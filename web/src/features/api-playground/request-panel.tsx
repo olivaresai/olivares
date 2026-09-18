@@ -414,7 +414,7 @@ export function RequestPanel({ endpoint }: RequestPanelProps) {
       <div className="flex items-center gap-2 border-b p-3">
         <span
           className={cn(
-            'rounded px-2 py-1 font-mono text-xs font-bold',
+            'rounded px-2 py-1 font-mono text-caption font-bold',
             endpoint.method === 'GET' &&
               'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
             endpoint.method === 'POST' &&
@@ -446,7 +446,7 @@ export function RequestPanel({ endpoint }: RequestPanelProps) {
             </TooltipContent>
           </Tooltip>
         )}
-        <code className="min-w-0 flex-1 truncate text-sm">{resolvedUrl}</code>
+        <code className="min-w-0 flex-1 truncate text-body">{resolvedUrl}</code>
         <Button
           size="sm"
           variant="outline"
@@ -490,12 +490,12 @@ export function RequestPanel({ endpoint }: RequestPanelProps) {
           >
             {pathParamNames.map((name) => (
               <div key={name} className="space-y-1">
-                <Label className="text-xs font-mono">{`{${name}}`}</Label>
+                <Label className="text-caption font-mono">{`{${name}}`}</Label>
                 <Input
                   value={pathParams[name] || ''}
                   onChange={(e) => setPathParam(name, e.target.value)}
                   placeholder={t('request.enterPathParam', { name })}
-                  className="h-8 font-mono text-xs"
+                  className="h-8 font-mono text-caption"
                 />
               </div>
             ))}
@@ -506,7 +506,7 @@ export function RequestPanel({ endpoint }: RequestPanelProps) {
           <TabsContent value="query" className="mx-3 space-y-2 overflow-y-auto">
             {queryParamDefs.map((p) => (
               <div key={p.name} className="space-y-1">
-                <Label className="text-xs">
+                <Label className="text-caption">
                   <span className="font-mono">{p.name}</span>
                   {p.required && (
                     <span className="ml-1 text-destructive">*</span>
@@ -525,7 +525,7 @@ export function RequestPanel({ endpoint }: RequestPanelProps) {
                       p.schema as Record<string, unknown>
                     )?.default?.toString() || ''
                   }
-                  className="h-8 font-mono text-xs"
+                  className="h-8 font-mono text-caption"
                 />
               </div>
             ))}
@@ -537,14 +537,14 @@ export function RequestPanel({ endpoint }: RequestPanelProps) {
             const isAuto = isManagedHeader(key)
             return (
               <div key={key} className="flex items-center gap-2">
-                <code className="w-40 shrink-0 truncate text-xs text-muted-foreground">
+                <code className="w-40 shrink-0 truncate text-caption text-muted-foreground">
                   {key}
                 </code>
                 <Input
                   value={value}
                   onChange={(e) => setHeader(key, e.target.value)}
                   disabled={isAuto}
-                  className="h-7 flex-1 font-mono text-xs"
+                  className="h-7 flex-1 font-mono text-caption"
                 />
                 {!isAuto && (
                   <Button
@@ -567,13 +567,13 @@ export function RequestPanel({ endpoint }: RequestPanelProps) {
               value={customHeaderKey}
               onChange={(e) => setCustomHeaderKey(e.target.value)}
               placeholder={t('request.headerNamePlaceholder')}
-              className="h-7 w-40 text-xs"
+              className="h-7 w-40 text-caption"
             />
             <Input
               value={customHeaderValue}
               onChange={(e) => setCustomHeaderValue(e.target.value)}
               placeholder={t('request.headerValuePlaceholder')}
-              className="h-7 flex-1 text-xs"
+              className="h-7 flex-1 text-caption"
               onKeyDown={(e) => e.key === 'Enter' && addCustomHeader()}
             />
             <Button

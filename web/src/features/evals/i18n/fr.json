@@ -41,7 +41,8 @@
     "runs": "Exécutions",
     "lastScore": "Dernier score",
     "regressed": "En régression",
-    "empty": "Aucune fiche de score pour l’instant — lancez une évaluation contre une suite de référence."
+    "empty": "Aucune fiche de score pour l’instant — lancez une évaluation contre une suite de référence.",
+    "emptyHint": "Une fiche de score résume les résultats d’un modèle sur les cas d’une suite. Lancez une évaluation sur une suite de référence pour en produire une."
   },
   "runs": {
     "title": "Exécutions d’évaluation",
@@ -57,6 +58,7 @@
     "regressed": "En régression · dérive {{drift}}",
     "noRegression": "Aucune",
     "empty": "Aucune exécution sur la période.",
+    "emptyHint": "Chaque exécution d’évaluation de la plage sélectionnée est listée ici avec son score et sa durée. Élargissez la plage ou lancez une exécution.",
     "overN": "sur {{n}}",
     "notScored": "not scored — no verdict",
     "noBaseline": "no baseline — nothing compared"
@@ -74,7 +76,8 @@
       "label": "Étiquette",
       "fingerprint": "Empreinte"
     },
-    "empty": "Aucun résultat par cas pour cette exécution."
+    "empty": "Aucun résultat par cas pour cette exécution.",
+    "emptyHint": "Chaque cas de la suite est listé ici avec le verdict du juge. Cette exécution n’a enregistré aucun résultat de cas."
   },
   "ab": {
     "title": "Comparaison A/B",
@@ -94,6 +97,7 @@
     "suiteLabel": "Suite",
     "selectSuite": "Sélectionner une suite",
     "noSuites": "Aucune suite pour l’instant. Une comparaison est notée sur les cas d’une suite : créez-en une d’abord.",
+    "noSuitesHint": "Une comparaison est notée sur les cas d’une suite : une suite doit donc exister d’abord. Créez-en une dans l’onglet Suites.",
     "labelA": "Libellé de la variante A",
     "labelB": "Libellé de la variante B",
     "outputsA": "Sorties de la variante A",
@@ -119,7 +123,8 @@
     "threshold": "Seuil de réussite",
     "pickerTitle": "Sujet",
     "note": "La ligne de seuil est le seuil de réussite de la suite ; les points en dessous ont échoué à atteindre la barre à ce moment-là.",
-    "empty": "Aucune donnée de tendance pour l’instant."
+    "empty": "Aucune donnée de tendance pour l’instant.",
+    "emptyHint": "La dérive compare les scores récents d’un modèle à son propre historique. Deux exécutions ou plus de la même suite produisent la première tendance."
   },
   "outcomeBar": {
     "passed": "Réussis",
@@ -141,6 +146,7 @@
     "title": "Gate CI",
     "description": "Évaluations du gate de régression : ce que le gate a mesuré, et ce que la CI doit appliquer.",
     "empty": "Aucune évaluation du gate",
+    "emptyHint": "Une évaluation de porte décide si un candidat peut être livré. Lancez une évaluation sur une suite avec porte pour en enregistrer une.",
     "measured": "mesuré {{verdict}}",
     "effective": "la CI applique {{verdict}}",
     "sampled": "{{sampled}} cas sur {{total}} échantillonnés",
@@ -160,6 +166,7 @@
     "title": "Calibration du juge",
     "description": "Dans quelle mesure le juge LLM concorde avec les étiquettes humaines. Un ensemble incapable de mesurer l'accord corrigé du hasard ne peut rien certifier.",
     "empty": "Aucun rapport de calibration",
+    "emptyHint": "Un rapport de calibration compare les scores du juge aux étiquettes humaines. Lancez une calibration pour en produire un.",
     "meets": "objectif atteint",
     "below": "en dessous de l'objectif",
     "cannotCertify": "non certifiable — kappa indéfini",
@@ -176,6 +183,7 @@
     "description": "The human labels the judge is measured against — and the reason a report can or cannot certify.",
     "run": "Run calibration",
     "empty": "No labelled items yet",
+    "emptyHint": "Les éléments étiquetés sont les jugements humains auxquels un rapport de calibration est comparé. Étiquetez un cas pour ajouter le premier.",
     "distribution": "{{pass}} labelled pass · {{fail}} labelled fail",
     "degenerate": "⛔ Every label is the same, so kappa CANNOT be computed and no report from this set can certify. Label cases of the other kind.",
     "humanPass": "human: pass",

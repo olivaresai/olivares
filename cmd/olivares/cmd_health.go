@@ -296,7 +296,7 @@ func streamHealth(cmd *cobra.Command, flags *authClientFlags, q url.Values) erro
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode >= 300 {
 		// A refusal arrives as an ordinary bounded body, so it is safe to read
-		// and classify exactly like every other verb in this lane.
+		// and classify exactly like every other verb in this command group.
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 		return observeHTTPError(resp.StatusCode, body)
 	}

@@ -132,10 +132,10 @@ export function LineageDetailSheet({
                   role="alert"
                   className="flex flex-col gap-1 rounded-md border border-warning-line bg-warning-soft px-3 py-2"
                 >
-                  <span className="text-sm font-medium text-warning">
+                  <span className="text-body font-medium text-warning">
                     {t('lineage.reason')}
                   </span>
-                  <span className="text-xs text-muted-foreground">
+                  <span className="text-caption text-muted-foreground">
                     {rec.reason}
                   </span>
                 </div>
@@ -145,7 +145,7 @@ export function LineageDetailSheet({
                 <>
                   <Separator />
                   <section className="flex flex-col gap-2">
-                    <h3 className="text-sm font-medium text-foreground">
+                    <h3 className="text-body font-medium text-foreground">
                       {t('lineage.sourceRefs')}
                     </h3>
                     <div className="flex flex-wrap gap-1.5">
@@ -163,17 +163,17 @@ export function LineageDetailSheet({
                 <>
                   <Separator />
                   <section className="flex flex-col gap-2">
-                    <h3 className="text-sm font-medium text-foreground">
+                    <h3 className="text-body font-medium text-foreground">
                       {t('lineage.chunkRefs')}
                     </h3>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-caption text-muted-foreground">
                       {t('lineage.chunkRefsCaption')}
                     </p>
                     <ul className="flex flex-col gap-2">
                       {rec.chunk_refs.map((c) => (
                         <li
                           key={c.chunk_id}
-                          className="rounded-md border border-border bg-surface p-2.5 text-xs"
+                          className="rounded-md border border-border bg-surface p-2.5 text-caption"
                         >
                           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                             <span className="text-muted-foreground">

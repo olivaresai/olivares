@@ -4,7 +4,7 @@
 
 package finops
 
-// D02 attempt lifecycle — types, exact canonical framing, digests and typed
+// The attempt lifecycle — types, exact canonical framing, digests and typed
 // errors for legacy import, the durable activation frontier, private T0 admission
 // and their shared group/hold reader. No dispatch grant, activation operation,
 // scheduler or T1–T4 operation is materialized. New/boot retains a nil verifier.

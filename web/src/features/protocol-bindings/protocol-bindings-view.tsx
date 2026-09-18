@@ -150,31 +150,32 @@ export function ProtocolBindingsView() {
       title={t('title')}
       description={t('subtitle')}
       actions={
-        <>
-          {can('sessions:protocol-binding:write') && activeWorkspace ? (
-            <Button
-              size="sm"
-              onClick={() =>
-                setComposerOperation({
-                  request: { tenant: activeTenant },
-                  workspaceId: activeWorkspace,
-                })
-              }
-            >
-              <Plus className="size-4" aria-hidden="true" />
-              {t('actions.newDraft')}
-            </Button>
-          ) : null}
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={!activeWorkspace}
+          onClick={refresh}
+        >
+          <RefreshCcw className="size-4" aria-hidden="true" />
+          {t('actions.refresh')}
+        </Button>
+      }
+      primaryAction={
+        can('sessions:protocol-binding:write') && activeWorkspace ? (
           <Button
-            variant="outline"
+            variant="primary"
             size="sm"
-            disabled={!activeWorkspace}
-            onClick={refresh}
+            onClick={() =>
+              setComposerOperation({
+                request: { tenant: activeTenant },
+                workspaceId: activeWorkspace,
+              })
+            }
           >
-            <RefreshCcw className="size-4" aria-hidden="true" />
-            {t('actions.refresh')}
+            <Plus className="size-4" aria-hidden="true" />
+            {t('actions.newDraft')}
           </Button>
-        </>
+        ) : undefined
       }
     >
       {!activeWorkspace ? (
@@ -185,7 +186,7 @@ export function ProtocolBindingsView() {
         />
       ) : (
         <>
-          <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-2 text-caption text-muted-foreground">
             <span>{t('workspace.scope')}</span>
             <Badge variant="outline">
               {activeWorkspaceName || activeWorkspace}
@@ -368,10 +369,10 @@ function SpecList({
               className="flex w-full items-start justify-between gap-4 py-3 text-left hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <div className="min-w-0 space-y-1">
-                <p className="truncate text-sm font-medium">
+                <p className="truncate text-body font-medium">
                   {spec.binding_key}
                 </p>
-                <p className="truncate font-mono text-xs text-muted-foreground">
+                <p className="truncate font-mono text-caption text-muted-foreground">
                   {spec.protocol.toUpperCase()} {spec.protocol_version} ·{' '}
                   {t('fields.generation')} {spec.generation} ·{' '}
                   {spec.peer_authority}
@@ -386,7 +387,7 @@ function SpecList({
         ))}
       </ul>
       {page.has_more ? (
-        <p className="border-t border-border pt-2 text-xs text-muted-foreground">
+        <p className="border-t border-border pt-2 text-caption text-muted-foreground">
           {t('pagination.truncated')}
         </p>
       ) : null}
@@ -421,11 +422,11 @@ function BindingList({
               className="flex w-full items-start justify-between gap-4 py-3 text-left hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <div className="min-w-0 space-y-1">
-                <p className="truncate font-mono text-sm font-medium">
+                <p className="truncate font-mono text-body font-medium">
                   {binding.external_kind}:
                   {binding.external_id || binding.synthetic_sid}
                 </p>
-                <p className="truncate font-mono text-xs text-muted-foreground">
+                <p className="truncate font-mono text-caption text-muted-foreground">
                   {binding.protocol.toUpperCase()} {binding.protocol_version} ·{' '}
                   {binding.local_state || '—'} ↔ {binding.remote_state || '—'} ·{' '}
                   {binding.peer_authority}
@@ -444,7 +445,7 @@ function BindingList({
         ))}
       </ul>
       {page.has_more ? (
-        <p className="border-t border-border pt-2 text-xs text-muted-foreground">
+        <p className="border-t border-border pt-2 text-caption text-muted-foreground">
           {t('pagination.truncated')}
         </p>
       ) : null}

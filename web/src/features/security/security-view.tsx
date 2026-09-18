@@ -273,7 +273,7 @@ function TriageDialog({
         </DialogHeader>
         {finding ? (
           <div className="flex flex-col gap-3">
-            <p className="text-sm text-foreground">{finding.title}</p>
+            <p className="text-body text-foreground">{finding.title}</p>
             {/* The evidence is immutable — triage only moves the flow status. */}
             <CaveatNotice>{t('findings.triage.immutableNote')}</CaveatNotice>
             <Field label={t('findings.triage.statusLabel')}>
@@ -490,10 +490,10 @@ function InspectForm({
       </Field>
       <label className="flex items-center justify-between gap-2 rounded-md border border-border px-3 py-2">
         <span className="flex flex-col">
-          <span className="text-sm text-foreground">
+          <span className="text-body text-foreground">
             {t('guardrails.form.enforce')}
           </span>
-          <span className="text-xs text-muted-foreground">
+          <span className="text-caption text-muted-foreground">
             {t('guardrails.form.enforceHint')}
           </span>
         </span>
@@ -590,11 +590,11 @@ function EnforcementDialog({
         </DialogHeader>
         {entry ? (
           <div className="flex flex-col gap-3">
-            <p className="font-mono text-sm text-foreground">
+            <p className="font-mono text-body text-foreground">
               {entry.class === '*' ? t('enforcement.wildcard') : entry.class}
             </p>
             <label className="flex items-center justify-between gap-2 rounded-md border border-border px-3 py-2">
-              <span className="text-sm text-foreground">
+              <span className="text-body text-foreground">
                 {t('enforcement.dialog.enabledLabel')}
               </span>
               <Switch checked={enabled} onCheckedChange={setEnabled} />
@@ -682,7 +682,10 @@ function AnomaliesTab() {
       <AsyncSection query={anomaliesQ} skeletonHeight={220}>
         {(data) =>
           data.items.length === 0 ? (
-            <EmptyState title={t('anomalies.empty')} />
+            <EmptyState
+              description={t('anomalies.emptyHint')}
+              title={t('anomalies.empty')}
+            />
           ) : (
             <AnomalyList anomalies={data.items} />
           )
@@ -752,7 +755,10 @@ function ForensicsTab() {
         <AsyncSection query={casesQ} skeletonHeight={200}>
           {(list) =>
             list.items.length === 0 ? (
-              <EmptyState title={t('forensics.empty')} />
+              <EmptyState
+                description={t('forensics.emptyHint')}
+                title={t('forensics.empty')}
+              />
             ) : (
               <div className="flex flex-col gap-2">
                 {list.items.map((c) => (
@@ -822,10 +828,10 @@ function CaseRow({
       className="flex w-full items-center justify-between gap-3 rounded-lg border border-border bg-surface p-4 text-left transition-colors hover:bg-muted focus-visible:bg-muted focus-visible:outline-none"
     >
       <div className="flex min-w-0 flex-col gap-1">
-        <span className="truncate text-sm font-medium text-foreground">
+        <span className="truncate text-body font-medium text-foreground">
           {forensicCase.title}
         </span>
-        <span className="truncate text-xs text-muted-foreground">
+        <span className="truncate text-caption text-muted-foreground">
           <span className="font-mono">
             {forensicCase.subject_kind}: {forensicCase.subject_ref}
           </span>
@@ -882,7 +888,7 @@ function CaseDetail({
               title={data.case.title}
               description={data.case.summary}
             >
-              <div className="mb-4 flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
+              <div className="mb-4 flex flex-wrap gap-x-6 gap-y-1 text-caption text-muted-foreground">
                 <span>
                   {t('forensics.openedBy')}:{' '}
                   <span className="font-mono text-foreground">

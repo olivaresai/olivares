@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { ClipboardList, Inbox } from 'lucide-react'
@@ -67,6 +67,21 @@ const STATUSES: WorkStatus[] = [
  * convenience default — it is the engine's behaviour when the key is absent. */
 type ArchivedFilter = 'any' | 'false' | 'true'
 
+/** How long the stream must stay quiet before one burst of events becomes one read. */
+const WORK_REFRESH_QUIET_MS = 150
+/** The longest a stream that never goes quiet may keep the list from refreshing. */
+const WORK_REFRESH_CEILING_MS = 1000
+
+/** The two timers of a coalesced refresh: the quiet window and its ceiling. */
+type PendingRefresh = { quiet: number | null; ceiling: number | null }
+
+function clearPendingRefresh(timers: PendingRefresh) {
+  if (timers.quiet !== null) window.clearTimeout(timers.quiet)
+  if (timers.ceiling !== null) window.clearTimeout(timers.ceiling)
+  timers.quiet = null
+  timers.ceiling = null
+}
+
 export function WorkView() {
   const etiquetaDuenno = useOwnerLabel()
   const { t } = useTranslation('work')
@@ -122,14 +137,45 @@ export function WorkView() {
   })
 
   // The durable event stream keeps the list honest without polling. Any work event
-  // invalidates the list; the stream's own cursor handles resume (stream.ts).
+  // invalidates the whole work key — the list, the open item with its lease and events,
+  // the decisions — and the stream's own cursor handles resume (stream.ts).
+  //
+  // ⛔ ONE BURST IS ONE READ. The list query carries an abort signal, and
+  //    `invalidateQueries` cancels a fetch still in flight before it starts the next one,
+  //    so invalidating on every frame turned a burst of N events into N-1 aborted reads
+  //    and one that answered: about sixty aborted reads per visit to /work, measured.
+  //    The key stays as wide as it is — the open item and the decisions must refresh too,
+  //    and dropping the signal would only turn aborted reads into discarded ones. What
+  //    changes is WHEN: the invalidation fires on the trailing edge of a quiet window, so
+  //    the read sees the state AFTER the burst and never one from its middle, and a
+  //    stream that never goes quiet still refreshes at the ceiling.
+  //
   // ⛔ `activeTenant` VA EN LAS DEPENDENCIAS. Sin él la retrollamada se queda con el inquilino
   // del primer render: tras cambiar de inquilino, cada evento del flujo invalidaría la clave del
   // ANTERIOR y la lista que el operador está mirando no se refrescaría nunca. Lo señaló
   // `react-hooks/exhaustive-deps` en el mismo cambio que metió la variable.
-  const onEvent = useCallback(() => {
+  const pending = useRef<{ quiet: number | null; ceiling: number | null }>({
+    quiet: null,
+    ceiling: null,
+  })
+  const refresh = useCallback(() => {
+    clearPendingRefresh(pending.current)
     void qc.invalidateQueries({ queryKey: workKeys.all(activeTenant) })
   }, [qc, activeTenant])
+  const onEvent = useCallback(() => {
+    const timers = pending.current
+    if (timers.quiet !== null) window.clearTimeout(timers.quiet)
+    timers.quiet = window.setTimeout(refresh, WORK_REFRESH_QUIET_MS)
+    if (timers.ceiling === null)
+      timers.ceiling = window.setTimeout(refresh, WORK_REFRESH_CEILING_MS)
+  }, [refresh])
+  // A refresh still pending when the view unmounts, or when the tenant changes under it,
+  // is dropped: the key it would invalidate is no longer the one on screen, and the new
+  // tenant's list is a new key that reads fresh on its own.
+  useEffect(() => {
+    const timers = pending.current
+    return () => clearPendingRefresh(timers)
+  }, [refresh])
   const { status: streamStatus } = useWorkStream({
     enabled: can('sessions:work:read'),
     onEvent,
@@ -192,7 +238,7 @@ export function WorkView() {
            reveal. */
         streamUnavailable ? (
           <UnavailableNotice code={streamUnavailable}>
-            <p className="text-xs">{t('stream.unavailableBody')}</p>
+            <p className="text-caption">{t('stream.unavailableBody')}</p>
           </UnavailableNotice>
         ) : null
       }
@@ -306,10 +352,10 @@ export function WorkView() {
                             className="flex w-full items-start justify-between gap-4 py-3 text-left hover:bg-muted/40"
                           >
                             <div className="min-w-0 space-y-1">
-                              <p className="truncate text-sm font-medium">
+                              <p className="truncate text-body font-medium">
                                 {item.title}
                               </p>
-                              <p className="font-mono text-xs text-muted-foreground">
+                              <p className="font-mono text-caption text-muted-foreground">
                                 {item.work_kind} ·{' '}
                                 {etiquetaDuenno(
                                   item.owner_kind,

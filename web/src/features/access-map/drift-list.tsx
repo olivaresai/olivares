@@ -47,7 +47,7 @@ export function DriftList({
   if (empty) {
     return diff.truncated ? (
       <div className="flex flex-col gap-2">
-        <p className="rounded-md border border-warning-line bg-warning-soft/40 px-2.5 py-1.5 text-xs leading-snug text-warning">
+        <p className="rounded-md border border-warning-line bg-warning-soft/40 px-2.5 py-1.5 text-caption leading-snug text-warning">
           {t('drift.partial')}
         </p>
         <EmptyState
@@ -72,7 +72,7 @@ export function DriftList({
           it as authoritative (modules/access-map/query.go:83-87). Saying it here is not
           decoration: without it these counts read as the whole estate. */}
       {diff.truncated && (
-        <p className="rounded-md border border-warning-line bg-warning-soft/40 px-2.5 py-1.5 text-xs leading-snug text-warning">
+        <p className="rounded-md border border-warning-line bg-warning-soft/40 px-2.5 py-1.5 text-caption leading-snug text-warning">
           {t('drift.partial')}
         </p>
       )}
@@ -156,7 +156,7 @@ function Group({
       <header className="mb-1.5 flex items-center gap-2">
         <span
           className={cn(
-            'inline-flex items-center gap-1.5 text-sm font-semibold',
+            'inline-flex items-center gap-1.5 text-body font-semibold',
             tone === 'danger' ? 'text-danger' : 'text-warning',
           )}
         >
@@ -167,7 +167,7 @@ function Group({
           {count}
         </Badge>
       </header>
-      <p className="mb-2 text-xs text-muted-foreground">{hint}</p>
+      <p className="mb-2 text-caption text-muted-foreground">{hint}</p>
       <ul className="flex flex-col gap-1">{children}</ul>
     </section>
   )
@@ -189,7 +189,7 @@ function DriftRow({
         type="button"
         onClick={() => onSelect(entry)}
         className={cn(
-          'flex w-full items-center gap-2 rounded-md border px-2.5 py-1.5 text-left text-xs transition-colors outline-none',
+          'flex w-full items-center gap-2 rounded-md border px-2.5 py-1.5 text-left text-caption transition-colors outline-none',
           'focus-visible:ring-2 focus-visible:ring-ring',
           tone === 'danger'
             ? 'border-danger-line bg-danger-soft/50 hover:bg-danger-soft'

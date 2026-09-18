@@ -87,7 +87,8 @@ export function SavedViewsMenu({
   // handler applies itself, so no permission set could ever answer it.
   const canDeleteAny =
     isSuperadmin ||
-    (roleRank(activeRole ?? undefined) >= roleRank('admin') && !confinedWorkspace)
+    (roleRank(activeRole ?? undefined) >= roleRank('admin') &&
+      !confinedWorkspace)
   const [saveOpen, setSaveOpen] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<SavedView | null>(null)
 
@@ -305,10 +306,10 @@ function SaveViewDialog({
           </Field>
           <div className="flex items-center justify-between gap-4 rounded-md border border-border p-3">
             <span className="min-w-0">
-              <span className="block text-sm font-medium text-foreground">
+              <span className="block text-body font-medium text-foreground">
                 {t('save.share')}
               </span>
-              <span className="block text-xs text-muted-foreground">
+              <span className="block text-caption text-muted-foreground">
                 {t('save.shareHint')}
               </span>
             </span>
@@ -319,7 +320,7 @@ function SaveViewDialog({
             />
           </div>
           {inlineError && (
-            <p role="alert" className="text-sm font-medium text-danger">
+            <p role="alert" className="text-body font-medium text-danger">
               {inlineError}
             </p>
           )}

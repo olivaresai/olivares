@@ -51,10 +51,10 @@ function HipaaControlCard({ control }: { control: HipaaControlGap }) {
       <div className="mb-2 flex flex-wrap items-center gap-2">
         {/* ⛔ LA CITA VA PRIMERO Y EN MONOESPACIADO. Es lo único que este informe tiene y la vista
             genérica de frameworks no; sin ella la pantalla es un duplicado peor de /gaps. */}
-        <span className="font-mono text-sm font-medium text-foreground">
+        <span className="font-mono text-body font-medium text-foreground">
           {control.citation}
         </span>
-        <span className="text-sm text-foreground">{control.title}</span>
+        <span className="text-body text-foreground">{control.title}</span>
         <ControlStatusBadge status={control.status} />
       </div>
       <KvList>
@@ -104,7 +104,11 @@ export function HipaaTab({ canRead }: { canRead: boolean }) {
   if (!canRead) {
     return (
       <SectionCard title={t('hipaa.title')}>
-        <EmptyState icon={<ShieldQuestion />} title={t('hipaa.forbidden')} />
+        <EmptyState
+          description={t('hipaa.forbiddenHint')}
+          icon={<ShieldQuestion />}
+          title={t('hipaa.forbidden')}
+        />
       </SectionCard>
     )
   }
@@ -114,7 +118,7 @@ export function HipaaTab({ canRead }: { canRead: boolean }) {
   if (q.isError || !q.data) {
     return (
       <SectionCard title={t('hipaa.title')}>
-        <p role="alert" className="text-sm text-warning">
+        <p role="alert" className="text-body text-warning">
           {t('hipaa.unreadable')}
         </p>
       </SectionCard>
@@ -179,12 +183,16 @@ export function HipaaTab({ canRead }: { canRead: boolean }) {
         {/* La nota que impide leer `by_design` como telemetría: es evidencia de DISEÑO, citada,
             no una medida del despliegue. El motor los separa por eso mismo. */}
         {r.summary.by_design > 0 ? (
-          <p role="note" className="text-xs text-muted-foreground">
+          <p role="note" className="text-caption text-muted-foreground">
             {t('hipaa.byDesignNote')}
           </p>
         ) : null}
         {r.controls.length === 0 ? (
-          <EmptyState icon={<ShieldQuestion />} title={t('hipaa.noControls')} />
+          <EmptyState
+            description={t('hipaa.noControlsHint')}
+            icon={<ShieldQuestion />}
+            title={t('hipaa.noControls')}
+          />
         ) : (
           <div className="flex flex-col gap-3">
             {r.controls.map((c) => (

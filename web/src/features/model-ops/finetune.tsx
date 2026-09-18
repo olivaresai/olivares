@@ -142,7 +142,7 @@ export function FinetuneTab() {
         header: t('finetune.columns.resultVersion'),
         cell: ({ row }) =>
           row.original.result_version_ref ? (
-            <span className="font-mono text-xs text-muted-foreground">
+            <span className="font-mono text-caption text-muted-foreground">
               {row.original.result_version_ref}
             </span>
           ) : (
@@ -227,7 +227,7 @@ export function FinetuneTab() {
         searchPlaceholder={t('finetune.search')}
         toolbar={
           <Select value={status} onValueChange={setStatus}>
-            <SelectTrigger className="h-8 w-[10rem] text-xs">
+            <SelectTrigger className="h-8 w-[10rem] text-caption">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -390,7 +390,7 @@ function FinetuneForm({
 
       {formError && (
         <div className="rounded-md border border-danger bg-danger-soft px-3 py-2">
-          <p className="whitespace-pre-wrap text-xs text-foreground">
+          <p className="whitespace-pre-wrap text-caption text-foreground">
             {formError}
           </p>
         </div>

@@ -166,10 +166,10 @@ function IngestionTab({ tenant }: { tenant: string | null }) {
               <CaveatNotice tone="warning">
                 {t('ingestion.blockedNote')}
               </CaveatNotice>
-              <h3 className="mt-2 text-sm font-medium text-foreground">
+              <h3 className="mt-2 text-body font-medium text-foreground">
                 {t('sources.title')}
               </h3>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-caption text-muted-foreground">
                 {t('sources.description')}
               </p>
               <IngestionSourcesTable
@@ -318,7 +318,7 @@ function TracesTab({ tenant }: { tenant: string | null }) {
                 value={filters.q ?? ''}
                 onChange={(e) => patchUrlState({ q: e.target.value })}
                 placeholder={t('traces.searchPlaceholder')}
-                className="h-8 w-full rounded-md border bg-background pl-8 pr-3 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+                className="h-8 w-full rounded-md border bg-background pl-8 pr-3 text-caption focus:outline-none focus:ring-1 focus:ring-ring"
                 aria-label={t('traces.searchPlaceholder')}
               />
             </div>
@@ -327,20 +327,20 @@ function TracesTab({ tenant }: { tenant: string | null }) {
               value={filters.service ?? ''}
               onChange={(e) => patchUrlState({ service: e.target.value })}
               placeholder={t('traces.filters.servicePlaceholder')}
-              className="h-8 w-full rounded-md border bg-background px-3 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+              className="h-8 w-full rounded-md border bg-background px-3 text-caption focus:outline-none focus:ring-1 focus:ring-ring"
               aria-label={t('traces.filters.service')}
             />
             <select
               value={filters.status ?? ''}
               onChange={(e) => patchUrlState({ status: e.target.value })}
-              className="h-8 w-full rounded-md border bg-background px-3 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+              className="h-8 w-full rounded-md border bg-background px-3 text-caption text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
               aria-label={t('traces.filters.status')}
             >
               <option value="">{t('traces.filters.allStatuses')}</option>
               <option value="unset">{t('traces.status.unset')}</option>
             </select>
             <label className="flex items-center gap-2">
-              <span className="shrink-0 text-xs text-muted-foreground">
+              <span className="shrink-0 text-caption text-muted-foreground">
                 {t('traces.filters.from')}
               </span>
               <input
@@ -349,12 +349,12 @@ function TracesTab({ tenant }: { tenant: string | null }) {
                 onChange={(e) =>
                   patchUrlState({ from: rfc3339FromLocal(e.target.value) })
                 }
-                className="h-8 min-w-0 flex-1 rounded-md border bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+                className="h-8 min-w-0 flex-1 rounded-md border bg-background px-2 text-caption focus:outline-none focus:ring-1 focus:ring-ring"
                 aria-label={t('traces.filters.from')}
               />
             </label>
             <label className="flex items-center gap-2">
-              <span className="shrink-0 text-xs text-muted-foreground">
+              <span className="shrink-0 text-caption text-muted-foreground">
                 {t('traces.filters.to')}
               </span>
               <input
@@ -363,7 +363,7 @@ function TracesTab({ tenant }: { tenant: string | null }) {
                 onChange={(e) =>
                   patchUrlState({ to: rfc3339FromLocal(e.target.value) })
                 }
-                className="h-8 min-w-0 flex-1 rounded-md border bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+                className="h-8 min-w-0 flex-1 rounded-md border bg-background px-2 text-caption focus:outline-none focus:ring-1 focus:ring-ring"
                 aria-label={t('traces.filters.to')}
               />
             </label>
@@ -419,7 +419,7 @@ function TracesTab({ tenant }: { tenant: string | null }) {
           canDrill && selected ? (
             <button
               onClick={handleExport}
-              className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-caption font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               title={t('traces.exportTitle')}
             >
               <Download className="h-3.5 w-3.5" />
@@ -429,7 +429,10 @@ function TracesTab({ tenant }: { tenant: string | null }) {
         }
       >
         {!canDrill || selected === null ? (
-          <EmptyState title={t('traces.selectPrompt')} />
+          <EmptyState
+            description={t('traces.selectPromptHint')}
+            title={t('traces.selectPrompt')}
+          />
         ) : (
           <AsyncSection query={detailQ} skeletonHeight={220}>
             {(trace) => (

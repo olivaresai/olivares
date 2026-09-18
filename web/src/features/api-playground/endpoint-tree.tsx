@@ -78,7 +78,7 @@ export function EndpointTree({
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
             placeholder={t('filterPlaceholder')}
-            className="h-8 pl-8 text-xs"
+            className="h-8 pl-8 text-caption"
             aria-label={t('filterPlaceholder')}
           />
         </div>
@@ -92,7 +92,7 @@ export function EndpointTree({
             <button
               type="button"
               onClick={() => toggleGroup(group.tag)}
-              className="flex w-full items-center gap-1.5 border-b px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:bg-muted/50"
+              className="flex w-full items-center gap-1.5 border-b px-3 py-2 text-left text-caption font-semibold uppercase tracking-wider text-muted-foreground hover:bg-muted/50"
               aria-expanded={!collapsed.has(group.tag)}
             >
               {collapsed.has(group.tag) ? (
@@ -121,7 +121,7 @@ export function EndpointTree({
                         type="button"
                         onClick={() => onSelect(ep)}
                         className={cn(
-                          'flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-muted/60',
+                          'flex w-full items-center gap-2 px-3 py-1.5 text-left text-caption hover:bg-muted/60',
                           isSelected && 'bg-muted',
                         )}
                         aria-current={isSelected ? 'true' : undefined}
@@ -139,7 +139,7 @@ export function EndpointTree({
           </div>
         ))}
         {filtered.length === 0 && (
-          <div className="px-3 py-6 text-center text-xs text-muted-foreground">
+          <div className="px-3 py-6 text-center text-caption text-muted-foreground">
             {t('noMatch')}
           </div>
         )}

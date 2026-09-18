@@ -30,7 +30,7 @@ export function PassphraseStrength({
     return (
       <p
         role="alert"
-        className={cn('text-xs text-danger', className)}
+        className={cn('text-caption text-danger', className)}
         data-testid="passphrase-floor-error"
       >
         {t('passphrase.tooShort', { min: MIN_DR_PASSPHRASE_LENGTH })}
@@ -64,7 +64,7 @@ export function PassphraseStrength({
           />
         ))}
       </div>
-      <span className="text-xs text-muted-foreground">
+      <span className="text-caption text-muted-foreground">
         {t(`passphrase.strength.${strength}`)}
       </span>
     </div>

@@ -22,7 +22,7 @@ export function SecretRef({ name, className }: SecretRefProps) {
   const { t } = useTranslation('common')
   if (!name) {
     return (
-      <span className={cn('text-sm text-muted-foreground', className)}>
+      <span className={cn('text-body text-muted-foreground', className)}>
         {t('secretRef.none')}
       </span>
     )
@@ -32,7 +32,7 @@ export function SecretRef({ name, className }: SecretRefProps) {
       data-slot="secret-ref"
       title={t('secretRef.hint')}
       className={cn(
-        'inline-flex items-center gap-1 rounded-sm border border-border bg-muted px-1.5 py-0.5 font-mono text-xs',
+        'inline-flex items-center gap-1 rounded-sm border border-border bg-muted px-1.5 py-0.5 font-mono text-caption',
         className,
       )}
     >

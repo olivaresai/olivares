@@ -269,7 +269,7 @@ function Inner({
       {strandedNotice ? (
         <div
           role="status"
-          className="mt-4 rounded-md border border-border bg-muted/30 px-3 py-2 text-xs"
+          className="mt-4 rounded-md border border-border bg-muted/30 px-3 py-2 text-caption"
           data-slot="handoff-offer-tracking-ended"
         >
           <p>{t('handoff.tracking.ended')}</p>
@@ -280,7 +280,7 @@ function Inner({
       ) : null}
       {retained && !open ? (
         <div
-          className="mt-4 flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-2 text-xs"
+          className="mt-4 flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-2 text-caption"
           data-slot="handoff-retained-operation"
         >
           <span>

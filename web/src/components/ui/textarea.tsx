@@ -20,7 +20,7 @@ export function Textarea({ className, mono = false, ...props }: TextareaProps) {
       data-slot="textarea"
       className={cn(
         'min-h-16 w-full rounded-md border border-border-strong bg-surface px-2.5 py-1.5',
-        'text-sm leading-relaxed text-foreground placeholder:text-muted-foreground',
+        'text-body leading-relaxed text-foreground placeholder:text-muted-foreground',
         'transition-colors outline-none',
         'focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background',
         'aria-[invalid=true]:border-danger aria-[invalid=true]:ring-danger',

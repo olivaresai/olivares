@@ -427,7 +427,11 @@ describe('useRunAttach', () => {
         if (identity === 'tenant') {
           useTenantStore.setState({ activeTenant: 't2' })
         } else {
-          useSessionStore.setState({ token: 'olvs_other' })
+          useSessionStore.getState().setSession({
+            token: 'olvs_other',
+            sessionId: 's1',
+            expiresAt: '2099-01-01T00:00:00Z',
+          })
         }
       })
       await waitFor(() => expect(controllers).toHaveLength(2))

@@ -19,6 +19,7 @@
   "framework": {
     "label": "Marco",
     "select": "Selecciona un marco",
+    "selectHint": "Elige un marco arriba para ver sus brechas de control, la evidencia de cada control y lo que sigue sin mapear.",
     "controls": "{{count}} controles",
     "authority": "Autoridad"
   },
@@ -75,6 +76,7 @@
     "title": "Qué corregir",
     "description": "Controles que aún no están satisfechos, ordenados por estado. Cada fila lista las capacidades que activar para cerrar la brecha.",
     "empty": "No hay brechas abiertas para este marco.",
+    "emptyHint": "Una brecha es un control sin evidencia operativa. Este marco no tiene ninguna abierta: todos los controles mapeados están satisfechos o cubiertos por diseño.",
     "missing": "Capacidades ausentes",
     "noMissing": "No se identificó una capacidad concreta: revisa el criterio."
   },
@@ -117,6 +119,7 @@
     "title": "Registro de riesgo de agentes",
     "description": "Nivel de riesgo del EU AI Act por agente, mapeado a las funciones del NIST AI RMF. La heurística nunca asigna el nivel inaceptable: solo aparece tras revisión humana.",
     "empty": "Aún no hay agentes clasificados.",
+    "emptyHint": "Aquí se listan los agentes con el nivel de riesgo que les da su clasificación. Clasifica un agente para verlo aparecer.",
     "columns": {
       "agent": "Agente",
       "tier": "Nivel",
@@ -156,6 +159,7 @@
     "title": "Residencia de datos",
     "description": "Regiones atestadas con su perímetro, cifrado en reposo y cualquier violación de egreso observada.",
     "empty": "Aún no hay regiones atestadas.",
+    "emptyHint": "Las regiones atestiguadas para este inquilino aparecen aquí con su evidencia. Todavía no se ha atestiguado ninguna.",
     "scan": "Ejecutar escaneo de residencia",
     "scanned": "Escaneo de residencia completado",
     "inPerimeter": "Los datos permanecen en el perímetro",
@@ -172,6 +176,7 @@
     "title": "Calendarios de retención",
     "description": "Calendarios de eliminación por clase, los barridos que los ejecutan y el certificado sellado que cada barrido deja. Un calendario documenta la intención; sólo un purgado aprobado destruye algo.",
     "noAccess": "No tienes acceso a los calendarios de retención",
+    "noAccessHint": "Los calendarios de retención deciden cuánto se conserva cada clase de registro. Pide a un administrador el permiso de lectura de retención.",
     "sweepNow": "Ejecutar barrido",
     "gateHint": "Un calendario es un documento hasta que una persona aprueba su purgado. Guardarlo no borra nada; un barrido sí.",
     "noClasses": "El motor no ha devuelto ninguna clase de datos",
@@ -285,6 +290,7 @@
     "title": "Retenciones legales",
     "description": "Órdenes de conservación que vetan toda vía de destrucción, incluido el borrado del RGPD.",
     "noAccess": "No tienes permiso para leer las retenciones legales.",
+    "noAccessHint": "Una retención legal impide borrar datos mientras un asunto está abierto. Pide a un administrador el permiso de lectura de retenciones legales.",
     "create": "Poner una retención",
     "release": "Liberar",
     "custody": "Cadena de custodia",
@@ -300,6 +306,7 @@
     "custodyTitle": "Cadena de custodia — {{matter}}",
     "custodyDescription": "Eventos de custodia de solo adición, cada uno anclado a la cabeza del registro de auditoría en el momento de sellarse.",
     "custodyEmpty": "Sin eventos de custodia registrados",
+    "custodyEmptyHint": "Cada vez que se añade, notifica o libera a un custodio queda registrado aquí. Esta retención aún no tiene eventos de custodia.",
     "status": {
       "active": "Activa",
       "released": "Liberada"
@@ -357,6 +364,7 @@
     "title": "Derecho de supresión y solicitudes del interesado",
     "description": "Solicitudes de borrado registradas, su ejecución con doble control y el recibo verificable que sella cada una.",
     "noAccess": "No tienes permiso para leer las solicitudes de borrado.",
+    "noAccessHint": "Aquí se siguen las solicitudes de borrado y de acceso del interesado, con sus plazos legales. Pide a un administrador el permiso de lectura de borrados.",
     "register": "Registrar una solicitud",
     "execute": "Ejecutar",
     "receipt": "Recibo",
@@ -455,10 +463,12 @@
     "description": "Hitos regulatorios fechados, cada uno con su fuente primaria y la fecha en que se verificó.",
     "notInForceHint": "Los acuerdos provisionales, los textos adoptados a la espera de publicación y los mapeos en desarrollo NO son derecho en vigor. Se muestran con su estado para que nunca se lean como obligaciones.",
     "empty": "Sin hitos para este marco",
+    "emptyHint": "Los hitos regulatorios del marco seleccionado aparecen aquí con sus fechas límite. Selecciona otro marco para ver su calendario.",
     "verifiedOn": "verificado el {{date}}",
     "watchlistTitle": "Lista de seguimiento",
     "watchlistDescription": "Desarrollos normativos, borradores de norma y pilotos que aún no tienen fecha que citar.",
     "watchlistEmpty": "Nada en seguimiento",
+    "watchlistEmptyHint": "Los hitos que sigues aparecen aquí, para que la fecha límite más cercana esté siempre a la vista. Añade uno desde el calendario de arriba.",
     "status": {
       "in_force": "En vigor",
       "applies_from": "Aplicable desde",
@@ -474,6 +484,7 @@
   "regops": {
     "title": "Operaciones regulatorias",
     "noAccess": "No tienes permiso para leer estas superficies.",
+    "noAccessHint": "Operaciones regulatorias cubre presentaciones, atestaciones y deriva de controles. Pide a un administrador el permiso de lectura de operaciones regulatorias.",
     "seamHint": "Leer, exportar y borrar estos artefactos funciona en esta compilación. Generarlos (registros DORA, clasificación de incidentes, ingesta OSCAL, packs de profundidad) lo aporta el add-on enterprise; sin él el motor responde 501 por diseño.",
     "addonRequired": "Generar requiere el add-on",
     "export": "Exportar",
@@ -596,6 +607,7 @@
       "emptyHint": "Las instantáneas las produce el add-on enterprise.",
       "driftTitle": "Deriva detectada",
       "noDrift": "Sin deriva detectada",
+      "noDriftHint": "La deriva es un control cuya evidencia se ha alejado de su línea base. Todos los controles comparados siguen coincidiendo con su línea base.",
       "snapshot": "Tomar instantánea",
       "snapshotTitle": "Tomar una instantánea de controles",
       "snapshotDescription": "El add-on reevalúa ahora mismo los marcos seleccionados contra el parque y guarda el resultado como una instantánea puntual con la que comparar más adelante.",
@@ -676,6 +688,7 @@
     "title": "Incidentes significativos NIS 2",
     "description": "Incidentes evaluados con los criterios de significatividad del art. 23(3) de la Directiva (UE) 2022/2555, con sus fases de notificación del art. 23(4) y los borradores de informe.",
     "noAccess": "No tienes permiso para leer las clasificaciones de incidentes NIS 2.",
+    "noAccessHint": "Aquí se siguen las clasificaciones de incidentes NIS 2 y sus plazos de notificación. Pide a un administrador el permiso de lectura de NIS 2.",
     "provisionalHint": "Cada veredicto y cada plazo de esta pantalla son APOYO A LA DECISIÓN, no una clasificación jurídica. El plano de control no puede medir los criterios del art. 23(3): los aplica a los datos de impacto que tú aportas. Una persona competente debe atestiguar el resultado, y el deber de notificar al CSIRT o a la autoridad competente recae en tu entidad.",
     "empty": "No hay incidentes clasificados",
     "emptyHint": "Clasifica un incidente para aplicar los criterios del art. 23(3) a sus datos de impacto y redactar los informes por fases.",
@@ -751,6 +764,7 @@
   "claudeFiles": {
     "title": "Almacén de ficheros del proveedor",
     "noAccess": "No tienes acceso al inventario del almacén de ficheros.",
+    "noAccessHint": "Esta pestaña inventaría los ficheros que el almacén guarda de las sesiones gobernadas. Pide a un administrador el permiso de lectura del almacén de ficheros.",
     "col": {
       "id": "Id del fichero",
       "mime": "Tipo",
@@ -820,17 +834,20 @@
       "none": "sin referencias"
     },
     "empty": "El catálogo no devolvió ninguna capacidad.",
+    "emptyHint": "Aquí se listan las capacidades de la plataforma con las que se puede evidenciar un marco. El catálogo no ha devuelto ninguna para este despliegue.",
     "error": "No se ha podido leer el catálogo de capacidades."
   },
   "hipaa": {
     "title": "Salvaguardas técnicas HIPAA",
     "forbidden": "No tienes permiso para leer los marcos de cumplimiento.",
+    "forbiddenHint": "Este informe mapea HIPAA §164.312 a los controles que la plataforma puede evidenciar. Pide a un administrador el permiso de lectura de marcos.",
     "unreadable": "No se ha podido leer el informe de brechas.",
     "generatedAt": "Generado",
     "controls": "Controles",
     "satisfied": "Satisfechos",
     "gaps": "Brechas",
     "noControls": "El informe no trae ningún control.",
+    "noControlsHint": "El informe lista cada salvaguarda técnica con la evidencia que la respalda. El marco no ha devuelto controles para este despliegue.",
     "requirement": "Requisito",
     "criterion": "Criterio",
     "gap": "Brecha",

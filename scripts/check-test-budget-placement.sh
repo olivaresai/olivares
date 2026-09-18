@@ -64,11 +64,9 @@
 #  4. It cannot follow a budget created in one function and used in another, nor one
 #     returned by a helper. Those are unreachable to a line reader and are not counted
 #     either — this is the one gap the count does not bound. The `go/ast` analyser that DOES
-#     see them is not in this repository: it is an analysis instrument kept with its own
-#     receipts, in the CONTROL repository (olivares-ai-control), at the path below — on ONE
-#     line, because a path a reader cannot select and paste is a citation that still cannot
-#     be opened:
-#     an internal design note (not shipped)
+#     see them is not in this repository: it is an analysis instrument kept with the maintainer's
+#     own receipts, outside the published tree, so this check states the gap rather than
+#     citing a document a reader of this repository cannot open.
 #  5. A duration held in a NAME is resolved from `NAME = <duration>` anywhere in the same
 #     DIRECTORY, not only from a package-level `const`, so two bindings of one name in one
 #     directory resolve to the last one read. MEASURED on this tree 2026-09-16: eleven such
@@ -156,7 +154,7 @@ raw_f="$(mktemp "${TMPDIR:-/tmp}/test-budget-raw.XXXXXX")" || blind "cannot crea
 # FINDING (see above): a waiver that stopped matching is a gate that stopped covering.
 # ═══════════════════════════════════════════════════════════════════════════════════════
 EXEMPTIONS=(
-	"core/internal/store/sqlstore/drcontrolintegrity_test.go|TestDRRecordFIFORefusesThroughActualOpen|Open IS the subject: the test proves Open REFUSES a FIFO record path instead of blocking on it, so the budget must cover Open or there is nothing to assert. The refusal is measured at 0.00 s under -race with real PostgreSQL (2026-09-16; receipt in the CONTROL repository, olivares-ai-control/assessments/engineering/r116-test-budget-sweep/receipts/), i.e. three orders of magnitude of headroom inside the 3 s budget."
+	"core/internal/store/sqlstore/drcontrolintegrity_test.go|TestDRRecordFIFORefusesThroughActualOpen|Open IS the subject: the test proves Open REFUSES a FIFO record path instead of blocking on it, so the budget must cover Open or there is nothing to assert. The refusal is measured at 0.00 s under -race with real PostgreSQL (2026-09-16), i.e. three orders of magnitude of headroom inside the 3 s budget."
 )
 
 for e in "${EXEMPTIONS[@]}"; do

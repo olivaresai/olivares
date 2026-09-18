@@ -178,7 +178,8 @@
     "current": "Aktuell",
     "rollback": "Zurückrollen",
     "caption": "Ein Rollback erfolgt in zwei Schritten: Es deklariert eine NEUE Soll-Revision, die der gewählten Version entspricht, anschließend Plan & Anwenden Sie (eine gesteuerte Aktion), um sie tatsächlich wiederherzustellen.",
-    "empty": "Keine Revisionen"
+    "empty": "Keine Revisionen",
+    "emptyHint": "Jede Änderung an dieser Bereitstellung wird als Revision aufbewahrt, die Sie vergleichen und wiederherstellen können. Die erste Bearbeitung erzeugt eine."
   },
   "rollback": {
     "title": "Soll-Zustand zurückrollen?",

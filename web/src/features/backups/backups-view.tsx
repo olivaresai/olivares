@@ -37,16 +37,16 @@ export function BackupsView() {
         description={t('description')}
         icon={DatabaseBackup}
         actions={
-          <div className="flex items-center gap-2">
-            <Button variant="secondary" onClick={() => setRestoreOpen(true)}>
-              <Upload className="size-4" />
-              {t('actions.restore')}
-            </Button>
-            <Button variant="primary" onClick={() => setTriggerOpen(true)}>
-              <Plus className="size-4" />
-              {t('actions.createBackup')}
-            </Button>
-          </div>
+          <Button variant="secondary" onClick={() => setRestoreOpen(true)}>
+            <Upload className="size-4" />
+            {t('actions.restore')}
+          </Button>
+        }
+        primaryAction={
+          <Button variant="primary" onClick={() => setTriggerOpen(true)}>
+            <Plus className="size-4" />
+            {t('actions.createBackup')}
+          </Button>
         }
       />
 

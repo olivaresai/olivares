@@ -36,6 +36,7 @@ import { workflowsApi, workflowsKeys } from './api'
 import { WorkflowEditor } from './editor'
 import type { CreateWorkflowInput, WorkflowDetail } from './types'
 import './i18n'
+import { StaticTable } from '@/components/data/static-table'
 
 export function WorkflowsTab() {
   const { t, i18n } = useTranslation('automations-workflows')
@@ -111,13 +112,13 @@ export function WorkflowsTab() {
               onElevated={() => void workflows.refetch()}
             />
           ) : forbidden ? (
-            <p className="rounded-md border border-border bg-muted p-3 text-sm text-muted-foreground">
+            <p className="rounded-md border border-border bg-muted p-3 text-body text-muted-foreground">
               {t('list.forbidden')}
             </p>
           ) : workflows.isPending ? (
             <Skeleton className="h-40 w-full" />
           ) : workflows.isError ? (
-            <p role="alert" className="text-sm text-muted-foreground">
+            <p role="alert" className="text-body text-muted-foreground">
               {t('list.loadFailed')}
             </p>
           ) : (workflows.data?.items.length ?? 0) === 0 ? (
@@ -140,30 +141,20 @@ export function WorkflowsTab() {
             />
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <StaticTable>
                 <thead>
-                  <tr className="border-b text-left text-muted-foreground">
-                    <th scope="col" className="py-2 pr-4 font-medium">
-                      {t('list.name')}
-                    </th>
-                    <th scope="col" className="py-2 pr-4 font-medium">
-                      {t('list.enabled')}
-                    </th>
-                    <th scope="col" className="py-2 pr-4 font-medium">
-                      {t('list.steps')}
-                    </th>
-                    <th scope="col" className="py-2 pr-4 font-medium">
-                      {t('list.version')}
-                    </th>
-                    <th scope="col" className="py-2 font-medium">
-                      {t('list.updated')}
-                    </th>
+                  <tr>
+                    <th scope="col">{t('list.name')}</th>
+                    <th scope="col">{t('list.enabled')}</th>
+                    <th scope="col">{t('list.steps')}</th>
+                    <th scope="col">{t('list.version')}</th>
+                    <th scope="col">{t('list.updated')}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {workflows.data?.items.map((workflow) => (
-                    <tr key={workflow.id} className="border-b last:border-0">
-                      <td className="py-2 pr-4">
+                    <tr key={workflow.id}>
+                      <td>
                         <Button
                           variant="link"
                           className="max-w-72 justify-start truncate text-left"
@@ -173,7 +164,7 @@ export function WorkflowsTab() {
                           {workflow.name}
                         </Button>
                       </td>
-                      <td className="py-2 pr-4">
+                      <td>
                         <Badge
                           variant={workflow.enabled ? 'success' : 'neutral'}
                         >
@@ -182,13 +173,13 @@ export function WorkflowsTab() {
                             : t('list.disabledValue')}
                         </Badge>
                       </td>
-                      <td className="py-2 pr-4 font-mono tabular-nums">
+                      <td className="font-mono tabular-nums">
                         {workflow.step_count}
                       </td>
-                      <td className="py-2 pr-4 font-mono tabular-nums">
+                      <td className="font-mono tabular-nums">
                         {workflow.version}
                       </td>
-                      <td className="py-2 text-muted-foreground">
+                      <td className="text-muted-foreground">
                         {workflow.updated_at
                           ? formatDateTime(workflow.updated_at, i18n.language)
                           : t('list.neverUpdated')}
@@ -196,7 +187,7 @@ export function WorkflowsTab() {
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </StaticTable>
             </div>
           )}
         </CardContent>

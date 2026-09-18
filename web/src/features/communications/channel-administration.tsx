@@ -288,7 +288,7 @@ export function ChannelAdministration({
       >
         <label
           htmlFor={`${idp}-by-id`}
-          className="text-xs text-muted-foreground"
+          className="text-caption text-muted-foreground"
         >
           {t('administration.openById')}
         </label>
@@ -308,7 +308,7 @@ export function ChannelAdministration({
         >
           {t('actions.administer')}
         </Button>
-        <span className="basis-full text-xs text-muted-foreground">
+        <span className="basis-full text-caption text-muted-foreground">
           {t('administration.openByIdHint')}
         </span>
       </form>

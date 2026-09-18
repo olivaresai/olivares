@@ -207,16 +207,16 @@ function OverviewTab({
   return (
     <div className="flex flex-col gap-4 py-4">
       {item.brief_md ? (
-        <p className="whitespace-pre-wrap text-sm">{item.brief_md}</p>
+        <p className="whitespace-pre-wrap text-body">{item.brief_md}</p>
       ) : null}
 
-      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
+      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-body">
         <dt className="text-muted-foreground">{t('detail.owner')}</dt>
-        <dd className="font-mono text-xs">
+        <dd className="font-mono text-caption">
           {etiquetaDuenno(item.owner_kind, item.owner_ref)}
         </dd>
         <dt className="text-muted-foreground">{t('detail.provenance')}</dt>
-        <dd className="font-mono text-xs">
+        <dd className="font-mono text-caption">
           {item.provenance_kind}:{item.provenance_ref}
         </dd>
         <dt className="text-muted-foreground">{t('detail.priority')}</dt>
@@ -226,7 +226,7 @@ function OverviewTab({
         {item.blocked_code ? (
           <>
             <dt className="text-muted-foreground">{t('detail.blocked')}</dt>
-            <dd className="text-xs">
+            <dd className="text-caption">
               {item.blocked_code}
               {item.blocked_reason ? ` — ${item.blocked_reason}` : ''}
             </dd>
@@ -235,14 +235,14 @@ function OverviewTab({
         {item.terminal_code ? (
           <>
             <dt className="text-muted-foreground">{t('detail.terminal')}</dt>
-            <dd className="text-xs">
+            <dd className="text-caption">
               {item.terminal_code}
               {item.terminal_reason ? ` — ${item.terminal_reason}` : ''}
             </dd>
           </>
         ) : null}
         <dt className="text-muted-foreground">{t('detail.etag')}</dt>
-        <dd className="font-mono text-xs">{etag ?? '—'}</dd>
+        <dd className="font-mono text-caption">{etag ?? '—'}</dd>
       </dl>
 
       {onOffer && canOffer ? (
@@ -255,7 +255,7 @@ function OverviewTab({
           >
             {t('handoff.offer')}
           </Button>
-          <span className="text-xs text-muted-foreground">
+          <span className="text-caption text-muted-foreground">
             {t('handoff.offerHint')}
           </span>
         </div>
@@ -348,12 +348,14 @@ function AcceptanceTab({
 
   return (
     <div className="flex flex-col gap-3 py-4">
-      <p className="text-xs text-muted-foreground">
+      <p className="text-caption text-muted-foreground">
         {isDraft ? t('acceptance.draftNotice') : t('acceptance.lockedNotice')}
       </p>
 
       {criteria.length === 0 ? (
-        <p className="text-sm text-muted-foreground">{t('acceptance.none')}</p>
+        <p className="text-body text-muted-foreground">
+          {t('acceptance.none')}
+        </p>
       ) : (
         <ul className="flex flex-col divide-y divide-border">
           {criteria.map((c) => (
@@ -412,7 +414,9 @@ function AcceptanceRow({
       <div className="min-w-0 space-y-1">
         <div className="flex flex-wrap items-center gap-2">
           {/* Identity, rendered as identity. Never an input. */}
-          <code className="font-mono text-xs">{criterion.criterion_key}</code>
+          <code className="font-mono text-caption">
+            {criterion.criterion_key}
+          </code>
           <Badge variant={stateVariant}>
             {t(`acceptance.state.${criterion.state}`)}
           </Badge>
@@ -420,9 +424,9 @@ function AcceptanceRow({
             <Badge variant="outline">{t('acceptance.required')}</Badge>
           ) : null}
         </div>
-        <p className="text-sm">{criterion.statement}</p>
+        <p className="text-body">{criterion.statement}</p>
         {criterion.evidence_ref ? (
-          <p className="font-mono text-xs text-muted-foreground">
+          <p className="font-mono text-caption text-muted-foreground">
             {criterion.evidence_ref}
           </p>
         ) : null}
@@ -463,14 +467,14 @@ function DependenciesTab({ itemId }: { itemId: string }) {
       <WorkSection query={query}>
         {(page) =>
           page.items.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-body text-muted-foreground">
               {t('dependencies.none')}
             </p>
           ) : (
             <>
               <ul className="flex flex-col divide-y divide-border">
                 {page.items.map((d) => (
-                  <li key={d.id} className="py-2 font-mono text-xs">
+                  <li key={d.id} className="py-2 font-mono text-caption">
                     {d.depends_on_id}
                   </li>
                 ))}
@@ -588,7 +592,9 @@ export function LeaseTab({
   if (!canRead) {
     // Una tabla vacía y «no tienes permiso» se ven igual, y sólo una de las dos es cierta.
     return (
-      <p className="py-4 text-sm text-muted-foreground">{t('lease.noRead')}</p>
+      <p className="py-4 text-body text-muted-foreground">
+        {t('lease.noRead')}
+      </p>
     )
   }
 
@@ -597,17 +603,21 @@ export function LeaseTab({
       <WorkSection query={query}>
         {({ lease }) => (
           <div className="flex flex-col gap-4">
-            <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+            <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-body">
               <dt className="text-muted-foreground">{t('lease.state')}</dt>
-              <dd className="font-mono text-xs">{lease.state}</dd>
+              <dd className="font-mono text-caption">{lease.state}</dd>
               <dt className="text-muted-foreground">{t('lease.holder')}</dt>
-              <dd className="font-mono text-xs">{lease.holder_sid || '—'}</dd>
+              <dd className="font-mono text-caption">
+                {lease.holder_sid || '—'}
+              </dd>
               <dt className="text-muted-foreground">{t('lease.fence')}</dt>
-              <dd className="font-mono text-xs">{lease.fence}</dd>
+              <dd className="font-mono text-caption">{lease.fence}</dd>
               <dt className="text-muted-foreground">{t('lease.expires')}</dt>
-              <dd className="font-mono text-xs">{lease.expires_at || '—'}</dd>
+              <dd className="font-mono text-caption">
+                {lease.expires_at || '—'}
+              </dd>
               <dt className="text-muted-foreground">{t('lease.renewals')}</dt>
-              <dd className="font-mono text-xs">{lease.renewal_count}</dd>
+              <dd className="font-mono text-caption">{lease.renewal_count}</dd>
               <dt className="text-muted-foreground">{t('lease.liveness')}</dt>
               <dd>
                 {/* THREE outcomes. The third is its own answer, not the negative one. */}
@@ -636,12 +646,12 @@ export function LeaseTab({
 
             {/* Saying WHY a control is inert beats a greyed button with no reason. */}
             {!canWrite && (
-              <p className="text-xs text-muted-foreground">
+              <p className="text-caption text-muted-foreground">
                 {t('lease.noWrite')}
               </p>
             )}
             {canWrite && !canAdmin && (
-              <p className="text-xs text-muted-foreground">
+              <p className="text-caption text-muted-foreground">
                 {t('lease.noAdmin')}
               </p>
             )}
@@ -665,7 +675,9 @@ function EventsTab({ itemId }: { itemId: string }) {
       <WorkSection query={query}>
         {(page) =>
           page.items.length === 0 ? (
-            <p className="text-sm text-muted-foreground">{t('events.none')}</p>
+            <p className="text-body text-muted-foreground">
+              {t('events.none')}
+            </p>
           ) : (
             <>
               <ul className="flex flex-col divide-y divide-border">
@@ -674,8 +686,8 @@ function EventsTab({ itemId }: { itemId: string }) {
                     key={e.id}
                     className="flex items-center justify-between gap-3 py-2"
                   >
-                    <code className="font-mono text-xs">{e.type}</code>
-                    <span className="text-xs text-muted-foreground">
+                    <code className="font-mono text-caption">{e.type}</code>
+                    <span className="text-caption text-muted-foreground">
                       #{e.seq} · {e.occurred_at}
                     </span>
                   </li>

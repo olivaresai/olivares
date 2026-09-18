@@ -789,7 +789,7 @@ func sessionsWorkPlanHashDescription(r moduleRoute) string {
 	return "Optional SHA-256 plan hash that apply must reproduce."
 }
 
-// --- inventory: the entity observation history (D08-C3) ------------------------
+// --- inventory: the entity observation history ---------------------------------
 //
 // GET /v1/m/inventory/entities/{kind}/{id}/observations is the first inventory
 // route published with a CLOSED contract instead of the generic envelope. The

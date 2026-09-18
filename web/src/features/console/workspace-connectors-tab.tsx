@@ -43,6 +43,7 @@ import {
   type WorkspaceDTO,
 } from './api'
 import { FormError } from './roles-shared'
+import { StaticTable } from '@/components/data/static-table'
 
 //Workspace connector scoping UI:
 // 1. Connector assignments: which global connectors are assigned to this workspace.
@@ -192,10 +193,10 @@ function AssignmentSection({
     <section className="flex flex-col gap-3">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h3 className="text-base font-semibold text-foreground">
+          <h3 className="text-heading text-foreground">
             {t('console:connectors.assignments')}
           </h3>
-          <p className="max-w-2xl text-sm text-muted-foreground">
+          <p className="max-w-2xl text-body text-muted-foreground">
             {t('console:connectors.assignmentsDesc')}
           </p>
         </div>
@@ -215,54 +216,44 @@ function AssignmentSection({
         />
       ) : (
         <div className="overflow-hidden rounded-lg border border-border">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
+          <StaticTable>
+            <thead>
               <tr>
-                <th className="px-3 py-2 font-medium">
-                  {t('console:connectors.connectorName')}
-                </th>
-                <th className="px-3 py-2 font-medium">
-                  {t('console:connectors.workspace')}
-                </th>
-                <th className="px-3 py-2 font-medium">
-                  {t('console:connectors.mode')}
-                </th>
-                <th className="px-3 py-2 font-medium">
-                  {t('console:connectors.statusLabel')}
-                </th>
-                <th className="px-3 py-2 font-medium">
-                  {t('console:connectors.note')}
-                </th>
-                <th className="px-3 py-2" />
+                <th>{t('console:connectors.connectorName')}</th>
+                <th>{t('console:connectors.workspace')}</th>
+                <th>{t('console:connectors.mode')}</th>
+                <th>{t('console:connectors.statusLabel')}</th>
+                <th>{t('console:connectors.note')}</th>
+                <th />
               </tr>
             </thead>
             <tbody>
               {items.map((assignment) => (
-                <tr key={assignment.id} className="border-t border-border">
-                  <td className="px-3 py-2 font-medium text-foreground">
+                <tr key={assignment.id}>
+                  <td className="font-medium text-foreground">
                     {assignment.connector_name}
                   </td>
-                  <td className="px-3 py-2">
+                  <td>
                     <Badge variant="outline">{assignment.workspace_ref}</Badge>
                   </td>
-                  <td className="px-3 py-2">
+                  <td>
                     <Badge variant="neutral">
                       {assignment.mode === 'r'
                         ? t('console:connectors.modeRead')
                         : t('console:connectors.modeReadWrite')}
                     </Badge>
                   </td>
-                  <td className="px-3 py-2">
+                  <td>
                     <Badge variant={assignment.enabled ? 'success' : 'neutral'}>
                       {assignment.enabled
                         ? t('common:status.enabled')
                         : t('common:status.disabled')}
                     </Badge>
                   </td>
-                  <td className="px-3 py-2 text-muted-foreground">
+                  <td className="text-muted-foreground">
                     {assignment.note || '—'}
                   </td>
-                  <td className="px-3 py-2 text-right">
+                  <td className="text-right">
                     {canWrite ? (
                       <div className="flex justify-end gap-1">
                         <Button
@@ -287,7 +278,7 @@ function AssignmentSection({
                 </tr>
               ))}
             </tbody>
-          </table>
+          </StaticTable>
         </div>
       )}
 
@@ -488,7 +479,7 @@ function AssignmentDialog({
                     onCheckedChange={setEnabled}
                     aria-label={t('console:connectors.enabled')}
                   />
-                  <span className="text-sm text-muted-foreground">
+                  <span className="text-body text-muted-foreground">
                     {enabled
                       ? t('common:status.enabled')
                       : t('common:status.disabled')}
@@ -612,10 +603,10 @@ function WsConnectorSection({
     <section className="flex flex-col gap-3">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h3 className="text-base font-semibold text-foreground">
+          <h3 className="text-heading text-foreground">
             {t('console:connectors.workspaceConnectors')}
           </h3>
-          <p className="max-w-2xl text-sm text-muted-foreground">
+          <p className="max-w-2xl text-body text-muted-foreground">
             {t('console:connectors.workspaceConnectorsDesc')}
           </p>
         </div>
@@ -635,40 +626,30 @@ function WsConnectorSection({
         />
       ) : (
         <div className="overflow-hidden rounded-lg border border-border">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
+          <StaticTable>
+            <thead>
               <tr>
-                <th className="px-3 py-2 font-medium">
-                  {t('console:connectors.name')}
-                </th>
-                <th className="px-3 py-2 font-medium">
-                  {t('console:connectors.kind')}
-                </th>
-                <th className="px-3 py-2 font-medium">
-                  {t('console:connectors.workspace')}
-                </th>
-                <th className="px-3 py-2 font-medium">
-                  {t('console:connectors.statusLabel')}
-                </th>
-                <th className="px-3 py-2 font-medium">
-                  {t('console:connectors.note')}
-                </th>
-                <th className="px-3 py-2" />
+                <th>{t('console:connectors.name')}</th>
+                <th>{t('console:connectors.kind')}</th>
+                <th>{t('console:connectors.workspace')}</th>
+                <th>{t('console:connectors.statusLabel')}</th>
+                <th>{t('console:connectors.note')}</th>
+                <th />
               </tr>
             </thead>
             <tbody>
               {items.map((connector) => (
-                <tr key={connector.id} className="border-t border-border">
-                  <td className="px-3 py-2 font-medium text-foreground">
+                <tr key={connector.id}>
+                  <td className="font-medium text-foreground">
                     {connector.name}
                   </td>
-                  <td className="px-3 py-2 font-mono text-xs text-muted-foreground">
+                  <td className="font-mono text-caption text-muted-foreground">
                     {connector.kind}
                   </td>
-                  <td className="px-3 py-2">
+                  <td>
                     <Badge variant="outline">{connector.workspace_ref}</Badge>
                   </td>
-                  <td className="px-3 py-2">
+                  <td>
                     <Badge
                       variant={
                         connector.enabled && connector.status === 'running'
@@ -681,10 +662,10 @@ function WsConnectorSection({
                         : t('common:status.disabled')}
                     </Badge>
                   </td>
-                  <td className="px-3 py-2 text-muted-foreground">
+                  <td className="text-muted-foreground">
                     {connector.note || '—'}
                   </td>
-                  <td className="px-3 py-2 text-right">
+                  <td className="text-right">
                     {canWrite ? (
                       <div className="flex justify-end gap-1">
                         <Button
@@ -709,7 +690,7 @@ function WsConnectorSection({
                 </tr>
               ))}
             </tbody>
-          </table>
+          </StaticTable>
         </div>
       )}
 
@@ -937,7 +918,7 @@ function WsConnectorDialog({
                     onCheckedChange={setEnabled}
                     aria-label={t('console:connectors.enabled')}
                   />
-                  <span className="text-sm text-muted-foreground">
+                  <span className="text-body text-muted-foreground">
                     {enabled
                       ? t('common:status.enabled')
                       : t('common:status.disabled')}

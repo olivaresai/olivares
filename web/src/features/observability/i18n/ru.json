@@ -91,6 +91,7 @@
     "loadingMore": "Загрузка…",
     "waterfallTitle": "Каскад спанов",
     "selectPrompt": "Выберите трассировку, чтобы увидеть её каскад спанов.",
+    "selectPromptHint": "Выберите трассу из списка, чтобы увидеть все её спаны с таймингами и ошибками.",
     "exportBtn": "Экспорт OTLP",
     "exportTitle": "Скачать OTLP-совместимый JSON для Jaeger / Tempo / Datadog",
     "legend": "Легенда акторов",

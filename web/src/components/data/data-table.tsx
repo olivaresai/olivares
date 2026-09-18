@@ -375,7 +375,10 @@ export function DataTable<TData extends RowData>({
     data.length === 0 ? (
       empty
     ) : (
-      <EmptyState title={t('states.noResults')} />
+      <EmptyState
+        description={t('states.noResultsHint')}
+        title={t('states.noResults')}
+      />
     )
   ) : null
 
@@ -772,7 +775,7 @@ export function DataTable<TData extends RowData>({
                 : ''}
           </div>
           <table
-            className="w-full border-collapse text-sm outline-none"
+            className="w-full border-collapse text-body outline-none"
             role={nav ? 'grid' : undefined}
             aria-label={nav ? (label ?? t('table.label')) : undefined}
             aria-busy={isLoading || undefined}
@@ -816,7 +819,7 @@ export function DataTable<TData extends RowData>({
                                 : undefined
                         }
                         className={cn(
-                          'bg-muted px-3 text-left align-middle text-xs font-medium tracking-wide text-muted-foreground uppercase',
+                          'bg-muted px-3 text-left align-middle text-caption font-medium tracking-wide text-muted-foreground uppercase',
                           rowH,
                           sticky && 'sticky top-0 z-10',
                         )}

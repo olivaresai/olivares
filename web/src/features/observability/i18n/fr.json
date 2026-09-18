@@ -91,6 +91,7 @@
     "loadingMore": "Chargement…",
     "waterfallTitle": "Cascade de spans",
     "selectPrompt": "Sélectionnez une trace pour voir sa cascade de spans.",
+    "selectPromptHint": "Choisissez une trace dans la liste pour voir chacune de ses spans, avec ses temps et ses erreurs.",
     "exportBtn": "Exporter OTLP",
     "exportTitle": "Télécharger le JSON compatible OTLP pour Jaeger / Tempo / Datadog",
     "legend": "Légende des acteurs",

@@ -147,7 +147,22 @@ test.describe('Launch-copy STATES over real seeded data', () => {
   }) => {
     await entrar(page)
     await page.goto('/agentops')
-    await page.getByRole('button', { name: /new session/i }).click()
+    // ⛔ THERE ARE TWO «New session» BUTTONS NOW, AND THE GUIDE PHOTOGRAPHS THE PAGE'S.
+    //    The work surface carries its own as the empty-state action of its context pane
+    //    (`sessions-workspace-view.tsx:1394` passes `emptyAction` into `WorkSurface`), so
+    //    `getByRole('button', { name: /new session/i })` resolves to two and Playwright
+    //    refuses in strict mode — measured 2026-09-18, and it named both: the page
+    //    header's, and `getByTestId('work-surface').getByRole(...)`.
+    //
+    //    `.first()` would make this pass by leaving the ambiguity inside, which is the
+    //    same mistake the docs harness records for its own `exact: true` fix: the remedy
+    //    NARROWS the question instead of silencing it. This says which button: the one
+    //    that is not inside the work surface, i.e. the page's own primary action.
+    await page
+      .locator(
+        'xpath=//button[not(ancestor::*[@data-testid="work-surface"])][normalize-space(.)="New session"]',
+      )
+      .click()
     // El diálogo se espera por su CONTENIDO, no por un `waitForTimeout`: un sleep fijo fotografía
     // el spinner en una caja lenta, que es exactamente lo que pasó en el primer intento de este
     // arnés — el testigo casaba con la miga de pan y la captura salió con el cargador girando.
@@ -182,8 +197,21 @@ test.describe('Launch-copy STATES over real seeded data', () => {
       'la pestaña Workspaces no abrió su panel',
     ).toBeVisible({ timeout: 15_000 })
 
-    const vacio = await page.getByText(/No workspaces registered/i).count()
-    if (vacio > 0) {
+    // ⛔ IT REGISTERS ITS OWN ROOT WHENEVER ITS OWN ROOT IS NOT THERE, not only when the
+    //    panel is empty. Measured 2026-09-18: the seeded estate now arrives with a host
+    //    workspace of its own (a disposable directory), so `No workspaces registered` was
+    //    false, this branch never ran, `Browse files` opened THAT workspace and the witness
+    //    below — `.github`, an entry of the repository tree — was about a root this test had
+    //    not registered. The assertion was right and its subject had changed.
+    //
+    //    So the condition is the presence of THIS test's workspace, and the browser is opened
+    //    from ITS row. That is what the constant above already promised: the root is captured
+    //    and checked against, rather than assumed to be the only one.
+    const yaRegistrado = await page
+      .getByRole('row')
+      .filter({ hasText: 'olivares-repo' })
+      .count()
+    if (yaRegistrado === 0) {
       await page.getByRole('button', { name: /Register workspace/i }).click()
       await expect(page.getByRole('dialog')).toBeVisible({ timeout: 10_000 })
       const dlg = page.getByRole('dialog')
@@ -219,14 +247,15 @@ test.describe('Launch-copy STATES over real seeded data', () => {
         trasRegistrar,
         `el workspace no quedó registrado.\n  aviso en pantalla: ${toast || '(ninguno)'}\n` +
           `  errores de consola: ${avisos.slice(0, 3).join(' | ') || '(ninguno)'}`,
-      ).not.toMatch(/No workspaces registered/i)
+      ).toMatch(/olivares-repo/)
     }
 
     // ⛔ El testigo NO es «existe el botón Browse files»: es que el navegador haya CARGADO. Un
     //    botón visible sólo prueba que hay una fila; la captura afirma un árbol de ficheros.
     await page
+      .getByRole('row')
+      .filter({ hasText: 'olivares-repo' })
       .getByRole('button', { name: /Browse files/i })
-      .first()
       .click()
     // ⚠ El testigo NO es la palabra «Files»: el panel se titula con el NOMBRE del workspace, no con
     //    esa etiqueta —visto en la captura del fallo—. Lo que demuestra que el navegador cargó es

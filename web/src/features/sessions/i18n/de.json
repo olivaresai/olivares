@@ -95,7 +95,8 @@
   "tabs": {
     "sessions": "Sitzungen",
     "workspaces": "Arbeitsbereiche",
-    "profiles": "Anbieterprofile"
+    "profiles": "Anbieterprofile",
+    "table": "Tabelle"
   },
   "partial": {
     "noLiveRead": "Beobachtete Sitzungen werden nicht angezeigt: Ihre Rolle enthält sessions:live:read nicht. Die gestarteten unten sind der lesbare Teil, nicht das ganze Bild.",
@@ -212,5 +213,104 @@
     "stopped": "Gestoppt",
     "failed": "Fehlgeschlagen",
     "cleaned": "Aufgeräumt"
+  },
+  "address": {
+    "retired": "Die geöffnete Sitzung wurde geschlossen. Ihr Zugriff auf die Hälfte, aus der sie stammt, hat sich geändert. Wählen Sie eine Zeile, um eine Sitzung mit Ihrem aktuellen Zugriff zu öffnen."
+  },
+  "work": {
+    "worked": "{{duration}} gearbeitet",
+    "toolCalls_one": "{{count}} Tool-Aufruf",
+    "toolCalls_other": "{{count}} Tool-Aufrufe",
+    "events_one": "{{count}} Ereignis",
+    "events_other": "{{count}} Ereignisse"
+  },
+  "rail": {
+    "label": "Arbeitsleiste",
+    "group": {
+      "active": "Aktiv",
+      "attention": "Wartet auf Sie",
+      "settled": "Abgeschlossen"
+    },
+    "groupEmpty": {
+      "active": "Derzeit läuft nichts.",
+      "attention": "Nichts wartet auf Sie.",
+      "settled": "Noch wurde keine Sitzung abgeschlossen."
+    },
+    "pin": "Anheften",
+    "unpin": "Lösen",
+    "pinnedMark": "Angeheftet",
+    "rowMenu": "Aktionen für {{name}}",
+    "noObservation": "Für diese Sitzung ist noch keine Telemetrie eingetroffen.",
+    "emptyTitle": "Noch keine Sitzungen",
+    "emptyDescription": "Jede Sitzung, die diese Installation beobachtet oder startet, erscheint hier, gruppiert danach, was sie von Ihnen braucht."
+  },
+  "surface": {
+    "paneSwitcher": "Bereich wählen",
+    "pane": {
+      "rail": "Sitzungen",
+      "narrative": "Arbeit",
+      "context": "Kontext"
+    }
+  },
+  "narrative": {
+    "noneTitle": "Sitzung auswählen",
+    "noneDescription": "Wählen Sie eine Sitzung in der Leiste, um zu lesen, was sie getan hat — mit ihren Belegen daneben.",
+    "openDetail": "Alle Steuerungen",
+    "noObjective": "Die Engine hat für diese Sitzung kein Ziel gemeldet; daher wird ihre Referenz angezeigt.",
+    "notReadTitle": "Diese Sitzung konnte nicht gelesen werden",
+    "menu": "Aktionen für {{name}}"
+  },
+  "evidence": {
+    "checks": {
+      "title": "Prüfungen",
+      "empty": "Diese Sitzung hat keine Funde gemeldet."
+    },
+    "activity": {
+      "title": "Letzte Schritte",
+      "empty": "Diese Sitzung hat keine Tool- oder MCP-Aufrufe gemacht."
+    },
+    "resources": {
+      "title": "Berührte Ressourcen",
+      "empty": "Kein Eintrag nennt eine Ressource."
+    },
+    "forbiddenTitle": "Belege nicht freigegeben",
+    "forbiddenDescription": "Ihre Rolle enthält keine Berechtigung, Sitzungstelemetrie zu lesen.",
+    "errorTitle": "Die Belege konnten nicht gelesen werden",
+    "errorDescription": "Der Zeitleisten-Abruf hat nicht geantwortet. Eine leere Liste hier würde bedeuten, dass die Sitzung nichts getan hat — das ist etwas anderes.",
+    "atLeast_one": "mindestens {{count}}",
+    "atLeast_other": "mindestens {{count}}",
+    "touches_one": "{{count}} Eintrag",
+    "touches_other": "{{count}} Einträge"
+  },
+  "context": {
+    "noneTitle": "Keine Sitzung ausgewählt",
+    "noneDescription": "Hier erscheinen der Geltungsbereich, unter dem eine Sitzung lief, und die Referenzen, mit denen Sie sie nachschlagen.",
+    "scopeTitle": "Geltungsbereich",
+    "scopeHint": "Worauf sich diese Sitzung bezieht. Dies sind die Werte, unter denen sie lief, nicht die jetzt ausgewählten.",
+    "tenant": "Organisation",
+    "workspace": "Arbeitsbereich",
+    "environment": "Umgebung",
+    "provider": "Anbieter",
+    "profile": "Anbieterprofil",
+    "traceTitle": "Spur",
+    "traceHint": "Die Referenzen, unter denen diese Sitzung bekannt ist, und was die Ebene über sie aufgezeichnet hat.",
+    "sessionRef": "Sitzungsreferenz",
+    "liveRef": "Zeilenreferenz",
+    "runRef": "Laufreferenz",
+    "canonicalSid": "Kanonische Sitzungs-ID",
+    "binding": "Quellenbindung",
+    "engine": "Agenten-Engine",
+    "posture": "Governance-Haltung",
+    "governance": "Was die Ebene aufgezeichnet hat",
+    "pepOn": "Tool-Aufrufe werden inline kontrolliert.",
+    "pepOff": "Tool-Aufrufe werden nicht inline kontrolliert.",
+    "recordOn": "Ein- und Ausgabe werden als Beleg verankert.",
+    "recordOff": "Ein- und Ausgabe werden nicht aufgezeichnet.",
+    "approval": "Freigabe",
+    "none": "Keine",
+    "notDeclared": "Nicht angegeben",
+    "copy": "Kopieren",
+    "copied": "Kopiert",
+    "copyRef": "{{value}} kopieren"
   }
 }

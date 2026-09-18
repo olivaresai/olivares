@@ -27,6 +27,7 @@ import { formatInt } from '@/lib/format'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { workspaceDashboardApi, workspaceDashboardKeys } from './api'
 import './i18n'
+import { StaticTable } from '@/components/data/static-table'
 
 export function WorkspaceDashboardView() {
   const { t } = useTranslation(['workspaceDashboard', 'common'])
@@ -93,7 +94,7 @@ function WorkspaceDashboard({
       title={title}
       description={
         s && (
-          <span className="flex items-center gap-2 font-mono text-sm text-muted-foreground">
+          <span className="flex items-center gap-2 font-mono text-body text-muted-foreground">
             {s.slug}
             {s.is_default && (
               <Badge variant="neutral">
@@ -156,9 +157,7 @@ function WorkspaceDashboard({
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-3">
             <div>
-              <CardTitle className="text-base">
-                {t('workspaceDashboard:recentAgents')}
-              </CardTitle>
+              <CardTitle>{t('workspaceDashboard:recentAgents')}</CardTitle>
               <CardDescription>
                 {s
                   ? `${cuentaConSuelo(s.agent_count, s.agent_count_capped, formatInt)} ${t('workspaceDashboard:agents').toLowerCase()}`
@@ -182,36 +181,27 @@ function WorkspaceDashboard({
               className="px-0 pt-0 pb-3"
             />
             {agentsQ.data?.items.length === 0 ? (
-              <p className="py-4 text-center text-sm text-muted-foreground">
+              <p className="py-4 text-center text-body text-muted-foreground">
                 {t('workspaceDashboard:noAgents')}
               </p>
             ) : (
               <div className="overflow-hidden rounded-lg border border-border">
-                <table className="w-full text-sm">
-                  <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
+                <StaticTable>
+                  <thead>
                     <tr>
-                      <th className="px-3 py-2 font-medium">
-                        {t('workspaceDashboard:name')}
-                      </th>
-                      <th className="px-3 py-2 font-medium">
-                        {t('workspaceDashboard:kind')}
-                      </th>
-                      <th className="px-3 py-2 font-medium">
-                        {t('workspaceDashboard:status')}
-                      </th>
+                      <th>{t('workspaceDashboard:name')}</th>
+                      <th>{t('workspaceDashboard:kind')}</th>
+                      <th>{t('workspaceDashboard:status')}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {agentsQ.data?.items.map((a) => (
-                      <tr
-                        key={a.id}
-                        className="border-t border-border align-top"
-                      >
-                        <td className="px-3 py-2 font-medium">{a.name}</td>
-                        <td className="px-3 py-2">
+                      <tr key={a.id} className="align-top">
+                        <td className="font-medium">{a.name}</td>
+                        <td>
                           <Badge variant="outline">{a.kind}</Badge>
                         </td>
-                        <td className="px-3 py-2">
+                        <td>
                           <Badge
                             variant={
                               a.status === 'active' ? 'success' : 'neutral'
@@ -223,7 +213,7 @@ function WorkspaceDashboard({
                       </tr>
                     ))}
                   </tbody>
-                </table>
+                </StaticTable>
               </div>
             )}
           </CardContent>
@@ -233,9 +223,7 @@ function WorkspaceDashboard({
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-3">
             <div>
-              <CardTitle className="text-base">
-                {t('workspaceDashboard:recentGroups')}
-              </CardTitle>
+              <CardTitle>{t('workspaceDashboard:recentGroups')}</CardTitle>
               <CardDescription>
                 {s
                   ? `${cuentaConSuelo(s.group_count, s.group_count_capped, formatInt)} ${t('workspaceDashboard:groups').toLowerCase()}`
@@ -259,36 +247,25 @@ function WorkspaceDashboard({
               className="px-0 pt-0 pb-3"
             />
             {groupsQ.data?.items.length === 0 ? (
-              <p className="py-4 text-center text-sm text-muted-foreground">
+              <p className="py-4 text-center text-body text-muted-foreground">
                 {t('workspaceDashboard:noGroups')}
               </p>
             ) : (
               <div className="overflow-hidden rounded-lg border border-border">
-                <table className="w-full text-sm">
-                  <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
+                <StaticTable>
+                  <thead>
                     <tr>
-                      <th className="px-3 py-2 font-medium">
-                        {t('workspaceDashboard:name')}
-                      </th>
-                      <th className="px-3 py-2 font-medium">
-                        {t('workspaceDashboard:slug')}
-                      </th>
-                      <th className="px-3 py-2 font-medium">
-                        {t('workspaceDashboard:status')}
-                      </th>
+                      <th>{t('workspaceDashboard:name')}</th>
+                      <th>{t('workspaceDashboard:slug')}</th>
+                      <th>{t('workspaceDashboard:status')}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {groupsQ.data?.items.map((g) => (
-                      <tr
-                        key={g.id}
-                        className="border-t border-border align-top"
-                      >
-                        <td className="px-3 py-2 font-medium">{g.name}</td>
-                        <td className="px-3 py-2 font-mono text-xs">
-                          {g.slug}
-                        </td>
-                        <td className="px-3 py-2">
+                      <tr key={g.id} className="align-top">
+                        <td className="font-medium">{g.name}</td>
+                        <td className="font-mono text-caption">{g.slug}</td>
+                        <td>
                           <Badge
                             variant={
                               g.status === 'active' ? 'success' : 'neutral'
@@ -300,7 +277,7 @@ function WorkspaceDashboard({
                       </tr>
                     ))}
                   </tbody>
-                </table>
+                </StaticTable>
               </div>
             )}
           </CardContent>
@@ -311,12 +288,10 @@ function WorkspaceDashboard({
       {summaryQ.data && (
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">
-              {t('workspaceDashboard:workspaceInfo')}
-            </CardTitle>
+            <CardTitle>{t('workspaceDashboard:workspaceInfo')}</CardTitle>
           </CardHeader>
           <CardContent>
-            <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-4">
+            <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-body sm:grid-cols-4">
               <div>
                 <dt className="text-muted-foreground">
                   {t('workspaceDashboard:slug')}

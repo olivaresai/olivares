@@ -34,6 +34,7 @@ import { useAuth } from '@/lib/auth/context'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
 import { consoleApi, consoleKeys, type GroupDTO } from './api'
 import { FormError } from './roles-shared'
+import { StaticTable } from '@/components/data/static-table'
 
 /** The tenant roles a group may be mapped to, and the sentinel the picker uses
  * for "no mapping" (an empty Select value is indistinguishable from unset). */
@@ -75,10 +76,10 @@ export function GroupHierarchySection({ canAdmin }: { canAdmin: boolean }) {
   return (
     <section className="flex flex-col gap-3">
       <div>
-        <h2 className="text-base font-semibold text-foreground">
+        <h2 className="text-heading text-foreground">
           {t('console:granular.groupSubjects.title')}
         </h2>
-        <p className="max-w-2xl text-sm text-muted-foreground">
+        <p className="max-w-2xl text-body text-muted-foreground">
           {t('console:granular.groupSubjects.caption')}
         </p>
       </div>
@@ -91,45 +92,38 @@ export function GroupHierarchySection({ canAdmin }: { canAdmin: boolean }) {
         <ErrorState retry={() => void query.refetch()} />
       ) : groups.length === 0 ? (
         <EmptyState
+          description={t('console:granular.groupSubjects.noGroupsHint')}
           title={t('console:granular.groupSubjects.noGroups')}
           icon={<GitBranch />}
         />
       ) : (
         <div className="overflow-hidden rounded-lg border border-border">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
+          <StaticTable>
+            <thead>
               <tr>
-                <th className="px-3 py-2 font-medium">
-                  {t('console:granular.groupSubjects.colName')}
-                </th>
-                <th className="px-3 py-2 font-medium">
-                  {t('console:granular.groupSubjects.colParent')}
-                </th>
-                <th className="px-3 py-2 font-medium">
-                  {t('console:granular.groupSubjects.colMembers')}
-                </th>
-                <th className="px-3 py-2 font-medium">
-                  {t('console:granular.groupSubjects.colRole')}
-                </th>
-                {canAdmin && <th className="px-3 py-2" />}
+                <th>{t('console:granular.groupSubjects.colName')}</th>
+                <th>{t('console:granular.groupSubjects.colParent')}</th>
+                <th>{t('console:granular.groupSubjects.colMembers')}</th>
+                <th>{t('console:granular.groupSubjects.colRole')}</th>
+                {canAdmin && <th />}
               </tr>
             </thead>
             <tbody>
               {groups.map((g) => (
-                <tr key={g.id} className="border-t border-border">
-                  <td className="px-3 py-2 font-mono text-xs text-foreground">
+                <tr key={g.id}>
+                  <td className="font-mono text-caption text-foreground">
                     {g.display_name || g.id}
                   </td>
-                  <td className="px-3 py-2 text-foreground">
+                  <td className="text-foreground">
                     {g.parent_group_id
                       ? (groups.find((p) => p.id === g.parent_group_id)
                           ?.display_name ?? g.parent_group_id)
                       : t('console:granular.groupSubjects.noParent')}
                   </td>
-                  <td className="px-3 py-2">
+                  <td>
                     <Badge variant="neutral">{g.members}</Badge>
                   </td>
-                  <td className="px-3 py-2">
+                  <td>
                     {g.mapped_role ? (
                       <Badge variant="accent">{g.mapped_role}</Badge>
                     ) : (
@@ -137,7 +131,7 @@ export function GroupHierarchySection({ canAdmin }: { canAdmin: boolean }) {
                     )}
                   </td>
                   {canAdmin && (
-                    <td className="px-3 py-2 text-right">
+                    <td className="text-right">
                       <div className="flex justify-end gap-1">
                         <Button
                           variant="ghost"
@@ -171,7 +165,7 @@ export function GroupHierarchySection({ canAdmin }: { canAdmin: boolean }) {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </StaticTable>
         </div>
       )}
 
@@ -372,7 +366,7 @@ function MapRoleForm({
         </Select>
       </Field>
       {ceiling ? (
-        <p role="alert" className="text-sm text-danger">
+        <p role="alert" className="text-body text-danger">
           {t('console:granular.groupSubjects.roleCeiling')}
         </p>
       ) : (

@@ -87,6 +87,45 @@ const CLASS_ATTRS = new Set(['className', 'class'])
 // paired variants which exclude each other because it attached no guard.
 const CLASS_HELPERS = new Set(['cn', 'clsx', 'classNames', 'twMerge', 'twJoin'])
 
+/**
+ * The OPERATOR TYPE SCALE, read from the token source rather than typed here.
+ *
+ * ⛔ WHY IT IS DERIVED. `text-*` is one namespace holding two unrelated things:
+ *    colours (`text-danger`) and sizes (`text-sm`). The list below used to enumerate
+ *    Tailwind's built-in sizes, which is fine as long as nobody adds one — and the
+ *    operator type scale added seven (`text-display-lg` … `text-overline`,
+ *    web/tokens/primitives.tokens.json,
+ *    the `type` group). The gate did NOT go quiet about them: it reported them as
+ *    `NOT MEASURED — no color rule for .text-body` and exited 2, which is the whole
+ *    point of its fail-closed design. But the remedy must not be a second
+ *    hand-written list, because that is the defect this whole module exists to
+ *    remove. Reading the scale is how the gate follows it.
+ *
+ * Returns an empty set if the source cannot be read: an unreadable token file must
+ * not silently turn size utilities into colours, so the caller's fail-closed
+ * "NOT MEASURED" is the answer it gets.
+ */
+function typeScaleUtilities(): Set<string> {
+  try {
+    const raw = readFileSync(
+      join(repoRoot, 'web', 'tokens', 'primitives.tokens.json'),
+      'utf8',
+    )
+    const group = (JSON.parse(raw) as Record<string, unknown>).type
+    if (!group || typeof group !== 'object') return new Set()
+    // Leaf keys are the CSS custom-property names; the `--line-height` and
+    // `--letter-spacing` sub-keys are not utilities and are skipped.
+    return new Set(
+      Object.keys(group).filter(
+        (k) => /^text-[a-z0-9-]+$/.test(k) && !k.includes('--'),
+      ),
+    )
+  } catch {
+    return new Set()
+  }
+}
+const TYPE_SCALE = typeScaleUtilities()
+
 /** Tailwind `text-*` utilities that are NOT colours. */
 const TEXT_NON_COLOUR =
   /^text-(xs|sm|base|lg|xl|\d?xl|left|center|right|justify|start|end|wrap|nowrap|balance|pretty|ellipsis|clip|top|bottom|middle|super|sub|\[[\d.]+(rem|px|em)\]|\[length:)/
@@ -103,6 +142,7 @@ function isColourText(base: string) {
   return (
     base.startsWith('text-') &&
     !TEXT_NON_COLOUR.test(base) &&
+    !TYPE_SCALE.has(base) &&
     !TEXT_INHERITS.test(base) &&
     !TEXT_INVISIBLE.test(base)
   )
@@ -260,27 +300,13 @@ function collectClasses(
   if (ts.isTemplateExpression(node)) {
     push(node.head.text, node)
     for (const span of node.templateSpans) {
-      collectClasses(
-        span.expression,
-        guards,
-        sf,
-        file,
-        out,
-        unresolved,
-      )
+      collectClasses(span.expression, guards, sf, file, out, unresolved)
       push(span.literal.text, span.literal)
     }
     return
   }
   if (ts.isParenthesizedExpression(node)) {
-    return collectClasses(
-      node.expression,
-      guards,
-      sf,
-      file,
-      out,
-      unresolved,
-    )
+    return collectClasses(node.expression, guards, sf, file, out, unresolved)
   }
   if (ts.isConditionalExpression(node)) {
     const id = normaliseCond(node.condition)
@@ -321,26 +347,12 @@ function collectClasses(
     ) {
       // Either side can be the painted value; neither implies the other.
       collectClasses(node.left, guards, sf, file, out, unresolved)
-      collectClasses(
-        node.right,
-        guards,
-        sf,
-        file,
-        out,
-        unresolved,
-      )
+      collectClasses(node.right, guards, sf, file, out, unresolved)
       return
     }
     if (k === ts.SyntaxKind.PlusToken) {
       collectClasses(node.left, guards, sf, file, out, unresolved)
-      collectClasses(
-        node.right,
-        guards,
-        sf,
-        file,
-        out,
-        unresolved,
-      )
+      collectClasses(node.right, guards, sf, file, out, unresolved)
       return
     }
   }
@@ -394,14 +406,7 @@ function collectClasses(
           }
         }
       } else if (ts.isSpreadAssignment(prop)) {
-        collectClasses(
-          prop.expression,
-          guards,
-          sf,
-          file,
-          out,
-          unresolved,
-        )
+        collectClasses(prop.expression, guards, sf, file, out, unresolved)
       }
     }
     return
@@ -416,14 +421,7 @@ function collectClasses(
     ts.isNonNullExpression(node) ||
     ts.isSatisfiesExpression(node)
   ) {
-    return collectClasses(
-      node.expression,
-      guards,
-      sf,
-      file,
-      out,
-      unresolved,
-    )
+    return collectClasses(node.expression, guards, sf, file, out, unresolved)
   }
   if (
     ts.isIdentifier(node) ||

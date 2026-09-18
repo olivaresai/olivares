@@ -167,7 +167,7 @@ export function ApiPlaygroundView() {
           {visibleSelectedEndpoint ? (
             <RequestPanel endpoint={visibleSelectedEndpoint} />
           ) : (
-            <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+            <div className="flex h-full items-center justify-center text-body text-muted-foreground">
               {t('selectEndpoint')}
             </div>
           )}

@@ -100,7 +100,7 @@ export function ConfidenceBadge({
     return (
       <span
         className={cn(
-          'inline-flex items-center gap-1.5 rounded-sm border border-dashed border-confidence-approximate/60 px-1.5 py-0.5 text-xs font-medium text-confidence-approximate',
+          'inline-flex items-center gap-1.5 rounded-sm border border-dashed border-confidence-approximate/60 px-1.5 py-0.5 text-caption font-medium text-confidence-approximate',
           className,
         )}
         title={t('confidence.approximateHint')}
@@ -117,7 +117,7 @@ export function ConfidenceBadge({
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1.5 rounded-sm border border-confidence-attributed/40 px-1.5 py-0.5 text-xs font-medium text-confidence-attributed',
+        'inline-flex items-center gap-1.5 rounded-sm border border-confidence-attributed/40 px-1.5 py-0.5 text-caption font-medium text-confidence-attributed',
         className,
       )}
       title={t('confidence.attributedHint')}

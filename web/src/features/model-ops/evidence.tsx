@@ -58,7 +58,9 @@ export function ModelEvidenceTab() {
         accessorKey: 'owned_ref',
         header: t('evidenceLedger.columns.ownedRef'),
         cell: ({ row }) => (
-          <span className="font-mono text-xs">{row.original.owned_ref}</span>
+          <span className="font-mono text-caption">
+            {row.original.owned_ref}
+          </span>
         ),
       },
       {
@@ -79,7 +81,7 @@ export function ModelEvidenceTab() {
         accessorKey: 'spec_version',
         header: t('evidenceLedger.columns.spec'),
         cell: ({ row }) => (
-          <span className="font-mono text-xs text-muted-foreground">
+          <span className="font-mono text-caption text-muted-foreground">
             CycloneDX {row.original.spec_version}
           </span>
         ),
@@ -218,7 +220,7 @@ function SealDrawer({
         {seal && (
           <>
             <SheetHeader>
-              <SheetTitle className="font-mono text-sm">
+              <SheetTitle className="font-mono text-body">
                 {seal.owned_ref}
               </SheetTitle>
               <SheetDescription>

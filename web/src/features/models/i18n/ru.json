@@ -47,6 +47,8 @@
     "title": "Управляемые модели",
     "description": "Модели в ландшафте этого тенанта, обогащённые данными из каталога.",
     "empty": "В ландшафте нет моделей",
+    "emptyHint": "Каждая модель, доступная этому арендатору, перечислена здесь с провайдером и лимитами. Добавьте провайдера, чтобы наполнить парк.",
+    "addProvider": "Добавить провайдера",
     "columns": {
       "name": "Модель",
       "provider": "Провайдер",
@@ -120,6 +122,7 @@
     "description": "Управляемые ссылки на ключи API и рабочие области провайдеров. Хранится только маскированная подсказка — никогда значение секрета.",
     "new": "Добавить ссылку на ключ",
     "empty": "Нет ссылок на ключи",
+    "emptyHint": "Ссылка на ключ указывает на учётные данные, которые хранит движок, но не на сам секрет. Добавьте одну, чтобы модель можно было вызвать.",
     "maskedOnly": "Только ссылка — значение секрета никогда не хранится и не отображается.",
     "columns": {
       "name": "Название",
@@ -233,6 +236,7 @@
     "title": "Резидентность рабочих пространств",
     "description": "Где каждое рабочее пространство выполняет вывод и где хранятся его данные, по сообщению поставщика.",
     "empty": "Ни одно рабочее пространство не сообщает настройки резидентности",
+    "emptyHint": "Настройки резидентности определяют, в каких регионах рабочее пространство может вызывать модели. Ни одно пространство их не объявило.",
     "unrestricted": "Поставщик не сообщает об ограничениях",
     "allowed": "Разрешено: {{geos}}",
     "unreported": "не сообщено",
@@ -245,9 +249,11 @@
     "title": "Model access rules",
     "description": "Who may use which model, and where.",
     "empty": "No access rules — every subject is unrestricted",
+    "emptyHint": "Правило доступа определяет, какие субъекты могут вызывать какие модели. Без правил любой субъект может вызвать любую модель парка.",
     "groupsTitle": "Model groups",
     "groupsDescription": "Named sets a rule can target instead of a single model.",
     "groupsEmpty": "No model groups",
+    "groupsEmptyHint": "Группа моделей объединяет набор моделей под одним именем, чтобы одно правило управляло всеми. Создайте одну, чтобы начать.",
     "members": "{{n}} members",
     "confinementNotice": "⛔ An allow is not only additive. A subject NAMED by any allow is CONFINED to its allows — everything else becomes denied for them. A subject named by no rule is unrestricted. So creating the FIRST allow for someone TAKES AWAY the rest of the catalogue from them.",
     "effect": {

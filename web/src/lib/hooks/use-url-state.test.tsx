@@ -313,3 +313,53 @@ describe('UrlStateNotice re-arms on a new rejection', () => {
     expect(screen.getByTestId('url-state-notice')).toBeInTheDocument()
   })
 })
+
+describe('history mode — a place pushes, a filter replaces', () => {
+  beforeEach(() => {
+    seedLocation('/sessions')
+    navigateMock.mockClear()
+  })
+
+  it('still replaces by default, which every existing consumer depends on', () => {
+    const { result } = renderHook(() => useUrlState(['q']))
+    act(() => result.current[1]({ q: 'deny' }))
+    expect(navigateMock.mock.calls[0][0].replace).toBe(true)
+  })
+
+  it('pushes when the call site declares its state a place', () => {
+    const { result } = renderHook(() =>
+      useUrlState(['session'], { history: 'push' }),
+    )
+    act(() => result.current[1]({ session: 'live:abc' }))
+    expect(navigateMock.mock.calls[0][0].replace).toBe(false)
+  })
+
+  it('lets one patch overrule the call site, both ways', () => {
+    const { result } = renderHook(() =>
+      useUrlState(['session', 'pane'], { history: 'push' }),
+    )
+    // The pane is a facet of the place, not another place.
+    act(() => result.current[1]({ pane: 'context' }, { history: 'replace' }))
+    expect(navigateMock.mock.calls[0][0].replace).toBe(true)
+
+    const { result: filter } = renderHook(() => useUrlState(['q']))
+    act(() => filter.current[1]({ q: 'deny' }, { history: 'push' }))
+    expect(navigateMock.mock.calls[1][0].replace).toBe(false)
+  })
+
+  it('clears a REFUSED key with a replace even on a pushing call site', () => {
+    // A value that was never in effect is not a place anyone can go back to. If this
+    // cleanup pushed, a pasted bad link would leave a history entry whose URL the
+    // screen never matched — and Back would walk into it.
+    seedLocation('/sessions?session=nonsense')
+    const decode = (raw: Record<string, string | undefined>) =>
+      raw.session === 'nonsense'
+        ? { value: { session: null }, issues: ['session'] }
+        : { value: { session: raw.session ?? null }, issues: [] }
+    renderHook(() =>
+      useValidatedUrlState(['session'], decode, { history: 'push' }),
+    )
+    expect(navigateMock).toHaveBeenCalledTimes(1)
+    expect(navigateMock.mock.calls[0][0].replace).toBe(true)
+  })
+})

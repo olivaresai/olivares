@@ -197,7 +197,7 @@ export function PolicyAuthoringPanel({
                   />
                 </div>
               ) : (
-                <p className="rounded-md border border-dashed border-border px-3 py-4 text-xs text-muted-foreground">
+                <p className="rounded-md border border-dashed border-border px-3 py-4 text-caption text-muted-foreground">
                   {t('panel.fixJsonToUseForm')}
                 </p>
               )}
@@ -266,7 +266,7 @@ export function PolicyAuthoringPanel({
             </Button>
           )}
           {errorCount > 0 && (
-            <span className="text-xs text-danger">
+            <span className="text-caption text-danger">
               {t('panel.fixErrorsFirst')}
             </span>
           )}
@@ -296,7 +296,7 @@ export function PolicyAuthoringPanel({
         pending={publishMutation.isPending}
         onConfirm={() => publishMutation.mutate()}
       >
-        <p className="text-xs text-muted-foreground">
+        <p className="text-caption text-muted-foreground">
           {t('publish.confirmNote')}
         </p>
       </ConfirmDialog>
@@ -311,7 +311,7 @@ function DryRunResultPanel({ result }: { result: DryRunResult }) {
       {result.resolved && result.resolved.length > 0 && (
         <ol className="mb-3 flex flex-col gap-1">
           {result.resolved.map((r, i) => (
-            <li key={i} className="flex items-center gap-2 text-xs">
+            <li key={i} className="flex items-center gap-2 text-caption">
               <Badge variant="outline">{r.scope}</Badge>
               <span className="text-muted-foreground">{r.note}</span>
             </li>
@@ -321,16 +321,18 @@ function DryRunResultPanel({ result }: { result: DryRunResult }) {
       {result.changes && result.changes.length > 0 ? (
         <ul className="flex flex-col gap-1">
           {result.changes.map((c, i) => (
-            <li key={i} className="font-mono text-xs">
+            <li key={i} className="font-mono text-caption">
               <span className="text-muted-foreground">{c.path}</span>
             </li>
           ))}
         </ul>
       ) : (
-        <p className="text-xs text-muted-foreground">{t('dryRun.noChanges')}</p>
+        <p className="text-caption text-muted-foreground">
+          {t('dryRun.noChanges')}
+        </p>
       )}
       {result.notes?.map((n, i) => (
-        <p key={i} className="mt-2 text-xs text-muted-foreground">
+        <p key={i} className="mt-2 text-caption text-muted-foreground">
           {n}
         </p>
       ))}
@@ -356,7 +358,7 @@ function PublishResultPanel({ result }: { result: PublishResult }) {
       title={t('publish.driftTitle')}
       description={t('publish.driftSubtitle')}
     >
-      <div className="mb-2 flex flex-wrap items-center gap-2 text-xs">
+      <div className="mb-2 flex flex-wrap items-center gap-2 text-caption">
         <Badge variant={distributionTone(result.distribution)}>
           {t(`publish.dist.${result.distribution ?? 'seam-pending'}`, {
             defaultValue: result.distribution ?? 'seam-pending',
@@ -372,14 +374,14 @@ function PublishResultPanel({ result }: { result: PublishResult }) {
       {drift.length > 0 ? (
         <DriftFindingList findings={drift} />
       ) : result.drift_computed ? (
-        <p className="text-xs text-success">{t('publish.noDrift')}</p>
+        <p className="text-caption text-success">{t('publish.noDrift')}</p>
       ) : (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-caption text-muted-foreground">
           {t('publish.driftUnknown')}
         </p>
       )}
       {result.notes?.map((n, i) => (
-        <p key={i} className="mt-1.5 text-xs text-muted-foreground">
+        <p key={i} className="mt-1.5 text-caption text-muted-foreground">
           {n}
         </p>
       ))}
@@ -402,7 +404,7 @@ function DistributionTab({ surface }: { surface: PolicySurface }) {
     <DeclaredSection query={query} what={t('dist.what')}>
       {(view: PolicyDistributionView) => (
         <div className="flex flex-col gap-3">
-          <div className="flex flex-wrap items-center gap-2 text-xs">
+          <div className="flex flex-wrap items-center gap-2 text-caption">
             <Badge variant="outline">
               {t('dist.latestRevision', { n: view.latest_revision ?? 0 })}
             </Badge>
@@ -420,12 +422,10 @@ function DistributionTab({ surface }: { surface: PolicySurface }) {
               {view.scopes.map((s) => (
                 <li
                   key={s.scope}
-                  className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs"
+                  className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-surface px-2.5 py-1.5 text-caption"
                 >
                   <span className="font-mono">{s.scope}</span>
-                  <Badge variant="outline">
-                    r{s.reported_revision ?? '—'}
-                  </Badge>
+                  <Badge variant="outline">r{s.reported_revision ?? '—'}</Badge>
                   <Badge variant={s.current ? 'success' : 'warning'}>
                     {s.current ? t('dist.current') : t('dist.stale')}
                   </Badge>
@@ -448,7 +448,7 @@ function DistributionTab({ surface }: { surface: PolicySurface }) {
             </ol>
           )}
           {view.notes?.map((n, i) => (
-            <p key={i} className="text-xs text-muted-foreground">
+            <p key={i} className="text-caption text-muted-foreground">
               {n}
             </p>
           ))}
@@ -473,7 +473,7 @@ function VersionsTab({ surface }: { surface: PolicySurface }) {
         const items = data.items ?? []
         if (items.length === 0) {
           return (
-            <p className="text-xs text-muted-foreground">
+            <p className="text-caption text-muted-foreground">
               {t('versions.empty')}
             </p>
           )
@@ -490,7 +490,7 @@ function VersionsTab({ surface }: { surface: PolicySurface }) {
               {items.map((v, i) => (
                 <li
                   key={v.revision}
-                  className="flex items-center gap-2 rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs"
+                  className="flex items-center gap-2 rounded-md border border-border bg-surface px-2.5 py-1.5 text-caption"
                 >
                   <Badge variant="outline">r{v.revision}</Badge>
                   <span className="text-muted-foreground">

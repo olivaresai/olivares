@@ -95,7 +95,8 @@
   "tabs": {
     "sessions": "会话",
     "workspaces": "工作区",
-    "profiles": "提供商配置文件"
+    "profiles": "提供商配置文件",
+    "table": "表格"
   },
   "partial": {
     "noLiveRead": "未显示被观察的会话：你的角色不包含 sessions:live:read。下面这些已启动的会话只是能读到的部分，不是全貌。",
@@ -212,5 +213,100 @@
     "stopped": "已停止",
     "failed": "失败",
     "cleaned": "已清理"
+  },
+  "address": {
+    "retired": "已打开的会话已关闭。您对其来源半边的访问权限发生了变化。请选择一行，以当前权限打开会话。"
+  },
+  "work": {
+    "worked": "运行 {{duration}}",
+    "toolCalls_other": "{{count}} 次工具调用",
+    "events_other": "{{count}} 个事件"
+  },
+  "rail": {
+    "label": "工作栏",
+    "group": {
+      "active": "进行中",
+      "attention": "等待您处理",
+      "settled": "已结束"
+    },
+    "groupEmpty": {
+      "active": "当前没有正在运行的会话。",
+      "attention": "没有等待您处理的会话。",
+      "settled": "还没有已结束的会话。"
+    },
+    "pin": "固定",
+    "unpin": "取消固定",
+    "pinnedMark": "已固定",
+    "rowMenu": "{{name}} 的操作",
+    "noObservation": "尚未收到该会话的遥测数据。",
+    "emptyTitle": "还没有会话",
+    "emptyDescription": "此部署观测或启动的每个会话都会显示在这里，并按其需要您做什么来分组。"
+  },
+  "surface": {
+    "paneSwitcher": "选择面板",
+    "pane": {
+      "rail": "会话",
+      "narrative": "工作",
+      "context": "上下文"
+    }
+  },
+  "narrative": {
+    "noneTitle": "请选择一个会话",
+    "noneDescription": "在工作栏中选择一个会话，即可查看它做了什么，旁边附有证据。",
+    "openDetail": "完整控制项",
+    "noObjective": "引擎未报告该会话的目标，因此改为显示其引用标识。",
+    "notReadTitle": "无法读取该会话",
+    "menu": "{{name}} 的操作"
+  },
+  "evidence": {
+    "checks": {
+      "title": "检查",
+      "empty": "该会话没有报告任何发现。"
+    },
+    "activity": {
+      "title": "最近的轮次",
+      "empty": "该会话没有进行工具或 MCP 调用。"
+    },
+    "resources": {
+      "title": "涉及的资源",
+      "empty": "没有条目指明资源。"
+    },
+    "forbiddenTitle": "无权查看证据",
+    "forbiddenDescription": "您的角色不包含读取会话遥测数据的权限。",
+    "errorTitle": "无法读取证据",
+    "errorDescription": "时间线读取没有响应。此处若显示空列表，等于说该会话什么都没做，而这是另一回事。",
+    "atLeast_other": "至少 {{count}} 条",
+    "touches_other": "{{count}} 条"
+  },
+  "context": {
+    "noneTitle": "未选择会话",
+    "noneDescription": "此处显示会话运行时所属的范围，以及查找它所需的引用标识。",
+    "scopeTitle": "范围",
+    "scopeHint": "该会话适用的对象。这些是它运行时的值，不是当前所选的值。",
+    "tenant": "组织",
+    "workspace": "工作区",
+    "environment": "环境",
+    "provider": "提供方",
+    "profile": "提供方配置",
+    "traceTitle": "追踪",
+    "traceHint": "该会话的各种引用标识，以及控制平面对它的记录。",
+    "sessionRef": "会话引用",
+    "liveRef": "行引用",
+    "runRef": "运行引用",
+    "canonicalSid": "规范会话 ID",
+    "binding": "来源绑定",
+    "engine": "智能体引擎",
+    "posture": "治理姿态",
+    "governance": "控制平面的记录",
+    "pepOn": "工具调用受到在线管控。",
+    "pepOff": "工具调用未受在线管控。",
+    "recordOn": "输入与输出被固定为证据。",
+    "recordOff": "不记录输入与输出。",
+    "approval": "审批",
+    "none": "无",
+    "notDeclared": "未声明",
+    "copy": "复制",
+    "copied": "已复制",
+    "copyRef": "复制 {{value}}"
   }
 }

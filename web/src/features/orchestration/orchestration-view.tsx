@@ -72,6 +72,7 @@ import type {
   TriggerKind,
 } from './types'
 import './i18n'
+import { PagePrimaryAction } from '@/components/ui/page-actions'
 
 const GRAPH_LIMIT = 500
 const FLOW_STATES: (FlowState | 'all')[] = [
@@ -290,7 +291,10 @@ function FlowsTab({ tenant }: { tenant: string | null }) {
       <AsyncSection query={flowsQ} skeletonHeight={200}>
         {(list) =>
           list.items.length === 0 ? (
-            <EmptyState title={t('flows.empty')} />
+            <EmptyState
+              description={t('flows.emptyHint')}
+              title={t('flows.empty')}
+            />
           ) : (
             <FlowsTable flows={list.items} />
           )
@@ -403,14 +407,16 @@ function SchedulesTab({
         description={t('schedules.description')}
         actions={
           canWrite ? (
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => setCreateOpen(true)}
-            >
-              <Plus />
-              {t('schedules.new')}
-            </Button>
+            <PagePrimaryAction>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => setCreateOpen(true)}
+              >
+                <Plus />
+                {t('schedules.new')}
+              </Button>
+            </PagePrimaryAction>
           ) : null
         }
         noPadding
@@ -471,9 +477,15 @@ function SchedulesTab({
         }
       >
         {selectedId === null ? (
-          <EmptyState title={t('decisions.pickHint')} />
+          <EmptyState
+            description={t('decisions.pickHintDetail')}
+            title={t('decisions.pickHint')}
+          />
         ) : enLedger && !puedeLeerSchedules ? (
-          <EmptyState title={t('decisions.forbidden')} />
+          <EmptyState
+            description={t('decisions.forbiddenHint')}
+            title={t('decisions.forbidden')}
+          />
         ) : enLedger ? (
           <AsyncSection query={ledgerQ} skeletonHeight={180}>
             {(list) => (
@@ -482,7 +494,10 @@ function SchedulesTab({
                   {t('decisions.estateCaveat')}
                 </CaveatNotice>
                 {list.items.length === 0 ? (
-                  <EmptyState title={t('decisions.empty')} />
+                  <EmptyState
+                    description={t('decisions.emptyHint')}
+                    title={t('decisions.empty')}
+                  />
                 ) : (
                   <DecisionList decisions={list.items} showSubject />
                 )}
@@ -502,7 +517,10 @@ function SchedulesTab({
           <AsyncSection query={decisionsQ} skeletonHeight={180}>
             {(list) =>
               list.items.length === 0 ? (
-                <EmptyState title={t('decisions.empty')} />
+                <EmptyState
+                  description={t('decisions.emptyHint')}
+                  title={t('decisions.empty')}
+                />
               ) : (
                 <DecisionList decisions={list.items} />
               )
@@ -551,6 +569,7 @@ function SchedulesTab({
             description: t('history.description'),
             caption: t('history.scopeCaption'),
             empty: t('history.empty'),
+            emptyHint: t('history.emptyHint'),
             loading: t('common:states.loading'),
             loadMore: t('history.loadMore'),
             compareTitle: t('history.compareTitle'),
@@ -1094,10 +1113,10 @@ function FireScheduleDialog({
 
         <div className="flex flex-col gap-4">
           <section className="flex flex-col gap-2 rounded-lg border border-border p-3">
-            <h3 className="text-sm font-medium">
+            <h3 className="text-body font-medium">
               {t('schedules.fire.step1Title')}
             </h3>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-caption text-muted-foreground">
               {t('schedules.fire.step1Description')}
             </p>
             <Button
@@ -1118,7 +1137,7 @@ function FireScheduleDialog({
                       {t('schedules.fire.requiresApproval')}
                     </Badge>
                   ) : null}
-                  <span className="font-mono text-xs">
+                  <span className="font-mono text-caption">
                     {result.approval_ref}
                   </span>
                   <Button
@@ -1133,7 +1152,7 @@ function FireScheduleDialog({
                 </div>
                 <Link
                   to={'/permissions' as never}
-                  className="text-sm text-accent-text underline-offset-4 hover:underline"
+                  className="text-body text-accent-text underline-offset-4 hover:underline"
                 >
                   {t('schedules.fire.governanceLink')}
                 </Link>
@@ -1142,10 +1161,10 @@ function FireScheduleDialog({
           </section>
 
           <section className="flex flex-col gap-2 rounded-lg border border-border p-3">
-            <h3 className="text-sm font-medium">
+            <h3 className="text-body font-medium">
               {t('schedules.fire.step2Title')}
             </h3>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-caption text-muted-foreground">
               {t('schedules.fire.step2Description')}
             </p>
             <Field label={t('schedules.fire.approvalRef')} required>
@@ -1173,7 +1192,7 @@ function FireScheduleDialog({
           {result ? (
             <section className="flex flex-col gap-2 rounded-lg border border-border p-3">
               <div className="flex flex-wrap items-center gap-2">
-                <h3 className="text-sm font-medium">
+                <h3 className="text-body font-medium">
                   {t('schedules.fire.receipt')}
                 </h3>
                 <Badge
@@ -1194,7 +1213,7 @@ function FireScheduleDialog({
                   label={t('schedules.fire.planHash')}
                 />
               ) : null}
-              <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
+              <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-caption">
                 <dt className="text-muted-foreground">
                   {t('schedules.fire.gateStatus')}
                 </dt>

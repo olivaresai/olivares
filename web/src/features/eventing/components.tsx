@@ -90,7 +90,7 @@ export function SubscriptionCard({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-foreground">
+            <span className="text-body font-medium text-foreground">
               {sub.name}
             </span>
             <Badge variant={sub.enabled ? 'success' : 'neutral'}>
@@ -111,7 +111,7 @@ export function SubscriptionCard({
               </Badge>
             ) : null}
           </div>
-          <p className="mt-1 flex items-center gap-1 truncate text-xs font-mono text-muted-foreground">
+          <p className="mt-1 flex items-center gap-1 truncate text-caption font-mono text-muted-foreground">
             <ExternalLink className="h-3 w-3 shrink-0" />
             {sub.endpoint}
           </p>
@@ -198,7 +198,7 @@ export function SubscriptionCard({
           </Badge>
         ))}
       </div>
-      <dl className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
+      <dl className="flex flex-wrap gap-x-6 gap-y-1 text-caption text-muted-foreground">
         {sub.role ? (
           <div className="flex flex-col">
             <dt className="text-[11px] tracking-wide uppercase">
@@ -223,7 +223,7 @@ export function SubscriptionCard({
         </div>
       </dl>
       {sub.description ? (
-        <p className="text-xs text-muted-foreground">{sub.description}</p>
+        <p className="text-caption text-muted-foreground">{sub.description}</p>
       ) : null}
       {/* ⛔ ESTO ERA UN `window.confirm` NATIVO, EL ÚNICO DE LA CONSOLA FRENTE A 69 FICHEROS
           QUE USAN `ConfirmDialog`. Y no era inconsistencia de estilo: `ConfirmDialog` trae
@@ -253,22 +253,22 @@ export function EventRow({ event }: { event: CapturedEvent }) {
   return (
     <div className="rounded-md border border-border bg-surface px-3 py-2">
       <div
-        className="flex cursor-pointer items-center gap-3 text-sm"
+        className="flex cursor-pointer items-center gap-3 text-body"
         onClick={() => setExpanded(!expanded)}
       >
-        <span className="w-16 shrink-0 font-mono text-xs text-muted-foreground">
+        <span className="w-16 shrink-0 font-mono text-caption text-muted-foreground">
           #{event.seq}
         </span>
         <Badge variant="accent">{event.type}</Badge>
-        <span className="truncate text-xs text-muted-foreground">
+        <span className="truncate text-caption text-muted-foreground">
           {event.source}
         </span>
-        <span className="ml-auto shrink-0 text-xs text-muted-foreground">
+        <span className="ml-auto shrink-0 text-caption text-muted-foreground">
           {formatDateTime(event.occurred_at)}
         </span>
       </div>
       {expanded && event.payload != null ? (
-        <pre className="mt-2 max-h-48 overflow-auto rounded bg-muted p-2 text-xs font-mono">
+        <pre className="mt-2 max-h-48 overflow-auto rounded bg-muted p-2 text-caption font-mono">
           {typeof event.payload === 'string'
             ? event.payload
             : JSON.stringify(event.payload, null, 2)}
@@ -300,11 +300,10 @@ export function DeliveryRow({
   const showRetry =
     delivery.status === 'queued' &&
     retryAt != null &&
-    !Number.isNaN(retryAt.getTime()) &&
-    retryAt.getTime() > Date.now()
+    !Number.isNaN(retryAt.getTime())
   return (
-    <div className="flex items-center gap-3 rounded-md border border-border bg-surface px-3 py-2 text-sm">
-      <span className="w-16 shrink-0 font-mono text-xs text-muted-foreground">
+    <div className="flex items-center gap-3 rounded-md border border-border bg-surface px-3 py-2 text-body">
+      <span className="w-16 shrink-0 font-mono text-caption text-muted-foreground">
         #{delivery.event_seq}
       </span>
       <Badge variant="accent">{delivery.event_type}</Badge>
@@ -312,17 +311,17 @@ export function DeliveryRow({
       <Badge variant="neutral">
         {t(`deliveries.origins.${delivery.origin}`)}
       </Badge>
-      <span className="text-xs text-muted-foreground">
+      <span className="text-caption text-muted-foreground">
         {t('deliveries.columns.subscription')}:{' '}
         {subscriptionName
           ? `${subscriptionName} (${delivery.subscription})`
           : delivery.subscription}
       </span>
-      <span className="text-xs text-muted-foreground">
+      <span className="text-caption text-muted-foreground">
         {t('deliveries.columns.attempts')}: {delivery.attempts}
       </span>
       {delivery.last_attempt_at ? (
-        <span className="text-xs text-muted-foreground">
+        <span className="text-caption text-muted-foreground">
           {formatDateTime(delivery.last_attempt_at)}
         </span>
       ) : null}
@@ -330,7 +329,7 @@ export function DeliveryRow({
         <Badge variant="neutral">{delivery.last_status}</Badge>
       ) : null}
       {showRetry ? (
-        <span className="text-xs text-muted-foreground">
+        <span className="text-caption text-muted-foreground">
           {t('deliveries.nextRetry', {
             time: formatRelativeTime(delivery.next_attempt_at, i18n.language),
           })}
@@ -373,9 +372,11 @@ export function SecretReveal({
 
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-sm text-muted-foreground">{t('secret.description')}</p>
+      <p className="text-body text-muted-foreground">
+        {t('secret.description')}
+      </p>
       <div className="flex items-center gap-2 rounded-md border border-border bg-muted p-3">
-        <code className="flex-1 break-all text-xs font-mono text-foreground">
+        <code className="flex-1 break-all text-caption font-mono text-foreground">
           {secret}
         </code>
         <Button variant="ghost" size="sm" onClick={handleCopy}>
@@ -387,7 +388,7 @@ export function SecretReveal({
         </Button>
       </div>
       {copied ? (
-        <p className="text-xs text-success">{t('secret.copied')}</p>
+        <p className="text-caption text-success">{t('secret.copied')}</p>
       ) : null}
       <Button variant="primary" onClick={onDone} className="self-end">
         {t('secret.done')}

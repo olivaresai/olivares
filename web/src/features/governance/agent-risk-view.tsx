@@ -49,6 +49,7 @@ import {
   type ClassifyAgentRiskInput,
   type SetAgentRiskTierInput,
 } from './types'
+import { PagePrimaryAction } from '@/components/ui/page-actions'
 
 /** Sentinel Select value for "clear the operator override" (maps to tier=""). */
 const CLEAR_OVERRIDE = '__clear__'
@@ -131,7 +132,7 @@ export function AgentRiskView() {
       accessorKey: 'agent_id',
       header: t('agentRisk.columns.agent'),
       cell: ({ row }) => (
-        <span className="font-mono text-xs font-medium text-foreground">
+        <span className="font-mono text-caption font-medium text-foreground">
           {row.original.agent_id}
         </span>
       ),
@@ -140,7 +141,7 @@ export function AgentRiskView() {
       accessorKey: 'suggested_tier',
       header: t('agentRisk.columns.suggested'),
       cell: ({ row }) => (
-        <span className="text-xs text-muted-foreground">
+        <span className="text-caption text-muted-foreground">
           {tierLabel(t, row.original.suggested_tier)}
         </span>
       ),
@@ -152,7 +153,7 @@ export function AgentRiskView() {
         row.original.operator_tier ? (
           <TierBadge tier={row.original.operator_tier} />
         ) : (
-          <span className="text-xs text-muted-foreground">
+          <span className="text-caption text-muted-foreground">
             {t('agentRisk.noOperator')}
           </span>
         ),
@@ -212,7 +213,21 @@ export function AgentRiskView() {
 
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-xs text-muted-foreground">{t('agentRisk.caption')}</p>
+      {canWrite && (
+        <PagePrimaryAction>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => setClassifyOpen(true)}
+          >
+            <Plus aria-hidden />
+            {t('agentRisk.classifyButton')}
+          </Button>
+        </PagePrimaryAction>
+      )}
+      <p className="text-caption text-muted-foreground">
+        {t('agentRisk.caption')}
+      </p>
 
       <DataTable
         columns={columns}
@@ -231,18 +246,6 @@ export function AgentRiskView() {
             title={t('empty.agentRisk.title')}
             description={t('empty.agentRisk.description')}
           />
-        }
-        toolbar={
-          canWrite ? (
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => setClassifyOpen(true)}
-            >
-              <Plus aria-hidden />
-              {t('agentRisk.classifyButton')}
-            </Button>
-          ) : undefined
         }
       />
 
@@ -308,7 +311,7 @@ function EffectiveCell({ profile }: { profile: AgentRiskProfileDTO }) {
         {profile.effective_tier ? (
           <TierBadge tier={profile.effective_tier} />
         ) : (
-          <span className="text-xs text-muted-foreground">
+          <span className="text-caption text-muted-foreground">
             {t('agentRisk.effectiveNone')}
           </span>
         )}
@@ -353,7 +356,7 @@ function SignalsSummary({ signals }: { signals?: AgentRiskSignals }) {
   const { t } = useTranslation('governance')
   if (!signals) {
     return (
-      <span className="text-xs text-muted-foreground">
+      <span className="text-caption text-muted-foreground">
         {t('agentRisk.signals.none')}
       </span>
     )
@@ -457,7 +460,7 @@ function ClassifyForm({ onClose }: { onClose: () => void }) {
         </Field>
       </div>
 
-      <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+      <p className="flex items-center gap-1.5 text-caption text-muted-foreground">
         <ScrollText className="size-3.5 shrink-0" aria-hidden />
         {t('common:privileged.auditedNotice')}
       </p>
@@ -541,7 +544,7 @@ function OverrideForm({
       </DialogHeader>
 
       <div className="flex flex-col gap-4">
-        <p className="text-xs text-muted-foreground">
+        <p className="text-caption text-muted-foreground">
           {t('agentRisk.override.currentSuggested', {
             tier: tierLabel(t, profile.suggested_tier),
           })}
@@ -569,7 +572,7 @@ function OverrideForm({
         </Field>
       </div>
 
-      <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+      <p className="flex items-center gap-1.5 text-caption text-muted-foreground">
         <ScrollText className="size-3.5 shrink-0" aria-hidden />
         {t('common:privileged.auditedNotice')}
       </p>

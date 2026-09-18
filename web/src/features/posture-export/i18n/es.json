@@ -43,6 +43,7 @@
     "note": "Esta lista solo cubre las exportaciones hechas en esta sesión del navegador. Cada exportación queda registrada en el libro de auditoría a prueba de manipulaciones (acción posture.export) —",
     "auditLink": "abre el Explorador de auditoría",
     "empty": "Aún no hay exportaciones en esta sesión.",
+    "emptyHint": "Aquí se listan las exportaciones que generas en esta sesión, para que puedas volver a descargarlas. Genera una para empezar.",
     "colTime": "Hora",
     "colFilters": "Filtros",
     "colCounts": "Recuentos",

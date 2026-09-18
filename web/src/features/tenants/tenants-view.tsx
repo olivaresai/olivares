@@ -138,17 +138,17 @@ export function TenantsView() {
                     <span className="font-medium text-foreground">
                       {org.name}
                     </span>
-                    <span className="text-xs text-muted-foreground">
+                    <span className="text-caption text-muted-foreground">
                       {org.slug}
                     </span>
                     <Badge variant={TONO[estado]}>
                       {t(`status.${estado}`)}
                     </Badge>
-                    <span className="text-xs text-muted-foreground">
+                    <span className="text-caption text-muted-foreground">
                       {org.data_region || t('unpinned')}
                     </span>
                     {estado === 'unknown' ? (
-                      <p className="w-full text-xs text-muted-foreground">
+                      <p className="w-full text-caption text-muted-foreground">
                         {t('unknownHint')}
                       </p>
                     ) : null}
@@ -230,7 +230,7 @@ export function TenantsView() {
               })
             }
           >
-            <div className="flex flex-col gap-2 text-sm text-muted-foreground">
+            <div className="flex flex-col gap-2 text-body text-muted-foreground">
               {/* ⛔ LAS DOS FRASES QUE HACEN HONESTO ESTE DIÁLOGO. La ficha OpenAPI de la ruta dice
                   «after the cloud grace period», y esa gracia es del plano CLOUD: este motor purga
                   al confirmar. Callarlo dejaría al operador creyendo que tiene 30 días. Y la
@@ -278,7 +278,7 @@ export function TenantsView() {
             }
           >
             {accion.destino === 'suspended' ? (
-              <div className="flex flex-col gap-2 text-sm text-muted-foreground">
+              <div className="flex flex-col gap-2 text-body text-muted-foreground">
                 <p className="font-medium text-foreground">{t('keeps')}</p>
                 <ul className="list-disc pl-5">
                   <li>{t('keepsAuth')}</li>

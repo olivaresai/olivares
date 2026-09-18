@@ -41,7 +41,8 @@
     "runs": "运行",
     "lastScore": "最近分数",
     "regressed": "已回退",
-    "empty": "暂无评分卡——请对黄金套件运行一次评估。"
+    "empty": "暂无评分卡——请对黄金套件运行一次评估。",
+    "emptyHint": "记分卡汇总模型在某个用例集各用例上的得分。针对黄金用例集运行一次评估即可生成。"
   },
   "runs": {
     "title": "评估运行",
@@ -57,6 +58,7 @@
     "regressed": "已回退 · 漂移 {{drift}}",
     "noRegression": "无",
     "empty": "该范围内无运行。",
+    "emptyHint": "所选时间范围内的每次评估运行及其得分与耗时都会列在这里。放宽时间范围，或启动一次运行。",
     "overN": "共 {{n}}",
     "notScored": "not scored — no verdict",
     "noBaseline": "no baseline — nothing compared"
@@ -74,7 +76,8 @@
       "label": "标签",
       "fingerprint": "指纹"
     },
-    "empty": "本次运行无用例结果。"
+    "empty": "本次运行无用例结果。",
+    "emptyHint": "用例集中的每个用例及其评审结论都会列在这里。本次运行没有记录任何用例结果。"
   },
   "ab": {
     "title": "A/B 对比",
@@ -94,6 +97,7 @@
     "suiteLabel": "套件",
     "selectSuite": "选择套件",
     "noSuites": "尚无套件。比较是针对套件的用例进行评分的，请先创建一个。",
+    "noSuitesHint": "对比是基于某个用例集的用例来评分的，因此必须先有用例集。请在「用例集」标签页中创建。",
     "labelA": "变体 A 标签",
     "labelB": "变体 B 标签",
     "outputsA": "变体 A 的输出",
@@ -119,7 +123,8 @@
     "threshold": "通过阈值",
     "pickerTitle": "对象",
     "note": "阈值线即套件通过阈值；低于该线的点表示当时未达标。",
-    "empty": "暂无趋势数据。"
+    "empty": "暂无趋势数据。",
+    "emptyHint": "漂移将模型近期的得分与它自身的历史进行比较。同一用例集运行两次及以上即可形成首个趋势。"
   },
   "outcomeBar": {
     "passed": "已通过",
@@ -141,6 +146,7 @@
     "title": "CI 门禁",
     "description": "回归门禁的评估结果：门禁测得的结论，以及 CI 必须遵循的结论。",
     "empty": "没有门禁评估",
+    "emptyHint": "闸门评估决定候选版本能否发布。针对带闸门的用例集运行一次评估即可记录。",
     "measured": "测得 {{verdict}}",
     "effective": "CI 遵循 {{verdict}}",
     "sampled": "已抽取 {{total}} 个用例中的 {{sampled}} 个",
@@ -160,6 +166,7 @@
     "title": "评判器校准",
     "description": "LLM 评判器与人工标注的一致程度。无法测量经随机性校正一致度的集合，不能证明任何结论。",
     "empty": "没有校准报告",
+    "emptyHint": "校准报告将评审模型的打分与人工标注进行比较。运行一次校准即可生成。",
     "meets": "达到目标",
     "below": "低于目标",
     "cannotCertify": "无法认定 — kappa 未定义",
@@ -176,6 +183,7 @@
     "description": "The human labels the judge is measured against — and the reason a report can or cannot certify.",
     "run": "Run calibration",
     "empty": "No labelled items yet",
+    "emptyHint": "已标注项是校准报告据以评分的人工判断。标注一个用例即可添加第一条。",
     "distribution": "{{pass}} labelled pass · {{fail}} labelled fail",
     "degenerate": "⛔ Every label is the same, so kappa CANNOT be computed and no report from this set can certify. Label cases of the other kind.",
     "humanPass": "human: pass",

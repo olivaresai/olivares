@@ -42,6 +42,7 @@ import {
   type WorkspaceDTO,
 } from './api'
 import { FormError } from './roles-shared'
+import { StaticTable } from '@/components/data/static-table'
 
 /** ⛔ EL 200 ERA UN NÚMERO A MANO por debajo del techo real del motor: ni pedía lo que da, ni
  *  decía nada al quedarse corto. `maxLimit` es 1000 (`sqlstore/generic.go:29`). */
@@ -125,10 +126,10 @@ export function AgentsTab() {
       <section className="flex flex-col gap-3">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 className="text-base font-semibold text-foreground">
+            <h2 className="text-heading text-foreground">
               {t('console:agents.title')}
             </h2>
-            <p className="max-w-2xl text-sm text-muted-foreground">
+            <p className="max-w-2xl text-body text-muted-foreground">
               {t('console:agents.caption')}
             </p>
           </div>
@@ -283,47 +284,45 @@ function AgentsTable({
   const { t } = useTranslation('console')
   return (
     <div className="overflow-hidden rounded-lg border border-border">
-      <table className="w-full text-sm">
-        <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
+      <StaticTable>
+        <thead>
           <tr>
-            <th className="px-3 py-2 font-medium">{t('agents.name')}</th>
-            <th className="px-3 py-2 font-medium">{t('agents.kind')}</th>
-            <th className="px-3 py-2 font-medium">{t('agents.status')}</th>
-            <th className="px-3 py-2 font-medium">{t('agents.externalId')}</th>
-            <th className="px-3 py-2 font-medium">{t('agents.workspace')}</th>
-            <th className="px-3 py-2" />
+            <th>{t('agents.name')}</th>
+            <th>{t('agents.kind')}</th>
+            <th>{t('agents.status')}</th>
+            <th>{t('agents.externalId')}</th>
+            <th>{t('agents.workspace')}</th>
+            <th />
           </tr>
         </thead>
         <tbody>
           {agents.map((agent) => (
-            <tr key={agent.id} className="border-t border-border align-top">
-              <td className="px-3 py-2">
+            <tr key={agent.id} className="align-top">
+              <td>
                 <div className="flex flex-col gap-1">
                   <span className="font-medium text-foreground">
                     {agent.name}
                   </span>
-                  <span className="font-mono text-xs text-muted-foreground">
+                  <span className="font-mono text-caption text-muted-foreground">
                     {agent.id}
                   </span>
                 </div>
               </td>
-              <td className="px-3 py-2 font-mono text-xs text-muted-foreground">
+              <td className="font-mono text-caption text-muted-foreground">
                 {agent.kind}
               </td>
-              <td className="px-3 py-2">
+              <td>
                 <Badge
                   variant={agent.status === 'active' ? 'success' : 'neutral'}
                 >
                   {t(`agents.statuses.${agent.status}`, agent.status)}
                 </Badge>
               </td>
-              <td className="px-3 py-2 font-mono text-xs text-muted-foreground">
+              <td className="font-mono text-caption text-muted-foreground">
                 {agent.external_id || t('agents.notSet')}
               </td>
-              <td className="px-3 py-2">
-                {workspaceLabel(t, workspaces, agent.workspace_id)}
-              </td>
-              <td className="px-3 py-2 text-right">
+              <td>{workspaceLabel(t, workspaces, agent.workspace_id)}</td>
+              <td className="text-right">
                 {canWrite ? (
                   <div className="flex flex-wrap justify-end gap-1">
                     <Button
@@ -358,7 +357,7 @@ function AgentsTable({
             </tr>
           ))}
         </tbody>
-      </table>
+      </StaticTable>
     </div>
   )
 }
@@ -592,7 +591,7 @@ function workspaceLabel(
   const workspace = workspaces.get(workspaceId)
   if (!workspace) {
     return (
-      <code className="break-all font-mono text-xs text-muted-foreground">
+      <code className="break-all font-mono text-caption text-muted-foreground">
         {workspaceId}
       </code>
     )
@@ -600,7 +599,7 @@ function workspaceLabel(
   return (
     <div className="flex flex-col gap-1">
       <span className="text-foreground">{workspace.name}</span>
-      <span className="font-mono text-xs text-muted-foreground">
+      <span className="font-mono text-caption text-muted-foreground">
         {workspace.slug}
       </span>
     </div>

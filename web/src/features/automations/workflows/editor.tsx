@@ -109,7 +109,7 @@ export function WorkflowEditor({
         className="flex min-h-64 items-center justify-center gap-2"
       >
         <Spinner />
-        <span className="text-sm text-muted-foreground">
+        <span className="text-body text-muted-foreground">
           {t('editor.loading')}
         </span>
       </div>
@@ -119,7 +119,7 @@ export function WorkflowEditor({
     return (
       <div
         role="alert"
-        className="rounded-lg border border-danger-line bg-danger-soft p-4 text-sm text-danger"
+        className="rounded-lg border border-danger-line bg-danger-soft p-4 text-body text-danger"
       >
         {t('editor.loadFailed')}
       </div>
@@ -306,11 +306,11 @@ function LoadedWorkflowEditor({
           {t('editor.back')}
         </Button>
         <div className="min-w-0 flex-1">
-          <h2 className="truncate text-lg font-semibold text-foreground">
+          <h2 className="truncate text-title text-foreground">
             {initialWorkflow.name}
           </h2>
           {initialWorkflow.description ? (
-            <p className="truncate text-sm text-muted-foreground">
+            <p className="truncate text-body text-muted-foreground">
               {initialWorkflow.description}
             </p>
           ) : null}
@@ -386,7 +386,7 @@ function LoadedWorkflowEditor({
       {clientErrors.length > 0 ? (
         <p
           role="alert"
-          className="rounded-md border border-danger-line bg-danger-soft p-2 text-sm text-danger"
+          className="rounded-md border border-danger-line bg-danger-soft p-2 text-body text-danger"
         >
           {t('editor.validationSummary', { count: clientErrors.length })}
         </p>
@@ -394,7 +394,7 @@ function LoadedWorkflowEditor({
       {serverError ? (
         <p
           role="alert"
-          className="rounded-md border border-danger-line bg-danger-soft p-2 text-sm text-danger"
+          className="rounded-md border border-danger-line bg-danger-soft p-2 text-body text-danger"
         >
           {t('editor.serverError', { message: serverError.message })}
         </p>
@@ -509,7 +509,7 @@ function LoadedWorkflowEditor({
               }
             />
           ) : (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-body text-muted-foreground">
               {t('editor.selectHint')}
             </p>
           )}
@@ -544,6 +544,7 @@ function LoadedWorkflowEditor({
           title: t('revisions.title', { name: initialWorkflow.name }),
           description: t('revisions.description'),
           empty: t('revisions.empty'),
+          emptyHint: t('revisions.emptyHint'),
           loading: t('revisions.loading'),
           loadMore: t('revisions.loadMore'),
           compareTitle: t('revisions.compare'),
@@ -625,13 +626,13 @@ function WorkflowNode({ data, selected }: NodeProps<Node<WorkflowNodeData>>) {
           <Icon className="size-4" aria-hidden />
         </span>
         <div className="min-w-0 flex-1">
-          <code className="block truncate font-mono text-xs text-foreground">
+          <code className="block truncate font-mono text-caption text-foreground">
             {data.step.ref}
           </code>
           <p className="text-[11px] text-muted-foreground">
             {t(`kind.${data.step.kind}`)}
           </p>
-          <p className="mt-1 max-w-44 truncate text-xs text-muted-foreground">
+          <p className="mt-1 max-w-44 truncate text-caption text-muted-foreground">
             {stepSummary(data.step, t)}
           </p>
         </div>
@@ -786,7 +787,7 @@ function StepEditor({
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2">
-        <h3 className="text-sm font-medium text-foreground">
+        <h3 className="text-body font-medium text-foreground">
           {t('config.title')}
         </h3>
         {!disabled ? (
@@ -801,8 +802,8 @@ function StepEditor({
         ) : null}
       </div>
       <div>
-        <p className="text-xs text-muted-foreground">{t('config.ref')}</p>
-        <code className="font-mono text-sm text-foreground">{step.ref}</code>
+        <p className="text-caption text-muted-foreground">{t('config.ref')}</p>
+        <code className="font-mono text-body text-foreground">{step.ref}</code>
       </div>
       <Badge variant="outline">{t(`kind.${step.kind}`)}</Badge>
       {step.kind === 'schedule-fire' ? (
@@ -899,19 +900,21 @@ function StepEditor({
       ) : null}
 
       <fieldset className="space-y-2 border-t border-border pt-4">
-        <legend className="text-sm font-medium text-foreground">
+        <legend className="text-body font-medium text-foreground">
           {t('deps.title')}
         </legend>
-        <p className="text-xs text-muted-foreground">{t('deps.description')}</p>
+        <p className="text-caption text-muted-foreground">
+          {t('deps.description')}
+        </p>
         {validDependencies.length === 0 ? (
-          <p className="text-xs text-muted-foreground">{t('deps.none')}</p>
+          <p className="text-caption text-muted-foreground">{t('deps.none')}</p>
         ) : (
           validDependencies.map((candidate) => {
             const checked = step.depends_on.includes(candidate.ref)
             return (
               <label
                 key={candidate.ref}
-                className="flex min-h-6 items-center gap-2 text-xs text-foreground"
+                className="flex min-h-6 items-center gap-2 text-caption text-foreground"
               >
                 <Checkbox
                   checked={checked}
@@ -932,7 +935,7 @@ function StepEditor({
           })
         )}
         {step.depends_on.length >= 8 ? (
-          <p className="text-xs text-warning">{t('deps.limit')}</p>
+          <p className="text-caption text-warning">{t('deps.limit')}</p>
         ) : null}
       </fieldset>
     </div>

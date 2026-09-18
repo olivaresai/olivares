@@ -228,27 +228,27 @@ export function HandoffSheet({
               data-slot="handoff-context"
             >
               <div>
-                <p className="text-sm font-medium">
+                <p className="text-body font-medium">
                   {t('handoff.detail.summary')}
                 </p>
-                <p className="whitespace-pre-wrap break-words text-sm">
+                <p className="whitespace-pre-wrap break-words text-body">
                   {detail.content.summary}
                 </p>
               </div>
               <div>
-                <p className="text-sm font-medium">
+                <p className="text-body font-medium">
                   {t('handoff.detail.nextAction')}
                 </p>
-                <p className="whitespace-pre-wrap break-words text-sm">
+                <p className="whitespace-pre-wrap break-words text-body">
                   {detail.content.next_action}
                 </p>
               </div>
               {detail.content.risk ? (
                 <div>
-                  <p className="text-sm font-medium">
+                  <p className="text-body font-medium">
                     {t('handoff.detail.risk')}
                   </p>
-                  <p className="whitespace-pre-wrap break-words text-sm">
+                  <p className="whitespace-pre-wrap break-words text-body">
                     {detail.content.risk}
                   </p>
                 </div>
@@ -256,7 +256,7 @@ export function HandoffSheet({
               {detail.content.artifact_refs &&
               detail.content.artifact_refs.length > 0 ? (
                 <div>
-                  <p className="text-sm font-medium">
+                  <p className="text-body font-medium">
                     {t('handoff.detail.artifacts')}
                   </p>
                   <ul className="flex flex-col gap-1">
@@ -264,7 +264,7 @@ export function HandoffSheet({
                       <li
                         key={`${r.kind}:${r.ref}:${i}`}
                         data-slot="handoff-artifact-ref"
-                        className="inline-flex max-w-full flex-wrap items-center gap-1 rounded-sm border border-border bg-muted px-1.5 py-0.5 text-xs"
+                        className="inline-flex max-w-full flex-wrap items-center gap-1 rounded-sm border border-border bg-muted px-1.5 py-0.5 text-caption"
                       >
                         <Mono>{r.kind}</Mono>
                         <Mono>{r.ref}</Mono>
@@ -272,7 +272,7 @@ export function HandoffSheet({
                       </li>
                     ))}
                   </ul>
-                  <p className="mt-1 text-xs text-muted-foreground">
+                  <p className="mt-1 text-caption text-muted-foreground">
                     {t('handoff.detail.artifactsInert')}
                   </p>
                 </div>
@@ -319,7 +319,7 @@ export function HandoffSheet({
                   {detail.carrier.channel_id}
                 </KvRow>
               </KvList>
-              <p className="mt-1 text-xs text-muted-foreground">
+              <p className="mt-1 text-caption text-muted-foreground">
                 {t('handoff.detail.preconditionHint')}
               </p>
             </section>
@@ -327,7 +327,7 @@ export function HandoffSheet({
             {detail.terminal_reason ? (
               <section
                 aria-label={t('handoff.detail.terminalTitle')}
-                className="rounded-md border border-border bg-muted px-3 py-2 text-sm"
+                className="rounded-md border border-border bg-muted px-3 py-2 text-body"
                 data-slot="handoff-terminal-reason"
               >
                 <p className="font-medium">
@@ -347,7 +347,7 @@ export function HandoffSheet({
             {!current ? (
               <div
                 role="status"
-                className="rounded-md border border-border bg-muted px-3 py-2 text-sm text-muted-foreground"
+                className="rounded-md border border-border bg-muted px-3 py-2 text-body text-muted-foreground"
                 data-slot="handoff-not-respondable"
               >
                 <p className="font-medium">
@@ -357,7 +357,7 @@ export function HandoffSheet({
               </div>
             ) : null}
             {current && !canRespond ? (
-              <p className="text-xs text-muted-foreground">
+              <p className="text-caption text-muted-foreground">
                 {t('handoff.detail.noRespondPermission')}
               </p>
             ) : null}

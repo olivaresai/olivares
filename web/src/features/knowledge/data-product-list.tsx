@@ -3,7 +3,7 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { useQuery } from '@tanstack/react-query'
 import { Plus } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useSyncExternalStore } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -24,6 +24,7 @@ import { DataProductDetailSheet } from './data-product-detail'
 import { DataProductEditorDialog } from './data-product-editor'
 import './i18n'
 import type { DataProductDTO } from './types'
+import { PagePrimaryAction } from '@/components/ui/page-actions'
 
 const STATUS_VARIANT: Record<string, string> = {
   draft: 'neutral',
@@ -41,6 +42,18 @@ function QualityBadge({ score }: { score: number }) {
   )
 }
 
+const FRESHNESS_TICK_MS = 30_000
+function subscribeFreshness(onChange: () => void) {
+  const id = window.setInterval(onChange, FRESHNESS_TICK_MS)
+  return () => window.clearInterval(id)
+}
+function freshnessTick(): number {
+  return Math.floor(Date.now() / FRESHNESS_TICK_MS)
+}
+function freshnessTickServer(): number {
+  return 0
+}
+
 function FreshnessBadge({
   lastIngest,
   sla,
@@ -49,13 +62,18 @@ function FreshnessBadge({
   sla: number
 }) {
   const { t } = useTranslation('knowledge')
+  const tick = useSyncExternalStore(
+    subscribeFreshness,
+    freshnessTick,
+    freshnessTickServer,
+  )
 
   if (!lastIngest) {
     return <Badge variant="neutral">{t('dataProducts.health.unknown')}</Badge>
   }
 
   const ageSeconds = Math.floor(
-    (Date.now() - new Date(lastIngest).getTime()) / 1000,
+    (tick * FRESHNESS_TICK_MS - new Date(lastIngest).getTime()) / 1000,
   )
   const ratio = sla > 0 ? ageSeconds / sla : 0
 
@@ -101,7 +119,7 @@ export function DataProductList({ canRead, canWrite }: DataProductListProps) {
       accessorKey: 'owner_ref',
       header: t('dataProducts.owner'),
       cell: ({ row }) => (
-        <span className="font-mono text-xs text-muted-foreground">
+        <span className="font-mono text-caption text-muted-foreground">
           {row.original.owner_ref}
         </span>
       ),
@@ -128,11 +146,11 @@ export function DataProductList({ canRead, canWrite }: DataProductListProps) {
       header: t('dataProducts.kbBinding'),
       cell: ({ row }) =>
         row.original.kb_ref ? (
-          <span className="font-mono text-xs text-foreground">
+          <span className="font-mono text-caption text-foreground">
             {row.original.kb_ref}
           </span>
         ) : (
-          <span className="text-xs text-muted-foreground">
+          <span className="text-caption text-muted-foreground">
             {t('dataProducts.kbUnbound')}
           </span>
         ),
@@ -181,6 +199,18 @@ export function DataProductList({ canRead, canWrite }: DataProductListProps) {
 
   return (
     <>
+      {canWrite && (
+        <PagePrimaryAction>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => setEditorOpen(true)}
+          >
+            <Plus />
+            {t('dataProducts.newProduct')}
+          </Button>
+        </PagePrimaryAction>
+      )}
       <ListTruncationBadge
         query={products}
         label={t('dataProducts.truncated', {
@@ -227,16 +257,6 @@ export function DataProductList({ canRead, canWrite }: DataProductListProps) {
                 </SelectItem>
               </SelectContent>
             </Select>
-            {canWrite && (
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={() => setEditorOpen(true)}
-              >
-                <Plus />
-                {t('dataProducts.newProduct')}
-              </Button>
-            )}
           </div>
         }
         empty={

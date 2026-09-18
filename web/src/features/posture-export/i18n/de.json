@@ -43,6 +43,7 @@
     "note": "Diese Liste umfasst nur Exporte aus dieser Browsersitzung. Jeder Export wird im manipulationssicheren Audit-Ledger festgehalten (Aktion posture.export) —",
     "auditLink": "den Audit-Explorer öffnen",
     "empty": "Noch keine Exporte in dieser Sitzung.",
+    "emptyHint": "In dieser Sitzung erzeugte Exporte werden hier aufgeführt, damit Sie sie erneut herunterladen können. Erzeugen Sie einen, um zu beginnen.",
     "colTime": "Zeit",
     "colFilters": "Filter",
     "colCounts": "Anzahl",

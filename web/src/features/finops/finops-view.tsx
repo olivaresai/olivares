@@ -298,7 +298,7 @@ function CostCentresTab() {
       {/* ⛔ VERDAD 1, y va ARRIBA porque condiciona todo lo que se haga debajo. */}
       <div
         role="note"
-        className="rounded-md border border-warning/40 bg-warning/5 p-3 text-xs"
+        className="rounded-md border border-warning/40 bg-warning/5 p-3 text-caption"
       >
         {t('costCentres.ingestOnlyNotice')}
       </div>
@@ -332,13 +332,16 @@ function CostCentresTab() {
               //    motor porque no lo mira; `CostCenter` sí.
               []) as CostCenter[]
             return items.length === 0 ? (
-              <EmptyState title={t('costCentres.empty')} />
+              <EmptyState
+                description={t('costCentres.emptyHint')}
+                title={t('costCentres.empty')}
+              />
             ) : (
               <div className="flex flex-col gap-1">
                 {items.map((c) => (
                   <div
                     key={c.id}
-                    className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border px-3 py-2 text-sm"
+                    className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border px-3 py-2 text-body"
                   >
                     <button
                       type="button"
@@ -348,7 +351,7 @@ function CostCentresTab() {
                       }
                     >
                       <Coins className="h-4 w-4 text-muted-foreground" />
-                      <span className="font-mono text-xs">{c.code}</span>
+                      <span className="font-mono text-caption">{c.code}</span>
                       <span>{c.name}</span>
                     </button>
                     <div className="flex items-center gap-2">
@@ -456,7 +459,12 @@ function CostCentresTab() {
                 priority: number
               }>
               if (items.length === 0)
-                return <EmptyState title={t('costCentres.noRules')} />
+                return (
+                  <EmptyState
+                    description={t('costCentres.noRulesHint')}
+                    title={t('costCentres.noRules')}
+                  />
+                )
 
               // ⛔ VERDAD 3: la prioridad ordena DENTRO de una dimensión y sólo decide ENTRE
               //    dimensiones distintas. Dos reglas con la MISMA dimensión y la MISMA clave son
@@ -479,7 +487,7 @@ function CostCentresTab() {
                 <div className="flex flex-col gap-3">
                   {[...porDim.entries()].map(([dim, lista]) => (
                     <div key={dim} className="flex flex-col gap-1">
-                      <div className="text-xs font-medium text-muted-foreground">
+                      <div className="text-caption font-medium text-muted-foreground">
                         {t('costCentres.dimension', { dim })}
                       </div>
                       {[...lista]
@@ -487,9 +495,9 @@ function CostCentresTab() {
                         .map((r) => (
                           <div
                             key={r.id}
-                            className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border px-3 py-2 text-sm"
+                            className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border px-3 py-2 text-body"
                           >
-                            <span className="font-mono text-xs">
+                            <span className="font-mono text-caption">
                               {r.source_key}
                             </span>
                             <div className="flex items-center gap-2">
@@ -527,7 +535,7 @@ function CostCentresTab() {
                     </div>
                   ))}
                   {/* ⛔ VERDAD 2, dicha donde se leen las reglas. */}
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-caption text-muted-foreground">
                     {t('costCentres.priorityNote')}
                   </p>
                 </div>
@@ -663,7 +671,7 @@ function ResultadosCard() {
               {items.map((o) => (
                 <div
                   key={`${o.subject_ref}:${o.occurred_at}:${o.outcome_ref ?? ''}`}
-                  className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border px-3 py-2 text-sm"
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border px-3 py-2 text-body"
                 >
                   <div className="flex min-w-0 items-center gap-2">
                     <Badge
@@ -673,9 +681,11 @@ function ResultadosCard() {
                     >
                       {o.verdict}
                     </Badge>
-                    <span className="font-mono text-xs">{o.subject_ref}</span>
+                    <span className="font-mono text-caption">
+                      {o.subject_ref}
+                    </span>
                   </div>
-                  <span className="text-xs text-muted-foreground">
+                  <span className="text-caption text-muted-foreground">
                     {/* Sin valor NO es valor cero: el campo es opcional. */}
                     {o.value_micro_usd === undefined
                       ? t('outcomes.noValue')
@@ -1033,16 +1043,19 @@ function SeatsTab() {
             has_seats: boolean
           }>
           return dias.length === 0 ? (
-            <EmptyState title={t('seats.empty')} />
+            <EmptyState
+              description={t('seats.emptyHint')}
+              title={t('seats.empty')}
+            />
           ) : (
             <div className="flex flex-col gap-1">
               {dias.map((d) => (
                 <div
                   key={d.day}
-                  className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border px-3 py-2 text-sm"
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border px-3 py-2 text-body"
                 >
-                  <span className="font-mono text-xs">{d.day}</span>
-                  <span className="text-xs text-muted-foreground">
+                  <span className="font-mono text-caption">{d.day}</span>
+                  <span className="text-caption text-muted-foreground">
                     {/* Sin snapshot NO se habla de asientos: no los hay que contar. */}
                     {d.has_seats
                       ? t('seats.assigned', {
@@ -1130,7 +1143,9 @@ function ValueTab({ tenant }: { tenant: string | null }) {
               />
             </StatGrid>
             {s.note ? (
-              <p className="mt-3 text-xs text-muted-foreground">{s.note}</p>
+              <p className="mt-3 text-caption text-muted-foreground">
+                {s.note}
+              </p>
             ) : null}
           </SectionCard>
 
@@ -1139,7 +1154,10 @@ function ValueTab({ tenant }: { tenant: string | null }) {
             description={t('value.riskDescription')}
           >
             {(s.cancellation_risk ?? []).length === 0 ? (
-              <EmptyState title={t('value.riskEmpty')} />
+              <EmptyState
+                description={t('value.riskEmptyHint')}
+                title={t('value.riskEmpty')}
+              />
             ) : (
               <div className="flex flex-col gap-2">
                 {(s.cancellation_risk ?? []).map((r) => (
@@ -1150,9 +1168,9 @@ function ValueTab({ tenant }: { tenant: string | null }) {
                     <div className="flex min-w-0 flex-col gap-1">
                       <div className="flex items-center gap-2">
                         <Badge variant="warning">{r.dimension}</Badge>
-                        <span className="font-mono text-sm">{r.key}</span>
+                        <span className="font-mono text-body">{r.key}</span>
                       </div>
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-caption text-muted-foreground">
                         {r.reason}
                       </p>
                     </div>
@@ -1160,7 +1178,7 @@ function ValueTab({ tenant }: { tenant: string | null }) {
                       <p className="font-medium">
                         {formatMicroUsd(r.cost_micro_usd)}
                       </p>
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-caption text-muted-foreground">
                         {t('value.satisfiedOf', {
                           satisfied: r.satisfied,
                           outcomes: r.outcomes,
@@ -1282,7 +1300,10 @@ export function FinOpsView() {
             <AsyncSection query={recsQ} skeletonHeight={180}>
               {(recs) =>
                 recs.recommendations.length === 0 ? (
-                  <EmptyState title={t('optimization.empty')} />
+                  <EmptyState
+                    description={t('optimization.emptyHint')}
+                    title={t('optimization.empty')}
+                  />
                 ) : (
                   <div className="flex flex-col gap-3">
                     {recs.recommendations.map((rec, i) => (
@@ -1602,7 +1623,7 @@ function FocusExportCard({ range }: { range: { since: string } }) {
         </div>
       }
     >
-      <p className="text-xs text-muted-foreground">{t('export.note')}</p>
+      <p className="text-caption text-muted-foreground">{t('export.note')}</p>
     </SectionCard>
   )
 }
@@ -1811,7 +1832,7 @@ function TenantBudgetsTab({ canWrite }: { canWrite: boolean }) {
               if (referenceInput.trim() === reference) void alertsQ.refetch()
             }}
           >
-            <label className="flex flex-1 flex-col gap-1 text-xs">
+            <label className="flex flex-1 flex-col gap-1 text-caption">
               {t('evidence.reference')}
               <Input
                 value={referenceInput}
@@ -1845,7 +1866,10 @@ function TenantBudgetsTab({ canWrite }: { canWrite: boolean }) {
           <AsyncSection query={alertsQ} skeletonHeight={140}>
             {(list) =>
               list.items.length === 0 ? (
-                <EmptyState title={t('alerts.empty')} />
+                <EmptyState
+                  description={t('alerts.emptyHint')}
+                  title={t('alerts.empty')}
+                />
               ) : (
                 <AlertsTable alerts={list.items} tenant={activeTenant} />
               )

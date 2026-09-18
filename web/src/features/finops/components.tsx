@@ -176,7 +176,9 @@ function bucketColumns(
       accessorKey: 'key',
       header: t('breakdown.columns.key'),
       cell: ({ row }) => (
-        <span className="font-mono text-xs">{row.original.key || '—'}</span>
+        <span className="font-mono text-caption">
+          {row.original.key || '—'}
+        </span>
       ),
     },
     {
@@ -267,7 +269,7 @@ export function SpendBreakdown({ summary }: { summary: SummaryResponse }) {
       }
     >
       {dim === 'agent' && summary.by_agent.length === 0 ? (
-        <p className="mb-3 text-xs text-muted-foreground">
+        <p className="mb-3 text-caption text-muted-foreground">
           {t('breakdown.noAgentAttribution')}
         </p>
       ) : null}
@@ -354,7 +356,7 @@ export function ForecastCard({ forecast }: { forecast: ForecastResponse }) {
         </Stat>
       </div>
       {hasBand ? (
-        <p className="mt-3 text-xs text-muted-foreground">
+        <p className="mt-3 text-caption text-muted-foreground">
           {t('forecast.confidenceBand', {
             low: formatMicroUsd(forecast.confidence_low_micro_usd),
             high: formatMicroUsd(forecast.confidence_high_micro_usd),
@@ -365,7 +367,7 @@ export function ForecastCard({ forecast }: { forecast: ForecastResponse }) {
       <DisclaimerNote className="mt-3" text={t('forecast.runRateNote')} />
       {forecast.anomalies && forecast.anomalies.length > 0 ? (
         <div className="mt-4">
-          <p className="mb-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+          <p className="mb-2 text-caption font-medium tracking-wide text-muted-foreground uppercase">
             {t('forecast.anomaliesTitle')}
           </p>
           <AnomaliesTable anomalies={forecast.anomalies} />
@@ -389,7 +391,7 @@ export function AnomaliesTable({
         accessorKey: 'day',
         header: t('forecast.anomalyColumns.day'),
         cell: ({ row }) => (
-          <span className="text-xs text-muted-foreground">
+          <span className="text-caption text-muted-foreground">
             {formatDate(`${row.original.day}T00:00:00Z`, i18n.language)}
           </span>
         ),
@@ -450,10 +452,10 @@ function Stat({
 }) {
   return (
     <div className="flex flex-col gap-0.5">
-      <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+      <span className="text-caption font-medium tracking-wide text-muted-foreground uppercase">
         {label}
       </span>
-      <span className="font-display text-lg font-semibold tabular-nums text-foreground">
+      <span className="font-display text-title tabular-nums text-foreground">
         {children}
       </span>
     </div>
@@ -476,7 +478,7 @@ export function EvidenceAmount({ amount }: { amount: PresentedAmount }) {
   return (
     <span data-amount-class={amount.class}>
       {label}
-      <span className="block text-xs font-normal text-muted-foreground">
+      <span className="block text-caption font-normal text-muted-foreground">
         {t(`evidence.${amount.class}`)}
         {amount.cause && amount.cause !== 'legacy_unversioned'
           ? ` · ${t('evidence.cause')}: ${amount.cause}`
@@ -513,7 +515,7 @@ export function BudgetCard({
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <span className="truncate text-sm font-medium text-foreground">
+              <span className="truncate text-body font-medium text-foreground">
                 {status.name}
               </span>
               {!status.enabled ? (
@@ -522,7 +524,7 @@ export function BudgetCard({
                 <Badge variant="danger">{t('budgets.over')}</Badge>
               ) : null}
             </div>
-            <p className="flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
+            <p className="flex flex-wrap items-center gap-x-1.5 text-caption text-muted-foreground">
               <span className="font-mono">
                 {status.dimension === 'global'
                   ? t('budgets.global')
@@ -541,10 +543,10 @@ export function BudgetCard({
           </div>
           <div className="flex items-start gap-2">
             <div className="text-right">
-              <div className="font-mono text-sm tabular-nums text-foreground">
+              <div className="font-mono text-body tabular-nums text-foreground">
                 <EvidenceAmount amount={amount} />
               </div>
-              <div className="text-xs text-muted-foreground">
+              <div className="text-caption text-muted-foreground">
                 / {limit ?? t('evidence.unavailable')}
               </div>
             </div>
@@ -556,11 +558,11 @@ export function BudgetCard({
         {pct !== null ? (
           <ConsumptionBar consumedPct={pct} over={over} />
         ) : (
-          <p className="text-xs text-muted-foreground">
+          <p className="text-caption text-muted-foreground">
             {t('evidence.barUnavailable')}
           </p>
         )}
-        <p className="text-xs text-muted-foreground">
+        <p className="text-caption text-muted-foreground">
           {t('evidence.forecast', {
             amount: Number.isSafeInteger(status.projected_micro_usd)
               ? formatEvidenceMoney(
@@ -573,7 +575,7 @@ export function BudgetCard({
         {reserved?.state === 'known' &&
         decimalMicro(reserved.value_micro_usd) &&
         BigInt(reserved.value_micro_usd) > 0n ? (
-          <p className="text-xs text-muted-foreground">
+          <p className="text-caption text-muted-foreground">
             {t('budgets.reservedHint', {
               amount: formatEvidenceMoney(
                 reserved.value_micro_usd,
@@ -582,7 +584,7 @@ export function BudgetCard({
             })}
           </p>
         ) : null}
-        <div className="flex items-center justify-between text-xs text-muted-foreground">
+        <div className="flex items-center justify-between text-caption text-muted-foreground">
           <span>
             {t('budgets.remaining')}:{' '}
             <span className="font-mono text-foreground">
@@ -612,7 +614,7 @@ export function AlertsTable({
         accessorKey: 'triggered_at',
         header: t('alerts.columns.triggeredAt'),
         cell: ({ row }) => (
-          <span className="text-xs text-muted-foreground">
+          <span className="text-caption text-muted-foreground">
             {formatDateTime(row.original.triggered_at, i18n.language)}
           </span>
         ),
@@ -621,7 +623,7 @@ export function AlertsTable({
         accessorKey: 'key',
         header: t('alerts.columns.budget'),
         cell: ({ row }) => (
-          <span className="font-mono text-xs">
+          <span className="font-mono text-caption">
             {row.original.dimension === 'global'
               ? t('budgets.global')
               : `${row.original.dimension}: ${row.original.key}`}
@@ -641,7 +643,7 @@ export function AlertsTable({
         id: 'spend',
         header: t('alerts.columns.spend'),
         cell: ({ row }) => (
-          <span className="font-mono text-xs tabular-nums text-muted-foreground">
+          <span className="font-mono text-caption tabular-nums text-muted-foreground">
             <EvidenceAmount amount={alertAmount(row.original, tenant)} />
           </span>
         ),
@@ -650,7 +652,7 @@ export function AlertsTable({
         accessorKey: 'id',
         header: t('evidence.reference'),
         cell: ({ row }) => (
-          <div className="max-w-64 break-all font-mono text-xs">
+          <div className="max-w-64 break-all font-mono text-caption">
             <span>{row.original.id}</span>
             {row.original.amount_evidence?.evidence_hash ? (
               <details>
@@ -697,14 +699,14 @@ export function RecommendationCard({ rec }: { rec: Recommendation }) {
             </Badge>
             <SeverityBadge severity={rec.severity} />
           </div>
-          <p className="text-sm font-medium text-foreground">{rec.title}</p>
+          <p className="text-body font-medium text-foreground">{rec.title}</p>
         </div>
         {rec.estimated_savings_micro_usd !== undefined ? (
           <div className="shrink-0 text-right">
-            <div className="text-xs text-muted-foreground">
+            <div className="text-caption text-muted-foreground">
               {t('optimization.estimatedSavings')}
             </div>
-            <div className="font-display text-base font-semibold tabular-nums text-success">
+            <div className="font-display text-heading tabular-nums text-success">
               {formatMicroUsd(rec.estimated_savings_micro_usd, {
                 compact: true,
               })}
@@ -712,11 +714,11 @@ export function RecommendationCard({ rec }: { rec: Recommendation }) {
           </div>
         ) : null}
       </div>
-      <p className="text-xs leading-relaxed text-muted-foreground">
+      <p className="text-caption leading-relaxed text-muted-foreground">
         {rec.detail}
       </p>
       {rec.subject ? (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-caption text-muted-foreground">
           {t('optimization.subject')}:{' '}
           <span className="font-mono text-foreground">{rec.subject}</span>
         </p>
@@ -855,7 +857,9 @@ function spendBucketColumns(
       accessorKey: 'key',
       header: t('breakdown.columns.key'),
       cell: ({ row }) => (
-        <span className="font-mono text-xs">{row.original.key || '—'}</span>
+        <span className="font-mono text-caption">
+          {row.original.key || '—'}
+        </span>
       ),
     },
     {
@@ -940,12 +944,12 @@ export function DimensionBreakdown({
         </CaveatNotice>
       ) : null}
       {dimension === 'service_tier' ? (
-        <p className="mb-3 text-xs text-muted-foreground">
+        <p className="mb-3 text-caption text-muted-foreground">
           {t('chargeback.serviceTierFreeform')}
         </p>
       ) : null}
       {empty ? (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-caption text-muted-foreground">
           {isCostType
             ? t('chargeback.costTypeEmpty')
             : t('chargeback.empty', { dimension: dimLabel })}
@@ -1005,7 +1009,7 @@ export function ReconciliationView({
         accessorKey: 'day',
         header: t('reconciliation.columns.day'),
         cell: ({ row }) => (
-          <span className="text-xs text-muted-foreground">
+          <span className="text-caption text-muted-foreground">
             {formatDayKey(row.original.day, i18n.language)}
           </span>
         ),
@@ -1055,7 +1059,7 @@ export function ReconciliationView({
         </CaveatNotice>
       ) : null}
       {r.estimated_only_tiers && r.estimated_only_tiers.length > 0 ? (
-        <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+        <div className="mb-3 flex flex-wrap items-center gap-2 text-caption text-muted-foreground">
           <span>{t('reconciliation.estimatedOnlyTiers')}:</span>
           {r.estimated_only_tiers.map((tier) => (
             <Badge key={tier} variant="warning">
@@ -1168,7 +1172,9 @@ export function AllocationTable({
         accessorKey: 'agent_ref',
         header: t('allocation.columns.agent'),
         cell: ({ row }) => (
-          <span className="font-mono text-xs">{row.original.agent_ref}</span>
+          <span className="font-mono text-caption">
+            {row.original.agent_ref}
+          </span>
         ),
       },
       {
@@ -1211,7 +1217,7 @@ export function AllocationTable({
         cell: ({ row }) => {
           const shared = row.original.resources.filter((r) => r.shared).length
           return (
-            <span className="text-xs text-muted-foreground">
+            <span className="text-caption text-muted-foreground">
               {t('allocation.resourceCount', {
                 count: row.original.resources.length,
               })}
@@ -1239,12 +1245,12 @@ export function AllocationTable({
         text={a.allocated_method_details || a.note}
       />
       {a.agents.length === 0 ? (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-caption text-muted-foreground">
           {a.note || t('allocation.empty')}
         </p>
       ) : (
         <>
-          <p className="mb-3 text-xs text-muted-foreground">
+          <p className="mb-3 text-caption text-muted-foreground">
             {t('allocation.method')}:{' '}
             <span className="font-mono text-foreground">
               {a.allocated_method_id}
@@ -1281,12 +1287,12 @@ export function FutureDimensionsPanel() {
         header: t('future.columns.dimension'),
         cell: ({ row }) => (
           <div className="flex flex-col">
-            <span className="text-sm text-foreground">
+            <span className="text-body text-foreground">
               {t(`future.dims.${row.original.id}.label`, {
                 defaultValue: humanize(row.original.id),
               })}
             </span>
-            <span className="text-xs text-muted-foreground">
+            <span className="text-caption text-muted-foreground">
               {t(`future.dims.${row.original.id}.detail`)}
             </span>
           </div>
@@ -1296,7 +1302,7 @@ export function FutureDimensionsPanel() {
         accessorKey: 'groupBy',
         header: t('future.columns.field'),
         cell: ({ row }) => (
-          <span className="font-mono text-xs text-muted-foreground">
+          <span className="font-mono text-caption text-muted-foreground">
             {row.original.groupBy}
           </span>
         ),
@@ -1316,7 +1322,7 @@ export function FutureDimensionsPanel() {
         accessorKey: 'ref',
         header: t('future.columns.ref'),
         cell: ({ row }) => (
-          <span className="font-mono text-xs text-muted-foreground">
+          <span className="font-mono text-caption text-muted-foreground">
             {row.original.ref}
           </span>
         ),
@@ -1331,12 +1337,12 @@ export function FutureDimensionsPanel() {
         header: t('future.columns.breakdown'),
         cell: ({ row }) => (
           <div className="flex flex-col">
-            <span className="text-sm text-foreground">
+            <span className="text-body text-foreground">
               {t(`future.breakdowns.${row.original.id}.label`, {
                 defaultValue: humanize(row.original.id),
               })}
             </span>
-            <span className="text-xs text-muted-foreground">
+            <span className="text-caption text-muted-foreground">
               {t(`future.breakdowns.${row.original.id}.detail`)}
             </span>
           </div>
@@ -1346,7 +1352,7 @@ export function FutureDimensionsPanel() {
         accessorKey: 'usageField',
         header: t('future.columns.field'),
         cell: ({ row }) => (
-          <span className="font-mono text-xs text-muted-foreground">
+          <span className="font-mono text-caption text-muted-foreground">
             {row.original.usageField || '—'}
           </span>
         ),
@@ -1366,7 +1372,7 @@ export function FutureDimensionsPanel() {
         accessorKey: 'ref',
         header: t('future.columns.ref'),
         cell: ({ row }) => (
-          <span className="font-mono text-xs text-muted-foreground">
+          <span className="font-mono text-caption text-muted-foreground">
             {row.original.ref}
           </span>
         ),
@@ -1387,7 +1393,7 @@ export function FutureDimensionsPanel() {
       </CaveatNotice>
       <div className="flex flex-col gap-5">
         <div>
-          <p className="mb-2 flex items-center gap-1.5 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+          <p className="mb-2 flex items-center gap-1.5 text-caption font-medium tracking-wide text-muted-foreground uppercase">
             <Users className="size-3.5" aria-hidden />
             {t('future.dimensionsTitle')}
           </p>
@@ -1405,7 +1411,7 @@ export function FutureDimensionsPanel() {
           />
         </div>
         <div>
-          <p className="mb-2 flex items-center gap-1.5 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+          <p className="mb-2 flex items-center gap-1.5 text-caption font-medium tracking-wide text-muted-foreground uppercase">
             <Zap className="size-3.5" aria-hidden />
             {t('future.breakdownsTitle')}
           </p>

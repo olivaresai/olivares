@@ -295,7 +295,7 @@ export function ChannelCreateForm({
       <div className="flex flex-col gap-4" data-slot="channel-created">
         <div
           role="status"
-          className="rounded-md border border-success-line bg-success-soft px-3 py-2 text-sm text-success"
+          className="rounded-md border border-success-line bg-success-soft px-3 py-2 text-body text-success"
         >
           <p className="font-medium">{t('create.result.title')}</p>
           <p>{t('create.result.body')}</p>
@@ -322,7 +322,7 @@ export function ChannelCreateForm({
           </KvRow>
         </KvList>
         <section aria-label={t('create.result.grants')}>
-          <p className="mb-1 text-sm font-medium">
+          <p className="mb-1 text-body font-medium">
             {t('create.result.grants')}
           </p>
           {result.grants && result.grants.length > 0 ? (
@@ -330,7 +330,7 @@ export function ChannelCreateForm({
               {result.grants.map((g) => (
                 <li
                   key={g.id}
-                  className="flex flex-wrap items-center gap-1.5 text-xs"
+                  className="flex flex-wrap items-center gap-1.5 text-caption"
                   data-slot="grant-recorded"
                 >
                   <Badge variant="outline">
@@ -356,13 +356,13 @@ export function ChannelCreateForm({
               ))}
             </ul>
           ) : (
-            <p className="text-xs text-muted-foreground">
+            <p className="text-caption text-muted-foreground">
               {t('create.result.noGrants')}
             </p>
           )}
         </section>
         {!canChannelRead ? (
-          <p className="text-xs text-muted-foreground">
+          <p className="text-caption text-muted-foreground">
             {t('create.noReadHint')}
           </p>
         ) : null}
@@ -378,14 +378,14 @@ export function ChannelCreateForm({
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate>
       {!canChannelRead ? (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-caption text-muted-foreground">
           {t('create.noReadHint')}
         </p>
       ) : null}
       {phase === 'unknown' && failure ? (
         <div className="flex flex-col gap-2" data-slot="create-unknown">
           <FailureNotice failure={failure} title={t('create.unknown.title')} />
-          <p className="text-sm text-muted-foreground">
+          <p className="text-body text-muted-foreground">
             {t('create.unknown.body', { slug: slug.trim() })}
           </p>
           <div className="flex flex-wrap gap-2">
@@ -409,7 +409,7 @@ export function ChannelCreateForm({
         <FailureNotice failure={failure} />
       ) : null}
       {errors.length > 0 ? (
-        <ul role="alert" className="list-disc pl-5 text-sm text-danger">
+        <ul role="alert" className="list-disc pl-5 text-body text-danger">
           {errors.map((e) => (
             <li key={e}>{e}</li>
           ))}
@@ -547,10 +547,10 @@ export function ChannelCreateForm({
       </div>
 
       <fieldset className="flex flex-col gap-3 rounded-md border border-border p-3">
-        <legend className="px-1 text-sm font-medium">
+        <legend className="px-1 text-body font-medium">
           {t('create.fields.grants')}
         </legend>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-caption text-muted-foreground">
           {t('create.fields.grantsHint')}
         </p>
         {grants.map((g, i) => (

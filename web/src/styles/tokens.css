@@ -206,4 +206,35 @@
   --ease-out: cubic-bezier(0.2, 0.7, 0.2, 1);
   --ease-in: cubic-bezier(0.4, 0, 1, 1);
   --animate-pulse-live: pulse-live 2s ease-in-out infinite;
+  --default-transition-duration: 140ms;
+  --default-transition-timing-function: cubic-bezier(0.2, 0.7, 0.2, 1);
+
+  /* Operator type scale — size + leading + tracking + weight per step */
+  --text-display-lg: 2rem;
+  --text-display-lg--line-height: 2.375rem;
+  --text-display-lg--letter-spacing: -0.025em;
+  --text-display-lg--font-weight: 600;
+  --text-display: 1.5rem;
+  --text-display--line-height: 1.875rem;
+  --text-display--letter-spacing: -0.02em;
+  --text-display--font-weight: 600;
+  --text-title: 1.125rem;
+  --text-title--line-height: 1.5rem;
+  --text-title--letter-spacing: -0.015em;
+  --text-title--font-weight: 600;
+  --text-heading: 1rem;
+  --text-heading--line-height: 1.375rem;
+  --text-heading--letter-spacing: -0.01em;
+  --text-heading--font-weight: 600;
+  --text-body: 0.875rem;
+  --text-body--line-height: 1.375rem;
+  --text-caption: 0.75rem;
+  --text-caption--line-height: 1.125rem;
+  --text-overline: 0.6875rem;
+  --text-overline--line-height: 1rem;
+  --text-overline--letter-spacing: 0.08em;
+  --text-overline--font-weight: 600;
+
+  /* Layout — the shell content width, named rather than bracketed */
+  --container-page: 90rem;
 }

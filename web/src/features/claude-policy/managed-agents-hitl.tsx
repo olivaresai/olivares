@@ -53,7 +53,7 @@ export function ManagedAgentsHitl({ active }: { active: boolean }) {
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2">
         <SeamBadge label={t('hitl.postV1')} />
-        <span className="text-xs text-muted-foreground">
+        <span className="text-caption text-muted-foreground">
           {t('hitl.postV1Hint')}
         </span>
       </div>
@@ -117,16 +117,16 @@ function HitlRow({
     <li className="flex flex-col gap-1 rounded-md border border-border bg-surface px-3 py-2">
       <div className="flex flex-wrap items-center gap-2">
         <Badge variant="warning">{t('hitl.pending')}</Badge>
-        <span className="text-sm text-foreground">
+        <span className="text-body text-foreground">
           {finding.title ?? t('hitl.title')}
         </span>
         {finding.occurred_at && (
-          <span className="text-xs text-muted-foreground">
+          <span className="text-caption text-muted-foreground">
             <RelTimeLabel ts={finding.occurred_at} />
           </span>
         )}
       </div>
-      <div className="flex flex-wrap items-center gap-x-3 text-xs text-muted-foreground">
+      <div className="flex flex-wrap items-center gap-x-3 text-caption text-muted-foreground">
         <span>
           {t('hitl.session')}:{' '}
           <code className="font-mono">{sessionRef || '—'}</code>
@@ -244,7 +244,7 @@ function HitlDetail({
           const toolEvents = (data.items ?? []).filter((e) => e.tool_name)
           if (toolEvents.length === 0) {
             return (
-              <p className="text-xs text-muted-foreground">
+              <p className="text-caption text-muted-foreground">
                 {t('hitl.noToolEvents')}
               </p>
             )
@@ -254,7 +254,7 @@ function HitlDetail({
               {toolEvents.map((ev, i) => (
                 <li
                   key={ev.id ?? i}
-                  className="flex flex-wrap items-center gap-2 text-xs"
+                  className="flex flex-wrap items-center gap-2 text-caption"
                 >
                   <span>
                     {t('hitl.tool')}:{' '}

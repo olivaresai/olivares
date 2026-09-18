@@ -47,7 +47,7 @@ var errReservationDenied = errors.New("finops: reservation denied")
 // headroom that no settlement will ever return.
 var errReservationScanIncomplete = errors.New("finops: reservation enumeration incomplete")
 
-// D02 ACTIVATION FRONTIER — A NEW COMPATIBILITY REQUIREMENT ON ALL FIVE COVERED
+// THE ACTIVATION FRONTIER — A NEW COMPATIBILITY REQUIREMENT ON ALL FIVE COVERED
 // WRAPPERS, and it is deliberately not described as preserved legacy behavior.
 //
 // From the commit of BeginLifecycleActivation for a tenant, the five reservation
@@ -213,7 +213,7 @@ type reservedTotal struct {
 	State reservedState
 	Scan  reservationScanState
 	Fault reservationFault
-	// UnallocatedHistorical (D02/R5) says the enumeration COMPLETED and every
+	// UnallocatedHistorical says the enumeration COMPLETED and every
 	// observed row was clean, and that what could not be established is the
 	// ALLOCATION of a held obligation with no accounting instant to a window that
 	// closed before now. It is a temporal fact, not a scan gap and not a corruption,
@@ -315,7 +315,7 @@ type reservationTarget struct {
 // review, and it is deliberately not described as unchanged legacy behaviour. The
 // native SQL scopes provide the capability. A wrapper that embeds store.Scope and
 // does not forward LockTransaction HIDES it, and such a scope is NOT SUPPORTED for
-// this call: before the D02 ingest cut it could reserve within headroom, deny an
+// this call: before the ingest cut it could reserve within headroom, deny an
 // exhausted budget, settle a handle and sweep expired rows through that wrapper, and
 // now every participating callback fails before it reads the ledger. MIGRATION for
 // such a decorator: forward the method to the scope it wraps —
@@ -1052,7 +1052,7 @@ func activeReservedMicroUSD(ctx context.Context, repo store.GenericRepo, tenant 
 		eq(colResvPeriodStart, periodText),
 		eq(colResvState, resvStateActive),
 		{Column: colResvExpiresAt, Op: model.OpGt, Value: model.NewTimestamp(now).String()},
-		// D02: THIS BRANCH IS THE LEGACY ONE, AND THE TWO MUST BE DISJOINT. Without
+		// THIS BRANCH IS THE LEGACY ONE, AND THE TWO MUST BE DISJOINT. Without
 		// this predicate an imported v1 child whose original expires_at is still in
 		// the future and whose period bucket matches would be summed HERE as well as
 		// by the v1 branch — the same obligation counted twice against the ceiling.

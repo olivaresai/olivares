@@ -4,7 +4,7 @@
 
 package finops
 
-// D02 attempt lifecycle — the three internal operations of this cut and their
+// The attempt lifecycle — the three internal operations of this cut and their
 // private helpers: the durable activation frontier (Begin), the bounded legacy
 // import, the exact lookup, and the guard the legacy reservation wrappers consult.
 //

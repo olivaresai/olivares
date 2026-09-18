@@ -125,7 +125,7 @@ export function NhiRosterTab() {
         accessorKey: 'ref',
         header: t('roster.col.externalId'),
         cell: ({ row }) => (
-          <span className="font-mono text-xs break-all">
+          <span className="font-mono text-caption break-all">
             {row.original.ref}
           </span>
         ),
@@ -155,7 +155,7 @@ export function NhiRosterTab() {
         accessorKey: 'source',
         header: t('roster.col.source'),
         cell: ({ row }) => (
-          <span className="text-xs text-muted-foreground">
+          <span className="text-caption text-muted-foreground">
             {row.original.source ?? '—'}
           </span>
         ),
@@ -274,7 +274,7 @@ function RosterDetailSheet({
               <StatusBadge status={identity.disabled ? 'inactive' : 'active'} />
             </KvRow>
           </KvList>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-caption text-muted-foreground">
             {t('roster.convergenceNote')}
           </p>
           <div>

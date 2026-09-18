@@ -30,7 +30,7 @@ export function PopoverContent({
         sideOffset={sideOffset}
         className={cn(
           'z-50 w-72 bg-elevated border border-border-strong rounded-lg shadow-lg p-3',
-          'text-sm text-foreground outline-none',
+          'text-body text-foreground outline-none',
           'transition-opacity duration-150 ease-out',
           'data-[state=open]:opacity-100 data-[state=closed]:opacity-0',
           className,

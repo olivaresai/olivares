@@ -58,7 +58,10 @@ export function ManagedSettingsReference() {
       <SectionCard title={t('ref.ms.precedence')}>
         <ol className="flex flex-col gap-1">
           {SETTINGS_PRECEDENCE.map((p, i) => (
-            <li key={p.scope} className="flex items-baseline gap-2 text-xs">
+            <li
+              key={p.scope}
+              className="flex items-baseline gap-2 text-caption"
+            >
               <span className="font-mono text-muted-foreground">{i + 1}.</span>
               <span className="font-medium text-foreground">{p.scope}</span>
               <span className="text-muted-foreground">{p.note}</span>
@@ -71,7 +74,7 @@ export function ManagedSettingsReference() {
       </SectionCard>
 
       <SectionCard title={t('ref.ms.dropIn', { dir: DROP_IN_MERGE.dir })}>
-        <ul className="flex list-disc flex-col gap-1 pl-4 text-xs text-muted-foreground">
+        <ul className="flex list-disc flex-col gap-1 pl-4 text-caption text-muted-foreground">
           {DROP_IN_MERGE.rules.map((r) => (
             <li key={r}>{r}</li>
           ))}
@@ -145,7 +148,7 @@ export function HooksReference() {
           {HOOK_EVENTS.map((e) => (
             <li
               key={e.name}
-              className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs"
+              className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-caption"
             >
               <code className="font-mono text-foreground">{e.name}</code>
               {e.governance && (
@@ -190,7 +193,7 @@ export function ManagedMcpReference() {
       <SectionCard title={t('ref.mcp.evalOrder')}>
         <ol className="flex flex-col gap-1">
           {MCP_EVALUATION_ORDER.map((s) => (
-            <li key={s.step} className="flex items-baseline gap-2 text-xs">
+            <li key={s.step} className="flex items-baseline gap-2 text-caption">
               <span className="font-mono text-muted-foreground">{s.step}.</span>
               <span className="text-foreground">{s.rule}</span>
             </li>
@@ -227,7 +230,7 @@ export function ManagedMcpReference() {
             {PLUGIN_MARKETPLACE_GOVERNANCE.airGap.cacheDir}
           </ReferenceRow>
         </dl>
-        <ul className="mt-1 flex list-disc flex-col gap-0.5 pl-4 text-xs text-muted-foreground">
+        <ul className="mt-1 flex list-disc flex-col gap-0.5 pl-4 text-caption text-muted-foreground">
           {PLUGIN_MARKETPLACE_GOVERNANCE.behavior.map((b) => (
             <li key={b}>{b}</li>
           ))}
@@ -260,7 +263,7 @@ export function SandboxReference() {
           {EGRESS_ALLOWLIST.map((e) => (
             <li
               key={e.host}
-              className="flex flex-wrap items-baseline gap-x-2 text-xs"
+              className="flex flex-wrap items-baseline gap-x-2 text-caption"
             >
               <code className="font-mono text-foreground">{e.host}</code>
               <span className="text-muted-foreground">{e.purpose}</span>

@@ -1280,7 +1280,7 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 			dc.UseData(data)
 		}
 	}
-	// D08-C2a: bind the inventory's durable sweep scope alongside UseData, and
+	// Bind the inventory's durable sweep scope alongside UseData, and
 	// well before rt.Start — the module reads it only inside a sweep, and Start is
 	// what begins the ticker that calls one.
 	//
@@ -2141,7 +2141,7 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	circuitBreaker := newCircuitBreakerEngine(osGetenv, circuitBreakerDeps{Data: data, Gov: set.gov}, log)
 	subscribeCircuitBreaker(circuitBreaker, bus, log)
 
-	// D01-C2B: late-bind the governed Chat execution adapter, here because this is the
+	// Late-bind the governed Chat execution adapter, here because this is the
 	// first point at which every dependency it must not run without exists — the store,
 	// the proxy governance policy, the context policy, the residency registry, the secret
 	// resolver, the approval bridge, the bus and the SAME circuit-breaker instance the

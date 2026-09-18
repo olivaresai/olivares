@@ -86,7 +86,7 @@ export function DrillLink({
     <Link
       // The feature registry IS the route table, so these paths are always valid.
       to={to as never}
-      className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium text-accent-text outline-none transition-colors hover:bg-accent-soft focus-visible:ring-2 focus-visible:ring-ring print:hidden [&_svg]:size-3.5"
+      className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-caption font-medium text-accent-text outline-none transition-colors hover:bg-accent-soft focus-visible:ring-2 focus-visible:ring-ring print:hidden [&_svg]:size-3.5"
     >
       {children}
       <ArrowRight />
@@ -134,7 +134,7 @@ export function DeltaCaption({ pct }: { pct: number | null }) {
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1 text-xs',
+        'inline-flex items-center gap-1 text-caption',
         up ? 'text-warning' : 'text-muted-foreground',
       )}
     >
@@ -323,7 +323,7 @@ export function PartialCoverageDisclosure({
   const { t } = useTranslation('executive')
   return (
     <details
-      className="group min-w-0 text-xs print:hidden"
+      className="group min-w-0 text-caption print:hidden"
       data-testid={testId}
     >
       <summary className="inline-flex max-w-full cursor-pointer list-none items-center gap-1 rounded-sm px-1 py-0.5 text-muted-foreground outline-none transition-colors select-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
@@ -358,7 +358,10 @@ export function PartialCoveragePrint({
   testId: string
 }) {
   return (
-    <div className="hidden min-w-0 text-xs print:block" data-testid={testId}>
+    <div
+      className="hidden min-w-0 text-caption print:block"
+      data-testid={testId}
+    >
       <PartialCoverageRows sources={sources} print />
     </div>
   )
@@ -494,7 +497,7 @@ export function KpiTiles({
             }
             trend={
               usage.silentEvasion !== null && usage.silentEvasion > 0 ? (
-                <span className="inline-flex items-center gap-1 text-xs text-warning">
+                <span className="inline-flex items-center gap-1 text-caption text-warning">
                   <Activity className="size-3.5" />
                   {t('pillars.silentEvasion', { count: usage.silentEvasion })}
                 </span>
@@ -589,7 +592,7 @@ export function SpendSection({ cost }: { cost: CostKpi }) {
             value={formatMicroUsd(cost.projectedMicroUsd, { compact: true })}
             tone={cost.projectedOver ? 'warning' : undefined}
           >
-            <span className="text-xs text-muted-foreground">
+            <span className="text-caption text-muted-foreground">
               {t('cost.atRunRate')}
             </span>
           </MiniStat>
@@ -644,7 +647,7 @@ export function SpendBreakdownChart({ spend }: { spend: SpendResponse }) {
   )
   if (top.length === 0) {
     return (
-      <p className="py-6 text-center text-sm text-muted-foreground">
+      <p className="py-6 text-center text-body text-muted-foreground">
         {t('cost.noAttribution')}
       </p>
     )
@@ -701,7 +704,7 @@ export function SeverityRow({
     <div className="flex flex-wrap items-center gap-1.5">
       {entries.map((s) => (
         <span key={s} className="inline-flex items-center gap-1">
-          <span className="font-mono text-xs tabular-nums text-foreground">
+          <span className="font-mono text-caption tabular-nums text-foreground">
             {bySeverity[s]}
           </span>
           <SeverityBadge severity={s} />
@@ -722,16 +725,16 @@ export function RiskSection({ risk }: { risk: RiskKpi }) {
       <div className="grid gap-4 md:grid-cols-3">
         {/* findings */}
         <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-4">
-          <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          <span className="text-caption font-medium uppercase tracking-wide text-muted-foreground">
             {t('risk.openFindings')}
           </span>
-          <span className="font-display text-2xl font-semibold tabular-nums text-foreground">
+          <span className="font-display text-display tabular-nums text-foreground">
             {formatInt(risk.openFindings)}
           </span>
           {risk.openFindings > 0 ? (
             <SeverityRow bySeverity={risk.bySeverity} />
           ) : (
-            <span className="text-xs text-muted-foreground">
+            <span className="text-caption text-muted-foreground">
               {t('risk.noFindings')}
             </span>
           )}
@@ -739,7 +742,7 @@ export function RiskSection({ risk }: { risk: RiskKpi }) {
 
         {/* robustness */}
         <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-border bg-surface p-4 text-center">
-          <span className="self-start text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          <span className="self-start text-caption font-medium uppercase tracking-wide text-muted-foreground">
             {t('risk.robustness')}
           </span>
           {risk.robustness.score !== null ? (
@@ -750,14 +753,14 @@ export function RiskSection({ risk }: { risk: RiskKpi }) {
                 caption="/100"
                 ariaLabel={t('risk.robustness')}
               />
-              <span className="text-xs text-muted-foreground">
+              <span className="text-caption text-muted-foreground">
                 {t('risk.robustnessCaption')}
               </span>
             </>
           ) : (
             <div className="flex flex-1 flex-col items-center justify-center gap-2 py-3">
               <Badge variant="warning">{t('risk.robustnessPending')}</Badge>
-              <span className="max-w-[14rem] text-xs leading-relaxed text-muted-foreground">
+              <span className="max-w-[14rem] text-caption leading-relaxed text-muted-foreground">
                 {risk.robustness.status
                   ? t('risk.robustnessPendingHint')
                   : t('risk.noRuns')}
@@ -768,7 +771,7 @@ export function RiskSection({ risk }: { risk: RiskKpi }) {
 
         {/* access drift */}
         <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-4">
-          <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          <span className="text-caption font-medium uppercase tracking-wide text-muted-foreground">
             {t('risk.drift')}
           </span>
           <DriftRow
@@ -815,10 +818,8 @@ function DriftRow({
           : 'text-foreground'
   return (
     <div className="flex items-baseline justify-between gap-2">
-      <span className="text-sm text-muted-foreground">{label}</span>
-      <span
-        className={cn('font-mono text-lg font-semibold tabular-nums', color)}
-      >
+      <span className="text-body text-muted-foreground">{label}</span>
+      <span className={cn('font-mono text-title tabular-nums', color)}>
         {formatInt(value)}
       </span>
     </div>
@@ -900,15 +901,15 @@ export function ComplianceSection({
     >
       <div className="grid gap-5 lg:grid-cols-[1fr_1.4fr]">
         <div className="flex flex-col gap-2">
-          <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          <span className="text-caption font-medium uppercase tracking-wide text-muted-foreground">
             {t('compliance.coverage')}
           </span>
-          <span className="font-display text-3xl font-semibold tabular-nums text-foreground">
+          <span className="font-display text-display-lg tabular-nums text-foreground">
             {compliance.coveredPct === null
               ? '—'
               : formatPercent(compliance.coveredPct, { digits: 0 })}
           </span>
-          <span className="text-xs text-muted-foreground">
+          <span className="text-caption text-muted-foreground">
             {t('compliance.ofControls', {
               total: formatInt(compliance.total),
               frameworks: formatInt(compliance.frameworks.length),
@@ -917,7 +918,7 @@ export function ComplianceSection({
           <ComplianceMixBar compliance={compliance} />
           {Object.values(compliance.riskTiers).some((n) => n > 0) ? (
             <div className="mt-2 flex flex-col gap-1.5">
-              <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              <span className="text-caption font-medium uppercase tracking-wide text-muted-foreground">
                 {t('compliance.riskTiers')}
               </span>
               <div className="flex flex-wrap items-center gap-1.5">
@@ -925,7 +926,7 @@ export function ComplianceSection({
                   .filter((tier) => compliance.riskTiers[tier] > 0)
                   .map((tier) => (
                     <span key={tier} className="inline-flex items-center gap-1">
-                      <span className="font-mono text-xs tabular-nums text-foreground">
+                      <span className="font-mono text-caption tabular-nums text-foreground">
                         {compliance.riskTiers[tier]}
                       </span>
                       <RiskTierBadge tier={tier} />
@@ -937,21 +938,21 @@ export function ComplianceSection({
         </div>
 
         <div className="flex flex-col gap-3">
-          <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          <span className="text-caption font-medium uppercase tracking-wide text-muted-foreground">
             {t('compliance.frameworks')}
           </span>
           {compliance.frameworks.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-body text-muted-foreground">
               {t('compliance.noFrameworks')}
             </p>
           ) : (
             compliance.frameworks.map((fw) => (
               <div key={fw.framework} className="flex flex-col gap-1.5">
                 <div className="flex items-baseline justify-between gap-2">
-                  <span className="text-sm font-medium text-foreground">
+                  <span className="text-body font-medium text-foreground">
                     {fw.name}
                   </span>
-                  <span className="font-mono text-xs text-muted-foreground">
+                  <span className="font-mono text-caption text-muted-foreground">
                     {fw.version}
                   </span>
                 </div>
@@ -1037,7 +1038,7 @@ export function ReliabilitySection({ health }: { health: HealthKpi }) {
           </div>
         </div>
       ) : (
-        <p className="py-6 text-center text-sm text-muted-foreground">
+        <p className="py-6 text-center text-body text-muted-foreground">
           {t('reliability.noData')}
         </p>
       )}
@@ -1061,12 +1062,12 @@ function MiniStat({
 }) {
   return (
     <div className="flex flex-col gap-0.5 rounded-lg border border-border bg-surface p-3">
-      <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+      <span className="text-caption font-medium uppercase tracking-wide text-muted-foreground">
         {label}
       </span>
       <span
         className={cn(
-          'font-display text-lg font-semibold tabular-nums',
+          'font-display text-title tabular-nums',
           tone === 'danger'
             ? 'text-danger'
             : tone === 'warning'

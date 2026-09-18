@@ -86,7 +86,7 @@ export function ConsumptionBar({
         ) : null}
       </div>
       {showLabels ? (
-        <div className="flex items-center justify-between text-xs">
+        <div className="flex items-center justify-between text-caption">
           <span
             className={cn(
               'font-mono tabular-nums',

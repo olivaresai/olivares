@@ -86,8 +86,10 @@ export interface GraphCanvasProps {
  */
 function useMeasurableNodes(nodes: Node[]) {
   const [rfNodes, setRfNodes] = useState<Node[]>(nodes)
+  const [prevNodes, setPrevNodes] = useState(nodes)
 
-  useEffect(() => {
+  if (nodes !== prevNodes) {
+    setPrevNodes(nodes)
     setRfNodes((prev) => {
       const medidos = new Map(prev.map((n) => [n.id, n.measured]))
       return nodes.map((n) => {
@@ -95,7 +97,7 @@ function useMeasurableNodes(nodes: Node[]) {
         return measured ? { ...n, measured } : n
       })
     })
-  }, [nodes])
+  }
 
   const onNodesChange = useCallback((changes: NodeChange[]) => {
     setRfNodes((prev) => applyNodeChanges(changes, prev))
@@ -183,6 +185,15 @@ export function GraphCanvas({
           maxZoom={2.5}
           nodesDraggable={false}
           nodesConnectable={false}
+          // ⛔ `nodesFocusable` SE PROBÓ Y SE RETIRA, y la razón está medida en la
+          // propia librería: un nodo enfocable recibe `tabIndex=0` y `role="group"`
+          // (`@xyflow/react` → `isFocusable ? 'group' : undefined`, `aria-label:
+          // node.ariaLabel`), y NUESTROS nodos no llevan `ariaLabel`. Con
+          // GRAPH_LIMIT=500 eso mete hasta quinientos grupos SIN NOMBRE en el orden
+          // de tabulación, delante de todo lo que venga después del lienzo. Es un
+          // teclado PEOR, no mejor. El camino de teclado del mapa es la lista
+          // «Map as a list» que abre debajo del lienzo: un solo tab stop que lleva a
+          // la misma selección, con nombre.
           elementsSelectable
           panOnScroll
           selectionOnDrag={false}

@@ -418,7 +418,7 @@ func newFinOpsCostCentersCmd(c modelstackClient) *cobra.Command {
 		// new and nothing measured aliases. See TestNoAliasDuplicatesItsOwnCommandName.
 		// misspell flags the literal itself, and it has to: the linter cannot tell an
 		// accepted invocation from prose. Suppressing it belongs in `.golangci.yml`
-		// beside `mitre` and `mosquitto`, which is the integration lane's call, not this lane's.
+		// beside `mitre` and `mosquitto`, which is an integration decision, not this command's.
 		Aliases: []string{"cost-centres"},
 		Short:   "Govern cost centers and the rules that map spend to them",
 		Long: "Govern the cost centers spend is charged to, and the mapping rules that decide which\n" +

@@ -52,6 +52,7 @@ import {
   type OnboardResult,
   type RosterMemberDTO,
 } from './api'
+import { StaticTable } from '@/components/data/static-table'
 
 const ROLES = ['viewer', 'editor', 'admin', 'owner'] as const
 
@@ -130,10 +131,10 @@ export function PeopleTab() {
       <section className="flex flex-col gap-3">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 className="text-base font-semibold text-foreground">
+            <h2 className="text-heading text-foreground">
               {t('console:people.title')}
             </h2>
-            <p className="max-w-2xl text-sm text-muted-foreground">
+            <p className="max-w-2xl text-body text-muted-foreground">
               {t('console:people.caption')}
             </p>
           </div>
@@ -148,14 +149,14 @@ export function PeopleTab() {
 
       <section className="flex flex-col gap-3">
         <div>
-          <h3 className="text-sm font-semibold text-foreground">
+          <h3 className="text-body font-semibold text-foreground">
             {t('console:members.title')}
           </h3>
-          <p className="max-w-2xl text-sm text-muted-foreground">
+          <p className="max-w-2xl text-body text-muted-foreground">
             {t('console:members.caption')}
           </p>
           {roster.some((member) => member.sso_only || member.external_id) ? (
-            <p className="mt-1 max-w-2xl text-xs text-muted-foreground">
+            <p className="mt-1 max-w-2xl text-caption text-muted-foreground">
               {t('console:members.externalManagedNotice')}
             </p>
           ) : null}
@@ -188,24 +189,14 @@ export function PeopleTab() {
           />
         ) : (
           <div className="overflow-hidden rounded-lg border border-border">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
+            <StaticTable>
+              <thead>
                 <tr>
-                  <th className="px-3 py-2 font-medium">
-                    {t('console:members.user')}
-                  </th>
-                  <th className="px-3 py-2 font-medium">
-                    {t('console:people.role')}
-                  </th>
-                  <th className="px-3 py-2 font-medium">
-                    {t('console:members.groups')}
-                  </th>
-                  <th className="px-3 py-2 font-medium">
-                    {t('console:members.status')}
-                  </th>
-                  <th className="px-3 py-2 text-right font-medium">
-                    {t('console:members.action')}
-                  </th>
+                  <th>{t('console:members.user')}</th>
+                  <th>{t('console:people.role')}</th>
+                  <th>{t('console:members.groups')}</th>
+                  <th>{t('console:members.status')}</th>
+                  <th className="text-right">{t('console:members.action')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -218,17 +209,17 @@ export function PeopleTab() {
                   />
                 ))}
               </tbody>
-            </table>
+            </StaticTable>
           </div>
         )}
       </section>
 
       <section className="flex flex-col gap-3">
         <div>
-          <h3 className="text-sm font-semibold text-foreground">
+          <h3 className="text-body font-semibold text-foreground">
             {t('console:people.pendingTitle')}
           </h3>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-body text-muted-foreground">
             {t('console:people.pendingCaption')}
           </p>
         </div>
@@ -248,39 +239,34 @@ export function PeopleTab() {
         ) : invites.isError ? (
           <ErrorState retry={() => void invites.refetch()} />
         ) : items.length === 0 ? (
-          <EmptyState title={t('console:people.noInvites')} />
+          <EmptyState
+            description={t('console:people.noInvitesHint')}
+            title={t('console:people.noInvites')}
+          />
         ) : (
           <div className="overflow-hidden rounded-lg border border-border">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
+            <StaticTable>
+              <thead>
                 <tr>
-                  <th className="px-3 py-2 font-medium">
-                    {t('console:people.email')}
-                  </th>
-                  <th className="px-3 py-2 font-medium">
-                    {t('console:people.role')}
-                  </th>
-                  <th className="px-3 py-2 font-medium">
-                    {t('console:people.expires')}
-                  </th>
-                  <th className="px-3 py-2" />
+                  <th>{t('console:people.email')}</th>
+                  <th>{t('console:people.role')}</th>
+                  <th>{t('console:people.expires')}</th>
+                  <th />
                 </tr>
               </thead>
               <tbody>
                 {items.map((inv) => (
-                  <tr key={inv.id} className="border-t border-border">
-                    <td className="px-3 py-2 font-medium text-foreground">
-                      {inv.email}
-                    </td>
-                    <td className="px-3 py-2">
+                  <tr key={inv.id}>
+                    <td className="font-medium text-foreground">{inv.email}</td>
+                    <td>
                       <Badge variant="neutral">{inv.role}</Badge>
                     </td>
-                    <td className="px-3 py-2 text-muted-foreground">
+                    <td className="text-muted-foreground">
                       {new Date(inv.expires_at).toLocaleDateString(
                         currentLanguage(),
                       )}
                     </td>
-                    <td className="px-3 py-2 text-right">
+                    <td className="text-right">
                       {canOnboard && (
                         <Button
                           variant="ghost"
@@ -295,7 +281,7 @@ export function PeopleTab() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </StaticTable>
           </div>
         )}
       </section>
@@ -303,10 +289,10 @@ export function PeopleTab() {
       {canReadSupers && (
         <section className="flex flex-col gap-3">
           <div>
-            <h3 className="text-sm font-semibold text-foreground">
+            <h3 className="text-body font-semibold text-foreground">
               {t('console:superadmins.title')}
             </h3>
-            <p className="max-w-2xl text-sm text-muted-foreground">
+            <p className="max-w-2xl text-body text-muted-foreground">
               {t('console:superadmins.caption')}
             </p>
           </div>
@@ -327,34 +313,30 @@ export function PeopleTab() {
             <ErrorState retry={() => void superadmins.refetch()} />
           ) : (
             <div className="overflow-hidden rounded-lg border border-border">
-              <table className="w-full text-sm">
-                <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
+              <StaticTable>
+                <thead>
                   <tr>
-                    <th className="px-3 py-2 font-medium">
-                      {t('console:people.email')}
-                    </th>
-                    <th className="px-3 py-2 font-medium">
-                      {t('console:superadmins.statusHeader')}
-                    </th>
-                    <th className="px-3 py-2" />
+                    <th>{t('console:people.email')}</th>
+                    <th>{t('console:superadmins.statusHeader')}</th>
+                    <th />
                   </tr>
                 </thead>
                 <tbody>
                   {supers.map((u) => {
                     const active = u.status === 'active'
                     return (
-                      <tr key={u.id} className="border-t border-border">
-                        <td className="px-3 py-2 font-medium text-foreground">
+                      <tr key={u.id}>
+                        <td className="font-medium text-foreground">
                           {u.email}
                         </td>
-                        <td className="px-3 py-2">
+                        <td>
                           <Badge variant={active ? 'success' : 'neutral'}>
                             {active
                               ? t('console:superadmins.active')
                               : t('console:superadmins.inactive')}
                           </Badge>
                         </td>
-                        <td className="px-3 py-2 text-right">
+                        <td className="text-right">
                           {canManageSupers && (
                             <Button
                               variant="ghost"
@@ -372,7 +354,7 @@ export function PeopleTab() {
                     )
                   })}
                 </tbody>
-              </table>
+              </StaticTable>
             </div>
           )}
         </section>
@@ -476,12 +458,14 @@ function RosterMemberRow({
       ? member.display_name
       : undefined
   return (
-    <tr className="border-t border-border align-top">
-      <td className="px-3 py-2">
+    <tr className="align-top">
+      <td>
         <div className="flex flex-col gap-1">
           <span className="font-medium text-foreground">{member.email}</span>
           {displayName ? (
-            <span className="text-xs text-muted-foreground">{displayName}</span>
+            <span className="text-caption text-muted-foreground">
+              {displayName}
+            </span>
           ) : null}
           {member.sso_only ? (
             <span>
@@ -490,12 +474,12 @@ function RosterMemberRow({
           ) : null}
         </div>
       </td>
-      <td className="px-3 py-2">
+      <td>
         <Badge variant="neutral">
           {t(`console:members.roles.${member.role}`, member.role)}
         </Badge>
       </td>
-      <td className="px-3 py-2">
+      <td>
         {member.groups?.length ? (
           <div className="flex flex-wrap gap-1">
             {member.groups.map((group) => (
@@ -510,12 +494,12 @@ function RosterMemberRow({
           </span>
         )}
       </td>
-      <td className="px-3 py-2">
+      <td>
         <Badge variant={memberStatusVariant(member.status)}>
           {t(`console:members.statuses.${member.status}`, member.status)}
         </Badge>
       </td>
-      <td className="px-3 py-2 text-right">
+      <td className="text-right">
         {canManage ? (
           <Switch
             checked={active}

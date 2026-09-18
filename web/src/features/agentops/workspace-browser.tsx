@@ -128,7 +128,7 @@ export function WorkspaceBrowser({ workspace }: { workspace: WorkspaceDTO }) {
     <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(16rem,22rem)_1fr]">
       {/* Left: breadcrumb + toolbar + list */}
       <div className="flex min-w-0 flex-col gap-2 rounded-md border border-border">
-        <div className="flex flex-wrap items-center gap-1 border-b border-border px-2 py-1.5 text-xs">
+        <div className="flex flex-wrap items-center gap-1 border-b border-border px-2 py-1.5 text-caption">
           <button
             type="button"
             onClick={() => {
@@ -199,7 +199,7 @@ export function WorkspaceBrowser({ workspace }: { workspace: WorkspaceDTO }) {
       {/* Right: viewer / editor */}
       <div className="flex min-w-0 flex-col gap-2 rounded-md border border-border p-3">
         {!selected ? (
-          <p className="p-6 text-center text-sm text-muted-foreground">
+          <p className="p-6 text-center text-body text-muted-foreground">
             {t('browser.pickFile')}
           </p>
         ) : fileQuery.isLoading ? (
@@ -207,7 +207,7 @@ export function WorkspaceBrowser({ workspace }: { workspace: WorkspaceDTO }) {
             <Spinner />
           </div>
         ) : fileQuery.error ? (
-          <p role="alert" className="p-4 text-sm text-danger">
+          <p role="alert" className="p-4 text-body text-danger">
             {fileQuery.error instanceof ApiError
               ? fileQuery.error.message
               : String(fileQuery.error)}
@@ -276,7 +276,7 @@ function FileList({
   if (error)
     return (
       <div role="alert" className="p-4">
-        <p className="text-sm text-danger">
+        <p className="text-body text-danger">
           {error instanceof ApiError ? error.message : String(error)}
         </p>
         <Button
@@ -291,7 +291,7 @@ function FileList({
     )
   if (entries.length === 0)
     return (
-      <p className="p-6 text-center text-sm text-muted-foreground">
+      <p className="p-6 text-center text-body text-muted-foreground">
         {t('browser.empty')}
       </p>
     )
@@ -303,7 +303,7 @@ function FileList({
             type="button"
             onClick={() => onOpen(e)}
             className={cn(
-              'flex w-full items-center gap-2 px-2 py-1.5 text-left text-sm hover:bg-muted',
+              'flex w-full items-center gap-2 px-2 py-1.5 text-left text-body hover:bg-muted',
               selected === e.path && 'bg-muted',
             )}
           >
@@ -312,7 +312,7 @@ function FileList({
             ) : (
               <FileIcon className="size-4 shrink-0 text-muted-foreground" />
             )}
-            <span className="truncate font-mono text-xs text-foreground">
+            <span className="truncate font-mono text-caption text-foreground">
               {e.name}
             </span>
             {e.is_symlink && (
@@ -409,7 +409,7 @@ function FileViewer({
   return (
     <>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="truncate font-mono text-sm font-medium text-foreground">
+        <span className="truncate font-mono text-body font-medium text-foreground">
           {path}
         </span>
         <div className="flex items-center gap-1">
@@ -443,11 +443,11 @@ function FileViewer({
 
       <SensitivityBadges hits={file.sensitivity} />
       {file.truncated && (
-        <p className="text-xs text-warning">{t('browser.truncated')}</p>
+        <p className="text-caption text-warning">{t('browser.truncated')}</p>
       )}
 
       {isBinary ? (
-        <p className="rounded-md border border-border bg-muted p-4 text-sm text-muted-foreground">
+        <p className="rounded-md border border-border bg-muted p-4 text-body text-muted-foreground">
           {t('browser.binary')}
         </p>
       ) : (
@@ -487,7 +487,7 @@ function FileViewer({
         </div>
       )}
       {!writable && (
-        <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <p className="flex items-center gap-1.5 text-caption text-muted-foreground">
           <Lock className="size-3" />
           {t('browser.readOnlyWorkspace')}
         </p>

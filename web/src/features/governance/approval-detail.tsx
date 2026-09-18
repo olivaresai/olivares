@@ -146,10 +146,10 @@ export function ApprovalDetailSheet({
               <Separator />
 
               <section className="flex flex-col gap-2">
-                <h3 className="text-sm font-medium text-foreground">
+                <h3 className="text-body font-medium text-foreground">
                   {t('detail.trail')}
                 </h3>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-caption text-muted-foreground">
                   {t('detail.trailCaption')}
                 </p>
                 <DecisionTrail
@@ -313,7 +313,13 @@ function DecisionTrail({
     return <StepUpRequiredState action="generic" onElevated={onRetry} />
   if (error instanceof ApiError && error.isForbidden) return <ForbiddenState />
   if (error) return <ErrorState retry={onRetry} />
-  if (items.length === 0) return <EmptyState title={t('detail.trailEmpty')} />
+  if (items.length === 0)
+    return (
+      <EmptyState
+        description={t('detail.trailEmptyHint')}
+        title={t('detail.trailEmpty')}
+      />
+    )
 
   return (
     <ol className="flex flex-col gap-2">
@@ -331,18 +337,20 @@ function DecisionTrail({
                   : t('detail.decisionReject')}
               </Badge>
               {d.decided_at && (
-                <span className="text-xs text-muted-foreground">
+                <span className="text-caption text-muted-foreground">
                   <RelTimeLabel ts={d.decided_at} />
                 </span>
               )}
             </div>
             <p
-              className="mt-1 font-mono text-xs text-muted-foreground"
+              className="mt-1 font-mono text-caption text-muted-foreground"
               title={t('approvals.actorHint')}
             >
               {d.decider}
             </p>
-            {d.note && <p className="mt-2 text-sm text-foreground">{d.note}</p>}
+            {d.note && (
+              <p className="mt-2 text-body text-foreground">{d.note}</p>
+            )}
           </li>
         )
       })}

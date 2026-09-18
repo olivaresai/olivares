@@ -42,7 +42,7 @@ type contentInspector interface {
 
 // inspectionSubject is the ONLY thing that differs between two governed callers of the
 // same inspector: what the published observations are ABOUT. Messages names the Anthropic
-// inference surface; the D01-C2B governed Chat operation names its own execution subject
+// inference surface; the governed Chat operation names its own execution subject
 // and its profile's provider and surface. Everything else — the input shape, the ordering,
 // the detail-hash preimage, the meter arithmetic, the approval behavior — is identical by
 // construction, because there is now one implementation of it.

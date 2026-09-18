@@ -75,6 +75,7 @@
     "pick": "Sujeto",
     "pickPlaceholder": "Elige un sujeto…",
     "pickEmpty": "Aún no hay sujetos monitorizados sobre los que informar.",
+    "pickEmptyHint": "Un informe de SLA se calcula sobre los sujetos monitorizados. Añade una comprobación de salud a un sujeto para poder informar sobre él.",
     "pickPrompt": {
       "title": "Elige un sujeto",
       "description": "Elige un sujeto monitorizado para ver su uptime frente al objetivo, reconstruido del ledger de fiabilidad."

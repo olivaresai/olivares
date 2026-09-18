@@ -411,7 +411,7 @@ func (ds *drService) approvePending(requestID, uploadID, approver string) (*pend
 		{
 			// VERBATIM from modules/sourcescope/posture.go as it stood before. The
 			// #580 contrast reproduced the self-signature here independently, and no
-			// open PR touched this file — three lanes fixed DR and none of them fixed
+			// open PR touched this file — three separate fixes closed DR and none of them fixed
 			// this one, which is the class defect stated as a fact about the estate.
 			name: "the sourcescope posture gate as it actually stood",
 			src: `package fake

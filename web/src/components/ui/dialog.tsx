@@ -123,10 +123,7 @@ export function DialogTitle({
 }: ComponentProps<typeof DialogPrimitive.Title>) {
   return (
     <DialogPrimitive.Title
-      className={cn(
-        'text-lg font-display font-semibold leading-tight text-foreground',
-        className,
-      )}
+      className={cn('font-display text-title text-foreground', className)}
       {...props}
     />
   )
@@ -138,7 +135,7 @@ export function DialogDescription({
 }: ComponentProps<typeof DialogPrimitive.Description>) {
   return (
     <DialogPrimitive.Description
-      className={cn('text-sm text-muted-foreground', className)}
+      className={cn('text-body text-muted-foreground', className)}
       {...props}
     />
   )

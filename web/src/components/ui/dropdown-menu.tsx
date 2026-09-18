@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils'
 
 /**
  * DropdownMenu — the contextual action menu over Radix DropdownMenu. Dense
- * (h-8 items, text-sm), flat `bg-elevated` panel with a strong hairline and
+ * (h-8 items, text-body), flat `bg-elevated` panel with a strong hairline and
  * `shadow-md`. Highlighted items wash to `bg-muted`; the `destructive` item variant
  * shifts to danger text + a danger-soft highlight. Radix handles roving focus,
  * typeahead and full keyboard nav — never reimplement those.
@@ -61,7 +61,7 @@ export function DropdownMenuItem({
     <DropdownMenuPrimitive.Item
       data-variant={variant}
       className={cn(
-        'flex h-8 cursor-default select-none items-center gap-2 rounded-sm px-2 text-sm outline-none',
+        'flex h-8 cursor-default select-none items-center gap-2 rounded-sm px-2 text-body outline-none',
         'transition-colors duration-100 ease-out',
         'data-[highlighted]:bg-muted',
         'data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
@@ -86,7 +86,7 @@ export function DropdownMenuCheckboxItem({
     <DropdownMenuPrimitive.CheckboxItem
       checked={checked}
       className={cn(
-        'relative flex h-8 cursor-default select-none items-center gap-2 rounded-sm py-0 pl-8 pr-2 text-sm outline-none',
+        'relative flex h-8 cursor-default select-none items-center gap-2 rounded-sm py-0 pl-8 pr-2 text-body outline-none',
         'transition-colors duration-100 ease-out',
         'data-[highlighted]:bg-muted',
         'data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
@@ -113,7 +113,7 @@ export function DropdownMenuRadioItem({
   return (
     <DropdownMenuPrimitive.RadioItem
       className={cn(
-        'relative flex h-8 cursor-default select-none items-center gap-2 rounded-sm py-0 pl-8 pr-2 text-sm outline-none',
+        'relative flex h-8 cursor-default select-none items-center gap-2 rounded-sm py-0 pl-8 pr-2 text-body outline-none',
         'transition-colors duration-100 ease-out',
         'data-[highlighted]:bg-muted',
         'data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
@@ -145,7 +145,7 @@ export function DropdownMenuLabel({
   return (
     <DropdownMenuPrimitive.Label
       className={cn(
-        'px-2 py-1.5 text-xs font-medium text-muted-foreground',
+        'px-2 py-1.5 text-caption font-medium text-muted-foreground',
         inset && 'pl-8',
         className,
       )}
@@ -173,7 +173,7 @@ export function DropdownMenuShortcut({
   return (
     <span
       className={cn(
-        'ml-auto text-xs tracking-widest text-muted-foreground tabular-nums',
+        'ml-auto text-caption tracking-widest text-muted-foreground tabular-nums',
         className,
       )}
       {...props}
@@ -192,7 +192,7 @@ export function DropdownMenuSubTrigger({
   return (
     <DropdownMenuPrimitive.SubTrigger
       className={cn(
-        'flex h-8 cursor-default select-none items-center gap-2 rounded-sm px-2 text-sm outline-none',
+        'flex h-8 cursor-default select-none items-center gap-2 rounded-sm px-2 text-body outline-none',
         'transition-colors duration-100 ease-out',
         'data-[highlighted]:bg-muted data-[state=open]:bg-muted',
         '[&_svg]:size-4 [&_svg]:shrink-0 [&_svg]:text-muted-foreground',

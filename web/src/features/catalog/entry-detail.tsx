@@ -58,10 +58,12 @@ function Section({
   return (
     <section className="flex flex-col gap-2">
       <div className="flex items-center justify-between gap-2">
-        <h3 className="text-sm font-medium text-foreground">{title}</h3>
+        <h3 className="text-body font-medium text-foreground">{title}</h3>
         {action}
       </div>
-      {caption && <p className="text-xs text-muted-foreground">{caption}</p>}
+      {caption && (
+        <p className="text-caption text-muted-foreground">{caption}</p>
+      )}
       {children}
     </section>
   )
@@ -365,11 +367,14 @@ function DetailBody({ entry }: { entry: EntryDTO }) {
       {/* Spec — read-only reference; secrets referenced by name/locator only. */}
       <Section title={t('detail.spec')} caption={t('detail.specCaption')}>
         {entry.spec && Object.keys(entry.spec).length > 0 ? (
-          <pre className="max-h-72 overflow-auto rounded-md border border-border bg-muted px-3 py-2 font-mono text-xs text-foreground">
+          <pre className="max-h-72 overflow-auto rounded-md border border-border bg-muted px-3 py-2 font-mono text-caption text-foreground">
             {JSON.stringify(entry.spec, null, 2)}
           </pre>
         ) : (
-          <EmptyState title={t('detail.specEmpty')} />
+          <EmptyState
+            description={t('detail.specEmptyHint')}
+            title={t('detail.specEmpty')}
+          />
         )}
       </Section>
 
@@ -423,7 +428,7 @@ function DetailBody({ entry }: { entry: EntryDTO }) {
             )}
           </KvList>
         ) : (
-          <p className="text-sm text-muted-foreground">
+          <p className="text-body text-muted-foreground">
             {t('detail.notApprovedYet')}
           </p>
         )}

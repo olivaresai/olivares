@@ -111,7 +111,7 @@ function ReasonBox({
         {label}
       </p>
       {/* Engine text — rendered verbatim, never reworded or treated as a key. */}
-      <p className="mt-0.5 whitespace-pre-wrap text-xs text-foreground">
+      <p className="mt-0.5 whitespace-pre-wrap text-caption text-foreground">
         {children}
       </p>
     </div>
@@ -413,7 +413,7 @@ function AdmitForm({
             placeholder={t('admit.bundlePlaceholder')}
             aria-invalid={bundleInvalid || undefined}
             rows={8}
-            className="font-mono text-xs"
+            className="font-mono text-caption"
           />
         </Field>
         <Field
@@ -429,7 +429,7 @@ function AdmitForm({
             placeholder={'{ "model.safetensors": "…" }'}
             aria-invalid={digestsInvalid || undefined}
             rows={3}
-            className="font-mono text-xs"
+            className="font-mono text-caption"
           />
         </Field>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

@@ -333,7 +333,7 @@ function EntryForm({
             placeholder={t('editor.specPlaceholder')}
             aria-invalid={specInvalid || specWarn || undefined}
             rows={8}
-            className="font-mono text-xs"
+            className="font-mono text-caption"
           />
         </Field>
       </div>
@@ -341,7 +341,7 @@ function EntryForm({
       {showAdmissionStale && (
         <div
           role="alert"
-          className="flex items-start gap-2 rounded-md border border-warning-line bg-warning-soft px-3 py-2 text-xs text-warning"
+          className="flex items-start gap-2 rounded-md border border-warning-line bg-warning-soft px-3 py-2 text-caption text-warning"
         >
           <AlertTriangle className="size-4 shrink-0" aria-hidden />
           <span>
@@ -352,7 +352,7 @@ function EntryForm({
         </div>
       )}
 
-      <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+      <p className="flex items-center gap-1.5 text-caption text-muted-foreground">
         <ScrollText className="size-3.5 shrink-0" aria-hidden />
         {t('common:privileged.auditedNotice')}
       </p>

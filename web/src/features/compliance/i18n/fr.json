@@ -19,6 +19,7 @@
   "framework": {
     "label": "Référentiel",
     "select": "Sélectionnez un référentiel",
+    "selectHint": "Choisissez un référentiel ci-dessus pour voir ses écarts de contrôle, les preuves derrière chaque contrôle et ce qui reste non mappé.",
     "controls": "{{count}} contrôles",
     "authority": "Autorité"
   },
@@ -75,6 +76,7 @@
     "title": "Ce qu’il faut corriger",
     "description": "Les contrôles qui ne sont pas encore satisfaits, triés par état. Chaque ligne indique les capacités à activer pour combler l’écart.",
     "empty": "Aucun écart ouvert pour ce référentiel.",
+    "emptyHint": "Un écart est un contrôle sans preuve opérationnelle. Ce référentiel n’en a aucun d’ouvert : chaque contrôle mappé est satisfait ou couvert par conception.",
     "missing": "Capacités manquantes",
     "noMissing": "Aucune capacité spécifique identifiée — examinez le critère."
   },
@@ -117,6 +119,7 @@
     "title": "Registre des risques d’agent",
     "description": "Niveau de risque EU AI Act par agent, mis en correspondance avec les fonctions du NIST AI RMF. L’heuristique n’attribue jamais le niveau inacceptable — il n’apparaît qu’après revue humaine.",
     "empty": "Aucun agent classé pour l’instant.",
+    "emptyHint": "Les agents sont listés ici avec le niveau de risque que leur donne leur classification. Classez un agent pour le voir apparaître.",
     "columns": {
       "agent": "Agent",
       "tier": "Niveau",
@@ -156,6 +159,7 @@
     "title": "Résidence des données",
     "description": "Régions attestées avec leur périmètre, le chiffrement au repos et toute violation d’exfiltration observée.",
     "empty": "Aucune région attestée pour l’instant.",
+    "emptyHint": "Les régions attestées pour ce locataire apparaissent ici avec les preuves correspondantes. Aucune région n’a encore été attestée.",
     "scan": "Lancer une analyse de résidence",
     "scanned": "Analyse de résidence terminée",
     "inPerimeter": "Les données restent dans le périmètre",
@@ -172,6 +176,7 @@
     "title": "Calendriers de conservation",
     "description": "Calendriers de suppression par classe, les balayages qui les exécutent et le certificat scellé que chaque balayage laisse. Un calendrier documente une intention ; seule une purge approuvée détruit quelque chose.",
     "noAccess": "Vous n'avez pas accès aux calendriers de conservation",
+    "noAccessHint": "Les calendriers de conservation déterminent la durée de conservation de chaque classe d’enregistrement. Demandez à un administrateur la permission de lecture correspondante.",
     "sweepNow": "Lancer le balayage",
     "gateHint": "Un calendrier n'est qu'un document tant qu'un humain n'a pas approuvé sa purge. L'enregistrer ne supprime jamais de données ; un balayage, si.",
     "noClasses": "Le moteur n'a renvoyé aucune classe de données",
@@ -285,6 +290,7 @@
     "title": "Mesures de conservation juridique",
     "description": "Ordres de conservation qui font obstacle à toute voie de destruction, y compris l’effacement au titre du RGPD.",
     "noAccess": "Vous n’êtes pas autorisé à consulter les mesures de conservation juridique.",
+    "noAccessHint": "Une conservation légale empêche la suppression des données tant qu’une affaire est ouverte. Demandez à un administrateur la permission de lecture des conservations légales.",
     "create": "Placer une mesure de conservation",
     "release": "Lever",
     "custody": "Chaîne de conservation",
@@ -300,6 +306,7 @@
     "custodyTitle": "Chaîne de conservation — {{matter}}",
     "custodyDescription": "Événements de conservation en ajout seul, chacun ancré à la tête du registre d’audit au moment de son scellement.",
     "custodyEmpty": "Aucun événement de conservation enregistré",
+    "custodyEmptyHint": "Chaque ajout, notification ou libération d’un dépositaire est consigné ici. Cette conservation n’a encore aucun événement de garde.",
     "status": {
       "active": "Active",
       "released": "Levée"
@@ -357,6 +364,7 @@
     "title": "Droit à l’effacement et demandes des personnes concernées",
     "description": "Demandes d’effacement enregistrées, leur exécution sous double contrôle et le reçu vérifiable scellé pour chacune.",
     "noAccess": "Vous n’êtes pas autorisé à consulter les demandes d’effacement.",
+    "noAccessHint": "Les demandes d’effacement et d’accès des personnes concernées sont suivies ici avec leurs délais légaux. Demandez à un administrateur la permission de lecture des effacements.",
     "register": "Enregistrer une demande",
     "execute": "Exécuter",
     "receipt": "Reçu",
@@ -455,10 +463,12 @@
     "description": "Jalons réglementaires datés, chacun accompagné de sa source primaire et de la date de sa vérification.",
     "notInForceHint": "Les accords provisoires, les textes adoptés en attente de publication et les correspondances en cours d’élaboration ne constituent PAS du droit en vigueur. Leur état est affiché afin qu’ils ne soient jamais interprétés comme des obligations.",
     "empty": "Aucun jalon pour ce référentiel",
+    "emptyHint": "Les jalons réglementaires du référentiel sélectionné apparaissent ici avec leurs échéances. Sélectionnez un autre référentiel pour voir son calendrier.",
     "verifiedOn": "vérifié le {{date}}",
     "watchlistTitle": "Liste de veille",
     "watchlistDescription": "Réglementations en préparation, projets de normes et pilotes suivis pour lesquels aucune date ne peut encore être citée.",
     "watchlistEmpty": "Aucun élément dans la liste de veille",
+    "watchlistEmptyHint": "Les jalons que vous suivez apparaissent ici, afin que l’échéance la plus proche reste toujours visible. Ajoutez-en un depuis le calendrier ci-dessus.",
     "status": {
       "in_force": "En vigueur",
       "applies_from": "Applicable à partir du",
@@ -474,6 +484,7 @@
   "regops": {
     "title": "Opérations réglementaires",
     "noAccess": "Vous n’êtes pas autorisé à consulter ces interfaces.",
+    "noAccessHint": "Les opérations réglementaires couvrent les dépôts, les attestations et la dérive des contrôles. Demandez à un administrateur la permission de lecture correspondante.",
     "seamHint": "La lecture, l’exportation et la suppression de ces artefacts fonctionnent dans cette version. Leur génération (registres DORA, classification des incidents, ingestion OSCAL, packs détaillés) est fournie par le module complémentaire Enterprise ; sans celui-ci, le moteur répond 501 par conception.",
     "addonRequired": "La génération exige le module complémentaire",
     "export": "Exporter",
@@ -596,6 +607,7 @@
       "emptyHint": "Les instantanés sont produits par le module complémentaire Enterprise.",
       "driftTitle": "Dérive détectée",
       "noDrift": "Aucune dérive détectée",
+      "noDriftHint": "La dérive est un contrôle dont la preuve s’est éloignée de sa référence. Chaque contrôle comparé correspond toujours à sa référence.",
       "snapshot": "Prendre un instantané",
       "snapshotTitle": "Prendre un instantané des contrôles",
       "snapshotDescription": "Le module complémentaire réévalue à l’instant les référentiels sélectionnés par rapport au parc et enregistre le résultat comme instantané ponctuel, à comparer plus tard.",
@@ -676,6 +688,7 @@
     "title": "Incidents importants NIS 2",
     "description": "Incidents évalués au regard des critères d'importance de l'art. 23(3) de la directive (UE) 2022/2555, avec leurs phases de notification de l'art. 23(4) et les projets de rapport.",
     "noAccess": "Vous n'avez pas l'autorisation de lire les classifications d'incidents NIS 2.",
+    "noAccessHint": "Les classifications d’incidents NIS 2 et leurs délais de notification sont suivis ici. Demandez à un administrateur la permission de lecture NIS 2.",
     "provisionalHint": "Chaque verdict et chaque échéance affichés ici constituent une AIDE À LA DÉCISION, non une qualification juridique. Le plan de contrôle ne peut pas mesurer les critères de l'art. 23(3) ; il les applique aux données d'impact que vous fournissez. Une personne compétente doit attester le résultat, et l'obligation de notifier le CSIRT ou l'autorité compétente incombe à votre entité.",
     "empty": "Aucun incident classifié",
     "emptyHint": "Classifiez un incident pour appliquer les critères de l'art. 23(3) à ses données d'impact et rédiger les rapports par phases.",
@@ -751,6 +764,7 @@
   "claudeFiles": {
     "title": "Magasin de fichiers du fournisseur",
     "noAccess": "Vous n'avez pas accès à l'inventaire du magasin de fichiers.",
+    "noAccessHint": "Cet onglet inventorie les fichiers que le magasin conserve pour les sessions gouvernées. Demandez à un administrateur la permission de lecture du magasin de fichiers.",
     "col": {
       "id": "Id du fichier",
       "mime": "Type",
@@ -820,17 +834,20 @@
       "none": "aucune référence"
     },
     "empty": "Le catalogue n'a renvoyé aucune capacité.",
+    "emptyHint": "Les capacités de la plateforme permettant d’attester un référentiel sont listées ici. Le catalogue n’en a renvoyé aucune pour ce déploiement.",
     "error": "Le catalogue des capacités n'a pas pu être lu."
   },
   "hipaa": {
     "title": "Garanties techniques HIPAA",
     "forbidden": "Vous n'avez pas l'autorisation de lire les référentiels de conformité.",
+    "forbiddenHint": "Ce rapport fait correspondre HIPAA §164.312 aux contrôles que la plateforme peut attester. Demandez à un administrateur la permission de lecture des référentiels.",
     "unreadable": "Le rapport d'écarts n'a pas pu être lu.",
     "generatedAt": "Généré",
     "controls": "Contrôles",
     "satisfied": "Satisfaits",
     "gaps": "Écarts",
     "noControls": "Le rapport ne comporte aucun contrôle.",
+    "noControlsHint": "Le rapport liste chaque garantie technique avec la preuve qui la soutient. Le référentiel n’a renvoyé aucun contrôle pour ce déploiement.",
     "requirement": "Exigence",
     "criterion": "Critère",
     "gap": "Écart",

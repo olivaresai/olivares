@@ -34,7 +34,7 @@ import (
 	sdkmodel "github.com/olivaresai/olivares/sdk/model"
 )
 
-// modelsguardedtext.go is D01-C2B's ONE concrete synchronous Chat operation: the composition
+// modelsguardedtext.go is the ONE concrete synchronous Chat operation: the composition
 // the models module's ChatExecutor port calls once a routing policy pinned an execution
 // profile and every existing handler gate cleared the request.
 //
@@ -1430,7 +1430,7 @@ const (
 // like `hard_budget` that silently disabled it would waste a day AND leave someone
 // believing they had asked for enforcement.
 //
-// ⛔ THERE IS NO `hard_budget` VALUE, AND ADDING ONE IS D02'S JOB, NOT A CONFIG EDIT. Until
+// ⛔ THERE IS NO `hard_budget` VALUE, AND ADDING ONE IS FINOPS' JOB, NOT A CONFIG EDIT. Until
 // a typed reserve/dispatch/settle integration exists and is qualified, a deployment that
 // must enforce a hard monetary cap leaves Chat disabled. "The precheck returned not-denied"
 // is not evidence that no hard budget was requested.

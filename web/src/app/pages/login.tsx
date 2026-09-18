@@ -53,12 +53,19 @@ export function LoginPage() {
 
   return (
     <AuthShell>
-      <Card className="p-6">
-        <div className="mb-5 flex flex-col gap-1">
-          <h1 className="font-display text-lg font-semibold tracking-tight text-foreground">
+      <Card className="p-6 sm:p-7">
+        <div className="mb-6 flex flex-col gap-1.5">
+          <h1 className="font-display text-title text-foreground">
             {t('login.title')}
           </h1>
-          <p className="text-sm text-muted-foreground">{t('login.subtitle')}</p>
+          {/* ⛔ THE SUBTITLE USED TO RESTATE THE TITLE. "Sign in to the control
+              plane." under a heading that says "Sign in" tells an operator nothing
+              they did not read half a second earlier, and in Spanish it read
+              "Accede al control plane." — an English term inside a Spanish sentence
+              on screen one. It now says what the credentials ARE. */}
+          <p className="text-body text-muted-foreground">
+            {t('login.subtitle')}
+          </p>
         </div>
         <form
           onSubmit={form.handleSubmit((v) => mutation.mutate(v))}
@@ -78,7 +85,6 @@ export function LoginPage() {
               id="email"
               type="email"
               autoComplete="username"
-              autoFocus
               placeholder={t('login.emailPlaceholder')}
               aria-invalid={!!form.formState.errors.email}
               {...form.register('email')}
@@ -103,7 +109,7 @@ export function LoginPage() {
           </Field>
 
           {submitError && (
-            <p className="text-sm text-danger" role="alert">
+            <p className="text-body text-danger" role="alert">
               {submitError}
             </p>
           )}
@@ -118,17 +124,26 @@ export function LoginPage() {
           </Button>
         </form>
       </Card>
-      {/*surface the public status page (it needs no session) so an operator
-       * facing a login failure can tell an outage from a credential problem. */}
-      <p className="text-center text-xs text-muted-foreground">
-        <Link to="/status-page" className="underline-offset-2 hover:underline">
-          {t('login.statusPage')}
-        </Link>
-      </p>
-      {/* Signing in is where a privileged operator next meets a step-up prompt,
-       *  and a passkey refused by the browser produces no server-side trace at
-       *  all. Renders nothing at an address where passkeys work. */}
-      <PasskeyAddressNotice />
+      {/* ⛔ THE FOOTNOTES ARE GROUPED AND QUIET, AND THAT IS THE FIX. Both of
+          these were already here and both still are — nothing is hidden. What changed
+          is rank: measured at 1600 px on 2026-09-17, the passkey panel was the LONGEST
+          element on the login screen, so the first thing a new operator read was a
+          limitation of their address. It is a footnote about a ceremony they have not
+          started yet; the form is the page. Renders nothing at all at an address where
+          passkeys work. */}
+      <div className="mt-5 flex flex-col items-center gap-3">
+        {/*surface the public status page (it needs no session) so an operator
+         * facing a login failure can tell an outage from a credential problem. */}
+        <p className="text-caption text-muted-foreground">
+          <Link
+            to="/status-page"
+            className="underline-offset-2 hover:underline"
+          >
+            {t('login.statusPage')}
+          </Link>
+        </p>
+        <PasskeyAddressNotice />
+      </div>
     </AuthShell>
   )
 }

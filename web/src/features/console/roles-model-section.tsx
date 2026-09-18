@@ -40,6 +40,7 @@ import {
   type ModelGroupDTO,
 } from './api'
 import { FormError } from './roles-shared'
+import { StaticTable } from '@/components/data/static-table'
 
 /**
  * ModelGovernanceSection surfaces model-groups and model-access rules.
@@ -155,11 +156,12 @@ function ModelGroupsSection({
     return (
       <section className="flex flex-col gap-3">
         <div>
-          <h2 className="text-base font-semibold text-foreground">
+          <h2 className="text-heading text-foreground">
             {t('console:granular.modelGroups.title')}
           </h2>
         </div>
         <EmptyState
+          description={t('console:roles.readOnlyNoticeHint')}
           title={t('console:roles.readOnlyNotice')}
           icon={<ShieldCheck />}
         />
@@ -171,10 +173,10 @@ function ModelGroupsSection({
     <section className="flex flex-col gap-3">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold text-foreground">
+          <h2 className="text-heading text-foreground">
             {t('console:granular.modelGroups.title')}
           </h2>
-          <p className="max-w-2xl text-sm text-muted-foreground">
+          <p className="max-w-2xl text-body text-muted-foreground">
             {t('console:granular.modelGroups.caption')}
           </p>
         </div>
@@ -193,34 +195,35 @@ function ModelGroupsSection({
         <ErrorState retry={refetch} />
       ) : items.length === 0 ? (
         <EmptyState
+          action={
+            canWrite ? (
+              <Button onClick={() => setCreateOpen(true)}>
+                <Plus />
+                {t('console:granular.modelGroups.create')}
+              </Button>
+            ) : undefined
+          }
+          description={t('console:granular.modelGroups.noneHint')}
           title={t('console:granular.modelGroups.none')}
           icon={<Layers />}
         />
       ) : (
         <div className="overflow-hidden rounded-lg border border-border">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
+          <StaticTable>
+            <thead>
               <tr>
-                <th className="px-3 py-2 font-medium">
-                  {t('console:granular.modelGroups.colName')}
-                </th>
-                <th className="px-3 py-2 font-medium">
-                  {t('console:granular.modelGroups.colMembers')}
-                </th>
-                <th className="px-3 py-2 font-medium">
-                  {t('console:granular.modelGroups.colFamilies')}
-                </th>
-                <th className="px-3 py-2 font-medium">
-                  {t('console:granular.modelGroups.colTiers')}
-                </th>
-                <th className="px-3 py-2" />
+                <th>{t('console:granular.modelGroups.colName')}</th>
+                <th>{t('console:granular.modelGroups.colMembers')}</th>
+                <th>{t('console:granular.modelGroups.colFamilies')}</th>
+                <th>{t('console:granular.modelGroups.colTiers')}</th>
+                <th />
               </tr>
             </thead>
             <tbody>
               {items.map((g) => (
-                <tr key={g.id ?? g.name} className="border-t border-border">
-                  <td className="px-3 py-2">
-                    <span className="font-mono text-xs text-foreground">
+                <tr key={g.id ?? g.name}>
+                  <td>
+                    <span className="font-mono text-caption text-foreground">
                       {g.name}
                     </span>
                     {g.description && (
@@ -229,16 +232,16 @@ function ModelGroupsSection({
                       </span>
                     )}
                   </td>
-                  <td className="px-3 py-2">
+                  <td>
                     <Badge variant="neutral">{g.member_refs.length}</Badge>
                   </td>
-                  <td className="px-3 py-2 text-muted-foreground">
+                  <td className="text-muted-foreground">
                     {g.family_selectors.join(', ') || '—'}
                   </td>
-                  <td className="px-3 py-2 text-muted-foreground">
+                  <td className="text-muted-foreground">
                     {g.tier_selectors.join(', ') || '—'}
                   </td>
-                  <td className="px-3 py-2 text-right">
+                  <td className="text-right">
                     {canWrite && (
                       <div className="flex justify-end gap-1">
                         <Button
@@ -263,7 +266,7 @@ function ModelGroupsSection({
                 </tr>
               ))}
             </tbody>
-          </table>
+          </StaticTable>
         </div>
       )}
 
@@ -509,11 +512,12 @@ function ModelAccessSection({
     return (
       <section className="flex flex-col gap-3">
         <div>
-          <h2 className="text-base font-semibold text-foreground">
+          <h2 className="text-heading text-foreground">
             {t('console:granular.modelAccess.title')}
           </h2>
         </div>
         <EmptyState
+          description={t('console:roles.readOnlyNoticeHint')}
           title={t('console:roles.readOnlyNotice')}
           icon={<ShieldCheck />}
         />
@@ -525,10 +529,10 @@ function ModelAccessSection({
     <section className="flex flex-col gap-3">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold text-foreground">
+          <h2 className="text-heading text-foreground">
             {t('console:granular.modelAccess.title')}
           </h2>
-          <p className="max-w-2xl text-sm text-muted-foreground">
+          <p className="max-w-2xl text-body text-muted-foreground">
             {t('console:granular.modelAccess.caption')}
           </p>
         </div>
@@ -547,46 +551,45 @@ function ModelAccessSection({
         <ErrorState retry={refetch} />
       ) : items.length === 0 ? (
         <EmptyState
+          action={
+            canAdmin ? (
+              <Button onClick={() => setCreateOpen(true)}>
+                <Plus />
+                {t('console:granular.modelAccess.create')}
+              </Button>
+            ) : undefined
+          }
+          description={t('console:granular.modelAccess.noneHint')}
           title={t('console:granular.modelAccess.none')}
           icon={<ShieldCheck />}
         />
       ) : (
         <div className="overflow-hidden rounded-lg border border-border">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
+          <StaticTable>
+            <thead>
               <tr>
-                <th className="px-3 py-2 font-medium">
-                  {t('console:granular.modelAccess.colSubject')}
-                </th>
-                <th className="px-3 py-2 font-medium">
-                  {t('console:granular.modelAccess.colTarget')}
-                </th>
-                <th className="px-3 py-2 font-medium">
-                  {t('console:granular.modelAccess.colEffect')}
-                </th>
-                <th className="px-3 py-2 font-medium">
-                  {t('console:granular.modelAccess.colWorkspace')}
-                </th>
-                <th className="px-3 py-2 font-medium">
-                  {t('console:granular.modelAccess.colSurfaces')}
-                </th>
-                <th className="px-3 py-2" />
+                <th>{t('console:granular.modelAccess.colSubject')}</th>
+                <th>{t('console:granular.modelAccess.colTarget')}</th>
+                <th>{t('console:granular.modelAccess.colEffect')}</th>
+                <th>{t('console:granular.modelAccess.colWorkspace')}</th>
+                <th>{t('console:granular.modelAccess.colSurfaces')}</th>
+                <th />
               </tr>
             </thead>
             <tbody>
               {items.map((a) => (
-                <tr key={a.id} className="border-t border-border">
-                  <td className="px-3 py-2">
-                    <span className="font-mono text-xs text-foreground">
+                <tr key={a.id}>
+                  <td>
+                    <span className="font-mono text-caption text-foreground">
                       {a.subject_kind}:{a.subject_ref}
                     </span>
                   </td>
-                  <td className="px-3 py-2">
-                    <span className="font-mono text-xs text-foreground">
+                  <td>
+                    <span className="font-mono text-caption text-foreground">
                       {a.target_kind}:{a.target_ref}
                     </span>
                   </td>
-                  <td className="px-3 py-2">
+                  <td>
                     <Badge
                       variant={a.effect === 'forbid' ? 'danger' : 'neutral'}
                     >
@@ -595,16 +598,16 @@ function ModelAccessSection({
                         : t('console:granular.modelAccess.effectAllow')}
                     </Badge>
                   </td>
-                  <td className="px-3 py-2 text-muted-foreground">
+                  <td className="text-muted-foreground">
                     {a.workspace_ref ||
                       t('console:granular.modelAccess.tenantWide')}
                   </td>
-                  <td className="px-3 py-2 text-muted-foreground">
+                  <td className="text-muted-foreground">
                     {a.surfaces.length > 0
                       ? a.surfaces.join(', ')
                       : t('console:granular.modelAccess.allSurfaces')}
                   </td>
-                  <td className="px-3 py-2 text-right">
+                  <td className="text-right">
                     {canAdmin && (
                       <div className="flex justify-end gap-1">
                         <Button
@@ -629,7 +632,7 @@ function ModelAccessSection({
                 </tr>
               ))}
             </tbody>
-          </table>
+          </StaticTable>
         </div>
       )}
 

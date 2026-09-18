@@ -59,10 +59,10 @@ export function TargetsTable({
         header: t('targets.columns.name'),
         cell: ({ row }) => (
           <div className="flex flex-col">
-            <span className="text-sm font-medium text-foreground">
+            <span className="text-body font-medium text-foreground">
               {row.original.name || row.original.agent_ref}
             </span>
-            <span className="font-mono text-xs text-muted-foreground">
+            <span className="font-mono text-caption text-muted-foreground">
               {row.original.agent_ref}
             </span>
           </div>
@@ -72,7 +72,7 @@ export function TargetsTable({
         accessorKey: 'endpoint',
         header: t('targets.columns.endpoint'),
         cell: ({ row }) => (
-          <span className="font-mono text-xs text-muted-foreground">
+          <span className="font-mono text-caption text-muted-foreground">
             {row.original.endpoint || '—'}
           </span>
         ),
@@ -81,7 +81,7 @@ export function TargetsTable({
         accessorKey: 'scope',
         header: t('targets.columns.scope'),
         cell: ({ row }) => (
-          <span className="font-mono text-xs text-muted-foreground">
+          <span className="font-mono text-caption text-muted-foreground">
             {row.original.scope || '—'}
           </span>
         ),
@@ -93,7 +93,7 @@ export function TargetsTable({
           <div className="flex flex-col gap-1">
             <ConsentBadge status={row.original.status} />
             {row.original.authorized && row.original.authorized_by ? (
-              <span className="text-xs text-muted-foreground">
+              <span className="text-caption text-muted-foreground">
                 {t('targets.authorizedBy', {
                   who: row.original.authorized_by,
                 })}
@@ -212,7 +212,7 @@ export function RunScorecard({ run }: { run: Run }) {
           ) : (
             <div className="flex size-[120px] flex-col items-center justify-center rounded-full border border-dashed border-border text-muted-foreground">
               <ShieldQuestion className="size-7" />
-              <span className="mt-1 text-xs">{t('runs.noScore')}</span>
+              <span className="mt-1 text-caption">{t('runs.noScore')}</span>
             </div>
           )}
           <RunStatusBadge status={run.status} />
@@ -291,7 +291,7 @@ export function RunsTable({
         accessorKey: 'started_at',
         header: t('runs.columns.started'),
         cell: ({ row }) => (
-          <span className="text-xs text-muted-foreground">
+          <span className="text-caption text-muted-foreground">
             {formatDateTime(row.original.started_at, i18n.language)}
           </span>
         ),
@@ -300,7 +300,7 @@ export function RunsTable({
         accessorKey: 'target_ref',
         header: t('runs.columns.target'),
         cell: ({ row }) => (
-          <span className="font-mono text-xs text-foreground">
+          <span className="font-mono text-caption text-foreground">
             {row.original.target_ref}
           </span>
         ),
@@ -309,7 +309,7 @@ export function RunsTable({
         accessorKey: 'suite',
         header: t('runs.columns.suite'),
         cell: ({ row }) => (
-          <span className="font-mono text-xs text-muted-foreground">
+          <span className="font-mono text-caption text-muted-foreground">
             {row.original.suite}
           </span>
         ),
@@ -336,7 +336,7 @@ export function RunsTable({
         id: 'passfail',
         header: t('runs.columns.passFail'),
         cell: ({ row }) => (
-          <span className="font-mono text-xs tabular-nums">
+          <span className="font-mono text-caption tabular-nums">
             <span className="text-success">
               {formatInt(row.original.passed)}
             </span>
@@ -453,7 +453,9 @@ export function OwaspFailures({ run }: { run: Run }) {
       description={t('runs.owasp.description')}
     >
       {entries.length === 0 ? (
-        <p className="text-sm text-muted-foreground">{t('runs.owasp.empty')}</p>
+        <p className="text-body text-muted-foreground">
+          {t('runs.owasp.empty')}
+        </p>
       ) : (
         <ul className="flex flex-wrap gap-2">
           {entries.map(([ref, count]) => (
@@ -480,7 +482,7 @@ export function ResultsTable({ results }: { results: ProbeResult[] }) {
         accessorKey: 'probe_id',
         header: t('results.columns.probe'),
         cell: ({ row }) => (
-          <span className="font-mono text-xs text-foreground">
+          <span className="font-mono text-caption text-foreground">
             {row.original.probe_id}
           </span>
         ),
@@ -489,7 +491,7 @@ export function ResultsTable({ results }: { results: ProbeResult[] }) {
         accessorKey: 'family',
         header: t('results.columns.family'),
         cell: ({ row }) => (
-          <span className="text-xs text-muted-foreground">
+          <span className="text-caption text-muted-foreground">
             {humanize(row.original.family)}
           </span>
         ),
@@ -531,7 +533,7 @@ export function ResultsTable({ results }: { results: ProbeResult[] }) {
         accessorKey: 'occurred_at',
         header: t('results.columns.occurredAt'),
         cell: ({ row }) => (
-          <span className="text-xs text-muted-foreground">
+          <span className="text-caption text-muted-foreground">
             {formatDateTime(row.original.occurred_at, i18n.language)}
           </span>
         ),
@@ -594,7 +596,7 @@ export function CatalogTable({ catalog }: { catalog: CatalogResponse }) {
         accessorKey: 'id',
         header: t('catalog.columns.id'),
         cell: ({ row }) => (
-          <span className="font-mono text-xs text-foreground">
+          <span className="font-mono text-caption text-foreground">
             {row.original.id}
           </span>
         ),
@@ -603,7 +605,7 @@ export function CatalogTable({ catalog }: { catalog: CatalogResponse }) {
         accessorKey: 'family',
         header: t('catalog.columns.family'),
         cell: ({ row }) => (
-          <span className="text-xs text-muted-foreground">
+          <span className="text-caption text-muted-foreground">
             {humanize(row.original.family)}
           </span>
         ),
@@ -612,7 +614,9 @@ export function CatalogTable({ catalog }: { catalog: CatalogResponse }) {
         accessorKey: 'title',
         header: t('catalog.columns.title'),
         cell: ({ row }) => (
-          <span className="text-sm text-foreground">{row.original.title}</span>
+          <span className="text-body text-foreground">
+            {row.original.title}
+          </span>
         ),
       },
       {
@@ -637,7 +641,7 @@ export function CatalogTable({ catalog }: { catalog: CatalogResponse }) {
         accessorKey: 'surface',
         header: t('catalog.columns.surface'),
         cell: ({ row }) => (
-          <span className="font-mono text-xs text-muted-foreground">
+          <span className="font-mono text-caption text-muted-foreground">
             {row.original.surface ?? '—'}
           </span>
         ),

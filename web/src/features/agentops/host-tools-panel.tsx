@@ -127,7 +127,7 @@ export function HostToolsPanel({
       data-testid="host-tools"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h4 id={headingId} className="text-xs font-medium text-foreground">
+        <h4 id={headingId} className="text-caption font-medium text-foreground">
           {t('hostTools.title')}
         </h4>
         <Button
@@ -152,7 +152,7 @@ export function HostToolsPanel({
 
       {query.isFetching && !current && (
         <p
-          className="flex items-center gap-2 text-xs text-muted-foreground"
+          className="flex items-center gap-2 text-caption text-muted-foreground"
           role="status"
         >
           <Spinner className="size-3.5" />
@@ -189,7 +189,7 @@ function HostToolsBody({ obs }: { obs: HostToolObservation }) {
   const total = obs.groups.reduce((sum, g) => sum + g.count, 0)
   return (
     <div className="flex flex-col gap-1" data-state={obs.state}>
-      <p className="text-xs text-foreground">
+      <p className="text-caption text-foreground">
         {t('hostTools.summary', { total })}
       </p>
       <ul
@@ -199,7 +199,7 @@ function HostToolsBody({ obs }: { obs: HostToolObservation }) {
         {obs.groups.map((g) => (
           <li
             key={`${g.origin}|${g.match}|${g.executable}|${g.configured}`}
-            className="rounded-sm bg-muted px-2 py-1 text-xs text-muted-foreground"
+            className="rounded-sm bg-muted px-2 py-1 text-caption text-muted-foreground"
             data-origin={g.origin}
             data-match={g.match}
             data-configured={g.configured}
@@ -235,8 +235,8 @@ function HostToolsNotice({
     <div
       className={
         tone === 'warning'
-          ? 'flex items-start gap-2 rounded-md border border-warning-line bg-warning-soft px-2.5 py-2 text-xs text-warning'
-          : 'flex items-start gap-2 rounded-md border border-border bg-muted px-2.5 py-2 text-xs text-muted-foreground'
+          ? 'flex items-start gap-2 rounded-md border border-warning-line bg-warning-soft px-2.5 py-2 text-caption text-warning'
+          : 'flex items-start gap-2 rounded-md border border-border bg-muted px-2.5 py-2 text-caption text-muted-foreground'
       }
     >
       <Icon className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />

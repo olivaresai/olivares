@@ -291,6 +291,33 @@
     "recentEmpty": "Hier erscheinen die Module, die du öffnest.",
     "recentScope": "In diesem Tab geöffnet. Wird beim Neuladen, Abmelden oder Wechsel von Konto oder Organisation gelöscht.",
     "recentRemove": "{{name}} aus zuletzt geöffneten Modulen entfernen",
-    "recentClear": "Zuletzt geöffnete Module löschen"
+    "recentClear": "Zuletzt geöffnete Module löschen",
+    "pinRow": "{{name}} zu Favoriten anheften (p)",
+    "unpinRow": "{{name}} von Favoriten lösen (p)"
+  },
+  "scope": {
+    "tenant": "Organisation",
+    "workspace": "Arbeitsbereich",
+    "environment": "Umgebung",
+    "noTenant": "keine",
+    "noWorkspace": "Kein Arbeitsbereich",
+    "noEnvironment": "Nicht angegeben",
+    "hint": "Worunter die nächste Sitzung laufen wird."
+  },
+  "launcher": {
+    "label": "Benennen Sie die zu startende Sitzung",
+    "placeholder": "Diese Sitzung benennen…",
+    "profile": "Anbieterprofil",
+    "profilePlaceholder": "Profil wählen",
+    "workspace": "Zu mountender Arbeitsbereich",
+    "start": "Starten",
+    "backgroundHint": "Strg+Eingabe startet sie und lässt Sie hier, bereit für die nächste.",
+    "noProfiles": "Es ist kein Anbieterprofil registriert, und ohne eines kann keine Sitzung starten.",
+    "addProvider": "Anbieterprofil hinzufügen",
+    "startedBackground": "Sitzung gestartet. Der Entwurf ist frei für die nächste.",
+    "startFailed": "Die Sitzung konnte nicht gestartet werden.",
+    "noTenant": "Wählen Sie eine Organisation, bevor Sie eine Sitzung starten.",
+    "noProfileRead": "Eine Sitzung läuft als Anbieterprofil, und Ihre Rolle enthält keine Berechtigung, diese zu lesen.",
+    "readFailed": "Die Anbieterprofile konnten nicht gelesen werden, daher kann von hier keine Sitzung gestartet werden."
   }
 }

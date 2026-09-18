@@ -119,7 +119,7 @@ export function LaunchReadinessPanel({
       data-testid="launch-readiness"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-sm font-medium text-foreground">
+        <h3 className="text-body font-medium text-foreground">
           {t('readiness.title')}
         </h3>
         <p className="font-mono text-[11px] text-muted-foreground">
@@ -130,7 +130,7 @@ export function LaunchReadinessPanel({
 
       {showLoading && (
         <p
-          className="flex items-center gap-2 text-xs text-muted-foreground"
+          className="flex items-center gap-2 text-caption text-muted-foreground"
           role="status"
         >
           <Spinner className="size-3.5" />
@@ -225,7 +225,7 @@ function ReadinessBody({ data }: { data: SessionLaunchReadiness }) {
         {data.checks.map((check) => (
           <li
             key={check.check}
-            className="flex flex-col gap-0.5 rounded-sm px-0.5 py-0.5 text-xs"
+            className="flex flex-col gap-0.5 rounded-sm px-0.5 py-0.5 text-caption"
             data-check={check.check}
             data-state={check.state}
             data-code={check.code}
@@ -278,8 +278,8 @@ function ReadinessNotice({
     <div
       className={
         tone === 'warning'
-          ? 'flex items-start gap-2 rounded-md border border-warning-line bg-warning-soft px-2.5 py-2 text-xs text-warning'
-          : 'flex items-start gap-2 rounded-md border border-border bg-muted px-2.5 py-2 text-xs text-muted-foreground'
+          ? 'flex items-start gap-2 rounded-md border border-warning-line bg-warning-soft px-2.5 py-2 text-caption text-warning'
+          : 'flex items-start gap-2 rounded-md border border-border bg-muted px-2.5 py-2 text-caption text-muted-foreground'
       }
     >
       <Icon className="mt-0.5 size-3.5 shrink-0" />

@@ -179,7 +179,7 @@ function EntityDetailBody({
         </KvRow>
         {entry.hosts && entry.hosts.length > 0 && (
           <KvRow label={t('cols.hosts')} align="start">
-            <span className="flex flex-wrap justify-end gap-1 font-mono text-xs">
+            <span className="flex flex-wrap justify-end gap-1 font-mono text-caption">
               {entry.hosts.map((h) => (
                 <span key={h} className="break-all">
                   {h}
@@ -262,7 +262,7 @@ function PointReadSection({ query }: { query: UseQueryResult<EntityDetail> }) {
   const { t } = useTranslation('inventory')
   if (query.error instanceof ApiError && query.error.isNotFound) {
     return (
-      <p role="status" className="mt-3 text-xs text-muted-foreground">
+      <p role="status" className="mt-3 text-caption text-muted-foreground">
         {t('detail.gone')}
       </p>
     )
@@ -288,7 +288,7 @@ function FreshnessBlock({ entry }: { entry: CatalogEntry }) {
     >
       <h3
         id="inventory-catalog-freshness"
-        className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+        className="mb-2 text-caption font-semibold uppercase tracking-wide text-muted-foreground"
       >
         {t('freshness.title')}
       </h3>
@@ -297,7 +297,7 @@ function FreshnessBlock({ entry }: { entry: CatalogEntry }) {
         <KvRow label={t('freshness.storedState')} align="start">
           <span className="flex min-w-0 flex-col items-end gap-1">
             <InvStatus status={entry.status} />
-            <span className="text-xs text-muted-foreground">
+            <span className="text-caption text-muted-foreground">
               {t('freshness.storedHint')}
             </span>
           </span>
@@ -325,7 +325,7 @@ function FreshnessBlock({ entry }: { entry: CatalogEntry }) {
             <span className="font-mono tabular-nums">
               {formatInt(entry.occurrence_count)}
             </span>
-            <span className="text-xs text-muted-foreground">
+            <span className="text-caption text-muted-foreground">
               {t('freshness.occurrenceHint')}
             </span>
           </span>
@@ -342,14 +342,14 @@ function CoreFields({ detail }: { detail?: Record<string, unknown> }) {
     .filter(([, v]) => v !== null)
   if (fields.length === 0) {
     return (
-      <p className="mt-3 text-xs text-muted-foreground">
+      <p className="mt-3 text-caption text-muted-foreground">
         {t('detail.noProjection')}
       </p>
     )
   }
   return (
     <>
-      <h3 className="mt-3 mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+      <h3 className="mt-3 mb-1 text-caption font-semibold uppercase tracking-wide text-muted-foreground">
         {t('detail.relations')}
       </h3>
       <KvList>

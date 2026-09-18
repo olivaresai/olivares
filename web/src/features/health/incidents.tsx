@@ -106,14 +106,14 @@ export function Incidents({ tenant }: { tenant: string | null }) {
             <div className="flex items-center gap-2">
               <div className="min-w-0">
                 <div
-                  className="truncate font-mono text-xs text-foreground"
+                  className="truncate font-mono text-caption text-foreground"
                   title={inc.subject_ref}
                 >
                   {inc.subject_ref}
                 </div>
                 {inc.summary && (
                   <div
-                    className="truncate text-xs text-muted-foreground"
+                    className="truncate text-caption text-muted-foreground"
                     title={inc.summary}
                   >
                     {inc.summary}
@@ -182,7 +182,7 @@ export function Incidents({ tenant }: { tenant: string | null }) {
           const inc = row.original
           if (inc.state === 'resolved') {
             return (
-              <span className="text-xs text-muted-foreground">
+              <span className="text-caption text-muted-foreground">
                 <RelTimeLabel ts={inc.resolved_at} />
               </span>
             )
@@ -227,13 +227,13 @@ export function Incidents({ tenant }: { tenant: string | null }) {
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <p className="flex items-center gap-1.5 text-caption text-muted-foreground">
           <AlertTriangle className="size-3.5 shrink-0" />
           {t('incidents.resolveHint')}
         </p>
         <Select value={state} onValueChange={setState}>
           <SelectTrigger
-            className="h-7 w-auto min-w-[8rem] text-xs"
+            className="h-7 w-auto min-w-[8rem] text-caption"
             aria-label={t('incidents.allStates')}
           >
             <SelectValue placeholder={t('incidents.allStates')} />
@@ -281,10 +281,10 @@ function EmptyIncidents() {
   const { t } = useTranslation('health')
   return (
     <div className={cn('px-6 py-12 text-center')}>
-      <p className="text-sm font-medium text-foreground">
+      <p className="text-body font-medium text-foreground">
         {t('incidents.empty.title')}
       </p>
-      <p className="mx-auto mt-1.5 max-w-sm text-sm text-muted-foreground">
+      <p className="mx-auto mt-1.5 max-w-sm text-body text-muted-foreground">
         {t('incidents.empty.description')}
       </p>
     </div>

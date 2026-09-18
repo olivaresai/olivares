@@ -174,10 +174,10 @@ function FirstOrgForm() {
             <Building2 className="size-5" aria-hidden />
           </div>
           <div className="flex flex-col gap-1">
-            <h1 className="font-display text-lg font-semibold tracking-tight text-foreground">
+            <h1 className="font-display text-title text-foreground">
               {t('auth:firstRun.createTitle')}
             </h1>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-body text-muted-foreground">
               {t('auth:firstRun.createDescription')}
             </p>
           </div>
@@ -246,10 +246,10 @@ function OrgPicker({
     <div className="flex justify-center py-10">
       <Card className="w-full max-w-xl p-6">
         <div className="mb-5 flex flex-col gap-1">
-          <h1 className="font-display text-lg font-semibold tracking-tight text-foreground">
+          <h1 className="font-display text-title text-foreground">
             {t('auth:firstRun.chooseTitle')}
           </h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-body text-muted-foreground">
             {t('auth:firstRun.chooseDescription')}
           </p>
         </div>
@@ -266,7 +266,7 @@ function OrgPicker({
                   aria-hidden
                 />
                 <span className="truncate">{o.name}</span>
-                <span className="truncate font-mono text-xs text-muted-foreground">
+                <span className="truncate font-mono text-caption text-muted-foreground">
                   {o.slug}
                 </span>
               </Button>

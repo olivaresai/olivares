@@ -197,7 +197,7 @@ export function ChannelCatalog({
       >
         <label
           htmlFor={`${idp}-by-id`}
-          className="text-xs text-muted-foreground"
+          className="text-caption text-muted-foreground"
         >
           {t('catalog.openById')}
         </label>
@@ -217,7 +217,7 @@ export function ChannelCatalog({
         >
           {t('actions.open')}
         </Button>
-        <span className="basis-full text-xs text-muted-foreground">
+        <span className="basis-full text-caption text-muted-foreground">
           {t('catalog.openByIdHint')}
         </span>
       </form>

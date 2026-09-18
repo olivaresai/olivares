@@ -116,6 +116,7 @@
     "pendingTitle": "Ausstehende Einladungen",
     "pendingCaption": "Einladungen, die auf Annahme warten. Der einmalig nutzbare Link legt das Passwort fest und aktiviert das Konto.",
     "noInvites": "Keine ausstehenden Einladungen.",
+    "noInvitesHint": "Von Ihnen gesendete Einladungen erscheinen hier, bis sie angenommen werden oder ablaufen. Laden Sie jemanden ein, um die erste hinzuzufügen.",
     "email": "E-Mail",
     "role": "Rolle",
     "expires": "Läuft ab",
@@ -440,6 +441,7 @@
     "catalog": {
       "caption": "Alle Konnektoren, die dieser Build einbinden kann, aus der Engine gelesen — insgesamt {{count}}. Das Ansehen ist schreibgeschützt; das Hinzufügen erfordert weiterhin eine Step-up-Authentifizierung.",
       "noMatch": "Kein Konnektor passt zu „{{query}}“.",
+      "noMatchHint": "Der Katalog listet jeden Connector auf, den dieser Build installieren kann. Leeren Sie die Suche, um alle zu sehen.",
       "search": "Nach Name oder Art filtern",
       "title": "Unterstützte Konnektoren"
     },
@@ -472,6 +474,7 @@
     "created": "Arbeitsbereich erstellt.",
     "renamed": "Arbeitsbereich umbenannt.",
     "none": "Noch keine Arbeitsbereiche.",
+    "noneHint": "Ein Workspace begrenzt Agenten, Sitzungen und Zuweisungen innerhalb dieser Organisation. Legen Sie einen an, um zu beginnen.",
     "ownerOnly": "Nur der Eigentümer der Organisation kann Arbeitsbereiche erstellen."
   },
   "agents": {
@@ -561,10 +564,12 @@
     "deleted": "Agent-Gruppe gelöscht.",
     "created": "Agent-Gruppe erstellt.",
     "updated": "Agent-Gruppe aktualisiert.",
-    "none": "Noch keine Agent-Gruppen."
+    "none": "Noch keine Agent-Gruppen.",
+    "noneHint": "Eine Agentengruppe benennt eine Menge von Agenten, damit eine Richtlinie sie alle steuert. Legen Sie eine an, um zu beginnen."
   },
   "roles": {
     "readOnlyNotice": "Sie benötigen Governance-RBAC-Zugriff, um Rollen und Delegation zu verwalten.",
+    "readOnlyNoticeHint": "Rollen, ihre Berechtigungen und wer sie delegieren darf, werden hier verwaltet. Bitten Sie eine Administratorin um die Governance-RBAC-Berechtigung.",
     "authority": {
       "title": "Ihre Delegationsbefugnis",
       "superadmin": "Sie sind Superadministrator — Sie können jede Rolle innerhalb jedes Geltungsbereichs delegieren.",
@@ -584,6 +589,7 @@
       "role": "Rolle",
       "scope": "Geltungsbereich",
       "none": "Noch keine geltungsbereichsbezogenen Gewährungen.",
+      "noneHint": "Eine begrenzte Zuweisung gibt einem Subjekt eine Rolle innerhalb eines Workspaces oder einer Ressource, nicht mandantenweit. Weisen Sie eine zu, um zu beginnen.",
       "revoke": "Widerrufen",
       "revokeTitle": "Gewährung widerrufen",
       "revokeBody": "Das Subjekt verliert diese geltungsbereichsbezogene Rolle sofort. Der Widerruf selbst wird gegen die Delegationsobergrenze geprüft.",
@@ -625,6 +631,7 @@
       "permissions": "Berechtigungen",
       "groups": "Gruppen",
       "none": "Noch keine benutzerdefinierten Rollen.",
+      "noneHint": "Eine benutzerdefinierte Rolle ist ein benannter Satz von Berechtigungen, den Sie wie eine eingebaute vergeben können. Legen Sie eine an, um zu beginnen.",
       "edit": "Bearbeiten",
       "delete": "Löschen",
       "deleteTitle": "Benutzerdefinierte Rolle löschen",
@@ -659,6 +666,7 @@
       "name": "Name",
       "permissions": "Berechtigungen",
       "none": "Noch keine Berechtigungsgruppen.",
+      "noneHint": "Eine Berechtigungsgruppe bündelt Berechtigungen, sodass eine Rolle sie namentlich einschließen kann. Legen Sie eine an, um zu beginnen.",
       "edit": "Bearbeiten",
       "delete": "Löschen",
       "deleteTitle": "Berechtigungsgruppe löschen",
@@ -690,6 +698,7 @@
       "title": "Gruppensubjekte & Hierarchie",
       "caption": "Weisen Sie bereitgestellten Benutzergruppen Rollen zu und gestalten Sie die Gruppenhierarchie. Mitglieder einer Kindgruppe erben die Gewährungen des Elternteils.",
       "noGroups": "Keine bereitgestellten Gruppen. Gruppen werden vom Identitätsanbieter (SCIM) übertragen.",
+      "noGroupsHint": "Gruppen kommen per SCIM von Ihrem Identitätsanbieter; die Konsole legt keine an. Stellen Sie dort eine Gruppe bereit, dann erscheint sie hier.",
       "colName": "Gruppe",
       "colParent": "Elternteil",
       "colMembers": "Mitglieder",
@@ -734,6 +743,7 @@
       "colFamilies": "Familien",
       "colTiers": "Stufen",
       "none": "Noch keine Modellgruppen.",
+      "noneHint": "Eine Modellgruppe benennt eine Menge von Modellen, damit eine Regel sie alle steuert. Legen Sie eine Gruppe an, um zu beginnen.",
       "edit": "Bearbeiten",
       "delete": "Löschen",
       "deleteTitle": "Modellgruppe löschen",
@@ -759,6 +769,7 @@
       "effectAllow": "Erlauben",
       "effectForbid": "Verbieten",
       "none": "Noch keine Modellzugriffsregeln.",
+      "noneHint": "Eine Modellzugriffsregel legt fest, welche Subjekte welche Modelle aufrufen dürfen. Ohne Regel darf jedes Subjekt jedes Modell dieses Mandanten aufrufen.",
       "edit": "Bearbeiten",
       "delete": "Löschen",
       "deleteTitle": "Modellzugriffsregel löschen",
@@ -796,6 +807,7 @@
       "title": "Zugriffsprüfung",
       "caption": "Umgekehrte Abfragen: Wer kann auf was zugreifen? Die Engine wertet jeden Kandidaten aus — die Ergebnisse sind maßgebend, nicht zwischengespeichert.",
       "readOnlyNotice": "Sie benötigen authz-Lesezugriff, um Zugriffsprüfungen durchzuführen.",
+      "readOnlyNoticeHint": "Eine Zugriffsüberprüfung listet auf, wer was hält, damit eine prüfende Person es bestätigen oder entziehen kann. Bitten Sie eine Administratorin um die Authz-Leseberechtigung.",
       "searchSubject": "Wer kann zugreifen auf…",
       "searchResource": "Worauf kann jemand zugreifen…",
       "export": "Zugriffsprüfung exportieren",

@@ -96,7 +96,7 @@ export function DependencyMap({ tenant }: { tenant: string | null }) {
 
   return (
     <div className="flex flex-col gap-3">
-      <p className="max-w-3xl text-sm text-muted-foreground">
+      <p className="max-w-3xl text-body text-muted-foreground">
         {t('deps.subtitle')}
       </p>
 
@@ -133,16 +133,16 @@ export function DependencyMap({ tenant }: { tenant: string | null }) {
       {/* Mobile fallback: the graph needs width; show a dignified summary. */}
       <div className="rounded-lg border border-border bg-surface p-6 text-center md:hidden">
         <Network className="mx-auto mb-2 size-6 text-muted-foreground" />
-        <p className="text-sm font-medium text-foreground">
+        <p className="text-body font-medium text-foreground">
           {t('deps.mobile.title')}
         </p>
-        <p className="mt-1 text-sm text-muted-foreground">
+        <p className="mt-1 text-body text-muted-foreground">
           {t('deps.mobile.summary', {
             nodes: built.stats.nodes,
             edges: built.stats.edges,
           })}
         </p>
-        <p className="mt-1 text-xs text-muted-foreground">
+        <p className="mt-1 text-caption text-muted-foreground">
           {t('deps.mobile.hint')}
         </p>
         <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
@@ -151,7 +151,7 @@ export function DependencyMap({ tenant }: { tenant: string | null }) {
           ).map((l) => (
             <span
               key={l.key}
-              className="inline-flex items-center gap-1.5 text-xs text-muted-foreground"
+              className="inline-flex items-center gap-1.5 text-caption text-muted-foreground"
             >
               <span className={cn('size-2 rounded-full', l.dot)} aria-hidden />
               {t(`state.${l.key}`)}

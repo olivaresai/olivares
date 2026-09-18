@@ -116,6 +116,7 @@
     "pendingTitle": "Pending invitations",
     "pendingCaption": "Invitations awaiting acceptance. The single-use link sets the password and activates the account.",
     "noInvites": "No pending invitations.",
+    "noInvitesHint": "Invitations you send appear here until they are accepted or expire. Invite someone to add the first one.",
     "email": "Email",
     "role": "Role",
     "expires": "Expires",
@@ -440,6 +441,7 @@
     "catalog": {
       "caption": "Every connector this build can wire, read from the engine — {{count}} in total. Browsing is read-only; adding one still requires a step-up.",
       "noMatch": "No connector matches “{{query}}”.",
+      "noMatchHint": "The catalog lists every connector this build can install. Clear the search to see all of them.",
       "search": "Filter by name or kind",
       "title": "Supported connectors"
     },
@@ -472,6 +474,7 @@
     "created": "Workspace created.",
     "renamed": "Workspace renamed.",
     "none": "No workspaces yet.",
+    "noneHint": "A workspace scopes agents, sessions and grants inside this organization. Create one to start.",
     "ownerOnly": "Only the organization owner can create workspaces."
   },
   "agents": {
@@ -561,10 +564,12 @@
     "deleted": "Agent-group deleted.",
     "created": "Agent-group created.",
     "updated": "Agent-group updated.",
-    "none": "No agent-groups yet."
+    "none": "No agent-groups yet.",
+    "noneHint": "An agent-group names a set of agents so one policy can govern all of them. Create one to start."
   },
   "roles": {
     "readOnlyNotice": "You need governance RBAC access to manage roles and delegation.",
+    "readOnlyNoticeHint": "Roles, their permissions and who may delegate them are managed here. Ask an administrator for the governance RBAC permission.",
     "authority": {
       "title": "Your delegation authority",
       "superadmin": "You are a superadmin — you can delegate any role within any scope.",
@@ -584,6 +589,7 @@
       "role": "Role",
       "scope": "Scope",
       "none": "No scoped grants yet.",
+      "noneHint": "A scoped grant gives a subject a role inside one workspace or resource, not across the tenant. Grant one to start.",
       "revoke": "Revoke",
       "revokeTitle": "Revoke grant",
       "revokeBody": "The subject loses this scoped role immediately. Revoking is itself ceiling-checked.",
@@ -625,6 +631,7 @@
       "permissions": "Permissions",
       "groups": "Groups",
       "none": "No custom roles yet.",
+      "noneHint": "A custom role is a named set of permissions you can grant like a built-in one. Create one to start.",
       "edit": "Edit",
       "delete": "Delete",
       "deleteTitle": "Delete custom role",
@@ -659,6 +666,7 @@
       "name": "Name",
       "permissions": "Permissions",
       "none": "No permission-groups yet.",
+      "noneHint": "A permission-group bundles permissions so a role can include them by name. Create one to start.",
       "edit": "Edit",
       "delete": "Delete",
       "deleteTitle": "Delete permission-group",
@@ -690,6 +698,7 @@
       "title": "Group subjects & hierarchy",
       "caption": "Grant roles to provisioned user groups and shape the group hierarchy. A child group's members inherit the parent's grants.",
       "noGroups": "No provisioned groups. Groups are pushed by the identity provider (SCIM).",
+      "noGroupsHint": "Groups arrive from your identity provider over SCIM; the console never creates them. Provision a group there and it appears here.",
       "colName": "Group",
       "colParent": "Parent",
       "colMembers": "Members",
@@ -734,6 +743,7 @@
       "colFamilies": "Families",
       "colTiers": "Tiers",
       "none": "No model-groups yet.",
+      "noneHint": "A model-group names a set of models so one rule can govern all of them. Create a group to start.",
       "edit": "Edit",
       "delete": "Delete",
       "deleteTitle": "Delete model-group",
@@ -759,6 +769,7 @@
       "effectAllow": "Allow",
       "effectForbid": "Forbid",
       "none": "No model-access rules yet.",
+      "noneHint": "A model-access rule says which subjects may call which models. With none, every subject may call every model this tenant has.",
       "edit": "Edit",
       "delete": "Delete",
       "deleteTitle": "Delete model-access rule",
@@ -796,6 +807,7 @@
       "title": "Access review",
       "caption": "Reverse queries: who can access what? The engine evaluates every candidate — results are authoritative, not cached.",
       "readOnlyNotice": "You need authz read access to run access reviews.",
+      "readOnlyNoticeHint": "An access review lists who holds what, so a reviewer can confirm or revoke it. Ask an administrator for the authz read permission.",
       "searchSubject": "Who can access…",
       "searchResource": "What can someone access…",
       "export": "Export access review",

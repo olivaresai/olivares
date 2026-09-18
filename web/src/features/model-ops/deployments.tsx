@@ -112,7 +112,7 @@ export function DeploymentsTab() {
         header: t('deployments.columns.version'),
         cell: ({ row }) =>
           row.original.version_ref ? (
-            <span className="font-mono text-xs text-muted-foreground">
+            <span className="font-mono text-caption text-muted-foreground">
               {row.original.version_ref}
             </span>
           ) : (
@@ -285,7 +285,7 @@ function FilterSelect({
 }) {
   return (
     <Select value={value} onValueChange={onChange}>
-      <SelectTrigger className="h-8 w-[9.5rem] text-xs">
+      <SelectTrigger className="h-8 w-[9.5rem] text-caption">
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
@@ -435,7 +435,7 @@ function DeploymentForm({
           <p className="text-[11px] font-medium uppercase tracking-wide text-danger">
             {t('deployments.deniedTitle')}
           </p>
-          <p className="mt-0.5 whitespace-pre-wrap text-xs text-foreground">
+          <p className="mt-0.5 whitespace-pre-wrap text-caption text-foreground">
             {denyReason}
           </p>
           <p className="mt-1 text-[11px] text-muted-foreground">

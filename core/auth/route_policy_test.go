@@ -541,7 +541,7 @@ func TestAGovernedRouteMintsAWitnessForAPrincipalWithEvidence(t *testing.T) {
 // ⚠ WHAT THIS DOES NOT PROVE, said so nobody inherits it as covered: that CheckRowSet MAPS this
 // state to ErrRowQuestionMismatch. That needs a sound witness inside core/api, which needs a
 // principal carrying sealed evidence, which nothing on the HTTP path installs yet. The mapping
-// gets its witness in the lane that wires principal evidence — where the branch becomes
+// gets its witness where principal evidence is wired — where the branch becomes
 // reachable in production for the first time, and where a green there will mean something.
 func TestASoundWitnessCanStillAnswerAnotherQuestion(t *testing.T) {
 	now := time.Date(2026, 9, 4, 12, 0, 0, 0, time.UTC)

@@ -94,7 +94,10 @@ export function RevisionsSheet({
           ) : query.error ? (
             <ErrorState retry={() => query.refetch()} />
           ) : revisions.length === 0 ? (
-            <EmptyState title={t('revisions.empty')} />
+            <EmptyState
+              description={t('revisions.emptyHint')}
+              title={t('revisions.empty')}
+            />
           ) : (
             <ol className="flex flex-col gap-3">
               {revisions.map((r: RevisionDTO) => (
@@ -103,7 +106,7 @@ export function RevisionsSheet({
                   className="rounded-lg border border-border bg-surface p-3"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="font-mono text-sm font-medium tabular-nums text-foreground">
+                    <span className="font-mono text-body font-medium tabular-nums text-foreground">
                       {t('revisions.revision')} {r.revision}
                     </span>
                     <Badge
@@ -114,12 +117,12 @@ export function RevisionsSheet({
                       })}
                     </Badge>
                   </div>
-                  <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+                  <div className="mt-1 flex items-center gap-2 text-caption text-muted-foreground">
                     <span className="font-mono">{r.change_actor}</span>
                     <span>·</span>
                     <RelTimeLabel ts={r.changed_at} />
                   </div>
-                  <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5 text-caption">
                     <Badge variant="neutral">{r.transport}</Badge>
                     {r.scope && <Badge variant="outline">{r.scope}</Badge>}
                     {r.secret_refs.map((s, i) => (
@@ -132,7 +135,7 @@ export function RevisionsSheet({
           )}
         </ScrollArea>
 
-        <p className="text-xs text-muted-foreground">
+        <p className="text-caption text-muted-foreground">
           {t('revisions.caption')}
         </p>
       </SheetContent>

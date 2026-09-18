@@ -42,7 +42,7 @@ import { WorkspaceSwitcher } from './workspace-switcher'
  *
  * ⇒ THAT DAY WAS 2026-08-23, and the condition is MET as of 2026-08-27. docs-site is deployed as
  * the `olivares-docs` Worker and `docs.olivares.ai` serves it. Measured this session, not assumed
- * and not taken from another lane's report: the 37 non-root `helpHref` values of
+ * and not taken from a second-hand report: the 37 non-root `helpHref` values of
  * `web/src/features/registry.tsx`, requested one by one against `https://docs.olivares.ai<path>/`,
  * answered **37/37 = 200, zero non-200**. The base moves back and the deep links go on.
  *
@@ -197,7 +197,7 @@ export function Topbar({
         type="button"
         onClick={() => setCommandOpen(true)}
         aria-label={t('common:actions.search')}
-        className="inline-flex h-8 shrink-0 items-center gap-2 rounded-md border border-border-strong bg-surface px-2.5 text-sm text-muted-foreground outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+        className="inline-flex h-8 shrink-0 items-center gap-2 rounded-md border border-border-strong bg-surface px-2.5 text-body text-muted-foreground outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
       >
         <Search className="size-4" aria-hidden />
         <span className="hidden xl:inline">{t('common:actions.search')}…</span>

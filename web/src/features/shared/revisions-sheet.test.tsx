@@ -27,6 +27,7 @@ const labels: RevisionsSheetLabels = {
   title: 'Revision history — Example',
   description: 'Chronological snapshots.',
   empty: 'No revisions recorded',
+  emptyHint: 'Every change is kept as a revision you can compare and restore.',
   loading: 'Loading',
   loadMore: 'Load more',
   compareTitle: 'Snapshot diff',

@@ -117,6 +117,7 @@
     "title": "Resultados por prueba",
     "description": "El resultado de cada prueba. La huella es un hash unidireccional — nunca un payload de ataque.",
     "empty": "No hay resultados para esta ejecución.",
+    "emptyHint": "Aquí se lista cada sonda de la ejecución, con su veredicto y la evidencia que lo respalda. Esta ejecución no ha registrado resultados.",
     "columns": {
       "probe": "Prueba",
       "family": "Familia",

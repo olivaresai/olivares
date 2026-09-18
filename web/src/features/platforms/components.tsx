@@ -30,6 +30,7 @@ import type {
   ParamDeprecation,
   Surface,
 } from './types'
+import { StaticTable } from '@/components/data/static-table'
 
 // --- honesty badge -----------------------------------------------------------
 
@@ -82,13 +83,13 @@ export function SurfaceMatrix({ surfaces }: { surfaces: Surface[] }) {
         header: t('surfaces.columns.surface'),
         cell: ({ row }) => (
           <div className="flex min-w-0 flex-col gap-0.5">
-            <span className="flex items-center gap-2 text-sm font-medium text-foreground">
+            <span className="flex items-center gap-2 text-body font-medium text-foreground">
               {row.original.display_name}
               {row.original.deprecated ? (
                 <Badge variant="danger">{t('surfaces.deprecatedBadge')}</Badge>
               ) : null}
             </span>
-            <span className="font-mono text-xs text-muted-foreground">
+            <span className="font-mono text-caption text-muted-foreground">
               {row.original.gateway}
             </span>
           </div>
@@ -100,7 +101,7 @@ export function SurfaceMatrix({ surfaces }: { surfaces: Surface[] }) {
         cell: ({ row }) => (
           <Tooltip>
             <TooltipTrigger asChild>
-              <span className="text-sm text-foreground">
+              <span className="text-body text-foreground">
                 {row.original.operator}
               </span>
             </TooltipTrigger>
@@ -112,7 +113,7 @@ export function SurfaceMatrix({ surfaces }: { surfaces: Surface[] }) {
         accessorKey: 'base_url_pattern',
         header: t('surfaces.columns.baseUrl'),
         cell: ({ row }) => (
-          <span className="font-mono text-xs break-all text-muted-foreground">
+          <span className="font-mono text-caption break-all text-muted-foreground">
             {row.original.base_url_pattern}
           </span>
         ),
@@ -121,7 +122,7 @@ export function SurfaceMatrix({ surfaces }: { surfaces: Surface[] }) {
         accessorKey: 'sigv4_service',
         header: t('surfaces.columns.sigv4'),
         cell: ({ row }) => (
-          <span className="font-mono text-xs text-muted-foreground">
+          <span className="font-mono text-caption text-muted-foreground">
             {row.original.sigv4_service || t('surfaces.noSigv4')}
           </span>
         ),
@@ -130,7 +131,7 @@ export function SurfaceMatrix({ surfaces }: { surfaces: Surface[] }) {
         accessorKey: 'workspace_header',
         header: t('surfaces.columns.workspaceHeader'),
         cell: ({ row }) => (
-          <span className="font-mono text-xs text-muted-foreground">
+          <span className="font-mono text-caption text-muted-foreground">
             {row.original.workspace_header || t('surfaces.noWorkspaceHeader')}
           </span>
         ),
@@ -139,7 +140,7 @@ export function SurfaceMatrix({ surfaces }: { surfaces: Surface[] }) {
         accessorKey: 'model_id_form',
         header: t('surfaces.columns.modelIdForm'),
         cell: ({ row }) => (
-          <span className="text-xs text-muted-foreground">
+          <span className="text-caption text-muted-foreground">
             {row.original.model_id_form}
           </span>
         ),
@@ -148,7 +149,7 @@ export function SurfaceMatrix({ surfaces }: { surfaces: Surface[] }) {
         accessorKey: 'billing',
         header: t('surfaces.columns.billing'),
         cell: ({ row }) => (
-          <span className="text-xs text-muted-foreground">
+          <span className="text-caption text-muted-foreground">
             {row.original.billing}
           </span>
         ),
@@ -162,7 +163,7 @@ export function SurfaceMatrix({ surfaces }: { surfaces: Surface[] }) {
         id: 'fedramp',
         header: t('surfaces.columns.fedramp'),
         cell: ({ row }) => (
-          <span className="text-xs text-muted-foreground">
+          <span className="text-caption text-muted-foreground">
             {/* FedRAMP/IL4-5 is declared only for the Bedrock surfaces (residency line,
                 surfaces.go). It is NOT inferred for any other surface — honest gap. */}
             {row.original.gateway === 'bedrock-mantle' ||
@@ -176,7 +177,7 @@ export function SurfaceMatrix({ surfaces }: { surfaces: Surface[] }) {
         accessorKey: 'zdr',
         header: t('surfaces.columns.zdr'),
         cell: ({ row }) => (
-          <span className="text-xs text-muted-foreground">
+          <span className="text-caption text-muted-foreground">
             {row.original.zdr}
           </span>
         ),
@@ -185,7 +186,7 @@ export function SurfaceMatrix({ surfaces }: { surfaces: Surface[] }) {
         accessorKey: 'residency',
         header: t('surfaces.columns.residency'),
         cell: ({ row }) => (
-          <span className="text-xs text-muted-foreground">
+          <span className="text-caption text-muted-foreground">
             {row.original.residency}
           </span>
         ),
@@ -249,23 +250,17 @@ export function ApiSupportMatrix({ surfaces }: { surfaces: Surface[] }) {
   }
   return (
     <div className="overflow-x-auto rounded-lg border border-border bg-surface">
-      <table
-        className="w-full border-collapse text-sm"
-        aria-label={t('surfaces.apiSupportTitle')}
-      >
+      <StaticTable aria-label={t('surfaces.apiSupportTitle')}>
         <thead>
-          <tr className="border-b border-border-strong">
-            <th
-              scope="col"
-              className="sticky left-0 z-10 bg-muted px-3 py-2 text-left text-xs font-medium tracking-wide text-muted-foreground uppercase"
-            >
+          <tr>
+            <th scope="col" className="sticky left-0 z-10">
               {t('surfaces.columns.surface')}
             </th>
             {API_FAMILIES.map((fam) => (
               <th
                 key={fam}
                 scope="col"
-                className="bg-muted px-2 py-2 text-center text-[11px] font-medium whitespace-nowrap text-muted-foreground"
+                className="text-center text-[11px] whitespace-nowrap"
               >
                 {t(colKey[fam])}
               </th>
@@ -274,20 +269,17 @@ export function ApiSupportMatrix({ surfaces }: { surfaces: Surface[] }) {
         </thead>
         <tbody>
           {surfaces.map((s) => (
-            <tr
-              key={s.gateway}
-              className="border-b border-border last:border-0"
-            >
+            <tr key={s.gateway}>
               <th
                 scope="row"
-                className="sticky left-0 z-10 bg-surface px-3 py-2 text-left font-normal whitespace-nowrap"
+                className="sticky left-0 z-10 bg-surface font-normal whitespace-nowrap"
               >
-                <span className="font-mono text-xs text-foreground">
+                <span className="font-mono text-caption text-foreground">
                   {s.gateway}
                 </span>
               </th>
               {API_FAMILIES.map((fam) => (
-                <td key={fam} className="px-2 py-2 text-center">
+                <td key={fam} className="text-center">
                   <ApiCell
                     on={s.apis[fam]}
                     label={
@@ -301,7 +293,7 @@ export function ApiSupportMatrix({ surfaces }: { surfaces: Surface[] }) {
             </tr>
           ))}
         </tbody>
-      </table>
+      </StaticTable>
     </div>
   )
 }
@@ -334,13 +326,13 @@ export function SurfaceNotes({ surfaces }: { surfaces: Surface[] }) {
     <dl className="flex flex-col gap-3">
       {surfaces.map((s) => (
         <div key={s.gateway} className="flex flex-col gap-0.5">
-          <dt className="flex items-center gap-2 text-sm font-medium text-foreground">
+          <dt className="flex items-center gap-2 text-body font-medium text-foreground">
             {s.display_name}
             {s.deprecated ? (
               <Badge variant="danger">{t('surfaces.deprecatedBadge')}</Badge>
             ) : null}
           </dt>
-          <dd className="text-xs leading-relaxed text-muted-foreground">
+          <dd className="text-caption leading-relaxed text-muted-foreground">
             {s.notes}
           </dd>
         </div>
@@ -392,10 +384,10 @@ export function LifecycleMatrix({
         cell: ({ row }) =>
           row.original.isFirst ? (
             <span className="flex flex-col">
-              <span className="text-sm font-medium text-foreground">
+              <span className="text-body font-medium text-foreground">
                 {row.original.model_display}
               </span>
-              <span className="font-mono text-xs text-muted-foreground">
+              <span className="font-mono text-caption text-muted-foreground">
                 {row.original.model_id}
               </span>
             </span>
@@ -407,7 +399,7 @@ export function LifecycleMatrix({
         accessorKey: 'surface',
         header: t('lifecycle.columns.surface'),
         cell: ({ row }) => (
-          <span className="font-mono text-xs text-foreground">
+          <span className="font-mono text-caption text-foreground">
             {row.original.surface}
           </span>
         ),
@@ -423,7 +415,7 @@ export function LifecycleMatrix({
             </span>
           ) : (
             // NEVER "never retires": an unpublished date is an honest pending value.
-            <span className="text-xs text-warning">
+            <span className="text-caption text-warning">
               {t('lifecycle.datePending')}
             </span>
           )
@@ -441,7 +433,7 @@ export function LifecycleMatrix({
         header: t('lifecycle.columns.replacement'),
         cell: ({ row }) =>
           row.original.retirement.replacement_ref ? (
-            <span className="font-mono text-xs text-foreground">
+            <span className="font-mono text-caption text-foreground">
               {row.original.retirement.replacement_ref}
             </span>
           ) : (
@@ -505,7 +497,7 @@ export function LifecycleNotes({ notes }: { notes: LifecycleNote[] }) {
         <li
           key={n.key}
           className={cn(
-            'flex items-start gap-2 rounded-md border border-border bg-surface px-3 py-2 text-xs leading-relaxed',
+            'flex items-start gap-2 rounded-md border border-border bg-surface px-3 py-2 text-caption leading-relaxed',
           )}
         >
           <ConfirmStatusBadge status={n.status} className="mt-px shrink-0" />

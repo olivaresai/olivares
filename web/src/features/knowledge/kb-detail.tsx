@@ -288,7 +288,7 @@ function DetailBody({
 
       {/* Governance metadata. */}
       <section className="flex flex-col gap-2">
-        <h3 className="text-sm font-medium text-foreground">
+        <h3 className="text-body font-medium text-foreground">
           {t('kbDetail.governance')}
         </h3>
         <KvList>
@@ -325,10 +325,10 @@ function DetailBody({
 
       {/* Documents — metadata + provenance only, never the body. */}
       <section className="flex flex-col gap-2">
-        <h3 className="text-sm font-medium text-foreground">
+        <h3 className="text-body font-medium text-foreground">
           {t('kbDetail.documents')}
         </h3>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-caption text-muted-foreground">
           {t('kbDetail.documentsCaption')}
         </p>
         <ListTruncationBadge
@@ -365,7 +365,7 @@ function DetailBody({
                 className="rounded-md border border-border bg-surface p-3"
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="truncate text-sm font-medium text-foreground">
+                  <span className="truncate text-body font-medium text-foreground">
                     {d.title || d.source_doc_id}
                   </span>
                   <Badge variant={d.status === 'pending' ? 'info' : 'success'}>
@@ -374,7 +374,7 @@ function DetailBody({
                       : t('kbDetail.docIndexed')}
                   </Badge>
                 </div>
-                <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-caption text-muted-foreground">
                   <Badge variant="neutral">{d.source_kind}</Badge>
                   <SourceModeBadge value={d.source_mode} />
                   <ClassificationBadge value={d.classification} />

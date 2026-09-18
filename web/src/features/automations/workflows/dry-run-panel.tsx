@@ -54,18 +54,18 @@ export function DryRunPanel({ workflowId }: { workflowId: string }) {
           ) : dryRun.isError ? (
             <div
               role="alert"
-              className="rounded-md border border-danger-line bg-danger-soft p-3 text-sm text-danger"
+              className="rounded-md border border-danger-line bg-danger-soft p-3 text-body text-danger"
             >
               {t('dryRun.failed')}
             </div>
           ) : dryRun.data ? (
             <div className="space-y-5">
               <section className="space-y-2">
-                <h3 className="text-sm font-medium text-foreground">
+                <h3 className="text-body font-medium text-foreground">
                   {t('dryRun.planHash')}
                 </h3>
                 <div className="flex items-center gap-2 rounded-md border border-border bg-surface p-2">
-                  <code className="min-w-0 flex-1 truncate font-mono text-xs">
+                  <code className="min-w-0 flex-1 truncate font-mono text-caption">
                     {truncateHash(dryRun.data.plan_hash)}
                   </code>
                   <Button
@@ -82,7 +82,7 @@ export function DryRunPanel({ workflowId }: { workflowId: string }) {
                 </div>
               </section>
               <section className="space-y-2">
-                <h3 className="text-sm font-medium text-foreground">
+                <h3 className="text-body font-medium text-foreground">
                   {t('dryRun.requires')}
                 </h3>
                 <div className="flex flex-wrap gap-1.5">
@@ -94,7 +94,10 @@ export function DryRunPanel({ workflowId }: { workflowId: string }) {
                 </div>
               </section>
               {dryRun.data.steps.length === 0 ? (
-                <EmptyState title={t('dryRun.empty')} />
+                <EmptyState
+                  description={t('dryRun.emptyHint')}
+                  title={t('dryRun.empty')}
+                />
               ) : (
                 <ol className="space-y-3">
                   {dryRun.data.steps.map((step) => (
@@ -106,15 +109,17 @@ export function DryRunPanel({ workflowId }: { workflowId: string }) {
                         <Badge variant="accent">
                           {t('dryRun.order', { order: step.order })}
                         </Badge>
-                        <code className="font-mono text-xs">{step.ref}</code>
+                        <code className="font-mono text-caption">
+                          {step.ref}
+                        </code>
                         <Badge variant="outline">
                           {t(`kind.${step.kind}`)}
                         </Badge>
                       </div>
-                      <p className="mt-2 text-sm text-foreground">
+                      <p className="mt-2 text-body text-foreground">
                         {step.action}
                       </p>
-                      <p className="mt-1 text-xs text-muted-foreground">
+                      <p className="mt-1 text-caption text-muted-foreground">
                         {step.depends_on.length > 0
                           ? t('dryRun.dependencies', {
                               value: step.depends_on.join(', '),
@@ -131,7 +136,7 @@ export function DryRunPanel({ workflowId }: { workflowId: string }) {
                         </div>
                       ) : null}
                       {step.warning ? (
-                        <p className="mt-2 rounded-md border border-warning-line bg-warning-soft p-2 text-xs text-warning">
+                        <p className="mt-2 rounded-md border border-warning-line bg-warning-soft p-2 text-caption text-warning">
                           {step.warning}
                         </p>
                       ) : null}

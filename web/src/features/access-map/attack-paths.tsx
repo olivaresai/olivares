@@ -103,7 +103,7 @@ function PathRow({ path }: { path: AttackPath }) {
   const attribution = path.attribution || 'unknown'
   return (
     <li className="border-border border-b py-2 last:border-b-0">
-      <ol className="flex flex-wrap items-center gap-1 text-sm">
+      <ol className="flex flex-wrap items-center gap-1 text-body">
         {path.steps.map((s, i) => (
           <li
             key={`${s.node_kind}-${s.node_id}-${i}`}
@@ -111,13 +111,13 @@ function PathRow({ path }: { path: AttackPath }) {
           >
             {i > 0 ? <span className="text-muted-foreground">→</span> : null}
             <Badge variant="outline">{s.node_kind}</Badge>
-            <span className="font-mono text-xs break-all">
+            <span className="font-mono text-caption break-all">
               {s.node_name || s.node_id}
             </span>
           </li>
         ))}
       </ol>
-      <div className="text-muted-foreground mt-1 flex flex-wrap items-center gap-2 text-xs">
+      <div className="text-muted-foreground mt-1 flex flex-wrap items-center gap-2 text-caption">
         <span>{t('attackPaths.weakestLink')}</span>
         <Badge variant={ATTRIBUTION_VARIANT[attribution] ?? 'warning'}>
           {t(`attackPaths.attribution.${attribution}`, {
@@ -181,15 +181,17 @@ function Analysis({
     <section aria-labelledby={`attack-${kind}`}>
       <h4 id={`attack-${kind}`}>{t(`attackPaths.kind.${kind}`)}</h4>
       {query.isPending ? (
-        <p className="text-muted-foreground text-sm">
+        <p className="text-muted-foreground text-body">
           {t('attackPaths.loading')}
         </p>
       ) : query.isError || (query.isSuccess && paths === null) ? (
-        <p role="alert" className="text-danger text-sm">
+        <p role="alert" className="text-danger text-body">
           {t('attackPaths.error')}
         </p>
       ) : paths?.length === 0 ? (
-        <p className="text-muted-foreground text-sm">{t('attackPaths.none')}</p>
+        <p className="text-muted-foreground text-body">
+          {t('attackPaths.none')}
+        </p>
       ) : (
         <ul>
           {(paths ?? []).map((p, i) => (
@@ -221,7 +223,7 @@ export function AttackPathsPanel({
     // rendered as an empty analysis.
     return (
       <p
-        className="text-muted-foreground text-sm"
+        className="text-muted-foreground text-body"
         data-testid="attack-paths-idle"
       >
         {t('attackPaths.chooseAgent')}
@@ -230,7 +232,7 @@ export function AttackPathsPanel({
   }
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-muted-foreground text-xs">
+      <p className="text-muted-foreground text-caption">
         {t('attackPaths.auditedNote')}
       </p>
       {asked ? (

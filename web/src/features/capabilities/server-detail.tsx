@@ -56,10 +56,12 @@ function Section({
   return (
     <section className="flex flex-col gap-2">
       <div className="flex items-center justify-between gap-2">
-        <h3 className="text-sm font-medium text-foreground">{title}</h3>
+        <h3 className="text-body font-medium text-foreground">{title}</h3>
         {action}
       </div>
-      {caption && <p className="text-xs text-muted-foreground">{caption}</p>}
+      {caption && (
+        <p className="text-caption text-muted-foreground">{caption}</p>
+      )}
       {children}
     </section>
   )
@@ -231,7 +233,7 @@ function DetailBody({
     <>
       {detail.endpoint && (
         <Section title={t('detail.endpoint')}>
-          <code className="block truncate rounded-md border border-border bg-muted px-2 py-1 font-mono text-xs text-foreground">
+          <code className="block truncate rounded-md border border-border bg-muted px-2 py-1 font-mono text-caption text-foreground">
             {detail.endpoint}
           </code>
         </Section>
@@ -345,7 +347,7 @@ function DetailBody({
       <Separator />
       <Section title={t('detail.tools')} caption={t('tools.untrustedNote')}>
         {detail.tools.length === 0 ? (
-          <p className="text-sm text-muted-foreground">—</p>
+          <p className="text-body text-muted-foreground">—</p>
         ) : (
           <ul className="flex flex-col gap-2">
             {detail.tools.map((tool) => (
@@ -353,7 +355,7 @@ function DetailBody({
                 key={tool.id}
                 className="flex items-center justify-between gap-2 rounded-md border border-border bg-surface px-2.5 py-1.5"
               >
-                <span className="truncate font-mono text-xs text-foreground">
+                <span className="truncate font-mono text-caption text-foreground">
                   {tool.name}
                 </span>
                 <ToolAnnotations tool={tool} />
@@ -372,7 +374,7 @@ function DetailBody({
               {detail.skills.map((s) => (
                 <li
                   key={s.id}
-                  className="flex items-center justify-between gap-2 text-xs"
+                  className="flex items-center justify-between gap-2 text-caption"
                 >
                   <span className="truncate font-mono text-foreground">
                     {s.name}

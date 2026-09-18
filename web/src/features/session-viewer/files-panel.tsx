@@ -33,7 +33,10 @@ const TYPE_ICON: Record<FileNode['type'], LucideIcon> = {
   create: FilePlus,
 }
 
-const TYPE_VARIANT: Record<FileNode['type'], 'neutral' | 'info' | 'accent' | 'success'> = {
+const TYPE_VARIANT: Record<
+  FileNode['type'],
+  'neutral' | 'info' | 'accent' | 'success'
+> = {
   read: 'neutral',
   write: 'info',
   edit: 'accent',
@@ -64,18 +67,20 @@ export function FilesPanel({ timeline }: FilesPanelProps) {
       }
     }
 
-    return Array.from(seen.values()).sort((a, b) => a.path.localeCompare(b.path))
+    return Array.from(seen.values()).sort((a, b) =>
+      a.path.localeCompare(b.path),
+    )
   }, [timeline])
 
   return (
     <section className="flex flex-col gap-2">
-      <h2 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+      <h2 className="flex items-center gap-1.5 text-caption font-semibold uppercase tracking-wide text-muted-foreground">
         <File className="size-3.5" aria-hidden />
         {t('panels.files')}
       </h2>
 
       {files.length === 0 ? (
-        <p className="text-xs text-muted-foreground">—</p>
+        <p className="text-caption text-muted-foreground">—</p>
       ) : (
         <ul className="flex flex-col gap-0.5">
           {files.map((f) => {
@@ -83,14 +88,20 @@ export function FilesPanel({ timeline }: FilesPanelProps) {
             return (
               <li
                 key={f.path}
-                className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs"
+                className="flex items-center gap-1.5 rounded-md px-2 py-1 text-caption"
                 title={f.path}
               >
-                <Icon className="size-3 shrink-0 text-muted-foreground" aria-hidden />
+                <Icon
+                  className="size-3 shrink-0 text-muted-foreground"
+                  aria-hidden
+                />
                 <span className="min-w-0 truncate font-mono text-foreground">
                   {f.name}
                 </span>
-                <Badge variant={TYPE_VARIANT[f.type]} className="ml-auto shrink-0 text-[10px]">
+                <Badge
+                  variant={TYPE_VARIANT[f.type]}
+                  className="ml-auto shrink-0 text-[10px]"
+                >
                   {t(`files.${f.type}`)}
                 </Badge>
               </li>

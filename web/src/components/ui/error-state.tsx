@@ -62,15 +62,15 @@ export function ErrorState({
         {icon ?? <AlertTriangle />}
       </div>
       <div className="flex flex-col items-center gap-1.5">
-        <p className="text-sm font-medium text-foreground">
+        <p className="text-body font-medium text-foreground">
           {title ?? t('errors:serverError.title')}
         </p>
-        <p className="max-w-sm text-sm text-muted-foreground">
+        <p className="max-w-sm text-body text-muted-foreground">
           {description ?? t('errors:serverError.description')}
         </p>
       </div>
       {requestId ? (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-caption text-muted-foreground">
           {t('errors:requestId')}:{' '}
           <span className="font-mono select-all">{requestId}</span>
         </p>
@@ -126,10 +126,10 @@ export function ForbiddenState({
         {icon ?? <ShieldOff />}
       </div>
       <div className="flex flex-col items-center gap-1.5">
-        <p className="text-sm font-medium text-foreground">
+        <p className="text-body font-medium text-foreground">
           {title ?? t('forbidden.title')}
         </p>
-        <p className="max-w-sm text-sm text-muted-foreground">
+        <p className="max-w-sm text-body text-muted-foreground">
           {description ?? t('forbidden.description')}
         </p>
       </div>

@@ -22,6 +22,10 @@ import { BindDialog } from './bind-dialog'
 import { GroupMembersSheet } from './group-members'
 import './i18n'
 import type { BindingDTO, GroupDTO, IdentityDTO, RosterReport } from './types'
+import {
+  PagePrimaryAction,
+  PageSecondaryActions,
+} from '@/components/ui/page-actions'
 
 type SubTab = 'identities' | 'groups' | 'bindings' | 'standards'
 
@@ -117,7 +121,7 @@ export function IdentitiesView() {
       accessorKey: 'ref',
       header: t('identities.ref'),
       cell: ({ row }) => (
-        <span className="font-mono text-xs text-muted-foreground">
+        <span className="font-mono text-caption text-muted-foreground">
           {row.original.ref}
         </span>
       ),
@@ -170,7 +174,7 @@ export function IdentitiesView() {
       accessorKey: 'ref',
       header: t('groups.ref'),
       cell: ({ row }) => (
-        <span className="font-mono text-xs text-muted-foreground">
+        <span className="font-mono text-caption text-muted-foreground">
           {row.original.ref}
         </span>
       ),
@@ -221,7 +225,7 @@ export function IdentitiesView() {
           <span className="font-medium text-foreground">
             {row.original.agent_name || row.original.agent_id}
           </span>
-          <span className="font-mono text-xs text-muted-foreground">
+          <span className="font-mono text-caption text-muted-foreground">
             {row.original.agent_id}
           </span>
         </div>
@@ -231,7 +235,7 @@ export function IdentitiesView() {
       accessorKey: 'identity_ref',
       header: t('bindings.identity'),
       cell: ({ row }) => (
-        <span className="font-mono text-xs text-muted-foreground">
+        <span className="font-mono text-caption text-muted-foreground">
           {row.original.identity_ref || row.original.identity_id}
         </span>
       ),
@@ -287,7 +291,19 @@ export function IdentitiesView() {
         </TabsList>
 
         <TabsContent value="identities">
-          <p className="mb-3 text-xs text-muted-foreground">
+          {canAdmin && (
+            <PageSecondaryActions>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setConfirmResync(true)}
+              >
+                <RefreshCw />
+                {t('identities.resync')}
+              </Button>
+            </PageSecondaryActions>
+          )}
+          <p className="mb-3 text-caption text-muted-foreground">
             {t('identities.caption')}
           </p>
           <DataTable
@@ -305,23 +321,11 @@ export function IdentitiesView() {
                 description={t('empty.identity.description')}
               />
             }
-            toolbar={
-              canAdmin ? (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => setConfirmResync(true)}
-                >
-                  <RefreshCw />
-                  {t('identities.resync')}
-                </Button>
-              ) : undefined
-            }
           />
         </TabsContent>
 
         <TabsContent value="groups">
-          <p className="mb-3 text-xs text-muted-foreground">
+          <p className="mb-3 text-caption text-muted-foreground">
             {t('groups.caption')}
           </p>
           <DataTable
@@ -343,8 +347,23 @@ export function IdentitiesView() {
         </TabsContent>
 
         <TabsContent value="bindings">
+          {canAdmin && (
+            <PagePrimaryAction>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => {
+                  setBindAgent(undefined)
+                  setBindOpen(true)
+                }}
+              >
+                <Link2 />
+                {t('bind.confirm')}
+              </Button>
+            </PagePrimaryAction>
+          )}
           <div className="mb-3 flex items-start justify-between gap-3">
-            <p className="text-xs text-muted-foreground">
+            <p className="text-caption text-muted-foreground">
               {t('bindings.caption')}
             </p>
             <RegisterAgentDialog canAdmin={canNHIAdmin} />
@@ -363,21 +382,6 @@ export function IdentitiesView() {
                 title={t('empty.binding.title')}
                 description={t('empty.binding.description')}
               />
-            }
-            toolbar={
-              canAdmin ? (
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={() => {
-                    setBindAgent(undefined)
-                    setBindOpen(true)
-                  }}
-                >
-                  <Link2 />
-                  {t('bind.confirm')}
-                </Button>
-              ) : undefined
             }
           />
         </TabsContent>

@@ -29,6 +29,7 @@ import {
   offboardVariant,
   stalenessVariant,
 } from './nhi-status'
+import { StaticTable } from '@/components/data/static-table'
 
 export function NhiDetailSheet({
   identityRef,
@@ -71,7 +72,7 @@ export function NhiDetailSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="overflow-y-auto sm:max-w-2xl">
         <SheetHeader>
-          <SheetTitle className="font-mono text-base break-all">
+          <SheetTitle className="font-mono text-heading break-all">
             {identityRef}
           </SheetTitle>
           <SheetDescription>
@@ -94,7 +95,7 @@ export function NhiDetailSheet({
               description={t('lifecycle.forbidden.description')}
             />
           ) : detail.isLoading ? (
-            <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground">
+            <div className="flex items-center gap-2 py-8 text-body text-muted-foreground">
               <Spinner size="sm" aria-hidden />
               {t('lifecycle.loading')}
             </div>
@@ -197,57 +198,48 @@ export function NhiDetailSheet({
               noPadding
             >
               {events.isLoading ? (
-                <div className="flex items-center gap-2 p-6 text-sm text-muted-foreground">
+                <div className="flex items-center gap-2 p-6 text-body text-muted-foreground">
                   <Spinner size="sm" aria-hidden />
                   {t('lifecycle.loading')}
                 </div>
               ) : events.error ? (
                 <ErrorState retry={() => void events.refetch()} />
               ) : (events.data?.items.length ?? 0) === 0 ? (
-                <p className="p-6 text-sm text-muted-foreground">
+                <p className="p-6 text-body text-muted-foreground">
                   {t('lifecycle.events.empty')}
                 </p>
               ) : (
                 <div className="overflow-x-auto">
-                  <table className="w-full border-collapse text-sm">
+                  <StaticTable>
                     <thead>
-                      <tr className="border-b border-border-strong bg-muted text-left text-xs tracking-wide text-muted-foreground uppercase">
-                        <th scope="col" className="px-3 py-2 font-medium">
-                          {t('lifecycle.events.event')}
-                        </th>
-                        <th scope="col" className="px-3 py-2 font-medium">
-                          {t('lifecycle.events.actor')}
-                        </th>
-                        <th scope="col" className="px-3 py-2 font-medium">
-                          {t('lifecycle.events.detail')}
-                        </th>
-                        <th scope="col" className="px-3 py-2 font-medium">
-                          {t('lifecycle.events.when')}
-                        </th>
+                      <tr>
+                        <th scope="col">{t('lifecycle.events.event')}</th>
+                        <th scope="col">{t('lifecycle.events.actor')}</th>
+                        <th scope="col">{t('lifecycle.events.detail')}</th>
+                        <th scope="col">{t('lifecycle.events.when')}</th>
                       </tr>
                     </thead>
                     <tbody>
                       {events.data?.items.map((event, index) => (
                         <tr
                           key={`${event.occurred_at}-${event.event}-${index}`}
-                          className="border-b border-border last:border-0"
                         >
-                          <td className="px-3 py-2">
+                          <td>
                             <Badge variant="outline">{event.event}</Badge>
                           </td>
-                          <td className="px-3 py-2 font-mono text-xs">
+                          <td className="font-mono text-caption">
                             {event.actor}
                           </td>
-                          <td className="max-w-64 px-3 py-2 text-xs text-muted-foreground">
+                          <td className="max-w-64 text-caption text-muted-foreground">
                             {event.detail ?? t('lifecycle.notSet')}
                           </td>
-                          <td className="px-3 py-2 whitespace-nowrap">
+                          <td className="whitespace-nowrap">
                             <RelTimeLabel ts={event.occurred_at} />
                           </td>
                         </tr>
                       ))}
                     </tbody>
-                  </table>
+                  </StaticTable>
                 </div>
               )}
             </SectionCard>

@@ -87,6 +87,7 @@
       "copyFailed": "Impossible de copier dans le presse-papiers.",
       "checkins": "Rapports des hôtes",
       "noCheckins": "Aucun hôte ne s'est encore manifesté.",
+      "noCheckinsHint": "Un hôte s’enregistre dès que le point d’application des politiques est installé et joint le moteur. Installez-le sur un hôte pour le voir ici.",
       "colScope": "Portée",
       "colReporter": "Rapporteur",
       "colRevision": "Révision",

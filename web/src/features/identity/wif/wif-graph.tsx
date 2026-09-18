@@ -33,11 +33,7 @@ import { useAuth } from '@/lib/auth/context'
 import { identityApi, identityKeys } from '../api'
 import { AAL, RequireAssurance } from '../assurance'
 import { AuthorityReferences, AUTHORITY } from '../references'
-import type {
-  WifGraphData,
-  WifLintFinding,
-  WifReconciliation,
-} from '../types'
+import type { WifGraphData, WifLintFinding, WifReconciliation } from '../types'
 import { buildWifGraph, wifNodeColor } from './wif-graph-build'
 import { lintSummary, lintWifGraph, SHADOW_ENV_VARS } from './wif-lint'
 
@@ -114,7 +110,9 @@ function WifGraphContent() {
         className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-muted/30 px-3 py-2"
         role="note"
       >
-        <p className="text-xs text-muted-foreground">{t('wif.consoleOnly')}</p>
+        <p className="text-caption text-muted-foreground">
+          {t('wif.consoleOnly')}
+        </p>
         <Button asChild variant="outline" size="sm">
           <a
             href={AUTHORITY.workloadIdentity}
@@ -134,16 +132,16 @@ function WifGraphContent() {
         <div className="flex flex-col gap-2 rounded-md border border-danger/40 bg-danger-soft/40 px-3 py-2.5">
           <div className="flex items-center gap-2">
             <ShieldX className="size-4 text-danger" aria-hidden />
-            <span className="text-sm font-medium text-foreground">
+            <span className="text-body font-medium text-foreground">
               {t('wif.lint.key-shadow.title')}
             </span>
             <Badge variant="danger">{footgunVar}</Badge>
           </div>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-caption text-muted-foreground">
             {footgunFinding.title ??
               t('wif.lint.key-shadow.detail', { var: footgunVar })}
           </p>
-          <p className="flex items-center gap-1.5 text-xs text-foreground">
+          <p className="flex items-center gap-1.5 text-caption text-foreground">
             <KeyRound className="size-3.5 shrink-0 text-warning" aria-hidden />
             {t('wif.lint.key-shadow.recommendation')}
           </p>
@@ -209,14 +207,14 @@ function ReconciliationStatus({
   const { t } = useTranslation('identity')
   if (!reconciliation) {
     return (
-      <p className="text-xs text-muted-foreground">
+      <p className="text-caption text-muted-foreground">
         {t('wif.recon.declaredOnly')}
       </p>
     )
   }
   if (reconciliation.reconciled) {
     return (
-      <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+      <p className="flex items-center gap-1.5 text-caption text-muted-foreground">
         <CircleCheck className="size-3.5 text-success" aria-hidden />
         {t('wif.recon.reconciled', { at: reconciliation.observed_at ?? '' })}
       </p>
@@ -224,7 +222,7 @@ function ReconciliationStatus({
   }
   return (
     <div
-      className="flex items-center gap-2 rounded-md border border-warning/40 bg-warning-soft/30 px-3 py-2 text-xs text-foreground"
+      className="flex items-center gap-2 rounded-md border border-warning/40 bg-warning-soft/30 px-3 py-2 text-caption text-foreground"
       role="status"
     >
       <CircleAlert className="size-3.5 shrink-0 text-warning" aria-hidden />
@@ -264,7 +262,7 @@ function LintSummaryBadges({
 function LintPanel({ findings }: { findings: WifLintFinding[] }) {
   const { t } = useTranslation('identity')
   if (findings.length === 0) {
-    return <p className="text-sm text-success">{t('wif.lintNoFindings')}</p>
+    return <p className="text-body text-success">{t('wif.lintNoFindings')}</p>
   }
   return (
     <ul className="flex flex-col gap-2" aria-label={t('wif.lintLabel')}>
@@ -276,28 +274,28 @@ function LintPanel({ findings }: { findings: WifLintFinding[] }) {
             ? { ...f.meta, reason: t(`wif.lint.drift.reason.${f.meta.reason}`) }
             : f.meta
         return (
-        <li
-          key={`${f.rule}-${f.subjectRef}-${i}`}
-          className="flex flex-col gap-1 rounded-md border border-border bg-surface px-3 py-2"
-        >
-          <div className="flex flex-wrap items-center gap-2">
-            <SeverityBadge severity={f.severity} />
-            <span className="text-sm font-medium text-foreground">
-              {t(`wif.lint.${f.rule}.title`)}
-            </span>
-            <code className="font-mono text-xs text-muted-foreground break-all">
-              {f.subjectRef}
-            </code>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            {t(`wif.lint.${f.rule}.detail`, { ...meta })}
-          </p>
-          {f.rule === 'key-shadow' ? (
-            <p className="text-xs text-foreground">
-              {t('wif.lint.key-shadow.recommendation')}
+          <li
+            key={`${f.rule}-${f.subjectRef}-${i}`}
+            className="flex flex-col gap-1 rounded-md border border-border bg-surface px-3 py-2"
+          >
+            <div className="flex flex-wrap items-center gap-2">
+              <SeverityBadge severity={f.severity} />
+              <span className="text-body font-medium text-foreground">
+                {t(`wif.lint.${f.rule}.title`)}
+              </span>
+              <code className="font-mono text-caption text-muted-foreground break-all">
+                {f.subjectRef}
+              </code>
+            </div>
+            <p className="text-caption text-muted-foreground">
+              {t(`wif.lint.${f.rule}.detail`, { ...meta })}
             </p>
-          ) : null}
-        </li>
+            {f.rule === 'key-shadow' ? (
+              <p className="text-caption text-foreground">
+                {t('wif.lint.key-shadow.recommendation')}
+              </p>
+            ) : null}
+          </li>
         )
       })}
     </ul>
@@ -310,13 +308,13 @@ function LintRulesDoc() {
   const { t } = useTranslation('identity')
   return (
     <div className="mt-3 rounded-md border border-border bg-muted/20 p-3">
-      <p className="mb-2 flex items-center gap-2 text-xs font-medium text-muted-foreground">
+      <p className="mb-2 flex items-center gap-2 text-caption font-medium text-muted-foreground">
         <CircleAlert className="size-3.5" aria-hidden />
         {t('wif.lintRulesTitle')}
       </p>
       <ul className="flex flex-col gap-1.5">
         {LINT_RULES.map((rule) => (
-          <li key={rule} className="text-xs text-foreground">
+          <li key={rule} className="text-caption text-foreground">
             <span className="font-medium">{t(`wif.lint.${rule}.title`)}</span>
             <span className="text-muted-foreground">
               {' '}
@@ -338,7 +336,7 @@ function WifLegend() {
     { kind: 'scope', color: 'var(--color-muted-foreground)' },
   ]
   return (
-    <div className="absolute left-2 top-2 flex flex-col gap-1 rounded-md border border-border bg-background/90 p-2 text-xs">
+    <div className="absolute left-2 top-2 flex flex-col gap-1 rounded-md border border-border bg-background/90 p-2 text-caption">
       {items.map((it) => (
         <span key={it.kind} className="flex items-center gap-1.5">
           <span

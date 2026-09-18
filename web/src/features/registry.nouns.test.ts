@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// THE SECOND LANGUAGE. The sidebar is headed by five VERBS's question —
-// "¿puede un ingeniero VER y GESTIONAR … sesiones, agentes, conexiones, identidades,
-// modelos, reglas, automatizaciones, grupos, estados, workflows, tareas, protocolos e
-// infraestructura?" (canon §0, answered in §5 of the audit) — is thirteen NOUNS.
+// THE SECOND LANGUAGE. The sidebar is headed by five VERBS; the question this console
+// answers — "¿puede un ingeniero VER y GESTIONAR … sesiones, agentes, conexiones,
+// identidades, modelos, reglas, automatizaciones, grupos, estados, workflows, tareas,
+// protocolos e infraestructura?" — is thirteen NOUNS.
 //
 // A navigation explicable in only one of the two has lost the other, and the way that
 // loss happens is silent: a noun stops being pointable when the last view claiming it

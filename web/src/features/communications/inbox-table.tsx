@@ -435,12 +435,12 @@ export function InboxTable({
           className="flex flex-col gap-2 border-t border-border px-3 py-3"
           data-slot="cursor-section"
         >
-          <p className="text-sm font-medium">{t('cursor.section.title')}</p>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-body font-medium">{t('cursor.section.title')}</p>
+          <p className="text-caption text-muted-foreground">
             {t('cursor.section.hint')}
           </p>
           {filter !== '' ? (
-            <p className="text-xs text-warning" role="status">
+            <p className="text-caption text-warning" role="status">
               {t('cursor.reasons.filtered')}
             </p>
           ) : null}
@@ -451,7 +451,7 @@ export function InboxTable({
               return (
                 <li
                   key={p.cursor_target ?? `page-${i}`}
-                  className="flex flex-wrap items-center gap-2 text-xs"
+                  className="flex flex-wrap items-center gap-2 text-caption"
                   data-slot="cursor-page"
                 >
                   <span>

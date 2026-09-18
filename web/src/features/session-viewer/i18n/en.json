@@ -27,6 +27,7 @@
   "timeline": {
     "loadMore": "Load more",
     "empty": "No events recorded",
+    "emptyHint": "Every event the recording captured appears here in order. This recording captured none.",
     "activityUnavailable": "Agent activity is unavailable because the timeline resolver is not wired or did not answer. Governance evidence remains available.",
     "tool": "Tool call",
     "mcp": "MCP invocation",
@@ -120,7 +121,9 @@
     "subtitle": "Correlated semantic events from the evidence ledger.",
     "seq": "seq {{seq}}",
     "empty": "No correlated ledger events",
+    "emptyHint": "Audit-ledger events that correlate with this recording appear here. None correlates with it.",
     "truncated": "The ledger view is truncated; additional correlated events exist beyond this bounded window."
   },
-  "notFound": "Recording session not found"
+  "notFound": "Recording session not found",
+  "notFoundHint": "Retention may have deleted the recording, or the link may be wrong. Open the recordings list to find it."
 }

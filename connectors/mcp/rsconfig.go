@@ -454,7 +454,7 @@ func resolveResourceServerRevisionMode(cfg ResourceServerConfig) (string, error)
 // RevisionMode reports the revision posture this Resource Server RESOLVED at
 // construction: "legacy", "dual" or "rc-strict". It is a read-only diagnostic
 // accessor, added for a composition root that must state its EFFECTIVE
-// configuration at startup (D07-1). Reporting the resolved value is what keeps
+// configuration at startup. Reporting the resolved value is what keeps
 // that read-back from drifting: resolveResourceServerRevisionMode above stays the
 // single resolver, and a caller that re-derived the mode would be publishing a
 // prediction instead of the value this server actually uses. It exposes no

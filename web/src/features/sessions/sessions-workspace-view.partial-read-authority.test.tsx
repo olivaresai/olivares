@@ -27,10 +27,17 @@
  * both key factories are real.
  */
 import { QueryClientProvider } from '@tanstack/react-query'
-import { act, render, screen, waitFor, within } from '@testing-library/react'
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { fakeRouter } from '@/test/fake-router'
 import type { RunDTO } from '@/features/agentops/types'
 import { ApiError } from '@/lib/api/errors'
 import { createQueryClient } from '@/lib/api/query'
@@ -66,13 +73,19 @@ const harness = vi.hoisted(() => {
 
 vi.mock('@/lib/auth/context', () => ({ useAuth: () => harness.auth }))
 
-vi.mock('@tanstack/react-router', () => ({
-  useRouterState: () => '',
-  Link: ({ children, to }: { children: ReactNode; to: string }) => (
-    <a href={to}>{children}</a>
-  ),
-  useRouter: () => undefined,
-}))
+// THE VIEW'S SELECTION IS NOW THE URL, so the router stub had to become a
+// LOCATION. The old two-line stub answered the empty string to every question, which
+// now cannot represent "this session is open": a click would write an address
+// nothing stored, the view would read back the default, and the card assertions below
+// would have measured the default instead of the choice. `fake-router` is one
+// in-memory location with a real entry stack and `navigate()` semantics that match the
+// ones `useUrlState` relies on. No RouterProvider is mounted: the shared Tabs strip
+// consults useRouter, and the double answers undefined there, exactly as the real hook
+// did here (console-tab-scroll-restoration R2, 2026-09-06).
+vi.mock('@tanstack/react-router', async () => {
+  const { fakeRouterModule } = await import('@/test/fake-router')
+  return fakeRouterModule()
+})
 
 // The stream is a live connection; what is under test is which frames the list is
 // still entitled to paint, so the hook is doubled and its callback captured.
@@ -88,6 +101,15 @@ vi.mock('@/features/shared', async () => {
       enabled?: boolean
       contextKey?: string | number
     }) => {
+      // THERE ARE TWO STREAMS ON THIS SCREEN NOW, and this file is about ONE of
+      // them. The LIST's subscription is the tenant-wide hint channel, and it is the
+      // only one that declares a `contextKey`: the authority episode it may act in,
+      // which is exactly what every case below drives. The other belongs to the OPEN
+      // SESSION (`use-session-resolution`), is scoped to one row and carries no
+      // episode. Recording both would have let a row subscription overwrite the
+      // list's capture — and the assertions would then have graded the wrong
+      // connection while still reading green.
+      if (!('contextKey' in opts)) return { status: 'idle' }
       harness.stream.onSnapshot = opts.onSnapshot
       harness.stream.enabled = !!opts.enabled
       harness.stream.contextKey = opts.contextKey
@@ -116,16 +138,22 @@ vi.mock('@/features/agentops/workspaces-panel', () => ({
 vi.mock('@/features/agentops/run-create-dialog', () => ({
   RunCreateDialog: () => null,
 }))
+// The card is handed an already-resolved session (the surface owns the one read
+// and its SSE subscription). What this file asserts is unchanged: WHICH target the view
+// decided to open, which is what the resolution carries.
 vi.mock('./session-card', () => ({
   SessionCard: ({
-    target,
+    resolution,
   }: {
-    target: { sessionRef?: string; runRef?: string; liveRef?: string } | null
+    resolution: {
+      target: { sessionRef?: string; runRef?: string; liveRef?: string } | null
+    }
   }) =>
-    target ? (
+    resolution.target ? (
       <div data-testid="spr-card">
-        live:{target.liveRef ?? ''}|sess:{target.sessionRef ?? ''}|run:
-        {target.runRef ?? ''}
+        live:{resolution.target.liveRef ?? ''}|sess:
+        {resolution.target.sessionRef ?? ''}|run:
+        {resolution.target.runRef ?? ''}
       </div>
     ) : null,
 }))
@@ -257,22 +285,51 @@ function view() {
   return <SessionsWorkspaceView entrance="observe" />
 }
 
+/**
+ * ⛔ THESE CASES LIVE ON THE TABLE TAB. The screen's default presentation is the
+ *    three-pane work surface; the table — with the columns, the origin chips and the
+ *    row-backed open target every case below reads — is the other tab, unchanged and
+ *    one click away. Opening it here is what keeps this file measuring the same thing
+ *    it always measured, instead of quietly re-grading a different surface.
+ *
+ *    The estate tiles and the "not read" notices are NOT on a tab: they describe the
+ *    reads, not the presentation, so they are above both and every assertion about
+ *    them works from either.
+ */
+function openTable() {
+  const trigger = screen.getByRole('tab', { name: 'Table' })
+  // MOUSEDOWN, not click: a Radix tab trigger selects on mouse-down, and a bare
+  // `.click()` leaves the strip exactly where it was — which reads as "the table is
+  // empty" instead of "the tab never changed".
+  act(() => {
+    fireEvent.mouseDown(trigger)
+  })
+}
+
 function renderView(qc = makeClient()) {
   const result = render(
     <QueryClientProvider client={qc}>{view()}</QueryClientProvider>,
   )
-  const again = () =>
+  openTable()
+  const again = () => {
     result.rerender(
       <QueryClientProvider client={qc}>{view()}</QueryClientProvider>,
     )
+    openTable()
+  }
   return { qc, again, ...result }
 }
 
 /** The number a summary tile is showing (`—` when it reports "not read"). */
 function tile(label: string): HTMLElement | undefined {
+  // ⚠ The locator names the tile's SHAPE — a muted caption with a figure beside it — and
+  //   no longer its font-size class. It matched `text-xs` until the console moved onto
+  //   the type ladder, and then found nothing: a test coupled to a utility class fails on
+  //   a rename that changes no behaviour, and says "count is undefined" while doing it.
   const el = screen.getAllByText(label).find((node) => {
     const cls = typeof node.className === 'string' ? node.className : ''
-    return cls.includes('text-muted-foreground') && cls.includes('text-xs')
+    if (!cls.includes('text-muted-foreground')) return false
+    return !!node.parentElement?.querySelector('.tabular-nums')
   })
   return (el?.parentElement?.querySelector('.tabular-nums') ?? undefined) as
     HTMLElement | undefined
@@ -333,8 +390,25 @@ function quiesce(ms = 30) {
   return new Promise((r) => setTimeout(r, ms))
 }
 
+/**
+ * THE LIST'S OWN RUN READS.
+ *
+ * `agentOpsApi.listRuns` has two callers on this screen now. The list asks for a PAGE
+ * (`{limit: 200}`); the open session's resolution asks for the runs of ONE row
+ * (`{live_ref}` / `{claude_session_id}`). "The list was asked again" is a claim about
+ * the first, and counting the second as well graded a read these cases are not about —
+ * which is how a correct screen fails a test and an incorrect one could pass it.
+ */
+function listRunReads() {
+  return harness.listRuns.mock.calls.filter(
+    ([params]) =>
+      (params as { limit?: number } | undefined)?.limit !== undefined,
+  )
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
+  fakeRouter.reset('/sessions')
   harness.stream.onSnapshot = undefined
   harness.stream.enabled = false
   harness.stream.contextKey = undefined
@@ -879,9 +953,7 @@ describe('SessionsWorkspaceView — a read bit that leaves, and comes back', () 
     grant(...BOTH_READ_AND_RUN_WRITE)
     again()
     await rowFor('spr-run-2', 'spr-auth/run-bit/current-answer-painted')
-    expect
-      .soft(harness.listRuns, 'spr-auth/run-bit/asked-again')
-      .toHaveBeenCalledTimes(2)
+    expect.soft(listRunReads(), 'spr-auth/run-bit/asked-again').toHaveLength(2)
     expect
       .soft(
         screen.queryByText('spr-run-name'),
@@ -1090,8 +1162,8 @@ describe('SessionsWorkspaceView — the boundary moves under the same tenant', (
       .soft(harness.live, 'spr-auth/principal/live-asked-again')
       .toHaveBeenCalledTimes(2)
     expect
-      .soft(harness.listRuns, 'spr-auth/principal/runs-asked-again')
-      .toHaveBeenCalledTimes(2)
+      .soft(listRunReads(), 'spr-auth/principal/runs-asked-again')
+      .toHaveLength(2)
   })
 
   it('credential change: the same principal under a new credential asks again too', async () => {
@@ -1716,6 +1788,9 @@ describe('SessionsWorkspaceView — leaving a context and coming back to it', ()
         <SessionsWorkspaceView entrance="observe" />
       </QueryClientProvider>,
     )
+    // This case mounts the view itself rather than through `renderView`, so it opens
+    // the table the same way — the row assertions below read the table's grid.
+    openTable()
     await waitFor(() => expect(harness.live).toHaveBeenCalled())
     expect
       .soft(

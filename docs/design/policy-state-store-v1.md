@@ -1,6 +1,6 @@
 # State-only Policy storage, v1 (SES2-S)
 
-Construction ratified 2026-09-12. SDD 02/06 and D06. This is the storage increment only.
+Construction ratified 2026-09-12. SDD 02/06 and the exact-money codec. This is the storage increment only.
 
 ## What it adds
 

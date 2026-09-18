@@ -34,7 +34,7 @@ type Module struct {
 	mu     sync.Mutex
 	cancel func() // bus unsubscribe
 
-	// attemptVerifier is the ONE fixed dependency of the D02 attempt lifecycle:
+	// attemptVerifier is the ONE fixed dependency of the attempt lifecycle:
 	// the component that establishes, per call, that the configured executing or
 	// reconciliation component still holds recovery access to the scope's tenant.
 	//
@@ -71,7 +71,7 @@ var (
 //
 // The variadic options are ADDITIVE: every existing New() call site keeps
 // compiling and keeps producing exactly the module it produced before, including
-// a nil attempt verifier. That is the intended default — the D02 lifecycle
+// a nil attempt verifier. That is the intended default — the attempt lifecycle
 // operations are unreachable without an explicitly configured verifier, and
 // nothing in boot fabricates one.
 func New(opts ...Option) *Module {

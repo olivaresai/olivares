@@ -87,10 +87,12 @@ export function SetupPage() {
     <AuthShell>
       <Card className="p-6">
         <div className="mb-5 flex flex-col gap-1">
-          <h1 className="font-display text-lg font-semibold tracking-tight text-foreground">
+          <h1 className="font-display text-title text-foreground">
             {t('setup.title')}
           </h1>
-          <p className="text-sm text-muted-foreground">{t('setup.subtitle')}</p>
+          <p className="text-body text-muted-foreground">
+            {t('setup.subtitle')}
+          </p>
         </div>
         <form
           onSubmit={form.handleSubmit((v) => mutation.mutate(v))}
@@ -152,7 +154,7 @@ export function SetupPage() {
           </Field>
 
           {submitError && (
-            <p className="text-sm text-danger" role="alert">
+            <p className="text-body text-danger" role="alert">
               {submitError}
             </p>
           )}

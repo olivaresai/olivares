@@ -121,6 +121,7 @@
     "dependencies": "Después de: {{value}}",
     "noDependencies": "Sin dependencias",
     "empty": "Este flujo no tiene pasos planificados.",
+    "emptyHint": "Una ejecución en seco lista los pasos que daría el flujo, en orden, sin ejecutar ninguno. Añade antes un paso al flujo.",
     "failed": "No se pudo generar la simulación."
   },
   "run": {
@@ -143,6 +144,7 @@
     "current": "Ejecución {{id}}",
     "history": "Historial de ejecuciones",
     "historyEmpty": "No hay ejecuciones registradas.",
+    "historyEmptyHint": "Aquí se lista cada ejecución de este flujo, con su resultado y su duración. Ejecuta el flujo para registrar la primera.",
     "historyFailed": "No se pudo cargar el historial de ejecuciones.",
     "viewRun": "Ver ejecución {{id}}",
     "paused": "En pausa: {{reason}}",
@@ -171,6 +173,7 @@
     "title": "Historial de revisiones — {{name}}",
     "description": "Compara instantáneas inmutables del flujo o restaura una.",
     "empty": "No hay revisiones registradas",
+    "emptyHint": "Cada cambio en este flujo se guarda como una revisión que puedes comparar y restaurar. La primera edición crea una.",
     "loading": "Cargando el historial de revisiones…",
     "loadMore": "Cargar más",
     "compare": "Comparar revisiones",

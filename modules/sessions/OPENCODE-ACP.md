@@ -14,7 +14,7 @@ ACP service; that is not an Olivares adoption interface.
 The construction contract for this mapping is held with the design records.
 
 This note records mapping limits that remain successor work: complete tool
-governance, D05 installer, authenticated paid turns, and a qualified
+governance, the official installers, authenticated paid turns, and a qualified
 XDG_RUNTIME_DIR. Template instructions, tool restrictions and non-default
 Claude permission modes have no OpenCode argv mapping and are refused before
 launch rather than discarded.

@@ -72,7 +72,7 @@ function WiringNode({ data, selected }: NodeProps<Node<WiringNodeData>>) {
       </span>
       <div className="min-w-0">
         <div
-          className="max-w-[180px] truncate font-mono text-xs text-foreground"
+          className="max-w-[180px] truncate font-mono text-caption text-foreground"
           title={data.label}
         >
           {data.label}
@@ -162,11 +162,11 @@ export function WiringGraph({ graph }: { graph: WiringGraphDTO }) {
 
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-xs text-muted-foreground">
+      <p className="text-caption text-muted-foreground">
         {t('wiring.notAccessMap')}
       </p>
       {graph.truncated && (
-        <p className="rounded-md border border-warning-line bg-warning-soft px-3 py-2 text-xs text-warning">
+        <p className="rounded-md border border-warning-line bg-warning-soft px-3 py-2 text-caption text-warning">
           {t('wiring.partial')}
         </p>
       )}
@@ -177,7 +177,7 @@ export function WiringGraph({ graph }: { graph: WiringGraphDTO }) {
           className="mx-auto mb-2 size-6 text-muted-foreground"
           aria-hidden
         />
-        <p className="text-sm text-muted-foreground">
+        <p className="text-body text-muted-foreground">
           {t('wiring.mobileHint', { count: graph.edges.length })}
         </p>
       </div>
@@ -194,7 +194,7 @@ export function WiringGraph({ graph }: { graph: WiringGraphDTO }) {
           fitKey={`${nodes.length}:${edges.length}`}
         >
           {/* Provenance legend. */}
-          <div className="absolute top-3 left-3 z-10 flex flex-col gap-1 rounded-md border border-border bg-elevated/90 px-2.5 py-2 text-xs backdrop-blur-sm">
+          <div className="absolute top-3 left-3 z-10 flex flex-col gap-1 rounded-md border border-border bg-elevated/90 px-2.5 py-2 text-caption backdrop-blur-sm">
             <span className="font-medium text-foreground">
               {t('wiring.legend')}
             </span>
@@ -210,7 +210,7 @@ export function WiringGraph({ graph }: { graph: WiringGraphDTO }) {
 
           {selectedEdge && (
             <div className="absolute right-3 bottom-3 z-10 w-[min(18rem,calc(100%-1.5rem))] rounded-lg border border-border bg-elevated/95 p-3 shadow-md backdrop-blur-sm">
-              <div className="mb-1 truncate font-mono text-xs text-foreground">
+              <div className="mb-1 truncate font-mono text-caption text-foreground">
                 {selectedEdge.origin_ref}
                 <span className="px-1 text-muted-foreground">→</span>
                 {selectedEdge.tool_ref || selectedEdge.capability_ref}

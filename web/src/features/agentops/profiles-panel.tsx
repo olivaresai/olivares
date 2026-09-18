@@ -167,7 +167,7 @@ function ProfilesPanelInner({ describe }: { describe: boolean }) {
         accessorKey: 'driver',
         header: t('profiles.cols.driver'),
         cell: ({ getValue }) => (
-          <span className="font-mono text-xs text-foreground">
+          <span className="font-mono text-caption text-foreground">
             {getValue<string>()}
           </span>
         ),
@@ -193,7 +193,7 @@ function ProfilesPanelInner({ describe }: { describe: boolean }) {
         accessorKey: 'created_at',
         header: t('profiles.cols.created'),
         cell: ({ getValue }) => (
-          <span className="text-xs text-muted-foreground">
+          <span className="text-caption text-muted-foreground">
             {formatDateTime(getValue<string>(), i18n.language)}
           </span>
         ),
@@ -223,7 +223,7 @@ function ProfilesPanelInner({ describe }: { describe: boolean }) {
 
   if (!canRead) {
     return (
-      <p className="rounded-md border border-border bg-muted px-2.5 py-2 text-xs text-muted-foreground">
+      <p className="rounded-md border border-border bg-muted px-2.5 py-2 text-caption text-muted-foreground">
         {t('profiles.noRead')}
       </p>
     )
@@ -233,7 +233,7 @@ function ProfilesPanelInner({ describe }: { describe: boolean }) {
     <div className="flex flex-col gap-3">
       <div className="flex items-start justify-between gap-3">
         {describe ? (
-          <p className="text-sm text-muted-foreground">
+          <p className="text-body text-muted-foreground">
             {t('profiles.subtitle')}
           </p>
         ) : (
@@ -265,7 +265,7 @@ function ProfilesPanelInner({ describe }: { describe: boolean }) {
           <Select value={state} onValueChange={setState}>
             <SelectTrigger
               ref={stateTriggerRef}
-              className="h-7 w-auto min-w-[9rem] text-xs"
+              className="h-7 w-auto min-w-[9rem] text-caption"
               aria-label={t('profiles.allStates')}
             >
               <SelectValue />
@@ -359,7 +359,7 @@ function EnvironmentCell({ profile }: { profile: ProviderProfileDTO }) {
   return (
     <span className="flex flex-col items-start gap-0.5">
       <span
-        className="font-mono text-xs text-muted-foreground"
+        className="font-mono text-caption text-muted-foreground"
         title={profile.environment_ref}
       >
         {profile.environment_ref}
@@ -542,13 +542,13 @@ function ProfileSheetBody({ initial }: { initial: ProviderProfileDTO }) {
             {profile.display_name || profile.profile_ref}
           </span>
         </SheetTitle>
-        <SheetDescription className="font-mono text-xs">
+        <SheetDescription className="font-mono text-caption">
           {profile.profile_ref}
         </SheetDescription>
       </SheetHeader>
 
       {detail.isError && (
-        <p className="text-xs text-warning">
+        <p className="text-caption text-warning">
           {t('profiles.details.loadFailed')}
         </p>
       )}
@@ -658,7 +658,7 @@ function ProfileSheetBody({ initial }: { initial: ProviderProfileDTO }) {
       {canAdmin && (
         <section className="flex flex-col gap-2">
           <div className="flex items-center justify-between gap-2">
-            <h3 className="text-sm font-medium text-foreground">
+            <h3 className="text-body font-medium text-foreground">
               {t('profiles.configuration.title')}
             </h3>
             <Button
@@ -676,17 +676,17 @@ function ProfileSheetBody({ initial }: { initial: ProviderProfileDTO }) {
                 : t('profiles.actions.reveal')}
             </Button>
           </div>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-caption text-muted-foreground">
             {t('profiles.configuration.hint')}
           </p>
           {reveal.state.status === 'loading' && (
-            <p className="text-xs text-muted-foreground" role="status">
+            <p className="text-caption text-muted-foreground" role="status">
               {t('profiles.configuration.loading')}
             </p>
           )}
           {(reveal.state.status === 'error' ||
             reveal.state.status === 'forbidden') && (
-            <p className="text-xs text-warning">
+            <p className="text-caption text-warning">
               {t('profiles.configuration.failed')}
             </p>
           )}
@@ -708,7 +708,7 @@ function ProfileSheetBody({ initial }: { initial: ProviderProfileDTO }) {
                   {reveal.state.data.user_home}
                 </KvRow>
               </KvList>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-caption text-muted-foreground">
                 {t('profiles.configuration.validatedOn', {
                   env: reveal.state.data.environment_ref,
                 })}
@@ -719,7 +719,7 @@ function ProfileSheetBody({ initial }: { initial: ProviderProfileDTO }) {
       )}
 
       <section className="flex flex-col gap-2">
-        <h3 className="text-sm font-medium text-foreground">
+        <h3 className="text-body font-medium text-foreground">
           {t('profiles.bindings.title')}
         </h3>
         <BindingsTable profile={profile} />

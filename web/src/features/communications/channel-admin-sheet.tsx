@@ -898,7 +898,7 @@ export function ChannelAdminSheet({
               t('admin.description')
             )}
           </SheetDescription>
-          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-2 text-caption text-muted-foreground">
             {query.isFetching ? (
               <span role="status" className="inline-flex items-center gap-1">
                 <Spinner className="size-3" />
@@ -943,7 +943,7 @@ export function ChannelAdminSheet({
                 failure={readFailure}
                 title={t('admin.readFailedTitle')}
               />
-              <p className="text-sm text-muted-foreground">
+              <p className="text-body text-muted-foreground">
                 {t('admin.readFailedBody')}
               </p>
             </div>
@@ -951,7 +951,7 @@ export function ChannelAdminSheet({
           {restarts > 0 ? (
             <div
               role="status"
-              className="mb-3 rounded-md border border-warning-line bg-warning-soft px-3 py-2 text-sm text-warning"
+              className="mb-3 rounded-md border border-warning-line bg-warning-soft px-3 py-2 text-body text-warning"
               data-slot="admin-snapshot-restarted"
             >
               {t('grants.snapshotChanged', { count: restarts })}
@@ -1086,7 +1086,10 @@ export function ChannelAdminSheet({
                     </div>
                   </form>
                   {applied ? (
-                    <p className="text-xs text-muted-foreground" role="status">
+                    <p
+                      className="text-caption text-muted-foreground"
+                      role="status"
+                    >
                       {t('grants.filters.applied', {
                         kind: t(`subject.kinds.${applied.kind}`),
                         ref: applied.ref,
@@ -1122,7 +1125,7 @@ export function ChannelAdminSheet({
                       }
                     />
                   </div>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-caption text-muted-foreground">
                     {t('grants.temporalHint')}
                   </p>
 
@@ -1132,7 +1135,7 @@ export function ChannelAdminSheet({
                       className="flex flex-col gap-2 rounded-md border border-border p-3"
                       data-slot="grant-detail"
                     >
-                      <p className="text-sm font-medium">
+                      <p className="text-body font-medium">
                         {t('grants.detail.title')}
                       </p>
                       <KvList>
@@ -1193,7 +1196,7 @@ export function ChannelAdminSheet({
                       </KvList>
                       {selectedItem.grant.state === 'active' &&
                       selectedItem.temporal_state === 'expired' ? (
-                        <p className="text-xs text-warning" role="status">
+                        <p className="text-caption text-warning" role="status">
                           {t('grants.detail.expiredActive')}
                         </p>
                       ) : null}
@@ -1223,7 +1226,7 @@ export function ChannelAdminSheet({
                           </Button>
                         </div>
                       ) : (
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-caption text-muted-foreground">
                           {t('grants.detail.notActive')}
                         </p>
                       )}
@@ -1267,14 +1270,14 @@ export function ChannelAdminSheet({
                       role="region"
                       aria-label={t('grants.confirm.title')}
                     >
-                      <p className="text-sm font-medium">
+                      <p className="text-body font-medium">
                         {t('grants.confirm.title')}
                       </p>
-                      <p className="text-sm text-muted-foreground">
+                      <p className="text-body text-muted-foreground">
                         {t('grants.confirm.body')}
                       </p>
                       {actGrant.successorOf ? (
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-body text-muted-foreground">
                           {t('grants.confirm.successorOf', {
                             id: actGrant.successorOf,
                           })}
@@ -1316,17 +1319,17 @@ export function ChannelAdminSheet({
                       role="region"
                       aria-label={t('grants.revoke.title')}
                     >
-                      <p className="text-sm font-medium">
+                      <p className="text-body font-medium">
                         {t('grants.revoke.title')}
                       </p>
-                      <p className="text-sm text-muted-foreground">
+                      <p className="text-body text-muted-foreground">
                         {actRevoke.thenGrant
                           ? t('grants.revoke.bodyThenGrant')
                           : t('grants.revoke.body')}
                       </p>
                       {ownAdmin(actRevoke.grant) ? (
                         <p
-                          className="text-sm font-medium text-danger"
+                          className="text-body font-medium text-danger"
                           role="alert"
                           data-slot="revoke-own-admin"
                         >
@@ -1393,7 +1396,7 @@ export function ChannelAdminSheet({
                         failure={failure}
                         title={t('grants.conflictTitle')}
                       />
-                      <p className="text-sm text-muted-foreground">
+                      <p className="text-body text-muted-foreground">
                         {t('grants.conflictBody')}
                       </p>
                       <div className="flex justify-end">
@@ -1416,7 +1419,7 @@ export function ChannelAdminSheet({
                         failure={failure}
                         title={t('grants.unknownTitle')}
                       />
-                      <p className="text-sm text-muted-foreground">
+                      <p className="text-body text-muted-foreground">
                         {t('grants.unknownBody')}
                       </p>
                       <KvList>
@@ -1504,7 +1507,7 @@ export function ChannelAdminSheet({
                     >
                       <div
                         role="status"
-                        className="rounded-md border border-success-line bg-success-soft px-3 py-2 text-sm text-success"
+                        className="rounded-md border border-success-line bg-success-soft px-3 py-2 text-body text-success"
                       >
                         <p className="font-medium">
                           {act?.kind === 'revoke'

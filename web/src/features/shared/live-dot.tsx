@@ -30,7 +30,7 @@ export function LiveDot({
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1.5 text-xs text-muted-foreground',
+        'inline-flex items-center gap-1.5 text-caption text-muted-foreground',
         className,
       )}
       title={t(`live.${status}`)}

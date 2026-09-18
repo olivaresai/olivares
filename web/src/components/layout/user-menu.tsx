@@ -48,11 +48,11 @@ export function UserMenu() {
       <DropdownMenuContent align="end" className="min-w-56">
         <div className="flex flex-col gap-1 px-2 py-1.5">
           {principal?.display_name && (
-            <p className="truncate text-sm font-medium text-foreground">
+            <p className="truncate text-body font-medium text-foreground">
               {principal.display_name}
             </p>
           )}
-          <p className="truncate font-mono text-xs text-muted-foreground">
+          <p className="truncate font-mono text-caption text-muted-foreground">
             {principal?.actor}
           </p>
           <div className="mt-1 flex flex-wrap gap-1">

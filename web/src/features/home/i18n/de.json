@@ -4,6 +4,31 @@
   "asOfNote": "Live-Aggregate über die letzten 30 Tage, über alle Module, die Ihre Rolle öffnen kann. Jede Kachel verlinkt auf ihr Modul; öffnen Sie den Management-Bericht für die vollständige Zusammenfassung und das PDF.",
   "openReport": "Management-Bericht",
   "range": "letzte 30 Tage",
+  "next": {
+    "title": "Nächster Schritt",
+    "provider": {
+      "title": "Anbieter hinzufügen",
+      "description": "Verbinden Sie Claude, Codex oder eine andere Engine, damit deren Sitzungen zugeordnet und gesteuert werden."
+    },
+    "agent": {
+      "title": "Agent bereitstellen",
+      "description": "Bringen Sie einen Agenten in einen Workspace, mit seiner Richtlinie und seinem Revisionsverlauf."
+    },
+    "session": {
+      "title": "Sitzung starten",
+      "description": "Starten Sie einen gesteuerten Lauf und verfolgen Sie seine Tool-Aufrufe live."
+    }
+  },
+  "recent": {
+    "title": "Letzte Arbeit",
+    "description": "Die fünf jüngsten Sitzungen, die diese Bereitstellung beobachtet hat.",
+    "openAll": "Alle Sitzungen",
+    "emptyTitle": "Noch keine Sitzungen",
+    "emptyDescription": "Hier erscheint jeder Lauf einer verbundenen Engine, mit dem, was er getan hat, wie lange er gedauert hat und was er gekostet hat.",
+    "unavailableTitle": "Letzte Arbeit konnte nicht geladen werden",
+    "unavailableDescription": "Der Sitzungs-Lesevorgang hat nicht geantwortet. Die Kennzahlen oben sind davon nicht betroffen.",
+    "open": "Sitzung öffnen: {{what}}"
+  },
   "tiles": {
     "inventory": {
       "label": "Inventar",

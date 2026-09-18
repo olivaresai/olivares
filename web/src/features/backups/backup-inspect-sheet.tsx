@@ -94,11 +94,11 @@ export function BackupInspectSheet({
             </KvList>
 
             <div className="flex flex-col gap-1.5">
-              <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              <span className="text-caption font-medium uppercase tracking-wider text-muted-foreground">
                 {t('inspect.tenants')}
               </span>
               {detail.manifest.tenants.length === 0 ? (
-                <span className="text-sm text-muted-foreground">
+                <span className="text-body text-muted-foreground">
                   {t('inspect.empty')}
                 </span>
               ) : (
@@ -117,11 +117,11 @@ export function BackupInspectSheet({
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              <span className="text-caption font-medium uppercase tracking-wider text-muted-foreground">
                 {t('inspect.keys')}
               </span>
               {detail.manifest.keys.length === 0 ? (
-                <span className="text-sm text-muted-foreground">
+                <span className="text-body text-muted-foreground">
                   {t('inspect.empty')}
                 </span>
               ) : (

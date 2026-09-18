@@ -186,7 +186,10 @@ export function InboxCursorDialog({
             </KvList>
           ) : null}
           {phase === 'preparing' ? (
-            <p role="status" className="inline-flex items-center gap-2 text-sm">
+            <p
+              role="status"
+              className="inline-flex items-center gap-2 text-body"
+            >
               <Spinner className="size-3.5" />
               {t('cursor.preparing')}
             </p>
@@ -197,7 +200,7 @@ export function InboxCursorDialog({
                 failure={failure}
                 title={t('cursor.prepareFailedTitle')}
               />
-              <p className="mt-1 text-sm text-muted-foreground">
+              <p className="mt-1 text-body text-muted-foreground">
                 {t('cursor.prepareFailedBody')}
               </p>
             </div>
@@ -210,8 +213,10 @@ export function InboxCursorDialog({
               className="flex flex-col gap-2 rounded-md border border-border bg-muted p-3"
               data-slot="cursor-intent"
             >
-              <p className="text-sm font-medium">{t('cursor.confirm.title')}</p>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-body font-medium">
+                {t('cursor.confirm.title')}
+              </p>
+              <p className="text-body text-muted-foreground">
                 {t('cursor.confirm.body')}
               </p>
               <KvList>
@@ -233,7 +238,7 @@ export function InboxCursorDialog({
                 failure={failure}
                 title={t('cursor.conflictTitle')}
               />
-              <p className="mt-1 text-sm text-muted-foreground">
+              <p className="mt-1 text-body text-muted-foreground">
                 {t('cursor.conflictBody')}
               </p>
             </div>
@@ -244,7 +249,7 @@ export function InboxCursorDialog({
                 failure={failure}
                 title={t('cursor.ambiguousTitle')}
               />
-              <p className="mt-1 text-sm text-muted-foreground">
+              <p className="mt-1 text-body text-muted-foreground">
                 {t('cursor.ambiguousBody')}
               </p>
             </div>
@@ -255,7 +260,7 @@ export function InboxCursorDialog({
                 failure={failure}
                 title={t('cursor.refusedTitle')}
               />
-              <p className="mt-1 text-sm text-muted-foreground">
+              <p className="mt-1 text-body text-muted-foreground">
                 {t('cursor.refusedBody')}
               </p>
             </div>
@@ -270,10 +275,10 @@ export function InboxCursorDialog({
                 role="status"
                 className={
                   barrier
-                    ? 'rounded-md border border-warning-line bg-warning-soft px-3 py-2 text-sm text-warning'
+                    ? 'rounded-md border border-warning-line bg-warning-soft px-3 py-2 text-body text-warning'
                     : outcome.result.replayed
-                      ? 'rounded-md border border-info-line bg-info-soft px-3 py-2 text-sm text-info'
-                      : 'rounded-md border border-success-line bg-success-soft px-3 py-2 text-sm text-success'
+                      ? 'rounded-md border border-info-line bg-info-soft px-3 py-2 text-body text-info'
+                      : 'rounded-md border border-success-line bg-success-soft px-3 py-2 text-body text-success'
                 }
               >
                 <p className="font-medium">
@@ -339,11 +344,11 @@ export function InboxCursorDialog({
                   </>
                 ) : null}
               </KvList>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-caption text-muted-foreground">
                 {t('cursor.result.notAck')}
               </p>
               {barrier ? (
-                <p className="text-xs text-muted-foreground">
+                <p className="text-caption text-muted-foreground">
                   {t('cursor.result.barrierHint')}
                 </p>
               ) : null}

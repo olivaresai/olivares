@@ -34,6 +34,7 @@
     "loading": "Chargement…",
     "empty": "Rien ici pour l’instant",
     "noResults": "Aucun résultat",
+    "noResultsHint": "Aucune ligne ne correspond au filtre actuel. Supprimez-le, ou élargissez la recherche, pour revoir les lignes.",
     "comingSoon": "Bientôt disponible",
     "loaded": "Chargé",
     "yes": "Oui",
@@ -200,5 +201,61 @@
     "navigation": "Aller à",
     "openPalette": "Ouvrir la palette de commandes",
     "showHelp": "Afficher cette aide"
+  },
+  "keys": {
+    "group": {
+      "general": "Général",
+      "launcher": "Démarrer une session",
+      "surface": "La surface de travail",
+      "navRail": "Barre de navigation"
+    },
+    "command": {
+      "palette": {
+        "open": "Ouvrir la palette de commandes"
+      },
+      "help": {
+        "toggle": "Afficher ces raccourcis"
+      },
+      "launcher": {
+        "focus": "Aller au lanceur",
+        "start": "Démarrer la session",
+        "startBackground": "La démarrer et rester ici"
+      },
+      "surface": {
+        "nextPane": "Volet suivant",
+        "previousPane": "Volet précédent"
+      },
+      "rail": {
+        "next": "Session suivante",
+        "previous": "Session précédente",
+        "first": "Première session",
+        "last": "Dernière session",
+        "open": "Ouvrir la session",
+        "pin": "L’épingler ou la détacher"
+      },
+      "nav": {
+        "toggleRail": "Replier ou déplier la barre de navigation"
+      },
+      "navRail": {
+        "next": "Module suivant",
+        "previous": "Module précédent",
+        "expand": "Ouvrir la zone, ou y entrer",
+        "fold": "Replier la zone, ou y revenir",
+        "first": "Premier module",
+        "last": "Dernier module",
+        "pin": "Épingler ou détacher ce module"
+      }
+    },
+    "when": {
+      "railFocused": "dans le rail des sessions",
+      "launcherFocused": "dans le champ du lanceur",
+      "workSurface": "sur l’écran des sessions"
+    },
+    "precedence": "Quand deux lignes partagent les mêmes touches, la dernière applicable l’emporte.",
+    "modNote": "⌘ correspond à Ctrl sous Windows et Linux.",
+    "problems_one": "{{count}} raccourci n’a pas pu être lu et ne se déclenche pas : {{commands}}",
+    "problems_other": "{{count}} raccourcis n’ont pas pu être lus et ne se déclenchent pas : {{commands}}",
+    "problems_many": "{{count}} raccourcis n’ont pas pu être lus et ne se déclenchent pas : {{commands}}",
+    "navRailNote": "La barre est un seul arrêt de tabulation. Ces touches agissent quand elle a le focus."
   }
 }

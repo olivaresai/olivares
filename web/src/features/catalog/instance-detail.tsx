@@ -40,7 +40,7 @@ function Section({
 }) {
   return (
     <section className="flex flex-col gap-2">
-      <h3 className="text-sm font-medium text-foreground">{title}</h3>
+      <h3 className="text-body font-medium text-foreground">{title}</h3>
       {children}
     </section>
   )
@@ -234,7 +234,7 @@ export function InstanceDetailSheet({
               <Separator />
 
               <Section title={t('instanceDetail.governance')}>
-                <p className="mb-1 text-xs text-muted-foreground">
+                <p className="mb-1 text-caption text-muted-foreground">
                   {t('instanceDetail.governanceCaption')}
                 </p>
                 <KvList>

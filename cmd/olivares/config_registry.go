@@ -212,7 +212,7 @@ var exactConfigEnvKeys = []string{
 	"OLIVARES_MCP_TASK_KILLSWITCH_SWEEP",
 	"OLIVARES_METRICS_ALLOWED_CIDRS",
 	"OLIVARES_METRICS_TOKEN",
-	// D01-C2B: the ONE explicit activation for the governed synchronous Chat dispatch
+	// The ONE explicit activation for the governed synchronous Chat dispatch
 	// path (modelsguardedtext.go). Absent and "disabled" both keep it deny-closed;
 	// only "development_precheck" wires it, and any other value fails startup.
 	"OLIVARES_MODEL_GATEWAY_CHAT_MODE",

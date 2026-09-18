@@ -30,7 +30,10 @@ export function ToolsPanel({
   const { t } = useTranslation('session-viewer')
 
   const aggregations = useMemo<ToolAggregation[]>(() => {
-    const map = new Map<string, { count: number; successCount: number; failCount: number }>()
+    const map = new Map<
+      string,
+      { count: number; successCount: number; failCount: number }
+    >()
     for (const entry of timeline) {
       if (entry.kind !== 'tool' || !entry.tool_ref) continue
       const existing = map.get(entry.tool_ref)
@@ -49,13 +52,13 @@ export function ToolsPanel({
 
   return (
     <section className="flex flex-col gap-2">
-      <h2 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+      <h2 className="flex items-center gap-1.5 text-caption font-semibold uppercase tracking-wide text-muted-foreground">
         <Wrench className="size-3.5" aria-hidden />
         {t('panels.tools')}
       </h2>
 
       {aggregations.length === 0 ? (
-        <p className="text-xs text-muted-foreground">—</p>
+        <p className="text-caption text-muted-foreground">—</p>
       ) : (
         <ul className="flex flex-col gap-0.5">
           {aggregations.map((agg) => {
@@ -65,7 +68,7 @@ export function ToolsPanel({
                 <button
                   type="button"
                   className={cn(
-                    'flex w-full items-center justify-between gap-2 rounded-md px-2 py-1 text-left text-xs transition-colors',
+                    'flex w-full items-center justify-between gap-2 rounded-md px-2 py-1 text-left text-caption transition-colors',
                     'hover:bg-muted/50',
                     isActive && 'bg-accent-soft/60 ring-1 ring-accent-strong',
                   )}

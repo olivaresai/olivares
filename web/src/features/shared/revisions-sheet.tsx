@@ -51,6 +51,13 @@ export interface RevisionsSheetLabels {
   description: string
   caption?: string
   empty: string
+  /**
+   * ONE sentence under `empty`: what a revision IS for this entity, and what creates
+   * the first one. Required, like `EmptyState.description` itself — a shared
+   * sheet that let a caller skip it would be the one place the compiler could not see
+   * a bare empty state.
+   */
+  emptyHint: string
   loading: string
   loadMore: string
   compareTitle: string
@@ -198,7 +205,7 @@ export function RevisionsSheet<TSnapshot, TEntity>({
         </SheetHeader>
 
         {labels.caption ? (
-          <p className="rounded-md border border-info-line bg-info-soft px-3 py-2 text-xs text-info">
+          <p className="rounded-md border border-info-line bg-info-soft px-3 py-2 text-caption text-info">
             {labels.caption}
           </p>
         ) : null}
@@ -212,7 +219,11 @@ export function RevisionsSheet<TSnapshot, TEntity>({
           ) : revisionsQ.isError ? (
             <ErrorState retry={() => void revisionsQ.refetch()} />
           ) : revisions.length === 0 ? (
-            <EmptyState icon={<History />} title={labels.empty} />
+            <EmptyState
+              description={labels.emptyHint}
+              icon={<History />}
+              title={labels.empty}
+            />
           ) : (
             <div className="flex flex-col gap-5">
               <ol className="flex flex-col gap-2">
@@ -241,7 +252,7 @@ export function RevisionsSheet<TSnapshot, TEntity>({
                       <Badge variant={OP_VARIANT[revision.op]}>
                         {operation}
                       </Badge>
-                      <span className="min-w-0 flex-1 truncate font-mono text-xs text-foreground">
+                      <span className="min-w-0 flex-1 truncate font-mono text-caption text-foreground">
                         {revision.actor}
                         {revision.actor_kind ? (
                           <span className="ml-1 text-muted-foreground">
@@ -251,7 +262,7 @@ export function RevisionsSheet<TSnapshot, TEntity>({
                       </span>
                       <RelTime
                         ts={revision.at}
-                        className="text-xs text-muted-foreground"
+                        className="text-caption text-muted-foreground"
                       />
                       {canRestoreRevision ? (
                         <Button
@@ -280,7 +291,7 @@ export function RevisionsSheet<TSnapshot, TEntity>({
               ) : null}
 
               <section className="flex flex-col gap-2">
-                <h3 className="text-sm font-medium text-foreground">
+                <h3 className="text-body font-medium text-foreground">
                   {labels.compareTitle}
                 </h3>
                 {selected.length === 2 ? (
@@ -293,7 +304,7 @@ export function RevisionsSheet<TSnapshot, TEntity>({
                     height="28rem"
                   />
                 ) : (
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-body text-muted-foreground">
                     {labels.selectTwo}
                   </p>
                 )}

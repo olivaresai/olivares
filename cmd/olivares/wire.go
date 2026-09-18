@@ -248,11 +248,11 @@ type moduleSet struct {
 	pinVerifier mcpc.ToolPinVerifier
 	// the reporting module, held so boot() registers the schedule pump.
 	reporting *reporting.Module
-	// D01-C2B: the governed Chat execution adapter (nil unless the explicit development
+	// The governed Chat execution adapter (nil unless the explicit development
 	// activation selected it). boot() late-binds its store/policy/context/residency/
 	// secret/approval/bus dependencies before HTTP serving, exactly like knowledgeGuard.
 	chatExecutor *modelsChatExecutor
-	// D08-C2a: module VIII (inventory), kept so boot() can bind its durable sweep
+	// Module VIII (inventory), kept so boot() can bind its durable sweep
 	// scope — the privileged tenant enumeration that stays in the composition root
 	// — before rt.Start. It is the SAME instance that is already in `all`; this is
 	// the typed reference, never a second inventory.New().
@@ -272,7 +272,7 @@ func buildModules(signer *audit.Signer, catalogSigner, policySigner ed25519.Priv
 	if err != nil {
 		return moduleSet{}, err
 	}
-	// D01-C2B: the governed Chat dispatch path is activated by ONE explicit key and
+	// The governed Chat dispatch path is activated by ONE explicit key and
 	// nothing else. An unknown value fails startup rather than falling back, so a
 	// deployment that asked for a mode this build does not have finds out at boot.
 	modelGatewayChatMode, err := loadModelGatewayChatMode(osGetenv)
@@ -742,7 +742,7 @@ func buildModules(signer *audit.Signer, catalogSigner, policySigner ed25519.Priv
 	if ex := newModelsExecutor(osGetenv, inferenceDoer, live, log); ex != nil {
 		modelsOpts = append(modelsOpts, models.WithExecutor(ex))
 	}
-	// D01-C2B: the SEPARATE synchronous Chat seam, deny-closed unless the explicit
+	// The SEPARATE synchronous Chat seam, deny-closed unless the explicit
 	// development activation selected it AND an immutable profile registry exists. Its
 	// store/policy/context/residency/secret/approval/bus dependencies are late-bound by
 	// boot() before HTTP serving; until they are, the port refuses rather than serving
@@ -1004,7 +1004,7 @@ func buildModules(signer *audit.Signer, catalogSigner, policySigner ed25519.Priv
 		agentsConsole,
 		identityConsole,
 		health.New(),
-		// D08-C2a: constructed outside the slice so the composition root can hand it
+		// Constructed outside the slice so the composition root can hand it
 		// the durable sweep scope (the eventing/orchestration-module pattern). There
 		// is exactly one inventory instance and `all` and moduleSet share it.
 		inv,

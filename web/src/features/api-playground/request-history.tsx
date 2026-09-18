@@ -37,7 +37,7 @@ export function RequestHistory({ entries, onClear }: RequestHistoryProps) {
     return (
       <div className="flex flex-col items-center justify-center gap-2 py-8 text-muted-foreground">
         <Clock className="h-6 w-6 opacity-40" />
-        <p className="text-xs">{t('noRequests')}</p>
+        <p className="text-caption">{t('noRequests')}</p>
       </div>
     )
   }
@@ -45,13 +45,13 @@ export function RequestHistory({ entries, onClear }: RequestHistoryProps) {
   return (
     <div className="space-y-1">
       <div className="flex items-center justify-between px-3 py-1.5">
-        <span className="text-xs font-semibold text-muted-foreground">
+        <span className="text-caption font-semibold text-muted-foreground">
           {t('historyPanel.recentCount', { count: entries.length })}
         </span>
         <Button
           size="sm"
           variant="ghost"
-          className="h-6 px-2 text-xs"
+          className="h-6 px-2 text-caption"
           onClick={onClear}
           aria-label={t('historyPanel.clearAria')}
         >
@@ -62,7 +62,7 @@ export function RequestHistory({ entries, onClear }: RequestHistoryProps) {
       {entries.map((entry, i) => (
         <div
           key={`${entry.timestamp}-${i}`}
-          className="flex items-center gap-2 px-3 py-1 text-xs"
+          className="flex items-center gap-2 px-3 py-1 text-caption"
         >
           <Badge
             variant="outline"

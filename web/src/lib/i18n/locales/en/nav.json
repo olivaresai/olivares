@@ -291,6 +291,33 @@
     "recentEmpty": "Modules you open appear here.",
     "recentScope": "Opened in this tab. Cleared on reload, sign-out or account and organization changes.",
     "recentRemove": "Remove {{name}} from recent modules",
-    "recentClear": "Clear recent modules"
+    "recentClear": "Clear recent modules",
+    "pinRow": "Pin {{name}} to favorites (p)",
+    "unpinRow": "Unpin {{name}} from favorites (p)"
+  },
+  "scope": {
+    "tenant": "Organization",
+    "workspace": "Workspace",
+    "environment": "Environment",
+    "noTenant": "none",
+    "noWorkspace": "No workspace",
+    "noEnvironment": "Not declared",
+    "hint": "What the next session will run under."
+  },
+  "launcher": {
+    "label": "Name the session to start",
+    "placeholder": "Name this session…",
+    "profile": "Provider profile",
+    "profilePlaceholder": "Choose a profile",
+    "workspace": "Workspace to mount",
+    "start": "Start",
+    "backgroundHint": "Ctrl+Enter starts it and keeps you here, ready for the next one.",
+    "noProfiles": "No provider profile is registered, and a session cannot start without one.",
+    "addProvider": "Add a provider profile",
+    "startedBackground": "Session started. The draft is clear for the next one.",
+    "startFailed": "The session could not be started.",
+    "noTenant": "Select an organization before starting a session.",
+    "noProfileRead": "A session runs as a provider profile, and your role does not include permission to read them.",
+    "readFailed": "The provider profiles could not be read, so a session cannot be started from here."
   }
 }

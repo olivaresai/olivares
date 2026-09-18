@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { StepUpRequiredState } from '@/components/layout/step-up-state'
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/ui/page-header'
+import { PagePrimaryAction } from '@/components/ui/page-actions'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { DataTable, type TableColumn } from '@/components/data/data-table'
@@ -96,7 +97,7 @@ export default function CapabilitiesView() {
       accessorKey: 'version',
       header: t('servers.version'),
       cell: ({ row }) => (
-        <span className="font-mono text-xs text-muted-foreground">
+        <span className="font-mono text-caption text-muted-foreground">
           {row.original.version || '—'}
         </span>
       ),
@@ -151,7 +152,7 @@ export default function CapabilitiesView() {
       accessorKey: 'name',
       header: t('tools.name'),
       cell: ({ row }) => (
-        <span className="font-mono text-xs text-foreground">
+        <span className="font-mono text-caption text-foreground">
           {row.original.name}
         </span>
       ),
@@ -166,7 +167,7 @@ export default function CapabilitiesView() {
       accessorKey: 'schema_hash',
       header: t('tools.schemaHash'),
       cell: ({ row }) => (
-        <span className="font-mono text-xs text-muted-foreground">
+        <span className="font-mono text-caption text-muted-foreground">
           {row.original.schema_hash
             ? row.original.schema_hash.slice(0, 12)
             : '—'}
@@ -180,7 +181,7 @@ export default function CapabilitiesView() {
       accessorKey: 'name',
       header: t('skills.name'),
       cell: ({ row }) => (
-        <span className="font-mono text-xs text-foreground">
+        <span className="font-mono text-caption text-foreground">
           {row.original.name}
         </span>
       ),
@@ -196,7 +197,7 @@ export default function CapabilitiesView() {
       accessorKey: 'description',
       header: t('skills.description'),
       cell: ({ row }) => (
-        <span className="text-xs text-muted-foreground">
+        <span className="text-caption text-muted-foreground">
           {row.original.description || '—'}
         </span>
       ),
@@ -208,7 +209,7 @@ export default function CapabilitiesView() {
       accessorKey: 'server_ref',
       header: t('configs.serverRef'),
       cell: ({ row }) => (
-        <span className="font-mono text-xs font-medium text-foreground">
+        <span className="font-mono text-caption font-medium text-foreground">
           {row.original.server_ref}
         </span>
       ),
@@ -333,7 +334,7 @@ export default function CapabilitiesView() {
             label={t('tools.truncated', { n: tools.data?.items?.length ?? 0 })}
             hint={t('truncatedHint')}
           />
-          <p className="mb-3 text-xs text-muted-foreground">
+          <p className="mb-3 text-caption text-muted-foreground">
             {t('tools.untrustedNote')}
           </p>
           <ListTruncationBadge
@@ -376,7 +377,7 @@ export default function CapabilitiesView() {
             })}
             hint={t('truncatedHint')}
           />
-          <p className="mb-3 text-xs text-muted-foreground">
+          <p className="mb-3 text-caption text-muted-foreground">
             {t('skills.caption')}
           </p>
           <ListTruncationBadge
@@ -429,6 +430,21 @@ export default function CapabilitiesView() {
 
         {canReadConfig && (
           <TabsContent value="configs">
+            {canWriteConfig && (
+              <PagePrimaryAction>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => {
+                    setEditingConfig(null)
+                    setEditorOpen(true)
+                  }}
+                >
+                  <Plus />
+                  {t('configs.newConfig')}
+                </Button>
+              </PagePrimaryAction>
+            )}
             <ListTruncationBadge
               query={configs}
               label={t('intel:notices.listTruncated', {
@@ -450,21 +466,6 @@ export default function CapabilitiesView() {
                 setEditingConfig(r)
                 setEditorOpen(true)
               }}
-              toolbar={
-                canWriteConfig ? (
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    onClick={() => {
-                      setEditingConfig(null)
-                      setEditorOpen(true)
-                    }}
-                  >
-                    <Plus />
-                    {t('configs.newConfig')}
-                  </Button>
-                ) : undefined
-              }
               empty={
                 <EmptyState
                   title={t('empty.config.title')}

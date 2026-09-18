@@ -324,14 +324,14 @@ export function ScenarioCreateDialog({
             }))}
           />
 
-          <p className="text-xs text-muted-foreground">
+          <p className="text-caption text-muted-foreground">
             {t('sandbox:scenarios.create.syntheticNote')}
           </p>
 
           {failure ? (
             <p
               role="alert"
-              className="rounded-md border border-danger-line bg-danger-soft px-2.5 py-2 text-xs text-danger"
+              className="rounded-md border border-danger-line bg-danger-soft px-2.5 py-2 text-caption text-danger"
             >
               {failure}
             </p>
@@ -382,12 +382,12 @@ function RowGroup({
 }) {
   return (
     <fieldset className="flex flex-col gap-2 rounded-md border border-border p-3">
-      <legend className="px-1 text-xs font-medium text-foreground">
+      <legend className="px-1 text-caption font-medium text-foreground">
         {title}
       </legend>
-      <p className="text-xs text-muted-foreground">{hint}</p>
+      <p className="text-caption text-muted-foreground">{hint}</p>
       {rows.length === 0 ? (
-        <p className="text-xs text-muted-foreground italic">{empty}</p>
+        <p className="text-caption text-muted-foreground italic">{empty}</p>
       ) : (
         rows.map((row, i) => (
           <div

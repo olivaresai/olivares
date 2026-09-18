@@ -391,7 +391,7 @@ function DefinitionForm({
         )}
 
         <div className="border-t border-border pt-3">
-          <h3 className="text-sm font-medium text-foreground">
+          <h3 className="text-body font-medium text-foreground">
             {t('editor.specSection')}
           </h3>
         </div>
@@ -532,7 +532,10 @@ function DefinitionForm({
                   mono
                 />
                 {warn && (
-                  <p role="alert" className="text-xs text-danger sm:col-span-2">
+                  <p
+                    role="alert"
+                    className="text-caption text-danger sm:col-span-2"
+                  >
                     {t('editor.credentialWarning')}
                   </p>
                 )}
@@ -555,11 +558,11 @@ function DefinitionForm({
               {t('editor.addWiring')}
             </Button>
           </div>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-caption text-muted-foreground">
             {t('editor.wiringsHint')}
           </p>
           {wirings.length === 0 ? (
-            <p className="rounded-md border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
+            <p className="rounded-md border border-dashed border-border px-3 py-2 text-caption text-muted-foreground">
               {t('editor.noWirings')}
             </p>
           ) : (
@@ -651,7 +654,7 @@ function DefinitionForm({
                     {warn && (
                       <p
                         role="alert"
-                        className="text-xs text-danger sm:col-span-3"
+                        className="text-caption text-danger sm:col-span-3"
                       >
                         {t('editor.credentialWarning')}
                       </p>
@@ -664,10 +667,10 @@ function DefinitionForm({
         </div>
       </div>
 
-      <p className="rounded-md border border-info-line bg-info-soft px-3 py-2 text-xs text-info">
+      <p className="rounded-md border border-info-line bg-info-soft px-3 py-2 text-caption text-info">
         {t('editor.controlPlaneNote')}
       </p>
-      <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+      <p className="flex items-center gap-1.5 text-caption text-muted-foreground">
         <ScrollText className="size-3.5 shrink-0" aria-hidden />
         {t('common:privileged.auditedNotice')}
       </p>
@@ -723,10 +726,10 @@ function RowEditor<T extends { _k: string }>({
           {addLabel}
         </Button>
       </div>
-      <p className="text-xs text-muted-foreground">{hint}</p>
+      <p className="text-caption text-muted-foreground">{hint}</p>
       {rows.length === 0 ? (
         emptyLabel ? (
-          <p className="rounded-md border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
+          <p className="rounded-md border border-dashed border-border px-3 py-2 text-caption text-muted-foreground">
             {emptyLabel}
           </p>
         ) : null

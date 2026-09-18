@@ -16,6 +16,7 @@
   "orgs": {
     "title": "Organizaciones",
     "empty": "Aún no hay organizaciones",
+    "emptyHint": "Las organizaciones aparecen aquí con la región a la que están fijados sus datos. Crea una organización para empezar.",
     "colOrg": "Organización",
     "colRegion": "Región fijada",
     "colActions": "Acciones",

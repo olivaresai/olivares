@@ -19,6 +19,7 @@
   "framework": {
     "label": "Rahmenwerk",
     "select": "Rahmenwerk auswählen",
+    "selectHint": "Wählen Sie oben ein Rahmenwerk, um seine Kontrolllücken, die Nachweise je Kontrolle und das noch nicht Zugeordnete zu sehen.",
     "controls": "{{count}} Kontrollen",
     "authority": "Behörde"
   },
@@ -75,6 +76,7 @@
     "title": "Was zu beheben ist",
     "description": "Kontrollen, die noch nicht erfüllt sind, nach Status sortiert. Jede Zeile listet die Fähigkeiten auf, die zu aktivieren sind, um die Lücke zu schließen.",
     "empty": "Keine offenen Lücken für dieses Rahmenwerk.",
+    "emptyHint": "Eine Lücke ist eine Kontrolle ohne operativen Nachweis. Dieses Rahmenwerk hat keine offene: Jede zugeordnete Kontrolle ist erfüllt oder per Design abgedeckt.",
     "missing": "Fehlende Fähigkeiten",
     "noMissing": "Keine spezifische Fähigkeit identifiziert — prüfen Sie das Kriterium."
   },
@@ -117,6 +119,7 @@
     "title": "Agent-Risikoregister",
     "description": "EU-AI-Act-Risikostufe pro Agent, quer zugeordnet zu den NIST-AI-RMF-Funktionen. Die Heuristik weist niemals die inakzeptable Stufe zu — sie erscheint erst nach menschlicher Prüfung.",
     "empty": "Noch keine Agenten klassifiziert.",
+    "emptyHint": "Agenten werden hier mit der Risikostufe aufgeführt, die ihre Klassifizierung ergibt. Klassifizieren Sie einen Agenten, damit er erscheint.",
     "columns": {
       "agent": "Agent",
       "tier": "Stufe",
@@ -156,6 +159,7 @@
     "title": "Datenstandort",
     "description": "Attestierte Regionen mit ihrem Perimeter, der Verschlüsselung im Ruhezustand und allen beobachteten Egress-Verstößen.",
     "empty": "Noch keine Regionen attestiert.",
+    "emptyHint": "Für diesen Mandanten attestierte Regionen erscheinen hier mit den zugehörigen Nachweisen. Es wurde noch keine Region attestiert.",
     "scan": "Datenstandort-Scan ausführen",
     "scanned": "Datenstandort-Scan abgeschlossen",
     "inPerimeter": "Daten bleiben im Perimeter",
@@ -172,6 +176,7 @@
     "title": "Aufbewahrungspläne",
     "description": "Löschpläne je Datenklasse, die Läufe, die sie ausführen, und das versiegelte Zertifikat, das jeder Lauf hinterlässt. Ein Plan dokumentiert die Absicht; nur eine genehmigte Löschung vernichtet etwas.",
     "noAccess": "Sie haben keinen Zugriff auf Aufbewahrungspläne",
+    "noAccessHint": "Aufbewahrungspläne legen fest, wie lange jede Datensatzklasse aufbewahrt wird. Bitten Sie eine Administratorin um die Leseberechtigung für Aufbewahrung.",
     "sweepNow": "Lauf starten",
     "gateHint": "Ein Plan ist ein Dokument, bis ein Mensch seine Löschung genehmigt. Das Speichern löscht nie Daten; ein Lauf tut es.",
     "noClasses": "Die Engine hat keine Datenklassen zurückgegeben",
@@ -285,6 +290,7 @@
     "title": "Rechtliche Aufbewahrungssperren",
     "description": "Aufbewahrungsanordnungen, die jeden Vernichtungsweg verhindern, einschließlich der Löschung gemäß DSGVO.",
     "noAccess": "Sie sind nicht berechtigt, rechtliche Aufbewahrungssperren einzusehen.",
+    "noAccessHint": "Ein Legal Hold schützt Daten vor Löschung, solange ein Vorgang offen ist. Bitten Sie eine Administratorin um die Leseberechtigung für Legal Holds.",
     "create": "Aufbewahrungssperre setzen",
     "release": "Aufheben",
     "custody": "Beweismittelkette",
@@ -300,6 +306,7 @@
     "custodyTitle": "Beweismittelkette — {{matter}}",
     "custodyDescription": "Nur anhängbare Ereignisse der Beweismittelkette, die jeweils zum Zeitpunkt ihrer Versiegelung am Kopf des Audit-Hauptbuchs verankert wurden.",
     "custodyEmpty": "Keine Ereignisse der Beweismittelkette erfasst",
+    "custodyEmptyHint": "Jedes Hinzufügen, Benachrichtigen oder Entlassen eines Verwahrers wird hier festgehalten. Dieser Hold hat noch keine Verwahrungsereignisse.",
     "status": {
       "active": "Aktiv",
       "released": "Aufgehoben"
@@ -357,6 +364,7 @@
     "title": "Recht auf Löschung & Anfragen betroffener Personen",
     "description": "Erfasste Löschanträge, deren Ausführung nach dem Vier-Augen-Prinzip und der jeweils versiegelte, überprüfbare Beleg.",
     "noAccess": "Sie sind nicht berechtigt, Löschanträge einzusehen.",
+    "noAccessHint": "Löschungs- und Auskunftsanträge werden hier mit ihren gesetzlichen Fristen verfolgt. Bitten Sie eine Administratorin um die Leseberechtigung für Löschungen.",
     "register": "Antrag erfassen",
     "execute": "Ausführen",
     "receipt": "Löschbeleg",
@@ -455,10 +463,12 @@
     "description": "Datierte regulatorische Meilensteine mit der jeweiligen Primärquelle und dem Datum ihrer Überprüfung.",
     "notInForceHint": "Vorläufige Einigungen, angenommene Texte mit noch ausstehender Veröffentlichung und noch in Entwicklung befindliche Zuordnungen sind KEIN geltendes Recht. Ihr Status wird angezeigt, damit sie niemals als verbindliche Pflichten verstanden werden.",
     "empty": "Keine Meilensteine für dieses Rahmenwerk",
+    "emptyHint": "Regulatorische Meilensteine des gewählten Rahmenwerks erscheinen hier mit ihren Fristen. Wählen Sie ein anderes Rahmenwerk, um dessen Kalender zu sehen.",
     "verifiedOn": "verifiziert am {{date}}",
     "watchlistTitle": "Beobachtungsliste",
     "watchlistDescription": "Beobachtete Regelsetzungsvorhaben, Normentwürfe und Pilotprojekte, für die noch kein Datum angegeben werden kann.",
     "watchlistEmpty": "Keine Einträge auf der Beobachtungsliste",
+    "watchlistEmptyHint": "Meilensteine, denen Sie folgen, erscheinen hier, damit die nächste Frist immer sichtbar ist. Fügen Sie einen aus dem Kalender oben hinzu.",
     "status": {
       "in_force": "In Kraft",
       "applies_from": "Anwendbar ab",
@@ -474,6 +484,7 @@
   "regops": {
     "title": "Regulatorische Vorgänge",
     "noAccess": "Sie sind nicht berechtigt, diese Bereiche einzusehen.",
+    "noAccessHint": "Regulatorischer Betrieb umfasst Einreichungen, Attestierungen und Kontrollabweichungen. Bitten Sie eine Administratorin um die Leseberechtigung dafür.",
     "seamHint": "Das Lesen, Exportieren und Löschen dieser Artefakte funktioniert in diesem Build. Ihre Erzeugung (DORA-Register, Vorfallklassifizierung, OSCAL-Import, Detailpakete) stellt das Enterprise-Add-on bereit; ohne dieses antwortet die Engine bestimmungsgemäß mit 501.",
     "addonRequired": "Erzeugung erfordert das Add-on",
     "export": "Exportieren",
@@ -596,6 +607,7 @@
       "emptyHint": "Momentaufnahmen werden vom Enterprise-Add-on erzeugt.",
       "driftTitle": "Erkannte Abweichung",
       "noDrift": "Keine Abweichung erkannt",
+      "noDriftHint": "Drift ist eine Kontrolle, deren Nachweis sich von der Baseline entfernt hat. Jede verglichene Kontrolle entspricht weiterhin ihrer Baseline.",
       "snapshot": "Momentaufnahme erstellen",
       "snapshotTitle": "Eine Kontroll-Momentaufnahme erstellen",
       "snapshotDescription": "Das Add-on bewertet die ausgewählten Rahmenwerke jetzt erneut gegen den Bestand und speichert das Ergebnis als Momentaufnahme, mit der später verglichen werden kann.",
@@ -676,6 +688,7 @@
     "title": "Erhebliche NIS-2-Vorfälle",
     "description": "Vorfälle, bewertet anhand der Erheblichkeitskriterien des Art. 23 Abs. 3 der Richtlinie (EU) 2022/2555, mit ihren Meldephasen nach Art. 23 Abs. 4 und den Berichtsentwürfen.",
     "noAccess": "Sie haben keine Berechtigung, NIS-2-Vorfallklassifizierungen zu lesen.",
+    "noAccessHint": "NIS-2-Vorfallklassifizierungen und ihre Meldefristen werden hier verfolgt. Bitten Sie eine Administratorin um die NIS-2-Leseberechtigung.",
     "provisionalHint": "Jedes Urteil und jede Frist hier ist ENTSCHEIDUNGSUNTERSTÜTZUNG, keine rechtliche Einstufung. Die Control Plane kann die Kriterien des Art. 23 Abs. 3 nicht messen; sie wendet sie auf die von Ihnen gelieferten Auswirkungsdaten an. Eine fachkundige Person muss das Ergebnis bestätigen, und die Pflicht zur Meldung an das CSIRT oder die zuständige Behörde liegt bei Ihrer Einrichtung.",
     "empty": "Keine klassifizierten Vorfälle",
     "emptyHint": "Klassifizieren Sie einen Vorfall, um die Kriterien des Art. 23 Abs. 3 auf seine Auswirkungsdaten anzuwenden und die gestuften Berichte zu entwerfen.",
@@ -751,6 +764,7 @@
   "claudeFiles": {
     "title": "Dateispeicher des Anbieters",
     "noAccess": "Sie haben keinen Zugriff auf das Inventar des Dateispeichers.",
+    "noAccessHint": "Dieser Reiter inventarisiert die Dateien, die der Speicher für gesteuerte Sitzungen hält. Bitten Sie eine Administratorin um die Leseberechtigung für den Dateispeicher.",
     "col": {
       "id": "Datei-ID",
       "mime": "Typ",
@@ -820,17 +834,20 @@
       "none": "keine Referenzen"
     },
     "empty": "Der Katalog lieferte keine Fähigkeiten.",
+    "emptyHint": "Hier werden die Plattformfähigkeiten aufgeführt, mit denen ein Rahmenwerk belegt werden kann. Der Katalog hat für diese Bereitstellung keine geliefert.",
     "error": "Der Fähigkeitskatalog konnte nicht gelesen werden."
   },
   "hipaa": {
     "title": "Technische HIPAA-Schutzmaßnahmen",
     "forbidden": "Sie haben keine Berechtigung, Compliance-Rahmenwerke zu lesen.",
+    "forbiddenHint": "Dieser Bericht ordnet HIPAA §164.312 den Kontrollen zu, die die Plattform belegen kann. Bitten Sie eine Administratorin um die Leseberechtigung für Rahmenwerke.",
     "unreadable": "Der Lückenbericht konnte nicht gelesen werden.",
     "generatedAt": "Erstellt",
     "controls": "Kontrollen",
     "satisfied": "Erfüllt",
     "gaps": "Lücken",
     "noControls": "Der Bericht enthält keine Kontrollen.",
+    "noControlsHint": "Der Bericht führt jede technische Schutzmaßnahme mit ihrem Nachweis auf. Das Rahmenwerk hat für diese Bereitstellung keine Kontrollen geliefert.",
     "requirement": "Anforderung",
     "criterion": "Kriterium",
     "gap": "Lücke",

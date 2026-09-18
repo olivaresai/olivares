@@ -50,7 +50,7 @@ export function EffectiveStateLinks({
   if (allowed.length === 0) return null
 
   return (
-    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-caption">
       <span className="text-muted-foreground">{label}</span>
       {allowed.map((target) => (
         <Link

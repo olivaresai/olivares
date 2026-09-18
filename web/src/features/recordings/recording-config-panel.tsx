@@ -258,11 +258,11 @@ function PolicyForm({
           control: no policy can un-record emergency access. */}
       <div className="flex items-start justify-between gap-4 rounded-md border border-border bg-muted/40 px-3 py-2.5">
         <span className="min-w-0">
-          <span className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+          <span className="flex items-center gap-1.5 text-body font-medium text-foreground">
             <Lock className="size-3.5 text-muted-foreground" aria-hidden />
             {t('policy.breakglass.label')}
           </span>
-          <span className="mt-0.5 block text-xs text-muted-foreground">
+          <span className="mt-0.5 block text-caption text-muted-foreground">
             {t('policy.breakglass.hint')}
           </span>
         </span>
@@ -293,7 +293,7 @@ function PolicyForm({
               ))}
             </div>
           ) : (
-            <p className="text-xs text-muted-foreground">
+            <p className="text-caption text-muted-foreground">
               {t('policy.namespaces.empty')}
             </p>
           )}
@@ -329,10 +329,10 @@ function PolicyForm({
       {/* Consent posture — "required" is the deny-closed high-assurance dial. */}
       <div className="flex items-start justify-between gap-4">
         <span className="min-w-0">
-          <span className="text-sm font-medium text-foreground">
+          <span className="text-body font-medium text-foreground">
             {t('policy.consent.label')}
           </span>
-          <span className="mt-0.5 block text-xs text-muted-foreground">
+          <span className="mt-0.5 block text-caption text-muted-foreground">
             {t('policy.consent.hint')}
           </span>
         </span>
@@ -402,10 +402,10 @@ function PolicyForm({
       {/* AI-derived summaries. */}
       <div className="flex items-start justify-between gap-4">
         <span className="min-w-0">
-          <span className="text-sm font-medium text-foreground">
+          <span className="text-body font-medium text-foreground">
             {t('policy.ai.label')}
           </span>
-          <span className="mt-0.5 block text-xs text-muted-foreground">
+          <span className="mt-0.5 block text-caption text-muted-foreground">
             {t('policy.ai.hint')}
           </span>
         </span>

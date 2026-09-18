@@ -87,6 +87,7 @@
       "copyFailed": "No se ha podido copiar al portapapeles.",
       "checkins": "Reportes de hosts",
       "noCheckins": "Ningún host ha reportado todavía.",
+      "noCheckinsHint": "Un host se registra cuando el punto de aplicación de políticas está instalado y alcanza el motor. Instálalo en un host para verlo aquí.",
       "colScope": "Ámbito",
       "colReporter": "Informante",
       "colRevision": "Revisión",

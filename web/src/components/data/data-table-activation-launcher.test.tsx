@@ -24,7 +24,12 @@ const columns: TableColumn<Row, string>[] = [
   { accessorKey: 'name', header: 'Name' },
 ]
 
-const EMPTY = <EmptyState title="Nothing on this bench" />
+const EMPTY = (
+  <EmptyState
+    title="Nothing on this bench"
+    description="Rows appear here once the read returns some."
+  />
+)
 
 const rows: Row[] = [
   { id: 'r1', name: 'alpha' },

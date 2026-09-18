@@ -291,6 +291,33 @@
     "recentEmpty": "打开的模块会显示在这里。",
     "recentScope": "在此标签页中打开的模块。重新加载、退出登录或切换账户及组织时清除。",
     "recentRemove": "从最近访问中移除{{name}}",
-    "recentClear": "清除最近访问"
+    "recentClear": "清除最近访问",
+    "pinRow": "将 {{name}} 固定到收藏 (p)",
+    "unpinRow": "从收藏中取消固定 {{name}} (p)"
+  },
+  "scope": {
+    "tenant": "组织",
+    "workspace": "工作区",
+    "environment": "环境",
+    "noTenant": "无",
+    "noWorkspace": "不挂载工作区",
+    "noEnvironment": "未声明",
+    "hint": "下一个会话将在此范围内运行。"
+  },
+  "launcher": {
+    "label": "为要启动的会话命名",
+    "placeholder": "为这个会话命名…",
+    "profile": "提供方配置",
+    "profilePlaceholder": "选择配置",
+    "workspace": "要挂载的工作区",
+    "start": "启动",
+    "backgroundHint": "Ctrl+Enter 启动它并让您留在此处，准备启动下一个。",
+    "noProfiles": "尚未注册提供方配置，没有它无法启动会话。",
+    "addProvider": "添加提供方配置",
+    "startedBackground": "会话已启动。输入框已清空，可继续下一个。",
+    "startFailed": "无法启动会话。",
+    "noTenant": "请先选择组织，然后再启动会话。",
+    "noProfileRead": "会话以提供方配置身份运行，而您的角色不包含读取这些配置的权限。",
+    "readFailed": "无法读取提供方配置，因此无法从这里启动会话。"
   }
 }

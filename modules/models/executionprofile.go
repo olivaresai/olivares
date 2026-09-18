@@ -14,7 +14,7 @@ import (
 	"github.com/olivaresai/olivares/core/model"
 )
 
-// D01-C2A deliberately recognizes one narrow operation and protocol. These values
+// The execution profile deliberately recognizes one narrow operation and protocol. These values
 // describe a future guarded dispatch; C2A never invokes a chat executor or transport.
 const (
 	ExecutionActionTextGenerate       = "text.generate"

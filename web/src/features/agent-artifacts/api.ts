@@ -22,7 +22,7 @@ import type {
 // indirect — the constant itself AND every call site derived from it become
 // "unresolvable": counted, never checked against a registered route. Measured
 // 2026-08-11: this one constant contributed 6 of the 34 sites that held the ratchet
-// over its budget of 32 and kept control-plane red on main for every lane. The BASE
+// over its budget of 32 and kept the control-plane gate red on main. The BASE
 // constant it used to interpolate had no other reader here and is gone with it; if a
 // second models-module path appears, spell it out the same way rather than deriving it.
 const ARTIFACTS = '/v1/m/models/agent-artifacts'

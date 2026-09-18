@@ -139,8 +139,8 @@ function FrameworkRollupCard({
           {/* ⛔ SEIS titulos de marco salian con «…». Un marco se identifica POR SU
               NOMBRE: truncarlo esconde justo lo que distingue «EU AI Act» de «EU AI
               Act — GPAI». El informe lo dice: wrap permitido en titulos. */}
-          <div className="text-sm font-medium text-foreground">{f.name}</div>
-          <div className="font-mono text-xs text-muted-foreground">
+          <div className="text-body font-medium text-foreground">{f.name}</div>
+          <div className="font-mono text-caption text-muted-foreground">
             {f.version}
           </div>
         </div>
@@ -213,7 +213,7 @@ export function FrameworkRollupList({
       {regulatory.length > 0 ? (
         <section className="flex flex-col gap-3">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+            <span className="text-caption font-medium tracking-wide text-muted-foreground uppercase">
               {t('groups.regulatory')}
             </span>
             <Badge variant="neutral">{formatInt(regulatory.length)}</Badge>
@@ -225,7 +225,7 @@ export function FrameworkRollupList({
       {crosswalk.length > 0 ? (
         <section className="flex flex-col gap-3">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+            <span className="text-caption font-medium tracking-wide text-muted-foreground uppercase">
               {t('groups.crosswalk')}
             </span>
             <Badge variant="outline">{formatInt(crosswalk.length)}</Badge>
@@ -282,7 +282,7 @@ function CapabilityRow({ cap }: { cap: ControlCapability }) {
       <div className="flex flex-wrap items-center gap-2">
         <Tooltip>
           <TooltipTrigger asChild>
-            <span className="inline-flex items-center gap-1.5 text-xs font-medium text-foreground">
+            <span className="inline-flex items-center gap-1.5 text-caption font-medium text-foreground">
               <Icon
                 className={cn(
                   'size-3.5',
@@ -308,13 +308,13 @@ function CapabilityRow({ cap }: { cap: ControlCapability }) {
           {t(`posture.capabilityState.${cap.state}`)}
         </Badge>
         {cap.count !== undefined ? (
-          <span className="font-mono text-xs text-muted-foreground">
+          <span className="font-mono text-caption text-muted-foreground">
             {t('posture.count')}: {formatInt(cap.count)}
           </span>
         ) : null}
       </div>
       {cap.detail ? (
-        <p className="text-xs leading-relaxed text-muted-foreground">
+        <p className="text-caption leading-relaxed text-muted-foreground">
           {cap.detail}
         </p>
       ) : null}
@@ -369,14 +369,14 @@ export function ControlRow({ control }: { control: ControlAssessment }) {
           )}
           <span className="min-w-0">
             <span className="flex items-center gap-2">
-              <span className="font-mono text-xs text-muted-foreground">
+              <span className="font-mono text-caption text-muted-foreground">
                 {control.control_id}
               </span>
-              <span className="text-sm font-medium text-foreground">
+              <span className="text-body font-medium text-foreground">
                 {control.title}
               </span>
             </span>
-            <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">
+            <span className="mt-1 block text-caption leading-relaxed text-muted-foreground">
               {control.requirement}
             </span>
           </span>
@@ -391,13 +391,13 @@ export function ControlRow({ control }: { control: ControlAssessment }) {
 
       {open ? (
         <div className="mt-1 flex flex-col gap-2 pl-6">
-          <p className="text-xs text-muted-foreground">
+          <p className="text-caption text-muted-foreground">
             <span className="font-medium text-foreground">
               {t('posture.criterion')}:
             </span>{' '}
             {control.criterion}
           </p>
-          <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+          <span className="text-caption font-medium tracking-wide text-muted-foreground uppercase">
             {t('posture.capabilities')}
           </span>
           {hasCaps ? (
@@ -407,7 +407,7 @@ export function ControlRow({ control }: { control: ControlAssessment }) {
               ))}
             </ul>
           ) : (
-            <p className="text-xs text-muted-foreground">
+            <p className="text-caption text-muted-foreground">
               {t('posture.noCapabilities')}
             </p>
           )}
@@ -457,14 +457,14 @@ export function GapList({ gaps }: { gaps: ControlAssessment[] }) {
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <span className="font-mono text-xs text-muted-foreground">
+                <span className="font-mono text-caption text-muted-foreground">
                   {g.control_id}
                 </span>
-                <span className="text-sm font-medium text-foreground">
+                <span className="text-body font-medium text-foreground">
                   {g.title}
                 </span>
               </div>
-              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+              <p className="mt-1 text-caption leading-relaxed text-muted-foreground">
                 {g.criterion}
               </p>
             </div>
@@ -472,7 +472,7 @@ export function GapList({ gaps }: { gaps: ControlAssessment[] }) {
           </div>
           {g.note ? <CaveatNotice tone="warning">{g.note}</CaveatNotice> : null}
           <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+            <span className="text-caption font-medium tracking-wide text-muted-foreground uppercase">
               {t('gaps.missing')}
             </span>
             {g.missing_capabilities && g.missing_capabilities.length > 0 ? (
@@ -486,7 +486,7 @@ export function GapList({ gaps }: { gaps: ControlAssessment[] }) {
                 ))}
               </ul>
             ) : (
-              <p className="text-xs text-muted-foreground">
+              <p className="text-caption text-muted-foreground">
                 {t('gaps.noMissing')}
               </p>
             )}
@@ -527,11 +527,11 @@ export function EvidenceCard({
                 className="size-4 text-muted-foreground"
                 aria-hidden
               />
-              <span className="text-sm font-medium text-foreground">
+              <span className="text-body font-medium text-foreground">
                 {pkg.framework} · {pkg.framework_version}
               </span>
             </div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-caption text-muted-foreground">
               {t('evidence.generatedAt')}:{' '}
               {formatDateTime(pkg.generated_at, i18n.language)} ·{' '}
               {t('evidence.generatedBy')}:{' '}
@@ -547,13 +547,13 @@ export function EvidenceCard({
             label={`${t('evidence.ledgerSeq')} ${pkg.ledger_seq}`}
           />
           <HashChip hash={pkg.manifest_hash} label={t('evidence.manifest')} />
-          <span className="font-mono text-xs text-muted-foreground">
+          <span className="font-mono text-caption text-muted-foreground">
             {t('evidence.checked', { count: pkg.integrity_checked })}
           </span>
         </div>
 
         {pkg.scope_note ? (
-          <p className="text-xs text-muted-foreground">
+          <p className="text-caption text-muted-foreground">
             {t('evidence.scope')}:{' '}
             <span className="text-foreground">{pkg.scope_note}</span>
           </p>
@@ -562,7 +562,7 @@ export function EvidenceCard({
         {canExport ? (
           <div className="flex flex-col gap-2 border-t border-border pt-3">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+              <span className="text-caption font-medium tracking-wide text-muted-foreground uppercase">
                 {t('export.label')}
               </span>
               {EXPORT_FORMATS.map((fmt) => (
@@ -603,7 +603,7 @@ export function OscalFindingsPreview({ oscal }: { oscal: OscalExport }) {
     <div className="flex flex-col gap-2">
       <div className="flex items-center gap-2">
         <ScrollText className="size-4 text-muted-foreground" aria-hidden />
-        <span className="text-sm font-medium text-foreground">
+        <span className="text-body font-medium text-foreground">
           {t('export.oscalPreview', { version: oscal.oscal_version })}
         </span>
       </div>
@@ -617,7 +617,7 @@ export function OscalFindingsPreview({ oscal }: { oscal: OscalExport }) {
               key={f.uuid}
               className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-muted/40 px-3 py-2"
             >
-              <span className="font-mono text-xs text-foreground">
+              <span className="font-mono text-caption text-foreground">
                 {f.target['target-id']}
               </span>
               <span className="flex items-center gap-2">
@@ -707,7 +707,7 @@ export function RiskTable({
         header: t('risk.columns.agent'),
         cell: ({ row }) => (
           <div className="flex flex-col">
-            <span className="font-mono text-xs text-foreground">
+            <span className="font-mono text-caption text-foreground">
               {row.original.agent_id || row.original.subject_ref}
             </span>
             <span className="text-[11px] text-muted-foreground">
@@ -725,7 +725,7 @@ export function RiskTable({
         accessorKey: 'suggested_tier',
         header: t('risk.columns.suggested'),
         cell: ({ row }) => (
-          <span className="text-xs text-muted-foreground">
+          <span className="text-caption text-muted-foreground">
             {t(`tiers.${row.original.suggested_tier}`, {
               defaultValue: humanize(row.original.suggested_tier),
             })}
@@ -799,10 +799,10 @@ export function ResidencyCard({ region }: { region: ResidencyAttestation }) {
       <div className="flex flex-col gap-3">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <div className="font-mono text-sm font-medium text-foreground">
+            <div className="font-mono text-body font-medium text-foreground">
               {region.region}
             </div>
-            <div className="text-xs text-muted-foreground">
+            <div className="text-caption text-muted-foreground">
               {region.perimeter}
             </div>
           </div>
@@ -832,7 +832,7 @@ export function ResidencyCard({ region }: { region: ResidencyAttestation }) {
         </div>
 
         {region.data_classes.length > 0 ? (
-          <p className="text-xs text-muted-foreground">
+          <p className="text-caption text-muted-foreground">
             {t('residency.dataClasses')}:{' '}
             <span className="font-mono text-foreground">
               {region.data_classes.join(', ')}
@@ -844,7 +844,7 @@ export function ResidencyCard({ region }: { region: ResidencyAttestation }) {
           <CaveatNotice tone="warning">{region.note}</CaveatNotice>
         ) : null}
 
-        <p className="text-xs text-muted-foreground">
+        <p className="text-caption text-muted-foreground">
           {t('residency.lastChecked')}:{' '}
           {formatDateTime(region.last_checked, i18n.language)} ·{' '}
           {t('residency.attestedBy')}:{' '}

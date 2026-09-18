@@ -57,11 +57,11 @@ export function DriftFindingList({
               {f.kind}
             </Badge>
             {f.status && <StatusBadge status={f.status} />}
-            <span className="text-sm text-foreground">
+            <span className="text-body text-foreground">
               {f.title ?? f.subject_ref}
             </span>
           </div>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-caption text-muted-foreground">
             {f.subject_kind && (
               <span>
                 {t('drift.subject')}:{' '}

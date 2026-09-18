@@ -81,7 +81,7 @@ export function UnavailableNotice({
     <div
       role="status"
       className={cn(
-        'flex flex-col gap-2 rounded-lg border border-warning-line bg-warning-soft p-4 text-sm text-warning',
+        'flex flex-col gap-2 rounded-lg border border-warning-line bg-warning-soft p-4 text-body text-warning',
         className,
       )}
     >
@@ -93,7 +93,7 @@ export function UnavailableNotice({
       {retryHint ? (
         <p className="text-warning">{t('unavailable.retryHint')}</p>
       ) : null}
-      <p className="font-mono text-xs text-warning">
+      <p className="font-mono text-caption text-warning">
         {t('unavailable.code', { code })}
       </p>
       {children}
@@ -111,14 +111,14 @@ export function ChecksList({ checks }: { checks: WorkCheck[] }) {
       {checks.map((c, i) => (
         <li
           key={`${c.name}-${i}`}
-          className="flex items-center justify-between gap-3 text-sm"
+          className="flex items-center justify-between gap-3 text-body"
         >
-          <span className="font-mono text-xs text-muted-foreground">
+          <span className="font-mono text-caption text-muted-foreground">
             {c.name}
           </span>
           <span className="flex items-center gap-2">
             {c.evidence_ref ? (
-              <span className="font-mono text-xs text-muted-foreground">
+              <span className="font-mono text-caption text-muted-foreground">
                 {t('checks.evidence', { ref: c.evidence_ref })}
               </span>
             ) : null}

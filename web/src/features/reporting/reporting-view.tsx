@@ -63,6 +63,7 @@ import {
   type ReportMeta,
   type ScheduleConfig,
 } from './api'
+import { StaticTable } from '@/components/data/static-table'
 
 export function ReportingView() {
   const { t } = useTranslation(['reporting', 'common'])
@@ -102,38 +103,34 @@ export function ReportingView() {
           ) : reportsQ.isError ? (
             <ErrorState retry={() => void reportsQ.refetch()} />
           ) : reports.length === 0 ? (
-            <EmptyState title={t('catalog.empty')} />
+            <EmptyState
+              description={t('catalog.emptyHint')}
+              title={t('catalog.empty')}
+            />
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <StaticTable>
                 <thead>
-                  <tr className="border-b text-left text-xs uppercase tracking-wider text-muted-foreground">
-                    <th className="py-2 pr-4 font-medium">
-                      {t('catalog.colReport')}
-                    </th>
-                    <th className="py-2 pr-4 font-medium">
-                      {t('catalog.colFormats')}
-                    </th>
-                    <th className="py-2 pl-4 text-right font-medium">
+                  <tr className="tracking-wider">
+                    <th>{t('catalog.colReport')}</th>
+                    <th>{t('catalog.colFormats')}</th>
+                    <th className="text-right">
                       <span className="sr-only">{t('catalog.colActions')}</span>
                     </th>
                   </tr>
                 </thead>
                 <tbody>
                   {reports.map((r) => (
-                    <tr
-                      key={r.type}
-                      className="border-b last:border-0 align-top"
-                    >
-                      <td className="py-3 pr-4">
+                    <tr key={r.type} className="align-top">
+                      <td>
                         <div className="font-medium text-foreground">
                           {r.title}
                         </div>
-                        <div className="mt-0.5 max-w-prose text-xs text-muted-foreground">
+                        <div className="mt-0.5 max-w-prose text-caption text-muted-foreground">
                           {r.description}
                         </div>
                       </td>
-                      <td className="py-3 pr-4">
+                      <td>
                         <div className="flex flex-wrap gap-1">
                           {r.formats.map((f) => (
                             <Badge
@@ -146,7 +143,7 @@ export function ReportingView() {
                           ))}
                         </div>
                       </td>
-                      <td className="py-3 pl-4 text-right">
+                      <td className="text-right">
                         <Button
                           variant="secondary"
                           size="sm"
@@ -158,7 +155,7 @@ export function ReportingView() {
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </StaticTable>
             </div>
           )}
         </CardContent>
@@ -237,11 +234,11 @@ function EnterpriseReportsCard() {
               <span className="font-medium">
                 {t(`enterprise.${r.id}.title`)}
               </span>
-              <span className="text-xs text-muted-foreground">
+              <span className="text-caption text-muted-foreground">
                 {t(`enterprise.${r.id}.description`)}
               </span>
               {seam === r.id ? (
-                <span className="text-xs text-foreground">
+                <span className="text-caption text-foreground">
                   {t('enterprise.seam')}
                 </span>
               ) : null}
@@ -499,7 +496,10 @@ function ScheduleRunsDialog({
         {/* La poda, dicha DONDE se lee la lista: es lo que impide sacar la conclusión falsa. */}
         <IntelNotice tone="info">{t('runs.notAnArchive')}</IntelNotice>
         {q.isLoading ? null : runs.length === 0 ? (
-          <EmptyState title={t('runs.empty')} />
+          <EmptyState
+            description={t('runs.emptyHint')}
+            title={t('runs.empty')}
+          />
         ) : (
           <div className="flex flex-col gap-2">
             {runs.map((r) => (
@@ -511,14 +511,16 @@ function ScheduleRunsDialog({
                   <Badge variant={r.status === 'ok' ? 'success' : 'danger'}>
                     {r.status}
                   </Badge>
-                  <span className="font-mono text-xs">{r.report_type}</span>
-                  <span className="text-xs text-muted-foreground">
+                  <span className="font-mono text-caption">
+                    {r.report_type}
+                  </span>
+                  <span className="text-caption text-muted-foreground">
                     {r.ran_at}
                   </span>
                 </div>
                 {/* El MOTIVO del fallo, no sólo que falló: sin él, «failed» obliga a ir al log. */}
                 {r.error ? (
-                  <span className="text-xs text-danger">{r.error}</span>
+                  <span className="text-caption text-danger">{r.error}</span>
                 ) : null}
               </div>
             ))}
@@ -587,30 +589,27 @@ function SchedulesCard({ canRead }: { canRead: boolean }) {
         ) : schedulesQ.isError ? (
           <ErrorState retry={() => void schedulesQ.refetch()} />
         ) : schedules.length === 0 ? (
-          <EmptyState title={t('schedules.empty')} />
+          <EmptyState
+            description={t('schedules.emptyHint')}
+            title={t('schedules.empty')}
+          />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <StaticTable>
               <thead>
-                <tr className="border-b text-left text-xs uppercase tracking-wider text-muted-foreground">
-                  <th className="py-2 pr-4 font-medium">
-                    {t('schedules.colReport')}
-                  </th>
-                  <th className="py-2 pr-4 font-medium">
-                    {t('schedules.colCron')}
-                  </th>
-                  <th className="py-2 pr-4 font-medium">
-                    {t('schedules.colStatus')}
-                  </th>
-                  <th className="py-2 pl-4 text-right font-medium">
+                <tr className="tracking-wider">
+                  <th>{t('schedules.colReport')}</th>
+                  <th>{t('schedules.colCron')}</th>
+                  <th>{t('schedules.colStatus')}</th>
+                  <th className="text-right">
                     <span className="sr-only">{t('schedules.colActions')}</span>
                   </th>
                 </tr>
               </thead>
               <tbody>
                 {schedules.map((s) => (
-                  <tr key={s.id} className="border-b last:border-0">
-                    <td className="py-2 pr-4">
+                  <tr key={s.id}>
+                    <td>
                       <span className="font-medium text-foreground">
                         {s.report_type}
                       </span>{' '}
@@ -618,15 +617,15 @@ function SchedulesCard({ canRead }: { canRead: boolean }) {
                         {s.format}
                       </Badge>
                     </td>
-                    <td className="py-2 pr-4 font-mono text-xs">{s.cron}</td>
-                    <td className="py-2 pr-4">
+                    <td className="font-mono text-caption">{s.cron}</td>
+                    <td>
                       <Badge variant={s.enabled ? 'success' : 'neutral'}>
                         {s.enabled
                           ? t('schedules.enabled')
                           : t('schedules.disabled')}
                       </Badge>
                     </td>
-                    <td className="py-2 pl-4 text-right">
+                    <td className="text-right">
                       {/* El historial es de LECTURA: va con `canRead`, no con `canWrite`. */}
                       <Button
                         variant="ghost"
@@ -650,7 +649,7 @@ function SchedulesCard({ canRead }: { canRead: boolean }) {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </StaticTable>
           </div>
         )}
       </CardContent>

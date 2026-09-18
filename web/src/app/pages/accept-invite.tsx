@@ -94,11 +94,11 @@ export function AcceptInvitePage() {
     <AuthShell>
       <Card className="p-6">
         <div className="mb-5 flex flex-col gap-1">
-          <h1 className="font-display text-lg font-semibold tracking-tight text-foreground">
+          <h1 className="font-display text-title text-foreground">
             {t('invite.title')}
           </h1>
           {token !== '' ? (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-body text-muted-foreground">
               {t('invite.subtitle')}
             </p>
           ) : null}
@@ -106,7 +106,7 @@ export function AcceptInvitePage() {
 
         {token === '' ? (
           <div className="flex flex-col gap-4">
-            <p className="text-sm text-danger" role="alert">
+            <p className="text-body text-danger" role="alert">
               {t('invite.missingToken')}
             </p>
             <Button asChild variant="secondary" className="w-full">
@@ -155,7 +155,7 @@ export function AcceptInvitePage() {
             </Field>
 
             {submitError && (
-              <p className="text-sm text-danger" role="alert">
+              <p className="text-body text-danger" role="alert">
                 {submitError}
               </p>
             )}
@@ -168,7 +168,7 @@ export function AcceptInvitePage() {
             >
               {mutation.isPending ? t('invite.submitting') : t('invite.submit')}
             </Button>
-            <p className="text-center text-xs text-muted-foreground">
+            <p className="text-center text-caption text-muted-foreground">
               <Link to="/login" className="underline-offset-2 hover:underline">
                 {t('invite.goToLogin')}
               </Link>

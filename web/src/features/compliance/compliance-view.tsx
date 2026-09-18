@@ -151,6 +151,7 @@ export function ComplianceView() {
           ) : (
             <SectionCard title={t('gaps.title')}>
               <EmptyState
+                description={t('framework.selectHint')}
                 icon={<ShieldQuestion />}
                 title={t('framework.select')}
               />
@@ -306,7 +307,11 @@ function GapsSection({ framework }: { framework: string }) {
       <AsyncSection query={gapsQ} skeletonHeight={260}>
         {(res) =>
           res.gaps.length === 0 ? (
-            <EmptyState icon={<FileCheck2 />} title={t('gaps.empty')} />
+            <EmptyState
+              description={t('gaps.emptyHint')}
+              icon={<FileCheck2 />}
+              title={t('gaps.empty')}
+            />
           ) : (
             <div className="flex flex-col gap-3">
               <GapList gaps={res.gaps} />
@@ -539,7 +544,11 @@ function RiskTab({ canReview }: { canReview: boolean }) {
         <AsyncSection query={riskQ} skeletonHeight={220}>
           {(list) =>
             list.items.length === 0 ? (
-              <EmptyState icon={<ShieldQuestion />} title={t('risk.empty')} />
+              <EmptyState
+                description={t('risk.emptyHint')}
+                icon={<ShieldQuestion />}
+                title={t('risk.empty')}
+              />
             ) : (
               <RiskTable
                 rows={list.items}
@@ -608,7 +617,7 @@ function RiskReviewDialog({
             review.mutate()
           }}
         >
-          <p className="text-xs text-muted-foreground">
+          <p className="text-caption text-muted-foreground">
             {t('risk.rationale')}:{' '}
             <span className="text-foreground">{row.rationale}</span>
           </p>
@@ -703,6 +712,7 @@ function ResidencyTab({ canScan }: { canScan: boolean }) {
         {(list) =>
           list.items.length === 0 ? (
             <EmptyState
+              description={t('residency.emptyHint')}
               icon={<ShieldQuestion />}
               title={t('residency.empty')}
             />

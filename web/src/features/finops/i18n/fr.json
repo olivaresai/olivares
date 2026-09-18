@@ -3,6 +3,7 @@
     "title": "Alertes de seuil",
     "description": "Historique des franchissements de seuil de budget. L’acheminement vers Slack/SIEM est assuré par les connecteurs de sortie — ceci en est le relevé.",
     "empty": "Aucune alerte franchie",
+    "emptyHint": "Une alerte de budget se déclenche lorsque la dépense franchit un seuil que vous définissez. Aucune n’a été franchie dans cette plage.",
     "columns": {
       "triggeredAt": "Déclenchée",
       "budget": "Budget",
@@ -151,6 +152,7 @@
     "editDescription": "The code cannot be changed: mapping rules resolve by it and issued statements record it.",
     "editTitle": "Edit cost centre",
     "empty": "No cost centres yet",
+    "emptyHint": "Un centre de coûts attribue la dépense à une équipe ou à un responsable de budget. Créez-en un pour commencer à attribuer.",
     "ingestOnlyNotice": "⛔ Mapping rules are applied AT INGESTION and stamped on each cost row. Creating or changing a rule does NOT re-attribute spend already recorded — it only affects costs ingested from now on.",
     "key": "Key",
     "name": "Name",
@@ -159,6 +161,7 @@
     "newRule": "New rule",
     "newRuleDescription": "Bind one dimension value to this cost centre.",
     "noRules": "No rules — traffic stays unattributed",
+    "noRulesHint": "Une règle associe le trafic à un centre de coûts. Sans règle, chaque requête reste non attribuée dans les rapports.",
     "owner": "Owner",
     "priority": "priority {{n}}",
     "priorityLabel": "Priority",
@@ -319,6 +322,7 @@
     "title": "Recommandations d’optimisation",
     "description": "Économies potentielles issues du parc gouverné. Les estimations ne sont pas une promesse — vérifiez l’adéquation en capacité et en qualité.",
     "empty": "Aucune recommandation",
+    "emptyHint": "Des recommandations apparaissent ici lorsque la dépense, le routage ou les limites peuvent être améliorés. Il n’y a rien à changer pour l’instant.",
     "estimatedSavings": "Économie est.",
     "subject": "Sujet",
     "kind": {
@@ -417,6 +421,7 @@
     "description": "Sièges attribués face aux acteurs réellement actifs, par jour. Un jour sans instantané de sièges ne rapporte rien — ce n'est pas un jour à usage nul.",
     "provider": "Fournisseur",
     "empty": "Aucun jour rapporté",
+    "emptyHint": "L’utilisation des sièges est rapportée par jour à partir de l’activité des sessions. Aucun jour de cette plage n’en a rapporté.",
     "assigned": "{{assigned}} attribués · {{active}} actifs",
     "noSnapshot": "aucun instantané de sièges publié pour ce jour"
   },
@@ -478,6 +483,7 @@
     "riskTitle": "Risque de résiliation",
     "riskDescription": "Sujets qui consomment de la dépense sans résultats satisfaits.",
     "riskEmpty": "Aucun sujet ne consomme de dépense sans résultats",
+    "riskEmptyHint": "Ce panneau liste les sujets dont la dépense n’est pas compensée par des résultats. Aucun n’a franchi le seuil dans cette plage.",
     "satisfiedOf": "{{satisfied}} sur {{outcomes}} satisfaits"
   },
   "evidence": {

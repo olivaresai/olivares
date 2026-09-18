@@ -66,10 +66,12 @@ function Section({
   return (
     <section className="flex flex-col gap-2">
       <div className="flex items-center justify-between gap-2">
-        <h3 className="text-sm font-medium text-foreground">{title}</h3>
+        <h3 className="text-body font-medium text-foreground">{title}</h3>
         {action}
       </div>
-      {caption && <p className="text-xs text-muted-foreground">{caption}</p>}
+      {caption && (
+        <p className="text-caption text-muted-foreground">{caption}</p>
+      )}
       {children}
     </section>
   )
@@ -318,7 +320,7 @@ export function DefinitionDetailSheet({
                 onDelete={() => setConfirmDelete(true)}
               />
 
-              <p className="rounded-md border border-info-line bg-info-soft px-3 py-2 text-xs text-info">
+              <p className="rounded-md border border-info-line bg-info-soft px-3 py-2 text-caption text-info">
                 {t('detail.controlPlaneNote')}
               </p>
 
@@ -429,7 +431,7 @@ export function DefinitionDetailSheet({
         pending={retireMutation.isPending}
         onConfirm={() => retireMutation.mutate(retirePending?.approval_ref)}
       >
-        <p className="rounded-md border border-warning-line bg-warning-soft px-3 py-2 text-xs text-warning">
+        <p className="rounded-md border border-warning-line bg-warning-soft px-3 py-2 text-caption text-warning">
           {t('retire.edgesNotice')}
         </p>
         <GovernedBody
@@ -472,7 +474,7 @@ function GovernedBody({
     <div className="mt-1 flex flex-col gap-2">
       {/* The plan_hash the approval binds to (anti-TOCTOU). */}
       {(pending?.plan_hash ?? detail?.spec_hash) && (
-        <p className="font-mono text-xs text-muted-foreground">
+        <p className="font-mono text-caption text-muted-foreground">
           {t('apply.planHashNotice', {
             hash: (pending?.plan_hash ?? detail?.spec_hash ?? '').slice(0, 12),
           })}
@@ -484,7 +486,7 @@ function GovernedBody({
       )}
 
       {pending?.requires_approval && (
-        <div className="rounded-md border border-info-line bg-info-soft px-3 py-2 text-xs text-info">
+        <div className="rounded-md border border-info-line bg-info-soft px-3 py-2 text-caption text-info">
           <p className="font-medium">{t('apply.pendingTitle')}</p>
           <p className="mt-0.5">{t('apply.pendingBody')}</p>
           <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -499,7 +501,9 @@ function GovernedBody({
       )}
 
       {/* Gate status is reported for DISPLAY ONLY — never an authorization input. */}
-      <p className="text-xs text-muted-foreground">{t('gate.displayNotice')}</p>
+      <p className="text-caption text-muted-foreground">
+        {t('gate.displayNotice')}
+      </p>
     </div>
   )
 }
@@ -627,7 +631,7 @@ function PlanResultPanel({
         </Button>
       }
     >
-      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+      <div className="flex flex-wrap items-center gap-2 text-caption text-muted-foreground">
         <Badge variant="neutral">
           {t('plan.fromTo', {
             from: result.from_version,
@@ -639,7 +643,7 @@ function PlanResultPanel({
         </span>
       </div>
       {result.up_to_date || result.changes.length === 0 ? (
-        <p className="text-sm text-success">{t('plan.upToDate')}</p>
+        <p className="text-body text-success">{t('plan.upToDate')}</p>
       ) : (
         <ChangeList changes={result.changes} />
       )}
@@ -665,7 +669,7 @@ function VerifyResultPanel({
       }
     >
       {result.in_sync || result.drift.length === 0 ? (
-        <p className="text-sm text-success">{t('verify.inSync')}</p>
+        <p className="text-body text-success">{t('verify.inSync')}</p>
       ) : (
         <ChangeList changes={result.drift} />
       )}
@@ -771,7 +775,9 @@ function DetailBody({
       <Separator />
       <Section title={t('detail.desiredSpec')}>
         {!spec ? (
-          <p className="text-sm text-muted-foreground">{t('detail.noSpec')}</p>
+          <p className="text-body text-muted-foreground">
+            {t('detail.noSpec')}
+          </p>
         ) : (
           <div className="flex flex-col gap-4">
             <KvList>
@@ -794,7 +800,7 @@ function DetailBody({
 
             {spec.resources && Object.keys(spec.resources).length > 0 && (
               <div className="flex flex-col gap-1.5">
-                <p className="text-xs font-medium text-foreground">
+                <p className="text-caption font-medium text-foreground">
                   {t('detail.resources')}
                 </p>
                 <div className="flex flex-wrap gap-1.5">
@@ -810,17 +816,17 @@ function DetailBody({
             {/* Env references — secret REFERENCES only, never values. */}
             {spec.env_refs && spec.env_refs.length > 0 && (
               <div className="flex flex-col gap-1.5">
-                <p className="text-xs font-medium text-foreground">
+                <p className="text-caption font-medium text-foreground">
                   {t('detail.envRefs')}
                 </p>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-caption text-muted-foreground">
                   {t('detail.envRefsHint')}
                 </p>
                 <ul className="flex flex-col gap-1.5">
                   {spec.env_refs.map((e) => (
                     <li
                       key={e.name}
-                      className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs"
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-surface px-2.5 py-1.5 text-caption"
                     >
                       <span className="font-mono text-foreground">
                         {e.name}
@@ -835,17 +841,17 @@ function DetailBody({
             {/* Wirings declared in the spec. */}
             {spec.wirings && spec.wirings.length > 0 && (
               <div className="flex flex-col gap-1.5">
-                <p className="text-xs font-medium text-foreground">
+                <p className="text-caption font-medium text-foreground">
                   {t('detail.wirings')}
                 </p>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-caption text-muted-foreground">
                   {t('detail.wiringsHint')}
                 </p>
                 <ul className="flex flex-col gap-1.5">
                   {spec.wirings.map((w, i) => (
                     <li
                       key={`${w.resource_kind}:${w.resource_ref}:${i}`}
-                      className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs"
+                      className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-surface px-2.5 py-1.5 text-caption"
                     >
                       <Badge variant="neutral">{w.resource_kind}</Badge>
                       <span className="font-mono text-foreground">
@@ -864,7 +870,7 @@ function DetailBody({
             {/* Identity intent. */}
             {spec.identity && (
               <div className="flex flex-col gap-1.5">
-                <p className="text-xs font-medium text-foreground">
+                <p className="text-caption font-medium text-foreground">
                   {t('detail.identity')}
                 </p>
                 <KvList>

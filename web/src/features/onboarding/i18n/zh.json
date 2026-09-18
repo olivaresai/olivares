@@ -85,6 +85,7 @@
       "copyFailed": "无法复制到剪贴板。",
       "checkins": "主机报到",
       "noCheckins": "尚无主机报到。",
+      "noCheckinsHint": "当策略执行点安装完成并能连通引擎后，主机就会登记。在主机上安装后即可在此看到。",
       "colScope": "范围",
       "colReporter": "报告方",
       "colRevision": "修订版",

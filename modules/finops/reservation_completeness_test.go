@@ -20,7 +20,7 @@ import (
 )
 
 // -----------------------------------------------------------------------------
-// D02-A: a reservation ledger that could not be fully enumerated, or whose total
+// The completeness rule: a reservation ledger that could not be fully enumerated, or whose total
 // is not representable, is an INABILITY TO ESTABLISH THE CEILING — never a
 // smaller total and never new headroom. These cases pin that distinction at the
 // seams that decide admission (ReserveBudget, CheckBudget), the seams that report
@@ -74,7 +74,7 @@ func (s forcedReservationScope) LockTransaction(ctx context.Context, key string)
 
 // TransactionNow forwards the REAL database clock, for the same reason
 // LockTransaction forwards the real lock: a decorator that hid the capability
-// would make the D02 lifecycle operations fail closed on the FIXTURE rather than
+// would make the lifecycle operations fail closed on the FIXTURE rather than
 // on anything the case is about. Forwarding is additive — no existing case's
 // behavior changes, because none of them read the transaction clock.
 func (s forcedReservationScope) TransactionNow(ctx context.Context) (model.Timestamp, error) {
@@ -298,7 +298,7 @@ func countReservations(t testing.TB, st store.Store, tenant model.TenantID) []mo
 // Enumeration
 // -----------------------------------------------------------------------------
 
-// TestReserveDeniesAnIncompleteReservationEnumeration is the core D02-A case: the
+// TestReserveDeniesAnIncompleteReservationEnumeration is the core completeness case: the
 // reserved sum stopped at the page cap with rows still to come, so it is a LOWER
 // bound. Admitting on a lower bound hands out headroom that may not exist, and
 // returning an error hands the decision to a caller documented to fail open. The

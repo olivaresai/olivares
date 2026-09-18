@@ -52,7 +52,7 @@ func (s *staticCredentialProvider) Credential(_ context.Context, _ string) (stri
 // KNOWN LIMIT, declared rather than hidden: the client currently receives the connector's
 // generic upstream-error code. Giving this refusal its OWN JSON-RPC code needs one exported
 // constant in connectors/mcp (proposed -31020, outside the JSON-RPC reserved range as that
-// package requires), which is a different lane's file. Until then the refusal is stable and
+// package requires), which is another package's file. Until then the refusal is stable and
 // self-describing in the message and in the logs, which is what makes it diagnosable.
 var errMCPAddonRequired = errors.New("mcp gateway: addon_requires_license")
 

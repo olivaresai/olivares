@@ -68,13 +68,15 @@ const FORBIDDEN_IN_UNKNOWN: Record<keyof typeof LANGS, string[]> = {
   fr: ['aucun résultat', 'non trouvé', 'succès', 'réussi', 'propre', 'correct'],
 }
 
+type WorkBundle = (typeof LANGS)[keyof typeof LANGS]
+
 describe('the third outcome survives translation in all seven languages', () => {
   for (const [lang, bundle] of Object.entries(LANGS) as [
     keyof typeof LANGS,
-    (typeof LANGS)[keyof typeof LANGS],
+    WorkBundle,
   ][]) {
     describe(lang, () => {
-      const verdict = (bundle as Record<string, any>).verdict
+      const verdict = bundle.verdict
 
       it('carries all three verdicts — never two', () => {
         // Two outcomes is the defect the canon names. If a bundle ever drops the third
@@ -124,7 +126,7 @@ describe('the third outcome survives translation in all seven languages', () => 
         // Trap 6 in copy form: this notice is the only thing telling an operator that
         // the history view does not answer "is this in force?". An empty or missing
         // string would silently drop that refusal.
-        const decisions = (bundle as Record<string, any>).decisions
+        const decisions = bundle.decisions
         expect(decisions.historyNotice.length).toBeGreaterThan(40)
         expect(decisions.state.notAttributed.length).toBeGreaterThan(3)
       })

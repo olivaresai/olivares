@@ -117,7 +117,7 @@ function ActionError({ error, action }: { error: unknown; action: RowAction }) {
   return (
     <p
       role="alert"
-      className="rounded-md bg-danger-soft p-3 text-sm text-danger"
+      className="rounded-md bg-danger-soft p-3 text-body text-danger"
     >
       {message}
     </p>
@@ -396,7 +396,7 @@ export function NhiActions({ identity }: { identity: NhiLifecycleDTO }) {
               </SelectContent>
             </Select>
           </Field>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-caption text-muted-foreground">
             {t('lifecycle.actions.policy.partialUpdateNote')}
           </p>
           <Field
@@ -579,7 +579,7 @@ export function NhiActions({ identity }: { identity: NhiLifecycleDTO }) {
             />
           </Field>
           {rotate.data?.new_credential_ref && (
-            <p className="text-xs text-muted-foreground">
+            <p className="text-caption text-muted-foreground">
               {t('lifecycle.actions.rotate.credentialRef', {
                 ref: rotate.data.new_credential_ref,
               })}
@@ -611,7 +611,7 @@ export function NhiActions({ identity }: { identity: NhiLifecycleDTO }) {
             </DialogDescription>
           </DialogHeader>
           {outcome?.result.approval_ref && (
-            <p className="font-mono text-sm break-all">
+            <p className="font-mono text-body break-all">
               {t('lifecycle.actions.result.approval', {
                 ref: outcome.result.approval_ref,
               })}
@@ -729,7 +729,7 @@ export function NhiSweepAction() {
         {t('lifecycle.actions.sweep.button')}
       </Button>
       {report && (
-        <p role="status" className="text-xs text-muted-foreground">
+        <p role="status" className="text-caption text-muted-foreground">
           {t('lifecycle.actions.sweep.result', {
             scanned: report.scanned,
             blocked: report.blocked,

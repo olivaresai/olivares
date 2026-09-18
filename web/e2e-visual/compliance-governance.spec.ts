@@ -13,7 +13,7 @@
 // The engine is mocked per-test rather than through the shared fixtures file:
 // these flows turn on the exact STATUS the engine returns (202 vs 423 vs 200),
 // which a shared 200-for-everything fixture cannot express — and mocking here
-// keeps this spec from colliding with other lanes editing fixtures.ts.
+// keeps this spec from colliding with other edits to fixtures.ts.
 import { expect, test, type Page } from '@playwright/test'
 
 const ACTIVE_HOLD = {

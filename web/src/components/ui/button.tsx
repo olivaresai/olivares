@@ -16,7 +16,7 @@ import { cn } from '@/lib/utils'
 const buttonVariants = cva(
   cn(
     'inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-md',
-    'text-sm font-medium transition-colors duration-100 ease-out select-none outline-none',
+    'text-body font-medium transition-colors duration-100 ease-out select-none outline-none',
     'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
     'disabled:pointer-events-none disabled:opacity-50',
     '[&_svg]:size-4 [&_svg]:shrink-0',
@@ -38,7 +38,7 @@ const buttonVariants = cva(
         link: 'h-auto rounded-none p-0 text-accent-text underline-offset-4 hover:underline',
       },
       size: {
-        sm: 'h-7 px-2.5 text-xs',
+        sm: 'h-7 px-2.5 text-caption',
         base: 'h-8 px-3',
         lg: 'h-9 px-4',
         icon: 'size-8',

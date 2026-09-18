@@ -13,7 +13,7 @@ import (
 	"github.com/olivaresai/olivares/core/store"
 )
 
-// D02-A4.2 — THE ONE FINANCIAL EVALUATION, shared by the alert path and by status.
+// THE ONE FINANCIAL EVALUATION, shared by the alert path and by status.
 //
 // Before this file the two disagreed by construction: `evaluateBudgets` summed the
 // old aggregate with int64 and compared with float64, while budgetStatus computed
@@ -166,7 +166,7 @@ func evaluateBudgetAmount(ctx context.Context, sc store.Scope, p model.Policy, s
 		return eval, eval.Cost.Err
 	}
 
-	// The version-aware hold reader over the evaluation's OWN window (D02). The
+	// The version-aware hold reader over the evaluation's OWN window. The
 	// window is already computed above as eval.PeriodStart/PeriodEnd/HasPeriod, so
 	// the evaluator no longer asks a reader that had to assume one.
 	reserved, err := heldReservedForWindow(ctx, sc, p.ID, spec.Key, pStart, eval.PeriodEnd, hasLower, now)
@@ -175,7 +175,7 @@ func evaluateBudgetAmount(ctx context.Context, sc store.Scope, p model.Policy, s
 	}
 	eval.Dynamic = dynamicFromReservedTotal(reserved)
 	if reserved.UnallocatedHistorical {
-		// D02/R5. The enumeration completed and every row was clean; what is not
+		// The enumeration completed and every row was clean; what is not
 		// established is that a held obligation with NO accounting instant belongs to
 		// this window, which has already closed. dynamicFromReservedTotal would name
 		// that "scan incomplete" — the only reason it has for the non-negative class —

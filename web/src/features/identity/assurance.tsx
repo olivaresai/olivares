@@ -356,13 +356,13 @@ function CeremonyPanel({
   return (
     <Card className={cn('border-warning/40', className)} aria-busy={busy}>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base">
+        <CardTitle className="flex items-center gap-2">
           <ShieldAlert className="size-4 text-warning" aria-hidden />
           {t('assurance.stepUpTitle')}
         </CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
-        <p className="text-sm text-muted-foreground">
+        <p className="text-body text-muted-foreground">
           {t('assurance.stepUpBody', {
             action: t(`assurance.actions.${action}`, {
               defaultValue: t('assurance.actions.generic'),
@@ -414,12 +414,12 @@ function CeremonyPanel({
         )}
         {allowEnrollment && enrollmentAvailable && (
           <div className="flex flex-col gap-3 rounded-md border p-3">
-            <p className="text-sm text-muted-foreground">
+            <p className="text-body text-muted-foreground">
               {t('assurance.enrollHint')}
             </p>
             {canEnrollPasskey() ? (
               <>
-                <label className="flex flex-col gap-1.5 text-sm font-medium">
+                <label className="flex flex-col gap-1.5 text-body font-medium">
                   {t('assurance.passkeyName')}
                   <Input
                     value={name}
@@ -444,7 +444,7 @@ function CeremonyPanel({
                 </Button>
               </>
             ) : (
-              <p role="alert" className="text-sm text-warning">
+              <p role="alert" className="text-body text-warning">
                 {t('assurance.enrollUnsupported')}
               </p>
             )}
@@ -456,7 +456,7 @@ function CeremonyPanel({
         {status !== 'idle' && status !== 'pending' && !busy && (
           <p
             role={status === 'registered' ? 'status' : 'alert'}
-            className="text-sm text-muted-foreground"
+            className="text-body text-muted-foreground"
           >
             {t(
               `assurance.${status === 'unenrolled' && allowEnrollment ? 'unenrolledInline' : status}`,
@@ -474,7 +474,7 @@ function CeremonyPanel({
           </Button>
         )}
         {allowEnrollment && (
-          <p className="text-xs text-muted-foreground">
+          <p className="text-caption text-muted-foreground">
             {t('assurance.cancelHint')}
           </p>
         )}

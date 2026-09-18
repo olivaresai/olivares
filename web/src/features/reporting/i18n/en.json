@@ -4,6 +4,7 @@
   "catalog": {
     "title": "On-demand reports",
     "empty": "No report types are available.",
+    "emptyHint": "The catalog lists the report types this build can produce. None is available in this edition.",
     "colReport": "Report",
     "colFormats": "Formats",
     "colActions": "Actions",
@@ -35,6 +36,7 @@
     "new": "New schedule",
     "enterprise": "Scheduled reports are an enterprise capability and are not enabled in this build.",
     "empty": "No scheduled reports yet.",
+    "emptyHint": "A schedule produces a report on a cadence and delivers it. Create one so a report arrives without being asked for.",
     "colReport": "Report",
     "colCron": "Cron",
     "colStatus": "Status",
@@ -75,6 +77,7 @@
     "title": "Run history",
     "description": "Every recorded execution of this schedule: when it ran, and if it failed, why.",
     "notAnArchive": "Providers cap this list and prune old runs — it is an operational convenience, not an archive. A short list does not mean the schedule only ran a few times.",
-    "empty": "No runs recorded"
+    "empty": "No runs recorded",
+    "emptyHint": "Each report run is listed here with its status and its output. Run a report to record the first one."
   }
 }

@@ -45,8 +45,22 @@ import { LiveDot, RelTimeLabel, useLiveStream } from '@/features/shared'
 import { ApiError } from '@/lib/api/errors'
 import { useAuth } from '@/lib/auth/context'
 import { formatInt, formatMicroUsd, formatTokens } from '@/lib/format'
+import { useValidatedUrlState } from '@/lib/hooks/use-url-state'
+import { UrlStateNotice } from '@/features/shared'
 import { cn } from '@/lib/utils'
 import { sessionsApi, sessionsKeys } from './api'
+import {
+  EVIDENCE_PARAM,
+  PANE_PARAM,
+  SESSION_ADDRESS_KEYS,
+  SESSION_PARAM,
+  addressFromTarget,
+  addressOf,
+  decodeSessionAddress,
+  targetFromAddress,
+  type EvidenceBlock,
+  type WorkPane,
+} from './session-address'
 import { AttributionChip } from './attribution-chip'
 import { CcStateBadge } from './cc-state-badge'
 import {
@@ -54,11 +68,13 @@ import {
   primaryRun,
   sessionLabel,
   sessionSearchKey,
-  sessionTarget,
   type Provenance,
   type UnifiedSession,
 } from './provenance'
 import { SessionCard } from './session-card'
+import { useSessionPins } from './use-session-pins'
+import { useSessionResolution } from './use-session-resolution'
+import { WorkSurface } from './work-surface'
 import type { SessionTarget } from './session-target'
 import type { CcState, LiveDTO } from './types'
 import './i18n'
@@ -243,6 +259,15 @@ interface ColaPista {
  * origin keeps a card open, and the card is the surface that then asks the engine for
  * more. `needsLive`/`needsRun` record which halves the clicked ROW was made of; a
  * target the card itself navigated to is not row-backed and only carries the episode.
+ *
+ * ⛔ THIS IS NO LONGER WHAT THE OPERATOR CHOSE — IT IS WHAT THE CHOICE IS STILL WORTH
+ *    The choice itself now lives in the address bar (`session-address.ts`), and
+ *    nothing writes this record except the one render-time adjustment that watches the
+ *    address. The two are not a duplicate of each other and must not be read as one:
+ *    the URL says what the operator ASKED FOR, and is shareable, reloadable and
+ *    reachable with Back; this says whether the authority that asked for it is still
+ *    the authority acting, and it is not shareable at all, because an admission is not
+ *    a fact about a link.
  */
 interface Selection {
   /** The authority EPISODE that owned the click (see `AuthorityEpisode`). */
@@ -378,6 +403,40 @@ function Inner({
   const [source, setSource] = useState<string>(ALL)
   const [selection, setSelection] = useState<Selection | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
+  /**
+   * IS THE FULL DETAIL SHEET OPEN? Selecting a session no longer opens it: the three
+   * panes are where a session is READ, and the sheet is where it is OPERATED — attach,
+   * drive, stop, governance, the live console. Keeping the sheet on selection would put
+   * a modal over the surface the moment the operator chose anything, which is the
+   * opposite of a place to work.
+   *
+   * It is local state and deliberately NOT in the address: a sheet is a control
+   * surface, not a place. What is worth sharing — which session, which pane, which
+   * evidence — is in the URL; "and a modal was open" is not.
+   */
+  const [detailOpen, setDetailOpen] = useState(false)
+
+  /**
+   * WHICH SESSION IS ON SCREEN — IN THE ADDRESS BAR.
+   *
+   * A review named this the largest gap the front door left: a work row there could
+   * open `/sessions` and no further, *"the ROOM, not the card"*, because this view held
+   * its selection in `useState` and nothing outside the component could name a session.
+   *
+   * `history: 'push'` is the decision that makes it a place rather than a filter. The
+   * two facets beside it — which pane, which evidence — patch with `'replace'` at their
+   * own call sites, because they are facets OF the place. So Back means "the session I
+   * was reading a moment ago", which is what an operator pressing it means.
+   *
+   * The value is untrusted (`decodeSessionAddress` validates and reports), and the
+   * report is rendered — a deep link that quietly ignored half of what it was handed
+   * would show the recipient a different screen than the author saw.
+   */
+  const [address, patchAddress, addressIssues] = useValidatedUrlState(
+    SESSION_ADDRESS_KEYS,
+    decodeSessionAddress,
+    { history: 'push' },
+  )
 
   const queryClient = useQueryClient()
 
@@ -771,6 +830,41 @@ function Inner({
     [live, runAdmitted, runsQuery.data],
   )
 
+  /**
+   * THE ADDRESS BECOMES AN ADMITTED SELECTION — ONCE, WHEN IT CHANGES.
+   *
+   * Adjusted during render because that is where the change is observable and an effect
+   * may not set state in this codebase. The guard is the ADDRESS, never the episode or
+   * the admission, and that is the whole correctness of it: re-stamping on anything but
+   * an address change would undo the one-way retirement below, and a returning
+   * permission would reopen a card the operator never re-chose — the defect review R2
+   * found in this file and the one the generation stamps exist to close.
+   *
+   * ROW-BACKING IS READ FROM THE PAGE, AT THE INSTANT OF THE CHANGE. A click resolves
+   * the row it clicked, so a session opened from the list keeps exactly the authority
+   * it always had: refuse the half that row was made of and the card goes with it. A
+   * COLD DEEP LINK has no page yet, so it is not row-backed — the same standing a
+   * target the card navigated to has always had. That is not a loophole: the card's own
+   * reads are answered by the engine, which refuses what this principal may not read.
+   */
+  const [seenAddress, setSeenAddress] = useState<string | null>(null)
+  if (seenAddress !== address.address) {
+    setSeenAddress(address.address)
+    const intent = address.address ? targetFromAddress(address.address) : null
+    if (!intent) setSelection(null)
+    else {
+      const row = sessions.find((s) => addressOf(s) === address.address)
+      setSelection({
+        episode: episodio,
+        needsLive: !!row?.live,
+        needsRun: (row?.runs.length ?? 0) > 0,
+        liveGen: admission.liveGen,
+        runGen: admission.runGen,
+        target: intent,
+      })
+    }
+  }
+
   const rows = useMemo(
     () =>
       sessions.filter((s) => {
@@ -840,7 +934,7 @@ function Inner({
           const ref = row.original.sessionRef
           return (
             <span className="flex flex-col">
-              <span className="font-mono text-xs font-medium text-foreground">
+              <span className="font-mono text-caption font-medium text-foreground">
                 {label}
               </span>
               {ref && ref !== label && (
@@ -916,7 +1010,7 @@ function Inner({
         accessorFn: (s) => s.control,
         header: t('cols.control'),
         cell: ({ row }) => (
-          <span className="text-xs text-muted-foreground">
+          <span className="text-caption text-muted-foreground">
             {t(`card.control.${row.original.control}`)}
           </span>
         ),
@@ -945,7 +1039,9 @@ function Inner({
         cell: ({ getValue }) => {
           const v = getValue<string>()
           return v ? (
-            <span className="font-mono text-xs text-muted-foreground">{v}</span>
+            <span className="font-mono text-caption text-muted-foreground">
+              {v}
+            </span>
           ) : (
             <span className="text-muted-foreground">—</span>
           )
@@ -959,7 +1055,7 @@ function Inner({
         cell: ({ row }) => {
           const l = row.original.live
           return l ? (
-            <span className="font-mono text-xs tabular-nums text-muted-foreground">
+            <span className="font-mono text-caption tabular-nums text-muted-foreground">
               {formatTokens(l.input_tokens, lang)} /{' '}
               {formatTokens(l.output_tokens, lang)}
             </span>
@@ -975,7 +1071,7 @@ function Inner({
         cell: ({ row }) => {
           const l = row.original.live
           return l ? (
-            <span className="font-mono text-xs tabular-nums text-foreground">
+            <span className="font-mono text-caption tabular-nums text-foreground">
               {formatMicroUsd(l.cost_micro_usd, { locale: lang })}
             </span>
           ) : (
@@ -1032,37 +1128,99 @@ function Inner({
       ? selection.target
       : null
 
+  /**
+   * THE ADDRESS OUTLIVED THE AUTHORITY THAT CHOSE IT — SAY SO, AND CLEAR IT.
+   *
+   * A retirement leaves the URL naming a session the screen is no longer showing. That
+   * is the one state a deep-linkable surface must not sit in quietly: the operator
+   * copies the link, the recipient is shown something else, and neither is told. So the
+   * key goes (a REPLACE — a value that was never in effect is not a place to go Back
+   * to), and the fact is LATCHED across that cleanup so the notice survives long enough
+   * to be read. It clears when a session is successfully open again.
+   *
+   * Both halves are adjusted during render; the clearing itself is a navigation and
+   * lives in the effect below, which sets no state.
+   */
+  const [retiredAddress, setRetiredAddress] = useState<string | null>(null)
+  if (address.address && !target && retiredAddress !== address.address)
+    setRetiredAddress(address.address)
+  if (address.address && target && retiredAddress !== null)
+    setRetiredAddress(null)
+
+  const addressToClear = address.address && !target ? address.address : null
+  useEffect(() => {
+    if (!addressToClear) return
+    patchAddress({ [SESSION_PARAM]: undefined }, { history: 'replace' })
+  }, [addressToClear, patchAddress])
+
+  /**
+   * THE OPEN SESSION, RESOLVED ONCE. The panes and the detail card are two views of
+   * one answer, and the resolution carries an SSE subscription — so it is read here
+   * and handed down, rather than each surface asking the engine for the same row.
+   */
+  const resolution = useSessionResolution(target)
+
+  /**
+   * OPENING A SESSION IS A NAVIGATION, and the address is the only thing written here.
+   * The adjustment above turns it into an admitted selection, so there is exactly one
+   * writer of what is on screen and the URL can never disagree with the card.
+   */
+  /** The RAIL opens a session: the panes are the destination, no modal. */
+  const abrirDelCarril = useCallback(
+    (s: UnifiedSession) => {
+      patchAddress({ [SESSION_PARAM]: addressOf(s) })
+    },
+    [patchAddress],
+  )
+
+  /**
+   * The TABLE opens a session AND its detail sheet — which is exactly what a row click
+   * on this screen did before the work surface, and taking that away would have removed a function
+   * from the table in the same commit that promised to keep it.
+   */
   const abrirFila = useCallback(
     (s: UnifiedSession) => {
-      setSelection({
-        episode: episodio,
-        needsLive: !!s.live,
-        needsRun: s.runs.length > 0,
-        liveGen: admission.liveGen,
-        runGen: admission.runGen,
-        target: sessionTarget(s),
-      })
+      patchAddress({ [SESSION_PARAM]: addressOf(s) })
+      setDetailOpen(true)
     },
-    [episodio, admission.liveGen, admission.runGen],
+    [patchAddress],
+  )
+
+  /** Which pane is in front below `xl`, and which evidence block is open. Both are
+   * FACETS of the session on screen, so they replace rather than push: Back means the
+   * previous session, not the previous scroll of the same one. */
+  const elegirPanel = useCallback(
+    (pane: WorkPane) => {
+      patchAddress({ [PANE_PARAM]: pane }, { history: 'replace' })
+    },
+    [patchAddress],
+  )
+
+  const elegirEvidencia = useCallback(
+    (block: EvidenceBlock) => {
+      patchAddress({ [EVIDENCE_PARAM]: block }, { history: 'replace' })
+    },
+    [patchAddress],
   )
 
   /** The card navigating to a RELATED session: resolved by the card against the engine,
-   * not backed by a row here, so it depends on the context and on nothing else. */
+   * not backed by a row here, so it depends on the context and on nothing else. A
+   * target carrying no reference addresses nothing, and moving to it would blank the
+   * card while leaving the address bar pointing at the session the operator can still
+   * see — so it is refused here rather than half-applied. */
   const navegarDesdeTarjeta = useCallback(
     (next: SessionTarget) => {
-      setSelection({
-        episode: episodio,
-        needsLive: false,
-        needsRun: false,
-        liveGen: admission.liveGen,
-        runGen: admission.runGen,
-        target: next,
-      })
+      const to = addressFromTarget(next)
+      if (to) patchAddress({ [SESSION_PARAM]: to })
     },
-    [episodio, admission.liveGen, admission.runGen],
+    [patchAddress],
   )
 
-  const cerrarTarjeta = useCallback(() => setSelection(null), [])
+  /** Closing the SHEET leaves the session on screen: the panes are still reading it,
+   * and clearing the address would send the operator back to an empty surface. */
+  const cerrarTarjeta = useCallback(() => setDetailOpen(false), [])
+
+  const pins = useSessionPins()
 
   const showWorkspaces = canRunRead
   // B1: the provider-profile plane has its OWN read tier, independent of runs — the
@@ -1103,23 +1261,130 @@ function Inner({
                 {t('refresh')}
               </Button>
             )}
-            {canRunWrite && (
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={() => setCreateOpen(true)}
-              >
-                <Plus className="size-3.5" />
-                {t('launch')}
-              </Button>
-            )}
           </div>
         }
+        primaryAction={
+          canRunWrite ? (
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => setCreateOpen(true)}
+            >
+              <Plus className="size-3.5" />
+              {t('launch')}
+            </Button>
+          ) : undefined
+        }
       />
+
+      {/* ⛔ THE SUMMARY AND THE NOTICES SIT ABOVE THE TABS, and that is a
+          correction rather than a move. They describe the READS behind this
+          screen — what was counted, what could not be read, which page is
+          truncated — and those facts do not change with the presentation the
+          operator chose. Inside one tab they were a claim about the table; a
+          second copy inside the other would have been two places to keep in step. */}
+      {/* A REJECTED PARAMETER AND A RETIRED SELECTION ARE DIFFERENT FACTS, and they
+          are two notices rather than one: the first says the link you were handed
+          named something this console does not understand, the second says the link
+          was fine and your authority moved. Telling an operator to fix a URL that
+          was never wrong is how a console teaches the wrong lesson. */}
+      <UrlStateNotice issues={addressIssues} />
+      {retiredAddress && (
+        <p
+          role="status"
+          data-testid="sessions-address-retired"
+          className="rounded-md border border-border bg-muted px-2.5 py-2 text-caption text-muted-foreground"
+        >
+          {t('address.retired')}
+        </p>
+      )}
+      {/* WHAT THIS INVENTORY ACTUALLY COVERS. Every read behind it — the observed
+          list, the run list and the stream — is tenant-wide: none of them takes a
+          core-workspace selector, and neither DTO carries a workspace. Saying so
+          beside the counts is the honest half of removing the filter that was being
+          sent and ignored; a number the operator reads as "in my workspace" is
+          worse than a number labelled for what it is. It describes the SCOPE, not a
+          grant and not completeness — `partial.truncated` still owns the page
+          disclosure, and the notices still own what could not be read. */}
+      <p
+        className="text-caption text-muted-foreground"
+        data-testid="sessions-scope-note"
+      >
+        {tn('workspace.tenantWide')}
+      </p>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Tile
+          label={t('summary.total')}
+          value={counts.total}
+          locale={lang}
+          loading={liveQuery.isLoading || runsQuery.isLoading}
+        />
+        {/* ⛔ MISSING METADATA IS NOT ZERO INVENTORY. These two tiles repeat the
+            ORIGIN column's claim, so they answer to the column's rule: with the run
+            half unread there is nothing to count launches against, and "0" would
+            report an empty inventory where the honest answer is that nobody looked.
+            The mark is the same "—" the row cells use, carrying the column's own
+            explanation. */}
+        <Tile
+          label={t('summary.launched')}
+          value={counts.launched}
+          locale={lang}
+          loading={runsQuery.isLoading}
+          unknown={originUnknown}
+          unknownHint={t('card.provenance.unknownExplain')}
+        />
+        <Tile
+          label={t('summary.discovered')}
+          value={counts.discovered}
+          locale={lang}
+          loading={liveQuery.isLoading}
+          unknown={originUnknown}
+          unknownHint={t('card.provenance.unknownExplain')}
+        />
+        <Tile
+          label={t('summary.attention')}
+          value={counts.attention}
+          tone={counts.attention > 0 ? 'danger' : undefined}
+          locale={lang}
+          loading={liveQuery.isLoading || runsQuery.isLoading}
+        />
+      </div>
+
+      {!canLiveRead && (
+        <p className="rounded-md border border-border bg-muted px-2.5 py-2 text-caption text-muted-foreground">
+          {t('partial.noLiveRead')}
+        </p>
+      )}
+      {!canRunRead && (
+        <p className="rounded-md border border-border bg-muted px-2.5 py-2 text-caption text-muted-foreground">
+          {t('partial.noRunRead')}
+        </p>
+      )}
+      {canRunRead && runsQuery.isError && (
+        <p className="rounded-md border border-warning-line bg-warning-soft px-2.5 py-2 text-caption text-warning">
+          {t('partial.runLookupFailed')}
+        </p>
+      )}
+      {canLiveRead && liveQuery.isError && (
+        <p className="rounded-md border border-warning-line bg-warning-soft px-2.5 py-2 text-caption text-warning">
+          {t('partial.liveLookupFailed')}
+        </p>
+      )}
+      {truncated && (
+        <p className="rounded-md border border-warning-line bg-warning-soft px-2.5 py-2 text-caption text-warning">
+          {t('partial.truncated')}
+        </p>
+      )}
 
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
           <TabsTrigger value="sessions">{t('tabs.sessions')}</TabsTrigger>
+          {/* ⛔ THE TABLE IS NOT DELETED, IT IS A TAB (the answer to a problem is never
+              to remove a function). The surface tells an operator what
+              each session is doing; the table sorts two hundred of them by cost and
+              searches every reference. They are different instruments, and this screen
+              keeps both. */}
+          <TabsTrigger value="table">{t('tabs.table')}</TabsTrigger>
           {showWorkspaces && (
             <TabsTrigger value="workspaces">{t('tabs.workspaces')}</TabsTrigger>
           )}
@@ -1129,88 +1394,37 @@ function Inner({
         </TabsList>
 
         <TabsContent value="sessions" className="mt-4 flex flex-col gap-4">
-          {/* WHAT THIS INVENTORY ACTUALLY COVERS. Every read behind it — the observed
-              list, the run list and the stream — is tenant-wide: none of them takes a
-              core-workspace selector, and neither DTO carries a workspace. Saying so
-              beside the counts is the honest half of removing the filter that was being
-              sent and ignored; a number the operator reads as "in my workspace" is
-              worse than a number labelled for what it is. It describes the SCOPE, not a
-              grant and not completeness — `partial.truncated` still owns the page
-              disclosure, and the notices still own what could not be read. */}
-          <p
-            className="text-xs text-muted-foreground"
-            data-testid="sessions-scope-note"
-          >
-            {tn('workspace.tenantWide')}
-          </p>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <Tile
-              label={t('summary.total')}
-              value={counts.total}
-              locale={lang}
-              loading={liveQuery.isLoading || runsQuery.isLoading}
-            />
-            {/* ⛔ MISSING METADATA IS NOT ZERO INVENTORY. These two tiles repeat the
-                ORIGIN column's claim, so they answer to the column's rule: with the run
-                half unread there is nothing to count launches against, and "0" would
-                report an empty inventory where the honest answer is that nobody looked.
-                The mark is the same "—" the row cells use, carrying the column's own
-                explanation. */}
-            <Tile
-              label={t('summary.launched')}
-              value={counts.launched}
-              locale={lang}
-              loading={runsQuery.isLoading}
-              unknown={originUnknown}
-              unknownHint={t('card.provenance.unknownExplain')}
-            />
-            <Tile
-              label={t('summary.discovered')}
-              value={counts.discovered}
-              locale={lang}
-              loading={liveQuery.isLoading}
-              unknown={originUnknown}
-              unknownHint={t('card.provenance.unknownExplain')}
-            />
-            <Tile
-              label={t('summary.attention')}
-              value={counts.attention}
-              tone={counts.attention > 0 ? 'danger' : undefined}
-              locale={lang}
-              loading={liveQuery.isLoading || runsQuery.isLoading}
-            />
-          </div>
+          <WorkSurface
+            sessions={sessions}
+            loading={liveQuery.isLoading || runsQuery.isLoading}
+            address={address}
+            resolution={resolution}
+            pinned={pins.pinned}
+            onTogglePin={pins.toggle}
+            onOpen={abrirDelCarril}
+            onPane={elegirPanel}
+            onEvidence={elegirEvidencia}
+            onOpenDetail={() => setDetailOpen(true)}
+            emptyAction={
+              canRunWrite ? (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => setCreateOpen(true)}
+                >
+                  <Plus className="size-3.5" />
+                  {t('launch')}
+                </Button>
+              ) : undefined
+            }
+          />
+        </TabsContent>
 
-          {!canLiveRead && (
-            <p className="rounded-md border border-border bg-muted px-2.5 py-2 text-xs text-muted-foreground">
-              {t('partial.noLiveRead')}
-            </p>
-          )}
-          {!canRunRead && (
-            <p className="rounded-md border border-border bg-muted px-2.5 py-2 text-xs text-muted-foreground">
-              {t('partial.noRunRead')}
-            </p>
-          )}
-          {canRunRead && runsQuery.isError && (
-            <p className="rounded-md border border-warning-line bg-warning-soft px-2.5 py-2 text-xs text-warning">
-              {t('partial.runLookupFailed')}
-            </p>
-          )}
-          {canLiveRead && liveQuery.isError && (
-            <p className="rounded-md border border-warning-line bg-warning-soft px-2.5 py-2 text-xs text-warning">
-              {t('partial.liveLookupFailed')}
-            </p>
-          )}
-          {truncated && (
-            <p className="rounded-md border border-warning-line bg-warning-soft px-2.5 py-2 text-xs text-warning">
-              {t('partial.truncated')}
-            </p>
-          )}
-
+        <TabsContent value="table" className="mt-4 flex flex-col gap-4">
           <div className="flex flex-wrap items-center justify-end gap-2">
             <Select value={source} onValueChange={setSource}>
               <SelectTrigger
-                className="h-7 w-auto min-w-[9rem] text-xs"
+                className="h-7 w-auto min-w-[9rem] text-caption"
                 aria-label={t('allSources')}
               >
                 <SelectValue />
@@ -1227,7 +1441,7 @@ function Inner({
             </Select>
             <Select value={state} onValueChange={setState}>
               <SelectTrigger
-                className="h-7 w-auto min-w-[11rem] text-xs"
+                className="h-7 w-auto min-w-[11rem] text-caption"
                 aria-label={t('allStates')}
               >
                 <SelectValue />
@@ -1291,7 +1505,7 @@ function Inner({
         {showProfiles && (
           <TabsContent value="profiles" className="mt-4 flex flex-col gap-3">
             {/* The plane also has its own doors, each entered on its own read tier. */}
-            <p className="text-xs text-muted-foreground">
+            <p className="text-caption text-muted-foreground">
               {ta('profiles.view.crossHint')}{' '}
               <Link to={'/provider-profiles' as never} className="underline">
                 {ta('profiles.view.openProfiles')}
@@ -1315,7 +1529,8 @@ function Inner({
 
       <RunCreateDialog open={createOpen} onOpenChange={setCreateOpen} />
       <SessionCard
-        target={target}
+        open={detailOpen}
+        resolution={resolution}
         onClose={cerrarTarjeta}
         onNavigate={navegarDesdeTarjeta}
       />
@@ -1380,12 +1595,12 @@ function Tile({
 }) {
   return (
     <Card className="p-3">
-      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className="text-caption text-muted-foreground">{label}</div>
       {loading ? (
         <Skeleton className="mt-1 h-7 w-12" />
       ) : unknown ? (
         <div
-          className="font-display text-2xl font-semibold tabular-nums text-muted-foreground"
+          className="font-display text-display tabular-nums text-muted-foreground"
           title={unknownHint}
         >
           —
@@ -1393,7 +1608,7 @@ function Tile({
       ) : (
         <div
           className={cn(
-            'font-display text-2xl font-semibold tabular-nums',
+            'font-display text-display tabular-nums',
             tone === 'danger' ? 'text-danger' : 'text-foreground',
           )}
         >

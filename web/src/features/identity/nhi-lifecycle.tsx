@@ -39,6 +39,7 @@ import {
   stalenessVariant,
 } from './nhi-status'
 import type { NhiLifecycleDTO } from './types'
+import { StaticTable } from '@/components/data/static-table'
 
 const CRITICALITIES = ['low', 'medium', 'high', 'critical'] as const
 const ENFORCEMENTS = ['monitor', 'alert', 'blocked'] as const
@@ -140,7 +141,7 @@ export function NhiLifecycleTab() {
         actions={<NhiSweepAction />}
       >
         {posture.isLoading ? (
-          <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
+          <div className="flex items-center gap-2 py-6 text-body text-muted-foreground">
             <Spinner size="sm" aria-hidden />
             {t('lifecycle.loading')}
           </div>
@@ -227,7 +228,7 @@ export function NhiLifecycleTab() {
         noPadding
       >
         {lifecycle.isLoading ? (
-          <div className="flex items-center gap-2 p-6 text-sm text-muted-foreground">
+          <div className="flex items-center gap-2 p-6 text-body text-muted-foreground">
             <Spinner size="sm" aria-hidden />
             {t('lifecycle.loading')}
           </div>
@@ -240,27 +241,15 @@ export function NhiLifecycleTab() {
           />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-sm">
+            <StaticTable>
               <thead>
-                <tr className="border-b border-border-strong bg-muted text-left text-xs tracking-wide text-muted-foreground uppercase">
-                  <th scope="col" className="px-3 py-2 font-medium">
-                    {t('lifecycle.table.identity')}
-                  </th>
-                  <th scope="col" className="px-3 py-2 font-medium">
-                    {t('lifecycle.table.criticality')}
-                  </th>
-                  <th scope="col" className="px-3 py-2 font-medium">
-                    {t('lifecycle.table.staleness')}
-                  </th>
-                  <th scope="col" className="px-3 py-2 font-medium">
-                    {t('lifecycle.table.enforcement')}
-                  </th>
-                  <th scope="col" className="px-3 py-2 font-medium">
-                    {t('lifecycle.table.ownership')}
-                  </th>
-                  <th scope="col" className="px-3 py-2 font-medium">
-                    {t('lifecycle.table.offboarding')}
-                  </th>
+                <tr>
+                  <th scope="col">{t('lifecycle.table.identity')}</th>
+                  <th scope="col">{t('lifecycle.table.criticality')}</th>
+                  <th scope="col">{t('lifecycle.table.staleness')}</th>
+                  <th scope="col">{t('lifecycle.table.enforcement')}</th>
+                  <th scope="col">{t('lifecycle.table.ownership')}</th>
+                  <th scope="col">{t('lifecycle.table.offboarding')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -272,11 +261,11 @@ export function NhiLifecycleTab() {
                   />
                 ))}
               </tbody>
-            </table>
+            </StaticTable>
             {truncated && (
               <p
                 role="note"
-                className="border-t border-border px-3 py-2 text-xs text-muted-foreground"
+                className="border-t border-border px-3 py-2 text-caption text-muted-foreground"
               >
                 {t('lifecycle.table.truncated', { count: PAGE_SIZE })}
               </p>
@@ -302,12 +291,12 @@ function LifecycleRow({
 }) {
   const { t } = useTranslation('identity')
   return (
-    <tr className="border-b border-border last:border-0 hover:bg-muted/60">
-      <td className="px-3 py-2">
+    <tr className="hover:bg-muted/60">
+      <td>
         <button
           type="button"
           onClick={onOpen}
-          className="rounded-sm font-mono text-xs font-medium text-accent-text outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+          className="rounded-sm font-mono text-caption font-medium text-accent-text outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
           aria-label={t('lifecycle.table.openDetail', {
             ref: row.identity_ref,
           })}
@@ -315,38 +304,38 @@ function LifecycleRow({
           {row.identity_ref}
         </button>
         {row.source && (
-          <span className="mt-0.5 block text-xs text-muted-foreground">
+          <span className="mt-0.5 block text-caption text-muted-foreground">
             {row.source}
           </span>
         )}
       </td>
-      <td className="px-3 py-2">
+      <td>
         <Badge variant={criticalityVariant(row.criticality)}>
           {t(`lifecycle.criticality.${row.criticality}`, {
             defaultValue: t('lifecycle.unknown'),
           })}
         </Badge>
       </td>
-      <td className="px-3 py-2">
+      <td>
         <Badge variant={stalenessVariant(row.staleness_status)}>
           {t(`lifecycle.staleness.${row.staleness_status}`, {
             defaultValue: t('lifecycle.unknown'),
           })}
         </Badge>
       </td>
-      <td className="px-3 py-2">
+      <td>
         <Badge variant={enforcementVariant(row.enforcement)}>
           {t(`lifecycle.enforcement.${row.enforcement}`, {
             defaultValue: t('lifecycle.unknown'),
           })}
         </Badge>
         {row.enforcement_reason && (
-          <span className="mt-1 block max-w-56 text-xs text-muted-foreground">
+          <span className="mt-1 block max-w-56 text-caption text-muted-foreground">
             {row.enforcement_reason}
           </span>
         )}
       </td>
-      <td className="px-3 py-2 text-xs">
+      <td className="text-caption">
         <span className="block">
           {t('lifecycle.table.ownerValue', {
             ref: row.owner_ref ?? t('lifecycle.notSet'),
@@ -363,7 +352,7 @@ function LifecycleRow({
           </Badge>
         )}
       </td>
-      <td className="px-3 py-2">
+      <td>
         <Badge variant={offboardVariant(row.offboard_state)}>
           {t(`lifecycle.offboard.${row.offboard_state}`, {
             defaultValue: t('lifecycle.unknown'),

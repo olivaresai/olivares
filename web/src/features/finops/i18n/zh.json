@@ -3,6 +3,7 @@
     "title": "阈值告警",
     "description": "预算阈值越界的历史记录。投递到 Slack/SIEM 由输出连接器处理——此处为记录。",
     "empty": "无越界告警",
+    "emptyHint": "预算告警会在支出超过你设定的阈值时触发。此时间范围内没有触发。",
     "columns": {
       "triggeredAt": "触发时间",
       "budget": "预算",
@@ -147,6 +148,7 @@
     "editDescription": "The code cannot be changed: mapping rules resolve by it and issued statements record it.",
     "editTitle": "Edit cost centre",
     "empty": "No cost centres yet",
+    "emptyHint": "成本中心把支出归属到某个团队或预算负责人。先创建一个，才能开始归属。",
     "ingestOnlyNotice": "⛔ Mapping rules are applied AT INGESTION and stamped on each cost row. Creating or changing a rule does NOT re-attribute spend already recorded — it only affects costs ingested from now on.",
     "key": "Key",
     "name": "Name",
@@ -155,6 +157,7 @@
     "newRule": "New rule",
     "newRuleDescription": "Bind one dimension value to this cost centre.",
     "noRules": "No rules — traffic stays unattributed",
+    "noRulesHint": "规则把流量映射到成本中心。没有规则时，所有请求在报表中都保持未归属状态。",
     "owner": "Owner",
     "priority": "priority {{n}}",
     "priorityLabel": "Priority",
@@ -315,6 +318,7 @@
     "title": "优化建议",
     "description": "来自受治理资产域的候选节省项。估算并非承诺——请核验能力与质量是否契合。",
     "empty": "无建议",
+    "emptyHint": "当支出、路由或速率限制存在优化空间时，建议会显示在这里。当前没有需要调整的地方。",
     "estimatedSavings": "预计节省",
     "subject": "对象",
     "kind": {
@@ -413,6 +417,7 @@
     "description": "按日比较已分配席位与实际活跃的主体。没有席位快照的日期不代表使用量为零，而是没有任何上报。",
     "provider": "提供方",
     "empty": "没有上报的日期",
+    "emptyHint": "席位用量按日从会话活动中统计。此时间范围内没有任何一天有数据。",
     "assigned": "已分配 {{assigned}} · 活跃 {{active}}",
     "noSnapshot": "该日未上报席位快照"
   },
@@ -474,6 +479,7 @@
     "riskTitle": "流失风险",
     "riskDescription": "消耗支出却没有达成成果的对象。",
     "riskEmpty": "没有对象在消耗支出却无成果",
+    "riskEmptyHint": "此面板列出支出与产出不匹配的主体。此时间范围内没有主体超过阈值。",
     "satisfiedOf": "{{outcomes}} 项中已达成 {{satisfied}} 项"
   },
   "evidence": {

@@ -296,7 +296,7 @@ export function DeliverySheet({
               </KvRow>
             </KvList>
             <section aria-label={t('fulfillment.title')}>
-              <p className="mb-1 text-sm font-medium">
+              <p className="mb-1 text-body font-medium">
                 {t('fulfillment.title')}
               </p>
               <FulfillmentView fulfillment={result.fulfillment} />
@@ -308,10 +308,10 @@ export function DeliverySheet({
                   className="flex flex-col gap-2 rounded-md border border-border bg-muted p-3"
                   data-slot="ack-intent"
                 >
-                  <p className="text-sm font-medium">
+                  <p className="text-body font-medium">
                     {t('delivery.ack.title')}
                   </p>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-body text-muted-foreground">
                     {t('delivery.ack.body', { etag: intent.etag })}
                   </p>
                   <KvList>
@@ -331,7 +331,7 @@ export function DeliverySheet({
                   failure={failure}
                   title={t('delivery.ack.conflictTitle')}
                 />
-                <p className="mt-1 text-sm text-muted-foreground">
+                <p className="mt-1 text-body text-muted-foreground">
                   {t('delivery.ack.conflictBody')}
                 </p>
               </div>
@@ -342,7 +342,7 @@ export function DeliverySheet({
                   failure={failure}
                   title={t('delivery.ack.ambiguousTitle')}
                 />
-                <p className="mt-1 text-sm text-muted-foreground">
+                <p className="mt-1 text-body text-muted-foreground">
                   {t('delivery.ack.ambiguousBody')}
                 </p>
               </div>
@@ -363,8 +363,8 @@ export function DeliverySheet({
                   role="status"
                   className={
                     outcome.result.replayed
-                      ? 'rounded-md border border-info-line bg-info-soft px-3 py-2 text-sm text-info'
-                      : 'rounded-md border border-success-line bg-success-soft px-3 py-2 text-sm text-success'
+                      ? 'rounded-md border border-info-line bg-info-soft px-3 py-2 text-body text-info'
+                      : 'rounded-md border border-success-line bg-success-soft px-3 py-2 text-body text-success'
                   }
                 >
                   <p className="font-medium">
@@ -381,7 +381,7 @@ export function DeliverySheet({
                 {outcome.result.late ? (
                   <div
                     role="alert"
-                    className="rounded-md border border-warning-line bg-warning-soft px-3 py-2 text-sm text-warning"
+                    className="rounded-md border border-warning-line bg-warning-soft px-3 py-2 text-body text-warning"
                     data-slot="ack-late"
                   >
                     {t('delivery.ack.late')}
@@ -417,12 +417,12 @@ export function DeliverySheet({
               </section>
             ) : null}
             {!canDeliveryWrite ? (
-              <p className="text-xs text-muted-foreground">
+              <p className="text-caption text-muted-foreground">
                 {t('delivery.ack.noPermission')}
               </p>
             ) : null}
             {!canMessageRead ? (
-              <p className="text-xs text-muted-foreground">
+              <p className="text-caption text-muted-foreground">
                 {t('delivery.noMessageRead')}
               </p>
             ) : null}

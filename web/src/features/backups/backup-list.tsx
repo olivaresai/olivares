@@ -69,7 +69,7 @@ export function BackupList({
         accessorKey: 'created_at',
         header: t('list.columns.date'),
         cell: ({ row }) => (
-          <span className="text-sm">
+          <span className="text-body">
             {formatDateTime(row.original.created_at)}
           </span>
         ),
@@ -78,7 +78,10 @@ export function BackupList({
         accessorKey: 'filename',
         header: t('list.columns.filename'),
         cell: ({ row }) => (
-          <span className="font-mono text-xs" title={row.original.filename}>
+          <span
+            className="font-mono text-caption"
+            title={row.original.filename}
+          >
             {row.original.filename}
           </span>
         ),
@@ -87,7 +90,7 @@ export function BackupList({
         accessorKey: 'size_bytes',
         header: t('list.columns.size'),
         cell: ({ row }) => (
-          <span className="tabular-nums text-sm">
+          <span className="tabular-nums text-body">
             {formatBytes(row.original.size_bytes, t)}
           </span>
         ),
@@ -103,7 +106,7 @@ export function BackupList({
         accessorKey: 'tenant_count',
         header: t('list.columns.tenants'),
         cell: ({ row }) => (
-          <span className="tabular-nums text-sm">
+          <span className="tabular-nums text-body">
             {row.original.tenant_count}
           </span>
         ),
@@ -113,7 +116,7 @@ export function BackupList({
         header: t('list.columns.notes'),
         cell: ({ row }) => (
           <span
-            className="max-w-[200px] truncate text-xs text-muted-foreground"
+            className="max-w-[200px] truncate text-caption text-muted-foreground"
             title={row.original.notes || undefined}
           >
             {row.original.notes || '—'}

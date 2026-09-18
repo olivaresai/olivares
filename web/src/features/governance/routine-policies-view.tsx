@@ -114,7 +114,7 @@ function TriStateList({
               ? 'font-medium text-warning'
               : state === 'unset'
                 ? 'text-muted-foreground'
-                : 'font-mono text-xs text-foreground'
+                : 'font-mono text-caption text-foreground'
         }
       >
         {state === 'listed'
@@ -223,7 +223,7 @@ export function RoutinePoliciesView() {
         id: 'scope',
         header: t('routines.cols.scope'),
         cell: ({ row }) => (
-          <span className="text-xs text-muted-foreground">
+          <span className="text-caption text-muted-foreground">
             {t(`routines.scope.${row.original.scope_kind}`, {
               defaultValue: row.original.scope_kind,
             })}
@@ -251,7 +251,7 @@ export function RoutinePoliciesView() {
               {t('routines.noFloor')}
             </span>
           ) : (
-            <span className="font-mono text-xs tabular-nums">
+            <span className="font-mono text-caption tabular-nums">
               {t('routines.secondsValue', {
                 seconds: row.original.max_cadence_seconds,
               })}
@@ -265,7 +265,7 @@ export function RoutinePoliciesView() {
           row.original.max_active_routines === 0 ? (
             <span className="text-muted-foreground">{t('routines.noCap')}</span>
           ) : (
-            <span className="font-mono text-xs tabular-nums">
+            <span className="font-mono text-caption tabular-nums">
               {row.original.max_active_routines}
             </span>
           ),
@@ -357,6 +357,22 @@ export function RoutinePoliciesView() {
         title={t('routines.title')}
         description={t('routines.subtitle')}
         icon={CalendarCog}
+        primaryAction={
+          canAdmin ? (
+            <Button
+              variant="primary"
+              size="sm"
+              data-testid="routine-policy-new"
+              onClick={() => {
+                setEditing(null)
+                setEditorOpen(true)
+              }}
+            >
+              <Plus />
+              {t('routines.newPolicy')}
+            </Button>
+          ) : undefined
+        }
       />
 
       <section
@@ -365,7 +381,7 @@ export function RoutinePoliciesView() {
         className="flex flex-col gap-4 rounded-lg border border-border p-4"
       >
         <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1">
-          <h2 className="text-sm font-medium text-foreground">
+          <h2 className="text-body font-medium text-foreground">
             {t('routines.posture.title')}
           </h2>
           {/* A failed posture read must NOT render as "0 enabled of 0": with the
@@ -376,16 +392,16 @@ export function RoutinePoliciesView() {
             <span
               role="alert"
               data-testid="posture-error"
-              className="text-xs font-medium text-danger"
+              className="text-caption font-medium text-danger"
             >
               {t('routines.posture.failed')}
             </span>
           ) : postureQ.isLoading ? (
-            <span className="text-xs text-muted-foreground">
+            <span className="text-caption text-muted-foreground">
               {t('common:states.loading')}
             </span>
           ) : (
-            <span className="text-xs text-muted-foreground">
+            <span className="text-caption text-muted-foreground">
               {t('routines.posture.counts', {
                 total: postureQ.data?.total_policies ?? 0,
                 enabled: postureQ.data?.enabled_policies ?? 0,
@@ -452,7 +468,7 @@ export function RoutinePoliciesView() {
               routine whose owner it cannot recognise, and there the resolution
               goes indeterminate and the fire is refused. An operator debugging
               that refusal has to be able to reproduce it here. */}
-          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+          <label className="flex items-center gap-2 text-caption text-muted-foreground">
             <input
               type="checkbox"
               data-testid="posture-scope-user-unknown"
@@ -484,8 +500,8 @@ export function RoutinePoliciesView() {
             data-stale={scopeDrifted ? 'true' : 'false'}
             className={
               scopeDrifted
-                ? 'text-xs font-medium text-warning'
-                : 'text-xs text-muted-foreground'
+                ? 'text-caption font-medium text-warning'
+                : 'text-caption text-muted-foreground'
             }
           >
             {t('routines.posture.resolvedFor', {
@@ -507,7 +523,7 @@ export function RoutinePoliciesView() {
           <p
             role="alert"
             data-testid="posture-indeterminate"
-            className="rounded-md border border-danger bg-danger/10 p-3 text-sm font-medium text-danger"
+            className="rounded-md border border-danger bg-danger/10 p-3 text-body font-medium text-danger"
           >
             {t('routines.posture.indeterminate', {
               axis: effective.indeterminate_axis,
@@ -520,7 +536,7 @@ export function RoutinePoliciesView() {
             {effective.indeterminate && (
               <p
                 data-testid="posture-superseded"
-                className="text-xs text-muted-foreground"
+                className="text-caption text-muted-foreground"
               >
                 {t('routines.posture.supersededByIndeterminate')}
               </p>
@@ -535,12 +551,12 @@ export function RoutinePoliciesView() {
               }
             >
               <div>
-                <dt className="text-xs text-muted-foreground">
+                <dt className="text-caption text-muted-foreground">
                   {t('routines.posture.floor')}
                 </dt>
                 <dd
                   data-testid="posture-floor"
-                  className="font-mono text-sm tabular-nums text-foreground"
+                  className="font-mono text-body tabular-nums text-foreground"
                 >
                   {effective.min_interval_seconds === 0
                     ? t('routines.noFloor')
@@ -550,17 +566,17 @@ export function RoutinePoliciesView() {
                 </dd>
               </div>
               <div>
-                <dt className="text-xs text-muted-foreground">
+                <dt className="text-caption text-muted-foreground">
                   {t('routines.posture.approval')}
                 </dt>
-                <dd data-testid="posture-approval" className="text-sm">
+                <dd data-testid="posture-approval" className="text-body">
                   {effective.require_approval
                     ? t('routines.approvalYes')
                     : t('routines.approvalNo')}
                 </dd>
               </div>
               <div>
-                <dt className="text-xs text-muted-foreground">
+                <dt className="text-caption text-muted-foreground">
                   {t('routines.posture.cron')}
                 </dt>
                 <dd>
@@ -569,8 +585,8 @@ export function RoutinePoliciesView() {
                     data-state={effectiveCronState(effective)}
                     className={
                       effectiveCronState(effective) === 'empty'
-                        ? 'text-sm font-medium text-warning'
-                        : 'text-sm'
+                        ? 'text-body font-medium text-warning'
+                        : 'text-body'
                     }
                   >
                     {effectiveCronState(effective) === 'listed'
@@ -582,10 +598,10 @@ export function RoutinePoliciesView() {
                 </dd>
               </div>
               <div>
-                <dt className="text-xs text-muted-foreground">
+                <dt className="text-caption text-muted-foreground">
                   {t('routines.posture.envs')}
                 </dt>
-                <dd data-testid="posture-envs" className="text-sm">
+                <dd data-testid="posture-envs" className="text-body">
                   {effective.blocked_environments.length === 0
                     ? t('routines.list.envs.unset')
                     : effective.blocked_environments.join(', ')}
@@ -596,7 +612,7 @@ export function RoutinePoliciesView() {
             {effective.active_caps.length > 0 && (
               <ul
                 data-testid="posture-caps"
-                className="flex flex-wrap gap-2 text-xs"
+                className="flex flex-wrap gap-2 text-caption"
               >
                 {effective.active_caps.map((cap) => (
                   <li
@@ -615,7 +631,7 @@ export function RoutinePoliciesView() {
             )}
 
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs text-muted-foreground">
+              <span className="text-caption text-muted-foreground">
                 {/* An INDETERMINATE resolution with nothing composed is a
                     REFUSAL, not an absence of controls: the engine sets
                     Indeterminate and skips the policy without ever reaching
@@ -640,7 +656,7 @@ export function RoutinePoliciesView() {
                     <span
                       key={ref}
                       data-testid="posture-policy-ref"
-                      className="rounded-md border border-border px-2 py-0.5 text-xs text-foreground"
+                      className="rounded-md border border-border px-2 py-0.5 text-caption text-foreground"
                     >
                       {label}
                     </span>
@@ -651,7 +667,7 @@ export function RoutinePoliciesView() {
                     key={ref}
                     type="button"
                     data-testid="posture-policy-ref"
-                    className="rounded-md border border-border px-2 py-0.5 text-xs text-foreground hover:bg-muted"
+                    className="rounded-md border border-border px-2 py-0.5 text-caption text-foreground hover:bg-muted"
                     onClick={() => {
                       setEditing(match)
                       setEditorOpen(true)
@@ -666,7 +682,7 @@ export function RoutinePoliciesView() {
         )}
       </section>
 
-      <p className="text-xs text-muted-foreground">
+      <p className="text-caption text-muted-foreground">
         {t('routines.enforcementCaption')}
       </p>
 
@@ -688,22 +704,6 @@ export function RoutinePoliciesView() {
             : undefined
         }
         label={t('routines.title')}
-        toolbar={
-          canAdmin ? (
-            <Button
-              variant="primary"
-              size="sm"
-              data-testid="routine-policy-new"
-              onClick={() => {
-                setEditing(null)
-                setEditorOpen(true)
-              }}
-            >
-              <Plus />
-              {t('routines.newPolicy')}
-            </Button>
-          ) : undefined
-        }
         empty={
           <EmptyState
             title={t('empty.routinePolicies.title')}

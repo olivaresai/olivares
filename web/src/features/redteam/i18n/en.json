@@ -117,6 +117,7 @@
     "title": "Per-probe results",
     "description": "Each probe's outcome. The fingerprint is a one-way hash — never an attack payload.",
     "empty": "No results for this run.",
+    "emptyHint": "Every probe in the run is listed here with its verdict and the evidence behind it. This run recorded no results.",
     "columns": {
       "probe": "Probe",
       "family": "Family",

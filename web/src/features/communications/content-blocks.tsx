@@ -16,7 +16,9 @@ import type { ContentBlock, Fulfillment, MessageContent } from './types'
  */
 export function Mono({ children }: { children: React.ReactNode }) {
   return (
-    <code className="break-all font-mono text-xs tabular-nums">{children}</code>
+    <code className="break-all font-mono text-caption tabular-nums">
+      {children}
+    </code>
   )
 }
 
@@ -29,7 +31,7 @@ function ReferenceChip({
   return (
     <span
       data-slot="content-reference"
-      className="inline-flex max-w-full flex-wrap items-center gap-1 rounded-sm border border-border bg-muted px-1.5 py-0.5 text-xs"
+      className="inline-flex max-w-full flex-wrap items-center gap-1 rounded-sm border border-border bg-muted px-1.5 py-0.5 text-caption"
     >
       <span className="text-muted-foreground">{t('content.reference')}</span>
       <Mono>{reference.kind}</Mono>
@@ -68,15 +70,17 @@ function BlockView({ block, index }: { block: ContentBlock; index: number }) {
         ) : null}
       </div>
       {block.text ? (
-        <p className="whitespace-pre-wrap break-words font-sans text-sm text-foreground">
+        <p className="whitespace-pre-wrap break-words font-sans text-body text-foreground">
           {block.text}
         </p>
       ) : block.type === 'text' ? (
-        <p className="text-sm text-muted-foreground">{t('content.empty')}</p>
+        <p className="text-body text-muted-foreground">{t('content.empty')}</p>
       ) : null}
       {block.reference ? <ReferenceChip reference={block.reference} /> : null}
       {block.type === 'action_ref' ? (
-        <p className="text-xs text-muted-foreground">{t('content.action')}</p>
+        <p className="text-caption text-muted-foreground">
+          {t('content.action')}
+        </p>
       ) : null}
     </li>
   )
@@ -90,7 +94,7 @@ export function ContentView({ content }: { content: MessageContent }) {
       className="flex flex-col gap-2"
       aria-label={t('content.title')}
     >
-      <p className="break-words text-sm font-medium text-foreground">
+      <p className="break-words text-body font-medium text-foreground">
         {content.subject || t('content.empty')}
       </p>
       <ol className="flex flex-col gap-2">
@@ -98,7 +102,7 @@ export function ContentView({ content }: { content: MessageContent }) {
           <BlockView key={i} block={block} index={i} />
         ))}
       </ol>
-      <p className="text-xs text-muted-foreground">{t('content.inert')}</p>
+      <p className="text-caption text-muted-foreground">{t('content.inert')}</p>
     </section>
   )
 }

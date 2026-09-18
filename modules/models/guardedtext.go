@@ -19,7 +19,7 @@ import (
 	"github.com/olivaresai/olivares/core/model"
 )
 
-// guardedtext.go is D01-C2B's module-side seam: ONE synchronous Chat operation behind the
+// guardedtext.go is the module-side seam of the governed Chat path: ONE synchronous Chat operation behind the
 // existing /execute handler, for a routing policy that pins a content-addressed execution
 // profile. C2A resolved and then refused (503); this port is what the composition root
 // fills in.
@@ -129,7 +129,7 @@ const (
 // ChatBudgetAssuranceDevelopmentPrecheck is the ONLY assurance this slice can claim, and
 // it is deliberately verbose. It states that the admission was the existing NON-ATOMIC,
 // FAIL-OPEN precheck: no monetary reservation was taken, nothing was settled, and a
-// permitted result is not evidence that a hard budget was respected. D02's typed
+// permitted result is not evidence that a hard budget was respected. FinOps' typed
 // reserve/dispatch/settle replaces it; until then the value never changes.
 const ChatBudgetAssuranceDevelopmentPrecheck = "development_precheck_non_atomic"
 

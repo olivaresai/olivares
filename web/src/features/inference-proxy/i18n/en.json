@@ -49,6 +49,7 @@
     "truncatedHint": "There are more DLP rules than shown; this page takes rows by id. A rule missing from this list does not prove it does not exist — egress may be governed by rules you cannot see here.",
     "add": "Add rule",
     "noRead": "You do not have permission to view DLP rules.",
+    "noReadHint": "DLP rules inspect prompts and responses for data you do not want leaving. Ask an administrator for the DLP read permission.",
     "empty": "No DLP rules",
     "emptyHint": "Add a rule to allow or deny a classification on egress.",
     "colClass": "Classification",

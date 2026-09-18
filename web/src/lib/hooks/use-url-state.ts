@@ -4,8 +4,10 @@
 //
 // useUrlState — the canonical deep-link/URL-state hook. A view declares
 // the search-param keys it OWNS; the hook seeds state from the URL and reflects
-// every change back with REPLACE semantics (filters never spam the history
-// stack — Back leaves the view, it does not undo a filter click).
+// every change back — by default with REPLACE semantics (filters never spam the
+// history stack — Back leaves the view, it does not undo a filter click), and
+// with PUSH where the call site declares its state a place rather than a filter
+// (which session the work surface is showing, for example). See `UrlStateOptions`.
 //
 // Contract:
 //   - Owned keys only: updates merge into the existing search, so params owned
@@ -34,6 +36,17 @@ import { useNavigate, useRouterState } from '@tanstack/react-router'
 /** The state shape: owned key → string value (absent = unset/default). */
 export type UrlState = Record<string, string | undefined>
 
+/** Whether a patch REPLACES the current history entry or PUSHES a new one. */
+export type UrlHistoryMode = 'replace' | 'push'
+
+/** What one patch may override for itself. */
+export interface UrlPatchOptions {
+  history?: UrlHistoryMode
+}
+
+/** Set (or clear) owned keys and reflect them into the URL. */
+export type UrlStatePatch = (patch: UrlState, options?: UrlPatchOptions) => void
+
 /** Optional extras forwarded on every reflect-into-URL navigation. */
 export type UrlStateOptions = {
   /**
@@ -43,6 +56,20 @@ export type UrlStateOptions = {
    * keep the historical default (unset) for every other consumer.
    */
   resetScroll?: boolean
+  /**
+   * The default history mode for this call site. `replace` — the historical
+   * behaviour and still the default — is right for a FILTER: Back should leave
+   * the view, not undo a click on a facet.
+   *
+   * `push` exists for the one class this hook did not serve at first: state that
+   * is a PLACE rather than a filter. Choosing another session on the work
+   * surface moves the operator somewhere else, and an operator who presses Back
+   * after it means "the session I was reading a moment ago", not "the screen I
+   * was on before I opened this one". A surface can also override per call —
+   * `patch(p, { history: 'replace' })` — because the same view usually holds
+   * both kinds: which session is a place, which pane is a facet of it.
+   */
+  history?: UrlHistoryMode
 }
 
 /** Read the current values of `keys` from a canonical search string. On first
@@ -73,47 +100,43 @@ function sameState(a: UrlState, b: UrlState, keys: readonly string[]): boolean {
 export function useUrlState(
   keys: readonly string[],
   options?: UrlStateOptions,
-): [UrlState, (patch: UrlState) => void] {
+): [UrlState, UrlStatePatch] {
   const navigate = useNavigate()
-  // The owned-keys list is a stable contract per call site; keep the first one.
-  const keysRef = useRef(keys)
-  // Options are a per-call-site contract too, but callers pass a fresh object
-  // literal. Read through a ref so patch's identity stays [navigate].
-  const optionsRef = useRef(options)
-  optionsRef.current = options
-  const [state, setState] = useState<UrlState>(() =>
-    readSearch(keysRef.current),
-  )
-
-  // Follow the location. Subscribing to the router (rather than to popstate)
-  // covers programmatic navigation too, which is how a saved view is applied
-  // and how one feature deep-links into another.
+  // The owned-keys list is a stable contract per call site; freeze the first one
+  // in state (not a ref) so later renders never read a ref during render.
+  const [ownedKeys] = useState(keys)
+  const resetScroll = options?.resetScroll
+  const defaultHistory: UrlHistoryMode = options?.history ?? 'replace'
   const searchStr = useRouterState({
     select: (s: { location: { searchStr: string } }) => s.location.searchStr,
   })
-  useEffect(() => {
-    // `searchStr` is the notification's payload. Reading window.location here
-    // can observe the previous URL for one tick and revert the optimistic state
-    // after a filter already fired its new request.
-    const next = readSearch(keysRef.current, searchStr)
-    // Guard the identity: a replace we just performed re-runs this effect, and
-    // handing back a fresh object every time would re-render every consumer on
-    // every navigation in the app.
-    setState((prev) => (sameState(prev, next, keysRef.current) ? prev : next))
-  }, [searchStr])
-
+  const fromUrl = useMemo(
+    () => readSearch(ownedKeys, searchStr),
+    [ownedKeys, searchStr],
+  )
+  // Optimistic overlay so a patch updates the view before the router reports
+  // the new search string. When searchStr actually changes, drop the overlay
+  // and trust the URL (Back/Forward, a foreign navigate, a saved view).
+  const [optimistic, setOptimistic] = useState<UrlState | null>(null)
+  const [seenSearch, setSeenSearch] = useState(searchStr)
+  if (searchStr !== seenSearch) {
+    setSeenSearch(searchStr)
+    setOptimistic(null)
+  }
+  const state = optimistic ?? fromUrl
   const stateRef = useRef(state)
-  stateRef.current = state
+  useEffect(() => {
+    stateRef.current = state
+  })
 
-  const patch = useCallback(
-    (p: UrlState) => {
-      // Compute against the LATEST state through a ref rather than inside a
-      // setState updater: navigate() is a side effect, and a side effect in a
-      // React reducer runs twice under StrictMode.
+  const patch = useCallback<UrlStatePatch>(
+    (p, patchOptions) => {
+      // navigate() is a side effect, so it stays in the event handler, never
+      // inside a setState updater (StrictMode would fire it twice).
       const prev = stateRef.current
       const next: UrlState = { ...prev }
       const searchPatch: Record<string, unknown> = {}
-      for (const k of keysRef.current) {
+      for (const k of ownedKeys) {
         if (!(k in p)) continue
         const v = p[k]
         if (v === undefined || v === '') delete next[k]
@@ -121,20 +144,19 @@ export function useUrlState(
         searchPatch[k] = next[k]
       }
       stateRef.current = next
-      setState(next)
+      if (!sameState(prev, next, ownedKeys)) setOptimistic(next)
       // Reflect into the URL: merge over the existing search so non-owned
       // params survive; explicit undefined deletes (TanStack drops them).
-      const resetScroll = optionsRef.current?.resetScroll
       void navigate({
         search: (cur: Record<string, unknown>) => ({ ...cur, ...searchPatch }),
-        replace: true,
+        replace: (patchOptions?.history ?? defaultHistory) === 'replace',
         // `true` keeps the current hash. Omitting hash would clear it, which
         // rewrites state the hook does not own.
         hash: true,
         ...(resetScroll !== undefined ? { resetScroll } : {}),
       } as never)
     },
-    [navigate],
+    [navigate, ownedKeys, resetScroll, defaultHistory],
   )
 
   return [state, patch]
@@ -168,7 +190,7 @@ export function useValidatedUrlState<T>(
   keys: readonly string[],
   decode: (raw: UrlState) => UrlStateDecoded<T>,
   options?: UrlStateOptions,
-): [T, (patch: UrlState) => void, string[]] {
+): [T, UrlStatePatch, string[]] {
   const [raw, patch] = useUrlState(keys, options)
   const decoded = useMemo(() => decode(raw), [raw, decode])
 
@@ -182,27 +204,31 @@ export function useValidatedUrlState<T>(
   // decode has nothing to complain about, and without the latch the notice
   // would flash and vanish before it could be read. It clears on the operator's
   // next deliberate change — or when they dismiss it.
+  //
+  // Latch the report during render (the array identity IS the event). The URL
+  // cleanup is the only remaining effect: it navigates, it does not setState.
   const [reported, setReported] = useState<string[]>([])
+  const [seenIssues, setSeenIssues] = useState<readonly string[] | null>(null)
+  if (decoded.issues.length > 0 && seenIssues !== decoded.issues) {
+    setSeenIssues(decoded.issues)
+    setReported([...decoded.issues])
+  }
+
   useEffect(() => {
     if (decoded.issues.length === 0) return
-    // A NEW array instance per event, CLONED here rather than passed through.
-    // The identity is what lets a consumer tell "the same latched complaint"
-    // from "it happened again" — keying on the joined names cannot, because two
-    // bad links naming the same key are two events and the second has to speak.
-    // Storing the decoder's own array would make that contract depend on the
-    // decoder allocating a fresh one, which nothing requires it to do.
-    setReported([...decoded.issues])
     const clear: UrlState = {}
     for (const k of decoded.issues) clear[k] = undefined
-    patch(clear)
-    // `decoded` is memoised on [raw, decode], so this re-enters exactly when the
-    // URL state actually changed — never once per render.
+    // ALWAYS a replace, whatever this call site's default is: removing a value
+    // that was never in effect is not a place the operator can go back to, and
+    // pushing it would put a URL the screen never matched into their history.
+    patch(clear, { history: 'replace' })
   }, [decoded, patch])
 
-  const patchAndClearReport = useCallback(
-    (p: UrlState) => {
+  const patchAndClearReport = useCallback<UrlStatePatch>(
+    (p, patchOptions) => {
       setReported([])
-      patch(p)
+      setSeenIssues(null)
+      patch(p, patchOptions)
     },
     [patch],
   )

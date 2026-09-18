@@ -81,6 +81,7 @@
     "spec": "Specification",
     "specCaption": "Read-only definition. Secrets are referenced inside the spec by name or locator — never as values. Inline credentials are rejected on write.",
     "specEmpty": "No specification",
+    "specEmptyHint": "The interface specification of this entry appears here when the entry publishes one. This one publishes none.",
     "integrity": "Integrity & approval",
     "contentHash": "Content hash",
     "signed": "Signed",

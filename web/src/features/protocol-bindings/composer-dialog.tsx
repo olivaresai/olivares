@@ -68,6 +68,7 @@ import type {
   ProtocolMappingTransform,
   ProtocolSpecApplyOutcome,
 } from './types'
+import { StaticTable } from '@/components/data/static-table'
 
 const STEPS = [
   'connection',
@@ -327,7 +328,7 @@ export function ProtocolComposerDialog({
             <li key={name}>
               <button
                 type="button"
-                className="w-full rounded-md border border-border px-2 py-2 text-left text-xs disabled:opacity-50"
+                className="w-full rounded-md border border-border px-2 py-2 text-left text-caption disabled:opacity-50"
                 aria-current={step === index ? 'step' : undefined}
                 disabled={index > step + 1 || phase === 'applying'}
                 onClick={() => setStep(index)}
@@ -403,17 +404,17 @@ export function ProtocolComposerDialog({
           ) : null}
 
           {phase === 'validating' ? (
-            <p role="status" className="text-sm text-muted-foreground">
+            <p role="status" className="text-body text-muted-foreground">
               {t('composer.flow.validating')}
             </p>
           ) : null}
           {phase === 'planning' ? (
-            <p role="status" className="text-sm text-muted-foreground">
+            <p role="status" className="text-body text-muted-foreground">
               {t('composer.flow.planning')}
             </p>
           ) : null}
           {phase === 'applying' ? (
-            <p role="status" className="text-sm text-muted-foreground">
+            <p role="status" className="text-body text-muted-foreground">
               {t('composer.flow.applying')}
             </p>
           ) : null}
@@ -427,17 +428,17 @@ export function ProtocolComposerDialog({
           {phase === 'applied' && outcome ? (
             <div
               role="status"
-              className="rounded-md border border-success-line bg-success-soft p-3 text-sm text-success"
+              className="rounded-md border border-success-line bg-success-soft p-3 text-body text-success"
             >
               <p className="font-medium">{t('composer.flow.created')}</p>
-              <p className="mt-1 text-xs">
+              <p className="mt-1 text-caption">
                 {outcome.result.spec.validation.verdict === 'CLEAN' &&
                 outcome.result.spec.validation.observed_at
                   ? t('composer.flow.createdVerified')
                   : t('composer.flow.createdUnverified')}
               </p>
               {outcome.replayed ? (
-                <p className="mt-1 text-xs">{t('outcome.replayed')}</p>
+                <p className="mt-1 text-caption">{t('outcome.replayed')}</p>
               ) : null}
             </div>
           ) : null}
@@ -880,7 +881,7 @@ function ResourcesStep({
           onChange={(e) => change('remoteResourceRef', e.target.value)}
         />
       </Field>
-      <div className="sm:col-span-2 rounded-md border border-border bg-muted/30 p-3 text-xs text-muted-foreground">
+      <div className="sm:col-span-2 rounded-md border border-border bg-muted/30 p-3 text-caption text-muted-foreground">
         {t('composer.resourceHelp')}
       </div>
     </div>
@@ -969,8 +970,10 @@ function MappingStep({
       </Field>
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-sm font-medium">{t('composer.mapping.title')}</h3>
-          <p className="text-xs text-muted-foreground">
+          <h3 className="text-body font-medium">
+            {t('composer.mapping.title')}
+          </h3>
+          <p className="text-caption text-muted-foreground">
             {t('composer.mapping.help')}
           </p>
         </div>
@@ -1179,25 +1182,21 @@ function MappingCoverageMatrix({
       aria-label={t('composer.coverage.title')}
     >
       <div className="border-b border-border bg-muted/30 p-3">
-        <h3 className="text-sm font-medium">{t('composer.coverage.title')}</h3>
-        <p className="mt-1 text-xs text-muted-foreground">
+        <h3 className="text-body font-medium">
+          {t('composer.coverage.title')}
+        </h3>
+        <p className="mt-1 text-caption text-muted-foreground">
           {t('composer.coverage.help')}
         </p>
       </div>
       <div className="max-h-72 overflow-auto">
-        <table className="w-full text-left text-xs">
-          <thead className="sticky top-0 bg-background text-muted-foreground">
+        <StaticTable className="text-caption">
+          <thead className="sticky top-0 bg-background">
             <tr>
-              <th className="px-3 py-2 font-medium">
-                {t('composer.coverage.route')}
-              </th>
-              <th className="px-3 py-2 font-medium">
-                {t('composer.coverage.field')}
-              </th>
-              <th className="px-3 py-2 font-medium">
-                {t('composer.coverage.result')}
-              </th>
-              <th className="px-3 py-2 font-medium">
+              <th>{t('composer.coverage.route')}</th>
+              <th>{t('composer.coverage.field')}</th>
+              <th>{t('composer.coverage.result')}</th>
+              <th>
                 <span className="sr-only">{t('composer.coverage.action')}</span>
               </th>
             </tr>
@@ -1222,11 +1221,11 @@ function MappingCoverageMatrix({
                   key={`${item.direction}:${item.role}:${item.field}`}
                   className={item.required ? 'bg-warning-soft/20' : undefined}
                 >
-                  <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">
+                  <td className="whitespace-nowrap text-muted-foreground">
                     {t(`direction.${item.direction}`)} ·{' '}
                     {t(`composer.coverage.${item.role}`)}
                   </td>
-                  <td className="px-3 py-2 font-mono">
+                  <td className="font-mono">
                     {item.field}
                     {item.required ? (
                       <span
@@ -1237,12 +1236,12 @@ function MappingCoverageMatrix({
                       </span>
                     ) : null}
                   </td>
-                  <td className="px-3 py-2">
+                  <td>
                     <Badge variant={variant}>
                       {t(`composer.coverage.status.${item.status}`)}
                     </Badge>
                   </td>
-                  <td className="px-3 py-2 text-right">
+                  <td className="text-right">
                     {item.status !== 'mapped' && !hasLoss ? (
                       <Button
                         type="button"
@@ -1267,7 +1266,7 @@ function MappingCoverageMatrix({
               )
             })}
           </tbody>
-        </table>
+        </StaticTable>
       </div>
     </section>
   )
@@ -1311,8 +1310,10 @@ function GovernanceStep({
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-sm font-medium">{t('composer.losses.title')}</h3>
-          <p className="text-xs text-muted-foreground">
+          <h3 className="text-body font-medium">
+            {t('composer.losses.title')}
+          </h3>
+          <p className="text-caption text-muted-foreground">
             {t('composer.losses.help')}
           </p>
         </div>
@@ -1342,7 +1343,7 @@ function GovernanceStep({
         </Button>
       </div>
       {draft.knownLosses.length === 0 ? (
-        <p className="rounded-md border border-border p-3 text-xs text-muted-foreground">
+        <p className="rounded-md border border-border p-3 text-caption text-muted-foreground">
           {t('composer.losses.none')}
         </p>
       ) : null}
@@ -1390,7 +1391,7 @@ function GovernanceStep({
                 })
               }
             />
-            <label htmlFor={`loss-${index}-accepted`} className="text-sm">
+            <label htmlFor={`loss-${index}-accepted`} className="text-body">
               {t('fields.lossAccepted')}
             </label>
           </div>
@@ -1503,15 +1504,17 @@ function PermissionPreview({
       className="rounded-md border border-border p-3"
       aria-label={t('composer.permissions.title')}
     >
-      <h3 className="text-sm font-medium">{t('composer.permissions.title')}</h3>
-      <p className="mt-1 text-xs text-muted-foreground">
+      <h3 className="text-body font-medium">
+        {t('composer.permissions.title')}
+      </h3>
+      <p className="mt-1 text-caption text-muted-foreground">
         {t('composer.permissions.help')}
       </p>
       <ul className="mt-3 space-y-2">
         {rows.map((row) => (
           <li
             key={row.permission}
-            className="flex items-center justify-between gap-3 text-xs"
+            className="flex items-center justify-between gap-3 text-caption"
           >
             <code>{row.permission}</code>
             <Badge
@@ -1581,7 +1584,7 @@ function ReviewStep({
   }
   return (
     <div className="space-y-4">
-      <div className="rounded-md border border-warning-line bg-warning-soft p-3 text-sm text-warning">
+      <div className="rounded-md border border-warning-line bg-warning-soft p-3 text-body text-warning">
         <div className="flex gap-2">
           <AlertTriangle
             className="mt-0.5 size-4 shrink-0"
@@ -1591,15 +1594,15 @@ function ReviewStep({
             <p className="font-medium">
               {t('composer.review.unverifiedTitle')}
             </p>
-            <p className="mt-1 text-xs">
+            <p className="mt-1 text-caption">
               {t('composer.review.unverifiedBody')}
             </p>
           </div>
         </div>
       </div>
-      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
+      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-body">
         <dt className="text-muted-foreground">{t('fields.bindingKey')}</dt>
-        <dd className="font-mono text-xs">{draft.bindingKey || '—'}</dd>
+        <dd className="font-mono text-caption">{draft.bindingKey || '—'}</dd>
         <dt className="text-muted-foreground">{t('fields.protocol')}</dt>
         <dd>
           <Badge variant="outline">
@@ -1609,13 +1612,13 @@ function ReviewStep({
         <dt className="text-muted-foreground">{t('fields.direction')}</dt>
         <dd>{t(`direction.${draft.direction}`)}</dd>
         <dt className="text-muted-foreground">{t('fields.peerAuthority')}</dt>
-        <dd className="break-all font-mono text-xs">
+        <dd className="break-all font-mono text-caption">
           {draft.peerAuthority || '—'}
         </dd>
         <dt className="text-muted-foreground">
           {t('composer.review.resources')}
         </dt>
-        <dd className="font-mono text-xs">
+        <dd className="font-mono text-caption">
           {draft.localKind}:{draft.localRef || '—'} → {draft.remoteResourceKind}
           :{draft.remoteResourceRef || '—'}
         </dd>
@@ -1630,7 +1633,7 @@ function ReviewStep({
           <Badge variant="info">{t('currency.pinned')}</Badge>
         </dd>
         <dt className="text-muted-foreground">{t('composer.intentKey')}</dt>
-        <dd className="break-all font-mono text-xs">{intentKey}</dd>
+        <dd className="break-all font-mono text-caption">{intentKey}</dd>
       </dl>
       <Button type="button" variant="outline" onClick={exportJSON}>
         <Download className="size-4" aria-hidden="true" />
@@ -1671,14 +1674,14 @@ function PlanDiff({
       aria-label={t('composer.diff.title')}
     >
       <div className="border-b border-border bg-muted/30 p-3">
-        <h3 className="text-sm font-medium">{t('composer.diff.title')}</h3>
-        <p className="mt-1 text-xs text-muted-foreground">
+        <h3 className="text-body font-medium">{t('composer.diff.title')}</h3>
+        <p className="mt-1 text-caption text-muted-foreground">
           {applied
             ? t('composer.diff.appliedHelp')
             : t('composer.diff.plannedHelp')}
         </p>
       </div>
-      <dl className="grid grid-cols-[minmax(8rem,auto)_1fr] gap-x-3 gap-y-2 p-3 text-xs">
+      <dl className="grid grid-cols-[minmax(8rem,auto)_1fr] gap-x-3 gap-y-2 p-3 text-caption">
         {rows.map((row) => (
           <div key={row.field} className="contents">
             <dt className="text-muted-foreground">
@@ -1719,10 +1722,10 @@ function PlanSummary({
   return (
     <section className="rounded-md border border-border p-3" aria-label={label}>
       <div className="flex items-center justify-between gap-2">
-        <h3 className="text-sm font-medium">{label}</h3>
+        <h3 className="text-body font-medium">{label}</h3>
         <ProtocolVerdictBadge verdict={plan.verdict} />
       </div>
-      <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
+      <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-caption">
         <dt className="text-muted-foreground">{t('fields.code')}</dt>
         <dd className="font-mono">{plan.code}</dd>
         <dt className="text-muted-foreground">{t('detail.validation')}</dt>

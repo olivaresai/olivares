@@ -112,7 +112,7 @@ export function AdmissionTab() {
         {policyQ.isLoading ? (
           <Skeleton className="h-28 w-full" />
         ) : policyQ.error ? (
-          <p className="text-sm text-muted-foreground">
+          <p className="text-body text-muted-foreground">
             {t('policy.loadError')}
           </p>
         ) : policyQ.data ? (
@@ -156,10 +156,10 @@ function PolicySummary({ policy }: { policy: AdmissionPolicy }) {
             : 'rounded-md border border-warning bg-warning-soft px-3 py-2'
         }
       >
-        <p className="text-sm font-medium text-foreground">
+        <p className="text-body font-medium text-foreground">
           {t(`policy.state.${stateKey}.title`)}
         </p>
-        <p className="mt-0.5 text-xs text-muted-foreground">
+        <p className="mt-0.5 text-caption text-muted-foreground">
           {t(`policy.state.${stateKey}.body`)}
         </p>
       </div>
@@ -176,7 +176,7 @@ function PolicySummary({ policy }: { policy: AdmissionPolicy }) {
         </KvRow>
         {policy.allowed_identities && policy.allowed_identities.length > 0 && (
           <KvRow label={t('policy.identities')} align="start">
-            <ul className="flex flex-col gap-0.5 font-mono text-xs">
+            <ul className="flex flex-col gap-0.5 font-mono text-caption">
               {policy.allowed_identities.map((v) => (
                 <li key={v} className="break-all">
                   {v}
@@ -187,7 +187,7 @@ function PolicySummary({ policy }: { policy: AdmissionPolicy }) {
         )}
         {policy.allowed_issuers && policy.allowed_issuers.length > 0 && (
           <KvRow label={t('policy.issuers')} align="start">
-            <ul className="flex flex-col gap-0.5 font-mono text-xs">
+            <ul className="flex flex-col gap-0.5 font-mono text-caption">
               {policy.allowed_issuers.map((v) => (
                 <li key={v} className="break-all">
                   {v}
@@ -360,7 +360,7 @@ function PolicyForm({
 
       <div className="flex flex-col gap-4">
         <div className="flex items-center justify-between rounded-md border border-border px-3 py-2">
-          <span className="text-xs text-muted-foreground">
+          <span className="text-caption text-muted-foreground">
             {t('policy.derivedMode')}
           </span>
           <ModeBadges modes={modes} />
@@ -368,7 +368,7 @@ function PolicyForm({
 
         {errorKey && (
           <div className="rounded-md border border-danger bg-danger-soft px-3 py-2">
-            <p className="text-xs text-danger">{t(errorKey)}</p>
+            <p className="text-caption text-danger">{t(errorKey)}</p>
           </div>
         )}
 
@@ -408,7 +408,7 @@ function PolicyForm({
               '-----BEGIN CERTIFICATE-----\n…\n-----END CERTIFICATE-----'
             }
             rows={5}
-            className="font-mono text-xs"
+            className="font-mono text-caption"
           />
         </Field>
         <Field
@@ -424,7 +424,7 @@ function PolicyForm({
               '-----BEGIN PUBLIC KEY-----\n…\n-----END PUBLIC KEY-----'
             }
             rows={4}
-            className="font-mono text-xs"
+            className="font-mono text-caption"
           />
         </Field>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -438,7 +438,7 @@ function PolicyForm({
               value={identities}
               onChange={(e) => setIdentities(e.target.value)}
               rows={3}
-              className="font-mono text-xs"
+              className="font-mono text-caption"
             />
           </Field>
           <Field
@@ -451,7 +451,7 @@ function PolicyForm({
               value={issuers}
               onChange={(e) => setIssuers(e.target.value)}
               rows={3}
-              className="font-mono text-xs"
+              className="font-mono text-caption"
             />
           </Field>
         </div>
@@ -528,7 +528,9 @@ function VerdictInventory({ canAdmit }: { canAdmit: boolean }) {
         accessorKey: 'version_ref',
         header: t('verdicts.columns.version'),
         cell: ({ row }) => (
-          <span className="font-mono text-xs">{row.original.version_ref}</span>
+          <span className="font-mono text-caption">
+            {row.original.version_ref}
+          </span>
         ),
       },
       {
@@ -564,7 +566,7 @@ function VerdictInventory({ canAdmit }: { canAdmit: boolean }) {
         id: 'tlog',
         header: t('verdicts.columns.tlog'),
         cell: ({ row }) => (
-          <span className="text-xs text-muted-foreground">
+          <span className="text-caption text-muted-foreground">
             {row.original.tlog_verified
               ? t('evidence.tlogVerified')
               : row.original.tlog_present
@@ -616,7 +618,7 @@ function VerdictInventory({ canAdmit }: { canAdmit: boolean }) {
         searchPlaceholder={t('verdicts.search')}
         toolbar={
           <Select value={verified} onValueChange={setVerified}>
-            <SelectTrigger className="h-8 w-[10rem] text-xs">
+            <SelectTrigger className="h-8 w-[10rem] text-caption">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -675,7 +677,7 @@ function VerdictDrawer({
         {verdict && (
           <>
             <SheetHeader>
-              <SheetTitle className="font-mono text-sm">
+              <SheetTitle className="font-mono text-body">
                 {verdict.version_ref}
               </SheetTitle>
               <SheetDescription>

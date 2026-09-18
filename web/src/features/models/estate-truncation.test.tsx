@@ -10,6 +10,7 @@
 // `_intel/notices.tsx`, y tiene su propia casilla con las cuatro combinaciones. Aquí se mide lo
 // que ESTA pantalla decide: que el techo llega a las tres llamadas y que el aviso lleva la cifra
 // CARGADA, no el techo que se pidió.
+import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderIntel, screen, userEvent } from '@/test/intel'
 import { governedModelsFixture, routingPoliciesFixture } from './fixtures'
@@ -18,6 +19,31 @@ import './i18n'
 
 vi.mock('@/lib/auth/context', () => ({
   useAuth: () => ({ activeTenant: 't1', can: () => true }),
+}))
+
+// The estate's empty state offers "Add a provider" as a router <Link>, and
+// this bench renders that empty state on purpose (it drives the three lists with no
+// rows). Without a RouterProvider the link throws `Cannot read properties of null
+// (reading 'isServer')` — the same anchor mock the home and executive benches use.
+vi.mock('@tanstack/react-router', () => ({
+  useRouterState: () => '',
+  // `useRouter: () => undefined` is the real no-provider answer, and the tree's
+  // partial mocks must declare every export a shared component reaches (the
+  // router-aware `TabsList` reaches this one). Never a runtime catch: an
+  // independent review rejected that in R2, 2026-09-06.
+  useRouter: () => undefined,
+  Link: ({
+    children,
+    to,
+    ...rest
+  }: {
+    children: ReactNode
+    to: string
+  } & Record<string, unknown>) => (
+    <a href={to} {...rest}>
+      {children}
+    </a>
+  ),
 }))
 
 const estateMock = vi.fn()

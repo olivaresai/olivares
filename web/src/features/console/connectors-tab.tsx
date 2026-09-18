@@ -66,6 +66,7 @@ import {
 } from './api'
 import { ConnectorCatalog, HostingBadge } from './connector-catalog'
 import { CustomFields, type CustomRow } from './custom-fields'
+import { StaticTable } from '@/components/data/static-table'
 
 // A source name/handle: letters, digits and the separators `. _ - /` (mirrors the
 // store's ValidateSourceName so the save button can explain itself).
@@ -230,7 +231,7 @@ export function ConnectorsTab() {
   // tab being removed outright — with no ref to prime and no transition to miss.
   if (!isSuperadmin) {
     return (
-      <div className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/5 px-4 py-3 text-sm text-muted-foreground">
+      <div className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/5 px-4 py-3 text-body text-muted-foreground">
         <ShieldAlert
           className="mt-0.5 size-4 shrink-0 text-warning"
           aria-hidden
@@ -402,10 +403,10 @@ function ConnectorsTabBody({ scope }: { scope: string }) {
     <div className="flex flex-col gap-4 pt-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold text-foreground">
+          <h2 className="text-heading text-foreground">
             {t('console:connectors.title')}
           </h2>
-          <p className="max-w-2xl text-sm text-muted-foreground">
+          <p className="max-w-2xl text-body text-muted-foreground">
             {t('console:connectors.caption')}
           </p>
         </div>
@@ -460,7 +461,7 @@ function ConnectorsTabBody({ scope }: { scope: string }) {
         // A 501 from the ROSTER is its own seam — a build with no source roster
         // service — and not the catalog's "onboarding not wired". Two different
         // sentences because they are two different facts.
-        <p className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/5 px-4 py-3 text-sm text-warning">
+        <p className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/5 px-4 py-3 text-body text-warning">
           <ShieldAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
           {t('console:connectors.sourcesUnavailable')}
         </p>
@@ -524,32 +525,21 @@ function ConnectorsTabBody({ scope }: { scope: string }) {
             />
           ) : (
             <div className="overflow-hidden rounded-lg border border-border">
-              <table className="w-full text-sm">
-                <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
+              <StaticTable>
+                <thead>
                   <tr>
-                    <th className="px-3 py-2 font-medium">
-                      {t('console:connectors.colName')}
-                    </th>
-                    <th className="px-3 py-2 font-medium">
-                      {t('console:connectors.colKind')}
-                    </th>
-                    <th className="px-3 py-2 font-medium">
-                      {t('console:connectors.colMode')}
-                    </th>
-                    <th className="px-3 py-2 font-medium">
-                      {t('console:connectors.colStatus')}
-                    </th>
-                    <th className="px-3 py-2" />
+                    <th>{t('console:connectors.colName')}</th>
+                    <th>{t('console:connectors.colKind')}</th>
+                    <th>{t('console:connectors.colMode')}</th>
+                    <th>{t('console:connectors.colStatus')}</th>
+                    <th />
                   </tr>
                 </thead>
                 <tbody>
                   {filteredRows.map((s) => (
-                    <tr
-                      key={s.name}
-                      className="border-t border-border align-top"
-                    >
-                      <td className="px-3 py-2">
-                        <span className="font-mono text-xs text-foreground">
+                    <tr key={s.name} className="align-top">
+                      <td>
+                        <span className="font-mono text-caption text-foreground">
                           {s.name}
                         </span>
                       </td>
@@ -562,22 +552,22 @@ function ConnectorsTabBody({ scope }: { scope: string }) {
                           default metadata cannot truthfully answer instance-level
                           hosting, so the roster says nothing rather than something
                           false; the catalog below, which really is about kinds, does. */}
-                      <td className="px-3 py-2 text-muted-foreground">
-                        <span className="font-mono text-xs">
+                      <td className="text-muted-foreground">
+                        <span className="font-mono text-caption">
                           {s.kind || '—'}
                         </span>
                       </td>
-                      <td className="px-3 py-2">
+                      <td>
                         <SourceModeBadge value={s.source_mode} />
                       </td>
-                      <td className="px-3 py-2">
+                      <td>
                         <Badge variant={statusVariant(s.status)}>
                           {t(`console:connectors.status.${s.status}`, {
                             defaultValue: s.status,
                           })}
                         </Badge>
                       </td>
-                      <td className="px-3 py-2 text-right">
+                      <td className="text-right">
                         <div className="flex justify-end gap-1">
                           <Button
                             variant="ghost"
@@ -600,7 +590,7 @@ function ConnectorsTabBody({ scope }: { scope: string }) {
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </StaticTable>
             </div>
           )}
         </>
@@ -627,7 +617,7 @@ function ConnectorsTabBody({ scope }: { scope: string }) {
           description={t('console:connectors.catalogForbiddenHint')}
         />
       ) : unavailable ? (
-        <p className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/5 px-4 py-3 text-sm text-warning">
+        <p className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/5 px-4 py-3 text-body text-warning">
           <ShieldAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
           {t('console:connectors.unavailable')}
         </p>
@@ -746,8 +736,8 @@ function ConnectorsTabBody({ scope }: { scope: string }) {
 function SummaryRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-start justify-between gap-4 px-4 py-2.5">
-      <dt className="text-sm text-muted-foreground">{label}</dt>
-      <dd className="min-w-0 break-words text-right text-sm text-foreground">
+      <dt className="text-body text-muted-foreground">{label}</dt>
+      <dd className="min-w-0 break-words text-right text-body text-foreground">
         {value}
       </dd>
     </div>
@@ -791,17 +781,17 @@ function ReloadReport({
         {/* (d) Rejections qualify the outcome as PARTIAL, listed per name + reason. */}
         {rejected.length > 0 && (
           <div className="flex flex-col gap-2 rounded-lg border border-warning/40 bg-warning/5 px-4 py-3">
-            <p className="flex items-center gap-2 text-sm font-medium text-warning">
+            <p className="flex items-center gap-2 text-body font-medium text-warning">
               <ShieldAlert className="size-4 shrink-0" aria-hidden />
               {t('console:connectors.reload.partialTitle')}
             </p>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-body text-muted-foreground">
               {t('console:connectors.reload.partialBody')}
             </p>
-            <ul className="flex flex-col gap-1 text-sm">
+            <ul className="flex flex-col gap-1 text-body">
               {rejected.map((r) => (
                 <li key={r.name}>
-                  <span className="font-mono text-xs text-foreground">
+                  <span className="font-mono text-caption text-foreground">
                     {r.name}
                   </span>
                   <span className="text-muted-foreground"> — {r.reason}</span>
@@ -840,14 +830,14 @@ function ReloadReport({
         {/* (c) ALWAYS surface requires_restart as a WARNING — even on a clean reload. */}
         {requiresRestart.length > 0 && (
           <div className="flex flex-col gap-2 rounded-lg border border-warning/40 bg-warning/5 px-4 py-3">
-            <p className="flex items-center gap-2 text-sm font-medium text-warning">
+            <p className="flex items-center gap-2 text-body font-medium text-warning">
               <ShieldAlert className="size-4 shrink-0" aria-hidden />
               {t('console:connectors.reload.restartTitle')}
             </p>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-body text-muted-foreground">
               {t('console:connectors.reload.restartBody')}
             </p>
-            <ul className="flex list-disc flex-col gap-1 pl-5 text-sm text-muted-foreground">
+            <ul className="flex list-disc flex-col gap-1 pl-5 text-body text-muted-foreground">
               {requiresRestart.map((d) => (
                 <li key={d}>{d}</li>
               ))}
@@ -1094,7 +1084,9 @@ function ConnectorForm({
           </div>
 
           {info?.description && (
-            <p className="text-xs text-muted-foreground">{info.description}</p>
+            <p className="text-caption text-muted-foreground">
+              {info.description}
+            </p>
           )}
 
           <div className="grid gap-4 sm:grid-cols-2">
@@ -1227,7 +1219,7 @@ function ConnectorForm({
 
           {/* Free-form settings: required for a plugin kind, optional otherwise. */}
           {isPlugin && (
-            <p className="text-xs text-muted-foreground">
+            <p className="text-caption text-muted-foreground">
               {t('console:connectors.pluginNote')}
             </p>
           )}

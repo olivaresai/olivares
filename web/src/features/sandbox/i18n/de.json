@@ -49,6 +49,7 @@
     "description": "Jede isolierte Ausführung, mit dem Backend, das sie ausgeführt hat, und der Angabe, ob sie bewertet wurde.",
     "isolationNote": "Die Isolation ist echt, nicht vorgetäuscht: Runner und Isolations-Flag werden genau so angezeigt, wie sie erfasst wurden. Ein beeinträchtigter Lauf wurde ausgeführt, aber nicht bewertet — er gilt nicht als bestanden.",
     "empty": "Noch keine Läufe",
+    "emptyHint": "Jeder Szenariolauf wird hier mit Urteil und Ausgaben aufgeführt. Führen Sie ein Szenario aus, um den ersten aufzuzeichnen.",
     "errored": "{{count}} Fehler",
     "errored_one": "{{count}} Fehler",
     "errored_other": "{{count}} Fehler",
@@ -66,6 +67,7 @@
   "outputs": {
     "title": "Schritt-Ausgaben",
     "empty": "Keine Ausgaben erfasst",
+    "emptyHint": "Alles, was ein Szenarioschritt schreibt, wird hier erfasst. Dieser Lauf hat keine Ausgabe aufgezeichnet.",
     "syntheticNote": "Dies sind begrenzte synthetische Ausgaben des Mock-Runners — keine Produktionsausgabe. Ein Mock-Miss ist ein deterministischer Marker; er hat niemals eine echte Ressource erreicht.",
     "mockHit": "Mock-Treffer",
     "mockMiss": "Mock-Miss"
@@ -79,6 +81,7 @@
     "completePartial": "Die Wiedergabe endete, ist aber nicht der vollständige Datensatz",
     "unreadable": "Frames, die diese Ansicht nicht lesen konnte: {{n}}. Sie kamen an und wurden verworfen, sodass die darin enthaltenen Nachweise hier fehlen — dies ist keine saubere Wiedergabe.",
     "emptyUnreadable": "Es konnte keine Schrittausgabe gelesen werden",
+    "emptyUnreadableHint": "Die Ausgabe eines Schritts wird während des Laufs aus der Sandbox gestreamt. Für diesen Schritt konnte nichts zurückgelesen werden.",
     "disconnected": "Nicht verbunden",
     "lost": "Verbindung verloren — Sie sehen diesen Lauf nicht mehr.",
     "lostHint": "Das bedeutet NICHT, dass der Lauf beendet ist: Die Verbindung endete, bevor die Engine das Ende der Wiedergabe signalisiert hat. Der Status des Laufs ist der von der Engine aufgezeichnete, wie ihn die Lauftabelle zeigt; er wird nie aus dieser Verbindung abgeleitet. Verbinden Sie sich neu, um fortzusetzen; bereits angezeigte Ausgaben werden nicht wiederholt.",

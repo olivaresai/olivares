@@ -95,7 +95,8 @@
   "tabs": {
     "sessions": "Sesiones",
     "workspaces": "Espacios de trabajo",
-    "profiles": "Perfiles de proveedor"
+    "profiles": "Perfiles de proveedor",
+    "table": "Tabla"
   },
   "partial": {
     "noLiveRead": "No se muestran las sesiones observadas: tu rol no incluye sessions:live:read. Las lanzadas de abajo son la parte que se ha podido leer, no el cuadro completo.",
@@ -212,5 +213,108 @@
     "stopped": "Parada",
     "failed": "Fallida",
     "cleaned": "Limpiada"
+  },
+  "address": {
+    "retired": "La sesión que tenías abierta se ha cerrado. Tu acceso a la mitad de la que venía ha cambiado. Selecciona una fila para abrir una sesión con tu acceso actual."
+  },
+  "work": {
+    "worked": "ha trabajado {{duration}}",
+    "toolCalls_one": "{{count}} llamada a herramienta",
+    "toolCalls_other": "{{count}} llamadas a herramienta",
+    "events_one": "{{count}} evento",
+    "events_other": "{{count}} eventos",
+    "toolCalls_many": "{{count}} llamadas a herramienta",
+    "events_many": "{{count}} eventos"
+  },
+  "rail": {
+    "label": "Carril de trabajo",
+    "group": {
+      "active": "Activas",
+      "attention": "Esperándote",
+      "settled": "Cerradas"
+    },
+    "groupEmpty": {
+      "active": "Ahora mismo no hay nada en marcha.",
+      "attention": "No hay nada esperándote.",
+      "settled": "Todavía no se ha cerrado ninguna sesión."
+    },
+    "pin": "Fijar",
+    "unpin": "Dejar de fijar",
+    "pinnedMark": "Fijada",
+    "rowMenu": "Acciones de {{name}}",
+    "noObservation": "Todavía no ha llegado telemetría de esta sesión.",
+    "emptyTitle": "Todavía no hay sesiones",
+    "emptyDescription": "Cada sesión que este despliegue observa o lanza aparece aquí, agrupada por lo que necesita de ti."
+  },
+  "surface": {
+    "paneSwitcher": "Elegir panel",
+    "pane": {
+      "rail": "Sesiones",
+      "narrative": "Trabajo",
+      "context": "Contexto"
+    }
+  },
+  "narrative": {
+    "noneTitle": "Selecciona una sesión",
+    "noneDescription": "Elige una sesión en el carril para leer lo que hizo, con su evidencia al lado.",
+    "openDetail": "Controles completos",
+    "noObjective": "El motor no ha reportado ningún objetivo para esta sesión, así que se muestra su referencia.",
+    "notReadTitle": "No se ha podido leer esta sesión",
+    "menu": "Acciones de {{name}}"
+  },
+  "evidence": {
+    "checks": {
+      "title": "Comprobaciones",
+      "empty": "Esta sesión no ha reportado hallazgos."
+    },
+    "activity": {
+      "title": "Últimos turnos",
+      "empty": "Esta sesión no ha hecho llamadas a herramientas ni a MCP."
+    },
+    "resources": {
+      "title": "Recursos tocados",
+      "empty": "Ninguna entrada nombra un recurso."
+    },
+    "forbiddenTitle": "Evidencia no autorizada",
+    "forbiddenDescription": "Tu rol no incluye permiso para leer la telemetría de sesiones.",
+    "errorTitle": "No se ha podido leer la evidencia",
+    "errorDescription": "La lectura de la línea de tiempo no ha respondido. Una lista vacía aquí diría que la sesión no hizo nada, y eso es otro hecho.",
+    "atLeast_one": "al menos {{count}}",
+    "atLeast_other": "al menos {{count}}",
+    "touches_one": "{{count}} entrada",
+    "touches_other": "{{count}} entradas",
+    "atLeast_many": "al menos {{count}}",
+    "touches_many": "{{count}} entradas"
+  },
+  "context": {
+    "noneTitle": "Ninguna sesión seleccionada",
+    "noneDescription": "Aquí aparecen el ámbito con el que se ejecutó una sesión y las referencias que necesitas para buscarla.",
+    "scopeTitle": "Ámbito",
+    "scopeHint": "A qué se aplica esta sesión. Son los valores con los que se ejecutó, no los seleccionados ahora.",
+    "tenant": "Organización",
+    "workspace": "Espacio de trabajo",
+    "environment": "Entorno",
+    "provider": "Proveedor",
+    "profile": "Perfil de proveedor",
+    "traceTitle": "Rastro",
+    "traceHint": "Las referencias por las que se conoce esta sesión y lo que el plano registró sobre ella.",
+    "sessionRef": "Referencia de sesión",
+    "liveRef": "Referencia de fila",
+    "runRef": "Referencia de ejecución",
+    "canonicalSid": "Id canónico de sesión",
+    "binding": "Vínculo de origen",
+    "engine": "Motor del agente",
+    "posture": "Postura de gobierno",
+    "governance": "Lo que registró el plano",
+    "pepOn": "Las llamadas a herramientas se controlan en línea.",
+    "pepOff": "Las llamadas a herramientas no se controlan en línea.",
+    "recordOn": "La entrada y la salida se anclan como evidencia.",
+    "recordOff": "La entrada y la salida no se registran.",
+    "approval": "Aprobación",
+    "none": "Ninguno",
+    "notDeclared": "No declarado",
+    "copy": "Copiar",
+    "copied": "Copiado",
+    "copyRef": "Copiar {{value}}"
   }
 }

@@ -38,6 +38,7 @@ import type {
   BreakGlassUseDTO,
   ReviewBreakGlassInput,
 } from './types'
+import { StaticTable } from '@/components/data/static-table'
 
 const BREAK_GLASS_POLL_MS = 12_000
 const BREAK_GLASS_PAGE_SIZE = 100
@@ -152,10 +153,10 @@ export function BreakGlassView({ active = true }: { active?: boolean }) {
     <div className="flex flex-col gap-5 pt-1">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="max-w-3xl">
-          <h2 className="text-base font-semibold text-foreground">
+          <h2 className="text-heading text-foreground">
             {t('breakGlass.title')}
           </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="mt-1 text-body text-muted-foreground">
             {t('breakGlass.caption')}
           </p>
         </div>
@@ -175,7 +176,7 @@ export function BreakGlassView({ active = true }: { active?: boolean }) {
       {canAdmin && activationBlock && (
         <p
           role="status"
-          className="flex items-start gap-2 rounded-lg border border-warning-line bg-warning-soft p-3 text-sm text-foreground"
+          className="flex items-start gap-2 rounded-lg border border-warning-line bg-warning-soft p-3 text-body text-foreground"
         >
           <AlertTriangle
             className="mt-0.5 size-4 shrink-0 text-warning"
@@ -192,11 +193,11 @@ export function BreakGlassView({ active = true }: { active?: boolean }) {
         <div>
           <h3
             id="break-glass-current"
-            className="text-sm font-semibold text-foreground"
+            className="text-body font-semibold text-foreground"
           >
             {t('breakGlass.currentTitle')}
           </h3>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-caption text-muted-foreground">
             {t('breakGlass.currentCaption')}
           </p>
         </div>
@@ -233,11 +234,11 @@ export function BreakGlassView({ active = true }: { active?: boolean }) {
         <div>
           <h3
             id="break-glass-history"
-            className="text-sm font-semibold text-foreground"
+            className="text-body font-semibold text-foreground"
           >
             {t('breakGlass.historyTitle')}
           </h3>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-caption text-muted-foreground">
             {t('breakGlass.historyCaption')}
           </p>
         </div>
@@ -285,21 +286,21 @@ function ActiveGrantCard({
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Badge variant="danger">{t('breakGlass.activeCritical')}</Badge>
-        <span className="font-mono text-xs text-muted-foreground">
+        <span className="font-mono text-caption text-muted-foreground">
           {grant.id}
         </span>
       </div>
-      <dl className="grid gap-2 text-sm sm:grid-cols-2">
+      <dl className="grid gap-2 text-body sm:grid-cols-2">
         <div>
-          <dt className="text-xs text-muted-foreground">
+          <dt className="text-caption text-muted-foreground">
             {t('breakGlass.scope')}
           </dt>
-          <dd className="font-mono text-xs text-foreground">
+          <dd className="font-mono text-caption text-foreground">
             <ScopeLabel matchAction={grant.match_action} />
           </dd>
         </div>
         <div>
-          <dt className="text-xs text-muted-foreground">
+          <dt className="text-caption text-muted-foreground">
             {t('breakGlass.expiresAt')}
           </dt>
           <dd className="text-foreground">
@@ -307,15 +308,15 @@ function ActiveGrantCard({
           </dd>
         </div>
         <div>
-          <dt className="text-xs text-muted-foreground">
+          <dt className="text-caption text-muted-foreground">
             {t('breakGlass.activatedBy')}
           </dt>
-          <dd className="font-mono text-xs text-foreground">
+          <dd className="font-mono text-caption text-foreground">
             {grant.activated_by ?? t('breakGlass.notAvailable')}
           </dd>
         </div>
         <div>
-          <dt className="text-xs text-muted-foreground">
+          <dt className="text-caption text-muted-foreground">
             {t('breakGlass.activatedAt')}
           </dt>
           <dd className="text-foreground">
@@ -324,7 +325,7 @@ function ActiveGrantCard({
         </div>
       </dl>
       {grant.reason && (
-        <p className="text-sm text-foreground">{grant.reason}</p>
+        <p className="text-body text-foreground">{grant.reason}</p>
       )}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
@@ -393,30 +394,15 @@ function GrantHistoryTable({
   return (
     <div className="flex flex-col gap-3">
       <div className="overflow-x-auto rounded-lg border border-border">
-        <table
-          className="w-full text-sm"
-          aria-label={t('breakGlass.tableLabel')}
-        >
-          <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
+        <StaticTable aria-label={t('breakGlass.tableLabel')}>
+          <thead>
             <tr>
-              <th scope="col" className="px-3 py-2 font-medium">
-                {t('breakGlass.scope')}
-              </th>
-              <th scope="col" className="px-3 py-2 font-medium">
-                {t('breakGlass.status')}
-              </th>
-              <th scope="col" className="px-3 py-2 font-medium">
-                {t('breakGlass.activatedBy')}
-              </th>
-              <th scope="col" className="px-3 py-2 font-medium">
-                {t('breakGlass.window')}
-              </th>
-              <th scope="col" className="px-3 py-2 font-medium">
-                {t('breakGlass.uses')}
-              </th>
-              <th scope="col" className="px-3 py-2 font-medium">
-                {t('breakGlass.review')}
-              </th>
+              <th scope="col">{t('breakGlass.scope')}</th>
+              <th scope="col">{t('breakGlass.status')}</th>
+              <th scope="col">{t('breakGlass.activatedBy')}</th>
+              <th scope="col">{t('breakGlass.window')}</th>
+              <th scope="col">{t('breakGlass.uses')}</th>
+              <th scope="col">{t('breakGlass.review')}</th>
             </tr>
           </thead>
           <tbody>
@@ -427,11 +413,11 @@ function GrantHistoryTable({
                   key={grant.id}
                   data-review-pending={pendingUseReview ? 'true' : undefined}
                   className={cn(
-                    'border-t border-border align-top',
+                    'align-top',
                     pendingUseReview && 'bg-warning-soft/60',
                   )}
                 >
-                  <td className="px-3 py-2">
+                  <td>
                     <Button
                       variant="link"
                       onClick={() => onInspect(grant.id)}
@@ -441,42 +427,42 @@ function GrantHistoryTable({
                     >
                       <ScopeLabel matchAction={grant.match_action} />
                     </Button>
-                    <p className="mt-1 font-mono text-xs text-muted-foreground">
+                    <p className="mt-1 font-mono text-caption text-muted-foreground">
                       {grant.id}
                     </p>
                   </td>
-                  <td className="px-3 py-2">
+                  <td>
                     <BreakGlassStatusBadge status={grant.status} />
                   </td>
-                  <td className="px-3 py-2 font-mono text-xs text-muted-foreground">
+                  <td className="font-mono text-caption text-muted-foreground">
                     {grant.activated_by ?? t('breakGlass.notAvailable')}
                   </td>
-                  <td className="px-3 py-2 text-xs text-muted-foreground">
+                  <td className="text-caption text-muted-foreground">
                     <WindowLabel grant={grant} />
                   </td>
-                  <td className="px-3 py-2">
+                  <td>
                     <Badge variant={pendingUseReview ? 'warning' : 'neutral'}>
                       {grant.use_count}
                     </Badge>
                     {pendingUseReview && (
-                      <p className="mt-1 text-xs font-medium text-warning">
+                      <p className="mt-1 text-caption font-medium text-warning">
                         {t('breakGlass.useReviewPending')}
                       </p>
                     )}
                   </td>
-                  <td className="px-3 py-2">
+                  <td>
                     {grant.reviewed ? (
                       <>
                         <Badge variant="success">
                           {t('breakGlass.reviewed')}
                         </Badge>
                         {grant.reviewed_by && (
-                          <p className="mt-1 font-mono text-xs text-muted-foreground">
+                          <p className="mt-1 font-mono text-caption text-muted-foreground">
                             {grant.reviewed_by}
                           </p>
                         )}
                         {grant.reviewed_at && (
-                          <p className="mt-1 text-xs text-muted-foreground">
+                          <p className="mt-1 text-caption text-muted-foreground">
                             <RelTimeLabel ts={grant.reviewed_at} />
                           </p>
                         )}
@@ -491,7 +477,7 @@ function GrantHistoryTable({
               )
             })}
           </tbody>
-        </table>
+        </StaticTable>
       </div>
       {hasMore && (
         <div className="flex justify-center">
@@ -597,7 +583,7 @@ function BreakGlassDetailSheet({
             {detail ? (
               <span className="flex flex-wrap items-center gap-2">
                 <BreakGlassStatusBadge status={detail.status} />
-                <span className="font-mono text-xs">{detail.id}</span>
+                <span className="font-mono text-caption">{detail.id}</span>
               </span>
             ) : (
               t('breakGlass.detailCaption')
@@ -648,10 +634,10 @@ function BreakGlassDetailSheet({
               <Separator />
 
               <section className="flex flex-col gap-2">
-                <h3 className="text-sm font-medium text-foreground">
+                <h3 className="text-body font-medium text-foreground">
                   {t('breakGlass.trailTitle')}
                 </h3>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-caption text-muted-foreground">
                   {t('breakGlass.trailCaption')}
                 </p>
                 <UseTrail
@@ -708,12 +694,12 @@ function BreakGlassDetailSheet({
         {separationDenied && (
           <p
             role="status"
-            className="rounded-md border border-warning-line bg-warning-soft p-3 text-sm text-foreground"
+            className="rounded-md border border-warning-line bg-warning-soft p-3 text-body text-foreground"
           >
             {t('breakGlass.reviewSeparationDenied')}
           </p>
         )}
-        <p className="mt-2 text-sm text-foreground">{reviewNote}</p>
+        <p className="mt-2 text-body text-foreground">{reviewNote}</p>
       </ConfirmDialog>
     </Sheet>
   )
@@ -805,11 +791,11 @@ function ReviewPanel({
       <div>
         <h3
           id="break-glass-review"
-          className="text-sm font-semibold text-foreground"
+          className="text-body font-semibold text-foreground"
         >
           {t('breakGlass.reviewPending')}
         </h3>
-        <p className="mt-1 text-xs text-muted-foreground">
+        <p className="mt-1 text-caption text-muted-foreground">
           {detail.use_count > 0
             ? t('breakGlass.useReviewPendingHint', {
                 count: detail.use_count,
@@ -819,12 +805,12 @@ function ReviewPanel({
       </div>
 
       {isActive ? (
-        <p role="status" className="text-sm text-foreground">
+        <p role="status" className="text-body text-foreground">
           {t('breakGlass.reviewActiveBlocked')}
         </p>
       ) : humanReviewBlocked || selfReviewBlocked ? (
         <div className="flex flex-col gap-2">
-          <p role="status" className="text-sm text-foreground">
+          <p role="status" className="text-body text-foreground">
             {humanReviewBlocked
               ? t('breakGlass.reviewHumanBlocked')
               : t('breakGlass.reviewSelfBlocked')}
@@ -894,45 +880,42 @@ function UseTrail({
   }
   if (error) return <ErrorState retry={onRetry} />
   if (items.length === 0) {
-    return <EmptyState title={t('breakGlass.trailEmpty')} />
+    return (
+      <EmptyState
+        description={t('breakGlass.trailEmptyHint')}
+        title={t('breakGlass.trailEmpty')}
+      />
+    )
   }
 
   return (
     <div className="overflow-x-auto rounded-lg border border-border">
-      <table className="w-full text-sm" aria-label={t('breakGlass.trailLabel')}>
-        <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
+      <StaticTable aria-label={t('breakGlass.trailLabel')}>
+        <thead>
           <tr>
-            <th scope="col" className="px-3 py-2 font-medium">
-              {t('breakGlass.useAction')}
-            </th>
-            <th scope="col" className="px-3 py-2 font-medium">
-              {t('breakGlass.useSubject')}
-            </th>
-            <th scope="col" className="px-3 py-2 font-medium">
-              {t('breakGlass.usedBy')}
-            </th>
-            <th scope="col" className="px-3 py-2 font-medium">
-              {t('breakGlass.usedAt')}
-            </th>
+            <th scope="col">{t('breakGlass.useAction')}</th>
+            <th scope="col">{t('breakGlass.useSubject')}</th>
+            <th scope="col">{t('breakGlass.usedBy')}</th>
+            <th scope="col">{t('breakGlass.usedAt')}</th>
           </tr>
         </thead>
         <tbody>
           {items.map((use, index) => (
             <tr
               key={`${use.action}:${use.used_at ?? index}`}
-              className="border-t border-border align-top"
+              className="align-top"
             >
-              <td className="px-3 py-2 font-mono text-xs text-foreground">
+              <td className="font-mono text-caption text-foreground">
                 {use.action}
               </td>
-              <td className="px-3 py-2">
+              <td>
                 {use.subject_kind || use.subject_ref ? (
                   <span className="flex flex-wrap items-center gap-1.5">
                     {use.subject_kind && (
                       <Badge variant="neutral">{use.subject_kind}</Badge>
                     )}
                     {use.subject_ref && (
-                      <span className="font-mono text-xs text-muted-foreground">
+                      <span className="font-mono text-caption text-muted-foreground">
                         {use.subject_ref}
                       </span>
                     )}
@@ -943,16 +926,16 @@ function UseTrail({
                   </span>
                 )}
               </td>
-              <td className="px-3 py-2 font-mono text-xs text-muted-foreground">
+              <td className="font-mono text-caption text-muted-foreground">
                 {use.used_by ?? t('breakGlass.notAvailable')}
               </td>
-              <td className="px-3 py-2 text-xs text-muted-foreground">
+              <td className="text-caption text-muted-foreground">
                 <RelTimeLabel ts={use.used_at} />
               </td>
             </tr>
           ))}
         </tbody>
-      </table>
+      </StaticTable>
     </div>
   )
 }

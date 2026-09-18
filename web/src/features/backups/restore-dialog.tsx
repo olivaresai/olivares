@@ -191,7 +191,7 @@ export function RestoreDialog({ open, onOpenChange }: RestoreDialogProps) {
         onConfirm={() => applyMutation.mutate()}
       >
         {upload && (
-          <div className="text-sm">
+          <div className="text-body">
             {t('restore.confirmSummaryPrefix')}{' '}
             <span className="font-mono">{upload.filename}</span>{' '}
             {t('restore.confirmSummarySuffix', {
@@ -210,11 +210,11 @@ function AwaitingApprovalStep({ requestId }: { requestId: string }) {
   return (
     <div className="flex flex-col items-center gap-3 rounded-lg border border-amber-500/40 bg-amber-500/5 p-6 text-center">
       <UserCheck className="size-8 text-amber-500" />
-      <p className="text-sm font-medium">{t('restore.awaitingTitle')}</p>
-      <p className="text-sm text-muted-foreground">
+      <p className="text-body font-medium">{t('restore.awaitingTitle')}</p>
+      <p className="text-body text-muted-foreground">
         {t('restore.awaitingDescription')}
       </p>
-      <p className="text-xs text-muted-foreground">
+      <p className="text-caption text-muted-foreground">
         {t('restore.requestId')}: <span className="font-mono">{requestId}</span>
       </p>
     </div>
@@ -235,7 +235,7 @@ function UploadStep({
   return (
     <div className="flex flex-col items-center gap-4 rounded-lg border border-dashed border-border p-6">
       <FileUp className="size-8 text-muted-foreground" />
-      <p className="text-sm text-muted-foreground">
+      <p className="text-body text-muted-foreground">
         {file ? file.name : t('restore.selectFile')}
       </p>
       <input
@@ -303,10 +303,12 @@ function ManifestPreview({
   const { t } = useTranslation('backups')
   return (
     <div className="rounded-lg border border-border bg-muted/50 p-4">
-      <h3 className="mb-3 text-sm font-medium">{t('restore.manifestTitle')}</h3>
-      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
+      <h3 className="mb-3 text-body font-medium">
+        {t('restore.manifestTitle')}
+      </h3>
+      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-body">
         <dt className="text-muted-foreground">{t('restore.manifest.file')}</dt>
-        <dd className="font-mono text-xs">{filename}</dd>
+        <dd className="font-mono text-caption">{filename}</dd>
 
         <dt className="text-muted-foreground">
           {t('restore.manifest.engine')}
@@ -333,7 +335,7 @@ function ManifestPreview({
                 <Badge
                   key={tenant.tenant}
                   variant="outline"
-                  className="text-xs"
+                  className="text-caption"
                 >
                   {tenant.tenant}
                 </Badge>

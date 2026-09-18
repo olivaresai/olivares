@@ -46,7 +46,7 @@ export function CapabilityNotice({ access }: { access: CapabilityAccess }) {
     return (
       <div
         data-slot="capability-checking"
-        className="flex items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground"
+        className="flex items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-2 text-body text-muted-foreground"
         role="status"
         aria-live="polite"
       >
@@ -65,21 +65,24 @@ export function CapabilityNotice({ access }: { access: CapabilityAccess }) {
       role="status"
       aria-live="polite"
     >
-      <p className="text-sm font-medium">
+      <p className="text-body font-medium">
         {t(
           undisclosed
             ? 'capability.undisclosedTitle'
             : 'capability.unavailableTitle',
         )}
       </p>
-      <p className="text-sm text-muted-foreground">
+      <p className="text-body text-muted-foreground">
         {t(
           undisclosed
             ? 'capability.undisclosedBody'
             : 'capability.unavailableBody',
         )}
       </p>
-      <p data-slot="capability-retry" className="text-xs text-muted-foreground">
+      <p
+        data-slot="capability-retry"
+        className="text-caption text-muted-foreground"
+      >
         {t('capability.retrying')}
       </p>
     </div>

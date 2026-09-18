@@ -91,6 +91,7 @@
     "loadingMore": "読み込み中…",
     "waterfallTitle": "スパンのウォーターフォール",
     "selectPrompt": "トレースを選択すると、そのスパンのウォーターフォールが表示されます。",
+    "selectPromptHint": "一覧からトレースを選ぶと、生成されたすべてのスパンを、所要時間とエラーとともに確認できます。",
     "exportBtn": "OTLP エクスポート",
     "exportTitle": "Jaeger / Tempo / Datadog 用の OTLP 互換 JSON をダウンロード",
     "legend": "アクター凡例",

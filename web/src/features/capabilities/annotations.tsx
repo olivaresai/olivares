@@ -27,7 +27,7 @@ export function ToolAnnotations({ tool }: { tool: ToolDTO }) {
     )
   }
   if (badges.length === 0) {
-    return <span className="text-xs text-muted-foreground">—</span>
+    return <span className="text-caption text-muted-foreground">—</span>
   }
   return <div className="flex flex-wrap gap-1">{badges}</div>
 }

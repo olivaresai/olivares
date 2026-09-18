@@ -86,6 +86,7 @@
       "copyFailed": "Could not copy to the clipboard.",
       "checkins": "Host check-ins",
       "noCheckins": "No host has checked in yet.",
+      "noCheckinsHint": "A host checks in once the policy enforcement point is installed and can reach the engine. Install it on a host to see it here.",
       "colScope": "Scope",
       "colReporter": "Reporter",
       "colRevision": "Revision",

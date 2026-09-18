@@ -214,6 +214,7 @@
     "createdBy": "Von",
     "current": "Aktuell",
     "revisionsEmpty": "Keine Revisionen",
+    "revisionsEmptyHint": "Jede Änderung an diesem Prompt wird als Revision aufbewahrt, die Sie vergleichen und wiederherstellen können. Die erste Bearbeitung erzeugt eine.",
     "truncated": "{{n}} Prompts geladen; es gibt mehr",
     "truncatedHint": "Es gibt mehr Prompts als angezeigt; diese Seite nimmt Zeilen nach ID. Ein hier fehlender ist deshalb nicht unveroeffentlicht."
   },
@@ -384,7 +385,9 @@
       "completenessThreshold": "Vollständigkeitsschwelle",
       "freshnessOverride": "Aktualitätsüberschreibung",
       "noContract": "Kein aktiver Vertrag",
+      "noContractHint": "Ein Vertrag legt Schema und Zusagen fest, die dieses Datenprodukt gibt. Veröffentlichen Sie einen, um diese Zusagen zu versionieren.",
       "undetermined": "Nicht feststellbar — die Engine hat nicht geantwortet, welcher Vertrag aktiv ist.",
+      "undeterminedHint": "Hier wird nichts behauptet statt geraten. Versuchen Sie es erneut oder öffnen Sie das Datenprodukt, um seinen Vertrag direkt zu lesen.",
       "newVersion": "Neue Vertragsversion",
       "note": "Änderungsnotiz",
       "modes": {
@@ -481,10 +484,12 @@
     "unanchored": "Ohne Anker (keine Ledger-Historie)",
     "legacy": "Alt (vor der Verankerung)",
     "truncated": "Die ZÄHLUNGEN oben sind vollständig; diese Detailliste ist begrenzt. Eine kurze Liste bedeutet nicht wenige Probleme.",
-    "allHealthy": "Alle geprüften Zeilen verifiziert"
+    "allHealthy": "Alle geprüften Zeilen verifiziert",
+    "allHealthyHint": "Eine Integritätsprüfung vergleicht jede gespeicherte Zeile mit ihrem aufgezeichneten Digest. Jede geprüfte Zeile stimmte überein."
   },
   "scans": {
     "empty": "No scans yet",
+    "emptyHint": "Ein Scan durchläuft eine Quelle und hält fest, was er findet. Starten Sie einen Scan, um seine Ergebnisse hier zu sehen.",
     "sourceName": "Source name",
     "scanSource": "Scan source",
     "scanSourceHint": "Reads the source WITHOUT ingesting it. Bodies are classified in memory and never stored, logged or embedded.",

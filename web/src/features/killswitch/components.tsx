@@ -38,7 +38,7 @@ export function StopScopeCell({ stop }: { stop: KillSwitchDTO }) {
         {t(`scope.${isEstate ? 'estate' : 'agent'}`)}
       </Badge>
       {!isEstate && ref && (
-        <span className="truncate font-mono text-xs text-muted-foreground">
+        <span className="truncate font-mono text-caption text-muted-foreground">
           {ref}
         </span>
       )}
@@ -57,7 +57,7 @@ export function StopSourceCell({ stop }: { stop: KillSwitchDTO }) {
       </Badge>
       {isGuardian && stop.rule_ref && (
         <span
-          className="truncate font-mono text-xs text-muted-foreground"
+          className="truncate font-mono text-caption text-muted-foreground"
           title={t('stops.byRule')}
         >
           {stop.rule_ref}

@@ -34,6 +34,7 @@
     "loading": "Cargando…",
     "empty": "Aún no hay nada aquí",
     "noResults": "Sin resultados",
+    "noResultsHint": "Ninguna fila coincide con el filtro actual. Quítalo, o amplía la búsqueda, para volver a ver las filas.",
     "comingSoon": "Próximamente",
     "loaded": "Cargado",
     "yes": "Sí",
@@ -200,5 +201,61 @@
     "navigation": "Ir a",
     "openPalette": "Abrir la paleta de comandos",
     "showHelp": "Mostrar esta ayuda"
+  },
+  "keys": {
+    "group": {
+      "general": "General",
+      "launcher": "Iniciar una sesión",
+      "surface": "La superficie de trabajo",
+      "navRail": "Barra de navegación"
+    },
+    "command": {
+      "palette": {
+        "open": "Abrir la paleta de comandos"
+      },
+      "help": {
+        "toggle": "Ver estos atajos"
+      },
+      "launcher": {
+        "focus": "Ir al lanzador",
+        "start": "Iniciar la sesión",
+        "startBackground": "Iniciarla y quedarte aquí"
+      },
+      "surface": {
+        "nextPane": "Panel siguiente",
+        "previousPane": "Panel anterior"
+      },
+      "rail": {
+        "next": "Sesión siguiente",
+        "previous": "Sesión anterior",
+        "first": "Primera sesión",
+        "last": "Última sesión",
+        "open": "Abrir la sesión",
+        "pin": "Fijarla o dejar de fijarla"
+      },
+      "nav": {
+        "toggleRail": "Plegar o desplegar la barra de navegación"
+      },
+      "navRail": {
+        "next": "Módulo siguiente",
+        "previous": "Módulo anterior",
+        "expand": "Abrir el área o entrar en ella",
+        "fold": "Plegar el área o volver a ella",
+        "first": "Primer módulo",
+        "last": "Último módulo",
+        "pin": "Fijar o quitar este módulo de favoritos"
+      }
+    },
+    "when": {
+      "railFocused": "en el carril de sesiones",
+      "launcherFocused": "en el campo del lanzador",
+      "workSurface": "en la pantalla de sesiones"
+    },
+    "precedence": "Cuando dos filas comparten teclas, gana la última que aplica.",
+    "modNote": "⌘ es Control en Windows y Linux.",
+    "problems_one": "No se ha podido leer {{count}} atajo y no funciona: {{commands}}",
+    "problems_other": "No se han podido leer {{count}} atajos y no funcionan: {{commands}}",
+    "problems_many": "No se han podido leer {{count}} atajos y no funcionan: {{commands}}",
+    "navRailNote": "La barra es una sola parada de tabulación. Estas teclas funcionan cuando tiene el foco."
   }
 }

@@ -54,7 +54,7 @@ export function EventDetailPanel({
       <div className="flex items-center justify-between border-b border-border px-3 py-2">
         <button
           type="button"
-          className="flex items-center gap-1.5 text-sm font-semibold text-foreground"
+          className="flex items-center gap-1.5 text-body font-semibold text-foreground"
           onClick={() => setExpanded((v) => !v)}
         >
           {expanded ? (
@@ -186,10 +186,12 @@ function FrameDetail({ frame }: { frame: FrameDTO }) {
         {formatLatency(frame.dur_ms)}
       </KvRow>
       <KvRow label={t('detail.hash')} align="start">
-        <span className="break-all font-mono text-xs">{frame.hash}</span>
+        <span className="break-all font-mono text-caption">{frame.hash}</span>
       </KvRow>
       <KvRow label={t('detail.prevHash')} align="start">
-        <span className="break-all font-mono text-xs">{frame.prev_hash}</span>
+        <span className="break-all font-mono text-caption">
+          {frame.prev_hash}
+        </span>
       </KvRow>
       <KvRow label={t('detail.anchorSeq')} mono>
         {frame.anchor_seq ?? '—'}

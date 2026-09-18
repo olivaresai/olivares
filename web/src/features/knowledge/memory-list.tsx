@@ -99,10 +99,10 @@ export function MemoryRow({
     <li className="rounded-lg border border-border bg-surface p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <span className="font-mono text-sm font-medium text-foreground">
+          <span className="font-mono text-body font-medium text-foreground">
             {entry.key}
           </span>
-          <span className="font-mono text-xs text-muted-foreground">
+          <span className="font-mono text-caption text-muted-foreground">
             {entry.agent_ref}
           </span>
         </div>
@@ -120,12 +120,12 @@ export function MemoryRow({
       </div>
 
       {entry.content && (
-        <p className="mt-2 line-clamp-3 text-xs text-muted-foreground">
+        <p className="mt-2 line-clamp-3 text-caption text-muted-foreground">
           {entry.content}
         </p>
       )}
 
-      <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
+      <div className="mt-2 flex flex-wrap items-center gap-1.5 text-caption">
         <ClassificationBadge value={entry.classification} />
         <ResidencyBadge value={entry.residency_region} />
         {entry.expires_at ? (

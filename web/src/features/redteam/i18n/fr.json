@@ -117,6 +117,7 @@
     "title": "Résultats par sonde",
     "description": "Le résultat de chaque sonde. L’empreinte est un hachage à sens unique — jamais une charge utile d’attaque.",
     "empty": "Aucun résultat pour cette exécution.",
+    "emptyHint": "Chaque sonde de l’exécution est listée ici avec son verdict et la preuve associée. Cette exécution n’a enregistré aucun résultat.",
     "columns": {
       "probe": "Sonde",
       "family": "Famille",

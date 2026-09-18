@@ -22,6 +22,7 @@
   },
   "stream": {
     "empty": "No log entries to display.",
+    "emptyHint": "Engine log lines appear here as they are written. Widen the filter, or lower the level, to see more.",
     "ariaLabel": "Log stream",
     "attrsAriaLabel": "Structured log attributes"
   },
@@ -36,5 +37,6 @@
     "INFO": "INF",
     "WARN": "WRN",
     "ERROR": "ERR"
-  }
+  },
+  "subtitle": "Live tail of the engine's log stream, merged with the buffer it holds."
 }

@@ -49,6 +49,7 @@ import type {
 import { ApiError } from '@/lib/api/errors'
 import { formatBytes, formatInt, formatPercent } from '@/lib/format'
 import { cn } from '@/lib/utils'
+import { StaticTable } from '@/components/data/static-table'
 
 const REFETCH_INTERVAL = 30_000
 const WARN_PERCENT = 80
@@ -99,12 +100,12 @@ export function SystemHealthTab() {
                 {data.ready ? t('system.ready') : t('system.notReady')}
               </Badge>
             </div>
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <div className="flex items-center gap-1.5 text-caption text-muted-foreground">
               <Database className="size-3.5 shrink-0" aria-hidden />
               {t('system.storeEngine')}:{' '}
               <span className="font-mono">{data.store_engine}</span>
             </div>
-            <div className="text-xs text-muted-foreground">
+            <div className="text-caption text-muted-foreground">
               {t('system.version')}:{' '}
               <span className="font-mono">{data.version}</span>
             </div>
@@ -131,12 +132,12 @@ export function SystemHealthTab() {
           <div className="space-y-2">
             {data.connectors_configured > 0 ? (
               <>
-                <div className="font-display text-xl font-semibold tabular-nums text-foreground">
+                <div className="font-display text-title tabular-nums text-foreground">
                   {t('system.connectorsRunning', {
                     count: data.connectors_running,
                   })}
                 </div>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-caption text-muted-foreground">
                   {t('system.connectorsConfigured', {
                     count: data.connectors_configured,
                   })}
@@ -151,13 +152,13 @@ export function SystemHealthTab() {
               </>
             ) : (
               <>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-body text-muted-foreground">
                   {t('system.noConnectors')}
                 </p>
                 {/* A build that advertises no kinds says nothing rather than
                     offering "0 available to configure". */}
                 {data.connectors_available > 0 ? (
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-caption text-muted-foreground">
                     {t('system.connectorsAvailable', {
                       count: data.connectors_available,
                     })}
@@ -177,7 +178,7 @@ export function SystemHealthTab() {
         {isLoading ? (
           <Skeleton className="h-5 w-28" />
         ) : data ? (
-          <div className="font-display text-xl font-semibold tabular-nums text-foreground">
+          <div className="font-display text-title tabular-nums text-foreground">
             {t('system.usersCount', { count: data.users })}
           </div>
         ) : (
@@ -241,7 +242,7 @@ function CardTitle({
   title: React.ReactNode
 }) {
   return (
-    <div className="mb-3 flex items-center gap-2 text-sm font-medium text-foreground">
+    <div className="mb-3 flex items-center gap-2 text-body font-medium text-foreground">
       <span className="shrink-0 text-muted-foreground">{icon}</span>
       {title}
     </div>
@@ -251,7 +252,7 @@ function CardTitle({
 function CardUnavailable() {
   const { t } = useTranslation('health')
   return (
-    <p role="status" className="text-sm text-muted-foreground">
+    <p role="status" className="text-body text-muted-foreground">
       {t('system.unavailable')}
     </p>
   )
@@ -281,7 +282,7 @@ function TLSCard({
           </Badge>
         ) : null}
         {notAfter ? (
-          <p className="text-xs text-muted-foreground">
+          <p className="text-caption text-muted-foreground">
             {t('tls.notAfter')}:{' '}
             <time dateTime={notAfter} className="font-mono">
               {new Date(notAfter).toLocaleString()}
@@ -315,59 +316,42 @@ function KeysCard({
       ) : error ? (
         <CardUnavailable />
       ) : keys.length === 0 ? (
-        <p className="text-sm text-muted-foreground">{t('keys.empty')}</p>
+        <p className="text-body text-muted-foreground">{t('keys.empty')}</p>
       ) : (
         <div className="space-y-4">
           {custodial.length > 0 ? (
             <div className="overflow-x-auto rounded-md border border-border">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-muted/40 text-muted-foreground">
+              <StaticTable className="text-caption">
+                <thead>
                   <tr>
-                    <th className="px-2.5 py-2 font-medium">
-                      {t('keys.cols.purpose')}
-                    </th>
-                    <th className="px-2.5 py-2 font-medium">
-                      {t('keys.cols.algorithm')}
-                    </th>
-                    <th className="px-2.5 py-2 font-medium">
-                      {t('keys.cols.mode')}
-                    </th>
-                    <th className="px-2.5 py-2 font-medium">
-                      {t('keys.cols.kek')}
-                    </th>
-                    <th className="px-2.5 py-2 font-medium">
-                      {t('keys.cols.created')}
-                    </th>
-                    <th className="px-2.5 py-2 font-medium">
-                      {t('keys.cols.fingerprint')}
-                    </th>
-                    <th className="px-2.5 py-2 text-right font-medium">
-                      {t('keys.cols.prior')}
-                    </th>
+                    <th>{t('keys.cols.purpose')}</th>
+                    <th>{t('keys.cols.algorithm')}</th>
+                    <th>{t('keys.cols.mode')}</th>
+                    <th>{t('keys.cols.kek')}</th>
+                    <th>{t('keys.cols.created')}</th>
+                    <th>{t('keys.cols.fingerprint')}</th>
+                    <th className="text-right">{t('keys.cols.prior')}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {custodial.map((key) => (
-                    <tr
-                      key={key.purpose}
-                      className="border-t border-border align-middle"
-                    >
-                      <td className="px-2.5 py-2 font-medium text-foreground">
+                    <tr key={key.purpose} className="align-middle">
+                      <td className="font-medium text-foreground">
                         {key.purpose}
                       </td>
-                      <td className="px-2.5 py-2 font-mono text-muted-foreground">
+                      <td className="font-mono text-muted-foreground">
                         {key.algorithm || '—'}
                       </td>
-                      <td className="px-2.5 py-2 text-muted-foreground">
+                      <td className="text-muted-foreground">
                         {key.custody_mode || key.origin || '—'}
                       </td>
-                      <td className="px-2.5 py-2 font-mono text-muted-foreground">
+                      <td className="font-mono text-muted-foreground">
                         {key.kek || '—'}
                       </td>
-                      <td className="px-2.5 py-2">
+                      <td>
                         <RelTimeLabel ts={key.created} />
                       </td>
-                      <td className="px-2.5 py-2">
+                      <td>
                         {key.fingerprint ? (
                           <FingerprintCopy
                             purpose={key.purpose}
@@ -377,19 +361,19 @@ function KeysCard({
                           <span className="text-muted-foreground">—</span>
                         )}
                       </td>
-                      <td className="px-2.5 py-2 text-right font-mono tabular-nums text-muted-foreground">
+                      <td className="text-right font-mono tabular-nums text-muted-foreground">
                         {formatInt(key.prior_count ?? 0)}
                       </td>
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </StaticTable>
             </div>
           ) : null}
 
           {sealers.length > 0 ? (
             <div>
-              <h3 className="mb-2 text-xs font-medium text-muted-foreground">
+              <h3 className="mb-2 text-caption font-medium text-muted-foreground">
                 {t('keys.sealers')}
               </h3>
               <div className="grid gap-2 sm:grid-cols-3">
@@ -399,10 +383,10 @@ function KeysCard({
                     className="flex items-center justify-between gap-2 rounded-md border border-border px-2.5 py-2"
                   >
                     <div className="min-w-0">
-                      <div className="truncate text-xs font-medium text-foreground">
+                      <div className="truncate text-caption font-medium text-foreground">
                         {key.purpose}
                       </div>
-                      <div className="truncate font-mono text-xs text-muted-foreground">
+                      <div className="truncate font-mono text-caption text-muted-foreground">
                         {key.source || t('keys.sourceUnknown')}
                       </div>
                     </div>
@@ -481,7 +465,7 @@ function EffectiveConfigCard({
           {(data?.strict_violations.length ?? 0) > 0 ? (
             <div
               role="alert"
-              className="rounded-md border border-warning-line bg-warning-soft p-3 text-sm text-warning"
+              className="rounded-md border border-warning-line bg-warning-soft p-3 text-body text-warning"
             >
               <div className="font-medium">{t('config.strictViolations')}</div>
               <ul className="mt-1 list-disc space-y-0.5 pl-5">
@@ -493,27 +477,19 @@ function EffectiveConfigCard({
           ) : null}
           {(data?.entries.length ?? 0) > 0 ? (
             <div className="max-h-80 overflow-auto rounded-md border border-border">
-              <table className="w-full text-left text-xs">
-                <thead className="sticky top-0 bg-muted text-muted-foreground">
+              <StaticTable className="text-caption">
+                <thead className="sticky top-0">
                   <tr>
-                    <th className="px-2.5 py-2 font-medium">
-                      {t('config.cols.key')}
-                    </th>
-                    <th className="px-2.5 py-2 font-medium">
-                      {t('config.cols.value')}
-                    </th>
-                    <th className="px-2.5 py-2 font-medium">
-                      {t('config.cols.source')}
-                    </th>
+                    <th>{t('config.cols.key')}</th>
+                    <th>{t('config.cols.value')}</th>
+                    <th>{t('config.cols.source')}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {data?.entries.map((entry) => (
-                    <tr key={entry.key} className="border-t border-border">
-                      <td className="px-2.5 py-2 font-mono text-foreground">
-                        {entry.key}
-                      </td>
-                      <td className="max-w-md truncate px-2.5 py-2 font-mono text-muted-foreground">
+                    <tr key={entry.key}>
+                      <td className="font-mono text-foreground">{entry.key}</td>
+                      <td className="max-w-md truncate font-mono text-muted-foreground">
                         {entry.value}
                         {entry.redacted ? (
                           <Badge variant="neutral" className="ml-2">
@@ -521,16 +497,18 @@ function EffectiveConfigCard({
                           </Badge>
                         ) : null}
                       </td>
-                      <td className="px-2.5 py-2">
+                      <td>
                         <Badge variant="outline">{entry.source}</Badge>
                       </td>
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </StaticTable>
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground">{t('config.empty')}</p>
+            <p className="text-body text-muted-foreground">
+              {t('config.empty')}
+            </p>
           )}
         </div>
       )}
@@ -584,7 +562,7 @@ function BusCard({
                       degraded && 'border-warning-line bg-warning-soft/40',
                     )}
                   >
-                    <div className="mb-1.5 flex items-center justify-between gap-2 text-xs">
+                    <div className="mb-1.5 flex items-center justify-between gap-2 text-caption">
                       <span className="truncate font-medium text-foreground">
                         {subscriber.name}
                       </span>
@@ -610,7 +588,7 @@ function BusCard({
                         style={{ width: `${percent}%` }}
                       />
                     </div>
-                    <div className="mt-1 text-xs text-muted-foreground">
+                    <div className="mt-1 text-caption text-muted-foreground">
                       {subscriber.class}
                     </div>
                   </div>
@@ -618,7 +596,7 @@ function BusCard({
               })}
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-body text-muted-foreground">
               {t('bus.noSubscribers')}
             </p>
           )}
@@ -673,10 +651,10 @@ function Counter({
 }) {
   return (
     <div className="rounded-md border border-border px-2.5 py-2">
-      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className="text-caption text-muted-foreground">{label}</div>
       <div
         className={cn(
-          'font-mono text-sm tabular-nums',
+          'font-mono text-body tabular-nums',
           loss && value > 0 ? 'text-danger' : 'text-foreground',
         )}
       >
@@ -695,12 +673,12 @@ function BridgeStatus({
   return (
     <div className="rounded-md border border-border p-3">
       <div className="mb-2 flex items-center gap-2">
-        <span className="text-xs font-medium text-foreground">
+        <span className="text-caption font-medium text-foreground">
           {t('bus.bridge.title')}
         </span>
         <StatusBadge status={bridge.connected ? 'connected' : 'disconnected'} />
       </div>
-      <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 text-caption text-muted-foreground sm:grid-cols-4">
         <span>
           {t('bus.bridge.pendingMessages')}: {formatInt(bridge.pending_msgs)}
         </span>
@@ -757,7 +735,7 @@ function UpdateCard({ update }: { update?: UpdateStatusDTO }) {
                   ? t('update.security')
                   : t('update.available')}
               </Badge>
-              <span className="font-mono text-xs text-foreground">
+              <span className="font-mono text-caption text-foreground">
                 {current.latest_version}
               </span>
             </>
@@ -767,7 +745,7 @@ function UpdateCard({ update }: { update?: UpdateStatusDTO }) {
             <Badge variant="neutral">{t('update.notChecked')}</Badge>
           )}
           {current?.channel ? (
-            <span className="text-xs text-muted-foreground">
+            <span className="text-caption text-muted-foreground">
               {t('update.channel')}: {current.channel}
             </span>
           ) : null}
@@ -775,7 +753,7 @@ function UpdateCard({ update }: { update?: UpdateStatusDTO }) {
 
         {(current?.advisories?.length ?? 0) > 0 ? (
           <div>
-            <div className="mb-1 text-xs font-medium text-muted-foreground">
+            <div className="mb-1 text-caption font-medium text-muted-foreground">
               {t('update.advisories')}
             </div>
             <ul className="space-y-1">
@@ -785,7 +763,7 @@ function UpdateCard({ update }: { update?: UpdateStatusDTO }) {
                     href={`https://osv.dev/vulnerability/${encodeURIComponent(advisory)}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 font-mono text-xs text-accent-text hover:underline"
+                    className="inline-flex items-center gap-1 font-mono text-caption text-accent-text hover:underline"
                   >
                     {advisory}
                     <ExternalLink className="size-3" aria-hidden />
@@ -797,17 +775,17 @@ function UpdateCard({ update }: { update?: UpdateStatusDTO }) {
         ) : null}
 
         {unavailable ? (
-          <p role="status" className="text-sm text-muted-foreground">
+          <p role="status" className="text-body text-muted-foreground">
             {t('update.unconfigured')}
           </p>
         ) : mutation.error ? (
-          <p role="alert" className="text-sm text-danger">
+          <p role="alert" className="text-body text-danger">
             {mutation.error instanceof Error
               ? mutation.error.message
               : t('update.failed')}
           </p>
         ) : current?.error ? (
-          <p role="alert" className="text-sm text-danger">
+          <p role="alert" className="text-body text-danger">
             {current.error}
           </p>
         ) : null}
@@ -868,7 +846,7 @@ function SupportBundleCard() {
   return (
     <Card className="p-5">
       <CardTitle icon={<Download />} title={t('support.title')} />
-      <p className="mb-3 text-sm text-muted-foreground">
+      <p className="mb-3 text-body text-muted-foreground">
         {t('support.description')}
       </p>
       <RequireAssurance minAal={AAL.HARDWARE} action="supportBundle">
@@ -895,11 +873,11 @@ function SupportBundleCard() {
             // mandaba al operador a resolver algo que no le desbloquea nada. Partir el predicado
             // no partía la copia. Se reusa la cadena común, que ya está traducida en todos los
             // idiomas, en vez de crear una clave nueva y su deuda de traducción.
-            <p role="alert" className="text-sm text-warning">
+            <p role="alert" className="text-body text-warning">
               {t('common:privileged.notAuthorized')}
             </p>
           ) : mutation.error ? (
-            <p role="alert" className="text-sm text-danger">
+            <p role="alert" className="text-body text-danger">
               {mutation.error instanceof Error
                 ? mutation.error.message
                 : t('support.failed')}
@@ -956,7 +934,7 @@ function AuditSpoolCard({ spool }: { spool: AuditSpoolDTO }) {
             {t(`auditSpool.modes.${spool.mode}`, { defaultValue: spool.mode })}
           </Badge>
         </div>
-        <div className="text-xs text-muted-foreground">
+        <div className="text-caption text-muted-foreground">
           {t('auditSpool.usage', {
             used: formatBytes(spool.used_bytes),
             max: formatBytes(spool.max_bytes),
@@ -964,7 +942,7 @@ function AuditSpoolCard({ spool }: { spool: AuditSpoolDTO }) {
           })}
         </div>
         {(spool.pending_drops ?? 0) > 0 ? (
-          <div className="text-xs text-danger">
+          <div className="text-caption text-danger">
             {t('auditSpool.pendingDrops', {
               drops: formatInt(spool.pending_drops ?? 0),
               tenants: formatInt(spool.pending_drop_tenants ?? 0),

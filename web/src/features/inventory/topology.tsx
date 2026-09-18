@@ -92,13 +92,13 @@ function TopologyPage({
 
   return (
     <div className="space-y-5">
-      <p className="text-sm text-muted-foreground">{t('topology.note')}</p>
+      <p className="text-body text-muted-foreground">{t('topology.note')}</p>
       {BANDS.map((band) => {
         const kinds = band.kinds.filter((k) => byKind.has(k))
         if (kinds.length === 0) return null
         return (
           <section key={band.id}>
-            <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            <h2 className="mb-2 text-caption font-semibold uppercase tracking-wide text-muted-foreground">
               {t(`topology.bands.${band.id}`)}
             </h2>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -117,7 +117,7 @@ function TopologyPage({
       })}
       {leftover.length > 0 && (
         <section>
-          <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <h2 className="mb-2 text-caption font-semibold uppercase tracking-wide text-muted-foreground">
             {t('topology.bands.other')}
           </h2>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -139,10 +139,10 @@ function TopologyPage({
           cannot advertise a limit. */}
       {pageLimited && (
         <div className="space-y-1">
-          <p className="text-xs text-muted-foreground">
+          <p className="text-caption text-muted-foreground">
             {t('topology.truncated', { n: TOPO_LIMIT })}
           </p>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-caption text-muted-foreground">
             {t('topology.countsAreLoaded')}
           </p>
         </div>
@@ -207,7 +207,7 @@ function KindCard({
               title={label}
               aria-label={label}
               className={cn(
-                'min-w-0 max-w-full break-all rounded-sm border border-border bg-surface px-1.5 py-0.5 text-left font-mono text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground sm:max-w-[12rem] sm:truncate sm:whitespace-nowrap',
+                'min-w-0 max-w-full break-all rounded-sm border border-border bg-surface px-1.5 py-0.5 text-left font-mono text-caption text-muted-foreground transition-colors hover:bg-muted hover:text-foreground sm:max-w-[12rem] sm:truncate sm:whitespace-nowrap',
                 'focus-visible:ring-2 focus-visible:ring-ring outline-none',
                 e.status === 'stale' && 'opacity-60',
               )}
@@ -217,7 +217,7 @@ function KindCard({
           )
         })}
         {entries.length > shown.length && (
-          <span className="px-1 text-xs text-muted-foreground">
+          <span className="px-1 text-caption text-muted-foreground">
             +{entries.length - shown.length}
           </span>
         )}

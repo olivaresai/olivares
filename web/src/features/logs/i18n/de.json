@@ -22,6 +22,7 @@
   },
   "stream": {
     "empty": "Keine Log-Einträge anzuzeigen.",
+    "emptyHint": "Log-Zeilen der Engine erscheinen hier, sobald sie geschrieben werden. Erweitern Sie den Filter oder senken Sie die Stufe, um mehr zu sehen.",
     "ariaLabel": "Log-Stream",
     "attrsAriaLabel": "Strukturierte Log-Attribute"
   },
@@ -36,5 +37,6 @@
     "INFO": "INF",
     "WARN": "WRN",
     "ERROR": "ERR"
-  }
+  },
+  "subtitle": "Live-Verfolgung des Protokollstroms der Engine, zusammengeführt mit dem gehaltenen Puffer."
 }

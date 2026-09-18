@@ -4,7 +4,7 @@
 
 package finops
 
-// D02 first internal cut — the durable activation frontier and the census.
+// The attempt lifecycle, first internal cut — the durable activation frontier and the census.
 //
 // Two tenants throughout: T1 crosses the frontier, T2 never does. T2 is not
 // decoration — the guarantee under test is that a boundary is PER TENANT, so every
@@ -269,7 +269,7 @@ func TestEveryCoveredWrapperIsRefusedAfterTheFrontierAndT2IsNot(t *testing.T) {
 	})
 	t.Run("ReserveBudget with no enforcing target", func(t *testing.T) {
 		// A dimension no budget scopes: the evaluation has nothing to bind, and the
-		// pre-D02 fast path answered Allowed:true before opening a transaction.
+		// The pre-lifecycle fast path answered Allowed:true before opening a transaction.
 		m2, st2, tenant2, v2 := newLifecycleFin(t)
 		_ = v2
 		handle := model.NewID()

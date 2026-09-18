@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import {
   Activity,
@@ -40,17 +40,12 @@ import { LiveConsole } from '@/features/agentops/live-console'
 import { EventsPanel, RunInfo } from '@/features/agentops/run-detail'
 import { RunStateBadge } from '@/features/agentops/run-state-badge'
 import type { RunDTO } from '@/features/agentops/types'
-import {
-  LiveDot,
-  RelTimeLabel,
-  humanDurationSeconds,
-  useLiveStream,
-} from '@/features/shared'
+import { LiveDot, RelTimeLabel, humanDurationSeconds } from '@/features/shared'
 import { ApiError } from '@/lib/api/errors'
 import { useAuth } from '@/lib/auth/context'
 import { formatInt, formatMicroUsd, formatTokens } from '@/lib/format'
 import { cn } from '@/lib/utils'
-import { sessionsApi, sessionsKeys } from './api'
+import { sessionsKeys } from './api'
 import { AttributionChip } from './attribution-chip'
 import { CcStateBadge } from './cc-state-badge'
 import {
@@ -58,7 +53,6 @@ import {
   controlLevel,
   isLiveRun,
   isScopedRow,
-  mergeSessions,
   primaryRun,
   sessionLabel,
   type Capability,
@@ -66,6 +60,7 @@ import {
   type UnifiedSession,
 } from './provenance'
 import type { SessionTarget } from './session-target'
+import type { SessionResolution } from './use-session-resolution'
 import { SessionTimeline } from './timeline'
 import type { Attribution, LiveDTO } from './types'
 import './i18n'
@@ -92,17 +87,32 @@ export type { SessionTarget } from './session-target'
  * sessions:run:read is told the operate half was not read, never that there is none.
  */
 export function SessionCard({
-  target,
+  open: wanted,
+  resolution,
   onClose,
   onNavigate,
 }: {
-  target: SessionTarget | null
+  /**
+   * Does the operator want the sheet? The work surface separated the two questions this component
+   * used to answer with one field: a session being SELECTED (the work surface reads it
+   * in three panes) and the operator asking for the full controls. Opening on selection
+   * would put a modal over the surface the moment anything was chosen.
+   */
+  open: boolean
+  /**
+   * The session, ALREADY RESOLVED by the surface that owns it. The card used
+   * to take a target and resolve it itself; the work surface needs the same answer
+   * for its panes, and the resolution carries an SSE subscription — so it is done
+   * once, above, and handed down. `resolution.target === null` means nothing is open.
+   */
+  resolution: SessionResolution
   onClose: () => void
   /** Open another row from inside the card (B2: the observation rows that share a
    * managed run's profile and id are separate rows, reachable from it). */
   onNavigate?: (target: SessionTarget) => void
 }) {
-  const open = target !== null
+  const target = resolution.target
+  const open = wanted && target !== null
   return (
     <Sheet
       open={open}
@@ -114,7 +124,7 @@ export function SessionCard({
         {target && (
           <CardBody
             key={target.liveRef ?? target.sessionRef ?? target.runRef ?? ''}
-            target={target}
+            resolution={resolution}
             onClose={onClose}
             onNavigate={onNavigate}
           />
@@ -125,150 +135,29 @@ export function SessionCard({
 }
 
 function CardBody({
-  target,
+  resolution,
   onClose,
   onNavigate,
 }: {
-  target: SessionTarget
+  resolution: SessionResolution
   onClose: () => void
   onNavigate?: (target: SessionTarget) => void
 }) {
   const { t, i18n } = useTranslation('sessions')
   const lang = i18n.language
-  const { activeTenant, can } = useAuth()
   const [tab, setTab] = useState('overview')
   const [selectedRun, setSelectedRun] = useState<string | null>(null)
 
-  const canLiveRead = can('sessions:live:read')
-  const canRunRead = can('sessions:run:read')
-  const grants = {
-    liveRead: canLiveRead,
-    runRead: canRunRead,
-    runWrite: can('sessions:run:write'),
-    runAdmin: can('sessions:run:admin'),
-  }
-
-  // Opened from a run row: the run itself announces the session it drives — a
-  // PROFILED run by the managed row the plane proved for it (live_ref), a legacy
-  // run by the bare id it captured.
-  const seedRunQuery = useQuery({
-    queryKey: agentOpsKeys.run(activeTenant, target.runRef ?? ''),
-    queryFn: () => agentOpsApi.getRun(target.runRef as string),
-    enabled: !!target.runRef && canRunRead,
-    refetchInterval: 5_000,
-  })
-  const seed = seedRunQuery.data
-  const seedProfiled = !!seed?.provider_profile_ref
-  // The identity this card resolves by (B2). A live_ref names ONE row; a bare
-  // session id names the LEGACY row and nothing else — two homes may announce the
-  // same id, so it is never a name for a profile-scoped row. A profiled run whose
-  // id has not been proven yet resolves by neither: its observed half is honestly
-  // absent rather than borrowed from whichever home shares the string.
-  const liveRef = target.liveRef || (seedProfiled ? seed?.live_ref || '' : '')
-  const sessionRef =
-    target.sessionRef ||
-    (!target.liveRef && seed && !seedProfiled
-      ? seed.claude_session_id || ''
-      : '')
-  const observedKey = liveRef || sessionRef
-
-  const liveQuery = useQuery({
-    queryKey: liveRef
-      ? sessionsKeys.liveById(activeTenant, liveRef)
-      : sessionsKeys.liveOne(activeTenant, sessionRef),
-    queryFn: () =>
-      liveRef ? sessionsApi.liveById(liveRef) : sessionsApi.liveOne(sessionRef),
-    enabled: !!observedKey && canLiveRead,
-    // A session with no telemetry yet is a 404, and that is an ANSWER (the launched
-    // half exists, the observed half has not started) — not an error to retry at.
-    retry: false,
-  })
-
-  // THE PROVENANCE LOOKUP, and it is the engine's answer, not a page join: by
-  // live_ref, the run the plane PROVED owns the row (none for an observed row, never
-  // "the first match"); by bare id, the legacy runs that captured it.
-  const runsParams = liveRef
-    ? { live_ref: liveRef }
-    : { claude_session_id: sessionRef }
-  const runsQuery = useQuery({
-    queryKey: agentOpsKeys.runs(activeTenant, runsParams),
-    queryFn: () => agentOpsApi.listRuns(runsParams),
-    enabled: !!observedKey && canRunRead,
-    refetchInterval: 8_000,
-  })
-
-  // Freshness for the observed half while the card is open. The subscription is as
-  // exact as the lookup: by live_ref it is ONE row; by bare id it is the legacy row,
-  // and a scoped row that shares the id never reaches it.
-  const matches = (snap: LiveDTO) =>
-    liveRef
-      ? snap.live_ref === liveRef
-      : snap.session_ref === sessionRef && !isScopedRow(snap)
-  const [override, setOverride] = useState<LiveDTO | null>(null)
-  const { status: streamStatus } = useLiveStream<LiveDTO>({
-    path: '/v1/m/sessions/stream',
-    events: ['session'],
-    query: liveRef
-      ? { live_ref: liveRef }
-      : sessionRef
-        ? { ref: sessionRef }
-        : undefined,
-    enabled: !!observedKey && canLiveRead,
-    onSnapshot: (snap) => {
-      if (matches(snap)) setOverride(snap)
-    },
-  })
-
-  const live =
-    override && matches(override) ? override : (liveQuery.data ?? undefined)
-
-  // B2: the observation rows that share a MANAGED row's profile and provider id —
-  // telemetry that arrived through a source bound to the same profile. They are
-  // shown BESIDE the run, never merged into it: the plane proved the process, not
-  // that those frames are its.
-  const relatedParams = {
-    provider_profile_ref: live?.provider_profile_ref ?? '',
-    session_ref: live?.session_ref ?? '',
-  }
-  const relatedQuery = useQuery({
-    queryKey: sessionsKeys.live(activeTenant, relatedParams),
-    queryFn: () => sessionsApi.live({ ...relatedParams, limit: 20 }),
-    enabled:
-      canLiveRead &&
-      live?.attribution === 'managed' &&
-      !!live.provider_profile_ref,
-  })
-  const related = (relatedQuery.data?.items ?? []).filter(
-    (r) => r.live_ref !== live?.live_ref,
-  )
-
-  // Every run the engine linked to this session, plus the seed run when the card was
-  // opened from a run that has not announced a session id (so it is never dropped).
-  const linked = runsQuery.data?.items ?? []
-  const runs: RunDTO[] =
-    seed && !linked.some((r) => r.run_ref === seed.run_ref)
-      ? [seed, ...linked]
-      : linked
-
-  const merged = mergeSessions(live ? [live] : [], runs)
-  const session: UnifiedSession = merged.find((r) => r.live) ??
-    merged[0] ?? {
-      key: liveRef
-        ? `live:${liveRef}`
-        : sessionRef
-          ? `sess:${sessionRef}`
-          : `run:${target.runRef ?? ''}`,
-      sessionRef: sessionRef || undefined,
-      liveRef: liveRef || undefined,
-      runs: [],
-      live,
-      provenance: 'discovered',
-      control: 'observe',
-      lastActivityMs: 0,
-    }
-  // The operator can act on ANY of the runs driving this session, not only the one
-  // the card opens on: before each run was its own selectable row, and folding
-  // them into one card must not take that away (contrast finding, 2026-08-10).
+  const {
+    session,
+    live,
+    related,
+    streamStatus,
+    operateUnknown,
+    observeUnknown,
+    loading,
+    grants,
+  } = resolution
   const defaultRun = primaryRun(session.runs)
   const run = session.runs.find((r) => r.run_ref === selectedRun) ?? defaultRun
   const caps = capabilities({ ...session, runs: run ? [run] : [] }, grants)
@@ -279,25 +168,6 @@ function CardBody({
   // controlLevel and capabilities, surfacing again through the picker. The list still
   // reports the SESSION's reach, which is the right unit there.
   const control = controlLevel(run ? [run] : session.runs)
-
-  // The operate half was NOT READ — which is NOT the same as "there is none", and the
-  // difference is the whole point of this card. Three ways to not know: no permission,
-  // a failed lookup, or a failed seed read. All three must say "not read"; only an
-  // answered lookup that came back empty may say "discovered".
-  const operateUnknown =
-    !canRunRead ||
-    (!!observedKey && runsQuery.isError) ||
-    (!!target.runRef && seedRunQuery.isError)
-  // Same rule on the observed half: a 404 is an ANSWER (nothing observed), any other
-  // failure is not.
-  const observeFailed =
-    liveQuery.isError &&
-    !(liveQuery.error instanceof ApiError && liveQuery.error.status === 404)
-  const observeUnknown = (!canLiveRead || observeFailed) && !!observedKey
-
-  const loading =
-    (!!target.runRef && seedRunQuery.isLoading) ||
-    (!!observedKey && canRunRead && runsQuery.isLoading)
 
   if (loading) {
     return (
@@ -316,7 +186,7 @@ function CardBody({
           ) : (
             <Activity className="size-4 text-accent-text" />
           )}
-          <span className="truncate font-mono text-base">
+          <span className="truncate font-mono text-body">
             {sessionLabel(session)}
           </span>
         </SheetTitle>
@@ -370,7 +240,7 @@ function CardBody({
           ) : observeUnknown ? (
             <NotRead text={t('card.observedNotRead')} />
           ) : (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-body text-muted-foreground">
               {t('card.noObservationYet')}
             </p>
           )}
@@ -397,7 +267,7 @@ function CardBody({
             isLiveRun(run) && run.transport === 'stream-json' ? (
               <LiveConsole run={run} />
             ) : (
-              <p className="text-sm text-muted-foreground">
+              <p className="text-body text-muted-foreground">
                 {run.transport === 'stream-json'
                   ? t('card.cap.reason.state')
                   : t('card.relayedIO')}
@@ -550,13 +420,13 @@ function ProvenanceBlock({
           </span>
         )}
       </div>
-      <p className="mt-1.5 text-sm text-muted-foreground">
+      <p className="mt-1.5 text-body text-muted-foreground">
         {unknown
           ? t('card.provenance.unknownExplain')
           : t(`card.provenance.${session.provenance}Explain`)}
       </p>
       {attribution && attribution !== 'legacy' && (
-        <p className="mt-1 text-xs text-muted-foreground">
+        <p className="mt-1 text-caption text-muted-foreground">
           {t(`card.attributionExplain.${attribution}`, { defaultValue: '' })}
         </p>
       )}
@@ -573,7 +443,7 @@ function ProvenanceBlock({
                   aria-pressed={many ? active : undefined}
                   disabled={!many}
                   className={cn(
-                    'flex w-full flex-wrap items-center gap-x-2 gap-y-0.5 rounded-sm px-1 py-0.5 text-left text-xs',
+                    'flex w-full flex-wrap items-center gap-x-2 gap-y-0.5 rounded-sm px-1 py-0.5 text-left text-caption',
                     many && 'hover:bg-muted',
                     many && active && 'bg-muted',
                   )}
@@ -609,7 +479,7 @@ function ProvenanceBlock({
         </p>
       )}
       {live?.unclaimed && (
-        <p className="mt-2 rounded-md border border-warning-line bg-warning-soft px-2.5 py-1.5 text-xs text-warning">
+        <p className="mt-2 rounded-md border border-warning-line bg-warning-soft px-2.5 py-1.5 text-caption text-warning">
           {t('card.unclaimed')}
         </p>
       )}
@@ -647,13 +517,13 @@ function ControlBlock({
   const shared = reasons.size === 1 ? [...reasons][0] : undefined
   return (
     <section className="rounded-md border border-border bg-surface p-3">
-      <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+      <div className="text-caption font-semibold uppercase tracking-wide text-muted-foreground">
         {t('card.control.title')}
       </div>
-      <p className="mt-1 text-sm text-foreground">
+      <p className="mt-1 text-body text-foreground">
         {t(`card.control.${control}`)}
       </p>
-      <p className="mt-0.5 text-sm text-muted-foreground">
+      <p className="mt-0.5 text-body text-muted-foreground">
         {operateUnknown
           ? t('card.control.unknownExplain')
           : t(`card.control.${control}Explain`)}
@@ -665,7 +535,7 @@ function ControlBlock({
             <li
               key={c.id}
               className={cn(
-                'flex items-start gap-1.5 text-xs',
+                'flex items-start gap-1.5 text-caption',
                 c.available ? 'text-foreground' : 'text-muted-foreground',
               )}
             >
@@ -688,7 +558,7 @@ function ControlBlock({
         })}
       </ul>
       {shared && (
-        <p className="mt-1.5 text-xs text-muted-foreground">
+        <p className="mt-1.5 text-caption text-muted-foreground">
           {t('card.cap.sharedReason', {
             reason: t(`card.cap.reason.${shared}`),
           })}
@@ -844,17 +714,17 @@ function RelatedObservations({
       className="rounded-md border border-border bg-surface p-3"
       data-testid="related-observations"
     >
-      <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+      <div className="text-caption font-semibold uppercase tracking-wide text-muted-foreground">
         {t('card.related.title')}
       </div>
-      <p className="mt-1 text-xs text-muted-foreground">
+      <p className="mt-1 text-caption text-muted-foreground">
         {t('card.related.explain')}
       </p>
       <ul className="mt-2 flex flex-col gap-1">
         {rows.map((r) => (
           <li
             key={r.live_ref}
-            className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs"
+            className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-caption"
           >
             <AttributionChip attribution={r.attribution} />
             {r.source_binding_ref && (
@@ -895,7 +765,7 @@ function Observed({ live, lang }: { live: LiveDTO; lang: string }) {
   return (
     <div className="flex flex-col gap-3">
       {live.cc_state === 'silent_evasion' && (
-        <div className="rounded-md border border-danger-line bg-danger-soft px-2.5 py-2 text-xs text-danger">
+        <div className="rounded-md border border-danger-line bg-danger-soft px-2.5 py-2 text-caption text-danger">
           {t('evasionBanner')}
         </div>
       )}
@@ -962,7 +832,7 @@ function Observed({ live, lang }: { live: LiveDTO; lang: string }) {
 
 function NotRead({ text }: { text: string }) {
   return (
-    <p className="rounded-md border border-border bg-muted px-2.5 py-2 text-xs text-muted-foreground">
+    <p className="rounded-md border border-border bg-muted px-2.5 py-2 text-caption text-muted-foreground">
       {text}
     </p>
   )
@@ -979,13 +849,13 @@ function Field({
 }) {
   return (
     <div>
-      <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+      <div className="text-caption font-semibold uppercase tracking-wide text-muted-foreground">
         {label}
       </div>
       {value ? (
-        <p className="mt-0.5 text-sm text-foreground">{value}</p>
+        <p className="mt-0.5 text-body text-foreground">{value}</p>
       ) : (
-        <p className="mt-0.5 text-sm italic text-muted-foreground">
+        <p className="mt-0.5 text-body italic text-muted-foreground">
           {fallback}
         </p>
       )}

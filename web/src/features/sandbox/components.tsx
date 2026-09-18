@@ -108,7 +108,7 @@ export function RunScore({ run }: { run: Run }) {
   const scored = run.score !== null && run.score !== undefined
   if (!scored) {
     return (
-      <span className="text-xs text-muted-foreground italic">
+      <span className="text-caption text-muted-foreground italic">
         {t('run.notScored')}
       </span>
     )
@@ -154,7 +154,7 @@ export function RunsTable({
         accessorKey: 'subject_ref',
         header: t('runs.columns.subject'),
         cell: ({ row }) => (
-          <span className="font-mono text-xs text-foreground">
+          <span className="font-mono text-caption text-foreground">
             {row.original.live_ref ?? row.original.subject_ref}
           </span>
         ),
@@ -183,7 +183,7 @@ export function RunsTable({
         id: 'steps',
         header: t('runs.columns.steps'),
         cell: ({ row }) => (
-          <span className="font-mono text-xs tabular-nums text-muted-foreground">
+          <span className="font-mono text-caption tabular-nums text-muted-foreground">
             {row.original.steps_ok}/{row.original.steps_total}
             {row.original.steps_error > 0 ? (
               <span className="ml-1 text-danger">
@@ -202,7 +202,7 @@ export function RunsTable({
         accessorKey: 'started_at',
         header: t('runs.columns.started'),
         cell: ({ row }) => (
-          <span className="text-xs text-muted-foreground">
+          <span className="text-caption text-muted-foreground">
             {formatDateTime(row.original.started_at, i18n.language)}
           </span>
         ),
@@ -237,7 +237,7 @@ export function OutputRow({ output }: { output: Output }) {
   return (
     <li className="flex flex-col gap-1 rounded-md border border-border bg-surface p-3">
       <div className="flex items-center justify-between gap-2">
-        <span className="font-mono text-xs font-medium text-foreground">
+        <span className="font-mono text-caption font-medium text-foreground">
           {output.step_key}
         </span>
         <div className="flex items-center gap-2">
@@ -253,7 +253,7 @@ export function OutputRow({ output }: { output: Output }) {
       </div>
       <pre
         className={cn(
-          'overflow-x-auto rounded-sm bg-muted px-2 py-1.5 font-mono text-xs whitespace-pre-wrap',
+          'overflow-x-auto rounded-sm bg-muted px-2 py-1.5 font-mono text-caption whitespace-pre-wrap',
           output.mock_hit ? 'text-foreground' : 'text-warning',
         )}
       >
@@ -332,11 +332,11 @@ export function ComparisonCard({ comparison }: { comparison: Comparison }) {
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <ComparisonVerdictBadge verdict={comparison.verdict} />
-              <span className="truncate font-mono text-xs text-muted-foreground">
+              <span className="truncate font-mono text-caption text-muted-foreground">
                 {comparison.live_ref ?? comparison.subject_ref}
               </span>
             </div>
-            <p className="mt-1 text-xs text-muted-foreground">
+            <p className="mt-1 text-caption text-muted-foreground">
               {t('comparisons.decidedBy')}:{' '}
               <span className="font-mono text-foreground">
                 {comparison.decided_by}
@@ -350,10 +350,7 @@ export function ComparisonCard({ comparison }: { comparison: Comparison }) {
               {t('comparisons.delta')}
             </div>
             <div
-              className={cn(
-                'font-display text-lg font-semibold tabular-nums',
-                deltaTone,
-              )}
+              className={cn('font-display text-title tabular-nums', deltaTone)}
             >
               {signedDelta}
             </div>
@@ -370,14 +367,14 @@ export function ComparisonCard({ comparison }: { comparison: Comparison }) {
           />
         </div>
         {comparison.suite_ref ? (
-          <p className="text-xs text-muted-foreground">
+          <p className="text-caption text-muted-foreground">
             {t('comparisons.scoredAgainst')}:{' '}
             <span className="font-mono text-foreground">
               {comparison.suite_ref}
             </span>
           </p>
         ) : (
-          <p className="text-xs text-muted-foreground italic">
+          <p className="text-caption text-muted-foreground italic">
             {t('comparisons.noSuite')}
           </p>
         )}
@@ -392,7 +389,7 @@ function ScoreCell({ label, score }: { label: string; score: number }) {
       <span className="text-[11px] tracking-wide text-muted-foreground uppercase">
         {label}
       </span>
-      <span className="font-mono text-base font-semibold tabular-nums text-foreground">
+      <span className="font-mono text-heading tabular-nums text-foreground">
         {formatScore(score)}
       </span>
     </div>
@@ -435,10 +432,10 @@ export function ScenariosTable({
         header: t('scenarios.columns.name'),
         cell: ({ row }) => (
           <div className="flex flex-col">
-            <span className="text-sm font-medium text-foreground">
+            <span className="text-body font-medium text-foreground">
               {row.original.name}
             </span>
-            <span className="text-xs text-muted-foreground">
+            <span className="text-caption text-muted-foreground">
               {row.original.description}
             </span>
           </div>
@@ -459,7 +456,7 @@ export function ScenariosTable({
               })}
             </Badge>
           ) : (
-            <span className="text-xs text-muted-foreground">
+            <span className="text-caption text-muted-foreground">
               {humanize(undefined)}
             </span>
           ),
@@ -468,7 +465,7 @@ export function ScenariosTable({
         id: 'steps',
         header: t('scenarios.columns.steps'),
         cell: ({ row }) => (
-          <span className="font-mono text-xs tabular-nums text-muted-foreground">
+          <span className="font-mono text-caption tabular-nums text-muted-foreground">
             {stepCount(row.original)}
           </span>
         ),
@@ -537,7 +534,7 @@ export function SyntheticDataSeam() {
   return (
     <div className="flex items-center gap-2">
       <Lock className="size-3.5 text-muted-foreground" />
-      <span className="text-xs text-muted-foreground">
+      <span className="text-caption text-muted-foreground">
         {t('seam.syntheticData')}
       </span>
     </div>

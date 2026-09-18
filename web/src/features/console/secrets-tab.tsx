@@ -31,6 +31,7 @@ import {
   type SecretDTO,
   type SecretInput,
 } from './api'
+import { StaticTable } from '@/components/data/static-table'
 
 // A secret name/handle: letters, digits and the separators `. _ - /`. The store
 // rejects anything else; we mirror the rule so the create button explains itself.
@@ -68,7 +69,7 @@ export function SecretsTab() {
 
   if (!isSuperadmin) {
     return (
-      <div className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/5 px-4 py-3 text-sm text-muted-foreground">
+      <div className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/5 px-4 py-3 text-body text-muted-foreground">
         <ShieldAlert
           className="mt-0.5 size-4 shrink-0 text-warning"
           aria-hidden
@@ -85,10 +86,10 @@ export function SecretsTab() {
     <div className="flex flex-col gap-4 pt-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold text-foreground">
+          <h2 className="text-heading text-foreground">
             {t('console:secrets.title')}
           </h2>
-          <p className="max-w-2xl text-sm text-muted-foreground">
+          <p className="max-w-2xl text-body text-muted-foreground">
             {t('console:secrets.caption')}
           </p>
         </div>
@@ -99,7 +100,7 @@ export function SecretsTab() {
       </div>
 
       {query.data && !sealerAvailable && (
-        <p className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/5 px-4 py-3 text-sm text-warning">
+        <p className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/5 px-4 py-3 text-body text-warning">
           <ShieldAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
           {t('console:secrets.sealerUnavailable')}
         </p>
@@ -119,30 +120,24 @@ export function SecretsTab() {
         />
       ) : (
         <div className="overflow-hidden rounded-lg border border-border">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
+          <StaticTable>
+            <thead>
               <tr>
-                <th className="px-3 py-2 font-medium">
-                  {t('console:secrets.colName')}
-                </th>
-                <th className="px-3 py-2 font-medium">
-                  {t('console:secrets.colHint')}
-                </th>
-                <th className="px-3 py-2 font-medium">
-                  {t('console:secrets.colDescription')}
-                </th>
-                <th className="px-3 py-2" />
+                <th>{t('console:secrets.colName')}</th>
+                <th>{t('console:secrets.colHint')}</th>
+                <th>{t('console:secrets.colDescription')}</th>
+                <th />
               </tr>
             </thead>
             <tbody>
               {secrets.map((s) => (
-                <tr key={s.name} className="border-t border-border align-top">
-                  <td className="px-3 py-2">
-                    <span className="font-mono text-xs text-foreground">
+                <tr key={s.name} className="align-top">
+                  <td>
+                    <span className="font-mono text-caption text-foreground">
                       {s.name}
                     </span>
                   </td>
-                  <td className="px-3 py-2">
+                  <td>
                     {/* The hint is a NON-secret fingerprint, never the value. */}
                     <Badge variant="neutral">
                       <KeyRound
@@ -152,10 +147,10 @@ export function SecretsTab() {
                       <span className="font-mono">{s.hint}</span>
                     </Badge>
                   </td>
-                  <td className="px-3 py-2 text-muted-foreground">
+                  <td className="text-muted-foreground">
                     {s.description || '—'}
                   </td>
-                  <td className="px-3 py-2 text-right">
+                  <td className="text-right">
                     <div className="flex justify-end gap-1">
                       <Button
                         variant="ghost"
@@ -178,7 +173,7 @@ export function SecretsTab() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </StaticTable>
         </div>
       )}
 

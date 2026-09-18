@@ -27,6 +27,7 @@
   "timeline": {
     "loadMore": "Cargar más",
     "empty": "No hay eventos registrados",
+    "emptyHint": "Aquí aparecen en orden todos los eventos que capturó la grabación. Esta grabación no capturó ninguno.",
     "activityUnavailable": "La actividad del agente no está disponible porque el resolver de timeline no está cableado o no respondió. La evidencia de gobernanza sigue disponible.",
     "tool": "Llamada a herramienta",
     "mcp": "Invocación MCP",
@@ -120,7 +121,9 @@
     "subtitle": "Eventos semánticos correlacionados del registro de evidencia.",
     "seq": "seq {{seq}}",
     "empty": "No hay eventos correlacionados del registro",
+    "emptyHint": "Aquí aparecen los eventos del libro de auditoría que se correlacionan con esta grabación. Ninguno se correlaciona.",
     "truncated": "La vista del registro está truncada; existen más eventos correlacionados más allá de esta ventana acotada."
   },
-  "notFound": "Sesión de grabación no encontrada"
+  "notFound": "Sesión de grabación no encontrada",
+  "notFoundHint": "Puede que la retención haya borrado la grabación, o que el enlace sea incorrecto. Abre la lista de grabaciones para encontrarla."
 }

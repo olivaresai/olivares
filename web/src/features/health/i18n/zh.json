@@ -75,6 +75,7 @@
     "pick": "对象",
     "pickPlaceholder": "选择一个对象…",
     "pickEmpty": "暂无可供报告的受监控对象。",
+    "pickEmptyHint": "SLA 报告基于受监控对象生成。为某个对象添加健康检查后即可纳入报告。",
     "pickPrompt": {
       "title": "选择一个对象",
       "description": "选择一个受监控的对象，以查看其相对于目标的正常运行时间，该数据基于可靠性账本重建得出。"

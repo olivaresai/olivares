@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/ui/page-header'
+import { PagePrimaryAction } from '@/components/ui/page-actions'
 import {
   Select,
   SelectContent,
@@ -132,7 +133,7 @@ export default function CatalogView() {
       accessorKey: 'slug',
       header: t('entries.slug'),
       cell: ({ row }) => (
-        <span className="font-mono text-xs text-muted-foreground">
+        <span className="font-mono text-caption text-muted-foreground">
           {row.original.slug}
         </span>
       ),
@@ -141,7 +142,7 @@ export default function CatalogView() {
       accessorKey: 'version',
       header: t('entries.version'),
       cell: ({ row }) => (
-        <span className="font-mono text-xs text-muted-foreground">
+        <span className="font-mono text-caption text-muted-foreground">
           {row.original.version}
         </span>
       ),
@@ -160,7 +161,7 @@ export default function CatalogView() {
       accessorKey: 'owner_ref',
       header: t('entries.owner'),
       cell: ({ row }) => (
-        <span className="font-mono text-xs text-muted-foreground">
+        <span className="font-mono text-caption text-muted-foreground">
           {row.original.owner_ref || '—'}
         </span>
       ),
@@ -184,7 +185,7 @@ export default function CatalogView() {
       accessorKey: 'entry_slug',
       header: t('instances.entry'),
       cell: ({ row }) => (
-        <span className="font-mono text-xs text-muted-foreground">
+        <span className="font-mono text-caption text-muted-foreground">
           {row.original.entry_slug || row.original.entry_id}
         </span>
       ),
@@ -207,7 +208,7 @@ export default function CatalogView() {
       accessorKey: 'entry_version',
       header: t('instances.version'),
       cell: ({ row }) => (
-        <span className="font-mono text-xs text-muted-foreground">
+        <span className="font-mono text-caption text-muted-foreground">
           {row.original.entry_version || '—'}
         </span>
       ),
@@ -226,7 +227,7 @@ export default function CatalogView() {
       accessorKey: 'requested_by',
       header: t('instances.requestedBy'),
       cell: ({ row }) => (
-        <span className="font-mono text-xs text-muted-foreground">
+        <span className="font-mono text-caption text-muted-foreground">
           {row.original.requested_by || '—'}
         </span>
       ),
@@ -259,6 +260,18 @@ export default function CatalogView() {
         </TabsList>
 
         <TabsContent value="entries">
+          {canWriteEntry && (
+            <PagePrimaryAction>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => setEditorOpen(true)}
+              >
+                <Plus />
+                {t('entries.newEntry')}
+              </Button>
+            </PagePrimaryAction>
+          )}
           <ListTruncationBadge
             query={entries}
             label={t('entries.truncated', {
@@ -319,16 +332,6 @@ export default function CatalogView() {
                     ))}
                   </SelectContent>
                 </Select>
-                {canWriteEntry && (
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    onClick={() => setEditorOpen(true)}
-                  >
-                    <Plus />
-                    {t('entries.newEntry')}
-                  </Button>
-                )}
               </>
             }
             empty={
@@ -351,7 +354,7 @@ export default function CatalogView() {
               className="px-0 pt-0 pb-3"
             />
             {instancesLive && (
-              <p className="mb-3 text-xs text-muted-foreground">
+              <p className="mb-3 text-caption text-muted-foreground">
                 {t('instances.liveNote')}
               </p>
             )}

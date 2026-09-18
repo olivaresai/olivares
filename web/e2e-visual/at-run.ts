@@ -340,7 +340,7 @@ const TOKEN_PAIRS: {
  * looked at. The ones with an unambiguous fix were fixed in the same change; the
  * ones below need a call this session is not the one to make — either a palette
  * decision (the API-playground method badges are raw Tailwind ramp colours, not
- * brand tokens) or a brand-token boundary that belongs to the other lane
+ * brand tokens) or a brand-token boundary that belongs to the palette itself
  * (`--accent-text` over `--muted`, a pairing no token list had ever measured).
  *
  * THIS IS NOT A RECLASSIFICATION, AND IT CANNOT ROT. Each entry names ONE origin
@@ -355,7 +355,7 @@ const TOKEN_PAIRS: {
 const RAMP =
   'raw Tailwind ramp; needs a brand-token decision for the method badges'
 const ACCENT_TEXT =
-  '`--accent-text` over a tinted surface; the token value is coordinated in the orchestrator lane'
+  '`--accent-text` over a tinted surface; the token value is decided in the palette'
 // ⛔ POR QUÉ `--accent` NO ALCANZA 3:1 CONTRA LOS FONDOS CLAROS Y AUN ASÍ NO ES UN DEFECTO.
 //    Medido el 2026-08-18: `--accent` es `rgb(240,128,0)` —el naranja de marca— y contra
 //    `background` da 2,58, contra `surface` 2,69 y contra `accent-soft` 2,37, los tres por debajo del

@@ -203,7 +203,7 @@ func main() {
 	}
 
 	// 5 · the Community derivation aggregate performs no live read, directly or through a
-	//     declared delegation. This is the lane Community-only CI runs with no private
+	//     declared delegation. This is the path Community-only CI runs with no private
 	//     source, where the reader can only answer COULD NOT LOOK.
 	if where := reach(tasks, aggregate).who(liveScript); len(where) > 0 {
 		findings = append(findings, fmt.Sprintf(

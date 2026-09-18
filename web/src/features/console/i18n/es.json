@@ -116,6 +116,7 @@
     "pendingTitle": "Invitaciones pendientes",
     "pendingCaption": "Invitaciones a la espera de aceptación. El enlace de un solo uso fija la contraseña y activa la cuenta.",
     "noInvites": "No hay invitaciones pendientes.",
+    "noInvitesHint": "Las invitaciones que envías aparecen aquí hasta que se aceptan o caducan. Invita a alguien para añadir la primera.",
     "email": "Email",
     "role": "Rol",
     "expires": "Caduca",
@@ -440,6 +441,7 @@
     "catalog": {
       "caption": "Todos los conectores que esta compilación puede activar, leídos del motor: {{count}} en total. La consulta es de sólo lectura; dar de alta uno sigue exigiendo verificación reforzada.",
       "noMatch": "Ningún conector coincide con «{{query}}».",
+      "noMatchHint": "El catálogo lista todos los conectores que esta versión puede instalar. Borra la búsqueda para verlos todos.",
       "search": "Filtrar por nombre o tipo",
       "title": "Conectores admitidos"
     },
@@ -472,6 +474,7 @@
     "created": "Workspace creado.",
     "renamed": "Workspace renombrado.",
     "none": "Aún no hay workspaces.",
+    "noneHint": "Un espacio de trabajo acota agentes, sesiones y concesiones dentro de esta organización. Crea uno para empezar.",
     "ownerOnly": "Solo el owner de la organización puede crear workspaces."
   },
   "agents": {
@@ -561,10 +564,12 @@
     "deleted": "Grupo de agentes eliminado.",
     "created": "Grupo de agentes creado.",
     "updated": "Grupo de agentes actualizado.",
-    "none": "Aún no hay grupos de agentes."
+    "none": "Aún no hay grupos de agentes.",
+    "noneHint": "Un grupo de agentes nombra un conjunto de agentes para que una sola política los gobierne todos. Crea uno para empezar."
   },
   "roles": {
     "readOnlyNotice": "Necesitas acceso RBAC de gobernanza para gestionar roles y delegación.",
+    "readOnlyNoticeHint": "Aquí se gestionan los roles, sus permisos y quién puede delegarlos. Pide a un administrador el permiso de RBAC de gobierno.",
     "authority": {
       "title": "Tu autoridad de delegación",
       "superadmin": "Eres superadmin — puedes delegar cualquier rol en cualquier ámbito.",
@@ -584,6 +589,7 @@
       "role": "Rol",
       "scope": "Ámbito",
       "none": "Aún no hay grants acotados.",
+      "noneHint": "Una concesión con alcance da a un sujeto un rol dentro de un espacio de trabajo o recurso, no en todo el inquilino. Concede una para empezar.",
       "revoke": "Revocar",
       "revokeTitle": "Revocar grant",
       "revokeBody": "El sujeto pierde este rol acotado de inmediato. La revocación también pasa por el techo de delegación.",
@@ -625,6 +631,7 @@
       "permissions": "Permisos",
       "groups": "Grupos",
       "none": "Aún no hay roles a medida.",
+      "noneHint": "Un rol personalizado es un conjunto de permisos con nombre que puedes conceder como uno integrado. Crea uno para empezar.",
       "edit": "Editar",
       "delete": "Eliminar",
       "deleteTitle": "Eliminar rol a medida",
@@ -659,6 +666,7 @@
       "name": "Nombre",
       "permissions": "Permisos",
       "none": "Aún no hay grupos de permisos.",
+      "noneHint": "Un grupo de permisos agrupa permisos para que un rol pueda incluirlos por nombre. Crea uno para empezar.",
       "edit": "Editar",
       "delete": "Eliminar",
       "deleteTitle": "Eliminar grupo de permisos",
@@ -690,6 +698,7 @@
       "title": "Grupos sujetos y jerarquía",
       "caption": "Concede roles a grupos de usuarios aprovisionados y configura la jerarquía de grupos. Los miembros de un grupo hijo heredan los grants del padre.",
       "noGroups": "No hay grupos aprovisionados. Los grupos los envía el proveedor de identidad (SCIM).",
+      "noGroupsHint": "Los grupos llegan desde tu proveedor de identidad por SCIM; la consola nunca los crea. Aprovisiona un grupo allí y aparecerá aquí.",
       "colName": "Grupo",
       "colParent": "Padre",
       "colMembers": "Miembros",
@@ -735,6 +744,7 @@
       "colFamilies": "Familias",
       "colTiers": "Niveles",
       "none": "Aún no hay grupos de modelos.",
+      "noneHint": "Un grupo de modelos nombra un conjunto de modelos para que una sola regla los gobierne todos. Crea un grupo para empezar.",
       "edit": "Editar",
       "delete": "Eliminar",
       "deleteTitle": "Eliminar grupo de modelos",
@@ -760,6 +770,7 @@
       "effectAllow": "Permitir",
       "effectForbid": "Denegar",
       "none": "Aún no hay reglas de acceso a modelos.",
+      "noneHint": "Una regla de acceso a modelos dice qué sujetos pueden llamar a qué modelos. Sin ninguna, todo sujeto puede llamar a todos los modelos de este inquilino.",
       "edit": "Editar",
       "delete": "Eliminar",
       "deleteTitle": "Eliminar regla de acceso a modelos",
@@ -797,6 +808,7 @@
       "title": "Revisión de acceso",
       "caption": "Consultas inversas: ¿quién puede acceder a qué? El motor evalúa cada candidato — los resultados son autoritativos, no están en caché.",
       "readOnlyNotice": "Necesitas acceso de lectura a authz para ejecutar revisiones de acceso.",
+      "readOnlyNoticeHint": "Una revisión de accesos lista quién tiene qué, para que un revisor lo confirme o lo revoque. Pide a un administrador el permiso de lectura de autorización.",
       "searchSubject": "¿Quién puede acceder a…",
       "searchResource": "¿A qué puede acceder alguien…",
       "export": "Exportar revisión de acceso",

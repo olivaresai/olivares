@@ -28,6 +28,17 @@
  * edit web/tokens/*.tokens.json and run `pnpm tokens` (CI: `pnpm tokens:check`). */
 @import './styles/tokens.css';
 
+/* ⛔ THE DTCG SOURCES ARE NOT A TEMPLATE, AND TAILWIND WAS READING THEM AS ONE.
+ * Tailwind 4 auto-detects its content sources, so `tokens/primitives.tokens.json` was
+ * scanned like a component file. The type-scale entries there are literally named
+ * `text-display--line-height`, `text-title--font-weight` and so on, and each of those
+ * strings is a legal utility candidate — so the build emitted SEVENTEEN dead classes,
+ * among them `.text-display--font-weight{font-size:600px}`: a 600-PIXEL font size,
+ * generated from a token that means "weight 600". Nothing referenced them, so nothing
+ * broke and nothing would ever have said so. Measured in the first build after the
+ * scale landed. */
+@source not "../tokens";
+
 /* Class-based dark mode: `dark:` keys off the `.dark` ancestor, not the OS media
  * query (the user's explicit choice wins; the OS is only the default). */
 @custom-variant dark (&:where(.dark, .dark *));

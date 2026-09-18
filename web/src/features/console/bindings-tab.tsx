@@ -66,6 +66,7 @@ import {
 } from './api'
 import { ResourceTreePicker } from './resource-tree-picker'
 import { FormError } from './roles-shared'
+import { StaticTable } from '@/components/data/static-table'
 
 /**
  * El máximo que el repositorio genérico acepta (`maxLimit`, sqlstore/generic.go:29). UNA sola
@@ -173,10 +174,10 @@ export function BindingsTab() {
       <section className="flex flex-col gap-4">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h2 className="text-base font-semibold text-foreground">
+            <h2 className="text-heading text-foreground">
               {t('console:bindings.title')}
             </h2>
-            <p className="max-w-3xl text-sm text-muted-foreground">
+            <p className="max-w-3xl text-body text-muted-foreground">
               {t('console:bindings.caption')}
             </p>
           </div>
@@ -381,54 +382,52 @@ function BindingsTable({
 
   return (
     <section className="overflow-hidden rounded-lg border border-border">
-      <table className="w-full text-sm">
-        <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
+      <StaticTable>
+        <thead>
           <tr>
-            <th className="px-3 py-2 font-medium">{t('bindings.scope')}</th>
-            <th className="px-3 py-2 font-medium">{t('bindings.effect')}</th>
-            <th className="px-3 py-2 font-medium">{t('bindings.enabled')}</th>
-            <th className="px-3 py-2 font-medium">
-              {t('bindings.credential')}
-            </th>
-            <th className="px-3 py-2 font-medium">{t('bindings.note')}</th>
-            <th className="px-3 py-2" />
+            <th>{t('bindings.scope')}</th>
+            <th>{t('bindings.effect')}</th>
+            <th>{t('bindings.enabled')}</th>
+            <th>{t('bindings.credential')}</th>
+            <th>{t('bindings.note')}</th>
+            <th />
           </tr>
         </thead>
         <tbody>
           {bindings.map((binding) => (
-            <tr key={binding.id} className="border-t border-border align-top">
-              <td className="px-3 py-2">
+            <tr key={binding.id} className="align-top">
+              <td>
                 <div className="flex flex-col gap-1">
                   <Badge variant="outline">
                     {t(`bindings.scopeTrees.${binding.scope_tree}`)}
                   </Badge>
-                  <code className="break-all font-mono text-xs text-foreground">
+                  <code className="break-all font-mono text-caption text-foreground">
                     {binding.scope_ref || t('bindings.defaultWorkspace')}
                   </code>
                   {binding.folder_path ? (
-                    <span className="break-all text-xs text-muted-foreground">
+                    <span className="break-all text-caption text-muted-foreground">
                       {binding.folder_path}
                     </span>
                   ) : null}
                 </div>
               </td>
-              <td className="px-3 py-2">
+              <td>
                 <EffectBadge effect={binding.effect ?? 'allow'} />
               </td>
-              <td className="px-3 py-2">
+              <td>
                 <Badge variant={binding.enabled ? 'success' : 'neutral'}>
                   {binding.enabled
                     ? t('bindings.enabledYes')
                     : t('bindings.enabledNo')}
                 </Badge>
               </td>
-              <td className="px-3 py-2">
+              <td>
                 {binding.cred_name ? (
                   <div className="flex flex-col gap-1">
-                    <span className="font-mono text-xs text-foreground">
+                    <span className="font-mono text-caption text-foreground">
                       {binding.cred_name}
                     </span>
-                    <span className="text-xs text-muted-foreground">
+                    <span className="text-caption text-muted-foreground">
                       {binding.cred_hint || binding.cred_ref_kind}
                     </span>
                   </div>
@@ -438,10 +437,10 @@ function BindingsTable({
                   </span>
                 )}
               </td>
-              <td className="max-w-xs px-3 py-2 text-muted-foreground">
+              <td className="max-w-xs text-muted-foreground">
                 {binding.note || '—'}
               </td>
-              <td className="px-3 py-2 text-right">
+              <td className="text-right">
                 {canWrite ? (
                   <div className="flex justify-end gap-1">
                     <Button
@@ -466,7 +465,7 @@ function BindingsTable({
             </tr>
           ))}
         </tbody>
-      </table>
+      </StaticTable>
     </section>
   )
 }
@@ -638,11 +637,11 @@ function BindingForm({
       </DialogHeader>
 
       <div className="flex flex-col gap-4">
-        <div className="rounded-lg border border-border bg-muted/20 p-3 text-sm">
+        <div className="rounded-lg border border-border bg-muted/20 p-3 text-body">
           <span className="font-medium text-foreground">
             {t('console:bindings.source')}
           </span>{' '}
-          <code className="font-mono text-xs">
+          <code className="font-mono text-caption">
             {sourceType}:{sourceRef}
           </code>
         </div>
@@ -761,7 +760,7 @@ function BindingForm({
               onCheckedChange={setEnabled}
               aria-label={t('console:bindings.enabled')}
             />
-            <span className="text-sm text-muted-foreground">
+            <span className="text-body text-muted-foreground">
               {enabled
                 ? t('console:bindings.enabledYes')
                 : t('console:bindings.enabledNo')}
@@ -1099,8 +1098,8 @@ function BindingDeleteDialog({
               {t('console:bindings.deleteBody')}
             </DialogDescription>
           </DialogHeader>
-          <div className="rounded-lg border border-border bg-muted/20 p-3 text-sm">
-            <code className="font-mono text-xs">
+          <div className="rounded-lg border border-border bg-muted/20 p-3 text-body">
+            <code className="font-mono text-caption">
               {binding.scope_tree}:{binding.scope_ref}
             </code>
           </div>
@@ -1166,8 +1165,8 @@ function DisableScopingDialog({
               {t('console:bindings.disableBody')}
             </DialogDescription>
           </DialogHeader>
-          <div className="rounded-lg border border-warning-line bg-warning-soft p-3 text-sm text-warning">
-            <code className="font-mono text-xs">
+          <div className="rounded-lg border border-warning-line bg-warning-soft p-3 text-body text-warning">
+            <code className="font-mono text-caption">
               {sourceType}:{sourceRef}
             </code>
           </div>
@@ -1222,11 +1221,11 @@ function ResolutionPreview({
     <section className="flex flex-col gap-3 rounded-lg border border-border bg-muted/20 p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="flex items-center gap-2 text-base font-semibold text-foreground">
+          <h2 className="flex items-center gap-2 text-heading text-foreground">
             <Eye className="size-4 text-accent-text" aria-hidden />
             {t('bindings.preview.title')}
           </h2>
-          <p className="max-w-3xl text-sm text-muted-foreground">
+          <p className="max-w-3xl text-body text-muted-foreground">
             {confined
               ? t('bindings.preview.confined', { source: sourceRef })
               : forbids.length > 0
@@ -1239,11 +1238,11 @@ function ResolutionPreview({
           {t('bindings.preview.openAccessMap')}
         </Button>
       </div>
-      <p className="text-sm text-muted-foreground">
+      <p className="text-body text-muted-foreground">
         {t('bindings.preview.algebra')}
       </p>
       {ordered.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
+        <p className="text-body text-muted-foreground">
           {t('bindings.preview.noEnabled')}
         </p>
       ) : (
@@ -1251,17 +1250,17 @@ function ResolutionPreview({
           {ordered.map((binding) => (
             <li
               key={binding.id ?? `${binding.scope_tree}:${binding.scope_ref}`}
-              className="flex flex-wrap items-center gap-2 text-sm"
+              className="flex flex-wrap items-center gap-2 text-body"
             >
               <EffectBadge effect={binding.effect ?? 'allow'} />
               <Badge variant="outline">
                 {t(`bindings.scopeTrees.${binding.scope_tree}`)}
               </Badge>
-              <code className="font-mono text-xs text-foreground">
+              <code className="font-mono text-caption text-foreground">
                 {binding.scope_ref || t('bindings.defaultWorkspace')}
               </code>
               {binding.cred_name ? (
-                <span className="text-xs text-muted-foreground">
+                <span className="text-caption text-muted-foreground">
                   {t('bindings.preview.credential', {
                     name: binding.cred_name,
                     hint: binding.cred_hint || binding.cred_ref_kind || '',
@@ -1324,10 +1323,10 @@ function ActorVerdict({
 
   return (
     <div className="flex flex-col gap-2 rounded-md border border-border p-3">
-      <h3 className="text-sm font-medium text-foreground">
+      <h3 className="text-body font-medium text-foreground">
         {t('bindings.preview.actor.title')}
       </h3>
-      <p className="text-xs text-muted-foreground">
+      <p className="text-caption text-muted-foreground">
         {t('bindings.preview.actor.hint')}
       </p>
       <div className="flex flex-wrap items-end gap-2">
@@ -1355,7 +1354,7 @@ function ActorVerdict({
         />
       </div>
       {!ready ? (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-caption text-muted-foreground">
           {t('bindings.preview.actor.empty')}
         </p>
       ) : verdict.data ? (
@@ -1371,18 +1370,18 @@ function ActorVerdict({
                 ? t('bindings.preview.actor.bound')
                 : t('bindings.preview.actor.unbound')}
             </Badge>
-            <span className="text-sm text-foreground">
+            <span className="text-body text-foreground">
               {verdict.data.reason}
             </span>
           </div>
           {verdict.data.cred_name ? (
-            <p className="text-xs text-muted-foreground">
+            <p className="text-caption text-muted-foreground">
               {t('bindings.preview.actor.cred')}: {verdict.data.cred_name}
               {verdict.data.cred_hint ? ` (${verdict.data.cred_hint})` : ''}
             </p>
           ) : null}
           {verdict.data.baseline ? (
-            <p role="note" className="text-xs text-warning">
+            <p role="note" className="text-caption text-warning">
               {t('bindings.preview.actor.baseline')}
             </p>
           ) : null}
@@ -1472,7 +1471,7 @@ function TargetAssignment({
   //    el suyo.
   if (!OPS_DE_ASIGNACION.has(op)) {
     return (
-      <span className="text-xs">
+      <span className="text-caption">
         {id}{' '}
         <span className="text-muted-foreground">
           {t('console:bindings.posture.target.notApplicable')}
@@ -1489,7 +1488,7 @@ function TargetAssignment({
   //    consumidor cuando algo entre medias está indexado más grueso que la frontera.**
   if (assignment && canResolve) {
     return (
-      <span className="text-xs">
+      <span className="text-caption">
         {id}{' '}
         <span className="text-foreground">
           {assignment.connector_name} → {assignment.workspace_ref}
@@ -1516,7 +1515,7 @@ function TargetAssignment({
       ? t('console:bindings.posture.target.unknown')
       : t('console:bindings.posture.target.notFound')
   return (
-    <span className="text-xs">
+    <span className="text-caption">
       {id} <span className="text-muted-foreground">{nota}</span>
     </span>
   )
@@ -1545,7 +1544,7 @@ function PostureChange({
   //    general ocultaría valores buenos y sería la sobrecorrección del defecto que arregla.
   if (unknown || (!current && incomplete)) {
     return (
-      <span className="text-xs text-muted-foreground">
+      <span className="text-caption text-muted-foreground">
         {t('console:bindings.posture.profileUnknown')}
       </span>
     )
@@ -1556,7 +1555,7 @@ function PostureChange({
         profile: label('acl_aware'),
       })
   return (
-    <div className="flex flex-col gap-0.5 text-xs">
+    <div className="flex flex-col gap-0.5 text-caption">
       <span className="text-foreground">{currentLabel}</span>
       {proposed ? (
         <span
@@ -1688,10 +1687,10 @@ function PostureQueue({
       ) : null}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold text-foreground">
+          <h2 className="text-heading text-foreground">
             {t('console:bindings.posture.title')}
           </h2>
-          <p className="max-w-3xl text-sm text-muted-foreground">
+          <p className="max-w-3xl text-body text-muted-foreground">
             {t('console:bindings.posture.caption')}
           </p>
         </div>
@@ -1755,39 +1754,26 @@ function PostureQueue({
         />
       ) : (
         <div className="overflow-hidden rounded-lg border border-border">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
+          <StaticTable>
+            <thead>
               <tr>
-                <th className="px-3 py-2 font-medium">
-                  {t('console:bindings.posture.target')}
-                </th>
-                <th className="px-3 py-2 font-medium">
-                  {t('console:bindings.posture.profile')}
-                </th>
-                <th className="px-3 py-2 font-medium">
-                  {t('console:bindings.posture.reason')}
-                </th>
-                <th className="px-3 py-2 font-medium">
-                  {t('console:bindings.posture.proposer')}
-                </th>
-                <th className="px-3 py-2 font-medium">
-                  {t('console:bindings.posture.status')}
-                </th>
-                <th className="px-3 py-2" />
+                <th>{t('console:bindings.posture.target')}</th>
+                <th>{t('console:bindings.posture.profile')}</th>
+                <th>{t('console:bindings.posture.reason')}</th>
+                <th>{t('console:bindings.posture.proposer')}</th>
+                <th>{t('console:bindings.posture.status')}</th>
+                <th />
               </tr>
             </thead>
             <tbody>
               {items.map((request) => (
-                <tr
-                  key={request.id}
-                  className="border-t border-border align-top"
-                >
-                  <td className="px-3 py-2">
+                <tr key={request.id} className="align-top">
+                  <td>
                     <div className="flex flex-col gap-1">
-                      <code className="font-mono text-xs text-foreground">
+                      <code className="font-mono text-caption text-foreground">
                         {request.source_type}:{request.source_ref}
                       </code>
-                      <span className="text-xs text-muted-foreground">
+                      <span className="text-caption text-muted-foreground">
                         {request.op}
                       </span>
                       {request.target_id ? (
@@ -1802,7 +1788,7 @@ function PostureQueue({
                       ) : null}
                     </div>
                   </td>
-                  <td className="px-3 py-2">
+                  <td>
                     <PostureChange
                       current={postureByKey.get(
                         `${request.source_type}:${request.source_ref}`,
@@ -1812,13 +1798,13 @@ function PostureQueue({
                       incomplete={posturesIncomplete}
                     />
                   </td>
-                  <td className="max-w-xs px-3 py-2 text-muted-foreground">
+                  <td className="max-w-xs text-muted-foreground">
                     {request.reason || '—'}
                   </td>
-                  <td className="px-3 py-2 font-mono text-xs text-foreground">
+                  <td className="font-mono text-caption text-foreground">
                     {request.proposer || '—'}
                   </td>
-                  <td className="px-3 py-2">
+                  <td>
                     <Badge
                       variant={
                         request.status === 'pending'
@@ -1836,7 +1822,7 @@ function PostureQueue({
                       )}
                     </Badge>
                   </td>
-                  <td className="px-3 py-2 text-right">
+                  <td className="text-right">
                     {canReview && request.status === 'pending' && request.id ? (
                       <RequireAssurance minAal={AAL.HARDWARE} action="console">
                         <div className="flex justify-end gap-1">
@@ -1873,7 +1859,7 @@ function PostureQueue({
                 </tr>
               ))}
             </tbody>
-          </table>
+          </StaticTable>
         </div>
       )}
     </section>
@@ -1885,7 +1871,7 @@ function QueuedNotice({ request }: { request: PostureRequestDTO }) {
   return (
     <div
       role="status"
-      className="rounded-lg border border-warning-line bg-warning-soft p-3 text-sm text-warning"
+      className="rounded-lg border border-warning-line bg-warning-soft p-3 text-body text-warning"
     >
       <div className="font-medium">{t('bindings.queuedTitle')}</div>
       <div>

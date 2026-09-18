@@ -130,13 +130,13 @@ export function ModelDocuments({
       {/* Block 1 — LIVE generated documents (never sealed, never audited). */}
       <div className="flex flex-col gap-3">
         <div>
-          <h3 className="flex items-center gap-2 text-sm font-medium text-foreground">
+          <h3 className="flex items-center gap-2 text-body font-medium text-foreground">
             {t('documents.liveTitle')}
             <Badge variant="outline" className="text-[11px]">
               {t('documents.live')}
             </Badge>
           </h3>
-          <p className="mt-0.5 text-xs text-muted-foreground">
+          <p className="mt-0.5 text-caption text-muted-foreground">
             {t('documents.liveSubtitle')}
           </p>
         </div>
@@ -200,11 +200,11 @@ export function ModelDocuments({
       <div className="flex flex-col gap-3">
         <div className="flex items-start justify-between gap-2">
           <div>
-            <h3 className="flex items-center gap-2 text-sm font-medium text-foreground">
+            <h3 className="flex items-center gap-2 text-body font-medium text-foreground">
               <Stamp className="size-4 text-muted-foreground" />
               {t('documents.sealsTitle')}
             </h3>
-            <p className="mt-0.5 text-xs text-muted-foreground">
+            <p className="mt-0.5 text-caption text-muted-foreground">
               {t('documents.aibom.sealHint')}
             </p>
           </div>
@@ -324,7 +324,7 @@ function DocRow({
   const { t } = useTranslation('model-ops')
   return (
     <div className="flex items-center justify-between gap-2 rounded-md border border-border px-3 py-2">
-      <span className="flex items-center gap-2 text-sm">
+      <span className="flex items-center gap-2 text-body">
         {icon}
         {label}
       </span>
@@ -491,7 +491,7 @@ function ModelCardPreviewDialog({
         {query.isLoading ? (
           <Skeleton className="h-64 w-full" />
         ) : query.error ? (
-          <p className="text-sm text-muted-foreground">
+          <p className="text-body text-muted-foreground">
             {t('documents.loadError')}
           </p>
         ) : query.data ? (
@@ -524,11 +524,11 @@ function ModelCardView({ card }: { card: ModelCardDoc }) {
       </KvList>
 
       <div>
-        <h4 className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        <h4 className="mb-1 text-caption font-medium uppercase tracking-wide text-muted-foreground">
           {t('documents.card.versions')}
         </h4>
         {card.model_details.versions.length === 0 ? (
-          <p className="text-xs text-muted-foreground">
+          <p className="text-caption text-muted-foreground">
             {t('documents.card.noVersions')}
           </p>
         ) : (
@@ -538,7 +538,7 @@ function ModelCardView({ card }: { card: ModelCardDoc }) {
                 key={v.version}
                 className="flex items-center justify-between gap-2 px-3 py-1.5"
               >
-                <span className="font-mono text-xs">{v.version}</span>
+                <span className="font-mono text-caption">{v.version}</span>
                 <span className="flex items-center gap-1">
                   {v.admission_recorded ? (
                     v.signature_verified ? (
@@ -563,13 +563,13 @@ function ModelCardView({ card }: { card: ModelCardDoc }) {
       </div>
 
       <div>
-        <h4 className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        <h4 className="mb-1 text-caption font-medium uppercase tracking-wide text-muted-foreground">
           {t('documents.card.trainingData')}
         </h4>
         {training && training.length > 0 ? (
           <ul className="flex flex-col gap-1">
             {training.map((d) => (
-              <li key={d.name} className="flex items-center gap-2 text-xs">
+              <li key={d.name} className="flex items-center gap-2 text-caption">
                 <span className="font-medium">{d.name}</span>
                 {d.classification && (
                   <Badge variant="outline" className="text-[11px]">
@@ -580,7 +580,7 @@ function ModelCardView({ card }: { card: ModelCardDoc }) {
             ))}
           </ul>
         ) : (
-          <p className="text-xs text-muted-foreground">
+          <p className="text-caption text-muted-foreground">
             {t('documents.card.notRecorded')}
           </p>
         )}
@@ -622,7 +622,7 @@ function JsonPreview({
   if (isLoading) return <Skeleton className="h-64 w-full" />
   if (error)
     return (
-      <p className="text-sm text-muted-foreground">
+      <p className="text-body text-muted-foreground">
         {t('documents.loadError')}
       </p>
     )

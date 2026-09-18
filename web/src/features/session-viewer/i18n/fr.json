@@ -27,6 +27,7 @@
   "timeline": {
     "loadMore": "Charger plus",
     "empty": "Aucun événement enregistré",
+    "emptyHint": "Chaque événement capté par l’enregistrement apparaît ici dans l’ordre. Cet enregistrement n’en a capté aucun.",
     "activityUnavailable": "L’activité de l’agent est indisponible car le résolveur de timeline n’est pas câblé ou n’a pas répondu. Les preuves de gouvernance restent disponibles.",
     "tool": "Appel d'outil",
     "mcp": "Invocation MCP",
@@ -120,7 +121,9 @@
     "subtitle": "Événements sémantiques corrélés issus du registre de preuves.",
     "seq": "seq {{seq}}",
     "empty": "Aucun événement corrélé du registre",
+    "emptyHint": "Les événements du journal d’audit corrélés à cet enregistrement apparaissent ici. Aucun n’est corrélé.",
     "truncated": "La vue du registre est tronquée ; d'autres événements corrélés existent au-delà de cette fenêtre bornée."
   },
-  "notFound": "Session d'enregistrement introuvable"
+  "notFound": "Session d'enregistrement introuvable",
+  "notFoundHint": "La conservation a peut-être supprimé l’enregistrement, ou le lien est erroné. Ouvrez la liste des enregistrements pour le retrouver."
 }

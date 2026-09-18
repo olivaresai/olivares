@@ -10,7 +10,7 @@
 import { useInfiniteQuery } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { Disc3 } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { DataTable, type TableColumn } from '@/components/data/data-table'
 import { Badge } from '@/components/ui/badge'
@@ -178,8 +178,14 @@ export function RecordingsView() {
   const [searchDraft, setSearchDraft] = useState(
     filters[initialSearchField] ?? '',
   )
-
-  useEffect(() => {
+  const [boundGrant, setBoundGrant] = useState(filters.grant)
+  const [boundSubject, setBoundSubject] = useState(filters.subject_contains)
+  if (
+    filters.grant !== boundGrant ||
+    filters.subject_contains !== boundSubject
+  ) {
+    setBoundGrant(filters.grant)
+    setBoundSubject(filters.subject_contains)
     if (filters.grant) {
       setSearchField('grant')
       setSearchDraft(filters.grant)
@@ -189,7 +195,7 @@ export function RecordingsView() {
     } else {
       setSearchDraft('')
     }
-  }, [filters.grant, filters.subject_contains])
+  }
 
   const patchFilters = useCallback(
     (patch: UrlState) => {
@@ -269,11 +275,11 @@ export function RecordingsView() {
           const s = row.original
           return (
             <div className="min-w-0">
-              <div className="truncate font-mono text-xs font-medium text-foreground">
+              <div className="truncate font-mono text-caption font-medium text-foreground">
                 {s.subject}
               </div>
               {s.subject_user && (
-                <div className="truncate font-mono text-xs text-muted-foreground">
+                <div className="truncate font-mono text-caption text-muted-foreground">
                   {s.subject_user}
                 </div>
               )}
@@ -313,7 +319,7 @@ export function RecordingsView() {
         accessorKey: 'frames_written',
         header: t('cols.frames'),
         cell: ({ getValue }) => (
-          <span className="font-mono text-xs tabular-nums text-muted-foreground">
+          <span className="font-mono text-caption tabular-nums text-muted-foreground">
             {formatInt(getValue<number>(), lang)}
           </span>
         ),
@@ -352,7 +358,7 @@ export function RecordingsView() {
         cell: ({ getValue }) => {
           const v = getValue<string | undefined>()
           return v ? (
-            <span className="text-xs text-muted-foreground">{v}</span>
+            <span className="text-caption text-muted-foreground">{v}</span>
           ) : (
             <span className="text-muted-foreground">—</span>
           )
@@ -395,7 +401,7 @@ export function RecordingsView() {
             onValueChange={(value) => setSearchField(value as SearchField)}
           >
             <SelectTrigger
-              className="h-7 w-auto min-w-[9rem] text-xs"
+              className="h-7 w-auto min-w-[9rem] text-caption"
               aria-label={t('search.field')}
             >
               <SelectValue />
@@ -408,7 +414,7 @@ export function RecordingsView() {
             </SelectContent>
           </Select>
           <Input
-            className="h-7 w-52 text-xs"
+            className="h-7 w-52 text-caption"
             value={searchDraft}
             onChange={(event) => setSearchDraft(event.currentTarget.value)}
             aria-label={t('search.input')}
@@ -442,7 +448,7 @@ export function RecordingsView() {
           }
         >
           <SelectTrigger
-            className="h-7 w-auto min-w-[9rem] text-xs"
+            className="h-7 w-auto min-w-[9rem] text-caption"
             aria-label={t('filterByStatus')}
           >
             <SelectValue />
@@ -464,7 +470,7 @@ export function RecordingsView() {
           }
         >
           <SelectTrigger
-            className="h-7 w-auto min-w-[10rem] text-xs"
+            className="h-7 w-auto min-w-[10rem] text-caption"
             aria-label={t('filterBySealReason')}
           >
             <SelectValue />
@@ -480,7 +486,7 @@ export function RecordingsView() {
         </Select>
 
         <div className="flex items-center gap-1">
-          <span className="text-xs text-muted-foreground">
+          <span className="text-caption text-muted-foreground">
             {t('filterOpenedAfter')}
           </span>
           <input
@@ -490,12 +496,12 @@ export function RecordingsView() {
               patchFilters({ opened_after: rfc3339FromDay(e.target.value) })
             }
             aria-label={t('filterOpenedAfter')}
-            className="h-7 rounded-md border border-input bg-background px-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+            className="h-7 rounded-md border border-input bg-background px-2 text-caption text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
           />
         </div>
 
         <div className="flex items-center gap-1">
-          <span className="text-xs text-muted-foreground">
+          <span className="text-caption text-muted-foreground">
             {t('filterOpenedBefore')}
           </span>
           <input
@@ -505,7 +511,7 @@ export function RecordingsView() {
               patchFilters({ opened_before: rfc3339FromDay(e.target.value) })
             }
             aria-label={t('filterOpenedBefore')}
-            className="h-7 rounded-md border border-input bg-background px-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+            className="h-7 rounded-md border border-input bg-background px-2 text-caption text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
           />
         </div>
       </div>
@@ -542,8 +548,10 @@ function EmptyHint() {
   const { t } = useTranslation('recordings')
   return (
     <div className="px-6 py-12 text-center">
-      <p className="text-sm font-medium text-foreground">{t('empty.title')}</p>
-      <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">
+      <p className="text-body font-medium text-foreground">
+        {t('empty.title')}
+      </p>
+      <p className="mx-auto mt-1 max-w-sm text-body text-muted-foreground">
         {t('empty.description')}
       </p>
     </div>

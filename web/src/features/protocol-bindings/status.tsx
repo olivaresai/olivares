@@ -59,14 +59,14 @@ export function UnknownNotice({
   return (
     <div
       role="status"
-      className="rounded-md border border-warning-line bg-warning-soft p-3 text-sm text-warning"
+      className="rounded-md border border-warning-line bg-warning-soft p-3 text-body text-warning"
     >
       <div className="flex items-start gap-2">
         <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
         <div className="space-y-1">
           <p className="font-medium">{t('outcome.unknownTitle')}</p>
-          <p className="text-xs">{children ?? t('outcome.unknownBody')}</p>
-          {code ? <p className="font-mono text-xs">{code}</p> : null}
+          <p className="text-caption">{children ?? t('outcome.unknownBody')}</p>
+          {code ? <p className="font-mono text-caption">{code}</p> : null}
         </div>
       </div>
     </div>
@@ -84,11 +84,11 @@ export function BrokenNotice({
   return (
     <div
       role="alert"
-      className="rounded-md border border-danger-line bg-danger-soft p-3 text-sm text-danger"
+      className="rounded-md border border-danger-line bg-danger-soft p-3 text-body text-danger"
     >
       <p className="font-medium">{t('outcome.brokenTitle')}</p>
-      <p className="mt-1 text-xs">{children ?? t('outcome.brokenBody')}</p>
-      {code ? <p className="mt-1 font-mono text-xs">{code}</p> : null}
+      <p className="mt-1 text-caption">{children ?? t('outcome.brokenBody')}</p>
+      {code ? <p className="mt-1 font-mono text-caption">{code}</p> : null}
     </div>
   )
 }

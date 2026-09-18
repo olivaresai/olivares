@@ -814,7 +814,7 @@ func TestAdmissionKeepsItsDecidedRefusalsAcrossTheNewSignature(t *testing.T) {
 					Dimension: "global", Period: "total", LimitMicroUSD: 10 * oneUSD, Action: "block",
 				})
 			}
-			// D02/R6 RE-AIMED THE INJECTION, AND ONLY THE INJECTION. The staging is
+			// AN INDEPENDENT REVIEW RE-AIMED THE INJECTION, AND ONLY THE INJECTION. The staging is
 			// call-indexed, and the hold reader now issues TWO reservation reads per
 			// target even when the first is already unestablished: the legacy branch
 			// and the disjoint v1 branch. It reads both because a CONTRADICTION in

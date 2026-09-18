@@ -24,7 +24,7 @@ import (
 	sdkmodel "github.com/olivaresai/olivares/sdk/model"
 )
 
-// inferenceevidence_test.go is the REGRESSION half of D01-C2B's two extractions. Its job is
+// inferenceevidence_test.go is the REGRESSION half of the governed Chat path's two extractions. Its job is
 // not to prove the new Chat path works — that is modelsguardedtext_test.go — but to prove
 // that pulling the anchoring mechanism and the inspection invocation out from under the
 // Messages proxy changed NOTHING about what Messages writes and publishes.

@@ -416,12 +416,12 @@ export function RunCreateDialog({
             </Field>
           )}
           {(!canReadProfiles || profilesQuery.isError) && (
-            <p className="text-xs text-warning">
+            <p className="text-caption text-warning">
               {t('create.profilesNotRead')}
             </p>
           )}
           {selectedProfile && (
-            <p className="font-mono text-xs text-muted-foreground">
+            <p className="font-mono text-caption text-muted-foreground">
               {selectedProfile.profile_ref} · {selectedProfile.environment_ref}
             </p>
           )}
@@ -463,7 +463,7 @@ export function RunCreateDialog({
               that declares something the launch cannot keep REFUSES the launch — so it
               is shown here rather than as a surprise 422 after pressing Launch. */}
           {previewData && !previewData.applied && (
-            <div className="flex items-start gap-2 rounded-md border border-danger-line bg-danger-soft px-2.5 py-2 text-xs text-danger">
+            <div className="flex items-start gap-2 rounded-md border border-danger-line bg-danger-soft px-2.5 py-2 text-caption text-danger">
               <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
               <div className="min-w-0">
                 <p>{t('create.templateUnenforceable')}</p>
@@ -478,7 +478,7 @@ export function RunCreateDialog({
             </div>
           )}
           {previewData?.applied && previewData.conflicts.length > 0 && (
-            <div className="flex items-start gap-2 rounded-md border border-warning-line bg-warning-soft px-2.5 py-2 text-xs text-warning">
+            <div className="flex items-start gap-2 rounded-md border border-warning-line bg-warning-soft px-2.5 py-2 text-caption text-warning">
               <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
               <div className="min-w-0">
                 <p>
@@ -512,7 +512,7 @@ export function RunCreateDialog({
           </Field>
 
           {profileRef !== NONE && !previewReady && (
-            <p className="text-xs text-muted-foreground">
+            <p className="text-caption text-muted-foreground">
               {t('readiness.waitingPreview')}
             </p>
           )}
@@ -526,39 +526,39 @@ export function RunCreateDialog({
             />
           )}
           {requestPermission === 'uncertain' && currentReadiness && (
-            <p className="text-xs text-muted-foreground">
+            <p className="text-caption text-muted-foreground">
               {t('readiness.requestHintUnknown')}
             </p>
           )}
           {requestPermission === 'permit' && currentReadiness && (
-            <p className="text-xs text-muted-foreground">
+            <p className="text-caption text-muted-foreground">
               {t('readiness.requestHintReady')}
             </p>
           )}
           {requestPermission === 'block' && currentReadiness && (
-            <p className="text-xs text-warning">
+            <p className="text-caption text-warning">
               {t('readiness.requestBlocked')}
             </p>
           )}
           {!canRunWrite && (
-            <p className="text-xs text-muted-foreground">
+            <p className="text-caption text-muted-foreground">
               {t('readiness.noWrite')}
             </p>
           )}
 
           {profileEnvConflict && (
-            <div className="flex items-start gap-2 rounded-md border border-danger-line bg-danger-soft px-2.5 py-2 text-xs text-danger">
+            <div className="flex items-start gap-2 rounded-md border border-danger-line bg-danger-soft px-2.5 py-2 text-caption text-danger">
               <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
               <span>{t('create.profileEnvConflict')}</span>
             </div>
           )}
 
-          <p className="text-xs text-muted-foreground">
+          <p className="text-caption text-muted-foreground">
             {t('create.isolationNativeOnly')}
           </p>
 
           {(isCriticalMode || isClassifiedRw) && (
-            <div className="flex items-start gap-2 rounded-md border border-warning-line bg-warning-soft px-2.5 py-2 text-xs text-warning">
+            <div className="flex items-start gap-2 rounded-md border border-warning-line bg-warning-soft px-2.5 py-2 text-caption text-warning">
               <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
               <span>
                 {isCriticalMode
@@ -570,7 +570,7 @@ export function RunCreateDialog({
 
           {create.isError && (
             <div
-              className="flex items-start gap-2 rounded-md border border-danger-line bg-danger-soft px-2.5 py-2 text-xs text-danger"
+              className="flex items-start gap-2 rounded-md border border-danger-line bg-danger-soft px-2.5 py-2 text-caption text-danger"
               role="alert"
             >
               <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />

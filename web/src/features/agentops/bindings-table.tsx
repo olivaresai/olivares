@@ -299,7 +299,7 @@ export function BindingsTable({
         accessorKey: 'source_revision',
         header: t('profiles.bindings.cols.revision'),
         cell: ({ getValue }) => (
-          <span className="font-mono text-xs tabular-nums text-foreground">
+          <span className="font-mono text-caption tabular-nums text-foreground">
             {getValue<number>()}
           </span>
         ),
@@ -334,7 +334,7 @@ export function BindingsTable({
         accessorKey: 'bound_at',
         header: t('profiles.bindings.cols.bound'),
         cell: ({ getValue }) => (
-          <span className="text-xs text-muted-foreground">
+          <span className="text-caption text-muted-foreground">
             {formatDateTime(getValue<string>(), i18n.language)}
           </span>
         ),
@@ -373,7 +373,7 @@ export function BindingsTable({
 
   if (!canRead) {
     return (
-      <p className="rounded-md border border-border bg-muted px-2.5 py-2 text-xs text-muted-foreground">
+      <p className="rounded-md border border-border bg-muted px-2.5 py-2 text-caption text-muted-foreground">
         {t('profiles.bindings.noRead')}
       </p>
     )
@@ -385,7 +385,7 @@ export function BindingsTable({
     <div className="flex flex-col gap-3">
       <div className="flex items-start justify-between gap-3">
         {describe ? (
-          <p className="text-sm text-muted-foreground">
+          <p className="text-body text-muted-foreground">
             {t('profiles.bindings.subtitle')}
           </p>
         ) : (
@@ -532,7 +532,7 @@ function BindingDetailDialog({
           <DialogTitle>{t('profiles.bindings.details.title')}</DialogTitle>
           <DialogDescription className="flex flex-col gap-1">
             <span
-              className="font-mono text-xs text-foreground"
+              className="font-mono text-caption text-foreground"
               title={bindingRef ?? undefined}
             >
               {bindingRef}
@@ -543,7 +543,7 @@ function BindingDetailDialog({
 
         {status === 'loading' && (
           <p
-            className="flex items-center gap-2 text-xs text-muted-foreground"
+            className="flex items-center gap-2 text-caption text-muted-foreground"
             role="status"
           >
             <Spinner className="size-3.5" />
@@ -552,7 +552,7 @@ function BindingDetailDialog({
         )}
         {status === 'forbidden' && (
           <div
-            className="flex items-start gap-2 rounded-md border border-warning-line bg-warning-soft px-2.5 py-2 text-xs text-warning"
+            className="flex items-start gap-2 rounded-md border border-warning-line bg-warning-soft px-2.5 py-2 text-caption text-warning"
             role="status"
           >
             <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
@@ -561,7 +561,7 @@ function BindingDetailDialog({
         )}
         {status === 'error' && (
           <div
-            className="flex items-start gap-2 rounded-md border border-danger-line bg-danger-soft px-2.5 py-2 text-xs text-danger"
+            className="flex items-start gap-2 rounded-md border border-danger-line bg-danger-soft px-2.5 py-2 text-caption text-danger"
             role="alert"
           >
             <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
@@ -574,7 +574,7 @@ function BindingDetailDialog({
         )}
         {answer?.kind === 'missing' && (
           <div
-            className="flex items-start gap-2 rounded-md border border-border bg-muted px-2.5 py-2 text-xs text-muted-foreground"
+            className="flex items-start gap-2 rounded-md border border-border bg-muted px-2.5 py-2 text-caption text-muted-foreground"
             role="status"
           >
             <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
@@ -583,7 +583,7 @@ function BindingDetailDialog({
         )}
         {open &&
           ((status === 'ready' && !read.current) || status === 'idle') && (
-            <p className="text-xs text-warning" role="status">
+            <p className="text-caption text-warning" role="status">
               {t('profiles.bindings.details.ended')}
             </p>
           )}
@@ -632,7 +632,7 @@ function BindingDetailDialog({
           </KvList>
         )}
         {answer && (
-          <p className="text-xs text-muted-foreground">
+          <p className="text-caption text-muted-foreground">
             {t('profiles.bindings.details.readAt', {
               at: formatDateTime(answer.readAt, i18n.language),
             })}
@@ -664,7 +664,10 @@ function BindingDetailDialog({
 
 function Mono({ value }: { value: string }) {
   return (
-    <span className="font-mono text-xs text-muted-foreground" title={value}>
+    <span
+      className="font-mono text-caption text-muted-foreground"
+      title={value}
+    >
       {value}
     </span>
   )
@@ -852,7 +855,7 @@ function BindingCreateDialog({
         </DialogHeader>
         <form onSubmit={onSubmit} className="flex flex-col gap-3">
           {profile ? (
-            <p className="font-mono text-xs text-muted-foreground">
+            <p className="font-mono text-caption text-muted-foreground">
               {profile.display_name || profile.profile_ref} ·{' '}
               {profile.profile_ref} · {profile.driver}
             </p>
@@ -891,13 +894,13 @@ function BindingCreateDialog({
                 </Select>
               </Field>
               {profilesQuery.isLoading && (
-                <p className="text-xs text-muted-foreground">
+                <p className="text-caption text-muted-foreground">
                   {t('profiles.roster.loadingProfiles')}
                 </p>
               )}
               {profilesQuery.hasNextPage && (
                 <div className="flex items-center gap-2">
-                  <p className="text-xs text-warning">
+                  <p className="text-caption text-warning">
                     {t('profiles.roster.loadedProfiles', {
                       n: profiles.length,
                     })}
@@ -917,7 +920,7 @@ function BindingCreateDialog({
                 </div>
               )}
               {(!canReadProfiles || profilesQuery.isError) && (
-                <p className="text-xs text-warning">
+                <p className="text-caption text-warning">
                   {t('profiles.bindings.create.profilesNotRead')}
                 </p>
               )}
@@ -925,18 +928,18 @@ function BindingCreateDialog({
           )}
 
           {rosterStatus === 'loading' && (
-            <p className="text-xs text-muted-foreground" role="status">
+            <p className="text-caption text-muted-foreground" role="status">
               {t('profiles.roster.loading')}
             </p>
           )}
           {rosterStatus === 'forbidden' && (
-            <div className="flex items-start gap-2 rounded-md border border-warning-line bg-warning-soft px-2.5 py-2 text-xs text-warning">
+            <div className="flex items-start gap-2 rounded-md border border-warning-line bg-warning-soft px-2.5 py-2 text-caption text-warning">
               <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
               <span>{t('profiles.roster.forbidden')}</span>
             </div>
           )}
           {rosterStatus === 'error' && (
-            <div className="flex items-start gap-2 rounded-md border border-danger-line bg-danger-soft px-2.5 py-2 text-xs text-danger">
+            <div className="flex items-start gap-2 rounded-md border border-danger-line bg-danger-soft px-2.5 py-2 text-caption text-danger">
               <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
               <span>
                 {t('profiles.roster.error', { message: roster.state.message })}
@@ -945,7 +948,9 @@ function BindingCreateDialog({
           )}
           {((rosterStatus === 'ready' && !roster.current) ||
             (rosterStatus === 'idle' && open)) && (
-            <p className="text-xs text-warning">{t('profiles.roster.ended')}</p>
+            <p className="text-caption text-warning">
+              {t('profiles.roster.ended')}
+            </p>
           )}
           {roster.current && (
             <Field
@@ -980,12 +985,12 @@ function BindingCreateDialog({
             </Field>
           )}
           {roster.current && sources.length === 0 && (
-            <p className="text-xs text-muted-foreground">
+            <p className="text-caption text-muted-foreground">
               {t('profiles.bindings.create.rosterEmpty')}
             </p>
           )}
           {selectedSource && appliedHere(selectedSource) && (
-            <p className="font-mono text-xs text-muted-foreground">
+            <p className="font-mono text-caption text-muted-foreground">
               {selectedSource.id} ·{' '}
               {t('profiles.bindings.create.revision', {
                 n: selectedSource.applied_revision,

@@ -55,7 +55,7 @@ function EntryCard({ entry }: { entry: DirectoryEntry }) {
           <Icon aria-hidden="true" />
         </div>
         <div className="min-w-0">
-          <h3 className="text-sm font-medium leading-tight">
+          <h3 className="text-heading">
             <Link
               to={entry.path as never}
               className="rounded-sm text-foreground outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
@@ -64,7 +64,7 @@ function EntryCard({ entry }: { entry: DirectoryEntry }) {
             </Link>
           </h3>
           {entry.description ? (
-            <p className="mt-1 text-sm text-muted-foreground">
+            <p className="mt-1 text-body text-muted-foreground">
               {entry.description}
             </p>
           ) : null}
@@ -149,7 +149,9 @@ export function AreaDirectoryView({ areaId }: { areaId: AreaId }) {
             >
               <h2
                 id={headingId}
-                className="text-xs font-medium tracking-wider text-muted-foreground uppercase"
+                // The same step the rail gives this same list of sections, so the
+                // directory and the sidebar read as one structure rather than two.
+                className="text-overline text-muted-foreground uppercase"
               >
                 {sectionLabel(t, areaId, s.sectionId)}
               </h2>

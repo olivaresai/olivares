@@ -453,7 +453,7 @@ func seedUnrelatedActiveChannelGrants(
 //
 // It also pins that the query is the WRITER's, term for term. The administrative
 // mutation asks the same question about the same rows; two spellings of one
-// predicate is how one lane's measured plan stops describing the other's.
+// predicate is how one caller's measured plan stops describing the other's.
 func TestChannelAdministrationAuthorityGrantQueryIsSubjectBoundAndIndexed(t *testing.T) {
 	t.Parallel()
 	channelID := model.NewID()

@@ -16,6 +16,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Pause, Play, ScrollText, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
+import { PageHeader } from '@/components/ui/page-header'
 import { currentLanguage } from '@/lib/i18n'
 import { CaveatNotice } from '@/features/_intel'
 import { LiveDot } from '@/features/shared'
@@ -62,8 +63,8 @@ export function LogsView() {
 
   // --- entries accumulator (ref to avoid per-line re-renders) -----------------
   const entriesRef = useRef<LogEntry[]>([])
-  // A render tick: bumped to trigger a batched visual refresh.
-  const [renderTick, setRenderTick] = useState(0)
+  // Snapshot published on the rAF tick so render never reads the ref.
+  const [entries, setEntries] = useState<LogEntry[]>([])
   const rafRef = useRef(0)
 
   /** Schedule a batched render via requestAnimationFrame. */
@@ -71,7 +72,7 @@ export function LogsView() {
     if (rafRef.current) return // already scheduled
     rafRef.current = requestAnimationFrame(() => {
       rafRef.current = 0
-      setRenderTick((t) => t + 1)
+      setEntries(entriesRef.current.slice())
     })
   }, [])
 
@@ -146,7 +147,7 @@ export function LogsView() {
 
   // --- filtered view (applies client-side level + search filters) -------------
   const displayed = useMemo(() => {
-    let items = entriesRef.current
+    let items = entries
     // Level filter (client-side, when multiple levels selected or for consistency).
     if (filters.levels.size > 0) {
       items = items.filter((e) => filters.levels.has(e.level))
@@ -164,9 +165,7 @@ export function LogsView() {
       items = items.filter((e) => e.message.toLowerCase().includes(needle))
     }
     return items
-    // renderTick is in the deps to pick up new entries from the rAF batch.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters, renderTick])
+  }, [filters, entries])
 
   // --- scroll tracking --------------------------------------------------------
   const scrollContainerRef = useRef<HTMLDivElement>(null)
@@ -190,54 +189,58 @@ export function LogsView() {
 
   return (
     <div className="flex flex-col gap-3 p-4">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <ScrollText className="size-5 text-muted-foreground" />
-          <h1 className="text-lg font-semibold text-foreground">
-            {t('title')}
-          </h1>
-          <LiveDot status={streamStatus} />
-        </div>
-        <div className="flex items-center gap-1.5">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              setPaused((p) => !p)
-              if (paused) setUserScrolledUp(false)
-            }}
-            aria-label={
-              paused ? t('controls.resumeAria') : t('controls.pauseAria')
-            }
-          >
-            {paused ? (
-              <Play className="size-3.5" />
-            ) : (
-              <Pause className="size-3.5" />
-            )}
-            <span className="ml-1 text-xs">
-              {paused ? t('controls.resume') : t('controls.pause')}
+      {/* ⛔ THE ONE VIEW OF 61 THAT STILL WROTE ITS OWN `<h1>`, and it no longer does.
+          Its heading was `text-title` (18px) while every other screen's was `text-display`
+          (24px) — so the console had two page-heading sizes, which is the exact drift
+          `PageHeader` was extracted to stop. The stream's own controls are the header's
+          SECONDARY slot: pausing a tail and clearing a buffer are not the verb the
+          operator came for, and this screen creates nothing (`NO_VERB`). */}
+      <PageHeader
+        icon={ScrollText}
+        title={t('title')}
+        description={t('subtitle')}
+        actions={
+          <div className="flex items-center gap-1.5">
+            <LiveDot status={streamStatus} />
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setPaused((p) => !p)
+                if (paused) setUserScrolledUp(false)
+              }}
+              aria-label={
+                paused ? t('controls.resumeAria') : t('controls.pauseAria')
+              }
+            >
+              {paused ? (
+                <Play className="size-3.5" />
+              ) : (
+                <Pause className="size-3.5" />
+              )}
+              <span className="ml-1 text-caption">
+                {paused ? t('controls.resume') : t('controls.pause')}
+              </span>
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={clearEntries}
+              aria-label={t('controls.clearAria')}
+            >
+              <Trash2 className="size-3.5" />
+              <span className="ml-1 text-caption">{t('controls.clear')}</span>
+            </Button>
+            <span className="text-caption tabular-nums text-muted-foreground">
+              {t('controls.entryCount', {
+                value: displayed.length.toLocaleString(currentLanguage()),
+              })}
             </span>
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={clearEntries}
-            aria-label={t('controls.clearAria')}
-          >
-            <Trash2 className="size-3.5" />
-            <span className="ml-1 text-xs">{t('controls.clear')}</span>
-          </Button>
-          <span className="text-xs tabular-nums text-muted-foreground">
-            {t('controls.entryCount', {
-              value: displayed.length.toLocaleString(currentLanguage()),
-            })}
-          </span>
-        </div>
-      </div>
+          </div>
+        }
+      />
 
       {/* Filter bar */}
       <LogFiltersBar filters={filters} onChange={setFilters} />

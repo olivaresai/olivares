@@ -93,6 +93,7 @@
   "timeline": {
     "title": "Chronologie reconstituée",
     "empty": "Aucun événement dans la plage.",
+    "emptyHint": "Les événements de preuve apparaissent ici à mesure que le moteur les enregistre. Élargissez la plage pour atteindre des événements plus anciens.",
     "seq": "séq"
   },
   "consumption": {

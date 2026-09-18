@@ -216,7 +216,7 @@ export function AuditView() {
         accessorKey: 'seq',
         header: t('cols.seq'),
         cell: ({ getValue }) => (
-          <span className="font-mono text-xs tabular-nums text-muted-foreground">
+          <span className="font-mono text-caption tabular-nums text-muted-foreground">
             {formatInt(getValue<number>(), lang)}
           </span>
         ),
@@ -241,7 +241,7 @@ export function AuditView() {
         accessorKey: 'action',
         header: t('cols.action'),
         cell: ({ getValue }) => (
-          <span className="font-mono text-xs font-medium text-foreground">
+          <span className="font-mono text-caption font-medium text-foreground">
             {getValue<string>()}
           </span>
         ),
@@ -254,7 +254,7 @@ export function AuditView() {
           const e = row.original
           return (
             <div className="flex min-w-0 items-center gap-1.5">
-              <span className="truncate font-mono text-xs text-foreground">
+              <span className="truncate font-mono text-caption text-foreground">
                 {e.actor || t('detail.actorSystem')}
               </span>
               <Badge variant="neutral">
@@ -277,7 +277,7 @@ export function AuditView() {
           if (!e.target_id && !e.target_kind)
             return <span className="text-muted-foreground">—</span>
           return (
-            <span className="truncate font-mono text-xs text-muted-foreground">
+            <span className="truncate font-mono text-caption text-muted-foreground">
               {e.target_kind ? `${e.target_kind}:` : ''}
               {e.target_id || '—'}
             </span>
@@ -322,7 +322,7 @@ export function AuditView() {
               }
             >
               <SelectTrigger
-                className="h-8 w-auto min-w-[11rem] text-xs"
+                className="h-8 w-auto min-w-[11rem] text-caption"
                 aria-label={t('scope.label')}
               >
                 <SelectValue />
@@ -358,7 +358,7 @@ export function AuditView() {
       {scannedThrough !== undefined && (
         <div
           role="status"
-          className="rounded-md border border-info-line bg-info-soft px-3 py-2 text-sm text-info"
+          className="rounded-md border border-info-line bg-info-soft px-3 py-2 text-body text-info"
         >
           {t('scan.incomplete', {
             seq: formatInt(scannedThrough, lang),
@@ -462,14 +462,14 @@ function AuditFilterBar({
       aria-label={t('filters.title')}
       className="rounded-lg border border-border bg-surface p-3"
     >
-      <div className="mb-3 flex items-center gap-2 text-sm font-medium text-foreground">
+      <div className="mb-3 flex items-center gap-2 text-body font-medium text-foreground">
         <Filter className="size-4 text-muted-foreground" aria-hidden />
         {t('filters.title')}
       </div>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {textFields.map((field) => (
           <label key={field.key} className="flex min-w-0 flex-col gap-1">
-            <span className="text-xs font-medium text-muted-foreground">
+            <span className="text-caption font-medium text-muted-foreground">
               {field.label}
             </span>
             <Input
@@ -484,7 +484,7 @@ function AuditFilterBar({
         ))}
         {(['since', 'until'] as const).map((key) => (
           <label key={key} className="flex min-w-0 flex-col gap-1">
-            <span className="text-xs font-medium text-muted-foreground">
+            <span className="text-caption font-medium text-muted-foreground">
               {t(`filters.${key}`)}
             </span>
             <Input
@@ -629,7 +629,7 @@ function EvidenceControls({ filters }: { filters: AuditFilters }) {
 
         <div className="flex flex-wrap items-end gap-2">
           <label className="flex flex-col gap-1">
-            <span className="text-xs text-muted-foreground">
+            <span className="text-caption text-muted-foreground">
               {t('export.fromSeq')}
             </span>
             <Input
@@ -643,7 +643,7 @@ function EvidenceControls({ filters }: { filters: AuditFilters }) {
             />
           </label>
           <label className="flex flex-col gap-1">
-            <span className="text-xs text-muted-foreground">
+            <span className="text-caption text-muted-foreground">
               {t('export.toSeq')}
             </span>
             <Input
@@ -661,7 +661,7 @@ function EvidenceControls({ filters }: { filters: AuditFilters }) {
             onValueChange={(f) => setFormat(f as ExportFormat)}
           >
             <SelectTrigger
-              className="h-8 w-auto min-w-[7rem] text-xs"
+              className="h-8 w-auto min-w-[7rem] text-caption"
               aria-label={t('export.formatLabel')}
             >
               <SelectValue />
@@ -685,7 +685,7 @@ function EvidenceControls({ filters }: { filters: AuditFilters }) {
           </Button>
         </div>
       </div>
-      <label className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+      <label className="mt-3 flex items-center gap-2 text-caption text-muted-foreground">
         <Checkbox
           checked={useCurrent}
           onCheckedChange={(checked) => setUseCurrentOverride(checked === true)}
@@ -707,7 +707,7 @@ function EvidenceControls({ filters }: { filters: AuditFilters }) {
             // A request-level failure is "verdict unavailable", NOT a confirmed
             // break — render it muted (never the danger-red reserved for a real
             // tamper finding). The Verify button stays the retry affordance.
-            <p className="text-xs text-muted-foreground">
+            <p className="text-caption text-muted-foreground">
               {t('verify.failed')}
             </p>
           ) : v ? (
@@ -740,7 +740,7 @@ function EvidenceControls({ filters }: { filters: AuditFilters }) {
                 )}
               </div>
               {!v.chain.ok && (
-                <p className="text-xs font-medium text-danger">
+                <p className="text-caption font-medium text-danger">
                   {t('verify.chainBreak', {
                     seq: formatInt(v.chain.break_at, lang),
                   })}
@@ -753,7 +753,7 @@ function EvidenceControls({ filters }: { filters: AuditFilters }) {
                   "Checkpoint signature failed at seq 0" on a healthy first-boot
                   install is how an operator learns to ignore this red. */}
               {v.checkpoints.status === 'failed' && (
-                <p className="text-xs font-medium text-danger">
+                <p className="text-caption font-medium text-danger">
                   {t('verify.checkpointBreak', {
                     seq: formatInt(v.checkpoints.first_bad_seq, lang),
                   })}
@@ -771,12 +771,12 @@ function EvidenceControls({ filters }: { filters: AuditFilters }) {
           {pubkeyQuery.isFetching && !pubkeyQuery.data ? (
             <Skeleton className="h-9 w-full" />
           ) : pubkeyQuery.error ? (
-            <p className="text-xs font-medium text-danger">
+            <p className="text-caption font-medium text-danger">
               {t('pubkey.failed')}
             </p>
           ) : pubkeyQuery.data ? (
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs text-muted-foreground">
+              <span className="text-caption text-muted-foreground">
                 {t('pubkey.label')}
               </span>
               <Badge variant="outline" className="font-mono uppercase">
@@ -790,7 +790,7 @@ function EvidenceControls({ filters }: { filters: AuditFilters }) {
               />
             </div>
           ) : null}
-          <p className="mt-1.5 text-xs text-muted-foreground">
+          <p className="mt-1.5 text-caption text-muted-foreground">
             {t('pubkey.hint')}
           </p>
         </div>
@@ -803,8 +803,10 @@ function EmptyHint() {
   const { t } = useTranslation('audit')
   return (
     <div className="px-6 py-12 text-center">
-      <p className="text-sm font-medium text-foreground">{t('empty.title')}</p>
-      <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">
+      <p className="text-body font-medium text-foreground">
+        {t('empty.title')}
+      </p>
+      <p className="mx-auto mt-1 max-w-sm text-body text-muted-foreground">
         {t('empty.description')}
       </p>
     </div>

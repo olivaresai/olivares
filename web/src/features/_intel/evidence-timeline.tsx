@@ -43,7 +43,12 @@ export function EvidenceTimeline({
 }) {
   const { t } = useTranslation('intel')
   if (events.length === 0) {
-    return <EmptyState title={t('timeline.empty')} />
+    return (
+      <EmptyState
+        description={t('timeline.emptyHint')}
+        title={t('timeline.empty')}
+      />
+    )
   }
   return (
     <ol className={cn('flex flex-col', className)}>
@@ -62,10 +67,10 @@ export function EvidenceTimeline({
             {/* content */}
             <div className="min-w-0 flex-1 pb-1">
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                <span className="text-sm font-medium text-foreground">
+                <span className="text-body font-medium text-foreground">
                   {humanize(ev.action)}
                 </span>
-                <span className="font-mono text-xs text-muted-foreground">
+                <span className="font-mono text-caption text-muted-foreground">
                   {t('timeline.seq')} {ev.seq}
                 </span>
                 {ev.signed ? (
@@ -81,7 +86,7 @@ export function EvidenceTimeline({
                   </Badge>
                 ) : null}
               </div>
-              <p className="mt-0.5 text-xs text-muted-foreground">
+              <p className="mt-0.5 text-caption text-muted-foreground">
                 <span className="font-mono">{ev.actor}</span>
                 {ev.actor_kind ? ` · ${ev.actor_kind}` : ''}
                 {ev.target_id ? (
@@ -98,7 +103,7 @@ export function EvidenceTimeline({
                 <time
                   dateTime={ev.occurred_at}
                   title={formatDateTime(ev.occurred_at)}
-                  className="text-xs text-muted-foreground"
+                  className="text-caption text-muted-foreground"
                 >
                   {formatRelativeTime(ev.occurred_at)}
                 </time>

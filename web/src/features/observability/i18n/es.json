@@ -91,6 +91,7 @@
     "loadingMore": "Cargando…",
     "waterfallTitle": "Cascada de tramos",
     "selectPrompt": "Selecciona una traza para ver su cascada de tramos.",
+    "selectPromptHint": "Elige una traza de la lista para ver todos sus tramos, con sus tiempos y sus errores.",
     "exportBtn": "Exportar OTLP",
     "exportTitle": "Descargar JSON compatible con OTLP para Jaeger / Tempo / Datadog",
     "legend": "Leyenda de actores",

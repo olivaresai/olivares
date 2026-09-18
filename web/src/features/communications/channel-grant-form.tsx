@@ -99,10 +99,12 @@ export function ChannelGrantForm({
       data-slot="grant-form"
       aria-label={t('grants.form.title')}
     >
-      <p className="text-sm font-medium">{t('grants.form.title')}</p>
-      <p className="text-xs text-muted-foreground">{t('grants.form.hint')}</p>
+      <p className="text-body font-medium">{t('grants.form.title')}</p>
+      <p className="text-caption text-muted-foreground">
+        {t('grants.form.hint')}
+      </p>
       {errors.length > 0 ? (
-        <ul role="alert" className="list-disc pl-5 text-sm text-danger">
+        <ul role="alert" className="list-disc pl-5 text-body text-danger">
           {errors.map((e) => (
             <li key={e}>{e}</li>
           ))}

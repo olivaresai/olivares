@@ -84,7 +84,8 @@
     "title": "Tendencia diaria",
     "description": "Productividad a lo largo del tiempo para la lente seleccionada.",
     "lensLabel": "Lente",
-    "empty": "No hay actividad en este intervalo."
+    "empty": "No hay actividad en este intervalo.",
+    "emptyHint": "La tendencia de adopción se calcula con las sesiones del intervalo seleccionado. Amplía el intervalo para cubrir días con actividad."
   },
   "teams": {
     "title": "Por equipo",
@@ -100,6 +101,7 @@
     "title": "Por desarrollador",
     "description": "ROI por desarrollador del feed de administración de Analytics.",
     "empty": "No hay actividad por desarrollador en este intervalo.",
+    "emptyHint": "La actividad por desarrollador aparece aquí cuando se ejecutan sesiones en este intervalo. Amplía el intervalo para cubrir más días.",
     "locked": "Vista por desarrollador restringida",
     "lockedHint": "Ver la productividad de cada desarrollador requiere el permiso adoption:developer:read (denegado por defecto).",
     "columns": {

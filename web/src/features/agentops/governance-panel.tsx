@@ -106,10 +106,12 @@ export function GovernancePanel({
   return (
     <div className="flex flex-col gap-2">
       <div>
-        <h3 className="text-sm font-semibold text-foreground">
+        <h3 className="text-body font-semibold text-foreground">
           {t('gov.title')}
         </h3>
-        <p className="text-xs text-muted-foreground">{t('gov.subtitle')}</p>
+        <p className="text-caption text-muted-foreground">
+          {t('gov.subtitle')}
+        </p>
       </div>
 
       <div className="divide-y divide-border rounded-md border border-border">
@@ -156,7 +158,7 @@ export function GovernancePanel({
               <button
                 type="button"
                 onClick={onViewEvidence}
-                className="inline-flex items-center gap-1 text-xs font-medium text-accent-text hover:underline"
+                className="inline-flex items-center gap-1 text-caption font-medium text-accent-text hover:underline"
               >
                 <ScrollText className="size-3" />
                 {t('gov.viewEvidence')}
@@ -241,10 +243,10 @@ function GovRow({
         aria-hidden
       />
       <div className="min-w-0 flex-1">
-        <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        <div className="text-caption font-semibold uppercase tracking-wide text-muted-foreground">
           {label}
         </div>
-        <div className={cn('text-sm', TONE_TEXT[tone])}>{children}</div>
+        <div className={cn('text-body', TONE_TEXT[tone])}>{children}</div>
       </div>
       {action && <div className="shrink-0 self-center">{action}</div>}
     </div>
@@ -256,7 +258,7 @@ function DeepLink({ to, label }: { to: string; label: string }) {
   return (
     <Link
       to={to as never}
-      className="inline-flex items-center gap-1 text-xs font-medium text-accent-text hover:underline"
+      className="inline-flex items-center gap-1 text-caption font-medium text-accent-text hover:underline"
     >
       <ExternalLink className="size-3" />
       {label}

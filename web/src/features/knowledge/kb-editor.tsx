@@ -227,9 +227,11 @@ function KbForm({ kb, onClose }: { kb: KbDTO | null; onClose: () => void }) {
               {t('common.addRef')}
             </Button>
           </div>
-          <p className="text-xs text-muted-foreground">{t('common.aclHint')}</p>
+          <p className="text-caption text-muted-foreground">
+            {t('common.aclHint')}
+          </p>
           {acl.length === 0 ? (
-            <p className="rounded-md border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
+            <p className="rounded-md border border-dashed border-border px-3 py-2 text-caption text-muted-foreground">
               {t('common.aclNone')}
             </p>
           ) : (
@@ -265,7 +267,7 @@ function KbForm({ kb, onClose }: { kb: KbDTO | null; onClose: () => void }) {
                       </Button>
                     </div>
                     {warn && (
-                      <p role="alert" className="text-xs text-danger">
+                      <p role="alert" className="text-caption text-danger">
                         {t('common.credentialWarning')}
                       </p>
                     )}
@@ -277,7 +279,7 @@ function KbForm({ kb, onClose }: { kb: KbDTO | null; onClose: () => void }) {
         </div>
       </div>
 
-      <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+      <p className="flex items-center gap-1.5 text-caption text-muted-foreground">
         <ScrollText className="size-3.5 shrink-0" aria-hidden />
         {t('common:privileged.auditedNotice')}
       </p>

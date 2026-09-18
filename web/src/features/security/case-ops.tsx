@@ -297,13 +297,17 @@ export function CaseLinksPanel({
       {q.isLoading && <Skeleton className="h-20 w-full" />}
       {q.data &&
         (q.data.items.length === 0 ? (
-          <EmptyState icon={<Link2 />} title={t('cases.noLinks')} />
+          <EmptyState
+            description={t('cases.noLinksHint')}
+            icon={<Link2 />}
+            title={t('cases.noLinks')}
+          />
         ) : (
           <ul className="flex flex-col gap-1">
             {q.data.items.map((l, i) => (
               <li
                 key={l.id ?? `${l.link_kind}:${l.link_ref}:${i}`}
-                className="flex items-center gap-2 text-xs"
+                className="flex items-center gap-2 text-caption"
               >
                 <Badge variant="neutral">
                   {t(`cases.linkKind.${l.link_kind}`, {

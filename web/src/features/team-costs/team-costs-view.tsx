@@ -43,6 +43,7 @@ import type {
   TeamSummaryDTO,
 } from './types'
 import './i18n'
+import { StaticTable } from '@/components/data/static-table'
 
 const PERIODS: SummaryPeriod[] = ['7d', '30d', '90d']
 /** The default lives here, not in the URL: a pristine view stays shareable. */
@@ -197,7 +198,7 @@ export function TeamCostsView() {
             type="button"
             onClick={() => selectPeriod(p)}
             className={cn(
-              'h-7 rounded px-2.5 text-xs transition-colors',
+              'h-7 rounded px-2.5 text-caption transition-colors',
               p === period
                 ? 'bg-accent text-accent-foreground'
                 : 'bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground',
@@ -259,23 +260,23 @@ interface TeamTableProps {
 function TeamTable({ teams, expanded, onToggle, lang, t }: TeamTableProps) {
   return (
     <div className="overflow-auto rounded-md border border-border">
-      <table
-        className="w-full min-w-[640px] border-collapse text-sm"
+      <StaticTable
+        className="min-w-[640px]"
         role="grid"
         aria-label={t('title')}
         aria-rowcount={teams.length + 1}
       >
         <thead className="sticky top-0 z-10 bg-surface">
-          <tr className="border-b border-border" role="row">
+          <tr role="row">
             <th
               scope="col"
-              className="w-8 px-3 py-2"
+              className="w-8"
               role="columnheader"
               aria-colindex={1}
             />
             <th
               scope="col"
-              className="px-3 py-2 text-left font-medium text-foreground"
+              className="text-foreground"
               role="columnheader"
               aria-colindex={2}
             >
@@ -283,7 +284,7 @@ function TeamTable({ teams, expanded, onToggle, lang, t }: TeamTableProps) {
             </th>
             <th
               scope="col"
-              className="px-3 py-2 text-right font-medium text-foreground"
+              className="text-right text-foreground"
               role="columnheader"
               aria-colindex={3}
             >
@@ -291,7 +292,7 @@ function TeamTable({ teams, expanded, onToggle, lang, t }: TeamTableProps) {
             </th>
             <th
               scope="col"
-              className="px-3 py-2 text-right font-medium text-foreground"
+              className="text-right text-foreground"
               role="columnheader"
               aria-colindex={4}
             >
@@ -299,7 +300,7 @@ function TeamTable({ teams, expanded, onToggle, lang, t }: TeamTableProps) {
             </th>
             <th
               scope="col"
-              className="px-3 py-2 text-right font-medium text-foreground"
+              className="text-right text-foreground"
               role="columnheader"
               aria-colindex={5}
             >
@@ -307,7 +308,7 @@ function TeamTable({ teams, expanded, onToggle, lang, t }: TeamTableProps) {
             </th>
             <th
               scope="col"
-              className="px-3 py-2 text-right font-medium text-foreground"
+              className="text-right text-foreground"
               role="columnheader"
               aria-colindex={6}
             >
@@ -315,7 +316,7 @@ function TeamTable({ teams, expanded, onToggle, lang, t }: TeamTableProps) {
             </th>
             <th
               scope="col"
-              className="w-24 px-3 py-2 text-left font-medium text-foreground"
+              className="w-24 text-foreground"
               role="columnheader"
               aria-colindex={7}
             >
@@ -336,7 +337,7 @@ function TeamTable({ teams, expanded, onToggle, lang, t }: TeamTableProps) {
             />
           ))}
         </tbody>
-      </table>
+      </StaticTable>
     </div>
   )
 }
@@ -384,16 +385,12 @@ function TeamRow({
         tabIndex={0}
       >
         {/* Expand/collapse chevron */}
-        <td
-          className="px-3 py-2 text-muted-foreground"
-          role="gridcell"
-          aria-colindex={1}
-        >
+        <td className="text-muted-foreground" role="gridcell" aria-colindex={1}>
           <ChevronIcon className="size-3.5" aria-hidden="true" />
         </td>
         {/* Team name */}
         <td
-          className="px-3 py-2 font-medium text-foreground"
+          className="font-medium text-foreground"
           role="gridcell"
           aria-colindex={2}
         >
@@ -401,7 +398,7 @@ function TeamRow({
         </td>
         {/* Sessions */}
         <td
-          className="px-3 py-2 text-right font-mono text-xs tabular-nums text-muted-foreground"
+          className="text-right font-mono text-caption tabular-nums text-muted-foreground"
           role="gridcell"
           aria-colindex={3}
         >
@@ -409,7 +406,7 @@ function TeamRow({
         </td>
         {/* Input tokens */}
         <td
-          className="px-3 py-2 text-right font-mono text-xs tabular-nums text-muted-foreground"
+          className="text-right font-mono text-caption tabular-nums text-muted-foreground"
           role="gridcell"
           aria-colindex={4}
         >
@@ -417,7 +414,7 @@ function TeamRow({
         </td>
         {/* Output tokens */}
         <td
-          className="px-3 py-2 text-right font-mono text-xs tabular-nums text-muted-foreground"
+          className="text-right font-mono text-caption tabular-nums text-muted-foreground"
           role="gridcell"
           aria-colindex={5}
         >
@@ -425,14 +422,14 @@ function TeamRow({
         </td>
         {/* Cost */}
         <td
-          className="px-3 py-2 text-right font-mono text-xs tabular-nums text-foreground"
+          className="text-right font-mono text-caption tabular-nums text-foreground"
           role="gridcell"
           aria-colindex={6}
         >
           {formatMicroUsd(team.cost_micro_usd, { compact: true, locale: lang })}
         </td>
         {/* Sparkline */}
-        <td className="px-3 py-2" role="gridcell" aria-colindex={7}>
+        <td role="gridcell" aria-colindex={7}>
           {team.trend.length > 0 && (
             <CostSparkline data={team.trend} height={32} />
           )}
@@ -467,43 +464,34 @@ interface ProjectBreakdownProps {
 function ProjectBreakdown({ projects, lang, t }: ProjectBreakdownProps) {
   return (
     <div className="min-w-[220px] flex-1">
-      <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+      <p className="mb-2 text-caption font-semibold uppercase tracking-wider text-muted-foreground">
         {t('breakdown.projects')}
       </p>
       {projects.length === 0 ? (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-caption text-muted-foreground">
           {t('breakdown.noProjects')}
         </p>
       ) : (
-        <table className="w-full text-xs" aria-label={t('breakdown.projects')}>
+        <StaticTable
+          className="text-caption"
+          aria-label={t('breakdown.projects')}
+        >
           <thead>
-            <tr className="border-b border-border">
-              <th
-                scope="col"
-                className="pb-1 text-left font-medium text-muted-foreground"
-              >
+            <tr>
+              <th scope="col" className="pb-1">
                 {t('breakdown.project')}
               </th>
-              <th
-                scope="col"
-                className="pb-1 text-right font-medium text-muted-foreground"
-              >
+              <th scope="col" className="pb-1 text-right">
                 {t('breakdown.sessions')}
               </th>
-              <th
-                scope="col"
-                className="pb-1 text-right font-medium text-muted-foreground"
-              >
+              <th scope="col" className="pb-1 text-right">
                 {t('breakdown.cost')}
               </th>
             </tr>
           </thead>
           <tbody>
             {projects.map((p) => (
-              <tr
-                key={p.project}
-                className="border-b border-border/50 last:border-0"
-              >
+              <tr key={p.project} className="border-border/50">
                 <td className="py-1 font-medium text-foreground">
                   {p.project}
                 </td>
@@ -519,7 +507,7 @@ function ProjectBreakdown({ projects, lang, t }: ProjectBreakdownProps) {
               </tr>
             ))}
           </tbody>
-        </table>
+        </StaticTable>
       )}
     </div>
   )
@@ -538,37 +526,31 @@ interface ModelBreakdownProps {
 function ModelBreakdown({ models, lang, t }: ModelBreakdownProps) {
   return (
     <div className="min-w-[220px] flex-1">
-      <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+      <p className="mb-2 text-caption font-semibold uppercase tracking-wider text-muted-foreground">
         {t('breakdown.models')}
       </p>
       {models.length === 0 ? (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-caption text-muted-foreground">
           {t('breakdown.noModels')}
         </p>
       ) : (
-        <table className="w-full text-xs" aria-label={t('breakdown.models')}>
+        <StaticTable
+          className="text-caption"
+          aria-label={t('breakdown.models')}
+        >
           <thead>
-            <tr className="border-b border-border">
-              <th
-                scope="col"
-                className="pb-1 text-left font-medium text-muted-foreground"
-              >
+            <tr>
+              <th scope="col" className="pb-1">
                 {t('breakdown.model')}
               </th>
-              <th
-                scope="col"
-                className="pb-1 text-right font-medium text-muted-foreground"
-              >
+              <th scope="col" className="pb-1 text-right">
                 {t('breakdown.cost')}
               </th>
             </tr>
           </thead>
           <tbody>
             {models.map((m) => (
-              <tr
-                key={m.model}
-                className="border-b border-border/50 last:border-0"
-              >
+              <tr key={m.model} className="border-border/50">
                 <td className="py-1 font-mono text-foreground">{m.model}</td>
                 <td className="py-1 text-right tabular-nums text-foreground">
                   {formatMicroUsd(m.cost_micro_usd, {
@@ -579,7 +561,7 @@ function ModelBreakdown({ models, lang, t }: ModelBreakdownProps) {
               </tr>
             ))}
           </tbody>
-        </table>
+        </StaticTable>
       )}
     </div>
   )

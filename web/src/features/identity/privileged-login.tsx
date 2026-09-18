@@ -61,6 +61,7 @@ import {
 import { useStepUpOwner } from '@/stores/step-up'
 import { useResumeGuard } from '@/lib/hooks/use-resume-guard'
 import { isPivKnownUnconfigured, pivStatusQueryKey } from './piv-configuration'
+import { StaticTable } from '@/components/data/static-table'
 
 export function PrivilegedLoginTab() {
   return (
@@ -103,7 +104,7 @@ function AssuranceStatusSection() {
           )}
         </KvRow>
       </KvList>
-      <p className="mt-2 text-xs text-muted-foreground">
+      <p className="mt-2 text-caption text-muted-foreground">
         {t('login.targetStandardsNote')}
       </p>
       {aal < AAL.HARDWARE ? (
@@ -218,33 +219,27 @@ function PasskeysManagementSection() {
         />
       ) : (
         <div className="mt-3 overflow-hidden rounded-lg border border-border">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
+          <StaticTable>
+            <thead>
               <tr>
-                <th className="px-3 py-2 font-medium">
-                  {t('login.passkeys.colName')}
-                </th>
-                <th className="px-3 py-2 font-medium">
-                  {t('login.passkeys.colCreated')}
-                </th>
-                <th className="px-3 py-2 font-medium">
-                  {t('login.passkeys.colBackup')}
-                </th>
-                <th className="px-3 py-2" />
+                <th>{t('login.passkeys.colName')}</th>
+                <th>{t('login.passkeys.colCreated')}</th>
+                <th>{t('login.passkeys.colBackup')}</th>
+                <th />
               </tr>
             </thead>
             <tbody>
               {credentials.map((cred) => (
-                <tr key={cred.id} className="border-t border-border align-top">
-                  <td className="px-3 py-2">
+                <tr key={cred.id} className="align-top">
+                  <td>
                     <span className="font-medium text-foreground">
                       {cred.name}
                     </span>
                   </td>
-                  <td className="px-3 py-2">
+                  <td>
                     <RelTimeLabel ts={cred.created_at} />
                   </td>
-                  <td className="px-3 py-2">
+                  <td>
                     <Badge
                       variant={cred.backup_eligible ? 'accent' : 'outline'}
                     >
@@ -253,7 +248,7 @@ function PasskeysManagementSection() {
                         : t('login.passkeys.backupBound')}
                     </Badge>
                   </td>
-                  <td className="px-3 py-2 text-right">
+                  <td className="text-right">
                     <div className="flex justify-end gap-1">
                       <Button
                         variant="ghost"
@@ -276,7 +271,7 @@ function PasskeysManagementSection() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </StaticTable>
         </div>
       )}
 
@@ -394,14 +389,14 @@ function RegisterPasskeyForm({
       <DialogHeader>
         <DialogTitle>{t('login.passkeys.registerTitle')}</DialogTitle>
       </DialogHeader>
-      <p className="text-sm text-muted-foreground">
+      <p className="text-body text-muted-foreground">
         {t('login.passkeys.registerHint')}
       </p>
       {failure === 'pending' && (
         <ContractPendingNotice what={t('assurance.seamWhat')} />
       )}
       {(failure === 'unknown' || failure === 'sessionExpired') && (
-        <p role="alert" className="text-sm text-warning">
+        <p role="alert" className="text-body text-warning">
           {t(
             failure === 'unknown'
               ? 'assurance.registrationUnknownElsewhere'
@@ -411,7 +406,7 @@ function RegisterPasskeyForm({
       )}
       <div className="flex flex-col gap-4">
         <label className="flex flex-col gap-1.5">
-          <span className="text-sm font-medium">
+          <span className="text-body font-medium">
             {t('login.passkeys.nameLabel')}
           </span>
           <Input
@@ -481,7 +476,7 @@ function RenamePasskeyForm({
       </DialogHeader>
       <div className="flex flex-col gap-4">
         <label className="flex flex-col gap-1.5">
-          <span className="text-sm font-medium">
+          <span className="text-body font-medium">
             {t('login.passkeys.nameLabel')}
           </span>
           <Input
@@ -525,8 +520,7 @@ function RenamePasskeyForm({
  * docs-site/src/content/docs/reference/configuration.md — this constant is not a
  * new destination invented for the copy.
  */
-const PIV_SETUP_GUIDE =
-  'https://docs.olivares.ai/reference/configuration/'
+const PIV_SETUP_GUIDE = 'https://docs.olivares.ai/reference/configuration/'
 
 function PivStatusSection() {
   const { t } = useTranslation(['identity', 'common'])
@@ -558,18 +552,18 @@ function PivStatusSection() {
         title={t('login.pivTitle')}
         description={t('login.pivDescription')}
       >
-        <p role="status" className="text-sm text-muted-foreground">
+        <p role="status" className="text-body text-muted-foreground">
           {t('login.pivNotConfigured')}
         </p>
-        <p className="mt-2 text-sm">
+        <p className="mt-2 text-body">
           <AuthorityLink
             href={PIV_SETUP_GUIDE}
-            className="font-sans text-sm break-normal"
+            className="font-sans text-body break-normal"
           >
             {t('login.pivSetupGuide')}
           </AuthorityLink>
         </p>
-        <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
+        <p className="mt-2 flex items-center gap-1.5 text-caption text-muted-foreground">
           <IdCard className="size-3.5 shrink-0" aria-hidden />
           {t('login.pivNote')}
         </p>
@@ -621,7 +615,7 @@ function PivStatusSection() {
           </KvList>
         )}
       </DeclaredSection>
-      <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
+      <p className="mt-2 flex items-center gap-1.5 text-caption text-muted-foreground">
         <IdCard className="size-3.5 shrink-0" aria-hidden />
         {t('login.pivNote')}
       </p>

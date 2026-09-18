@@ -180,7 +180,7 @@ function inventoryColumns(
         const title = models.join(', ')
         return (
           <span
-            className="block max-w-[20rem] truncate font-mono text-xs text-muted-foreground"
+            className="block max-w-[20rem] truncate font-mono text-caption text-muted-foreground"
             title={title}
           >
             {title}

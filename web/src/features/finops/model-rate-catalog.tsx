@@ -76,7 +76,7 @@ export function ModelRateCatalog({
         />
       ) : (
         <div className="flex flex-col gap-3">
-          <div className="flex flex-col gap-1 text-xs text-muted-foreground">
+          <div className="flex flex-col gap-1 text-caption text-muted-foreground">
             <p>{t('rates.unitNote', { unit: t('rates.unit') })}</p>
             <p>{t('rates.validityNote')}</p>
           </div>
@@ -99,7 +99,7 @@ function RateEntry({ entry }: { entry: ModelRateEntry }) {
       className="rounded-md border border-border px-3 py-2.5"
       data-slot="model-rate-entry"
     >
-      <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.25fr)_minmax(0,1.25fr)]">
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-body sm:grid-cols-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.25fr)_minmax(0,1.25fr)]">
         <Fact label={t('rates.model')} className="col-span-2 xl:col-span-1">
           <span className="font-mono font-medium text-foreground [overflow-wrap:anywhere]">
             {entry.model}
@@ -142,7 +142,7 @@ function Fact({
 }) {
   return (
     <div className={cn('min-w-0', className)}>
-      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dt className="text-caption text-muted-foreground">{label}</dt>
       <dd className="mt-0.5 break-words text-foreground">{children}</dd>
     </div>
   )
@@ -231,7 +231,7 @@ function InvalidCatalog({
         retry={onReload}
       />
       {reloading ? (
-        <p role="status" className="text-xs text-muted-foreground">
+        <p role="status" className="text-caption text-muted-foreground">
           {t('common:states.loading')}
         </p>
       ) : null}

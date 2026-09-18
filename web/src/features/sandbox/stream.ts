@@ -74,6 +74,7 @@ export function useRunStream({
   enabled = true,
 }: UseRunStreamOptions): UseRunStreamResult {
   const token = useSessionStore((s) => s.token)
+  const credentialGeneration = useSessionStore((s) => s.credentialGeneration)
   const tenant = useTenantStore((s) => s.activeTenant)
   const [outputs, setOutputs] = useState<Output[]>([])
   const [summary, setSummary] = useState<RunStreamSummary | null>(null)
@@ -89,17 +90,23 @@ export function useRunStream({
 
   const active = enabled && !!runId && !!token
 
-  // A DIFFERENT run (or a tenant/token switch) is a different transcript, so it starts
+  // A DIFFERENT run (or a tenant/credential switch) is a different transcript, so it starts
   // empty. A reconnect is not: it keeps what it has, which is what makes the resume
   // loss-free. Hence this reset keys on identity only, never on `epoch`.
-  useEffect(() => {
-    seenRef.current = new Set()
+  // The bearer is not stored; credentialGeneration is the non-secret counter.
+  const identity = `${runId ?? ''}:${tenant ?? ''}:${credentialGeneration}`
+  const [boundIdentity, setBoundIdentity] = useState(identity)
+  if (boundIdentity !== identity) {
+    setBoundIdentity(identity)
     setOutputs([])
     setSummary(null)
     setComplete(false)
     setInterrupted(false)
     setUnreadable(0)
-  }, [runId, tenant, token])
+  }
+  useEffect(() => {
+    seenRef.current = new Set()
+  }, [identity])
 
   useEffect(() => {
     if (!active || !runId) return

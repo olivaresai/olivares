@@ -52,6 +52,7 @@ import {
   type WorkspaceDTO,
 } from './api'
 import { FormError } from './roles-shared'
+import { StaticTable } from '@/components/data/static-table'
 
 const WORKSPACE_NONE = '__none__'
 const GROUP_STATUSES = ['active', 'inactive'] as const
@@ -111,10 +112,10 @@ export function ScopesTab() {
       <section className="flex flex-col gap-3">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 className="text-base font-semibold text-foreground">
+            <h2 className="text-heading text-foreground">
               {t('console:workspaces.title')}
             </h2>
-            <p className="max-w-2xl text-sm text-muted-foreground">
+            <p className="max-w-2xl text-body text-muted-foreground">
               {t('console:workspaces.caption')}
             </p>
           </div>
@@ -141,28 +142,33 @@ export function ScopesTab() {
         ) : workspaces.isError ? (
           <ErrorState retry={() => void workspaces.refetch()} />
         ) : wsItems.length === 0 ? (
-          <EmptyState title={t('console:workspaces.none')} />
+          <EmptyState
+            action={
+              isOwner ? (
+                <Button onClick={() => setWsCreateOpen(true)}>
+                  <Plus />
+                  {t('console:workspaces.create')}
+                </Button>
+              ) : undefined
+            }
+            description={t('console:workspaces.noneHint')}
+            title={t('console:workspaces.none')}
+          />
         ) : (
           <div className="overflow-hidden rounded-lg border border-border">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
+            <StaticTable>
+              <thead>
                 <tr>
-                  <th className="px-3 py-2 font-medium">
-                    {t('console:workspaces.name')}
-                  </th>
-                  <th className="px-3 py-2 font-medium">
-                    {t('console:workspaces.slug')}
-                  </th>
-                  <th className="px-3 py-2 font-medium">
-                    {t('console:workspaces.status')}
-                  </th>
-                  <th className="px-3 py-2" />
+                  <th>{t('console:workspaces.name')}</th>
+                  <th>{t('console:workspaces.slug')}</th>
+                  <th>{t('console:workspaces.status')}</th>
+                  <th />
                 </tr>
               </thead>
               <tbody>
                 {wsItems.map((ws) => (
-                  <tr key={ws.id} className="border-t border-border">
-                    <td className="px-3 py-2 font-medium text-foreground">
+                  <tr key={ws.id}>
+                    <td className="font-medium text-foreground">
                       {ws.name}
                       {ws.is_default && (
                         <Badge variant="neutral" className="ml-2">
@@ -170,17 +176,17 @@ export function ScopesTab() {
                         </Badge>
                       )}
                     </td>
-                    <td className="px-3 py-2 font-mono text-xs text-muted-foreground">
+                    <td className="font-mono text-caption text-muted-foreground">
                       {ws.slug}
                     </td>
-                    <td className="px-3 py-2">
+                    <td>
                       <Badge
                         variant={ws.status === 'active' ? 'success' : 'neutral'}
                       >
                         {ws.status}
                       </Badge>
                     </td>
-                    <td className="px-3 py-2 text-right">
+                    <td className="text-right">
                       {isOwner && (
                         <div className="flex flex-wrap justify-end gap-1">
                           <Button
@@ -207,7 +213,7 @@ export function ScopesTab() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </StaticTable>
           </div>
         )}
       </section>
@@ -215,10 +221,10 @@ export function ScopesTab() {
       <section className="flex flex-col gap-3">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 className="text-base font-semibold text-foreground">
+            <h2 className="text-heading text-foreground">
               {t('console:groups.title')}
             </h2>
-            <p className="max-w-2xl text-sm text-muted-foreground">
+            <p className="max-w-2xl text-body text-muted-foreground">
               {t('console:groups.caption')}
             </p>
           </div>
@@ -241,47 +247,47 @@ export function ScopesTab() {
         ) : groups.isError ? (
           <ErrorState retry={() => void groups.refetch()} />
         ) : groupItems.length === 0 ? (
-          <EmptyState title={t('console:groups.none')} icon={<Boxes />} />
+          <EmptyState
+            action={
+              canManageGroups ? (
+                <Button onClick={() => setGroupCreateOpen(true)}>
+                  <Plus />
+                  {t('console:groups.create')}
+                </Button>
+              ) : undefined
+            }
+            description={t('console:groups.noneHint')}
+            title={t('console:groups.none')}
+            icon={<Boxes />}
+          />
         ) : (
           <div className="overflow-hidden rounded-lg border border-border">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
+            <StaticTable>
+              <thead>
                 <tr>
-                  <th className="px-3 py-2 font-medium">
-                    {t('console:groups.name')}
-                  </th>
-                  <th className="px-3 py-2 font-medium">
-                    {t('console:groups.slug')}
-                  </th>
-                  <th className="px-3 py-2 font-medium">
-                    {t('console:groups.workspace')}
-                  </th>
-                  <th className="px-3 py-2 font-medium">
-                    {t('console:groups.status')}
-                  </th>
-                  <th className="px-3 py-2" />
+                  <th>{t('console:groups.name')}</th>
+                  <th>{t('console:groups.slug')}</th>
+                  <th>{t('console:groups.workspace')}</th>
+                  <th>{t('console:groups.status')}</th>
+                  <th />
                 </tr>
               </thead>
               <tbody>
                 {groupItems.map((g) => (
-                  <tr key={g.id} className="border-t border-border">
-                    <td className="px-3 py-2 font-medium text-foreground">
-                      {g.name}
-                    </td>
-                    <td className="px-3 py-2 font-mono text-xs text-muted-foreground">
+                  <tr key={g.id}>
+                    <td className="font-medium text-foreground">{g.name}</td>
+                    <td className="font-mono text-caption text-muted-foreground">
                       {g.slug}
                     </td>
-                    <td className="px-3 py-2">
-                      {workspaceLabel(t, workspaceMap, g.workspace_id)}
-                    </td>
-                    <td className="px-3 py-2">
+                    <td>{workspaceLabel(t, workspaceMap, g.workspace_id)}</td>
+                    <td>
                       <Badge
                         variant={g.status === 'active' ? 'success' : 'neutral'}
                       >
                         {t(`console:groups.statuses.${g.status}`, g.status)}
                       </Badge>
                     </td>
-                    <td className="px-3 py-2 text-right">
+                    <td className="text-right">
                       <div className="flex flex-wrap justify-end gap-1">
                         <Button
                           variant="ghost"
@@ -316,7 +322,7 @@ export function ScopesTab() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </StaticTable>
           </div>
         )}
       </section>
@@ -813,16 +819,12 @@ function AgentGroupMembersDialog({
           />
         ) : (
           <div className="overflow-hidden rounded-lg border border-border">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
+            <StaticTable>
+              <thead>
                 <tr>
-                  <th className="px-3 py-2 font-medium">
-                    {t('console:groups.memberAgent')}
-                  </th>
-                  <th className="px-3 py-2 font-medium">
-                    {t('console:groups.memberId')}
-                  </th>
-                  <th className="px-3 py-2" />
+                  <th>{t('console:groups.memberAgent')}</th>
+                  <th>{t('console:groups.memberId')}</th>
+                  <th />
                 </tr>
               </thead>
               <tbody>
@@ -836,7 +838,7 @@ function AgentGroupMembersDialog({
                   />
                 ))}
               </tbody>
-            </table>
+            </StaticTable>
           </div>
         )}
       </div>
@@ -880,12 +882,12 @@ function MemberRow({
 }) {
   const { t } = useTranslation('console')
   return (
-    <tr className="border-t border-border align-top">
-      <td className="px-3 py-2">
+    <tr className="align-top">
+      <td>
         {agent ? (
           <div className="flex flex-col gap-1">
             <span className="font-medium text-foreground">{agent.name}</span>
-            <span className="font-mono text-xs text-muted-foreground">
+            <span className="font-mono text-caption text-muted-foreground">
               {agent.kind}
             </span>
           </div>
@@ -895,12 +897,12 @@ function MemberRow({
           </span>
         )}
       </td>
-      <td className="px-3 py-2">
-        <code className="break-all font-mono text-xs text-muted-foreground">
+      <td>
+        <code className="break-all font-mono text-caption text-muted-foreground">
           {member.agent_id}
         </code>
       </td>
-      <td className="px-3 py-2 text-right">
+      <td className="text-right">
         {canWrite ? (
           <Button variant="ghost" size="sm" onClick={() => onRemove(member)}>
             <Trash2 />
@@ -921,7 +923,7 @@ function workspaceLabel(
   const workspace = workspaces.get(workspaceId)
   if (!workspace) {
     return (
-      <code className="break-all font-mono text-xs text-muted-foreground">
+      <code className="break-all font-mono text-caption text-muted-foreground">
         {workspaceId}
       </code>
     )
@@ -929,7 +931,7 @@ function workspaceLabel(
   return (
     <div className="flex flex-col gap-1">
       <span className="text-foreground">{workspace.name}</span>
-      <span className="font-mono text-xs text-muted-foreground">
+      <span className="font-mono text-caption text-muted-foreground">
         {workspace.slug}
       </span>
     </div>

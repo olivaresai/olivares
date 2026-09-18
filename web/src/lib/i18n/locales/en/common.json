@@ -34,6 +34,7 @@
     "loading": "Loading…",
     "empty": "Nothing here yet",
     "noResults": "No results",
+    "noResultsHint": "No row matches the current filter. Clear it, or widen the search, to see the rows again.",
     "comingSoon": "Coming soon",
     "loaded": "Loaded",
     "yes": "Yes",
@@ -200,5 +201,60 @@
     "navigation": "Go to",
     "openPalette": "Open command palette",
     "showHelp": "Show this help"
+  },
+  "keys": {
+    "group": {
+      "general": "General",
+      "launcher": "Starting a session",
+      "surface": "The work surface",
+      "navRail": "Navigation rail"
+    },
+    "command": {
+      "palette": {
+        "open": "Open the command palette"
+      },
+      "help": {
+        "toggle": "Show these shortcuts"
+      },
+      "launcher": {
+        "focus": "Go to the launcher",
+        "start": "Start the session",
+        "startBackground": "Start it and stay here"
+      },
+      "surface": {
+        "nextPane": "Next pane",
+        "previousPane": "Previous pane"
+      },
+      "rail": {
+        "next": "Next session",
+        "previous": "Previous session",
+        "first": "First session",
+        "last": "Last session",
+        "open": "Open the session",
+        "pin": "Pin or unpin it"
+      },
+      "nav": {
+        "toggleRail": "Fold or unfold the navigation rail"
+      },
+      "navRail": {
+        "next": "Next module",
+        "previous": "Previous module",
+        "expand": "Open the area, or enter it",
+        "fold": "Fold the area, or go back to it",
+        "first": "First module",
+        "last": "Last module",
+        "pin": "Pin or unpin this module"
+      }
+    },
+    "when": {
+      "railFocused": "in the session rail",
+      "launcherFocused": "in the launcher field",
+      "workSurface": "on the sessions screen"
+    },
+    "precedence": "When two rows share keys, the last one that applies wins.",
+    "modNote": "⌘ is Control on Windows and Linux.",
+    "problems_one": "{{count}} binding could not be read and does not fire: {{commands}}",
+    "problems_other": "{{count}} bindings could not be read and do not fire: {{commands}}",
+    "navRailNote": "The rail is one tab stop. These keys work while it has focus."
   }
 }

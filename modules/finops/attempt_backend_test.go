@@ -4,7 +4,7 @@
 
 package finops
 
-// D02 first internal cut — durability and failure, on a real SQLite FILE database
+// The attempt lifecycle, first internal cut — durability and failure, on a real SQLite FILE database
 // and, when a server is configured, on a real isolated PostgreSQL. An absent
 // Postgres server SKIPS loudly: not run is not a pass.
 //
@@ -61,7 +61,7 @@ func eachAttemptBackend(t *testing.T, fn func(t *testing.T, cfg store.Config)) {
 
 // registerHistoricalFinOpsSchema declares the reservation ledger EXACTLY as it was
 // before this cut: no lifecycle linkage columns, and no attempt or lifecycle-scope
-// tables at all. A database opened with it is a genuine pre-D02 database, not a
+// tables at all. A database opened with it is a genuine pre-lifecycle database, not a
 // current one with some rows removed.
 func registerHistoricalFinOpsSchema(reg store.ExtensionRegistry) error {
 	return reg.Register(model.EntityDescriptor{
@@ -116,7 +116,7 @@ func finModuleOn(t testing.TB, st store.Store, tenant model.TenantID) (*Module, 
 
 // TestAHistoricalDatabaseIsExpandedAndReopenedRepeatedly is the migration causal.
 //
-// A pre-D02 database is created and POPULATED through the old descriptor; it is
+// A pre-lifecycle database is created and POPULATED through the old descriptor; it is
 // then opened with the current one (which adds two nullable columns and creates
 // two tables), and reopened twice more. Across all of it: the original rows keep
 // their ids, keep NULL in both linkage columns, and are still read as legacy; a

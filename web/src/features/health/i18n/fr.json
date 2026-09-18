@@ -75,6 +75,7 @@
     "pick": "Sujet",
     "pickPlaceholder": "Choisir un sujet…",
     "pickEmpty": "Aucun sujet surveillé à signaler pour l’instant.",
+    "pickEmptyHint": "Un rapport de SLA est établi à partir des sujets surveillés. Ajoutez un contrôle de santé à un sujet pour qu’il puisse être rapporté.",
     "pickPrompt": {
       "title": "Choisir un sujet",
       "description": "Choisissez un sujet surveillé pour voir sa disponibilité par rapport à la cible, reconstruite à partir du registre de fiabilité."

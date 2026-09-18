@@ -354,7 +354,7 @@ function DetailBody({
 
       {/* Metadata. */}
       <section className="flex flex-col gap-2">
-        <h3 className="text-sm font-medium text-foreground">
+        <h3 className="text-body font-medium text-foreground">
           {t('dataProducts.name')}
         </h3>
         <KvList>
@@ -364,11 +364,11 @@ function DetailBody({
             </KvRow>
           )}
           <KvRow label={t('dataProducts.owner')}>
-            <span className="font-mono text-xs">{product.owner_ref}</span>
+            <span className="font-mono text-caption">{product.owner_ref}</span>
           </KvRow>
           <KvRow label={t('dataProducts.kbBinding')}>
             {product.kb_ref ? (
-              <span className="font-mono text-xs">{product.kb_ref}</span>
+              <span className="font-mono text-caption">{product.kb_ref}</span>
             ) : (
               <span className="text-muted-foreground">
                 {t('dataProducts.kbUnbound')}
@@ -408,7 +408,7 @@ function DetailBody({
 
       {/* Health. */}
       <section className="flex flex-col gap-2">
-        <h3 className="text-sm font-medium text-foreground">
+        <h3 className="text-body font-medium text-foreground">
           {t('dataProducts.health.title')}
         </h3>
         {healthLoading ? (
@@ -453,7 +453,7 @@ function DetailBody({
                   defaultValue: health.quality.status,
                 })}
               </Badge>
-              <span className="ml-2 font-mono tabular-nums text-xs">
+              <span className="ml-2 font-mono tabular-nums text-caption">
                 {health.quality.score}
               </span>
             </KvRow>
@@ -465,15 +465,15 @@ function DetailBody({
             </KvRow>
             {health.kb && (
               <KvRow label={t('dataProducts.kbBinding')}>
-                <span className="font-mono text-xs">{health.kb.name}</span>
-                <span className="ml-2 text-xs text-muted-foreground">
+                <span className="font-mono text-caption">{health.kb.name}</span>
+                <span className="ml-2 text-caption text-muted-foreground">
                   ({health.kb.doc_count} docs, {health.kb.chunk_count} chunks)
                 </span>
               </KvRow>
             )}
           </KvList>
         ) : (
-          <p className="text-xs text-muted-foreground">
+          <p className="text-caption text-muted-foreground">
             {t('dataProducts.health.unknown')}
           </p>
         )}
@@ -483,7 +483,7 @@ function DetailBody({
 
       {/* Active contract. */}
       <section className="flex flex-col gap-2">
-        <h3 className="text-sm font-medium text-foreground">
+        <h3 className="text-body font-medium text-foreground">
           {t('dataProducts.contract.title')}
         </h3>
         {/* ⛔ 404 ES UNA RESPUESTA; cualquier otro error NO. El motor contesta 404 cuando de
@@ -516,7 +516,7 @@ function DetailBody({
             </KvRow>
             {activeContract.schema_definition && (
               <KvRow label={t('dataProducts.contract.schema')} align="start">
-                <pre className="max-h-40 overflow-auto rounded-md border border-border bg-muted p-2 font-mono text-xs">
+                <pre className="max-h-40 overflow-auto rounded-md border border-border bg-muted p-2 font-mono text-caption">
                   {JSON.stringify(activeContract.schema_definition, null, 2)}
                 </pre>
               </KvRow>
@@ -531,12 +531,12 @@ function DetailBody({
           activeContractError.status === 404 ? (
           <EmptyState
             title={t('dataProducts.contract.noContract')}
-            description=""
+            description={t('dataProducts.contract.noContractHint')}
           />
         ) : (
           <EmptyState
             title={t('dataProducts.contract.undetermined')}
-            description=""
+            description={t('dataProducts.contract.undeterminedHint')}
           />
         )}
 
@@ -552,14 +552,14 @@ function DetailBody({
         {/* Contract version history. */}
         {contracts.length > 1 && (
           <div className="mt-2 flex flex-col gap-1">
-            <p className="text-xs font-medium text-muted-foreground">
+            <p className="text-caption font-medium text-muted-foreground">
               {t('dataProducts.contract.version')} history
             </p>
             <ul className="flex flex-col gap-1">
               {contracts.map((c) => (
                 <li
                   key={c.id}
-                  className="flex items-center gap-2 text-xs text-muted-foreground"
+                  className="flex items-center gap-2 text-caption text-muted-foreground"
                 >
                   <span className="font-mono tabular-nums">v{c.version}</span>
                   <Badge
@@ -581,7 +581,7 @@ function DetailBody({
 
       {/* Events. */}
       <section className="flex flex-col gap-2">
-        <h3 className="text-sm font-medium text-foreground">
+        <h3 className="text-body font-medium text-foreground">
           {t('dataProducts.events.title')}
         </h3>
         <ListTruncationBadge
@@ -597,7 +597,7 @@ function DetailBody({
             ))}
           </div>
         ) : events.length === 0 ? (
-          <p className="text-xs text-muted-foreground">
+          <p className="text-caption text-muted-foreground">
             {t('dataProducts.events.title')} — none
           </p>
         ) : (
@@ -627,7 +627,7 @@ function DetailBody({
                     })}
                   </Badge>
                 </div>
-                <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+                <div className="mt-1 flex items-center gap-2 text-caption text-muted-foreground">
                   {ev.subject_kind && (
                     <span>
                       {ev.subject_kind}: {ev.subject_ref}

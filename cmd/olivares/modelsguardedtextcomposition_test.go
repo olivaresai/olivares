@@ -32,7 +32,7 @@ import (
 )
 
 // modelsguardedtextcomposition_test.go closes the causal R3 of the independent review
-// returned D01-C2B for: the qualification had two useful halves and no whole.
+// returned the governed Chat path for: the qualification had two useful halves and no whole.
 //
 // One group drove the CONCRETE executor to a real TLS server but constructed a
 // ScopedPrincipal in a fixture and called ExecuteChat directly, so it never crossed the

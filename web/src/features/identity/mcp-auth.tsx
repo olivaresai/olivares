@@ -68,16 +68,16 @@ export function McpAuthTab() {
               className="flex items-start gap-3 rounded-md border border-border bg-surface px-3 py-2"
             >
               <span
-                className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground"
+                className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-caption font-medium text-muted-foreground"
                 aria-hidden
               >
                 {i + 1}
               </span>
               <div>
-                <p className="text-sm font-medium text-foreground">
+                <p className="text-body font-medium text-foreground">
                   {t(`mcp.flow.${step}.title`)}
                 </p>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-caption text-muted-foreground">
                   {t(`mcp.flow.${step}.body`)}
                 </p>
               </div>
@@ -89,7 +89,9 @@ export function McpAuthTab() {
             className="mt-0.5 size-4 shrink-0 text-success"
             aria-hidden
           />
-          <p className="text-xs text-foreground">{t('mcp.noPassthrough')}</p>
+          <p className="text-caption text-foreground">
+            {t('mcp.noPassthrough')}
+          </p>
         </div>
       </SectionCard>
 

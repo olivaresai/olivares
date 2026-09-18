@@ -16,6 +16,7 @@
   "orgs": {
     "title": "组织",
     "empty": "暂无组织",
+    "emptyHint": "组织及其数据所绑定的区域会显示在这里。先创建一个组织。",
     "colOrg": "组织",
     "colRegion": "区域固定",
     "colActions": "操作",

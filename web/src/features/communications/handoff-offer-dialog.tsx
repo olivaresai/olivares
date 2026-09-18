@@ -353,7 +353,7 @@ export function HandoffOfferDialog({
           {itemMismatch ? (
             <div
               role="alert"
-              className="rounded-md border border-danger-line bg-danger-soft px-3 py-2 text-sm text-danger"
+              className="rounded-md border border-danger-line bg-danger-soft px-3 py-2 text-body text-danger"
               data-slot="handoff-offer-item-mismatch"
             >
               {t('handoff.offer.itemMismatch')}
@@ -362,7 +362,7 @@ export function HandoffOfferDialog({
           {workspaceMismatch ? (
             <div
               role="alert"
-              className="rounded-md border border-warning-line bg-warning-soft px-3 py-2 text-sm text-warning"
+              className="rounded-md border border-warning-line bg-warning-soft px-3 py-2 text-body text-warning"
               data-slot="handoff-offer-workspace-mismatch"
             >
               <p className="font-medium">
@@ -381,14 +381,14 @@ export function HandoffOfferDialog({
           {noPrecondition ? (
             <div
               role="alert"
-              className="rounded-md border border-danger-line bg-danger-soft px-3 py-2 text-sm text-danger"
+              className="rounded-md border border-danger-line bg-danger-soft px-3 py-2 text-body text-danger"
               data-slot="handoff-offer-no-precondition"
             >
               {t('handoff.offer.noPrecondition')}
             </div>
           ) : null}
           {!canOffer ? (
-            <p className="text-xs text-muted-foreground">
+            <p className="text-caption text-muted-foreground">
               {t('handoff.offer.noPermission')}
             </p>
           ) : null}
@@ -442,7 +442,7 @@ export function HandoffOfferDialog({
                   </Select>
                 </Field>
               ) : (
-                <p className="text-xs text-muted-foreground">
+                <p className="text-caption text-muted-foreground">
                   {t('handoff.offer.channelNoDirectory')}
                 </p>
               )}
@@ -524,7 +524,7 @@ export function HandoffOfferDialog({
               </Field>
               {deadlineNow.ok ? (
                 <p
-                  className="text-xs text-muted-foreground"
+                  className="text-caption text-muted-foreground"
                   data-slot="handoff-offer-deadline-review"
                 >
                   {t('handoff.offer.deadlineReview', {
@@ -538,7 +538,7 @@ export function HandoffOfferDialog({
                 <ul
                   role="alert"
                   data-testid="offer-problems"
-                  className="flex flex-col gap-1 rounded-md border border-danger-line bg-danger-soft px-3 py-2 text-sm text-danger"
+                  className="flex flex-col gap-1 rounded-md border border-danger-line bg-danger-soft px-3 py-2 text-body text-danger"
                   data-slot="handoff-offer-problems"
                 >
                   {problems.map((p) => (
@@ -552,7 +552,7 @@ export function HandoffOfferDialog({
           {stoppedAfterSend ? (
             <div
               role="status"
-              className="rounded-md border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground"
+              className="rounded-md border border-border bg-muted/30 px-3 py-2 text-body text-muted-foreground"
               data-slot="handoff-offer-stopped"
             >
               {t('handoff.tracking.stoppedAfterSend')}
@@ -561,7 +561,7 @@ export function HandoffOfferDialog({
           {targetRefused ? (
             <div
               role="alert"
-              className="rounded-md border border-warning-line bg-warning-soft px-3 py-2 text-sm text-warning"
+              className="rounded-md border border-warning-line bg-warning-soft px-3 py-2 text-body text-warning"
               data-slot="handoff-offer-target-refused"
             >
               <p className="font-medium">
@@ -579,7 +579,7 @@ export function HandoffOfferDialog({
           phase !== 'uncertain' ? (
             <div
               role="status"
-              className="rounded-md border border-warning-line bg-warning-soft px-3 py-2 text-sm text-warning"
+              className="rounded-md border border-warning-line bg-warning-soft px-3 py-2 text-body text-warning"
               data-slot="handoff-offer-prior-unresolved"
             >
               {t('handoff.uncertain.priorTransmission')}
@@ -592,10 +592,10 @@ export function HandoffOfferDialog({
               className="flex flex-col gap-2 rounded-md border border-border bg-muted p-3"
               data-slot="handoff-offer-intent"
             >
-              <p className="text-sm font-medium">
+              <p className="text-body font-medium">
                 {t('handoff.offer.confirmTitle')}
               </p>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-body text-muted-foreground">
                 {t('handoff.offer.confirmBody')}
               </p>
               <KvList>
@@ -627,7 +627,7 @@ export function HandoffOfferDialog({
           {operation.state.phase === 'lost' ? (
             <div
               role="alert"
-              className="rounded-md border border-warning-line bg-warning-soft px-3 py-2 text-sm text-warning"
+              className="rounded-md border border-warning-line bg-warning-soft px-3 py-2 text-body text-warning"
               data-slot="handoff-offer-lost"
             >
               <p className="font-medium">{t('handoff.lost.title')}</p>
@@ -654,7 +654,7 @@ export function HandoffOfferDialog({
                     : t('handoff.offer.conflictTitle')
                 }
               />
-              <p className="mt-1 text-sm text-muted-foreground">
+              <p className="mt-1 text-body text-muted-foreground">
                 {operation.priorUnresolvedAttempt
                   ? t('handoff.offer.conflictBodyLatest')
                   : t('handoff.offer.conflictBody')}
@@ -667,7 +667,7 @@ export function HandoffOfferDialog({
                 failure={failure}
                 title={t('handoff.uncertain.title')}
               />
-              <p className="mt-1 text-sm text-muted-foreground">
+              <p className="mt-1 text-body text-muted-foreground">
                 {t('handoff.uncertain.body')}
               </p>
             </div>
@@ -693,8 +693,8 @@ export function HandoffOfferDialog({
                 role="status"
                 className={
                   operation.state.outcome.replayed
-                    ? 'rounded-md border border-info-line bg-info-soft px-3 py-2 text-sm text-info'
-                    : 'rounded-md border border-success-line bg-success-soft px-3 py-2 text-sm text-success'
+                    ? 'rounded-md border border-info-line bg-info-soft px-3 py-2 text-body text-info'
+                    : 'rounded-md border border-success-line bg-success-soft px-3 py-2 text-body text-success'
                 }
               >
                 <p className="font-medium">
@@ -736,7 +736,7 @@ export function HandoffOfferDialog({
             </section>
           ) : null}
 
-          <p className="text-xs text-muted-foreground">
+          <p className="text-caption text-muted-foreground">
             {t('handoff.offer.serverFinal', { lang: i18n.language })}
           </p>
         </div>
@@ -827,7 +827,7 @@ export function HandoffOfferDialog({
               the dialog two indistinguishable exits by name. */}
         </DialogFooter>
         <p
-          className="text-xs text-muted-foreground"
+          className="text-caption text-muted-foreground"
           data-slot="handoff-offer-tracking-limits"
         >
           {phase === 'submitting' || phase === 'uncertain'

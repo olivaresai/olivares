@@ -32,7 +32,10 @@ export function EmergingStandardsPanel({ canRead }: { canRead: boolean }) {
   if (!canRead) {
     return (
       <SectionCard title={t('emerging.title')}>
-        <EmptyState title={t('emerging.noAccess')} />
+        <EmptyState
+          description={t('emerging.noAccessHint')}
+          title={t('emerging.noAccess')}
+        />
       </SectionCard>
     )
   }
@@ -51,11 +54,14 @@ export function EmergingStandardsPanel({ canRead }: { canRead: boolean }) {
         <>
           {/* `verified_at` es GRUESO a propósito (mes): se enseña tal cual, sin convertirlo
               en una fecha exacta que el motor no afirma. */}
-          <p className="mb-3 text-xs text-muted-foreground">
+          <p className="mb-3 text-caption text-muted-foreground">
             {t('emerging.verifiedAt', { month: q.data.verified_at })}
           </p>
           {q.data.standards.length === 0 ? (
-            <EmptyState title={t('emerging.empty')} />
+            <EmptyState
+              description={t('emerging.emptyHint')}
+              title={t('emerging.empty')}
+            />
           ) : (
             <ul className="flex flex-col gap-3">
               {q.data.standards.map((s) => (
@@ -74,7 +80,7 @@ function StandardRow({ standard }: { standard: EmergingStandard }) {
   return (
     <li className="rounded-md border border-border px-3 py-2">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-sm font-medium text-foreground">
+        <span className="text-body font-medium text-foreground">
           {standard.name}
         </span>
         <Badge variant="neutral">{standard.body}</Badge>
@@ -85,7 +91,7 @@ function StandardRow({ standard }: { standard: EmergingStandard }) {
         </Badge>
       </div>
 
-      <dl className="mt-2 grid gap-x-6 gap-y-1 text-xs sm:grid-cols-2">
+      <dl className="mt-2 grid gap-x-6 gap-y-1 text-caption sm:grid-cols-2">
         <div>
           <dt className="inline text-muted-foreground">
             {t('emerging.spec')}:{' '}
@@ -108,12 +114,12 @@ function StandardRow({ standard }: { standard: EmergingStandard }) {
       </dl>
 
       {/* La nota de honestidad, SIEMPRE visible: es la razón de que la fila exista. */}
-      <p className="mt-2 border-l-2 border-warning pl-2 text-xs text-muted-foreground">
+      <p className="mt-2 border-l-2 border-warning pl-2 text-caption text-muted-foreground">
         {standard.caveat}
       </p>
 
       {standard.authority && (
-        <p className="mt-1 text-xs">
+        <p className="mt-1 text-caption">
           <a
             href={standard.authority}
             target="_blank"

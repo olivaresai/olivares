@@ -19,6 +19,7 @@
   "framework": {
     "label": "Framework",
     "select": "Select a framework",
+    "selectHint": "Pick a framework above to see its control gaps, the evidence behind each control, and what is still unmapped.",
     "controls": "{{count}} controls",
     "authority": "Authority"
   },
@@ -75,6 +76,7 @@
     "title": "What to fix",
     "description": "Controls that are not yet satisfied, ordered by status. Each row lists the capabilities to turn on to close the gap.",
     "empty": "No open gaps for this framework.",
+    "emptyHint": "A gap is a control with no operational evidence. This framework has none open: every mapped control is satisfied or design-ready.",
     "missing": "Missing capabilities",
     "noMissing": "No specific capability identified — review the criterion."
   },
@@ -117,6 +119,7 @@
     "title": "Agent risk register",
     "description": "EU AI Act risk tier per agent, cross-mapped to NIST AI RMF functions. The heuristic never assigns the unacceptable tier — it appears only after human review.",
     "empty": "No agents classified yet.",
+    "emptyHint": "Agents are listed here with the risk tier their classification gives them. Classify an agent to see it appear.",
     "columns": {
       "agent": "Agent",
       "tier": "Tier",
@@ -156,6 +159,7 @@
     "title": "Data residency",
     "description": "Attested regions with their perimeter, encryption at rest, and any observed egress violations.",
     "empty": "No regions attested yet.",
+    "emptyHint": "Regions attested for this tenant appear here with the evidence behind them. No region has been attested yet.",
     "scan": "Run residency scan",
     "scanned": "Residency scan complete",
     "inPerimeter": "Data stays in perimeter",
@@ -172,6 +176,7 @@
     "title": "Retention schedules",
     "description": "Per-class disposal schedules, the sweeps that run them, and the sealed certificate each sweep leaves behind. A schedule documents intent; only an approved purge destroys anything.",
     "noAccess": "You do not have access to retention schedules",
+    "noAccessHint": "Retention schedules decide how long each class of record is kept. Ask an administrator for the retention read permission.",
     "sweepNow": "Run sweep",
     "gateHint": "A schedule is a document until a human approves its purge. Saving one never deletes data; a sweep does.",
     "noClasses": "The engine returned no data classes",
@@ -285,6 +290,7 @@
     "title": "Legal holds",
     "description": "Preservation orders that veto every destruction path, including GDPR erasure.",
     "noAccess": "You do not have permission to read legal holds.",
+    "noAccessHint": "A legal hold freezes data from deletion while a matter is open. Ask an administrator for the legal-hold read permission.",
     "create": "Place a hold",
     "release": "Release",
     "custody": "Chain of custody",
@@ -300,6 +306,7 @@
     "custodyTitle": "Chain of custody — {{matter}}",
     "custodyDescription": "Append-only custody events, each anchored to the audit ledger head at the moment it was sealed.",
     "custodyEmpty": "No custody events recorded",
+    "custodyEmptyHint": "Each time a custodian is added, notified or released it is recorded here. This hold has no custody events yet.",
     "status": {
       "active": "Active",
       "released": "Released"
@@ -357,6 +364,7 @@
     "title": "Right to erasure & data-subject requests",
     "description": "Registered erasure requests, their dual-control execution and the verifiable receipt each one seals.",
     "noAccess": "You do not have permission to read erasure requests.",
+    "noAccessHint": "Erasure and subject-access requests are tracked here with their legal deadlines. Ask an administrator for the erasure read permission.",
     "register": "Register a request",
     "execute": "Execute",
     "receipt": "Receipt",
@@ -455,10 +463,12 @@
     "description": "Dated regulatory milestones, each with its primary source and the date it was verified.",
     "notInForceHint": "Provisional agreements, texts adopted pending publication and in-development mappings are NOT in-force law. They are shown with their status so they are never read as obligations.",
     "empty": "No milestones for this framework",
+    "emptyHint": "Regulatory milestones for the selected framework appear here with their due dates. Select another framework to see its calendar.",
     "verifiedOn": "verified {{date}}",
     "watchlistTitle": "Watchlist",
     "watchlistDescription": "Tracked rulemakings, draft standards and pilots that have no date to cite yet.",
     "watchlistEmpty": "Nothing on the watchlist",
+    "watchlistEmptyHint": "Milestones you follow appear here, so the nearest deadline is always on screen. Add one from the calendar above.",
     "status": {
       "in_force": "In force",
       "applies_from": "Applies from",
@@ -474,6 +484,7 @@
   "regops": {
     "title": "Regulatory operations",
     "noAccess": "You do not have permission to read these surfaces.",
+    "noAccessHint": "Regulatory operations covers filings, attestations and control drift. Ask an administrator for the regulatory-ops read permission.",
     "seamHint": "Reading, exporting and deleting these artefacts works in this build. Generating them (DORA registers, incident classification, OSCAL ingestion, depth packs) is provided by the enterprise add-on; without it the engine answers 501 by design.",
     "addonRequired": "Generation requires the add-on",
     "export": "Export",
@@ -596,6 +607,7 @@
       "emptyHint": "Snapshots are produced by the enterprise add-on.",
       "driftTitle": "Detected drift",
       "noDrift": "No drift detected",
+      "noDriftHint": "Drift is a control whose evidence moved away from its baseline. Every compared control still matches its baseline.",
       "snapshot": "Take snapshot",
       "snapshotTitle": "Take a control snapshot",
       "snapshotDescription": "The add-on re-evaluates the selected frameworks against the estate right now and stores the result as a point-in-time snapshot to compare against later.",
@@ -676,6 +688,7 @@
     "title": "NIS 2 significant incidents",
     "description": "Incidents assessed against the Art 23(3) significance criteria of Directive (EU) 2022/2555, with their Art 23(4) reporting phases and drafted reports.",
     "noAccess": "You do not have permission to read NIS 2 incident classifications.",
+    "noAccessHint": "NIS 2 incident classifications and their reporting clocks are tracked here. Ask an administrator for the NIS 2 read permission.",
     "provisionalHint": "Every verdict and deadline here is DECISION SUPPORT, not a legal classification. The control plane cannot measure the Art 23(3) criteria; it applies them to the impact data you supply. A competent person must attest the result, and the duty to notify the CSIRT or competent authority rests with your entity.",
     "empty": "No classified incidents",
     "emptyHint": "Classify an incident to apply the Art 23(3) criteria to its impact data and draft the tiered reports.",
@@ -751,6 +764,7 @@
   "claudeFiles": {
     "title": "Provider file store",
     "noAccess": "You do not have access to the file store inventory.",
+    "noAccessHint": "This tab inventories the files the store holds for governed sessions. Ask an administrator for the file-store read permission.",
     "col": {
       "id": "File id",
       "mime": "Type",
@@ -820,17 +834,20 @@
       "none": "no references"
     },
     "empty": "The catalog returned no capabilities.",
+    "emptyHint": "The platform capabilities a framework can be evidenced against are listed here. The catalog returned none for this deployment.",
     "error": "The capability catalog could not be read."
   },
   "hipaa": {
     "title": "HIPAA technical safeguards",
     "forbidden": "You do not have permission to read compliance frameworks.",
+    "forbiddenHint": "This report maps HIPAA §164.312 to the controls the platform can evidence. Ask an administrator for the framework read permission.",
     "unreadable": "The gap report could not be read.",
     "generatedAt": "Generated",
     "controls": "Controls",
     "satisfied": "Satisfied",
     "gaps": "Gaps",
     "noControls": "The report carries no controls.",
+    "noControlsHint": "The report lists each technical safeguard with the evidence behind it. The framework returned no controls for this deployment.",
     "requirement": "Requirement",
     "criterion": "Criterion",
     "gap": "Gap",

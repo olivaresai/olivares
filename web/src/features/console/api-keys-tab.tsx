@@ -49,6 +49,7 @@ import {
   type RotateTokenResult,
   type TokenDTO,
 } from './api'
+import { StaticTable } from '@/components/data/static-table'
 
 /** El máximo que el repositorio genérico acepta (`maxLimit`, sqlstore/generic.go:29). */
 const CONSOLE_PAGE = 1000
@@ -105,10 +106,10 @@ export function ApiKeysTab() {
     <div className="flex flex-col gap-4 pt-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold text-foreground">
+          <h2 className="text-heading text-foreground">
             {t('console:apiKeys.title')}
           </h2>
-          <p className="max-w-2xl text-sm text-muted-foreground">
+          <p className="max-w-2xl text-body text-muted-foreground">
             {t('console:apiKeys.caption')}
           </p>
         </div>
@@ -145,33 +146,23 @@ export function ApiKeysTab() {
         />
       ) : (
         <div className="overflow-hidden rounded-lg border border-border">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
+          <StaticTable>
+            <thead>
               <tr>
-                <th className="px-3 py-2 font-medium">
-                  {t('console:apiKeys.colName')}
-                </th>
-                <th className="px-3 py-2 font-medium">
-                  {t('console:apiKeys.colRole')}
-                </th>
-                <th className="px-3 py-2 font-medium">
-                  {t('console:apiKeys.colLastUsed')}
-                </th>
-                <th className="px-3 py-2 font-medium">
-                  {t('console:apiKeys.colCreated')}
-                </th>
-                <th className="px-3 py-2 font-medium">
-                  {t('console:apiKeys.colExpires')}
-                </th>
-                <th className="px-3 py-2" />
+                <th>{t('console:apiKeys.colName')}</th>
+                <th>{t('console:apiKeys.colRole')}</th>
+                <th>{t('console:apiKeys.colLastUsed')}</th>
+                <th>{t('console:apiKeys.colCreated')}</th>
+                <th>{t('console:apiKeys.colExpires')}</th>
+                <th />
               </tr>
             </thead>
             <tbody>
               {tokens.map((tok) => (
-                <tr key={tok.id} className="border-t border-border align-top">
-                  <td className="px-3 py-2">
+                <tr key={tok.id} className="align-top">
+                  <td>
                     <div className="flex items-center gap-2">
-                      <span className="font-mono text-xs text-foreground">
+                      <span className="font-mono text-caption text-foreground">
                         {tok.name}
                       </span>
                       {tok.is_superadmin && (
@@ -181,29 +172,29 @@ export function ApiKeysTab() {
                       )}
                     </div>
                   </td>
-                  <td className="px-3 py-2 text-muted-foreground">
+                  <td className="text-muted-foreground">
                     <Badge variant="outline">
                       {tok.is_superadmin
                         ? t('console:apiKeys.superadmin')
                         : tok.role || '—'}
                     </Badge>
                   </td>
-                  <td className="px-3 py-2">
+                  <td>
                     <RelTimeLabel ts={tok.last_used_at ?? undefined} />
                   </td>
-                  <td className="px-3 py-2">
+                  <td>
                     <RelTimeLabel ts={tok.created_at} />
                   </td>
-                  <td className="px-3 py-2">
+                  <td>
                     {tok.expires_at ? (
                       <RelTimeLabel ts={tok.expires_at} />
                     ) : (
-                      <span className="text-xs text-muted-foreground">
+                      <span className="text-caption text-muted-foreground">
                         {t('console:apiKeys.noExpiry')}
                       </span>
                     )}
                   </td>
-                  <td className="px-3 py-2 text-right">
+                  <td className="text-right">
                     <div className="flex justify-end gap-1">
                       <Button
                         variant="ghost"
@@ -226,7 +217,7 @@ export function ApiKeysTab() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </StaticTable>
         </div>
       )}
 
@@ -422,12 +413,12 @@ function TokenRevealDialog({
         </DialogHeader>
         <div className="flex items-center gap-2 rounded-lg border border-warning/40 bg-warning/5 p-3">
           <ShieldAlert className="size-4 shrink-0 text-warning" aria-hidden />
-          <span className="text-sm text-warning">
+          <span className="text-body text-warning">
             {t('console:apiKeys.revealWarning')}
           </span>
         </div>
         <div className="flex items-center gap-2">
-          <code className="flex-1 overflow-x-auto rounded-md bg-muted px-3 py-2 font-mono text-xs text-foreground">
+          <code className="flex-1 overflow-x-auto rounded-md bg-muted px-3 py-2 font-mono text-caption text-foreground">
             {token}
           </code>
           <Button

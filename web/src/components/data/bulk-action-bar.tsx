@@ -90,7 +90,7 @@ export function BulkActionBar({
         <span
           role="status"
           aria-live="polite"
-          className="mr-auto text-sm font-medium text-foreground"
+          className="mr-auto text-body font-medium text-foreground"
         >
           {pending
             ? t('common:bulk.progress', {

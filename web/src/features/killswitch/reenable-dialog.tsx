@@ -147,15 +147,17 @@ function ReenableBody({
 
       {pending ? (
         <div className="flex flex-col gap-3">
-          <p className="text-sm font-medium">{t('reenable.pendingTitle')}</p>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-body font-medium">{t('reenable.pendingTitle')}</p>
+          <p className="text-caption text-muted-foreground">
             {t('reenable.pendingBody')}
           </p>
-          <div className="flex flex-wrap items-center gap-2 text-sm">
+          <div className="flex flex-wrap items-center gap-2 text-body">
             <span className="text-muted-foreground">
               {t('reenable.approvalId')}
             </span>
-            <span className="font-mono text-xs">{pending.approval.id}</span>
+            <span className="font-mono text-caption">
+              {pending.approval.id}
+            </span>
             <StatusBadge status={pending.approval.status} />
             <Badge variant="info">
               {t('reenable.progress', {
@@ -166,7 +168,7 @@ function ReenableBody({
           </div>
           <Link
             to={'/permissions' as never}
-            className="text-sm text-accent-text underline-offset-4 hover:underline"
+            className="text-body text-accent-text underline-offset-4 hover:underline"
           >
             {t('reenable.goToApprovals')}
           </Link>
@@ -174,7 +176,7 @@ function ReenableBody({
       ) : (
         <div className="flex flex-col gap-3">
           {existingApproval && (
-            <p className="text-xs text-muted-foreground">
+            <p className="text-caption text-muted-foreground">
               {t('reenable.existingApproval', { id: existingApproval })}
             </p>
           )}

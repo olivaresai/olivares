@@ -153,7 +153,11 @@ export function RetentionTab({
   if (!canRead) {
     return (
       <SectionCard title={t('retention.title')}>
-        <EmptyState icon={<LockKeyhole />} title={t('retention.noAccess')} />
+        <EmptyState
+          description={t('retention.noAccessHint')}
+          icon={<LockKeyhole />}
+          title={t('retention.noAccess')}
+        />
       </SectionCard>
     )
   }
@@ -325,7 +329,7 @@ function ClassScheduleRow({
         </div>
 
         {policy ? (
-          <p className="text-xs text-muted-foreground">
+          <p className="text-caption text-muted-foreground">
             {!purging
               ? t('retention.rowRetaining', { days: policy.retention_days })
               : isClampedByFloor(policy)
@@ -339,7 +343,7 @@ function ClassScheduleRow({
           </p>
         ) : (
           // NOT an empty cell: the absence of a schedule is the whole answer.
-          <p className="text-xs text-muted-foreground">
+          <p className="text-caption text-muted-foreground">
             {entry.recommended_days
               ? t('retention.rowUnscheduledAdvised', {
                   days: entry.recommended_days,
@@ -349,14 +353,14 @@ function ClassScheduleRow({
         )}
 
         {policy?.basis ? (
-          <p className="text-xs text-muted-foreground">
+          <p className="text-caption text-muted-foreground">
             {t('retention.basis')}:{' '}
             <span className="text-foreground">{policy.basis}</span>
           </p>
         ) : null}
 
         {entry.note ? (
-          <p className="text-xs text-muted-foreground">{entry.note}</p>
+          <p className="text-caption text-muted-foreground">{entry.note}</p>
         ) : null}
 
         {/* §7. The number a tenant may DISCLOSE is not the schedule: the provider
@@ -364,7 +368,7 @@ function ClassScheduleRow({
             only max(schedule, floor) supports. An ABSENT value means the floor is
             unknown — which is not zero, and must not read as one. */}
         {policy && entry.model_io ? (
-          <p className="text-xs text-muted-foreground">
+          <p className="text-caption text-muted-foreground">
             {policy.effective_disclosure_days
               ? t('retention.disclosure', {
                   days: policy.effective_disclosure_days,
@@ -374,7 +378,7 @@ function ClassScheduleRow({
         ) : null}
 
         {floor ? (
-          <p className="text-xs text-warning">
+          <p className="text-caption text-warning">
             {t('retention.regulatoryFloor', {
               days: floor.min_days,
               basis: floor.basis,
@@ -385,7 +389,7 @@ function ClassScheduleRow({
 
         {policy?.approval_ref ? (
           <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">
+            <span className="text-caption text-muted-foreground">
               {t('retention.approvalRef')}
             </span>
             <HashChip hash={policy.approval_ref} />
@@ -685,8 +689,8 @@ function ScheduleDialog({
               onCheckedChange={(v) => setEnabled(v === true)}
             />
             <div className="flex flex-col">
-              <span className="text-sm">{t('retention.dialog.enabled')}</span>
-              <span className="text-xs text-muted-foreground">
+              <span className="text-body">{t('retention.dialog.enabled')}</span>
+              <span className="text-caption text-muted-foreground">
                 {t('retention.dialog.enabledHint')}
               </span>
             </div>
@@ -913,7 +917,7 @@ function SweepDialog({
                 {t('retention.sweep.scopeIntro', { count: armed.length })}
               </span>
             </CaveatNotice>
-            <ul className="flex flex-col gap-1 text-sm">
+            <ul className="flex flex-col gap-1 text-body">
               {armed.map((p) => (
                 <li
                   key={p.data_class}
@@ -978,7 +982,7 @@ function SweepResultCard({
               })
             : t('retention.result.complete')}
       </CaveatNotice>
-      <p className="text-sm">
+      <p className="text-body">
         {t('retention.result.totals', {
           examined: summary.examined,
           purged: summary.purged,
@@ -986,7 +990,7 @@ function SweepResultCard({
         })}
       </p>
       {classes.length === 0 ? (
-        <p className="mt-2 text-xs text-muted-foreground">
+        <p className="mt-2 text-caption text-muted-foreground">
           {t('retention.result.noClasses')}
         </p>
       ) : (
@@ -994,7 +998,7 @@ function SweepResultCard({
           {classes.map((c) => (
             <li
               key={c.data_class}
-              className="rounded-md border border-border p-2 text-xs"
+              className="rounded-md border border-border p-2 text-caption"
             >
               <div className="flex flex-wrap items-center gap-2">
                 <span className="font-medium">{c.data_class}</span>
@@ -1078,7 +1082,7 @@ function RetentionRunsCard({ classes }: { classes: DataClassEntry[] }) {
               {list.items.map((run) => (
                 <li
                   key={run.id}
-                  className="rounded-md border border-border p-2 text-xs"
+                  className="rounded-md border border-border p-2 text-caption"
                 >
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge variant="neutral">

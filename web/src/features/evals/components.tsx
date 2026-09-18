@@ -82,10 +82,10 @@ export function ScorecardCard({ scorecard }: { scorecard: Scorecard }) {
       <div className="flex flex-col gap-3">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <span className="block truncate font-mono text-sm text-foreground">
+            <span className="block truncate font-mono text-body text-foreground">
               {scorecard.key}
             </span>
-            <span className="text-xs text-muted-foreground">
+            <span className="text-caption text-muted-foreground">
               {/* No kind renders NOTHING. The previous form passed the missing
                   value as its own defaultValue, so when the engine omitted the
                   field the fallback was `undefined` and i18next returned the
@@ -107,10 +107,10 @@ export function ScorecardCard({ scorecard }: { scorecard: Scorecard }) {
 
         <div className="flex items-end justify-between gap-3">
           <div>
-            <div className="font-display text-2xl font-semibold tracking-tight tabular-nums text-foreground">
+            <div className="font-display text-display tabular-nums text-foreground">
               {formatScore(scorecard.mean_score)}
             </div>
-            <div className="text-xs text-muted-foreground">
+            <div className="text-caption text-muted-foreground">
               {t('scorecards.meanScore')}
             </div>
           </div>
@@ -123,15 +123,15 @@ export function ScorecardCard({ scorecard }: { scorecard: Scorecard }) {
                 sobre puntuados de TODAS las corridas. Ausente se pinta «—»
                 (formatFraction ya lo hace): ausencia es «no se puntuó nada»,
                 nunca «0 %». */}
-            <div className="font-mono text-base tabular-nums text-foreground">
+            <div className="font-mono text-heading tabular-nums text-foreground">
               {formatFraction(scorecard.pooled_pass_rate?.rate)}
               {scorecard.pooled_pass_rate !== undefined ? (
-                <span className="ml-1 text-xs opacity-70">
+                <span className="ml-1 text-caption opacity-70">
                   {t('runs.overN', { n: scorecard.pooled_pass_rate.n })}
                 </span>
               ) : null}
             </div>
-            <div className="text-xs text-muted-foreground">
+            <div className="text-caption text-muted-foreground">
               {t('scorecards.passRate')}
             </div>
           </div>
@@ -144,7 +144,7 @@ export function ScorecardCard({ scorecard }: { scorecard: Scorecard }) {
           height={36}
         />
 
-        <div className="flex items-center justify-between text-xs text-muted-foreground">
+        <div className="flex items-center justify-between text-caption text-muted-foreground">
           <span>
             {t('scorecards.runs')}:{' '}
             <span className="font-mono text-foreground">
@@ -191,10 +191,10 @@ export function RunsTable({
         header: t('runs.columns.subject'),
         cell: ({ row }) => (
           <div className="flex flex-col">
-            <span className="font-mono text-xs text-foreground">
+            <span className="font-mono text-caption text-foreground">
               {row.original.subject_ref}
             </span>
-            <span className="text-xs text-muted-foreground">
+            <span className="text-caption text-muted-foreground">
               {row.original.suite_ref}
               {row.original.prompt_variant
                 ? ` · ${row.original.prompt_variant}`
@@ -228,7 +228,7 @@ export function RunsTable({
           <span className="font-mono tabular-nums text-muted-foreground">
             {formatFraction(row.original.pass_rate)}
             {row.original.n_scored !== undefined ? (
-              <span className="ml-1 text-xs opacity-70">
+              <span className="ml-1 text-caption opacity-70">
                 {t('runs.overN', { n: row.original.n_scored })}
               </span>
             ) : null}
@@ -250,7 +250,7 @@ export function RunsTable({
               </Badge>
             )
           return (
-            <span className="text-xs text-muted-foreground">
+            <span className="text-caption text-muted-foreground">
               {t(`runs.${v}`)}
             </span>
           )
@@ -260,7 +260,7 @@ export function RunsTable({
         accessorKey: 'started_at',
         header: t('runs.columns.startedAt'),
         cell: ({ row }) => (
-          <span className="text-xs text-muted-foreground">
+          <span className="text-caption text-muted-foreground">
             {formatDateTime(row.original.started_at, i18n.language)}
           </span>
         ),
@@ -297,7 +297,7 @@ export function CaseResultsTable({ results }: { results: CaseResult[] }) {
         accessorKey: 'case_key',
         header: t('cases.columns.case'),
         cell: ({ row }) => (
-          <span className="font-mono text-xs text-foreground">
+          <span className="font-mono text-caption text-foreground">
             {row.original.case_key}
           </span>
         ),
@@ -324,7 +324,7 @@ export function CaseResultsTable({ results }: { results: CaseResult[] }) {
         accessorKey: 'label',
         header: t('cases.columns.label'),
         cell: ({ row }) => (
-          <span className="text-xs text-muted-foreground">
+          <span className="text-caption text-muted-foreground">
             {row.original.label || '—'}
           </span>
         ),
@@ -402,7 +402,7 @@ export function AbComparison({
           const barColor = isWinner ? theme.success : theme.slate
           return (
             <div key={v.label} className="flex flex-col gap-1.5">
-              <div className="flex items-center justify-between gap-2 text-sm">
+              <div className="flex items-center justify-between gap-2 text-body">
                 <span
                   className={cn(
                     'font-mono',
@@ -437,7 +437,7 @@ export function AbComparison({
                   data-variant-index={i}
                 />
               </div>
-              <span className="text-xs text-muted-foreground">
+              <span className="text-caption text-muted-foreground">
                 {t('ab.passRate', { value: formatFraction(v.pass_rate) })}
               </span>
             </div>
@@ -459,7 +459,7 @@ function PairwiseBlock({ pairwise }: { pairwise: AbPairwise }) {
   return (
     <div className="flex flex-col gap-1.5 border-t border-border pt-3">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-sm font-medium text-foreground">
+        <span className="text-body font-medium text-foreground">
           {t('ab.pairwiseTitle')}
         </span>
         {pairwise.mode === 'skipped' ? (
@@ -479,18 +479,21 @@ function PairwiseBlock({ pairwise }: { pairwise: AbPairwise }) {
         // meaning; the engine's own words stay verbatim beside it, because a
         // paraphrase of why the engine skipped is not evidence of why it skipped.
         <>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-caption text-muted-foreground">
             {t('ab.pairwiseSkippedBody')}
           </p>
           {pairwise.skip_reason ? (
-            <p className="font-mono text-xs text-muted-foreground" lang="en">
+            <p
+              className="font-mono text-caption text-muted-foreground"
+              lang="en"
+            >
               {pairwise.skip_reason}
             </p>
           ) : null}
         </>
       ) : (
         <>
-          <p className="text-xs tabular-nums text-muted-foreground">
+          <p className="text-caption tabular-nums text-muted-foreground">
             {t('ab.pairwiseCounts', {
               compared: pairwise.compared,
               aWins: pairwise.a_wins,
@@ -501,7 +504,7 @@ function PairwiseBlock({ pairwise }: { pairwise: AbPairwise }) {
             })}
           </p>
           {pc ? (
-            <p className="text-xs tabular-nums text-muted-foreground">
+            <p className="text-caption tabular-nums text-muted-foreground">
               {t('ab.pairwiseConsistency', {
                 rate: formatFraction(pc.rate),
                 n: pc.n,

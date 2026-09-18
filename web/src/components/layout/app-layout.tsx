@@ -6,11 +6,13 @@ import { PersonalNavigationProvider } from '@/features/navigation/personal-navig
 import { Navigate, Outlet } from '@tanstack/react-router'
 import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { PageActionsProvider } from '@/components/ui/page-actions'
 import { Spinner } from '@/components/ui/spinner'
 import { useAuth } from '@/lib/auth/context'
 import { BrandMark } from './brand'
 import { CommandMenu } from './command-menu'
 import { GlobalShortcuts } from './shortcuts'
+import { ShellLauncher } from './shell-launcher'
 import { MobileNav, Sidebar } from './sidebar'
 import { TenantGate } from './tenant-gate'
 import { Topbar } from './topbar'
@@ -50,7 +52,10 @@ export function AppLayout() {
           sidebar nav straight to the routed content on every page. */}
         <a
           href="#main-content"
-          className="sr-only z-50 rounded-md bg-accent px-3 py-2 text-sm font-medium text-accent-foreground outline-none focus-visible:not-sr-only focus-visible:absolute focus-visible:left-2 focus-visible:top-2 focus-visible:ring-2 focus-visible:ring-ring"
+          onClick={() => {
+            document.getElementById('main-content')?.focus()
+          }}
+          className="sr-only z-50 rounded-md bg-accent px-3 py-2 text-body font-medium text-accent-foreground outline-none focus-visible:not-sr-only focus-visible:absolute focus-visible:left-2 focus-visible:top-2 focus-visible:ring-2 focus-visible:ring-ring"
         >
           {t('a11y.skipToContent')}
         </a>
@@ -70,16 +75,31 @@ export function AppLayout() {
             tabIndex={-1}
             className="flex-1 overflow-y-auto outline-none print:overflow-visible"
           >
-            <div className="mx-auto w-full max-w-[1440px] px-4 py-5 sm:px-6 print:max-w-none print:px-0 print:py-0">
+            <div className="mx-auto w-full max-w-page px-4 py-5 sm:px-6 print:max-w-none print:px-0 print:py-0">
               {/* No active tenant ⇒ the routed view is never mounted, so it cannot
                 fire the tenant-scoped reads the engine would answer with 400
                 "tenant required". See TenantGate. */}
-              <TenantGate>
-                <Outlet />
-                <SettingsVisit />
-              </TenantGate>
+              {/* One host per page for the verb a TABBED screen declares from
+                  inside its active tab. It wraps the routed content, so the header and
+                  the tab that fills its primary-action slot share it. */}
+              <PageActionsProvider>
+                <TenantGate>
+                  <Outlet />
+                  <SettingsVisit />
+                </TenantGate>
+              </PageActionsProvider>
             </div>
           </main>
+          {/* THE LAUNCHER AND THE SCOPE LINE ARE PART OF THE SHELL, not of a
+              route: there is always something to DO, and what the next action applies
+              to is never a guess. It sits AFTER `main` so the tab order reaches the
+              routed content first — a bar that intercepted Tab on every page would
+              cost every keyboard operator a stop before anything they came for — and
+              `shrink-0` beside a scrolling `main`, so it never overlaps content.
+              `print:hidden`: a launcher on paper is noise. */}
+          <div className="shrink-0 print:hidden">
+            <ShellLauncher />
+          </div>
         </div>
         <CommandMenu />
         <GlobalShortcuts />

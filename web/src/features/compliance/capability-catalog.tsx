@@ -44,6 +44,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { useAuth } from '@/lib/auth/context'
 import { complianceApi, complianceKeys } from './api'
 import type { CapabilityEvidence, CapabilityState } from './types'
+import { StaticTable } from '@/components/data/static-table'
 
 /** present → default, absent → destructive, unknown → outline. Three, never two:
  *  the two-state version is exactly the rounding this view exists to avoid. */
@@ -104,13 +105,19 @@ export function CapabilityCatalog() {
   if (query.isError) return <ErrorState title={t('capabilities.error')} />
 
   const items = query.data?.capabilities ?? []
-  if (items.length === 0) return <EmptyState title={t('capabilities.empty')} />
+  if (items.length === 0)
+    return (
+      <EmptyState
+        description={t('capabilities.emptyHint')}
+        title={t('capabilities.empty')}
+      />
+    )
 
   return (
     <section aria-labelledby="capability-catalog-title">
       <h2 id="capability-catalog-title">{t('capabilities.title')}</h2>
       <p className="text-muted-foreground">{t('capabilities.description')}</p>
-      <table>
+      <StaticTable>
         <thead>
           <tr>
             <th scope="col">{t('capabilities.columns.capability')}</th>
@@ -158,7 +165,7 @@ export function CapabilityCatalog() {
             </tr>
           ))}
         </tbody>
-      </table>
+      </StaticTable>
       {query.data?.disclaimer ? (
         <p role="note" className="text-muted-foreground">
           {query.data.disclaimer}

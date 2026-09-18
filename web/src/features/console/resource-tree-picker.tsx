@@ -143,7 +143,7 @@ function ResourceTreeItem({
           }
         }}
         className={cn(
-          'group flex items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-none',
+          'group flex items-center gap-2 rounded-md px-2 py-1.5 text-body outline-none',
           'focus-visible:ring-2 focus-visible:ring-ring',
           selected ? 'bg-accent-soft text-foreground' : 'hover:bg-muted',
         )}
@@ -166,7 +166,7 @@ function ResourceTreeItem({
           className="min-w-0 flex-1 text-left"
         >
           <span className="truncate font-medium">{node.name}</span>
-          <span className="ml-2 font-mono text-xs text-muted-foreground">
+          <span className="ml-2 font-mono text-caption text-muted-foreground">
             {node.kind}
           </span>
         </button>
@@ -189,7 +189,7 @@ function ResourceTreeItem({
               <Spinner size="sm" />
             </div>
           ) : children.isError ? (
-            <p role="alert" className="py-2 text-xs text-danger">
+            <p role="alert" className="py-2 text-caption text-danger">
               {t('bindings.folderPicker.loadError')}
             </p>
           ) : hasLoadedChildren ? (
@@ -203,7 +203,7 @@ function ResourceTreeItem({
               />
             ))
           ) : (
-            <p className="py-2 text-xs text-muted-foreground">
+            <p className="py-2 text-caption text-muted-foreground">
               {t('bindings.folderPicker.noChildren')}
             </p>
           )}

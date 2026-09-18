@@ -4,7 +4,7 @@
 
 package finops
 
-// D02 first internal cut — enablement/authority, import identity and replay, and
+// The attempt lifecycle, first internal cut — enablement/authority, import identity and replay, and
 // the monetary behavior of an imported hold.
 //
 // What the fixture verifier in this file DOES and DOES NOT prove, said once: it

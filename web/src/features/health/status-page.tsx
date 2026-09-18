@@ -46,10 +46,10 @@ export function StatusPage() {
       className="mx-auto flex min-h-screen max-w-2xl flex-col px-4 py-8 outline-none"
     >
       <header className="mb-8 text-center">
-        <h1 className="font-display text-2xl font-bold tracking-tight text-foreground">
+        <h1 className="font-display text-display-lg text-foreground">
           {t('statusPage.title')}
         </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
+        <p className="mt-1 text-body text-muted-foreground">
           {t('statusPage.subtitle')}
         </p>
       </header>
@@ -62,18 +62,15 @@ export function StatusPage() {
       <div
         className={cn(
           'mb-6 rounded-lg border p-6 text-center',
-          overallStatus === 'operational' &&
-            'border-success/30 bg-success/5',
+          overallStatus === 'operational' && 'border-success/30 bg-success/5',
           (overallStatus === 'not_configured' || overallStatus === undefined) &&
             'border-border bg-muted/40',
-          overallStatus === 'degraded' &&
-            'border-warning/30 bg-warning/5',
-          overallStatus === 'outage' &&
-            'border-danger/30 bg-danger/5',
+          overallStatus === 'degraded' && 'border-warning/30 bg-warning/5',
+          overallStatus === 'outage' && 'border-danger/30 bg-danger/5',
         )}
       >
         <StatusIcon status={overallStatus} className="mx-auto mb-2 size-8" />
-        <div className="font-display text-lg font-semibold">
+        <div className="font-display text-title">
           {overallStatus ? (
             t(`statusPage.overall.${overallStatus}`)
           ) : query.isLoading ? (
@@ -98,18 +95,20 @@ export function StatusPage() {
             <ComponentRow key={c.name} component={c} />
           ))
         ) : (
-          <div className="p-6 text-center text-sm text-muted-foreground">
+          <div className="p-6 text-center text-body text-muted-foreground">
             {t('statusPage.unavailable')}
           </div>
         )}
       </div>
 
       {/* Footer */}
-      <footer className="mt-8 flex items-center justify-between text-xs text-muted-foreground">
+      <footer className="mt-8 flex items-center justify-between text-caption text-muted-foreground">
         <span>
           {data?.timestamp &&
             t('statusPage.lastUpdated', {
-              time: new Date(data.timestamp).toLocaleTimeString(currentLanguage()),
+              time: new Date(data.timestamp).toLocaleTimeString(
+                currentLanguage(),
+              ),
             })}
         </span>
         <button
@@ -131,7 +130,7 @@ function ComponentRow({ component }: { component: ComponentStatusDTO }) {
   const { t } = useTranslation('health')
   return (
     <div className="flex items-center justify-between px-4 py-3">
-      <span className="text-sm font-medium text-foreground">
+      <span className="text-body font-medium text-foreground">
         {t(`statusPage.component.${component.name}`, {
           defaultValue: component.name,
         })}
@@ -140,7 +139,7 @@ function ComponentRow({ component }: { component: ComponentStatusDTO }) {
         <StatusIcon status={component.status} className="size-4" />
         <span
           className={cn(
-            'text-sm',
+            'text-body',
             component.status === 'operational' && 'text-success',
             component.status === 'not_configured' && 'text-muted-foreground',
             component.status === 'degraded' && 'text-warning',

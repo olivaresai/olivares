@@ -78,7 +78,7 @@ function ChartFrame({
           className,
         )}
       >
-        <span className="text-xs text-muted-foreground">
+        <span className="text-caption text-muted-foreground">
           {emptyLabel ?? t('states.noResults')}
         </span>
       </div>
@@ -125,13 +125,15 @@ function makeTooltip(
         style={{ minWidth: 120 }}
       >
         {label ? (
-          <p className="mb-1 text-xs font-medium text-foreground">{label}</p>
+          <p className="mb-1 text-caption font-medium text-foreground">
+            {label}
+          </p>
         ) : null}
         <ul className="flex flex-col gap-0.5">
           {props.payload.map((entry, i) => (
             <li
               key={entry.dataKey ?? i}
-              className="flex items-center justify-between gap-3 text-xs"
+              className="flex items-center justify-between gap-3 text-caption"
             >
               <span className="flex items-center gap-1.5 text-muted-foreground">
                 <span
@@ -484,12 +486,14 @@ export function DonutChart({
       {!empty && (centerValue || centerLabel) ? (
         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
           {centerValue ? (
-            <span className="font-display text-lg font-semibold tabular-nums text-foreground">
+            <span className="font-display text-title tabular-nums text-foreground">
               {centerValue}
             </span>
           ) : null}
           {centerLabel ? (
-            <span className="text-xs text-muted-foreground">{centerLabel}</span>
+            <span className="text-caption text-muted-foreground">
+              {centerLabel}
+            </span>
           ) : null}
         </div>
       ) : null}
@@ -512,7 +516,7 @@ export function ChartLegend({
       {items.map((it) => (
         <li
           key={it.key}
-          className="flex items-center justify-between gap-3 text-xs"
+          className="flex items-center justify-between gap-3 text-caption"
         >
           <span className="flex min-w-0 items-center gap-1.5 text-muted-foreground">
             <span
@@ -553,7 +557,11 @@ export function Sparkline({
   return (
     // Decorative micro-trend: it is always paired with a textual delta beside it, so
     // it is hidden from AT rather than adding a nameless graphic to the tree.
-    <div aria-hidden="true" style={{ width: '100%', height }} className={className}>
+    <div
+      aria-hidden="true"
+      style={{ width: '100%', height }}
+      className={className}
+    >
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart
           data={data}
@@ -754,7 +762,7 @@ export function StatusBar({
           {segments.map((s) => (
             <li
               key={s.key}
-              className="flex items-center gap-1.5 text-xs text-muted-foreground"
+              className="flex items-center gap-1.5 text-caption text-muted-foreground"
             >
               <span
                 aria-hidden

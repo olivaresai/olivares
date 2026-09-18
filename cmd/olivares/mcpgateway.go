@@ -136,7 +136,7 @@ type mcpGatewayConfig struct {
 	// DisableNextRevisionHeaders:true and the RS resolves LEGACY. true selects
 	// dual; the full pair is the RevisionMode table below.
 	NextRevisionHeaders bool `json:"next_revision_headers"`
-	// RevisionMode (D07-1) states this gateway's MCP revision posture EXPLICITLY,
+	// RevisionMode states this gateway's MCP revision posture EXPLICITLY,
 	// with exactly the values connectors/mcp already implements: "legacy", "dual"
 	// or "rc-strict". It is OPTIONAL and moves no default. The whole resolution
 	// table, because the PAIR is what an operator actually reads:
@@ -263,7 +263,7 @@ func scanMCPRevisionControls(data []byte) ([]mcpRevisionControl, error) {
 // always did — the alias type drops this method, so no field changes type,
 // validation or strictness — and additionally reads the two revision controls
 // from the document's OWN member names. That presence is the structural fact
-// D07-1 needs: without it, "next_revision_headers explicitly set to false" and
+// the posture needs: without it, "next_revision_headers explicitly set to false" and
 // "the operator never mentioned it" are the same value, and the contradiction
 // rule cannot be stated, let alone tested.
 //
@@ -724,7 +724,7 @@ func buildMCPResourceServerWithDurableTaskStore(
 	log *slog.Logger,
 	durableTaskStore mcpc.DurableTaskStore,
 ) (*mcpc.ResourceServer, model.TenantID, error) {
-	// D07-1: validate the operator's revision pair FIRST, before anything is
+	// Validate the operator's revision pair FIRST, before anything is
 	// constructed. An unknown, empty or self-contradictory pair refuses to mount,
 	// which is how this composition already refuses malformed provisioning: the
 	// caller logs PROVISIONED BUT NOT MOUNTED and never builds a listener for it.
@@ -899,7 +899,7 @@ func buildMCPResourceServerWithDurableTaskStore(
 		RenderInspector:       ri,
 		ElicitationMediator:   em,
 
-		// D07-1: the validated EXPLICIT mode, or "" when the operator stated none.
+		// The validated EXPLICIT mode, or "" when the operator stated none.
 		// The legacy knob below is passed exactly as before on purpose — the
 		// connector's resolver consults it only while RevisionMode is empty
 		// (rsconfig.go:438-452), so the absent-mode path stays identical to the
@@ -923,7 +923,7 @@ func buildMCPResourceServerWithDurableTaskStore(
 			return nil, "", fmt.Errorf("mcp gateway: wire protocol binding reconcile adapter: %w", err)
 		}
 	}
-	// D07-1: the read-back is emitted LAST, once every seam is wired, so it only
+	// The read-back is emitted LAST, once every seam is wired, so it only
 	// ever describes a Resource Server this function is about to return. Emitting
 	// it earlier would publish an effective configuration for a composition that
 	// then failed to mount, which is the exact shape of a misleading startup line.

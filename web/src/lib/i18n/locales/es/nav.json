@@ -291,6 +291,33 @@
     "recentEmpty": "Aquí aparecen los módulos que abres.",
     "recentScope": "Abiertos en esta pestaña. Se borran al recargar, cerrar sesión o cambiar de cuenta u organización.",
     "recentRemove": "Quitar {{name}} de recientes",
-    "recentClear": "Borrar recientes"
+    "recentClear": "Borrar recientes",
+    "pinRow": "Fijar {{name}} en favoritos (p)",
+    "unpinRow": "Quitar {{name}} de favoritos (p)"
+  },
+  "scope": {
+    "tenant": "Organización",
+    "workspace": "Espacio de trabajo",
+    "environment": "Entorno",
+    "noTenant": "ninguna",
+    "noWorkspace": "Sin espacio de trabajo",
+    "noEnvironment": "No declarado",
+    "hint": "Con qué se ejecutará la próxima sesión."
+  },
+  "launcher": {
+    "label": "Nombra la sesión que vas a iniciar",
+    "placeholder": "Nombra esta sesión…",
+    "profile": "Perfil de proveedor",
+    "profilePlaceholder": "Elige un perfil",
+    "workspace": "Espacio de trabajo a montar",
+    "start": "Iniciar",
+    "backgroundHint": "Ctrl+Intro la inicia y te deja aquí, listo para la siguiente.",
+    "noProfiles": "No hay ningún perfil de proveedor registrado, y una sesión no puede iniciarse sin uno.",
+    "addProvider": "Añadir un perfil de proveedor",
+    "startedBackground": "Sesión iniciada. El borrador queda limpio para la siguiente.",
+    "startFailed": "No se ha podido iniciar la sesión.",
+    "noTenant": "Selecciona una organización antes de iniciar una sesión.",
+    "noProfileRead": "Una sesión se ejecuta con un perfil de proveedor, y tu rol no incluye permiso para leerlos.",
+    "readFailed": "No se han podido leer los perfiles de proveedor, así que no se puede iniciar una sesión desde aquí."
   }
 }

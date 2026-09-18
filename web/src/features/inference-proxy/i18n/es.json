@@ -49,6 +49,7 @@
     "truncatedHint": "Hay más reglas DLP de las que se ven; esta página toma filas por id. Que una regla no esté aquí no prueba que no exista: el egreso puede estar gobernado por reglas que no ves.",
     "add": "Añadir regla",
     "noRead": "No tienes permiso para ver las reglas DLP.",
+    "noReadHint": "Las reglas de DLP inspeccionan prompts y respuestas en busca de datos que no deben salir. Pide a un administrador el permiso de lectura de DLP.",
     "empty": "Sin reglas DLP",
     "emptyHint": "Añade una regla para permitir o denegar una clasificación en el egreso.",
     "colClass": "Clasificación",

@@ -178,7 +178,8 @@
     "current": "Current",
     "rollback": "Roll back",
     "caption": "Rollback is two steps: it declares a NEW desired revision matching the chosen version, then you Plan & Apply (a governed action) to actually restore it.",
-    "empty": "No revisions"
+    "empty": "No revisions",
+    "emptyHint": "Every change to this deployment is kept as a revision you can compare and restore. The first edit creates one."
   },
   "rollback": {
     "title": "Roll back desired state?",
