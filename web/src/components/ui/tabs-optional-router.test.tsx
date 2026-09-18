@@ -5,7 +5,7 @@
 // The strip reads the router through `useRouter({ warn: false })`, whose installed
 // no-provider contract is to answer undefined. These two controls pin the boundary of that
 // contract, and are adopted from the independent review's fault-injection probe
-// (assessments/implementation/console-tab-scroll-restoration/independent-review/
+// (an internal design note (not shipped)
 // optional-router-fault.test.tsx, 2026-09-06): the real hook is kept for its normal
 // behaviour, and an explicitly injected Error stands in for "some other failure of the
 // hook". Injection proves what the strip does with such an error; it is not a report of a

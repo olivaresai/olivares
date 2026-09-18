@@ -152,7 +152,7 @@ jobs:
       - name: preflight — validate the release profile (fail-closed)
         id: profile
         # ⛔ EL PERFIL LO DECLARA EL REPOSITORIO QUE CORRE, Y NINGÚN NOMBRE PRIVADO VIVE AQUÍ.
-        # `vars.OLIVARES_RELEASE_PROFILE` sólo existe en el repositorio de preprod, así que en
+        # `vars.OLIVARES_RELEASE_PROFILE` sólo existe en el repositorio que declara ese perfil, así que en
         # el público toda rama de abajo resuelve a producción, que es el valor por omisión y
         # no un caso especial. Los destinos de preprod llegan por variables de ESE repositorio
         # (`OLIVARES_PREPROD_EXPECTED_*`) y jamás por un literal en este fichero, que viaja al
@@ -245,10 +245,10 @@ jobs:
     needs: [preflight]
     # ⛔ EL SEGUNDO DESTINO NO SE ESCRIBE, SE DECLARA POR VARIABLE, y no es estilo: este
     # fichero VIAJA al árbol público (`.github/workflows/` se exporta), así que escribir aquí
-    # el nombre del repositorio de preprod lo publicaría — `lint:export` bloquea ese literal
+    # el nombre del repositorio que declara ese perfil lo publicaría — `lint:export` bloquea ese literal
     # y tiene razón. Mismo motivo y misma cura que `aws-images.yml:306-312`.
     #
-    # `vars.OLIVARES_RELEASE_PROFILE` sólo existe EN el repositorio de preprod, así que en el
+    # `vars.OLIVARES_RELEASE_PROFILE` sólo existe EN el repositorio que declara ese perfil, así que en el
     # público esta rama no puede activarse ni por accidente. Y no es una llave de confianza:
     # quien la ponga sigue chocando con el preflight, que en modo preprod exige la tupla
     # inyectada (deny-closed), rechaza cualquier destino que nombre una superficie de
@@ -1406,7 +1406,7 @@ jobs:
       base64-subjects: ${{ needs.goreleaser.outputs.hashes }}
       upload-assets: true
       draft-release: true
-      # Preserve the preflight acknowledgment for private preprod repositories.
+      # Preserve the preflight acknowledgment for repositories that declare that profile.
       private-repository: ${{ github.event.repository.private }}
 
   # --- SCP-01: SLSA Build L3 provenance for the IMAGE ---------------------------
@@ -1451,10 +1451,10 @@ jobs:
     # AND the load-bearing PUBLISH_LATEST switch from the validated §C.4 outputs.
     # ⛔ EL SEGUNDO DESTINO NO SE ESCRIBE, SE DECLARA POR VARIABLE, y no es estilo: este
     # fichero VIAJA al árbol público (`.github/workflows/` se exporta), así que escribir aquí
-    # el nombre del repositorio de preprod lo publicaría — `lint:export` bloquea ese literal
+    # el nombre del repositorio que declara ese perfil lo publicaría — `lint:export` bloquea ese literal
     # y tiene razón. Mismo motivo y misma cura que `aws-images.yml:306-312`.
     #
-    # `vars.OLIVARES_RELEASE_PROFILE` sólo existe EN el repositorio de preprod, así que en el
+    # `vars.OLIVARES_RELEASE_PROFILE` sólo existe EN el repositorio que declara ese perfil, así que en el
     # público esta rama no puede activarse ni por accidente. Y no es una llave de confianza:
     # quien la ponga sigue chocando con el preflight, que en modo preprod exige la tupla
     # inyectada (deny-closed), rechaza cualquier destino que nombre una superficie de
@@ -1792,7 +1792,7 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: copy signed images to the preprod mirror and compare manifest bytes
+      - name: copy signed images to the side mirror and compare manifest bytes
         env:
           SRC: ${{ needs.preflight.outputs.oci_image_repo }}
           DST: ${{ needs.preflight.outputs.mirror_image_repo }}
@@ -1843,10 +1843,10 @@ jobs:
     # guard is what makes it safe to copy this source into the rehearsal repo at all.
     # ⛔ EL SEGUNDO DESTINO NO SE ESCRIBE, SE DECLARA POR VARIABLE, y no es estilo: este
     # fichero VIAJA al árbol público (`.github/workflows/` se exporta), así que escribir aquí
-    # el nombre del repositorio de preprod lo publicaría — `lint:export` bloquea ese literal
+    # el nombre del repositorio que declara ese perfil lo publicaría — `lint:export` bloquea ese literal
     # y tiene razón. Mismo motivo y misma cura que `aws-images.yml:306-312`.
     #
-    # `vars.OLIVARES_RELEASE_PROFILE` sólo existe EN el repositorio de preprod, así que en el
+    # `vars.OLIVARES_RELEASE_PROFILE` sólo existe EN el repositorio que declara ese perfil, así que en el
     # público esta rama no puede activarse ni por accidente. Y no es una llave de confianza:
     # quien la ponga sigue chocando con el preflight, que en modo preprod exige la tupla
     # inyectada (deny-closed), rechaza cualquier destino que nombre una superficie de

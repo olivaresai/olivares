@@ -80,7 +80,7 @@ while IFS= read -r line; do
 		}
 	fi
 	# ⛔ AND THEN BY PATCH-ID, because ancestry does not see a SQUASH MERGE. Corrected 2026-08-15
-	# by the console lane, with a counter-example rather than an argument: a branch listed here as
+	# by the console owner, with a counter-example rather than an argument: a branch listed here as
 	# orphan with one commit carried a commit patch-equivalent to one already in main -- content
 	# inside, ancestry broken. Every squash-merged branch nobody deleted inflated this list, so the
 	# first run's "125" was a CEILING, not a count.

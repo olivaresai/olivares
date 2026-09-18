@@ -34,7 +34,7 @@ grep -F -q 'Unique leftover unique vs `#1402`' "$DOC" \
   || fail "prepare doc lost uniqueness vs #1402"
 grep -F -q 'Does not restack `#961`' "$DOC" \
   || fail "prepare doc lost uniqueness vs #961"
-grep -q 'This lane does not decide price' "$DOC" || fail "prepare doc lost price HOLD"
+grep -q 'This document does not decide price' "$DOC" || fail "prepare doc lost price HOLD"
 grep -q 'U_f / U_d UNKNOWN' "$DOC" || fail "prepare doc lost U_f/U_d HOLD"
 if grep -qiE 'price.*(signed|final|\$[0-9]+/mo)|precio firmado|FIRMA A claimed' "$DOC"; then
   fail "prepare doc reads as a signed price"
@@ -82,7 +82,7 @@ price = ledger.get("price") or {}
 if price.get("status") != "unsigned":
     fail("ledger price.status is %r, must stay unsigned" % price.get("status"))
 if price.get("value") not in (None, ""):
-    fail("ledger price.value is %r — this lane does not sign a price" % price.get("value"))
+    fail("ledger price.value is %r — this document does not sign a price" % price.get("value"))
 by_id = {}
 for fig in ledger.get("figures") or []:
     by_id[fig.get("id")] = fig

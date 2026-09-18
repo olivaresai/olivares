@@ -74,7 +74,7 @@ else
 	diff <(printf '%s\n' "${EXPECTED_PUBLIC}") <(printf '%s\n' "${PUBLIC_ENTRIES}") >&2 || true
 fi
 
-# The private sequence must not shrink: routing must never become a filter on the hub.
+# The private sequence must not shrink: routing must never become a filter on the full source tree.
 if [ "${PRIVATE_COUNT}" = "221" ]; then
 	say_ok "CASE 0b: the private sequence is still 221 entries" "221"
 else
@@ -82,7 +82,7 @@ else
 fi
 
 # Every applicable entry must ALSO be in the private sequence: the public task is a
-# SUBSEQUENCE, not a second list that can drift away from what the hub runs.
+# SUBSEQUENCE, not a second list that can drift away from what the full source tree runs.
 PRIVATE_ENTRIES="$(entries_of lint:addon-sets:legs)"
 # ⛔ NO `printf … | grep -q`. Under `pipefail` grep -q exits on its first match, printf dies of
 # SIGPIPE and the PIPELINE returns 141 ON SUCCESS — the exact shape lint:sigpipe-booleans
@@ -246,7 +246,7 @@ fi
 # export-closure: absent-by-design scripts/export-public.sh — a SENTINEL passed as fixture
 #   data, not a dependency: this battery writes an empty file of that name into a scratch
 #   tree to make the real classifier answer "hub", and never hands it to an execution verb.
-#   The hub has it and the export removes it on purpose; that is the fact under test.
+#   The full source tree has it and the export removes it on purpose; that is the fact under test.
 run_case "CASE 2: a hub runs the private sequence" private ok signed scripts/export-public.sh
 
 # CASE 3 — THE SOURCE-SENSITIVE MUTATION of the discriminator: right NAME, wrong CONTENT. A

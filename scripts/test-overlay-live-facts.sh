@@ -11,7 +11,7 @@
 # boundary.sh` existe para impedir. Los fixtures reproducen las FORMAS que el lector juzga.
 #
 # ⇒ Y por eso la corrida contra los BLOBS REALES no desaparece: vive en la evidencia del
-#   encargo (assessments/implementation/overlay-fact-gates/), con los mismos mutantes
+#   encargo (an internal design note (not shipped)), con los mismos mutantes
 #   aplicados a los blobs reales de `origin/main`, sus SHA y sus codigos de salida. Una
 #   bateria hermetica prueba el LECTOR; aquella prueba que el lector lee bien el sujeto.
 #

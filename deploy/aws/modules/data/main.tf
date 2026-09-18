@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 #
 # ⛔ NEVER APPLIED.
-# RDS PostgreSQL 16 Multi-AZ, db.t4g.small + 20 GB gp3 (D10-bis §2.2).
+# RDS PostgreSQL 16 Multi-AZ, db.t4g.small + 20 GB gp3, ratified.
 # App role is NOT the owner (RLS FORCE). That SQL is deploy/postgres/.
 
 resource "aws_db_subnet_group" "this" {

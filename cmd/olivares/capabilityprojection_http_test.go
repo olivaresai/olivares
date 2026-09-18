@@ -810,7 +810,7 @@ func capabilitySameShape(
 
 // TestCapabilityProjectionDiscriminantsHTTP is the permanent home of the six
 // discriminants raised by the INDEPENDENT REVIEW of the first G1-A candidate
-// (`assessments/implementation/capabilities-g1a/independent-review/REPORT.md`,
+// (`an internal design note (not shipped)`,
 // SHA-256 2e9875c2dcace018b43aea349dbbe82271deb9c730d04c3a40ed738878cf1ffa, findings
 // R1–R5). The cases are the reviewer's; this file adopts them so the defects cannot
 // return, and each one carries the finding it belongs to.

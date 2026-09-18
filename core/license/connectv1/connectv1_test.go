@@ -24,7 +24,7 @@ import (
 //     16b41ca56de959528557076b92731317872fb6c1 (git blob d986f43690124a1b1a006bc2d10984a72dcc5dd4,
 //     checked below).
 //   - ts-generated-vectors.b-16b41ca.json was produced by running that commit's canonical.ts and
-//     keys.ts under Node 24 (assessments/implementation/r115-connect-client-current/evidence).
+//     keys.ts under Node 24 (an internal design note (not shipped)).
 const (
 	bCommittedVectors = "testdata/canonical-vectors.b-16b41ca.json"
 	bCommittedBlobID  = "d986f43690124a1b1a006bc2d10984a72dcc5dd4"

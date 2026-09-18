@@ -1466,7 +1466,7 @@ run_finalizer COSIGN_EXPECT_IDENTITY='^https://github\.com/olivaresai/olivares/\
 [ "$rc" -ne 0 ] && [ "$(patch_count)" -eq 0 ]
 check "a cosign that accepts only the any-SemVer default refuses" "the fallback is gone" $?
 
-# THE OTHER SUPPORTED PROFILE. Preprod certificates are issued to the preprod repository's own
+# THE OTHER SUPPORTED PROFILE. Preprod certificates are issued to the repository that declares that profile's own
 # workflow identity, so a production anchor rejects every attestation there and the isolated
 # trial the ratification requires could not have run at all. The destination name here is a
 # neutral stand-in: this file is exported, and the real preprod surface is not written in it.

@@ -22,7 +22,7 @@ import (
 // executable's OWN shipped documentation and `--help`, which is what this binary
 // does. (2) The Agent Client Protocol, which is what the wire means. (3) The
 // recorded `initialize` of an owned 1.0.13 child under an empty isolated home
-// (assessments/implementation/grok-runtime-contract/), which is what this build
+// (an internal design note (not shipped)), which is what this build
 // actually answered. Where a generic guide disagrees with the installed help, the
 // installed help wins; where nothing was observed, this file says so instead of
 // guessing.

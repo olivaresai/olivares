@@ -3,7 +3,7 @@
 
 package main
 
-// Witnesses for eleven guards of the observe-and-report lane that were BLIND.
+// Witnesses for eleven guards of the observe-and-report command group that were BLIND.
 //
 // Each one was found the same way: the guard was mutated into its opposite, the
 // lot's whole suite was run, and NOTHING went red. A guard no test can see is
@@ -24,14 +24,14 @@ package main
 //                       instruction in the engine's own DTO (dto.go:36-40)
 //   accessmap graph     the human-readable ref was dropped for the opaque id
 //   notify routes get   a disabled route stopped saying it cannot fire
-//   lane-wide           a truncated page with NO cursor stopped warning that it
+//   group-wide           a truncated page with NO cursor stopped warning that it
 //                       is not the whole list
 //   consoleviews        an over-cap params document was SENT instead of refused
 //   health checks report a negative latency was SENT instead of refused
 //   observability       a trace with no usable span_id rendered as an empty table
 //
 // The last three matter beyond their text: two are LOCAL REFUSALS, the half of
-// this lane's exit contract that promises exit 2 at zero requests, and they had
+// this group's exit contract that promises exit 2 at zero requests, and they had
 // no test at all. So each of those carries a request counter AND a paired
 // positive control, per the rule at the top of cmd_observeplane_test.go: without
 // the control, "it refused" is also satisfied by a command that refuses
@@ -189,7 +189,7 @@ func TestAnOmittedCountIsNotRenderedAsZero(t *testing.T) {
 }
 
 // TestTheGraphRendersAttributionFirmnessNotConfidence guards the one column in
-// this lane the engine attaches a standing instruction to: attribution_tier is
+// this group the engine attaches a standing instruction to: attribution_tier is
 // how firm the origin→identity attribution is, and the DTO says in as many words
 // that approximate/unknown must not be rendered as if it were firm
 // (modules/access-map/dto.go:36-40). CONF measures something else entirely, so a
@@ -272,7 +272,7 @@ func TestRouteGetSaysADisabledRouteCannotFire(t *testing.T) {
 }
 
 // TestATruncatedPageWithoutACursorSaysItIsNotTheWholeList covers all three
-// states of the lane's shared truncation note, because the middle one is the
+// states of the group's shared truncation note, because the middle one is the
 // only one anything measured.
 //
 // has_more with NO cursor is the state that cannot be recovered from: there is
@@ -317,7 +317,7 @@ func TestATruncatedPageWithoutACursorSaysItIsNotTheWholeList(t *testing.T) {
 
 // TestOverCapParamsAreRefusedBeforeTheRequest and
 // TestANegativeLatencyIsRefusedBeforeTheRequest are the two local refusals of
-// this lane that had no witness at all. Both carry the request counter and a
+// this group that had no witness at all. Both carry the request counter and a
 // paired positive control, because a refusal with neither is also what a
 // completely broken command looks like.
 func TestOverCapParamsAreRefusedBeforeTheRequest(t *testing.T) {

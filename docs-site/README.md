@@ -162,7 +162,7 @@ What is true today, measured:
 | Worker | `olivares-docs`, a static-assets Worker; config in [`wrangler.jsonc`](./wrangler.jsonc) |
 | Live at | `https://docs.olivares.ai` — a **zone route** onto that Worker. The hostname's DNS is still carried by a custom domain on the marketing Worker; `wrangler.jsonc` documents the pending migration and why its order matters |
 | Build artifact | `.github/workflows/docs-site-artifact.yml` — dispatch-only, uploads `dist/`, **deploys nothing** |
-| Deploy | `.github/workflows/docs-site-deploy.yml` — dispatch-only, requires typing `PUBLISH`, selects its target from a fixed `github.repository_id` table (`docs.olivares.ai` from the development hub and the public repository, `docs-preprod.olivaresai.dev` via `wrangler.preprod.jsonc` from the preprod repository; any other repository refuses), and **refuses with a named secret** if `CLOUDFLARE_API_TOKEN` is absent (it is, in this repository, today) |
+| Deploy | `.github/workflows/docs-site-deploy.yml` — dispatch-only, requires typing `PUBLISH`, selects its target from a fixed `github.repository_id` table (`docs.olivares.ai` from this repository; a rehearsal target via `wrangler.preprod.jsonc` from the repository that owns it; any other repository refuses), and **refuses with a named secret** if `CLOUDFLARE_API_TOKEN` is absent (it is, in this repository, today) |
 | Staleness | `bash ../scripts/check-docs-site-live.sh` — compares the live site against what this tree promises. `0` up to date · `1` stale or broken · `2` could not look |
 
 Publishing is still owner-gated and still deliberate: there is no push trigger, and the

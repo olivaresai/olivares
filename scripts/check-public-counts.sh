@@ -7,7 +7,7 @@
 #
 # The counts the product states about itself (modules, integrations, framework catalogs,
 # deny-closed enforcement points) are DERIVED HERE from the same sources as
-# the hub's state script, and every public surface that states one is checked against the
+# the full source tree's state script, and every public surface that states one is checked against the
 # derived value — as a digit with its localized noun (emphasis markers and CJK counters
 # normalized first), as a spelled-out English/Spanish number word, or as a hedge
 # ("more than / about / über / 以上 / 超过 / около…", all forbidden: the counts are exact).
@@ -34,7 +34,7 @@
 #
 # The curated public export drops design/, docs/launch/ and sessions/ on purpose
 # (the export curation script): those sections print SKIP when their root is absent. In
-# the hub tree a missing file inside a present root is a FAILURE, never a skip.
+# the full source tree a missing file inside a present root is a FAILURE, never a skip.
 #
 # Version strings (v26.6.0 vs v26.7.0) are deliberately NOT checked yet: that
 # contradiction is an explicit pending owner decision; the single-source version check
@@ -97,7 +97,7 @@ fi
 # is what .githooks/pre-push:619 and mainline-ci.yml:517 actually call, one by one, and a
 # check hung off the `lint` aggregate would never run at all.
 #
-# WHAT IT COSTS, and why that is affordable in the fast lane. The command tree only
+# WHAT IT COSTS, and why that is affordable in the fast path. The command tree only
 # exists at RUNTIME, so the gate walks it with `go test -run TestCLIRefDump
 # ./cmd/olivares`. That looks expensive and is not: `task vet` runs at pre-push:397 and
 # COMPILES THE TEST FILES of every workspace module, so by the time this runs the test
@@ -218,7 +218,7 @@ fi
 #   FALLAN · worktree de lote 2/8), y la causa es exactamente esta: su veredicto era sobre el
 #   ARBOL donde corre, no sobre el codigo.
 #
-# La regla que ya estaba escrita en este repositorio lo colocaba: **«the fast lane cannot run
+# La regla que ya estaba escrita en este repositorio lo colocaba: **«the fast path cannot run
 # node»**, por eso `lint:format-ratchet` vive en el carril PESADO. `lint:guide-docs` va ahora a
 # su lado, y `mainline-ci` lo corre con las deps que YA instala a proposito para este gate
 # (`.github/workflows/mainline-ci.yml`, paso `install web deps … needed by lint:public-counts`).
@@ -323,7 +323,7 @@ def blind(msg):
     sys.exit(2)
 
 # The explicit public-export marker (written by the curation pipeline, never tracked in
-# the hub): a curated-out root's absence is sanctioned ONLY when it is present. In the
+# the full source tree): a curated-out root's absence is sanctioned ONLY when it is present. In the
 # hub, a vanished design/ or docs/launch is a broken checkout, not an export.
 PUBLIC_EXPORT = os.path.isfile(".olivares-public-export")
 
@@ -357,7 +357,7 @@ def norm(line):
 #
 # A seam counts only when the proof named in the census exists AND its assertion is still
 # INSIDE that test function's body: a function gutted to a no-op keeps its name and stops
-# counting. the hub's state script reads the SAME census, so the two counters cannot drift —
+# counting. the full source tree's state script reads the SAME census, so the two counters cannot drift —
 # duplicating a weak count in two places is how this defect survived.
 ENFORCEMENT_CENSUS = os.environ.get("CPC_ENFORCEMENT_CENSUS") or "scripts/enforcement-seams.tsv"
 
@@ -414,7 +414,7 @@ def proven_seams(census=None, root=""):
 # ── the published API surface: read from the CONTRACT, never transcribed ────────────────
 # The reference index states this count TWICE per language and it had drifted to THREE
 # values at once (contract 53, EN/ES 24, and five locales 24) with nothing watching. The
-# derivation is not new: the hub's state script already emits (line 241) `openapi_paths` from this
+# derivation is not new: the full source tree's state script already emits (line 241) `openapi_paths` from this
 # exact file. It was derived in one place and gated in NEITHER — which is the whole
 # mechanism, because a number nobody compares is a number that only ever drifts.
 #
@@ -444,7 +444,7 @@ def openapi_paths(path=None):
                  "vanished measurement, not a count of zero")
     return len(paths)
 
-# ── derivations (mirror the hub's state script; keep the two in step) ───────────────────
+# ── derivations (mirror the full source tree's state script; keep the two in step) ───────────────────
 def derive():
     wire = rd("cmd/olivares/wire.go")
     modules = len(set(re.findall(r'"github\.com/olivaresai/olivares/modules/[a-z-]+"', wire)))

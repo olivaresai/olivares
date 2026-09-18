@@ -1,27 +1,21 @@
 {
-  // Olivares AI documentation — PREPROD. Serves the same `docs-site/dist` as production, on the
-  // sandbox zone, so the release candidate can be reviewed before anything touches
-  // `docs.olivares.ai`. Order 38 (three environments: .dev -> .preprod -> public).
+  // Olivares AI documentation — REHEARSAL TARGET. Serves the same `docs-site/dist` as
+  // production, on a separate zone, so a release candidate can be reviewed before anything
+  // touches `docs.olivares.ai`.
   //
-  // ⛔ THE HOSTNAME IS ONE LEVEL DEEP, AND THAT IS NOT A PREFERENCE — IT IS THE ONLY ONE THAT
-  // SERVES TLS TODAY. The row named `docs.preprod.olivaresai.dev`. Measured 2026-08-29 with both
-  // records live and a positive control:
+  // ⛔ THE HOSTNAME IS ONE LABEL DEEP, AND THAT IS NOT A PREFERENCE — IT IS THE ONLY SHAPE THAT
+  // SERVES TLS ON THAT ZONE. Measured 2026-08-29 against a live positive control: a one-label
+  // name terminates TLS and reaches the discard origin (HTTP 522, the correct state before a
+  // route exists); a two-label name fails the TLS handshake with no HTTP at all.
   //
-  //   https://hooks-sandbox.olivaresai.dev/   -> 200   (one level, the zone's existing convention)
-  //   https://docs-preprod.olivaresai.dev/    -> 522   (one level: TLS TERMINATED, then Cloudflare
-  //                                                     reached the 100:: discard origin — the
-  //                                                     correct state before a route exists)
-  //   https://docs.preprod.olivaresai.dev/    -> TLS HANDSHAKE FAILURE, no HTTP at all
+  // `GET /zones/{id}/ssl/certificate_packs` returns ZERO packs: the zone has Universal SSL
+  // only, which covers the apex and one wildcard label. A third-level name needs Advanced
+  // Certificate Manager or Total TLS, both paid add-ons and both a decision for the owner.
+  // So the deliverable uses the name that works.
   //
-  // `GET /zones/{id}/ssl/certificate_packs` returns ZERO packs: this zone has Universal SSL only,
-  // which covers the apex and `*.olivaresai.dev` — ONE label. A third-level name needs Advanced
-  // Certificate Manager or Total TLS, both paid add-ons and both a decision that is not a lane's.
-  // So the deliverable uses the name that works and the other record stays as evidence.
-  //
-  // ⛔ AND IT IS A ROUTE, NOT A `custom_domain`, for the same reason production is: the DNS record
-  // `docs-preprod.olivaresai.dev` (AAAA 100::, proxied) was created explicitly under order 24's
-  // create-only mandate, matching `hooks-sandbox` in this zone. A `custom_domain` would try to
-  // manage that record itself and collide with the one the order says a human creates.
+  // ⛔ AND IT IS A ROUTE, NOT A `custom_domain`, for the same reason production is: the DNS
+  // record is created explicitly under a create-only mandate. A `custom_domain` would try to
+  // manage that record itself and collide with the one a person creates.
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "olivares-docs-preprod",
   "compatibility_date": "2026-08-23",

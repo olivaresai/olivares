@@ -6,7 +6,7 @@
 WHY THIS EXISTS, AND IT IS A MEASURED PROBLEM, NOT A TIDINESS ONE. An ordinary
 Enterprise main advance forced ten versioned metadata replacements across seven
 Community records even when every measured product property stayed true: after
-ent#182 and again after ent#183, the hub's overlay re-measure tool rewrote
+ent#182 and again after ent#183, the overlay re-measure tool rewrote
 `overlay_main_sha` in seven actas and `prNN_behind_overlay_main` in three,
 and every original semantic predicate held before and after. Reproduced here with
 an actual same-tree child (`git commit-tree <main^{tree}> -p <main>`, identical

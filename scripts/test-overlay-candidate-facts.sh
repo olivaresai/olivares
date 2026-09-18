@@ -245,32 +245,32 @@ printf '%s\n' 'package main' 'func (' >"$TMP/bad.go"
 cand "$(mkcommit "$TMP/ent" "$MAIN" put "$P_AP" "$TMP/bad.go")" "$HUB_PIN"
 look2 "D09 E carries a malformed Go source"
 cand "$MAIN" fedcba9876543210fedcba9876543210fedcba98
-look2 "D10 C is not an object in the store"
-same "D11 E stays recorded while C is null" "$(jf enterprise.commit)/$(jf community.commit)" "$MAIN/null"
+look2 "F10 C is not an object in the store"
+same "F11 E stays recorded while C is null" "$(jf enterprise.commit)/$(jf community.commit)" "$MAIN/null"
 cand "$MAIN" "$($GIT -C "$TMP/tree" rev-parse "$HUB_PIN:$P_MAP")"
-look2 "D12 C is a blob object, not a commit"
+look2 "F12 C is a blob object, not a commit"
 cand "$MAIN" "$(mkcommit "$TMP/tree" "$HUB_PIN" del "$P_MAP")"
-look2 "D13 C has no public slug map"
+look2 "F13 C has no public slug map"
 printf 'not json\n' >"$TMP/map-bad.json"
 cand "$MAIN" "$(mkcommit "$TMP/tree" "$HUB_PIN" put "$P_MAP" "$TMP/map-bad.json")"
-look2 "D14 C's slug map is not readable as the sold map"
+look2 "F14 C's slug map is not readable as the sold map"
 rc=0
 bash "$TRUSTED/check-overlay-candidate-facts.sh" --enterprise-repo "$TMP/no-such-repo" \
 	--enterprise-commit "$MAIN" --community-repo "$TMP/tree" --community-commit "$HUB_PIN" \
 	--acta "$ACTA_FIX" >"$TMP/out" 2>"$TMP/err" || rc=$?
 echo "$rc" >"$TMP/rc"
-look2 "D15 the enterprise repository is not a repository"
+look2 "F15 the enterprise repository is not a repository"
 rc=0
 bash "$TRUSTED/check-overlay-candidate-facts.sh" --enterprise-repo "$TMP/ent" \
 	--enterprise-commit "$MAIN" --community-repo "$TMP/tree" --community-commit "$HUB_PIN" \
 	>"$TMP/out" 2>"$TMP/err" || rc=$?
 echo "$rc" >"$TMP/rc"
-look2 "D16 the trusted install has no acta: the default acta is missing"
+look2 "F16 the trusted install has no acta: the default acta is missing"
 rc=0
 bash "$TRUSTED/check-overlay-candidate-facts.sh" --enterprise-repo "$TMP/ent" \
 	--enterprise-commit "$MAIN" >"$TMP/out" 2>"$TMP/err" || rc=$?
 echo "$rc" >"$TMP/rc"
-look2 "D17 a missing required input"
+look2 "F17 a missing required input"
 
 # ══ E · a C that is not E's gitlink is a development observation, never a release ═══════════
 C_SAME="$($GIT -C "$TMP/tree" commit-tree "$HUB_TREE" -p "$HUB_PIN" -m 'same map, another commit')"

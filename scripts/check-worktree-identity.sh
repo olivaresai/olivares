@@ -4,7 +4,7 @@
 #
 # check-worktree-identity.sh — does Git operate on the tree this script is STANDING IN?
 #
-# ⛔ EXISTS BECAUSE IT HAS HAPPENED THREE TIMES, and the third blocked the hub for hours.
+# ⛔ EXISTS BECAUSE IT HAS HAPPENED THREE TIMES, and the third blocked the full source tree for hours.
 # On 2026-08-16 at 03:36 the shared clone's `.git/config` acquired
 #
 #     core.worktree = <a sibling session's worktree directory>
@@ -16,8 +16,8 @@
 # the lens was.
 #
 # The cost is not the confusion, it is what the obvious remedies do under it: a `reset --hard`
-# or a `checkout -- .` run from the hub would have destroyed WORKING TREE, not the hub's.
-# That is the exact class of the two losses of 2026-08-08, and the hub's own config still carries
+# or a `checkout -- .` run from the full source tree would have destroyed WORKING TREE, not the full source tree's.
+# That is the exact class of the two losses of 2026-08-08, and the full source tree's own config still carries
 # the branch `rescue/s441-canonical-worktree-2026-08-05` from an earlier round.
 #
 # ── WHY IT COMPARES PATHS INSTEAD OF READING THE CONFIG KEY ─────────────────────────────────

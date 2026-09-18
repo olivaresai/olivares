@@ -161,7 +161,7 @@ describe('ReportingView', () => {
 
   /**
    * ⛔ LA MISMA PROPIEDAD, PERO CON UN 501 DE VERDAD, y existe por un hallazgo del recorrido con
-   * navegador de the integrator: contra un motor community real, `GET /schedules` contestó 501 y
+   * navegador de the maintainer: contra un motor community real, `GET /schedules` contestó 501 y
    * el informe decía que el operador no veía nada.
    *
    * La casilla de arriba inyecta un `ApiError` CONSTRUIDO A MANO, así que sólo prueba que el

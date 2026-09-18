@@ -6,7 +6,7 @@
 # update-cosign-digests.sh — the AUDITABLE procedure for refreshing the digest table that
 # scripts/assert-cosign-binary.sh enforces.
 #
-# WHY THIS IS A SCRIPT AND NOT A PARAGRAPH. The integrator's question was: where does the
+# WHY THIS IS A SCRIPT AND NOT A PARAGRAPH. The maintainer's question was: where does the
 # expected digest come from at execution time? The answer must be "a list versioned in this
 # repository", because fetching `cosign_checksums.txt` while signing would put a network
 # dependency and a remote trust point ON THE SIGNING PATH. But "versioned in the repo" is

@@ -90,7 +90,7 @@ foto_vivos >"$vivos"
 #     hay un punto ciego real. Y si no queda ninguna raiz enumerada, no hay veredicto que dar.
 #
 # ⛔ ESTO ERA UN SOLO BOOLEANO `mirado`, Y LO REFUTO POR EJECUCION la revision independiente
-# `the model` del 2026-09-05 sobre `0525eed8e1` (assessments/implementation/disk-residue-ci/
+# `the model` del 2026-09-05 sobre `0525eed8e1` (an internal design note (not shipped)
 # review/first-level-enumeration-followup.md). CUALQUIER raiz que terminara 0 lo ponia a 1, asi
 # que UNA RAIZ SANA BORRABA EL FALLO DE OTRA. Reproducido por dos mecanismos distintos:
 #

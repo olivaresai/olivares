@@ -116,7 +116,8 @@
 #
 # ── TWO PROFILES, ONE BATTERY (added 2026-09-06) ──────────────────────────────────────────
 # This script SHIPS and the export script does not, and the battery below used to demand the
-# hub's shape unconditionally: TOP_ALLOW read from the export script, DOCS_BLOCK read from it,
+# full source tree's shape unconditionally: TOP_ALLOW read from the export script, DOCS_BLOCK
+# read from it,
 # the internal context present on disk so the prune could be seen removing it. Measured on a
 # real export of this tree, from the export: six assertions red and the published
 # `task lint:release-version` red with them. A gate that can only pass where the export script
@@ -135,9 +136,9 @@
 #   unknown — refused, by the battery AND by the run (require_known_profile): neither
 #             profile's facts can be established, so nothing is certified, whatever the volume.
 # The parser controls (TOP_ALLOW and DOCS_BLOCK shapes, comments, emptiness, unreadability) run
-# in BOTH profiles on an in-memory export script, so the public tree does not lose the hub's
+# in BOTH profiles on an in-memory export script, so the public tree does not lose the full source tree's
 # coverage of the parsers. One verdict changed with this: a PRESENT but unreadable export
-# script sat in `except OSError`, the same branch as absent — in the hub that enumerated the
+# script sat in `except OSError`, the same branch as absent — in the full source tree that enumerated the
 # private tree and called its private documents divergent. Unreadable is COULD NOT LOOK:
 # UNVERIFIED, exit 2. Selftest: `unreadable`, and the `public export:` cases.
 #
@@ -512,14 +513,14 @@ def require_known_profile(profile, why):
     the population cleared it. A population above a floor is not a profile."""
     if profile not in ("hub", "public"):
         unverified(f"UNVERIFIED check-release-version: this tree classifies as {profile} ({why}); "
-                   "neither the hub's census nor the export's can be certified for a tree that is "
+                   "neither the full source tree's census nor the export's can be certified for a tree that is "
                    "neither, whatever its volume.")
 
 
 def require_census_matches(profile, census_src):
     """A hub reads its census from the export script; a stamped export has no export script and
     enumerates itself. The other two pairings describe a tree this file does not: a hub that lost
-    its export script, or an export that grew one. The battery already refuses both (the hub
+    its export script, or an export that grew one. The battery already refuses both (the full source tree
     assertion on TOP_ALLOW, the public one on its absence); the run must not certify what the
     battery refuses."""
     from_script = "TOP_ALLOW" in census_src
@@ -809,7 +810,7 @@ LAST_GOOD = {"date": "2026-08-14", "files": 6, "tokens": 17,
 # Kind is the PRE-RENAME product word, and THIS SCRIPT SHIPS in the public export: spelling
 # the path planted that word in scripts/, where the export's leak gate refuses it (leg 2 —
 # "stale identity outside operator/"). Measured 2026-08-14: the literal turned
-# `task lint:export` red and would have blocked every lane's push. The gate is right —
+# `task lint:export` red and would have blocked every contributor's push. The gate is right —
 # in scripts/ that word is indistinguishable from a binary/command/image still carrying the
 # old name — so the answer is not an allow-strings entry (which publishes the word AND keeps
 # a second copy of a name the tree already owns, the same double cost measured on the egress
@@ -1033,12 +1034,12 @@ DOCS_LAST_GOOD = {"date": "2026-08-14", "measured": 283, "floor": 200, "top": 1,
 # The curated PUBLIC export is a smaller population BY DESIGN, not a broken walk: the export's
 # DOCS_BLOCK removes whole subtrees and some thirty top-level files before this script ever runs
 # there. Measured 2026-09-06 on a real export of this tree, from the export: 84 files, 32 of them
-# directly under docs/, against the hub's floor of 200 — so the shipped gate answered UNVERIFIED
+# directly under docs/, against the full source tree's floor of 200 — so the shipped gate answered UNVERIFIED
 # (exit 2) on every public read of this tree, and the battery went red on the same line. This is
-# that population's own record, with the hub record's reasoning and the hub record's margin (29 %
+# that population's own record, with the source-tree record's reasoning and its margin (29 %
 # below the measurement): the failures the floor exists to catch remove a SUBTREE, and the largest
 # one the public walk carries (28 files) dropping out crosses 60; ordinary churn does not. The
-# hub's record is untouched and still holds the hub — and any tree that classifies as neither
+# source-tree record is untouched and still holds it — and any tree that classifies as neither
 # (docs_floor): an unknown tree earns the strictest floor, never the smaller one.
 DOCS_LAST_GOOD_PUBLIC = {"date": "2026-09-06", "measured": 84, "floor": 60, "top": 1,
                          "note": "the curated public export: docs/ walked whole minus the "
@@ -1047,7 +1048,7 @@ DOCS_LAST_GOOD_PUBLIC = {"date": "2026-09-06", "measured": 84, "floor": 60, "top
 
 def docs_floor(profile):
     """-> the enumeration record this tree is held to: only a stamped public export earns the
-    public record; hub and unknown are held to the hub's, which is the stricter one."""
+    public record; hub and unknown are held to the full source tree's, which is the stricter one."""
     return DOCS_LAST_GOOD_PUBLIC if profile == "public" else DOCS_LAST_GOOD
 
 
@@ -1173,7 +1174,7 @@ def selftest():
     # its marker plus the absence of every hub-only path — so a copied marker, or a hub that lost
     # one file, cannot buy the other profile's assertions. `unknown` is a red, not a third branch.
     profile, why = tree_profile()
-    expect(f"the tree classifies as the hub or a stamped public export, never guessed ({profile}: {why})",
+    expect(f"the tree classifies as the full source tree or a stamped public export, never guessed ({profile}: {why})",
            profile in ("hub", "public"))
     hub = profile == "hub"
     # PARSER CONTROLS, BOTH PROFILES, on an in-memory export script: the census and the curation
@@ -1234,7 +1235,7 @@ def selftest():
                {"deploy", "packaging", "operator", "docs-site", "docs"} <= set(real_tops) and len(real_tops) > 15)
         # scan_pins yields (path, line no, token, line, dated): FIVE fields. This branch runs only in
         # the public export, where the first hosted rehearsal of the exported v26.9.0 tree found it
-        # unpacking four (ValueError, 2026-09-16); the hub never executes it. Bind the path only.
+        # unpacking four (ValueError, 2026-09-16); the full source tree never executes it. Bind the path only.
         walked = {hit[0].split("/", 1)[0] for hit in scan_pins([t for t in real_tops if t in ARTIFACT_ROOTS])}
         expect("public export: the fallback census walks to the shipped pins on disk (deploy/ and packaging/)",
                {"deploy", "packaging"} <= walked)
@@ -1313,7 +1314,7 @@ def selftest():
     expect(f"docs walk is above its enumeration floor ({profile} record: floor {floor['floor']}, "
            f"measured {floor['measured']} on {floor['date']})",
            len(dfs) >= floor["floor"])
-    expect("the public record is earned only by a stamped export: hub and unknown are held to the hub's floor",
+    expect("the public record is earned only by a stamped export: hub and unknown are held to the full source tree's floor",
            docs_floor("public") is DOCS_LAST_GOOD_PUBLIC and docs_floor("hub") is DOCS_LAST_GOOD
            and docs_floor("unknown") is DOCS_LAST_GOOD)
     # WIRING, not just the function. Every case above feeds judge() a synthetic tree, so
@@ -1337,7 +1338,7 @@ def selftest():
     # The parser and the prune, BOTH profiles, on the in-memory export script above: `syn_cur`
     # names the internal context and ONE synthetic directory this file does not name. The second
     # name is synthetic on purpose — a real curated directory spelled here is a STRING VALUE in a
-    # script that SHIPS, and on 2026-09-06 `lint:export` reported exactly that as a leak. The hub
+    # script that SHIPS, and on 2026-09-06 `lint:export` reported exactly that as a leak. The full source tree
     # branch below reads the REAL curation on top, so every curated directory is still covered
     # there, including ones added after this line. The fixture path is synthetic too; rd(tree)
     # reads the in-memory dictionary further down.
@@ -1373,7 +1374,7 @@ def selftest():
     if hub:
         # The REAL curation, on the REAL tree: read from the export script, wider than this file,
         # and the prune is proven both ways — with it the internal context is out, without it
-        # the same walk brings it straight back. Only the hub has both halves on disk.
+        # the same walk brings it straight back. Only the full source tree has both halves on disk.
         real_cur = curated_out()
         expect("the docs curation is read from export-public.sh, not written here",
                "docs/ai-context" in real_cur and len(real_cur) > 5)

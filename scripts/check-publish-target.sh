@@ -25,7 +25,7 @@
 # THE HOLE THIS CLOSES, measured 2026-08-29: `release-chart.yml` and `release-provider.yml` had a
 # literal repository guard and NO preflight at all (`grep -c release-preflight` answered 0 in
 # both), with their destinations hard-wired to production. Widening only the guard — which is what
-# a first reading of orders 36/37 suggests — would have let a preprod repository push charts to
+# a first reading of orders 36/37 suggests — would have let a repository that declares that profile push charts to
 # ghcr.io/olivaresai/charts with a single variable in between. A gate that opens a door must be
 # paired with the one that decides who walks through it.
 #

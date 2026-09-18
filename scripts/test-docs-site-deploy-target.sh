@@ -62,7 +62,7 @@ outputs() { tr '\n' '|' <"$WORK/out"; }
 
 HUB=1263277317     # private development hub: its existing production dispatch target
 PUBLIC=1268548683  # olivaresai/olivares: carries this workflow, production target
-PREPROD=1269477539 # olivares.preprod: the Community preprod repository
+PREPROD=1269477539 # olivares.preprod: the Community repository that declares that profile
 MAIN=refs/heads/main
 G="$WORK/guard.sh"
 

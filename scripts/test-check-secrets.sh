@@ -1682,7 +1682,7 @@ fi
 # HEAD whose File is `odd<US>path.txt` shifted every field by one — the Commit column received
 # the StartLine — and the gate answered `0 / NOT IN THIS REPOSITORY` about a finding that IS in
 # HEAD. Reproduced and sealed against that exact commit in
-# `assessments/implementation/secrets-report-attribution/framing-correction/red/`.
+# `an internal design note (not shipped)`.
 #
 # The cure is not a rarer byte. Every field is escaped reversibly (`\t \n \r \xNN`, and `\\`
 # for a literal backslash) and framed BY POSITION, eight lines per finding, read with
@@ -2160,7 +2160,7 @@ fi
 # exempts before any rule, but only when the guard proves the rules would see nothing different.
 # Every case runs the gate twice — narrowed (the default) and OLIVARES_SECRETS_NARROW_EXTRACTION=0 —
 # and requires the SAME exit code and the SAME named findings. Measured without the guard
-# (assessments/engineering/secrets-exemption-equivalence-20260911): 54 loses its finding, 55 gains
+# (an internal design note (not shipped)): 54 loses its finding, 55 gains
 # material the full extraction never scans, 56 loses its finding, 57 hides a now-scanned mailbox.
 findings_of() { grep -E '^  (rule|file|commit|fingerprint)' "$1" | LC_ALL=C sort; }
 narrow_pair() { # <dir> <case> ; sets n_rc (narrowed) and f_rc (full)

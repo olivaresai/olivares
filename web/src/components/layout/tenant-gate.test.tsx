@@ -62,7 +62,7 @@ const TENANT_INDEPENDENT = new Set([
   '/v1/server-info',
   '/v1/auth/whoami',
   '/v1/auth/logout',
-  // Added 2026-08-17 by the integrator, resolving a collision between two lanes that were each
+  // Added 2026-08-17 by the maintainer, resolving a collision between two lanes that were each
   // correct alone: Landed the PROACTIVE session refresh (the console schedules it from the
   // `expires_at` it had been storing and never reading), so the shell now calls this before a
   // tenant is chosen and these five cases went red on `['/v1/auth/refresh']`.

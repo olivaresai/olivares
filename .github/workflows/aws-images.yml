@@ -50,7 +50,7 @@ on:
         required: false
         default: "olivares-pilot"
       aws_region:
-        description: "Region of the ECR registry. Ratified: us-east-1 (D10-bis §2.6)."
+        description: "Region of the ECR registry. Ratified: us-east-1."
         required: false
         default: "us-east-1"
 

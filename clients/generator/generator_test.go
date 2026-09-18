@@ -1421,7 +1421,7 @@ func mustRead(t *testing.T, path string) string {
 
 // TestAuthCapabilitiesTypedFamilyGeneration is the permanent guard for finding R5 of the
 // independent review of the first G1-A candidate
-// (`assessments/implementation/capabilities-g1a/independent-review/REPORT.md`, SHA-256
+// (`an internal design note (not shipped)`, SHA-256
 // 2e9875c2dcace018b43aea349dbbe82271deb9c730d04c3a40ed738878cf1ffa).
 //
 // ⛔ IT EXISTS BECAUSE GREEN GENERATION GATES SAID NOTHING. On the rejected candidate the
@@ -1527,7 +1527,7 @@ func TestAuthCapabilitiesTypedFamilyGeneration(t *testing.T) {
 // ── F2/F4 regressions ────────────────────────────────────────────────────────────
 //
 // Permanent home of two defects found by the R2 independent review of the capability
-// SDK increment (`assessments/implementation/capabilities-g1a/r2-independent-review/
+// SDK increment (`an internal design note (not shipped)
 // REPORT.md`, findings F2 and F4). Both were invisible to the existing suite: the
 // generated artifacts reproduced byte-for-byte and every typed-contract assertion
 // passed while a recursive document killed the process and a stable operation shipped
@@ -1856,7 +1856,7 @@ func TestAuthCapabilitiesSchema2VocabularyIsPublished(t *testing.T) {
 // ── Java request-body documentation ──────────────────────────────────────────────
 //
 // Permanent guard for the inherited finding of the N3-A independent review
-// (`assessments/implementation/capabilities-schema2-generated/independent-review/REPORT.md`,
+// (`an internal design note (not shipped)`,
 // "Java required-body javadoc"): `Client.postV1AuthCapabilities` said its request body was
 // optional and could be null, while OpenAPI declares it required, the generated input record
 // calls `Objects.requireNonNull(body, "body")` and the seam is `doJsonRequired`. The prose

@@ -7,7 +7,7 @@
 # `CREATE TABLE IF NOT EXISTS` turns the collision into a silent no-op. This refuses that shape.
 #
 # WHY THIS EXISTS, and it cost most of 2026-08-08. Three unmerged branches carried a `0006`, and
-# two of them (#591 and the hub's) created `dodo_cohort_fragments` with INCOMPATIBLE primary keys
+# two of them created `dodo_cohort_fragments` with INCOMPATIBLE primary keys
 # — `webhook_id` against `(business_id, subscription_id, event_timestamp, kind)`. Every instrument
 # we had said there was nothing wrong:
 #
@@ -80,7 +80,7 @@ if [ ! -d "$DIR" ] && [ "$DIR" = "$DIR_POR_DEFECTO" ] \
    && [ "$(bash "${ROOT:-.}/scripts/hub-leg.sh" --classify --root "${ROOT:-.}" 2>/dev/null)" = "public" ]; then
 	say "check-d1-migrations: SCOPED — public export; commercial/ is curated out of the"
 	say "  published tree, so $DIR has no subject here and never will."
-	say "  In the hub this leg keeps grading every D1 migration; this is not a green from"
+	say "  In the full source tree this leg keeps grading every D1 migration; this is not a green from"
 	say "  having looked, it is a leg that does not apply to this tree."
 	exit 0
 fi

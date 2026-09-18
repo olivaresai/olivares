@@ -480,7 +480,7 @@ if [ "$rc" = 1 ] && printf '%s' "$LAST" | grep -q 'in waitAndRace$'; then
 	ok "a finding inside a METHOD is reported under the method name"
 else ko "the method name was not extracted (rc=$rc)" "$LAST"; fi
 
-# ── 16 · A STRING LITERAL IS NOT CODE — no FALSE RED in the fast lane ──────────────────
+# ── 16 · A STRING LITERAL IS NOT CODE — no FALSE RED in the fast path ──────────────────
 # A gate wired into the pre-push hook that can go red on a `t.Fatalf("Open(ctx) …")` poisons
 # the push of every branch on every box. Measured on the first shipped version: it did.
 row "string literal immunity"

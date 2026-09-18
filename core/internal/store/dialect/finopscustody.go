@@ -11,7 +11,7 @@ import (
 
 // finopscustody.go renders the three FinOps custody control relations of core v12
 // `finops_custody_control_v1`, exactly as the ratified construction contract
-// `assessments/architecture/r87-finops-enrollment/correction-2/SCHEMA-V12.md` declares them.
+// `an internal design note (not shipped)` declares them.
 //
 // WHAT THIS FILE IS, and what it deliberately is not. It is the DDL and the guards: the
 // three relations, their typed constraints, their unique indexes, the statement-order

@@ -123,7 +123,7 @@ expect 1 "firing: the overlay pin was replaced with another 40-hex"
 stage
 acta_set hub '"0000000000000000000000000000000000000000"'
 run
-expect 1 "firing: the hub pin was replaced"
+expect 1 "firing: the pinned source was replaced"
 
 stage
 python3 - "$TMP/tree/commercial/module-slug-package.json" <<'PY'

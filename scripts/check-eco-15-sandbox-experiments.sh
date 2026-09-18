@@ -55,7 +55,7 @@ for r in rows:
         raise SystemExit("%s status is %r, want HOLD" % (r.get("id"), r.get("status")))
     if r.get("capture") is not None:
         raise SystemExit("%s capture must be null while ran is false" % r.get("id"))
-# Both lanes stay closed. Match the YAML block, not a comment.
+# Both paths stay closed. Match the YAML block, not a comment.
 import re
 for lane in ("self-hosted-annual", "cloud-scale-monthly"):
     m = re.search(r"(?m)^  %s:\n    state: (\S+)" % re.escape(lane), canon)

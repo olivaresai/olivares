@@ -5,14 +5,14 @@
 
 This runbook describes the repeatable security checks and where they are wired.
 Execution and acceptance must be established for the candidate being reviewed. It exists because
-of decision **D22** — no external pen-test yet, but everything automatable is
+of a recorded decision — no external pen-test yet, but everything automatable is
 automated and audited in the pre-release sessions. The re-executable adversarial
 campaign runs on top of this scaffolding, starting from `task security:report`.
 
 ## What runs where
 
 The [mainline workflow](../../.github/workflows/mainline-ci.yml) has manual dispatch
-and push to `main`, with journal-path exclusions on the push trigger. The integrator
+and push to `main`, with journal-path exclusions on the push trigger. The maintainer
 dispatches the merge candidate before integration; post-merge CI applies to the
 resulting commit. The table describes wiring, not a successful execution: record
 the exact SHA, run/job/step, result and omissions. A skipped or absent substantive
@@ -108,7 +108,7 @@ allowlisted** — bump the dependency instead.
 `task security:report` renders `docs/security/gate-report.md`: the full informational
 SAST scan, the vuln gate result, the secret-scan status and SBOM presence. This is the
 product-led assurance artifact the trust center links in place of an external audit
-(D22). It reports honestly — a tool that did not run is recorded as "not run", never as
+as recorded. It reports honestly — a tool that did not run is recorded as "not run", never as
 a pass.
 
 ## Security invariants (E3)

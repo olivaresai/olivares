@@ -49,7 +49,7 @@ else
 	if [ "$_cls" = "public" ]; then
 		echo "test-guard-bash: SCOPED — public export; .claude/hooks/guard-bash.sh is hub-only"
 		echo "  session tooling and is curated out of the published tree. This witness has no"
-		echo "  subject here and never will. In the hub it still grades the hook."
+		echo "  subject here and never will. In the full source tree it still grades the hook."
 		exit 0
 	fi
 	echo "test-guard-bash: no existe .claude/hooks/guard-bash.sh (hub-only); no puedo probarlo" >&2

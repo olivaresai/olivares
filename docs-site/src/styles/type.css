@@ -7,7 +7,7 @@
  * WHY THIS FILE EXISTS, and why it is not brand.css:
  * brand.css is generated from colour tokens (scripts/gen-brand-css.mjs) and
  * `npm run brand:check` compares the whole file. The generator is not in this
- * lane's write set. Motion already follows the same split: generated colour
+ * file's write set. Motion already follows the same split: generated colour
  * file, then a hand-authored layer on the Starlight `customCss` list
  * (astro.config.mjs). This is that layer for type and component sizing.
  *
@@ -29,7 +29,7 @@
  * SCALE: minor third, ratio 1.2, base 1 rem.
  *   1.00 body · 1.20 (snapped to 1.25 h3) · 1.44 (snapped to 1.50 h2)
  *   · 1.728 (snapped to 1.75 h1 mobile) · 2.074 (snapped to 2.25 h1 desktop)
- * Heading roles snap to the integrator ceilings rather than the raw powers so
+ * Heading roles snap to the rounded ceilings rather than the raw powers so
  * h3 is distinct from body and the desktop page title has a real step up from
  * mobile. --sl-text-5xl and --sl-text-6xl are capped at 2.25 rem so the hero
  * clamp cannot outgrow the page title.

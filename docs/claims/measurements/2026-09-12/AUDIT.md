@@ -15,18 +15,17 @@ H, W and E are development measurements, not release identities. The producer co
 that stores this audit follows H and is not named inside this document.
 
 **Observation window (real UTC clock, this process):** start `2026-09-12T03:53:53Z`, end `2026-09-12T03:55:54Z`.
-**Correction revision.** Root Astra personally reviewed producer P `58e3b76c405a80e7d033e4aecf8ead3c5139b83e`
+**Correction revision.** The maintainer personally reviewed producer P `58e3b76c405a80e7d033e4aecf8ead3c5139b83e`
 and RETURNED it on 2026-09-12 against R1-R5 and the surviving C2 combined-mechanism inference.
 This document is the corrected revision. Observations added by the correction are dated and marked
 as such; the original measurement window above is unchanged and was not re-run.
 No capability is accepted here, and no claim state, job state or release state changed.
 
-**Original author:** Claude Opus 5 (`claude-opus-5`), effort xhigh.
-**First correction author:** Claude Opus 5 (`claude-opus-5`), effort xhigh.
-**Second correction author and adjudicator:** Root Astra; the later corrections below preserve the original observation window.
-**Independent reviewer of P:** grok / grok-4.6 (RETURN, 2026-09-12). **Adjudicator:** Root Astra.
-**Legacy provider line:** Claude Opus 5 (`claude-opus-5`), effort xhigh,
-acting as the single Community documentation writer under the MC3-P cut. Root Astra reviews.
+**Original author:** the Community documentation writer.
+**First correction author:** the same writer.
+**Second correction author and adjudicator:** the maintainer; the later corrections below preserve the original observation window.
+**Independent reviewer of P:** a separate reviewer (RETURN, 2026-09-12). **Adjudicator:** the maintainer.
+**Role of the author:** the single Community documentation writer for this cut. The maintainer reviews.
 
 **Original author-time limit, preserved.** At the original observation window the commit object
 `459faf501325cd9fb51e3944da5df4f4577d8f73` could not be resolved in the object stores this writer
@@ -60,10 +59,10 @@ None of it is claim-format capability acceptance.
 
 | Receipt | State | Exact scope, and what it does not cover |
 |---|---|---|
-| `assessments/implementation/r62-web-claims-core-review-20260912/root-review/ACCEPTANCE.json` | accepted-for-website-composition | The MC1 contract core module at website `e95717815ee8271508326359678654f1cc8edc2b`. Validators only. No page wiring, no current measurement, no capability promotion. |
-| `assessments/integration/r62-web-publication-20260912/ACCEPTANCE.json` | accepted-for-normal-web-dev-PR | Website persona pages and the MC1 core at head `b51d885e`. Build and hermetic checks. No product RC or production release claim. |
-| `assessments/integration/r61-private-composition-20260912-attempt04/ACCEPTANCE.json` | `state: accepted-local-private-composition` | Its own fields: `gate_exit: 0`, `remote_received: false`, `complete_rc: false`, head `d8869212…`, public `fcf029f7…`. It binds none of the six claim jobs. The wiring scope wording ("preserve fixed gate floor and membership cross-check") belongs to the sibling `WIRING-ACCEPTANCE.json` (`owner: Astra`, 2026-09-12T00:43:57Z) and is attributed there, not here. |
-| `assessments/integration/r62-web-live-20260912/RESULT.json` | partially-observed | 117 of 117 persona pages matched the measured title and H1. This does not establish complete page-byte equality. Root acceptance is `assessments/integration/r62-web-live-20260912/root-review/ACCEPTANCE.md`; deployment identity remains unknown. No capability acceptance. |
+| an internal acceptance record (not shipped) | accepted-for-website-composition | The MC1 contract core module at website `e95717815ee8271508326359678654f1cc8edc2b`. Validators only. No page wiring, no current measurement, no capability promotion. |
+| an internal acceptance record (not shipped) | accepted-for-normal-web-dev-PR | Website persona pages and the MC1 core at head `b51d885e`. Build and hermetic checks. No product RC or production release claim. |
+| an internal acceptance record (not shipped) | `state: accepted-local-private-composition` | Its own fields: `gate_exit: 0`, `remote_received: false`, `complete_rc: false`, head `d8869212…`, public `fcf029f7…`. It binds none of the six claim jobs. The wiring scope wording ("preserve fixed gate floor and membership cross-check") belongs to the sibling `WIRING-ACCEPTANCE.json` (`owner: Astra`, 2026-09-12T00:43:57Z) and is attributed there, not here. |
+| an internal acceptance record (not shipped) | partially-observed | 117 of 117 persona pages matched the measured title and H1. This does not establish complete page-byte equality. Root acceptance is an internal acceptance record (not shipped); deployment identity remains unknown. No capability acceptance. |
 
 ## What was corrected in this revision
 

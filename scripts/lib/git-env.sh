@@ -6,13 +6,14 @@
 # Not executable, not a program: it exists to be `.`-sourced, and it unsets the
 # ambient git environment in the CALLER's shell.
 #
-# THE DEFECT IT CLOSES, measured 2026-08-06 (reported by another lane, reproduced
+# THE DEFECT IT CLOSES, measured 2026-08-06 (reported by another contributor, reproduced
 # here in a faithful topology before a line of this was written).
 #
 #   git exports GIT_DIR to its hooks — but ONLY from a LINKED worktree
 #   (`git worktree add`), never from the main checkout. Every parallel session in
-#   this repository works in a linked worktree; the hub does not. That is why the
-#   hub's own pushes were clean while sessions' pushes were corrupting themselves,
+#   this repository works in a linked worktree; the main checkout does not. That is why
+#   pushes from the main checkout were clean while those from a linked worktree corrupted
+#   themselves,
 #   and why the first attempt to refute the vector — run in a flat repo, the one
 #   topology where GIT_DIR is not exported — came back negative and proved nothing.
 #

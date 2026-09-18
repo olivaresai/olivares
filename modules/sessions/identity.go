@@ -60,7 +60,7 @@ const (
 	// composition root answered it by reading a core model.Session — a different
 	// notion of "session" whose primary key a canonical sid never equals (see the
 	// SG-00 preamble above). Deriving it instead from the driving agent was
-	// considered and REFUSED by the hub on 2026-08-11: it repeats the same
+	// considered and REFUSED on 2026-08-11: it repeats the same
 	// pattern of asking the neighboring entity for a fact, and it couples two
 	// lifecycles the design separates on purpose — an agent that changes
 	// workspace would retroactively move every live session it drives, in a plane

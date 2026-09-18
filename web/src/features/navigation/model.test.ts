@@ -4,7 +4,7 @@
 //
 // THE ROUTE MAP PIN AND THE MODEL'S CONTRACT (N1).
 //
-// Root ratified one placement per route (assessments/product/console-navigation-hierarchy/
+// Root ratified one placement per route (an internal design note (not shipped)
 // ROUTE-MAP.md), extended by k3-i3-console-construction/CONSTRUCTION-3.md §4 for Handoffs.
 // The table below pins those decisions so the registry cannot drift
 // from it silently: moving a view to another area, renaming a section or forgetting a new

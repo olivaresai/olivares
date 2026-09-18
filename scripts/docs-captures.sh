@@ -784,8 +784,8 @@ if [ "${PUBLICAR:-0}" = "1" ]; then
   # ⛔ SE PUBLICA POR GLOB DEL DIRECTORIO, NO POR UNA LISTA DE NOMBRES, y el motivo lo dio un gate
   # rechazando este mismo push. `lint:export-closure` cazo dos referencias literales mias a
   # `manifest.json` —origen y destino— con el veredicto exacto: «exists in neither the export nor
-  # the hub (dangling reference)». Y cuando las declare `hub-only`, me corrigio otra vez y mejor:
-  # «declared hub-only but no such path exists in the hub — the declaration names nothing». Tenia
+  # the full source tree (dangling reference)». Y cuando las declare `hub-only`, me corrigio otra vez y mejor:
+  # «declared hub-only but no such path exists in the full source tree — the declaration names nothing». Tenia
   # razon las dos veces: el manifiesto lo PRODUCE esta misma corrida, asi que en un arbol en reposo
   # —publicado o no— no esta, y `hub-only` significa «esta en el hub y no en el export», que es otra
   # cosa. Iterar el directorio publica lo que la tanda haya producido y no nombra ningun fichero

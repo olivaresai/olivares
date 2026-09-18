@@ -118,7 +118,7 @@ func TestWiredResolverResolvesACanonicalSID(t *testing.T) {
 }
 
 // TestWiredResolverScopesASessionToItsOwnWorkspace proves the plane OWNS the
-// workspace dimension the hub chose (option ii) rather than borrowing it.
+// workspace dimension the design chose (option ii) rather than borrowing it.
 func TestWiredResolverScopesASessionToItsOwnWorkspace(t *testing.T) {
 	resolver, mod, st, tenant, defaultWS := newSessionResolverFixture(t)
 	ctx := context.Background()

@@ -16,7 +16,7 @@
 # the fast lints only. The rule itself lives in scripts/prepush-refclass.sh so it can
 # be tested without paying for the gate it decides (scripts/test-prepush-refclass.sh,
 # `task lint:prepush-refclass`). Until today the policy said one thing and this file
-# did another — every lane ran the full gate on every branch and worked around it by
+# did another — every contributor ran the full gate on every branch and worked around it by
 # hand with OLIVARES_FAST_PUSH=1, which also silently opened the same hole on main.
 #
 # SANCTIONED bypass: git push --no-verify (declare it in the PR). It is not the only
@@ -31,7 +31,7 @@
 # guarantees above, and none of them is closed by the code below.
 #
 #  N-1  THE CLASSIFIER RUNS LIKE ANY OTHER COMMAND THIS HOOK CALLS: in the foreground, with
-#       no deadline of its own. A rule that never returns parks the lane exactly as a wedged
+#       no deadline of its own. A rule that never returns parks the push exactly as a wedged
 #       `task test` would. It is a local, hermetic script with no network and no lock. The
 #       base hook already had unbounded commands on content pushes; classification newly
 #       places the same failure mode BEFORE the deletion/skip decisions, which the base hook
@@ -50,13 +50,13 @@
 #       See DEFERRED D-2: this is the open half of the property, not a satisfied one.
 #  N-4  THE HOST MUTEX IS THE ONE THIS REPOSITORY ALREADY HAD, UNCHANGED. The split moved
 #       WHO takes it: every push classified `full` — main, tags, and any deny-closed
-#       promotion (unknown namespace, malformed line) — instead of every lane on the box.
+#       promotion (unknown namespace, malformed line) — instead of every contributor on the box.
 #       Nothing else moved. Its known weaknesses are therefore exactly today's: the lock's age is
 #       the commit date, which `git commit-tree` takes from GIT_COMMITTER_DATE and a slow
 #       host clock changes on its own, so a LIVE holder can be presumed dead and robbed;
-#       the takeover is a plain force push, so two lanes that saw the same stale OID can
+#       the takeover is a plain force push, so two contributors that saw the same stale OID can
 #       both believe they won; and release deletes the ref unconditionally and swallows
-#       every error, so a lane that was stolen from can later delete its successor's lock.
+#       every error, so a contributor that was stolen from can later delete its successor's lock.
 #       Measured in rounds 3 and 5 of the review. See DEFERRED D-1.
 #  N-5  A CLIENT HOOK IS NOT A SECURITY BOUNDARY. `--no-verify`, `core.hooksPath` and an
 #       editor all defeat it, and the classification is only as good as the stdin git hands
@@ -74,7 +74,7 @@
 #       confirmed-live holder, per-call network deadlines and a wait budget that is an
 #       actual deadline. Round 11 left L-02 OPEN: with the shipped defaults
 #       (WAIT == STALE) the promised recovery of an indeterminable holder is UNREACHABLE —
-#       the lane gives up at the threshold before the lease is ever re-evaluated, so an
+#       the push gives up at the threshold before the lease is ever re-evaluated, so an
 #       abandoned lock on another host is never recovered automatically. Landing a mutex
 #       whose advertised recovery cannot fire is worse than the plain one above, which at
 #       least does what its comment says. REOPEN with the ordering of lease vs give-up
@@ -83,7 +83,7 @@
 #       deriva como STALE+1800, con una guarda que lo corrige y lo DICE si alguien lo fija por
 #       debajo. El robo se evalua siempre antes de rendirse. Probado en scripts/test-gate-lock-order.sh.
 #  D-2  TASKFILE-GRAPH OBSERVATION — resolving what go-task expands from Taskfile.yml so a
-#       feature lane cannot buy a heavy task through a `deps:` edge the hook never types
+#       feature branch cannot buy a heavy task through a `deps:` edge the hook never types
 #       (N-3). Round 11 left L-01 OPEN: the hand-written resolver is blind to syntax go-task
 #       3.51.1 accepts and executes — single-quoted entries and flow mappings
 #       (`deps: ['heavy']`, `deps: [{task: heavy}]`) produced ZERO edges while `task --dry`
@@ -110,7 +110,7 @@
 #       `265 passed, 1 failed` and `266 passed, 0 failed` on two consecutive runs (L-03):
 #       a wait-budget mutant that raced whole-second clock arithmetic. `lint:prepush-refclass`
 #       is in the fast lints of EVERY push with commits, and an intermittent gate is worse
-#       than a slow one — it teaches lanes to re-run until green. Nothing time-dependent
+#       than a slow one — it teaches contributors to re-run until green. Nothing time-dependent
 #       came back with this change; anything that does must force its overshoot
 #       deterministically instead of measuring the wall clock.
 # =====================================================================================
@@ -189,7 +189,7 @@ fi
 # CAPTURE BYTES, NOT A BASH STRING. `$(...)` strips EVERY trailing LF — a classifier
 # printing `fast<TAB>reason<LF><LF>` satisfied a contract that says "exactly one line" —
 # and it also DELETES NUL bytes, warning on a stderr nobody reads inside a hook. Measured:
-# `fa<NUL>st<TAB>reason<LF>` arrived as `fast` and bought a MAIN push the fast lane, and
+# `fa<NUL>st<TAB>reason<LF>` arrived as `fast` and bought a MAIN push the fast path, and
 # `de<NUL>lete` arrived as `delete` and took the no-toolchain exception below. A bash
 # variable cannot even hold that byte, so the verdict does not travel through one: stdout
 # goes to a FILE and is read back byte-exactly. `read -r -d ''` stops at a NUL, so the read
@@ -209,13 +209,13 @@ fi
 # the classifier still gets a plain `<` redirection, so `$?` is still its OWN status.
 #
 # It is captured because a fast lint may need to know WHICH refs are travelling. The lint that
-# first required it, lint:unpublished-work, was withdrawn from this lane the same day (see below),
+# first required it, lint:unpublished-work, was withdrawn from this path the same day (see below),
 # and the capture stays because it is the correct shape regardless: a hook that consumed its own
 # stdin and could not say what it was pushing had to re-derive it, and re-deriving is where the
 # earlier byte-exactness bugs came from.
 #
 # A capture that FAILS refuses the push: a classifier fed a truncated file would see fewer refs
-# than git sent, and fewer refs is the direction that buys a main push the fast lane.
+# than git sent, and fewer refs is the direction that buys a main push the fast path.
 push_refs_file=""
 if ! push_refs_file="$(mktemp "${TMPDIR:-/tmp}/olivares-prepush-refs.XXXXXX" 2>/dev/null)" ||
 	[ -z "$push_refs_file" ]; then
@@ -271,7 +271,7 @@ gate_capture="$gate_decision"
 
 # THE SHAPE OF THE VERDICT IS PART OF THE CONTRACT. Reading the first word of the first
 # line accepted a classifier that printed `fast` and then, on the next line, `full`: the
-# hook believed the first, ran the fast lane on a main push and exited 0. A tool that
+# hook believed the first, ran the fast path on a main push and exited 0. A tool that
 # contradicts itself has classified nothing, and "it said fast somewhere" is not a
 # verdict. Exactly ONE line — one terminating LF and no other — exactly
 # `<full|fast|skip|delete><TAB><non-empty reason>`, no CR, no second TAB. Anything else is
@@ -324,11 +324,11 @@ export OLIVARES_PUSH_CLASS="$gate_class"
 # ("no task -> refusal, never green") would be true with no footnote. Measured with real
 # git on a machine without go-task, that cost this: `git push --delete stale-branch` was
 # REFUSED and the only way to tidy a branch was to disable the entire hook with
-# --no-verify — i.e. the absolute rule made lanes practise the bypass on the one operation
+# --no-verify — i.e. the absolute rule made contributors practise the bypass on the one operation
 # that needs no gate at all.
 #
 # So the exception is NAMED rather than left implicit: a push in which EVERY ref line is a
-# deletion carries no commits, so there is nothing any lane could lint, build or test, and
+# deletion carries no commits, so there is nothing any gate could lint, build or test, and
 # it does not need the toolchain to prove that. The classifier decides this — verdict
 # `delete`, which requires deletion_refs == lines_seen — so the hook is not re-deriving it
 # from a reason string, and a deletion travelling with a gate-lock ref, a commit or an
@@ -434,7 +434,7 @@ fi
 # local push AND this ref actually classified `fast`. With the setting absent — which is
 # every ordinary push — this block introduces no variable, no function and no output, and
 # the hook from here on is byte-for-byte the hook it was before. Delete, skip and full
-# keep their existing behaviour too: observation is for the lane this measurement is
+# keep their existing behaviour too: observation is for the push this measurement is
 # about, and "unknown" is never promoted into "enabled".
 #
 # WHY IT SITS HERE, BEFORE THE PARSER CHECK BELOW. That check runs `task --list-all`,
@@ -847,7 +847,7 @@ task lint:hook-leg-wiring:selftest
 # which all 194 "deleted" existed and none of the 214 "untracked" did. Every tree-reading lint
 # would have judged the wrong files, and the obvious remedy — reset --hard — would have destroyed
 # the OTHER session's work. Third occurrence; the first cost a rescue branch that is still in the
-# hub's config. Under a second, and it names both paths when it refuses.
+# repository config. Under a second, and it names both paths when it refuses.
 task lint:worktree-identity
 # ⛔ AND CONFLICT MARKERS BEFORE ANYTHING ELSE RUNS. One second, and a tree carrying `# is not a tree worth spending the rest of this gate on. It sits here because of what happened on
 # 2026-08-15: a merge reported one conflicted file, four had markers, `git add -A` marked the other
@@ -968,7 +968,7 @@ OLIVARES_NETWORK_ADVISORY=1 task lint:session-numbers
 # ...and its battery immediately after it, for the reason the gate itself proved on 2026-08-13:
 # it shipped on 2026-08-10 with no test, and was found refusing every dependabot commit in the
 # repository. A guard that runs on every push with nothing checking WHAT it refuses can block all
-# three lanes with a false positive, and the only remedy left in that state is --no-verify.
+# three contributors with a false positive, and the only remedy left in that state is --no-verify.
 task lint:commit-identity-gate
 # El portal de licencias es superficie de marca y ningún otro gate lo alcanza: brand-parity mira
 # la web pública y email-brand descubre por marcas de correo. Sin esto, un cambio de marca deja
@@ -999,15 +999,15 @@ task vet
 # ⛔ lint:unpublished-work USED TO RUN HERE AND WAS WITHDRAWN THE SAME DAY IT LANDED (2026-08-10),
 # AND ON 2026-08-29 IT LEFT THE HOOK ALTOGETHER. Read the two dates together, because the second
 # is the consequence of the first: on 08-10 it lost its AUTHORITY (the reasoning below) and was
-# left running behind `|| true`; for nineteen days it therefore charged every push of every lane
+# left running behind `|| true`; for nineteen days it therefore charged every push of every contributor
 # the full price of a gate that could fail no one. Measured the day it was removed, with its
 # conditions: >30 min and still running (1812 s alive) over 3371 remote branches and 127
 # worktrees, load 15.2-34.1 on 16 cpu with 16 concurrent pushes — while a lot's own push sat
-# inside it enumerating other lanes' worktrees. `lint:watchdog-unpublished-work` (3 s) stays:
+# inside it enumerating other contributors' worktrees. `lint:watchdog-unpublished-work` (3 s) stays:
 # what left is the CENSUS, not the check that the census works. The census is one command away,
 # `task lint:unpublished-work`. The reasoning that retired it on 08-10 is kept verbatim below,
 # because it is the argument, not the history:
-# It is not disabled for being noisy. Its PREMISE is wrong at this point in the flow, and two lanes
+# It is not disabled for being noisy. Its PREMISE is wrong at this point in the flow, and two contributors
 # measured it independently within four hours.
 #
 # It counts branches that exist only in this clone. But the clone is shared by three containers and
@@ -1073,10 +1073,10 @@ task vet
 # INT-23: los HOLDs y vetos vigentes se EJECUTAN, no se recuerdan. Su batería va con él porque un
 # gate que nadie corre deja de proteger y su salida sana es silencio. Los dos juntos ~0,4 s.
 # The mailbox check ran in NO gate at all — not here, not in the battery, not in CI — so a
-# branch never paid it and the only lane that did was whoever next published documents to
+# branch never paid it and the only push that did was whoever next published documents to
 # main. The breaker never found out; the next person through the door did, and spent the
 # time proving the red was not theirs. That happened TWICE inside forty minutes on
-# 2026-08-06, both times from the same lane, the second AFTER the first was repaired by
+# 2026-08-06, both times from the same checkout, the second AFTER the first was repaired by
 # hand. A gate whose cost lands on someone other than its cause teaches people to push
 # without looking, which is the exact multiplier this hook exists to prevent. It costs a
 # grep over three files — measured at 0s — so there was never a budget argument either.
@@ -1109,11 +1109,11 @@ task lint:export
 # idea: until 2026-08-15 this gate ran in NO local gate at all -- only in the export-check
 # workflow, i.e. only AFTER a push had landed. It cost twelve consecutive red runs on main in one
 # day, and the mechanism is worth stating because it is not carelessness: the closure of a
-# reference is a property of TWO commits. A lane curated a path out of the export in one commit
+# reference is a property of TWO commits. A contributor curated a path out of the export in one commit
 # while the declaration excusing its callers waited, correctly, in another. Each half was green
 # where it was written; only the pair is measurable, and only a gate that runs on the tree can
 # see it. MEASURED 2026-08-15 in an isolated worktree, load 4.03 over 16 cpu: this leg costs 98s
-# and the whole fast lane 12m41s, 55 of 55 green. The figure first written here was ~56s, taken
+# and the whole fast path 12m41s, 55 of 55 green. The figure first written here was ~56s, taken
 # from one run under different load and without its conditions attached -- which is the same
 # class of number this file already corrected once, when a 4m15s from 2026-08-02 had aged 2.5x
 # in prose. A duration without the load it was taken under is citable, not comparable.
@@ -1135,7 +1135,7 @@ task lint:export-closure
 # scripts/check-hooks-path.sh — from HERE it can only catch the absolute case, because the
 # other three mean no hook ran at all.
 task lint:hooks-path
-# And its battery, in the FAST lane for the same reason the npm one is: a battery nothing
+# And its battery, in the FAST path for the same reason the npm one is: a battery nothing
 # runs is a battery that proves nothing. Nine cases against real throwaway repositories,
 # each red one with a mutant that must flip it green. ~1s, no network.
 task lint:hooks-path-gate
@@ -1181,7 +1181,7 @@ task lint:addon-sets-gate
 # content — so every source-anchor ratchet that reads lines from that file stops seeing it,
 # silently, while tsc, the unit suites and lint:spdx all stay green. Measured on 2026-08-07 by
 # walking into it: six raw NULs went into two license-worker sources through the whole fast
-# lane without a single red. It costs 0.7s over 10118 tracked files, and it declares what it
+# path without a single red. It costs 0.7s over 10118 tracked files, and it declares what it
 # skipped. Its battery runs next to it for the same reason the npm one does.
 task lint:nul
 task lint:nul-gate
@@ -1534,12 +1534,12 @@ task lint:actions
 # machine cannot exercise, where no server is present and the run must still say which
 # coverage it lacks instead of printing an unqualified green.
 task lint:pg-env
-# The rule that decided which of these two lanes you are in. Same class of wiring as
+# The rule that decided which of these two contributors you are in. Same class of wiring as
 # lint:pg-env above: hermetic, and it is the only place the branch-aware policy is
 # proved — a classifier is exercised by the gate it selects, so without this battery a
 # regression would show up as "the full gate stopped running", i.e. as a green push.
 # SESSION-NUMBER CLAIMS, IN THE FAST LANE (2026-08-06). Both orchestrators asked for this
-# and it is the integrator's call because GATES v3 is this lane. Wired FAST, not full, for
+# and it is the maintainer's call because GATES v3 is this path. Wired FAST, not full, for
 # a reason: the collisions this catches are made by pushing a BRIEF to a feature branch,
 # which is precisely the push that never sees the full gate. Measured cost 15s, and the
 # claim that it "times out at two minutes" was the environment, not the gate.
@@ -1548,15 +1548,15 @@ task lint:pg-env
 # never a pass), and it was RED on a correct integrated tree until today: three of its four
 # reported collisions came from audits under design/ naming the worktree they measured
 # against, and the fourth from a session's own RESULTADO document being read as a rival of
-# its own brief. Wiring a gate that cries on a correct tree only teaches the lane to reach
+# its own brief. Wiring a gate that cries on a correct tree only teaches contributors to reach
 # for --no-verify, which is how this one got skipped the day it mattered.
 # A REQUEST BODY IS ONE JSON DOCUMENT (2026-08-06). Cheap (a git ls-files plus 22 greps,
-# measured at well under a second) and it belongs in the FAST lane for the same reason the
+# measured at well under a second) and it belongs in the FAST path for the same reason the
 # session-number check does: the drift it catches is written on a feature branch, and the
 # full gate never sees one. Twenty-one of the twenty-two streaming decoders had lost the
 # trailing-value rejection that core/api has always had.
 task lint:json-decoders
-# ONE STORE ERROR, ONE ANSWER (2026-08-12). Same lane and the same reason as the decoder
+# ONE STORE ERROR, ONE ANSWER (2026-08-12). Same path and the same reason as the decoder
 # gate above: the drift is written on a feature branch, in a file nobody diffs against the
 # other thirty-five copies of itself, and the full gate never sees one. Measured that day:
 # thirty-six copies of the mapper, and store.ErrTenantSuspended / ErrTenantNotInService /
@@ -1571,10 +1571,10 @@ task lint:json-decoders
 # throwaway tree that does exactly that. Measured well under two seconds, build included.
 task lint:error-mappers
 # The mailbox check ran in NO gate at all — not here, not in the battery, not in CI — so a
-# branch never paid it and the only lane that did was whoever next published documents to
+# branch never paid it and the only push that did was whoever next published documents to
 # main. The breaker never found out; the next person through the door did, and spent the
 # time proving the red was not theirs. That happened TWICE inside forty minutes on
-# 2026-08-06, both times from the same lane, the second AFTER the first was repaired by
+# 2026-08-06, both times from the same checkout, the second AFTER the first was repaired by
 # hand. A gate whose cost lands on someone other than its cause teaches people to push
 # without looking, which is the exact multiplier this hook exists to prevent. It costs a
 # grep over three files — measured at 0s — so there was never a budget argument either.
@@ -1590,7 +1590,7 @@ task lint:error-mappers
 task lint:build-bin-parity
 # The engine-boot battery (18 cases, 26 s). It guards the boot path of the web e2e run, whose
 # defect leaked engines that squatted this host's ports for a day and five hours and then made
-# every later run fail blaming a token. It was wired into the HEAVY lane first, on a 142 s
+# every later run fail blaming a token. It was wired into the HEAVY path first, on a 142 s
 # figure that turned out to be 120 s of a defect in the battery itself.
 task lint:web-e2e-boot
 # La bateria del censo de duplicados. El censo NO corre aqui —no es una puerta, y su cabecera
@@ -1630,7 +1630,7 @@ task ci:run-skipped-steps:selftest
 # sin que nadie las invocara. Es hermetica —un `origin` de mentira en TMPDIR, transporte acotado a
 # `file`— y su coste es de contencion, no suyo: 296 ms el gancho, 12 ms el `ls-remote`.
 task lint:claim-lector:selftest
-# The npm/JS vulnerability gate's own battery. FAST lane and not the heavy one because it never
+# The npm/JS vulnerability gate's own battery. FAST path and not the heavy one because it never
 # touches the registry — it drives the gate with injected audit binaries emitting fixtures, so it
 # is deterministic and costs seconds. The gate ITSELF runs in CI's `web` job, which is a required
 # context; this line is what stops the gate from rotting unnoticed, because a battery nothing runs
@@ -2058,7 +2058,7 @@ task lint:race-report:selftest
 task lint:race-groups:selftest
 task lint:race-full-services-parity
 task lint:modules-race-partition
-# R112/HR2. Both lanes run it: CI proves the partition before spending its Postgres, and the
+# R112/HR2. Both paths run it: CI proves the partition before spending its Postgres, and the
 # push proves it here. A selection whose union loses an entry leaves that entry unraced with
 # every partition green, which is the one failure a red cannot warn about.
 task lint:hot-race-partition
@@ -2082,6 +2082,14 @@ task lint:session-record:selftest
 task lint:launch-placeholders:selftest
 task lint:overlay-seal:selftest
 task lint:export-identity:selftest
+# ⛔ CABLEADA EL 2026-09-17, y va AQUI, junto a export-identity, porque miden la misma frontera
+#    por dos caminos: aquella vigila la lista de denegacion de IDENTIDAD privada del export;
+#    esta vigila la de PROSA — que el arbol publicado hable del producto y de sus propias
+#    guardas, y no de nuestro proceso. El gate real corre como pata 8 de `lint:export` sobre el
+#    arbol que se va a publicar; esto es su banco, 32 casos en arboles de usar y tirar, ~2 s.
+#    Se cablea en el mismo commit que nace: `lint:orphan-batteries` cuenta como huerfana una
+#    bateria con tarea y sin llamada del gancho, y un banco que nadie corre no falla, se calla.
+task lint:public-prose:selftest
 task lint:baseline-shrink:selftest
 task lint:cra-pack:selftest
 task lint:guard-bash
@@ -2098,8 +2106,8 @@ task lint:prepush-refclass
 # --- FAST LOCAL GATE ENDS HERE ----------------------------------------------------
 # From here on, only the refs that earned it (GATES v3): main and tags. A feature ref
 # stops at the line above with its fast lints green — the heavy gate for that work is
-# the integrator's, run on the Hetzner runners or as a batch `task test`, and this is
-# why the host mutex below is no longer taken by every lane on the box.
+# the maintainer's, run on the Hetzner runners or as a batch `task test`, and this is
+# why the host mutex below is no longer taken by every contributor on the box.
 #
 # OLIVARES_FAST_PUSH=1 IS NO LONGER READ HERE. It used to skip the full gate for ANY ref,
 # main included, which is the hole this change closes; the classifier reports it as
@@ -2119,7 +2127,7 @@ task lint:prepush-refclass
 # the most expensive defect of a month.
 if [ "$gate_class" != "full" ]; then
 	echo "pre-push: fast lints GREEN; the heavy gate is not this ref's gate. Nothing was built" >&2
-	echo "pre-push: and nothing was tested — the PR's CI and the integrator's batch cover it." >&2
+	echo "pre-push: and nothing was tested — the PR's CI and the maintainer's batch cover it." >&2
 	exit 0
 fi
 echo "pre-push: running the FULL gate locally (build + test + web)." >&2
@@ -2147,7 +2155,7 @@ echo "pre-push: running the FULL gate locally (build + test + web)." >&2
 #   * if origin is unreachable the gate runs WITHOUT the lock, loudly — the
 #     gate must never depend on the network to run;
 #   * refs/gate-locks/* is not a branch: it triggers no workflows and shows in
-#     no PR. This mutex covers concurrent local lanes, which is where the
+#     no PR. This mutex covers concurrent local pushes, which is where the
 #     collisions actually happen.
 GATE_LOCK_REF="refs/gate-locks/heavy"
 # ⛔ D-1 / L-02 CERRADO el 2026-08-16 por la SEGUNDA vía que la propia nota autoriza: «WAIT >
@@ -2231,10 +2239,10 @@ acquire_gate_lock() {
 			fi
 		fi
 		if [ "$waited" -ge "$GATE_LOCK_WAIT_SECS" ]; then
-			echo "pre-push: waited ${waited}s for the heavy-gate lock; giving up. Another lane is running its gate — retry when it finishes, or raise OLIVARES_GATE_LOCK_WAIT_SECS." >&2
+			echo "pre-push: waited ${waited}s for the heavy-gate lock; giving up. Another contributor is running its gate — retry when it finishes, or raise OLIVARES_GATE_LOCK_WAIT_SECS." >&2
 			exit 1
 		fi
-		[ $((waited % 600)) -eq 0 ] && echo "pre-push: heavy-gate lock held by another lane (age ${age:-?}s); waiting (${waited}/${GATE_LOCK_WAIT_SECS}s)..." >&2
+		[ $((waited % 600)) -eq 0 ] && echo "pre-push: heavy-gate lock held by another contributor (age ${age:-?}s); waiting (${waited}/${GATE_LOCK_WAIT_SECS}s)..." >&2
 		sleep 60
 		waited=$((waited + 60))
 	done
@@ -2258,7 +2266,7 @@ fi
 # for exactly that. Then on 2026-08-05 `test/deployed-portal.run.ts` landed on main
 # with five TS errors (a non-module file using top-level await, and the DOM-only name
 # `RequestRedirect` in a Worker project) — the local full gate passed, the push
-# succeeded, and `main` sat red on the `license-worker` job while every other lane's
+# succeeded, and `main` sat red on the `license-worker` job while every other contributor's
 # push was blocked behind it. Four seconds here would have refused that push.
 #
 # private-leg.sh keeps the three answers in the public export: the directory exists
@@ -2334,8 +2342,8 @@ task tokens:check
 # THE FORMATTING RATCHET (2026-08-15). `prettier --check` lives in `format:check`, which hangs off
 # `lint:web` — deliberately skipped by this hook — and off `fmt:check`, and NO workflow invokes
 # either: measured against origin/main, 191 files under web/ do not pass the formatter and
-# nothing in the repository said so. It runs HERE and not in the fast lane because it needs the
-# deps check:web just installed; the fast lane has no node, and a leg that cannot run is a leg
+# nothing in the repository said so. It runs HERE and not in the fast path because it needs the
+# deps check:web just installed; the fast path has no node, and a leg that cannot run is a leg
 # that fails every feature push. It prints the census on every run and fails ONLY when the set of
 # offenders grows, so nobody is blocked by a debt they did not create.
 task lint:format-ratchet

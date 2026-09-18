@@ -261,7 +261,7 @@ if [ -n "${AMB_ROOT:-}" ]; then
 	# ⛔ THIS USED TO FAIL ON ANY REF-NAME CHANGE, AND IT WAS WRONG IN BOTH DIRECTIONS.
 	#
 	# It fingerprinted every ref name in the host repo and demanded nobody move them while this
-	# battery ran. On a clone five lanes share that is not an invariant, it is a race: any branch
+	# battery ran. On a clone five contributors share that is not an invariant, it is a race: any branch
 	# creation, `worktree add -b`, or a fetch bringing a new remote branch breaks it — and the push
 	# that pays is the one that did nothing. Measured 2026-08-20: it killed a push whose only crime
 	# was that another worktree was being created at the time, and the cost is not the retry, it is
@@ -287,7 +287,7 @@ if [ -n "${AMB_ROOT:-}" ]; then
 	fi
 	if [ "${added:-0}" -gt 0 ]; then
 		# Named, never silent: a tolerated difference nobody prints is the same as no check.
-		printf 'note %-62s %s ref(s) appeared meanwhile (another lane; not this battery)\n' \
+		printf 'note %-62s %s ref(s) appeared meanwhile (another contributor; not this battery)\n' \
 			"host repo untouched" "$added"
 		comm -13 <(printf '%s\n' "$AMB_REFS") <(printf '%s\n' "$now") | head -5 | sed 's/^/       /'
 	fi

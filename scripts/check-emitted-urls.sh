@@ -173,7 +173,7 @@ MAX_RECORD_AGE_DAYS=45
 #       The README's high-assurance path names the release page of the version this tree cuts
 #       (README.md, "release page"). That page exists only after the PUBLIC ACT publishes the
 #       v26.9.0 release: pushing the export does not create it, and neither does the tag on the
-#       preprod repository. Measured 404 on 2026-09-16 while the cut sat on the hub. It is its own
+#       repository that declares that profile. Measured 404 on 2026-09-16 before the cut was published. It is its own
 #       owner, not `public-repo-empty-release-blocker`, for the same reason Discussions is: a true
 #       status must carry its true reason, and this one resolves at release time, by the act.
 #

@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 #
 # ⛔ NEVER APPLIED.
-# ECS Fargate 0.25 vCPU / 0.5 GiB (D10-bis §2.1). Service is created only
+# ECS Fargate 0.25 vCPU / 0.5 GiB, ratified. Service is created only
 # when var.image is a digest. An empty image must not launch a task.
 
 resource "aws_ecs_cluster" "this" {

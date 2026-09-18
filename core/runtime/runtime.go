@@ -278,7 +278,7 @@ var ErrEmptyRegistrationName = errors.New("runtime: source registration name is 
 // before Open, before any reservation, before anything was wired. Afterwards the
 // paths reserved the REGISTRATION name instead, and "" was simply a name nobody had
 // taken yet: a connector with no descriptor name was Opened and registered with an
-// empty Name and an empty Component. Astra's independent overlay reproduced exactly
+// empty Name and an empty Component. An independent overlay reproduced exactly
 // that (it passes on the baseline and failed on the first commit of this lot).
 //
 // The two identities stay separate — the registration name is the operator's and is

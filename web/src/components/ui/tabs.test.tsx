@@ -8,7 +8,7 @@
 // browser would; what is asserted is the component's REACTION — the affordance it
 // shows, the scrollLeft it writes, the focus/selection every tab receives. The pixel
 // truth of the same strip is measured in the browser evidence
-// (assessments/implementation/console-ui-layout-density).
+// (an internal design note (not shipped)).
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, type Mock } from 'vitest'

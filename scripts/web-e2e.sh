@@ -52,7 +52,7 @@ WORK="$(mktemp -d)"
 #
 # It became a member of that class in this repository's own history rather than by design:
 # restoring `build_olivares_bin` here (the fix a merge had reverted) is what introduced the
-# git call, and lint:git-env went red on main for every lane. Sourcing IS the unset — the
+# git call, and lint:git-env went red on main for every contributor. Sourcing IS the unset — the
 # helper clears the inherited environment in the caller's shell, which is exactly what a
 # script with its own working tree wants.
 _olivares_git_env="$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" && pwd)/lib/git-env.sh"

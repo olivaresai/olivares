@@ -11,8 +11,7 @@ Protocol token: `opencode_acp` (bidirectional, text). Transport is the existing
 `rpcConn` JSON-RPC 2.0 pump. The counterpart may open loopback HTTP for its own
 ACP service; that is not an Olivares adoption interface.
 
-Construction contract:
-`assessments/architecture/r87-opencode-protocol/ROOT-CONSTRUCTION.md`.
+The construction contract for this mapping is held with the design records.
 
 This note records mapping limits that remain successor work: complete tool
 governance, D05 installer, authenticated paid turns, and a qualified

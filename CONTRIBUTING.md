@@ -68,13 +68,13 @@ that every required check has run or passed.
 - `refs/heads/main` and `refs/tags/*` — the fast lints **and** the full gate
   (`test:license-worker`, `build:cloud`, `test:cloud:norace`, `check:web`, `tokens:check`, `lint:format-ratchet`, `lint:guide-docs`, `lint:cockpit-strings`, `lint:cockpit-strings:selftest`, `lint:raw-palette`, `test:web`, `web:check`, `build:go`, `test`, `sdk:check`),
   under the same host-wide mutex this repository already had. The split changed *who* takes
-  that lock — every lane on the box used to; now only pushes classified `full` do: main,
+  that lock — every contributor on the box used to; now only pushes classified `full` do: main,
   tags, and any deny-closed promotion (unknown namespace, malformed line) — and nothing
   about the lock itself; its known weaknesses are listed by name in the hook's header.
 - Any other `refs/heads/*` — the fast lints only. **The three commands above are yours
-  to run**, or the integrator's on the batch.
+  to run**, or the maintainer's on the batch.
 - A deletion, `refs/gate-locks/*`, `refs/integration-claims/*`, an empty push — nothing to gate.
-  The claim ref is a POINTER an integrator publishes before pushing a batch; it used to score
+  The claim ref is a POINTER a maintainer publishes before pushing a batch; it used to score
   `full` as an unrecognised namespace, which made obeying that protocol cost a full gate and taught
   people to reach for `--no-verify`. Strictest-wins still applies: a claim travelling with
   `main` pays the full gate.
@@ -83,7 +83,7 @@ that every required check has run or passed.
 
 On a feature branch the hook does **not** run the full build/test gate: run `task test`
 and the applicable web/SDK checks, or document the scope of a focused `-race` run for
-branch review. The integrator still requires the complete applicable candidate checks.
+branch review. The maintainer still requires the complete applicable candidate checks.
 A draft PR can preserve work with failures or checks not yet run; it is not acceptance
 for integration. Use the normal hooks and merge checks: declaring `--no-verify` or an
 admin bypass does not satisfy missing checks.
@@ -91,7 +91,7 @@ admin bypass does not satisfy missing checks.
 **Without `task` on `PATH` the hook refuses the push** — a gate that cannot run has not
 cleared anything. There is exactly **one named exception, the pure-deletion push**: when
 *every* ref line is a deletion (`git push --delete old-branch`, `git push origin :old`)
-there are no commits to lint, build or test in any lane, so it needs no toolchain to run
+there are no commits to lint, build or test on any path, so it needs no toolchain to run
 nothing and the hook lets it through, saying which exception it applied. A deletion
 travelling with anything else — another ref, the gate-lock ref, a line the rule cannot
 read — is not that class and still refuses.
@@ -241,7 +241,7 @@ governing Claude Code tool-calls, OpenTelemetry GenAI ingest, and scaffolding a 
   `main` directly — so the CLA/DCO and review flow below applies.
 - **CI before integration:** [`mainline-ci`](.github/workflows/mainline-ci.yml) has
   `workflow_dispatch` and push to `main`, subject to its journal-path exclusions;
-  it has no pull-request trigger. The integrator dispatches it on the merge candidate
+  it has no pull-request trigger. The maintainer dispatches it on the merge candidate
   and requires all applicable jobs and substantive steps to pass on its exact SHA,
   including checks beyond the repository's required contexts. A changed candidate
   needs its own verdict; verify the merge tree and post-merge CI separately.

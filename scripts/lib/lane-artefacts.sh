@@ -18,7 +18,7 @@
 #                                              #      LA_RELAY_INDEX, LA_RELAY_REF_REGEX
 # export-closure: hub-only sessions/lane-artefact-globs.txt — carries the live process-artefact
 # name patterns; it is curated OUT of the export on purpose, because publishing it would
-# republish exactly the lane literals this indirection removes. The published tree does NOT
+# republish exactly the internal literals this indirection removes. The published tree does NOT
 # exit 127 on its absence: lane_artefacts_load() tests for it and REFUSES with 2, naming the
 # file — the third answer, not a crash and not a silent clean.
 

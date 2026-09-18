@@ -2034,7 +2034,7 @@ func chatReceiptFor(binding sdk.EvidenceBinding, ref string) sdk.EvidenceReceipt
 // --- group 9: G1 format identity and the derived v2 codecs ---------------------------------------------
 
 // The hex digests below were computed by the assessment-owned encoder
-// (assessments/implementation/generic-lease-digest/vectors.py) from the written specification
+// (an internal design note (not shipped)) from the written specification
 // in docs/design/route-evidence-digest-v2.md, never by asking this package for its answer. The
 // three inner values are core/auth vectors for the generic witness digest and are consumed
 // here as opaque 32-byte inputs, which is exactly how the effect codec consumes them.

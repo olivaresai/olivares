@@ -10,7 +10,7 @@ package main
 // --owner-approval) needs the current purchase credential given explicitly, by file or stdin; a
 // recorded request or completion is repeated with its exact bytes and never reads evidence again;
 // the proof-of-possession paths need no evidence; and a lost connect request is reported with its own
-// method (assessments/integration/r115-connect-client-real-joint/ROOT-SUCCESSOR-DIRECTION.md).
+// method (an internal design note (not shipped)).
 
 import (
 	"bytes"

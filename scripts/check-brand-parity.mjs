@@ -85,7 +85,7 @@ const WEB_VENDORED_REL = 'src/data/hub/brand-tokens.json'
 // fill, so the deepening AA needs for TEXT buys nothing there). Measured 2026-08-09,
 // the old rule reported `--color-on-primary: no light-dark() re-declaration` against
 // a site that renders #1a1206 in light — the correct value. A gate that calls a
-// correct site broken teaches lanes to write `light-dark(x, x)` into the brand
+// correct site broken teaches contributors to write `light-dark(x, x)` into the brand
 // stylesheet to satisfy a parser, which is a workaround masquerading as a palette.
 // Comparing the RENDERED value is also strictly stricter: a var that lost its light
 // arm by accident still goes red, now because the value is wrong rather than because
@@ -470,7 +470,7 @@ function checkWebTree(manifest, webDir) {
  * Returns EVERY candidate, not the first one. Measured 2026-08-09: this box carries FIVE
  * sibling checkouts of the website, and picking the alphabetically-first match made the gate
  * compare the console against `olivares.ai.web-privacy2` — neither the canonical tree nor the
- * one the lane was editing — and then print the winner's path inside a sentence that reads as
+ * one being edited — and then print the winner's path inside a sentence that reads as
  * a finding about the brand. Sorting is not a tie-break, it is a coin toss with a stable seed:
  * the verdict depended on which clone happened to sort first, and BOTH answers were wrong in
  * the same way, because a green there is as unearned as a red.
@@ -521,7 +521,7 @@ function discoverWebDir(root) {
 /**
  * Is this website checkout usable as EVIDENCE about the live site?
  *
- * Measured 2026-08-02: a lane pushing to the hub was forced to --no-verify because this gate went
+ * Measured 2026-08-02: a push was forced to --no-verify because this gate went
  * red over a vendored manifest in a SIBLING checkout that was 27 commits behind its own origin.
  * The disagreement was real in the bytes and meaningless as a fact: the clone was simply old. A
  * gate that reports "the console and the website disagree" when the only measurable difference is
@@ -540,7 +540,7 @@ function webTreeUsable(dir) {
     // inherited GIT_DIR beats `-C <dir>`: every question below would then be answered about the
     // repository being pushed instead of the tree we are judging. Measured 2026-08-03 — this is
     // why the two `usable=true` cases failed under the hook and passed by hand, 3 times out of 3,
-    // and why three lanes reported it while nobody could reproduce it manually.
+    // and why three contributors reported it while nobody could reproduce it manually.
     const env = { ...process.env }
     delete env.GIT_DIR
     delete env.GIT_WORK_TREE
@@ -805,7 +805,7 @@ function selftest(root) {
     // Usability of the website checkout AS EVIDENCE (2026-08-02). These decide whether the
     // cross-repo comparison runs at all — the fixtures are real git repos, because the property
     // is about git state and a stub would prove nothing about the code that queries it.
-    // FIXTURES THAT CANNOT ESCAPE THEIR SANDBOX (hardened the same day, after two lanes found
+    // FIXTURES THAT CANNOT ESCAPE THEIR SANDBOX (hardened the same day, after two contributors found
     // this battery writing into THEIR worktrees).
     //
     // `git -C <dir> add/commit` does NOT fail when <dir> is not a repository: git walks UP and
@@ -813,7 +813,7 @@ function selftest(root) {
     // dir that happens to live inside a checkout, an inherited GIT_DIR, a global template hook —
     // every later command lands on the ENCLOSING repo, and `add -A` there stages the whole tree
     // against a directory holding only a synthesized site. That is exactly the whole-repo
-    // deletion two lanes found committed under this fixture's author name.
+    // deletion two contributors found committed under this fixture's author name.
     //
     // Three fences, because one of them is a comment and two are checks: the environment cannot
     // leak a repository in (GIT_DIR/GIT_WORK_TREE cleared, GIT_CEILING_DIRECTORIES stops the

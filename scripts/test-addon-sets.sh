@@ -216,7 +216,7 @@ fi
 # from the SECOND assignment place, which is exactly the one a naive reader misses.
 # The canon lives in a root the public export curates out ON PURPOSE, so in an exported
 # tree its absence is sanctioned, not a finding — the marker written by the curation
-# pipeline (never tracked in the hub) is the discriminator, and :343 below already guards
+# pipeline (never tracked in the full source tree) is the discriminator, and :343 below already guards
 # the same file. Without this the case answered FAIL from an exported tree.
 if [ ! -r design/PRICING-CANON.md ] && [ "$(bash scripts/hub-leg.sh --classify 2>/dev/null)" = public ]; then
   skip "the real canon derives its known members" "design/PRICING-CANON.md curated out of the public export"

@@ -22,16 +22,16 @@ import (
 	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
 )
 
-// This file is the shared transport for the OBSERVE-AND-REPORT lane: the ten
+// This file is the shared transport for the OBSERVE-AND-REPORT command group: the ten
 // module namespaces whose affinity is reading and announcing state rather than
 // changing it — reporting, notify, health, accessmap, observability,
 // consoleviews, adoption, identity, inventory and posture.
 //
 // It is ONE client, not ten, for the reason C08-01 gave for not writing a third
 // tenant resolver: a per-family copy is a per-family opportunity to classify the
-// same refusal differently. Every verb in the lane therefore reaches the control
+// same refusal differently. Every verb in the group therefore reaches the control
 // plane through observeCall.do, so the exit contract below is a property of the
-// lane, not of whichever file a reader happens to open.
+// group, not of whichever file a reader happens to open.
 //
 // WHAT IT DELIBERATELY DOES NOT DO.
 //
@@ -39,14 +39,14 @@ import (
 //     401/403 → 3, 404 → 4, 409 → 5, 5xx → 6, and everything else falls to 1.
 //     A 400 from a rejected query value is arguably a usage error, but `mcp`,
 //     `findings`, `compliance` and `agent` all surface it as 1 through httpErr,
-//     and a lane that answered 2 to the same refusal would make the CLI's exit
-//     contract depend on which noun the operator typed. What this lane does
+//     and a command group that answered 2 to the same refusal would make the CLI's exit
+//     contract depend on which noun the operator typed. What this group does
 //     instead is refuse LOCALLY, before the connection, whatever it can decide
 //     from the arguments alone — those refusals are exit 2 and cost zero
 //     requests.
 //
 //   - It does not add authorization. The credential and the tenant header go to
-//     the engine and the engine decides. The local checks in this lane only ever
+//     the engine and the engine decides. The local checks in this group only ever
 //     REFUSE (a missing required query parameter, a contradictory pair of
 //     flags); none of them can turn a "no" into a "yes".
 //
@@ -57,10 +57,10 @@ import (
 //     ignores it is how a script comes to believe it has paged through a list it
 //     only ever saw the first page of.
 
-// observeBase is the module-route root every namespace in this lane hangs off.
+// observeBase is the module-route root every namespace in this group hangs off.
 const observeBase = "/v1/m/"
 
-// maxObserveBodySize bounds a response this lane reads into memory. These are
+// maxObserveBodySize bounds a response this group reads into memory. These are
 // status projections, ledgers, graphs and rendered reports; a PDF posture pack
 // is the largest legitimate answer, so the cap is generous but finite — an
 // unbounded read is how a hostile or broken endpoint turns a CLI into an OOM.
@@ -69,7 +69,7 @@ const maxObserveBodySize = 32 << 20
 // observeCall is one authenticated request against one module namespace.
 //
 // body and rawBody are exclusive: body is marshaled as JSON, rawBody is sent
-// verbatim under contentType. The second form exists because this lane has a
+// verbatim under contentType. The second form exists because this group has a
 // route that genuinely takes a non-JSON document — PUT /templates/{type} stores
 // an HTML report template (modules/reporting/enterprise.go:312) — and encoding
 // it as a JSON string would store the wrong bytes.
@@ -87,7 +87,7 @@ type observeCall struct {
 
 // observeResult carries the bytes, the status and the content type.
 //
-// The content type is not decoration. Three routes in this lane answer with a
+// The content type is not decoration. Three routes in this group answer with a
 // rendered artifact rather than a document — GET /reports/{type} is HTML or PDF
 // (api.go:393), GET /templates/{type} is HTML (enterprise.go:307), and GET
 // /schedules/{id}/runs/{rid} is JSON when the run stored no output and the
@@ -100,7 +100,7 @@ type observeResult struct {
 }
 
 // decode unmarshals a JSON body. An empty body is not an error: several routes
-// in this lane answer 200 with nothing at all.
+// in this group answer 200 with nothing at all.
 func (r observeResult) decode(into any) error {
 	if len(bytes.TrimSpace(r.raw)) == 0 {
 		return nil
@@ -217,7 +217,7 @@ func (c observeCall) do(cmd *cobra.Command) (observeResult, error) {
 }
 
 // observeHTTPError classifies a refusal. It extends httpErr with the one status
-// this lane answers that the generic map reads as an ordinary failure.
+// this group answers that the generic map reads as an ordinary failure.
 //
 // 501 IS A PRODUCT BOUNDARY, NOT A FAULT. Every enterprise route in reporting
 // answers it through writeNotWired (enterprise.go:109) when its seam is nil, and
@@ -225,7 +225,7 @@ func (c observeCall) do(cmd *cobra.Command) (observeResult, error) {
 // reads "request failed: HTTP 501" goes looking for a bug; the correct reading
 // is "this build does not link that add-on, and the rest of the namespace works".
 // The code stays exitcode.Err (1) to match the identical decision in
-// cmd_compliance.go:269 — the lane does not get its own dialect of the contract.
+// cmd_compliance.go:269 — the group does not get its own dialect of the contract.
 func observeHTTPError(status int, body []byte) error {
 	if status == http.StatusNotImplemented {
 		detail := observeErrorMessage(body)
@@ -239,7 +239,7 @@ func observeHTTPError(status int, body []byte) error {
 }
 
 // observeErrorMessage pulls the message out of the two error envelopes the
-// modules in this lane emit: {"error":{"message":...}} (the module helper) and
+// modules in this group emit: {"error":{"message":...}} (the module helper) and
 // {"error":"..."} (core/api and a few module handlers). It returns "" when the
 // body is neither, so a caller never prints an invented reason.
 func observeErrorMessage(body []byte) string {
@@ -262,7 +262,7 @@ func observeErrorMessage(body []byte) string {
 
 // ---- pagination ----------------------------------------------------------------
 
-// observePage is the list envelope five namespaces in this lane share
+// observePage is the list envelope five namespaces in this group share
 // (api.ListResponse: items + cursor + has_more). Embedding it keeps every list
 // verb reporting truncation the same way.
 type observePage struct {
@@ -280,7 +280,7 @@ type observePageFlags struct {
 // addObservePageFlags declares --limit/--cursor. CALL IT ONLY ON A ROUTE WHOSE
 // ENGINE READS THEM.
 //
-// The lane is split and the split is measured, not assumed: notify
+// The group is split and the split is measured, not assumed: notify
 // (helpers.go:102), health (helpers.go:127), accessmap (api.go:66),
 // observability (traces.go:324) and inventory (api.go:211) parse both;
 // adoption parses `limit` only, as a top-N (dto.go:207) and has no cursor;
@@ -365,7 +365,7 @@ func observeValue(cmd *cobra.Command, raw []byte, headline string) error {
 	}, pretty)
 }
 
-// observeJSON is what every verb in this lane hands renderOut as its JSON value.
+// observeJSON is what every verb in this group hands renderOut as its JSON value.
 //
 // IT IS THE ENGINE'S BYTES, NOT THE CLI'S STRUCT, and that is the whole point.
 // The typed structs in these files exist to build a TABLE — they name the
@@ -374,7 +374,7 @@ func observeValue(cmd *cobra.Command, raw []byte, headline string) error {
 // an edge's attribution_reason, a check's detail hash, a route's owner. Worse,
 // it would drop fields ADDED to the engine later, so a `-o json` consumer would
 // stop seeing new data the day the engine started sending it, with no error
-// anywhere. `mcp pins ls` established this shape (cmd_mcp.go:197); this lane
+// anywhere. `mcp pins ls` established this shape (cmd_mcp.go:197); this group
 // follows it everywhere rather than per-command.
 //
 // An empty body becomes `null` because an empty RawMessage is not valid JSON and
@@ -409,7 +409,7 @@ func observeBool(v bool, yes, no string) string {
 
 // ---- artifacts -----------------------------------------------------------------
 
-// observeArtifactFlag declares --out for the three routes in this lane that
+// observeArtifactFlag declares --out for the three routes in this group that
 // answer with a rendered artifact instead of a document.
 //
 // IT IS REQUIRED, and that is a decision rather than an oversight. A PDF posture
@@ -503,7 +503,7 @@ func readObserveDocument(cmd *cobra.Command, path string) ([]byte, error) {
 // requireObserveQuery refuses, from the arguments alone, a request the engine
 // would answer 400 for want of a required query parameter.
 //
-// It is the local-refusal half of this lane's exit contract: the caller learns
+// It is the local-refusal half of this group's exit contract: the caller learns
 // the flag is missing at exit 2 with no request sent, instead of exit 1 carrying
 // the engine's 400. It can only ever REFUSE — no path through it authorizes
 // anything.
@@ -514,7 +514,7 @@ func requireObserveQuery(q url.Values, param, flag string) error {
 	return nil
 }
 
-// observeIDPath joins a path segment safely. Every id in this lane arrives as a
+// observeIDPath joins a path segment safely. Every id in this group arrives as a
 // positional argument, and a positional argument is attacker-adjacent input the
 // moment a script interpolates it: without escaping, `../../` in an id would
 // retarget the request at a different route entirely.

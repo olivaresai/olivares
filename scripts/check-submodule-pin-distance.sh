@@ -15,7 +15,7 @@
 #
 # Nothing caught it, and the reason is the whole point of this gate: BOTH sides were green
 # and BOTH were telling the truth. The enterprise CI honestly measures what it assembles.
-# The hub gate honestly measures the hub. Nobody measured the distance between them. A stale
+# Each gate honestly measures its own tree. Nobody measured the distance between them. A stale
 # submodule pin does not fail — it checks out, it compiles, it ships.
 #
 # WHAT IS ENFORCED, and what is only declared. There is no invented commit threshold here,

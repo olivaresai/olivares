@@ -9,7 +9,7 @@
 // `check-aws-estate.sh` certificaba la forma del workflow con `grep` sobre el fichero
 // entero. Un `grep` encuentra su patrón igual en un paso EJECUTABLE que en un COMENTARIO,
 // y este workflow llevaba —hasta el 2026-08-27— exactamente eso: un comentario de cuatro
-// líneas diciendo «the OIDC pin is the integrator's» donde tenía que ir el paso. Una
+// líneas diciendo «the OIDC pin is the maintainer's» donde tenía que ir el paso. Una
 // invariante escrita como «el fichero menciona configure-aws-credentials» la habría
 // satisfecho ESE COMENTARIO. La misma clase que los «log-bucket names in comments» que
 // el guard de HCL existe para rechazar.

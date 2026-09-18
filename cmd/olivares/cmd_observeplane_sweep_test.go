@@ -3,7 +3,7 @@
 
 package main
 
-// The observe-and-report lane, driven END TO END: all 73 leaf verbs, both
+// The observe-and-report command group, driven END TO END: all 73 leaf verbs, both
 // directions, against the route census the modules actually mount.
 //
 // WHY THIS EXISTS NEXT TO cmd_observeplane_test.go. That file samples — one read

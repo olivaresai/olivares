@@ -311,7 +311,7 @@ regexes = [
     '''^AIzaSyA1234567890abcdefghijklmnopqrstuv$''',
     '''^14m9cf91wfsesv1kkhevg12cdywm2wvqy6s8sk53z1ngtazp1t9tykc-secret$''',
     '''^ZmFrZS1jb25qdXItYWNjZXNzLXRva2Vu$''',
-    # Anadidos 2026-08-20 por the integrator: los DOS hallazgos que #902 no cierra.
+    # Anadidos 2026-08-20 por el mantenedor: los DOS hallazgos que #902 no cierra.
     # Valor exacto, nunca la ruta, siguiendo la regla que encabeza este bloque.
     #
     # 1) cloud/control-plane/internal/config/config_test.go:286 — la fila "space inside" de
@@ -648,7 +648,7 @@ regexes = [
 # reproduced locally one commit at a time with the pinned scanner and this config
 # (`gitleaks detect --log-opts '<sha>^!'`): one finding each, fingerprints identical to the
 # job's. Each capture is a synthetic fixture value; the provenance is recorded per block below
-# and in assessments/ci/r74-fixture-findings-20260912.
+# and in an internal design note (not shipped)
 #
 # WHY AN EXCEPTION AT ALL. All three values are already present in reachable history. History
 # is not rewritten, so the commits stay reachable and the findings recur on every history scan;

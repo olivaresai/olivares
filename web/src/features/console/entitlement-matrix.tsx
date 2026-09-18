@@ -4,7 +4,7 @@
 //
 // C07-07 — QUÉ HAY, A QUÉ SE TIENE DERECHO Y QUÉ ESTÁ ENCENDIDO: tres preguntas distintas.
 //
-// ⛔ LA ADJUDICACIÓN QUE HIZO POSIBLE ESTA PANTALLA (the integrator, 2026-08-17) fue **negar la
+// ⛔ LA ADJUDICACIÓN QUE HIZO POSIBLE ESTA PANTALLA (the maintainer, 2026-08-17) fue **negar la
 //    premisa de la fila**: no hay una sola autoridad sobre «qué módulos hay» y **no debe haberla**.
 //    Buscar «la fuente» es justo el defecto que esta pantalla existe para no cometer. Así que la
 //    consola COMPONE tres fuentes independientes y, cuando una falta, dice **«no se sabe» — nunca

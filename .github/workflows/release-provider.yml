@@ -93,7 +93,7 @@ jobs:
 
       # ⛔ LO QUE ESTE WORKFLOW NECESITA Y NO TIENE EN PREPROD, dicho donde se va a buscar: el
       # paso de abajo importa `secrets.GPG_PRIVATE_KEY` y goreleaser firma SHA256SUMS con esa
-      # clave. Un repositorio de preprod no la tiene, así que el acto de preprod llegará hasta
+      # clave. Un repositorio que declara ese perfil no la tiene, así que el acto de preprod llegará hasta
       # aquí y morirá en la importación. Hace falta una clave GPG SANDBOX propia del repositorio
       # de preprod — misma clase de material que falta para la ancla OTA sandbox
       # (`an internal design note (not shipped)` tampoco existe). No la genero por mi cuenta: es

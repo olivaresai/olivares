@@ -9,7 +9,7 @@
 # rendered to docs/security/gate-report.md.
 #
 # This is the product-led assurance artifact the trust center links in place of
-# an external audit (D22). It is regenerable and consumed by the re-executable
+# an external audit. It is regenerable and consumed by the re-executable
 # adversarial campaign. It reports HONESTLY: a tool that is unavailable or
 # errors is recorded as "not run", never as a pass.
 set -euo pipefail
@@ -107,7 +107,7 @@ sbom_state="not generated (run 'task build:repro && task sbom')"
 	echo "- **Commit:** \`${COMMIT}\`"
 	echo ""
 	echo "This is the product-led assurance evidence the trust center links in place of an"
-	echo "external audit (decision D22: automate/analyse/test in pre-release sessions, no"
+	echo "external audit (the recorded decision: automate/analyse/test in pre-release sessions, no"
 	echo "external pen-test yet). Regenerate with \`task security:report\`."
 	echo ""
 	echo "## Summary"

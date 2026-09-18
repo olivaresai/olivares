@@ -6,10 +6,10 @@
 //
 // The pillar mixes two reads, and both are tenant-wide: the headline agent count and
 // the "tracked" total come from `GET /v1/m/inventory/summary`, which reads no request
-// filter and whose catalog carries no workspace lineage (assessments/product/inventory-
+// filter and whose catalog carries no workspace lineage (an internal design note (not shipped)
 // effective-workspace-scope, ratified 2026-09-08); the "live" figure comes from
 // `GET /v1/m/sessions/live`, which takes no core-workspace selector and puts none on
-// its DTO (assessments/product/sessions-effective-context-contract, ratified the same
+// its DTO (an internal design note (not shipped), ratified the same
 // day). The live read stopped sending `workspace_id` first; until this change the
 // inventory read still sent it and re-fetched on every selection, presenting the same
 // tenant-wide summary as the new workspace's count beside a live figure whose note

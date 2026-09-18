@@ -742,7 +742,7 @@ describe('ObservabilityView outer tab', () => {
 })
 
 describe('ObservabilityView refuses an impossible trace bound', () => {
-  // The hub's R5-01. This view kept the original opportunistic check while the
+  // This view kept the original opportunistic check while the
   // recordings bound was hardened four times, so `2026-02-30` was accepted here
   // and queried as the 2nd of March — a link showing one window and asking for
   // another, silently. Both views now share one parser.

@@ -197,7 +197,7 @@ func statusFor(err error) (int, string) {
 		// distinct code; the body never reveals the allow-list (no recon oracle).
 		return http.StatusForbidden, "network_not_allowed"
 	case errors.Is(err, auth.ErrLoginEnforcementComponentAbsent):
-		// R5 (D13): the deployment recorded an enforcing build and has global/default login
+		// R5: the deployment recorded an enforcing build and has global/default login
 		// enforcement configured, and THIS build cannot enforce it, so a new session is
 		// refused deny-closed. It is a deployment state the operator changes (an enforcing
 		// build, a reduced posture, or host break-glass), never an edition or payment

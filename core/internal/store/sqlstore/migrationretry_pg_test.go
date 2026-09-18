@@ -2005,7 +2005,7 @@ func TestRetryUnitReconcilesAgainstThePrestateItJudgedAgainst(t *testing.T) {
 //
 // # THE BUDGET'S CLOCK IS DRIVEN BY THIS TEST, AND THAT IS THE FIX FOR A REAL FLAKE
 //
-// This test used to hand the unit a 400 ms budget measured by time.Now, and the hub's sweep
+// This test used to hand the unit a 400 ms budget measured by time.Now, and a timing sweep
 // showed what that costs. Reaching the locked re-projection at all takes NINE round trips
 // against PostgreSQL — the pre-lock projection, BeginTx, two set_config per armAcquisition,
 // two LOCK TABLE, and verifyLockFootprint against pg_locks. If the budget ran out in any of

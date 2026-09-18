@@ -530,7 +530,7 @@ fi
 #
 # ⛔ EL PRIMER CASO ES EL DEFECTO QUE OCURRIÓ DE VERDAD, no una variante inventada.
 # Hasta el 2026-08-27 el job `apply` pedía `id-token: write` y donde tenía que ir el paso
-# había ESTE comentario: «OIDC pin is the integrator's: this lote does not invent a
+# había ESTE comentario: «OIDC pin is the maintainer's: this lote does not invent a
 # configure-aws-credentials digest». Un gate escrito como «el fichero menciona
 # configure-aws-credentials» lo habría aprobado. Éste tiene que rechazarlo.
 WF_T="$TMP/tree/.github/workflows/aws-terraform.yml"
@@ -540,7 +540,7 @@ stage
 subst "$WF_T" \
   '      - name: assume the sandbox apply role (OIDC → STS)
         uses: aws-actions/configure-aws-credentials@' \
-  '      # OIDC pin is the integrator: this lote does not invent a
+  '      # OIDC pin is the maintainer: this lote does not invent a
       # configure-aws-credentials digest.
       # uses: aws-actions/configure-aws-credentials@'
 expect 1 "has no aws-actions/configure-aws-credentials step" "the credential exchange living only in a COMMENT is a finding (the 2026-08-27 defect itself)"

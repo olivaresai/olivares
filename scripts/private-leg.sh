@@ -56,7 +56,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # `commercial/` no viaja ninguno y una exportacion limpia no tiene ni un directorio vacio.
 if [ -d "$ROOT/$DIR" ] && [ -n "$(find "$ROOT/$DIR" -mindepth 1 -print -quit 2>/dev/null)" ]; then
 	cd "$ROOT/$DIR"
-	# THE FOURTH ANSWER, and it was missing (measured 2026-08-07 by another lane, confirmed here).
+	# THE FOURTH ANSWER, and it was missing (measured 2026-08-07 by another contributor, confirmed here).
 	# The three above are all about the DIRECTORY. This one is about its TOOLCHAIN: the directory
 	# is present and its dependencies are not, which is neither "not applicable" nor "the code is
 	# broken" — it is the third answer this project insists on everywhere else, "I could not look".

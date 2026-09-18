@@ -56,8 +56,8 @@ row() { # row <name> <want-exit> <must-contain> -- <cmd...>
 # with TMPDIR=/tmp this battery reports 2 passed, 9 FAILED, every one of them
 # `timeout: failed to run command '…/bin/thresh': Permission denied`.
 #
-# THAT IS NOT A COSMETIC FLAKE. This battery runs in the FAST lane of every push in every lane,
-# so a lane whose TMPDIR is not exec-capable gets its push refused by the VULNERABILITY gate,
+# THAT IS NOT A COSMETIC FLAKE. This battery runs in the FAST path of every push,
+# so a contributor whose TMPDIR is not exec-capable gets its push refused by the VULNERABILITY gate,
 # with a message that reads like a finding. It was measured exactly that way: a push from the
 # hub failed here while the same task run by hand, with an exec-capable TMPDIR exported, passed
 # 11/11 seconds later.

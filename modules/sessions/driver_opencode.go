@@ -17,7 +17,7 @@ import (
 )
 
 // The official OpenCode ACP driver (CLI v1.18.30), over ACP on the owned child's
-// stdio. Construction: assessments/architecture/r87-opencode-protocol/ROOT-CONSTRUCTION.md.
+// stdio. Construction: an internal design note (not shipped)
 //
 // WIRE. NDJSON over stdio, JSON-RPC 2.0 WITH the `"jsonrpc":"2.0"` member. The
 // existing owned rpcConn is the transport; this file does not introduce a second

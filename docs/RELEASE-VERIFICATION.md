@@ -271,7 +271,7 @@ below is a coverage floor, not a claim about which version ships:
 > write, so the round-trip that sentence attests to never happened: the rotation reached the tree
 > and this table, and never the deployment. The Variables were actually set on
 > **2026-08-28T23:46Z**, and the values above were then verified against them independently, in
-> both fingerprint forms, by a different lane than the one that wrote them.
+> both fingerprint forms, by someone other than whoever wrote them.
 >
 > This is why `scripts/check-release-anchor-identity.sh` exists and why `release-preflight` §C.4.8
 > now COMPARES the anchor instead of printing its fingerprint: for five days a sentence in this

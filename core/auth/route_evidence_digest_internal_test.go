@@ -21,7 +21,7 @@ import (
 // Two kinds of control live here. The CAUSAL ones mint a real witness through AuthorizeRoute
 // and change one lease coordinate at a time; nothing in those witnesses is typed by hand.
 // The FIXED-VECTOR ones compare the codec against digests computed by the assessment-owned
-// encoder (assessments/implementation/generic-lease-digest/vectors.py) from the written
+// encoder (an internal design note (not shipped)) from the written
 // specification in docs/design/route-evidence-digest-v2.md — never by asking this package for
 // its own answer. Those constants are permanent: a value that stops matching is a codec
 // change and needs a new format label, not a new constant.

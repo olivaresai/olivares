@@ -11,7 +11,7 @@
 # never run at all. It is sourced by its caller and by its battery, so the shape that
 # broke is the shape under test.
 #
-# THE DEFECT THIS EXISTS TO CLOSE, measured 2026-08-08 by another lane:
+# THE DEFECT THIS EXISTS TO CLOSE, measured 2026-08-08 by another contributor:
 # the readiness probe was `curl -sf http://127.0.0.1:$port/healthz`, which asks THE PORT
 # whether something is alive there — never whether that something is the engine we just
 # started. Three engines leaked from a closed session had been holding 8458/8460/8462 for
@@ -64,11 +64,11 @@ engine_probe_usable() {
 	#    describes ("our engine died on bind, the stranger answered the probe") reproduced
 	#    INSIDE the check meant to catch it. The other side of the same coin is a false
 	#    RED — nobody answers, we conclude "/dev/tcp is broken", exit 2, and a push is
-	#    rejected for a busy port. That one happened too: it killed a lane's push.
+	#    rejected for a busy port. That one happened too: it killed a contributor's push.
 	#
 	#    So the control now announces "up" on fd 3 AFTER its bind returns, and a probe is
 	#    only trusted when we have that announcement. No announcement means OUR PORT WAS
-	#    TAKEN, which is an ordinary event here — five lanes share this host and the hint
+	#    TAKEN, which is an ordinary event here — five contributors share this host and the hint
 	#    is `$$ % 900`, so live shells collide (three colliding pairs measured the same
 	#    day) — and an ordinary event must not be reported as a broken instrument.
 	for attempt in 0 1 2 3; do
@@ -147,7 +147,7 @@ engine_port_owner() {
 # A PID IS NOT AN IDENTITY, and this is the half that #625 contributed to this file.
 # The pidfile used to hold a bare number. If an engine dies on its own and the kernel
 # recycles its number before cleanup runs, signalling that number reaches WHOEVER holds it
-# now — and on this host that is another lane's work, because three containers share it.
+# now — and on this host that is another contributor's work, because three containers share it.
 # Demonstrated by the contrast on the first version of that fix, with the real cleanup and
 # no engine at all: `sleep 300 &`, its pid written to the file, cleanup → KILLED.
 #
@@ -189,7 +189,7 @@ engine_proc_gone() {
 # engine it started, since the multi-engine change of 2026-08-05.
 #
 # That is not a tidiness point: it is the ORIGIN of the leak that produced the bug above.
-# The three engines another lane found squatting 8458/8460/8462 for a day and five hours
+# The three engines another contributor found squatting 8458/8460/8462 for a day and five hours
 # were leaked BY THIS SCRIPT, and the port pre-flight would then refuse to run because of
 # them. Fixing only the probe would have left the script generating its own blockers.
 # Found by this file's own battery asserting that the caller can see the child — a case

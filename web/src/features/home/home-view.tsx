@@ -197,7 +197,7 @@ export function HomeView() {
   // ⛔ THE INVENTORY READ IS TENANT-WIDE, AND ITS TILE SAYS SO. `GET /v1/m/inventory/summary`
   //    reads no request filter and the catalog carries no workspace lineage
   //    (modules/inventory/api.go:123, schema.go:67; ratified 2026-09-08 in
-  //    assessments/product/inventory-effective-workspace-scope). Until today this query still
+  //    an internal design note (not shipped)). Until today this query still
   //    sent `workspace_id` and keyed on the topbar selection, so a W1→W2 switch re-fetched the
   //    SAME tenant-wide summary and presented it as the new workspace's estate — beside a
   //    Sessions tile that already said it was tenant-wide. Keyed by tenant only now (the very
@@ -211,7 +211,7 @@ export function HomeView() {
   })
   // ⛔ THE LIVE-SESSIONS READ IS TENANT-WIDE, AND THIS TILE SAYS SO. `GET /v1/m/sessions/live`
   //    takes no core-workspace selector and neither DTO carries one (the ratified contract of
-  //    2026-09-08, assessments/product/sessions-effective-context-contract). Until 2026-09-08
+  //    2026-09-08, an internal design note (not shipped)). Until 2026-09-08
   //    this query still sent `workspace_id` and keyed on the selection, so a workspace switch
   //    re-fetched the SAME tenant-wide page and presented it as the new workspace's figure.
   //    Only that ignored filter went: the read is still pinned to the tenant, still gated by

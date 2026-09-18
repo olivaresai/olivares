@@ -39,7 +39,7 @@ VT_ROOTS="core modules connectors cmd sdk"
 if [ -d cloud ]; then
   VT_ROOTS="$VT_ROOTS cloud"
 elif [ -f .olivares-public-export ]; then
-  # sanctioned ONLY in a marked curated export; in the hub a vanished root is fatal
+  # sanctioned ONLY in a marked curated export; in the full source tree a vanished root is fatal
   echo "check-verifier-truth: no cloud/ (curated public export) — sweeping the shipped roots."
 else
   echo "check-verifier-truth: cloud/ is MISSING and this tree carries no public-export marker; refusing." >&2

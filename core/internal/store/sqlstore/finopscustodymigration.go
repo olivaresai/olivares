@@ -17,7 +17,7 @@ import (
 
 // finopscustodymigration.go is the callable constructor for the prospective core v12
 // migration `finops_custody_control_v1`, per
-// `assessments/architecture/r87-finops-enrollment/correction-2/SCHEMA-V12.md` §1 and §4.3.1
+// `an internal design note (not shipped)` §1 and §4.3.1
 // and the source split of `ROOT-CORRECTION-3.md`.
 //
 // WHAT THIS SLICE IS, stated before the code so nothing here reads as more than it is.

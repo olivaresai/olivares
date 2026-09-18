@@ -8,7 +8,7 @@
 // `olivares`. A new CLI subcommand would ripple into the generated CLI reference and
 // its six translations for a generator nobody but the release pipeline runs.
 //
-// It lives under modules/compliance/ rather than modules/ because the hub's state script (line 16)
+// It lives under modules/compliance/ rather than modules/ because the census script
 // counts `modules/*/` directories and that count is the public "modules" figure the
 // website states and `scripts/check-public-counts.sh` pins. A tools directory one level
 // up would have silently added a module to a public claim.

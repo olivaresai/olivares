@@ -25,7 +25,7 @@ import (
 // authenticated provider account: a home can change login without the plane
 // knowing, and one account can be used from several homes. The plane therefore
 // never reads, compares or shows credential material to guess an account
-// (assessments/product/provider-session-identity-lot.md §1–§2).
+// (an internal design note (not shipped) §1–§2).
 //
 // What is immutable after creation is exactly what makes the profile an identity:
 // driver, environment_ref, config_home and user_home. A visible name may change

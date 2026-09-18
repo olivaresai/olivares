@@ -25,7 +25,7 @@ import type { CatalogEntry, EntityDetail, InventorySummary } from './types'
  * access to the workspace it names. A principal whose membership is confined to one
  * workspace is refused before the read (403 "workspace confined") — a refusal the
  * views render as such, never as an empty or zero estate. Measured and ratified in
- * `assessments/product/inventory-effective-workspace-scope/REPORT.md` (2026-09-08).
+ * `an internal design note (not shipped)` (2026-09-08).
  *
  * Consequently no consumer of these endpoints — the Inventory views, the Home
  * overview, the Executive dashboard, or the C3 history — sends a `workspace_id`,

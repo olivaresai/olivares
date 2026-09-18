@@ -59,8 +59,8 @@ MARKER_SIGNATURE='This repository is the public, curated export of the Olivares 
 # export-closure: absent-by-design scripts/export-public.sh — a SENTINEL, not a dependency:
 #   this script tests for its ABSENCE to classify the tree and never runs it. The export
 #   removing it is the whole point, and the export-closure gate proves that claim
-#   (in the hub, and never handed to an execution verb here).
-# export-closure: absent-by-design scripts/ai-state.sh — the same, for the hub-internal
+#   (in the full source tree, and never handed to an execution verb here).
+# export-closure: absent-by-design scripts/ai-state.sh — the same, for the internal-only
 #   measuring stick that no shipping surface calls.
 HUB_SENTINELS=(
 	scripts/export-public.sh
@@ -161,6 +161,6 @@ fi
 echo "hub-leg: $NAME: $SCRIPT is MISSING and this tree is not a stamped public export." >&2
 echo "  Classified as '$TREE': $WHY." >&2
 echo "  A complete hub HAS $SCRIPT; a stamped export carries the marker the generator" >&2
-echo "  writes and none of the hub-only paths. Refusing to guess: skipping the leg here" >&2
+echo "  writes and none of those hub-only paths. Refusing to guess: skipping the leg here" >&2
 echo "  would report it green against nothing." >&2
 exit 1

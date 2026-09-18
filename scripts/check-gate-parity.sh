@@ -466,7 +466,7 @@ fi
 if [ ! -r "$REG" ] \
    && [ "$(bash "$ROOT/scripts/hub-leg.sh" --classify --root "$ROOT" 2>/dev/null)" = "public" ]; then
 	echo "check-gate-parity: SCOPED — public export; $REG is curated out. The leg census above"
-	echo "  stands; the registered baseline it would be compared against lives only in the hub."
+	echo "  stands; the registered baseline it would be compared against lives only in the full source tree."
 	exit 0
 fi
 [ -r "$REG" ] || blind "no puedo leer el registro $REG (crealo con --print)"

@@ -104,7 +104,7 @@ var skipDirNames = map[string]bool{
 	"dist":         true,
 	"build":        true,
 	".astro":       true,
-	// ⛔ RESUELTO EL 2026-08-20, Y LA CLAVE SE QUEDA. Another lane la retiro esperando la mia y
+	// ⛔ RESUELTO EL 2026-08-20, Y LA CLAVE SE QUEDA. Another contributor la retiro esperando la mia y
 	// yo retire la mia tomando la suya, asi que por un momento NO QUEDO NINGUNA: los dos cedimos
 	// el paso y el arreglo desaparecio. Lo cazo `check-lot-heads` al re-traer la punta de #1279 y
 	// contar las claves del mapa, no al leer el diff. La entrada es UNA y esta aqui.
@@ -471,7 +471,7 @@ func splitCounts(documented []*variable) (vars, fams int) {
 // reportUnregistered names, on success, the variables the CLI registry does not
 // recognize — `olivares config validate --strict` would reject a deployment that sets
 // them. It is a DIAGNOSTIC, not a verdict: the registry's scope is a CLI question
-// (C08), and a documentation gate that failed on it would be blocking a lane it does
+// (C08), and a documentation gate that failed on it would be blocking a contributor it does
 // not own. Printed rather than swallowed, because a silent finding is a lost one.
 func reportUnregistered(inv *inventory, out io.Writer) {
 	var names []string

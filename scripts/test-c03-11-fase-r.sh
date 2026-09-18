@@ -10,7 +10,7 @@ CHECK="$ROOT/scripts/check-c03-11-fase-r.sh"
 # The HOLD doc and the Worker wrangler live under design/ and commercial/, both
 # curated out of the public export. This battery copies those files into a fixture;
 # without them it cannot stage a single case. In a stamped public tree that absence
-# is the contract: SCOPED, not a red. In the hub a missing HOLD doc remains a defect.
+# is the contract: SCOPED, not a red. In the full source tree a missing HOLD doc remains a defect.
 if [ ! -f "$ROOT/design/C03-11-FASE-R-HOLD-2026-08-20.md" ]; then
 	_cls=""
 	if [ -f "$ROOT/scripts/hub-leg.sh" ]; then

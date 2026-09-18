@@ -59,7 +59,7 @@
 // it was looking at, and had no way to make the answer general. That is how thirty-six
 // copies come to disagree.
 //
-// That module was brought into the family the same day, after another lane showed the
+// That module was brought into the family the same day, after another contributor showed the
 // closed overlay gates it: reporting now has a mapper and this gate watches it. What
 // stays true is the general shape of the blind spot — a handler that classifies inline
 // has nothing with the family signature, and this gate cannot see it.

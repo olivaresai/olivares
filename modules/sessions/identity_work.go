@@ -26,7 +26,7 @@ import (
 // not-found before any authorization ran, so the half of the ownership model
 // that this plane makes possible was unreachable in production.
 //
-// The hub decided on 2026-08-11 that the plane owns the workspace dimension
+// It was decided on 2026-08-11 that the plane owns the workspace dimension
 // rather than deriving it from the driving agent, and the reasoning generalizes
 // to both answers below: a session is not its agent and is not a core Session,
 // so asking either of them for a fact about it is how the original defect

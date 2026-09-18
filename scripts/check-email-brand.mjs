@@ -381,7 +381,7 @@ const GENERATED = [
 const WAIVED = [
   {
     path: 'cloud/control-plane/internal/lifecycle/notifier.go',
-    owner: 'the cloud lane',
+    owner: 'the cloud owner',
     since: '2026-08-06',
     why:
       'The data-deletion warning email, composed inline with the same defect as the ' +
@@ -429,7 +429,7 @@ const NOT_A_SURFACE = [
   // templates.generated in a COMMENT (its :14) that explains what THIS gate discovers, so
   // that a reader knows why the licence portal fell outside both. It sends no mail and
   // decides nothing about how mail looks. Undeclared it made the trunk red — and
-  // `lint:email-brand` is a FAST-LINT, so it was not just main: it bounced every lane's
+  // `lint:email-brand` is a FAST-LINT, so it was not just main: it bounced every contributor's
   // branch push, mine among them, for a file none of them touch.
   //
   // ⚠ TRES CARRILES ESCRIBIERON ESTA MISMA EXENCIÓN. Dos aterrizaron en `main` —el MISMO path

@@ -8,7 +8,7 @@ package main
 
 // license_connect_planning_test.go: the local refresh planning boundary is the earliest
 // EffectiveBoundary among the signed grants active at install, never the answer's unsigned
-// credential_effective_until (assessments/integration/r115-connect-paid-mixed-joint/ROOT-J1-DECISION.md).
+// credential_effective_until (an internal design note (not shipped)).
 
 import (
 	"crypto/ed25519"

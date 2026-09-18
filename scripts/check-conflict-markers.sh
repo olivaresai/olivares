@@ -22,8 +22,8 @@
 #   * --others  — what is written but not yet added, because the author staging a bad
 #                 resolution is exactly the moment this gate is for, and reading only the
 #                 index would move the blind spot one step earlier instead of closing it;
-#   * --exclude-standard — a scratch worktree of another lane is not this tree. Measured on
-#                 the shared hub clone, a bare walk finds other lanes' checkouts and grades
+#   * --exclude-standard — a scratch worktree of another contributor is not this tree. Measured on
+#                 the shared hub clone, a bare walk finds other contributors' checkouts and grades
 #                 them, which is how a correct gate gets switched off for crying wolf.
 #
 # THE PATTERN IS THE TRIPLE, IN ORDER, EACH AT LINE START: `<<<<<<< `, then `=======`, then
@@ -55,7 +55,7 @@ top="$(git rev-parse --show-toplevel 2>/dev/null)" || top=""
   and walking the filesystem instead would grade whatever happens to be lying here."
 
 # ⛔ `-z`, AND IT IS NOT PEDANTRY: this gate declared a tree CLEAN with a conflicted file in it.
-# Found 2026-08-15 by another lane, with file:line rather than an argument. A path containing a
+# Found 2026-08-15 by another contributor, with file:line rather than an argument. A path containing a
 # real NEWLINE is emitted by git QUOTED AND ESCAPED when -z is absent, so the name that reached
 # the scan did not exist; the xargs error was swallowed by `2>/dev/null || true`, and the
 # `[ -f "$f" ] || continue` below skipped it without a word. TWO deny-closed nets in a row, and
@@ -74,7 +74,7 @@ count="$(tr -cd '\0' < "$CENSUS" | wc -c)"
 
 # ⛔ CANDIDATES FIRST, AND THAT IS A MEASUREMENT NOT A MICRO-OPTIMISATION. The first version
 # spawned two processes per file — a binary test and an awk — over ~11k files, and cost 26s on
-# the FAST lane, which is ~10% of its whole budget imposed on four lanes for a check that finds
+# the FAST path, which is ~10% of its whole budget imposed on four contributors for a check that finds
 # nothing almost every time. One grep pass now narrows to the files that carry the opening
 # marker at all, and awk runs only on those. Same answer, 26s -> under 2s.
 #

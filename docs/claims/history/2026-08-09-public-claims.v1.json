@@ -4,7 +4,7 @@
   "measurement": {
     "auditReportTitle": "Public claims truth matrix (adversarial), 2026-08-09",
     "auditReportSha256": "505b6ef556459edf71210284b8b67c7e3705742440a46a0f8611a6abf10e00e8",
-    "auditor": "Codex gpt-5.6-sol",
+    "auditor": "independent adversarial review",
     "refs": {
       "hub": "d363a51b5b68512a7024ed14b920be9afb210d4b",
       "web": "a48fac48d396c775a3383967ecfa47a7cf6ae524",

@@ -152,7 +152,7 @@ def auto_triggered(path):
     ⛔ THIS GATE CERTIFIED A CLAIM THAT ONLY A MANUAL DISPATCH SATISFIED. It matched the task name
     against the text of every workflow and never once looked at the `on:` block. mainline-ci.yml is
     `on: workflow_dispatch` and NOTHING ELSE — so "CI walks the same path" was reported as wired
-    while the path was walked only when an integrator remembered to dispatch it. A reader of that
+    while the path was walked only when a maintainer remembered to dispatch it. A reader of that
     sentence does not hear "when somebody presses a button".
     """
     try:

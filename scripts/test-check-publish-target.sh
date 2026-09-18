@@ -76,12 +76,12 @@ check "a docker.io preprod destination fails the same tripwire" "tripwire" $?
 run RELEASE_PROFILE=preprod PUBLISH_TARGET="$PRE_T" PRODUCTION_TARGET="$PROD_T" PREPROD_TARGET="$PRE_T" \
 	PREPROD_EXPECTED_REPO="$PRE_ID" GITHUB_REPOSITORY="$PRE_ID" DOCKERHUB_USERNAME=someone DOCKERHUB_TOKEN=secret
 [ "$rc" -ne 0 ] && grep -q 'holds Docker Hub credentials' "$errf"
-check "a preprod repository holding Docker Hub credentials refuses" "no secrets" $?
+check "a repository that declares that profile holding Docker Hub credentials refuses" "no secrets" $?
 
 run RELEASE_PROFILE=preprod PUBLISH_TARGET="$PRE_T" PRODUCTION_TARGET="$PROD_T" PREPROD_TARGET="$PRE_T" \
 	PREPROD_EXPECTED_REPO="$PRE_ID" GITHUB_REPOSITORY="$PRE_ID" HOMEBREW_TAP_GITHUB_TOKEN=secret
 [ "$rc" -ne 0 ] && grep -q 'Homebrew tap token' "$errf"
-check "a preprod repository holding a Homebrew tap token refuses" "no secrets" $?
+check "a repository that declares that profile holding a Homebrew tap token refuses" "no secrets" $?
 
 run RELEASE_PROFILE=rehearsal PUBLISH_TARGET="$PRE_T" PRODUCTION_TARGET="$PROD_T" GITHUB_REPOSITORY="$PRE_ID"
 [ "$rc" -ne 0 ] && grep -q 'is not a reviewed profile' "$errf"

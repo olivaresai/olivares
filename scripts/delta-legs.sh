@@ -7,19 +7,19 @@
 #
 # WHY IT EXISTS. `core.hooksPath` is relative (`.githooks`), so every worktree gates its
 # pushes with ITS OWN copy of the hook. Measured 2026-09-01 across twelve live session
-# trees: main carried 216 legs and the lanes carried between 170 and 215 — nine distinct
-# hook versions. So "my fast lane went green" means "the legs MY TREE KNEW ABOUT passed",
-# and a lane that has not rebased in days pushes a branch that has never seen the newest
+# trees: main carried 216 legs and the contributors carried between 170 and 215 — nine distinct
+# hook versions. So "my fast path went green" means "the legs MY TREE KNEW ABOUT passed",
+# and a contributor that has not rebased in days pushes a branch that has never seen the newest
 # gates. That is not a design defect (the hook travels with the tree, and gating a tree
 # with its own hook is correct) but it does invalidate reading "green on the branch" as
 # "green on main".
 #
 # Integration policy adopted 2026-09-01: for a lot whose tree is more than ~20 legs behind
-# the base, the integrator runs the DELTA over the merged tree, not only the legs chosen by
+# the base, the maintainer runs the DELTA over the merged tree, not only the legs chosen by
 # the class of the touched files. This prints that delta.
 #
 # It is TOOLING, not a gate: nothing wires it, nothing depends on its exit code landing
-# green, and it is deliberately not in the hook. It answers a question an integrator asks
+# green, and it is deliberately not in the hook. It answers a question a maintainer asks
 # before choosing a review; it does not block anything on its own.
 #
 # THREE ANSWERS, because "no delta" and "I could not look" are different facts:

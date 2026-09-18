@@ -159,7 +159,7 @@ row() { # row <name> <expected-substring> -- <command...>
 #                                       stamped export, and guessing is how a battery
 #                                       reports green against nothing.
 # scripts/check-export-closure.sh enforces the other half — that a path declared hub-only
-# here really is absent from the export and really does exist in the hub.
+# here really is absent from the export and really does exist in the full source tree.
 #
 # The classification is scripts/hub-leg.sh's, deliberately NOT a local `[ -f PUBLIC-EXPORT.md ]`.
 # That single-file test was a password anybody can type: measured 2026-08-02, an EMPTY file
@@ -240,7 +240,7 @@ if want fast; then
 	# pattern — a scrubbed leak regex is a broken leak gate. (This very comment was measured
 	# tripping the same check when it quoted one of those tokens: the class is real, not
 	# theoretical.) What is NOT claimed here, because it was refuted on 2026-08-02: that the
-	# generator would be meaningless outside the hub. The public manifest ships the provider
+	# generator would be meaningless outside the full source tree. The public manifest ships the provider
 	# subtree and its inputs, so its `git ls-files` mechanism has the same material there; a
 	# deliberately public-safe variant is possible. Curating THIS file out is the scoped fix
 	# — "not safely publishable unchanged" is measured, "impossible elsewhere" is not.
@@ -270,7 +270,7 @@ if want fast; then
 		sh -c "cd '$FZCASE' && bash scripts/fuzz-smoke.sh"
 
 	# The public-export MARKER family (S-O audit B2): the SAME absence must be fatal in
-	# the hub and a loud skip in a marked export — both directions proven, every run.
+	# the full source tree and a loud skip in a marked export — both directions proven, every run.
 	FZHUB="$STUBS/fzhub"
 	mkdir -p "$FZHUB/scripts"
 	cp "$ROOT/scripts/fuzz-smoke.sh" "$FZHUB/scripts/"

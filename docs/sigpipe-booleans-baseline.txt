@@ -14,7 +14,7 @@
 # (`scripts/test-claim-lector.sh`, 6 tuberías) para un fichero que no existe en el repositorio. Un
 # censo hecho sobre el disco mide el disco, no el commit.
 #
-# ⛔ Y NO SE MATERIALIZA SIN LÍNEA DE the planner or the kernel lane: subir la deuda declarada es gobierno del
+# ⛔ Y NO SE MATERIALIZA SIN LÍNEA DEL MANTENEDOR: subir la deuda declarada es gobierno del
 # trinquete, no decisión de quien la mide.
 #
 #
