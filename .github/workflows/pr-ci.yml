@@ -164,7 +164,7 @@ jobs:
       # rest of the suite — which is the report the author needs most at that moment.
       fail-fast: false
       matrix:
-        shard: [a, b, c]
+        shard: [a, b, c, d]
     runs-on: ubuntu-latest
     # The ceilings are the ones ci/pr-suite-shards.txt declares, and the gate above pins
     # that they are the same numbers. The slowest shard is predicted between 24.8 and
@@ -172,7 +172,7 @@ jobs:
     # disagree by up to 16 % on the very package that bounds it. 45 minutes for the step
     # leaves at least 70 % of headroom over the top of that range and 55 for the job stays
     # above it. They are a prediction until a run measures them; the file says so.
-    timeout-minutes: 55
+    timeout-minutes: 65
     # `task test:functional` is fail-closed on the Postgres posture (scripts/pg-test-env.sh):
     # without the DSN pair it refuses rather than skipping. The first real run of this job on
     # the public repository (PR #31, 2026-09-17) died exactly there, because the job had no
@@ -253,7 +253,7 @@ jobs:
           PGPASSWORD: postgres
         run: bash scripts/ci-postgres-service.sh provision
       - name: one shard of the Go suite, without the race detector
-        timeout-minutes: 45
+        timeout-minutes: 55
         env:
           OLIVARES_TEST_SHARD: ${{ matrix.shard }}
         run: task test:functional:shard

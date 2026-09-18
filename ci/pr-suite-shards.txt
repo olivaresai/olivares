@@ -51,6 +51,7 @@
 shard a
 shard b
 shard c
+shard d
 
 # --- a — the longest package, and nothing that makes it wait.
 # core/internal/store/sqlstore is 1461.7 s of the suite's 6516.7 s and it spends that time
@@ -59,6 +60,10 @@ shard c
 # because its Kubernetes dependencies take 58 s to compile for 1.2 s of tests, and on this
 # shard 58 s of compilation is 58 s of the critical path.
 pkg a github.com/olivaresai/olivares/core/internal/...
+# The store's SQL suite alone: 20–24 min on the hosted runner beside nothing, and it exceeded a 35-minute
+# per-package timeout inside shard a (run 35312925387, 2026-09-18). It runs as its own shard (longest pattern
+# wins), so no shard carries it beside other long packages.
+pkg d github.com/olivaresai/olivares/core/internal/store/sqlstore/...
 pkg a github.com/olivaresai/olivares/clients/...
 pkg a github.com/olivaresai/olivares/sdk/...
 pkg a github.com/olivaresai/olivares/terraform-provider-olivares/...
@@ -107,6 +112,6 @@ leg c test:commerce-core:norace
 # 1231.2 s). 45 min leaves at least 70 % of headroom over the top of that range, which is
 # what a ceiling is for. Re-measure it once the shards have run: a ceiling that was never
 # measured is a guess that nothing corrects.
-go-timeout-minutes 35
-step-ceiling-minutes 45
-job-ceiling-minutes 55
+go-timeout-minutes 45
+step-ceiling-minutes 55
+job-ceiling-minutes 65
