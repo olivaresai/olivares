@@ -142,9 +142,13 @@ jobs:
   pr-test:
     if: github.repository == 'olivaresai/olivares' || vars.OLIVARES_RELEASE_PROFILE == 'preprod'
     runs-on: ubuntu-latest
-    # The functional leg without -race. Its own task carries a 45-minute internal timeout, so
-    # the job ceiling sits above the sum of its steps rather than cancelling them mute.
-    timeout-minutes: 75
+    # The functional leg without -race. Its own task carries a 45-minute internal timeout PER
+    # PACKAGE (go test -timeout is per test binary), so the job ceiling sits above the sum of
+    # its steps rather than cancelling them mute. The suite's wall clock was measured on the
+    # hosted 4-vCPU runner (run 35289372613, 2026-09-18): 264 packages green when the 60-minute
+    # step ceiling cut it, with core/internal/store/sqlstore at 1457 s and cmd/olivares at
+    # 1358 s running beside the rest. The step gets 120 minutes and the job 135.
+    timeout-minutes: 135
     # `task test:functional` is fail-closed on the Postgres posture (scripts/pg-test-env.sh):
     # without the DSN pair it refuses rather than skipping. The first real run of this job on
     # the public repository (PR #31, 2026-09-17) died exactly there, because the job had no
@@ -223,7 +227,7 @@ jobs:
           PGPASSWORD: postgres
         run: bash scripts/ci-postgres-service.sh provision
       - name: the Go suite, without the race detector
-        timeout-minutes: 60
+        timeout-minutes: 120
         run: task test:functional
 
   pr-web:
