@@ -4,10 +4,10 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [CalVer](https://calver.org/) — `vYY.M.PATCH` (two-digit year,
-month, release-of-month; the current release is `v26.9.0`).
+month, release-of-month; the current release is `v26.9.1`).
 
-> **Status: beta.** The current release is **v26.9.0** — its dated section below lists what it
-> ships and where, and the [GitHub release](https://github.com/olivaresai/olivares/releases/tag/v26.9.0)
+> **Status: beta.** The current release is **v26.9.1** — its dated section below lists what it
+> ships and where, and the [GitHub release](https://github.com/olivaresai/olivares/releases/tag/v26.9.1)
 > carries the artifacts. Every earlier release keeps its own dated section, unchanged.
 > The section heading carries the cut date; this masthead does not restate it.
 > APIs, schemas and the module surface MAY still change before a
@@ -32,6 +32,88 @@ month, release-of-month; the current release is `v26.9.0`).
   changelog never discloses a vulnerability ahead of its coordinated fix.
 
 ## [Unreleased]
+
+## [26.9.1] - 2026-09-18
+
+### Added
+
+- `olivares first-boot` answers "what now?" without a shell. It reads the installation's
+  data directory and prints the address or addresses the console answers at, plus whether
+  first setup is still pending — no credential and no network, so it works against the
+  distroless container whose startup banner has scrolled away
+  (`docker compose -f deploy/compose/docker-compose.yml exec olivares olivares first-boot`)
+  and against a packaged install (`olivares first-boot --data-dir /var/lib/olivares`). It
+  never prints the one-time setup token, which is shown once at mint time; while no
+  administrator exists, `--new-token` mints a replacement and prints it once, and the
+  previous token stops working. The command sits with `quickstart` under *Setup &
+  Configuration* in `olivares --help`.
+
+### Changed
+
+- **The console is a server: `serve` and `quickstart` bind every interface by default.**
+  `--listen` now defaults to `:8443` and `--grpc-listen` to `:8444` — `0.0.0.0` and, where
+  the kernel has IPv6, `::` — where 26.9.0 defaulted to `127.0.0.1:8443` and
+  `127.0.0.1:8444`. A default install therefore answers off-host as soon as it starts; to
+  keep the engine on the host, pass `--listen=127.0.0.1:8443 --grpc-listen=127.0.0.1:8444`.
+  What guards the exposed port is unchanged: TLS on by default, no default credentials, the
+  one-time setup token gating the first administrator, a plaintext `--insecure` listener
+  refused off-host, and `--seed-demo` refusing a non-loopback bind. The first-boot banner
+  lists every address the bind answers at. The Compose stack is named `olivares` — project,
+  service and container — so the documented next step,
+  `docker compose -f deploy/compose/docker-compose.yml exec olivares olivares first-boot`,
+  is typed as-is; it publishes on `${OLIVARES_BIND:-0.0.0.0}`, and `OLIVARES_BIND=127.0.0.1`
+  in `.env` restricts it to the host. The packaged systemd and OpenRC units bind every
+  interface too, with `OLIVARES_EXTRA_ARGS` in the environment file to override. The install
+  guide, the README family, the deployment guides and the configuration and CLI references
+  describe the new defaults.
+
+- The release workflow completes its second phase and publishes one draft per tag. The
+  step that asserts the reviewed `slsa-verifier` makes the installed binary readable before
+  it takes its digest, and digests it by absolute path only; the guard that binds the
+  second phase to the first admits the `$HOME/.cosign` location the cosign installer uses;
+  the workflow-only evidence step quotes its file list, filters the changed paths with git
+  itself and treats a non-numeric run count as a refusal; the evidence fetch no longer
+  shallows the checkout, so the release build records the previous tag instead of an empty
+  one; the finalizer reads its candidate from the release list and retries a dropped asset;
+  and the first phase reuses an existing draft for the tag instead of creating a second
+  one. The assertions, the digests they compare and the published artifacts are the same.
+
+- The installer matrix installs the current release from end to end on Debian, Ubuntu,
+  Fedora, openSUSE Leap, Alpine and macOS. Each leg installs with `install.sh`, installs
+  the user-mode service at the one route the service adapter accepts (the launchd
+  configuration and data routes on macOS), starts the engine from the binary that adapter
+  installed and reads `olivares doctor`. The legs use the isolated cosign the workflow
+  supplies and hash with `sha256sum` or `shasum`; the container images carry `python3` for
+  the doctor step; a failing leg prints the captured installer and engine logs before it
+  cleans up; and the scratch is emptied from inside the container, so a cleanup can never
+  decide the verdict.
+
+- The published tree describes the product only. Prose in scripts, workflows, tests and
+  records was rewritten to name what the code does; ten scripts that served no shipped
+  target and one staging note were removed; and a gate refuses prose that describes
+  anything else.
+
+- The pull-request checks bring their own PostgreSQL services and run the functional suite
+  as declared shards, each with the time it measures on the hosted runner; the estate-shape
+  self-test answers *not applicable* where the tree carries no `design/` instead of red.
+
+### Fixed
+
+- The installer (`scripts/install.sh`, served at `https://olivares.ai/olivares/install.sh`)
+  and the HTTPS bootstrap no longer stop with `cosign is required` on a host without
+  cosign: they fetch cosign v2.6.4 into their temporary directory, accept it only if its
+  SHA-256 equals the digest pinned in the script (the per-platform rows
+  `scripts/assert-cosign-binary.sh` approves), say so in the printed plan, verify the
+  release with it and remove it afterwards. `--install-cosign` keeps the verified copy
+  next to `olivares`; `OLIVARES_COSIGN=/path/to/cosign` uses your own. A temporary
+  directory mounted `noexec` falls back to `$XDG_CACHE_HOME`/`~/.cache`. Reported
+  against v26.8 and again against v26.9 (`curl -fsSL https://olivares.ai/olivares/install.sh | sh`).
+
+- The service installer no longer refuses to replace an existing service file on a host
+  without `cmp`. The idempotency check uses `cmp` when it is present and SHA-256
+  (`sha256sum` or `shasum`) otherwise, and it names the missing tools when neither
+  exists. On a minimal image the missing tool read as "refusing to replace existing
+  service file" on the second `--start` invocation.
 
 ## [26.9.0] - 2026-09-16
 
@@ -197,16 +279,6 @@ month, release-of-month; the current release is `v26.9.0`).
   signatures.
 
 ### Fixed
-
-- The installer (`scripts/install.sh`, served at `https://olivares.ai/olivares/install.sh`)
-  and the HTTPS bootstrap no longer stop with `cosign is required` on a host without
-  cosign: they fetch cosign v2.6.4 into their temporary directory, accept it only if its
-  SHA-256 equals the digest pinned in the script (the per-platform rows
-  `scripts/assert-cosign-binary.sh` approves), say so in the printed plan, verify the
-  release with it and remove it afterwards. `--install-cosign` keeps the verified copy
-  next to `olivares`; `OLIVARES_COSIGN=/path/to/cosign` uses your own. A temporary
-  directory mounted `noexec` falls back to `$XDG_CACHE_HOME`/`~/.cache`. Reported
-  against v26.8 and again against v26.9 (`curl -fsSL https://olivares.ai/olivares/install.sh | sh`).
 
 - The packaged OpenRC unit now brings up loopback, re-owns `/var/lib/olivares`
   before start, and logs to `/var/log/olivares.log`. The `.apk` no longer ships
@@ -786,5 +858,6 @@ shadow mode and final work authority (design only); a general message bus for ar
   [`SECURITY.md`](SECURITY.md).
 
 [Unreleased]: #unreleased
+[26.9.1]: https://github.com/olivaresai/olivares/releases/tag/v26.9.1
 [26.9.0]: https://github.com/olivaresai/olivares/releases/tag/v26.9.0
 [26.8.0]: https://github.com/olivaresai/olivares/releases/tag/v26.8.0

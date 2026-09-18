@@ -50,7 +50,7 @@ olivares upgrade --check
 включёнными:
 
 ```sh
-olivares upgrade --check --current-version 26.9.0
+olivares upgrade --check --current-version 26.9.1
 ```
 
 ## Каналы релизов

@@ -26,8 +26,8 @@ Helm chart，**按摘要**将它们镜像到你的私有 registry，然后安装
 
 ```bash
 scripts/airgap-bundle.sh \
-  --version v26.9.0 \
-  --image docker.io/olivaresai/olivares:26.9.0-amd64 \
+  --version v26.9.1 \
+  --image docker.io/olivaresai/olivares:26.9.1-amd64 \
   --chart deploy/helm/olivares \
   --cosign-key cosign.key \
   [--collector-image <ref>] [--out dist/airgap] [--gpg-key <id>]
@@ -92,7 +92,7 @@ cosign verify-blob --key cosign.pub --insecure-ignore-tlog \
 
 ```bash
 scripts/airgap-mirror.sh \
-  --bundle olivares-airgap-v26.9.0.tar.gz \
+  --bundle olivares-airgap-v26.9.1.tar.gz \
   --registry registry.internal:5000 [--insecure]
 ```
 

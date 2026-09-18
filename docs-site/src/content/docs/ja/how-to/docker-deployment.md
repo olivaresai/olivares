@@ -14,9 +14,9 @@ description: >-
 そして TLS はデフォルトで有効です。ホストポートはすべてのインターフェースに公開されます —
 これはサーバーだからです。下記のように意図して制限してください。
 
-:::note[ベータ ── 26.9.0 はまだ公開されていません]
+:::note[ベータ ── 26.9.1 はまだ公開されていません]
 Olivares AI は **ベータ** です。以下のイメージ座標は **リリース
-`26.9.0` が出荷された後** にのみ解決します。それまでレジストリにはプルできるものがありません。
+`26.9.1` が出荷された後** にのみ解決します。それまでレジストリにはプルできるものがありません。
 これは本番運用可能であることの保証ではなく、あなたが使うことになるデプロイの形だと捉えてください。
 :::
 
@@ -31,14 +31,14 @@ Olivares AI は **ベータ** です。以下のイメージ座標は **リリ�
 主要なコンテナのプル元は **Docker Hub** です:
 
 ```bash
-docker pull docker.io/olivaresai/olivares:26.9.0
+docker pull docker.io/olivaresai/olivares:26.9.1
 ```
 
 同じ内容は `ghcr.io/olivaresai/olivares` にも公開されています ── ダイジェストで同一であり、
 バックアップ兼ビルドレジストリとして使われます。Docker Hub は**匿名**プルにレート制限を課しますが、
 ghcr.io は公開イメージの匿名プルにレート制限を課しません。CI ノードや大規模なフリートが上限に達した
 場合は `docker login` するか、ghcr.io の座標に切り替えてください。タグには **先頭に `v` が付きません**:
-`:26.9.0` はリリースを固定し、`:latest` は浮動、`:26.9.0-fips` / `:26.9.0-stig` は
+`:26.9.1` はリリースを固定し、`:latest` は浮動、`:26.9.1-fips` / `:26.9.1-stig` は
 堅牢化されたバリアントです。ベースと `:latest` タグはマルチアーキ
 （`linux/amd64`、`linux/arm64`）で、`fips`/`stig` は `amd64` 専用です。
 
@@ -49,7 +49,7 @@ Docker Hub にコピーされるため、ダイジェストは同じです:
 
 ```bash
 IMAGE=docker.io/olivaresai/olivares          # fallback: ghcr.io/olivaresai/olivares (same digest)
-DIGEST="$(crane digest "$IMAGE:26.9.0")"
+DIGEST="$(crane digest "$IMAGE:26.9.1")"
 REF="$IMAGE@$DIGEST"
 
 cosign verify "$REF" \
@@ -86,7 +86,7 @@ docker run -d --name olivares \
   -v olivares-data:/var/lib/olivares \
   -p 8443:8443 \
   -p 8444:8444 \
-  docker.io/olivaresai/olivares:26.9.0 \
+  docker.io/olivaresai/olivares:26.9.1 \
   serve \
     --listen=0.0.0.0:8443 \
     --grpc-listen=0.0.0.0:8444 \
@@ -283,7 +283,7 @@ olivares.example.com {
 ```bash
 # 1. Back up first (see §4).
 # 2. Pull the new release and re-verify it (see §1):
-docker pull docker.io/olivaresai/olivares:26.9.1
+docker pull docker.io/olivaresai/olivares:26.9.2
 
 # docker run:
 docker stop olivares && docker rm olivares
@@ -299,7 +299,7 @@ docker compose -f deploy/compose/docker-compose.yml up -d
 
 ## 8. 本番ではダイジェストで固定する
 
-可変タグ（`:26.9.0`、`:latest`）は評価用です。本番では検証した **ダイジェスト** を固定してください ──
+可変タグ（`:26.9.1`、`:latest`）は評価用です。本番では検証した **ダイジェスト** を固定してください ──
 ダイジェストは不変であり、まさにあなたが承認したものです:
 
 ```bash

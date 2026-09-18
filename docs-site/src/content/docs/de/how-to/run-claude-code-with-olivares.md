@@ -75,14 +75,14 @@ zuerst:
 
 ```sh
 # verify the engine image you build FROM (it is cosign-signed)
-cosign verify docker.io/olivaresai/olivares:26.9.0 \
+cosign verify docker.io/olivaresai/olivares:26.9.1 \
   --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 
 docker build -f Dockerfile.agentops \
   --build-arg OLIVARES_IMAGE=docker.io/olivaresai/olivares@sha256:<digest> \
   --build-arg CLAUDE_CHANNEL=stable \
-  -t olivares-agentops:26.9.0 .
+  -t olivares-agentops:26.9.1 .
 ```
 
 Bringen Sie stattdessen Ihr eigenes `claude` mit `--build-arg CLAUDE_INSTALL=byo` mit (das
@@ -92,7 +92,7 @@ Image wird ohne `claude` ausgeliefert; mounten Sie Ihres zur Laufzeit und setzen
 ### Hochfahren
 
 ```sh
-export OLIVARES_AGENTOPS_IMAGE=olivares-agentops:26.9.0
+export OLIVARES_AGENTOPS_IMAGE=olivares-agentops:26.9.1
 docker compose -f deploy/compose/docker-compose.yml \
                -f deploy/compose/docker-compose.agentops.yml up -d
 ```

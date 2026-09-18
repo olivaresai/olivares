@@ -2,7 +2,7 @@
 title: Mit Homebrew installieren
 description: >-
   Die macOS-Homebrew-Cask-Koordinate für Olivares AI, was das Cask mit
-  Gatekeeper tut, und der Veröffentlichungsstand des v26.9.0-Tap-Bumps.
+  Gatekeeper tut, und der Veröffentlichungsstand des v26.9.1-Tap-Bumps.
 draft: false
 ---
 
@@ -12,9 +12,9 @@ Gatekeeper-Quarantäne auf. Es ist nicht der Linux-Paketpfad
 ([Aus einem Paket installieren](/how-to/install-from-packages/)) und nicht
 Docker ([Mit Docker bereitstellen](/how-to/docker-deployment/)).
 
-:::note[Beta — das v26.9.0-Cask ist noch nicht veröffentlicht]
+:::note[Beta — das v26.9.1-Cask ist noch nicht veröffentlicht]
 Der Install-Surface-Zeuge verzeichnet Homebrew als **not-published**
-(`docs/releases/v26.9.0-install-surfaces.json`, gemessen
+(`docs/releases/v26.9.1-install-surfaces.json`, gemessen
 2026-09-15T20:29:52Z). Der Producer ist `.goreleaser.yaml`
 `homebrew_casks:`. Das Tap-Cask wird vom Release-Job angehoben, den dieser
 Tag nicht ausgeführt hat. Der Befehl unten ist die Koordinate, die

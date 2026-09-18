@@ -19,7 +19,7 @@ und das die [API-Referenz](/reference/api/) rendert:
 
 :::note[Distributionsstatus]
 Die SDKs liegen im Produkt-Repository unter `clients/` und werden mit ihm versioniert.
-Diese Seite behauptet nicht, dass die v26.9.0-Clients auf pkg.go.dev, Maven Central,
+Diese Seite behauptet nicht, dass die v26.9.1-Clients auf pkg.go.dev, Maven Central,
 PyPI oder npm liegen. Beziehen Sie sie aus dem Repo
 (Go-Modulpfad oben, `mvn -f clients/java install`, `pip install ./clients/python`,
 `npm install ./clients/typescript`), sofern Sie ein Registry-Paket für diese

@@ -170,7 +170,7 @@ volume, ports and first-boot flow are wired correctly.
 The Helm chart source in `deploy/helm/olivares` deploys the control plane as a **core StatefulSet**
 (single-writer; its data directory holds the audit signing key and TLS material) and,
 for the distributed topology, a **collectors DaemonSet** that pushes observations to
-the core over **gRPC + mTLS**. The v26.9.0 engine release does not publish the chart to
+the core over **gRPC + mTLS**. The v26.9.1 engine release does not publish the chart to
 an OCI registry: no independent `chart-v*` tag has run. Install the reviewed source
 chart from a checkout and pin the published container image by digest.
 

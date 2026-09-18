@@ -43,7 +43,7 @@ olivares upgrade --check
 已经安装的版本，所有保护仍会启用：
 
 ```sh
-olivares upgrade --check --current-version 26.9.0
+olivares upgrade --check --current-version 26.9.1
 ```
 
 ## 发布渠道

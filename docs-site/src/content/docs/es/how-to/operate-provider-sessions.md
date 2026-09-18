@@ -19,7 +19,7 @@ de configuración de Grok Build o de Codex, usa
 el mismo host, usa
 [Ejecutar Claude Code con Olivares](/how-to/run-claude-code-with-olivares/).
 
-Fuente del comportamiento en v26.9.0: sección `[26.9.0]` de `CHANGELOG.md`
+Fuente de este comportamiento: sección `[26.9.0]` de `CHANGELOG.md`
 (perfiles de proveedor, controlador Codex, controlador Grok), las referencias
 generadas de [consola](/reference/console/) y
 [configuración](/reference/configuration/), `cmd/olivares/sessionruntime.go` y

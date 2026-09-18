@@ -52,7 +52,7 @@ olivares upgrade --check
 バージョンを宣言すれば、ガードは有効なままです。
 
 ```sh
-olivares upgrade --check --current-version 26.9.0
+olivares upgrade --check --current-version 26.9.1
 ```
 
 ## リリースチャネル

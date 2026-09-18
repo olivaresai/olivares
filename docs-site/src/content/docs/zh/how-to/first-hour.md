@@ -1,12 +1,12 @@
 ---
-title: "使用 Olivares AI 的第一个小时（v26.9.0，按实际交付状态）"
+title: "使用 Olivares AI 的第一个小时（v26.9.1，按实际交付状态）"
 description: >-
-  全新安装公开版 v26.9.0 二进制文件后，第一个小时内实际可以完成的操作：
+  全新安装公开版 v26.9.1 二进制文件后，第一个小时内实际可以完成的操作：
   安装令牌、AAL3 屏障、通行密钥注册、通过提供商配置文件启动会话、部署、
   知识库，以及 Codex 和 Grok 的 PEP hook。
 ---
 
-本页描述的是 **实际交付状态下的 v26.9.0**。它不是计划中的首次运行向导，也不是
+本页描述的是 **实际交付状态下的 v26.9.1**。它不是计划中的首次运行向导，也不是
 设计稿的截图。以下每个步骤都是公开版二进制文件如今确实能够执行的操作，并注明了
 使其成立的文件或环境变量。在产品拒绝执行某项操作的地方，本页会如实说明。
 
@@ -23,7 +23,7 @@ description: >-
 `--seed-demo` 不是产品导览。2026-09-04 在全新安装的公开版二进制文件上测得：使用
 种子数据启动后，控制台 **54 条路由中仍有 36 条**为空。该数字是测量日的普查。
 本树生成的 [控制台参考](/reference/console/) 列出 **75 条路由**。本页不对
-v26.9.0 上 `--seed-demo` 之后的空选项卡重新计数。演示环境会填充
+v26.9.1 上 `--seed-demo` 之后的空选项卡重新计数。演示环境会填充
 [从零开始构建读写访问图](/tutorials/zero-to-graph/) 中的访问图流程，但不会填充控制台
 的其余部分。不要用它来「探索产品」。
 :::
@@ -226,7 +226,7 @@ ACL 拒绝永远不会使它递增。
 
 ## 6. Codex 与 Grok 会话：提供商配置文件，然后才是其余 CLI hook
 
-v26.9.0 将官方 Codex CLI 和官方 Grok CLI 作为会话驱动程序运行，外加 Claude Code
+v26.9.1 将官方 Codex CLI 和官方 Grok CLI 作为会话驱动程序运行，外加 Claude Code
 （`CHANGELOG.md` `[26.9.0]` Added）。控制台在 **Provider profiles**
 （`/provider-profiles`，`sessions:profile:read`）和 **Source bindings**
 （`/provider-bindings`，`sessions:profile-binding:read`）上管理这些启动。两条路由

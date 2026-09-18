@@ -10,13 +10,13 @@
 
 [![License: AGPL-3.0-only](https://img.shields.io/badge/license-AGPL--3.0--only-blue)](LICENSING.md)
 [![SDK & connectors: Apache-2.0](https://img.shields.io/badge/SDK%20%26%20connectors-Apache--2.0-blue)](LICENSING.md)
-[![Release: v26.9.0](https://img.shields.io/badge/release-v26.9.0-28282B)](https://github.com/olivaresai/olivares/releases/tag/v26.9.0)
+[![Release: v26.9.1](https://img.shields.io/badge/release-v26.9.1-28282B)](https://github.com/olivaresai/olivares/releases/tag/v26.9.1)
 [![Status: beta](https://img.shields.io/badge/status-beta-F08000)](CHANGELOG.md)
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa)](CODE_OF_CONDUCT.md)
 
 </div>
 
-> **Beta**, in active development. **v26.9.0** ships signed archives, native packages and container images. What runs today, what is on-demand and what is design-stage is stated in [Honesty & limits](docs-site/src/content/docs/start/honesty-and-limits.md).
+> **Beta**, in active development. **v26.9.1** ships signed archives, native packages and container images. What runs today, what is on-demand and what is design-stage is stated in [Honesty & limits](docs-site/src/content/docs/start/honesty-and-limits.md).
 
 ## What it is
 
@@ -80,7 +80,7 @@ helm install olivares deploy/helm/olivares -n olivares-system --create-namespace
 kubectl create namespace olivares-system && kubectl apply -n olivares-system -f deploy/manifests/install.yaml
 ```
 
-**5 · Linux packages** — `.deb`, `.rpm`, `.apk` from the [release page](https://github.com/olivaresai/olivares/releases/tag/v26.9.0): the binary, an example env file, a no-login `olivares` user and a hardened unit; the service is not started for you.
+**5 · Linux packages** — `.deb`, `.rpm`, `.apk` from the [release page](https://github.com/olivaresai/olivares/releases/tag/v26.9.1): the binary, an example env file, a no-login `olivares` user and a hardened unit; the service is not started for you.
 
 ```sh
 sudo dpkg -i olivares_*_linux_amd64.deb        # Debian / Ubuntu   (sudo rpm -i … on RHEL / Fedora / SUSE; sudo apk add --allow-untrusted … on Alpine)

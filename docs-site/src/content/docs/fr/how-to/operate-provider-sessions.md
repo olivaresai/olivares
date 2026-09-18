@@ -19,7 +19,7 @@ fichiers de configuration de Grok Build ou de Codex, utilisez
 le même hôte, utilisez
 [Exécuter Claude Code avec Olivares](/how-to/run-claude-code-with-olivares/).
 
-Source du comportement v26.9.0 : section `[26.9.0]` de `CHANGELOG.md` (profils
+Source de ce comportement : section `[26.9.0]` de `CHANGELOG.md` (profils
 de fournisseur, pilote Codex, pilote Grok), les références générées de
 [console](/reference/console/) et de [configuration](/reference/configuration/),
 `cmd/olivares/sessionruntime.go` et `web/src/features/agentops/types.ts`.

@@ -22,12 +22,12 @@ stack elle-même (`deploy/compose/*.yml`), et le flux de premier démarrage qu'e
 est le même que celui vérifié de bout en bout contre le binaire dans le
 [tutoriel nœud unique](/tutorials/getting-started/single-node/).
 
-<Aside type="caution" title="Jusqu’à la publication des images v26.9.0, compilez en local">
-Une version étiquetée antérieure a déjà livré des images signées. Le canon de cet arbre est **v26.9.0**.
+<Aside type="caution" title="Jusqu’à la publication des images v26.9.1, compilez en local">
+Une version étiquetée antérieure a déjà livré des images signées. Le canon de cet arbre est **v26.9.1**.
 Le témoin des surfaces d’installation enregistre encore Docker Hub et GHCR comme
-**not-published** pour `26.9.0` jusqu’à l’exécution du job de release de ce tag
-(`docs/releases/v26.9.0-install-surfaces.json`). La même honnêteté figure dans
-[Déployer avec Docker](/how-to/docker-deployment/). Tant que les tags `26.9.0`
+**not-published** pour `26.9.1` jusqu’à l’exécution du job de release de ce tag
+(`docs/releases/v26.9.1-install-surfaces.json`). La même honnêteté figure dans
+[Déployer avec Docker](/how-to/docker-deployment/). Tant que les tags `26.9.1`
 n’existent pas, compilez l’image distroless durcie depuis les sources et pointez
 la stack vers elle :
 
@@ -36,7 +36,7 @@ task image                                   # builds olivares:dev
 echo 'OLIVARES_IMAGE=olivares:dev' >> deploy/compose/.env
 ```
 
-Lorsque l’image `26.9.0` existe : définissez
+Lorsque l’image `26.9.1` existe : définissez
 `OLIVARES_IMAGE=docker.io/olivaresai/olivares@sha256:<digest>` et
 [vérifiez-la](/how-to/verify-a-release/) d'abord — par digest, jamais par tag.
 </Aside>

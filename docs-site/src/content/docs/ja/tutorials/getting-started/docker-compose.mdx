@@ -22,12 +22,12 @@ control plane までを案内します。
 [シングルノードチュートリアル](/tutorials/getting-started/single-node/)でバイナリに
 対してエンドツーエンドで検証されたものと同じです。
 
-<Aside type="caution" title="v26.9.0 イメージが公開されるまではローカルでビルドする">
+<Aside type="caution" title="v26.9.1 イメージが公開されるまではローカルでビルドする">
 以前のタグ付きリリースは既に署名済みイメージを出荷しています。このツリーの canon は
-**v26.9.0** です。インストール面の証人は、そのタグのリリースジョブが走るまで
-`26.9.0` の Docker Hub と GHCR を **not-published** と記録しています
-（`docs/releases/v26.9.0-install-surfaces.json`）。同じ誠実さは
-[Docker でデプロイする](/how-to/docker-deployment/) にあります。`26.9.0`
+**v26.9.1** です。インストール面の証人は、そのタグのリリースジョブが走るまで
+`26.9.1` の Docker Hub と GHCR を **not-published** と記録しています
+（`docs/releases/v26.9.1-install-surfaces.json`）。同じ誠実さは
+[Docker でデプロイする](/how-to/docker-deployment/) にあります。`26.9.1`
 タグが存在するまで、堅牢化された distroless イメージをソースからビルドし、
 スタックをそれに向けます：
 
@@ -36,7 +36,7 @@ task image                                   # builds olivares:dev
 echo 'OLIVARES_IMAGE=olivares:dev' >> deploy/compose/.env
 ```
 
-`26.9.0` イメージが存在するとき：`OLIVARES_IMAGE=docker.io/olivaresai/olivares@sha256:<digest>`
+`26.9.1` イメージが存在するとき：`OLIVARES_IMAGE=docker.io/olivaresai/olivares@sha256:<digest>`
 を設定し、まず[検証](/how-to/verify-a-release/)してください — タグではなく digest で。
 </Aside>
 

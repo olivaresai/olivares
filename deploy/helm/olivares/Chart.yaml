@@ -33,7 +33,7 @@ version: 0.2.4
 
 # The default engine image tag this chart targets (engine CalVer). Overridden
 # per-release by `--set image.tag=` / `image.digest=` (air-gap pins by digest).
-appVersion: "26.9.0"
+appVersion: "26.9.1"
 
 kubeVersion: ">=1.25.0-0"
 

@@ -15,7 +15,7 @@ configuration files, use [Integrate Grok Build](/how-to/integrations/grok/) or
 [Integrate Codex](/how-to/integrations/codex/). To co-deploy Claude Code on the
 same host, use [Run Claude Code with Olivares](/how-to/run-claude-code-with-olivares/).
 
-Source for the v26.9.0 behavior: `CHANGELOG.md` section `[26.9.0]` (provider
+Source for this behavior: `CHANGELOG.md` section `[26.9.0]` (provider
 profiles, Codex driver, Grok driver), the generated
 [console](/reference/console/) and [configuration](/reference/configuration/)
 references, `cmd/olivares/sessionruntime.go`, and

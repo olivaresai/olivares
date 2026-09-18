@@ -19,7 +19,7 @@ description: >-
 Claude Code на том же хосте, используйте
 [Запуск Claude Code с Olivares](/how-to/run-claude-code-with-olivares/).
 
-Источник поведения v26.9.0: раздел `[26.9.0]` в `CHANGELOG.md` (профили
+Источник этого поведения: раздел `[26.9.0]` в `CHANGELOG.md` (профили
 провайдера, драйвер Codex, драйвер Grok), сгенерированные справочники
 [консоли](/reference/console/) и
 [конфигурации](/reference/configuration/), `cmd/olivares/sessionruntime.go`

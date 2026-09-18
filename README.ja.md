@@ -10,13 +10,13 @@
 
 [![License: AGPL-3.0-only](https://img.shields.io/badge/license-AGPL--3.0--only-blue)](LICENSING.md)
 [![SDK & connectors: Apache-2.0](https://img.shields.io/badge/SDK%20%26%20connectors-Apache--2.0-blue)](LICENSING.md)
-[![Release: v26.9.0](https://img.shields.io/badge/release-v26.9.0-28282B)](https://github.com/olivaresai/olivares/releases/tag/v26.9.0)
+[![Release: v26.9.1](https://img.shields.io/badge/release-v26.9.1-28282B)](https://github.com/olivaresai/olivares/releases/tag/v26.9.1)
 [![Status: beta](https://img.shields.io/badge/status-beta-F08000)](CHANGELOG.md)
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa)](CODE_OF_CONDUCT.md)
 
 </div>
 
-> **ベータ版**、活発に開発中です。**v26.9.0** は、署名済みアーカイブ、ネイティブパッケージ、コンテナイメージを提供します。今日動作するもの、オンデマンドのもの、設計段階のものは、[誠実さと限界](docs-site/src/content/docs/start/honesty-and-limits.md)に記載されています。
+> **ベータ版**、活発に開発中です。**v26.9.1** は、署名済みアーカイブ、ネイティブパッケージ、コンテナイメージを提供します。今日動作するもの、オンデマンドのもの、設計段階のものは、[誠実さと限界](docs-site/src/content/docs/start/honesty-and-limits.md)に記載されています。
 
 ## Olivares AI とは
 
@@ -80,7 +80,7 @@ helm install olivares deploy/helm/olivares -n olivares-system --create-namespace
 kubectl create namespace olivares-system && kubectl apply -n olivares-system -f deploy/manifests/install.yaml
 ```
 
-**5 · Linux パッケージ** — [リリースページ](https://github.com/olivaresai/olivares/releases/tag/v26.9.0)の `.deb`、`.rpm`、`.apk`。バイナリ、サンプル env ファイル、ログインなしの `olivares` ユーザー、硬化されたユニット。サービスは自動では起動されません。
+**5 · Linux パッケージ** — [リリースページ](https://github.com/olivaresai/olivares/releases/tag/v26.9.1)の `.deb`、`.rpm`、`.apk`。バイナリ、サンプル env ファイル、ログインなしの `olivares` ユーザー、硬化されたユニット。サービスは自動では起動されません。
 
 ```sh
 sudo dpkg -i olivares_*_linux_amd64.deb        # Debian / Ubuntu   (sudo rpm -i … on RHEL / Fedora / SUSE; sudo apk add --allow-untrusted … on Alpine)

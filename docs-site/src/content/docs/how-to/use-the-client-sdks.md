@@ -19,7 +19,7 @@ serves and the [API reference](/reference/api/) renders:
 
 :::note[Distribution status]
 The SDKs live in the product repository under `clients/` and are versioned
-with it. This page does not assert that the v26.9.0 clients are on
+with it. This page does not assert that the v26.9.1 clients are on
 pkg.go.dev, Maven Central, PyPI or npm. Consume them from the repo
 (Go module path above, `mvn -f clients/java install`, `pip install ./clients/python`,
 `npm install ./clients/typescript`) unless you have verified a registry

@@ -45,8 +45,8 @@ installation without printing secrets
 
 ### `agentops-layout` check
 
-`olivares doctor` 报告名为 `agentops-layout` 的检查（`CHANGELOG.md`
-`[26.9.0]`；`cmd/olivares/cmd_doctor.go` `doctorAgentOpsCheck`）。它不是子命令。
+`olivares doctor` 报告名为 `agentops-layout` 的检查
+（`CHANGELOG.md` `[26.9.0]`；`cmd/olivares/cmd_doctor.go` `doctorAgentOpsCheck`）。它不是子命令。
 它测量所有权清单记录的原生 AgentOps 布局：受管 drop-in 必须以其 mode 存在，并
 必须命名记录的 claude `HOME`、令牌目录和工作区；runtime env 必须以配置 mode
 存在（从不读取值）；工作区必须是目录（`docs/RELEASE-INSTALLER.md`）。

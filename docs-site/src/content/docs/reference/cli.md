@@ -44,7 +44,7 @@ olivares serve [flags]
 These are properties of `serve`, not opt-ins:
 
 - **TLS is on by default.** If no certificate is supplied, the engine generates a self-signed certificate in the data directory and logs both its SHA-256 certificate fingerprint and, as `pin_sha256`, the leaf SPKI pin; clients either trust the certificate or pass that `pin_sha256` value to `--pin-sha256`. The two are different digests of different bytes — the certificate fingerprint is not a pin. The gRPC server fails closed: outside `--insecure` it will not start in plaintext.
-- **Loopback by default.** Both the HTTP and gRPC listeners default to `127.0.0.1`. Exposing the control plane beyond the local host is a deliberate change you make by setting a non-loopback bind and fronting it with your own ingress.
+- **Every interface by default.** Both the HTTP and gRPC listeners default to the wildcard — `--listen :8443` and `--grpc-listen :8444`, that is `0.0.0.0` and, where the kernel has IPv6, `::` — because the console is a server; `quickstart` shares the default. Restricting it to this host is the deliberate change: `--listen 127.0.0.1:8443 --grpc-listen 127.0.0.1:8444`, or `OLIVARES_BIND=127.0.0.1` for the Compose stack. The guards do not move with the bind: TLS stays on, first setup stays behind the one-time token, `--insecure` is still refused off-host unless `--insecure-allow-public-bind` declares TLS termination in front, and `--seed-demo` is still loopback-only.
 - **No default credentials.** On a fresh install with no users, the engine mints a **one-time, single-use setup token** (prefix `olst_`) and prints it to **stdout only** (never to the logs). You create the first administrator by posting that token to the setup endpoint, then log in. See [First-boot setup](#first-boot-setup).
 
 ### Flags
@@ -10114,7 +10114,7 @@ olivares release manifest
 | `--security` | `bool` | `false` | mark this as a security release |
 | `--sign-key` | `string` | — | base64 (or @file) Ed25519 PRIVATE key to sign the manifest |
 | `--start-at` | `string` | — | rollout start time (RFC3339); before it no node upgrades |
-| `--version` | `string` | — | release version (semver), e.g. 26.9.0 (required) |
+| `--version` | `string` | — | release version (semver), e.g. 26.9.1 (required) |
 
 #### Command: olivares release sign-manifest
 

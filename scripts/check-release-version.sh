@@ -713,6 +713,65 @@ def historical_allowed(canon, path, tok, dated, curated, kept=frozenset()):
     return True
 
 
+# ── A CITATION OF A DATED CHANGELOG SECTION (added 2026-09-18) ────────────────────────
+# The member above says the dated sections of CHANGELOG.md ARE the record of every release.
+# Documentation OUTSIDE that file cites those sections by their own heading syntax, and a
+# citation promises nothing about what ships: it names WHERE a fact is written.
+#
+# THE MEASURE THAT PUT IT HERE, on the v26.9.1 cut: with the canon re-derived and nothing
+# else changed, 146 of the 589 divergent occurrences were `[26.9.0]` section references in
+# 64 files — ten how-to and reference pages in seven locales, all written AFTER the v26.9.0
+# tag. Swept to the canon they would send the reader to a `[26.9.1]` section that does not
+# carry the entry. That is not a stale claim corrected; it is a working reference broken.
+#
+# IT IS BOUND BY FORM, NOT BY PATH, and the form is the changelog's own section syntax
+# (Keep a Changelog): the token inside `[...]`, on a line that names the changelog file.
+# A path list was rejected for the reason this file already gives for the docs walk — the
+# eleventh page to cite a section would be born invisible, and nobody would be told.
+#
+# EVERY occurrence on the line, never any: the `bounded()` precedent, for its reason. A line
+# that cites a section AND states the version bare is ambiguous, and an ambiguous claim is
+# judged as the stale claim it might be. Seven real lines in seven locales read exactly like
+# that, and they were rewritten rather than exempted.
+#
+# It cannot rescue anything `changelog-history` refuses: a heading does not name the file it
+# sits in, so the masthead stays judged and the sections stay the record.
+CITED_SECTION = re.compile(r"\[v?(?:2[6-9]|[3-9][0-9])[.](?:[1-9]|1[0-2])[.][0-9]+\]")
+
+# The changelog is named by its filename, which is the same string every one of those pages
+# uses to point at it. Bare "changelog" is deliberately not enough: the word is prose.
+CHANGELOG_FILE = "CHANGELOG.md"
+
+
+def wrapped_citation(line, tok):
+    """-> True iff `tok` sits in a section reference on a line that names no changelog.
+
+    The one shape a reader cannot diagnose from a divergence line: the citation is right and
+    the LINE BREAK is what refuses it, because the file name ended the line above. Measured on
+    the v26.9.1 cut: eight lines in eight files, every one of them wrapped in that same place.
+    They were rewrapped, not exempted, and this note exists so the ninth is not a puzzle."""
+    if CHANGELOG_FILE in line:
+        return False
+    spots = [m.start() for m in re.finditer(r"(?<![\w.-])" + re.escape(tok) + r"(?![\w.-])", line)]
+    brackets = [m.span() for m in CITED_SECTION.finditer(line)]
+    return bool(spots) and all(any(b < s and s + len(tok) < e for b, e in brackets) for s in spots)
+
+
+def cited_section(line, tok):
+    """-> True iff EVERY occurrence of `tok` in `line` sits inside a changelog section
+    reference, on a line that names the changelog file.
+
+    A section reference is the heading syntax the changelog itself uses, so `[26.9.0-fips]`
+    is not one: a hardened image tag has no section and earns nothing here."""
+    if CHANGELOG_FILE not in line:
+        return False
+    spots = [m.start() for m in re.finditer(r"(?<![\w.-])" + re.escape(tok) + r"(?![\w.-])", line)]
+    if not spots:
+        return False
+    brackets = [m.span() for m in CITED_SECTION.finditer(line)]
+    return all(any(b < s and s + len(tok) < e for b, e in brackets) for s in spots)
+
+
 def scan_pins(tops):
     """-> [(path, line_no, token, line, dated)] for every artefact pin under a published tree."""
     hits = []
@@ -955,6 +1014,11 @@ def doc_allowed(canon, path, tok, line, dated, curated, kept=frozenset()):
     if "min-version" in kinds and bounded(line, tok) and _tuple(tok) <= _tuple(canon):
         return True
     if historical_allowed(canon, path, tok, dated, curated, kept):
+        return True
+    # A citation of a section that already exists. Strictly below the canon for the same
+    # reason every record is: the canon's own section is the live claim, and a section above
+    # it is one nobody wrote.
+    if cited_section(line, tok) and _tuple(tok) < _tuple(canon):
         return True
     return False
 
@@ -1558,6 +1622,103 @@ def selftest():
            histpin("  image: docker.io/olivaresai/olivares:26.8.0\n",
                    "deploy/manifests/install.yaml", False)
            == [("deploy/manifests/install.yaml", 1, "olivaresai/olivares:26.8.0")])
+    # 8b · TWO PAST RELEASES, NOT ONE (added 2026-09-18). The v26.9.1 cut is the first with
+    #      more than one shipped release behind it, and every case above happens to use a single
+    #      past version. "Strictly below the canon" is what the rule says and "the previous
+    #      release" is what a reader may assume it says; these cases hold it to the first.
+    ledger = {"docs/launch/fixture-two-releases.md":
+              "the first tag `v26.8.0` shipped, and `v26.9.0` followed it"}
+    expect("historical: a record naming TWO past releases -> both green",
+           judge("v26.9.1", scan(ledger, rd(ledger)), curated=hist)[0] == [])
+    # The ledger holds one file per release, and each admits ONLY its own label. Asserted in
+    # both directions, because "any past version under docs/releases" would pass one direction
+    # and is exactly what the self-bound kind refuses.
+    older = {"docs/releases/v26.8.0-install-surfaces.json": '  "version": "v26.8.0",'}
+    newer = {"docs/releases/v26.9.0-install-surfaces.json": '  "version": "v26.9.0",'}
+    crossed = {"docs/releases/v26.9.0-install-surfaces.json": '  "evidence": "measured against v26.8.0",'}
+    expect("historical: each witness admits its own label and refuses its neighbour's",
+           judge("v26.9.1", scan(older, rd(older)), curated=hist)[0] == []
+           and judge("v26.9.1", scan(newer, rd(newer)), curated=hist)[0] == []
+           and judge("v26.9.1", scan(crossed, rd(crossed)), curated=hist)[0]
+           == [("docs/releases/v26.9.0-install-surfaces.json", 1, "v26.8.0")])
+    # THE ONE THAT FIRED FOR REAL while this cut was written: the CURRENT release's witness
+    # named the previous tag in an evidence sentence. The filename is the allowance, so the
+    # canon's own witness may not name a past release either — measured, and the sentence was
+    # rewritten rather than exempted.
+    current = {"docs/releases/v26.9.1-install-surfaces.json":
+               '  "evidence": "the v26.9.0 tag is published and keeps its own witness",'}
+    expect("historical: the CURRENT witness naming a past release -> red (the label is the allowance)",
+           judge("v26.9.1", scan(current, rd(current)), curated=hist)[0]
+           == [("docs/releases/v26.9.1-install-surfaces.json", 1, "v26.9.0")])
+    # A changelog with TWO dated sections: both are the record, and the masthead above them is
+    # still the live claim. The founding defect of this gate lives in that masthead.
+    two = ("# Changelog\n\nthe current release is `v26.9.0`.\n\n## [Unreleased]\n\n"
+           "## [26.9.0] - 2026-09-16\n\nTag `v26.9.0` points at a commit\n\n"
+           "## [26.8.0] - 2026-09-01\n\nTag `v26.8.0` points at another\n")
+    tree = {"CHANGELOG.md": two}
+    expect("historical: two dated sections are both the record; the masthead is not",
+           judge("v26.9.1", scan(tree, rd(tree)), curated=hist)[0] == [("CHANGELOG.md", 3, "v26.9.0")])
+    # And the generation that is NOT past: a record may not name the canon's successor, however
+    # many releases sit below it.
+    ahead = {"docs/launch/fixture-two-releases.md": "next up is v26.9.2"}
+    expect("historical: with two releases behind it, a record still may not name one ahead",
+           judge("v26.9.1", scan(ahead, rd(ahead)), curated=hist)[0]
+           == [("docs/launch/fixture-two-releases.md", 1, "v26.9.2")])
+    # 9 · A CITATION OF A DATED SECTION IS NOT A CLAIM ABOUT WHAT SHIPS (added 2026-09-18).
+    #     Measured on the v26.9.1 cut: 146 of the 589 divergences were pages naming the
+    #     `[26.9.0]` changelog section as the SOURCE of a behaviour they document — ten how-to
+    #     and reference pages in seven locales, all written after the v26.9.0 tag. Sweeping a
+    #     citation to the new canon does not correct a claim; it points the reader at a section
+    #     that does not carry the entry. The class is bound by FORM, so every case below either
+    #     proves the form or proves what the form refuses.
+    cite = lambda text, path="docs-site/src/content/docs/how-to/x.md": judge(
+        "v26.9.1", scan({path: text}, rd({path: text})), curated=hist)[0]
+    expect("citation: a page naming a past changelog section -> green",
+           cite("the turn ends and the process stays usable (`CHANGELOG.md` `[26.9.0]`).") == [])
+    expect("citation: the same past version stated BARE on the same page -> red",
+           cite("v26.9.0 keys every live session row by its own identity.")
+           == [("docs-site/src/content/docs/how-to/x.md", 1, "v26.9.0")])
+    expect("citation: a bracketed version on a line that does NOT name the changelog -> red",
+           cite("pin the `[26.9.0]` image before you roll the fleet.")
+           == [("docs-site/src/content/docs/how-to/x.md", 1, "26.9.0")])
+    # EVERY occurrence, not any — the `bounded()` precedent, for the same reason: a line that
+    # cites a section AND states the version bare is ambiguous, and an ambiguous claim is judged
+    # as the stale claim it might be. Measured: seven real lines in seven locales read exactly
+    # like this, and they are rewritten rather than exempted.
+    expect("citation: a citation and a bare token on ONE line -> the bare one stays red",
+           cite("Source for the v26.9.0 behavior: `CHANGELOG.md` section `[26.9.0]`.")
+           == [("docs-site/src/content/docs/how-to/x.md", 1, "v26.9.0")])
+    # THE SAME TOKEN TWICE, which is what "every" and "any" actually disagree about. The case
+    # above has one bare occurrence and one bracketed one of DIFFERENT tokens (`v26.9.0` and
+    # `26.9.0`), so either quantifier answers it. A mutation control found that gap: with `any`
+    # the battery stayed green. This line is the one that fails under it.
+    expect("citation: the same token cited AND stated bare -> red (every, not any)",
+           cite("see `CHANGELOG.md` `[26.9.0]`, then install 26.9.0 on every node.")
+           == [("docs-site/src/content/docs/how-to/x.md", 1, "26.9.0")] * 2)
+    expect("citation: a section ABOVE the canon -> red (nobody wrote that section)",
+           cite("see `CHANGELOG.md` `[26.9.2]` for the fix.")
+           == [("docs-site/src/content/docs/how-to/x.md", 1, "26.9.2")])
+    expect("citation: a hardened variant in brackets is not a section reference -> red",
+           cite("see `CHANGELOG.md` `[26.9.0-fips]` for the hardened build.")
+           == [("docs-site/src/content/docs/how-to/x.md", 1, "26.9.0-fips")])
+    expect("citation: a wrapped citation is named as wrapped, not left as a puzzle",
+           wrapped_citation("`[26.9.0]` Added; `INSTALL.md`).", "26.9.0")
+           and not wrapped_citation("see `CHANGELOG.md` `[26.9.0]`", "26.9.0")
+           and not wrapped_citation("pin `[26.9.0]` and 26.9.0 too", "26.9.0")
+           and not wrapped_citation("deploy 26.9.0 today", "26.9.0"))
+    # The changelog's OWN headings are reached by `changelog-history`, not by this rule: a
+    # heading does not name the file it sits in. The separation is asserted on the SAME BYTES
+    # in two places, so neither rule can be mistaken for the other.
+    heading = "## [26.9.0] - 2026-09-16\n"
+    expect("citation: the changelog's own heading is the record; the same bytes on a page are not",
+           judge("v26.9.1", scan({"CHANGELOG.md": heading}, rd({"CHANGELOG.md": heading})),
+                 curated=hist)[0] == []
+           and cite(heading) == [("docs-site/src/content/docs/how-to/x.md", 1, "26.9.0")])
+    # A record that cites a section keeps its own allowance too, so the two never compete.
+    expect("citation: a launch record citing a section is still a record -> green",
+           judge("v26.9.1", scan({"docs/launch/fixture-post.md": "see `CHANGELOG.md` `[26.8.0]`"},
+                                 rd({"docs/launch/fixture-post.md": "see `CHANGELOG.md` `[26.8.0]`"})),
+                 curated=hist)[0] == [])
     # 8 · every member carries a written reason, and the two tied ones are the two the export
     #     curates. Asserted so a member added without a reason, or a tie invented for a
     #     directory the export publishes, fails here rather than in review.
@@ -1962,11 +2123,15 @@ if failures or afailures:
     total = len(failures) + len(afailures)
     print(f"FAIL check-release-version: canon is {canon}; {total} divergent occurrence(s):")
     base = canon.lstrip("v")
+    text_at = {(p, i): ln for p, i, _t, ln, _d in hits + pin_hits}
     for p, i, tok in failures[:40]:
         note = ""
         if tok.lstrip("v").replace("-fips", "").replace("-stig", "") == base:
             note = ("  <- the canon's HARDENED tag, not another version: if this file documents "
                     "the artefact matrix, give it a 'variants' record in DERIVED_ALLOW")
+        elif wrapped_citation(text_at.get((p, i), ""), tok):
+            note = ("  <- a changelog SECTION reference whose line names no changelog: if the "
+                    "citation wrapped, put `CHANGELOG.md` and the section on ONE line")
         print(f"  {p}:{i}: {tok}{note}")
     for p, i, tok in afailures[:40]:
         print(f"  {p}:{i}: {tok}   [shipped release coordinate]")

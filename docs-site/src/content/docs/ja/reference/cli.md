@@ -44,7 +44,7 @@ olivares serve [flags]
 これらは `serve` の性質であり、オプトインではありません：
 
 - **TLS はデフォルトでオン。** 証明書が供給されない場合、エンジンはデータディレクトリに自己署名証明書を生成し、その証明書の SHA-256 フィンガープリントと、`pin_sha256` としてリーフ証明書の SPKI ピンの両方をログに記録します。クライアントは証明書を信頼するか、その `pin_sha256` の値を `--pin-sha256` に渡します。両者は異なるバイト列の異なるダイジェストであり、証明書フィンガープリントはピンでは**ありません**。gRPC サーバーは fail closed です：`--insecure` の外では平文では起動しません。
-- **デフォルトで loopback。** HTTP と gRPC のリスナーはともにデフォルトで `127.0.0.1` です。コントロールプレーンをローカルホストの外に公開することは、非 loopback のバインドを設定し、自前の ingress で前面に立てることで行う、意図的な変更です。
+- **デフォルトで全インターフェース。** HTTP と gRPC のリスナーはともにデフォルトでワイルドカード（`--listen :8443` と `--grpc-listen :8444`、つまり `0.0.0.0` と、カーネルが IPv6 を持つ場合は `::`）にバインドします。コンソールはサーバーだからです。`quickstart` も同じデフォルトです。意図的な変更となるのは、このホストに限定することです: `--listen 127.0.0.1:8443 --grpc-listen 127.0.0.1:8444`、または Compose スタックでは `OLIVARES_BIND=127.0.0.1`。ガードはバインドと一緒に動きません: TLS はオンのまま、初回セットアップはワンタイムトークンの後ろのまま、`--insecure` は `--insecure-allow-public-bind` で前段の TLS 終端を宣言しない限りホスト外では引き続き拒否され、`--seed-demo` は引き続き loopback 限定です。
 - **デフォルトの認証情報なし。** ユーザーのいない新規インストールでは、エンジンは **ワンタイム・単回使用のセットアップトークン**（プレフィックス `olst_`）を発行し、それを **stdout のみ** に出力します（ログには決して出力しません）。そのトークンをセットアップエンドポイントにポストすることで最初の管理者を作成し、その後ログインします。[初回起動セットアップ](#初回起動セットアップ) を参照してください。
 
 ### フラグ
@@ -10122,7 +10122,7 @@ olivares release manifest
 | `--security` | `bool` | `false` | mark this as a security release |
 | `--sign-key` | `string` | — | base64 (or @file) Ed25519 PRIVATE key to sign the manifest |
 | `--start-at` | `string` | — | rollout start time (RFC3339); before it no node upgrades |
-| `--version` | `string` | — | release version (semver), e.g. 26.9.0 (required) |
+| `--version` | `string` | — | release version (semver), e.g. 26.9.1 (required) |
 
 #### Command: olivares release sign-manifest
 
