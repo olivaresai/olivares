@@ -499,7 +499,7 @@ func TestAgentToolInstallNegativeControls(t *testing.T) {
 		gets := f.srv.Count(artifact)
 		for _, args := range [][]string{
 			{"agent", "tool", "install", "--platform", "win32-x64", "--root", f.root, "--source", f.srv.URL, "--yes"},
-			{"agent", "tool", "install", "--driver", "grok", "--platform", "linux-x64", "--root", f.root, "--yes"},
+			{"agent", "tool", "install", "--driver", "not-a-cli", "--platform", "linux-x64", "--root", f.root, "--yes"},
 			{"agent", "tool", "install", "--platform", "linux-x64", "--root", f.root, "--source", "ftp://mirror.invalid", "--yes"},
 			{"agent", "tool", "install", "--platform", "linux-x64", "--root", "relative/tools", "--yes"},
 			{"agent", "tool", "plan", "--platform", "riscv-x64", "--root", f.root},
@@ -778,7 +778,14 @@ func TestAgentToolProductionWiringTrustsOnlyTheEmbeddedKey(t *testing.T) {
 	// The production engine builds without touching the network or the disk.
 	eng := toolInstallEngine(context.Background())
 	if keys := eng.Catalog().Keys(); len(keys) != 1 || keys[0] != "claude" {
-		t.Fatalf("catalog %v", keys)
+		t.Fatalf("v1 catalog %v", keys)
+	}
+	got := strings.Join(eng.DriverKeys(), ",")
+	if got != "claude,codex,grok" {
+		t.Fatalf("driver keys %q", got)
+	}
+	if bytes.Contains(src, []byte("HashMatchingVerifier")) {
+		t.Fatal("cmd_agent_tool.go must not wire the test-only HashMatchingVerifier")
 	}
 }
 

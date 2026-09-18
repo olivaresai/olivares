@@ -60,7 +60,7 @@ func (c *Catalog) Lookup(driver string) (Provider, error) {
 		return p, nil
 	}
 	return nil, refuse(KindUnsupportedProvider,
-		"driver %q has no installer in this release (registered: %v); Codex and Grok Build installation is release work still ahead, not a removed scope",
+		"driver %q has no v1 installer in this catalog (registered: %v)",
 		driver, c.Keys())
 }
 

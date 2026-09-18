@@ -80,7 +80,8 @@ func buildSessionRuntimeOptions(getenv func(string) string, broker *wifCredentia
 	opts := []sessions.Option{sessions.WithRunner(sessions.NewProcRunner())}
 	// HC1: the host-tools read's adapter. It captures its locations here and
 	// detects nothing until a request asks (hosttools.go).
-	opts = append(opts, sessions.WithHostToolObserver(newHostToolObserver(getenv)))
+	obs := newHostToolObserver(getenv)
+	opts = append(opts, sessions.WithHostToolObserver(obs))
 
 	if bin := strings.TrimSpace(getenv(envSessionClaudeBin)); bin != "" {
 		opts = append(opts, sessions.WithProgram(bin))
@@ -88,35 +89,10 @@ func buildSessionRuntimeOptions(getenv func(string) string, broker *wifCredentia
 	// The version Olivares presents to an official CLI's handshake is the BUILD's,
 	// never a constant the module invented.
 	opts = append(opts, sessions.WithProductVersion(version))
-	if bin := strings.TrimSpace(getenv(envSessionCodexBin)); bin != "" {
-		opts = append(opts,
-			sessions.WithProviderDriver(sessions.NewCodexDriver()),
-			sessions.WithDriverProgram("codex", bin),
-		)
-		if log != nil {
-			log.Info("session runtime: the official Codex driver is operable on this node",
-				"program", bin,
-				"authentication", "per profile: "+sessions.AuthSourceAccountHome+" or "+sessions.AuthSourceManagedInjection+" (managed needs its own governed adapter)")
-		}
-	} else if log != nil {
-		log.Info("session runtime: no Codex driver registered; codex profiles are observable and not launchable",
-			"set", envSessionCodexBin+" to the pinned official codex binary")
-	}
-	if bin := strings.TrimSpace(getenv(envSessionGrokBin)); bin != "" {
-		opts = append(opts,
-			sessions.WithProviderDriver(sessions.NewGrokDriver()),
-			sessions.WithDriverProgram("grok", bin),
-		)
-		if log != nil {
-			log.Info("session runtime: the official Grok driver is operable on this node",
-				"program", bin,
-				"transport", "agent --no-leader stdio (owned child, ACP over stdio; never a leader, server or relay)",
-				"authentication", "per profile: "+sessions.AuthSourceAccountHome+" or "+sessions.AuthSourceManagedInjection+" (managed needs its own governed adapter)")
-		}
-	} else if log != nil {
-		log.Info("session runtime: no Grok driver registered; grok profiles are observable and not launchable",
-			"set", envSessionGrokBin+" to the pinned official grok binary")
-	}
+	pinOfficialSessionDriver(&opts, getenv, log, obs, envSessionCodexBin, "codex", sessions.NewCodexDriver,
+		"authentication", "per profile: "+sessions.AuthSourceAccountHome+" or "+sessions.AuthSourceManagedInjection+" (managed needs its own governed adapter)")
+	pinOfficialSessionDriver(&opts, getenv, log, obs, envSessionGrokBin, "grok", sessions.NewGrokDriver,
+		"transport", "agent --no-leader stdio (owned child, ACP over stdio; never a leader, server or relay)")
 	if bin := strings.TrimSpace(getenv(envSessionOpenCodeBin)); bin != "" {
 		opts = append(opts,
 			sessions.WithProviderDriver(sessions.NewOpenCodeDriver()),
@@ -150,6 +126,42 @@ func buildSessionRuntimeOptions(getenv func(string) string, broker *wifCredentia
 	// (without it, deny-mode fails closed — see the module seam).
 	opts = append(opts, sessions.WithClassifier(securityWorkspaceClassifier{}))
 	return opts
+}
+
+func pinOfficialSessionDriver(
+	opts *[]sessions.Option,
+	getenv func(string) string,
+	log *slog.Logger,
+	obs *hostToolObserver,
+	envName, driver string,
+	newDriver func() sessions.ProviderDriver,
+	extraKey, extraVal string,
+) {
+	bin := strings.TrimSpace(getenv(envName))
+	source := "environment"
+	if bin == "" && obs != nil {
+		if managed := obs.latestProgram(driver); managed != "" {
+			bin, source = managed, "managed-install"
+		}
+	}
+	if bin == "" {
+		if log != nil {
+			log.Info("session runtime: no "+driver+" driver registered; profiles are observable and not launchable",
+				"set", envName+" or install with olivares agent tool install --driver "+driver)
+		}
+		return
+	}
+	*opts = append(*opts,
+		sessions.WithProviderDriver(newDriver()),
+		sessions.WithDriverProgram(driver, bin),
+	)
+	if log != nil {
+		args := []any{"program", bin, "pin", source}
+		if extraKey != "" {
+			args = append(args, extraKey, extraVal)
+		}
+		log.Info("session runtime: the official "+driver+" driver is operable on this node", args...)
+	}
 }
 
 // logSessionLaunchInspection records, once at boot, whether the wired Runner can

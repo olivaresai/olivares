@@ -86,14 +86,27 @@ func newHostToolObserverAt(root string, rootErr error, home, pathEnv string) *ho
 		home, homeErr = "", errHostToolHomeUnavailable
 	}
 	network := &refusedNetwork{}
+	// cli-transport-exempt: refusedNetwork is this client's only transport and its RoundTrip
+	// refuses every request, so host-tool observation never reaches the network through it.
+	client := &http.Client{Transport: network}
 	claude := toolinstall.NewClaude(toolinstall.ClaudeOptions{
 		Verifier: toolinstall.UnavailableVerifier{},
-		// cli-transport-exempt: refusedNetwork is this client's only transport and its RoundTrip
-		// refuses every request, so host-tool observation never reaches the network through it.
-		Client: &http.Client{Transport: network},
+		Client:   client,
 	})
+	codex := toolinstall.NewCodex(toolinstall.CodexOptions{
+		Verifier: toolinstall.UnavailableSubjectVerifier{},
+		Client:   client,
+	})
+	grok := toolinstall.NewGrok(toolinstall.GrokOptions{Client: client})
+	cat, err := toolinstall.NewCapabilityCatalog(toolinstall.NewCatalog(claude), codex, grok)
+	var engine *toolinstall.Engine
+	if err != nil {
+		engine = toolinstall.NewEngine(toolinstall.NewCatalog(claude), toolinstall.EngineOptions{InstallerVersion: version})
+	} else {
+		engine = toolinstall.NewEngineWithCapabilities(cat, toolinstall.EngineOptions{InstallerVersion: version})
+	}
 	return &hostToolObserver{
-		engine:  toolinstall.NewEngine(toolinstall.NewCatalog(claude), toolinstall.EngineOptions{InstallerVersion: version}),
+		engine:  engine,
 		root:    root,
 		rootErr: rootErr,
 		home:    home,
@@ -121,7 +134,7 @@ func (o *hostToolObserver) ObserveHostTools(ctx context.Context, driver, configu
 	}
 	// The catalog's supported set decides first; another driver is never answered
 	// with Claude's detector, and no filesystem error can hide that answer.
-	provider, err := o.engine.Catalog().Lookup(driver)
+	paths, err := o.engine.ProviderDefaultPaths(driver, o.home)
 	if err != nil {
 		if toolinstall.KindOf(err) == toolinstall.KindUnsupportedProvider {
 			return sessions.HostToolObservation{UnsupportedDriver: true}, nil
@@ -143,7 +156,7 @@ func (o *hostToolObserver) ObserveHostTools(ctx context.Context, driver, configu
 	}
 	// Managed-root errors other than absence already came back from Detect (List).
 	// A dated observation across filesystem calls, not an atomic snapshot.
-	if err := examineHostToolScope(provider, driver, o.home, o.pathEnv); err != nil {
+	if err := examineHostToolScope(driver, o.home, o.pathEnv, paths); err != nil {
 		return sessions.HostToolObservation{}, err
 	}
 	if err := ctx.Err(); err != nil {
@@ -168,13 +181,13 @@ func (o *hostToolObserver) ObserveHostTools(ctx context.Context, driver, configu
 // ignores relative ones). A location is acceptable only when it is present or
 // fs.ErrNotExist. It uses Lstat and one directory listing, so it never opens a
 // FIFO, a candidate file or provider configuration, and it executes nothing.
-func examineHostToolScope(provider toolinstall.Provider, driver, home, pathEnv string) error {
+func examineHostToolScope(driver, home, pathEnv string, defaultPaths []string) error {
 	if driver == claudeHostToolDriver {
 		if err := enumerableOrMissing(claudeVersionsDir(home)); err != nil {
 			return err
 		}
 	}
-	for _, path := range provider.DefaultPaths(home) {
+	for _, path := range defaultPaths {
 		if err := presentOrMissing(path); err != nil {
 			return err
 		}
@@ -286,6 +299,17 @@ func lookPathIn(name, pathEnv string) (string, bool) {
 
 // compare answers same or different only from two successful stats of real
 // files; every failure is unknown, never different.
+func (o *hostToolObserver) latestProgram(driver string) string {
+	if o == nil || o.rootErr != nil || o.root == "" {
+		return ""
+	}
+	in, ok, err := o.engine.LatestInstalled(context.Background(), o.root, driver)
+	if err != nil || !ok || strings.TrimSpace(in.Executable) == "" {
+		return ""
+	}
+	return in.Executable
+}
+
 func (c configuredIdentity) compare(resolved string) string {
 	if c.info == nil || resolved == "" {
 		return sessions.HostToolCodeUnknown

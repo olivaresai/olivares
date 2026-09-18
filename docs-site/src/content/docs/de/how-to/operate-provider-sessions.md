@@ -51,8 +51,8 @@ Ablehnung, kein Fallback.
 | Driver | Diese Umgebungsvariable pinnen | Wenn sie nicht gesetzt ist |
 |---|---|---|
 | Claude Code | `OLIVARES_SESSION_RUNTIME_CLAUDE_BIN` (Standard `claude`) | der Claude-Pfad verwendet den Standard-Executable-Namen |
-| Codex | `OLIVARES_SESSION_RUNTIME_CODEX_BIN` | Codex-Profile bleiben beobachtbar und sind nicht startbar |
-| Grok | `OLIVARES_SESSION_RUNTIME_GROK_BIN` | Grok-Profile bleiben beobachtbar und sind nicht startbar |
+| Codex | `OLIVARES_SESSION_RUNTIME_CODEX_BIN` | Ist sie nicht gesetzt, pinnt eine **registrierte** verwaltete Installation (`olivares agent tool install --driver codex`) das Executable aus der Quittung. Andernfalls bleiben Codex-Profile beobachtbar und sind nicht startbar. Die Engine durchsucht `PATH` nicht. |
+| Grok | `OLIVARES_SESSION_RUNTIME_GROK_BIN` | Ist sie nicht gesetzt, pinnt eine **registrierte** verwaltete Installation (`olivares agent tool install --driver grok`) das Executable aus der Quittung. Andernfalls bleiben Grok-Profile beobachtbar und sind nicht startbar. Die Engine durchsucht `PATH` nicht. |
 
 Der Wert ist das offizielle Binary, das dieser Knoten betreiben darf. Die
 Engine löst `codex` oder `grok` nicht über `PATH` auf. Die generierte

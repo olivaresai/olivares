@@ -12,11 +12,12 @@ trazas OTLP. No es el conector de la API de xAI, no consulta modelos remotos y n
 secreto del proveedor. El control preventivo de herramienta viaja por `olivares grok-hook` y un
 PEP local separado.
 
-Esta página es la vía del **conector y del hook PEP**. No lanza la CLI oficial de
-Grok como hijo gobernado. Esa vía de operación es
+Esta página es la vía del **conector y del hook PEP**. Para instalar o verificar la
+CLI oficial, registrar un recibo de sondeo y lanzar o detener una sesión gobernada,
+use [Instalar la CLI de Grok](/how-to/install-grok-cli/). La vía de operación es
 [Operar una sesión de proveedor](/how-to/operate-provider-sessions/)
-(`OLIVARES_SESSION_RUNTIME_GROK_BIN` más un perfil de proveedor;
-`CHANGELOG.md` `[26.9.0]`). Allí no se afirma compatibilidad con una cuenta
+(`OLIVARES_SESSION_RUNTIME_GROK_BIN` o el recibo de una instalación gestionada,
+más un perfil de proveedor). Allí no se afirma compatibilidad con una cuenta
 oficial de Grok autenticada.
 
 ## Agregar Grok Build

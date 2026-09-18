@@ -154,8 +154,11 @@ func TestSessionRuntimeHostToolObserverExecutesVerifiesAndDialsNothing(t *testin
 
 	// Drivers the catalog does not support are refused as unsupported, never
 	// answered with Claude's detector; a root that could not be resolved is an error.
-	if res, err := obs.ObserveHostTools(context.Background(), "codex", ""); err != nil || !res.UnsupportedDriver || len(res.Candidates) != 0 {
-		t.Fatalf("codex: %+v %v", res, err)
+	if res, err := obs.ObserveHostTools(context.Background(), "not-a-provider", ""); err != nil || !res.UnsupportedDriver || len(res.Candidates) != 0 {
+		t.Fatalf("unsupported: %+v %v", res, err)
+	}
+	if res, err := obs.ObserveHostTools(context.Background(), "grok", ""); err != nil || res.UnsupportedDriver {
+		t.Fatalf("grok must be a supported driver: %+v %v", res, err)
 	}
 	noRoot := newHostToolObserverAt("", errors.New("no data directory"), home, captured)
 	if _, err := noRoot.ObserveHostTools(context.Background(), "claude", ""); err == nil {

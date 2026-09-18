@@ -77,6 +77,25 @@ func firstLine(s string) string {
 	return ""
 }
 
+// firstVersionToken returns the version a vendor --version line reports. The
+// vendors do not agree on where it goes: Claude Code prints "2.1.275 (Claude
+// Code)" and both Grok Build and Codex print the name first ("grok 1.0.34
+// (5e9a58528b76)", "codex-cli 0.154.0"). Reading the first field as the version
+// therefore refuses every real Grok and Codex release, so the first
+// version-shaped field is what counts. An empty line has no token.
+func firstVersionToken(line string) string {
+	fields := strings.Fields(line)
+	for _, f := range fields {
+		if ValidVersion(f) {
+			return f
+		}
+	}
+	if len(fields) == 0 {
+		return ""
+	}
+	return fields[0]
+}
+
 func newProbeCmd(ctx context.Context, spec probeSpec, out *cappedBuffer) *exec.Cmd {
 	cmd := exec.CommandContext(ctx, spec.Exe, spec.Args...) // #nosec G204 -- spec.Exe is the absolute path of the staged file whose size and SHA-256 were just verified, or a detected path the operator named explicitly with --probe; args are fixed literals per provider
 	cmd.Env = spec.Env
