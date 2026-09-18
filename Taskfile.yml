@@ -348,6 +348,23 @@ tasks:
       - task test:commerce
       - task test:commerce-core:norace
 
+  test:functional:shard:
+    desc: >-
+      ONE shard of test:functional, named by OLIVARES_TEST_SHARD (or by the argument
+      scripts/pr-suite-shards.sh takes). test:functional above keeps its meaning — the
+      whole suite — and this is how a job runs a part of it without a second definition
+      of what the suite is. The partition is declared in ci/pr-suite-shards.txt and
+      lint:pr-suite-shards proves the union of the shards is exactly the set of packages
+      the whole suite runs, with none in two shards and none in none. WHY IT EXISTS,
+      measured on the hosted 4-vCPU runner over two runs of the same tree: the suite in
+      one job reached 264 packages and the step ceiling cut it at 60 minutes, both times,
+      because core/internal/store/sqlstore (1457 s) and cmd/olivares (1358 s) ran one
+      after the other. The shards are bounded by those two numbers instead of by their
+      sum. Same Postgres posture as test:functional: with-pg-env.sh is fail-closed, so a
+      shard without the DSN pair refuses rather than skipping.
+    cmds:
+      - bash scripts/pr-suite-shards.sh run
+
   test:race-hot:
     desc: >-
       Race detector on the concurrency-critical paths — the push gate's -race leg.
@@ -4393,6 +4410,36 @@ tasks:
       set in another order does not fire).
     cmds:
       - bash scripts/hub-leg.sh lint:pr-ci-regime:selftest scripts/test-pr-ci-regime.sh
+
+  lint:pr-suite-shards:
+    desc: >-
+      a repository gate — the union of the pull-request functional shards IS the suite,
+      exactly once. Splitting a suite across jobs moves the failure from slow to SILENT: a
+      package that belongs to no shard is reported by nothing, every shard is green, the
+      required check is green, and the package has simply stopped being tested. `go test`
+      cannot catch it either — a shard runs the packages it was given and has no opinion
+      about the ones it was not. Pins four things: every test-bearing package of the
+      workspace is in exactly one shard (none in two, none in none); every declared pattern
+      matches something, except the ones the spec marks optional because the module they
+      name is not published everywhere, and those are PRINTED; the matrix of pr-ci.yml is
+      the shard list of ci/pr-suite-shards.txt, in order; and the ceilings the workflow
+      declares are the ones the spec declares, with the Go timeout under the step ceiling so
+      Go names the package that hung instead of the step being cancelled mute. Three
+      answers: CLEAN, FAIL, COULD NOT LOOK.
+    cmds:
+      - bash scripts/check-pr-suite-shards.sh
+
+  lint:pr-suite-shards:selftest:
+    desc: >-
+      PR suite shards — battery: the three mutants the split exists to catch (a package in
+      two shards, a package in no shard, a pattern naming packages that do not exist), the
+      matrix out of step with the spec in both directions, a Go timeout at or above the step
+      ceiling, a leg that is not a task, an empty shard, a spec line the reader cannot
+      classify, an empty universe and an absent spec (COULD NOT LOOK, not clean), and the
+      two non-firing directions — the real tree stays clean, and an optional pattern that
+      matches nothing is a notice instead of a finding.
+    cmds:
+      - bash scripts/test-check-pr-suite-shards.sh
 
   lint:cfg-06-community-prep:
     desc: >-
