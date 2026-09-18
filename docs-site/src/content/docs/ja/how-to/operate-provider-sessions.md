@@ -49,8 +49,8 @@ Codex ドライバー、Grok ドライバー）、生成された
 | ドライバー | この環境変数を固定 | 未設定のとき |
 |---|---|---|
 | Claude Code | `OLIVARES_SESSION_RUNTIME_CLAUDE_BIN`（既定 `claude`） | Claude 経路は既定の実行ファイル名を使う |
-| Codex | `OLIVARES_SESSION_RUNTIME_CODEX_BIN` | Codex プロファイルは観測可能のままで起動できない |
-| Grok | `OLIVARES_SESSION_RUNTIME_GROK_BIN` | Grok プロファイルは観測可能のままで起動できない |
+| Codex | `OLIVARES_SESSION_RUNTIME_CODEX_BIN` | 未設定なら、**登録済み**の管理対象インストール（`olivares agent tool install --driver codex`）がレシートの実行ファイルを固定する。それ以外では Codex プロファイルは観測可能のままで起動できない。エンジンは `PATH` を検索しない |
+| Grok | `OLIVARES_SESSION_RUNTIME_GROK_BIN` | 未設定なら、**登録済み**の管理対象インストール（`olivares agent tool install --driver grok`）がレシートの実行ファイルを固定する。それ以外では Grok プロファイルは観測可能のままで起動できない。エンジンは `PATH` を検索しない |
 
 値はこのノードが運用してよい公式バイナリです。エンジンは `PATH` から
 `codex` や `grok` を解決しません。生成された設定表は同じ登録規則で

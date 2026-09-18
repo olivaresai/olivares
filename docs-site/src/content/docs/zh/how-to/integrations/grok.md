@@ -10,11 +10,10 @@ TOML 配置、sandbox profile、MCP server 名称、系统 requirement，以及�
 它也可以接收 OTLP trace。这不是 xAI API 连接器：它不查询 remote model，也不需要 provider secret。
 预防性工具控制使用 `olivares grok-hook` 和一个独立的本地 PEP。
 
-本页是 **连接器与 PEP hook** 路径。它不会把官方 Grok CLI 作为受治理子进程启动。
-该运行路径是
+本页是 **连接器与 PEP hook** 路径。要安装或验证官方 CLI、记录探测回执、启动或停止受治理会话，
+请使用 [安装 Grok CLI](/how-to/install-grok-cli/)。运行路径是
 [运行提供商会话](/how-to/operate-provider-sessions/)
-（`OLIVARES_SESSION_RUNTIME_GROK_BIN` 加上提供商配置文件；
-`CHANGELOG.md` `[26.9.0]`）。那里不断言与已认证官方 Grok 账户的兼容性。
+（`OLIVARES_SESSION_RUNTIME_GROK_BIN` 或托管安装的回执，加上提供商配置文件）。那里不断言与已认证官方 Grok 账户的兼容性。
 
 ## 添加 Grok Build
 

@@ -798,6 +798,14 @@ func grokLayoutMembers() []memberSpec {
 	}
 }
 
+func expectedMembersFromSpec(spec []memberSpec) []ExpectedMember {
+	out := make([]ExpectedMember, len(spec))
+	for i, s := range spec {
+		out[i] = ExpectedMember{Path: s.Path, Kind: s.Kind, Role: s.Role, FinalMode: s.Mode}
+	}
+	return out
+}
+
 func membersMatch(got []ExpectedMember, want []memberSpec) error {
 	if len(got) != len(want) {
 		return refuse(KindInvalidRequest, "layout.members has %d entries, want the closed set of %d", len(got), len(want))

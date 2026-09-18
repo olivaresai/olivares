@@ -174,6 +174,77 @@ func readSmallContents(files smallFileFS, rel string, limit int64) ([]byte, erro
 
 func (e *Engine) inspectRelease(ctx context.Context, root *os.Root, rel, abs, driver string) Installed {
 	in := Installed{Driver: driver, ReleaseDir: abs, State: StateDamaged}
+	schema, err := readReceiptSchema(root, filepath.Join(rel, ReceiptFile))
+	if err != nil {
+		in.Reason = "receipt: " + err.Error()
+		return in
+	}
+	switch schema {
+	case ReceiptSchemaV2:
+		return e.inspectReleaseV2(root, rel, abs, driver)
+	case ReceiptSchema:
+		return e.inspectReleaseV1(ctx, root, rel, abs, driver)
+	default:
+		in.Reason = fmt.Sprintf("receipt schema %q is not a known installer receipt", schema)
+		return in
+	}
+}
+
+func (e *Engine) inspectReleaseV2(root *os.Root, rel, abs, driver string) Installed {
+	in := Installed{Driver: driver, ReleaseDir: abs, State: StateDamaged}
+	rec, err := readReceiptV2(root, filepath.Join(rel, ReceiptFile), abs)
+	if err != nil {
+		in.Reason = "receipt: " + err.Error()
+		return in
+	}
+	in.Version, in.VendorPlatform = rec.Version, rec.VendorPlatform
+	in.Platform = Platform{OS: rec.Platform.OS, Arch: rec.Platform.Arch, Libc: rec.Platform.Libc}
+	in.Executable, in.InstalledAt = rec.Destination.Executable, rec.InstalledAt
+	in.InstallerVersion, in.PlanDigest, in.ReceiptPath = rec.InstallerVersion, rec.PlanDigest, filepath.Join(abs, ReceiptFile)
+	if rec.Driver != driver {
+		in.Reason = fmt.Sprintf("receipt records driver %q under the %q directory", rec.Driver, driver)
+		return in
+	}
+	entry := "bin/" + driver
+	if rec.Driver == DriverGrok {
+		entry = "bin/grok"
+	}
+	if rec.Driver == DriverCodex {
+		entry = "bin/codex"
+	}
+	exeRel := filepath.Join(rel, filepath.FromSlash(entry))
+	fi, err := root.Lstat(exeRel)
+	if err != nil {
+		in.Reason = "executable: " + err.Error()
+		return in
+	}
+	if fi.Mode()&os.ModeSymlink != 0 || !fi.Mode().IsRegular() {
+		in.Reason = "executable is not a regular file"
+		return in
+	}
+	in.IsExecutable = fi.Mode().Perm()&0o111 != 0
+	sum, size, err := fileSHA256Root(root, exeRel)
+	if err != nil {
+		in.Reason = "executable: " + err.Error()
+		return in
+	}
+	in.SHA256, in.Size = sum, size
+	want, _, herr := memberHash(&rec.Payload, entry)
+	if herr != nil || want != sum {
+		in.Reason = fmt.Sprintf("executable holds sha256 %s; the receipt inventory does not match", sum)
+		return in
+	}
+	if rec.VerificationKind == VerificationNoneOriginOnly && rec.FetchedObject.SHA256 != sum {
+		in.Reason = fmt.Sprintf("origin-only executable sha256 %s does not match fetched-object %s", sum, rec.FetchedObject.SHA256)
+		return in
+	}
+	_ = size
+	in.State = StateInstalled
+	return in
+}
+
+func (e *Engine) inspectReleaseV1(ctx context.Context, root *os.Root, rel, abs, driver string) Installed {
+	in := Installed{Driver: driver, ReleaseDir: abs, State: StateDamaged}
 	rec, err := readReceipt(root, filepath.Join(rel, ReceiptFile), abs)
 	if err != nil {
 		in.Reason = "receipt: " + err.Error()
@@ -227,7 +298,7 @@ func (e *Engine) inspectRelease(ctx context.Context, root *os.Root, rel, abs, dr
 		in.Reason = "retained signature: " + err.Error()
 		return in
 	}
-	p, err := e.catalog.Lookup(driver)
+	p, err := e.v1Provider(driver)
 	if err != nil {
 		in.State = StateUnverified
 		in.Reason = fmt.Sprintf("no installer is registered for %q, so its retained signature was not re-checked", driver)
@@ -302,8 +373,9 @@ type Candidate struct {
 	Probe          *ProbeReport `json:"probe,omitempty"`
 	ProbeError     string       `json:"probe_error,omitempty"`
 	// ProbeSkipped says why a candidate was not executed in this run.
-	ProbeSkipped string `json:"probe_skipped,omitempty"`
-	Note         string `json:"note,omitempty"`
+	ProbeSkipped string           `json:"probe_skipped,omitempty"`
+	Auth         *AuthObservation `json:"auth_observation,omitempty"`
+	Note         string           `json:"note,omitempty"`
 }
 
 // Detect enumerates candidate executables for the driver. Observed facts (path,
@@ -313,15 +385,46 @@ type Candidate struct {
 // still returned together with a probe_failed refusal, so the caller can show
 // them and still exit non-zero.
 func (e *Engine) Detect(ctx context.Context, opts DetectOptions) ([]Candidate, error) {
-	p, err := e.catalog.Lookup(opts.Driver)
+	capab, err := e.capabilityOf(opts.Driver)
 	if err != nil {
 		return nil, err
 	}
+	var defaultPaths []string
+	var probeFn func(context.Context, string, string, string) (ProbeReport, error)
+	var observeAuth func(string) AuthObservation
 	var vm *VerifiedManifest
-	if opts.Material != nil {
-		if vm, err = p.VerifyMaterial(ctx, opts.Material); err != nil {
+	switch capab {
+	case ProviderCapabilityV1:
+		p, err := e.v1Provider(opts.Driver)
+		if err != nil {
 			return nil, err
 		}
+		defaultPaths = p.DefaultPaths(opts.Home)
+		probeFn = p.Probe
+		if t, ok := p.(interface{ ObserveAuth(string) AuthObservation }); ok {
+			observeAuth = t.ObserveAuth
+		}
+		if opts.Material != nil {
+			if vm, err = p.VerifyMaterial(ctx, opts.Material); err != nil {
+				return nil, err
+			}
+		}
+	case ProviderCapabilityV2:
+		p, err := e.v2Provider(opts.Driver)
+		if err != nil {
+			return nil, err
+		}
+		defaultPaths = p.DefaultPaths(opts.Home)
+		probeFn = p.Probe
+		if opts.Material != nil {
+			return nil, refuse(KindInvalidRequest, "signed-manifest corroboration is the Claude v1 installer; driver %s uses the v2 receipt", opts.Driver)
+		}
+		switch t := p.(type) {
+		case interface{ ObserveAuth(string) AuthObservation }:
+			observeAuth = t.ObserveAuth
+		}
+	default:
+		return nil, refuse(KindUnsupportedProvider, "driver %q has no installer", opts.Driver)
 	}
 	named := map[string]bool{}
 	for _, raw := range opts.ProbePaths {
@@ -375,7 +478,7 @@ func (e *Engine) Detect(ctx context.Context, opts DetectOptions) ([]Candidate, e
 			add(c)
 		}
 	}
-	for _, path := range p.DefaultPaths(opts.Home) {
+	for _, path := range defaultPaths {
 		if c, ok := observe(opts.Driver, path, "vendor-default"); ok {
 			add(c)
 		}
@@ -466,12 +569,19 @@ func (e *Engine) Detect(ctx context.Context, opts DetectOptions) ([]Candidate, e
 			failures++
 			continue
 		}
-		rep, perr := p.Probe(ctx, c.Resolved, scratch, "")
+		rep, perr := probeFn(ctx, c.Resolved, scratch, "")
 		_ = os.RemoveAll(scratch)
 		c.Probe = &rep
 		if perr != nil {
 			c.ProbeError = perr.Error()
 			failures++
+		}
+	}
+	if observeAuth != nil && filepath.IsAbs(opts.Home) {
+		obs := observeAuth(opts.Home)
+		for i := range out {
+			a := obs
+			out[i].Auth = &a
 		}
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Path < out[j].Path })

@@ -21,7 +21,7 @@ const (
 
 // CapabilityCatalog registers exactly one capability per driver: Provider (v1)
 // or PackageProviderV2. It wraps the existing v1 Catalog; it does not replace
-// it, announce v2 drivers in production, or add methods to Provider.
+// it or add methods to Provider. Production wiring lives in cmd/olivares.
 type CapabilityCatalog struct {
 	v1      *Catalog
 	v2ByKey map[string]PackageProviderV2

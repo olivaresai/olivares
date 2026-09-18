@@ -10,12 +10,13 @@ requirements, and the file that disables hooks. It can also receive OTLP traces.
 xAI API connector: it does not query remote models and does not require a provider secret.
 Preventive tool control uses `olivares grok-hook` and a separate local PEP.
 
-This page is the **connector and PEP-hook** path. It does not launch the official
-Grok CLI as a governed child. That operate path is
+This page is the **connector and PEP-hook** path. To install or verify the official
+CLI, record a probe receipt, and launch or stop a governed session, use
+[Install the Grok CLI](/how-to/install-grok-cli/). The operate path is
 [Operate a provider session](/how-to/operate-provider-sessions/)
-(`OLIVARES_SESSION_RUNTIME_GROK_BIN` plus a provider profile;
-`CHANGELOG.md` `[26.9.0]`). Compatibility with an authenticated official Grok
-account is not claimed there.
+(`OLIVARES_SESSION_RUNTIME_GROK_BIN` or a managed install receipt, plus a
+provider profile). Compatibility with an authenticated official Grok account is
+not claimed there.
 
 ## Add Grok Build
 

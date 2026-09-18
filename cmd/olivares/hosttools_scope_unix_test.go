@@ -89,8 +89,8 @@ func TestSessionRuntimeHostToolObserverUnobservableScopeIsNotAbsence(t *testing.
 			t.Fatalf("an unexaminable PATH entry was published as a successful observation: %+v", res)
 		}
 		// The supported-driver decision still comes before filesystem errors.
-		if res, err := observeHostToolsBounded(t, newHostToolObserverAt(root, nil, emptyHome, notDir), "codex"); err != nil || !res.UnsupportedDriver {
-			t.Fatalf("codex with an ENOTDIR PATH: %+v %v", res, err)
+		if res, err := observeHostToolsBounded(t, newHostToolObserverAt(root, nil, emptyHome, notDir), "not-a-provider"); err != nil || !res.UnsupportedDriver {
+			t.Fatalf("unsupported driver with an ENOTDIR PATH: %+v %v", res, err)
 		}
 	})
 
@@ -128,8 +128,8 @@ func TestSessionRuntimeHostToolObserverUnobservableScopeIsNotAbsence(t *testing.
 		if res, err := observeHostToolsBounded(t, obs, "claude"); err == nil {
 			t.Fatalf("an unavailable home was published as a successful observation: %+v", res)
 		}
-		if res, err := observeHostToolsBounded(t, obs, "codex"); err != nil || !res.UnsupportedDriver {
-			t.Fatalf("codex with an unavailable home: %+v %v", res, err)
+		if res, err := observeHostToolsBounded(t, obs, "not-a-provider"); err != nil || !res.UnsupportedDriver {
+			t.Fatalf("unsupported driver with an unavailable home: %+v %v", res, err)
 		}
 		if res, err := observeHostToolsBounded(t, newHostToolObserverAt(root, nil, "relative/home", emptyPath), "claude"); err == nil {
 			t.Fatalf("a relative home was published as a successful observation: %+v", res)
