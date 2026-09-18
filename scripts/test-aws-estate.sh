@@ -10,6 +10,53 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 2; pwd)"
 CHECK="$ROOT/scripts/check-aws-estate.sh"
+
+# ── EL SUJETO DE ESTA BATERÍA VIVE EN `design/`, Y EL ÁRBOL PUBLICADO NO LO TRAE ──
+#
+# ⛔ MEDIDO EL 2026-09-18 EN EL ÁRBOL PÚBLICO (job `validate` de `aws-terraform.yml`, paso
+#    «estate shape selftest»): `stage` copia `design/aws-apply-role-policy.*.json` al árbol
+#    de pruebas y en el export curado ese directorio NO EXISTE, así que no copiaba nada. Lo
+#    que salía no era un veredicto: tres casos en FAIL por «no design/aws-apply-role-policy
+#    .*.json» y un `FileNotFoundError` al mutar una pieza que nunca llegó. Rojo por
+#    construcción, en el repositorio que ve cualquiera, y sobre una pregunta que a ese árbol
+#    no se le hace.
+#
+#    El gate que esta batería examina YA contesta bien ahí: sin `design/` dice
+#    «apply-role-policy-skipped» y sigue (check-aws-estate.sh, bloque de la policy). Lo que
+#    faltaba era que su batería dijese lo mismo en vez de morir. Es la regla de la casa, la
+#    que `build:web` aplica en el punto de llamada: el árbol publicado CONTESTA «no aplica»,
+#    no se cae.
+#
+#    Y LA AUSENCIA SOLA NO ES LA DISCRIMINANTE, que es por donde esto se convertiría en un
+#    verde falso: un árbol completo que perdiera las piezas sale 2 —NO HE PODIDO MIRAR—, nunca 0. Sólo
+#    el marcador que estampa la curación, que el generador se niega a trackear en el árbol fuente,
+#    convierte la ausencia en «no aplica». Tres respuestas, las mismas que el gate: 0 limpio
+#    · 1 hallazgo · 2 no he podido mirar. Con las piezas presentes esta guarda no se mete en
+#    medio: el árbol fuente corre la batería entera y sus mutantes siguen matando (el caso «no
+#    least-privilege policy at all is a finding» de más abajo es el que lo prueba).
+_pol_parts=( "$ROOT"/design/aws-apply-role-policy.*.json )
+if [ ! -e "${_pol_parts[0]}" ]; then
+  _pol_missing="design/aws-apply-role-policy.*.json"
+  [ -d "$ROOT/design" ] || _pol_missing="design/ (and with it $_pol_missing)"
+  if [ -f "$ROOT/.olivares-public-export" ]; then
+    _note="NOT APPLICABLE: this tree is the curated public export and does not carry"
+    _note="$_note $_pol_missing — the subject of this self-test. The estate-shape gate itself"
+    _note="$_note answers 'apply-role-policy-skipped' here for the same reason. Nothing was"
+    _note="$_note checked by this leg, and in this tree that is the expected state."
+    echo "test-aws-estate: $_note"
+    if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+      printf '### %s\n\n%s\n\n' "estate shape selftest: NOT APPLICABLE (public tree)" \
+        "$_note" >>"$GITHUB_STEP_SUMMARY"
+    fi
+    exit 0
+  fi
+  echo "test-aws-estate: COULD NOT LOOK — $_pol_missing is MISSING and this tree carries no" >&2
+  echo "  public-export marker. A complete source tree HAS those parts and a curated export carries the" >&2
+  echo "  marker the curation stamps. Refusing to guess: reporting this battery green here would" >&2
+  echo "  report it green against no subject." >&2
+  exit 2
+fi
+# ==== ANCLA: fin de la guarda de arbol ====
 _tmp_base="${TMPDIR:-/workspace/.olivares-tmptest}"
 mkdir -p "$_tmp_base"
 TMP="$(mktemp -d "$_tmp_base/aws-estate.XXXXXX")"
@@ -2411,6 +2458,75 @@ expect 0 "" "la prosa que nombra produccion NO dispara (direccion de no disparo)
 stage
 rm -f "$RB_T"
 expect 0 "" "sin el runbook del piloto la pata se SALTA, no aprueba"
+
+
+# ═══ LA GUARDA DE ÁRBOL DE ESTA PROPIA BATERÍA ═══════════════════════════════
+#
+# ⛔ EL SUJETO ES EL BLOQUE DE GUARDA DE ARRIBA, RECORTADO POR ANCLA Y NO REESCRITO. Una
+#    copia a mano del guard probaría la copia: estos casos cortan ESTE fichero justo debajo
+#    de su ancla y le pegan una línea que dice que la guarda dejó pasar. Si el ancla se
+#    mueve o se duplica, el recorte sale 1 y la batería cae — un caso que deja de medir
+#    tiene que tumbarla, no aprobarla. Y el recorte para antes de la batería de verdad, así
+#    que ninguno de estos casos la vuelve a lanzar dentro de sí misma.
+guard_copy() { # guard_copy <root-de-usar-y-tirar>: esta batería cortada tras su guarda
+  mkdir -p "$1/scripts"
+  python3 - "$ROOT/scripts/test-aws-estate.sh" "$1/scripts/test-aws-estate.sh" <<'CUT'
+import re, sys
+src, dst = sys.argv[1], sys.argv[2]
+s = open(src, encoding="utf-8").read()
+pat = re.compile(r"^# ={4} ANCLA: fin de la guarda de arbol ={4}$", re.M)
+hits = pat.findall(s)
+if len(hits) != 1:
+    sys.exit("el ancla de la guarda de arbol aparece %d veces, no 1: el caso no mide nada"
+             % len(hits))
+head = s[:pat.search(s).start()]
+open(dst, "w", encoding="utf-8").write(
+    head + 'echo "test-aws-estate: GUARD PASSED — the battery would run from here"\nexit 0\n')
+CUT
+}
+
+guard_case() { # guard_case <rótulo> <rc-esperado> <trozo-de-frase> <marcador:si|no> <piezas:si|no>
+  local label="$1" want="$2" needle="$3" marker="$4" parts="$5"
+  local d="$TMP/guard-$want-$marker-$parts" rc=0 out
+  rm -rf "$d"
+  guard_copy "$d"
+  [ "$marker" = no ] || printf 'olivares-public-export-marker v1\n' >"$d/.olivares-public-export"
+  if [ "$parts" = si ]; then
+    mkdir -p "$d/design"
+    cp "$ROOT/design/aws-apply-role-policy.sandbox.0-guardrails.json" "$d/design/"
+  fi
+  out="$(bash "$d/scripts/test-aws-estate.sh" 2>&1)" || rc=$?
+  if [ "$rc" != "$want" ]; then
+    bad "$label — rc=$rc, want $want ($(printf '%s' "$out" | head -c 400))"
+    return
+  fi
+  case "$out" in
+    *"$needle"*) ok "$label" ;;
+    *) bad "$label — rc=$want but the message does not name its reason; got: $(printf '%s' "$out" | head -c 400)" ;;
+  esac
+}
+
+# G-01 · El árbol publicado CONTESTA. Éste es el defecto que se midió: sin la guarda este
+#        mismo paso moría en el repositorio público con tres FAIL y un FileNotFoundError.
+guard_case "the curated public export answers NOT APPLICABLE and exits 0" \
+  0 "NOT APPLICABLE" si no
+
+# G-02 · Y LA OTRA DIRECCIÓN, que es la que impide que esto sea un verde falso: sin piezas y
+#        sin marcador nadie sabe qué árbol es esto, así que no se aprueba — se rehúsa.
+guard_case "no policy parts and no export marker is COULD NOT LOOK, not a skip" \
+  2 "COULD NOT LOOK" no no
+
+# G-03 · Con las piezas presentes la guarda NO se mete en medio: el árbol fuente corre la batería
+#        entera. Sin este caso, una guarda demasiado ancha dejaría el banco del árbol fuente en cero
+#        casos y «0 passed, 0 failed» saldría verde.
+guard_case "with the policy parts present the guard falls through (the source tree runs the battery)" \
+  0 "GUARD PASSED" no si
+
+# G-04 · El marcador NO es una contraseña: un árbol que SÍ trae el sujeto se examina, lleve
+#        el fichero que lleve. La ausencia del sujeto es la condición; el marcador sólo
+#        decide si esa ausencia es sancionada.
+guard_case "the marker does not silence a tree that does carry the parts" \
+  0 "GUARD PASSED" si si
 
 printf 'check-aws-estate selftest: %d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
