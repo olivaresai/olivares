@@ -194,6 +194,7 @@ accusé de réception confirmé du fournisseur.
 - [Votre première heure](/how-to/first-hour/) — jeton de configuration, AAL3, source d’identifiants Claude.
 - [Exécuter Claude Code avec Olivares](/how-to/run-claude-code-with-olivares/) — topologies de co-déploiement.
 - [Intégrer Codex](/how-to/integrations/codex/) / [Intégrer Grok Build](/how-to/integrations/grok/) — connecteur et hook PEP.
+- [API d’exécution de session](/reference/session-runtime-api/) — liste, attach, input, stop ; PTY Community et frontière d’édition.
 - [Opération en direct et sessions](/reference/modules/ii-sessions/) — `live_ref` et attribution.
 - [Configuration](/reference/configuration/) — variables d’épinglage du pilote.
 - [Référence CLI](/reference/cli/) — `olivares agent session *` (générée à partir du binaire).

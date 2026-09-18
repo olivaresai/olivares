@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/modules/sessions/cliruntime"
 )
 
 // The INTERNAL provider-driver seam.
@@ -65,6 +66,24 @@ type DriverLaunch struct {
 	// validates them. No common enum is invented across providers.
 	Model  string
 	Effort string
+}
+
+// cliRuntimeRequest is the same launch context in the vocabulary of the ONE
+// argv table (cliruntime). It exists so a driver can consult that table instead
+// of keeping a second copy of its own official CLI's form, which is the
+// duplication r3 removed.
+//
+// It carries no permission mode, no tool allowlist and no instructions: those
+// are Claude Code's own flags and a driver's official CLI has no equivalent —
+// inventing one would be the common-enum §5.5 forbids, arriving as an argv.
+func (l DriverLaunch) cliRuntimeRequest() cliruntime.LaunchRequest {
+	return cliruntime.LaunchRequest{
+		WorkDir:    l.WorkDir,
+		ConfigHome: l.ConfigHome,
+		UserHome:   l.UserHome,
+		Model:      l.Model,
+		Effort:     l.Effort,
+	}
 }
 
 // DriverHandshake is what an owned handshake PROVED about this launch. It is the

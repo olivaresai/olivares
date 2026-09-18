@@ -13,6 +13,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/olivaresai/olivares/modules/sessions/cliruntime"
 )
 
 // The official Grok agent driver (CLI 1.0.13), over ACP on the owned child's
@@ -133,15 +135,11 @@ func (grokDriver) DefaultProgram() string { return "grok" }
 // before the mode name. Model and effort are the provider's OWN open strings —
 // `--model` and `--reasoning-effort` are documented agent options of this binary
 // — and no common enum is invented across providers.
+// The form itself is declared ONCE, in cliruntime, beside the transport it
+// requires (r3): a driver that kept its own copy would let the declaration and
+// the launch drift apart without a test going red.
 func (grokDriver) LaunchArgs(l DriverLaunch) []string {
-	args := []string{"agent", "--no-leader"}
-	if model := strings.TrimSpace(l.Model); model != "" {
-		args = append(args, "--model", model)
-	}
-	if effort := strings.TrimSpace(l.Effort); effort != "" {
-		args = append(args, "--reasoning-effort", effort)
-	}
-	return append(args, "stdio")
+	return cliruntime.GrokArgs(l.cliRuntimeRequest())
 }
 
 // TransportProfile describes the channel this driver's owned child actually

@@ -98,7 +98,15 @@ else
 		scratch="$(mktemp -d 2>/dev/null)" || nope "cannot create a scratch dir (TMPDIR=${TMPDIR:-unset}); /tmp is noexec here"
 		trap 'rm -rf "$scratch"' EXIT
 		BIN="$scratch/olivares-community"
-		build_err="$(cd "$ROOT/cmd/olivares" && go build -o "$BIN" . 2>&1)" || {
+		# ⛔ THE PROBE IS BUILT BY scripts/lib/build-bin.sh, AND -trimpath IS WHY.
+		# A bare `go build` embeds the checkout path in every source reference, so
+		# this gate used to judge WHERE the repository sits as if it were a string
+		# the product ships: a working tree whose directory name carries `cockpit`
+		# or `xterm` produced ~1950 findings, every one of them a path. Measured on
+		# 2026-09-18 from a checkout whose directory name carried both words — the
+		# same binary built with -trimpath is clean. Five other scripts had the same
+		# drift, and the helper is the single definition that closes it.
+		build_err="$(. "$ROOT/scripts/lib/build-bin.sh" && build_olivares_bin "$BIN" 2>&1)" || {
 			say "check-community-cockpit-strings: COULD NOT LOOK — the community binary did not build." >&2
 			printf '%s\n' "$build_err" | sed 's/^/    /' >&2
 			exit 2

@@ -189,6 +189,7 @@ prompt (`CHANGELOG.md` `[26.9.0]`). Не считайте тихое отмен�
 - [Ваш первый час](/how-to/first-hour/) — токен установки, AAL3, источник учётных данных Claude.
 - [Запуск Claude Code с Olivares](/how-to/run-claude-code-with-olivares/) — топологии совместного размещения.
 - [Интеграция Codex](/how-to/integrations/codex/) / [Интеграция Grok Build](/how-to/integrations/grok/) — коннектор и PEP hook.
+- [API среды выполнения сеанса](/reference/session-runtime-api/) — список, attach, input, stop; Community PTY и граница редакции.
 - [Живая эксплуатация и сеансы](/reference/modules/ii-sessions/) — `live_ref` и атрибуция.
 - [Конфигурация](/reference/configuration/) — переменные закрепления драйвера.
 - [Справочник CLI](/reference/cli/) — `olivares agent session *` (сгенерирован из двоичного файла).

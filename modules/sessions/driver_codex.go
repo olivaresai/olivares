@@ -12,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/olivaresai/olivares/modules/sessions/cliruntime"
 )
 
 // The official Codex app-server driver (CLI 0.153.4).
@@ -157,8 +159,12 @@ func (codexDriver) TransportProfile() DriverTransportProfile {
 
 // LaunchArgs is the ONLY operate form: an owned stdio app-server. The daemon,
 // proxy and remote forms are not options this driver can produce.
-func (codexDriver) LaunchArgs(DriverLaunch) []string {
-	return []string{"app-server", "--listen", "stdio://"}
+//
+// The form itself is declared ONCE, in cliruntime, beside the transport it
+// requires (r3): a driver that kept its own copy would let the declaration and
+// the launch drift apart without a test going red.
+func (codexDriver) LaunchArgs(l DriverLaunch) []string {
+	return cliruntime.CodexArgs(l.cliRuntimeRequest())
 }
 
 func (d codexDriver) OpenSession(cfg DriverSessionConfig) DriverSession {

@@ -24,15 +24,25 @@ import (
 // stdio transport pattern (the pattern is replicated here in AGPL code rather
 // than importing the connector's unexported helpers). A container/sandbox runner
 // is a drop-in alternative behind the same Runner seam.
+//
+// When usePTY is set, stdin/stdout are a local Unix PTY in raw mode (stderr
+// stays a pipe so the two streams stay distinct). That is the Community
+// terminal path; it is not the Identity & Scale overlay listener.
 type procRunner struct {
 	// lineCap bounds a single output line so a pathological frame cannot exhaust
 	// memory before the ring buffer's own bound applies.
 	lineCap int
+	usePTY  bool
 }
 
-// NewProcRunner returns the native streaming runner. It is constructed in
-// cmd/olivares (the only layer that wires concrete runtimes into a module).
+// NewProcRunner returns the native streaming runner (stdio pipes). It is
+// constructed in cmd/olivares (the only layer that wires concrete runtimes
+// into a module).
 func NewProcRunner() Runner { return &procRunner{lineCap: maxOutputLine} }
+
+// NewPTYRunner returns the native runner that attaches a local PTY for
+// stdin/stdout. Container/sandbox isolation is still refused.
+func NewPTYRunner() Runner { return &procRunner{lineCap: maxOutputLine, usePTY: true} }
 
 // maxOutputLine bounds one bridged output line (1 MiB) — a stream-json frame is
 // far smaller; this guards against a runaway line, never a normal one.
@@ -63,6 +73,13 @@ func (pr *procRunner) Launch(ctx context.Context, spec LaunchSpec) (Process, err
 	if spec.WaitDelay > 0 {
 		cmd.WaitDelay = spec.WaitDelay
 	}
+	if pr.usePTY {
+		return pr.launchPTY(cmd, spec.WaitDelay)
+	}
+	return pr.launchPipes(cmd, spec.WaitDelay)
+}
+
+func (pr *procRunner) launchPipes(cmd *exec.Cmd, waitDelay time.Duration) (Process, error) {
 	// Own process group so a graceful/hard stop reaches grandchildren that would
 	// otherwise hold the stdout pipe open and wedge teardown.
 	configureProcGroup(cmd)
@@ -80,13 +97,23 @@ func (pr *procRunner) Launch(ctx context.Context, spec LaunchSpec) (Process, err
 		return nil, fmt.Errorf("sessions: stderr pipe: %w", err)
 	}
 	if err := cmd.Start(); err != nil {
-		return nil, fmt.Errorf("sessions: start %q: %w", spec.Program, err)
+		return nil, fmt.Errorf("sessions: start %q: %w", specProgram(cmd), err)
 	}
 	// exec has copied the environment into the started child. Do not retain the
 	// raw slice (which includes short-lived inference/work bearers) for the
 	// process lifetime and closed-handle retention window.
 	cmd.Env = nil
+	return pr.watch(cmd, stdin, stdout, stderr, waitDelay), nil
+}
 
+func specProgram(cmd *exec.Cmd) string {
+	if cmd == nil || cmd.Path == "" {
+		return ""
+	}
+	return cmd.Path
+}
+
+func (pr *procRunner) watch(cmd *exec.Cmd, stdin io.WriteCloser, stdout, stderr io.ReadCloser, waitDelay time.Duration) *procProcess {
 	p := &procProcess{
 		cmd:   cmd,
 		stdin: stdin,
@@ -98,7 +125,7 @@ func (pr *procRunner) Launch(ctx context.Context, spec LaunchSpec) (Process, err
 		out:       make(chan OutputFrame, 256),
 		waitDone:  make(chan struct{}),
 		abandon:   make(chan struct{}),
-		waitDelay: spec.WaitDelay,
+		waitDelay: waitDelay,
 	}
 
 	// Two pumps (stdout, stderr); a coordinator waits for both to drain (EOF on
@@ -115,7 +142,7 @@ func (pr *procRunner) Launch(ctx context.Context, spec LaunchSpec) (Process, err
 		close(p.out)
 		close(p.waitDone)
 	}()
-	return p, nil
+	return p
 }
 
 func validateExplicitEnv(env []EnvVar) error {
