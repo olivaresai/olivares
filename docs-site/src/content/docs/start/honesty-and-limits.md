@@ -35,7 +35,7 @@ cover something, the page says so rather than implying it does.
   in several SIEM formats.
 - **Releases are signed and verifiable offline.** Signature, SLSA provenance, SBOM
   and OpenVEX can all be [verified without network access](/how-to/verify-a-release/),
-  and the product ships an [air-gap bundle](/how-to/air-gap-install/). The latest tagged release, **v26.9.0**, is published with signed archives, native packages and container images; APIs, schemas and the module surface may still change before 1.0.
+  and the product ships an [air-gap bundle](/how-to/air-gap-install/). The latest tagged release, **v26.9.1**, is published with signed archives, native packages and container images; APIs, schemas and the module surface may still change before 1.0.
 
 ## Open core — what is open vs enterprise
 

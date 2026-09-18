@@ -2,7 +2,7 @@
 title: Установка через Homebrew
 description: >-
   Координата macOS Homebrew cask для Olivares AI, что cask делает с
-  Gatekeeper, и состояние публикации bump tap v26.9.0.
+  Gatekeeper, и состояние публикации bump tap v26.9.1.
 draft: false
 ---
 
@@ -12,9 +12,9 @@ Gatekeeper. Это не путь пакетов Linux
 ([Установка из пакета](/how-to/install-from-packages/)) и не Docker
 ([Развёртывание с Docker](/how-to/docker-deployment/)).
 
-:::note[Бета — cask v26.9.0 ещё не опубликован]
+:::note[Бета — cask v26.9.1 ещё не опубликован]
 Свидетель поверхностей установки записывает Homebrew как **not-published**
-(`docs/releases/v26.9.0-install-surfaces.json`, измерено
+(`docs/releases/v26.9.1-install-surfaces.json`, измерено
 2026-09-15T20:29:52Z). Производитель — `.goreleaser.yaml`
 `homebrew_casks:`. Cask tap поднимает задание выпуска, которое этот тег не
 запускал. Команда ниже — координата, которую называет `INSTALL.md`

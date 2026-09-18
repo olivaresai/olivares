@@ -54,7 +54,7 @@ olivares serve [flags]
 这些是 `serve` 的固有属性，而非选择性启用项：
 
 - **TLS 默认开启。** 若未提供证书，引擎会在数据目录中生成一份自签名证书并同时记录其证书 SHA-256 指纹，以及作为 `pin_sha256` 的叶证书 SPKI 固定值；客户端要么信任该证书，要么把这个 `pin_sha256` 值传给 `--pin-sha256`。二者是对不同字节计算的不同摘要——证书指纹**不是**固定值。gRPC 服务器失败时关闭（fail closed）：在 `--insecure` 之外，它不会以明文启动。
-- **默认 loopback。** HTTP 与 gRPC 监听器都默认为 `127.0.0.1`。将 control plane 暴露到本机之外，是你通过设置一个非 loopback 绑定地址并在其前置自有 ingress 来主动做出的更改。
+- **默认绑定所有接口。** HTTP 与 gRPC 监听器都默认绑定通配地址——`--listen :8443` 与 `--grpc-listen :8444`，即 `0.0.0.0` 以及（内核支持 IPv6 时）`::`——因为控制台是一台服务器；`quickstart` 使用同样的默认值。主动做出的更改是把它限制在本机：`--listen 127.0.0.1:8443 --grpc-listen 127.0.0.1:8444`，或在 Compose 栈中设置 `OLIVARES_BIND=127.0.0.1`。守卫不会随绑定地址移动：TLS 仍然开启，首次设置仍然在一次性令牌之后，除非 `--insecure-allow-public-bind` 声明前置的 TLS 终结，否则 `--insecure` 在本机之外仍被拒绝，而 `--seed-demo` 仍然仅限 loopback。
 - **不存在默认凭据。** 在一次全新安装且没有任何用户时，引擎会铸造一个**一次性、单次使用的设置令牌（setup token）**（前缀 `olst_`），并**仅**将其打印到 **stdout**（绝不打印到日志）。你通过把该令牌 post 到设置端点来创建第一个管理员，然后登录。参见 [首次启动设置](#首次启动设置)。
 
 ### 标志
@@ -10165,7 +10165,7 @@ olivares release manifest
 | `--security` | `bool` | `false` | mark this as a security release |
 | `--sign-key` | `string` | — | base64 (or @file) Ed25519 PRIVATE key to sign the manifest |
 | `--start-at` | `string` | — | rollout start time (RFC3339); before it no node upgrades |
-| `--version` | `string` | — | release version (semver), e.g. 26.9.0 (required) |
+| `--version` | `string` | — | release version (semver), e.g. 26.9.1 (required) |
 
 #### Command: olivares release sign-manifest
 

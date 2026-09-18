@@ -19,7 +19,7 @@ oder Codex zu inventarisieren oder zu governen, verwenden Sie
 Host mitzubetreiben, verwenden Sie
 [Claude Code mit Olivares betreiben](/how-to/run-claude-code-with-olivares/).
 
-Quelle für das Verhalten in v26.9.0: Abschnitt `[26.9.0]` in `CHANGELOG.md`
+Quelle für dieses Verhalten: Abschnitt `[26.9.0]` in `CHANGELOG.md`
 (Provider-Profile, Codex-Driver, Grok-Driver), die generierten Referenzen zu
 [Konsole](/reference/console/) und [Konfiguration](/reference/configuration/),
 `cmd/olivares/sessionruntime.go` und `web/src/features/agentops/types.ts`.

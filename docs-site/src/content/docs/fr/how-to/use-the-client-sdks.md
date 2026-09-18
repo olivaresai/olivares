@@ -20,7 +20,7 @@ Le control plane fournit quatre **SDK clients de première partie** pour son con
 
 :::note[Statut de distribution]
 Les SDK vivent dans le dépôt du produit sous `clients/` et sont versionnés avec lui.
-Cette page n’affirme pas que les clients v26.9.0 sont sur pkg.go.dev, Maven Central,
+Cette page n’affirme pas que les clients v26.9.1 sont sur pkg.go.dev, Maven Central,
 PyPI ou npm. Consommez-les depuis le dépôt (chemin de module Go ci-dessus,
 `mvn -f clients/java install`, `pip install ./clients/python`,
 `npm install ./clients/typescript`) sauf si vous avez vous-même vérifié un

@@ -24,12 +24,12 @@ Erststart-Ablauf, den sie steuern, ist derselbe, der im
 [Single-Node-Tutorial](/tutorials/getting-started/single-node/) end-to-end gegen
 das Binary verifiziert wird.
 
-<Aside type="caution" title="Bis v26.9.0-Images veröffentlicht sind, lokal bauen">
+<Aside type="caution" title="Bis v26.9.1-Images veröffentlicht sind, lokal bauen">
 Ein früherer getaggter Release hat bereits signierte Images ausgeliefert. Der Kanon dieses Baums ist
-**v26.9.0**. Der Install-Surface-Zeuge verzeichnet Docker Hub und GHCR für
-`26.9.0` noch als **not-published**, bis der Release-Job dieses Tags läuft
-(`docs/releases/v26.9.0-install-surfaces.json`). Dieselbe Ehrlichkeit steht unter
-[Mit Docker bereitstellen](/how-to/docker-deployment/). Bis die Tags `26.9.0`
+**v26.9.1**. Der Install-Surface-Zeuge verzeichnet Docker Hub und GHCR für
+`26.9.1` noch als **not-published**, bis der Release-Job dieses Tags läuft
+(`docs/releases/v26.9.1-install-surfaces.json`). Dieselbe Ehrlichkeit steht unter
+[Mit Docker bereitstellen](/how-to/docker-deployment/). Bis die Tags `26.9.1`
 existieren, bauen Sie das gehärtete distroless-Image aus dem Quellcode und
 richten Sie den Stack darauf aus:
 
@@ -38,7 +38,7 @@ task image                                   # builds olivares:dev
 echo 'OLIVARES_IMAGE=olivares:dev' >> deploy/compose/.env
 ```
 
-Wenn das Image `26.9.0` existiert: setzen Sie
+Wenn das Image `26.9.1` existiert: setzen Sie
 `OLIVARES_IMAGE=docker.io/olivaresai/olivares@sha256:<digest>` und
 [verifizieren Sie es](/how-to/verify-a-release/) zuerst — per Digest, niemals per
 Tag.

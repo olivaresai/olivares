@@ -62,7 +62,7 @@ olivares serve [flags]
 Estas son propiedades de `serve`, no opciones a activar:
 
 - **TLS está activado por defecto.** Si no se suministra ningún certificado, el motor genera un certificado autofirmado en el directorio de datos y registra tanto su huella SHA-256 del certificado como, en `pin_sha256`, el pin del SPKI de la hoja; los clientes o confían en el certificado o pasan ese valor `pin_sha256` a `--pin-sha256`. Son dos resúmenes distintos de bytes distintos: la huella del certificado NO es un pin. El servidor gRPC falla cerrado: fuera de `--insecure` no arrancará en texto plano.
-- **Loopback por defecto.** Tanto el listener HTTP como el gRPC enlazan por defecto a `127.0.0.1`. Exponer el control plane más allá del host local es un cambio deliberado que haces estableciendo un enlace no-loopback y poniéndole delante tu propio ingress.
+- **Todas las interfaces por defecto.** Tanto el listener HTTP como el gRPC enlazan por defecto al comodín — `--listen :8443` y `--grpc-listen :8444`, es decir `0.0.0.0` y, donde el kernel tiene IPv6, `::` — porque la consola es un servidor; `quickstart` comparte ese valor por defecto. El cambio deliberado es restringirla a este host: `--listen 127.0.0.1:8443 --grpc-listen 127.0.0.1:8444`, o `OLIVARES_BIND=127.0.0.1` para el stack de Compose. Las salvaguardas no se mueven con el enlace: TLS sigue activado, la configuración inicial sigue detrás del token de un solo uso, `--insecure` se sigue rechazando fuera del host salvo que `--insecure-allow-public-bind` declare una terminación TLS delante, y `--seed-demo` sigue siendo solo loopback.
 - **Sin credenciales por defecto.** En una instalación nueva sin usuarios, el motor acuña un **token de configuración de un solo uso, único** (prefijo `olst_`) y lo imprime **solo por stdout** (nunca en los logs). Creas el primer administrador enviando ese token al endpoint de configuración y luego inicias sesión. Consulta [Configuración de primer arranque](#configuración-de-primer-arranque).
 
 ### Flags
@@ -10177,7 +10177,7 @@ olivares release manifest
 | `--security` | `bool` | `false` | mark this as a security release |
 | `--sign-key` | `string` | — | base64 (or @file) Ed25519 PRIVATE key to sign the manifest |
 | `--start-at` | `string` | — | rollout start time (RFC3339); before it no node upgrades |
-| `--version` | `string` | — | release version (semver), e.g. 26.9.0 (required) |
+| `--version` | `string` | — | release version (semver), e.g. 26.9.1 (required) |
 
 #### Command: olivares release sign-manifest
 

@@ -100,8 +100,8 @@ TLS — haz copia de seguridad y protégelo.
 El diseño nativo predeterminado es `/var/lib/olivares`. El adaptador de servicio
 firmado (`install.sh --data-dir`, `scripts/install-service.sh`) admite un
 directorio de datos **personalizado** por **forma**, no por lista de permitidos.
-El manifiesto de propiedad registra `"layout": "custom"` (`CHANGELOG.md`
-`[26.9.0]` Added; `INSTALL.md`).
+El manifiesto de propiedad registra `"layout": "custom"`
+(`CHANGELOG.md` `[26.9.0]` Added; `INSTALL.md`).
 
 SDD 04 §6: cada campo configurable declara propietario, esquema, fuentes
 aceptadas y validador. Aquí el adaptador posee el directorio dedicado; el
@@ -172,7 +172,7 @@ datos, los puertos y el flujo de primer arranque queden cableados correctamente.
 El chart de Helm en `deploy/helm/olivares` despliega el control plane como un **StatefulSet del núcleo**
 (escritor único; su directorio de datos contiene la clave de firma de auditoría y el material TLS) y,
 para la topología distribuida, un **DaemonSet de colectores** que empuja observaciones al núcleo
-sobre **gRPC + mTLS**. La release v26.9.0 del motor no publica el chart en un registro OCI:
+sobre **gRPC + mTLS**. La release v26.9.1 del motor no publica el chart en un registro OCI:
 ninguna etiqueta independiente `chart-v*` ha ejecutado todavía ese workflow. Instala el
 chart revisado desde un checkout y fija la imagen publicada por digest.
 

@@ -16,9 +16,9 @@ description: >-
 настройки и TLS, включённый по умолчанию. Порт хоста публикуется на всех интерфейсах,
 потому что это сервер — ограничивайте его осознанно, как показано ниже.
 
-:::note[Бета — 26.9.0 ещё не опубликован]
+:::note[Бета — 26.9.1 ещё не опубликован]
 Olivares AI находится в **бете**. Координаты образа ниже разрешаются только
-**после выхода релиза `26.9.0`**; до тех пор реестрам нечего
+**после выхода релиза `26.9.1`**; до тех пор реестрам нечего
 отдавать. Воспринимайте это как форму развёртывания, которую вы будете
 использовать, а не как гарантию готовности к продакшену.
 :::
@@ -33,7 +33,7 @@ Olivares AI находится в **бете**. Координаты образ�
 Основная загрузка контейнера — **Docker Hub**:
 
 ```bash
-docker pull docker.io/olivaresai/olivares:26.9.0
+docker pull docker.io/olivaresai/olivares:26.9.1
 ```
 
 То же содержимое также публикуется в `ghcr.io/olivaresai/olivares` — идентичное
@@ -41,8 +41,8 @@ docker pull docker.io/olivaresai/olivares:26.9.0
 **анонимных** пулов; ghcr.io не ограничивает анонимные пулы публичных образов — поэтому
 `docker login` или координата ghcr.io и есть выход, если узел CI или большой парк упирается
 в лимит. Теги несут **без
-ведущего `v`**: `:26.9.0` закрепляет релиз, `:latest` плавает, а
-`:26.9.0-fips` / `:26.9.0-stig` — усиленные варианты. Базовый тег и `:latest`
+ведущего `v`**: `:26.9.1` закрепляет релиз, `:latest` плавает, а
+`:26.9.1-fips` / `:26.9.1-stig` — усиленные варианты. Базовый тег и `:latest`
 мультиархитектурные (`linux/amd64`, `linux/arm64`); `fips`/`stig` — только
 `amd64`.
 
@@ -53,7 +53,7 @@ Docker Hub через `cosign copy`, поэтому digest тот же:
 
 ```bash
 IMAGE=docker.io/olivaresai/olivares          # fallback: ghcr.io/olivaresai/olivares (same digest)
-DIGEST="$(crane digest "$IMAGE:26.9.0")"
+DIGEST="$(crane digest "$IMAGE:26.9.1")"
 REF="$IMAGE@$DIGEST"
 
 cosign verify "$REF" \
@@ -91,7 +91,7 @@ docker run -d --name olivares \
   -v olivares-data:/var/lib/olivares \
   -p 8443:8443 \
   -p 8444:8444 \
-  docker.io/olivaresai/olivares:26.9.0 \
+  docker.io/olivaresai/olivares:26.9.1 \
   serve \
     --listen=0.0.0.0:8443 \
     --grpc-listen=0.0.0.0:8444 \
@@ -298,7 +298,7 @@ olivares.example.com {
 ```bash
 # 1. Back up first (see §4).
 # 2. Pull the new release and re-verify it (see §1):
-docker pull docker.io/olivaresai/olivares:26.9.1
+docker pull docker.io/olivaresai/olivares:26.9.2
 
 # docker run:
 docker stop olivares && docker rm olivares
@@ -314,7 +314,7 @@ docker compose -f deploy/compose/docker-compose.yml up -d
 
 ## 8. Закрепление по digest для продакшена
 
-Изменяемые теги (`:26.9.0`, `:latest`) — для оценки. В продакшене закрепляйте
+Изменяемые теги (`:26.9.1`, `:latest`) — для оценки. В продакшене закрепляйте
 **digest**, который вы проверили — digest неизменяем и есть ровно то, что вы
 утвердили:
 

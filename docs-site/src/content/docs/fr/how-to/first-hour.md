@@ -1,13 +1,13 @@
 ---
-title: "Votre première heure avec Olivares AI (v26.9.0, tel que livré)"
+title: "Votre première heure avec Olivares AI (v26.9.1, tel que livré)"
 description: >-
-  Ce qu’une installation propre du binaire public v26.9.0 vous permet
+  Ce qu’une installation propre du binaire public v26.9.1 vous permet
   réellement de faire pendant la première heure : jeton de configuration,
   barrière AAL3, enregistrement d’une passkey, lancement de session via un
   profil fournisseur, déploiement, connaissances et hooks PEP Codex et Grok.
 ---
 
-Cette page décrit **v26.9.0 tel que livré**. Il ne s’agit ni d’un assistant de
+Cette page décrit **v26.9.1 tel que livré**. Il ne s’agit ni d’un assistant de
 premier démarrage prévu, ni d’une capture d’écran d’une maquette. Chacune des
 étapes ci-dessous correspond à une action que le binaire public effectue
 aujourd’hui, avec le fichier ou la variable d’environnement qui la rend
@@ -31,7 +31,7 @@ restent vides après un démarrage avec données de démonstration. Ce chiffre e
 le recensement de la date de mesure. La
 [référence console](/reference/console/) générée dans cet arbre liste
 **75 routes**. Cette page ne recompte pas les onglets vides après
-`--seed-demo` sur v26.9.0. L’environnement de démonstration alimente le
+`--seed-demo` sur v26.9.1. L’environnement de démonstration alimente le
 parcours du graphe d’accès dans
 [De zéro à un graphe d’accès en lecture/écriture](/tutorials/zero-to-graph/),
 mais pas le reste de la console. Ne l’utilisez pas pour « explorer le
@@ -281,7 +281,7 @@ ne l’incrémente jamais.
 
 ## 6. Sessions Codex et Grok : profils fournisseur, puis les hooks CLI restants
 
-v26.9.0 exploite la CLI officielle Codex et la CLI officielle Grok comme
+v26.9.1 exploite la CLI officielle Codex et la CLI officielle Grok comme
 pilotes de session, en plus de Claude Code (`CHANGELOG.md` `[26.9.0]` Added).
 La console administre ces lancements sur **Provider profiles**
 (`/provider-profiles`, `sessions:profile:read`) et **Source bindings**

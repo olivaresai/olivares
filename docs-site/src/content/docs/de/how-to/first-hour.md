@@ -1,13 +1,13 @@
 ---
-title: "Ihre erste Stunde mit Olivares AI (v26.9.0, wie ausgeliefert)"
+title: "Ihre erste Stunde mit Olivares AI (v26.9.1, wie ausgeliefert)"
 description: >-
   Was Sie mit einer sauberen Installation des öffentlichen Binärprogramms
-  v26.9.0 in der ersten Stunde tatsächlich tun können: Setup-Token,
+  v26.9.1 in der ersten Stunde tatsächlich tun können: Setup-Token,
   AAL3-Schranke, Passkey-Registrierung, Sitzungsstart über Anbieterprofile,
   Deployment, Wissen und die PEP-Hooks für Codex und Grok.
 ---
 
-Diese Seite beschreibt **v26.9.0 im ausgelieferten Zustand**. Sie ist weder
+Diese Seite beschreibt **v26.9.1 im ausgelieferten Zustand**. Sie ist weder
 ein geplanter Einrichtungsassistent für den ersten Start noch ein Screenshot
 eines Mockups. Jeder der folgenden Schritte ist etwas, das das öffentliche
 Binärprogramm heute ausführt, einschließlich der Datei oder Umgebungsvariable,
@@ -30,7 +30,7 @@ Installation des öffentlichen Binärprogramms: **36 von 54** Konsolenrouten
 sind auch nach einem Start mit Seed-Daten noch leer. Diese Zahl ist die Zählung
 des Messtags. Die generierte
 [Konsolenreferenz](/reference/console/) in diesem Baum listet **75 Routen**.
-Diese Seite zählt leere Tabs nach `--seed-demo` auf v26.9.0 nicht neu.
+Diese Seite zählt leere Tabs nach `--seed-demo` auf v26.9.1 nicht neu.
 Der Demo-Bestand füllt den Durchlauf durch den Zugriffsgraphen in
 [Von null zu einem Lese-/Schreibzugriffsgraphen](/tutorials/zero-to-graph/);
 den Rest der Konsole füllt er nicht. Verwenden Sie ihn nicht, um „das Produkt
@@ -276,7 +276,7 @@ aufgrund von Freigabestufe oder ACL erhöht ihn niemals.
 
 ## 6. Codex- und Grok-Sessions: Anbieterprofile, dann die übrigen CLI-Hooks
 
-v26.9.0 betreibt die offizielle Codex-CLI und die offizielle Grok-CLI als
+v26.9.1 betreibt die offizielle Codex-CLI und die offizielle Grok-CLI als
 Session-Treiber, zusätzlich zu Claude Code (`CHANGELOG.md` `[26.9.0]` Added).
 Die Konsole verwaltet diese Starts unter **Provider profiles**
 (`/provider-profiles`, `sessions:profile:read`) und **Source bindings**

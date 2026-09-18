@@ -39,7 +39,7 @@ CycloneDX) и аттестация OpenVEX — все ссылаются **по 
 scripts/verify-release.sh
 
 # Pin the SLSA provenance to a specific source tag.
-scripts/verify-release.sh --source-tag v26.9.0
+scripts/verify-release.sh --source-tag v26.9.1
 
 # Key-based: only for files signed with a private key you control.
 # Releases are signed keyless and do not publish a public key.

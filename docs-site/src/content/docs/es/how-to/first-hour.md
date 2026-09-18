@@ -1,13 +1,13 @@
 ---
-title: "Tu primera hora con Olivares AI (v26.9.0, tal como se distribuye)"
+title: "Tu primera hora con Olivares AI (v26.9.1, tal como se distribuye)"
 description: >-
-  Lo que una instalación limpia del binario público v26.9.0 te permite hacer
+  Lo que una instalación limpia del binario público v26.9.1 te permite hacer
   realmente durante la primera hora: el token de configuración, el muro AAL3,
   el registro de una passkey, el inicio de sesiones con perfiles de proveedor,
   el despliegue, el conocimiento y los hooks PEP de Codex y Grok.
 ---
 
-Esta página describe **v26.9.0 tal como se distribuye**. No es un asistente de
+Esta página describe **v26.9.1 tal como se distribuye**. No es un asistente de
 primer arranque previsto para el futuro ni una captura de pantalla de una
 maqueta. Cada paso que aparece a continuación es algo que el binario público
 hace hoy, junto con el fichero o la variable de entorno que lo hace posible.
@@ -31,7 +31,7 @@ siguen vacías después de un arranque con datos de muestra. Esa cifra es el
 censo de la fecha de medición. La
 [referencia de consola](/reference/console/) generada en este árbol lista
 **75 rutas**. Esta página no vuelve a contar pestañas vacías tras
-`--seed-demo` en v26.9.0. El entorno de demostración rellena el recorrido del
+`--seed-demo` en v26.9.1. El entorno de demostración rellena el recorrido del
 grafo de acceso de
 [De cero a un grafo de acceso de lectura/escritura](/tutorials/zero-to-graph/),
 pero no rellena el resto de la consola. No lo uses para «explorar el producto».
@@ -270,7 +270,7 @@ denegación por clearance o ACL nunca lo incrementa.
 
 ## 6. Sesiones Codex y Grok: perfiles de proveedor y, después, los hooks CLI
 
-v26.9.0 opera la CLI oficial de Codex y la CLI oficial de Grok como
+v26.9.1 opera la CLI oficial de Codex y la CLI oficial de Grok como
 controladores de sesión, además de Claude Code (`CHANGELOG.md` `[26.9.0]` Added).
 La consola administra esos lanzamientos en **Provider profiles**
 (`/provider-profiles`, `sessions:profile:read`) y **Source bindings**

@@ -138,6 +138,36 @@ published)
 *) fail "unknown Helm publication status: $helm_status" ;;
 esac
 
+# ── THE PACKAGE FILENAME IS CHECKED IN EVERY LOCALE, NOT ONLY IN ENGLISH ────
+# The three literals above are the English guide's, and they were the ONLY three of
+# twenty-one that anything checked. Measured on the v26.9.1 cut: after the version sweep,
+# `olivares_<previous>_linux_amd64.{deb,rpm,apk}` survived in all seven locales, because
+# NEITHER arm of check-release-version.sh can see that shape — both token regexes end on
+# `\b` and the next character is `_`, which is a word character, so there is no boundary.
+# The HYPHEN form of the same name matches and has a case of its own; the UNDERSCORE form
+# is the one GoReleaser actually produces.
+#
+# No release number is written in this comment, and that is not shyness: this script is
+# scanned by the pin census of check-release-version.sh, which exempts only its OWN
+# fixtures. The first draft spelled the hyphen form with a real past version and the gate
+# refused the push, naming this line. A gate that catches its sibling's prose is the gate
+# working.
+#
+# Same discipline as the three sibling loops below: enumerate the locales from the tree and
+# check the LITERAL a reader copies, so an omitted translation is independently red rather
+# than covered by its English original.
+list="$tmp/install-from-packages.md"
+find "$ROOT/docs-site/src/content/docs" -type f -name 'install-from-packages.md' ! -path '*/2026-06/*' -print | sort >"$list" \
+	|| blind "cannot enumerate install-from-packages.md"
+[ "$(wc -l <"$list" | tr -d ' ')" = 7 ] || fail "expected seven current package guides"
+while IFS= read -r file; do
+	for ext in deb rpm apk; do
+		contains "$file" "olivares_${plain_version}_linux_amd64.$ext" "localized package command"
+	done
+	contains "$file" 'arm64' "localized package architecture"
+	contains "$file" 'draft: false' "published localized package guide"
+done <"$list"
+
 # All seven current locales must send users to the same executable source path.
 # Checking the path rather than translated adjectives keeps this mechanical and
 # makes an omitted translation independently red.

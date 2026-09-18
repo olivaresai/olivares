@@ -16,17 +16,19 @@
 # free, and it is the intended way round — surfaces follow the derivation, never the
 # reverse.
 #
-# WHAT IS NOT DERIVED, AND IS STILL FRAN'S: WHEN a cut happens. Two cuts have been decided so
-# far. The first shipped: public tag v26.8.0 resolves to its released commit, and CHANGELOG.md
-# keeps that section unchanged. The second is THIS one, re-derived from its own cut date in
-# September 2026, which is where the value below comes from. It names what this tree ships; the
-# release itself is published by the tag, and docs/releases/*-install-surfaces.json records the
-# measured publication state of each surface at the moment it was measured.
+# WHAT IS NOT DERIVED, AND IS STILL FRAN'S: WHEN a cut happens. Three cuts have been decided
+# so far, and the two that shipped keep their own CHANGELOG.md sections unchanged: public tag
+# v26.8.0 resolves to its released commit, and public tag v26.9.0 to its own. The third is THIS
+# one. It is the first SAME-MONTH fix: the month does not move, so CalVer bumps only PATCH, and
+# a September 2026 cut after v26.9.0 is v26.9.1 — again nobody picks it, the calendar and the
+# count do. It names what this tree ships; the release itself is published by the tag, and
+# docs/releases/*-install-surfaces.json records the measured publication state of each surface
+# at the moment it was measured.
 #
 # THE UNDECIDED ESCAPE STILL EXISTS IN THE CHECKER and is worth knowing about, because
 # this header used to be written as though it were the current state. Writing UNDECIDED
 # on the value line below puts the gate into census mode: it prints every divergent
 # occurrence grouped by value and exits 0 with a PENDING banner instead of blocking. That
-# is for a tree that has no answer yet. It is not this tree: v26.9.0 is derived and the
+# is for a tree that has no answer yet. It is not this tree: v26.9.1 is derived and the
 # current install surfaces are bound to it by scripts/check-install-docs.sh.
-v26.9.0
+v26.9.1

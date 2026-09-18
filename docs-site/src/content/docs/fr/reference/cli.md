@@ -64,7 +64,7 @@ olivares serve [flags]
 Ce sont des propriétés de `serve`, pas des options à activer :
 
 - **TLS est activé par défaut.** Si aucun certificat n'est fourni, le moteur génère un certificat auto-signé dans le répertoire de données et journalise à la fois l'empreinte SHA-256 du certificat et, sous `pin_sha256`, le pin SPKI du certificat feuille ; les clients approuvent le certificat ou passent cette valeur `pin_sha256` à `--pin-sha256`. Ce sont deux condensats différents d'octets différents — l'empreinte du certificat n'est PAS un pin. Le serveur gRPC échoue en mode fermé (fail closed) : hors `--insecure`, il ne démarrera pas en texte clair.
-- **Boucle locale par défaut.** Les écouteurs HTTP et gRPC se lient par défaut à `127.0.0.1`. Exposer le control plane au-delà de l'hôte local est un changement délibéré que vous effectuez en configurant une liaison non-boucle-locale et en la plaçant derrière votre propre ingress.
+- **Toutes les interfaces par défaut.** Les écouteurs HTTP et gRPC se lient par défaut au joker — `--listen :8443` et `--grpc-listen :8444`, c'est-à-dire `0.0.0.0` et, lorsque le noyau a IPv6, `::` — parce que la console est un serveur ; `quickstart` partage ce défaut. Le changement délibéré consiste à la restreindre à cet hôte : `--listen 127.0.0.1:8443 --grpc-listen 127.0.0.1:8444`, ou `OLIVARES_BIND=127.0.0.1` pour la pile Compose. Les garde-fous ne bougent pas avec la liaison : TLS reste activé, la première configuration reste derrière le jeton à usage unique, `--insecure` est toujours refusé hors de l'hôte sauf si `--insecure-allow-public-bind` déclare une terminaison TLS en amont, et `--seed-demo` reste réservé à la boucle locale.
 - **Aucun identifiant par défaut.** Sur une installation neuve sans utilisateurs, le moteur émet un **jeton de configuration à usage unique** (préfixe `olst_`) et l'affiche sur la **sortie standard uniquement** (jamais dans les journaux). Vous créez le premier administrateur en envoyant ce jeton à l'endpoint de configuration, puis vous vous connectez. Voir [Configuration au premier démarrage](#configuration-au-premier-démarrage).
 
 ### Drapeaux
@@ -10180,7 +10180,7 @@ olivares release manifest
 | `--security` | `bool` | `false` | mark this as a security release |
 | `--sign-key` | `string` | — | base64 (or @file) Ed25519 PRIVATE key to sign the manifest |
 | `--start-at` | `string` | — | rollout start time (RFC3339); before it no node upgrades |
-| `--version` | `string` | — | release version (semver), e.g. 26.9.0 (required) |
+| `--version` | `string` | — | release version (semver), e.g. 26.9.1 (required) |
 
 #### Command: olivares release sign-manifest
 

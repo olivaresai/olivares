@@ -1,12 +1,12 @@
 ---
-title: "Your first hour with Olivares AI (v26.9.0, as shipped)"
+title: "Your first hour with Olivares AI (v26.9.1, as shipped)"
 description: >-
-  What a clean install of the public v26.9.0 binary actually lets you do in the
+  What a clean install of the public v26.9.1 binary actually lets you do in the
   first hour: the setup token, the AAL3 wall, passkey registration, provider-profile
   session launch, deploy, knowledge, and the Codex and Grok PEP hooks.
 ---
 
-This page describes **v26.9.0 as shipped**. It is not a planned first-run
+This page describes **v26.9.1 as shipped**. It is not a planned first-run
 wizard and it is not a screenshot of a mockup. Every step below is something
 the public binary does today, with the file or environment variable that
 makes it true. Where the product refuses, the page says so.
@@ -26,7 +26,7 @@ command, once the binary is on the host, is `olivares quickstart`.
 binary on 2026-09-04: **36 of 54** console routes still empty after a
 seeded boot. That count is the measurement date's census. The generated
 [console reference](/reference/console/) on this tree lists **75 routes**.
-This page does not re-count empty tabs after `--seed-demo` on v26.9.0.
+This page does not re-count empty tabs after `--seed-demo` on v26.9.1.
 The demo estate fills the access-graph walk in
 [From zero to a read/write access graph](/tutorials/zero-to-graph/); it does
 not fill the rest of the console. Do not use it to “explore the product”.
@@ -254,7 +254,7 @@ ACL denial never adds to it.
 
 ## 6. Codex and Grok sessions: provider profiles, then the remaining CLI hooks
 
-v26.9.0 operates the official Codex CLI and the official Grok CLI as session
+v26.9.1 operates the official Codex CLI and the official Grok CLI as session
 drivers, in addition to Claude Code (`CHANGELOG.md` `[26.9.0]` Added). The
 console administers those launches on **Provider profiles**
 (`/provider-profiles`, `sessions:profile:read`) and **Source bindings**

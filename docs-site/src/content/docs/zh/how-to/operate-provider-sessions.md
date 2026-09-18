@@ -15,7 +15,7 @@ description: >-
 共存，请使用
 [在 Olivares 中运行 Claude Code](/how-to/run-claude-code-with-olivares/)。
 
-v26.9.0 行为的来源：`CHANGELOG.md` 的 `[26.9.0]`（提供商配置文件、Codex
+该行为的来源：`CHANGELOG.md` 的 `[26.9.0]`（提供商配置文件、Codex
 驱动程序、Grok 驱动程序）、生成的
 [控制台](/reference/console/) 与
 [配置](/reference/configuration/) 参考、`cmd/olivares/sessionruntime.go` 以及

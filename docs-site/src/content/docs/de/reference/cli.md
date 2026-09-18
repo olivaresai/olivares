@@ -44,7 +44,7 @@ olivares serve [flags]
 Dies sind Eigenschaften von `serve`, keine Opt-ins:
 
 - **TLS ist standardmäßig an.** Wird kein Zertifikat bereitgestellt, generiert die Engine ein selbstsigniertes Zertifikat im Datenverzeichnis und protokolliert sowohl dessen SHA-256-Zertifikatsfingerprint als auch, als `pin_sha256`, den SPKI-Pin des Leaf-Zertifikats; Clients vertrauen entweder dem Zertifikat oder übergeben diesen `pin_sha256`-Wert an `--pin-sha256`. Es sind zwei verschiedene Hashes verschiedener Bytes — der Zertifikatsfingerprint ist KEIN Pin. Der gRPC-Server schlägt fehl-geschlossen (fail closed) fehl: außerhalb von `--insecure` startet er nicht im Klartext.
-- **Standardmäßig Loopback.** Sowohl der HTTP- als auch der gRPC-Listener binden standardmäßig auf `127.0.0.1`. Die Control Plane über den lokalen Host hinaus verfügbar zu machen ist eine bewusste Änderung, die Sie vornehmen, indem Sie einen Nicht-Loopback-Bind setzen und sie mit Ihrem eigenen Ingress vorlagern.
+- **Standardmäßig jede Schnittstelle.** Sowohl der HTTP- als auch der gRPC-Listener binden standardmäßig auf die Wildcard — `--listen :8443` und `--grpc-listen :8444`, also `0.0.0.0` und, wo der Kernel IPv6 hat, `::` —, weil die Konsole ein Server ist; `quickstart` teilt diesen Standard. Die bewusste Änderung ist die Beschränkung auf diesen Host: `--listen 127.0.0.1:8443 --grpc-listen 127.0.0.1:8444` oder `OLIVARES_BIND=127.0.0.1` für den Compose-Stack. Die Schutzmechanismen wandern nicht mit dem Bind: TLS bleibt an, die Ersteinrichtung bleibt hinter dem einmaligen Token, `--insecure` wird außerhalb des Hosts weiterhin verweigert, sofern nicht `--insecure-allow-public-bind` eine vorgeschaltete TLS-Terminierung erklärt, und `--seed-demo` bleibt auf Loopback beschränkt.
 - **Keine Default-Credentials.** Bei einer frischen Installation ohne Nutzer prägt die Engine ein **einmaliges, single-use Setup-Token** (Präfix `olst_`) und gibt es **nur auf stdout** aus (nie in die Logs). Sie erstellen den ersten Administrator, indem Sie dieses Token an den Setup-Endpunkt posten, und melden sich dann an. Siehe [First-Boot-Setup](#first-boot-setup).
 
 ### Flags
@@ -10152,7 +10152,7 @@ olivares release manifest
 | `--security` | `bool` | `false` | mark this as a security release |
 | `--sign-key` | `string` | — | base64 (or @file) Ed25519 PRIVATE key to sign the manifest |
 | `--start-at` | `string` | — | rollout start time (RFC3339); before it no node upgrades |
-| `--version` | `string` | — | release version (semver), e.g. 26.9.0 (required) |
+| `--version` | `string` | — | release version (semver), e.g. 26.9.1 (required) |
 
 #### Command: olivares release sign-manifest
 

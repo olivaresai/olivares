@@ -23,13 +23,13 @@ documentados del stack (`deploy/compose/*.yml`), y el flujo de primer arranque q
 es el mismo que se verifica de extremo a extremo contra el binario en el
 [tutorial de nodo único](/tutorials/getting-started/single-node/).
 
-<Aside type="caution" title="Hasta que existan las imágenes v26.9.0, compila en local">
-Una versión etiquetada anterior ya publicó imágenes firmadas. El canon de este árbol es **v26.9.0**. El
+<Aside type="caution" title="Hasta que existan las imágenes v26.9.1, compila en local">
+Una versión etiquetada anterior ya publicó imágenes firmadas. El canon de este árbol es **v26.9.1**. El
 testigo de superficies de instalación sigue registrando Docker Hub y GHCR como
-**not-published** para `26.9.0` hasta que corra el trabajo de release de esa
-etiqueta (`docs/releases/v26.9.0-install-surfaces.json`). La misma nota está en
+**not-published** para `26.9.1` hasta que corra el trabajo de release de esa
+etiqueta (`docs/releases/v26.9.1-install-surfaces.json`). La misma nota está en
 [Desplegar con Docker](/how-to/docker-deployment/). Hasta que existan las
-etiquetas `26.9.0`, compila la imagen distroless endurecida desde el código
+etiquetas `26.9.1`, compila la imagen distroless endurecida desde el código
 fuente y apunta el stack a ella:
 
 ```bash
@@ -37,7 +37,7 @@ task image                                   # builds olivares:dev
 echo 'OLIVARES_IMAGE=olivares:dev' >> deploy/compose/.env
 ```
 
-Cuando exista la imagen `26.9.0`: establece
+Cuando exista la imagen `26.9.1`: establece
 `OLIVARES_IMAGE=docker.io/olivaresai/olivares@sha256:<digest>` y
 [verifícala](/how-to/verify-a-release/) primero — por digest, nunca un tag.
 </Aside>

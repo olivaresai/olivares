@@ -18,7 +18,7 @@ Claude Code を同居させるには
 [Olivares で Claude Code を実行する](/how-to/run-claude-code-with-olivares/)
 を使います。
 
-v26.9.0 の挙動の出典: `CHANGELOG.md` の `[26.9.0]`（プロバイダープロファイル、
+この挙動の出典: `CHANGELOG.md` の `[26.9.0]`（プロバイダープロファイル、
 Codex ドライバー、Grok ドライバー）、生成された
 [コンソール](/reference/console/) と
 [設定](/reference/configuration/) リファレンス、
