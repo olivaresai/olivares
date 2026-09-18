@@ -665,6 +665,32 @@ release:
   # the `ota-release-ceremony` environment reviewers, who now approve PUBLICATION of an exact
   # tag and commit, before the job starts.
   draft: true # never auto-publish from this config; publication is the protected phase 2
+  # ONE DRAFT PER TAG, AND THIS IS THE LINE THAT KEEPS IT THAT WAY. Without it GoReleaser
+  # creates a NEW draft on every phase-1 run, while the SBOM, VEX and manifest producers that
+  # follow upload with `gh release upload <tag>`, which resolves the tag to a DIFFERENT one.
+  # Measured 2026-09-17 on v26.9.0: two drafts for one tag, the build's signed assets on one
+  # and the producers' output on the other, so neither was the complete candidate and a human
+  # reconciled them by hand. Re-running phase 1 after a failure is ordinary — it happened
+  # twice that day — so the recipe has to survive it.
+  #
+  # DELETE-AND-RECREATE, NOT REUSE, and the choice is forced by the other two settings here.
+  # `use_existing_draft` would fill the draft the previous run left, but this config sets no
+  # `replace_existing_artifacts`, so re-uploading an asset the failed run already uploaded is
+  # an error, and a stale asset the new recipe does not produce would survive on the release
+  # (scripts/release-finalize-stable.sh refuses those by name, at the end of a two-hour
+  # ceremony). Deleting the previous draft first gives the new run an empty release, which is
+  # what a rebuilt candidate needs. `mode:` above is NOT the artifact knob — in GoReleaser it
+  # decides what happens to the release NOTES.
+  #
+  # Verified against GoReleaser v2.17.0, the version this workflow pins
+  # (internal/client/github.go): the delete is gated on `draft: true`, which is set above; it
+  # matches drafts by NAME against the templated release title, and this config sets no
+  # `name_template`, so the title is `{{ .Tag }}` and the match is by tag; when nothing
+  # matches it is a no-op, so the FIRST run of a tag is unaffected; and a delete that fails
+  # stops the run instead of silently building a second draft. It removes ONE matching draft
+  # per run, so a tag that already carries several is still ambiguous — that is the case
+  # scripts/release-finalize-stable.sh refuses rather than guessing.
+  replace_existing_draft: true
   prerelease: auto
   mode: replace
   # THE OTHER HALF OF THE EVIDENCE CONTRACT. `checksum.extra_files` puts the digest of
