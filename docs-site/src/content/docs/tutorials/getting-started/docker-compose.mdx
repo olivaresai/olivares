@@ -57,14 +57,19 @@ When the `26.9.0` image exists: set
 
    | Property | Value |
    |---|---|
-   | Ports | `127.0.0.1:8443` (HTTPS: REST + web UI), `127.0.0.1:8444` (gRPC) — bound to **localhost on the host**; expose deliberately |
+   | Ports | `8443` (HTTPS: REST + web UI), `8444` (gRPC) — published on **every host interface**, because this is a server. Set `OLIVARES_BIND=127.0.0.1` in `.env` to restrict them to the host |
    | Data | named volume `olivares-data` → `/var/lib/olivares` (SQLite store, audit signing key, TLS material) |
    | Hardening | runs as `65532:65532`, read-only root, all capabilities dropped, `no-new-privileges`, tmpfs `/tmp` |
    | Healthcheck | direct exec of the built-in `olivares readyz` command—no shell, curl, or wget. Only local `/readyz` HTTP 200 is healthy |
 
-2. Read the one-time setup token from the logs:
+2. Ask the engine where it is, and read the one-time setup token from the logs:
 
    ```bash
+   # where the console answers, and whether setup is still pending. The image is
+   # distroless: `docker exec … bash` has nothing to run, this needs no shell.
+   docker compose -f deploy/compose/docker-compose.yml exec olivares olivares first-boot
+
+   # the one-time setup token, printed once at first boot
    docker compose -f deploy/compose/docker-compose.yml logs olivares \
      | sed -n '/FIRST-BOOT SETUP/,/========================/p'
    ```
@@ -91,11 +96,36 @@ that its Docker run has happened.
 </Aside>
 
 <Aside type="tip" title="Missed the token?">
-A restart does not re-print it (only its hash is stored). While no users exist
-yet, the recovery is safe: `docker compose down`, remove `setup.token` from the
-`olivares-data` volume (or remove the volume entirely on a fresh install), and
-`up -d` again — a new token is minted.
+A restart does not re-print it (only its hash is stored). While no administrator
+exists yet, mint a replacement without restarting anything — the running engine
+accepts it at once, and the previous token stops working:
+
+```bash
+docker compose -f deploy/compose/docker-compose.yml exec olivares \
+  olivares first-boot --new-token
+```
 </Aside>
+
+<Aside type="tip" title="The four commands, and why each needs the `-f`">
+The stack names its own Compose project, so the engine's container is `olivares`
+(not `compose-olivares-1`) and the override services are `olivares-postgres-1` and
+`olivares-backup-1`. Compose still looks for a compose file in the **working
+directory**, and this one lives in `deploy/compose/` — so a bare `docker compose ps`
+at the repository root answers *"no configuration file provided"*. Pass `-f` every
+time, or `export COMPOSE_FILE=deploy/compose/docker-compose.yml` once.
+
+```bash
+docker compose -f deploy/compose/docker-compose.yml exec olivares olivares first-boot
+docker compose -f deploy/compose/docker-compose.yml logs olivares
+docker compose -f deploy/compose/docker-compose.yml ps
+docker compose -f deploy/compose/docker-compose.yml down
+```
+
+`olivares quickstart` is the **local-binary** path, not this one: here the server is
+already running — the container's command is `serve` — and `quickstart` would start a
+second engine inside the container.
+</Aside>
+
 
 ## 2. Wire sources
 

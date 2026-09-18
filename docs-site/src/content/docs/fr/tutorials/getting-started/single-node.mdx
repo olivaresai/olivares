@@ -116,9 +116,11 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now olivares
 ```
 
-Le moteur se lie à la **loopback** par défaut — `127.0.0.1:8443` est délibéré.
-Exposez-le plus tard, derrière votre propre ingress et votre TLS, comme une décision explicite
-(voir [durcissement](/fr/how-to/security-hardening/)).
+Le moteur se lie à **toutes les interfaces** par défaut (`:8443`) : c'est un serveur.
+La commande ci-dessus passe `--listen 127.0.0.1:8443` pour restreindre l'installation de
+ce tutoriel à l'hôte sur lequel vous êtes, ce qui est une décision explicite — retirez ces
+deux drapeaux pour que la console réponde depuis le réseau, et placez alors devant votre
+propre ingress et votre TLS (voir [durcissement](/fr/how-to/security-hardening/)).
 
 <Aside type="note" title="TLS est activé, avec un certificat auto-signé">
 Sans `--tls-cert`/`--tls-key`, le moteur génère un certificat

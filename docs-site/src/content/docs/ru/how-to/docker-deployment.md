@@ -13,7 +13,8 @@ description: >-
 без внешних зависимостей, а переопределение для Postgres даёт мультиарендную
 топологию, когда она вам нужна. Каждый путь сохраняет одни и те же безопасные
 значения по умолчанию: никаких учётных данных по умолчанию, одноразовый токен
-настройки, TLS, включённый по умолчанию, и порт хоста, привязанный к loopback.
+настройки и TLS, включённый по умолчанию. Порт хоста публикуется на всех интерфейсах,
+потому что это сервер — ограничивайте его осознанно, как показано ниже.
 
 :::note[Бета — 26.9.0 ещё не опубликован]
 Olivares AI находится в **бете**. Координаты образа ниже разрешаются только
@@ -74,7 +75,8 @@ cosign verify-attestation "$REF" --type spdxjson \
 
 Команда образа по умолчанию привязывается к `0.0.0.0` **внутри контейнера**,
 чтобы вы могли поставить перед ним ingress; сопоставление портов на стороне
-хоста ниже закрепляет экспозицию к loopback. Запускайте его не от root, в
+хоста решает, что доступно: ниже он публикуется на всех интерфейсах хоста — используйте
+`-p 127.0.0.1:8443:8443`, чтобы оставить консоль только на хосте. Запускайте его не от root, в
 режиме read-only, со сброшенными всеми capabilities:
 
 ```bash
@@ -87,8 +89,8 @@ docker run -d --name olivares \
   --cap-drop ALL \
   --security-opt no-new-privileges \
   -v olivares-data:/var/lib/olivares \
-  -p 127.0.0.1:8443:8443 \
-  -p 127.0.0.1:8444:8444 \
+  -p 8443:8443 \
+  -p 8444:8444 \
   docker.io/olivaresai/olivares:26.9.0 \
   serve \
     --listen=0.0.0.0:8443 \
@@ -105,13 +107,14 @@ docker run -d --name olivares \
 | `--cap-drop ALL` | движку не нужны Linux-capabilities |
 | `--security-opt no-new-privileges` | блокировка повышения привилегий через setuid-бинарники |
 | `-v olivares-data:/var/lib/olivares` | сохранение каталога данных (см. [§5](#5-операционные-заметки)) |
-| `-p 127.0.0.1:8443:8443` | публикация HTTPS (REST + веб-интерфейс) **только на loopback** |
-| `-p 127.0.0.1:8444:8444` | публикация gRPC (приём / API ControlPlane) только на loopback |
+| `-p 8443:8443` | публикация HTTPS (REST + веб-интерфейс) **на всех интерфейсах хоста** |
+| `-p 8444:8444` | публикация gRPC (приём / API ControlPlane) на всех интерфейсах хоста |
 
 Прочитайте одноразовый токен настройки из логов и создайте первого
 администратора:
 
 ```bash
+docker exec olivares olivares first-boot   # the console address(es) + setup state
 docker logs olivares | sed -n '/FIRST-BOOT SETUP/,/========================/p'
 
 curl -fsS -k -X POST https://127.0.0.1:8443/v1/setup \
@@ -127,13 +130,21 @@ curl -fsS -k -X POST https://127.0.0.1:8443/v1/setup \
 ### Через Docker Compose
 
 В репозитории поставляется стек Compose, который связывает том, сопоставление
-портов на loopback и те же флаги усиления, что и выше:
+опубликованные порты и те же флаги усиления, что и выше:
 
 ```bash
 docker compose -f deploy/compose/docker-compose.yml up -d
 
+# Where the console answers, and whether first setup is still pending:
+docker compose -f deploy/compose/docker-compose.yml exec olivares olivares first-boot
+
 # Read the one-time first-boot setup token:
 docker compose -f deploy/compose/docker-compose.yml logs olivares | sed -n '/FIRST-BOOT SETUP/,/========================/p'
+
+# What is running, and how to stop it. Every command needs the -f: this file lives in
+# deploy/compose/, so a bare `docker compose ps` answers "no configuration file provided".
+docker compose -f deploy/compose/docker-compose.yml ps
+docker compose -f deploy/compose/docker-compose.yml down
 
 # Then open https://localhost:8443 (self-signed TLS by default)
 ```
@@ -237,12 +248,12 @@ curl -fsS -k https://127.0.0.1:8443/readyz
 
 Из коробки движок отдаёт собственный **самоподписанный** сертификат, что годится
 для оценки, но не для клиентов, которые проверяют доверие. В продакшене
-поставьте перед движком, привязанным к loopback, обратный прокси, который
+ограничьте движок петлевым адресом (`OLIVARES_BIND=127.0.0.1`) и поставьте перед ним обратный прокси, который
 терминирует TLS сертификатом, предоставленным оператором (из вашего CA или
 ACME), и пусть прокси будет единственным, что выставлено в сеть.
 
 Поскольку сам движок говорит на TLS, прокси подключается к нему по HTTPS на порту
-loopback. Минимальный серверный блок nginx:
+ограниченный порт. Минимальный серверный блок nginx:
 
 ```nginx
 server {
@@ -253,7 +264,7 @@ server {
   ssl_certificate_key /etc/ssl/olivares/privkey.pem;
 
   location / {
-    proxy_pass         https://127.0.0.1:8443;   # engine's own TLS on loopback
+    proxy_pass         https://127.0.0.1:8443;   # engine restricted to loopback, own TLS
     proxy_ssl_verify   off;                       # engine cert is self-signed
     proxy_set_header   Host              $host;
     proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
@@ -268,7 +279,7 @@ server {
 olivares.example.com {
   reverse_proxy https://127.0.0.1:8443 {
     transport http {
-      tls_insecure_skip_verify   # engine cert is self-signed on loopback
+      tls_insecure_skip_verify   # the engine's cert is self-signed
     }
   }
 }

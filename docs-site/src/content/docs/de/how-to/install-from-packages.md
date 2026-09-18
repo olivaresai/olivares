@@ -132,7 +132,7 @@ stdout gedruckt:
 
 ```bash
 sudo -u olivares olivares serve --data-dir=/var/lib/olivares \
-  --listen=127.0.0.1:8443 --grpc-listen=127.0.0.1:8444 --checkpoint-interval=1h
+  --listen=:8443 --grpc-listen=:8444 --checkpoint-interval=1h
 ```
 
 ## 3. Die gehärtete systemd-Unit
@@ -155,11 +155,14 @@ Quellbaum gebaute `.apk`-Pakete laufen stattdessen unter OpenRC: sie verwenden d
 `olivares`, schreiben das Erststart-Token nach `/var/log/olivares.log` und setzen keine
 systemd-Sandbox-Direktiven um.
 
-**Die Listener sind standardmäßig nur Loopback** — `--listen=127.0.0.1:8443` für HTTP
-(REST plus eingebettete Konsole) und `--grpc-listen=127.0.0.1:8444` für gRPC. Erweitern
-Sie sie bewusst über `OLIVARES_EXTRA_ARGS` in `/etc/olivares/olivares.env` und stellen
-Sie Ihre eigene TLS-Terminierung davor. Für IPv6-Loopback verwenden Sie
-`--listen=[::1]:8443`.
+**Die Listener nehmen standardmäßig Verbindungen aus dem Netz an** — `--listen=:8443`
+für HTTP (REST plus eingebettete Konsole) und `--grpc-listen=:8444` für gRPC, der
+Dual-Stack-Wildcard. Dies ist ein Server, und was ihn schützt, ist TLS an, keine
+Standard-Anmeldedaten und ein einmalig verwendbares Setup-Token. Beschränken Sie ihn
+bewusst mit `OLIVARES_EXTRA_ARGS=--listen=127.0.0.1:8443 --grpc-listen=127.0.0.1:8444` in
+`/etc/olivares/olivares.env` — diese Flags werden nach den eigenen der Unit angehängt, und
+das spätere gewinnt — und stellen Sie Ihre eigene TLS-Terminierung davor. Für
+IPv6-Loopback verwenden Sie `--listen=[::1]:8443`.
 
 ### Ausführbares Scratch-Dateisystem
 
@@ -388,7 +391,7 @@ verdient:
   sich etwas bewegt. Die ehrliche Form des Versprechens lautet: *eine Lizenz zu
   prüfen, ruft niemanden an; herunterzuladen, wofür Sie bezahlt haben, schon.*
   Verwenden Sie `--bundle`, wenn der Update-Pfad ebenfalls keinen Aufruf machen soll.
-- **Es öffnet keinen Port ins Netz.** Die Unit bindet nur Loopback, bis Sie sie selbst
+- **Es öffnet einen Port ins Netz.** Die Unit bindet alle Schnittstellen, bis Sie sie selbst
   erweitern.
 
 ## Siehe auch

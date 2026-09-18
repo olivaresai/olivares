@@ -35,7 +35,7 @@ für getrennte Standorte siehe
 |---|---|
 | **Anmeldedaten** | keine. Der erste Start gibt einen **einmaligen, nur einmal verwendbaren Setup-Token** aus (`olst_…`); damit erstellen Sie den ersten Administrator. |
 | **TLS** | standardmäßig aktiviert. `--insecure` (Klartext) ist nur für die lokale Entwicklung auf localhost gedacht. |
-| **Bind** | die Binärdatei bindet standardmäßig an **loopback**; geben Sie sie bewusst frei. |
+| **Bind** | standardmäßig **alle Schnittstellen** (`:8443`, `:8444`) — dies ist ein Server. Mit `--listen 127.0.0.1:8443 --grpc-listen 127.0.0.1:8444` beschränken Sie sie auf diesen Host. |
 | **Lizenz** | Im offenen (AGPL-)Binary wird die Lizenz **offline** validiert (Ed25519) und dient nur der Attestierung — sie sperrt oder degradiert das offene Produkt niemals, und das ändert sich nicht. Kommerzielle Add-ons sind ein Recht für die bezahlte Laufzeit, das als **Zugang per Abonnement zu den Enterprise-Repositorys** bereitgestellt wird (das SUSE/Novell-Modell): Für den Bezug der Add-ons und ihrer Updates — einschließlich Sicherheitsupdates — ist dieses Entitlement erforderlich. Air-gapped-Umgebungen werden wie bei SUSE über einen lokalen Mirror versorgt, für den das Entitlement weiterhin gilt. |
 | **Telemetry-home** | aus. Die Engine führt beim Start keine verpflichtenden ausgehenden Aufrufe durch. |
 

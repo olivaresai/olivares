@@ -155,7 +155,7 @@ expect_rc 0 "systemd system adapter admits a custom data directory with a space"
   /bin/sh "$root/scripts/install-service.sh" --system --root "$custom" --init systemd \
   --binary /usr/local/bin/olivares --data-dir '/srv/olivares data'
 [[ "$(stat -c '%a' "$custom/srv/olivares data")" = 750 ]]
-grep -Fq 'ExecStart=/usr/local/bin/olivares serve --data-dir="/srv/olivares data" --listen=127.0.0.1:8443' \
+grep -Fq 'ExecStart=/usr/local/bin/olivares serve --data-dir="/srv/olivares data" --listen=:8443' \
   "$custom/etc/systemd/system/olivares.service"
 grep -Fqx 'ReadWritePaths="/srv/olivares data"' "$custom/etc/systemd/system/olivares.service"
 grep -Fq 'data: /srv/olivares data (custom layout)' "$scratch/out"

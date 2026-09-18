@@ -55,14 +55,19 @@ echo 'OLIVARES_IMAGE=olivares:dev' >> deploy/compose/.env
 
    | Свойство | Значение |
    |---|---|
-   | Порты | `127.0.0.1:8443` (HTTPS: REST + веб-UI), `127.0.0.1:8444` (gRPC) — привязаны к **localhost на хосте**; открывайте намеренно |
+   | Порты | `8443` (HTTPS: REST + веб-UI), `8444` (gRPC) — опубликованы на **всех интерфейсах хоста**, потому что это сервер. Задайте `OLIVARES_BIND=127.0.0.1` в `.env`, чтобы ограничить их хостом |
    | Данные | именованный том `olivares-data` → `/var/lib/olivares` (хранилище SQLite, ключ подписи аудита, материал TLS) |
    | Укрепление | работает как `65532:65532`, read-only root, все capabilities сброшены, `no-new-privileges`, tmpfs `/tmp` |
    | Healthcheck | прямой запуск встроенной команды `olivares readyz` — без shell, curl и wget. Здоровым считается только HTTP 200 локального `/readyz` |
 
-2. Прочитайте одноразовый setup-токен из логов:
+2. Спросите у движка, где он, и прочитайте одноразовый setup-токен из логов:
 
    ```bash
+   # where the console answers, and whether setup is still pending. The image is
+   # distroless: `docker exec … bash` has nothing to run, this needs no shell.
+   docker compose -f deploy/compose/docker-compose.yml exec olivares olivares first-boot
+
+   # the one-time setup token, printed once at first boot
    docker compose -f deploy/compose/docker-compose.yml logs olivares \
      | sed -n '/FIRST-BOOT SETUP/,/========================/p'
    ```
@@ -81,11 +86,36 @@ echo 'OLIVARES_IMAGE=olivares:dev' >> deploy/compose/.env
 </Steps>
 
 <Aside type="tip" title="Пропустили токен?">
-Перезапуск не печатает его повторно (хранится только его хеш). Пока пользователей ещё
-нет, восстановление безопасно: `docker compose down`, удалите `setup.token` из тома
-`olivares-data` (или удалите том целиком при чистой установке) и снова `up -d` — будет
-выпущен новый токен.
+Перезапуск не печатает его повторно (хранится только его хеш). Пока администратора ещё
+нет, выпустите замену, ничего не перезапуская, — работающий движок принимает её сразу, а
+предыдущий токен перестаёт работать:
+
+```bash
+docker compose -f deploy/compose/docker-compose.yml exec olivares \
+  olivares first-boot --new-token
+```
 </Aside>
+
+<Aside type="tip" title="Четыре команды и почему каждой нужен `-f`">
+Стек задаёт имя своего проекта Compose, поэтому контейнер движка называется `olivares`
+(а не `compose-olivares-1`), а сервисы переопределений — `olivares-postgres-1` и
+`olivares-backup-1`. Compose по-прежнему ищет файл compose в **текущем каталоге**, а этот
+файл лежит в `deploy/compose/` — поэтому просто `docker compose ps` в корне репозитория
+отвечает *"no configuration file provided"*. Передавайте `-f` каждый раз или один раз
+выполните `export COMPOSE_FILE=deploy/compose/docker-compose.yml`.
+
+```bash
+docker compose -f deploy/compose/docker-compose.yml exec olivares olivares first-boot
+docker compose -f deploy/compose/docker-compose.yml logs olivares
+docker compose -f deploy/compose/docker-compose.yml ps
+docker compose -f deploy/compose/docker-compose.yml down
+```
+
+`olivares quickstart` — это путь **локального бинарника**, а не этот: здесь сервер уже
+работает (команда контейнера — `serve`), и `quickstart` запустил бы второй движок внутри
+контейнера.
+</Aside>
+
 
 ## 2. Подключите источники
 

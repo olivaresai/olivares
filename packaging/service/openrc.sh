@@ -12,7 +12,13 @@ name="Olivares AI"
 description="Self-hosted AI governance control plane"
 olivares_config="@CONFIG@"
 command="@BINARY@"
-command_args_base="serve --data-dir=@DATA_DIR@ --listen=127.0.0.1:8443 --grpc-listen=127.0.0.1:8444 --checkpoint-interval=1h"
+# --listen=:8443 is the dual-stack wildcard: the console accepts connections from the
+# network, which is what a server is for. TLS is on with a self-signed first-boot
+# certificate and there are no default credentials. To restrict the engine to this
+# host, put --listen=127.0.0.1:8443 --grpc-listen=127.0.0.1:8444 in
+# OLIVARES_EXTRA_ARGS in the environment file: it is appended after these flags and
+# the later flag wins.
+command_args_base="serve --data-dir=@DATA_DIR@ --listen=:8443 --grpc-listen=:8444 --checkpoint-interval=1h"
 command_args="$command_args_base"
 command_user="olivares:olivares"
 command_background=true
@@ -21,7 +27,8 @@ output_log="@DATA_DIR@/olivares.log"
 error_log="@DATA_DIR@/olivares.log"
 
 depend() {
-  # Loopback-only listeners do not require a configured uplink.
+  # The listeners bind the wildcard, which succeeds before an uplink is configured;
+  # `use net` keeps the ordering without making the service fail when there is none.
   use net
   after firewall
 }

@@ -48,14 +48,19 @@ echo 'OLIVARES_IMAGE=olivares:dev' >> deploy/compose/.env
 
    | 属性 | 值 |
    |---|---|
-   | 端口 | `127.0.0.1:8443`（HTTPS：REST + web UI）、`127.0.0.1:8444`（gRPC）——绑定到**宿主机上的 localhost**；按需刻意暴露 |
+   | 端口 | `8443`（HTTPS：REST + web UI）、`8444`（gRPC）——发布在**所有主机接口**上，因为这是一台服务器。在 `.env` 中设置 `OLIVARES_BIND=127.0.0.1` 可将其限制在本机 |
    | 数据 | 命名卷 `olivares-data` → `/var/lib/olivares`（SQLite 存储、审计签名密钥、TLS 材料） |
    | 加固 | 以 `65532:65532` 运行，root 只读，丢弃所有 capability，`no-new-privileges`，tmpfs `/tmp` |
    | 健康检查 | 直接执行内置的 `olivares readyz` 命令——无需 shell、curl 或 wget。只有本地 `/readyz` 返回 HTTP 200 才算健康 |
 
-2. 从日志中读取一次性安装 token：
+2. 询问引擎它在哪里，并从日志中读取一次性安装 token：
 
    ```bash
+   # where the console answers, and whether setup is still pending. The image is
+   # distroless: `docker exec … bash` has nothing to run, this needs no shell.
+   docker compose -f deploy/compose/docker-compose.yml exec olivares olivares first-boot
+
+   # the one-time setup token, printed once at first boot
    docker compose -f deploy/compose/docker-compose.yml logs olivares \
      | sed -n '/FIRST-BOOT SETUP/,/========================/p'
    ```
@@ -80,10 +85,33 @@ echo 'OLIVARES_IMAGE=olivares:dev' >> deploy/compose/.env
 </Aside>
 
 <Aside type="tip" title="错过了 token？">
-重启不会重新打印它（只存储了它的 hash）。在尚无任何用户存在期间，恢复是安全的：`docker compose down`、
-从 `olivares-data` 卷中移除 `setup.token`（或在全新安装时整个移除该卷），然后再次 `up -d`——
-会铸造一个新 token。
+重启不会重新打印它（只存储了它的 hash）。在尚无管理员存在期间，你可以在不重启任何东西的情况下铸造一个替代
+token——正在运行的引擎会立即接受它，而先前的 token 随即失效：
+
+```bash
+docker compose -f deploy/compose/docker-compose.yml exec olivares \
+  olivares first-boot --new-token
+```
 </Aside>
+
+<Aside type="tip" title="四条命令，以及为什么每条都需要 `-f`">
+这套 stack 自己命名了 Compose 项目，因此引擎容器叫 `olivares`（而不是 `compose-olivares-1`），
+override 的服务叫 `olivares-postgres-1` 和 `olivares-backup-1`。Compose 仍然在**当前工作目录**
+中寻找 compose 文件，而这个文件位于 `deploy/compose/`——所以在仓库根目录直接执行 `docker compose ps`
+会回答 *"no configuration file provided"*。每次都传 `-f`，或者执行一次
+`export COMPOSE_FILE=deploy/compose/docker-compose.yml`。
+
+```bash
+docker compose -f deploy/compose/docker-compose.yml exec olivares olivares first-boot
+docker compose -f deploy/compose/docker-compose.yml logs olivares
+docker compose -f deploy/compose/docker-compose.yml ps
+docker compose -f deploy/compose/docker-compose.yml down
+```
+
+`olivares quickstart` 是**本地二进制**的路径，而不是这里的路径：这里服务器已经在运行
+（容器的命令是 `serve`），`quickstart` 会在容器内再启动第二个引擎。
+</Aside>
+
 
 ## 2. 接入数据源
 

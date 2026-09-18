@@ -13,7 +13,8 @@ avec l'interface web embarquée — de sorte qu'un seul hôte peut exécuter la 
 SQLite sans dépendance externe, et un override Postgres vous donne la topologie
 multi-locataire quand vous en avez besoin. Chaque chemin conserve les mêmes valeurs
 par défaut sécurisées : aucune crédential par défaut, un token de configuration à
-usage unique, TLS activé par défaut, et le port de l'hôte lié à loopback.
+usage unique et TLS activé par défaut. Le port de l'hôte est publié sur toutes les
+interfaces, car c'est un serveur — restreignez-le délibérément, comme ci-dessous.
 
 :::note[Beta — 26.9.0 n'est pas encore publiée]
 Olivares AI est en **beta**. Les coordonnées d'image ci-dessous ne se résolvent
@@ -75,7 +76,8 @@ vérifié, déployez par le **digest** que vous avez vérifié, jamais par un ta
 
 La commande par défaut de l'image se lie à `0.0.0.0` **à l'intérieur du conteneur**
 pour que vous puissiez la placer derrière un ingress ; le mapping de port côté hôte
-ci-dessous épingle l'exposition à loopback. Exécutez-la en non-root, en lecture seule,
+ci-dessous décide de l'exposition : il publie sur toutes les interfaces de l'hôte — utilisez
+`-p 127.0.0.1:8443:8443` pour garder la console sur l'hôte. Exécutez-la en non-root, en lecture seule,
 avec toutes les capabilities retirées :
 
 ```bash
@@ -88,8 +90,8 @@ docker run -d --name olivares \
   --cap-drop ALL \
   --security-opt no-new-privileges \
   -v olivares-data:/var/lib/olivares \
-  -p 127.0.0.1:8443:8443 \
-  -p 127.0.0.1:8444:8444 \
+  -p 8443:8443 \
+  -p 8444:8444 \
   docker.io/olivaresai/olivares:26.9.0 \
   serve \
     --listen=0.0.0.0:8443 \
@@ -106,13 +108,14 @@ docker run -d --name olivares \
 | `--cap-drop ALL` | le moteur n'a besoin d'aucune capability Linux |
 | `--security-opt no-new-privileges` | bloquer l'escalade de privilèges via les binaires setuid |
 | `-v olivares-data:/var/lib/olivares` | persister le répertoire de données (voir [§5](#5-notes-dexploitation)) |
-| `-p 127.0.0.1:8443:8443` | publier HTTPS (REST + interface web) sur **loopback uniquement** |
-| `-p 127.0.0.1:8444:8444` | publier gRPC (ingestion / API ControlPlane) sur loopback uniquement |
+| `-p 8443:8443` | publier HTTPS (REST + interface web) sur **toutes les interfaces de l'hôte** |
+| `-p 8444:8444` | publier gRPC (ingestion / API ControlPlane) sur toutes les interfaces de l'hôte |
 
 Lisez le token de configuration à usage unique dans les logs et créez le premier
 administrateur :
 
 ```bash
+docker exec olivares olivares first-boot   # the console address(es) + setup state
 docker logs olivares | sed -n '/FIRST-BOOT SETUP/,/========================/p'
 
 curl -fsS -k -X POST https://127.0.0.1:8443/v1/setup \
@@ -127,14 +130,22 @@ unique.
 
 ### Avec Docker Compose
 
-Le dépôt fournit une stack Compose qui câble le volume, le mapping de port loopback et
+Le dépôt fournit une stack Compose qui câble le volume, les ports publiés et
 les mêmes flags de durcissement que ci-dessus :
 
 ```bash
 docker compose -f deploy/compose/docker-compose.yml up -d
 
+# Where the console answers, and whether first setup is still pending:
+docker compose -f deploy/compose/docker-compose.yml exec olivares olivares first-boot
+
 # Read the one-time first-boot setup token:
 docker compose -f deploy/compose/docker-compose.yml logs olivares | sed -n '/FIRST-BOOT SETUP/,/========================/p'
+
+# What is running, and how to stop it. Every command needs the -f: this file lives in
+# deploy/compose/, so a bare `docker compose ps` answers "no configuration file provided".
+docker compose -f deploy/compose/docker-compose.yml ps
+docker compose -f deploy/compose/docker-compose.yml down
 
 # Then open https://localhost:8443 (self-signed TLS by default)
 ```
@@ -236,12 +247,12 @@ de l'audit, donc protégez et sauvegardez le volume — utilisez le profil DR de
 
 D'emblée, le moteur sert son propre certificat **auto-signé**, ce qui convient pour
 l'évaluation mais pas pour des clients qui valident la confiance. En production, placez
-le moteur lié à loopback derrière un reverse proxy qui termine TLS avec un certificat
+le moteur restreint à loopback (`OLIVARES_BIND=127.0.0.1`) derrière un reverse proxy qui termine TLS avec un certificat
 fourni par l'opérateur (depuis votre CA ou ACME), et faites du proxy la seule chose
 exposée sur le réseau.
 
 Parce que le moteur parle lui-même TLS, le proxy s'y connecte en HTTPS sur le port
-loopback. Un bloc serveur nginx minimal :
+ce port restreint. Un bloc serveur nginx minimal :
 
 ```nginx
 server {
@@ -252,7 +263,7 @@ server {
   ssl_certificate_key /etc/ssl/olivares/privkey.pem;
 
   location / {
-    proxy_pass         https://127.0.0.1:8443;   # engine's own TLS on loopback
+    proxy_pass         https://127.0.0.1:8443;   # engine restricted to loopback, own TLS
     proxy_ssl_verify   off;                       # engine cert is self-signed
     proxy_set_header   Host              $host;
     proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
@@ -267,7 +278,7 @@ L'équivalent avec Caddy, qui provisionne automatiquement un certificat public :
 olivares.example.com {
   reverse_proxy https://127.0.0.1:8443 {
     transport http {
-      tls_insecure_skip_verify   # engine cert is self-signed on loopback
+      tls_insecure_skip_verify   # the engine's cert is self-signed
     }
   }
 }

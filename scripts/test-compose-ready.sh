@@ -73,6 +73,7 @@ workflow=.github/workflows/compose-ready.yml
 mainline=.github/workflows/mainline-ci.yml
 cache_action=.github/actions/olivares-tool-cache/action.yml
 no_ports=deploy/compose/docker-compose.ready-no-ports.ci.yml
+compose=deploy/compose/docker-compose.yml
 view() (
 	shopt -s dotglob nullglob
 	dest="$scratch/$1"
@@ -95,11 +96,12 @@ view() (
 	link_except .github/actions olivares-tool-cache
 	link_except .github/actions/olivares-tool-cache action.yml
 	link_except deploy compose
-	link_except deploy/compose docker-compose.ready-no-ports.ci.yml
+	link_except deploy/compose docker-compose.ready-no-ports.ci.yml docker-compose.yml
 	cp "$root/$workflow" "$dest/$workflow"
 	cp "$root/$mainline" "$dest/$mainline"
 	cp "$root/$cache_action" "$dest/$cache_action"
 	cp "$root/$no_ports" "$dest/$no_ports"
+	cp "$root/$compose" "$dest/$compose"
 )
 anchor() {
 	local file="$1" want="$2" pattern="$3" hits
@@ -139,6 +141,9 @@ anchor "$workflow" 1 'check-compose-ready\.sh effective-config "\$config" "\$REA
 anchor "$workflow" 1 '^          docker image rm "\$OLIVARES_IMAGE"$'
 anchor "$workflow" 1 '^          if ! listed="\$\(docker image ls '
 anchor "$no_ports" 1 '^    ports: !override \[\]$'
+anchor "$no_ports" 1 '^    container_name: !reset null$'
+anchor "$compose" 1 '^name: olivares$'
+anchor "$compose" 1 '^    container_name: olivares$'
 
 wiring 3 unmutated-view 0 'compose-ready contract: OK' "$workflow" cat
 wiring 4 admin-password-omitted 1 "without ['OLIVARES_ADMIN_PASSWORD']" "$workflow" \
@@ -171,8 +176,18 @@ for occurrence in 1 2 3 4; do
 		"'${layer_steps[occurrence - 1]}' runs Compose without the final no-ports layer" "$workflow" \
 		awk -v n="$occurrence" '/docker-compose\.ready-no-ports\.ci\.yml/ && ++seen == n { next } { print }'
 done
-wiring 17 plain-ports-list 1 'must contain only services.olivares.ports: !override []' "$no_ports" \
+wiring 17 plain-ports-list 1 'must contain only services.olivares.container_name: !reset null' "$no_ports" \
 	sed -e 's/ports: !override \[\]/ports: []/'
+# The second thing that layer undoes: a container name is unique per daemon, so dropping the
+# reset would collide two runs of this workflow on one runner.
+wiring 17b dropped-container-name-reset 1 'must contain only services.olivares.container_name: !reset null' "$no_ports" \
+	sed -e '/container_name: !reset null/d'
+# And the base file must keep BOTH of the things that layer exists to undo, or the layer is
+# inert and nothing says so.
+wiring 17c base-without-project-name 1 'must name its project' "$compose" \
+	sed -e '/^name: olivares$/d'
+wiring 17d base-without-container-name 1 'must pin container_name: olivares' "$compose" \
+	sed -e '/^    container_name: olivares$/d'
 wiring 18 effective-config-not-before-up 1 \
 	"'name: reference SQLite Compose reaches healthy' does not refuse unsupported Compose or a published port before up" \
 	"$workflow" sed -e '/check-compose-ready\.sh effective-config "\$config" "\$READY_POSITIVE_PROJECT"/d'

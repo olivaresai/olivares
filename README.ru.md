@@ -54,10 +54,10 @@ olivares quickstart        # prints the console URL and the one-time setup token
 
 Добавьте `--user` для пользовательской службы (systemd user unit или LaunchAgent) или запустите проверенный скрипт из привилегированной оболочки с `--system --start` для системной службы. Предпочитаете скачать, проверить и запустить вручную? Путь ручного бинарника и матрица по ОС: [`INSTALL.md`](INSTALL.md).
 
-**2 · Docker** — multi-arch, distroless, без root; привязка портов хоста держит его только на loopback.
+**2 · Docker** — multi-arch, distroless, без root; публикуется на всех интерфейсах хоста (добавьте `127.0.0.1:` перед привязками `-p`, чтобы оставить его локальным).
 
 ```sh
-docker run -d --name olivares -p 127.0.0.1:8443:8443 -p 127.0.0.1:8444:8444 \
+docker run -d --name olivares -p 8443:8443 -p 8444:8444 \
   -v olivares-data:/var/lib/olivares \
   docker.io/olivaresai/olivares \
   serve --listen :8443 --grpc-listen :8444 --data-dir /var/lib/olivares
@@ -104,11 +104,11 @@ task build && ./bin/olivares quickstart
 ## Быстрый старт
 
 ```sh
-# a deterministic demo estate — loopback-only, no real data
+# a deterministic demo estate — loopback-only (the demo password is public), no real data
 olivares serve --seed-demo --insecure --listen 127.0.0.1:8901 --grpc-listen 127.0.0.1:8902 --data-dir "$(mktemp -d)"
 # open http://127.0.0.1:8901 — inventory, work, orchestration, access map + drift, policies, FinOps
 
-# the real thing — TLS on, loopback; create the first administrator with the printed token
+# the real thing — TLS on, reachable from your network; create the first administrator with the printed token
 olivares quickstart
 ```
 

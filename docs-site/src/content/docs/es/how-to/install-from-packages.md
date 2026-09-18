@@ -127,7 +127,7 @@ imprime en stdout:
 
 ```bash
 sudo -u olivares olivares serve --data-dir=/var/lib/olivares \
-  --listen=127.0.0.1:8443 --grpc-listen=127.0.0.1:8444 --checkpoint-interval=1h
+  --listen=:8443 --grpc-listen=:8444 --checkpoint-interval=1h
 ```
 
 ## 3. La unidad systemd endurecida
@@ -148,10 +148,13 @@ anteriormente**, porque la unidad systemd de ese payload no está en ejecución.
 `olivares`, escriben el token de primer arranque en `/var/log/olivares.log` y no
 implementan las directivas de sandbox de systemd.
 
-**Los listeners son solo loopback por defecto** — `--listen=127.0.0.1:8443` para HTTP
-(REST más la consola embebida) y `--grpc-listen=127.0.0.1:8444` para gRPC. Ábrelos de
-forma deliberada, mediante `OLIVARES_EXTRA_ARGS` en `/etc/olivares/olivares.env`, y
-pon delante tu propia terminación TLS. Para loopback IPv6 usa `--listen=[::1]:8443`.
+**Los listeners aceptan conexiones de la red por defecto** — `--listen=:8443` para HTTP
+(REST más la consola embebida) y `--grpc-listen=:8444` para gRPC, el comodín dual-stack.
+Esto es un servidor, y lo que lo protege es TLS activado, cero credenciales por defecto y
+un token de un solo uso. Restríngelo de forma deliberada con
+`OLIVARES_EXTRA_ARGS=--listen=127.0.0.1:8443 --grpc-listen=127.0.0.1:8444` en
+`/etc/olivares/olivares.env` — esos flags se añaden después de los de la unidad y gana el
+último — y pon delante tu propia terminación TLS. Para loopback IPv6 usa `--listen=[::1]:8443`.
 
 ### Montaje de scratch ejecutable
 
@@ -376,7 +379,7 @@ instalación:
   muestra el plan antes de que se mueva nada. La forma honesta de la promesa es:
   *verificar una licencia nunca llama a nadie; descargar lo que pagaste, sí.* Usa
   `--bundle` si quieres que la vía de actualización tampoco haga ninguna llamada.
-- **No abre un puerto a la red.** La unidad enlaza solo loopback hasta que tú la
+- **Abre un puerto a la red.** La unidad enlaza todas las interfaces hasta que tú la
   amplías.
 
 ## Véase también

@@ -7,6 +7,8 @@ package main
 import (
 	"testing"
 
+	"github.com/spf13/cobra"
+
 	"github.com/olivaresai/olivares/core/webaddr"
 )
 
@@ -47,8 +49,16 @@ func TestConsoleAddressFromABind(t *testing.T) {
 }
 
 // TestNewQuickstartCmdSecureByConstruction asserts quickstart cannot be talked
-// into the insecure / demo paths: those flags do not exist on it, and its listen
-// default is loopback. The secure posture is structural, not a runtime check.
+// into the insecure / demo paths: those flags do not exist on it. The secure
+// posture is structural, not a runtime check.
+//
+// IT NO LONGER ASSERTS A LOOPBACK BIND, and the reason is the point of D18: the
+// bind was never what made this path secure. TLS is on, there are no default
+// credentials and first setup is gated by a single-use token — none of which
+// depends on where the socket is. What the loopback default did do was hide a
+// correctly-secured console from the server it was installed on. The default is
+// now the wildcard, and the flags that WOULD make the bind load-bearing
+// (--insecure, --seed-demo) are still absent from this command.
 func TestNewQuickstartCmdSecureByConstruction(t *testing.T) {
 	t.Parallel()
 	cmd := newQuickstartCmd()
@@ -57,12 +67,67 @@ func TestNewQuickstartCmdSecureByConstruction(t *testing.T) {
 	}
 	if f := cmd.Flags().Lookup("listen"); f == nil {
 		t.Fatal("missing --listen flag")
-	} else if f.DefValue != "127.0.0.1:8443" {
-		t.Errorf("--listen default = %q, want loopback 127.0.0.1:8443", f.DefValue)
+	} else if f.DefValue != defaultHTTPListen {
+		t.Errorf("--listen default = %q, want %q", f.DefValue, defaultHTTPListen)
 	}
 	for _, forbidden := range []string{"insecure", "seed-demo"} {
 		if cmd.Flags().Lookup(forbidden) != nil {
 			t.Errorf("quickstart must not expose --%s (secure by construction)", forbidden)
 		}
+	}
+}
+
+// TestServeFamilyBindDefaultsAreTheWildcard is the regression row for D18: every
+// command that BINDS defaults to every interface, and every default is the one
+// constant. A command that spells its own default is how the product came to have
+// eight of them.
+func TestServeFamilyBindDefaultsAreTheWildcard(t *testing.T) {
+	t.Parallel()
+	if defaultHTTPListen != ":8443" || defaultGRPCListen != ":8444" {
+		t.Fatalf("bind defaults are %q/%q, want the dual-stack wildcards :8443/:8444",
+			defaultHTTPListen, defaultGRPCListen)
+	}
+	// ":8443" must not be readable as loopback by the classifier that gates
+	// --insecure and --seed-demo: if it were, widening the default would have
+	// silently widened plaintext exposure too.
+	for _, addr := range []string{defaultHTTPListen, defaultGRPCListen} {
+		if hostIsLoopback(addr) {
+			t.Errorf("hostIsLoopback(%q) = true; the wildcard default must not pass the plaintext guard", addr)
+		}
+	}
+	for _, c := range []struct {
+		name string
+		cmd  *cobra.Command
+		grpc bool
+	}{
+		{name: "serve", cmd: newServeCmd(), grpc: true},
+		{name: "quickstart", cmd: newQuickstartCmd(), grpc: true},
+	} {
+		if f := c.cmd.Flags().Lookup("listen"); f == nil {
+			t.Errorf("%s: missing --listen", c.name)
+		} else if f.DefValue != defaultHTTPListen {
+			t.Errorf("%s: --listen default = %q, want %q", c.name, f.DefValue, defaultHTTPListen)
+		}
+		if !c.grpc {
+			continue
+		}
+		if f := c.cmd.Flags().Lookup("grpc-listen"); f == nil {
+			t.Errorf("%s: missing --grpc-listen", c.name)
+		} else if f.DefValue != defaultGRPCListen {
+			t.Errorf("%s: --grpc-listen default = %q, want %q", c.name, f.DefValue, defaultGRPCListen)
+		}
+	}
+	// `quickstart governed-rag` carries its own options struct rather than cobra
+	// defaults, so it is checked where it is actually set.
+	rag := newQuickstartGovernedRAGOptions()
+	if rag.listen != defaultHTTPListen || rag.grpcListen != defaultGRPCListen {
+		t.Errorf("quickstart governed-rag binds %q/%q, want %q/%q",
+			rag.listen, rag.grpcListen, defaultHTTPListen, defaultGRPCListen)
+	}
+	// The agent gateway is NOT part of this change and stays loopback: it is an
+	// opt-in surface with its own guard, and this row exists so widening it later
+	// is a decision somebody makes on purpose.
+	if rag.agentGatewayListen != "127.0.0.1:8446" {
+		t.Errorf("agent gateway bind = %q, want the unchanged loopback default", rag.agentGatewayListen)
 	}
 }

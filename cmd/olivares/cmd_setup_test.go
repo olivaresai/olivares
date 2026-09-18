@@ -92,7 +92,16 @@ func TestSetupInteractivePostgres(t *testing.T) {
 	}
 }
 
-// TestSetupInteractiveEval proves the minimal eval flow yields a loopback SQLite plan.
+// TestSetupInteractiveEval proves the minimal eval flow yields a SQLite plan on
+// the product's one bind default, and that accepting every default still produces
+// a plan that validates.
+//
+// IT USED TO REQUIRE A LOOPBACK BIND (D18, 2026-09-17). The wizard had its own
+// answer to "where does this listen", so the product had two: a wizard-made
+// install was reachable only from the machine it was installed on while the same
+// engine started by hand was reachable from the network. One default, named in
+// binddefaults.go, is the whole point — the operator who wants loopback is offered
+// it by name in the prompt, which the next row measures.
 func TestSetupInteractiveEval(t *testing.T) {
 	t.Parallel()
 	p, _ := scriptedPrompter([]string{"1", ""}) // profile eval, default data dir
@@ -103,11 +112,44 @@ func TestSetupInteractiveEval(t *testing.T) {
 	if plan.Profile != profileEval || plan.Engine != "sqlite" {
 		t.Fatalf("eval plan = %q/%q", plan.Profile, plan.Engine)
 	}
-	if !hostIsLoopback(plan.Listen) {
-		t.Errorf("eval listen %q is not loopback", plan.Listen)
+	if plan.Listen != defaultHTTPListen || plan.GRPCListen != defaultGRPCListen {
+		t.Errorf("eval binds %q/%q, want the product defaults %q/%q",
+			plan.Listen, plan.GRPCListen, defaultHTTPListen, defaultGRPCListen)
 	}
 	if err := plan.validate(); err != nil {
 		t.Fatalf("eval plan invalid: %v", err)
+	}
+}
+
+// TestSetupInteractiveOffersTheLoopbackRestriction measures the other half of the
+// decision: a wider default is only defensible if the narrower one is offered in
+// the same breath. The prompt must name the exact address to type, and the note
+// that follows a wildcard answer must describe the posture truthfully — TLS on, no
+// default credentials — rather than claiming a proxy is required.
+func TestSetupInteractiveOffersTheLoopbackRestriction(t *testing.T) {
+	t.Parallel()
+	// single-node-prod is the profile that asks the listener questions at all.
+	p, out := scriptedPrompter([]string{"", "", "", "", "", "", ""})
+	plan, err := buildPlanInteractive(dummyCmd(), p, t.TempDir())
+	if err != nil {
+		t.Fatalf("buildPlanInteractive: %v", err)
+	}
+	if plan.Profile != profileSingleNode {
+		t.Fatalf("scripted the wrong profile: %q", plan.Profile)
+	}
+	if plan.Listen != defaultHTTPListen {
+		t.Fatalf("accepting the default gave %q, want %q", plan.Listen, defaultHTTPListen)
+	}
+	transcript := out.String()
+	if !strings.Contains(transcript, loopbackHTTPListen) {
+		t.Errorf("the listener prompt does not name %q as the way to restrict the bind:\n%s",
+			loopbackHTTPListen, transcript)
+	}
+	if !strings.Contains(transcript, "accepts connections from the network") {
+		t.Errorf("a wildcard bind is not named as such in the transcript:\n%s", transcript)
+	}
+	if strings.Contains(transcript, "must sit behind your reverse proxy") {
+		t.Errorf("the transcript still claims a proxy is REQUIRED off-host; TLS is on by default:\n%s", transcript)
 	}
 }
 

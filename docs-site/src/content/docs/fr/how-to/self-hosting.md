@@ -36,7 +36,7 @@ pour les sites déconnectés, voir
 |---|---|
 | **Identifiants** | aucun. Au premier démarrage, un **jeton d'amorçage à usage unique** (`olst_…`) est affiché ; vous créez le premier administrateur avec lui. |
 | **TLS** | activé par défaut. `--insecure` (texte en clair) est réservé au développement en local. |
-| **Liaison** | le binaire se lie à la **boucle locale (loopback)** par défaut ; exposez-le délibérément. |
+| **Liaison** | **toutes les interfaces** (`:8443`, `:8444`) par défaut : c'est un serveur. Utilisez `--listen 127.0.0.1:8443 --grpc-listen 127.0.0.1:8444` pour le restreindre à cet hôte. |
 | **Licence** | Dans le binaire ouvert (AGPL), la licence est validée **hors ligne** (Ed25519) et sert uniquement d'attestation — elle ne conditionne ni ne dégrade jamais le produit ouvert, et cela ne change pas. Les add-ons commerciaux sont un droit à terme payé fourni sous la forme d'un **accès par abonnement aux dépôts enterprise** (le modèle SUSE/Novell) : l'obtention des add-ons et la réception de leurs mises à jour — mises à jour de sécurité comprises — exigent ce droit. Les environnements air-gapped sont desservis comme chez SUSE, au moyen d'un miroir local qui reste soumis à ce droit. |
 | **Télémétrie de retour** | désactivée. Le moteur n'effectue aucun appel sortant obligatoire au démarrage. |
 

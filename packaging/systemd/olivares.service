@@ -2,9 +2,13 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 #
 # systemd unit for a bare-metal install (shipped by the .deb/.rpm packages and
-# by scripts/install.sh). The .apk ships an OpenRC unit instead. Secure defaults from docs/SECURITY-HARDENING.md: loopback-only listeners and a
-# self-signed cert generated in the data dir on first boot. Front it with your reverse
-# proxy, or widen the listen address via OLIVARES_EXTRA_ARGS in /etc/olivares/olivares.env.
+# by scripts/install.sh). The .apk ships an OpenRC unit instead. Secure defaults from
+# docs/SECURITY-HARDENING.md: TLS on with a self-signed cert generated in the data dir on
+# first boot, and no default credentials. The listeners are the dual-stack wildcard — this
+# is a server, and the bind was never what made it safe. To restrict the console to this
+# host, set OLIVARES_EXTRA_ARGS=--listen=127.0.0.1:8443 --grpc-listen=127.0.0.1:8444 in
+# /etc/olivares/olivares.env: those flags are appended after the ones below and the later
+# flag on the command line wins. Front it with your reverse proxy for a trusted cert.
 [Unit]
 Description=Olivares AI — self-hosted engine for enterprise AI
 Documentation=https://github.com/olivaresai/olivares
@@ -19,8 +23,8 @@ Group=olivares
 EnvironmentFile=-/etc/olivares/olivares.env
 ExecStart=/usr/bin/olivares serve \
   --data-dir=/var/lib/olivares \
-  --listen=127.0.0.1:8443 \
-  --grpc-listen=127.0.0.1:8444 \
+  --listen=:8443 \
+  --grpc-listen=:8444 \
   --checkpoint-interval=1h \
   $OLIVARES_EXTRA_ARGS
 # `systemctl reload olivares` reconciles the observation-source roster WITHOUT a restart

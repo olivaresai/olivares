@@ -200,8 +200,14 @@ func linesBetween(s, from, to string) int {
 	return -1
 }
 
-// A WILDCARD BIND IS NAMED AS A BIND, and the localhost it offers is offered as a
-// same-machine address and never as reachability from anywhere else.
+// A WILDCARD BIND IS NAMED AS A BIND, AND THE PANEL LISTS WHAT IT ANSWERS AT.
+//
+// The earlier version of this row required the sentence "the URL above is the one
+// that works on this machine" and nothing else. That sentence was true and it was
+// the whole defect: the reader is on a server over SSH, and the single address the
+// panel offered is the one address their browser cannot open. D18 replaced it with
+// the list, so the row now measures the list — and still measures that nothing
+// claims reachability, which this process cannot observe.
 func TestAWildcardBindIsNamedAndNeverPromisesRemoteReach(t *testing.T) {
 	t.Parallel()
 	for _, listen := range []string{":8443", "0.0.0.0:8443", "[::]:8443"} {
@@ -209,19 +215,85 @@ func TestAWildcardBindIsNamedAndNeverPromisesRemoteReach(t *testing.T) {
 		if got.URL() != "https://localhost:8443" {
 			t.Errorf("%q: panel address = %q, want an openable same-machine address", listen, got.URL())
 		}
-		if !strings.Contains(got.Advice, "bound to EVERY interface") {
+		if !strings.Contains(got.Advice, "EVERY interface of this host") {
 			t.Errorf("%q: the bind was printed as if it were an address:\n%s", listen, got.Advice)
 		}
-		if !strings.Contains(got.Advice, "works on this machine") {
-			t.Errorf("%q: the advice does not limit the address to this machine:\n%s", listen, got.Advice)
+		if !strings.Contains(got.Advice, "the console answers") {
+			t.Errorf("%q: the advice does not offer the addresses the bind answers at:\n%s", listen, got.Advice)
 		}
-		if !strings.Contains(got.Advice, "--public-url") {
-			t.Errorf("%q: the advice names no way out:\n%s", listen, got.Advice)
+		// Loopback is always in the list, and it is LAST: whoever reads this in a
+		// terminal on the machine can use it, and whoever reads it over SSH wants
+		// the routable ones first.
+		addrs := got.Reachable
+		if len(addrs) == 0 {
+			t.Fatalf("%q: no address was enumerated at all", listen)
+		}
+		if last := addrs[len(addrs)-1]; last.Origin != "https://127.0.0.1:8443" {
+			t.Errorf("%q: last enumerated address = %q, want loopback last", listen, last.Origin)
+		}
+		for i, a := range addrs[:len(addrs)-1] {
+			if a.IsLoopback() {
+				t.Errorf("%q: loopback address %q at position %d, want it only last", listen, a.Origin, i)
+			}
+		}
+		// NOTHING in the paragraph may promise reach. A firewall, a route and a NAT
+		// are all invisible to this process.
+		for _, forbidden := range []string{"reachable from", "you can reach", "is reachable"} {
+			if strings.Contains(got.Advice, forbidden) {
+				t.Errorf("%q: the advice claims reachability (%q):\n%s", listen, forbidden, got.Advice)
+			}
 		}
 	}
-	// Non-firing: a concrete bind is not called a wildcard.
-	if a := resolveConsoleAddress(webaddr.Address{}, "panel.example.com:8443", false).withPlan(webAuthnPlan{Source: "per-request"}).Advice; strings.Contains(a, "EVERY interface") {
-		t.Errorf("a concrete bind was called a wildcard:\n%s", a)
+	// Non-firing: a concrete bind is not called a wildcard and enumerates nothing.
+	concrete := resolveConsoleAddress(webaddr.Address{}, "panel.example.com:8443", false).withPlan(webAuthnPlan{Source: "per-request"})
+	if strings.Contains(concrete.Advice, "EVERY interface") {
+		t.Errorf("a concrete bind was called a wildcard:\n%s", concrete.Advice)
+	}
+	if len(concrete.Reachable) != 0 {
+		t.Errorf("a concrete bind enumerated %d addresses; there is nothing to enumerate", len(concrete.Reachable))
+	}
+}
+
+// THE CONTAINER SENTENCE IS A DIFFERENT REMEDY, NOT A HEDGE. Inside a container
+// the enumerated addresses are the container's, and the useful address is the
+// published port on a host this process cannot see — so the paragraph must send
+// the reader to the host, and must say where the setup token is, because it is
+// printed to a log they are not looking at.
+func TestContainerAdviceSendsTheReaderToThePublishedPort(t *testing.T) {
+	t.Parallel()
+	base := resolveConsoleAddress(webaddr.Address{}, ":8443", false)
+	base.Container = true
+	got := base.withPlan(webAuthnPlan{Source: "per-request"}).Advice
+	for _, want := range []string{"INSIDE this container", "published port", "OLIVARES_PUBLIC_URL", "first-boot"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("the container advice does not mention %q:\n%s", want, got)
+		}
+	}
+	// The mapped port named is the one this process listens on, taken from the
+	// bind rather than assumed.
+	if !strings.Contains(got, "mapped to 8443") {
+		t.Errorf("the container advice does not name the container-side port:\n%s", got)
+	}
+	odd := resolveConsoleAddress(webaddr.Address{}, ":19443", false)
+	odd.Container = true
+	if a := odd.withPlan(webAuthnPlan{Source: "per-request"}).Advice; !strings.Contains(a, "mapped to 19443") {
+		t.Errorf("a non-default port was not carried into the container advice:\n%s", a)
+	}
+}
+
+// WHEN ENUMERATION ANSWERS NOTHING, THE PANEL SAYS SO. An empty list printed as a
+// list is a panel that looks broken; the fallback names the one address it is
+// sure of and states what it could not find out.
+func TestWildcardAdviceWithoutAnyEnumeratedAddress(t *testing.T) {
+	t.Parallel()
+	addr := resolveConsoleAddress(webaddr.Address{}, ":8443", false)
+	addr.Reachable = nil
+	got := addr.withPlan(webAuthnPlan{Source: "per-request"}).Advice
+	if !strings.Contains(got, "could not enumerate") {
+		t.Errorf("the fallback does not state what went unanswered:\n%s", got)
+	}
+	if !strings.Contains(got, "https://localhost:8443") {
+		t.Errorf("the fallback does not offer the one address it is sure of:\n%s", got)
 	}
 }
 

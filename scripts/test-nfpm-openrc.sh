@@ -370,7 +370,7 @@ inspect_apk() {
 	grep -Fq 'command_user="olivares:olivares"' "$init" || fail "apk OpenRC unit lost service account"
 	grep -Fq 'command="/usr/bin/olivares"' "$init" || fail "apk OpenRC unit lost the product binary"
 	grep -Fq 'serve --data-dir=/var/lib/olivares' "$init" || fail "apk OpenRC unit lost product serve args"
-	grep -Fq -- '--listen=127.0.0.1:8443' "$init" || fail "apk OpenRC unit lost loopback HTTP listen"
+	grep -Fq -- '--listen=:8443' "$init" || fail "apk OpenRC unit lost its wildcard HTTP listen"
 	grep -Fq 'output_log="/var/log/olivares.log"' "$init" || fail "apk OpenRC unit lost /var/log/olivares.log"
 	if grep -Fq 'output_logger' "$init"; then
 		fail "apk OpenRC unit pipes the product into logger (SIGPIPE on Alpine without syslogd)"

@@ -154,7 +154,7 @@ func newRootCmd() *cobra.Command {
 	root.PersistentFlags().VarP(&outputFlagValue{value: "text"}, "output", "o",
 		"global output format: text or json (report commands keep json unless -o is given)")
 	_ = root.RegisterFlagCompletionFunc("output", completeOutput)
-	root.AddCommand(newQuickstartCmd(), newSetupCmd(), newConfigCmd(), newAuthCmd(), newDBCmd(), newMigrateCmd(), newVersionCmd(), newStatusCmd(), newReadyzCmd(), newDoctorCmd(), newWebUIFilesCmd(), newServeCmd(), newCollectorCmd(), newLicenseCmd(), newUpgradeCmd(), newUninstallCmd(), newReleaseCmd(), newAuditCmd(), newDDILCmd(), newDRCmd(), newOpenAPICmd(), newClaudeHookCmd(), newCodexHookCmd(), newGrokHookCmd(), newHookPEPCmd(), newKeysCmd(), newEvalsCmd(), newAgentCmd(), newWorkCmd(), newCodexCmd(), newMCPCmd(), newThreatIntelCmd(), newHooksCmd(), newSecretsCmd(), newSourcesCmd(), newConnectorCmd(), newSuperadminCmd(), newEventingCmd(), newSecurityCmd(), newFindingsCmd(), newComplianceCmd(), newSupportCmd(), newCompletionCmd(root), newCommandsCmd(), newFirstPartyBinsCmd(), newExtractCmd(), newTokensCmd(), newUsersCmd(), newMembersCmd(), newTenantsCmd(), newGovernanceCmd(), newCapabilitiesCmd())
+	root.AddCommand(newQuickstartCmd(), newFirstBootCmd(), newSetupCmd(), newConfigCmd(), newAuthCmd(), newDBCmd(), newMigrateCmd(), newVersionCmd(), newStatusCmd(), newReadyzCmd(), newDoctorCmd(), newWebUIFilesCmd(), newServeCmd(), newCollectorCmd(), newLicenseCmd(), newUpgradeCmd(), newUninstallCmd(), newReleaseCmd(), newAuditCmd(), newDDILCmd(), newDRCmd(), newOpenAPICmd(), newClaudeHookCmd(), newCodexHookCmd(), newGrokHookCmd(), newHookPEPCmd(), newKeysCmd(), newEvalsCmd(), newAgentCmd(), newWorkCmd(), newCodexCmd(), newMCPCmd(), newThreatIntelCmd(), newHooksCmd(), newSecretsCmd(), newSourcesCmd(), newConnectorCmd(), newSuperadminCmd(), newEventingCmd(), newSecurityCmd(), newFindingsCmd(), newComplianceCmd(), newSupportCmd(), newCompletionCmd(root), newCommandsCmd(), newFirstPartyBinsCmd(), newExtractCmd(), newTokensCmd(), newUsersCmd(), newMembersCmd(), newTenantsCmd(), newGovernanceCmd(), newCapabilitiesCmd())
 	// The observe-and-report lane: one top-level command per module namespace it
 	// covers, named after the namespace so `olivares <ns>` and /v1/m/<ns>/ are the
 	// same word. Their shared transport is cmd_observeplane.go.
@@ -194,7 +194,7 @@ func newRootCmd() *cobra.Command {
 // command cannot land ungrouped.
 var commandGroups = map[string]string{
 	// Setup & configuration.
-	"quickstart": "setup", "setup": "setup", "config": "setup", "auth": "setup", "db": "setup",
+	"quickstart": "setup", "first-boot": "setup", "setup": "setup", "config": "setup", "auth": "setup", "db": "setup",
 	"migrate": "setup", "keys": "setup", "completion": "setup", "connector": "setup",
 	// The browser-free first run (C08-01): the identity families an install must
 	// have before anything else in this binary can authenticate.

@@ -8,7 +8,7 @@ description: "Olivares AI control plane 经过验证的配置接口面：serve �
 此处列出的一切都取自引擎自身的命令定义与组合根（composition root）。凡是无法在源代码中确认的设置，均不列出。关于这些默认值背后的概念性安全姿态，参见 [安全模型](/zh/explanation/security/security-model/)；关于可运行的端到端路径，参见 [自托管](/zh/how-to/self-hosting/)。
 
 :::note[配置哲学]
-引擎由标志和环境变量配置，而非由一个庞杂的配置文件。它读取的每个变量都列在下文，并从源码本身生成。配置真实数据源的密钥保留在由环境变量引用的、运营方持有的文件中 —— 绝不进入存储。默认值的选择以失败时关闭（fail closed）为准：loopback 绑定、TLS 开启、不存在默认凭据。
+引擎由标志和环境变量配置，而非由一个庞杂的配置文件。它读取的每个变量都列在下文，并从源码本身生成。配置真实数据源的密钥保留在由环境变量引用的、运营方持有的文件中 —— 绝不进入存储。默认值的选择以失败时关闭（fail closed）为准：TLS 开启、不存在默认凭据、设置令牌单次使用。绑定是双栈通配符（`:8443`、`:8444`）——这是一台服务器，而绑定从来不是让它安全的东西。
 :::
 
 ## `serve` 子命令
@@ -17,8 +17,8 @@ description: "Olivares AI control plane 经过验证的配置接口面：serve �
 
 | 标志 | 默认值 | 用途 |
 | --- | --- | --- |
-| `--listen` | `127.0.0.1:8443` | HTTP 监听地址（REST API + 内嵌 Web UI）。 |
-| `--grpc-listen` | `127.0.0.1:8444` | gRPC 监听地址（control-plane / 采集器摄取 API）。 |
+| `--listen` | `:8443` | HTTP 监听地址（REST API + 内嵌 Web UI）。 |
+| `--grpc-listen` | `:8444` | gRPC 监听地址（control-plane / 采集器摄取 API）。 |
 | `--data-dir` | `$OLIVARES_DATA_DIR`、已存在的 `./olivares-data` 安装，否则 `$XDG_DATA_HOME/olivares` 或 `~/.local/share/olivares` | 数据目录：审计签名密钥、TLS 材料，以及（对 SQLite 而言）存储文件。 |
 | `--engine` | `sqlite` | 存储引擎：`sqlite` 或 `postgres`。 |
 | `--dsn` | 空（数据目录中的 SQLite 文件） | 存储连接字符串。 |
@@ -442,13 +442,13 @@ SQLite 是默认值且不需要任何外部服务。选择 `postgres` 即选择�
 | 凭据 | 不随附 | 不存在默认用户名或密码。在没有任何用户的首次启动时，引擎铸造一个单次使用的设置令牌，并仅将其打印到标准输出 —— 绝不打印到日志。 |
 | 首次启动设置 | 一次性令牌 | 管理员用该令牌创建第一个用户，然后登录。该令牌只显示一次且单次使用。 |
 | 传输 | TLS 开启 | HTTP 与 gRPC 默认通过 TLS 提供服务；若未提供证书，则在数据目录中生成一份自签名证书，并记录其证书指纹与其 `--pin-sha256` 值。 |
-| 绑定地址 | Loopback | `--listen` 与 `--grpc-listen` 默认为 `127.0.0.1`。引擎绑定本机，直到你刻意将其发布。 |
+| 绑定地址 | 所有网络接口 | `--listen` 与 `--grpc-listen` 默认为 `:8443` 与 `:8444`。要把引擎限制在本机，请刻意传入 `--listen 127.0.0.1:8443 --grpc-listen 127.0.0.1:8444`。 |
 | 明文模式 | 关 | `--insecure` 是提供明文服务的唯一途径，而 gRPC 路径失败时关闭（fail closed）而非降级。仅供 localhost 开发使用。 |
 | 演示填充 | 关 | `--seed-demo` 默认关闭，并拒绝任何非 loopback 绑定，因为它会铸造一个公开密码的演示管理员。 |
 | 遥测回传 | 关 | 引擎不向母公司回传（phone home）：不存在向厂商发送遥测的通道，运行过程中也不会作为副作用发送任何内容。出站连接存在于你所配置的源，以及你主动运行的 `olivares upgrade`——除非用 `--endpoint` 或 `--bundle` 指向别处，否则它会连接更新通道。这正是使[离线（air-gapped）安装](/zh/how-to/air-gap-install/)在零出口（egress）下成为可能的原因。 |
 
-:::caution[默认 loopback，按需暴露]
-默认的 loopback 绑定意味着在你更改它们之前，引擎在本机之外不可达。当你确实将其发布时 —— 例如通过在 Docker Compose 中映射一个主机端口 —— 那是一次刻意的运营决策，而 TLS 已经开启以保护它。不要把一个已发布的绑定与 `--insecure` 搭配使用。
+:::caution[默认可达，按需限制]
+默认绑定会在所有网络接口上接受连接：这是一台服务器，保护它的是默认启用的 TLS、没有任何默认凭据，以及单次使用的设置令牌。刻意的运营决策是**限制**它——二进制用 `--listen 127.0.0.1:8443`，Compose 栈用 `OLIVARES_BIND=127.0.0.1`。绝不要把非 loopback 绑定与 `--insecure` 搭配：引擎会拒绝这种组合。
 :::
 
 ### 首次启动，实践中

@@ -236,8 +236,8 @@ assert "olivares_load_env" in openrc_env
 assert "command_user=\"olivares:olivares\"" in openrc_unit
 assert "command=\"/usr/bin/olivares\"" in openrc_unit
 assert "serve --data-dir=/var/lib/olivares" in openrc_unit
-assert "--listen=127.0.0.1:8443" in openrc_unit
-assert "--grpc-listen=127.0.0.1:8444" in openrc_unit
+assert "--listen=:8443" in openrc_unit
+assert "--grpc-listen=:8444" in openrc_unit
 assert "/usr/lib/olivares/openrc-load-env.sh" in openrc_unit
 assert "output_log=\"/var/log/olivares.log\"" in openrc_unit
 assert "error_log=\"/var/log/olivares.log\"" in openrc_unit

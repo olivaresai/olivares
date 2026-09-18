@@ -13,8 +13,10 @@ par un fichier de configuration tentaculaire. Toutes les variables qu'il lit son
 répertoriées ci-dessous, générées à partir des sources elles-mêmes. Les secrets qui
 câblent les sources réelles restent dans des fichiers détenus par l'opérateur et
 référencés par variable d'environnement — jamais dans le stockage. Les valeurs par
-défaut sont choisies pour échouer en mode fermé (fail closed) : liaisons sur la boucle
-locale, TLS activé, aucun identifiant par défaut.
+défaut sont choisies pour échouer en mode fermé (fail closed) : TLS activé, aucun
+identifiant par défaut, un jeton de configuration à usage unique. Les liaisons sont le
+joker dual-stack (`:8443`, `:8444`) — c'est un serveur, et la liaison n'a jamais été ce
+qui le rendait sûr.
 :::
 
 ## La sous-commande `serve`
@@ -23,8 +25,8 @@ locale, TLS activé, aucun identifiant par défaut.
 
 | Drapeau | Défaut | Objet |
 | --- | --- | --- |
-| `--listen` | `127.0.0.1:8443` | Adresse d'écoute HTTP (API REST + interface web embarquée). |
-| `--grpc-listen` | `127.0.0.1:8444` | Adresse d'écoute gRPC (API du control plane / d'ingestion du collecteur). |
+| `--listen` | `:8443` | Adresse d'écoute HTTP (API REST + interface web embarquée). |
+| `--grpc-listen` | `:8444` | Adresse d'écoute gRPC (API du control plane / d'ingestion du collecteur). |
 | `--data-dir` | `$OLIVARES_DATA_DIR`, une installation existante dans `./olivares-data`, sinon `$XDG_DATA_HOME/olivares` ou `~/.local/share/olivares` | Répertoire de données : clé de signature d'audit, matériel TLS, et (pour SQLite) le fichier de stockage. |
 | `--engine` | `sqlite` | Moteur de stockage : `sqlite` ou `postgres`. |
 | `--dsn` | vide (fichier SQLite dans le répertoire de données) | Chaîne de connexion au stockage. |
@@ -450,13 +452,13 @@ Ce sont les postures en vigueur sans aucune configuration au-delà de `serve`. C
 | Identifiants | Aucun livré | Aucun nom d'utilisateur ni mot de passe par défaut n'existe. Au premier démarrage sans utilisateurs, le moteur émet un jeton de configuration à usage unique et l'affiche sur la sortie standard uniquement — jamais dans les journaux. |
 | Configuration au premier démarrage | Jeton à usage unique | L'administrateur crée le premier utilisateur avec ce jeton, puis se connecte. Le jeton est affiché une fois et est à usage unique. |
 | Transport | TLS activé | HTTP et gRPC servent sur TLS par défaut ; un certificat auto-signé est généré dans le répertoire de données si aucun n'est fourni, et son empreinte de certificat ainsi que sa valeur `--pin-sha256` sont journalisées. |
-| Adresse de liaison | Boucle locale | `--listen` et `--grpc-listen` se lient par défaut à `127.0.0.1`. Le moteur se lie à l'hôte local jusqu'à ce que vous le publiiez délibérément. |
+| Adresse de liaison | Toutes les interfaces | `--listen` et `--grpc-listen` se lient par défaut à `:8443` et `:8444`. Restreignez le moteur à son propre hôte délibérément, avec `--listen 127.0.0.1:8443 --grpc-listen 127.0.0.1:8444`. |
 | Mode texte clair | Off | `--insecure` est le seul moyen de servir en texte clair, et le chemin gRPC échoue en mode fermé plutôt que de se rétrograder. Destiné au développement localhost uniquement. |
 | Amorçage de démo | Off | `--seed-demo` est désactivé par défaut et refuse toute liaison non-boucle-locale parce qu'il émet un administrateur de démo à mot de passe public. |
 | Télémétrie « phone home » | Off | Le moteur ne « rappelle pas à la maison » : il n'existe aucun canal de télémétrie vers l'éditeur, et rien n'est envoyé comme effet de bord de l'exécution. Les connexions sortantes existent vers les sources que vous configurez, plus `olivares upgrade` lorsque vous le lancez — il joint le canal de mises à jour sauf si `--endpoint` ou `--bundle` le pointe ailleurs. C'est ce qui rend possible l'[installation en environnement isolé](/fr/how-to/air-gap-install/) avec zéro sortie (egress). |
 
-:::caution[Boucle locale par défaut, exposé à dessein]
-Les liaisons par défaut sur la boucle locale signifient que le moteur n'est pas joignable hors de l'hôte tant que vous ne les changez pas. Quand vous le publiez — par exemple en mappant un port hôte dans Docker Compose — c'est une décision délibérée de l'opérateur, et TLS est déjà activé pour le protéger. Ne couplez pas une liaison publiée avec `--insecure`.
+:::caution[Joignable par défaut, restreint à dessein]
+Les liaisons par défaut acceptent les connexions sur toutes les interfaces : c'est un serveur, et ce qui le protège, c'est TLS activé, aucun identifiant par défaut et un jeton à usage unique. Le restreindre est la décision délibérée de l'opérateur — `--listen 127.0.0.1:8443` pour le binaire, `OLIVARES_BIND=127.0.0.1` pour la stack Compose. Ne couplez jamais une liaison non-boucle-locale avec `--insecure` : le moteur refuse cette combinaison.
 :::
 
 ### Premier démarrage, en pratique

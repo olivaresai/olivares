@@ -186,8 +186,8 @@ func (p *prompter) askChoice(label string, opts []string, def int) string {
 func newPlanForProfile(profile string) installPlan {
 	p := installPlan{
 		Profile:    profile,
-		Listen:     "127.0.0.1:8443",
-		GRPCListen: "127.0.0.1:8444",
+		Listen:     defaultHTTPListen,
+		GRPCListen: defaultGRPCListen,
 		Engine:     string(engineSQLite),
 	}
 	if profile == profilePostgresPro {
@@ -208,7 +208,9 @@ func buildPlanInteractive(cmd *cobra.Command, p *prompter, secretsDir string) (i
 
 	switch profile {
 	case profileEval:
-		// The quickstart shape, but written to a unit: loopback SQLite, self-signed.
+		// The quickstart shape, but written to a unit: SQLite, self-signed TLS, and
+		// the product's own bind default — the console answers on the network, as
+		// it does for every other profile (binddefaults.go).
 		plan.DataDir = p.ask("Data directory", defaultUnitDataDir)
 	case profileSingleNode:
 		askListeners(p, &plan, false)
@@ -247,10 +249,13 @@ func buildPlanInteractive(cmd *cobra.Command, p *prompter, secretsDir string) (i
 
 func askListeners(p *prompter, plan *installPlan, _ bool) {
 	plan.DataDir = p.ask("Data directory", defaultUnitDataDir)
-	plan.Listen = p.ask("HTTP listen (the console + REST). Widen only behind a TLS-terminating proxy", plan.Listen)
+	plan.Listen = p.ask("HTTP listen (the console + REST). The default is every interface; enter "+loopbackHTTPListen+" to restrict it to this host", plan.Listen)
 	plan.GRPCListen = p.ask("gRPC listen (collectors)", plan.GRPCListen)
 	if !hostIsLoopback(plan.Listen) {
-		p.printf("  note: a non-loopback bind must sit behind your reverse proxy / ingress (docs/08).\n")
+		p.printf("  note: this bind accepts connections from the network. The engine serves TLS with\n" +
+			"  a self-signed certificate and has no default credentials, so that is a supported\n" +
+			"  posture; put a reverse proxy or ingress in front of it for a certificate a browser\n" +
+			"  trusts and for a host name passkeys can use (docs/08).\n")
 	}
 }
 

@@ -112,8 +112,9 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now olivares
 ```
 
-引擎默认绑定 **loopback** —— `127.0.0.1:8443` 是有意为之。
-之后再将它对外暴露，置于你自己的 ingress 和 TLS 之后，作为一个明确的决定
+引擎默认绑定**所有网络接口**（`:8443`）：它是一台服务器。上面的命令传入
+`--listen 127.0.0.1:8443`，把本教程的安装限制在你所在的这台主机上——这是一个明确的决定。
+去掉这两个标志，控制台就会从网络应答；那时请把你自己的 ingress 和 TLS 放在它前面
 （参见[加固](/zh/how-to/security-hardening/)）。
 
 <Aside type="note" title="TLS 已开启，使用自签名证书">
