@@ -212,7 +212,12 @@ jobs:
         run: |
           set -euo pipefail
           bash scripts/ci-postgres-service.sh resolve
-          echo "OLIVARES_TEST_PG_EXPECT_MAJOR=16" >> "$GITHUB_ENV"
+          # No OLIVARES_TEST_PG_EXPECT_MAJOR here, on purpose: that variable declares a
+          # Postgres MAJOR-MATRIX pass and the matrix tests then REQUIRE
+          # OLIVARES_TEST_POSTGRES_MAJOR_DSNS (guardmajormatrix_pg_test.go refuses an
+          # incomplete declaration instead of skipping). This job is the single-major
+          # PR suite; the matrix is pg-majors.yml, which sets both. Declaring the major
+          # here failed nine sqlstore tests on every PR (run 35283849584, 2026-09-17).
       - name: provision postgres roles (least-privilege app role + BYPASSRLS admin)
         env:
           PGPASSWORD: postgres
