@@ -194,7 +194,7 @@ func newRootCmd() *cobra.Command {
 // command cannot land ungrouped.
 var commandGroups = map[string]string{
 	// Setup & configuration.
-	"quickstart": "setup", "setup": "setup", "config": "setup", "auth": "setup", "db": "setup",
+	"quickstart": "setup", "first-boot": "setup", "setup": "setup", "config": "setup", "auth": "setup", "db": "setup",
 	"migrate": "setup", "keys": "setup", "completion": "setup", "connector": "setup",
 	// The browser-free first run (C08-01): the identity families an install must
 	// have before anything else in this binary can authenticate.
