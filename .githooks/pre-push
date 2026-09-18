@@ -598,6 +598,7 @@ echo "pre-push:   web-bundle-freshness + list-truncation-witness + list-truncati
 echo "pre-push:   0022-published-schema + 0022-published-schema:selftest + ver-10-og + ver-10-og:selftest + baseline-shrink + relay-pointer +"
 echo "pre-push:   test:publish-enterprise-artifacts + test:cli-walk + commit-msg-closing + commit-msg-scope + timeout-headroom + test-budget-placement + test-budget-placement:selftest + branch-protection + rebase-web-branch +"
 echo "pre-push:   ci-timeout-arithmetic + ci-timeout-arithmetic:selftest + ci-step-guard + ci-step-guard:selftest + ci-a11y-gate-wrap:selftest + ci-inner-clocks + ci-inner-clocks:selftest + ci-sibling-legs + ci-sibling-legs:selftest +"
+echo "pre-push:   pr-suite-shards + pr-suite-shards:selftest + pr-ci-regime + pr-ci-regime:selftest +"
 echo "pre-push:   test-hook-parallelism + test-hook-parallelism:selftest + ci-secrets-cap + alc-02-f1-hold:selftest + alc-02-f2-hold:selftest + alc-02-f3-hold:selftest +"
 echo "pre-push:   alc-02-f4-hold:selftest + alc-04-xff-hold:selftest + c02-hold-key-until-producer:selftest + c02-r2-key-from-token:selftest + c02-r2-set-key-prep:selftest + c03-02-sign-features-prep:selftest +"
 echo "pre-push:   c03-02-sign-features:selftest + c03-11-fase-r:selftest + c05-14-effect-key-prep:selftest + c13-07-ar-holds-prep:selftest + c13-07-holds + cfg-01-production-hold:selftest + eco-01-activation-hold:selftest +"
@@ -1886,6 +1887,20 @@ task lint:ci-inner-clocks
 task lint:ci-inner-clocks:selftest
 task lint:ci-sibling-legs
 task lint:ci-sibling-legs:selftest
+# ⛔ LAS DOS DE LA REGIMEN DE PR DEL REPOSITORIO PUBLICO, Y ENTRAN HOY (2026-09-18) PORQUE
+# HASTA HOY NO LAS CORRIA NADIE. Medido con `scripts/check-gate-parity.sh --print` sobre
+# `origin/main`: `pr-ci-regime` no aparece NI en SOLO-CI NI en SOLO-GANCHO — es decir, ni el
+# gancho ni `mainline-ci` la invocan. Un gate que nadie corre no es neutro: certifica. Y lo
+# que certificaba en silencio es la unica pareja que decide si una contribucion publica puede
+# mergearse: los contextos que la proteccion EXIGE contra los jobs que pr-ci.yml publica.
+# `pr-suite-shards` entra con ella porque su clase es la misma y es nueva: al partir la suite
+# funcional en turnos, un paquete que no cae en ninguno deja de probarse SIN un rojo —
+# todos los turnos verdes, el check obligatorio verde, y el paquete sin cobertura.
+# Coste medido en esta caja el 2026-09-18: 2,6 s + 8,6 s + 0,08 s + 1,07 s = 12,4 s.
+task lint:pr-suite-shards
+task lint:pr-suite-shards:selftest
+task lint:pr-ci-regime
+task lint:pr-ci-regime:selftest
 # ⛔ NO BLOQUEANTE, y no es dejadez: el contraste sol max (an internal design note (not shipped))
 #    encontro DOS clases ALTAS que este guion no puede cerrar — falsos NEGATIVOS (un comentario
 #    gofmt-limpio ENTRE `Parallel` y `()`, asignacion antes del t.Parallel(), un *testing.T con
