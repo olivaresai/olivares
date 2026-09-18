@@ -54,7 +54,7 @@ func TestPlaceholderRegistersNoRouteAtAll(t *testing.T) {
 	if len(reg.patterns) != 0 {
 		t.Fatalf("the placeholder must register NO route, got %d: %v\n"+
 			"A route here must also appear in web/openapi/openapi.beta.json, which is the "+
-			"public document; this lane may not touch web/ and a cockpit operation does not "+
+			"public document; this module may not touch web/ and a cockpit operation does not "+
 			"belong in the public surface.", len(reg.patterns), reg.patterns)
 	}
 	if reg.entities != 0 {

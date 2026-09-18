@@ -225,8 +225,20 @@ async function eligeWorkspaceConcretoK3(page: import('@playwright/test').Page) {
  * through the ordinary login form. Nothing is forged, patched or impersonated. Its secret is random
  * per run and lives only in this process: it never reaches a capture, the evidence, a log or Git.
  * The evidence records the role, the tenant, the user id and the basis.
+ *
+ * ⛔ THE ROLE IS A PARAMETER, AND THE DOOR CHOOSES IT. Measured 2026-09-18: with `editor` the
+ *    administration door answers "Not authorized — You do not have permission to view this",
+ *    because it is gated on `sessions:channel:admin` (`registry.tsx:1224`,
+ *    `modules/sessions/api.go:44`) and the `admin` VERB is granted from the `admin` role up
+ *    (`core/auth/permission.go:33`: "RoleAdmin can additionally manage tenant IAM and settings").
+ *    The handoffs door is a personal read and keeps `editor` — the LOWEST role that can open it,
+ *    which is the honest thing for a capture to photograph. Minting `admin` for every door would
+ *    hide exactly that distinction.
  */
-async function provisionaEditorK3(page: import('@playwright/test').Page) {
+async function provisionaMiembroK3(
+  page: import('@playwright/test').Page,
+  rol: 'editor' | 'admin',
+) {
   const api = page.request
   const entrada = await api.post('/v1/auth/login', {
     data: { email: DEMO_EMAIL, password: DEMO_PASSWORD },
@@ -241,7 +253,7 @@ async function provisionaEditorK3(page: import('@playwright/test').Page) {
     'X-Olivares-Tenant': demoTenant,
     'Content-Type': 'application/json',
   }
-  const email = `docs-capture-k3-editor-${randomBytes(6).toString('hex')}@olivares.local`
+  const email = `docs-capture-k3-${rol}-${randomBytes(6).toString('hex')}@olivares.local`
   const clave = randomBytes(24).toString('base64url')
   const creado = await api.post('/v1/users', {
     headers: cabeceras,
@@ -257,7 +269,7 @@ async function provisionaEditorK3(page: import('@playwright/test').Page) {
     data: JSON.stringify({
       user_id: usuario,
       tenant: demoTenant,
-      role: 'editor',
+      role: rol,
     }),
   })
   expect(
@@ -269,7 +281,7 @@ async function provisionaEditorK3(page: import('@playwright/test').Page) {
     clave,
     procedencia: {
       kind: 'tenant-member',
-      role: 'editor',
+      role: rol,
       tenant: demoTenant,
       user_id: usuario,
       basis:
@@ -300,7 +312,7 @@ const VIEWS: {
   ) => Promise<void | Record<string, unknown>>
   // The principal this cell is photographed as when it is NOT the demo global superadmin. One
   // value exists, ratified for communications-handoffs only; every other cell keeps the superadmin.
-  actor?: 'k3-tenant-editor'
+  actor?: 'k3-tenant-editor' | 'k3-tenant-admin'
   // Ver la excepcion documentada en `tomar`: sólo para tomas cuyo sujeto ES un diálogo.
   modal?: boolean
   // La superficie que la toma acredita, cuando NO es el `<h1>` de la vista. Las entradas que no
@@ -690,9 +702,24 @@ const VIEWS: {
     },
   },
   // K3 I2 — the administration door (`doors.administration.title`).
+  //
+  // ⛔ IT IS READ AS A MEMBER, LIKE THE HANDOFFS DOOR, AND FOR A REASON THE PRODUCT STATES.
+  //    The administration route is the console's ONE capability view, and a global account
+  //    never submits its question: `useViewAccess` passes `null` instead of the declared
+  //    surface question when `principal.superadmin === true`
+  //    (`features/navigation/authorization.ts:112`, `globalAccount()` at :177), so the route
+  //    gate renders `GlobalAccountNotice` — "Sign in with a member account … Global accounts
+  //    cannot check access to this view" (`require-permission.tsx:81,133`).
+  //
+  //    Measured 2026-09-18: the harness signed in as the demo global superadmin and this cell
+  //    waited 30 s for `Channel administration` while `main` held that notice. The AUTHORITY
+  //    moved (`7df0764036`, 2026-09-11); the heading did not. The remedy is the one the
+  //    handoffs door already carries — read it as the provisioned tenant editor — and not a
+  //    weaker oracle, because photographing the notice would publish a refusal as the door.
   {
     id: 'communications-administration',
     path: '/communications/administration',
+    actor: 'k3-tenant-admin',
     heading: /^Channel administration$/,
     despues: eligeWorkspaceConcretoK3,
   },
@@ -718,6 +745,16 @@ const VIEWS: {
     //    esta sesion» (`provenance.ts:26`). El filtro no maquilla nada — elige el subconjunto
     //    del que la guia habla. (Veredicto de the planner sobre las 142, 2026-08-31.)
     despues: async (page) => {
+      // ⛔ THE TABLE IS A TAB NOW, AND THIS CAPTURE IS OF THE TABLE. `/sessions` leads with
+      //    the three-pane work surface and keeps the list beside it as a `Table` tab
+      //    (`sessions-workspace-view.tsx:1380-1394`: `TabsTrigger value="table"`, with its
+      //    own comment — "the answer to a problem is never to remove a function"). The source
+      //    filter this capture drives lives in that tab's toolbar, so a click on the combobox
+      //    from the default tab waits 30 s for a control that is not mounted. Measured
+      //    2026-09-18: `locator.click` timed out on `getByRole('combobox', { name: 'All
+      //    sources' })` while the page snapshot showed `tab "Sessions" [selected]`.
+      //    The CONTROL moved; nothing about it is broken.
+      await page.getByRole('tab', { name: 'Table', exact: true }).click()
       await page.getByRole('combobox', { name: 'All sources' }).click()
       await page.getByRole('option', { name: 'Launched', exact: true }).click()
       // ⛔ EL ANILLO DE FOCO SALE EN LA FOTO. Radix devuelve el foco al disparador al cerrar
@@ -1346,10 +1383,20 @@ const VIEWS: {
     path: '/console?tab=connectors',
     settle: 800,
     modal: true,
-    // El dialogo lleva DOS h2: este, que es el DialogTitle, y el CardTitle del panel
-    // (`Step-up authentication required`). Se nombra el que etiqueta al dialogo.
+    // ⛔ EL DIALOGO QUE ABRE «Edit» YA NO ES EL DEL ANFITRION DE STEP-UP. Aqui se nombraba
+    //    `This action needs an elevated session`, que es el DialogTitle de `StepUpHost`
+    //    (`common.json:159`). Medido el 2026-09-18: el dialogo que aparece es el PROPIO del
+    //    conector —`dialog "Edit connector"`— y el step-up se pinta DENTRO de el como panel,
+    //    con el encabezado `Step-up authentication required`
+    //    (`features/identity/assurance.tsx:361`, `assurance.stepUpTitle`).
+    //
+    //    Se nombra el encabezado del PANEL, y eso no es rendirse al DOM: es lo que el lector
+    //    ve y lo que la captura publicada de esta misma vista ya enseñaba
+    //    (`docs-site/public/console/guias-config-step-up-light.png`), donde el DialogTitle
+    //    viejo nunca fue visible. La toma sigue acreditando la misma cosa —el control AAL3
+    //    actuando— por el elemento que la enseña.
     objetivo: (page) =>
-      encabezadoDeDialogo(page, 'This action needs an elevated session'),
+      encabezadoDeDialogo(page, 'Step-up authentication required'),
     despues: async (page) => {
       await page
         .getByRole('row', { name: /claude-code-prod/ })
@@ -1692,7 +1739,12 @@ test.describe('Docs captures over real seeded data', () => {
         //    app monto su navegacion», y con `exact` sigue diciendo eso y solo eso.
         // communications-handoffs only (Root, 2026-09-11): K3 cannot scope a global superadmin
         // session, so that door is read as a tenant editor provisioned through the public API.
-        const actor = view.actor ? await provisionaEditorK3(page) : undefined
+        const actor = view.actor
+          ? await provisionaMiembroK3(
+              page,
+              view.actor === 'k3-tenant-admin' ? 'admin' : 'editor',
+            )
+          : undefined
         await page.goto('/login')
         await page.locator('#email').fill(actor ? actor.email : DEMO_EMAIL)
         await page
@@ -1943,6 +1995,14 @@ test.describe('Docs captures over real seeded data', () => {
    */
 
   async function abreSesionOperada(page: import('@playwright/test').Page) {
+    // ⛔ THE ROW LIVES IN THE `Table` TAB. `/agentops` mounts the SAME view as `/sessions`
+    //    (`registry.tsx:1425`, `SessionsWorkspaceView` with `entrance: 'operate'`), and that
+    //    view now leads with the three-pane work surface: the `Origin` column this helper
+    //    reads — and therefore the word `Launched` — is only painted by the table beside it.
+    //    Measured 2026-09-18: scenes 7 and 8 failed in both themes on a seeded estate whose
+    //    five governed sessions HAD been created and corroborated, which is why the helper's
+    //    own message ("this is a SEEDING gap") was wrong here. The tab is where it moved.
+    await page.getByRole('tab', { name: 'Table', exact: true }).click()
     await esperaTablasCargadas(page)
     const fila = page.getByRole('row').filter({ hasText: 'Launched' }).first()
     try {

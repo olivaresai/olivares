@@ -100,7 +100,11 @@ export function ClaudeFilesPanel({
   if (!canRead) {
     return (
       <SectionCard title={t('claudeFiles.title')}>
-        <EmptyState icon={<FileWarning />} title={t('claudeFiles.noAccess')} />
+        <EmptyState
+          description={t('claudeFiles.noAccessHint')}
+          icon={<FileWarning />}
+          title={t('claudeFiles.noAccess')}
+        />
       </SectionCard>
     )
   }
@@ -111,7 +115,9 @@ export function ClaudeFilesPanel({
       accessorKey: 'id',
       header: t('claudeFiles.col.id'),
       cell: ({ row }) => (
-        <span className="font-mono text-xs break-all">{row.original.id}</span>
+        <span className="font-mono text-caption break-all">
+          {row.original.id}
+        </span>
       ),
     },
     {
@@ -139,7 +145,7 @@ export function ClaudeFilesPanel({
       accessorKey: 'scope_id',
       header: t('claudeFiles.col.scope'),
       cell: ({ row }) => (
-        <span className="font-mono text-xs">
+        <span className="font-mono text-caption">
           {row.original.scope_id || '—'}
         </span>
       ),
@@ -181,10 +187,10 @@ export function ClaudeFilesPanel({
 
         {inv && !inv.wired && (
           <div className="rounded-md border border-warning bg-warning-soft px-3 py-2">
-            <p className="text-sm font-medium text-foreground">
+            <p className="text-body font-medium text-foreground">
               {t('claudeFiles.unwired.title')}
             </p>
-            <p className="mt-0.5 text-xs text-muted-foreground">
+            <p className="mt-0.5 text-caption text-muted-foreground">
               {t('claudeFiles.unwired.body')}
             </p>
           </div>
@@ -265,7 +271,9 @@ function EraseOutcome({ result }: { result: ClaudeFileEraseResult }) {
             defaultValue: result.status,
           })}
         </Badge>
-        <span className="font-mono text-xs break-all">{result.file_id}</span>
+        <span className="font-mono text-caption break-all">
+          {result.file_id}
+        </span>
       </div>
       <KvList className="mt-2">
         {result.detail && (
@@ -283,7 +291,7 @@ function EraseOutcome({ result }: { result: ClaudeFileEraseResult }) {
         )}
         {result.holds && result.holds.length > 0 && (
           <KvRow label={t('claudeFiles.holds')} align="start">
-            <ul className="flex flex-col gap-0.5 text-xs">
+            <ul className="flex flex-col gap-0.5 text-caption">
               {result.holds.map((h, i) => (
                 <li key={h.id ?? i}>{h.name || h.id || h.reason || '—'}</li>
               ))}

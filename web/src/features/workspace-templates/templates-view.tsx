@@ -98,7 +98,7 @@ export function TemplatesView() {
         icon={LayoutTemplate}
         title={t('title')}
         description={t('subtitle')}
-        actions={
+        primaryAction={
           <Button
             variant="primary"
             size="sm"
@@ -118,7 +118,7 @@ export function TemplatesView() {
           onValueChange={(v) => setFilter(v as FilterType)}
         >
           <SelectTrigger
-            className="h-7 w-auto min-w-[9rem] text-xs"
+            className="h-7 w-auto min-w-[9rem] text-caption"
             aria-label={t('catalog.filterAll')}
           >
             <SelectValue />
@@ -140,7 +140,7 @@ export function TemplatesView() {
           />
           <Label
             htmlFor="show-archived"
-            className="cursor-pointer text-xs text-muted-foreground"
+            className="cursor-pointer text-caption text-muted-foreground"
           >
             {t('catalog.showArchived')}
           </Label>

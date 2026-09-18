@@ -244,7 +244,7 @@ export function HandoffResponseHost({
       {strandedNotice ? (
         <div
           role="status"
-          className="mt-4 rounded-md border border-border bg-muted/30 px-3 py-2 text-xs"
+          className="mt-4 rounded-md border border-border bg-muted/30 px-3 py-2 text-caption"
           data-slot="handoff-response-tracking-ended"
         >
           <p>{t('handoff.tracking.ended')}</p>
@@ -256,7 +256,7 @@ export function HandoffResponseHost({
       {stoppedAfterSend ? (
         <div
           role="status"
-          className="mt-4 rounded-md border border-border bg-muted/30 px-3 py-2 text-xs"
+          className="mt-4 rounded-md border border-border bg-muted/30 px-3 py-2 text-caption"
           data-slot="handoff-response-stopped"
         >
           <p>{t('handoff.tracking.stoppedAfterSend')}</p>
@@ -264,7 +264,7 @@ export function HandoffResponseHost({
       ) : null}
       {retained && !open ? (
         <div
-          className="mt-4 flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-2 text-xs"
+          className="mt-4 flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-2 text-caption"
           data-slot="handoff-response-retained"
         >
           <span>

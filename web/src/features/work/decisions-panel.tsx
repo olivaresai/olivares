@@ -108,8 +108,9 @@ export function DecisionsPanel({ workItemId }: { workItemId?: string }) {
   const seccion = {
     ...query,
     data: acumulado,
-  } as unknown as Parameters<typeof WorkSection<WorkPage<WorkDecision>>>[0]['query']
-
+  } as unknown as Parameters<
+    typeof WorkSection<WorkPage<WorkDecision>>
+  >[0]['query']
 
   const refreshIntentTenant = (operation: WorkIntent | null) => {
     if (!operation) return
@@ -149,7 +150,7 @@ export function DecisionsPanel({ workItemId }: { workItemId?: string }) {
       }
     >
       {view === 'history' ? (
-        <p className="mb-3 flex items-start gap-2 rounded-md border border-info-line bg-info-soft p-3 text-xs text-info">
+        <p className="mb-3 flex items-start gap-2 rounded-md border border-info-line bg-info-soft p-3 text-caption text-info">
           <Info aria-hidden className="mt-0.5 size-4 shrink-0" />
           {t('decisions.historyNotice')}
         </p>
@@ -231,7 +232,9 @@ function DecisionRow({
     <li className="flex items-start justify-between gap-4 py-3">
       <div className="min-w-0 space-y-1">
         <div className="flex flex-wrap items-center gap-2">
-          <code className="font-mono text-xs">{decision.decision_key}</code>
+          <code className="font-mono text-caption">
+            {decision.decision_key}
+          </code>
           {attributed ? (
             <Badge
               variant={decision.state === 'effective' ? 'success' : 'neutral'}
@@ -247,8 +250,8 @@ function DecisionRow({
             </Badge>
           )}
         </div>
-        <p className="text-sm">{decision.statement_md}</p>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-body">{decision.statement_md}</p>
+        <p className="text-caption text-muted-foreground">
           {t('decisions.meta', {
             subject: `${decision.subject_kind}:${decision.subject_ref}`,
             actor: `${decision.decided_by_kind}:${decision.decided_by_ref}`,

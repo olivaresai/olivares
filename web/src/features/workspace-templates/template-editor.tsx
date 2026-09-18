@@ -97,16 +97,31 @@ interface FormState {
   }
 }
 
-const HOOK_KINDS: HookKind[] = ['pre_tool', 'post_tool', 'pre_session', 'post_session']
+const HOOK_KINDS: HookKind[] = [
+  'pre_tool',
+  'post_tool',
+  'pre_session',
+  'post_session',
+]
 
 function emptyFormState(): FormState {
   return {
     name: '',
     description: '',
     hooks: { pre_tool: [], post_tool: [], pre_session: [], post_session: [] },
-    settings: { permission_mode: '', effort: '', model: '', custom_instructions: '' },
+    settings: {
+      permission_mode: '',
+      effort: '',
+      model: '',
+      custom_instructions: '',
+    },
     connectors: '',
-    policies: { dlp_mode: '', max_session_duration_minutes: '', allowed_tools: '', record_io: false },
+    policies: {
+      dlp_mode: '',
+      max_session_duration_minutes: '',
+      allowed_tools: '',
+      record_io: false,
+    },
   }
 }
 
@@ -132,9 +147,10 @@ function dtoToFormState(dto: TemplateDTO): FormState {
     connectors: (dto.body.connectors ?? []).join(', '),
     policies: {
       dlp_mode: p.dlp_mode ?? '',
-      max_session_duration_minutes: p.max_session_duration_minutes != null
-        ? String(p.max_session_duration_minutes)
-        : '',
+      max_session_duration_minutes:
+        p.max_session_duration_minutes != null
+          ? String(p.max_session_duration_minutes)
+          : '',
       allowed_tools: (p.allowed_tools ?? []).join(', '),
       record_io: p.record_io ?? false,
     },
@@ -142,7 +158,10 @@ function dtoToFormState(dto: TemplateDTO): FormState {
 }
 
 function hToForm(e: HookEntry): FormHook {
-  return { command: e.command, timeout_ms: e.timeout_ms != null ? String(e.timeout_ms) : '' }
+  return {
+    command: e.command,
+    timeout_ms: e.timeout_ms != null ? String(e.timeout_ms) : '',
+  }
 }
 
 function formStateToBody(f: FormState): TemplateBody {
@@ -158,7 +177,8 @@ function formStateToBody(f: FormState): TemplateBody {
   }
 
   const settings: TemplateSettings = {}
-  if (f.settings.permission_mode) settings.permission_mode = f.settings.permission_mode
+  if (f.settings.permission_mode)
+    settings.permission_mode = f.settings.permission_mode
   if (f.settings.effort) settings.effort = f.settings.effort
   if (f.settings.model.trim()) settings.model = f.settings.model.trim()
   if (f.settings.custom_instructions.trim())
@@ -172,7 +192,9 @@ function formStateToBody(f: FormState): TemplateBody {
   const policies: TemplatePolicies = {}
   if (f.policies.dlp_mode) policies.dlp_mode = f.policies.dlp_mode
   if (f.policies.max_session_duration_minutes.trim())
-    policies.max_session_duration_minutes = Number(f.policies.max_session_duration_minutes)
+    policies.max_session_duration_minutes = Number(
+      f.policies.max_session_duration_minutes,
+    )
   const allowedTools = f.policies.allowed_tools
     .split(',')
     .map((s) => s.trim())
@@ -199,7 +221,11 @@ export interface TemplateEditorProps {
   template?: TemplateDTO
 }
 
-export function TemplateEditor({ open, onOpenChange, template }: TemplateEditorProps) {
+export function TemplateEditor({
+  open,
+  onOpenChange,
+  template,
+}: TemplateEditorProps) {
   const { t } = useTranslation('workspace-templates')
   const { activeTenant } = useAuth()
   const queryClient = useQueryClient()
@@ -224,9 +250,15 @@ export function TemplateEditor({ open, onOpenChange, template }: TemplateEditorP
 
   const createMutation = useMutation({
     mutationFn: () =>
-      templatesApi.create({ name: form.name.trim(), description: form.description.trim(), body: formStateToBody(form) }),
+      templatesApi.create({
+        name: form.name.trim(),
+        description: form.description.trim(),
+        body: formStateToBody(form),
+      }),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: templatesKeys.all(activeTenant) })
+      await queryClient.invalidateQueries({
+        queryKey: templatesKeys.all(activeTenant),
+      })
       onOpenChange(false)
       toast.success(t('actions.save'))
     },
@@ -241,7 +273,9 @@ export function TemplateEditor({ open, onOpenChange, template }: TemplateEditorP
         body: formStateToBody(form),
       }),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: templatesKeys.all(activeTenant) })
+      await queryClient.invalidateQueries({
+        queryKey: templatesKeys.all(activeTenant),
+      })
       onOpenChange(false)
       toast.success(t('actions.save'))
     },
@@ -278,7 +312,9 @@ export function TemplateEditor({ open, onOpenChange, template }: TemplateEditorP
               <Badge variant="accent">{t('catalog.builtin')}</Badge>
             </SheetDescription>
           </SheetHeader>
-          <p className="text-sm text-muted-foreground">{template?.description}</p>
+          <p className="text-body text-muted-foreground">
+            {template?.description}
+          </p>
         </SheetContent>
       </Sheet>
     )
@@ -286,7 +322,10 @@ export function TemplateEditor({ open, onOpenChange, template }: TemplateEditorP
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="flex w-full flex-col overflow-y-auto sm:max-w-lg" key={initKey}>
+      <SheetContent
+        className="flex w-full flex-col overflow-y-auto sm:max-w-lg"
+        key={initKey}
+      >
         <SheetHeader>
           <SheetTitle>
             {template ? t('actions.edit') : t('actions.create')}
@@ -329,10 +368,10 @@ export function TemplateEditor({ open, onOpenChange, template }: TemplateEditorP
           {/* ── Hooks ── */}
           <section className="flex flex-col gap-3">
             <div>
-              <h3 className="text-sm font-semibold text-foreground">
+              <h3 className="text-body font-semibold text-foreground">
                 {t('editor.sections.hooks')}
               </h3>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-caption text-muted-foreground">
                 {t('editor.sections.hooksHint')}
               </p>
             </div>
@@ -354,10 +393,10 @@ export function TemplateEditor({ open, onOpenChange, template }: TemplateEditorP
           {/* ── Settings ── */}
           <section className="flex flex-col gap-3">
             <div>
-              <h3 className="text-sm font-semibold text-foreground">
+              <h3 className="text-body font-semibold text-foreground">
                 {t('editor.sections.settings')}
               </h3>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-caption text-muted-foreground">
                 {t('editor.sections.settingsHint')}
               </p>
             </div>
@@ -365,7 +404,10 @@ export function TemplateEditor({ open, onOpenChange, template }: TemplateEditorP
               <Select
                 value={form.settings.permission_mode}
                 onValueChange={(v) =>
-                  set('settings', { ...form.settings, permission_mode: v === '__none__' ? '' : v })
+                  set('settings', {
+                    ...form.settings,
+                    permission_mode: v === '__none__' ? '' : v,
+                  })
                 }
                 disabled={isPending}
               >
@@ -386,7 +428,10 @@ export function TemplateEditor({ open, onOpenChange, template }: TemplateEditorP
               <Select
                 value={form.settings.effort}
                 onValueChange={(v) =>
-                  set('settings', { ...form.settings, effort: v === '__none__' ? '' : v })
+                  set('settings', {
+                    ...form.settings,
+                    effort: v === '__none__' ? '' : v,
+                  })
                 }
                 disabled={isPending}
               >
@@ -418,7 +463,10 @@ export function TemplateEditor({ open, onOpenChange, template }: TemplateEditorP
               <Textarea
                 value={form.settings.custom_instructions}
                 onChange={(e) =>
-                  set('settings', { ...form.settings, custom_instructions: e.target.value })
+                  set('settings', {
+                    ...form.settings,
+                    custom_instructions: e.target.value,
+                  })
                 }
                 rows={4}
                 disabled={isPending}
@@ -431,10 +479,10 @@ export function TemplateEditor({ open, onOpenChange, template }: TemplateEditorP
           {/* ── Connectors ── */}
           <section className="flex flex-col gap-3">
             <div>
-              <h3 className="text-sm font-semibold text-foreground">
+              <h3 className="text-body font-semibold text-foreground">
                 {t('editor.sections.connectors')}
               </h3>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-caption text-muted-foreground">
                 {t('editor.sections.connectorsHint')}
               </p>
             </div>
@@ -452,10 +500,10 @@ export function TemplateEditor({ open, onOpenChange, template }: TemplateEditorP
           {/* ── Policies ── */}
           <section className="flex flex-col gap-3">
             <div>
-              <h3 className="text-sm font-semibold text-foreground">
+              <h3 className="text-body font-semibold text-foreground">
                 {t('editor.sections.policies')}
               </h3>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-caption text-muted-foreground">
                 {t('editor.sections.policiesHint')}
               </p>
             </div>
@@ -463,7 +511,10 @@ export function TemplateEditor({ open, onOpenChange, template }: TemplateEditorP
               <Select
                 value={form.policies.dlp_mode}
                 onValueChange={(v) =>
-                  set('policies', { ...form.policies, dlp_mode: v === '__none__' ? '' : v })
+                  set('policies', {
+                    ...form.policies,
+                    dlp_mode: v === '__none__' ? '' : v,
+                  })
                 }
                 disabled={isPending}
               >
@@ -502,7 +553,10 @@ export function TemplateEditor({ open, onOpenChange, template }: TemplateEditorP
               <Input
                 value={form.policies.allowed_tools}
                 onChange={(e) =>
-                  set('policies', { ...form.policies, allowed_tools: e.target.value })
+                  set('policies', {
+                    ...form.policies,
+                    allowed_tools: e.target.value,
+                  })
                 }
                 placeholder={t('editor.policies.allowedToolsPlaceholder')}
                 disabled={isPending}
@@ -514,11 +568,14 @@ export function TemplateEditor({ open, onOpenChange, template }: TemplateEditorP
                 id="record-io"
                 checked={form.policies.record_io}
                 onCheckedChange={(checked) =>
-                  set('policies', { ...form.policies, record_io: checked === true })
+                  set('policies', {
+                    ...form.policies,
+                    record_io: checked === true,
+                  })
                 }
                 disabled={isPending}
               />
-              <Label htmlFor="record-io" className="cursor-pointer text-sm">
+              <Label htmlFor="record-io" className="cursor-pointer text-body">
                 {t('editor.policies.recordIo')}
               </Label>
             </div>
@@ -526,7 +583,11 @@ export function TemplateEditor({ open, onOpenChange, template }: TemplateEditorP
         </div>
 
         <SheetFooter>
-          <Button variant="secondary" onClick={() => onOpenChange(false)} disabled={isPending}>
+          <Button
+            variant="secondary"
+            onClick={() => onOpenChange(false)}
+            disabled={isPending}
+          >
             {t('actions.cancel')}
           </Button>
           <Button variant="primary" onClick={handleSubmit} disabled={isPending}>
@@ -574,7 +635,7 @@ function HookSection({ kind, entries, disabled, onChange }: HookSectionProps) {
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between">
-        <span className="text-xs font-medium text-muted-foreground">
+        <span className="text-caption font-medium text-muted-foreground">
           {t(`editor.${HOOK_KIND_LABELS[kind]}`)}
         </span>
         <Button
@@ -603,7 +664,9 @@ function HookSection({ kind, entries, disabled, onChange }: HookSectionProps) {
                 />
                 <Input
                   value={entry.timeout_ms}
-                  onChange={(e) => updateEntry(idx, 'timeout_ms', e.target.value)}
+                  onChange={(e) =>
+                    updateEntry(idx, 'timeout_ms', e.target.value)
+                  }
                   placeholder={t('editor.hooks.timeoutMs')}
                   type="number"
                   min={0}

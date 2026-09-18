@@ -127,13 +127,13 @@ export function FindingRow({ finding }: { finding: IdentityFinding }) {
         <SeverityBadge severity={finding.severity} />
         {finding.status ? <StatusBadge status={finding.status} /> : null}
         {finding.subject_ref ? (
-          <code className="font-mono text-xs text-muted-foreground break-all">
+          <code className="font-mono text-caption text-muted-foreground break-all">
             {finding.subject_ref}
           </code>
         ) : null}
       </div>
       {finding.title ? (
-        <p className="text-sm text-foreground">{finding.title}</p>
+        <p className="text-body text-foreground">{finding.title}</p>
       ) : null}
       {finding.detail_hash ? <HashChip hash={finding.detail_hash} /> : null}
     </li>
@@ -149,7 +149,13 @@ export function FindingList({
 }: {
   findings: IdentityFinding[]
   emptyTitle: string
-  emptyDescription?: string
+  /**
+   * ⛔ REQUIRED, and the compiler is what found it. It used to be optional,
+   *    so this list could render a titled empty state with no sentence under it — and
+   *    a text census counted the site as "described" because the PROP was present.
+   *    Both callers already passed one; the type now says they must.
+   */
+  emptyDescription: string
   label: string
 }) {
   if (findings.length === 0) {
@@ -180,7 +186,7 @@ export function AuthorityLink({
       target="_blank"
       rel="noreferrer noopener"
       className={cn(
-        'font-mono text-xs text-accent-text underline-offset-2 hover:underline break-all',
+        'font-mono text-caption text-accent-text underline-offset-2 hover:underline break-all',
         className,
       )}
     >

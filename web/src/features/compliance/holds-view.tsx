@@ -110,7 +110,11 @@ export function HoldsTab({
   if (!canRead) {
     return (
       <SectionCard title={t('holds.title')}>
-        <EmptyState icon={<LockKeyhole />} title={t('holds.noAccess')} />
+        <EmptyState
+          description={t('holds.noAccessHint')}
+          icon={<LockKeyhole />}
+          title={t('holds.noAccess')}
+        />
       </SectionCard>
     )
   }
@@ -213,24 +217,26 @@ function HoldRow({
           </Badge>
           <span className="font-medium">{hold.matter_ref}</span>
           {hold.title ? (
-            <span className="text-sm text-muted-foreground">{hold.title}</span>
+            <span className="text-body text-muted-foreground">
+              {hold.title}
+            </span>
           ) : null}
         </div>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-caption text-muted-foreground">
           {holdScopeLabel(hold, t)}
         </p>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-caption text-muted-foreground">
           {t('holds.reason')}:{' '}
           <span className="text-foreground">{hold.reason}</span>
         </p>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-caption text-muted-foreground">
           {t('holds.createdBy', {
             actor: hold.created_by,
             at: hold.created_at,
           })}
         </p>
         {hold.released_at ? (
-          <p className="text-xs text-muted-foreground">
+          <p className="text-caption text-muted-foreground">
             {t('holds.releasedBy', {
               actor: hold.released_by ?? '',
               at: hold.released_at,
@@ -733,13 +739,17 @@ function HoldCustodyTrail({
         <AsyncSection query={eventsQ} skeletonHeight={180}>
           {(list) =>
             list.items.length === 0 ? (
-              <EmptyState icon={<Gavel />} title={t('holds.custodyEmpty')} />
+              <EmptyState
+                description={t('holds.custodyEmptyHint')}
+                icon={<Gavel />}
+                title={t('holds.custodyEmpty')}
+              />
             ) : (
               <ol className="flex flex-col gap-2">
                 {list.items.map((ev, i) => (
                   <li
                     key={`${ev.hold_id}-${ev.event}-${ev.occurred_at}-${i}`}
-                    className="rounded-md border border-border p-2 text-xs"
+                    className="rounded-md border border-border p-2 text-caption"
                   >
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge variant="neutral">

@@ -37,6 +37,7 @@
     "filter": "Filtrar por estado",
     "allStates": "Todos los estados",
     "empty": "No hay flujos en este estado",
+    "emptyHint": "Los flujos en este estado aparecen aquí con su próxima ejecución. Cambia el filtro de estado, o crea un flujo.",
     "columns": {
       "supervisor": "Supervisor",
       "workers": "Workers",
@@ -179,7 +180,9 @@
     "description": "Registro de solo anexado de las decisiones de disparo de la cadencia seleccionada. Una decisión se muestra tal como se resolvió — una aprobación no es una actuación.",
     "pick": "Selecciona una cadencia",
     "pickHint": "Selecciona una cadencia para ver su registro de decisiones.",
+    "pickHintDetail": "El libro muestra cada decisión que tomó el planificador para esa programación, y el motivo de cada una.",
     "empty": "Sin decisiones registradas",
+    "emptyHint": "Cada vez que el planificador decide ejecutar, omitir o retrasar una ocurrencia queda registrado aquí. Esta programación aún no ha decidido nada.",
     "gate": "Gate",
     "plan": "plan",
     "op": {
@@ -214,7 +217,8 @@
       "workflow": "Workflow"
     },
     "estateDescription": "Registro de solo anexión de todas las decisiones del estate, de más reciente a más antigua. Incluye decisiones que no pertenecen a ningún schedule.",
-    "forbidden": "Tu rol no puede leer las decisiones de schedules."
+    "forbidden": "Tu rol no puede leer las decisiones de schedules.",
+    "forbiddenHint": "El libro de decisiones registra por qué el planificador ejecutó, omitió o retrasó cada ocurrencia. Pide a un administrador el permiso de lectura de decisiones de programación."
   },
   "timeline": {
     "title": "Cronología de actividad",
@@ -232,6 +236,7 @@
     "description": "Instantáneas cronológicas de esta programación en un registro de solo anexión.",
     "scopeCaption": "La restauración vuelve a aplicar solo los campos modificables; nunca el nombre, la clase de sujeto ni la clase de disparador.",
     "empty": "No hay revisiones registradas",
+    "emptyHint": "Cada cambio en esta programación se guarda como una revisión que puedes comparar y restaurar. La primera edición crea una.",
     "loadMore": "Cargar más",
     "compareTitle": "Diferencias entre instantáneas",
     "selectTwo": "Selecciona dos revisiones para comparar sus instantáneas.",

@@ -9,8 +9,8 @@ ESTADO-PROYECTO.md merge=union
 # line-ending-normalize them or the embedded signature/zip offsets break.
 connectors/mcpb/testdata/*.mcpb binary
 
-# Mailboxes between lanes: append-only entries, written concurrently from separate
-# containers. Without union-merge two lanes appending at the same time produce an
+# Mailboxes between concurrent writers: append-only entries, written from separate
+# containers. Without union-merge two writers appending at the same time produce an
 # added-by-both over the whole tail — measured 2026-08-04 on a 1158-line file, and a
 # session had to leave its own report OUT of its branch to avoid it. Union is safe here
 # for the reason it is safe for the journal: nobody edits an existing entry, they append.

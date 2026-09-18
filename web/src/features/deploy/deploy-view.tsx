@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/ui/page-header'
+import { PagePrimaryAction } from '@/components/ui/page-actions'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { EmptyState } from '@/components/ui/empty-state'
 import { DataTable, type TableColumn } from '@/components/data/data-table'
@@ -63,7 +64,7 @@ export default function DeployView() {
       cell: ({ row }) => (
         <span className="flex items-center gap-1.5">
           <Badge variant="outline">{row.original.subject_kind}</Badge>
-          <span className="font-mono text-xs text-muted-foreground">
+          <span className="font-mono text-caption text-muted-foreground">
             {row.original.subject_ref}
           </span>
         </span>
@@ -80,7 +81,7 @@ export default function DeployView() {
       accessorKey: 'target',
       header: t('definitions.target'),
       cell: ({ row }) => (
-        <span className="font-mono text-xs text-muted-foreground">
+        <span className="font-mono text-caption text-muted-foreground">
           {row.original.target}
         </span>
       ),
@@ -94,7 +95,7 @@ export default function DeployView() {
       id: 'versions',
       header: t('definitions.versions'),
       cell: ({ row }) => (
-        <span className="font-mono text-xs tabular-nums text-muted-foreground">
+        <span className="font-mono text-caption tabular-nums text-muted-foreground">
           {t('definitions.versionsLabel', {
             applied: row.original.applied_version,
             current: row.original.current_version,
@@ -133,6 +134,18 @@ export default function DeployView() {
         </TabsList>
 
         <TabsContent value="definitions">
+          {canWrite && (
+            <PagePrimaryAction>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => setEditorOpen(true)}
+              >
+                <Plus />
+                {t('definitions.declare')}
+              </Button>
+            </PagePrimaryAction>
+          )}
           {/* Si el motor recortó, la tabla es una PARTE y no lo diría: una definición que no
               sale se lee como una definición que no existe. */}
           <ListTruncationBadge
@@ -155,18 +168,6 @@ export default function DeployView() {
               setSelected(r.id)
               setDetailOpen(true)
             }}
-            toolbar={
-              canWrite ? (
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={() => setEditorOpen(true)}
-                >
-                  <Plus />
-                  {t('definitions.declare')}
-                </Button>
-              ) : undefined
-            }
             empty={
               <EmptyState
                 title={t('empty.deploy.title')}

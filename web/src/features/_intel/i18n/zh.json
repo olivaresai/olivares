@@ -93,6 +93,7 @@
   "timeline": {
     "title": "重建的时间线",
     "empty": "范围内没有事件。",
+    "emptyHint": "引擎记录的证据事件会显示在这里。放宽时间范围即可看到更早的事件。",
     "seq": "seq"
   },
   "consumption": {

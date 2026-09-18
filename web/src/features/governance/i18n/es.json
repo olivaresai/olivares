@@ -67,6 +67,7 @@
     "trailTitle": "Rastro inmutable de usos",
     "trailCaption": "Cada acción que continuó sin su quórum de aprobación. Estas entradas son solo de adición y no pueden editarse ni eliminarse.",
     "trailEmpty": "Este grant no se utilizó",
+    "trailEmptyHint": "Aquí se registra para revisión todo lo hecho bajo una concesión de emergencia. Esta concesión no llegó a usarse.",
     "trailLabel": "Rastro inmutable de usos de break-glass",
     "useAction": "Acción",
     "useSubject": "Sujeto",
@@ -219,6 +220,7 @@
     "trail": "Rastro de decisiones",
     "trailCaption": "El registro inmutable y solo de adición de quién decidió qué y cuándo. Solo lectura — no se puede editar ni eliminar.",
     "trailEmpty": "Todavía no hay decisiones registradas",
+    "trailEmptyHint": "Aquí se registra cada decisión sobre esta aprobación: quién decidió, cuándo y por qué. Todavía no ha decidido nadie.",
     "decisionApprove": "Aprobada",
     "decisionReject": "Rechazada"
   },
@@ -338,7 +340,8 @@
     "via": "vía",
     "kindIdentity": "Identidad",
     "kindCollection": "Colección",
-    "empty": "No hay miembros"
+    "empty": "No hay miembros",
+    "emptyHint": "Aquí se listan los sujetos que pertenecen a este grupo. Añade un miembro para empezar."
   },
   "bindings": {
     "title": "Vínculos de agente",
@@ -683,7 +686,9 @@
     "title": "Estándares emergentes de identidad de agente",
     "description": "Un registro de «hacia dónde diseñar»: qué seguimos, dónde encajaría y por qué no está implementado.",
     "noAccess": "No tienes acceso al registro de identidades.",
+    "noAccessHint": "Este panel sigue los estándares hacia los que se alinea la plataforma. Pide a un administrador el permiso de lectura del registro de identidad.",
     "empty": "No se sigue nada",
+    "emptyHint": "Los estándares hacia los que se alinea la plataforma aparecen aquí con su estado. Todavía no se sigue ninguno.",
     "verifiedAt": "Revisiones verificadas contra fuentes primarias en {{month}}. Se mueven: tómalo como una fecha, no como una garantía.",
     "spec": "Especificación",
     "revision": "Revisión",

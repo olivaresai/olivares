@@ -18,6 +18,7 @@ import type {
   ModelRate,
   StatementLine,
 } from './types'
+import { StaticTable } from '@/components/data/static-table'
 
 // --- Cost Center Components -------------------------------------------------
 
@@ -31,7 +32,7 @@ export function CostCenterList({
   const { t } = useTranslation()
   if (items.length === 0)
     return (
-      <p className="text-sm text-muted-foreground">
+      <p className="text-body text-muted-foreground">
         {t('No cost centers configured')}
       </p>
     )
@@ -44,8 +45,8 @@ export function CostCenterList({
           onClick={() => onSelect?.(cc)}
         >
           <div>
-            <span className="font-mono text-sm font-medium">{cc.code}</span>
-            <span className="ml-2 text-sm text-muted-foreground">
+            <span className="font-mono text-body font-medium">{cc.code}</span>
+            <span className="ml-2 text-body text-muted-foreground">
               {cc.name}
             </span>
           </div>
@@ -66,13 +67,13 @@ export function CostCenterMappingList({
   onDelete?: (id: string) => void
 }) {
   if (mappings.length === 0)
-    return <p className="text-sm text-muted-foreground">No mapping rules</p>
+    return <p className="text-body text-muted-foreground">No mapping rules</p>
   return (
     <div className="space-y-1">
       {mappings.map((m) => (
         <div
           key={m.id}
-          className="flex items-center justify-between rounded border px-3 py-2 text-sm"
+          className="flex items-center justify-between rounded border px-3 py-2 text-body"
         >
           <span>
             <span className="font-medium">{m.source_dimension}</span>
@@ -100,39 +101,41 @@ export function CostCenterMappingList({
 
 export function RateCatalogTable({ rates }: { rates: ModelRate[] }) {
   if (rates.length === 0)
-    return <p className="text-sm text-muted-foreground">No rates configured</p>
+    return (
+      <p className="text-body text-muted-foreground">No rates configured</p>
+    )
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-sm">
+      <StaticTable>
         <thead>
-          <tr className="border-b text-left text-muted-foreground">
-            <th className="p-2">Provider</th>
-            <th className="p-2">Model</th>
-            <th className="p-2 text-right">Input $/MTok</th>
-            <th className="p-2 text-right">Output $/MTok</th>
-            <th className="p-2 text-right">Cache Read</th>
-            <th className="p-2 text-right">Cache Create</th>
-            <th className="p-2">Effective</th>
+          <tr>
+            <th>Provider</th>
+            <th>Model</th>
+            <th className="text-right">Input $/MTok</th>
+            <th className="text-right">Output $/MTok</th>
+            <th className="text-right">Cache Read</th>
+            <th className="text-right">Cache Create</th>
+            <th>Effective</th>
           </tr>
         </thead>
         <tbody>
           {rates.map((r) => (
-            <tr key={r.id} className="border-b">
-              <td className="p-2">{r.provider}</td>
-              <td className="p-2 font-mono text-xs">{r.model}</td>
-              <td className="p-2 text-right">
+            <tr key={r.id}>
+              <td>{r.provider}</td>
+              <td className="font-mono text-caption">{r.model}</td>
+              <td className="text-right">
                 {formatMicroUsd(r.input_rate_micro_usd)}
               </td>
-              <td className="p-2 text-right">
+              <td className="text-right">
                 {formatMicroUsd(r.output_rate_micro_usd)}
               </td>
-              <td className="p-2 text-right">
+              <td className="text-right">
                 {formatMicroUsd(r.cache_read_rate_micro_usd)}
               </td>
-              <td className="p-2 text-right">
+              <td className="text-right">
                 {formatMicroUsd(r.cache_creation_rate_micro_usd)}
               </td>
-              <td className="p-2 text-xs text-muted-foreground">
+              <td className="text-caption text-muted-foreground">
                 {r.effective_from?.slice(0, 10)}
                 {r.effective_until
                   ? ` → ${r.effective_until.slice(0, 10)}`
@@ -141,7 +144,7 @@ export function RateCatalogTable({ rates }: { rates: ModelRate[] }) {
             </tr>
           ))}
         </tbody>
-      </table>
+      </StaticTable>
     </div>
   )
 }
@@ -157,7 +160,7 @@ export function ModelComparisonCard({
   return (
     <div className="space-y-4">
       <div className="rounded-lg border p-4">
-        <h4 className="mb-2 text-sm font-medium">Retrospective Re-pricing</h4>
+        <h4 className="mb-2 text-body font-medium">Retrospective Re-pricing</h4>
         <div className="mb-3 flex gap-4">
           <MetricStat
             label="Source actual"
@@ -171,9 +174,9 @@ export function ModelComparisonCard({
               key={t.model}
               className="flex items-center justify-between rounded border p-2"
             >
-              <span className="font-mono text-xs">{t.model}</span>
+              <span className="font-mono text-caption">{t.model}</span>
               <div className="flex items-center gap-3">
-                <span className="text-sm">
+                <span className="text-body">
                   {formatMicroUsd(t.rate_micro_usd)}
                 </span>
                 <Badge variant={t.savings_pct > 0 ? 'success' : 'neutral'}>
@@ -188,8 +191,8 @@ export function ModelComparisonCard({
       </div>
       {data.projections && data.projections.length > 0 && (
         <div className="rounded-lg border p-4">
-          <h4 className="mb-2 text-sm font-medium">Prospective Projection</h4>
-          <p className="mb-2 text-xs text-muted-foreground">
+          <h4 className="mb-2 text-body font-medium">Prospective Projection</h4>
+          <p className="mb-2 text-caption text-muted-foreground">
             Forecast period: {data.forecast_period}
           </p>
           {data.projections.map((p) => (
@@ -197,12 +200,12 @@ export function ModelComparisonCard({
               key={p.model}
               className="flex items-center justify-between rounded border p-2"
             >
-              <span className="font-mono text-xs">{p.model}</span>
+              <span className="font-mono text-caption">{p.model}</span>
               <div className="flex items-center gap-3">
-                <span className="text-sm">
+                <span className="text-body">
                   {formatMicroUsd(p.projected_micro_usd)}
                 </span>
-                <span className="text-xs text-muted-foreground">
+                <span className="text-caption text-muted-foreground">
                   [{formatMicroUsd(p.confidence_low_micro_usd)} –{' '}
                   {formatMicroUsd(p.confidence_high_micro_usd)}]
                 </span>
@@ -232,7 +235,7 @@ export function StatementList({
   const { t } = useTranslation('finops')
   if (statements.length === 0)
     return (
-      <p className="text-sm text-muted-foreground">{t('statements.empty')}</p>
+      <p className="text-body text-muted-foreground">{t('statements.empty')}</p>
     )
   return (
     <div className="space-y-2">
@@ -243,16 +246,16 @@ export function StatementList({
           onClick={() => onSelect?.(s)}
         >
           <div>
-            <span className="font-mono text-sm font-medium">
+            <span className="font-mono text-body font-medium">
               {s.cost_center_code}
             </span>
-            <span className="ml-2 text-sm">{s.cost_center_name}</span>
-            <span className="ml-3 text-xs text-muted-foreground">
+            <span className="ml-2 text-body">{s.cost_center_name}</span>
+            <span className="ml-3 text-caption text-muted-foreground">
               {s.period_start?.slice(0, 10)} → {s.period_end?.slice(0, 10)}
             </span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-sm font-medium">
+            <span className="text-body font-medium">
               {formatMicroUsd(s.total_micro_usd)}
             </span>
             {s.delta_pct !== 0 && (
@@ -284,10 +287,10 @@ export function StatementDetail({
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-lg font-medium">
+          <h3 className="text-title">
             {statement.cost_center_code} — {statement.cost_center_name}
           </h3>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-body text-muted-foreground">
             {statement.period} | {statement.period_start?.slice(0, 10)} →{' '}
             {statement.period_end?.slice(0, 10)}
           </p>
@@ -299,7 +302,7 @@ export function StatementDetail({
           />
           {onExport && (
             <button
-              className="rounded border px-3 py-1 text-sm hover:bg-muted"
+              className="rounded border px-3 py-1 text-body hover:bg-muted"
               onClick={onExport}
             >
               {t('statements.exportCsv')}
@@ -308,36 +311,36 @@ export function StatementDetail({
         </div>
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+        <StaticTable>
           <thead>
-            <tr className="border-b text-left text-muted-foreground">
-              <th className="p-2">{t('statements.model')}</th>
-              <th className="p-2">{t('statements.provider')}</th>
-              <th className="p-2">{t('statements.agent')}</th>
-              <th className="p-2 text-right">{t('statements.inputTokens')}</th>
-              <th className="p-2 text-right">{t('statements.outputTokens')}</th>
-              <th className="p-2 text-right">{t('statements.cost')}</th>
-              <th className="p-2 text-right">{t('statements.samples')}</th>
+            <tr>
+              <th>{t('statements.model')}</th>
+              <th>{t('statements.provider')}</th>
+              <th>{t('statements.agent')}</th>
+              <th className="text-right">{t('statements.inputTokens')}</th>
+              <th className="text-right">{t('statements.outputTokens')}</th>
+              <th className="text-right">{t('statements.cost')}</th>
+              <th className="text-right">{t('statements.samples')}</th>
             </tr>
           </thead>
           <tbody>
             {lines.map((l: StatementLine) => (
-              <tr key={l.id} className="border-b">
-                <td className="p-2 font-mono text-xs">{l.model_ref}</td>
-                <td className="p-2">{l.provider_ref}</td>
-                <td className="p-2 text-xs text-muted-foreground">
+              <tr key={l.id}>
+                <td className="font-mono text-caption">{l.model_ref}</td>
+                <td>{l.provider_ref}</td>
+                <td className="text-caption text-muted-foreground">
                   {l.agent_ref || '—'}
                 </td>
-                <td className="p-2 text-right">{formatInt(l.input_tokens)}</td>
-                <td className="p-2 text-right">{formatInt(l.output_tokens)}</td>
-                <td className="p-2 text-right font-medium">
+                <td className="text-right">{formatInt(l.input_tokens)}</td>
+                <td className="text-right">{formatInt(l.output_tokens)}</td>
+                <td className="text-right font-medium">
                   {formatMicroUsd(l.cost_micro_usd)}
                 </td>
-                <td className="p-2 text-right">{l.sample_count}</td>
+                <td className="text-right">{l.sample_count}</td>
               </tr>
             ))}
           </tbody>
-        </table>
+        </StaticTable>
       </div>
     </div>
   )
@@ -361,7 +364,7 @@ export function EWAForecastCard({
   return (
     <div className="rounded-lg border p-4">
       <div className="mb-1 flex items-center gap-2">
-        <h4 className="text-sm font-medium">EWA Forecast</h4>
+        <h4 className="text-body font-medium">EWA Forecast</h4>
         <SeamBadge label={`α=${alpha}`} />
       </div>
       <div className="flex gap-4">
@@ -384,40 +387,40 @@ export function DimensionForecastTable({
   if (forecasts.length === 0) return null
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-sm">
+      <StaticTable>
         <thead>
-          <tr className="border-b text-left text-muted-foreground">
-            <th className="p-2">Key</th>
-            <th className="p-2 text-right">Current Spend</th>
-            <th className="p-2 text-right">EWA Rate/Day</th>
-            <th className="p-2 text-right">Projected</th>
-            <th className="p-2 text-right">95% CI Low</th>
-            <th className="p-2 text-right">95% CI High</th>
+          <tr>
+            <th>Key</th>
+            <th className="text-right">Current Spend</th>
+            <th className="text-right">EWA Rate/Day</th>
+            <th className="text-right">Projected</th>
+            <th className="text-right">95% CI Low</th>
+            <th className="text-right">95% CI High</th>
           </tr>
         </thead>
         <tbody>
           {forecasts.map((f) => (
-            <tr key={f.key} className="border-b">
-              <td className="p-2 font-mono text-xs">{f.key || '(global)'}</td>
-              <td className="p-2 text-right">
+            <tr key={f.key}>
+              <td className="font-mono text-caption">{f.key || '(global)'}</td>
+              <td className="text-right">
                 {formatMicroUsd(f.spend_micro_usd)}
               </td>
-              <td className="p-2 text-right">
+              <td className="text-right">
                 {formatMicroUsd(f.ewa_daily_rate_micro_usd)}
               </td>
-              <td className="p-2 text-right font-medium">
+              <td className="text-right font-medium">
                 {formatMicroUsd(f.ewa_projected_micro_usd)}
               </td>
-              <td className="p-2 text-right text-muted-foreground">
+              <td className="text-right text-muted-foreground">
                 {formatMicroUsd(f.ewa_confidence_low_micro_usd)}
               </td>
-              <td className="p-2 text-right text-muted-foreground">
+              <td className="text-right text-muted-foreground">
                 {formatMicroUsd(f.ewa_confidence_high_micro_usd)}
               </td>
             </tr>
           ))}
         </tbody>
-      </table>
+      </StaticTable>
     </div>
   )
 }

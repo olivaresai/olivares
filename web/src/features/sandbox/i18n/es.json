@@ -49,6 +49,7 @@
     "description": "Cada ejecución aislada, con el backend que la corrió y si fue puntuada.",
     "isolationNote": "El aislamiento es real, no fingido: el runner y el flag de aislamiento se muestran exactamente como se registraron. Una ejecución degradada se ejecutó pero no se puntuó — no es un aprobado.",
     "empty": "Aún no hay ejecuciones",
+    "emptyHint": "Aquí se lista cada ejecución de escenario, con su veredicto y sus salidas. Ejecuta un escenario para registrar la primera.",
     "errored": "{{count}} error",
     "errored_one": "{{count}} error",
     "errored_many": "{{count}} errores",
@@ -67,6 +68,7 @@
   "outputs": {
     "title": "Salidas por paso",
     "empty": "No hay salidas registradas",
+    "emptyHint": "Aquí se captura todo lo que escribe un paso del escenario. Esta ejecución no ha registrado salida.",
     "syntheticNote": "Son salidas sintéticas acotadas del runner mock — no son salida de producción. Un mock-miss es un marcador determinista; nunca alcanzó un recurso real.",
     "mockHit": "Mock acertado",
     "mockMiss": "Mock-miss"
@@ -80,6 +82,7 @@
     "completePartial": "La reproducción terminó, pero no es el registro completo",
     "unreadable": "Frames que esta vista no ha podido leer: {{n}}. Llegaron y se descartaron, así que falta aquí la evidencia que traían: esto no es una reproducción limpia.",
     "emptyUnreadable": "No se ha podido leer ninguna salida de paso",
+    "emptyUnreadableHint": "La salida de cada paso se transmite desde el sandbox mientras avanza la ejecución. No se ha podido leer nada de este paso.",
     "disconnected": "Sin conexión",
     "lost": "Conexión perdida — has dejado de ver esta ejecución.",
     "lostHint": "Esto NO es que la ejecución haya terminado: la conexión se cortó antes de que el motor señalara el final de la reproducción. El estado de la ejecución es el que registró el motor, el que muestra la tabla de ejecuciones; nunca se deduce de esta conexión. Reconecta para reanudar; las salidas ya mostradas no se repiten.",

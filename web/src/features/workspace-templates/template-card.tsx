@@ -99,9 +99,14 @@ export function TemplateCard({ template, onEdit, onApply }: TemplateCardProps) {
 
   const duplicate = useMutation({
     mutationFn: () =>
-      templatesApi.duplicate(template.id, t('actions.duplicateName', { name: template.name })),
+      templatesApi.duplicate(
+        template.id,
+        t('actions.duplicateName', { name: template.name }),
+      ),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: templatesKeys.all(activeTenant) })
+      await queryClient.invalidateQueries({
+        queryKey: templatesKeys.all(activeTenant),
+      })
       toast.success(t('actions.duplicate'))
     },
     onError: () => toast.error(t('errors.duplicateFailed')),
@@ -110,7 +115,9 @@ export function TemplateCard({ template, onEdit, onApply }: TemplateCardProps) {
   const archive = useMutation({
     mutationFn: () => templatesApi.remove(template.id),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: templatesKeys.all(activeTenant) })
+      await queryClient.invalidateQueries({
+        queryKey: templatesKeys.all(activeTenant),
+      })
       setConfirmArchive(false)
       toast.success(t('actions.archive'))
     },
@@ -130,7 +137,10 @@ export function TemplateCard({ template, onEdit, onApply }: TemplateCardProps) {
                 aria-label={t('catalog.builtin')}
               />
             )}
-            <CardTitle as="h2" className="min-w-0 truncate text-sm font-semibold">
+            <CardTitle
+              as="h2"
+              className="min-w-0 truncate text-body font-semibold"
+            >
               {template.name}
             </CardTitle>
           </div>
@@ -188,11 +198,11 @@ export function TemplateCard({ template, onEdit, onApply }: TemplateCardProps) {
 
         <CardContent className="flex-1">
           {template.description ? (
-            <CardDescription className="line-clamp-2 text-xs">
+            <CardDescription className="line-clamp-2 text-caption">
               {template.description}
             </CardDescription>
           ) : (
-            <CardDescription className="text-xs italic text-muted-foreground/60">
+            <CardDescription className="text-caption italic text-muted-foreground/60">
               —
             </CardDescription>
           )}
@@ -208,7 +218,7 @@ export function TemplateCard({ template, onEdit, onApply }: TemplateCardProps) {
           {isArchived && (
             <Badge variant="neutral">{t('catalog.archived')}</Badge>
           )}
-          <span className="ml-auto truncate text-xs text-muted-foreground">
+          <span className="ml-auto truncate text-caption text-muted-foreground">
             {t('catalog.author', { author: template.author })}
           </span>
         </CardFooter>

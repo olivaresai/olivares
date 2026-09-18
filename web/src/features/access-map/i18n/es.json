@@ -149,6 +149,12 @@
     "title": "Aún no hay acceso observado",
     "description": "Cuando los conectores reporten actividad de los agentes, las relaciones R/RW aparecerán aquí."
   },
+  "list": {
+    "summary": "Mapa como lista",
+    "hint": "Lista accesible por teclado de cada nodo de este mapa. Seleccionar una fila abre el mismo detalle que el grafo.",
+    "node": "Nodo",
+    "kind": "Tipo"
+  },
   "forbidden": {
     "title": "Mapa de acceso no autorizado",
     "description": "Tu rol no incluye permiso para ver el grafo de acceso."

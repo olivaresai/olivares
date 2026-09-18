@@ -90,6 +90,8 @@ import {
   type NotifyEvaluateResult,
   type NotifySeverity,
 } from './api'
+import { PagePrimaryAction } from '@/components/ui/page-actions'
+import { StaticTable } from '@/components/data/static-table'
 
 const SEVERITIES: NotifySeverity[] = [
   '',
@@ -366,15 +368,15 @@ function RoutesTab({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-sm text-muted-foreground">{t('routes.intro')}</p>
-        {canWrite ? (
+      <p className="text-body text-muted-foreground">{t('routes.intro')}</p>
+      {canWrite ? (
+        <PagePrimaryAction>
           <Button variant="primary" size="sm" onClick={() => setCreating(true)}>
             <Plus />
             {t('routes.add')}
           </Button>
-        ) : null}
-      </div>
+        </PagePrimaryAction>
+      ) : null}
       {canWrite ? (
         <BulkActionBar
           selectedIds={[...selectedIds]}
@@ -473,6 +475,7 @@ function RoutesTab({
             title: t('history.title', { name: historyRoute.name }),
             description: t('history.description'),
             empty: t('history.empty'),
+            emptyHint: t('history.emptyHint'),
             loading: t('common:states.loading'),
             loadMore: t('history.loadMore'),
             compareTitle: t('history.compareTitle'),
@@ -673,7 +676,7 @@ function RouteDialog({
               {matchTypesQ.data?.match_types.map((item) => (
                 <label
                   key={item.type}
-                  className="flex items-start gap-2 text-sm"
+                  className="flex items-start gap-2 text-body"
                 >
                   <Checkbox
                     checked={matchTypes.includes(item.type)}
@@ -686,8 +689,10 @@ function RouteDialog({
                     }
                   />
                   <span>
-                    <span className="block font-mono text-xs">{item.type}</span>
-                    <span className="block text-xs text-muted-foreground">
+                    <span className="block font-mono text-caption">
+                      {item.type}
+                    </span>
+                    <span className="block text-caption text-muted-foreground">
                       {item.description}
                     </span>
                   </span>
@@ -769,10 +774,10 @@ function RouteDialog({
           </div>
           <div className="flex items-center justify-between gap-4 rounded-md border p-3">
             <span className="min-w-0">
-              <span className="text-sm font-medium text-foreground">
+              <span className="text-body font-medium text-foreground">
                 {t('routes.dialog.enabled')}
               </span>
-              <span className="block text-xs text-muted-foreground">
+              <span className="block text-caption text-muted-foreground">
                 {t('routes.dialog.enabledHint')}
               </span>
             </span>
@@ -835,7 +840,7 @@ function TestSignalPanel() {
           que puntúa h1=1 skips=0 igual que una vista limpia. El peso visual lo da `font-medium`,
           que no se toca. */}
       <h2 className="font-medium text-foreground">{t('evaluate.title')}</h2>
-      <p className="mt-1 text-sm text-muted-foreground">
+      <p className="mt-1 text-body text-muted-foreground">
         {t('evaluate.caption')}
       </p>
       <form
@@ -913,12 +918,12 @@ function TestSignalPanel() {
       </form>
       {result ? (
         <div className="mt-4">
-          <p className="text-sm font-medium">
+          <p className="text-body font-medium">
             {t('evaluate.matchedCount', { count: result.matched_count })}
           </p>
-          <table className="mt-2 w-full text-sm">
+          <StaticTable className="mt-2">
             <thead>
-              <tr className="border-b text-left">
+              <tr>
                 <th>{t('evaluate.name')}</th>
                 <th>{t('evaluate.enabled')}</th>
                 <th>{t('evaluate.matched')}</th>
@@ -927,8 +932,8 @@ function TestSignalPanel() {
             </thead>
             <tbody>
               {result.items.map((verdict) => (
-                <tr key={verdict.id} className="border-b last:border-0">
-                  <td className="py-2">{verdict.name}</td>
+                <tr key={verdict.id}>
+                  <td>{verdict.name}</td>
                   <td>
                     <Badge variant={verdict.enabled ? 'success' : 'neutral'}>
                       {t(
@@ -941,7 +946,7 @@ function TestSignalPanel() {
                       {t(verdict.matched ? 'evaluate.yes' : 'evaluate.no')}
                     </Badge>
                   </td>
-                  <td className="flex flex-wrap gap-1 py-2">
+                  <td className="flex flex-wrap gap-1">
                     {verdict.mismatches.map((mismatch) => (
                       <Badge key={mismatch} variant="neutral">
                         {t(`evaluate.dimensions.${mismatch}`)}
@@ -951,7 +956,7 @@ function TestSignalPanel() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </StaticTable>
         </div>
       ) : null}
     </section>
@@ -966,7 +971,12 @@ function DeliveriesTab() {
   const [status, setStatus] = useState<string>('all')
 
   if (!can('notify:delivery:read')) {
-    return <EmptyState title={t('deliveries.noRead')} />
+    return (
+      <EmptyState
+        description={t('deliveries.noReadHint')}
+        title={t('deliveries.noRead')}
+      />
+    )
   }
 
   const params = status === 'all' ? undefined : { status }
@@ -1007,7 +1017,9 @@ function DeliveriesList({
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-sm text-muted-foreground">{t('deliveries.intro')}</p>
+        <p className="text-body text-muted-foreground">
+          {t('deliveries.intro')}
+        </p>
         <div className="w-48">
           <Select value={status} onValueChange={setStatus}>
             <SelectTrigger aria-label={t('deliveries.filterStatus')}>
@@ -1032,45 +1044,38 @@ function DeliveriesList({
       ) : deliveriesQ.isError ? (
         <ErrorState retry={() => void deliveriesQ.refetch()} />
       ) : items.length === 0 ? (
-        <EmptyState title={t('deliveries.empty')} />
+        <EmptyState
+          description={t('deliveries.emptyHint')}
+          title={t('deliveries.empty')}
+        />
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <StaticTable>
             <thead>
-              <tr className="border-b text-left text-xs uppercase tracking-wider text-muted-foreground">
-                <th className="py-2 pr-4 font-medium">
-                  {t('deliveries.colTime')}
-                </th>
-                <th className="py-2 pr-4 font-medium">
-                  {t('deliveries.colDest')}
-                </th>
-                <th className="py-2 pr-4 font-medium">
-                  {t('deliveries.colKind')}
-                </th>
-                <th className="py-2 pr-4 font-medium">
-                  {t('deliveries.colStatus')}
-                </th>
-                <th className="py-2 pr-4 font-medium">
-                  {t('deliveries.colDetail')}
-                </th>
+              <tr className="tracking-wider">
+                <th>{t('deliveries.colTime')}</th>
+                <th>{t('deliveries.colDest')}</th>
+                <th>{t('deliveries.colKind')}</th>
+                <th>{t('deliveries.colStatus')}</th>
+                <th>{t('deliveries.colDetail')}</th>
               </tr>
             </thead>
             <tbody>
               {items.map((d) => (
-                <tr key={d.id} className="border-b last:border-0 align-top">
-                  <td className="py-2 pr-4 font-mono text-xs text-muted-foreground">
+                <tr key={d.id} className="align-top">
+                  <td className="font-mono text-caption text-muted-foreground">
                     {d.occurred_at}
                   </td>
-                  <td className="py-2 pr-4 font-mono">{d.destination}</td>
-                  <td className="py-2 pr-4">
+                  <td className="font-mono">{d.destination}</td>
+                  <td>
                     {d.finding_kind || d.event_type}
                     {d.severity ? (
-                      <span className="ml-1 text-xs text-muted-foreground">
+                      <span className="ml-1 text-caption text-muted-foreground">
                         ({d.severity})
                       </span>
                     ) : null}
                   </td>
-                  <td className="py-2 pr-4">
+                  <td>
                     <Badge
                       variant={
                         d.status === 'delivered'
@@ -1088,13 +1093,11 @@ function DeliveriesList({
                       })}
                     </Badge>
                   </td>
-                  <td className="py-2 pr-4 text-muted-foreground">
-                    {d.detail ?? ''}
-                  </td>
+                  <td className="text-muted-foreground">{d.detail ?? ''}</td>
                 </tr>
               ))}
             </tbody>
-          </table>
+          </StaticTable>
           {deliveriesQ.hasNextPage ? (
             <div className="flex justify-center pt-2">
               <Button
@@ -1246,13 +1249,15 @@ function RedeliverFailure({
       role={calm ? 'status' : 'alert'}
       className={
         calm
-          ? 'rounded-md border border-border bg-muted px-3 py-2 text-sm text-foreground'
-          : 'rounded-md border border-danger/40 bg-danger-soft px-3 py-2 text-sm text-foreground'
+          ? 'rounded-md border border-border bg-muted px-3 py-2 text-body text-foreground'
+          : 'rounded-md border border-danger/40 bg-danger-soft px-3 py-2 text-body text-foreground'
       }
     >
       <span className="font-medium">{message}</span>
       {detail ? (
-        <span className="block text-xs text-muted-foreground">{detail}</span>
+        <span className="block text-caption text-muted-foreground">
+          {detail}
+        </span>
       ) : null}
     </div>
   )
@@ -1342,7 +1347,7 @@ function OutboxList({ canRedeliver }: { canRedeliver: boolean }) {
       accessorKey: 'occurred_at',
       header: t('outbox.colTime'),
       cell: ({ row }) => (
-        <span className="font-mono text-xs text-muted-foreground">
+        <span className="font-mono text-caption text-muted-foreground">
           {row.original.occurred_at}
         </span>
       ),
@@ -1363,12 +1368,12 @@ function OutboxList({ canRedeliver }: { canRedeliver: boolean }) {
           <span>
             {entry.finding_kind || entry.event_type}
             {entry.severity ? (
-              <span className="ml-1 text-xs text-muted-foreground">
+              <span className="ml-1 text-caption text-muted-foreground">
                 ({entry.severity})
               </span>
             ) : null}
             {entry.title ? (
-              <span className="block text-xs text-muted-foreground">
+              <span className="block text-caption text-muted-foreground">
                 {entry.title}
               </span>
             ) : null}
@@ -1380,7 +1385,7 @@ function OutboxList({ canRedeliver }: { canRedeliver: boolean }) {
       accessorKey: 'attempts',
       header: t('outbox.colAttempts'),
       cell: ({ row }) => (
-        <span className="font-mono text-xs">{row.original.attempts}</span>
+        <span className="font-mono text-caption">{row.original.attempts}</span>
       ),
     },
     {
@@ -1441,7 +1446,7 @@ function OutboxList({ canRedeliver }: { canRedeliver: boolean }) {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-sm text-muted-foreground">{t('outbox.intro')}</p>
+        <p className="text-body text-muted-foreground">{t('outbox.intro')}</p>
         <div className="w-48">
           <Select value={status} onValueChange={setStatus}>
             <SelectTrigger aria-label={t('outbox.filterStatus')}>

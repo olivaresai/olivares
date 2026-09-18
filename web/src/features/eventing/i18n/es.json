@@ -107,6 +107,7 @@
     "title": "Eventos capturados",
     "description": "Registro de eventos con cursor de secuencia. Filtra por tipo de evento para acotar resultados.",
     "empty": "Sin eventos capturados",
+    "emptyHint": "Aquí se lista cada evento capturado por el bus, del más reciente al más antiguo. No se ha publicado nada en este intervalo.",
     "typeFilter": "Filtrar por tipo",
     "allTypes": "Todos los tipos",
     "columns": {
@@ -123,6 +124,7 @@
     "title": "Entregas",
     "description": "Estado de entrega de despachos de eventos webhook. Filtra por suscripción, estado o tipo de evento.",
     "empty": "Sin entregas",
+    "emptyHint": "Aquí se lista cada intento de entregar un evento a una suscripción, con su resultado. Todavía no se ha entregado nada.",
     "subscriptionFilter": "Suscripción",
     "statusFilter": "Estado",
     "typeFilter": "Tipo de evento",
@@ -188,6 +190,7 @@
     "description": "Instantáneas cronológicas de esta suscripción en un registro de solo anexión.",
     "scopeCaption": "La restauración vuelve a aplicar solo la configuración de entrega; nunca las credenciales ni el perfil de destino.",
     "empty": "No hay revisiones registradas",
+    "emptyHint": "Cada cambio en esta suscripción se guarda como una revisión que puedes comparar y restaurar. La primera edición crea una.",
     "loadMore": "Cargar más",
     "compareTitle": "Diferencias entre instantáneas",
     "selectTwo": "Selecciona dos revisiones para comparar sus instantáneas.",

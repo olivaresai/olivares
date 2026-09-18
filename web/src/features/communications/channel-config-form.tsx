@@ -730,7 +730,7 @@ export function ChannelConfigForm({
     >
       {archived ? (
         <p
-          className="rounded-md border border-warning-line bg-warning-soft px-3 py-2 text-sm text-warning"
+          className="rounded-md border border-warning-line bg-warning-soft px-3 py-2 text-body text-warning"
           role="status"
         >
           {t('config.archivedNote')}
@@ -738,7 +738,7 @@ export function ChannelConfigForm({
       ) : null}
       {rebased.length > 0 ? (
         <p
-          className="rounded-md border border-info-line bg-info-soft px-3 py-2 text-sm text-info"
+          className="rounded-md border border-info-line bg-info-soft px-3 py-2 text-body text-info"
           role="status"
           data-slot="config-rebased"
         >
@@ -750,7 +750,7 @@ export function ChannelConfigForm({
         </p>
       ) : null}
       {errors.length > 0 ? (
-        <ul role="alert" className="list-disc pl-5 text-sm text-danger">
+        <ul role="alert" className="list-disc pl-5 text-body text-danger">
           {errors.map((e) => (
             <li key={e}>{e}</li>
           ))}
@@ -794,7 +794,9 @@ export function ChannelConfigForm({
           <span data-slot="config-etag">{etag}</span>
         </KvRow>
       </KvList>
-      <p className="text-xs text-muted-foreground">{t('config.immutable')}</p>
+      <p className="text-caption text-muted-foreground">
+        {t('config.immutable')}
+      </p>
 
       <Button
         type="button"
@@ -946,12 +948,12 @@ export function ChannelConfigForm({
           role="region"
           aria-label={t('config.confirm.title')}
         >
-          <p className="text-sm font-medium">{t('config.confirm.title')}</p>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-body font-medium">{t('config.confirm.title')}</p>
+          <p className="text-body text-muted-foreground">
             {t('config.confirm.body', { etag: intent.etag })}
           </p>
           {archiving ? (
-            <p className="text-sm font-medium text-danger" role="alert">
+            <p className="text-body font-medium text-danger" role="alert">
               {t('config.confirm.archiving')}
             </p>
           ) : null}
@@ -971,7 +973,7 @@ export function ChannelConfigForm({
             </KvRow>
           </KvList>
           {reading ? (
-            <p className="text-xs text-muted-foreground" role="status">
+            <p className="text-caption text-muted-foreground" role="status">
               {t('states.reading')}
             </p>
           ) : null}
@@ -980,7 +982,7 @@ export function ChannelConfigForm({
       {phase === 'conflict' && failure ? (
         <div data-slot="config-conflict">
           <FailureNotice failure={failure} title={t('config.conflictTitle')} />
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="mt-1 text-body text-muted-foreground">
             {t('config.conflictBody')}
           </p>
         </div>
@@ -988,7 +990,7 @@ export function ChannelConfigForm({
       {phase === 'unknown' && failure && intent ? (
         <div data-slot="config-unknown" className="flex flex-col gap-2">
           <FailureNotice failure={failure} title={t('config.unknownTitle')} />
-          <p className="text-sm text-muted-foreground">
+          <p className="text-body text-muted-foreground">
             {t('config.unknownBody')}
           </p>
           <KvList>
@@ -1019,7 +1021,7 @@ export function ChannelConfigForm({
         >
           <div
             role="status"
-            className="rounded-md border border-success-line bg-success-soft px-3 py-2 text-sm text-success"
+            className="rounded-md border border-success-line bg-success-soft px-3 py-2 text-body text-success"
           >
             <p className="font-medium">{t('config.appliedTitle')}</p>
             <p>{t('config.appliedBody')}</p>

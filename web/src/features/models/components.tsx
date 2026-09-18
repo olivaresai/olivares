@@ -29,6 +29,7 @@ import type {
   GovernedModel,
   KeyRef,
 } from './types'
+import { StaticTable } from '@/components/data/static-table'
 
 // --- capability matrix -------------------------------------------------------
 
@@ -41,16 +42,14 @@ export function CapabilityMatrix({ catalog }: { catalog: CatalogResponse }) {
       noPadding
     >
       <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-sm">
+        <StaticTable>
           <thead>
-            <tr className="border-b border-border-strong">
-              <th className="sticky left-0 z-10 bg-muted px-3 py-2 text-left text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                {t('catalog.family')}
-              </th>
+            <tr>
+              <th className="sticky left-0 z-10">{t('catalog.family')}</th>
               {catalog.capabilities.map((cap) => (
                 <th
                   key={cap}
-                  className="bg-muted px-2 py-2 text-center text-[11px] font-medium whitespace-nowrap text-muted-foreground"
+                  className="text-center text-[11px] whitespace-nowrap"
                   title={humanize(cap)}
                 >
                   {humanize(cap)}
@@ -62,15 +61,12 @@ export function CapabilityMatrix({ catalog }: { catalog: CatalogResponse }) {
             {catalog.models.map((m) => {
               const present = new Set(m.capabilities)
               return (
-                <tr
-                  key={m.family}
-                  className="border-b border-border last:border-0"
-                >
-                  <td className="sticky left-0 z-10 bg-surface px-3 py-2 whitespace-nowrap">
-                    <span className="font-mono text-xs text-foreground">
+                <tr key={m.family}>
+                  <td className="sticky left-0 z-10 bg-surface whitespace-nowrap">
+                    <span className="font-mono text-caption text-foreground">
                       {m.family}
                     </span>
-                    <span className="ml-2 text-xs text-muted-foreground">
+                    <span className="ml-2 text-caption text-muted-foreground">
                       {m.provider_ref}
                     </span>
                     {m.caps_to_confirm ? (
@@ -87,7 +83,7 @@ export function CapabilityMatrix({ catalog }: { catalog: CatalogResponse }) {
                     ) : null}
                   </td>
                   {catalog.capabilities.map((cap) => (
-                    <td key={cap} className="px-2 py-2 text-center">
+                    <td key={cap} className="text-center">
                       {present.has(cap) ? (
                         <Check
                           className="mx-auto size-3.5 text-confidence-attributed"
@@ -105,7 +101,7 @@ export function CapabilityMatrix({ catalog }: { catalog: CatalogResponse }) {
               )
             })}
           </tbody>
-        </table>
+        </StaticTable>
       </div>
     </SectionCard>
   )
@@ -125,65 +121,42 @@ export function PricingTable({ catalog }: { catalog: CatalogResponse }) {
           })}
         </CaveatNotice>
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-sm">
+          <StaticTable>
             <thead>
-              <tr className="border-b border-border-strong text-xs text-muted-foreground uppercase">
-                <th className="px-3 py-2 text-left font-medium">
-                  {t('catalog.family')}
-                </th>
-                <th className="px-3 py-2 text-left font-medium">
-                  {t('catalog.provider')}
-                </th>
-                <th className="px-3 py-2 text-right font-medium">
-                  {t('catalog.context')}
-                </th>
-                <th className="px-3 py-2 text-right font-medium">
-                  {t('catalog.inputPrice')}
-                </th>
-                <th className="px-3 py-2 text-right font-medium">
-                  {t('catalog.outputPrice')}
-                </th>
-                <th className="px-3 py-2 text-right font-medium">
-                  {t('catalog.cacheRead')}
-                </th>
-                <th className="px-3 py-2 text-right font-medium">
-                  {t('catalog.cacheWrite1h')}
-                </th>
-                <th className="px-3 py-2 text-left font-medium">
-                  {t('catalog.residency')}
-                </th>
-                <th className="px-3 py-2 text-left font-medium">
-                  {t('catalog.tiers')}
-                </th>
+              <tr>
+                <th>{t('catalog.family')}</th>
+                <th>{t('catalog.provider')}</th>
+                <th className="text-right">{t('catalog.context')}</th>
+                <th className="text-right">{t('catalog.inputPrice')}</th>
+                <th className="text-right">{t('catalog.outputPrice')}</th>
+                <th className="text-right">{t('catalog.cacheRead')}</th>
+                <th className="text-right">{t('catalog.cacheWrite1h')}</th>
+                <th>{t('catalog.residency')}</th>
+                <th>{t('catalog.tiers')}</th>
               </tr>
             </thead>
             <tbody>
               {catalog.models.map((m) => (
-                <tr
-                  key={m.family}
-                  className="border-b border-border last:border-0"
-                >
-                  <td className="px-3 py-2 font-mono text-xs">{m.family}</td>
-                  <td className="px-3 py-2 text-muted-foreground">
-                    {m.provider_ref}
-                  </td>
-                  <td className="px-3 py-2 text-right font-mono tabular-nums text-muted-foreground">
+                <tr key={m.family}>
+                  <td className="font-mono text-caption">{m.family}</td>
+                  <td className="text-muted-foreground">{m.provider_ref}</td>
+                  <td className="text-right font-mono tabular-nums text-muted-foreground">
                     {formatInt(m.context_window, i18n.language)}
                   </td>
                   {m.pricing ? (
                     <>
-                      <td className="px-3 py-2 text-right font-mono tabular-nums">
+                      <td className="text-right font-mono tabular-nums">
                         ${m.pricing.input_per_mtok_usd}
                       </td>
-                      <td className="px-3 py-2 text-right font-mono tabular-nums">
+                      <td className="text-right font-mono tabular-nums">
                         ${m.pricing.output_per_mtok_usd}
                       </td>
-                      <td className="px-3 py-2 text-right font-mono tabular-nums text-muted-foreground">
+                      <td className="text-right font-mono tabular-nums text-muted-foreground">
                         {m.pricing.cache_read_per_mtok_usd !== undefined
                           ? `$${m.pricing.cache_read_per_mtok_usd}`
                           : '—'}
                       </td>
-                      <td className="px-3 py-2 text-right font-mono tabular-nums text-muted-foreground">
+                      <td className="text-right font-mono tabular-nums text-muted-foreground">
                         {/* The 1-hour TTL cache-write tier is a DISTINCT rate (~2× base
                             input) — never collapsed into the 5m rate (reference.go). */}
                         {m.pricing.cache_write_1h_per_mtok_usd !== undefined
@@ -192,20 +165,20 @@ export function PricingTable({ catalog }: { catalog: CatalogResponse }) {
                       </td>
                     </>
                   ) : (
-                    <td colSpan={4} className="px-3 py-2 text-center">
+                    <td colSpan={4} className="text-center">
                       <Badge variant="outline">{t('catalog.noPricing')}</Badge>
                     </td>
                   )}
-                  <td className="px-3 py-2">
+                  <td>
                     <ResidencyBadges model={m} />
                   </td>
-                  <td className="px-3 py-2">
+                  <td>
                     <TierEligibility tiers={m.service_tier_eligibility} />
                   </td>
                 </tr>
               ))}
             </tbody>
-          </table>
+          </StaticTable>
         </div>
       </div>
     </SectionCard>
@@ -223,7 +196,7 @@ export function ResidencyBadges({ model }: { model: CatalogModel }) {
   const regions = model.data_residency ?? []
   if (regions.length === 0) {
     return (
-      <span className="text-xs text-muted-foreground">
+      <span className="text-caption text-muted-foreground">
         {t('catalog.residencyNotApplicable')}
       </span>
     )
@@ -252,7 +225,7 @@ export function TierEligibility({ tiers }: { tiers?: string[] }) {
   const { t } = useTranslation('models')
   if (!tiers || tiers.length === 0) {
     return (
-      <span className="text-xs text-muted-foreground">
+      <span className="text-caption text-muted-foreground">
         {t('catalog.tiersNotDeclared')}
       </span>
     )
@@ -279,7 +252,7 @@ export function ModelsTable({ models }: { models: GovernedModel[] }) {
         header: t('estate.columns.name'),
         cell: ({ row }) => (
           <div className="flex items-center gap-2">
-            <span className="font-mono text-xs text-foreground">
+            <span className="font-mono text-caption text-foreground">
               {row.original.name}
             </span>
             {!row.original.enriched ? (
@@ -304,7 +277,7 @@ export function ModelsTable({ models }: { models: GovernedModel[] }) {
         accessorKey: 'family',
         header: t('estate.columns.family'),
         cell: ({ row }) => (
-          <span className="font-mono text-xs text-muted-foreground">
+          <span className="font-mono text-caption text-muted-foreground">
             {row.original.family || '—'}
           </span>
         ),
@@ -372,7 +345,7 @@ export function ModelsTable({ models }: { models: GovernedModel[] }) {
 function TargetChip({ target }: { target: DecisionTarget }) {
   const { t } = useTranslation('models')
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-md border border-border bg-muted px-2 py-1 font-mono text-xs">
+    <span className="inline-flex items-center gap-1.5 rounded-md border border-border bg-muted px-2 py-1 font-mono text-caption">
       <span className="text-muted-foreground">{target.provider_ref}</span>
       {/* `--border-strong` is a BORDER token: as a text colour the separator
           measured 1.50:1 (dark) / 1.29:1 (light) on `bg-muted` — a glyph you
@@ -394,24 +367,26 @@ export function DecisionPanel({ decision }: { decision: Decision }) {
   if (!decision.resolved) {
     return (
       <div className="rounded-md border border-warning-line bg-warning-soft p-3">
-        <p className="text-sm font-medium text-warning">
+        <p className="text-body font-medium text-warning">
           {t('routing.decision.unresolved')}
         </p>
-        <p className="mt-1 text-xs text-muted-foreground">{decision.reason}</p>
+        <p className="mt-1 text-caption text-muted-foreground">
+          {decision.reason}
+        </p>
       </div>
     )
   }
   return (
     <div className="flex flex-col gap-3 rounded-md border border-border bg-muted/40 p-3">
       <div className="flex flex-col gap-1.5">
-        <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+        <span className="text-caption font-medium tracking-wide text-muted-foreground uppercase">
           {t('routing.decision.primary')}
         </span>
         {decision.primary ? <TargetChip target={decision.primary} /> : null}
       </div>
       {decision.fallbacks.length > 0 ? (
         <div className="flex flex-col gap-1.5">
-          <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+          <span className="text-caption font-medium tracking-wide text-muted-foreground uppercase">
             {t('routing.decision.fallbacks')}
           </span>
           <div className="flex flex-wrap items-center gap-1.5">
@@ -429,7 +404,7 @@ export function DecisionPanel({ decision }: { decision: Decision }) {
           </div>
         </div>
       ) : null}
-      <p className="text-xs text-muted-foreground">
+      <p className="text-caption text-muted-foreground">
         {t('routing.decision.reason')}:{' '}
         <span className="font-mono">{decision.reason}</span>
       </p>
@@ -446,7 +421,7 @@ export function MaskedHint({ hint }: { hint: string }) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <span className="inline-flex items-center gap-1.5 font-mono text-xs text-muted-foreground">
+        <span className="inline-flex items-center gap-1.5 font-mono text-caption text-muted-foreground">
           <Lock className="size-3 text-border-strong" />
           {hint || '—'}
         </span>
@@ -500,7 +475,7 @@ export function KeyRefsTable({
         accessorKey: 'ext_id',
         header: t('keys.columns.extId'),
         cell: ({ row }) => (
-          <span className="font-mono text-xs text-muted-foreground">
+          <span className="font-mono text-caption text-muted-foreground">
             {row.original.ext_id}
           </span>
         ),
@@ -514,7 +489,7 @@ export function KeyRefsTable({
         accessorKey: 'owner_ref',
         header: t('keys.columns.owner'),
         cell: ({ row }) => (
-          <span className="font-mono text-xs text-muted-foreground">
+          <span className="font-mono text-caption text-muted-foreground">
             {row.original.owner_ref || '—'}
           </span>
         ),
@@ -528,7 +503,7 @@ export function KeyRefsTable({
         accessorKey: 'created_at',
         header: t('keys.columns.created'),
         cell: ({ row }) => (
-          <span className="text-xs text-muted-foreground">
+          <span className="text-caption text-muted-foreground">
             {formatDate(row.original.created_at, i18n.language)}
           </span>
         ),

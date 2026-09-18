@@ -41,7 +41,7 @@ export function IntelNotice({
   return (
     <div
       className={cn(
-        'flex items-start gap-2 rounded-md border px-3 py-2 text-xs leading-relaxed',
+        'flex items-start gap-2 rounded-md border px-3 py-2 text-caption leading-relaxed',
         TONE_STYLES[tone],
         className,
       )}
@@ -208,7 +208,10 @@ export function DisclaimerNote({
   // saying nothing. Found by the sol-max contrast.
   return (
     <p
-      className={cn('text-xs leading-relaxed text-muted-foreground', className)}
+      className={cn(
+        'text-caption leading-relaxed text-muted-foreground',
+        className,
+      )}
       title={translated ? text : undefined}
     >
       {shown}

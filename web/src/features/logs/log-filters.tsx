@@ -64,7 +64,7 @@ export function LogFiltersBar({ filters, onChange }: LogFiltersBarProps) {
               type="button"
               onClick={() => toggleLevel(level)}
               className={cn(
-                'rounded-sm border px-1.5 py-0.5 text-xs font-medium transition-colors',
+                'rounded-sm border px-1.5 py-0.5 text-caption font-medium transition-colors',
                 'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background outline-none',
                 active ? colors.active : colors.inactive,
               )}
@@ -85,7 +85,7 @@ export function LogFiltersBar({ filters, onChange }: LogFiltersBarProps) {
         onChange={(e) => onChange({ ...filters, module: e.target.value })}
         placeholder={t('filters.modulePlaceholder')}
         mono
-        className="h-7 w-32 text-xs"
+        className="h-7 w-32 text-caption"
         aria-label={t('filters.moduleAria')}
       />
 
@@ -96,7 +96,7 @@ export function LogFiltersBar({ filters, onChange }: LogFiltersBarProps) {
           value={filters.search}
           onChange={(e) => onChange({ ...filters, search: e.target.value })}
           placeholder={t('filters.searchPlaceholder')}
-          className="h-7 w-40 pl-7 text-xs"
+          className="h-7 w-40 pl-7 text-caption"
           aria-label={t('filters.searchAria')}
         />
       </div>

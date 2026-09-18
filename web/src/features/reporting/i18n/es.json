@@ -4,6 +4,7 @@
   "catalog": {
     "title": "Informes bajo demanda",
     "empty": "No hay tipos de informe disponibles.",
+    "emptyHint": "El catálogo lista los tipos de informe que esta versión puede producir. Ninguno está disponible en esta edición.",
     "colReport": "Informe",
     "colFormats": "Formatos",
     "colActions": "Acciones",
@@ -35,6 +36,7 @@
     "new": "Nueva programación",
     "enterprise": "Los informes programados son una capacidad Enterprise y no están habilitados en esta edición.",
     "empty": "Aún no hay informes programados.",
+    "emptyHint": "Una programación produce un informe con una cadencia y lo entrega. Crea una para que el informe llegue sin pedirlo.",
     "colReport": "Informe",
     "colCron": "Cron",
     "colStatus": "Estado",
@@ -75,6 +77,7 @@
     "title": "Historial de ejecuciones",
     "description": "Cada ejecución registrada de esta programación: cuándo corrió y, si falló, por qué.",
     "notAnArchive": "Los proveedores acotan esta lista y podan las ejecuciones viejas — es una comodidad operativa, no un archivo. Una lista corta no significa que la programación sólo haya corrido unas pocas veces.",
-    "empty": "Sin ejecuciones registradas"
+    "empty": "Sin ejecuciones registradas",
+    "emptyHint": "Aquí se lista cada ejecución de informe, con su estado y su salida. Ejecuta un informe para registrar la primera."
   }
 }

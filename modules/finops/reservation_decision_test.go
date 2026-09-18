@@ -16,7 +16,7 @@ import (
 )
 
 // -----------------------------------------------------------------------------
-// R1 (independent review of D02-A, finding R1): AN ERROR THAT ARRIVES AFTER A
+// From an independent review of the completeness rule: AN ERROR THAT ARRIVES AFTER A
 // DECISION DOES NOT ERASE THE DECISION.
 //
 // Both admission paths keep evaluating the remaining budgets after one of them has
@@ -70,7 +70,7 @@ func incompletePage(int, model.Query) ([]model.Record, model.Page) {
 // It is two because the version-aware hold reader reads both of its disjoint
 // branches — the legacy one and the v1 one — and reads the second EVEN WHEN the
 // first is already unestablished, so that a contradiction observed in a v1 prefix
-// cannot hide behind a clean legacy prefix (D02/R6). The monotonic seq probe is a
+// cannot hide behind a clean legacy prefix, as an independent review found. The monotonic seq probe is a
 // sorted single-row query and the paging fixture deliberately leaves it on the real
 // repository, so it is not one of these.
 const readsPerTarget = 2
@@ -369,7 +369,7 @@ func TestGroupRefusalSurvivesALaterReadFailure(t *testing.T) {
 				// The first budget's reservation reads succeed; the group budget never
 				// reaches one (its aggregation fails first); the third one breaks.
 				//
-				// D02 RE-AIMED THE INJECTION, AND ONLY THE INJECTION. The staging is
+				// THE INJECTION WAS RE-AIMED, AND ONLY THE INJECTION. The staging is
 				// call-indexed, and the version-aware hold reader issues TWO reservation
 				// reads per target where the single-branch reader issued one: the legacy
 				// branch (active, unexpired, original bucket, NULL lifecycle linkage) and

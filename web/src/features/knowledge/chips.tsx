@@ -72,7 +72,7 @@ export function EmbedModelBadge({ value }: { value: string }) {
     )
   }
   return (
-    <span className="font-mono text-xs text-muted-foreground">
+    <span className="font-mono text-caption text-muted-foreground">
       {value || '—'}
     </span>
   )
@@ -107,14 +107,14 @@ export function HashChip({
 }) {
   const { t } = useTranslation('knowledge')
   if (!value) {
-    return <span className="text-xs text-muted-foreground">—</span>
+    return <span className="text-caption text-muted-foreground">—</span>
   }
   return (
     <span
       data-slot="hash-chip"
       title={title ?? t('common.hashHint')}
       className={cn(
-        'inline-flex items-center rounded-sm border border-border bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground',
+        'inline-flex items-center rounded-sm border border-border bg-muted px-1.5 py-0.5 font-mono text-caption text-muted-foreground',
         className,
       )}
     >
@@ -138,7 +138,7 @@ export function AclRefs({
   const { t } = useTranslation('knowledge')
   if (!acl || acl.length === 0) {
     return (
-      <span className="text-xs text-muted-foreground">
+      <span className="text-caption text-muted-foreground">
         {t('common.aclNone')}
       </span>
     )
@@ -150,7 +150,7 @@ export function AclRefs({
           key={ref}
           data-slot="acl-ref"
           title={t('common.aclHint')}
-          className="inline-flex items-center gap-1 rounded-sm border border-border bg-muted px-1.5 py-0.5 font-mono text-xs"
+          className="inline-flex items-center gap-1 rounded-sm border border-border bg-muted px-1.5 py-0.5 font-mono text-caption"
         >
           <KeyRound className="size-3 shrink-0 text-accent-text" aria-hidden />
           <span className="text-foreground">{ref}</span>

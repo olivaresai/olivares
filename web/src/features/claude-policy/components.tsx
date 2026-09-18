@@ -133,7 +133,7 @@ export function ValidationPanel({
     return (
       <p
         className={cn(
-          'flex items-center gap-2 text-xs text-success',
+          'flex items-center gap-2 text-caption text-success',
           className,
         )}
         role="status"
@@ -146,7 +146,7 @@ export function ValidationPanel({
   const errors = issues.filter((i) => i.severity === 'error').length
   return (
     <div className={cn('flex flex-col gap-1.5', className)}>
-      <p className="text-xs font-medium text-muted-foreground">
+      <p className="text-caption font-medium text-muted-foreground">
         {t('validation.summary', { count: issues.length, errors })}
       </p>
       <ul
@@ -159,7 +159,7 @@ export function ValidationPanel({
           return (
             <li
               key={`${issue.path}-${i}`}
-              className="flex items-start gap-2 rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs"
+              className="flex items-start gap-2 rounded-md border border-border bg-surface px-2.5 py-1.5 text-caption"
             >
               <Icon
                 className={cn('mt-px size-3.5 shrink-0', meta.cls)}
@@ -193,10 +193,12 @@ export function ReferenceRow({
 }) {
   return (
     <div className="grid grid-cols-[minmax(0,12rem)_1fr] gap-x-3 gap-y-0.5 py-1.5">
-      <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
+      <dt className="text-caption font-medium text-muted-foreground">
+        {label}
+      </dt>
       <dd
         className={cn(
-          'min-w-0 text-xs text-foreground',
+          'min-w-0 text-caption text-foreground',
           mono && 'font-mono break-all',
         )}
       >

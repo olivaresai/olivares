@@ -5,7 +5,7 @@
 // Schedule configuration form for automated backups. The engine owns the cron
 // scheduler; this form reads/writes the {enabled, cron, retain_days} config and
 // adds no logic (ARCHITECTURE.md SS8).
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
@@ -66,15 +66,17 @@ export function BackupSchedule() {
   const [dirty, setDirty] = useState(false)
 
   // Seed local state when the query resolves (or re-resolves after a mutation).
-  useEffect(() => {
-    if (scheduleQ.data) {
-      setEnabled(scheduleQ.data.enabled)
-      setCron(scheduleQ.data.cron)
-      setRetainDays(scheduleQ.data.retain_days)
-      setDualControl(scheduleQ.data.require_dual_control_restore ?? false)
-      setDirty(false)
-    }
-  }, [scheduleQ.data])
+  // Adjust during render: an effect that setState here was the cascading-render defect.
+  const data = scheduleQ.data
+  const [seeded, setSeeded] = useState<DRSchedule | undefined>(undefined)
+  if (data !== undefined && data !== seeded) {
+    setSeeded(data)
+    setEnabled(data.enabled)
+    setCron(data.cron)
+    setRetainDays(data.retain_days)
+    setDualControl(data.require_dual_control_restore ?? false)
+    setDirty(false)
+  }
 
   const saveMutation = usePrivilegedMutation<void, DRSchedule>({
     mutationFn: () =>
@@ -105,8 +107,8 @@ export function BackupSchedule() {
   return (
     <div className="flex flex-col gap-6 rounded-lg border border-border bg-surface p-6">
       <div>
-        <h2 className="text-base font-medium">{t('schedule.title')}</h2>
-        <p className="text-xs text-muted-foreground">
+        <h2 className="text-heading">{t('schedule.title')}</h2>
+        <p className="text-caption text-muted-foreground">
           {t('schedule.description')}
         </p>
       </div>
@@ -123,7 +125,7 @@ export function BackupSchedule() {
         />
         <label
           htmlFor="schedule-enabled"
-          className="text-sm font-medium select-none"
+          className="text-body font-medium select-none"
         >
           {enabled ? t('schedule.enabled') : t('schedule.disabled')}
         </label>
@@ -180,12 +182,12 @@ export function BackupSchedule() {
           />
           <label
             htmlFor="schedule-dual-control"
-            className="text-sm font-medium select-none"
+            className="text-body font-medium select-none"
           >
             {t('schedule.dualControlLabel')}
           </label>
         </div>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-caption text-muted-foreground">
           {t('schedule.dualControlDescription')}
         </p>
         {/* A requested disarm is not immediate, so the toggle snapping back to ON
@@ -193,7 +195,7 @@ export function BackupSchedule() {
             actually happening: the request is recorded, the gate still holds
             until the stated instant, and re-enabling cancels it. */}
         {scheduleQ.data?.dual_control_disarm_effective_at && (
-          <p className="text-xs font-medium text-warning" role="status">
+          <p className="text-caption font-medium text-warning" role="status">
             {t('schedule.dualControlDisarmPending', {
               when: new Date(
                 scheduleQ.data.dual_control_disarm_effective_at,

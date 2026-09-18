@@ -120,6 +120,7 @@
     "dependencies": "Nach: {{value}}",
     "noDependencies": "Keine Abhängigkeiten",
     "empty": "Dieser Workflow hat keine geplanten Schritte.",
+    "emptyHint": "Ein Probelauf listet die Schritte auf, die der Workflow gehen würde, der Reihe nach und ohne sie auszuführen. Fügen Sie dem Workflow zuerst einen Schritt hinzu.",
     "failed": "Der Probelauf konnte nicht erzeugt werden."
   },
   "run": {
@@ -142,6 +143,7 @@
     "current": "Lauf {{id}}",
     "history": "Laufverlauf",
     "historyEmpty": "Es wurden keine Läufe aufgezeichnet.",
+    "historyEmptyHint": "Jeder Lauf dieses Workflows wird hier mit Ergebnis und Dauer aufgeführt. Führen Sie den Workflow aus, um den ersten aufzuzeichnen.",
     "historyFailed": "Der Ausführungsverlauf konnte nicht geladen werden.",
     "viewRun": "Lauf {{id}} anzeigen",
     "paused": "Pausiert: {{reason}}",
@@ -170,6 +172,7 @@
     "title": "Revisionsverlauf — {{name}}",
     "description": "Unveränderliche Workflow-Snapshots vergleichen oder wiederherstellen.",
     "empty": "Keine Revisionen aufgezeichnet",
+    "emptyHint": "Jede Änderung an diesem Workflow wird als Revision aufbewahrt, die Sie vergleichen und wiederherstellen können. Die erste Bearbeitung erzeugt eine.",
     "loading": "Revisionsverlauf wird geladen…",
     "loadMore": "Mehr laden",
     "compare": "Revisionen vergleichen",

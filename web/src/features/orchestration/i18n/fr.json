@@ -37,6 +37,7 @@
     "filter": "Filtrer par état",
     "allStates": "Tous les états",
     "empty": "Aucun flux dans cet état",
+    "emptyHint": "Les flux dans cet état apparaissent ici avec leur prochaine exécution. Changez le filtre d’état, ou créez un flux.",
     "columns": {
       "supervisor": "Superviseur",
       "workers": "Travailleurs",
@@ -179,7 +180,9 @@
     "description": "Enregistrement en ajout seul des décisions de déclenchement pour la planification sélectionnée. Une décision est affichée exactement telle qu’elle a été résolue — une approbation n’est pas un actionnement.",
     "pick": "Sélectionner une planification",
     "pickHint": "Sélectionnez une planification pour voir son registre des décisions.",
+    "pickHintDetail": "Le registre montre chaque décision prise par le planificateur pour cette planification, et la raison de chacune.",
     "empty": "Aucune décision enregistrée",
+    "emptyHint": "Chaque fois que le planificateur décide d’exécuter, d’ignorer ou de retarder une occurrence, c’est consigné ici. Cette planification n’a encore rien décidé.",
     "gate": "Garde",
     "plan": "plan",
     "op": {
@@ -214,7 +217,8 @@
       "workflow": "Workflow"
     },
     "estateDescription": "Journal en ajout seul de toutes les décisions du parc, de la plus récente à la plus ancienne. Inclut des décisions qui n’appartiennent à aucune planification.",
-    "forbidden": "Votre rôle ne peut pas lire les décisions de planification."
+    "forbidden": "Votre rôle ne peut pas lire les décisions de planification.",
+    "forbiddenHint": "Le registre des décisions consigne pourquoi le planificateur a exécuté, ignoré ou retardé chaque occurrence. Demandez à un administrateur la permission de lecture correspondante."
   },
   "timeline": {
     "title": "Chronologie d’activité",
@@ -232,6 +236,7 @@
     "description": "Instantanés chronologiques de cette planification dans un journal en ajout seul.",
     "scopeCaption": "La restauration réapplique uniquement les champs modifiables — jamais le nom, la nature du sujet ni la nature du déclencheur.",
     "empty": "Aucune révision enregistrée",
+    "emptyHint": "Chaque modification de cette planification est conservée comme une révision que vous pouvez comparer et restaurer. La première édition en crée une.",
     "loadMore": "Charger plus",
     "compareTitle": "Différence entre les instantanés",
     "selectTwo": "Sélectionnez deux révisions pour comparer leurs instantanés.",

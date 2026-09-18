@@ -126,7 +126,7 @@ export function SlaGauge({
           {t('sla.uptime')}
         </text>
       </svg>
-      <div className="mt-1 text-xs text-muted-foreground">
+      <div className="mt-1 text-caption text-muted-foreground">
         {hasTarget ? (
           <span>
             {t('sla.target')}:{' '}

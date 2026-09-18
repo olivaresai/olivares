@@ -50,7 +50,7 @@ export function EntryVerifyPanel({ entry }: { entry: EntryDTO }) {
   return (
     <section className="flex flex-col gap-3">
       <div className="flex items-center justify-between gap-2">
-        <h3 className="text-sm font-medium text-foreground">
+        <h3 className="text-body font-medium text-foreground">
           {t('verify.title')}
         </h3>
         <Button
@@ -63,7 +63,9 @@ export function EntryVerifyPanel({ entry }: { entry: EntryDTO }) {
           {t('verify.reverify')}
         </Button>
       </div>
-      <p className="text-xs text-muted-foreground">{t('verify.caption')}</p>
+      <p className="text-caption text-muted-foreground">
+        {t('verify.caption')}
+      </p>
 
       {verify.isLoading ? (
         <Skeleton className="h-20 w-full" />
@@ -73,7 +75,7 @@ export function EntryVerifyPanel({ entry }: { entry: EntryDTO }) {
 
       {/* Catalog-wide signing posture from /pubkey. */}
       <div className="mt-1 rounded-md border border-border bg-muted/40 p-3">
-        <p className="mb-1.5 text-xs font-medium text-foreground">
+        <p className="mb-1.5 text-caption font-medium text-foreground">
           {t('posture.title')}
         </p>
         {pubkey.isLoading ? (
@@ -99,7 +101,7 @@ export function EntryVerifyPanel({ entry }: { entry: EntryDTO }) {
               )}
             </KvList>
           ) : (
-            <p className="text-xs text-muted-foreground">
+            <p className="text-caption text-muted-foreground">
               {pubkey.data.note ?? t('posture.disabledNote')}
             </p>
           )
@@ -172,14 +174,14 @@ function VerifyState({ data, pinned }: { data: VerifyDTO; pinned: boolean }) {
       <div
         role="status"
         className={cn(
-          'flex items-start gap-2 rounded-md border px-3 py-2 text-sm',
+          'flex items-start gap-2 rounded-md border px-3 py-2 text-body',
           toneClass,
         )}
       >
         <Icon className="mt-0.5 size-4 shrink-0" aria-hidden />
         <div className="flex flex-col gap-0.5">
           <span className="font-medium">{label}</span>
-          <span className="text-xs opacity-90">{hint}</span>
+          <span className="text-caption opacity-90">{hint}</span>
         </div>
       </div>
 

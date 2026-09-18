@@ -149,7 +149,7 @@ export function MessageSheet({
               </KvRow>
             </KvList>
             <section aria-label={t('fulfillment.title')}>
-              <p className="mb-1 text-sm font-medium">
+              <p className="mb-1 text-body font-medium">
                 {t('fulfillment.title')}
               </p>
               <FulfillmentView fulfillment={result.fulfillment} />

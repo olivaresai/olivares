@@ -103,7 +103,7 @@ function CheckingNotice() {
       aria-live="polite"
     >
       <Spinner />
-      <span className="ml-3 text-sm text-muted-foreground">
+      <span className="ml-3 text-body text-muted-foreground">
         {t('capability.checking')}
       </span>
     </div>
@@ -140,10 +140,10 @@ function GlobalAccountNotice() {
       aria-live="polite"
     >
       <div className="max-w-md space-y-2 text-center">
-        <p className="text-sm font-medium">
+        <p className="text-body font-medium">
           {t('capability.globalAccountTitle')}
         </p>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-body text-muted-foreground">
           {t('capability.globalAccountBody')}
         </p>
       </div>
@@ -168,14 +168,14 @@ function NeutralNotice({ undisclosed }: { undisclosed: boolean }) {
       aria-live="polite"
     >
       <div className="max-w-md space-y-2 text-center">
-        <p className="text-sm font-medium">
+        <p className="text-body font-medium">
           {t(
             undisclosed
               ? 'capability.undisclosedTitle'
               : 'capability.unavailableTitle',
           )}
         </p>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-body text-muted-foreground">
           {t(
             undisclosed
               ? 'capability.undisclosedBody'
@@ -184,7 +184,7 @@ function NeutralNotice({ undisclosed }: { undisclosed: boolean }) {
         </p>
         <p
           data-slot="capability-retry"
-          className="text-xs text-muted-foreground"
+          className="text-caption text-muted-foreground"
         >
           {t('capability.retrying')}
         </p>

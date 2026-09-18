@@ -86,6 +86,7 @@
       "copyFailed": "Konnte nicht in die Zwischenablage kopieren.",
       "checkins": "Host-Meldungen",
       "noCheckins": "Noch hat sich kein Host gemeldet.",
+      "noCheckinsHint": "Ein Host meldet sich, sobald der Policy Enforcement Point installiert ist und die Engine erreicht. Installieren Sie ihn auf einem Host, damit er hier erscheint.",
       "colScope": "Geltungsbereich",
       "colReporter": "Melder",
       "colRevision": "Revision",

@@ -59,6 +59,7 @@ import type {
   DatasetClassification,
   DatasetInput,
 } from '@/features/models/types'
+import { PagePrimaryAction } from '@/components/ui/page-actions'
 
 const CLASSIFICATIONS: DatasetClassification[] = [
   'public',
@@ -127,7 +128,7 @@ export function DatasetsTab() {
         header: t('datasets.columns.ownedRef'),
         cell: ({ row }) =>
           row.original.owned_ref ? (
-            <span className="font-mono text-xs text-muted-foreground">
+            <span className="font-mono text-caption text-muted-foreground">
               {row.original.owned_ref}
             </span>
           ) : (
@@ -177,14 +178,16 @@ export function DatasetsTab() {
       description={t('datasets.description')}
       actions={
         canWrite ? (
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={() => setCreateOpen(true)}
-          >
-            <Plus />
-            {t('datasets.new')}
-          </Button>
+          <PagePrimaryAction>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => setCreateOpen(true)}
+            >
+              <Plus />
+              {t('datasets.new')}
+            </Button>
+          </PagePrimaryAction>
         ) : null
       }
       noPadding
@@ -293,7 +296,7 @@ function DatasetDrawer({
                   <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                     {t('datasets.provenanceLabel')}
                   </p>
-                  <p className="mt-0.5 text-xs text-foreground">
+                  <p className="mt-0.5 text-caption text-foreground">
                     {dataset.verified
                       ? t('datasets.provenanceClaimed')
                       : t('datasets.provenanceNotClaimed')}
@@ -449,7 +452,7 @@ function DatasetForm({
 
       {formError && (
         <div className="rounded-md border border-danger bg-danger-soft px-3 py-2">
-          <p className="whitespace-pre-wrap text-xs text-foreground">
+          <p className="whitespace-pre-wrap text-caption text-foreground">
             {formError}
           </p>
         </div>

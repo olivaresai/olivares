@@ -34,6 +34,7 @@
     "loading": "Wird geladen…",
     "empty": "Hier ist noch nichts",
     "noResults": "Keine Ergebnisse",
+    "noResultsHint": "Keine Zeile entspricht dem aktuellen Filter. Entfernen Sie ihn oder erweitern Sie die Suche, um die Zeilen wieder zu sehen.",
     "comingSoon": "Demnächst verfügbar",
     "loaded": "Geladen",
     "yes": "Ja",
@@ -200,5 +201,60 @@
     "navigation": "Gehe zu",
     "openPalette": "Befehlspalette öffnen",
     "showHelp": "Diese Hilfe anzeigen"
+  },
+  "keys": {
+    "group": {
+      "general": "Allgemein",
+      "launcher": "Sitzung starten",
+      "surface": "Die Arbeitsfläche",
+      "navRail": "Navigationsleiste"
+    },
+    "command": {
+      "palette": {
+        "open": "Befehlspalette öffnen"
+      },
+      "help": {
+        "toggle": "Diese Tastenkürzel anzeigen"
+      },
+      "launcher": {
+        "focus": "Zum Starter springen",
+        "start": "Sitzung starten",
+        "startBackground": "Starten und hier bleiben"
+      },
+      "surface": {
+        "nextPane": "Nächster Bereich",
+        "previousPane": "Vorheriger Bereich"
+      },
+      "rail": {
+        "next": "Nächste Sitzung",
+        "previous": "Vorherige Sitzung",
+        "first": "Erste Sitzung",
+        "last": "Letzte Sitzung",
+        "open": "Sitzung öffnen",
+        "pin": "Anheften oder lösen"
+      },
+      "nav": {
+        "toggleRail": "Navigationsleiste ein- oder ausklappen"
+      },
+      "navRail": {
+        "next": "Nächstes Modul",
+        "previous": "Vorheriges Modul",
+        "expand": "Bereich öffnen oder hineingehen",
+        "fold": "Bereich einklappen oder zu ihm zurück",
+        "first": "Erstes Modul",
+        "last": "Letztes Modul",
+        "pin": "Dieses Modul anheften oder lösen"
+      }
+    },
+    "when": {
+      "railFocused": "in der Sitzungsleiste",
+      "launcherFocused": "im Starterfeld",
+      "workSurface": "auf dem Sitzungsbildschirm"
+    },
+    "precedence": "Teilen sich zwei Zeilen dieselben Tasten, gewinnt die letzte zutreffende.",
+    "modNote": "⌘ ist Strg unter Windows und Linux.",
+    "problems_one": "{{count}} Tastenkürzel konnte nicht gelesen werden und löst nicht aus: {{commands}}",
+    "problems_other": "{{count}} Tastenkürzel konnten nicht gelesen werden und lösen nicht aus: {{commands}}",
+    "navRailNote": "Die Leiste ist ein einziger Tabstopp. Diese Tasten wirken, solange sie den Fokus hat."
   }
 }

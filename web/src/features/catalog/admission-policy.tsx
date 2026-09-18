@@ -79,10 +79,10 @@ function PolicyCard({ kind }: { kind: AdmissionKind }) {
     <section className="rounded-lg border border-border p-4">
       <header className="mb-3 flex items-start justify-between gap-3">
         <div>
-          <h3 className="text-sm font-medium text-foreground">
+          <h3 className="text-body font-medium text-foreground">
             {t(`policy.kind.${kind}.title`)}
           </h3>
-          <p className="mt-0.5 text-xs text-muted-foreground">
+          <p className="mt-0.5 text-caption text-muted-foreground">
             {t(`policy.kind.${kind}.body`)}
           </p>
         </div>
@@ -96,7 +96,7 @@ function PolicyCard({ kind }: { kind: AdmissionKind }) {
       {q.isLoading && <Skeleton className="h-32 w-full" />}
       {q.error && (
         <div className="rounded-md border border-danger bg-danger-soft px-3 py-2">
-          <p className="text-xs text-danger">{t('policy.loadFailed')}</p>
+          <p className="text-caption text-danger">{t('policy.loadFailed')}</p>
           <Button
             variant="ghost"
             size="sm"
@@ -142,10 +142,10 @@ function PolicySummary({ policy }: { policy: AdmissionPolicy }) {
             : 'rounded-md border border-warning bg-warning-soft px-3 py-2'
         }
       >
-        <p className="text-sm font-medium text-foreground">
+        <p className="text-body font-medium text-foreground">
           {t(`policy.state.${stateKey}.title`)}
         </p>
-        <p className="mt-0.5 text-xs text-muted-foreground">
+        <p className="mt-0.5 text-caption text-muted-foreground">
           {t(`policy.state.${stateKey}.body`)}
         </p>
       </div>
@@ -162,7 +162,7 @@ function PolicySummary({ policy }: { policy: AdmissionPolicy }) {
         </KvRow>
         {policy.allowed_identities && policy.allowed_identities.length > 0 && (
           <KvRow label={t('policy.identities')} align="start">
-            <ul className="flex flex-col gap-0.5 font-mono text-xs">
+            <ul className="flex flex-col gap-0.5 font-mono text-caption">
               {policy.allowed_identities.map((v) => (
                 <li key={v} className="break-all">
                   {v}
@@ -173,7 +173,7 @@ function PolicySummary({ policy }: { policy: AdmissionPolicy }) {
         )}
         {policy.allowed_issuers && policy.allowed_issuers.length > 0 && (
           <KvRow label={t('policy.issuers')} align="start">
-            <ul className="flex flex-col gap-0.5 font-mono text-xs">
+            <ul className="flex flex-col gap-0.5 font-mono text-caption">
               {policy.allowed_issuers.map((v) => (
                 <li key={v} className="break-all">
                   {v}
@@ -184,7 +184,7 @@ function PolicySummary({ policy }: { policy: AdmissionPolicy }) {
         )}
         {policy.allowed_predicates && policy.allowed_predicates.length > 0 && (
           <KvRow label={t('policy.predicates')} align="start">
-            <ul className="flex flex-col gap-0.5 font-mono text-xs">
+            <ul className="flex flex-col gap-0.5 font-mono text-caption">
               {policy.allowed_predicates.map((v) => (
                 <li key={v} className="break-all">
                   {v}
@@ -368,7 +368,7 @@ function PolicyForm({
 
       <div className="flex flex-col gap-4">
         <div className="flex items-center justify-between rounded-md border border-border px-3 py-2">
-          <span className="text-xs text-muted-foreground">
+          <span className="text-caption text-muted-foreground">
             {t('policy.derivedMode')}
           </span>
           <ModeBadges modes={modes} />
@@ -376,7 +376,7 @@ function PolicyForm({
 
         {draftError && (
           <div className="rounded-md border border-danger bg-danger-soft px-3 py-2">
-            <p className="text-xs text-danger">
+            <p className="text-caption text-danger">
               {t(`policy.err.${draftError}`)}
             </p>
           </div>
@@ -448,7 +448,7 @@ function PolicyForm({
           <Textarea
             id="cat-pol-roots"
             rows={4}
-            className="font-mono text-xs"
+            className="font-mono text-caption"
             value={roots}
             onChange={(e) => setRoots(e.target.value)}
           />
@@ -461,7 +461,7 @@ function PolicyForm({
           <Textarea
             id="cat-pol-keys"
             rows={4}
-            className="font-mono text-xs"
+            className="font-mono text-caption"
             value={keys}
             onChange={(e) => setKeys(e.target.value)}
           />

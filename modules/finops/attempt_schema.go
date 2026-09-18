@@ -4,7 +4,7 @@
 
 package finops
 
-// D02 attempt lifecycle — the two durable descriptors and their explicit codecs.
+// The attempt lifecycle — the two durable descriptors and their explicit codecs.
 //
 // Both entities are declared in their COMPLETE contract shape from this first cut,
 // even though only the imported-hold subset is ever written here. The alternative —

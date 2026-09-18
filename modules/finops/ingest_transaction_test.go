@@ -4,7 +4,7 @@
 
 package finops
 
-// D02 ingest cut. The causal controls for the transactional extraction of cost
+// The ingest cut. The causal controls for the transactional extraction of cost
 // ingestion and the writer lock the FinOps ledger writers now share:
 //
 //   - an exact replay and a grown / re-settled / signed replacement of the same
@@ -1199,7 +1199,7 @@ func TestAForwardingDecoratorKeepsEveryReservationOutcome(t *testing.T) {
 // It is documented as a break on the public methods, and this is what the break looks
 // like.
 //
-// The shape of the refusal is the assertion that matters, and D02/R1 SUPERSEDED IT.
+// The shape of the refusal is the assertion that matters, and an independent review SUPERSEDED IT.
 //
 // BEFORE (this cut's original text, kept so the change is legible): "Reserve returns
 // Allowed:true WITH the error and WITHOUT a handle: that is the seam's pre-existing

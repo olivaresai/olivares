@@ -98,7 +98,7 @@ export function SchemaForm({
         return (
           <div key={d.key} className="flex flex-col gap-1.5 py-3">
             <div className="flex flex-wrap items-center gap-2">
-              <Label htmlFor={fieldId} className="font-mono text-xs">
+              <Label htmlFor={fieldId} className="font-mono text-caption">
                 {d.key}
               </Label>
               {d.scope === 'managed-only' && (
@@ -122,7 +122,7 @@ export function SchemaForm({
             </div>
             <p
               id={`${fieldId}-summary`}
-              className="text-xs text-muted-foreground"
+              className="text-caption text-muted-foreground"
             >
               {d.summary}
             </p>
@@ -164,7 +164,7 @@ function SchemaField({
           disabled={disabled}
           onCheckedChange={(c) => onChange(c ? true : undefined)}
         />
-        <Label htmlFor={id} className="text-xs text-muted-foreground">
+        <Label htmlFor={id} className="text-caption text-muted-foreground">
           {value === true ? t('form.enabled') : t('form.unset')}
         </Label>
       </div>

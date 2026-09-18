@@ -95,7 +95,8 @@
   "tabs": {
     "sessions": "セッション",
     "workspaces": "ワークスペース",
-    "profiles": "プロバイダープロファイル"
+    "profiles": "プロバイダープロファイル",
+    "table": "テーブル"
   },
   "partial": {
     "noLiveRead": "観測セッションは表示されていません。ロールに sessions:live:read が含まれていないためです。下に並ぶ起動済みのものは読み取れた分であり、全体像ではありません。",
@@ -212,5 +213,100 @@
     "stopped": "停止",
     "failed": "失敗",
     "cleaned": "クリーンアップ済み"
+  },
+  "address": {
+    "retired": "開いていたセッションを閉じました。そのセッションが属する側へのアクセス権が変わりました。行を選択すると、現在のアクセス権でセッションを開きます。"
+  },
+  "work": {
+    "worked": "{{duration}} 稼働",
+    "toolCalls_other": "ツール呼び出し {{count}} 件",
+    "events_other": "イベント {{count}} 件"
+  },
+  "rail": {
+    "label": "作業レール",
+    "group": {
+      "active": "実行中",
+      "attention": "あなた待ち",
+      "settled": "完了"
+    },
+    "groupEmpty": {
+      "active": "現在、実行中のものはありません。",
+      "attention": "あなたを待っているものはありません。",
+      "settled": "まだ完了したセッションはありません。"
+    },
+    "pin": "ピン留め",
+    "unpin": "ピン留めを解除",
+    "pinnedMark": "ピン留め済み",
+    "rowMenu": "{{name}} の操作",
+    "noObservation": "このセッションのテレメトリはまだ届いていません。",
+    "emptyTitle": "まだセッションがありません",
+    "emptyDescription": "このデプロイが観測または起動したセッションが、あなたに必要とすることごとにまとめて表示されます。"
+  },
+  "surface": {
+    "paneSwitcher": "ペインを選択",
+    "pane": {
+      "rail": "セッション",
+      "narrative": "作業",
+      "context": "コンテキスト"
+    }
+  },
+  "narrative": {
+    "noneTitle": "セッションを選択してください",
+    "noneDescription": "レールでセッションを選ぶと、その作業内容と根拠が並んで表示されます。",
+    "openDetail": "すべての操作",
+    "noObjective": "エンジンはこのセッションの目的を報告していないため、参照 ID を表示しています。",
+    "notReadTitle": "このセッションを読み取れませんでした",
+    "menu": "{{name}} の操作"
+  },
+  "evidence": {
+    "checks": {
+      "title": "チェック",
+      "empty": "このセッションは所見を報告していません。"
+    },
+    "activity": {
+      "title": "直近のやり取り",
+      "empty": "このセッションはツールや MCP の呼び出しを行っていません。"
+    },
+    "resources": {
+      "title": "触れたリソース",
+      "empty": "リソースを示すエントリはありません。"
+    },
+    "forbiddenTitle": "根拠の閲覧は許可されていません",
+    "forbiddenDescription": "あなたのロールにはセッションのテレメトリを読む権限が含まれていません。",
+    "errorTitle": "根拠を読み取れませんでした",
+    "errorDescription": "タイムラインの読み取りが応答しませんでした。ここで空のリストを出すと「何もしなかった」という別の意味になります。",
+    "atLeast_other": "{{count}} 件以上",
+    "touches_other": "{{count}} 件"
+  },
+  "context": {
+    "noneTitle": "セッションが選択されていません",
+    "noneDescription": "セッションが実行された範囲と、検索に必要な参照 ID がここに表示されます。",
+    "scopeTitle": "範囲",
+    "scopeHint": "このセッションが適用される対象です。現在選択中の値ではなく、実行時の値です。",
+    "tenant": "組織",
+    "workspace": "ワークスペース",
+    "environment": "環境",
+    "provider": "プロバイダー",
+    "profile": "プロバイダープロファイル",
+    "traceTitle": "トレース",
+    "traceHint": "このセッションを識別する参照 ID と、プレーンが記録した内容です。",
+    "sessionRef": "セッション参照",
+    "liveRef": "行参照",
+    "runRef": "実行参照",
+    "canonicalSid": "正規セッション ID",
+    "binding": "ソースバインディング",
+    "engine": "エージェントエンジン",
+    "posture": "ガバナンス姿勢",
+    "governance": "プレーンが記録した内容",
+    "pepOn": "ツール呼び出しはインラインで統制されます。",
+    "pepOff": "ツール呼び出しはインラインで統制されません。",
+    "recordOn": "入出力は証跡として固定されます。",
+    "recordOff": "入出力は記録されません。",
+    "approval": "承認",
+    "none": "なし",
+    "notDeclared": "未申告",
+    "copy": "コピー",
+    "copied": "コピーしました",
+    "copyRef": "{{value}} をコピー"
   }
 }

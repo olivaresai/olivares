@@ -42,12 +42,12 @@ export function KvRow({
         className,
       )}
     >
-      <dt className="shrink-0 text-sm text-muted-foreground">{label}</dt>
+      <dt className="shrink-0 text-body text-muted-foreground">{label}</dt>
       <dd
         className={cn(
-          'min-w-0 text-sm text-foreground',
+          'min-w-0 text-body text-foreground',
           align === 'right' ? 'text-right' : 'flex-1 text-left',
-          mono && 'font-mono text-xs tabular-nums',
+          mono && 'font-mono text-caption tabular-nums',
         )}
       >
         {children}

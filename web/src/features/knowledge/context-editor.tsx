@@ -199,7 +199,7 @@ function ContextForm({
         </div>
       </div>
 
-      <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+      <p className="flex items-center gap-1.5 text-caption text-muted-foreground">
         <ScrollText className="size-3.5 shrink-0" aria-hidden />
         {t('common:privileged.auditedNotice')}
       </p>

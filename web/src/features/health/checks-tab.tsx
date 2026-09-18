@@ -136,7 +136,7 @@ export function ChecksTab({ tenant }: { tenant: string | null }) {
             </div>
             {row.original.name ? (
               <div
-                className="truncate font-mono text-xs text-muted-foreground"
+                className="truncate font-mono text-caption text-muted-foreground"
                 title={row.original.subject_ref}
               >
                 {row.original.subject_ref}
@@ -170,7 +170,7 @@ export function ChecksTab({ tenant }: { tenant: string | null }) {
         accessorKey: 'expected_interval_seconds',
         header: t('health:checks.cols.cadence'),
         cell: ({ row }) => (
-          <span className="font-mono text-xs tabular-nums text-muted-foreground">
+          <span className="font-mono text-caption tabular-nums text-muted-foreground">
             {t('health:checks.seconds', {
               count: row.original.expected_interval_seconds,
             })}
@@ -182,7 +182,7 @@ export function ChecksTab({ tenant }: { tenant: string | null }) {
         header: t('health:checks.cols.sla'),
         cell: ({ row }) =>
           row.original.sla_target_ppm > 0 ? (
-            <span className="font-mono text-xs tabular-nums text-muted-foreground">
+            <span className="font-mono text-caption tabular-nums text-muted-foreground">
               {ppmToPercent(row.original.sla_target_ppm)}
             </span>
           ) : (
@@ -294,7 +294,7 @@ export function ChecksTab({ tenant }: { tenant: string | null }) {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-1.5">
-            <h2 className="text-base font-semibold text-foreground">
+            <h2 className="text-heading text-foreground">
               {t('health:checks.title')}
             </h2>
             <TooltipProvider>
@@ -315,7 +315,7 @@ export function ChecksTab({ tenant }: { tenant: string | null }) {
               </Tooltip>
             </TooltipProvider>
           </div>
-          <p className="max-w-2xl text-sm text-muted-foreground">
+          <p className="max-w-2xl text-body text-muted-foreground">
             {t('health:checks.description')}
           </p>
         </div>
@@ -569,7 +569,7 @@ function CheckDialog({
               </Field>
               <Field label={t('health:checks.form.subjectRef')}>
                 <div
-                  className="flex min-h-8 items-center break-all font-mono text-xs text-muted-foreground"
+                  className="flex min-h-8 items-center break-all font-mono text-caption text-muted-foreground"
                   aria-label={t('health:checks.form.subjectRef')}
                 >
                   {check.subject_ref}
@@ -688,15 +688,15 @@ function CheckDialog({
           </Field>
 
           {validationError ? (
-            <p role="alert" className="text-sm text-danger sm:col-span-2">
+            <p role="alert" className="text-body text-danger sm:col-span-2">
               {validationError}
             </p>
           ) : duplicate ? (
-            <p role="alert" className="text-sm text-danger sm:col-span-2">
+            <p role="alert" className="text-body text-danger sm:col-span-2">
               {t('health:checks.duplicate')}
             </p>
           ) : mutation.error ? (
-            <p role="alert" className="text-sm text-danger sm:col-span-2">
+            <p role="alert" className="text-body text-danger sm:col-span-2">
               {mutation.error instanceof Error
                 ? mutation.error.message
                 : t('health:checks.failed')}

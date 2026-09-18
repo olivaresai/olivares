@@ -185,10 +185,10 @@ function QueryForm({ kb, onClose }: { kb: KbDTO; onClose: () => void }) {
             role="alert"
             className="flex flex-col gap-1 rounded-md border border-warning-line bg-warning-soft px-3 py-2"
           >
-            <span className="text-sm font-medium text-warning">
+            <span className="text-body font-medium text-warning">
               {t('query.deniedTitle')}
             </span>
-            <span className="text-xs text-muted-foreground">
+            <span className="text-caption text-muted-foreground">
               {deniedReason}
             </span>
           </div>
@@ -198,7 +198,7 @@ function QueryForm({ kb, onClose }: { kb: KbDTO; onClose: () => void }) {
           <div className="flex flex-col gap-2">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-sm font-medium text-foreground">
+                <span className="text-body font-medium text-foreground">
                   {t('query.resultsTitle')}
                 </span>
                 <EgressBadge value={result.egress} />
@@ -208,7 +208,7 @@ function QueryForm({ kb, onClose }: { kb: KbDTO; onClose: () => void }) {
                 </Badge>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground">
+                <span className="text-caption text-muted-foreground">
                   {t('query.modeFilter')}
                 </span>
                 <Select
@@ -238,7 +238,7 @@ function QueryForm({ kb, onClose }: { kb: KbDTO; onClose: () => void }) {
                 </Select>
               </div>
             </div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-caption text-muted-foreground">
               {t('query.resultsCaption')}
             </p>
 
@@ -265,7 +265,7 @@ function QueryForm({ kb, onClose }: { kb: KbDTO; onClose: () => void }) {
               </IntelNotice>
             ) : null}
 
-            <div className="flex flex-wrap items-center gap-2 text-xs">
+            <div className="flex flex-wrap items-center gap-2 text-caption">
               {(result.excluded_chunks ?? 0) > 0 ? (
                 <Badge variant="warning">
                   {t('query.excludedChunks', {
@@ -297,11 +297,11 @@ function QueryForm({ kb, onClose }: { kb: KbDTO; onClose: () => void }) {
             </div>
 
             {result.results.length === 0 ? (
-              <p className="rounded-md border border-dashed border-border px-3 py-3 text-sm text-muted-foreground">
+              <p className="rounded-md border border-dashed border-border px-3 py-3 text-body text-muted-foreground">
                 {t('query.noResults')}
               </p>
             ) : visibleResults.length === 0 ? (
-              <p className="rounded-md border border-dashed border-border px-3 py-3 text-sm text-muted-foreground">
+              <p className="rounded-md border border-dashed border-border px-3 py-3 text-body text-muted-foreground">
                 {t('query.noModeResults')}
               </p>
             ) : (
@@ -312,10 +312,10 @@ function QueryForm({ kb, onClose }: { kb: KbDTO; onClose: () => void }) {
                     className="rounded-md border border-border bg-surface p-3"
                   >
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <span className="truncate text-sm font-medium text-foreground">
+                      <span className="truncate text-body font-medium text-foreground">
                         {r.title || r.document_id}
                       </span>
-                      <span className="font-mono text-xs tabular-nums text-muted-foreground">
+                      <span className="font-mono text-caption tabular-nums text-muted-foreground">
                         {t('query.score')} {r.score.toFixed(3)}
                       </span>
                     </div>
@@ -324,7 +324,7 @@ function QueryForm({ kb, onClose }: { kb: KbDTO; onClose: () => void }) {
                       <Badge variant="neutral">{r.source_kind}</Badge>
                       <SourceModeBadge value={r.source_mode} />
                     </div>
-                    <p className="mt-2 line-clamp-4 text-xs text-muted-foreground">
+                    <p className="mt-2 line-clamp-4 text-caption text-muted-foreground">
                       {r.text}
                     </p>
                   </li>
@@ -335,7 +335,7 @@ function QueryForm({ kb, onClose }: { kb: KbDTO; onClose: () => void }) {
         )}
       </div>
 
-      <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+      <p className="flex items-center gap-1.5 text-caption text-muted-foreground">
         <ScrollText className="size-3.5 shrink-0" aria-hidden />
         {t('common:privileged.auditedNotice')}
       </p>

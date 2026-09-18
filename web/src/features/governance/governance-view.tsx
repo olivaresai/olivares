@@ -43,6 +43,10 @@ import { PoliciesView } from './policies-view'
 import './i18n'
 import { APPROVAL_STATUSES, canDecideOnRequest } from './types'
 import type { ApprovalDTO, DecisionVerb, SweepReport } from './types'
+import {
+  PagePrimaryAction,
+  PageSecondaryActions,
+} from '@/components/ui/page-actions'
 
 type TabKey =
   'approvals' | 'policies' | 'identities' | 'agent-risk' | 'break-glass'
@@ -179,7 +183,7 @@ function ApprovalsTab({ active }: { active: boolean }) {
       accessorKey: 'action',
       header: t('approvals.action'),
       cell: ({ row }) => (
-        <span className="font-mono text-xs font-medium text-foreground">
+        <span className="font-mono text-caption font-medium text-foreground">
           {row.original.action || '—'}
         </span>
       ),
@@ -199,7 +203,7 @@ function ApprovalsTab({ active }: { active: boolean }) {
           <span className="flex items-center gap-1.5">
             {subject_kind && <Badge variant="neutral">{subject_kind}</Badge>}
             {subject_ref && (
-              <span className="truncate font-mono text-xs text-muted-foreground">
+              <span className="truncate font-mono text-caption text-muted-foreground">
                 {subject_ref}
               </span>
             )}
@@ -212,7 +216,7 @@ function ApprovalsTab({ active }: { active: boolean }) {
       header: t('approvals.requestedBy'),
       cell: ({ row }) => (
         <span
-          className="font-mono text-xs text-muted-foreground"
+          className="font-mono text-caption text-muted-foreground"
           title={t('approvals.actorHint')}
         >
           {row.original.requested_by || '—'}
@@ -341,7 +345,29 @@ function ApprovalsTab({ active }: { active: boolean }) {
 
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-xs text-muted-foreground">{t('approvals.caption')}</p>
+      {canWrite && (
+        <PagePrimaryAction>
+          <Button variant="primary" size="sm" onClick={() => setNewOpen(true)}>
+            <Plus />
+            {t('approvals.newRequest')}
+          </Button>
+        </PagePrimaryAction>
+      )}
+      {canDecide && (
+        <PageSecondaryActions>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setConfirmSweep(true)}
+          >
+            <RefreshCw />
+            {t('approvals.runSweep')}
+          </Button>
+        </PageSecondaryActions>
+      )}
+      <p className="text-caption text-muted-foreground">
+        {t('approvals.caption')}
+      </p>
 
       <DataTable
         columns={columns}
@@ -377,26 +403,6 @@ function ApprovalsTab({ active }: { active: boolean }) {
                 ))}
               </SelectContent>
             </Select>
-            {canWrite && (
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={() => setNewOpen(true)}
-              >
-                <Plus />
-                {t('approvals.newRequest')}
-              </Button>
-            )}
-            {canDecide && (
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => setConfirmSweep(true)}
-              >
-                <RefreshCw />
-                {t('approvals.runSweep')}
-              </Button>
-            )}
           </>
         }
       />

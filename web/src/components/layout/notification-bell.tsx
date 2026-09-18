@@ -175,7 +175,7 @@ export function NotificationBell() {
       </PopoverTrigger>
       <PopoverContent align="end" className="w-80 p-0" sideOffset={8}>
         <div className="border-b border-border px-3 py-2">
-          <h3 className="text-sm font-medium text-foreground">
+          <h3 className="text-body font-medium text-foreground">
             {t('notifications.title')}
           </h3>
         </div>
@@ -184,7 +184,7 @@ export function NotificationBell() {
             <Spinner />
           </div>
         ) : events.length === 0 ? (
-          <div className="py-6 text-center text-sm text-muted-foreground">
+          <div className="py-6 text-center text-body text-muted-foreground">
             {t('notifications.empty')}
           </div>
         ) : (
@@ -202,19 +202,19 @@ export function NotificationBell() {
                 >
                   <div className="flex items-start justify-between gap-2">
                     <span
-                      className={`text-xs font-medium ${actionTone(event.action)}`}
+                      className={`text-caption font-medium ${actionTone(event.action)}`}
                     >
                       {actionLabel(event.action)}
                     </span>
                     <RelTimeLabel ts={event.occurred_at} />
                   </div>
                   {event.target_kind && (
-                    <div className="mt-0.5 truncate font-mono text-xs text-muted-foreground">
+                    <div className="mt-0.5 truncate font-mono text-caption text-muted-foreground">
                       {event.target_kind}
                       {event.target_id ? ` ${event.target_id}` : ''}
                     </div>
                   )}
-                  <div className="mt-0.5 text-xs text-muted-foreground">
+                  <div className="mt-0.5 text-caption text-muted-foreground">
                     {event.actor_kind}: {event.actor}
                   </div>
                 </div>

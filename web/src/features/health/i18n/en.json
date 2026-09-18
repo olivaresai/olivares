@@ -138,6 +138,7 @@
     "pick": "Subject",
     "pickPlaceholder": "Pick a subject…",
     "pickEmpty": "No monitored subjects to report on yet.",
+    "pickEmptyHint": "An SLA report is drawn from monitored subjects. Add a health check to a subject so it can be reported on.",
     "pickPrompt": {
       "title": "Pick a subject",
       "description": "Choose a monitored subject to see its uptime against target, reconstructed from the reliability ledger."

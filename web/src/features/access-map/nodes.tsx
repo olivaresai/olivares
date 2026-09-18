@@ -106,7 +106,7 @@ export function OriginNode({
       </span>
       <div className="min-w-0">
         <div
-          className="max-w-[170px] truncate font-mono text-xs text-foreground"
+          className="max-w-[170px] truncate font-mono text-caption text-foreground"
           title={data.label}
         >
           {data.label}
@@ -161,7 +161,7 @@ export function ResourceNode({
       </span>
       <div className="min-w-0">
         <div
-          className="max-w-[190px] truncate font-mono text-xs text-foreground"
+          className="max-w-[190px] truncate font-mono text-caption text-foreground"
           title={data.label}
         >
           {data.label}

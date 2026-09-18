@@ -95,7 +95,8 @@
   "tabs": {
     "sessions": "Sessions",
     "workspaces": "Workspaces",
-    "profiles": "Provider profiles"
+    "profiles": "Provider profiles",
+    "table": "Table"
   },
   "partial": {
     "noLiveRead": "Observed sessions are not shown: your role does not include sessions:live:read. The launched ones below are the part that could be read, not the whole picture.",
@@ -212,5 +213,104 @@
     "stopped": "Stopped",
     "failed": "Failed",
     "cleaned": "Cleaned"
+  },
+  "address": {
+    "retired": "The session you had open is closed. Your access to the half it came from changed. Select a row to open a session under your current access."
+  },
+  "work": {
+    "worked": "worked for {{duration}}",
+    "toolCalls_one": "{{count}} tool call",
+    "toolCalls_other": "{{count}} tool calls",
+    "events_one": "{{count}} event",
+    "events_other": "{{count}} events"
+  },
+  "rail": {
+    "label": "Work rail",
+    "group": {
+      "active": "Active",
+      "attention": "Waiting for you",
+      "settled": "Settled"
+    },
+    "groupEmpty": {
+      "active": "Nothing is running right now.",
+      "attention": "Nothing is waiting for you.",
+      "settled": "No session has settled yet."
+    },
+    "pin": "Pin",
+    "unpin": "Unpin",
+    "pinnedMark": "Pinned",
+    "rowMenu": "Actions for {{name}}",
+    "noObservation": "No telemetry has arrived for this session yet.",
+    "emptyTitle": "No sessions yet",
+    "emptyDescription": "Every session this deployment observes or launches appears here, grouped by what it needs from you."
+  },
+  "surface": {
+    "paneSwitcher": "Choose a pane",
+    "pane": {
+      "rail": "Sessions",
+      "narrative": "Work",
+      "context": "Context"
+    }
+  },
+  "narrative": {
+    "noneTitle": "Select a session",
+    "noneDescription": "Choose a session in the rail to read what it did, with its evidence beside it.",
+    "openDetail": "Full controls",
+    "noObjective": "The engine reported no objective for this session, so its reference is shown instead.",
+    "notReadTitle": "This session could not be read",
+    "menu": "Actions for {{name}}"
+  },
+  "evidence": {
+    "checks": {
+      "title": "Checks",
+      "empty": "This session reported no findings."
+    },
+    "activity": {
+      "title": "Last turns",
+      "empty": "This session made no tool or MCP calls."
+    },
+    "resources": {
+      "title": "Resources touched",
+      "empty": "No entry names a resource."
+    },
+    "forbiddenTitle": "Evidence not authorized",
+    "forbiddenDescription": "Your role does not include permission to read session telemetry.",
+    "errorTitle": "The evidence could not be read",
+    "errorDescription": "The timeline read did not answer. An empty list here would mean the session did nothing, which is a different fact.",
+    "atLeast_one": "at least {{count}}",
+    "atLeast_other": "at least {{count}}",
+    "touches_one": "{{count}} entry",
+    "touches_other": "{{count}} entries"
+  },
+  "context": {
+    "noneTitle": "No session selected",
+    "noneDescription": "The scope a session ran under, and the references you need to look it up, appear here.",
+    "scopeTitle": "Scope",
+    "scopeHint": "What this session applies to. These are the values it ran under, not the ones selected now.",
+    "tenant": "Organization",
+    "workspace": "Workspace",
+    "environment": "Environment",
+    "provider": "Provider",
+    "profile": "Provider profile",
+    "traceTitle": "Trace",
+    "traceHint": "The references this session is known by, and what the plane recorded about it.",
+    "sessionRef": "Session reference",
+    "liveRef": "Row reference",
+    "runRef": "Run reference",
+    "canonicalSid": "Canonical session id",
+    "binding": "Source binding",
+    "engine": "Agent engine",
+    "posture": "Governance posture",
+    "governance": "What the plane recorded",
+    "pepOn": "Tool calls are policed in line.",
+    "pepOff": "Tool calls are not policed in line.",
+    "recordOn": "Input and output are anchored as evidence.",
+    "recordOff": "Input and output are not recorded.",
+    "approval": "Approval",
+    "none": "None",
+    "notDeclared": "Not declared",
+    "copy": "Copy",
+    "copied": "Copied",
+    "copyRef": "Copy {{value}}"
   }
 }

@@ -34,6 +34,7 @@
     "loading": "加载中…",
     "empty": "此处暂无内容",
     "noResults": "无结果",
+    "noResultsHint": "没有行匹配当前筛选条件。清除筛选或放宽搜索范围即可重新看到数据。",
     "comingSoon": "敬请期待",
     "loaded": "已加载",
     "yes": "是",
@@ -200,5 +201,59 @@
     "navigation": "前往",
     "openPalette": "打开命令面板",
     "showHelp": "显示此帮助"
+  },
+  "keys": {
+    "group": {
+      "general": "通用",
+      "launcher": "启动会话",
+      "surface": "工作界面",
+      "navRail": "导航栏"
+    },
+    "command": {
+      "palette": {
+        "open": "打开命令面板"
+      },
+      "help": {
+        "toggle": "显示这些快捷键"
+      },
+      "launcher": {
+        "focus": "跳到启动栏",
+        "start": "启动会话",
+        "startBackground": "启动并留在此处"
+      },
+      "surface": {
+        "nextPane": "下一个面板",
+        "previousPane": "上一个面板"
+      },
+      "rail": {
+        "next": "下一个会话",
+        "previous": "上一个会话",
+        "first": "第一个会话",
+        "last": "最后一个会话",
+        "open": "打开会话",
+        "pin": "固定或取消固定"
+      },
+      "nav": {
+        "toggleRail": "折叠或展开导航栏"
+      },
+      "navRail": {
+        "next": "下一个模块",
+        "previous": "上一个模块",
+        "expand": "展开该区域，或进入其中",
+        "fold": "折叠该区域，或返回该区域",
+        "first": "第一个模块",
+        "last": "最后一个模块",
+        "pin": "固定或取消固定此模块"
+      }
+    },
+    "when": {
+      "railFocused": "在会话栏中",
+      "launcherFocused": "在启动输入框中",
+      "workSurface": "在会话页面"
+    },
+    "precedence": "当两行使用相同按键时，以最后一条适用的为准。",
+    "modNote": "在 Windows 和 Linux 上，⌘ 即 Control。",
+    "problems_other": "有 {{count}} 个按键绑定无法读取，不会生效：{{commands}}",
+    "navRailNote": "导航栏只占一个 Tab 停靠点。这些按键在其获得焦点时生效。"
   }
 }

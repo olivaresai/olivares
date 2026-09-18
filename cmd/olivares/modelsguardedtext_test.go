@@ -38,7 +38,7 @@ import (
 	"github.com/olivaresai/olivares/sdk"
 )
 
-// modelsguardedtext_test.go qualifies D01-C2B's concrete composition against BOUNDED LOCAL
+// modelsguardedtext_test.go qualifies the governed Chat composition against BOUNDED LOCAL
 // FIXTURES: a real TLS server with a trusted test CA, the real C0 codec, the real C1
 // transport, the real immutable registry, the real secret resolver and a real store. No
 // provider is contacted; every "upstream" here is a loopback synthetic.

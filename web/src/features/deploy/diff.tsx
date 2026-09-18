@@ -22,7 +22,7 @@ export function ChangeList({ changes }: { changes: Change[] }) {
       {changes.map((c, i) => (
         <li
           key={`${c.kind}:${c.resource}:${i}`}
-          className="flex items-center gap-2 rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs"
+          className="flex items-center gap-2 rounded-md border border-border bg-surface px-2.5 py-1.5 text-caption"
         >
           <Badge variant={CHANGE_VARIANT[c.kind] ?? 'neutral'}>
             {t(`change.${c.kind}`, { defaultValue: c.kind })}

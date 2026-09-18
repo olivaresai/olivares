@@ -128,7 +128,7 @@ export function UnifiedTimeline({
         <EmptyState
           icon={<Disc3 />}
           title={t('timeline.empty')}
-          description=""
+          description={t('timeline.emptyHint')}
         />
       </div>
     )
@@ -139,10 +139,10 @@ export function UnifiedTimeline({
       {unavailableNotice}
       {/* Lane headers */}
       <div className="my-2 grid grid-cols-2 gap-4 border-b border-border pb-1">
-        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        <span className="text-caption font-semibold uppercase tracking-wide text-muted-foreground">
           {t('lanes.activity')}
         </span>
-        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        <span className="text-caption font-semibold uppercase tracking-wide text-muted-foreground">
           {t('lanes.evidence')}
         </span>
       </div>
@@ -240,7 +240,7 @@ function ActivityRow({
             {t(`timeline.${entry.kind}`, { defaultValue: entry.kind })}
           </Badge>
           <span
-            className="truncate text-xs font-medium text-foreground"
+            className="truncate text-caption font-medium text-foreground"
             title={label}
           >
             {label}
@@ -294,7 +294,7 @@ function EvidenceRow({
           <span className="font-mono text-[10px] text-muted-foreground">
             #{frame.idx}
           </span>
-          <span className="truncate text-xs font-medium text-foreground">
+          <span className="truncate text-caption font-medium text-foreground">
             {frame.method} {frame.namespace}
             {frame.pattern}
           </span>

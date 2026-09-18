@@ -117,7 +117,7 @@ export function InventoryView() {
           <div className="flex items-center gap-2">
             <Select value={kind} onValueChange={setKind}>
               <SelectTrigger
-                className="h-7 w-auto min-w-[8rem] text-xs"
+                className="h-7 w-auto min-w-[8rem] text-caption"
                 aria-label={t('facets.allKinds')}
               >
                 <SelectValue placeholder={t('facets.allKinds')} />
@@ -133,7 +133,7 @@ export function InventoryView() {
             </Select>
             <Select value={status} onValueChange={setStatus}>
               <SelectTrigger
-                className="h-7 w-auto min-w-[7rem] text-xs"
+                className="h-7 w-auto min-w-[7rem] text-caption"
                 aria-label={t('facets.allStatus')}
               >
                 <SelectValue placeholder={t('facets.allStatus')} />
@@ -336,10 +336,10 @@ function StatTile({
 }) {
   return (
     <Card className="p-3">
-      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className="text-caption text-muted-foreground">{label}</div>
       <div
         className={cn(
-          'font-display text-2xl font-semibold tabular-nums',
+          'font-display text-display tabular-nums',
           tone === 'success' && 'text-success',
           tone === 'warning' && 'text-warning',
           !tone && 'text-foreground',

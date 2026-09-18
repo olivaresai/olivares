@@ -214,6 +214,7 @@
     "createdBy": "Por",
     "current": "Actual",
     "revisionsEmpty": "Sin revisiones",
+    "revisionsEmptyHint": "Cada cambio en este prompt se guarda como una revisión que puedes comparar y restaurar. La primera edición crea una.",
     "truncated": "Cargados {{n}} prompts; hay mas",
     "truncatedHint": "Hay mas prompts de los que se ven; esta pagina toma filas por id. Que uno falte de esta lista no prueba que no este publicado."
   },
@@ -384,7 +385,9 @@
       "completenessThreshold": "Umbral de completitud",
       "freshnessOverride": "Anulación de frescura",
       "noContract": "Sin contrato activo",
+      "noContractHint": "Un contrato fija el esquema y las garantías que promete este producto de datos. Publica uno para versionar esas promesas.",
       "undetermined": "No se puede determinar — el motor no respondió cuál es el contrato activo.",
+      "undeterminedHint": "Aquí no se afirma nada en lugar de adivinar. Reinténtalo, o abre el producto de datos para leer su contrato directamente.",
       "newVersion": "Nueva versión de contrato",
       "note": "Nota de cambio",
       "modes": {
@@ -481,10 +484,12 @@
     "unanchored": "Sin anclar (sin historia en el ledger)",
     "legacy": "Heredada (anterior al anclaje)",
     "truncated": "Las CUENTAS de arriba son completas; esta lista de detalle está acotada. Una lista corta no significa pocos problemas.",
-    "allHealthy": "Todas las filas comprobadas verifican"
+    "allHealthy": "Todas las filas comprobadas verifican",
+    "allHealthyHint": "Una comprobación de integridad compara cada fila almacenada con su resumen registrado. Todas las filas comprobadas coinciden."
   },
   "scans": {
     "empty": "Todavía no hay escaneos",
+    "emptyHint": "Un escaneo recorre una fuente y registra lo que encuentra. Inicia un escaneo para ver aquí sus resultados.",
     "sourceName": "Nombre de la fuente",
     "scanSource": "Escanear fuente",
     "scanSourceHint": "Lee la fuente SIN ingerirla. Los cuerpos se clasifican en memoria y no se guardan, ni se registran, ni se embeben.",

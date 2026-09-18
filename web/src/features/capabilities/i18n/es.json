@@ -214,6 +214,7 @@
       "delete": "Eliminada"
     },
     "empty": "Sin versiones",
+    "emptyHint": "Cada cambio en este servidor se guarda como una revisión que puedes comparar y restaurar. La primera edición crea una.",
     "truncated": "Cargadas {{n}} revisiones; hay mas",
     "truncatedHint": "El historial es mas largo que esta pagina. Que una revision falte de esta lista no prueba que no se registrara."
   },

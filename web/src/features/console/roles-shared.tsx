@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Spinner } from '@/components/ui/spinner'
 import type { RBACCatalogDTO } from './api'
+import { StaticTable } from '@/components/data/static-table'
 
 // scopeLabel renders a grant/domain scope (tree + ref) as a human label.
 export function scopeLabel(
@@ -105,12 +106,12 @@ export function PermissionMatrix({
 
   return (
     <div className="max-h-64 overflow-y-auto rounded-lg border border-border">
-      <table className="w-full text-sm">
-        <thead className="sticky top-0 bg-muted/60 text-left text-xs text-muted-foreground">
+      <StaticTable>
+        <thead className="sticky top-0">
           <tr>
-            <th className="px-3 py-2 font-medium">{t('roles.matrix.kind')}</th>
+            <th>{t('roles.matrix.kind')}</th>
             {catalog.verbs.map((v) => (
-              <th key={v} className="px-3 py-2 text-center font-medium">
+              <th key={v} className="text-center">
                 {verbLabel[v] ?? v}
               </th>
             ))}
@@ -118,14 +119,12 @@ export function PermissionMatrix({
         </thead>
         <tbody>
           {kinds.map((kind) => (
-            <tr key={kind} className="border-t border-border">
-              <td className="px-3 py-1.5 font-mono text-xs text-foreground">
-                {kind}
-              </td>
+            <tr key={kind}>
+              <td className="font-mono text-caption text-foreground">{kind}</td>
               {catalog.verbs.map((verb) => {
                 const perm = `${kind}:${verb}`
                 return (
-                  <td key={verb} className="px-3 py-1.5 text-center">
+                  <td key={verb} className="text-center">
                     {offers(kind, verb) ? (
                       <Checkbox
                         checked={selected.has(perm)}
@@ -150,7 +149,7 @@ export function PermissionMatrix({
             </tr>
           ))}
         </tbody>
-      </table>
+      </StaticTable>
     </div>
   )
 }
@@ -160,7 +159,7 @@ export function PermissionMatrix({
 export function FormError({ error }: { error: unknown }) {
   if (!(error instanceof Error) || !error.message) return null
   return (
-    <p role="alert" className="text-sm text-danger">
+    <p role="alert" className="text-body text-danger">
       {error.message}
     </p>
   )

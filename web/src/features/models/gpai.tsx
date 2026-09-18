@@ -131,7 +131,7 @@ export function GpaiTab() {
         accessorKey: 'provider_ref',
         header: t('gpai.columns.provider'),
         cell: ({ row }) => (
-          <span className="font-mono text-xs font-medium text-foreground">
+          <span className="font-mono text-caption font-medium text-foreground">
             {row.original.provider_ref}
           </span>
         ),
@@ -148,7 +148,7 @@ export function GpaiTab() {
         cell: ({ row }) => (
           <RelTimeLabel
             ts={row.original.attested_at}
-            className="whitespace-nowrap text-xs text-muted-foreground"
+            className="whitespace-nowrap text-caption text-muted-foreground"
           />
         ),
       },
@@ -309,7 +309,7 @@ function GpaiDetailDialog({
             </IntelNotice>
 
             <div className="flex flex-col gap-2">
-              <h3 className="text-sm font-medium text-foreground">
+              <h3 className="text-body font-medium text-foreground">
                 {t('gpai.detail.claims')}
               </h3>
               <dl className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -318,7 +318,7 @@ function GpaiDetailDialog({
                     key={field}
                     className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2"
                   >
-                    <dt className="text-xs text-foreground">
+                    <dt className="text-caption text-foreground">
                       {t(`gpai.claims.${field}`)}
                     </dt>
                     <dd>
@@ -332,7 +332,7 @@ function GpaiDetailDialog({
               </dl>
             </div>
 
-            <dl className="grid grid-cols-1 gap-3 rounded-md border border-border bg-muted p-3 text-sm sm:grid-cols-2">
+            <dl className="grid grid-cols-1 gap-3 rounded-md border border-border bg-muted p-3 text-body sm:grid-cols-2">
               <DetailValue
                 label={t('gpai.detail.reviewState')}
                 value={<ReviewBadge reviewed={posture.verified} />}
@@ -387,7 +387,7 @@ function DetailValue({
       <dt className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
         {label}
       </dt>
-      <dd className="mt-1 whitespace-pre-wrap text-sm text-foreground">
+      <dd className="mt-1 whitespace-pre-wrap text-body text-foreground">
         {value}
       </dd>
     </div>
@@ -520,10 +520,10 @@ function GpaiPostureDialog({
               role="alert"
               className="rounded-md border border-danger-line bg-danger-soft px-3 py-2"
             >
-              <p className="text-xs font-medium text-danger">
+              <p className="text-caption font-medium text-danger">
                 {t('gpai.form.requestRejected')}
               </p>
-              <p className="mt-1 text-xs text-foreground">{serverError}</p>
+              <p className="mt-1 text-caption text-foreground">{serverError}</p>
             </div>
           ) : null}
 
@@ -552,10 +552,10 @@ function GpaiPostureDialog({
 
           <div className="flex flex-col gap-2">
             <div>
-              <h3 className="text-sm font-medium text-foreground">
+              <h3 className="text-body font-medium text-foreground">
                 {t('gpai.form.claimsTitle')}
               </h3>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-caption text-muted-foreground">
                 {t('gpai.form.claimsDescription')}
               </p>
             </div>

@@ -28,7 +28,7 @@ import (
 // while the SAME handler served that file with a 200. The product shipped the
 // manifest, served it, linked it, and forbade it.
 //
-// The emission is CONDITIONAL: another lane walked 50 routes against a binary with
+// The emission is CONDITIONAL: an earlier walk covered 50 routes against a binary with
 // the same defect and saw zero console errors, because Chromium fetches a manifest
 // when it needs one, not on every load. A green browser run therefore proves
 // nothing about the policy -- which is exactly why this is a test over the shipped

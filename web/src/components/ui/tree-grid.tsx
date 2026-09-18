@@ -281,7 +281,7 @@ export function TreeGrid<T>({
           aria-colcount={colCount}
           tabIndex={gridTabIndex}
           onKeyDown={onGridKeyDown}
-          className="w-full text-sm outline-none"
+          className="w-full text-body outline-none"
         >
           <div role="rowgroup">
             <div
@@ -295,7 +295,7 @@ export function TreeGrid<T>({
                   role="columnheader"
                   aria-colindex={c + 1}
                   className={cn(
-                    'flex-1 bg-muted text-left text-xs font-medium tracking-wide text-muted-foreground uppercase',
+                    'flex-1 bg-muted text-left text-caption font-medium tracking-wide text-muted-foreground uppercase',
                     headPad,
                   )}
                 >

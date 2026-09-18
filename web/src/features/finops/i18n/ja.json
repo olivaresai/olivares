@@ -3,6 +3,7 @@
     "title": "しきい値アラート",
     "description": "予算しきい値の超過履歴。Slack／SIEMへの配信は出力コネクターが処理します — ここはその記録です。",
     "empty": "超過したアラートはありません",
+    "emptyHint": "予算アラートは、設定したしきい値を支出が超えたときに発火します。この期間に超えたものはありません。",
     "columns": {
       "triggeredAt": "発生日時",
       "budget": "予算",
@@ -147,6 +148,7 @@
     "editDescription": "The code cannot be changed: mapping rules resolve by it and issued statements record it.",
     "editTitle": "Edit cost centre",
     "empty": "No cost centres yet",
+    "emptyHint": "コストセンターは、支出をチームや予算責任者に割り当てます。まず 1 つ作成してください。",
     "ingestOnlyNotice": "⛔ Mapping rules are applied AT INGESTION and stamped on each cost row. Creating or changing a rule does NOT re-attribute spend already recorded — it only affects costs ingested from now on.",
     "key": "Key",
     "name": "Name",
@@ -155,6 +157,7 @@
     "newRule": "New rule",
     "newRuleDescription": "Bind one dimension value to this cost centre.",
     "noRules": "No rules — traffic stays unattributed",
+    "noRulesHint": "ルールはトラフィックをコストセンターに割り当てます。ルールがない場合、すべてのリクエストはレポート上で未割り当てのままです。",
     "owner": "Owner",
     "priority": "priority {{n}}",
     "priorityLabel": "Priority",
@@ -315,6 +318,7 @@
     "title": "最適化の推奨事項",
     "description": "ガバナンス下のエステートからの節約候補。推定値は約束ではありません — ケーパビリティと品質の適合性を検証してください。",
     "empty": "推奨事項はありません",
+    "emptyHint": "支出・ルーティング・レート制限に改善余地があると、ここに推奨事項が表示されます。現時点で変更すべき点はありません。",
     "estimatedSavings": "推定節約額",
     "subject": "対象",
     "kind": {
@@ -413,6 +417,7 @@
     "description": "割り当て済みシートと実際に活動したアクターの日次比較。シートのスナップショットがない日は何も報告していません。利用がゼロだった日ではありません。",
     "provider": "プロバイダー",
     "empty": "報告された日はありません",
+    "emptyHint": "シート利用はセッションの活動から日次で集計されます。この期間にはどの日も報告がありません。",
     "assigned": "割当 {{assigned}} · 活動 {{active}}",
     "noSnapshot": "この日のシートスナップショットは未投稿です"
   },
@@ -474,6 +479,7 @@
     "riskTitle": "解約リスク",
     "riskDescription": "成果を満たさずに支出を消費している対象。",
     "riskEmpty": "支出を消費して成果のない対象はありません",
+    "riskEmptyHint": "このパネルは、支出に見合う成果が出ていない主体を一覧表示します。この期間にしきい値を超えた主体はありません。",
     "satisfiedOf": "{{outcomes}} 件中 {{satisfied}} 件が満たされました"
   },
   "evidence": {

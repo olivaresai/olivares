@@ -224,7 +224,7 @@ function CalibrationItemsPanel() {
       {sinJuez ? (
         <div
           role="note"
-          className="mb-3 rounded-md border border-border p-2 text-xs"
+          className="mb-3 rounded-md border border-border p-2 text-caption"
         >
           {t('calibItems.noJudge')}
         </div>
@@ -249,7 +249,12 @@ function CalibrationItemsPanel() {
             human_score?: number
           }>
           if (items.length === 0)
-            return <EmptyState title={t('calibItems.empty')} />
+            return (
+              <EmptyState
+                description={t('calibItems.emptyHint')}
+                title={t('calibItems.empty')}
+              />
+            )
 
           // ⛔ LA DISTRIBUCIÓN ES LA EXPLICACIÓN, y por eso va antes de la lista.
           const pasan = items.filter((i) => i.human_passed).length
@@ -258,7 +263,7 @@ function CalibrationItemsPanel() {
 
           return (
             <div className="flex flex-col gap-2">
-              <div className="flex flex-wrap items-center gap-2 text-xs">
+              <div className="flex flex-wrap items-center gap-2 text-caption">
                 <Badge variant="neutral">
                   {t('calibItems.distribution', { pass: pasan, fail: fallan })}
                 </Badge>
@@ -271,7 +276,7 @@ function CalibrationItemsPanel() {
                 {items.map((i) => (
                   <div
                     key={`${i.set_name ?? ''}:${i.case_key}`}
-                    className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border px-3 py-2 text-xs"
+                    className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border px-3 py-2 text-caption"
                   >
                     <div className="flex min-w-0 items-center gap-2">
                       <Badge variant={i.human_passed ? 'success' : 'danger'}>
@@ -347,7 +352,10 @@ function CalibrationTab({ tenant }: { tenant: string | null }) {
               meets_target: boolean
             }>
             return informes.length === 0 ? (
-              <EmptyState title={t('calibration.empty')} />
+              <EmptyState
+                description={t('calibration.emptyHint')}
+                title={t('calibration.empty')}
+              />
             ) : (
               informes.map((r) => (
                 <div
@@ -368,7 +376,7 @@ function CalibrationTab({ tenant }: { tenant: string | null }) {
                           : t('calibration.below')}
                       </Badge>
                     )}
-                    <span className="font-mono text-sm">{r.set_name}</span>
+                    <span className="font-mono text-body">{r.set_name}</span>
                     {r.judge_model ? (
                       <Badge variant="outline">{r.judge_model}</Badge>
                     ) : null}
@@ -380,7 +388,7 @@ function CalibrationTab({ tenant }: { tenant: string | null }) {
                       </Badge>
                     ) : null}
                   </div>
-                  <dl className="grid grid-cols-2 gap-x-6 gap-y-1 text-xs sm:grid-cols-4">
+                  <dl className="grid grid-cols-2 gap-x-6 gap-y-1 text-caption sm:grid-cols-4">
                     <div>
                       <dt className="text-muted-foreground">
                         {t('calibration.agreement')}
@@ -504,7 +512,10 @@ function GateTab({
           <AsyncSection query={gatesQ} skeletonHeight={240}>
             {(list) =>
               (list.items ?? []).length === 0 ? (
-                <EmptyState title={t('gate.empty')} />
+                <EmptyState
+                  description={t('gate.emptyHint')}
+                  title={t('gate.empty')}
+                />
               ) : (
                 (list.items ?? []).map((g) => (
                   <GateRow
@@ -568,12 +579,12 @@ function GateRow({
               </Badge>
             </>
           ) : null}
-          <span className="font-mono text-sm">{gate.suite_ref}</span>
+          <span className="font-mono text-body">{gate.suite_ref}</span>
           {gate.subject_ref ? (
             <Badge variant="outline">{gate.subject_ref}</Badge>
           ) : null}
         </div>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-caption text-muted-foreground">
           {t('gate.sampled', {
             sampled: gate.sampled,
             total: gate.total_cases,
@@ -588,7 +599,7 @@ function GateRow({
             Y su AUSENCIA no significa «coincide con la cruda»: significa que no hubo calibración
             de confianza con la que corregir, y eso se dice. */}
         {gate.corrected_pass_rate ? (
-          <p className="text-xs">
+          <p className="text-caption">
             {t('gate.correctedRate', {
               rate: formatFraction(gate.corrected_pass_rate.pass_rate),
               sens: formatFraction(gate.corrected_pass_rate.sensitivity),
@@ -596,18 +607,18 @@ function GateRow({
             })}
           </p>
         ) : (
-          <p className="text-xs text-muted-foreground">
+          <p className="text-caption text-muted-foreground">
             {t('gate.noCorrection')}
           </p>
         )}
         {gate.overridden ? (
-          <p className="text-xs text-foreground">
+          <p className="text-caption text-foreground">
             {t('gate.overriddenBy', { actor: gate.override_by ?? '—' })}
             {gate.override_reason ? ` — ${gate.override_reason}` : ''}
           </p>
         ) : null}
         {(gate.reasons ?? []).length > 0 ? (
-          <ul className="list-disc pl-4 text-xs text-muted-foreground">
+          <ul className="list-disc pl-4 text-caption text-muted-foreground">
             {(gate.reasons ?? []).slice(0, 4).map((r: string) => (
               <li key={r}>{r}</li>
             ))}
@@ -720,7 +731,10 @@ function ScorecardsTab({ tenant }: { tenant: string | null }) {
       <AsyncSection query={scorecardsQ} skeletonHeight={220}>
         {(list) =>
           list.items.length === 0 ? (
-            <EmptyState title={t('scorecards.empty')} />
+            <EmptyState
+              description={t('scorecards.emptyHint')}
+              title={t('scorecards.empty')}
+            />
           ) : (
             <ScorecardGrid scorecards={list.items} />
           )
@@ -760,7 +774,10 @@ function RunsTab({ tenant }: { tenant: string | null }) {
           <AsyncSection query={runsQ} skeletonHeight={240}>
             {(list) =>
               list.items.length === 0 ? (
-                <EmptyState title={t('runs.empty')} />
+                <EmptyState
+                  description={t('runs.emptyHint')}
+                  title={t('runs.empty')}
+                />
               ) : (
                 <RunsTable
                   runs={list.items}
@@ -846,13 +863,13 @@ function PinBaselineAction({ run }: { run: EvalRun }) {
             </DialogDescription>
           </DialogHeader>
           {/* La cifra de ESTA ejecución, delante de la decisión. */}
-          <p className="text-sm">
+          <p className="text-body">
             {t('baseline.thisRunScores', {
               score: formatFraction(run.pass_rate),
               n: run.n_scored ?? 0,
             })}
           </p>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-caption text-muted-foreground">
             {t('baseline.cannotShowCurrent')}
           </p>
           <DialogFooter>
@@ -902,7 +919,10 @@ function RunDetailDialog({
             <AsyncSection query={resultsQ} skeletonHeight={200}>
               {(list) =>
                 list.items.length === 0 ? (
-                  <EmptyState title={t('cases.empty')} />
+                  <EmptyState
+                    description={t('cases.emptyHint')}
+                    title={t('cases.empty')}
+                  />
                 ) : (
                   <CaseResultsTable results={list.items} />
                 )
@@ -1045,7 +1065,7 @@ function AbTab({ tenant }: { tenant: string | null }) {
         <Textarea
           id={id}
           rows={5}
-          className="font-mono text-xs"
+          className="font-mono text-caption"
           placeholder={t('ab.outputsPlaceholder')}
           value={value}
           onChange={(e) => onChange(e.target.value)}
@@ -1077,7 +1097,12 @@ function AbTab({ tenant }: { tenant: string | null }) {
         <AsyncSection query={suitesQ} skeletonHeight={120}>
           {(list) => {
             if (list.items.length === 0) {
-              return <EmptyState title={t('ab.noSuites')} />
+              return (
+                <EmptyState
+                  description={t('ab.noSuitesHint')}
+                  title={t('ab.noSuites')}
+                />
+              )
             }
             return (
               <div className="flex flex-col gap-4">
@@ -1136,14 +1161,14 @@ function AbTab({ tenant }: { tenant: string | null }) {
                     parsedB,
                   )}
                 </div>
-                <label className="flex items-start gap-2 text-sm">
+                <label className="flex items-start gap-2 text-body">
                   <Checkbox
                     checked={pairwise}
                     onCheckedChange={(v) => setPairwise(v === true)}
                   />
                   <span className="flex flex-col gap-0.5">
                     <span>{t('ab.pairwiseLabel')}</span>
-                    <span className="text-xs text-muted-foreground">
+                    <span className="text-caption text-muted-foreground">
                       {t('ab.pairwiseHint')}
                     </span>
                   </span>
@@ -1170,7 +1195,7 @@ function AbTab({ tenant }: { tenant: string | null }) {
                   </Button>
                 </div>
                 {comparison.isError ? (
-                  <p role="alert" className="text-sm text-danger">
+                  <p role="alert" className="text-body text-danger">
                     {t('ab.runError')}
                   </p>
                 ) : null}
@@ -1248,7 +1273,10 @@ function DriftTab({ tenant }: { tenant: string | null }) {
           if (list.items.length === 0) {
             return (
               <SectionCard>
-                <EmptyState title={t('drift.empty')} />
+                <EmptyState
+                  description={t('drift.emptyHint')}
+                  title={t('drift.empty')}
+                />
               </SectionCard>
             )
           }

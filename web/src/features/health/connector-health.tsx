@@ -82,7 +82,7 @@ export function ConnectorHealthTab({ tenant }: ConnectorHealthTabProps) {
 
       {/* Connector table */}
       <div className="flex items-center justify-between">
-        <p className="text-xs text-muted-foreground">
+        <p className="text-caption text-muted-foreground">
           {t('connectors.autoRefresh')}
         </p>
         <Button
@@ -158,13 +158,13 @@ function SummaryTile({
 }) {
   return (
     <Card className="p-3">
-      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className="text-caption text-muted-foreground">{label}</div>
       {loading ? (
         <Skeleton className="mt-1 h-7 w-12" />
       ) : (
         <div
           className={cn(
-            'font-display text-2xl font-semibold tabular-nums',
+            'font-display text-display tabular-nums',
             tone === 'success' && 'text-success',
             tone === 'warning' && 'text-warning',
             tone === 'danger' && 'text-danger',
@@ -184,7 +184,7 @@ function TrendIcon({ trend }: { trend: string }) {
     case 'up':
       return (
         <span
-          className="inline-flex items-center gap-1 text-xs text-success"
+          className="inline-flex items-center gap-1 text-caption text-success"
           title={t('connectors.trend.up')}
         >
           <ArrowUp className="size-3" />
@@ -194,7 +194,7 @@ function TrendIcon({ trend }: { trend: string }) {
     case 'down':
       return (
         <span
-          className="inline-flex items-center gap-1 text-xs text-danger"
+          className="inline-flex items-center gap-1 text-caption text-danger"
           title={t('connectors.trend.down')}
         >
           <ArrowDown className="size-3" />
@@ -204,7 +204,7 @@ function TrendIcon({ trend }: { trend: string }) {
     default:
       return (
         <span
-          className="inline-flex items-center gap-1 text-xs text-muted-foreground"
+          className="inline-flex items-center gap-1 text-caption text-muted-foreground"
           title={t('connectors.trend.stable')}
         >
           <ArrowRight className="size-3" />
@@ -253,7 +253,7 @@ function ConnectorTable({
                 {c.title || c.name}
               </div>
               {c.title && c.title !== c.name && (
-                <div className="truncate font-mono text-xs text-muted-foreground">
+                <div className="truncate font-mono text-caption text-muted-foreground">
                   {c.name}
                 </div>
               )}

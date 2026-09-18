@@ -122,7 +122,7 @@ export function SessionsTable({
         header: t('sessions.columns.agent'),
         cell: ({ row }) => (
           <div className="flex flex-col">
-            <span className="font-mono text-xs text-foreground">
+            <span className="font-mono text-caption text-foreground">
               {row.original.agent_ref}
             </span>
             <span className="text-[11px] text-muted-foreground">
@@ -135,7 +135,7 @@ export function SessionsTable({
         id: 'model',
         header: t('sessions.columns.model'),
         cell: ({ row }) => (
-          <span className="font-mono text-xs text-muted-foreground">
+          <span className="font-mono text-caption text-muted-foreground">
             {row.original.provider_ref} / {row.original.model_ref}
           </span>
         ),
@@ -144,7 +144,7 @@ export function SessionsTable({
         accessorKey: 'turn_count',
         header: t('sessions.columns.turns'),
         cell: ({ row }) => (
-          <span className="font-mono text-xs tabular-nums text-muted-foreground">
+          <span className="font-mono text-caption tabular-nums text-muted-foreground">
             {formatInt(row.original.turn_count, i18n.language)}{' '}
             <span className="text-[11px]">
               (
@@ -161,7 +161,7 @@ export function SessionsTable({
         accessorKey: 'duration_ms',
         header: t('sessions.columns.duration'),
         cell: ({ row }) => (
-          <span className="font-mono text-xs tabular-nums text-muted-foreground">
+          <span className="font-mono text-caption tabular-nums text-muted-foreground">
             {formatDuration(row.original.duration_ms)}
           </span>
         ),
@@ -171,7 +171,7 @@ export function SessionsTable({
         id: 'latency',
         header: t('sessions.columns.latency'),
         cell: ({ row }) => (
-          <div className="flex flex-col font-mono text-xs tabular-nums">
+          <div className="flex flex-col font-mono text-caption tabular-nums">
             <span className="text-foreground">
               {t('sessions.latencyAvg', {
                 value: formatLatency(row.original.latency_avg_ms),
@@ -206,7 +206,7 @@ export function SessionsTable({
         accessorKey: 'last_event_at',
         header: t('sessions.columns.lastEvent'),
         cell: ({ row }) => (
-          <span className="text-xs text-muted-foreground">
+          <span className="text-caption text-muted-foreground">
             {formatRelativeTime(row.original.last_event_at, i18n.language)}
           </span>
         ),
@@ -258,7 +258,7 @@ export function LatencyByCategory({ sessions }: { sessions: VoiceSession[] }) {
         accessorKey: 'key',
         header: t('latency.colSession'),
         cell: ({ row }) => (
-          <span className="font-mono text-xs">{row.original.key}</span>
+          <span className="font-mono text-caption">{row.original.key}</span>
         ),
       },
       {
@@ -320,7 +320,7 @@ export function PoliciesTable({
           row.original.agent_ref === '*' ? (
             <Badge variant="accent">{allLabel}</Badge>
           ) : (
-            <span className="font-mono text-xs text-foreground">
+            <span className="font-mono text-caption text-foreground">
               {row.original.agent_ref}
             </span>
           ),
@@ -329,7 +329,7 @@ export function PoliciesTable({
         accessorKey: 'allowed_model_ref',
         header: t('policies.columns.model'),
         cell: ({ row }) => (
-          <span className="font-mono text-xs text-muted-foreground">
+          <span className="font-mono text-caption text-muted-foreground">
             {row.original.allowed_model_ref === '*'
               ? allLabel
               : row.original.allowed_model_ref}
@@ -340,7 +340,7 @@ export function PoliciesTable({
         accessorKey: 'allowed_provider_ref',
         header: t('policies.columns.provider'),
         cell: ({ row }) => (
-          <span className="font-mono text-xs text-muted-foreground">
+          <span className="font-mono text-caption text-muted-foreground">
             {row.original.allowed_provider_ref === '*'
               ? allLabel
               : row.original.allowed_provider_ref}
@@ -351,7 +351,7 @@ export function PoliciesTable({
         accessorKey: 'max_session_minutes',
         header: t('policies.columns.maxMinutes'),
         cell: ({ row }) => (
-          <span className="font-mono text-xs tabular-nums text-muted-foreground">
+          <span className="font-mono text-caption tabular-nums text-muted-foreground">
             {t('policies.minutes', {
               value: formatInt(row.original.max_session_minutes, i18n.language),
             })}
@@ -362,7 +362,7 @@ export function PoliciesTable({
         accessorKey: 'max_latency_ms',
         header: t('policies.columns.maxLatency'),
         cell: ({ row }) => (
-          <span className="font-mono text-xs tabular-nums text-muted-foreground">
+          <span className="font-mono text-caption tabular-nums text-muted-foreground">
             {formatLatency(row.original.max_latency_ms)}
           </span>
         ),
@@ -371,7 +371,7 @@ export function PoliciesTable({
         accessorKey: 'set_by',
         header: t('policies.columns.setBy'),
         cell: ({ row }) => (
-          <span className="font-mono text-xs text-muted-foreground">
+          <span className="font-mono text-caption text-muted-foreground">
             {row.original.set_by}
           </span>
         ),
@@ -380,7 +380,7 @@ export function PoliciesTable({
         accessorKey: 'updated_at',
         header: t('policies.columns.updated'),
         cell: ({ row }) => (
-          <span className="text-xs text-muted-foreground">
+          <span className="text-caption text-muted-foreground">
             {formatRelativeTime(row.original.updated_at, i18n.language)}
           </span>
         ),
@@ -445,7 +445,7 @@ export function DecisionsTable({ decisions }: { decisions: VoiceDecision[] }) {
         accessorKey: 'occurred_at',
         header: t('ledger.columns.when'),
         cell: ({ row }) => (
-          <span className="text-xs text-muted-foreground">
+          <span className="text-caption text-muted-foreground">
             {formatRelativeTime(row.original.occurred_at, i18n.language)}
           </span>
         ),
@@ -473,7 +473,7 @@ export function DecisionsTable({ decisions }: { decisions: VoiceDecision[] }) {
         //    recortada, que es su estado por defecto. Ausente + incompleto = no lo sé, y
         //    no lo sé no se pinta como un hecho.
         cell: ({ row }) => (
-          <span className="font-mono text-xs text-foreground">
+          <span className="font-mono text-caption text-foreground">
             {row.original.session_ref || '—'}
           </span>
         ),
@@ -483,7 +483,7 @@ export function DecisionsTable({ decisions }: { decisions: VoiceDecision[] }) {
         header: t('ledger.columns.agent'),
         cell: ({ row }) => (
           <div className="flex flex-col">
-            <span className="font-mono text-xs text-foreground">
+            <span className="font-mono text-caption text-foreground">
               {row.original.agent_ref || '—'}
             </span>
             <span className="text-[11px] text-muted-foreground">
@@ -498,7 +498,7 @@ export function DecisionsTable({ decisions }: { decisions: VoiceDecision[] }) {
         header: t('ledger.columns.actor'),
         cell: ({ row }) => (
           <div className="flex flex-col">
-            <span className="font-mono text-xs text-muted-foreground">
+            <span className="font-mono text-caption text-muted-foreground">
               {row.original.actor}
             </span>
             <span className="text-[11px] text-muted-foreground">
@@ -513,7 +513,7 @@ export function DecisionsTable({ decisions }: { decisions: VoiceDecision[] }) {
         // El texto es el que REDACTA el motor (`result`), no una glosa de la consola: es
         // lo que distingue «no hay política» de «tope de presupuesto» de «kill switch».
         cell: ({ row }) => (
-          <span className="text-xs text-muted-foreground">
+          <span className="text-caption text-muted-foreground">
             {row.original.result || '—'}
           </span>
         ),

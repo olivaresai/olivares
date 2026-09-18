@@ -2,10 +2,17 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { fakeRouter } from '@/test/fake-router'
 import type { RunDTO } from '@/features/agentops/types'
 import type { LiveDTO } from './types'
 
@@ -14,15 +21,19 @@ vi.mock('@/lib/auth/context', () => ({
   useAuth: () => ({ activeTenant: 't1', can: (p: string) => perms.has(p) }),
 }))
 
-vi.mock('@tanstack/react-router', () => ({
-  useRouterState: () => '',
-  Link: ({ children, to }: { children: ReactNode; to: string }) => (
-    <a href={to}>{children}</a>
-  ),
-  // No RouterProvider in this test: the shared Tabs strip consults useRouter, and the real
-  // hook answers undefined here (console-tab-scroll-restoration R2, 2026-09-06).
-  useRouter: () => undefined,
-}))
+// THE VIEW'S SELECTION IS NOW THE URL, so the router stub had to become a
+// LOCATION. The old two-line stub answered the empty string to every question, which
+// now cannot represent "this session is open": a click would write an address
+// nothing stored, the view would read back the default, and the card assertions below
+// would have measured the default instead of the choice. `fake-router` is one
+// in-memory location with a real entry stack and `navigate()` semantics that match the
+// ones `useUrlState` relies on. No RouterProvider is mounted: the shared Tabs strip
+// consults useRouter, and the double answers undefined there, exactly as the real hook
+// did here (console-tab-scroll-restoration R2, 2026-09-06).
+vi.mock('@tanstack/react-router', async () => {
+  const { fakeRouterModule } = await import('@/test/fake-router')
+  return fakeRouterModule()
+})
 
 // The SSE stream is a live connection; the list under test is the merge, not the wire.
 vi.mock('@/features/shared', async () => {
@@ -44,16 +55,20 @@ vi.mock('@/features/agentops/workspaces-panel', () => ({
 vi.mock('@/features/agentops/run-create-dialog', () => ({
   RunCreateDialog: () => null,
 }))
+// The card is handed an already-resolved session; the target it was resolved FOR
+// is what these cases are about, and it rides on the resolution.
 vi.mock('./session-card', () => ({
   SessionCard: ({
-    target,
+    resolution,
   }: {
-    target: { sessionRef?: string; runRef?: string; liveRef?: string } | null
+    resolution: {
+      target: { sessionRef?: string; runRef?: string; liveRef?: string } | null
+    }
   }) =>
-    target ? (
+    resolution.target ? (
       <div data-testid="card">
-        card:{target.sessionRef ?? ''}|{target.runRef ?? ''}|
-        {target.liveRef ?? ''}
+        card:{resolution.target.sessionRef ?? ''}|
+        {resolution.target.runRef ?? ''}|{resolution.target.liveRef ?? ''}
       </div>
     ) : null,
 }))
@@ -118,15 +133,36 @@ const launchedRun: RunDTO = {
   last_activity_at: '2026-08-10T10:06:00Z',
 }
 
+/**
+ * ⛔ THIS FILE MEASURES THE TABLE. The screen's default presentation is the
+ *    three-pane work surface; the table — the columns, the origin chips, the facets and
+ *    the row-backed open target these cases read — is the other tab, unchanged. Opening
+ *    it keeps every case measuring what it was written to measure.
+ *
+ *    MOUSEDOWN, not click: a Radix tab trigger selects on mouse-down, and a bare
+ *    `.click()` leaves the strip where it was — which reads as "the table is empty"
+ *    rather than "the tab never changed".
+ */
+function openTable() {
+  // The LAST strip: a few cases render the view twice in one test, and the newest
+  // mount is the one they go on to assert against.
+  const triggers = screen.getAllByRole('tab', { name: 'Table' })
+  act(() => {
+    fireEvent.mouseDown(triggers[triggers.length - 1])
+  })
+}
+
 function renderView(entrance: 'observe' | 'operate' = 'observe') {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: 0 } },
   })
-  return render(
+  const result = render(
     <QueryClientProvider client={qc}>
       <SessionsWorkspaceView entrance={entrance} />
     </QueryClientProvider>,
   )
+  openTable()
+  return result
 }
 
 const rowFor = async (label: string) => {
@@ -136,6 +172,7 @@ const rowFor = async (label: string) => {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  fakeRouter.reset('/sessions')
   perms.clear()
   perms.add('sessions:live:read')
   perms.add('sessions:run:read')
@@ -471,5 +508,112 @@ describe('SessionsWorkspaceView — B2: two homes, one provider session id', () 
     expect(screen.getAllByRole('row')).toHaveLength(3)
     expect(within(legacy).getByText('Discovered')).toBeInTheDocument()
     expect(within(own).getByText('Launched')).toBeInTheDocument()
+  })
+})
+
+/**
+ * THE SESSION IS ADDRESSABLE. A review named this the single largest gap the front door
+ * left: a work row there could open the room and not the card, because the selection
+ * lived in `useState`.
+ *
+ * Every case below drives the REAL location double (`@/test/fake-router`), so what is
+ * asserted is the address bar an operator would copy, and not a prop.
+ */
+describe('SessionsWorkspaceView — the address bar holds the session', () => {
+  it('opens a session COLD from a deep link, with no click and no list behind it', async () => {
+    // The whole point: nothing is loaded yet when the address is read, so the card has
+    // to be resolvable from the URL alone.
+    fakeRouter.reset('/sessions?session=sess%3Asess-found')
+    renderView()
+    expect(await screen.findByTestId('card')).toHaveTextContent(
+      'card:sess-found|',
+    )
+  })
+
+  it('opens a scoped row cold by its own opaque id', async () => {
+    fakeRouter.reset('/sessions?session=live%3Alr-ours')
+    renderView()
+    expect(await screen.findByTestId('card')).toHaveTextContent('|lr-ours')
+  })
+
+  it('writes the address when a row is clicked — the URL is the only writer', async () => {
+    const user = userEvent.setup()
+    renderView()
+    await user.click(await rowFor('sess-found'))
+    await screen.findByTestId('card')
+    expect(fakeRouter.url()).toBe('/sessions?session=sess%3Asess-found')
+  })
+
+  it('Back returns to the session read a moment ago, and Forward goes on again', async () => {
+    const user = userEvent.setup()
+    renderView()
+    await user.click(await rowFor('sess-found'))
+    await screen.findByTestId('card')
+    await user.click(await rowFor('nightly-indexer'))
+    expect(await screen.findByTestId('card')).toHaveTextContent(
+      'card:sess-ours|',
+    )
+
+    // A session is a PLACE, so each one is its own history entry.
+    act(() => fakeRouter.back())
+    expect(await screen.findByTestId('card')).toHaveTextContent(
+      'card:sess-found|',
+    )
+    act(() => fakeRouter.forward())
+    expect(await screen.findByTestId('card')).toHaveTextContent(
+      'card:sess-ours|',
+    )
+  })
+
+  it('closing the card takes the session out of the address', async () => {
+    fakeRouter.reset('/sessions?session=sess%3Asess-found')
+    renderView()
+    await screen.findByTestId('card')
+    act(() => fakeRouter.go('/sessions'))
+    await waitFor(() =>
+      expect(screen.queryByTestId('card')).not.toBeInTheDocument(),
+    )
+  })
+
+  it('refuses an address that names nothing, says which key, and cleans the bar', async () => {
+    // A URL is typed, pasted and edited. A deep link that silently ignored half of
+    // what it was handed would show the recipient a different screen than the author.
+    fakeRouter.reset('/sessions?session=nonsense&pane=diff')
+    renderView()
+    expect(await screen.findByTestId('url-state-notice')).toHaveTextContent(
+      /session/,
+    )
+    expect(screen.queryByTestId('card')).not.toBeInTheDocument()
+    await waitFor(() => expect(fakeRouter.url()).toBe('/sessions'))
+  })
+
+  it('a withdrawn read retires the open session, clears the bar and SAYS SO', async () => {
+    // The authority model is unchanged and this proves the address did not weaken it:
+    // the selection was made ON a row the observed half answered, so losing that half
+    // takes the card with it — and now the URL follows, because a link naming a
+    // session the screen is not showing is the one state a shareable surface must not
+    // sit in quietly.
+    const user = userEvent.setup()
+    const { rerender } = renderView()
+    await user.click(await rowFor('sess-found'))
+    await screen.findByTestId('card')
+
+    perms.delete('sessions:live:read')
+    rerender(
+      <QueryClientProvider
+        client={
+          new QueryClient({
+            defaultOptions: { queries: { retry: false, gcTime: 0 } },
+          })
+        }
+      >
+        <SessionsWorkspaceView entrance="observe" />
+      </QueryClientProvider>,
+    )
+    await waitFor(() =>
+      expect(screen.queryByTestId('card')).not.toBeInTheDocument(),
+    )
+    expect(await screen.findByTestId('sessions-address-retired')).toBeVisible()
+    await waitFor(() => expect(fakeRouter.url()).toBe('/sessions'))
   })
 })

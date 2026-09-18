@@ -49,6 +49,7 @@
     "description": "Chaque exécution isolée, avec le backend qui l’a lancée et son évaluation éventuelle.",
     "isolationNote": "L’isolation est réelle, non simulée : l’exécuteur et l’indicateur d’isolation sont affichés exactement tels qu’enregistrés. Une exécution dégradée a été lancée mais non évaluée — il ne s’agit pas d’une réussite.",
     "empty": "Aucune exécution pour l’instant",
+    "emptyHint": "Chaque exécution de scénario est listée ici avec son verdict et ses sorties. Exécutez un scénario pour enregistrer la première.",
     "errored": "{{count}} erreur",
     "errored_one": "{{count}} erreur",
     "errored_many": "{{count}} erreurs",
@@ -67,6 +68,7 @@
   "outputs": {
     "title": "Sorties des étapes",
     "empty": "Aucune sortie enregistrée",
+    "emptyHint": "Tout ce qu’écrit une étape de scénario est capturé ici. Cette exécution n’a enregistré aucune sortie.",
     "syntheticNote": "Ce sont des sorties synthétiques bornées issues de l’exécuteur simulé — et non des sorties de production. Un échec de simulation est un marqueur déterministe ; il n’a jamais atteint de ressource réelle.",
     "mockHit": "Correspondance de simulation",
     "mockMiss": "Échec de simulation"
@@ -80,6 +82,7 @@
     "completePartial": "La relecture s'est terminée, mais ce n'est pas l'enregistrement complet",
     "unreadable": "Trames que cette vue n'a pas pu lire : {{n}}. Elles sont arrivées et ont été écartées : les preuves qu'elles portaient manquent ici — ce n'est pas une relecture intègre.",
     "emptyUnreadable": "Aucune sortie d'étape n'a pu être lue",
+    "emptyUnreadableHint": "La sortie de chaque étape est diffusée depuis le bac à sable au fil de l’exécution. Rien n’a pu être relu pour cette étape.",
     "disconnected": "Non connecté",
     "lost": "Connexion perdue — vous ne voyez plus cette exécution.",
     "lostHint": "Cela ne signifie PAS que l'exécution est terminée : la connexion s'est interrompue avant que le moteur ne signale la fin de la relecture. Le statut de l'exécution est celui enregistré par le moteur, affiché dans le tableau des exécutions ; il n'est jamais déduit de cette connexion. Reconnectez-vous pour reprendre ; les sorties déjà affichées ne sont pas répétées.",

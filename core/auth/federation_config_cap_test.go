@@ -119,7 +119,7 @@ func mustPut(t *testing.T, svc *auth.FederationService, scope model.TenantID, in
 // The enterprise composition root wires one UNCONDITIONALLY (wire_enterprise.go:159-160), so
 // a customer who bought a different pack received per-tenant multi-IdP for free: one binary
 // carries the capability and entitlement is per pack, so "compiled in" and "paid for" stopped
-// being the same thing. Requested by another lane, who owns the enterprise side of the seam.
+// being the same thing. Requested from the enterprise side of the seam.
 //
 // The refusal is returned UNWRAPPED so it carries its own name. Folding it into
 // ErrMultiIDPRequiresEnterprise would tell an enterprise customer to buy the build they are

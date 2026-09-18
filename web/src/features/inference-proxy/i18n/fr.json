@@ -49,6 +49,7 @@
     "truncatedHint": "Il existe plus de règles DLP que celles affichées ; cette page prend les lignes par id. L’absence d’une règle ici ne prouve pas qu’elle n’existe pas : la sortie peut être régie par des règles que vous ne voyez pas.",
     "add": "Ajouter une règle",
     "noRead": "Vous n'avez pas la permission de voir les règles DLP.",
+    "noReadHint": "Les règles DLP inspectent les prompts et les réponses à la recherche de données qui ne doivent pas sortir. Demandez à un administrateur la permission de lecture DLP.",
     "empty": "Aucune règle DLP",
     "emptyHint": "Ajoutez une règle pour autoriser ou refuser une classification en sortie.",
     "colClass": "Classification",

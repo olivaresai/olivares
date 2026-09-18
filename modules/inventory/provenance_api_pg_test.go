@@ -19,7 +19,7 @@ import (
 	sdkmodel "github.com/olivaresai/olivares/sdk/model"
 )
 
-// The PostgreSQL 16 leg of D08-C3: both read indexes exist on a real isolated
+// The PostgreSQL 16 leg of the observation history: both read indexes exist on a real isolated
 // database, the distinct-receipt page is exact over HTTP against the real store,
 // the three focal statements the reader issues are answered from indexes with a
 // fixture large enough that the planner has a genuine choice (no planner

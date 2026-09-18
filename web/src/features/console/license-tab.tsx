@@ -47,6 +47,7 @@ import {
   consoleKeys,
   type LicenseStatusDTO,
 } from './api'
+import { StaticTable } from '@/components/data/static-table'
 
 // Badge tone for each license lifecycle status.
 function statusVariant(
@@ -71,8 +72,8 @@ function statusVariant(
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="flex min-w-0 items-start justify-between gap-4 py-2.5">
-      <dt className="text-sm text-muted-foreground">{label}</dt>
-      <dd className="min-w-0 text-right text-sm break-words text-foreground">
+      <dt className="text-body text-muted-foreground">{label}</dt>
+      <dd className="min-w-0 text-right text-body break-words text-foreground">
         {children}
       </dd>
     </div>
@@ -155,7 +156,7 @@ function LicenseFacts({
             {license.active_users}
             {license.active_users_capped ? '+' : ''}
           </span>
-          <span className="ml-2 text-xs text-muted-foreground">
+          <span className="ml-2 text-caption text-muted-foreground">
             {t('console:license.noUserLimit')}
           </span>
         </Row>
@@ -170,7 +171,7 @@ function LicenseFacts({
           </Row>
         )}
         <Row label={t('console:license.sourceLabel')}>
-          <span className="font-mono text-xs break-all">
+          <span className="font-mono text-caption break-all">
             {t(`console:license.sources.${license.source}`, {
               defaultValue: license.source,
             })}
@@ -213,7 +214,7 @@ export function LicenseTab() {
 
   if (!isSuperadmin) {
     return (
-      <div className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/5 px-4 py-3 text-sm text-muted-foreground">
+      <div className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/5 px-4 py-3 text-body text-muted-foreground">
         <ShieldAlert
           className="mt-0.5 size-4 shrink-0 text-warning"
           aria-hidden
@@ -247,10 +248,10 @@ export function LicenseTab() {
         className="flex flex-wrap items-start justify-between gap-3"
       >
         <div className="min-w-[min(100%,20rem)] flex-1 basis-[20rem]">
-          <h2 className="text-base font-semibold text-foreground">
+          <h2 className="text-heading text-foreground">
             {t('console:license.title')}
           </h2>
-          <p className="max-w-2xl text-sm text-muted-foreground">
+          <p className="max-w-2xl text-body text-muted-foreground">
             {t('console:license.caption')}
           </p>
         </div>
@@ -303,14 +304,14 @@ export function LicenseTab() {
         >
           {/* Renewal banner — the honest degradation prompt when expired. */}
           {licenseRead.license.status === 'expired' && (
-            <p className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/5 px-4 py-3 text-sm text-warning">
+            <p className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/5 px-4 py-3 text-body text-warning">
               <ShieldAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
               {t('console:license.expiredBanner')}
             </p>
           )}
           {/* Managed-externally note: the data-dir install is shadowed by an override. */}
           {licenseRead.license.managed_externally && (
-            <p className="flex items-start gap-2 rounded-lg border border-accent-line bg-accent-soft px-4 py-3 text-sm text-accent-soft-foreground">
+            <p className="flex items-start gap-2 rounded-lg border border-accent-line bg-accent-soft px-4 py-3 text-body text-accent-soft-foreground">
               <ShieldAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
               {t('console:license.managedExternally', {
                 source: licenseRead.license.source,
@@ -319,7 +320,7 @@ export function LicenseTab() {
           )}
           <LicenseFacts license={licenseRead.license} />
           {licenseRead.license.edition !== 'enterprise' && (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-body text-muted-foreground">
               {t('console:license.communityNote')}
             </p>
           )}
@@ -328,10 +329,10 @@ export function LicenseTab() {
 
       {licenseRead.kind !== 'loading' ? (
         <details
-          className="text-sm text-muted-foreground"
+          className="text-body text-muted-foreground"
           data-slot="license-apply-help"
         >
-          <summary className="cursor-pointer rounded-sm text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background">
+          <summary className="cursor-pointer rounded-sm text-body text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background">
             {t('console:license.helpSummary')}
           </summary>
           <p className="mt-2">{t('console:license.helpBody')}</p>
@@ -494,11 +495,11 @@ function InstallForm({ onClose }: { onClose: () => void }) {
               setNeedsAck(false)
             }}
             rows={5}
-            className="font-mono text-xs"
+            className="font-mono text-caption"
             placeholder="eyJ...license-blob...="
           />
         </Field>
-        <label className="inline-flex cursor-pointer items-center gap-2 text-sm text-accent-text">
+        <label className="inline-flex cursor-pointer items-center gap-2 text-body text-accent-text">
           <Upload className="size-4" aria-hidden />
           {t('console:license.uploadFile')}
           <input
@@ -516,7 +517,7 @@ function InstallForm({ onClose }: { onClose: () => void }) {
         </label>
 
         {needsAck && (
-          <p className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/5 px-4 py-3 text-sm text-warning">
+          <p className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/5 px-4 py-3 text-body text-warning">
             <ShieldAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
             {ackMessage || t('console:license.downgradeWarn')}
           </p>
@@ -614,7 +615,7 @@ function RemoveForm({ onClose }: { onClose: () => void }) {
   return (
     <>
       {needsAck && (
-        <p className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/5 px-4 py-3 text-sm text-warning">
+        <p className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/5 px-4 py-3 text-body text-warning">
           <ShieldAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
           {ackMessage || t('console:license.downgradeWarn')}
         </p>
@@ -688,7 +689,7 @@ function ActivationSection() {
   }
   if (query.isError || !query.data) {
     return (
-      <p className="rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+      <p className="rounded-lg border border-border bg-muted/30 px-4 py-3 text-body text-muted-foreground">
         {t('console:activation.unavailable')}
       </p>
     )
@@ -697,16 +698,16 @@ function ActivationSection() {
   return (
     <div className="flex flex-col gap-3 rounded-lg border border-border p-5">
       <div>
-        <h3 className="text-sm font-semibold text-foreground">
+        <h3 className="text-body font-semibold text-foreground">
           {t('console:activation.title')}
         </h3>
-        <p className="max-w-2xl text-sm text-muted-foreground">
+        <p className="max-w-2xl text-body text-muted-foreground">
           {t('console:activation.caption')}
         </p>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-sm text-muted-foreground">
+        <span className="text-body text-muted-foreground">
           {t('console:activation.enablePreset')}:
         </span>
         {data.presets.map((p) => (
@@ -723,19 +724,13 @@ function ActivationSection() {
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+        <StaticTable>
           <thead>
-            <tr className="border-b border-border text-left text-xs text-muted-foreground">
-              <th className="py-1.5 pr-3 font-medium">
-                {t('console:activation.addon')}
-              </th>
-              <th className="py-1.5 pr-3 font-medium">
-                {t('console:activation.state')}
-              </th>
-              <th className="py-1.5 pr-3 font-medium">
-                {t('console:activation.tier')}
-              </th>
-              <th className="py-1.5 font-medium" aria-hidden />
+            <tr>
+              <th>{t('console:activation.addon')}</th>
+              <th>{t('console:activation.state')}</th>
+              <th>{t('console:activation.tier')}</th>
+              <th aria-hidden />
             </tr>
           </thead>
           <tbody>
@@ -743,10 +738,10 @@ function ActivationSection() {
               <AddonRow key={a.key} addon={a} />
             ))}
           </tbody>
-        </table>
+        </StaticTable>
       </div>
 
-      <p className="flex items-start gap-2 text-xs text-muted-foreground">
+      <p className="flex items-start gap-2 text-caption text-muted-foreground">
         <RotateCw className="mt-0.5 size-3.5 shrink-0" aria-hidden />
         {t('console:activation.restartNote')}
       </p>
@@ -803,18 +798,20 @@ function AddonRow({ addon }: { addon: ActivationAddonDTO }) {
   const { t } = useTranslation(['console'])
   const [confirmOpen, setConfirmOpen] = useState(false)
   return (
-    <tr className="border-b border-border/60">
-      <td className="py-1.5 pr-3">
+    <tr className="border-border/60">
+      <td>
         <div className="font-medium text-foreground">{addon.title}</div>
-        <div className="text-xs text-muted-foreground">{addon.summary}</div>
+        <div className="text-caption text-muted-foreground">
+          {addon.summary}
+        </div>
       </td>
-      <td className="py-1.5 pr-3 align-top">
+      <td className="align-top">
         <Badge variant={addonStateTone(addon.state)}>{addon.state}</Badge>
       </td>
-      <td className="py-1.5 pr-3 align-top text-xs text-muted-foreground">
+      <td className="align-top text-caption text-muted-foreground">
         {addon.preset}
       </td>
-      <td className="py-1.5 text-right align-top">
+      <td className="text-right align-top">
         {addon.state === 'pending' && (
           <Button
             variant="ghost"
@@ -912,7 +909,7 @@ function PromoteAddonForm({
   return (
     <>
       {addon.reason && (
-        <p className="rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+        <p className="rounded-lg border border-border bg-muted/30 px-4 py-3 text-body text-muted-foreground">
           {addon.reason}
         </p>
       )}
@@ -1003,7 +1000,7 @@ function EnablePresetForm({
       ) : preview.isError || !preview.data ? (
         <ErrorState retry={() => void preview.refetch()} />
       ) : (
-        <div className="flex flex-col gap-1 rounded-lg border border-border p-3 font-mono text-xs">
+        <div className="flex flex-col gap-1 rounded-lg border border-border p-3 font-mono text-caption">
           {preview.data.entries.map((e) => (
             <div key={e.addon} className="flex items-start gap-2">
               <span

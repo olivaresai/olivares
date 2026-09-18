@@ -132,7 +132,11 @@ export function Nis2Tab({
   if (!canRead) {
     return (
       <SectionCard title={t('nis2.title')}>
-        <EmptyState icon={<Siren />} title={t('nis2.noAccess')} />
+        <EmptyState
+          description={t('nis2.noAccessHint')}
+          icon={<Siren />}
+          title={t('nis2.noAccess')}
+        />
       </SectionCard>
     )
   }
@@ -305,28 +309,28 @@ function Nis2Row({
           ) : null}
           <span className="font-medium">{inc.reference}</span>
         </div>
-        {inc.rationale ? <p className="text-xs">{inc.rationale}</p> : null}
+        {inc.rationale ? <p className="text-caption">{inc.rationale}</p> : null}
         {inc.criteria_met && inc.criteria_met.length > 0 ? (
-          <p className="text-xs text-muted-foreground">
+          <p className="text-caption text-muted-foreground">
             {t('nis2.criteria', { list: inc.criteria_met.join(', ') })}
           </p>
         ) : null}
         {inc.note ? (
-          <p className="text-xs text-muted-foreground">{inc.note}</p>
+          <p className="text-caption text-muted-foreground">{inc.note}</p>
         ) : null}
         {!phaseKnown ? (
           <CaveatNotice tone="warning">
             {t('nis2.unknownPhase', { phase: inc.phase })}
           </CaveatNotice>
         ) : null}
-        <p className="text-xs text-muted-foreground">
+        <p className="text-caption text-muted-foreground">
           {t('nis2.classifiedBy', {
             actor: inc.classified_by,
             at: inc.classified_at,
           })}
         </p>
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs text-muted-foreground">
+          <span className="text-caption text-muted-foreground">
             {t('nis2.impactHash')}
           </span>
           <HashChip hash={inc.doc_sha256} />
@@ -546,7 +550,7 @@ function ClassifyDialog({
                 value={impact}
                 onChange={(e) => setImpact(e.target.value)}
                 rows={10}
-                className="font-mono text-xs"
+                className="font-mono text-caption"
                 required
               />
             )}
@@ -798,14 +802,14 @@ function Nis2DetailDialog({
               />
               {full.basis && full.basis.length > 0 ? (
                 <div className="flex flex-col gap-1">
-                  <p className="text-xs font-medium">
+                  <p className="text-caption font-medium">
                     {t('compliance:nis2.basisTitle')}
                   </p>
                   <ul className="flex flex-col gap-1">
                     {full.basis.map((b, i) => (
                       <li
                         key={`${b.provision ?? ''}-${i}`}
-                        className="text-xs text-muted-foreground"
+                        className="text-caption text-muted-foreground"
                       >
                         {b.provision ?? ''}
                         {b.source_url ? ` · ${b.source_url}` : ''}
@@ -843,13 +847,13 @@ function KeyValueBlock({
   const entries = Object.entries(value ?? {})
   return (
     <div className="flex flex-col gap-1">
-      <p className="text-xs font-medium">{title}</p>
+      <p className="text-caption font-medium">{title}</p>
       {entries.length === 0 ? (
-        <p className="text-xs text-muted-foreground">{empty}</p>
+        <p className="text-caption text-muted-foreground">{empty}</p>
       ) : (
         <dl className="flex flex-col gap-1">
           {entries.map(([k, v]) => (
-            <div key={k} className="flex flex-wrap gap-2 text-xs">
+            <div key={k} className="flex flex-wrap gap-2 text-caption">
               <dt className="text-muted-foreground">{k}</dt>
               <dd className="font-mono break-all">
                 {typeof v === 'string' ? v : JSON.stringify(v)}

@@ -112,5 +112,12 @@ TENANT="$(curl -sf "http://127.0.0.1:$PORT/v1/system/orgs" -H "Authorization: Be
 echo "==> Tenant demo: $TENANT"
 
 cd "$ROOT/web"
+# ⛔ LA RAÍZ DEL WORKSPACE SE PASA, NO SE ADIVINA. El spec la lee de `WS_ROOT` y cae a
+#    `/workspace` cuando nadie se la da — y este lanzador nunca se la daba, así que registraba
+#    el directorio padre del contenedor (524 entradas de productos ajenos) y luego comprobaba
+#    `.github`, que ahí no existe. Medido el 2026-09-18: `el navegador abrió sin listar el
+#    árbol`. El propio spec dice qué raíz quiere — «el propio árbol del repositorio» — y es la
+#    única que sostiene su testigo, así que se la nombra aquí.
+WS_ROOT="$ROOT" \
 PLAYWRIGHT_BASE_URL="http://127.0.0.1:$PORT" DEMO_TENANT="$TENANT" \
   pnpm exec playwright test e2e/launch-states.spec.ts "$@"

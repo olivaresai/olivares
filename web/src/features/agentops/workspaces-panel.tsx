@@ -94,7 +94,7 @@ export function WorkspacesPanel() {
         accessorKey: 'root_path',
         header: t('workspaces.cols.rootPath'),
         cell: ({ getValue }) => (
-          <span className="font-mono text-xs text-muted-foreground">
+          <span className="font-mono text-caption text-muted-foreground">
             {getValue<string>()}
           </span>
         ),
@@ -170,7 +170,7 @@ export function WorkspacesPanel() {
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">
+        <p className="text-body text-muted-foreground">
           {t('workspaces.subtitle')}
         </p>
         {canAdmin && (
@@ -234,7 +234,7 @@ export function WorkspacesPanel() {
                     {browse.name || browse.workspace_ref}
                   </span>
                 </SheetTitle>
-                <SheetDescription className="font-mono text-xs">
+                <SheetDescription className="font-mono text-caption">
                   {browse.root_path}
                 </SheetDescription>
               </SheetHeader>

@@ -98,8 +98,8 @@ function StateBanner({ state }: { state: KillSwitchStateDTO }) {
           <OctagonX className="size-4 shrink-0" aria-hidden />
           {t('banner.estateTitle')}
         </p>
-        <p className="text-sm text-foreground">{t('banner.estateBody')}</p>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-body text-foreground">{t('banner.estateBody')}</p>
+        <p className="text-caption text-muted-foreground">
           {t('banner.engagedBy')}{' '}
           <span className="font-mono">{estateStop.engaged_by || '—'}</span>
           {' · '}
@@ -122,13 +122,15 @@ function StateBanner({ state }: { state: KillSwitchStateDTO }) {
           <OctagonAlert className="size-4 shrink-0" aria-hidden />
           {t('banner.agentCount', { count: agentStops.length })}
         </p>
-        <p className="text-xs text-muted-foreground">{t('banner.agentBody')}</p>
+        <p className="text-caption text-muted-foreground">
+          {t('banner.agentBody')}
+        </p>
       </div>
     )
   }
 
   return (
-    <p className="flex items-center gap-2 text-sm text-muted-foreground">
+    <p className="flex items-center gap-2 text-body text-muted-foreground">
       <CircleCheck className="size-4 shrink-0 text-success" aria-hidden />
       {t('banner.none')}
     </p>
@@ -207,7 +209,7 @@ function StopsSection({ canAdmin }: { canAdmin: boolean }) {
         header: t('stops.reason'),
         cell: ({ row }) => (
           <span
-            className="truncate text-xs text-muted-foreground"
+            className="truncate text-caption text-muted-foreground"
             title={row.original.reason || undefined}
           >
             {row.original.reason || '—'}
@@ -233,12 +235,12 @@ function StopsSection({ canAdmin }: { canAdmin: boolean }) {
           // en ningun otro sitio) y la hora NUNCA rompe, que es la regla del informe
           // para columnas de tiempo.
           <span className="flex min-w-0 items-center gap-1.5">
-            <span className="min-w-0 truncate font-mono text-xs text-muted-foreground">
+            <span className="min-w-0 truncate font-mono text-caption text-muted-foreground">
               {row.original.engaged_by || '—'}
             </span>
             <RelTime
               ts={row.original.engaged_at}
-              className="shrink-0 whitespace-nowrap text-xs text-muted-foreground"
+              className="shrink-0 whitespace-nowrap text-caption text-muted-foreground"
             />
             {row.original.source === 'operator' && (
               <Badge variant="outline" title={t('stops.aalHint')}>
@@ -253,7 +255,7 @@ function StopsSection({ canAdmin }: { canAdmin: boolean }) {
         header: t('stops.revoked'),
         cell: ({ row }) => (
           <span
-            className="font-mono tabular-nums text-xs"
+            className="font-mono tabular-nums text-caption"
             title={t('stops.revokedHint')}
           >
             {row.original.revoked_approvals}
@@ -331,8 +333,10 @@ function StopsSection({ canAdmin }: { canAdmin: boolean }) {
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <h2 className="text-base font-medium">{t('stops.title')}</h2>
-        <p className="text-xs text-muted-foreground">{t('stops.caption')}</p>
+        <h2 className="text-heading">{t('stops.title')}</h2>
+        <p className="text-caption text-muted-foreground">
+          {t('stops.caption')}
+        </p>
       </div>
 
       {/* Fuera del bloque de datos a propósito: si un refetch falla, el aviso no debe

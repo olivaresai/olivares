@@ -77,7 +77,7 @@ export function MetricStat({
               {icon}
             </span>
           ) : null}
-          <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+          <span className="text-caption font-medium tracking-wide text-muted-foreground uppercase">
             {label}
           </span>
         </div>
@@ -86,14 +86,14 @@ export function MetricStat({
       <div className="flex flex-col gap-0.5">
         <span
           className={cn(
-            'font-display text-2xl font-semibold tracking-tight tabular-nums',
+            'font-display text-display tabular-nums',
             VALUE_TONE[tone],
           )}
         >
           {value}
         </span>
         {caption ? (
-          <span className="min-w-0 text-xs text-muted-foreground">
+          <span className="min-w-0 text-caption text-muted-foreground">
             {caption}
           </span>
         ) : null}

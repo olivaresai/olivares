@@ -68,6 +68,7 @@ import type {
   PostureGrade,
 } from './types'
 import './i18n'
+import { PagePrimaryAction } from '@/components/ui/page-actions'
 
 const ARTIFACT_CLASSES: readonly AgentArtifactClass[] = [
   'skill',
@@ -200,7 +201,7 @@ function ArtifactRegistry() {
         accessorKey: 'version',
         header: t('registry.columns.version'),
         cell: ({ row }) => (
-          <span className="font-mono text-xs text-muted-foreground">
+          <span className="font-mono text-caption text-muted-foreground">
             {row.original.version || t('values.none')}
           </span>
         ),
@@ -210,7 +211,7 @@ function ArtifactRegistry() {
         header: t('registry.columns.provenance'),
         cell: ({ row }) => (
           <div className="flex min-w-40 flex-col items-start gap-1">
-            <span className="max-w-64 truncate text-xs text-muted-foreground">
+            <span className="max-w-64 truncate text-caption text-muted-foreground">
               {row.original.provenance || t('values.none')}
             </span>
             <ProvenanceState verified={row.original.verified} />
@@ -226,7 +227,7 @@ function ArtifactRegistry() {
         accessorKey: 'posture_issues',
         header: t('registry.columns.issues'),
         cell: ({ row }) => (
-          <span className="font-mono text-xs tabular-nums">
+          <span className="font-mono text-caption tabular-nums">
             {row.original.posture_grade
               ? row.original.posture_issues
               : t('values.none')}
@@ -237,7 +238,7 @@ function ArtifactRegistry() {
         accessorKey: 'attested_at',
         header: t('registry.columns.attestedAt'),
         cell: ({ row }) => (
-          <span className="whitespace-nowrap text-xs text-muted-foreground">
+          <span className="whitespace-nowrap text-caption text-muted-foreground">
             {displayTime(row.original.attested_at, t('values.none'))}
           </span>
         ),
@@ -265,14 +266,16 @@ function ArtifactRegistry() {
       description={t('registry.description')}
       actions={
         canWrite ? (
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={() => setCreateOpen(true)}
-          >
-            <Plus />
-            {t('registry.new')}
-          </Button>
+          <PagePrimaryAction>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => setCreateOpen(true)}
+            >
+              <Plus />
+              {t('registry.new')}
+            </Button>
+          </PagePrimaryAction>
         ) : null
       }
       noPadding
@@ -318,7 +321,7 @@ function ArtifactRegistry() {
             }
           >
             <SelectTrigger
-              className="h-8 w-48 text-xs"
+              className="h-8 w-48 text-caption"
               aria-label={t('registry.filter.label')}
             >
               <SelectValue />
@@ -610,8 +613,12 @@ function CreateArtifactForm({
           role="alert"
           className="rounded-md border border-danger-line bg-danger-soft px-3 py-2"
         >
-          <p className="text-xs font-medium text-danger">{inlineError.title}</p>
-          <p className="mt-1 text-xs text-foreground">{inlineError.message}</p>
+          <p className="text-caption font-medium text-danger">
+            {inlineError.title}
+          </p>
+          <p className="mt-1 text-caption text-foreground">
+            {inlineError.message}
+          </p>
         </div>
       ) : null}
 
@@ -890,7 +897,7 @@ function AgentAibom() {
           <ScrollArea className="max-h-[60vh] rounded-md border border-border bg-muted/40 p-3">
             <pre
               aria-label={t('aibom.live.jsonLabel')}
-              className="whitespace-pre-wrap break-all font-mono text-xs text-foreground"
+              className="whitespace-pre-wrap break-all font-mono text-caption text-foreground"
             >
               {JSON.stringify(live, null, 2)}
             </pre>
@@ -992,7 +999,7 @@ function SealHistory({
       {loading ? (
         <div
           role="status"
-          className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground"
+          className="flex items-center justify-center gap-2 py-10 text-body text-muted-foreground"
         >
           <Spinner size="sm" aria-hidden />
           {t('aibom.live.loading')}

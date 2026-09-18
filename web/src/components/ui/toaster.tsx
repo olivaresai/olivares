@@ -31,19 +31,19 @@ export function Toaster({ toastOptions, ...props }: ToasterProps) {
         classNames: {
           toast: cn(
             'group font-sans bg-elevated border border-border-strong text-foreground',
-            'rounded-lg shadow-lg gap-2 p-3 text-sm',
+            'rounded-lg shadow-lg gap-2 p-3 text-body',
           ),
-          title: 'text-sm font-medium text-foreground',
-          description: 'text-xs text-muted-foreground',
+          title: 'text-body font-medium text-foreground',
+          description: 'text-caption text-muted-foreground',
           icon: 'shrink-0 [&_svg]:size-4',
           content: 'gap-0.5',
           actionButton: cn(
-            'h-7 rounded-md bg-accent px-2.5 text-xs font-medium text-accent-foreground',
+            'h-7 rounded-md bg-accent px-2.5 text-caption font-medium text-accent-foreground',
             'hover:bg-accent-hover active:bg-accent-active',
             'outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
           ),
           cancelButton: cn(
-            'h-7 rounded-md border border-border-strong bg-surface px-2.5 text-xs font-medium text-foreground',
+            'h-7 rounded-md border border-border-strong bg-surface px-2.5 text-caption font-medium text-foreground',
             'hover:bg-muted',
             'outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
           ),

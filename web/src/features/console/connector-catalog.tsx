@@ -96,10 +96,10 @@ export function ConnectorCatalog({ kinds }: { kinds: ConnectorInfo[] }) {
     <section className="flex flex-col gap-3 pt-2">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h3 className="text-sm font-semibold text-foreground">
+          <h3 className="text-body font-semibold text-foreground">
             {t('console:connectors.catalog.title')}
           </h3>
-          <p className="max-w-2xl text-sm text-muted-foreground">
+          <p className="max-w-2xl text-body text-muted-foreground">
             {t('console:connectors.catalog.caption', { count: kinds.length })}
           </p>
         </div>
@@ -120,6 +120,7 @@ export function ConnectorCatalog({ kinds }: { kinds: ConnectorInfo[] }) {
 
       {rows.length === 0 ? (
         <EmptyState
+          description={t('console:connectors.catalog.noMatchHint')}
           title={t('console:connectors.catalog.noMatch', { query: q.trim() })}
           icon={<Search />}
         />
@@ -131,7 +132,7 @@ export function ConnectorCatalog({ kinds }: { kinds: ConnectorInfo[] }) {
               className="flex flex-col gap-1.5 rounded-lg border border-border px-3 py-2.5"
             >
               <div className="flex items-start justify-between gap-2">
-                <span className="min-w-0 text-sm font-medium text-foreground">
+                <span className="min-w-0 text-body font-medium text-foreground">
                   {c.title || c.kind}
                 </span>
                 <HostingBadge hosting={c.hosting} />
@@ -139,11 +140,11 @@ export function ConnectorCatalog({ kinds }: { kinds: ConnectorInfo[] }) {
               {/* The KIND is always shown, never only the title: it is what the
                   operator types and what the source row stores, and three Gemini-ish
                   titles are only unambiguous next to their kinds. */}
-              <span className="font-mono text-xs text-muted-foreground">
+              <span className="font-mono text-caption text-muted-foreground">
                 {c.kind}
               </span>
               {c.description && (
-                <p className="line-clamp-2 text-xs text-muted-foreground">
+                <p className="line-clamp-2 text-caption text-muted-foreground">
                   {c.description}
                 </p>
               )}

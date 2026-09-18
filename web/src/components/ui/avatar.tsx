@@ -18,8 +18,8 @@ const avatarVariants = cva(
     variants: {
       size: {
         sm: 'size-6 text-[0.625rem]',
-        base: 'size-7 text-xs',
-        lg: 'size-9 text-sm',
+        base: 'size-7 text-caption',
+        lg: 'size-9 text-body',
       },
     },
     defaultVariants: { size: 'base' },

@@ -10,6 +10,7 @@
 import type { ReactElement, ReactNode } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, type RenderOptions } from '@testing-library/react'
+import { PageActionsProvider } from '@/components/ui/page-actions'
 import { TooltipProvider } from '@/components/ui/tooltip'
 
 /** A query client that never retries — tests resolve/throw once, deterministically. */
@@ -31,7 +32,12 @@ function Wrapper({
 }) {
   return (
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider delayDuration={0}>{children}</TooltipProvider>
+      <TooltipProvider delayDuration={0}>
+        {/* The same host AppLayout mounts, so a view under test puts its tab's verb
+            in the page header here exactly as it does in the console. Without it the
+            verb would render in place and a test would prove the wrong DOM. */}
+        <PageActionsProvider>{children}</PageActionsProvider>
+      </TooltipProvider>
     </QueryClientProvider>
   )
 }

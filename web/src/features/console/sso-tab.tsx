@@ -112,7 +112,7 @@ export function SSOTab() {
 
   if (!isSuperadmin) {
     return (
-      <div className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/5 px-4 py-3 text-sm text-muted-foreground">
+      <div className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/5 px-4 py-3 text-body text-muted-foreground">
         <ShieldAlert
           className="mt-0.5 size-4 shrink-0 text-warning"
           aria-hidden
@@ -128,10 +128,10 @@ export function SSOTab() {
     <div className="flex flex-col gap-4 pt-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold text-foreground">
+          <h2 className="text-heading text-foreground">
             {t('console:sso.title')}
           </h2>
-          <p className="max-w-2xl text-sm text-muted-foreground">
+          <p className="max-w-2xl text-body text-muted-foreground">
             {t('console:sso.caption')}
           </p>
         </div>
@@ -174,7 +174,7 @@ export function SSOTab() {
               ))}
             </SelectContent>
           </Select>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-caption text-muted-foreground">
             {scope
               ? t('console:sso.scope.tenantHint')
               : t('console:sso.scope.globalHint')}
@@ -210,7 +210,7 @@ export function SSOTab() {
               </SelectContent>
             </Select>
           </div>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-caption text-muted-foreground">
             {t('console:sso.idp.hint')}
           </p>
         </div>
@@ -240,7 +240,7 @@ export function SSOTab() {
             )}
           </div>
           {cfg && !cfg.provider_available && (
-            <p className="flex items-start gap-2 text-sm text-warning">
+            <p className="flex items-start gap-2 text-body text-warning">
               <ShieldAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
               {t('console:sso.builderUnavailable')}
             </p>
@@ -261,7 +261,7 @@ export function SSOTab() {
           {cfg && (
             <div className="flex flex-col gap-2 border-t border-border pt-3">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-sm font-medium text-foreground">
+                <span className="text-body font-medium text-foreground">
                   {t('console:sso.enforcement.title')}
                 </span>
                 {(() => {
@@ -302,13 +302,13 @@ export function SSOTab() {
                   )
                 })()}
               </div>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-body text-muted-foreground">
                 {cfg.require_sso
                   ? t('console:sso.enforcement.requireSsoOn')
                   : t('console:sso.enforcement.requireSsoOff')}
               </p>
               <div className="flex flex-col gap-1">
-                <span className="text-sm text-muted-foreground">
+                <span className="text-body text-muted-foreground">
                   {t('console:sso.enforcement.networkAllowlist')}
                 </span>
                 {cfg.network_allowlist.length > 0 ? (
@@ -316,14 +316,14 @@ export function SSOTab() {
                     {cfg.network_allowlist.map((cidr) => (
                       <code
                         key={cidr}
-                        className="rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-xs text-foreground"
+                        className="rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-caption text-foreground"
                       >
                         {cidr}
                       </code>
                     ))}
                   </div>
                 ) : (
-                  <span className="text-sm text-muted-foreground">
+                  <span className="text-body text-muted-foreground">
                     {t('console:sso.enforcement.noNetworkRestriction')}
                   </span>
                 )}
@@ -335,7 +335,7 @@ export function SSOTab() {
                   give the wrong advice for the other. */}
               {cfg.enforced_by !== 'enterprise' &&
                 (cfg.require_sso || cfg.network_allowlist.length > 0) && (
-                  <p className="flex items-start gap-2 text-sm text-warning">
+                  <p className="flex items-start gap-2 text-body text-warning">
                     <ShieldAlert
                       className="mt-0.5 size-4 shrink-0"
                       aria-hidden
@@ -820,10 +820,10 @@ function SSOForm({
         {/* Login-enforcement posture — applies to both OIDC and SAML. */}
         <div className="flex flex-col gap-4 border-t border-border pt-4">
           <div>
-            <h3 className="text-sm font-medium text-foreground">
+            <h3 className="text-body font-medium text-foreground">
               {t('console:sso.enforcement.title')}
             </h3>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-body text-muted-foreground">
               {t('console:sso.enforcement.caption')}
             </p>
           </div>
@@ -838,11 +838,11 @@ function SSOForm({
               <Label htmlFor="sso-require">
                 {t('console:sso.enforcement.requireSso')}
               </Label>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-body text-muted-foreground">
                 {t('console:sso.enforcement.requireSsoHint')}
               </p>
               {requireSso && !enabled && (
-                <p className="flex items-start gap-2 text-sm text-warning">
+                <p className="flex items-start gap-2 text-body text-warning">
                   <ShieldAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
                   {t('console:sso.enforcement.noIdpWarning')}
                 </p>
@@ -863,7 +863,7 @@ function SSOForm({
             />
           </Field>
           {current.enforced_by !== 'enterprise' && (
-            <p className="flex items-start gap-2 text-sm text-warning">
+            <p className="flex items-start gap-2 text-body text-warning">
               <ShieldAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
               {current.enforced_by === 'out_of_scope'
                 ? t('console:sso.enforcement.outOfScopeBanner')
@@ -875,10 +875,10 @@ function SSOForm({
         {/* Group mapping + JIT coherence — protocol-independent. */}
         <div className="flex flex-col gap-4 border-t border-border pt-4">
           <div>
-            <h3 className="text-sm font-medium text-foreground">
+            <h3 className="text-body font-medium text-foreground">
               {t('console:sso.groups.title')}
             </h3>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-body text-muted-foreground">
               {t('console:sso.groups.caption')}
             </p>
           </div>
@@ -893,13 +893,13 @@ function SSOForm({
               <Label htmlFor="sso-scim-authoritative">
                 {t('console:sso.groups.scimAuthoritative')}
               </Label>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-body text-muted-foreground">
                 {t('console:sso.groups.scimAuthoritativeHint')}
               </p>
             </div>
           </div>
           {current.groups_mapped_by === 'unavailable' && (
-            <p className="flex items-start gap-2 text-sm text-warning">
+            <p className="flex items-start gap-2 text-body text-warning">
               <ShieldAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
               {t('console:sso.groups.unavailableBanner')}
             </p>
@@ -909,10 +909,10 @@ function SSOForm({
         {/* Home-realm routing (U5) — protocol-independent. */}
         <div className="flex flex-col gap-4 border-t border-border pt-4">
           <div>
-            <h3 className="text-sm font-medium text-foreground">
+            <h3 className="text-body font-medium text-foreground">
               {t('console:sso.domains.title')}
             </h3>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-body text-muted-foreground">
               {t('console:sso.domains.caption')}
             </p>
           </div>
@@ -930,7 +930,7 @@ function SSOForm({
             />
           </Field>
           {current.routed_by === 'unavailable' && domainsText.trim() !== '' && (
-            <p className="flex items-start gap-2 text-sm text-warning">
+            <p className="flex items-start gap-2 text-body text-warning">
               <ShieldAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
               {t('console:sso.domains.unavailableBanner')}
             </p>

@@ -18,7 +18,7 @@ import (
 	"github.com/olivaresai/olivares/core/model"
 )
 
-// D02-A4.2 — THE DURABLE FINANCIAL EVIDENCE OF ONE ALERT.
+// THE DURABLE FINANCIAL EVIDENCE OF ONE ALERT.
 //
 // An alert row records a number today. What it cannot record is what kind of number
 // it is, which policy produced it, or what was actually established when it fired.

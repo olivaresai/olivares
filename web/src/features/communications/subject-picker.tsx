@@ -172,7 +172,7 @@ export function SubjectPicker({
             </Select>
           </Field>
         ) : value.kind === 'user' || value.kind === 'agent' ? (
-          <p className="text-xs text-muted-foreground">
+          <p className="text-caption text-muted-foreground">
             {t('subject.noDirectory')}
           </p>
         ) : null}

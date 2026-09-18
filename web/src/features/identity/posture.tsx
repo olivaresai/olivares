@@ -57,7 +57,9 @@ function ExternalKeysSection() {
         accessorKey: 'id',
         header: t('posture.ek.col.id'),
         cell: ({ row }) => (
-          <span className="font-mono text-xs break-all">{row.original.id}</span>
+          <span className="font-mono text-caption break-all">
+            {row.original.id}
+          </span>
         ),
       },
       {
@@ -161,7 +163,7 @@ function ResidencySection() {
               reason={data.reason ?? t('posture.unavailable.fallback')}
             />
           ) : data.items.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-body text-muted-foreground">
               {t('posture.residency.none')}
             </p>
           ) : (
@@ -183,7 +185,7 @@ function ResidencySection() {
                   </KvRow>
                   <KvRow label={t('posture.residency.cmek')} align="start">
                     {w.external_key_id ? (
-                      <span className="font-mono text-xs break-all">
+                      <span className="font-mono text-caption break-all">
                         {w.external_key_id}
                       </span>
                     ) : (
@@ -273,7 +275,9 @@ function CryptoInventorySection() {
         accessorKey: 'algorithm',
         header: t('posture.crypto.col.algorithm'),
         cell: ({ row }) => (
-          <span className="font-mono text-xs">{row.original.algorithm}</span>
+          <span className="font-mono text-caption">
+            {row.original.algorithm}
+          </span>
         ),
       },
       {

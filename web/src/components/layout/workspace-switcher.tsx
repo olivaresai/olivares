@@ -85,7 +85,7 @@ export function WorkspaceSwitcher() {
         <DropdownMenuItem onSelect={() => setActiveWorkspace(null)}>
           <span className="flex min-w-0 flex-col">
             <span className="truncate">{t('nav:workspace.all')}</span>
-            <span className="truncate font-mono text-xs text-muted-foreground">
+            <span className="truncate font-mono text-caption text-muted-foreground">
               {t('nav:workspace.allHint')}
             </span>
           </span>
@@ -103,7 +103,7 @@ export function WorkspaceSwitcher() {
             >
               <span className="flex min-w-0 flex-col">
                 <span className="truncate">{w.name}</span>
-                <span className="truncate font-mono text-xs text-muted-foreground">
+                <span className="truncate font-mono text-caption text-muted-foreground">
                   {w.slug}
                   {w.is_default ? ` · ${t('nav:workspace.default')}` : ''}
                 </span>

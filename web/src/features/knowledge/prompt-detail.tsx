@@ -138,10 +138,10 @@ export function PromptDetailSheet({
               <Separator />
 
               <section className="flex flex-col gap-2">
-                <h3 className="text-sm font-medium text-foreground">
+                <h3 className="text-body font-medium text-foreground">
                   {t('prompts.revisions')}
                 </h3>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-caption text-muted-foreground">
                   {t('prompts.revisionsCaption')}
                 </p>
 
@@ -166,7 +166,10 @@ export function PromptDetailSheet({
                 ) : revisionsQuery.error ? (
                   <ErrorState retry={() => revisionsQuery.refetch()} />
                 ) : sorted.length === 0 ? (
-                  <EmptyState title={t('prompts.revisionsEmpty')} />
+                  <EmptyState
+                    description={t('prompts.revisionsEmptyHint')}
+                    title={t('prompts.revisionsEmpty')}
+                  />
                 ) : (
                   <ol className="flex flex-col gap-3">
                     {sorted.map((r: RevisionDTO) => (
@@ -230,7 +233,7 @@ function RevisionItem({
     <li className="rounded-lg border border-border bg-surface p-3">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <span className="font-mono text-sm font-medium tabular-nums text-foreground">
+          <span className="font-mono text-body font-medium tabular-nums text-foreground">
             {t('prompts.rev')} {revision.rev}
           </span>
           {isCurrent && <Badge variant="success">{t('prompts.current')}</Badge>}
@@ -258,7 +261,7 @@ function RevisionItem({
           )}
         </KvList>
       </div>
-      <pre className="mt-2 max-h-48 overflow-auto rounded-md border border-border bg-muted px-2.5 py-2 font-mono text-xs whitespace-pre-wrap text-foreground">
+      <pre className="mt-2 max-h-48 overflow-auto rounded-md border border-border bg-muted px-2.5 py-2 font-mono text-caption whitespace-pre-wrap text-foreground">
         {revision.template}
       </pre>
     </li>

@@ -213,7 +213,11 @@ export function RegOpsTab({
       !canAimsRead &&
       !canCcmRead ? (
         <SectionCard title={t('regops.title')}>
-          <EmptyState icon={<Landmark />} title={t('regops.noAccess')} />
+          <EmptyState
+            description={t('regops.noAccessHint')}
+            icon={<Landmark />}
+            title={t('regops.noAccess')}
+          />
         </SectionCard>
       ) : null}
     </>
@@ -384,7 +388,7 @@ function DocumentWriteDialog({
                 value={document}
                 onChange={(e) => setDocument(e.target.value)}
                 rows={10}
-                className="font-mono text-xs"
+                className="font-mono text-caption"
                 required
               />
             )}
@@ -486,7 +490,7 @@ function DeleteArtefactDialog({
         <AlertTriangle className="mt-0.5 size-4 shrink-0" />
         <span>{scopeWarning}</span>
       </CaveatNotice>
-      <p className="text-xs text-muted-foreground">
+      <p className="text-caption text-muted-foreground">
         {t('compliance:regops.dialog.deleteAuditNote')}
       </p>
     </ConfirmDialog>
@@ -525,7 +529,10 @@ function FrameworkChecklist({
         {(list) => (
           <div className="grid max-h-48 gap-2 overflow-y-auto sm:grid-cols-2">
             {list.items.map((fw) => (
-              <label key={fw.id} className="flex items-center gap-2 text-xs">
+              <label
+                key={fw.id}
+                className="flex items-center gap-2 text-caption"
+              >
                 <Checkbox
                   checked={selected.includes(fw.id)}
                   onCheckedChange={() => onToggle(fw.id)}
@@ -714,11 +721,11 @@ function RegisterRow({
           </span>
           <Badge variant="outline">{reg.regulation}</Badge>
         </div>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-caption text-muted-foreground">
           {t('regops.dora.lei', { lei: reg.entity_lei })}
           {reg.reference_date ? ` · ${reg.reference_date}` : ''}
         </p>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-caption text-muted-foreground">
           {t('regops.generatedBy', {
             actor: reg.generated_by,
             at: reg.generated_at,
@@ -946,15 +953,15 @@ function IncidentRow({
           ) : null}
           <span className="font-medium">{inc.reference}</span>
         </div>
-        {inc.rationale ? <p className="text-xs">{inc.rationale}</p> : null}
+        {inc.rationale ? <p className="text-caption">{inc.rationale}</p> : null}
         {inc.criteria_met && inc.criteria_met.length > 0 ? (
-          <p className="text-xs text-muted-foreground">
+          <p className="text-caption text-muted-foreground">
             {t('regops.incidents.criteria', {
               list: inc.criteria_met.join(', '),
             })}
           </p>
         ) : null}
-        <p className="text-xs text-muted-foreground">
+        <p className="text-caption text-muted-foreground">
           {t('regops.classifiedBy', {
             actor: inc.classified_by,
             at: inc.classified_at,
@@ -1178,11 +1185,11 @@ function ProfileRow({
           ) : null}
         </div>
         {profile.oscal_version ? (
-          <p className="text-xs text-muted-foreground">
+          <p className="text-caption text-muted-foreground">
             OSCAL {profile.oscal_version}
           </p>
         ) : null}
-        <p className="text-xs text-muted-foreground">
+        <p className="text-caption text-muted-foreground">
           {t('regops.registeredBy', {
             actor: profile.registered_by,
             at: profile.registered_at,
@@ -1384,7 +1391,7 @@ function DepthPackDetail({
           {(pack) => (
             <div className="flex flex-col gap-4 p-4">
               <HashChip hash={pack.doc_sha256} label={t('regops.docHash')} />
-              <p className="text-xs text-muted-foreground">
+              <p className="text-caption text-muted-foreground">
                 {t('regops.generatedBy', {
                   actor: pack.generated_by,
                   at: pack.generated_at,
@@ -1394,11 +1401,11 @@ function DepthPackDetail({
                   ninguno: un contador no distingue «falta un campo» de «la sección entera no
                   aplica». Aquí van con su severidad, su sección y su campo. */}
               <div>
-                <h3 className="mb-1.5 text-sm font-medium text-foreground">
+                <h3 className="mb-1.5 text-body font-medium text-foreground">
                   {t('regops.depth.validation')}
                 </h3>
                 {(pack.validation ?? []).length === 0 ? (
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-caption text-muted-foreground">
                     {t('regops.depth.validationClean')}
                   </p>
                 ) : (
@@ -1406,7 +1413,7 @@ function DepthPackDetail({
                     {(pack.validation ?? []).map((v, i) => (
                       <li
                         key={`${v.section ?? ''}-${v.field ?? ''}-${i}`}
-                        className="rounded-md border border-border p-2 text-xs"
+                        className="rounded-md border border-border p-2 text-caption"
                       >
                         <span className="font-medium text-foreground">
                           {v.severity ?? '—'}
@@ -1428,15 +1435,15 @@ function DepthPackDetail({
                 ]
                 return (
                   <div key={clave}>
-                    <h3 className="mb-1.5 text-sm font-medium text-foreground">
+                    <h3 className="mb-1.5 text-body font-medium text-foreground">
                       {clave}
                     </h3>
                     {valor == null ? (
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-caption text-muted-foreground">
                         {t('regops.depth.sectionAbsent')}
                       </p>
                     ) : (
-                      <pre className="max-h-64 overflow-auto rounded-md border border-border bg-surface p-2 text-xs text-foreground">
+                      <pre className="max-h-64 overflow-auto rounded-md border border-border bg-surface p-2 text-caption text-foreground">
                         {JSON.stringify(valor, null, 2)}
                       </pre>
                     )}
@@ -1714,9 +1721,11 @@ function DepthRow({
           <Badge variant="outline">{etiqueta}</Badge>
         </div>
         {pack.scope_note ? (
-          <p className="text-xs text-muted-foreground">{pack.scope_note}</p>
+          <p className="text-caption text-muted-foreground">
+            {pack.scope_note}
+          </p>
         ) : null}
-        <p className="text-xs text-muted-foreground">
+        <p className="text-caption text-muted-foreground">
           {t('regops.generatedBy', {
             actor: pack.generated_by,
             at: pack.generated_at,
@@ -1815,7 +1824,7 @@ function CcmPanel({ canAdmin }: { canAdmin: boolean }) {
               {list.items.map((s) => (
                 <li
                   key={s.id}
-                  className="rounded-md border border-border p-2 text-xs"
+                  className="rounded-md border border-border p-2 text-caption"
                 >
                   <span className="font-medium">{s.snapshot_at}</span>
                   {s.note ? (
@@ -1829,11 +1838,14 @@ function CcmPanel({ canAdmin }: { canAdmin: boolean }) {
       </AsyncSection>
 
       <div className="mt-4">
-        <p className="mb-2 text-sm font-medium">{t('regops.ccm.driftTitle')}</p>
+        <p className="mb-2 text-body font-medium">
+          {t('regops.ccm.driftTitle')}
+        </p>
         <AsyncSection query={driftQ} skeletonHeight={100}>
           {(list) =>
             (list.items ?? []).length === 0 ? (
               <EmptyState
+                description={t('regops.ccm.noDriftHint')}
                 icon={<ShieldCheck />}
                 title={t('regops.ccm.noDrift')}
               />
@@ -1842,7 +1854,7 @@ function CcmPanel({ canAdmin }: { canAdmin: boolean }) {
                 {list.items.map((d) => (
                   <li
                     key={d.id}
-                    className="rounded-md border border-border p-2 text-xs"
+                    className="rounded-md border border-border p-2 text-caption"
                   >
                     {/* THE ENGINE'S OWN FIELD NAMES. Reading `from_status` /
                         `to_status` / `framework` / `note` drew `? → ?` over a

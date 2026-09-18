@@ -111,7 +111,7 @@ func (m *Module) EvaluateCommunicationReadiness(ctx context.Context) (Communicat
 			communicationPortBound(m.communicationAudienceAttestor) &&
 			communicationPortBound(m.communicationGrantClosure),
 		// The term watches the DIRECT BINDER, not the two CoreEntity* ports.
-		// Adjudicated 2026-08-26 on a measurement from this lane, and the reason is
+		// Adjudicated 2026-08-26 on a measurement taken here, and the reason is
 		// that those ports CANNOT authorize faithfully: AuthorizeEntityRead and
 		// AuthorizeEntityOperation receive a CommunicationPrincipal, which carries
 		// identity and nothing else -- no role, no membership, no AAL, no CredID --

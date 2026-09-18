@@ -528,7 +528,7 @@ function RunDetail({ runId, onClose }: { runId: string; onClose: () => void }) {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <h2 className="font-display text-lg font-semibold text-foreground">
+        <h2 className="font-display text-title text-foreground">
           {t('runs.detailTitle')}
         </h2>
         <Button variant="ghost" size="sm" onClick={onClose}>
@@ -555,7 +555,10 @@ function RunDetail({ runId, onClose }: { runId: string; onClose: () => void }) {
           <AsyncSection query={resultsQ} skeletonHeight={200}>
             {(list) =>
               list.items.length === 0 ? (
-                <EmptyState title={t('results.empty')} />
+                <EmptyState
+                  description={t('results.emptyHint')}
+                  title={t('results.empty')}
+                />
               ) : (
                 <ResultsTable results={list.items} />
               )

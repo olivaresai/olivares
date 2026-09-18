@@ -58,7 +58,12 @@ interface Row {
 const columns: TableColumn<Row, string>[] = [
   { accessorKey: 'name', header: 'Name' },
 ]
-const EMPTY = <EmptyState title="Nothing here" />
+const EMPTY = (
+  <EmptyState
+    title="Nothing here"
+    description="Rows appear here once the read returns some."
+  />
+)
 
 const stepUp = () =>
   new ApiError(403, 'step_up_required', 'assurance level too low')

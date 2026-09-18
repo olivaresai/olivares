@@ -301,7 +301,7 @@ export function HandoffRespondDialog({
                 <ul
                   role="alert"
                   data-testid="respond-problems"
-                  className="flex flex-col gap-1 rounded-md border border-danger-line bg-danger-soft px-3 py-2 text-sm text-danger"
+                  className="flex flex-col gap-1 rounded-md border border-danger-line bg-danger-soft px-3 py-2 text-body text-danger"
                   data-slot="handoff-respond-problems"
                 >
                   {problems.map((p) => (
@@ -315,7 +315,7 @@ export function HandoffRespondDialog({
           {targetRefused ? (
             <div
               role="alert"
-              className="rounded-md border border-warning-line bg-warning-soft px-3 py-2 text-sm text-warning"
+              className="rounded-md border border-warning-line bg-warning-soft px-3 py-2 text-body text-warning"
               data-slot="handoff-respond-target-refused"
             >
               <p className="font-medium">
@@ -334,7 +334,7 @@ export function HandoffRespondDialog({
           phase !== 'uncertain' ? (
             <div
               role="status"
-              className="rounded-md border border-warning-line bg-warning-soft px-3 py-2 text-sm text-warning"
+              className="rounded-md border border-warning-line bg-warning-soft px-3 py-2 text-body text-warning"
               data-slot="handoff-respond-prior-unresolved"
             >
               {t('handoff.uncertain.priorTransmission')}
@@ -347,10 +347,10 @@ export function HandoffRespondDialog({
               className="flex flex-col gap-2 rounded-md border border-border bg-muted p-3"
               data-slot="handoff-respond-intent"
             >
-              <p className="text-sm font-medium">
+              <p className="text-body font-medium">
                 {t('handoff.respond.confirmTitle')}
               </p>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-body text-muted-foreground">
                 {reviewed.body.transition === 'accept'
                   ? t('handoff.respond.confirmAcceptBody')
                   : t('handoff.respond.confirmRejectBody')}
@@ -377,7 +377,7 @@ export function HandoffRespondDialog({
           {operation.state.phase === 'lost' ? (
             <div
               role="alert"
-              className="rounded-md border border-warning-line bg-warning-soft px-3 py-2 text-sm text-warning"
+              className="rounded-md border border-warning-line bg-warning-soft px-3 py-2 text-body text-warning"
               data-slot="handoff-respond-lost"
             >
               <p className="font-medium">{t('handoff.lost.title')}</p>
@@ -404,7 +404,7 @@ export function HandoffRespondDialog({
                     : t('handoff.respond.conflictTitle')
                 }
               />
-              <p className="mt-1 text-sm text-muted-foreground">
+              <p className="mt-1 text-body text-muted-foreground">
                 {operation.priorUnresolvedAttempt
                   ? t('handoff.respond.conflictBodyLatest')
                   : t('handoff.respond.conflictBody')}
@@ -417,7 +417,7 @@ export function HandoffRespondDialog({
                 failure={failure}
                 title={t('handoff.uncertain.title')}
               />
-              <p className="mt-1 text-sm text-muted-foreground">
+              <p className="mt-1 text-body text-muted-foreground">
                 {t('handoff.uncertain.body')}
               </p>
             </div>
@@ -529,7 +529,7 @@ export function HandoffRespondDialog({
               the dialog two indistinguishable exits by name. */}
         </DialogFooter>
         <p
-          className="text-xs text-muted-foreground"
+          className="text-caption text-muted-foreground"
           data-slot="handoff-respond-tracking-limits"
         >
           {phase === 'submitting' || phase === 'uncertain'
@@ -573,8 +573,8 @@ function HandoffResponseReceipt({
         role="status"
         className={
           outcome.replayed
-            ? 'rounded-md border border-info-line bg-info-soft px-3 py-2 text-sm text-info'
-            : 'rounded-md border border-success-line bg-success-soft px-3 py-2 text-sm text-success'
+            ? 'rounded-md border border-info-line bg-info-soft px-3 py-2 text-body text-info'
+            : 'rounded-md border border-success-line bg-success-soft px-3 py-2 text-body text-success'
         }
       >
         <p className="font-medium">
@@ -627,14 +627,14 @@ function HandoffResponseReceipt({
       </KvList>
       {accepted && outcome.result.resulting_lease_fence === undefined ? (
         <p
-          className="text-xs text-muted-foreground"
+          className="text-caption text-muted-foreground"
           data-slot="handoff-no-lease"
         >
           {t('handoff.receipt.noLease')}
         </p>
       ) : null}
       <p
-        className="text-xs text-muted-foreground"
+        className="text-caption text-muted-foreground"
         data-slot="handoff-receipt-not-current"
       >
         {t('handoff.receipt.notCurrentOwnership')}

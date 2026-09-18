@@ -170,7 +170,7 @@ export function HealthView() {
         description={
           <span className="space-y-1">
             <span className="block max-w-2xl">{t('subtitle')}</span>
-            <span className="flex items-center gap-1.5 text-xs">
+            <span className="flex items-center gap-1.5 text-caption">
               <ShieldCheck className="size-3.5 shrink-0 text-confidence-attributed" />
               {t('auditedNote')}
             </span>
@@ -390,7 +390,7 @@ function StatusTab({
               </div>
               {s.name && s.name !== s.subject_ref && (
                 <div
-                  className="truncate font-mono text-xs text-muted-foreground"
+                  className="truncate font-mono text-caption text-muted-foreground"
                   title={s.subject_ref}
                 >
                   {s.subject_ref}
@@ -441,7 +441,7 @@ function StatusTab({
           return (
             <span
               className={cn(
-                'inline-flex items-center gap-1.5 text-xs',
+                'inline-flex items-center gap-1.5 text-caption',
                 alerting ? 'text-muted-foreground' : 'text-muted-foreground/70',
               )}
               title={
@@ -472,7 +472,7 @@ function StatusTab({
           if (!ppm || ppm <= 0)
             return <span className="text-muted-foreground">—</span>
           return (
-            <span className="font-mono text-xs tabular-nums text-muted-foreground">
+            <span className="font-mono text-caption tabular-nums text-muted-foreground">
               {ppmToPercent(ppm)}
             </span>
           )
@@ -486,7 +486,7 @@ function StatusTab({
           if (ms == null || ms < 0)
             return <span className="text-muted-foreground">—</span>
           return (
-            <span className="font-mono text-xs tabular-nums text-muted-foreground">
+            <span className="font-mono text-caption tabular-nums text-muted-foreground">
               {formatLatency(ms)}
             </span>
           )
@@ -506,11 +506,11 @@ function StatusTab({
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs text-muted-foreground">{t('live.note')}</p>
+        <p className="text-caption text-muted-foreground">{t('live.note')}</p>
         <div className="flex items-center gap-2">
           <Select value={stateFacet} onValueChange={setStateFacet}>
             <SelectTrigger
-              className="h-7 w-auto min-w-[8rem] text-xs"
+              className="h-7 w-auto min-w-[8rem] text-caption"
               aria-label={t('facets.allStates')}
             >
               <SelectValue placeholder={t('facets.allStates')} />
@@ -525,7 +525,7 @@ function StatusTab({
           </Select>
           <Select value={kindFacet} onValueChange={setKindFacet}>
             <SelectTrigger
-              className="h-7 w-auto min-w-[7rem] text-xs"
+              className="h-7 w-auto min-w-[7rem] text-caption"
               aria-label={t('facets.allKinds')}
             >
               <SelectValue placeholder={t('facets.allKinds')} />
@@ -609,12 +609,12 @@ function SlaTab({
         />
         {selected && (
           <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">
+            <span className="text-body text-muted-foreground">
               {t('sla.window')}
             </span>
             <Select value={windowSeconds} onValueChange={setWindowSeconds}>
               <SelectTrigger
-                className="h-7 w-auto min-w-[6rem] text-xs"
+                className="h-7 w-auto min-w-[6rem] text-caption"
                 aria-label={t('sla.window')}
               >
                 <SelectValue />
@@ -631,7 +631,11 @@ function SlaTab({
       </div>
 
       {subjects.length === 0 ? (
-        <EmptyState icon={<Activity />} title={t('sla.pickEmpty')} />
+        <EmptyState
+          description={t('sla.pickEmptyHint')}
+          icon={<Activity />}
+          title={t('sla.pickEmpty')}
+        />
       ) : !selected ? (
         <EmptyState
           icon={<Activity />}
@@ -700,7 +704,7 @@ function SlaReport({ data }: { data: SlaDTO }) {
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:content-start">
         <Card className="p-4">
-          <div className="text-xs text-muted-foreground">
+          <div className="text-caption text-muted-foreground">
             {t('sla.currentState')}
           </div>
           <div className="mt-1.5">
@@ -709,7 +713,7 @@ function SlaReport({ data }: { data: SlaDTO }) {
         </Card>
         {/* Downtime and degraded are shown SEPARATELY — degraded is UP for the SLA. */}
         <Card className="p-4">
-          <div className="text-xs text-muted-foreground">
+          <div className="text-caption text-muted-foreground">
             {t('sla.downtime')}
           </div>
           {/* ⛔ Rojo INCONDICIONAL: `modules/health/sla.go` inicializa ambos
@@ -718,7 +722,7 @@ function SlaReport({ data }: { data: SlaDTO }) {
               como una caída. Cero segundos caídos es la mejor noticia posible. */}
           <div
             className={cn(
-              'mt-1 font-display text-xl font-semibold tabular-nums',
+              'mt-1 font-display text-title tabular-nums',
               data.downtime_seconds > 0 ? 'text-danger' : 'text-foreground',
             )}
           >
@@ -727,14 +731,14 @@ function SlaReport({ data }: { data: SlaDTO }) {
         </Card>
         <Card className="p-4">
           <div
-            className="flex items-center gap-1 text-xs text-muted-foreground"
+            className="flex items-center gap-1 text-caption text-muted-foreground"
             title={t('sla.degradedNote')}
           >
             {t('sla.degraded')}
           </div>
           <div
             className={cn(
-              'mt-1 font-display text-xl font-semibold tabular-nums',
+              'mt-1 font-display text-title tabular-nums',
               data.degraded_seconds > 0 ? 'text-warning' : 'text-foreground',
             )}
           >
@@ -742,10 +746,10 @@ function SlaReport({ data }: { data: SlaDTO }) {
           </div>
         </Card>
         <Card className="p-4 sm:col-span-3">
-          <p className="text-xs text-muted-foreground">
+          <p className="text-caption text-muted-foreground">
             {t('sla.degradedNote')}
           </p>
-          <p className="mt-1 text-sm text-foreground">
+          <p className="mt-1 text-body text-foreground">
             {t('sla.uptime')}:{' '}
             <span className="font-mono tabular-nums">
               {formatPercent(data.uptime_percent, { digits: 3 })}
@@ -784,7 +788,7 @@ function StatTile({
 }) {
   return (
     <Card className="p-3">
-      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className="text-caption text-muted-foreground">{label}</div>
       {loading ? (
         <Skeleton className="mt-1 h-7 w-12" />
       ) : (
@@ -793,7 +797,7 @@ function StatTile({
           aria-live="polite"
           aria-atomic="true"
           className={cn(
-            'font-display text-2xl font-semibold tabular-nums',
+            'font-display text-display tabular-nums',
             tone === 'success' && 'text-success',
             tone === 'warning' && 'text-warning',
             tone === 'danger' && 'text-danger',

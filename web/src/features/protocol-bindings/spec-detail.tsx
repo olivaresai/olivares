@@ -91,7 +91,7 @@ export function ProtocolSpecDetailSheet({
             return (
               <div className="space-y-5 py-2">
                 <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="font-mono text-sm font-medium">
+                  <h2 className="font-mono text-body font-medium">
                     {spec.binding_key}
                   </h2>
                   <SpecStateBadge state={spec.state} />
@@ -107,11 +107,11 @@ export function ProtocolSpecDetailSheet({
 
                 {can('sessions:protocol-binding:admin') ? (
                   <section className="space-y-2 border-t border-border pt-4">
-                    <h3 className="text-sm font-medium">
+                    <h3 className="text-body font-medium">
                       {t('detail.lifecycle')}
                     </h3>
                     {blocker && spec.state === 'draft' ? (
-                      <p className="text-xs text-warning">
+                      <p className="text-caption text-warning">
                         {t(`activation.blocker.${blocker}`)}
                       </p>
                     ) : null}
@@ -185,27 +185,29 @@ function SpecOverview({
   const selector = JSON.stringify(spec.local_selector)
   return (
     <section className="space-y-3">
-      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
+      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-body">
         <dt className="text-muted-foreground">{t('fields.id')}</dt>
-        <dd className="break-all font-mono text-xs">{spec.id}</dd>
+        <dd className="break-all font-mono text-caption">{spec.id}</dd>
         <dt className="text-muted-foreground">{t('fields.generation')}</dt>
         <dd>{spec.generation}</dd>
         <dt className="text-muted-foreground">{t('fields.direction')}</dt>
         <dd>{t(`direction.${spec.direction}`)}</dd>
         <dt className="text-muted-foreground">{t('fields.peerAuthority')}</dt>
-        <dd className="break-all font-mono text-xs">{spec.peer_authority}</dd>
+        <dd className="break-all font-mono text-caption">
+          {spec.peer_authority}
+        </dd>
         <dt className="text-muted-foreground">{t('detail.localResource')}</dt>
-        <dd className="break-all font-mono text-xs">
+        <dd className="break-all font-mono text-caption">
           {spec.local_kind} {selector}
         </dd>
         <dt className="text-muted-foreground">{t('detail.remoteResource')}</dt>
-        <dd className="break-all font-mono text-xs">
+        <dd className="break-all font-mono text-caption">
           {spec.remote_resource_kind}:{spec.remote_resource_ref}
         </dd>
         <dt className="text-muted-foreground">
           {t('fields.permissionProfile')}
         </dt>
-        <dd className="break-all font-mono text-xs">
+        <dd className="break-all font-mono text-caption">
           {spec.permission_profile_ref}
         </dd>
         <dt className="text-muted-foreground">{t('fields.currency')}</dt>
@@ -213,23 +215,25 @@ function SpecOverview({
           <Badge variant="info">{t(`currency.${spec.currency_policy}`)}</Badge>
         </dd>
         <dt className="text-muted-foreground">{t('fields.etag')}</dt>
-        <dd className="font-mono text-xs">{etag ?? '—'}</dd>
+        <dd className="font-mono text-caption">{etag ?? '—'}</dd>
         <dt className="text-muted-foreground">{t('detail.validation')}</dt>
         <dd className="space-y-1">
           <ProtocolVerdictBadge verdict={spec.validation.verdict} />
-          <p className="font-mono text-xs">{spec.validation.code}</p>
-          <p className="text-xs text-muted-foreground">
+          <p className="font-mono text-caption">{spec.validation.code}</p>
+          <p className="text-caption text-muted-foreground">
             {spec.validation.observed_at ?? t('detail.notObserved')}
           </p>
         </dd>
         <dt className="text-muted-foreground">{t('fields.specHash')}</dt>
-        <dd className="break-all font-mono text-xs">{spec.spec_hash || '—'}</dd>
+        <dd className="break-all font-mono text-caption">
+          {spec.spec_hash || '—'}
+        </dd>
         <dt className="text-muted-foreground">{t('fields.mappingHash')}</dt>
-        <dd className="break-all font-mono text-xs">
+        <dd className="break-all font-mono text-caption">
           {spec.mapping_hash || '—'}
         </dd>
         <dt className="text-muted-foreground">{t('fields.lossesHash')}</dt>
-        <dd className="break-all font-mono text-xs">
+        <dd className="break-all font-mono text-caption">
           {spec.losses_hash || '—'}
         </dd>
       </dl>
@@ -241,12 +245,12 @@ function MappingList({ spec }: { spec: ProtocolBindingSpec }) {
   const { t } = useTranslation('protocolBindings')
   return (
     <section>
-      <h3 className="mb-2 text-sm font-medium">{t('detail.mapping')}</h3>
+      <h3 className="mb-2 text-body font-medium">{t('detail.mapping')}</h3>
       <ul className="space-y-2">
         {spec.mapping.map((rule, index) => (
           <li
             key={`${rule.source}-${rule.target}-${index}`}
-            className="rounded-md border border-border p-3 text-xs"
+            className="rounded-md border border-border p-3 text-caption"
           >
             <p className="break-all font-mono">
               {rule.source} → {rule.target}
@@ -266,15 +270,17 @@ function LossList({ spec }: { spec: ProtocolBindingSpec }) {
   const { t } = useTranslation('protocolBindings')
   return (
     <section>
-      <h3 className="mb-2 text-sm font-medium">{t('detail.losses')}</h3>
+      <h3 className="mb-2 text-body font-medium">{t('detail.losses')}</h3>
       {spec.known_losses.length === 0 ? (
-        <p className="text-xs text-muted-foreground">{t('detail.noLosses')}</p>
+        <p className="text-caption text-muted-foreground">
+          {t('detail.noLosses')}
+        </p>
       ) : (
         <ul className="space-y-2">
           {spec.known_losses.map((loss, index) => (
             <li
               key={`${loss.field}-${index}`}
-              className="rounded-md border border-border p-3 text-xs"
+              className="rounded-md border border-border p-3 text-caption"
             >
               <div className="flex items-center justify-between gap-2">
                 <span className="font-mono">{loss.field}</span>
@@ -465,7 +471,7 @@ export function ProtocolSpecTransitionDialog({
           phase === 'validating' ||
           phase === 'planning' ||
           phase === 'applying' ? (
-            <p role="status" className="text-sm text-muted-foreground">
+            <p role="status" className="text-body text-muted-foreground">
               {t(`transition.phase.${phase}`)}
             </p>
           ) : null}
@@ -489,13 +495,13 @@ export function ProtocolSpecTransitionDialog({
           {phase === 'applied' && outcome ? (
             <div
               role="status"
-              className="rounded-md border border-success-line bg-success-soft p-3 text-sm text-success"
+              className="rounded-md border border-success-line bg-success-soft p-3 text-body text-success"
             >
               <p className="font-medium">
                 {t(`transition.${operation}.applied`)}
               </p>
               {outcome.replayed ? (
-                <p className="mt-1 text-xs">{t('outcome.replayed')}</p>
+                <p className="mt-1 text-caption">{t('outcome.replayed')}</p>
               ) : null}
             </div>
           ) : null}
@@ -535,10 +541,10 @@ function TransitionPlan({
   return (
     <section className="rounded-md border border-border p-3">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-medium">{t('transition.plan')}</h3>
+        <h3 className="text-body font-medium">{t('transition.plan')}</h3>
         <ProtocolVerdictBadge verdict={plan.verdict} />
       </div>
-      <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
+      <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-caption">
         <dt className="text-muted-foreground">{t('fields.planHash')}</dt>
         <dd className="break-all font-mono">{plan.plan_hash}</dd>
         <dt className="text-muted-foreground">{t('detail.validation')}</dt>

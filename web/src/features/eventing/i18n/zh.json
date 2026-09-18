@@ -107,6 +107,7 @@
     "title": "已捕获事件",
     "description": "带序列游标的事件日志。按事件类型过滤以缩小结果范围。",
     "empty": "暂无已捕获事件",
+    "emptyHint": "总线捕获的每个事件按时间从新到旧列在这里。此时间范围内没有发布任何事件。",
     "typeFilter": "按类型过滤",
     "allTypes": "所有类型",
     "columns": {
@@ -123,6 +124,7 @@
     "title": "投递记录",
     "description": "Webhook 事件派发的投递状态。按订阅、状态或事件类型过滤。",
     "empty": "暂无投递",
+    "emptyHint": "每一次向订阅投递事件的尝试及其结果都会列在这里。目前还没有任何投递。",
     "subscriptionFilter": "订阅",
     "statusFilter": "状态",
     "typeFilter": "事件类型",
@@ -188,6 +190,7 @@
     "description": "此订阅按时间顺序记录的仅追加快照。",
     "scopeCaption": "恢复只会重新应用投递配置结构，绝不会恢复凭据或接收端配置。",
     "empty": "没有已记录的修订",
+    "emptyHint": "对该订阅的每次更改都会保存为可比较、可回滚的修订。第一次编辑就会产生一条。",
     "loadMore": "加载更多",
     "compareTitle": "快照差异",
     "selectTwo": "选择两个修订以比较其快照。",

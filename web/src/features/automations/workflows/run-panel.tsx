@@ -118,7 +118,7 @@ export function RunPanel({
 
           {phaseOne.isPending ? (
             <div
-              className="flex items-center gap-2 rounded-md border border-border p-3 text-sm text-muted-foreground"
+              className="flex items-center gap-2 rounded-md border border-border p-3 text-body text-muted-foreground"
               role="status"
             >
               <Spinner className="size-4" />
@@ -133,7 +133,7 @@ export function RunPanel({
           {approval?.approval_ref && !currentRun ? (
             <section className="space-y-3 rounded-lg border border-info-line bg-info-soft p-4">
               <div className="flex flex-wrap items-center gap-2">
-                <h3 className="text-sm font-medium text-info">
+                <h3 className="text-body font-medium text-info">
                   {t('run.approvalTitle')}
                 </h3>
                 {/* ⛔ ESTO ERA `variant="warning"` FIJO: una puerta APROBADA se leía como una
@@ -142,14 +142,14 @@ export function RunPanel({
                 <GateBadge gate={approval.gate_status} />
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-caption text-muted-foreground">
                   {t('run.approvalRef')}
                 </p>
-                <code className="break-all font-mono text-sm text-foreground">
+                <code className="break-all font-mono text-body text-foreground">
                   {approval.approval_ref}
                 </code>
               </div>
-              <p className="text-sm text-info">{t('run.approvalHint')}</p>
+              <p className="text-body text-info">{t('run.approvalHint')}</p>
               {canAdmin ? (
                 <Button
                   variant="primary"
@@ -174,7 +174,7 @@ export function RunPanel({
           ) : null}
 
           <section className="space-y-3 border-t border-border pt-4">
-            <h3 className="text-sm font-medium text-foreground">
+            <h3 className="text-body font-medium text-foreground">
               {t('run.history')}
             </h3>
             {history.isPending ? (
@@ -194,7 +194,11 @@ export function RunPanel({
                 retry={() => void history.refetch()}
               />
             ) : (history.data?.items.length ?? 0) === 0 ? (
-              <EmptyState className="py-6" title={t('run.historyEmpty')} />
+              <EmptyState
+                description={t('run.historyEmptyHint')}
+                className="py-6"
+                title={t('run.historyEmpty')}
+              />
             ) : (
               <ul className="space-y-2">
                 {history.data?.items.map((run) => (
@@ -205,7 +209,7 @@ export function RunPanel({
                     <Badge variant={runStatusVariant(run.status)}>
                       {t(`run.status.${run.status}`)}
                     </Badge>
-                    <code className="min-w-0 flex-1 truncate font-mono text-xs">
+                    <code className="min-w-0 flex-1 truncate font-mono text-caption">
                       {run.id}
                     </code>
                     <Button
@@ -256,7 +260,7 @@ export function RunError({
   return (
     <div
       role="alert"
-      className="flex flex-col items-start gap-2 rounded-md border border-danger-line bg-danger-soft p-3 text-sm text-danger"
+      className="flex flex-col items-start gap-2 rounded-md border border-danger-line bg-danger-soft p-3 text-body text-danger"
     >
       <span>{message}</span>
       {/* ⛔ EL REINTENTO FALTABA, y sin él este panel decía «falló» y dejaba al operador sin
@@ -279,7 +283,7 @@ function RunView({ run }: { run: WorkflowRun }) {
   return (
     <section className="space-y-4 rounded-lg border border-border bg-elevated p-4">
       <div className="flex flex-wrap items-center gap-2">
-        <h3 className="text-sm font-medium text-foreground">
+        <h3 className="text-body font-medium text-foreground">
           {t('run.current', { id: run.id })}
         </h3>
         <Badge variant={runStatusVariant(run.status)}>
@@ -287,18 +291,18 @@ function RunView({ run }: { run: WorkflowRun }) {
         </Badge>
       </div>
       {run.paused_reason ? (
-        <p className="rounded-md border border-warning-line bg-warning-soft p-2 text-sm text-warning">
+        <p className="rounded-md border border-warning-line bg-warning-soft p-2 text-body text-warning">
           {t('run.paused', { reason: run.paused_reason })}
         </p>
       ) : null}
       <div>
-        <h4 className="mb-2 text-xs font-medium text-muted-foreground">
+        <h4 className="mb-2 text-caption font-medium text-muted-foreground">
           {t('run.graph')}
         </h4>
         <RunGraph steps={run.steps} />
       </div>
       <div>
-        <h4 className="mb-2 text-xs font-medium text-muted-foreground">
+        <h4 className="mb-2 text-caption font-medium text-muted-foreground">
           {t('run.timeline')}
         </h4>
         <ol className="space-y-2">
@@ -307,14 +311,14 @@ function RunView({ run }: { run: WorkflowRun }) {
               key={step.ref}
               className="flex flex-wrap items-start gap-2 border-l-2 border-border py-1 pl-3"
             >
-              <code className="font-mono text-xs text-foreground">
+              <code className="font-mono text-caption text-foreground">
                 {step.ref}
               </code>
               <Badge variant={stepStatusVariant(step.status)}>
                 {t(`run.status.${step.status}`)}
               </Badge>
               {step.detail ? (
-                <p className="w-full text-xs text-muted-foreground">
+                <p className="w-full text-caption text-muted-foreground">
                   {step.detail}
                 </p>
               ) : null}
@@ -345,7 +349,7 @@ function RunNode({ data }: NodeProps<Node<RunNodeData>>) {
         position={Position.Left}
         className="!bg-border-strong"
       />
-      <code className="block max-w-40 truncate font-mono text-xs">
+      <code className="block max-w-40 truncate font-mono text-caption">
         {data.ref}
       </code>
       <Badge className="mt-1" variant={stepStatusVariant(data.status)}>

@@ -61,16 +61,11 @@ export function CommandMenu() {
   const open = useCommandStore((s) => s.open)
   const setOpen = useCommandStore((s) => s.setOpen)
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault()
-        useCommandStore.getState().toggle()
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [])
+  // ⛔ ⌘K IS NOT HANDLED HERE ANY MORE. It is a row of the declared keybinding
+  //    table, resolved by `GlobalShortcuts` — the console's one keyboard authority —
+  //    so the chord an operator presses, the row a test enumerates and the line the
+  //    help page prints are the same single fact. A second listener here would have
+  //    toggled the palette twice.
 
   // Closing gives focus back to the control that opened the palette (Escape, outside
   // click, or a selection whose navigation did not move focus itself). The dialog's own
@@ -203,12 +198,12 @@ function PaletteBody() {
         <span className="flex min-w-0 flex-1 flex-col">
           <span className="truncate">{e.label}</span>
           {e.description ? (
-            <span className="truncate text-xs text-muted-foreground">
+            <span className="truncate text-caption text-muted-foreground">
               {e.description}
             </span>
           ) : null}
         </span>
-        <span className="ml-2 shrink-0 text-xs text-muted-foreground">
+        <span className="ml-2 shrink-0 text-caption text-muted-foreground">
           {e.kind === 'area' ? t('nav:directory.area') : e.context}
         </span>
       </CommandItem>
@@ -300,7 +295,7 @@ function PaletteBody() {
                   >
                     <Icon />
                     <span className="min-w-0 flex-1 truncate">{hit.name}</span>
-                    <span className="ml-2 shrink-0 text-xs text-muted-foreground">
+                    <span className="ml-2 shrink-0 text-caption text-muted-foreground">
                       {featureId ? t(`nav:items.${featureId}`) : hit.kind}
                       {hit.detail ? ` · ${hit.detail}` : ''}
                     </span>
@@ -309,7 +304,7 @@ function PaletteBody() {
               })}
             </CommandGroup>
             {searchQ.data?.truncated ? (
-              <p className="px-3 pb-1 text-xs text-muted-foreground">
+              <p className="px-3 pb-1 text-caption text-muted-foreground">
                 {t('common:commandPalette.searchTruncated')}
               </p>
             ) : null}
@@ -332,7 +327,7 @@ function PaletteBody() {
 
             Destructive tone rather than muted: it is a failure, not a hint. */}
         {searchQ.data?.degraded ? (
-          <p className="px-3 pb-2 pt-1 text-xs text-destructive">
+          <p className="px-3 pb-2 pt-1 text-caption text-destructive">
             {t('common:commandPalette.searchDegraded')}
           </p>
         ) : null}

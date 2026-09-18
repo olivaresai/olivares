@@ -19,7 +19,7 @@ import (
 	"github.com/olivaresai/olivares/sdk/event"
 )
 
-// The observation history of one catalog entity (D08-C3, first slice).
+// The observation history of one catalog entity (first slice).
 //
 // This file is the Implementation behind one small Interface: listEntityObservations
 // takes a tenant-pinned read Scope, the exact catalog (kind, id) pair and a validated

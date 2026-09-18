@@ -12,6 +12,7 @@ import { useState } from 'react'
 import { currentLanguage } from '@/lib/i18n'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Link } from '@tanstack/react-router'
 import { Cpu, Plus, Wand2 } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
@@ -59,6 +60,7 @@ import {
 import { GpaiTab } from './gpai'
 import type { Decision, RoutingPolicy, RoutingStrategy } from './types'
 import './i18n'
+import { PagePrimaryAction } from '@/components/ui/page-actions'
 
 const STRATEGIES: RoutingStrategy[] = [
   'cost',
@@ -115,7 +117,10 @@ function ResidencyCard() {
             as_of?: string
           }>
           return filas.length === 0 ? (
-            <EmptyState title={t('residency.empty')} />
+            <EmptyState
+              description={t('residency.emptyHint')}
+              title={t('residency.empty')}
+            />
           ) : (
             <div className="flex flex-col gap-2">
               {filas.map((r) => (
@@ -124,8 +129,10 @@ function ResidencyCard() {
                   className="flex flex-wrap items-start justify-between gap-3 rounded-md border border-border p-3"
                 >
                   <div className="flex min-w-0 flex-col gap-1">
-                    <span className="font-mono text-sm">{r.workspace_ref}</span>
-                    <span className="text-xs text-muted-foreground">
+                    <span className="font-mono text-body">
+                      {r.workspace_ref}
+                    </span>
+                    <span className="text-caption text-muted-foreground">
                       {/* Vacío NO es «denegado»: es que el proveedor no reporta restricción. */}
                       {(r.allowed_geos ?? []).length === 0
                         ? t('residency.unrestricted')
@@ -204,7 +211,8 @@ function ModelAccessTab() {
   const accesoParams = { limit: EVIDENCE_PAGE }
   const q = useQuery({
     queryKey: modelsKeys.modelAccess(activeTenant, accesoParams),
-    queryFn: () => modelsApi.modelAccess({ tenant: activeTenant }, accesoParams),
+    queryFn: () =>
+      modelsApi.modelAccess({ tenant: activeTenant }, accesoParams),
   })
 
   const grupos = useQuery({
@@ -246,7 +254,12 @@ function ModelAccessTab() {
               description?: string
             }>
             if (reglas.length === 0)
-              return <EmptyState title={t('access.empty')} />
+              return (
+                <EmptyState
+                  description={t('access.emptyHint')}
+                  title={t('access.empty')}
+                />
+              )
 
             // Los sujetos CONFINADOS por al menos un allow: para ellos, lo no listado está negado.
             const confinados = new Set(
@@ -264,7 +277,7 @@ function ModelAccessTab() {
                   return (
                     <div
                       key={r.id}
-                      className="flex flex-col gap-1 rounded-md border border-border p-3 text-sm"
+                      className="flex flex-col gap-1 rounded-md border border-border p-3 text-body"
                     >
                       <div className="flex flex-wrap items-center gap-2">
                         <Badge
@@ -272,13 +285,13 @@ function ModelAccessTab() {
                         >
                           {t(`access.effect.${efecto}`)}
                         </Badge>
-                        <span className="font-mono text-xs">{sujeto}</span>
+                        <span className="font-mono text-caption">{sujeto}</span>
                         <span className="text-muted-foreground">→</span>
-                        <span className="font-mono text-xs">
+                        <span className="font-mono text-caption">
                           {r.target_kind}:{r.target_ref}
                         </span>
                       </div>
-                      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                      <div className="flex flex-wrap items-center gap-2 text-caption text-muted-foreground">
                         {/* Vacío = TODO el tenant, no «ningún workspace». */}
                         <span>
                           {r.workspace_ref
@@ -296,11 +309,11 @@ function ModelAccessTab() {
                       </div>
                       {/* Un forbid no es una fila más: RESTA de los allows del mismo sujeto. */}
                       {efecto === 'forbid' ? (
-                        <span className="text-xs text-danger">
+                        <span className="text-caption text-danger">
                           {t('access.forbidSubtracts')}
                         </span>
                       ) : confinados.has(sujeto) ? (
-                        <span className="text-xs text-muted-foreground">
+                        <span className="text-caption text-muted-foreground">
                           {t('access.confinedSubject', { subject: sujeto })}
                         </span>
                       ) : null}
@@ -329,16 +342,19 @@ function ModelAccessTab() {
             const items = ((res as { items?: unknown[] })?.items ??
               []) as Array<{ id: string; name?: string; members?: string[] }>
             return items.length === 0 ? (
-              <EmptyState title={t('access.groupsEmpty')} />
+              <EmptyState
+                description={t('access.groupsEmptyHint')}
+                title={t('access.groupsEmpty')}
+              />
             ) : (
               <div className="flex flex-col gap-1">
                 {items.map((g) => (
                   <div
                     key={g.id}
-                    className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border px-3 py-2 text-sm"
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border px-3 py-2 text-body"
                   >
-                    <span className="font-mono text-xs">{g.name}</span>
-                    <span className="text-xs text-muted-foreground">
+                    <span className="font-mono text-caption">{g.name}</span>
+                    <span className="text-caption text-muted-foreground">
                       {t('access.members', {
                         n: (g.members ?? []).length,
                       })}
@@ -352,7 +368,7 @@ function ModelAccessTab() {
       </SectionCard>
 
       {!puedeAdministrar ? (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-caption text-muted-foreground">
           {t('access.readOnlyNote')}
         </p>
       ) : null}
@@ -371,7 +387,8 @@ export function ModelsView() {
   const listaParams = { limit: EVIDENCE_PAGE }
   const modelsQ = useQuery({
     queryKey: modelsKeys.models(activeTenant, listaParams),
-    queryFn: () => modelsApi.models({ tenant: activeTenant, query: listaParams }),
+    queryFn: () =>
+      modelsApi.models({ tenant: activeTenant, query: listaParams }),
   })
   const policiesQ = useQuery({
     queryKey: modelsKeys.routingPolicies(activeTenant, listaParams),
@@ -425,7 +442,25 @@ export function ModelsView() {
             <AsyncSection query={modelsQ} skeletonHeight={240}>
               {(list) =>
                 list.items.length === 0 ? (
-                  <EmptyState title={t('estate.empty')} />
+                  <EmptyState
+                    description={t('estate.emptyHint')}
+                    title={t('estate.empty')}
+                    // The estate is filled by connecting a provider, and nothing on
+                    // this tab does that — so the empty state carries the verb rather
+                    // than leaving the operator to find the plane that owns it. Gated
+                    // on the WRITE permission, like the front door's own offer: a card
+                    // that invites a read-only principal to add one is a 403 waiting.
+                    action={
+                      can('sessions:profile:write') ? (
+                        <Button asChild variant="primary">
+                          <Link to={'/provider-profiles' as never}>
+                            <Plus />
+                            {t('estate.addProvider')}
+                          </Link>
+                        </Button>
+                      ) : undefined
+                    }
+                  />
                 ) : (
                   <ModelsTable models={list.items} />
                 )
@@ -440,14 +475,16 @@ export function ModelsView() {
             description={t('routing.description')}
             actions={
               canRouting ? (
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={() => setPolicyOpen(true)}
-                >
-                  <Plus />
-                  {t('routing.new')}
-                </Button>
+                <PagePrimaryAction>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => setPolicyOpen(true)}
+                  >
+                    <Plus />
+                    {t('routing.new')}
+                  </Button>
+                </PagePrimaryAction>
               ) : null
             }
           >
@@ -509,7 +546,10 @@ export function ModelsView() {
             <AsyncSection query={keysQ} skeletonHeight={180}>
               {(list) =>
                 list.items.length === 0 ? (
-                  <EmptyState title={t('keys.empty')} />
+                  <EmptyState
+                    description={t('keys.emptyHint')}
+                    title={t('keys.empty')}
+                  />
                 ) : (
                   <KeyRefsTable keys={list.items} />
                 )
@@ -550,7 +590,7 @@ function PolicyCard({ policy }: { policy: RoutingPolicy }) {
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-foreground">
+            <span className="text-body font-medium text-foreground">
               {policy.name}
             </span>
             <Badge variant="neutral">
@@ -562,7 +602,7 @@ function PolicyCard({ policy }: { policy: RoutingPolicy }) {
               {policy.enabled ? t('routing.enabled') : t('routing.disabled')}
             </Badge>
           </div>
-          <dl className="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
+          <dl className="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-caption text-muted-foreground">
             {policy.strategy === 'pinned' && policy.pinned_model ? (
               <Meta
                 label={t('routing.pinnedModel')}
@@ -678,7 +718,7 @@ function ExecutePanel({ policy }: { policy: RoutingPolicy }) {
   return (
     <div className="flex flex-col gap-2 border-t border-border pt-3">
       <div className="flex items-center justify-between gap-3">
-        <span className="text-xs text-muted-foreground">
+        <span className="text-caption text-muted-foreground">
           {t('routing.executeHint')}
         </span>
         <Button size="sm" variant="outline" onClick={() => setAbierto(true)}>
@@ -689,7 +729,7 @@ function ExecutePanel({ policy }: { policy: RoutingPolicy }) {
       {negado === 'unwired' ? (
         <div
           role="note"
-          className="rounded-md border border-border p-2 text-xs"
+          className="rounded-md border border-border p-2 text-caption"
         >
           {t('routing.noExecutor')}
         </div>
@@ -697,14 +737,14 @@ function ExecutePanel({ policy }: { policy: RoutingPolicy }) {
       {negado === 'budget' ? (
         <div
           role="note"
-          className="rounded-md border border-warning/40 bg-warning/5 p-2 text-xs"
+          className="rounded-md border border-warning/40 bg-warning/5 p-2 text-caption"
         >
           {t('routing.budgetDenied')}
         </div>
       ) : null}
 
       {resultado ? (
-        <div className="flex flex-col gap-1 rounded-md border border-border p-2 text-xs">
+        <div className="flex flex-col gap-1 rounded-md border border-border p-2 text-caption">
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="neutral">{resultado.served?.model ?? '—'}</Badge>
             {/* Servido ≠ primera opción: sin esto, una cadena que cayó al respaldo se lee
@@ -929,7 +969,7 @@ function PolicyDialog({
             )}
           </Field>
           <label className="flex items-center justify-between gap-2 rounded-md border border-border px-3 py-2">
-            <span className="text-sm text-foreground">
+            <span className="text-body text-foreground">
               {t('routing.allowDeprecated')}
             </span>
             <Switch

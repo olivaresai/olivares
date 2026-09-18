@@ -33,7 +33,7 @@ export function UntrustedBadge({
       data-slot="untrusted"
       title={hint ?? t('untrusted.hint')}
       className={cn(
-        'inline-flex items-center gap-1 rounded-sm border border-dashed border-border-strong bg-transparent px-1.5 py-0.5 text-xs font-medium text-muted-foreground',
+        'inline-flex items-center gap-1 rounded-sm border border-dashed border-border-strong bg-transparent px-1.5 py-0.5 text-caption font-medium text-muted-foreground',
         className,
       )}
     >

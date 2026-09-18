@@ -84,7 +84,12 @@ export function LogStream({ entries, autoScroll }: LogStreamProps) {
     // EmptyState, not a bare div: the shared primitive carries role="status"
     // so a resolved-but-empty stream is announced instead of silent (4.1.3).
     return (
-      <EmptyState icon={<Logs />} title={t('stream.empty')} className="h-64" />
+      <EmptyState
+        description={t('stream.emptyHint')}
+        icon={<Logs />}
+        title={t('stream.empty')}
+        className="h-64"
+      />
     )
   }
 
@@ -116,7 +121,7 @@ function LogRow({ entry }: { entry: LogEntry }) {
   return (
     <div
       className={cn(
-        'flex flex-wrap gap-2 px-1.5 py-px font-mono text-xs leading-5 hover:bg-muted/80',
+        'flex flex-wrap gap-2 px-1.5 py-px font-mono text-caption leading-5 hover:bg-muted/80',
         LEVEL_TEXT[entry.level],
       )}
     >

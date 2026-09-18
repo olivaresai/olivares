@@ -48,6 +48,7 @@ import { RunStreamPanel } from './run-stream'
 import { ScenarioCreateDialog } from './scenario-create-dialog'
 import type { Run, Scenario } from './types'
 import './i18n'
+import { PagePrimaryAction } from '@/components/ui/page-actions'
 
 // --- las tres acciones del sandbox (C07-04) ----------------------------------
 //
@@ -308,7 +309,10 @@ export function SandboxView() {
               <AsyncSection query={runsQ} skeletonHeight={260}>
                 {(list) =>
                   list.items.length === 0 ? (
-                    <EmptyState title={t('runs.empty')} />
+                    <EmptyState
+                      description={t('runs.emptyHint')}
+                      title={t('runs.empty')}
+                    />
                   ) : (
                     <RunsTable runs={list.items} onRowClick={setOpenRun} />
                   )
@@ -358,15 +362,17 @@ export function SandboxView() {
               // Not offered at all without the right, rather than offered and then
               // 403'd. The server door stays the real one either way.
               canCreate ? (
-                <Button
-                  type="button"
-                  variant="primary"
-                  size="sm"
-                  onClick={() => setCreateOpen(true)}
-                >
-                  <Plus className="size-3.5" aria-hidden />
-                  {t('scenarios.create.action')}
-                </Button>
+                <PagePrimaryAction>
+                  <Button
+                    type="button"
+                    variant="primary"
+                    size="sm"
+                    onClick={() => setCreateOpen(true)}
+                  >
+                    <Plus className="size-3.5" aria-hidden />
+                    {t('scenarios.create.action')}
+                  </Button>
+                </PagePrimaryAction>
               ) : null
             }
           >
@@ -464,7 +470,7 @@ function RunStreamDialog({
           <DialogTitle>{t('outputs.title')}</DialogTitle>
           <DialogDescription>
             {run ? (
-              <span className="font-mono text-xs">
+              <span className="font-mono text-caption">
                 {run.live_ref ?? run.subject_ref}
               </span>
             ) : null}

@@ -17,7 +17,7 @@ import (
 	"github.com/olivaresai/olivares/modules/models"
 )
 
-// guardedtext_test.go qualifies the MODULE SIDE of D01-C2B: that the profiled branch sits
+// guardedtext_test.go qualifies the MODULE SIDE of the governed Chat path: that the profiled branch sits
 // exactly where the contract puts it, that the existing budget precheck is consulted once
 // and only through the handler's own closure, and that nothing about the legacy Messages/
 // routed-executor path changed.

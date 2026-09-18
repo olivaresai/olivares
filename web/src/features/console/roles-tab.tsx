@@ -59,6 +59,7 @@ import {
   PermissionMatrix,
   scopeLabel,
 } from './roles-shared'
+import { StaticTable } from '@/components/data/static-table'
 
 /**
  * RolesTab is the FASE X Roles & delegation panel — the console UI over the
@@ -116,6 +117,7 @@ export function RolesTab() {
     return (
       <div className="pt-4">
         <EmptyState
+          description={t('console:roles.readOnlyNoticeHint')}
           title={t('console:roles.readOnlyNotice')}
           icon={<ShieldCheck />}
         />
@@ -186,7 +188,7 @@ function DelegationAuthorityCard({
     <section className="rounded-lg border border-border bg-muted/20 p-4">
       <div className="flex items-center gap-2">
         <ShieldCheck className="size-4 text-accent-text" />
-        <h2 className="text-base font-semibold text-foreground">
+        <h2 className="text-heading text-foreground">
           {t('roles.authority.title')}
         </h2>
       </div>
@@ -196,18 +198,20 @@ function DelegationAuthorityCard({
         </div>
       ) : query.isError ? (
         // A failed fetch must NOT read as "you have no authority" — say it couldn't load.
-        <p className="mt-2 text-sm text-muted-foreground">
+        <p className="mt-2 text-body text-muted-foreground">
           {t('roles.authority.loadError')}
         </p>
       ) : query.data?.superadmin ? (
-        <p className="mt-2 text-sm text-muted-foreground">
+        <p className="mt-2 text-body text-muted-foreground">
           {t('roles.authority.superadmin')}
         </p>
       ) : (query.data?.domains.length ?? 0) === 0 ? (
-        <p className="mt-2 text-sm text-warning">{t('roles.authority.none')}</p>
+        <p className="mt-2 text-body text-warning">
+          {t('roles.authority.none')}
+        </p>
       ) : (
         <div className="mt-2 flex flex-col gap-3">
-          <p className="text-sm text-muted-foreground">
+          <p className="text-body text-muted-foreground">
             {t('roles.authority.caption')}
           </p>
           <ul className="flex flex-col gap-3">
@@ -221,7 +225,7 @@ function DelegationAuthorityCard({
                     {scopeLabel(t, d.scope_tree, d.scope_ref)}
                   </Badge>
                   {d.scope_class && (
-                    <span className="text-xs text-muted-foreground">
+                    <span className="text-caption text-muted-foreground">
                       {t('roles.authority.classLabel', {
                         class: d.scope_class,
                       })}
@@ -232,7 +236,7 @@ function DelegationAuthorityCard({
                   {d.permissions.map((p) => (
                     <code
                       key={p}
-                      className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground"
+                      className="rounded bg-muted px-1.5 py-0.5 font-mono text-caption text-muted-foreground"
                     >
                       {p}
                     </code>
@@ -289,10 +293,10 @@ function GrantsSection({
     <section className="flex flex-col gap-3">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold text-foreground">
+          <h2 className="text-heading text-foreground">
             {t('console:roles.grants.title')}
           </h2>
-          <p className="max-w-2xl text-sm text-muted-foreground">
+          <p className="max-w-2xl text-body text-muted-foreground">
             {t('console:roles.grants.caption')}
           </p>
         </div>
@@ -311,31 +315,34 @@ function GrantsSection({
         <ErrorState retry={refetch} />
       ) : grants.length === 0 ? (
         <EmptyState
+          action={
+            canAdmin ? (
+              <Button onClick={() => setCreateOpen(true)}>
+                <Plus />
+                {t('console:roles.grants.create')}
+              </Button>
+            ) : undefined
+          }
+          description={t('console:roles.grants.noneHint')}
           title={t('console:roles.grants.none')}
           icon={<ShieldCheck />}
         />
       ) : (
         <div className="overflow-hidden rounded-lg border border-border">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
+          <StaticTable>
+            <thead>
               <tr>
-                <th className="px-3 py-2 font-medium">
-                  {t('console:roles.grants.subject')}
-                </th>
-                <th className="px-3 py-2 font-medium">
-                  {t('console:roles.grants.role')}
-                </th>
-                <th className="px-3 py-2 font-medium">
-                  {t('console:roles.grants.scope')}
-                </th>
-                <th className="px-3 py-2" />
+                <th>{t('console:roles.grants.subject')}</th>
+                <th>{t('console:roles.grants.role')}</th>
+                <th>{t('console:roles.grants.scope')}</th>
+                <th />
               </tr>
             </thead>
             <tbody>
               {grants.map((g) => (
-                <tr key={g.id} className="border-t border-border align-top">
-                  <td className="px-3 py-2">
-                    <span className="font-mono text-xs text-foreground">
+                <tr key={g.id} className="align-top">
+                  <td>
+                    <span className="font-mono text-caption text-foreground">
                       {g.subject_kind === 'role'
                         ? `role:${g.subject_ref}`
                         : g.subject_kind === 'group'
@@ -343,25 +350,25 @@ function GrantsSection({
                           : g.subject_ref}
                     </span>
                   </td>
-                  <td className="px-3 py-2">
+                  <td>
                     <Badge variant="neutral">{g.role}</Badge>
                     {g.role_custom && (
-                      <span className="ml-1 text-xs text-muted-foreground">
+                      <span className="ml-1 text-caption text-muted-foreground">
                         {t('console:roles.grantForm.groupCustom')}
                       </span>
                     )}
                   </td>
-                  <td className="px-3 py-2 text-foreground">
+                  <td className="text-foreground">
                     {scopeLabel(t, g.scope_tree, g.scope_ref)}
                     {g.scope_class && (
-                      <span className="ml-1 text-xs text-muted-foreground">
+                      <span className="ml-1 text-caption text-muted-foreground">
                         {t('console:roles.authority.classLabel', {
                           class: g.scope_class,
                         })}
                       </span>
                     )}
                   </td>
-                  <td className="px-3 py-2 text-right">
+                  <td className="text-right">
                     {canAdmin && (
                       <Button
                         variant="ghost"
@@ -376,7 +383,7 @@ function GrantsSection({
                 </tr>
               ))}
             </tbody>
-          </table>
+          </StaticTable>
         </div>
       )}
 
@@ -776,10 +783,10 @@ function RolesSection({
     <section className="flex flex-col gap-3">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold text-foreground">
+          <h2 className="text-heading text-foreground">
             {t('console:roles.defs.title')}
           </h2>
-          <p className="max-w-2xl text-sm text-muted-foreground">
+          <p className="max-w-2xl text-body text-muted-foreground">
             {t('console:roles.defs.caption')}
           </p>
         </div>
@@ -797,29 +804,35 @@ function RolesSection({
       ) : isError ? (
         <ErrorState retry={refetch} />
       ) : roles.length === 0 ? (
-        <EmptyState title={t('console:roles.defs.none')} icon={<KeyRound />} />
+        <EmptyState
+          action={
+            canAdmin ? (
+              <Button onClick={() => setCreateOpen(true)}>
+                <Plus />
+                {t('console:roles.defs.create')}
+              </Button>
+            ) : undefined
+          }
+          description={t('console:roles.defs.noneHint')}
+          title={t('console:roles.defs.none')}
+          icon={<KeyRound />}
+        />
       ) : (
         <div className="overflow-hidden rounded-lg border border-border">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
+          <StaticTable>
+            <thead>
               <tr>
-                <th className="px-3 py-2 font-medium">
-                  {t('console:roles.defs.name')}
-                </th>
-                <th className="px-3 py-2 font-medium">
-                  {t('console:roles.defs.permissions')}
-                </th>
-                <th className="px-3 py-2 font-medium">
-                  {t('console:roles.defs.groups')}
-                </th>
-                <th className="px-3 py-2" />
+                <th>{t('console:roles.defs.name')}</th>
+                <th>{t('console:roles.defs.permissions')}</th>
+                <th>{t('console:roles.defs.groups')}</th>
+                <th />
               </tr>
             </thead>
             <tbody>
               {roles.map((r) => (
-                <tr key={r.name} className="border-t border-border">
-                  <td className="px-3 py-2">
-                    <span className="font-mono text-xs text-foreground">
+                <tr key={r.name}>
+                  <td>
+                    <span className="font-mono text-caption text-foreground">
                       {r.name}
                     </span>
                     {r.display_name && (
@@ -828,13 +841,13 @@ function RolesSection({
                       </span>
                     )}
                   </td>
-                  <td className="px-3 py-2">
+                  <td>
                     <Badge variant="neutral">{r.permissions.length}</Badge>
                   </td>
-                  <td className="px-3 py-2 text-muted-foreground">
+                  <td className="text-muted-foreground">
                     {(r.groups ?? []).join(', ') || '—'}
                   </td>
-                  <td className="px-3 py-2 text-right">
+                  <td className="text-right">
                     {canAdmin && (
                       <div className="flex justify-end gap-1">
                         <Button
@@ -859,7 +872,7 @@ function RolesSection({
                 </tr>
               ))}
             </tbody>
-          </table>
+          </StaticTable>
         </div>
       )}
 
@@ -1061,19 +1074,22 @@ function RoleForm({
           description={t('console:roles.roleForm.groupsHint')}
         >
           {groups.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-body text-muted-foreground">
               {t('console:roles.roleForm.noGroups')}
             </p>
           ) : (
             <div className="flex flex-col gap-2">
               {groups.map((g) => (
-                <label key={g.name} className="flex items-center gap-2 text-sm">
+                <label
+                  key={g.name}
+                  className="flex items-center gap-2 text-body"
+                >
                   <Checkbox
                     checked={selGroups.includes(g.name)}
                     onCheckedChange={() => toggleGroup(g.name)}
                     aria-label={g.name}
                   />
-                  <span className="font-mono text-xs text-foreground">
+                  <span className="font-mono text-caption text-foreground">
                     {g.name}
                   </span>
                   {g.display_name && (
@@ -1147,10 +1163,10 @@ function GroupsSection({
     <section className="flex flex-col gap-3">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold text-foreground">
+          <h2 className="text-heading text-foreground">
             {t('console:roles.groups.title')}
           </h2>
-          <p className="max-w-2xl text-sm text-muted-foreground">
+          <p className="max-w-2xl text-body text-muted-foreground">
             {t('console:roles.groups.caption')}
           </p>
         </div>
@@ -1168,26 +1184,34 @@ function GroupsSection({
       ) : isError ? (
         <ErrorState retry={refetch} />
       ) : groups.length === 0 ? (
-        <EmptyState title={t('console:roles.groups.none')} icon={<Layers />} />
+        <EmptyState
+          action={
+            canAdmin ? (
+              <Button onClick={() => setCreateOpen(true)}>
+                <Plus />
+                {t('console:roles.groups.create')}
+              </Button>
+            ) : undefined
+          }
+          description={t('console:roles.groups.noneHint')}
+          title={t('console:roles.groups.none')}
+          icon={<Layers />}
+        />
       ) : (
         <div className="overflow-hidden rounded-lg border border-border">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
+          <StaticTable>
+            <thead>
               <tr>
-                <th className="px-3 py-2 font-medium">
-                  {t('console:roles.groups.name')}
-                </th>
-                <th className="px-3 py-2 font-medium">
-                  {t('console:roles.groups.permissions')}
-                </th>
-                <th className="px-3 py-2" />
+                <th>{t('console:roles.groups.name')}</th>
+                <th>{t('console:roles.groups.permissions')}</th>
+                <th />
               </tr>
             </thead>
             <tbody>
               {groups.map((g) => (
-                <tr key={g.name} className="border-t border-border">
-                  <td className="px-3 py-2">
-                    <span className="font-mono text-xs text-foreground">
+                <tr key={g.name}>
+                  <td>
+                    <span className="font-mono text-caption text-foreground">
                       {g.name}
                     </span>
                     {g.display_name && (
@@ -1196,10 +1220,10 @@ function GroupsSection({
                       </span>
                     )}
                   </td>
-                  <td className="px-3 py-2">
+                  <td>
                     <Badge variant="neutral">{g.permissions.length}</Badge>
                   </td>
-                  <td className="px-3 py-2 text-right">
+                  <td className="text-right">
                     {canAdmin && (
                       <div className="flex justify-end gap-1">
                         <Button
@@ -1224,7 +1248,7 @@ function GroupsSection({
                 </tr>
               ))}
             </tbody>
-          </table>
+          </StaticTable>
         </div>
       )}
 

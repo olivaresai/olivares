@@ -26,33 +26,17 @@ import './i18n'
 const MAX_FRAMES = 5000
 
 function useOpaqueAttachEpoch(runRef: string) {
-  // Opaque remount key: the bearer is compared privately and never written
-  // into a React key, the DOM or a log.
-  const token = useSessionStore((s) => s.token)
+  // Opaque remount key: the bearer is never written into a React key, the DOM
+  // or a log. credentialGeneration is the non-secret "the credential moved"
+  // counter (stores/session.ts).
   const credentialGeneration = useSessionStore((s) => s.credentialGeneration)
   const tenant = useTenantStore((s) => s.activeTenant)
-  const stamp = useRef({
-    token,
-    tenant,
-    runRef,
-    credentialGeneration,
-    epoch: 0,
-  })
-  if (
-    stamp.current.token !== token ||
-    stamp.current.tenant !== tenant ||
-    stamp.current.runRef !== runRef ||
-    stamp.current.credentialGeneration !== credentialGeneration
-  ) {
-    stamp.current = {
-      token,
-      tenant,
-      runRef,
-      credentialGeneration,
-      epoch: stamp.current.epoch + 1,
-    }
+  const identity = `${credentialGeneration}:${tenant ?? ''}:${runRef}`
+  const [stamp, setStamp] = useState({ identity, epoch: 0 })
+  if (stamp.identity !== identity) {
+    setStamp({ identity, epoch: stamp.epoch + 1 })
   }
-  return stamp.current.epoch
+  return stamp.epoch
 }
 
 /**
@@ -151,11 +135,13 @@ function LiveConsoleSession({ run }: { run: RunDTO }) {
     allowed: canInterrupt,
     intent: interruptIntent,
   })
-  currentInterrupt.current = {
-    isAuthorized,
-    allowed: canInterrupt,
-    intent: interruptIntent,
-  }
+  useEffect(() => {
+    currentInterrupt.current = {
+      isAuthorized,
+      allowed: canInterrupt,
+      intent: interruptIntent,
+    }
+  })
   const mounted = useRef(true)
   useEffect(() => {
     mounted.current = true
@@ -234,7 +220,7 @@ function LiveConsoleSession({ run }: { run: RunDTO }) {
   return (
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <div className="flex items-center gap-2 text-caption text-muted-foreground">
           <LiveDot status={status} />
           {ended && <span>{t('live.ended')}</span>}
           {ioUnavailable === 'not_live_on_node' && (
@@ -265,7 +251,7 @@ function LiveConsoleSession({ run }: { run: RunDTO }) {
               {t('live.interrupt')}
             </Button>
           )}
-          <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <label className="flex items-center gap-1.5 text-caption text-muted-foreground">
             <Switch checked={autoscroll} onCheckedChange={setAutoscroll} />
             {t('live.autoscroll')}
           </label>
@@ -285,13 +271,13 @@ function LiveConsoleSession({ run }: { run: RunDTO }) {
       </div>
 
       {interruptSupported && can('sessions:run:write') && !workFenceValid && (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-caption text-muted-foreground">
           {t('live.interruptFenceUnavailable')}
         </p>
       )}
 
       {dropped > 0 && (
-        <div className="flex items-center gap-2 rounded-md border border-warning-line bg-warning-soft px-2.5 py-1.5 text-xs text-warning">
+        <div className="flex items-center gap-2 rounded-md border border-warning-line bg-warning-soft px-2.5 py-1.5 text-caption text-warning">
           <AlertTriangle className="size-3.5 shrink-0" />
           {t('live.lag', { count: dropped })}
         </div>
@@ -303,7 +289,7 @@ function LiveConsoleSession({ run }: { run: RunDTO }) {
         tabIndex={0}
         role="log"
         aria-label={t('detail.live')}
-        className="h-80 overflow-auto rounded-md border border-border bg-surface p-2 font-mono text-xs leading-relaxed focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background"
+        className="h-80 overflow-auto rounded-md border border-border bg-surface p-2 font-mono text-caption leading-relaxed focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background"
       >
         {frames.length === 0 ? (
           <p className="p-2 text-muted-foreground">
@@ -350,7 +336,7 @@ function LiveConsoleSession({ run }: { run: RunDTO }) {
         </Button>
       </form>
       {!canSend && !isRemote && (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-caption text-muted-foreground">
           {t('live.inputNotAllowed')}
         </p>
       )}
@@ -366,7 +352,7 @@ function Notice({
   children: React.ReactNode
 }) {
   return (
-    <div className="flex items-start gap-2 rounded-md border border-border bg-muted px-3 py-2.5 text-sm text-muted-foreground">
+    <div className="flex items-start gap-2 rounded-md border border-border bg-muted px-3 py-2.5 text-body text-muted-foreground">
       <Icon className="mt-0.5 size-4 shrink-0" />
       <span>{children}</span>
     </div>

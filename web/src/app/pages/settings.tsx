@@ -23,8 +23,8 @@ import { useThemeStore, type Theme } from '@/stores/theme'
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="flex items-center justify-between gap-4 py-2.5">
-      <dt className="text-sm text-muted-foreground">{label}</dt>
-      <dd className="min-w-0 truncate text-right text-sm text-foreground">
+      <dt className="text-body text-muted-foreground">{label}</dt>
+      <dd className="min-w-0 truncate text-right text-body text-foreground">
         {children}
       </dd>
     </div>
@@ -44,17 +44,17 @@ export function SettingsPage() {
   // resolvedLanguage already maps region variants (en-US→en, zh-CN→zh) and
   // applies the fallback, so the switcher reflects the real UI language for all
   // six locales — not just en/es.
-  const lang: LanguageCode =
-    (SUPPORTED_LANGUAGES.find((l) => l.code === i18n.resolvedLanguage)?.code ??
-      'en') as LanguageCode
+  const lang: LanguageCode = (SUPPORTED_LANGUAGES.find(
+    (l) => l.code === i18n.resolvedLanguage,
+  )?.code ?? 'en') as LanguageCode
 
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground">
+        <h1 className="font-display text-display text-foreground">
           {t('settings:title')}
         </h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-body text-muted-foreground">
           {t('settings:subtitle')}
         </p>
       </div>
@@ -79,7 +79,9 @@ export function SettingsPage() {
                 </Row>
               )}
               <Row label={t('settings:profile.actor')}>
-                <span className="font-mono text-xs">{principal?.actor}</span>
+                <span className="font-mono text-caption">
+                  {principal?.actor}
+                </span>
               </Row>
               <Row label={t('settings:profile.role')}>
                 {isSuperadmin ? (
@@ -175,12 +177,12 @@ export function SettingsPage() {
           <Card className="max-w-2xl p-5">
             <dl className="divide-y divide-border">
               <Row label={t('settings:about.version')}>
-                <span className="font-mono text-xs">
+                <span className="font-mono text-caption">
                   {serverInfo.data?.version ?? '—'}
                 </span>
               </Row>
               <Row label={t('settings:about.engine')}>
-                <span className="font-mono text-xs">
+                <span className="font-mono text-caption">
                   {serverInfo.data?.engine ?? '—'}
                 </span>
               </Row>

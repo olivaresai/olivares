@@ -54,7 +54,7 @@ export function JobProgress({ jobId, onFinished }: JobProgressProps) {
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
-        <span className="text-sm font-medium">{phase}</span>
+        <span className="text-body font-medium">{phase}</span>
         <div className="flex items-center gap-2">
           <Badge variant={STATUS_VARIANT[jobStatus] ?? 'neutral'}>
             {t(`job.status.${jobStatus}`)}
@@ -76,12 +76,12 @@ export function JobProgress({ jobId, onFinished }: JobProgressProps) {
         />
       </div>
 
-      <p className="text-xs tabular-nums text-muted-foreground">
+      <p className="text-caption tabular-nums text-muted-foreground">
         {t('job.complete', { progress })}
       </p>
 
       {job?.error && (
-        <p className="break-words text-sm text-danger">{job.error}</p>
+        <p className="break-words text-body text-danger">{job.error}</p>
       )}
     </div>
   )

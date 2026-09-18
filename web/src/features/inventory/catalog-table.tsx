@@ -76,7 +76,7 @@ export function CatalogTable({
                   {e.name || e.ref || e.entity_id.slice(0, 8)}
                 </div>
                 {e.ref && e.ref !== e.name && (
-                  <div className="truncate font-mono text-xs text-muted-foreground">
+                  <div className="truncate font-mono text-caption text-muted-foreground">
                     {e.ref}
                   </div>
                 )}
@@ -130,7 +130,7 @@ export function CatalogTable({
           if (hosts.length === 0)
             return <span className="text-muted-foreground">—</span>
           return (
-            <span className="font-mono text-xs" title={hosts.join(', ')}>
+            <span className="font-mono text-caption" title={hosts.join(', ')}>
               {hosts.length === 1
                 ? hosts[0]
                 : t('hostCount', { count: hosts.length })}

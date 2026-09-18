@@ -64,6 +64,7 @@ import type {
   GuardianRuleDTO,
   GuardianAgentTier,
 } from './types'
+import { PagePrimaryAction } from '@/components/ui/page-actions'
 
 // The containment trail is a live feed (the loop fires on findings, the sweep
 // executes approvals) — poll it gently; rules change only by operator action.
@@ -176,7 +177,7 @@ export function GuardianSection() {
         header: t('guardian.name'),
         cell: ({ row }) => (
           <span
-            className="font-mono text-xs font-medium text-foreground"
+            className="font-mono text-caption font-medium text-foreground"
             title={row.original.note || undefined}
           >
             {row.original.name}
@@ -188,11 +189,11 @@ export function GuardianSection() {
         header: t('guardian.kinds'),
         cell: ({ row }) =>
           row.original.match_kinds ? (
-            <span className="truncate font-mono text-xs text-muted-foreground">
+            <span className="truncate font-mono text-caption text-muted-foreground">
               {row.original.match_kinds}
             </span>
           ) : (
-            <span className="text-xs text-muted-foreground">
+            <span className="text-caption text-muted-foreground">
               {t('guardian.kindsAny')}
             </span>
           ),
@@ -207,9 +208,11 @@ export function GuardianSection() {
         header: t('guardian.agentTier'),
         cell: ({ row }) =>
           row.original.agent_tier ? (
-            <span className="font-mono text-xs">{row.original.agent_tier}</span>
+            <span className="font-mono text-caption">
+              {row.original.agent_tier}
+            </span>
           ) : (
-            <span className="text-xs text-muted-foreground">
+            <span className="text-caption text-muted-foreground">
               {t('guardian.create.agentTierAny')}
             </span>
           ),
@@ -299,7 +302,7 @@ export function GuardianSection() {
         accessorKey: 'rule_name',
         header: t('guardian.trail.rule'),
         cell: ({ row }) => (
-          <span className="font-mono text-xs text-foreground">
+          <span className="font-mono text-caption text-foreground">
             {row.original.rule_name}
           </span>
         ),
@@ -309,7 +312,7 @@ export function GuardianSection() {
         header: t('guardian.trail.finding'),
         cell: ({ row }) => (
           <span className="flex items-center gap-1.5">
-            <span className="truncate font-mono text-xs text-muted-foreground">
+            <span className="truncate font-mono text-caption text-muted-foreground">
               {row.original.finding_kind}
             </span>
             <SeverityBadge severity={row.original.finding_severity} />
@@ -323,7 +326,7 @@ export function GuardianSection() {
           <span className="flex items-center gap-1.5">
             <Badge variant="neutral">{row.original.target_kind}</Badge>
             {row.original.target_ref && (
-              <span className="truncate font-mono text-xs text-muted-foreground">
+              <span className="truncate font-mono text-caption text-muted-foreground">
                 {row.original.target_ref}
               </span>
             )}
@@ -356,7 +359,7 @@ export function GuardianSection() {
             <GuardianStatusBadge status={row.original.status} />
             {row.original.approval_id && (
               <span
-                className="truncate font-mono text-xs text-muted-foreground"
+                className="truncate font-mono text-caption text-muted-foreground"
                 title={t('guardian.trail.approval')}
               >
                 {row.original.approval_id}
@@ -380,7 +383,7 @@ export function GuardianSection() {
         header: t('guardian.trail.detail'),
         cell: ({ row }) => (
           <span
-            className="truncate text-xs text-muted-foreground"
+            className="truncate text-caption text-muted-foreground"
             title={row.original.detail || undefined}
           >
             {row.original.detail || '—'}
@@ -394,9 +397,24 @@ export function GuardianSection() {
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <h2 className="text-base font-medium">{t('guardian.title')}</h2>
-        <p className="text-xs text-muted-foreground">{t('guardian.caption')}</p>
+        <h2 className="text-heading">{t('guardian.title')}</h2>
+        <p className="text-caption text-muted-foreground">
+          {t('guardian.caption')}
+        </p>
       </div>
+
+      {canAdmin && (
+        <PagePrimaryAction>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => setCreateOpen(true)}
+          >
+            <Plus />
+            {t('guardian.newRule')}
+          </Button>
+        </PagePrimaryAction>
+      )}
 
       <ListTruncationBadge
         query={rules}
@@ -419,23 +437,11 @@ export function GuardianSection() {
             description={t('guardian.emptyHint')}
           />
         }
-        toolbar={
-          canAdmin ? (
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => setCreateOpen(true)}
-            >
-              <Plus />
-              {t('guardian.newRule')}
-            </Button>
-          ) : undefined
-        }
       />
 
       <div>
-        <h3 className="text-sm font-medium">{t('guardian.trail.title')}</h3>
-        <p className="text-xs text-muted-foreground">
+        <h3 className="text-body font-medium">{t('guardian.trail.title')}</h3>
+        <p className="text-caption text-muted-foreground">
           {t('guardian.trail.caption')}
         </p>
       </div>
@@ -492,10 +498,10 @@ export function GuardianSection() {
             role="alert"
             className="rounded-md border border-danger-line bg-danger-soft px-3 py-2"
           >
-            <p className="text-xs font-medium text-danger">
+            <p className="text-caption font-medium text-danger">
               {deleteError.title}
             </p>
-            <p className="mt-1 text-xs text-foreground">
+            <p className="mt-1 text-caption text-foreground">
               {deleteError.message}
             </p>
           </div>

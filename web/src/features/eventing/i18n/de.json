@@ -107,6 +107,7 @@
     "title": "Erfasste Ereignisse",
     "description": "Ereignisprotokoll mit Sequenz-Cursor. Nach Ereignistyp filtern, um Ergebnisse einzugrenzen.",
     "empty": "Keine erfassten Ereignisse",
+    "emptyHint": "Jedes vom Bus erfasste Ereignis wird hier aufgeführt, das neueste zuerst. In diesem Zeitraum wurde nichts veröffentlicht.",
     "typeFilter": "Nach Typ filtern",
     "allTypes": "Alle Typen",
     "columns": {
@@ -123,6 +124,7 @@
     "title": "Zustellungen",
     "description": "Zustellungsstatus der Webhook-Ereignis-Dispatches. Nach Abonnement, Status oder Ereignistyp filtern.",
     "empty": "Keine Zustellungen",
+    "emptyHint": "Jeder Versuch, ein Ereignis an ein Abonnement zuzustellen, wird hier mit seinem Ergebnis aufgeführt. Es wurde noch nichts zugestellt.",
     "subscriptionFilter": "Abonnement",
     "statusFilter": "Status",
     "typeFilter": "Ereignistyp",
@@ -188,6 +190,7 @@
     "description": "Chronologische, ausschließlich ergänzte Snapshots dieses Abonnements.",
     "scopeCaption": "Eine Wiederherstellung wendet nur die Zustellungsstruktur erneut an — niemals Anmeldedaten oder das Senkenprofil.",
     "empty": "Keine Revisionen aufgezeichnet",
+    "emptyHint": "Jede Änderung an diesem Abonnement wird als Revision aufbewahrt, die Sie vergleichen und wiederherstellen können. Die erste Bearbeitung erzeugt eine.",
     "loadMore": "Mehr laden",
     "compareTitle": "Snapshot-Unterschiede",
     "selectTwo": "Wählen Sie zwei Revisionen aus, um ihre Snapshots zu vergleichen.",

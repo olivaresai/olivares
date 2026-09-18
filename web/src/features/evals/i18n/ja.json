@@ -41,7 +41,8 @@
     "runs": "実行",
     "lastScore": "直近スコア",
     "regressed": "回帰あり",
-    "empty": "スコアカードはまだありません。ゴールデンスイートに対して評価を実行してください。"
+    "empty": "スコアカードはまだありません。ゴールデンスイートに対して評価を実行してください。",
+    "emptyHint": "スコアカードは、スイートの各ケースでモデルがどう採点されたかをまとめます。ゴールデンスイートに対して評価を実行すると作成されます。"
   },
   "runs": {
     "title": "評価の実行",
@@ -57,6 +58,7 @@
     "regressed": "回帰あり · ドリフト {{drift}}",
     "noRegression": "なし",
     "empty": "範囲内に実行はありません。",
+    "emptyHint": "選択した期間の評価実行が、スコアと所要時間とともに一覧表示されます。期間を広げるか、実行を開始してください。",
     "overN": "{{n}} 件中",
     "notScored": "not scored — no verdict",
     "noBaseline": "no baseline — nothing compared"
@@ -74,7 +76,8 @@
       "label": "ラベル",
       "fingerprint": "フィンガープリント"
     },
-    "empty": "この実行にはケース結果がありません。"
+    "empty": "この実行にはケース結果がありません。",
+    "emptyHint": "スイート内の各ケースが、ジャッジの判定とともに一覧表示されます。この実行ではケース結果が記録されませんでした。"
   },
   "ab": {
     "title": "A/B比較",
@@ -94,6 +97,7 @@
     "suiteLabel": "スイート",
     "selectSuite": "スイートを選択",
     "noSuites": "スイートがまだありません。比較はスイートのケースに対して採点されるため、先に作成してください。",
+    "noSuitesHint": "比較はスイートのケースで採点するため、まずスイートが必要です。「スイート」タブで作成してください。",
     "labelA": "バリアント A のラベル",
     "labelB": "バリアント B のラベル",
     "outputsA": "バリアント A の出力",
@@ -119,7 +123,8 @@
     "threshold": "合格しきい値",
     "pickerTitle": "サブジェクト",
     "note": "しきい値の線はスイートの合格しきい値です。それを下回る点は、その時点で基準を満たしませんでした。",
-    "empty": "傾向データはまだありません。"
+    "empty": "傾向データはまだありません。",
+    "emptyHint": "ドリフトは、モデルの直近のスコアを自身の履歴と比較します。同じスイートを 2 回以上実行すると最初のトレンドが出ます。"
   },
   "outcomeBar": {
     "passed": "合格",
@@ -141,6 +146,7 @@
     "title": "CI ゲート",
     "description": "リグレッションゲートの評価: ゲートが測定した結果と、CI が従うべき結果。",
     "empty": "ゲートの評価はありません",
+    "emptyHint": "ゲート評価は、候補をリリースしてよいかを判定します。ゲート付きスイートに対して評価を実行すると記録されます。",
     "measured": "測定 {{verdict}}",
     "effective": "CI は {{verdict}} に従います",
     "sampled": "{{total}} 件中 {{sampled}} 件を抽出",
@@ -160,6 +166,7 @@
     "title": "ジャッジ較正",
     "description": "LLM ジャッジが人間のラベルとどの程度一致するか。偶然を補正した一致度を測定できない集合は、何も証明できません。",
     "empty": "較正レポートはありません",
+    "emptyHint": "キャリブレーションレポートは、ジャッジの採点と人手のラベルを比較します。キャリブレーションを実行すると作成されます。",
     "meets": "目標を満たす",
     "below": "目標未達",
     "cannotCertify": "証明不可 — カッパ未定義",
@@ -176,6 +183,7 @@
     "description": "The human labels the judge is measured against — and the reason a report can or cannot certify.",
     "run": "Run calibration",
     "empty": "No labelled items yet",
+    "emptyHint": "ラベル付き項目とは、キャリブレーションレポートの採点基準となる人手の判定です。ケースにラベルを付けると 1 件目が追加されます。",
     "distribution": "{{pass}} labelled pass · {{fail}} labelled fail",
     "degenerate": "⛔ Every label is the same, so kappa CANNOT be computed and no report from this set can certify. Label cases of the other kind.",
     "humanPass": "human: pass",

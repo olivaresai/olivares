@@ -341,14 +341,14 @@ export function ComposeDialog({
         {editing ? (
           <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-x-hidden overflow-y-auto pr-1">
             {errors.length > 0 ? (
-              <ul role="alert" className="list-disc pl-5 text-sm text-danger">
+              <ul role="alert" className="list-disc pl-5 text-body text-danger">
                 {errors.map((e) => (
                   <li key={e}>{e}</li>
                 ))}
               </ul>
             ) : null}
             <fieldset className="flex flex-col gap-2">
-              <legend className="text-sm font-medium">
+              <legend className="text-body font-medium">
                 {t('compose.recipient')}
               </legend>
               <SubjectPicker
@@ -375,7 +375,7 @@ export function ComposeDialog({
               />
             </Field>
             <fieldset className="flex flex-col gap-3">
-              <legend className="text-sm font-medium">
+              <legend className="text-body font-medium">
                 {t('compose.blocks')}
               </legend>
               {blocks.map((b, i) => (
@@ -594,7 +594,7 @@ export function ComposeDialog({
             data-slot="send-intent"
           >
             {phase === 'confirm' || phase === 'sending' ? (
-              <div className="rounded-md border border-border bg-muted px-3 py-2 text-sm">
+              <div className="rounded-md border border-border bg-muted px-3 py-2 text-body">
                 <p className="font-medium">{t('compose.confirm.title')}</p>
                 <p className="text-muted-foreground">
                   {t('compose.confirm.body')}
@@ -604,7 +604,7 @@ export function ComposeDialog({
             {phase === 'applied' && outcome ? (
               <div
                 role="status"
-                className="rounded-md border border-success-line bg-success-soft px-3 py-2 text-sm text-success"
+                className="rounded-md border border-success-line bg-success-soft px-3 py-2 text-body text-success"
               >
                 <p className="font-medium">
                   {t('compose.result.appliedTitle')}
@@ -615,7 +615,7 @@ export function ComposeDialog({
             {phase === 'replayed' && outcome ? (
               <div
                 role="status"
-                className="rounded-md border border-info-line bg-info-soft px-3 py-2 text-sm text-info"
+                className="rounded-md border border-info-line bg-info-soft px-3 py-2 text-body text-info"
               >
                 <p className="font-medium">
                   {t('compose.result.replayedTitle')}
@@ -630,7 +630,7 @@ export function ComposeDialog({
               />
             ) : null}
             {phase === 'ambiguous' ? (
-              <p className="text-sm text-muted-foreground">
+              <p className="text-body text-muted-foreground">
                 {t('compose.result.ambiguousBody')}
               </p>
             ) : null}
@@ -640,7 +640,7 @@ export function ComposeDialog({
                   failure={failure}
                   title={t('compose.result.refusedTitle')}
                 />
-                <p className="text-sm text-muted-foreground">
+                <p className="text-body text-muted-foreground">
                   {t('compose.result.refusedBody')}
                 </p>
               </>

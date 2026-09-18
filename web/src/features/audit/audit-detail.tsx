@@ -41,7 +41,7 @@ export function AuditEventSheet({
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2">
             <ScrollText className="size-4 text-accent-text" aria-hidden />
-            <span className="font-mono text-base">
+            <span className="font-mono text-heading">
               {event
                 ? t('detail.seqTitle', { seq: event.seq })
                 : t('detail.title')}
@@ -100,14 +100,14 @@ export function AuditEventSheet({
                 )}
               </KvRow>
               <KvRow label={t('detail.id')} mono align="start">
-                <span className="break-all text-xs">{event.id}</span>
+                <span className="break-all text-caption">{event.id}</span>
               </KvRow>
             </KvList>
 
             {/* Chain links — the tamper-evidence fingerprints. No payload behind a
                 hash; copying yields the full value (docs/SECURITY-HARDENING.md). */}
             <section className="mt-4 flex flex-col gap-2">
-              <h3 className="text-sm font-semibold text-foreground">
+              <h3 className="text-body font-semibold text-foreground">
                 {t('detail.chainTitle')}
               </h3>
               <KvList>
@@ -123,7 +123,7 @@ export function AuditEventSheet({
                   </KvRow>
                 )}
               </KvList>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-caption text-muted-foreground">
                 {t('detail.chainHint')}
               </p>
             </section>

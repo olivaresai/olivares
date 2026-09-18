@@ -35,7 +35,12 @@ function Harness(props?: Partial<AccessibleChartProps<Datum>>) {
       columns={columns}
       data={data}
       getRowId={(r) => r.model}
-      empty={<EmptyState title="No spend recorded yet" />}
+      empty={
+        <EmptyState
+          title="No spend recorded yet"
+          description="Rows appear here once the read returns some."
+        />
+      }
       {...props}
     >
       <div data-testid="fake-chart">[chart svg]</div>

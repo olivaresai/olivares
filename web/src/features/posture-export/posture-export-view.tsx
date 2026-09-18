@@ -56,6 +56,7 @@ import {
   type PostureExportParams,
   type SeverityFloor,
 } from './api'
+import { StaticTable } from '@/components/data/static-table'
 
 const ANY = '__any__'
 const SEVERITIES: SeverityFloor[] = ['low', 'medium', 'high', 'critical']
@@ -284,7 +285,9 @@ export function PostureExportView() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={ANY}>{t('filters.severityAny')}</SelectItem>
+                    <SelectItem value={ANY}>
+                      {t('filters.severityAny')}
+                    </SelectItem>
                     {SEVERITIES.map((s) => (
                       <SelectItem key={s} value={s}>
                         {t(`severity.${s}`)}
@@ -315,7 +318,10 @@ export function PostureExportView() {
                 />
               )}
             </Field>
-            <Field label={t('filters.kind')} description={t('filters.kindHint')}>
+            <Field
+              label={t('filters.kind')}
+              description={t('filters.kindHint')}
+            >
               {({ id }) => (
                 <Input
                   id={id}
@@ -362,29 +368,30 @@ export function PostureExportView() {
             .
           </CaveatNotice>
           {history.length === 0 ? (
-            <EmptyState title={t('history.empty')} />
+            <EmptyState
+              description={t('history.emptyHint')}
+              title={t('history.empty')}
+            />
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <StaticTable>
                 <thead>
-                  <tr className="border-b text-left text-xs uppercase tracking-wider text-muted-foreground">
-                    <th className="py-2 pr-4 font-medium">{t('history.colTime')}</th>
-                    <th className="py-2 pr-4 font-medium">{t('history.colFilters')}</th>
-                    <th className="py-2 pr-4 text-right font-medium">
-                      {t('history.colCounts')}
-                    </th>
+                  <tr className="tracking-wider">
+                    <th>{t('history.colTime')}</th>
+                    <th>{t('history.colFilters')}</th>
+                    <th className="text-right">{t('history.colCounts')}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {history.map((h, i) => (
-                    <tr key={`${h.at}-${i}`} className="border-b last:border-0">
-                      <td className="py-2 pr-4 font-mono text-xs">
+                    <tr key={`${h.at}-${i}`}>
+                      <td className="font-mono text-caption">
                         {new Date(h.at).toLocaleTimeString(currentLanguage())}
                       </td>
-                      <td className="py-2 pr-4 text-xs text-muted-foreground">
+                      <td className="text-caption text-muted-foreground">
                         {describeFilters(h.filters, t)}
                       </td>
-                      <td className="py-2 pr-4 text-right text-xs">
+                      <td className="text-right text-caption">
                         {t('history.counts', {
                           inventory: h.inventory,
                           findings: h.findings,
@@ -399,7 +406,7 @@ export function PostureExportView() {
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </StaticTable>
             </div>
           )}
         </CardContent>
@@ -413,7 +420,8 @@ function describeFilters(
   t: (k: string, o?: Record<string, unknown>) => string,
 ): string {
   const parts: string[] = []
-  if (f.severity) parts.push(t('summary.severityFloor', { severity: f.severity }))
+  if (f.severity)
+    parts.push(t('summary.severityFloor', { severity: f.severity }))
   if (f.category?.trim()) parts.push(`category=${f.category.trim()}`)
   if (f.kind?.trim()) parts.push(`kind=${f.kind.trim()}`)
   return parts.length ? parts.join(', ') : t('filters.none')
@@ -437,17 +445,23 @@ function SummaryCard({ doc }: { doc: PostureExportDoc }) {
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {stats.map((st) => (
             <div key={st.label} className="rounded-md border bg-muted/30 p-3">
-              <div className="text-2xl font-semibold tabular-nums text-foreground">
+              <div className="text-display tabular-nums text-foreground">
                 {st.value}
               </div>
-              <div className="text-xs text-muted-foreground">{st.label}</div>
+              <div className="text-caption text-muted-foreground">
+                {st.label}
+              </div>
             </div>
           ))}
         </div>
         {s.truncated ? (
-          <CaveatNotice tone="warning">{t('summary.truncatedHint')}</CaveatNotice>
+          <CaveatNotice tone="warning">
+            {t('summary.truncatedHint')}
+          </CaveatNotice>
         ) : null}
-        <p className="text-xs leading-relaxed text-muted-foreground">{doc.note}</p>
+        <p className="text-caption leading-relaxed text-muted-foreground">
+          {doc.note}
+        </p>
       </CardContent>
     </Card>
   )

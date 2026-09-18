@@ -33,7 +33,7 @@ export function BreadcrumbList({ className, ...props }: ComponentProps<'ol'>) {
   return (
     <ol
       className={cn(
-        'flex min-w-0 flex-nowrap items-center gap-1.5 text-sm text-muted-foreground',
+        'flex min-w-0 flex-nowrap items-center gap-1.5 text-body text-muted-foreground',
         className,
       )}
       {...props}

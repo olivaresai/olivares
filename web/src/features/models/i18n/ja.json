@@ -47,6 +47,8 @@
     "title": "ガバナンス対象モデル",
     "description": "このテナントのエステートに含まれるモデル。カタログから情報が補完されています。",
     "empty": "エステートにモデルがありません",
+    "emptyHint": "このテナントが呼び出せるモデルが、プロバイダーと制限とともに一覧表示されます。プロバイダーを追加すると資産が埋まります。",
+    "addProvider": "プロバイダーを追加",
     "columns": {
       "name": "モデル",
       "provider": "プロバイダー",
@@ -120,6 +122,7 @@
     "description": "プロバイダーのAPIキーとワークスペースへのガバナンス対象の参照。保存されるのはマスクされたヒントのみで、シークレットの値が保存されることはありません。",
     "new": "キー参照を追加",
     "empty": "キー参照がありません",
+    "emptyHint": "キー参照は、エンジンが保持する資格情報を指すもので、シークレットそのものではありません。追加するとモデルを呼び出せるようになります。",
     "maskedOnly": "参照のみ — シークレットの値は保存も表示もされません。",
     "columns": {
       "name": "名前",
@@ -233,6 +236,7 @@
     "title": "ワークスペースのレジデンシー",
     "description": "各ワークスペースが推論を処理する場所と、データが保管される場所を、プロバイダーの報告どおりに示します。",
     "empty": "レジデンシー設定を報告しているワークスペースはありません",
+    "emptyHint": "レジデンシー設定は、ワークスペースがどのリージョンでモデルを呼び出せるかを定めます。宣言しているワークスペースはありません。",
     "unrestricted": "プロバイダーは制限を報告していません",
     "allowed": "許可: {{geos}}",
     "unreported": "未報告",
@@ -245,9 +249,11 @@
     "title": "Model access rules",
     "description": "Who may use which model, and where.",
     "empty": "No access rules — every subject is unrestricted",
+    "emptyHint": "アクセスルールは、どの主体がどのモデルを呼び出せるかを定めます。ルールがない場合、すべての主体が資産内のすべてのモデルを呼び出せます。",
     "groupsTitle": "Model groups",
     "groupsDescription": "Named sets a rule can target instead of a single model.",
     "groupsEmpty": "No model groups",
+    "groupsEmptyHint": "モデルグループは複数のモデルに名前を付け、1 つのルールでまとめて統制できるようにします。まず 1 つ作成してください。",
     "members": "{{n}} members",
     "confinementNotice": "⛔ An allow is not only additive. A subject NAMED by any allow is CONFINED to its allows — everything else becomes denied for them. A subject named by no rule is unrestricted. So creating the FIRST allow for someone TAKES AWAY the rest of the catalogue from them.",
     "effect": {

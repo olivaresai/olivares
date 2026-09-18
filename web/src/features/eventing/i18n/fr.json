@@ -107,6 +107,7 @@
     "title": "Événements capturés",
     "description": "Journal des événements avec curseur de séquence. Filtrez par type d'événement pour affiner les résultats.",
     "empty": "Aucun événement capturé",
+    "emptyHint": "Chaque événement capté par le bus est listé ici, du plus récent au plus ancien. Rien n’a été publié dans cette plage.",
     "typeFilter": "Filtrer par type",
     "allTypes": "Tous les types",
     "columns": {
@@ -123,6 +124,7 @@
     "title": "Livraisons",
     "description": "État de livraison des événements webhook. Filtrez par abonnement, statut ou type d'événement.",
     "empty": "Aucune livraison",
+    "emptyHint": "Chaque tentative de remise d’un événement à un abonnement est listée ici avec son résultat. Rien n’a encore été remis.",
     "subscriptionFilter": "Abonnement",
     "statusFilter": "Statut",
     "typeFilter": "Type d'événement",
@@ -188,6 +190,7 @@
     "description": "Instantanés chronologiques de cet abonnement dans un journal en ajout seul.",
     "scopeCaption": "La restauration réapplique uniquement la structure de livraison — jamais les identifiants ni le profil de destination.",
     "empty": "Aucune révision enregistrée",
+    "emptyHint": "Chaque modification de cet abonnement est conservée comme une révision que vous pouvez comparer et restaurer. La première édition en crée une.",
     "loadMore": "Charger plus",
     "compareTitle": "Différence entre les instantanés",
     "selectTwo": "Sélectionnez deux révisions pour comparer leurs instantanés.",

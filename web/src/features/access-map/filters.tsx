@@ -125,7 +125,7 @@ export function AccessFilters({
           }
         >
           <SelectTrigger
-            className="h-7 w-auto min-w-[8rem] text-xs"
+            className="h-7 w-auto min-w-[8rem] text-caption"
             aria-label={t('filters.signal')}
           >
             <SelectValue placeholder={t('filters.signal')} />
@@ -202,7 +202,7 @@ function ModeToggle({
       onClick={onClick}
       aria-pressed={active}
       className={cn(
-        'inline-flex h-7 items-center gap-1.5 rounded-md border px-2 text-xs font-medium transition-colors',
+        'inline-flex h-7 items-center gap-1.5 rounded-md border px-2 text-caption font-medium transition-colors',
         'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background outline-none',
         active
           ? 'border-accent-line bg-accent-soft text-accent-soft-foreground'

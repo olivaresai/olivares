@@ -16,7 +16,7 @@ import (
 // WHY THIS FILE WAS REWRITTEN AT INTEGRATION, and it is not cosmetic. It used to call a
 // module-local `dualControlVerdict`. PR #615 replaced that helper's only call site
 // with the shared primitive (`auth.PersonRefFromActor` + `auth.TwoDistinctPeople`), and the
-// two lanes had fixed the same defect independently. Merging both left the helper with ZERO
+// two changes had fixed the same defect independently. Merging both left the helper with ZERO
 // production callers while this table kept passing — eleven green cases measuring code the
 // product no longer runs, which is the failure this repository keeps removing: a test that
 // cannot go red is not evidence. The cases are preserved and now drive the path the route

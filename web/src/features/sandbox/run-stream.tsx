@@ -42,8 +42,15 @@ import type { Run } from './types'
 export function RunStreamPanel({ run }: { run: Run }) {
   const { t } = useTranslation('sandbox')
   const { activeTenant } = useAuth()
-  const { outputs, summary, status, complete, interrupted, unreadable, reconnect } =
-    useRunStream({ runId: run.id })
+  const {
+    outputs,
+    summary,
+    status,
+    complete,
+    interrupted,
+    unreadable,
+    reconnect,
+  } = useRunStream({ runId: run.id })
 
   const fallbackQ = useQuery({
     queryKey: sandboxKeys.outputs(activeTenant, run.id),
@@ -68,7 +75,9 @@ export function RunStreamPanel({ run }: { run: Run }) {
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="text-xs text-muted-foreground">{statusLabel}</span>
+        <span className="text-caption text-muted-foreground">
+          {statusLabel}
+        </span>
       </div>
 
       <CaveatNotice>{t('stream.replayNote')}</CaveatNotice>
@@ -76,7 +85,7 @@ export function RunStreamPanel({ run }: { run: Run }) {
       {unreadable > 0 ? (
         <div
           role="alert"
-          className="flex items-start gap-2 rounded-md border border-warning-line bg-warning-soft px-3 py-2.5 text-xs text-warning"
+          className="flex items-start gap-2 rounded-md border border-warning-line bg-warning-soft px-3 py-2.5 text-caption text-warning"
         >
           <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden />
           {/* `n`, not `count`: i18next reserves `count` for plural resolution, which
@@ -89,7 +98,7 @@ export function RunStreamPanel({ run }: { run: Run }) {
       {interrupted ? (
         <div
           role="alert"
-          className="flex flex-col gap-2 rounded-md border border-warning-line bg-warning-soft px-3 py-2.5 text-xs text-warning"
+          className="flex flex-col gap-2 rounded-md border border-warning-line bg-warning-soft px-3 py-2.5 text-caption text-warning"
         >
           <div className="flex items-start gap-2">
             <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden />
@@ -99,7 +108,12 @@ export function RunStreamPanel({ run }: { run: Run }) {
             </div>
           </div>
           <div>
-            <Button type="button" variant="outline" size="sm" onClick={reconnect}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={reconnect}
+            >
               <RotateCw className="size-3.5" aria-hidden />
               {t('stream.reconnect')}
             </Button>
@@ -114,6 +128,11 @@ export function RunStreamPanel({ run }: { run: Run }) {
         // lost on the way: with unreadable frames, what happened is that this client
         // could not read them, which is a different sentence entirely.
         <EmptyState
+          description={
+            unreadable > 0
+              ? t('stream.emptyUnreadableHint')
+              : t('outputs.emptyHint')
+          }
           title={
             unreadable > 0 ? t('stream.emptyUnreadable') : t('outputs.empty')
           }
@@ -124,7 +143,10 @@ export function RunStreamPanel({ run }: { run: Run }) {
         <AsyncSection query={fallbackQ} skeletonHeight={160}>
           {(list) =>
             list.items.length === 0 ? (
-              <EmptyState title={t('outputs.empty')} />
+              <EmptyState
+                description={t('outputs.emptyHint')}
+                title={t('outputs.empty')}
+              />
             ) : (
               <div className="flex flex-col gap-3">
                 <CaveatNotice>{t('stream.snapshot')}</CaveatNotice>
@@ -137,13 +159,13 @@ export function RunStreamPanel({ run }: { run: Run }) {
         // Only while a connection is actually being made or held. A stream that is not
         // running at all (no session, so `active` is false and the status is `closed`)
         // must not sit there saying it is waiting for output that nothing is fetching.
-        <p className="px-1 text-xs text-muted-foreground" role="status">
+        <p className="px-1 text-caption text-muted-foreground" role="status">
           {t('stream.waiting')}
         </p>
       ) : null}
 
       {summary ? (
-        <p className="px-1 text-xs text-muted-foreground">
+        <p className="px-1 text-caption text-muted-foreground">
           {t('stream.summary', {
             ok: summary.steps_ok,
             error: summary.steps_error,

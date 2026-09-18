@@ -276,7 +276,7 @@ function ProductForm({
         {!isEdit && (
           <>
             <div className="mt-2 border-t border-border pt-4">
-              <h4 className="mb-2 text-sm font-medium text-foreground">
+              <h4 className="mb-2 text-body font-medium text-foreground">
                 {t('dataProducts.contract.title')}
               </h4>
             </div>
@@ -363,7 +363,7 @@ function ProductForm({
         )}
       </div>
 
-      <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+      <p className="flex items-center gap-1.5 text-caption text-muted-foreground">
         <ScrollText className="size-3.5 shrink-0" aria-hidden />
         {t('common:privileged.auditedNotice')}
       </p>

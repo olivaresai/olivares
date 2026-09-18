@@ -42,6 +42,7 @@ import { AAL, RequireAssurance } from '@/features/identity/assurance'
 import { useAuth } from '@/lib/auth/context'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
 import { residencyApi, residencyKeys, type OrgDTO } from './api'
+import { StaticTable } from '@/components/data/static-table'
 
 const CLEAR_PIN_VALUE = '__clear_residency_pin__'
 
@@ -78,7 +79,7 @@ export function ResidencyView() {
         actions={
           registryQ.data ? (
             <div
-              className="flex flex-wrap items-center justify-end gap-2 text-xs text-muted-foreground"
+              className="flex flex-wrap items-center justify-end gap-2 text-caption text-muted-foreground"
               aria-label={t('registry.summary')}
             >
               <span>{t('registry.homeRegion')}</span>
@@ -123,35 +124,34 @@ export function ResidencyView() {
           ) : orgsQ.isError ? (
             <ErrorState retry={() => void orgsQ.refetch()} />
           ) : orgs.length === 0 ? (
-            <EmptyState title={t('orgs.empty')} />
+            <EmptyState
+              description={t('orgs.emptyHint')}
+              title={t('orgs.empty')}
+            />
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <StaticTable>
                 <thead>
-                  <tr className="border-b text-left text-xs uppercase tracking-wider text-muted-foreground">
-                    <th className="py-2 pr-4 font-medium">
-                      {t('orgs.colOrg')}
-                    </th>
-                    <th className="py-2 pr-4 font-medium">
-                      {t('orgs.colRegion')}
-                    </th>
-                    <th className="py-2 pl-4 text-right font-medium">
+                  <tr className="tracking-wider">
+                    <th>{t('orgs.colOrg')}</th>
+                    <th>{t('orgs.colRegion')}</th>
+                    <th className="text-right">
                       <span className="sr-only">{t('orgs.colActions')}</span>
                     </th>
                   </tr>
                 </thead>
                 <tbody>
                   {orgs.map((o) => (
-                    <tr key={o.tenant_id} className="border-b last:border-0">
-                      <td className="py-2 pr-4">
+                    <tr key={o.tenant_id}>
+                      <td>
                         <div className="font-medium text-foreground">
                           {o.name}
                         </div>
-                        <div className="font-mono text-xs text-muted-foreground">
+                        <div className="font-mono text-caption text-muted-foreground">
                           {o.slug}
                         </div>
                       </td>
-                      <td className="py-2 pr-4">
+                      <td>
                         {o.data_region ? (
                           <Badge variant="outline" className="font-mono">
                             {o.data_region}
@@ -160,7 +160,7 @@ export function ResidencyView() {
                           <Badge variant="neutral">{t('orgs.unpinned')}</Badge>
                         )}
                       </td>
-                      <td className="py-2 pl-4 text-right">
+                      <td className="text-right">
                         <Button
                           variant="secondary"
                           size="sm"
@@ -173,7 +173,7 @@ export function ResidencyView() {
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </StaticTable>
             </div>
           )}
         </CardContent>
@@ -286,7 +286,7 @@ function RegionDialog({
                   )
                 }
               </Field>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-caption text-muted-foreground">
                 {t(
                   hasKnownRegions
                     ? 'dialog.selectClearHint'
@@ -304,7 +304,7 @@ function RegionDialog({
             </form>
           ) : (
             <div className="flex flex-col gap-3">
-              <div className="rounded-md border border-warning-line bg-warning-soft/40 p-3 text-sm text-foreground">
+              <div className="rounded-md border border-warning-line bg-warning-soft/40 p-3 text-body text-foreground">
                 {clearing
                   ? t('dialog.summaryClear', { name: org.name })
                   : t('dialog.summaryPin', {
@@ -312,7 +312,7 @@ function RegionDialog({
                       region: trimmed,
                     })}
               </div>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-body text-muted-foreground">
                 {t('dialog.implications')}
               </p>
               <SelfAuditNotice />

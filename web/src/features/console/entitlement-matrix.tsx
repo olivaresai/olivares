@@ -55,9 +55,10 @@ import { Spinner } from '@/components/ui/spinner'
 import { CaveatNotice, SectionCard } from '@/features/_intel'
 import { ApiError, isOpenCoreSeam } from '@/lib/api/errors'
 import { cn } from '@/lib/utils'
+import { StaticTable } from '@/components/data/static-table'
 
 const DISCLOSURE_SUMMARY_CLASS = cn(
-  'cursor-pointer rounded-sm text-sm text-foreground',
+  'cursor-pointer rounded-sm text-body text-foreground',
   'outline-none focus-visible:ring-2 focus-visible:ring-ring',
   'focus-visible:ring-offset-2 focus-visible:ring-offset-background',
 )
@@ -72,7 +73,7 @@ function OperatorDisclosure({
   children: ReactNode
 }) {
   return (
-    <details className="text-sm text-muted-foreground" data-slot={slot}>
+    <details className="text-body text-muted-foreground" data-slot={slot}>
       <summary className={DISCLOSURE_SUMMARY_CLASS}>{summary}</summary>
       <div className="mt-2 flex flex-col gap-2">{children}</div>
     </details>
@@ -133,9 +134,9 @@ function MatrixFact({
   children: ReactNode
 }) {
   return (
-    <td className="py-2 pr-4 max-md:flex max-md:flex-wrap max-md:items-center max-md:justify-between max-md:gap-2 max-md:border-t max-md:border-border/60 max-md:py-2 max-md:pr-0">
+    <td className="max-md:flex max-md:flex-wrap max-md:items-center max-md:justify-between max-md:gap-2 max-md:border-t max-md:border-border/60 max-md:py-2 max-md:pr-0">
       <span
-        className="text-xs text-muted-foreground md:hidden"
+        className="text-caption text-muted-foreground md:hidden"
         aria-hidden="true"
       >
         {label}
@@ -204,7 +205,7 @@ export function EntitlementMatrix({
           </CaveatNotice>
           {entitlementUnknownReason === 'refresh-failed' &&
           (lastSuccessfulLicense?.edition || lastSuccessfulLicense?.status) ? (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-body text-muted-foreground">
               {t('entitlement.licenseLastSuccessfulRead', {
                 edition: lastEdition,
                 status: lastStatus,
@@ -215,7 +216,7 @@ export function EntitlementMatrix({
           (entitlementUnknownReason === 'refresh-failed' ||
             entitlementUnknownReason === 'unavailable') ? (
             <>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-body text-muted-foreground">
                 {t('entitlement.licenseRefreshFailedAction')}
               </p>
               <LicenseRetry onRetry={licenseRetry} />
@@ -231,24 +232,16 @@ export function EntitlementMatrix({
       ) : null}
 
       <div className="min-w-0" data-slot="entitlement-matrix-frame">
-        <table
-          className="w-full min-w-0 text-sm max-md:block"
+        <StaticTable
+          className="min-w-0 max-md:block"
           data-slot="entitlement-matrix-table"
         >
           <thead className="max-md:sr-only">
-            <tr className="border-b text-left text-xs uppercase tracking-wider text-muted-foreground">
-              <th scope="col" className="py-2 pr-4 font-medium">
-                {t('entitlement.colAddon')}
-              </th>
-              <th scope="col" className="py-2 pr-4 font-medium">
-                {t('entitlement.colBinary')}
-              </th>
-              <th scope="col" className="py-2 pr-4 font-medium">
-                {t('entitlement.colEntitled')}
-              </th>
-              <th scope="col" className="py-2 pr-4 font-medium">
-                {t('entitlement.colActivated')}
-              </th>
+            <tr className="text-left text-caption uppercase tracking-wider text-muted-foreground">
+              <th scope="col">{t('entitlement.colAddon')}</th>
+              <th scope="col">{t('entitlement.colBinary')}</th>
+              <th scope="col">{t('entitlement.colEntitled')}</th>
+              <th scope="col">{t('entitlement.colActivated')}</th>
             </tr>
           </thead>
           <tbody className="max-md:block">
@@ -258,7 +251,7 @@ export function EntitlementMatrix({
               return (
                 <tr
                   key={a.key}
-                  className="border-b last:border-0 max-md:mb-3 max-md:block max-md:rounded-md max-md:border max-md:border-border max-md:p-3 max-md:last:border"
+                  className="max-md:mb-3 max-md:block max-md:rounded-md max-md:border max-md:border-border max-md:p-3 max-md:last:border"
                 >
                   {/* ⛔ SÓLO LA CLAVE, y no es estética: el título del add-on ya lo pinta la
                       tabla de activación de arriba, y repetirlo aquí hacía que
@@ -268,16 +261,16 @@ export function EntitlementMatrix({
                       matriz de ejes. El título viaja en `title` para quien pase el ratón. */}
                   <th
                     scope="row"
-                    className="py-2 pr-4 text-left font-normal max-md:block max-md:pb-2 max-md:pr-0"
+                    className="font-normal max-md:block max-md:pb-2 max-md:pr-0"
                   >
                     <span
-                      className="mb-1 block text-xs font-medium tracking-wide text-muted-foreground uppercase md:hidden"
+                      className="mb-1 block text-caption font-medium tracking-wide text-muted-foreground uppercase md:hidden"
                       aria-hidden="true"
                     >
                       {t('entitlement.colAddon')}
                     </span>
                     <span
-                      className="block font-mono text-xs break-all"
+                      className="block font-mono text-caption break-all"
                       title={a.title}
                     >
                       {a.key}
@@ -312,7 +305,7 @@ export function EntitlementMatrix({
               )
             })}
           </tbody>
-        </table>
+        </StaticTable>
       </div>
 
       <div className="mt-3">
@@ -484,7 +477,7 @@ export function LicenseReadStatus({
   if (read.kind === 'loading') {
     return (
       <p
-        className="text-sm text-muted-foreground"
+        className="text-body text-muted-foreground"
         data-slot="license-read-state"
         data-kind="loading"
       >
@@ -517,11 +510,11 @@ export function LicenseReadStatus({
         </CaveatNotice>
         {read.hadPriorData &&
         (read.lastSuccess?.edition || read.lastSuccess?.status) ? (
-          <p className="text-sm text-muted-foreground">
+          <p className="text-body text-muted-foreground">
             {t('entitlement.licenseLastSuccessfulRead', { edition, status })}
           </p>
         ) : null}
-        <p className="text-sm text-muted-foreground">
+        <p className="text-body text-muted-foreground">
           {t('entitlement.licenseRefreshFailedAction')}
         </p>
         <LicenseRetry onRetry={onRetry} />
@@ -538,7 +531,7 @@ export function LicenseReadStatus({
   if (!license.edition && !license.status) {
     return (
       <p
-        className="text-sm text-muted-foreground"
+        className="text-body text-muted-foreground"
         data-slot="license-read-state"
         data-kind="success"
       >
@@ -558,7 +551,7 @@ export function LicenseReadStatus({
     : t('entitlement.unknown')
   return (
     <p
-      className="text-sm text-foreground"
+      className="text-body text-foreground"
       data-slot="license-read-state"
       data-kind="success"
     >
@@ -578,7 +571,7 @@ function ReadTechnicalDetail({
   const codePart = code ? ` · ${code}` : ''
   const requestPart = requestId ? ` · ${requestId}` : ''
   return (
-    <details className="text-xs text-muted-foreground">
+    <details className="text-caption text-muted-foreground">
       <summary className={DISCLOSURE_SUMMARY_CLASS}>
         {t('entitlement.technicalSummary')}
       </summary>
@@ -708,7 +701,7 @@ export function EntitlementMatrixCard() {
         <div className="flex justify-center py-6">
           <Spinner />
         </div>
-        <p className="text-center text-sm text-muted-foreground">
+        <p className="text-center text-body text-muted-foreground">
           {t('entitlement.loading')}
         </p>
       </SectionCard>,
@@ -731,7 +724,7 @@ export function EntitlementMatrixCard() {
               {t('entitlement.staleNotCurrent')}
             </CaveatNotice>
           ) : null}
-          <p className="text-sm text-muted-foreground">
+          <p className="text-body text-muted-foreground">
             {t('entitlement.unavailableAction')}
           </p>
           <CatalogueRetry onRetry={retry} />
@@ -760,7 +753,7 @@ export function EntitlementMatrixCard() {
               {t('entitlement.staleNotCurrent')}
             </CaveatNotice>
           ) : null}
-          <p className="text-sm text-muted-foreground">
+          <p className="text-body text-muted-foreground">
             {t('entitlement.failedAction')}
           </p>
           <CatalogueRetry onRetry={retry} />

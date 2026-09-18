@@ -81,13 +81,13 @@ export function DecisionsPanel({ timeline }: DecisionsPanelProps) {
 
   return (
     <section className="flex flex-col gap-2">
-      <h2 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+      <h2 className="flex items-center gap-1.5 text-caption font-semibold uppercase tracking-wide text-muted-foreground">
         <Layers className="size-3.5" aria-hidden />
         {t('panels.decisions')}
       </h2>
 
       {groups.length === 0 ? (
-        <p className="text-xs text-muted-foreground">—</p>
+        <p className="text-caption text-muted-foreground">—</p>
       ) : (
         <ol className="flex flex-col gap-1">
           {groups.map((group, idx) => {
@@ -114,16 +114,20 @@ export function DecisionsPanel({ timeline }: DecisionsPanelProps) {
                 className="rounded-md border border-border px-2 py-1.5"
               >
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs font-medium text-foreground">
+                  <span className="text-caption font-medium text-foreground">
                     {t('decisions.group', { idx: idx + 1 })}
                   </span>
                   <Badge variant="outline" className="text-[10px]">
                     {t('decisions.tools', { count: group.tools.length })}
                   </Badge>
                 </div>
-                <p className="mt-0.5 truncate font-mono text-[10px] text-muted-foreground" title={dominant}>
+                <p
+                  className="mt-0.5 truncate font-mono text-[10px] text-muted-foreground"
+                  title={dominant}
+                >
                   {dominant}
-                  {resourceSet.size > 0 && ` (${t('decisions.fileCount', { count: resourceSet.size })})`}
+                  {resourceSet.size > 0 &&
+                    ` (${t('decisions.fileCount', { count: resourceSet.size })})`}
                 </p>
               </li>
             )

@@ -58,7 +58,7 @@ export function HashChip({
           onClick={copy}
           className={cn(
             'group inline-flex items-center gap-1.5 rounded-sm border border-border bg-muted px-1.5 py-0.5',
-            'font-mono text-xs text-muted-foreground tabular-nums',
+            'font-mono text-caption text-muted-foreground tabular-nums',
             'outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring',
             className,
           )}

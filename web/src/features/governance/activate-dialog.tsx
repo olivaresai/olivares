@@ -137,7 +137,7 @@ function ActivateForm({ onClose }: { onClose: () => void }) {
       <div className="flex flex-col gap-4">
         <div
           role="note"
-          className="flex items-start gap-2 rounded-lg border border-danger-line bg-danger-soft p-3 text-sm text-foreground"
+          className="flex items-start gap-2 rounded-lg border border-danger-line bg-danger-soft p-3 text-body text-foreground"
         >
           <ShieldAlert
             className="mt-0.5 size-4 shrink-0 text-danger"

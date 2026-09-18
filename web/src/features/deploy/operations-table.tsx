@@ -53,7 +53,7 @@ export function OperationsTable() {
       id: 'version',
       header: t('operations.version'),
       cell: ({ row }) => (
-        <span className="font-mono text-xs tabular-nums text-muted-foreground">
+        <span className="font-mono text-caption tabular-nums text-muted-foreground">
           {t('operations.fromTo', {
             from: row.original.from_version,
             to: row.original.to_version,
@@ -86,7 +86,7 @@ export function OperationsTable() {
       id: 'approval',
       header: t('operations.approval'),
       cell: ({ row }) => (
-        <span className="font-mono text-xs text-muted-foreground">
+        <span className="font-mono text-caption text-muted-foreground">
           {row.original.approval_ref || '—'}
         </span>
       ),
@@ -95,7 +95,7 @@ export function OperationsTable() {
       accessorKey: 'actor',
       header: t('operations.actor'),
       cell: ({ row }) => (
-        <span className="font-mono text-xs text-muted-foreground">
+        <span className="font-mono text-caption text-muted-foreground">
           {row.original.actor || '—'}
         </span>
       ),
@@ -104,7 +104,7 @@ export function OperationsTable() {
       id: 'plan_hash',
       header: t('operations.planHash'),
       cell: ({ row }) => (
-        <span className="font-mono text-xs text-muted-foreground">
+        <span className="font-mono text-caption text-muted-foreground">
           {row.original.plan_hash ? row.original.plan_hash.slice(0, 12) : '—'}
         </span>
       ),
@@ -123,7 +123,7 @@ export function OperationsTable() {
 
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-xs text-muted-foreground">
+      <p className="text-caption text-muted-foreground">
         {t('operations.description')}
       </p>
       <ListTruncationBadge

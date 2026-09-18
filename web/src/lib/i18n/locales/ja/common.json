@@ -34,6 +34,7 @@
     "loading": "読み込み中…",
     "empty": "まだ何もありません",
     "noResults": "結果がありません",
+    "noResultsHint": "現在のフィルターに一致する行はありません。フィルターを解除するか、検索条件を広げてください。",
     "comingSoon": "近日公開",
     "loaded": "読み込み完了",
     "yes": "はい",
@@ -200,5 +201,59 @@
     "navigation": "移動",
     "openPalette": "コマンドパレットを開く",
     "showHelp": "このヘルプを表示"
+  },
+  "keys": {
+    "group": {
+      "general": "全般",
+      "launcher": "セッションの開始",
+      "surface": "作業画面",
+      "navRail": "ナビゲーションレール"
+    },
+    "command": {
+      "palette": {
+        "open": "コマンドパレットを開く"
+      },
+      "help": {
+        "toggle": "これらのショートカットを表示"
+      },
+      "launcher": {
+        "focus": "ランチャーへ移動",
+        "start": "セッションを開始",
+        "startBackground": "開始してこの画面に残る"
+      },
+      "surface": {
+        "nextPane": "次のペイン",
+        "previousPane": "前のペイン"
+      },
+      "rail": {
+        "next": "次のセッション",
+        "previous": "前のセッション",
+        "first": "最初のセッション",
+        "last": "最後のセッション",
+        "open": "セッションを開く",
+        "pin": "ピン留め／解除"
+      },
+      "nav": {
+        "toggleRail": "ナビゲーションレールを折りたたむ／展開する"
+      },
+      "navRail": {
+        "next": "次のモジュール",
+        "previous": "前のモジュール",
+        "expand": "エリアを開く、または中に入る",
+        "fold": "エリアを折りたたむ、または戻る",
+        "first": "最初のモジュール",
+        "last": "最後のモジュール",
+        "pin": "このモジュールを固定／固定解除"
+      }
+    },
+    "when": {
+      "railFocused": "セッションレール内",
+      "launcherFocused": "ランチャー入力欄内",
+      "workSurface": "セッション画面"
+    },
+    "precedence": "同じキーを持つ行が 2 つある場合、該当する最後の行が優先されます。",
+    "modNote": "Windows と Linux では ⌘ は Ctrl です。",
+    "problems_other": "{{count}} 件のキー割り当てを読み取れず、動作しません: {{commands}}",
+    "navRailNote": "レールはタブ停止点が 1 つです。フォーカスがある間、これらのキーが働きます。"
   }
 }

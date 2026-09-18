@@ -53,7 +53,7 @@ func newEventingFenceCmd() *cobra.Command {
 		// exits non-zero instead of printing help and succeeding (36 of 37 groups used to
 		// exit 0 on a mistyped subcommand). That makes the help contract apply to this
 		// command too, and it landed without an Example — caught only at integration,
-		// because the lane that added the file runs fast lints and this contract is a test.
+		// because the branch that added the file runs fast lints and this contract is a test.
 		Example: "  # What the fence's disposition is, and what the database actually enforces\n" +
 			"  olivares eventing fence status\n\n" +
 			"  # Arm it after every authoring node carries the gate (one-way; there is no disarm)\n" +
@@ -440,7 +440,7 @@ func newEventingFenceStatusCmd() *cobra.Command {
 			// printed the human table while `--json` printed JSON, and the two flags
 			// meant different things on the same command. Neither branch was red on its
 			// own — this file arrived with #457 and the coverage guard
-			// (render_coverage_test.go) with another lane, and only the merge produces
+			// (render_coverage_test.go) arrived separately, and only the merge produces
 			// the failure. That is what integration is for.
 			//
 			// `--json` keeps working: it is this command's older spelling of `-o json`,

@@ -49,6 +49,7 @@
     "truncatedHint": "Es gibt mehr DLP-Regeln als angezeigt; diese Seite lädt Zeilen nach ID. Fehlt hier eine Regel, beweist das nicht, dass es sie nicht gibt — der Ausgang kann Regeln unterliegen, die hier nicht sichtbar sind.",
     "add": "Regel hinzufügen",
     "noRead": "Sie haben keine Berechtigung, DLP-Regeln anzuzeigen.",
+    "noReadHint": "DLP-Regeln prüfen Prompts und Antworten auf Daten, die nicht hinausgehen sollen. Bitten Sie eine Administratorin um die DLP-Leseberechtigung.",
     "empty": "Keine DLP-Regeln",
     "emptyHint": "Fügen Sie eine Regel hinzu, um eine Klassifizierung beim Egress zuzulassen oder zu verweigern.",
     "colClass": "Klassifizierung",

@@ -120,6 +120,7 @@
     "dependencies": "After: {{value}}",
     "noDependencies": "No dependencies",
     "empty": "This workflow has no planned steps.",
+    "emptyHint": "A dry run lists the steps the workflow would take, in order, without running any of them. Add a step to the workflow first.",
     "failed": "The dry run could not be generated."
   },
   "run": {
@@ -142,6 +143,7 @@
     "current": "Run {{id}}",
     "history": "Run history",
     "historyEmpty": "No runs have been recorded.",
+    "historyEmptyHint": "Each run of this workflow is listed here with its outcome and its duration. Run the workflow to record the first one.",
     "historyFailed": "The run history could not be loaded.",
     "viewRun": "View run {{id}}",
     "paused": "Paused: {{reason}}",
@@ -170,6 +172,7 @@
     "title": "Revision history — {{name}}",
     "description": "Compare immutable workflow snapshots or restore one.",
     "empty": "No revisions recorded",
+    "emptyHint": "Every change to this workflow is kept as a revision you can compare and restore. The first edit creates one.",
     "loading": "Loading revision history…",
     "loadMore": "Load more",
     "compare": "Compare revisions",

@@ -17,6 +17,7 @@ import { governanceApi, governanceKeys } from './api'
 import { PolicyEditorDialog } from './policy-editor'
 import './i18n'
 import type { AbacSpec, PolicyDTO } from './types'
+import { PagePrimaryAction } from '@/components/ui/page-actions'
 
 /**
  * PoliciesView lists governance policies (ABAC deny + approval rules) and hosts the
@@ -121,8 +122,25 @@ export function PoliciesView() {
 
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-xs text-muted-foreground">{t('policies.caption')}</p>
-      <p className="text-xs text-muted-foreground">
+      {canAdmin && (
+        <PagePrimaryAction>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => {
+              setEditing(null)
+              setEditorOpen(true)
+            }}
+          >
+            <Plus />
+            {t('policies.newPolicy')}
+          </Button>
+        </PagePrimaryAction>
+      )}
+      <p className="text-caption text-muted-foreground">
+        {t('policies.caption')}
+      </p>
+      <p className="text-caption text-muted-foreground">
         {t('policies.enforcementCaption')}
       </p>
 
@@ -148,21 +166,6 @@ export function PoliciesView() {
             title={t('empty.policies.title')}
             description={t('empty.policies.description')}
           />
-        }
-        toolbar={
-          canAdmin ? (
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => {
-                setEditing(null)
-                setEditorOpen(true)
-              }}
-            >
-              <Plus />
-              {t('policies.newPolicy')}
-            </Button>
-          ) : undefined
         }
       />
 

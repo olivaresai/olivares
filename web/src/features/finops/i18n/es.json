@@ -3,6 +3,7 @@
     "title": "Alertas de umbral",
     "description": "Histórico de cruces de umbral de presupuesto. La entrega a Slack/SIEM la hacen los conectores de salida — esto es el registro.",
     "empty": "Ningún umbral cruzado",
+    "emptyHint": "Una alerta de presupuesto se dispara cuando el gasto cruza un umbral que defines. Ninguna se ha cruzado en este intervalo.",
     "columns": {
       "triggeredAt": "Disparada",
       "budget": "Presupuesto",
@@ -151,6 +152,7 @@
     "editDescription": "El código no se puede cambiar: las reglas de asignación resuelven por él y los extractos ya emitidos lo registran.",
     "editTitle": "Editar centro de coste",
     "empty": "Todavía no hay centros de coste",
+    "emptyHint": "Un centro de coste atribuye el gasto a un equipo o a un responsable de presupuesto. Crea uno para empezar a atribuir.",
     "ingestOnlyNotice": "⛔ Las reglas de mapeo se aplican EN LA INGESTA y se graban en cada fila de coste. Crear o cambiar una regla NO reatribuye el gasto ya registrado: sólo afecta a lo que se ingiera a partir de ahora.",
     "key": "Clave",
     "name": "Nombre",
@@ -159,6 +161,7 @@
     "newRule": "Nueva regla",
     "newRuleDescription": "Ata el valor de una dimensión a este centro de coste.",
     "noRules": "Sin reglas: el tráfico se queda sin atribuir",
+    "noRulesHint": "Una regla asigna el tráfico a un centro de coste. Sin reglas, toda petición queda sin atribuir en los informes.",
     "owner": "Responsable",
     "priority": "prioridad {{n}}",
     "priorityLabel": "Prioridad",
@@ -319,6 +322,7 @@
     "title": "Recomendaciones de optimización",
     "description": "Ahorros candidatos del estate gobernado. Las estimaciones no son una promesa — verifica idoneidad de capacidad y calidad.",
     "empty": "Sin recomendaciones",
+    "emptyHint": "Aquí aparecen recomendaciones cuando el gasto, el enrutado o los límites se pueden mejorar. Ahora mismo no hay nada que cambiar.",
     "estimatedSavings": "Ahorro est.",
     "subject": "Sujeto",
     "kind": {
@@ -417,6 +421,7 @@
     "description": "Asientos asignados frente a los actores realmente activos, por día. Un día sin snapshot de asientos no reporta nada — no es un día con uso cero.",
     "provider": "Proveedor",
     "empty": "Sin días reportados",
+    "emptyHint": "El uso de puestos se reporta por día a partir de la actividad de las sesiones. Ningún día de este intervalo ha reportado ninguno.",
     "assigned": "{{assigned}} asignados · {{active}} activos",
     "noSnapshot": "no se publicó snapshot de asientos para este día"
   },
@@ -478,6 +483,7 @@
     "riskTitle": "Riesgo de cancelación",
     "riskDescription": "Sujetos que queman gasto sin resultados satisfechos.",
     "riskEmpty": "Ningún sujeto quema gasto sin resultados",
+    "riskEmptyHint": "Este panel lista los sujetos cuyo gasto no se corresponde con resultados. Ninguno ha cruzado el umbral en este intervalo.",
     "satisfiedOf": "{{satisfied}} de {{outcomes}} satisfechos"
   },
   "evidence": {

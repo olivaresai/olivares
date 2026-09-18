@@ -328,7 +328,7 @@ func (m *Module) evaluateBudgets(ctx context.Context, sc store.Scope, attr attri
 	// transaction BEFORE anything is read, so the existence check below and the INSERT
 	// that follows it cannot be interleaved with another ingestion's.
 	//
-	// THE BOUNDARY (D02 ingest cut): this entry point is for a caller that does NOT
+	// THE BOUNDARY (the ingest cut): this entry point is for a caller that does NOT
 	// already hold the writer lock, and it is the one every caller outside this file
 	// uses. The cost ingestion holds the lock from the top of its transaction —
 	// earlier than here, because its own decisive read (the natural-key lookup) and
@@ -356,7 +356,7 @@ func (m *Module) evaluateBudgetsLocked(ctx context.Context, sc store.Scope, attr
 	// truncated the batch says so as a diagnostic, the budgets actually read keep
 	// their proven crossings, and nothing here asserts "all budgets evaluated" or "no
 	// budget exceeded". Certifying every enumeration of the catalogue stays a
-	// registered D02 dependency.
+	// registered attempt-lifecycle dependency.
 	budgets, censusTruncated, err := listAllBudgets(ctx, sc)
 	if err != nil {
 		return nil, nil, err
@@ -465,7 +465,7 @@ const alertWriterLockKeyPrefix = "finops.budget_alert.writer.v1:"
 // commits between the lookup and the write, so all three now take ONE key, before
 // their own decisive read.
 //
-// MEASURED, and it bounds what the key can be credited with (D02 ingest cut): on the
+// MEASURED, and it bounds what the key can be credited with (the ingest cut): on the
 // store this module actually runs on, two write transactions of one tenant CANNOT
 // interleave in the first place — sqlstore.Mutate takes an exclusive per-tenant
 // advisory lock before it calls the callback (lineageWriteTracker.start,
@@ -796,7 +796,7 @@ func budgetStatus(ctx context.Context, sc store.Scope, p model.Policy, now time.
 	// reports "10% consumed, not over" while the same budget is actively throttling.
 	// SpendMicroUSD stays the raw actual spend.
 	// The version-aware hold reader, given this status's REAL window rather than
-	// letting it infer an end from now (D02). It combines the legacy branch this
+	// letting it infer an end from now. It combines the legacy branch this
 	// status has always read with the v1 obligations of held attempt parents.
 	dyn, derr := heldReservedForWindow(ctx, sc, p.ID, spec.Key, pStart, pEnd, hasLower, now)
 	if derr != nil {
@@ -1278,7 +1278,7 @@ func (m *Module) CheckBudget(ctx context.Context, tenant model.TenantID, dims Sp
 			// in-flight request that already RESERVED headroom counts against the limit
 			// here too, so the pre-flight denial reflects reservations, not only settled
 			// spend. Static ReservedMicroUSD (Priority-Tier capacity) is a separate line.
-			// The version-aware hold reader over this budget's real window (D02): the
+			// The version-aware hold reader over this budget's real window: the
 			// preventive check and the atomic reserve must bind the same obligations,
 			// and an imported v1 hold is one of them.
 			dyn, err := heldReservedForWindow(ctx, sc, p.ID, spec.Key, pStart, pEnd, hasLower, now)

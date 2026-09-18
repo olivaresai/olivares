@@ -84,7 +84,8 @@
     "title": "Täglicher Trend",
     "description": "Produktivität im Zeitverlauf für die ausgewählte Perspektive.",
     "lensLabel": "Perspektive",
-    "empty": "Keine Aktivität in diesem Zeitraum."
+    "empty": "Keine Aktivität in diesem Zeitraum.",
+    "emptyHint": "Der Adoptionstrend wird aus den Sitzungen im gewählten Zeitraum gebildet. Erweitern Sie den Zeitraum auf Tage mit Aktivität."
   },
   "teams": {
     "title": "Nach Team",
@@ -100,6 +101,7 @@
     "title": "Nach Entwickler",
     "description": "ROI pro Entwickler aus dem Admin-Analytics-Feed.",
     "empty": "Keine Aktivität pro Entwickler in diesem Zeitraum.",
+    "emptyHint": "Aktivität pro Entwickler erscheint hier, sobald in diesem Zeitraum Sitzungen laufen. Erweitern Sie den Zeitraum, um mehr Tage abzudecken.",
     "locked": "Ansicht pro Entwickler eingeschränkt",
     "lockedHint": "Das Anzeigen der Produktivität einzelner Entwickler erfordert die Berechtigung adoption:developer:read (deny-closed).",
     "columns": {

@@ -85,17 +85,17 @@ function Decisions({ sessionRef }: { sessionRef: string }) {
   const items: VoiceDecision[] = q.data?.items ?? []
   if (q.isPending)
     return (
-      <p className="text-muted-foreground text-sm">{t('surface.loading')}</p>
+      <p className="text-muted-foreground text-body">{t('surface.loading')}</p>
     )
   if (q.isError)
     return (
-      <p role="alert" className="text-danger text-sm">
+      <p role="alert" className="text-danger text-body">
         {t('surface.decisionsError')}
       </p>
     )
   if (items.length === 0)
     return (
-      <p className="text-muted-foreground text-sm">
+      <p className="text-muted-foreground text-body">
         {t('surface.noDecisions')}
       </p>
     )
@@ -104,7 +104,7 @@ function Decisions({ sessionRef }: { sessionRef: string }) {
       {items.map((d) => (
         <li
           key={d.id}
-          className="border-border border-b py-1.5 text-sm last:border-b-0"
+          className="border-border border-b py-1.5 text-body last:border-b-0"
         >
           <div className="flex flex-wrap items-center gap-2">
             <Badge
@@ -114,12 +114,12 @@ function Decisions({ sessionRef }: { sessionRef: string }) {
             </Badge>
             <Badge variant="outline">{d.op}</Badge>
             <Badge variant="outline">{d.gate_status}</Badge>
-            <span className="font-mono text-xs break-all">
+            <span className="font-mono text-caption break-all">
               {d.requested_model_ref}
             </span>
           </div>
           {/* `result` es `omitempty`: ausente no es «sin motivo», es que no lo hay escrito. */}
-          <p className="text-muted-foreground text-xs">
+          <p className="text-muted-foreground text-caption">
             {d.result || t('surface.noReason')} · {d.occurred_at}
           </p>
         </li>
@@ -145,7 +145,7 @@ export function VoiceSessionSurface({
   if (!sessionRef)
     return (
       <p
-        className="text-muted-foreground text-sm"
+        className="text-muted-foreground text-body"
         data-testid="voice-surface-idle"
       >
         {t('surface.chooseSession')}
@@ -159,7 +159,7 @@ export function VoiceSessionSurface({
         <Badge variant={STREAM_VARIANT[status] ?? 'neutral'}>
           {t(`surface.stream.${status}`)}
         </Badge>
-        <span className="text-muted-foreground text-xs">
+        <span className="text-muted-foreground text-caption">
           {t('surface.frames', { count: frames })}
         </span>
       </div>
@@ -191,12 +191,12 @@ export function GovernedOpen({ input }: { input: VoiceOpenInput }) {
         {t('surface.open')}
       </Button>
       {outcome !== 'idle' && (
-        <p role="status" className="text-sm">
+        <p role="status" className="text-body">
           {t(`surface.outcome.${outcome}`)}
           {outcome === 'approval' && m.data?.approval_ref ? (
             <>
               {' '}
-              <span className="font-mono text-xs break-all">
+              <span className="font-mono text-caption break-all">
                 {m.data.approval_ref}
               </span>
             </>

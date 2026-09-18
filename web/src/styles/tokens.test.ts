@@ -281,9 +281,9 @@ describe('ADM-CORE-04 — DTCG-generated tokens ≡ brand identity', () => {
     // would be false: e2e-visual/at-run.ts:86-87 measures accent/background and accent/surface
     // as kind:'ui' at 3:1, they are outside its DECORATIVE exclusion (:331), and they are the
     // only two pairs of the 41 that this change turns red. That is the arithmetic consequence
-    // of order of 2026-08-06 — the brand orange on a near-white canvas is 2.58:1 however
+    // of keeping ONE brand orange — the brand orange on a near-white canvas is 2.58:1 however
     // it is measured — and it is reported rather than waived. If these numbers ever move, the
-    // declaration in sessions and the at:gate expectation move with them.
+    // declaration below and the at:gate expectation move with them.
     expect(contrast(light.accent, light.background)).toBeCloseTo(2.58, 2)
     expect(contrast(light.accent, light.surface)).toBeCloseTo(2.69, 2)
     // Dark is untouched and stays above the UI threshold, which is why only light is declared.
@@ -443,8 +443,8 @@ describe('ADM-CORE-04 — DTCG-generated tokens ≡ brand identity', () => {
   })
 
   it('preserves the brand anchors (single orange, ring, confidence axis)', () => {
-    //the orange is ONE brand orange split BY ROLE, not two oranges by theme.
-    // The FILL is #f08000 in both themes (order, 2026-08-06): the ink sits ON
+    // The orange is ONE brand orange split BY ROLE, not two oranges by theme.
+    // The FILL is #f08000 in both themes, decided 2026-08-06: the ink sits ON
     // it, so the deepening that AA needs for TEXT buys nothing here and cost 2.18
     // points of contrast (#1a1206 on #f08000 = 6.88:1 vs #fff8f0 on #b45500 = 4.70:1).
     expect(dark.accent).toBe('#f08000') // the brand orange, dark surface

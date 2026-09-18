@@ -64,7 +64,7 @@ olivares-data/
 # The script CHOOSES its scratch (TMPDIR, then this, then /var/tmp) rather than having the task
 # impose one — imposing it rejects on a read-only CI checkout and annuls a good TMPDIR the runner
 # may supply. This entry exists because the fallback creates the parent, and an untracked
-# directory in a SHARED clone is what a stray `git add -A` from another lane sweeps up.
+# directory in a SHARED clone is what a stray `git add -A` from another checkout sweeps up.
 /.openapi-op-tmp/
 
 # config-env-docs gate's repo-local build scratch: it builds a Go helper and EXECUTES it,
@@ -94,7 +94,7 @@ olivares-data/
 
 # Artefacts of `task console:walk`, which writes 51 files into the CURRENT DIRECTORY by default
 # (scripts/console-walk.mjs:46). Measured 2026-08-08: after a walk from the shared hub clone they
-# sat there untracked, where any other lane's `git add -A` would have committed them. In a clone
+# sat there untracked, where any other checkout's `git add -A` would have committed them. In a clone
 # three containers share, an untracked artefact is not private -- it is everyone's. Point
 # OLIVARES_WALK_OUT elsewhere if you want them kept.
 /console-walk-out/

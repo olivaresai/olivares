@@ -33,7 +33,7 @@ import (
 	sdkmodel "github.com/olivaresai/olivares/sdk/model"
 )
 
-// D08-C3 first slice: GET /v1/m/inventory/entities/{kind}/{id}/observations.
+// First slice: GET /v1/m/inventory/entities/{kind}/{id}/observations.
 //
 // These tests drive the REAL router, authenticator, authorizer and tenant
 // resolution over a real store (SQLite here; the PostgreSQL leg is

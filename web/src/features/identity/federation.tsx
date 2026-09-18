@@ -124,10 +124,10 @@ function SsoSection() {
               aria-hidden
             />
             <div>
-              <p className="text-sm font-medium text-foreground">
+              <p className="text-body font-medium text-foreground">
                 {t('sso.notConfigured')}
               </p>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-caption text-muted-foreground">
                 {t('sso.notConfiguredHint')}
               </p>
             </div>
@@ -177,7 +177,7 @@ function SsoSection() {
             <p
               role="status"
               className={cn(
-                'flex items-center gap-1.5 text-xs',
+                'flex items-center gap-1.5 text-caption',
                 exactMatch ? 'text-success' : 'text-danger',
               )}
             >
@@ -196,7 +196,7 @@ function SsoSection() {
           {SSO_ENV_FIELDS.map((f) => (
             <KvRow
               key={f.key}
-              label={<code className="font-mono text-xs">{f.key}</code>}
+              label={<code className="font-mono text-caption">{f.key}</code>}
               align="start"
             >
               <span className="flex flex-wrap items-center gap-1.5">
@@ -211,7 +211,7 @@ function SsoSection() {
             </KvRow>
           ))}
         </KvList>
-        <p className="text-xs text-muted-foreground">{t('sso.envNote')}</p>
+        <p className="text-caption text-muted-foreground">{t('sso.envNote')}</p>
         <div>
           <Button asChild variant="outline" size="sm">
             <a
@@ -237,7 +237,7 @@ function scimUserColumns(
       accessorKey: 'userName',
       header: t('scim.col.userName'),
       cell: ({ row }) => (
-        <span className="font-mono text-xs break-all">
+        <span className="font-mono text-caption break-all">
           {row.original.userName}
         </span>
       ),
@@ -255,7 +255,7 @@ function scimUserColumns(
       header: t('scim.col.externalId'),
       cell: ({ row }) =>
         row.original.externalId ? (
-          <span className="font-mono text-xs break-all">
+          <span className="font-mono text-caption break-all">
             {row.original.externalId}
           </span>
         ) : (
@@ -324,7 +324,7 @@ function ScimSection() {
                     {cfg.authenticationSchemes[0]?.type ?? 'oauthbearertoken'}
                   </Badge>
                   <SecretRef name={t('scim.bearerName')} />
-                  <span className="text-xs text-muted-foreground">
+                  <span className="text-caption text-muted-foreground">
                     {t('scim.bearerNote')}
                   </span>
                 </span>
@@ -345,7 +345,7 @@ function ScimSection() {
             como evidencia buena. El tamaño visual lo pone la clase, no la etiqueta:
             `text-sm` se queda igual. */}
         <div>
-          <h3 className="mb-1.5 text-sm font-medium text-foreground">
+          <h3 className="mb-1.5 text-body font-medium text-foreground">
             {t('scim.usersTitle')}
           </h3>
           {users.isError && isContractPending(users.error) ? (
@@ -380,14 +380,14 @@ function ScimSection() {
             className="mt-0.5 size-4 shrink-0 text-muted-foreground"
             aria-hidden
           />
-          <p className="text-xs text-muted-foreground">
+          <p className="text-caption text-muted-foreground">
             {t('scim.groupsSupported')}
           </p>
         </div>
 
         {/* Leaver evidence from the audit ledger. */}
         <div>
-          <h3 className="mb-1.5 flex items-center gap-2 text-sm font-medium text-foreground">
+          <h3 className="mb-1.5 flex items-center gap-2 text-body font-medium text-foreground">
             {t('scim.leaverTitle')}
           </h3>
           <SelfAuditNotice />
@@ -408,7 +408,7 @@ function ScimSection() {
                     <KvRow
                       key={e.id ?? `${e.target_id}-${i}`}
                       label={
-                        <code className="font-mono text-xs break-all">
+                        <code className="font-mono text-caption break-all">
                           {e.target_id ?? '—'}
                         </code>
                       }
@@ -474,14 +474,14 @@ function ClaudeConsolePostureSection() {
           )}
         </DeclaredSection>
         <div className="rounded-md border border-border bg-muted/30 p-3">
-          <p className="mb-2 text-xs font-medium text-muted-foreground">
+          <p className="mb-2 text-caption font-medium text-muted-foreground">
             {t('console.blindSpotTitle')}
           </p>
           <ul className="flex flex-col gap-1">
             {blindSpots.map((k) => (
               <li
                 key={k}
-                className="flex items-start gap-2 text-xs text-foreground"
+                className="flex items-start gap-2 text-caption text-foreground"
               >
                 <span className="mt-px text-muted-foreground" aria-hidden>
                   ·

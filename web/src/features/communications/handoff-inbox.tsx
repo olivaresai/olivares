@@ -232,13 +232,13 @@ export function HandoffInbox({
           aria-live="polite"
           className="space-y-1 px-3 py-6"
         >
-          <p className="text-sm font-medium text-foreground">
+          <p className="text-body font-medium text-foreground">
             {t('handoff.inbox.accountGuidanceTitle')}
           </p>
-          <p className="max-w-prose text-sm text-muted-foreground">
+          <p className="max-w-prose text-body text-muted-foreground">
             {t('handoff.inbox.accountGuidanceBody')}
           </p>
-          <p className="max-w-prose text-xs text-muted-foreground">
+          <p className="max-w-prose text-caption text-muted-foreground">
             {t('handoff.inbox.accountGuidanceHint')}
           </p>
         </div>
@@ -274,7 +274,7 @@ export function HandoffInbox({
               />
             }
           />
-          <p className="border-t border-border px-3 py-2 text-xs text-muted-foreground">
+          <p className="border-t border-border px-3 py-2 text-caption text-muted-foreground">
             {t('handoff.inbox.contentFree')}
           </p>
         </>

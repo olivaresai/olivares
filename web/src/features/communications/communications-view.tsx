@@ -347,7 +347,7 @@ function Inner({
         <ForbiddenState />
       ) : (
         <>
-          <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-2 text-caption text-muted-foreground">
             <span>{t('workspace.scope')}</span>
             <Badge variant="outline">
               {scope.workspaceName || scope.workspace}

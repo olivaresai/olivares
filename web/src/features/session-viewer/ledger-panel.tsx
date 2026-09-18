@@ -30,19 +30,21 @@ export function LedgerPanel({
       <div>
         <h2
           id="session-ledger-title"
-          className="flex items-center gap-1.5 text-sm font-semibold text-foreground"
+          className="flex items-center gap-1.5 text-body font-semibold text-foreground"
         >
           <ScrollText className="size-4 text-muted-foreground" aria-hidden />
           {t('ledger.title')}
         </h2>
-        <p className="text-xs text-muted-foreground">{t('ledger.subtitle')}</p>
+        <p className="text-caption text-muted-foreground">
+          {t('ledger.subtitle')}
+        </p>
       </div>
 
       {events.length === 0 ? (
         <EmptyState
           icon={<ScrollText />}
           title={t('ledger.empty')}
-          description=""
+          description={t('ledger.emptyHint')}
         />
       ) : (
         <ol className="flex flex-col" data-testid="session-ledger">
@@ -55,20 +57,20 @@ export function LedgerPanel({
                 key={event.seq}
                 className="grid gap-1 border-b border-border py-2 last:border-0 sm:grid-cols-[auto_minmax(0,1fr)_auto]"
               >
-                <span className="font-mono text-xs tabular-nums text-muted-foreground">
+                <span className="font-mono text-caption tabular-nums text-muted-foreground">
                   {t('ledger.seq', { seq: event.seq })}
                 </span>
                 <div className="min-w-0">
-                  <p className="break-all font-mono text-xs font-medium text-foreground">
+                  <p className="break-all font-mono text-caption font-medium text-foreground">
                     {event.action}
                   </p>
-                  <p className="break-all font-mono text-xs text-muted-foreground">
+                  <p className="break-all font-mono text-caption text-muted-foreground">
                     {event.actor} {'→'} {target}
                   </p>
                 </div>
                 <RelTimeLabel
                   ts={event.occurred_at}
-                  className="text-xs text-muted-foreground"
+                  className="text-caption text-muted-foreground"
                 />
               </li>
             )

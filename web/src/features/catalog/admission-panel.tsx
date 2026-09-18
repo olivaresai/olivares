@@ -74,7 +74,7 @@ export function AdmissionPanel({ entry }: { entry: EntryDTO }) {
   return (
     <section className="flex flex-col gap-2">
       <div className="flex items-center justify-between gap-2">
-        <h3 className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+        <h3 className="flex items-center gap-1.5 text-body font-medium text-foreground">
           <ShieldCheck className="size-4 text-muted-foreground" aria-hidden />
           {t('admission.title')}
         </h3>
@@ -88,7 +88,9 @@ export function AdmissionPanel({ entry }: { entry: EntryDTO }) {
           </Button>
         )}
       </div>
-      <p className="text-xs text-muted-foreground">{t('admission.caption')}</p>
+      <p className="text-caption text-muted-foreground">
+        {t('admission.caption')}
+      </p>
 
       {query.isLoading ? (
         <Skeleton className="h-24 w-full" />
@@ -241,7 +243,7 @@ function Reason({ label, children }: { label: string; children: ReactNode }) {
       <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
         {label}
       </p>
-      <p className="mt-0.5 text-xs text-foreground">{children}</p>
+      <p className="mt-0.5 text-caption text-foreground">{children}</p>
     </div>
   )
 }
@@ -371,7 +373,7 @@ function AdmitForm({
             placeholder={t('admission.bundlePlaceholder')}
             aria-invalid={bundleInvalid || undefined}
             rows={8}
-            className="font-mono text-xs"
+            className="font-mono text-caption"
           />
         </Field>
         <Field

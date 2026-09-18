@@ -43,9 +43,17 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Search,
+  Star,
   X,
 } from 'lucide-react'
-import { useEffect, useId, useMemo, useState, type RefObject } from 'react'
+import {
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type RefObject,
+} from 'react'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -85,6 +93,9 @@ import {
   type NavSearchEntry,
   type ViewGate,
 } from '@/features/navigation/model'
+import { railKey, type RailRow } from '@/features/navigation/rail-keys'
+import { usePersonalNavigation } from '@/features/navigation/personal-navigation'
+import { personalLink } from '@/features/navigation/personal-navigation-store'
 import { isAreaOpen, usePreferencesStore } from '@/stores/preferences'
 import { BrandMark, Wordmark } from './brand'
 import { PersonalNavigation } from './personal-navigation'
@@ -94,7 +105,7 @@ export { fold }
 
 /** Row chrome shared by the Overview link, the area links and every leaf. */
 const ROW_CLASS = cn(
-  'group relative flex h-8 min-w-0 items-center gap-2.5 rounded-md px-2.5 text-sm text-muted-foreground outline-none transition-colors',
+  'group relative flex min-h-8 min-w-0 items-center gap-2.5 rounded-md px-2.5 py-1 text-body text-muted-foreground outline-none transition-colors',
   'hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring',
   'data-[status=active]:bg-accent-soft data-[status=active]:font-medium data-[status=active]:text-foreground',
   'before:absolute before:top-1/2 before:left-0 before:h-4 before:w-0.5 before:-translate-y-1/2 before:rounded-r-full before:bg-transparent',
@@ -112,8 +123,26 @@ interface NavItemProps {
   collapsed?: boolean
   onNavigate?: () => void
   className?: string
+  /** 0 for a top-level row, 1 for a leaf inside an area. Read by the rail keyboard. */
+  depth?: 0 | 1
+  /** The feature id this row pins, when the principal has a personal partition. */
+  pinId?: string
 }
 
+/**
+ * ⛔ LABELS WRAP; THEY ARE NEVER CUT, and the reason is a measurement rather than a
+ *    preference. On 2026-09-18, at 1600 px against a live engine, the rail cut **65
+ *    labels across the seven console languages** — en 5, es 12, ja 9, de 8, ru 16, fr 15,
+ *    zh 0. The worst was 102 px of French past the edge
+ *    (*Boîte de réception des communications*). An earlier review recorded "three
+ *    truncated labels", which was Spanish, area rows only.
+ *
+ *    A width that fits 102 px more is not a rail, and a per-language character budget is
+ *    a gate that has to be re-tuned for every string and cannot cover the eighth language.
+ *    So the row grows to a second line and the label stays whole. `title` is kept for the
+ *    pointer, but a tooltip was never the answer: it is invisible to a keyboard and to a
+ *    reader who is just trying to find a module.
+ */
 function NavItem({
   to,
   icon: Icon,
@@ -123,6 +152,8 @@ function NavItem({
   collapsed,
   onNavigate,
   className,
+  depth = 0,
+  pinId,
 }: NavItemProps) {
   const link = (
     <Link
@@ -134,19 +165,29 @@ function NavItem({
       activeProps={{ 'aria-current': 'page' }}
       onClick={onNavigate}
       aria-label={collapsed ? label : undefined}
-      className={cn(
-        ROW_CLASS,
-        collapsed && 'justify-center px-0',
-        context && 'h-auto min-h-8 py-1',
-        className,
-      )}
+      // The rail is ONE tab stop with a roving tabindex (see `useRailKeyboard`), so every
+      // row starts untabbable and the hook promotes exactly one.
+      tabIndex={-1}
+      data-nav-row=""
+      data-depth={depth}
+      data-pin-id={pinId}
+      className={cn(ROW_CLASS, collapsed && 'justify-center px-0', className)}
     >
       <Icon />
-      {!collapsed && !context && <span className="truncate">{label}</span>}
+      {!collapsed && !context && (
+        <span className="min-w-0 break-words" title={label}>
+          {label}
+        </span>
+      )}
       {!collapsed && context && (
         <span className="flex min-w-0 flex-col">
-          <span className="truncate">{label}</span>
-          <span className="truncate text-[0.6875rem] leading-tight text-muted-foreground">
+          <span className="break-words" title={label}>
+            {label}
+          </span>
+          <span
+            className="break-words text-overline font-normal tracking-normal text-muted-foreground"
+            title={context}
+          >
             {context}
           </span>
         </span>
@@ -161,7 +202,67 @@ function NavItem({
       </Tooltip>
     )
   }
-  return link
+  if (!pinId) return link
+  return (
+    <span
+      data-rail-row-group=""
+      className="group/row flex min-w-0 items-center gap-0.5"
+    >
+      {link}
+      <RailPin id={pinId} label={label} />
+    </span>
+  )
+}
+
+/**
+ * The pin, ON THE ROW and NAMED BEFORE IT HAPPENS.
+ *
+ * ⛔ IT IS NOT A TAB STOP, and it does not need to be: the rail owns one, and this control
+ *    carries `tabIndex={-1}` so it stays in the accessibility tree — reachable in a screen
+ *    reader's browse mode and by pointer — without putting eighty-five stops back. `p` on
+ *    the focused row does the same thing, and the button's own name says so, which is what
+ *    makes the two EQUAL paths rather than a key and a secret.
+ *
+ * ⚠ A link cannot contain a button (invalid HTML, and assistive technology reports the
+ *   inner control inconsistently), so it is a SIBLING inside the row, exactly as the
+ *   work rail resolves the same question.
+ */
+function RailPin({ id, label }: { id: string; label: string }) {
+  const personal = usePersonalNavigation()
+  const { t } = useTranslation('nav')
+  // `personalLink` returns undefined for an id the registry cannot resolve — a retired
+  // module still listed somewhere. No link, no pin, and no crash.
+  const link = personalLink(id)
+  if (!link || !personal?.available || !personal.visible(link)) return null
+  const pinned = personal.favorites.some((f) => f.id === id)
+  const name = t(pinned ? 'personal.unpinRow' : 'personal.pinRow', {
+    name: label,
+  })
+  return (
+    <button
+      type="button"
+      tabIndex={-1}
+      aria-pressed={pinned}
+      aria-label={name}
+      title={name}
+      data-rail-pin={id}
+      onClick={() => personal.setFavorite(link, !pinned)}
+      className={cn(
+        'flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground outline-none',
+        'hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring',
+        // Quiet until the row is under the pointer or holds focus — a column of stars
+        // beside seventy modules is noise, and the key works whether it is painted or not.
+        pinned
+          ? 'text-accent-text'
+          : 'opacity-0 group-hover/row:opacity-100 group-focus-within/row:opacity-100',
+      )}
+    >
+      <Star
+        aria-hidden
+        className={cn('size-3.5', pinned && 'fill-accent-soft')}
+      />
+    </button>
+  )
 }
 
 /** One area's sections and leaves — the same markup inside the expanded sidebar, the rail's
@@ -190,7 +291,7 @@ function AreaSections({
             <p
               id={headingId}
               className={cn(
-                'truncate px-2.5 pb-0.5 text-[0.6875rem] font-medium tracking-wider text-muted-foreground uppercase',
+                'break-words px-2.5 pb-0.5 text-overline text-muted-foreground uppercase',
                 dense ? 'pt-1' : 'pt-1.5',
               )}
             >
@@ -204,6 +305,8 @@ function AreaSections({
                     icon={v.icon}
                     label={viewLabel(t, v.id)}
                     onNavigate={onNavigate}
+                    depth={1}
+                    pinId={v.id}
                   />
                 </li>
               ))}
@@ -213,6 +316,108 @@ function AreaSections({
       })}
     </>
   )
+}
+
+/**
+ * THE RAIL FROM A KEYBOARD — one tab stop, a roving tabindex, `rail-keys.ts` for the
+ * rules.
+ *
+ * ⛔ WHY: measured 2026-09-18 at 1600 px against a live engine, the sidebar held **85 tab
+ *    stops**. Tab eighty-five times, then the page. `DataTable` solved the same problem
+ *    for ten thousand rows and the work rail does it too, with the same sentence: moving focus
+ *    is not choosing.
+ *
+ * ⛔ THE ROWS ARE READ FROM THE DOM, not held in state, and that is deliberate. The rail's
+ *    shape changes with the filter, the fold preference, the permission projection and the
+ *    personal partition — four sources — and a mirrored array would be a fifth that
+ *    disagrees with all of them. `querySelectorAll` at keystroke time is the shape the
+ *    operator is actually looking at.
+ *
+ * ⛔ AND THE ACTIVE ROW IS THE CURRENT PAGE. Arriving at a route puts the roving index on
+ *    the row that names it and scrolls it into view, so "where am I" is answered before
+ *    the first keystroke rather than by counting arrows from the top.
+ */
+function useRailKeyboard(
+  rail: RefObject<HTMLElement | null>,
+  {
+    onExpand,
+    onFold,
+  }: { onExpand: (id: string) => void; onFold: (id: string) => void },
+) {
+  // ⚠ NOT `useCallback`. These read `rail.current`, and the React Compiler refuses to
+  //   preserve a memo whose input is a ref it cannot see change ("Compilation Skipped:
+  //   Existing memoization could not be preserved" — an ESLint ERROR in this repository).
+  //   Plain functions let the compiler do the memoizing it is here to do.
+  const rowsOf = (): HTMLElement[] =>
+    Array.from(
+      rail.current?.querySelectorAll<HTMLElement>('[data-nav-row]') ?? [],
+    )
+
+  /** Exactly one row is tabbable, and it is the current page when there is one. */
+  const settle = (): HTMLElement | undefined => {
+    const rows = rowsOf()
+    if (rows.length === 0) return undefined
+    let active = rows.findIndex(
+      (r) => r.getAttribute('aria-current') === 'page',
+    )
+    if (active < 0) active = rows.findIndex((r) => r.tabIndex === 0)
+    if (active < 0) active = 0
+    rows.forEach((r, i) => {
+      r.tabIndex = i === active ? 0 : -1
+    })
+    return rows[active]
+  }
+
+  // Every render: the rail's shape changes with the filter, the fold preference, the
+  // permission projection and the personal partition, and the tab stop has to follow it.
+  // `nearest` rather than `center` — a rail that jumps on every navigation is its own
+  // defect.
+  useEffect(() => {
+    settle()?.scrollIntoView({ block: 'nearest' })
+  })
+
+  return (event: React.KeyboardEvent<HTMLElement>) => {
+    // Never steal a keystroke from the filter field above the tree.
+    if (event.target instanceof HTMLInputElement) return
+    if (event.metaKey || event.ctrlKey || event.altKey) return
+    const rows = rowsOf()
+    const from = (event.target as HTMLElement).closest<HTMLElement>(
+      '[data-nav-row]',
+    )
+    const at = from ? rows.indexOf(from) : -1
+    if (at < 0) return
+    const model: RailRow[] = rows.map((r) => {
+      const areaId = r.getAttribute('data-nav-area-row')
+      return {
+        depth: r.getAttribute('data-depth') === '1' ? 1 : 0,
+        pinId: r.getAttribute('data-pin-id') ?? undefined,
+        area: areaId
+          ? { id: areaId, open: r.getAttribute('data-area-open') === 'true' }
+          : undefined,
+      }
+    })
+    const action = railKey(event.key, model, at)
+    if (action.kind === 'none') return
+    event.preventDefault()
+    if (action.kind === 'focus') {
+      rows.forEach((r, i) => {
+        r.tabIndex = i === action.index ? 0 : -1
+      })
+      rows[action.index]?.focus()
+      rows[action.index]?.scrollIntoView({ block: 'nearest' })
+      return
+    }
+    if (action.kind === 'expand') return onExpand(action.areaId)
+    if (action.kind === 'fold') return onFold(action.areaId)
+    if (action.kind === 'pin') {
+      // The row's own control, clicked. ONE implementation of the action, so the key and
+      // the named menu path cannot drift into two behaviours.
+      rows[action.index]
+        ?.closest('[data-rail-row-group]')
+        ?.querySelector<HTMLButtonElement>('[data-rail-pin]')
+        ?.click()
+    }
+  }
 }
 
 interface ProjectedArea {
@@ -293,6 +498,13 @@ function SidebarBody({
   // and the screen cannot disagree.
   const hits = filtering ? ranked.length : 0
 
+  // ONE TAB STOP, arrows inside — the rules live in `features/navigation/rail-keys.ts`.
+  const railRef = useRef<HTMLDivElement>(null)
+  const onRailKeyDown = useRailKeyboard(railRef, {
+    onExpand: (id) => setAreaOpen(id as AreaId, true),
+    onFold: (id) => setAreaOpen(id as AreaId, false),
+  })
+
   // The rail's flyouts: one open at a time, closed by navigating from inside it.
   const [flyout, setFlyout] = useState<AreaId | null>(null)
   const closeFlyout = () => setFlyout(null)
@@ -303,7 +515,14 @@ function SidebarBody({
     visibleIds.every((id) => isAreaOpen(expansion, id, activeAreaId))
 
   return (
-    <div className="flex h-full flex-col">
+    // The rail's keyboard region is the WHOLE body, not just the tree: `Settings` is a
+    // navigation row that happens to be pinned to the foot, and `End` must reach it. The
+    // handler ignores keystrokes aimed at the filter field above.
+    <div
+      ref={railRef}
+      onKeyDown={onRailKeyDown}
+      className="flex h-full flex-col"
+    >
       <div
         className={cn(
           'flex h-12 shrink-0 items-center border-b border-border',
@@ -330,7 +549,7 @@ function SidebarBody({
               onKeyDown={(e) => e.key === 'Escape' && setQuery('')}
               placeholder={t('filter.placeholder')}
               aria-label={t('filter.label')}
-              className="h-8 w-full rounded-md border border-border bg-background pr-7 pl-8 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-search-cancel-button]:appearance-none"
+              className="h-8 w-full rounded-md border border-border bg-background pr-7 pl-8 text-body outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-search-cancel-button]:appearance-none"
             />
             {filtering && (
               <button
@@ -376,6 +595,10 @@ function SidebarBody({
       <ScrollArea className="flex-1 [mask-image:linear-gradient(to_bottom,#000_calc(100%-16px),transparent_100%)]">
         <nav
           aria-label={t('common:a11y.mainNavigation')}
+          // The rail is a composite: one tab stop, arrows inside. `aria-keyshortcuts`
+          // names the one key that is NOT movement, so a screen reader announces it
+          // with the region rather than leaving it to the help overlay.
+          aria-keyshortcuts="p"
           className="flex flex-col gap-1 p-2 pb-6 [contain:inline-size]"
         >
           {filtering && !collapsed && (
@@ -413,6 +636,7 @@ function SidebarBody({
               exact
               collapsed={collapsed}
               onNavigate={onNavigate}
+              pinId="home"
             />
           )}
 
@@ -422,7 +646,7 @@ function SidebarBody({
 
           {!filtering && !collapsed && areas.length > 0 && (
             <div className="mt-1 flex items-center justify-between px-2.5 pb-0.5">
-              <span className="text-[0.6875rem] font-medium tracking-wider text-muted-foreground uppercase">
+              <span className="text-overline text-muted-foreground uppercase">
                 {t('directory.areas')}
               </span>
               <button
@@ -495,13 +719,15 @@ function SidebarBody({
                         className={cn(ROW_CLASS, 'font-medium text-foreground')}
                       >
                         <Icon />
-                        <span className="min-w-0 flex-1 truncate">{label}</span>
+                        <span className="min-w-0 flex-1 truncate" title={label}>
+                          {label}
+                        </span>
                         <ArrowRight
                           aria-hidden="true"
                           className="size-3.5 text-muted-foreground"
                         />
                       </Link>
-                      <p className="px-2.5 pb-1 text-xs text-muted-foreground">
+                      <p className="px-2.5 pb-1 text-caption text-muted-foreground">
                         {areaQuestion(t, area.id)}
                       </p>
                       <AreaSections
@@ -531,6 +757,11 @@ function SidebarBody({
                       activeOptions={{ exact: true }}
                       activeProps={{ 'aria-current': 'page' }}
                       onClick={onNavigate}
+                      tabIndex={-1}
+                      data-nav-row=""
+                      data-depth="0"
+                      data-nav-area-row={area.id}
+                      data-area-open={open ? 'true' : 'false'}
                       className={cn(
                         ROW_CLASS,
                         'flex-1',
@@ -538,13 +769,16 @@ function SidebarBody({
                       )}
                     >
                       <Icon />
-                      <span className="truncate">{label}</span>
+                      <span className="min-w-0 break-words" title={label}>
+                        {label}
+                      </span>
                     </Link>
                     <button
                       type="button"
                       onClick={() => setAreaOpen(area.id, !open)}
                       aria-expanded={open}
                       aria-controls={panelId}
+                      tabIndex={-1}
                       aria-label={
                         open
                           ? t('directory.collapse', { area: label })
@@ -580,7 +814,7 @@ function SidebarBody({
             })}
 
           {filtering && hits === 0 && (
-            <p className="px-2.5 py-4 text-sm text-muted-foreground">
+            <p className="px-2.5 py-4 text-body text-muted-foreground">
               {t('filter.empty', { query: query.trim() })}
             </p>
           )}
@@ -599,6 +833,7 @@ function SidebarBody({
             label={settingsLabel}
             collapsed={collapsed}
             onNavigate={onNavigate}
+            pinId={SETTINGS_UTILITY.id}
           />
         </div>
       )}

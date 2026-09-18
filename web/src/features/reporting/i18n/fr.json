@@ -4,6 +4,7 @@
   "catalog": {
     "title": "Rapports à la demande",
     "empty": "Aucun type de rapport n'est disponible.",
+    "emptyHint": "Le catalogue liste les types de rapport que cette build peut produire. Aucun n’est disponible dans cette édition.",
     "colReport": "Rapport",
     "colFormats": "Formats",
     "colActions": "Actions",
@@ -35,6 +36,7 @@
     "new": "Nouvelle planification",
     "enterprise": "Les rapports planifiés sont une capacité Enterprise et ne sont pas activés dans cette édition.",
     "empty": "Aucun rapport planifié pour l'instant.",
+    "emptyHint": "Une planification produit un rapport à une cadence donnée et le distribue. Créez-en une pour qu’un rapport arrive sans avoir à le demander.",
     "colReport": "Rapport",
     "colCron": "Cron",
     "colStatus": "État",
@@ -75,6 +77,7 @@
     "title": "Historique des exécutions",
     "description": "Chaque exécution enregistrée de cette planification : quand elle a eu lieu et, en cas d'échec, pourquoi.",
     "notAnArchive": "Les fournisseurs limitent cette liste et purgent les anciennes exécutions — c'est une commodité opérationnelle, pas une archive. Une liste courte ne signifie pas que la planification n'a tourné que quelques fois.",
-    "empty": "Aucune exécution enregistrée"
+    "empty": "Aucune exécution enregistrée",
+    "emptyHint": "Chaque exécution de rapport est listée ici avec son statut et sa sortie. Exécutez un rapport pour enregistrer la première."
   }
 }

@@ -46,7 +46,7 @@ export function CommandInput({
       />
       <CommandPrimitive.Input
         className={cn(
-          'h-11 w-full bg-transparent text-sm text-foreground outline-none',
+          'h-11 w-full bg-transparent text-body text-foreground outline-none',
           'placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50',
           className,
         )}
@@ -76,7 +76,7 @@ export function CommandEmpty(
 ) {
   return (
     <CommandPrimitive.Empty
-      className="py-6 text-center text-sm text-muted-foreground"
+      className="py-6 text-center text-body text-muted-foreground"
       {...props}
     />
   )
@@ -91,7 +91,7 @@ export function CommandGroup({
       className={cn(
         'overflow-hidden text-foreground',
         '[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5',
-        '[&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-medium',
+        '[&_[cmdk-group-heading]]:text-caption [&_[cmdk-group-heading]]:font-medium',
         '[&_[cmdk-group-heading]]:text-muted-foreground',
         className,
       )}
@@ -119,7 +119,7 @@ export function CommandItem({
   return (
     <CommandPrimitive.Item
       className={cn(
-        'relative flex h-9 cursor-default select-none items-center gap-2 rounded-md px-2 text-sm outline-none',
+        'relative flex h-9 cursor-default select-none items-center gap-2 rounded-md px-2 text-body outline-none',
         'border-l-2 border-transparent transition-colors duration-100 ease-out',
         'data-[selected=true]:border-accent-text data-[selected=true]:bg-accent-soft',
         'data-[selected=true]:text-accent-soft-foreground',

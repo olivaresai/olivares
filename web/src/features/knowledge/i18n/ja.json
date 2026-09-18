@@ -214,6 +214,7 @@
     "createdBy": "作成者",
     "current": "現在",
     "revisionsEmpty": "リビジョンがありません",
+    "revisionsEmptyHint": "このプロンプトへの変更は、比較と復元ができるリビジョンとして保存されます。最初の編集で 1 件目が作成されます。",
     "truncated": "プロンプトを {{n}} 件読み込みました。さらにあります",
     "truncatedHint": "表示より多くのプロンプトがあります。このページは id 順に行を取得します。一覧にないことは未公開の証明にはなりません。"
   },
@@ -384,7 +385,9 @@
       "completenessThreshold": "完全性閾値",
       "freshnessOverride": "鮮度オーバーライド",
       "noContract": "アクティブな契約がありません",
+      "noContractHint": "コントラクトは、このデータプロダクトが約束するスキーマと保証を固定します。公開すると、その約束をバージョン管理できます。",
       "undetermined": "判定できません — どの契約が有効か、エンジンから応答がありませんでした。",
+      "undeterminedHint": "推測するのではなく、ここでは何も断定しません。再試行するか、データプロダクトを開いてコントラクトを直接確認してください。",
       "newVersion": "新しい契約バージョン",
       "note": "変更メモ",
       "modes": {
@@ -481,10 +484,12 @@
     "unanchored": "アンカーなし（台帳履歴なし）",
     "legacy": "旧来（アンカー導入前）",
     "truncated": "上の件数は完全ですが、この詳細一覧には上限があります。一覧が短くても問題が少ないとは限りません。",
-    "allHealthy": "検査したすべての行が検証されました"
+    "allHealthy": "検査したすべての行が検証されました",
+    "allHealthyHint": "整合性チェックは、保存された各行を記録済みのダイジェストと照合します。チェックしたすべての行が一致しました。"
   },
   "scans": {
     "empty": "No scans yet",
+    "emptyHint": "スキャンはソースを走査し、見つけたものを記録します。スキャンを開始すると結果がここに表示されます。",
     "sourceName": "Source name",
     "scanSource": "Scan source",
     "scanSourceHint": "Reads the source WITHOUT ingesting it. Bodies are classified in memory and never stored, logged or embedded.",

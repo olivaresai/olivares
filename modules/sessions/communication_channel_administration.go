@@ -801,7 +801,7 @@ const channelAdministrationSubjectGrantBound = directNoticeReadSetPageSize
 // after its six-column equality prefix.
 //
 // The filters are ALSO shared with the writer now (`currentChannelGrantSubjectFilters`),
-// so the two lanes ask the store one question with one shape. That is the whole
+// so the two paths ask the store one question with one shape. That is the whole
 // reason no second index is declared here: the composition merges the writer's
 // implementation instead of copying its schema.
 //

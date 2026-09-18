@@ -128,7 +128,7 @@ function CommNode({ data }: NodeProps<Node<CommNodeData>>) {
       </span>
       <div className="min-w-0">
         <div
-          className="max-w-[170px] truncate font-mono text-xs text-foreground"
+          className="max-w-[170px] truncate font-mono text-caption text-foreground"
           title={data.ref}
         >
           {data.ref}
@@ -251,7 +251,7 @@ export function CommunicationGraph({ graph }: { graph: GraphResponse }) {
 export function GraphLegend() {
   const { t } = useTranslation('orchestration')
   return (
-    <ul className="flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
+    <ul className="flex flex-wrap gap-x-4 gap-y-1.5 text-caption text-muted-foreground">
       <li className="flex items-center gap-1.5">
         <svg width="22" height="6" aria-hidden>
           <line
@@ -313,7 +313,7 @@ export function FlowsTable({ flows }: { flows: FlowDTO[] }) {
         accessorKey: 'supervisor_ref',
         header: t('flows.columns.supervisor'),
         cell: ({ row }) => (
-          <span className="font-mono text-xs text-foreground">
+          <span className="font-mono text-caption text-foreground">
             {row.original.supervisor_ref}
           </span>
         ),
@@ -351,7 +351,7 @@ export function FlowsTable({ flows }: { flows: FlowDTO[] }) {
         header: t('flows.columns.lastSeen'),
         cell: ({ row }) => (
           <span
-            className="text-xs text-muted-foreground"
+            className="text-caption text-muted-foreground"
             title={formatDateTime(row.original.last_seen_at, i18n.language)}
           >
             {formatRelativeTime(row.original.last_seen_at, i18n.language)}
@@ -407,7 +407,7 @@ export function SchedulesTable({
         header: t('schedules.columns.name'),
         cell: ({ row }) => (
           <div className="flex flex-col gap-0.5">
-            <span className="text-sm font-medium text-foreground">
+            <span className="text-body font-medium text-foreground">
               {row.original.name}
             </span>
             <span className="font-mono text-[11px] text-muted-foreground">
@@ -435,7 +435,7 @@ export function SchedulesTable({
         accessorKey: 'cadence_spec',
         header: t('schedules.columns.cadence'),
         cell: ({ row }) => (
-          <span className="font-mono text-xs text-muted-foreground">
+          <span className="font-mono text-caption text-muted-foreground">
             {row.original.cadence_spec}
           </span>
         ),
@@ -444,7 +444,7 @@ export function SchedulesTable({
         accessorKey: 'desired_status',
         header: t('schedules.columns.desired'),
         cell: ({ row }) => (
-          <span className="text-xs text-muted-foreground">
+          <span className="text-caption text-muted-foreground">
             {t(`schedules.desired.${row.original.desired_status}`, {
               defaultValue: row.original.desired_status,
             })}
@@ -461,7 +461,7 @@ export function SchedulesTable({
         header: t('schedules.columns.lastFired'),
         cell: ({ row }) => (
           <span
-            className="text-xs text-muted-foreground"
+            className="text-caption text-muted-foreground"
             title={formatDateTime(row.original.last_fired_at, i18n.language)}
           >
             {row.original.last_fired_at
@@ -634,7 +634,7 @@ export function DecisionList({
           className="flex flex-col gap-1.5 rounded-lg border border-border bg-surface p-3"
         >
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm font-medium text-foreground">
+            <span className="text-body font-medium text-foreground">
               {t(`decisions.op.${d.op}`, { defaultValue: d.op })}
             </span>
             <DecisionOpStatusBadge status={d.op_status} />
@@ -647,7 +647,7 @@ export function DecisionList({
             <GateBadge gate={d.gate_status} />
           </div>
           {showSubject && d.subject_ref ? (
-            <p className="text-xs text-foreground">
+            <p className="text-caption text-foreground">
               {/* El tipo declara `subject_kind` opcional, así que no se compone la clave
                   con un `undefined` —daría `decisions.subjectKind.undefined` y pintaría el
                   literal—: sin él se enseña sólo el ref, que es lo cierto. */}
@@ -670,7 +670,7 @@ export function DecisionList({
               )}
             </p>
           ) : null}
-          <p className="text-xs text-muted-foreground">
+          <p className="text-caption text-muted-foreground">
             <span className="font-mono">{d.actor}</span>
             {d.result ? <> · {d.result}</> : null}
           </p>
@@ -678,7 +678,7 @@ export function DecisionList({
             <time
               dateTime={d.occurred_at}
               title={formatDateTime(d.occurred_at, i18n.language)}
-              className="text-xs text-muted-foreground"
+              className="text-caption text-muted-foreground"
             >
               {formatRelativeTime(d.occurred_at, i18n.language)}
             </time>
@@ -721,14 +721,14 @@ export function CommTimeline({ items }: { items: TimelineItem[] }) {
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-sm font-medium text-foreground">
+                  <span className="text-body font-medium text-foreground">
                     {it.title}
                   </span>
                   <Badge variant={isMiss ? 'warning' : 'outline'}>
                     {t(`timeline.kind.${it.kind}`, { defaultValue: it.kind })}
                   </Badge>
                 </div>
-                <p className="mt-0.5 text-xs text-muted-foreground">
+                <p className="mt-0.5 text-caption text-muted-foreground">
                   <span className="font-mono">{it.source}</span>
                   {it.source !== it.target ? (
                     <>
@@ -740,7 +740,7 @@ export function CommTimeline({ items }: { items: TimelineItem[] }) {
                 <time
                   dateTime={it.at}
                   title={formatDateTime(it.at, i18n.language)}
-                  className="text-xs text-muted-foreground"
+                  className="text-caption text-muted-foreground"
                 >
                   {formatRelativeTime(it.at, i18n.language)}
                 </time>

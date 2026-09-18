@@ -4,7 +4,7 @@
 
 package finops
 
-// D02 attempt lifecycle — the ONE version-aware hold reader.
+// The attempt lifecycle — the ONE version-aware hold reader.
 //
 // heldReservedForWindow answers the question every ceiling evaluation asks: how
 // much of this policy+scope's headroom is currently HELD by live obligations. It

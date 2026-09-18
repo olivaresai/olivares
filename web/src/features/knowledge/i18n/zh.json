@@ -214,6 +214,7 @@
     "createdBy": "操作者",
     "current": "当前",
     "revisionsEmpty": "暂无修订",
+    "revisionsEmptyHint": "对该提示词的每次更改都会保存为可比较、可回滚的修订。第一次编辑就会产生一条。",
     "truncated": "已加载 {{n}} 个提示词；还有更多",
     "truncatedHint": "提示词数量多于所示；本页按 id 取行。此列表中没有某个提示词，并不能证明它未发布。"
   },
@@ -384,7 +385,9 @@
       "completenessThreshold": "完整性阈值",
       "freshnessOverride": "新鲜度覆盖",
       "noContract": "无活跃合约",
+      "noContractHint": "契约固定了该数据产品承诺的模式与保证。发布一份契约即可对这些承诺进行版本管理。",
       "undetermined": "无法确定——引擎未回答当前哪个合同有效。",
+      "undeterminedHint": "此处不做猜测，因此不给出任何结论。请重试，或直接打开该数据产品查看其契约。",
       "newVersion": "新合约版本",
       "note": "变更备注",
       "modes": {
@@ -481,10 +484,12 @@
     "unanchored": "无锚点（无台账历史）",
     "legacy": "历史遗留（早于锚点机制）",
     "truncated": "上方的计数是完整的；此明细列表有上限。列表较短并不表示问题较少。",
-    "allHealthy": "所有已检查的记录均通过验证"
+    "allHealthy": "所有已检查的记录均通过验证",
+    "allHealthyHint": "完整性校验会把每一条存储行与其记录的摘要进行比对。所有已检查的行都匹配。"
   },
   "scans": {
     "empty": "No scans yet",
+    "emptyHint": "扫描会遍历数据源并记录发现的内容。启动一次扫描即可在此查看结果。",
     "sourceName": "Source name",
     "scanSource": "Scan source",
     "scanSourceHint": "Reads the source WITHOUT ingesting it. Bodies are classified in memory and never stored, logged or embedded.",

@@ -86,7 +86,7 @@ export function DepNode({ data, selected }: NodeProps<Node<DepNodeData>>) {
       </span>
       <div className="min-w-0">
         <div
-          className="max-w-[180px] truncate font-mono text-xs text-foreground"
+          className="max-w-[180px] truncate font-mono text-caption text-foreground"
           title={data.ref}
         >
           {data.ref}

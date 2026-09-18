@@ -119,6 +119,7 @@
     "dependencies": "在此之后：{{value}}",
     "noDependencies": "无依赖项",
     "empty": "此工作流没有计划步骤。",
+    "emptyHint": "试运行会按顺序列出该工作流将执行的步骤，但不真正执行。请先为工作流添加步骤。",
     "failed": "无法生成试运行。"
   },
   "run": {
@@ -141,6 +142,7 @@
     "current": "运行 {{id}}",
     "history": "运行历史",
     "historyEmpty": "没有运行记录。",
+    "historyEmptyHint": "该工作流的每次运行及其结果和耗时都会列在这里。运行一次工作流即可记录第一条。",
     "historyFailed": "无法加载运行历史。",
     "viewRun": "查看运行 {{id}}",
     "paused": "已暂停：{{reason}}",
@@ -169,6 +171,7 @@
     "title": "修订历史 — {{name}}",
     "description": "比较不可变的工作流快照或恢复其中一个。",
     "empty": "没有修订记录",
+    "emptyHint": "对该工作流的每次更改都会保存为可比较、可回滚的修订。第一次编辑就会产生一条。",
     "loading": "正在加载修订历史…",
     "loadMore": "加载更多",
     "compare": "比较修订",

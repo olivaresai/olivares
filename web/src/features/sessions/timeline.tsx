@@ -95,16 +95,16 @@ export function SessionTimeline({
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
-          <h3 className="text-sm font-semibold text-foreground">
+          <h3 className="text-body font-semibold text-foreground">
             {t('timeline.title')}
           </h3>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-caption text-muted-foreground">
             {t('timeline.subtitle')}
           </p>
         </div>
         <Select value={kind} onValueChange={setKind}>
           <SelectTrigger
-            className="h-7 w-auto min-w-[7rem] text-xs"
+            className="h-7 w-auto min-w-[7rem] text-caption"
             aria-label={t('timeline.all')}
           >
             <SelectValue placeholder={t('timeline.all')} />
@@ -207,7 +207,7 @@ function TimelineRow({ row }: { row: TimelineDTO }) {
             {t(`kind.${row.kind}`, { defaultValue: row.kind })}
           </Badge>
           <span
-            className="truncate text-sm font-medium text-foreground"
+            className="truncate text-body font-medium text-foreground"
             title={label}
           >
             {label}
@@ -215,7 +215,7 @@ function TimelineRow({ row }: { row: TimelineDTO }) {
           {row.mode && <AccessModeBadge mode={row.mode} />}
         </div>
         {(row.resource_ref && row.resource_ref !== label) || row.source ? (
-          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 font-mono text-xs text-muted-foreground">
+          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 font-mono text-caption text-muted-foreground">
             {row.resource_ref && row.resource_ref !== label && (
               <span className="truncate" title={row.resource_ref}>
                 {row.resource_ref}
@@ -231,7 +231,7 @@ function TimelineRow({ row }: { row: TimelineDTO }) {
       </div>
       <RelTimeLabel
         ts={row.at}
-        className="shrink-0 text-xs text-muted-foreground"
+        className="shrink-0 text-caption text-muted-foreground"
       />
     </li>
   )

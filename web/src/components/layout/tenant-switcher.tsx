@@ -68,7 +68,7 @@ export function TenantSwitcher() {
   if (!isSuperadmin && options.length <= 1) {
     return (
       <span
-        className="inline-flex h-8 min-w-0 items-center gap-1.5 rounded-md px-2 text-sm text-muted-foreground"
+        className="inline-flex h-8 min-w-0 items-center gap-1.5 rounded-md px-2 text-body text-muted-foreground"
         title={activeLabel}
       >
         <Building2 className="size-4 shrink-0" />
@@ -104,7 +104,7 @@ export function TenantSwitcher() {
             <span className="flex min-w-0 flex-col">
               <span className="truncate">{o.label}</span>
               {o.sub && (
-                <span className="truncate font-mono text-xs text-muted-foreground">
+                <span className="truncate font-mono text-caption text-muted-foreground">
                   {o.sub}
                 </span>
               )}

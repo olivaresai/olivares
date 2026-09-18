@@ -572,7 +572,7 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		return err
 	}
 
-	// D02: the attempt-lifecycle parent and the per-tenant activation frontier.
+	// The attempt-lifecycle parent and the per-tenant activation frontier.
 	// Registered BEFORE the reservation ledger below because the reservation's new
 	// nullable linkage columns only mean something once the parent they point at
 	// exists as a declared entity.
@@ -601,7 +601,7 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 			{Name: colResvHandle, Kind: model.KindUUID, Indexed: true},
 			{Name: colResvExpiresAt, Kind: model.KindTimestamp, Indexed: true},
 			{Name: colResvSettledAt, Kind: model.KindTimestamp, Nullable: true},
-			// D02 lifecycle linkage. BOTH are nullable and BOTH stay NULL on every
+			// Attempt-lifecycle linkage. BOTH are nullable and BOTH stay NULL on every
 			// row this module writes today: the engine's additive reconciliation adds
 			// them to an existing populated table on an in-place upgrade, and a NULL
 			// pair is exactly what the legacy read branch selects on.
@@ -626,7 +626,7 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 			Columns: []string{model.ColTenantID, colResvPolicyRef, colResvPeriodStart, colResvScopeKey, colResvSeq},
 			Unique:  true,
 		}, {
-			// D02: one v1 child per (attempt, policy, scope, period). NULL attempt_ref
+			// One v1 child per (attempt, policy, scope, period). NULL attempt_ref
 			// rows do not collide on either engine — SQLite and PostgreSQL both treat
 			// NULLs as distinct in a unique index — so every legacy row stays outside
 			// this constraint while a v1 group cannot acquire two children for one

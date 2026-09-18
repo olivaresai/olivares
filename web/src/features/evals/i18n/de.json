@@ -41,7 +41,8 @@
     "runs": "Läufe",
     "lastScore": "Letzte Bewertung",
     "regressed": "Regressiert",
-    "empty": "Noch keine Scorecards — führen Sie eine Bewertung gegen eine Golden Suite aus."
+    "empty": "Noch keine Scorecards — führen Sie eine Bewertung gegen eine Golden Suite aus.",
+    "emptyHint": "Eine Scorecard fasst zusammen, wie ein Modell über die Fälle einer Suite abgeschnitten hat. Führen Sie eine Auswertung gegen eine Golden-Suite aus, um eine zu erzeugen."
   },
   "runs": {
     "title": "Eval-Läufe",
@@ -57,6 +58,7 @@
     "regressed": "Regressiert · Abweichung {{drift}}",
     "noRegression": "Keine",
     "empty": "Keine Läufe im Bereich.",
+    "emptyHint": "Jeder Auswertungslauf im gewählten Zeitraum wird hier mit Ergebnis und Dauer aufgeführt. Erweitern Sie den Zeitraum oder starten Sie einen Lauf.",
     "overN": "von {{n}}",
     "notScored": "not scored — no verdict",
     "noBaseline": "no baseline — nothing compared"
@@ -74,7 +76,8 @@
       "label": "Label",
       "fingerprint": "Fingerabdruck"
     },
-    "empty": "Keine Fallergebnisse für diesen Lauf."
+    "empty": "Keine Fallergebnisse für diesen Lauf.",
+    "emptyHint": "Jeder Fall der Suite wird hier mit dem Urteil des Judges aufgeführt. Dieser Lauf hat keine Fallergebnisse aufgezeichnet."
   },
   "ab": {
     "title": "A/B-Vergleich",
@@ -94,6 +97,7 @@
     "suiteLabel": "Suite",
     "selectSuite": "Suite auswählen",
     "noSuites": "Noch keine Suites. Ein Vergleich wird gegen die Fälle einer Suite bewertet — legen Sie zuerst eine an.",
+    "noSuitesHint": "Ein Vergleich wird gegen die Fälle einer Suite bewertet, daher muss zuerst eine Suite existieren. Legen Sie eine im Reiter Suites an.",
     "labelA": "Bezeichnung Variante A",
     "labelB": "Bezeichnung Variante B",
     "outputsA": "Ausgaben der Variante A",
@@ -119,7 +123,8 @@
     "threshold": "Bestehensschwelle",
     "pickerTitle": "Subjekt",
     "note": "Die Schwellenlinie ist die Bestehensschwelle der Suite; Punkte darunter haben die Schwelle zu jenem Zeitpunkt nicht erreicht.",
-    "empty": "Noch keine Trenddaten."
+    "empty": "Noch keine Trenddaten.",
+    "emptyHint": "Drift vergleicht die jüngsten Bewertungen eines Modells mit seiner eigenen Historie. Zwei oder mehr Läufe derselben Suite ergeben den ersten Trend."
   },
   "outcomeBar": {
     "passed": "Bestanden",
@@ -141,6 +146,7 @@
     "title": "CI-Gate",
     "description": "Auswertungen des Regressions-Gates: was das Gate gemessen hat und wonach CI handeln muss.",
     "empty": "Keine Gate-Auswertungen",
+    "emptyHint": "Eine Gate-Auswertung entscheidet, ob ein Kandidat ausgeliefert werden darf. Führen Sie eine Auswertung gegen eine gegatete Suite aus, um eine aufzuzeichnen.",
     "measured": "gemessen {{verdict}}",
     "effective": "CI handelt nach {{verdict}}",
     "sampled": "{{sampled}} von {{total}} Fällen ausgewertet",
@@ -160,6 +166,7 @@
     "title": "Judge-Kalibrierung",
     "description": "Wie weit der LLM-Judge mit menschlichen Kennzeichnungen übereinstimmt. Ein Satz, der zufallskorrigierte Übereinstimmung nicht messen kann, kann nichts zertifizieren.",
     "empty": "Keine Kalibrierungsberichte",
+    "emptyHint": "Ein Kalibrierungsbericht vergleicht die Bewertungen des Judges mit menschlichen Labels. Führen Sie eine Kalibrierung aus, um einen zu erzeugen.",
     "meets": "Ziel erreicht",
     "below": "unter dem Ziel",
     "cannotCertify": "nicht zertifizierbar — Kappa undefiniert",
@@ -176,6 +183,7 @@
     "description": "The human labels the judge is measured against — and the reason a report can or cannot certify.",
     "run": "Run calibration",
     "empty": "No labelled items yet",
+    "emptyHint": "Gelabelte Elemente sind die menschlichen Urteile, gegen die ein Kalibrierungsbericht bewertet wird. Labeln Sie einen Fall, um das erste hinzuzufügen.",
     "distribution": "{{pass}} labelled pass · {{fail}} labelled fail",
     "degenerate": "⛔ Every label is the same, so kappa CANNOT be computed and no report from this set can certify. Label cases of the other kind.",
     "humanPass": "human: pass",

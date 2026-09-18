@@ -4,6 +4,31 @@
   "asOfNote": "Agregados en vivo de los últimos 30 días, sobre los módulos que tu rol puede abrir. Cada tarjeta enlaza con su módulo; abre el informe ejecutivo para el resumen completo y el PDF.",
   "openReport": "Informe ejecutivo",
   "range": "últimos 30 días",
+  "next": {
+    "title": "Siguiente paso",
+    "provider": {
+      "title": "Añade un proveedor",
+      "description": "Conecta Claude, Codex u otro motor para que sus sesiones queden atribuidas y gobernadas."
+    },
+    "agent": {
+      "title": "Despliega un agente",
+      "description": "Publica un agente en un espacio de trabajo, con su política y su historial de revisiones."
+    },
+    "session": {
+      "title": "Inicia una sesión",
+      "description": "Lanza una ejecución gobernada y observa sus llamadas a herramientas en vivo."
+    }
+  },
+  "recent": {
+    "title": "Trabajo reciente",
+    "description": "Las cinco sesiones más recientes que ha observado este despliegue.",
+    "openAll": "Todas las sesiones",
+    "emptyTitle": "Aún no hay sesiones",
+    "emptyDescription": "Aquí aparece cada ejecución de un motor conectado, con lo que hizo, cuánto duró y cuánto costó.",
+    "unavailableTitle": "No se ha podido cargar el trabajo reciente",
+    "unavailableDescription": "La lectura de sesiones no ha respondido. Las cifras de arriba no se ven afectadas.",
+    "open": "Abrir la sesión: {{what}}"
+  },
   "tiles": {
     "inventory": {
       "label": "Inventario",

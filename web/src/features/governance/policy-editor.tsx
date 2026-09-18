@@ -303,11 +303,11 @@ function PolicyForm({
                 {t('policyEditor.addRule')}
               </Button>
             </div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-caption text-muted-foreground">
               {t('policyEditor.abacRulesHint')}
             </p>
             {rules.length === 0 ? (
-              <p className="rounded-md border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
+              <p className="rounded-md border border-dashed border-border px-3 py-2 text-caption text-muted-foreground">
                 {t('policyEditor.noRules')}
               </p>
             ) : (
@@ -322,7 +322,7 @@ function PolicyForm({
                       className="flex flex-col gap-2 rounded-md border border-border bg-muted/40 p-2"
                     >
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-medium text-danger">
+                        <span className="text-caption font-medium text-danger">
                           {t('policyEditor.denyImplicit')}
                         </span>
                         <Button
@@ -441,7 +441,7 @@ function PolicyForm({
                         </Select>
                       </div>
                       {warn && (
-                        <p role="alert" className="text-xs text-danger">
+                        <p role="alert" className="text-caption text-danger">
                           {t('policyEditor.credentialWarning')}
                         </p>
                       )}
@@ -530,7 +530,7 @@ function PolicyForm({
         )}
       </div>
 
-      <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+      <p className="flex items-center gap-1.5 text-caption text-muted-foreground">
         <ScrollText className="size-3.5 shrink-0" aria-hidden />
         {t('common:privileged.auditedNotice')}
       </p>

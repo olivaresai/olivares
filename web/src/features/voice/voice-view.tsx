@@ -45,6 +45,7 @@ import {
 import { VoiceSessionSurface } from './session-surface'
 import type { VoicePolicy } from './types'
 import './i18n'
+import { PagePrimaryAction } from '@/components/ui/page-actions'
 
 // El techo REAL del motor: `maxLimit = 1000` en
 // `core/internal/store/sqlstore/generic.go`. Pedir más no trae más — lo recorta ahí—, y
@@ -166,17 +167,19 @@ export function VoiceView() {
             description={t('policies.description')}
             actions={
               canWritePolicy ? (
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={() => {
-                    setEditing(null)
-                    setPolicyOpen(true)
-                  }}
-                >
-                  <Plus />
-                  {t('policies.new')}
-                </Button>
+                <PagePrimaryAction>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => {
+                      setEditing(null)
+                      setPolicyOpen(true)
+                    }}
+                  >
+                    <Plus />
+                    {t('policies.new')}
+                  </Button>
+                </PagePrimaryAction>
               ) : null
             }
             noPadding

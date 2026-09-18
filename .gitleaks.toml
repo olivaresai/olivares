@@ -244,6 +244,15 @@ regexes = [
                                                                         # string. Committed in history, so it recurs on EVERY history scan.
                                                                         # Anchored to the exact truncated sample: a COMPLETE token pasted into
                                                                         # the same file would not match this entry and still blocks.
+  '''^NIS-2-Vorfallklassifizierungen$''',                              # Translated UI prose, not a credential. In the German
+                                                                        # compliance strings (web/src/features/compliance/i18n/de.json,
+                                                                        # key `noAccessHint`) generic-api-key joins the word "Access"
+                                                                        # in the KEY NAME to the first word of the sentence and captures
+                                                                        # that word ("NIS-2-Vorfallklassifizierungen", entropy 4.12) as
+                                                                        # the secret; the same sentence sits in the built console bundle
+                                                                        # (core/internal/webui/dist/assets/compliance-view-*.js), so the
+                                                                        # finding is reported twice. Anchored to that one word: any other
+                                                                        # captured string in those files still blocks. Nothing to rotate.
 ]
 
 

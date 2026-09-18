@@ -46,7 +46,7 @@ type Module struct {
 	// The default refuses every lookup. C2A only binds policy and target metadata;
 	// it never resolves credentials or dispatches provider traffic.
 	executionProfiles ExecutionProfileResolver
-	// chatExecutor is D01-C2B's SEPARATE synchronous Chat seam (guardedtext.go), used
+	// chatExecutor is the SEPARATE synchronous Chat seam (guardedtext.go), used
 	// only for a routing policy that pins an execution profile. It is deny-closed by
 	// default and its availability is INDEPENDENT of executor above: a build with a
 	// routed legacy executor still refuses Chat until an operator activates it.

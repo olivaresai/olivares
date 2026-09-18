@@ -239,7 +239,7 @@ is safe to run against this schema.
   structured evidence, and any consumer reading the old numbers/booleans directly has
   not been certified.
 - Group accounting, the completeness of the budget catalogue, the older aggregates,
-  `CheckSpendLimit` and the forecast remain open D02 work. An unresolved group scope is
+  `CheckSpendLimit` and the forecast remain open admission work. An unresolved group scope is
   refused here rather than approximated with tenant-wide spend.
 - The evidence describes **the evaluation that actually happened**. It does not
   reconstruct a policy that was in force at some earlier instant, an authorization
@@ -282,7 +282,7 @@ Legacy run-rate forecast remains visible, explicitly **not certified**, and does
 not determine the crossing color. Alert timestamps and recorded references remain
 visible; historical evidence is never rewritten from today's policy.
 
-These controls do not close D02 reserve/dispatch/settle, concurrent admission,
+These controls do not close reserve/dispatch/settle, concurrent admission,
 external unknown-outcome reconciliation, outage behavior, certified forecast,
 HA, Enterprise integration or release qualification. Browser demonstration and
 console bundling are separate integration work.

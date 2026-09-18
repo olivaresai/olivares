@@ -4,7 +4,7 @@
 
 package finops
 
-// D02 — the KNOWN-EMPTY census: a tenant whose complete enumeration finds zero
+// The KNOWN-EMPTY census: a tenant whose complete enumeration finds zero
 // pending legacy groups.
 //
 // The producer and the reader disagreed about how that fact is spelled.

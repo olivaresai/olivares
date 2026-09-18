@@ -25,7 +25,7 @@ function AttributionTag({ attribution }: { attribution: string }) {
   if (attribution === 'degraded') {
     return (
       <span
-        className="inline-flex items-center gap-1.5 rounded-sm border border-dashed border-border-strong px-1.5 py-0.5 text-xs font-medium text-muted-foreground"
+        className="inline-flex items-center gap-1.5 rounded-sm border border-dashed border-border-strong px-1.5 py-0.5 text-caption font-medium text-muted-foreground"
         title={t('wirings.degradedHint')}
       >
         <span
@@ -38,7 +38,7 @@ function AttributionTag({ attribution }: { attribution: string }) {
   }
   return (
     <span
-      className="inline-flex items-center gap-1.5 rounded-sm border border-confidence-attributed/40 px-1.5 py-0.5 text-xs font-medium text-confidence-attributed"
+      className="inline-flex items-center gap-1.5 rounded-sm border border-confidence-attributed/40 px-1.5 py-0.5 text-caption font-medium text-confidence-attributed"
       title={t('wirings.firmHint')}
     >
       <span className="size-1.5 rounded-full bg-current" aria-hidden />
@@ -63,7 +63,7 @@ export function WiringsTable() {
       accessorKey: 'agent_ref',
       header: t('wirings.agent'),
       cell: ({ row }) => (
-        <span className="font-mono text-xs font-medium text-foreground">
+        <span className="font-mono text-caption font-medium text-foreground">
           {row.original.agent_ref}
         </span>
       ),
@@ -74,7 +74,7 @@ export function WiringsTable() {
       cell: ({ row }) => (
         <span className="flex items-center gap-1.5">
           <Badge variant="neutral">{row.original.resource_kind}</Badge>
-          <span className="font-mono text-xs text-foreground">
+          <span className="font-mono text-caption text-foreground">
             {row.original.resource_ref}
           </span>
         </span>
@@ -131,7 +131,7 @@ export function WiringsTable() {
 
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-xs text-muted-foreground">
+      <p className="text-caption text-muted-foreground">
         {t('wirings.description')}
       </p>
       <ListTruncationBadge

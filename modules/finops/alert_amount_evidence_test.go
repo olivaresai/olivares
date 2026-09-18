@@ -18,7 +18,7 @@ import (
 )
 
 // -----------------------------------------------------------------------------
-// D02-A4 increment 1. These cases pin the ONE thing the alert history cannot say
+// The financial evidence, increment 1. These cases pin the ONE thing the alert history cannot say
 // today: which kind of number a consumption figure is. Nothing here is wired, so
 // every case drives the helper directly — the point is the algebra and the reading,
 // not a path through the evaluator that increment 2 has not built yet.

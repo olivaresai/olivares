@@ -140,7 +140,9 @@ export function ModelMix({ byModel }: { byModel: ModelMixT[] }) {
   }))
   const total = byModel.reduce((s, m) => s + m.tokens, 0)
   if (data.length === 0) {
-    return <p className="text-sm text-muted-foreground">{t('models.empty')}</p>
+    return (
+      <p className="text-body text-muted-foreground">{t('models.empty')}</p>
+    )
   }
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -199,7 +201,7 @@ export function AcceptanceBreakdown({ byTool }: { byTool: ToolBreakdown[] }) {
   )
   if (byTool.length === 0) {
     return (
-      <p className="text-sm text-muted-foreground">{t('acceptance.empty')}</p>
+      <p className="text-body text-muted-foreground">{t('acceptance.empty')}</p>
     )
   }
   return (
@@ -374,7 +376,7 @@ export function OfficialObservedComparison({
   )
   if (discrepancy.days.length === 0) {
     return (
-      <p className="text-sm text-muted-foreground">{t('comparison.empty')}</p>
+      <p className="text-body text-muted-foreground">{t('comparison.empty')}</p>
     )
   }
   return (
@@ -386,26 +388,26 @@ export function OfficialObservedComparison({
             className="grid gap-3 rounded-sm border border-border bg-muted/20 p-3 md:grid-cols-[minmax(10rem,1.2fr)_minmax(8rem,0.7fr)_minmax(8rem,0.7fr)_minmax(13rem,1fr)] md:items-center"
           >
             <div className="min-w-0">
-              <p className="text-sm font-medium text-foreground">
+              <p className="text-body font-medium text-foreground">
                 {t(metricLabelKey(row.name))}
               </p>
-              <p className="font-mono text-xs text-muted-foreground">
+              <p className="font-mono text-caption text-muted-foreground">
                 {row.name}
               </p>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-caption text-muted-foreground">
                 {t('comparison.official')}
               </p>
-              <p className="font-mono text-sm tabular-nums">
+              <p className="font-mono text-body tabular-nums">
                 {metricValue(row.name, row.analytics, i18n.language)}
               </p>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-caption text-muted-foreground">
                 {t('comparison.observed')}
               </p>
-              <p className="font-mono text-sm tabular-nums">
+              <p className="font-mono text-body tabular-nums">
                 {metricValue(row.name, row.telemetry, i18n.language)}
               </p>
             </div>
@@ -477,7 +479,9 @@ export function DeveloperTable({ developers }: { developers: DeveloperRow[] }) {
         accessorKey: 'developer',
         header: t('developers.columns.developer'),
         cell: ({ row }) => (
-          <span className="font-mono text-xs">{row.original.developer}</span>
+          <span className="font-mono text-caption">
+            {row.original.developer}
+          </span>
         ),
       },
       ...productivityColumns<DeveloperRow>(t),

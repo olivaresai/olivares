@@ -76,7 +76,7 @@ export function RunDetailSheet({
             <SheetHeader>
               <SheetTitle className="flex items-center gap-2">
                 <Terminal className="size-4 text-accent-text" />
-                <span className="truncate font-mono text-base">
+                <span className="truncate font-mono text-heading">
                   {run.name || run.run_ref}
                 </span>
               </SheetTitle>
@@ -125,7 +125,7 @@ export function RunDetailSheet({
             <Spinner />
           </div>
         ) : runQuery.error ? (
-          <p role="alert" className="p-6 text-sm text-danger">
+          <p role="alert" className="p-6 text-body text-danger">
             {runQuery.error instanceof ApiError
               ? runQuery.error.message
               : String(runQuery.error)}
@@ -321,13 +321,17 @@ export function EventsPanel({ runRef }: { runRef: string }) {
 
   return (
     <div className="flex flex-col gap-2">
-      <p className="text-xs text-muted-foreground">{t('events.subtitle')}</p>
+      <p className="text-caption text-muted-foreground">
+        {t('events.subtitle')}
+      </p>
       {q.isLoading ? (
         <div className="flex justify-center p-6">
           <Spinner />
         </div>
       ) : events.length === 0 ? (
-        <p className="p-4 text-sm text-muted-foreground">{t('events.empty')}</p>
+        <p className="p-4 text-body text-muted-foreground">
+          {t('events.empty')}
+        </p>
       ) : (
         <ol className="divide-y divide-border rounded-md border border-border">
           {events.map((e) => (
@@ -344,12 +348,12 @@ function EventRow({ e }: { e: RunEventDTO }) {
   return (
     <li className="flex flex-col gap-0.5 px-3 py-2">
       <div className="flex items-center justify-between gap-2">
-        <span className="font-mono text-xs font-medium text-foreground">
+        <span className="font-mono text-caption font-medium text-foreground">
           #{e.seq} · {e.event}
         </span>
         <RelTimeLabel ts={e.at} />
       </div>
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-caption text-muted-foreground">
         {(e.from_state || e.to_state) && (
           <span>
             {e.from_state || '—'} → {e.to_state || '—'}

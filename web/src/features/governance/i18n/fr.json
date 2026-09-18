@@ -67,6 +67,7 @@
     "trailTitle": "Piste d’utilisation immuable",
     "trailCaption": "Chaque action ayant continué sans son quorum d’approbation. Ces entrées sont uniquement ajoutables et ne peuvent être ni modifiées ni supprimées.",
     "trailEmpty": "Cet octroi n’a pas été utilisé",
+    "trailEmptyHint": "Tout ce qui est fait sous une autorisation d’urgence est consigné ici pour revue. Cette autorisation n’a jamais été utilisée.",
     "trailLabel": "Piste d’utilisation break-glass immuable",
     "useAction": "Action",
     "useSubject": "Sujet",
@@ -219,6 +220,7 @@
     "trail": "Piste de décision",
     "trailCaption": "Le registre immuable, en ajout seul, de qui a décidé quoi et quand. En lecture seule — il ne peut jamais être modifié ni supprimé.",
     "trailEmpty": "Aucune décision consignée pour l’instant",
+    "trailEmptyHint": "Chaque décision sur cette approbation — qui a décidé, quand et pourquoi — est consignée ici. Personne n’a encore décidé.",
     "decisionApprove": "Approuvé",
     "decisionReject": "Rejeté"
   },
@@ -338,7 +340,8 @@
     "via": "via",
     "kindIdentity": "Identité",
     "kindCollection": "Collection",
-    "empty": "Aucun membre"
+    "empty": "Aucun membre",
+    "emptyHint": "Les sujets qui appartiennent à ce groupe sont listés ici. Ajoutez un membre pour commencer."
   },
   "bindings": {
     "title": "Liaisons d’agents",
@@ -683,7 +686,9 @@
     "title": "Standards émergents d'identité d'agent",
     "description": "Un registre « design-toward » : ce que nous suivons, où cela se brancherait et pourquoi ce n’est pas implémenté.",
     "noAccess": "Vous n'avez pas accès au registre des identités.",
+    "noAccessHint": "Ce panneau suit les normes vers lesquelles la plateforme s’aligne. Demandez à un administrateur la permission de lecture du registre d’identité.",
     "empty": "Rien de suivi",
+    "emptyHint": "Les normes vers lesquelles la plateforme s’aligne apparaissent ici avec leur statut. Aucune n’est encore suivie.",
     "verifiedAt": "Révisions vérifiées auprès des sources primaires en {{month}}. Elles bougent : à lire comme une date, pas comme une garantie.",
     "spec": "Spécification",
     "revision": "Révision",

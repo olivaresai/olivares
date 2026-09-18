@@ -27,12 +27,12 @@ export function Input({
       type={type}
       data-slot="input"
       className={cn(
-        'h-8 w-full rounded-md border border-border-strong bg-surface px-2.5 text-sm text-foreground',
+        'h-8 w-full rounded-md border border-border-strong bg-surface px-2.5 text-body text-foreground',
         'placeholder:text-muted-foreground transition-colors outline-none',
         'focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background',
         'aria-[invalid=true]:border-danger aria-[invalid=true]:ring-danger',
         'disabled:pointer-events-none disabled:opacity-50 disabled:bg-muted',
-        'file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground',
+        'file:border-0 file:bg-transparent file:text-body file:font-medium file:text-foreground',
         mono && 'font-mono tabular-nums tracking-tight',
         className,
       )}

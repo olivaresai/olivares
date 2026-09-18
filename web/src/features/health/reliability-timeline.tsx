@@ -139,7 +139,7 @@ export function ReliabilityTimeline({
                   />
                   <div className="flex flex-wrap items-center gap-2">
                     <HealthStateBadge state={e.state} />
-                    <span className="text-xs text-muted-foreground">
+                    <span className="text-caption text-muted-foreground">
                       {t('timeline.transition', {
                         prev: t(`state.${e.prev_state}`, {
                           defaultValue: e.prev_state,
@@ -157,7 +157,7 @@ export function ReliabilityTimeline({
                       </span>
                     )}
                   </div>
-                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-caption text-muted-foreground">
                     <span
                       className={cn('inline-flex items-center gap-1')}
                       title={t(`timeline.causeHint.${e.cause}`, {
@@ -210,7 +210,7 @@ export function SubjectPicker({
     : ''
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <span className="text-sm text-muted-foreground">{t(labelKey)}</span>
+      <span className="text-body text-muted-foreground">{t(labelKey)}</span>
       <Select
         value={value}
         onValueChange={(v) => {
@@ -219,7 +219,7 @@ export function SubjectPicker({
         }}
       >
         <SelectTrigger
-          className="h-8 w-full max-w-sm text-sm"
+          className="h-8 w-full max-w-sm text-body"
           aria-label={t(placeholderKey)}
         >
           <SelectValue placeholder={t(placeholderKey)} />
@@ -230,7 +230,7 @@ export function SubjectPicker({
               key={`${s.subject_kind}::${s.subject_ref}`}
               value={`${s.subject_kind}::${s.subject_ref}`}
             >
-              <span className="font-mono text-xs">
+              <span className="font-mono text-caption">
                 {s.name || s.subject_ref}
               </span>
             </SelectItem>

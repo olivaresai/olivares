@@ -70,6 +70,7 @@ import type {
   MemoryDTO,
   PromptDTO,
 } from './types'
+import { PagePrimaryAction } from '@/components/ui/page-actions'
 
 type TabKey =
   'kbs' | 'lineage' | 'prompts' | 'memory' | 'context' | 'data-products' | 'dlp'
@@ -135,7 +136,7 @@ function MemoryIntegrityPanel({ canAdmin }: { canAdmin: boolean }) {
 
       {informe ? (
         <>
-          <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-4">
+          <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-body sm:grid-cols-4">
             {(
               [
                 ['checked', informe.checked],
@@ -149,7 +150,7 @@ function MemoryIntegrityPanel({ canAdmin }: { canAdmin: boolean }) {
               ] as const
             ).map(([k, v]) => (
               <div key={k}>
-                <dt className="text-xs text-muted-foreground">
+                <dt className="text-caption text-muted-foreground">
                   {t(`integrity.${k}`)}
                 </dt>
                 <dd className="font-medium">{v}</dd>
@@ -163,7 +164,10 @@ function MemoryIntegrityPanel({ canAdmin }: { canAdmin: boolean }) {
           ) : null}
 
           {(informe.entries ?? []).length === 0 ? (
-            <EmptyState title={t('integrity.allHealthy')} />
+            <EmptyState
+              description={t('integrity.allHealthyHint')}
+              title={t('integrity.allHealthy')}
+            />
           ) : (
             <div className="flex flex-col gap-2">
               {(informe.entries ?? []).map((e) => (
@@ -181,8 +185,10 @@ function MemoryIntegrityPanel({ canAdmin }: { canAdmin: boolean }) {
                         defaultValue: e.status,
                       })}
                     </Badge>
-                    <span className="font-mono text-xs">{e.agent_ref}</span>
-                    <span className="text-xs text-muted-foreground">
+                    <span className="font-mono text-caption">
+                      {e.agent_ref}
+                    </span>
+                    <span className="text-caption text-muted-foreground">
                       {e.key}
                     </span>
                   </div>
@@ -287,7 +293,7 @@ function ScansPanel({
           >
             {t('scans.scanSource')}
           </Button>
-          <span className="text-xs text-muted-foreground">
+          <span className="text-caption text-muted-foreground">
             {t('scans.scanSourceHint')}
           </span>
         </div>
@@ -301,7 +307,10 @@ function ScansPanel({
       />
 
       {escaneos.length === 0 ? (
-        <EmptyState title={t('scans.empty')} />
+        <EmptyState
+          description={t('scans.emptyHint')}
+          title={t('scans.empty')}
+        />
       ) : (
         <div className="flex flex-col gap-2">
           {escaneos.map((s) => (
@@ -311,13 +320,13 @@ function ScansPanel({
             >
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant="outline">{s.scope_kind}</Badge>
-                <span className="font-mono text-xs">{s.scope_ref}</span>
+                <span className="font-mono text-caption">{s.scope_ref}</span>
                 {/* La BASE, junto al alcance: es lo que decide qué significa el resultado. */}
                 <Badge variant={s.basis === 'raw' ? 'warning' : 'neutral'}>
                   {t(`scans.basis.${s.basis}`, { defaultValue: s.basis })}
                 </Badge>
               </div>
-              <span className="text-xs text-muted-foreground">
+              <span className="text-caption text-muted-foreground">
                 {t('scans.counts', {
                   docs: s.docs_scanned,
                   hits: s.docs_with_hits,
@@ -326,7 +335,7 @@ function ScansPanel({
               </span>
               {/* ⛔ Un CERO no dice lo mismo según la base, y se dice donde se lee el cero. */}
               {s.docs_with_hits === 0 ? (
-                <span className="text-xs">
+                <span className="text-caption">
                   {s.basis === 'stored'
                     ? t('scans.zeroOnStored')
                     : t('scans.zeroOnRaw')}
@@ -472,18 +481,18 @@ function DlpPanel({
                 <Badge variant={r.action === 'allow' ? 'success' : 'danger'}>
                   {r.action}
                 </Badge>
-                <span className="font-mono text-sm">{r.class}</span>
+                <span className="font-mono text-body">{r.class}</span>
                 {/* El `*` se explica DONDE se lee, no en una nota al pie: su alcance es
                     justo lo que se malinterpreta. */}
                 {r.class === '*' ? (
-                  <span className="text-xs text-muted-foreground">
+                  <span className="text-caption text-muted-foreground">
                     {t('dlp.anyScope')}
                   </span>
                 ) : null}
               </div>
               <div className="flex items-center gap-2">
                 {r.note ? (
-                  <span className="text-xs text-muted-foreground">
+                  <span className="text-caption text-muted-foreground">
                     {r.note}
                   </span>
                 ) : null}
@@ -743,7 +752,7 @@ export default function KnowledgeView() {
       accessorKey: 'kb_ref',
       header: t('lineage.kbRef'),
       cell: ({ row }) => (
-        <span className="font-mono text-xs text-foreground">
+        <span className="font-mono text-caption text-foreground">
           {row.original.kb_ref}
         </span>
       ),
@@ -752,7 +761,7 @@ export default function KnowledgeView() {
       accessorKey: 'agent_ref',
       header: t('lineage.agentRef'),
       cell: ({ row }) => (
-        <span className="font-mono text-xs text-muted-foreground">
+        <span className="font-mono text-caption text-muted-foreground">
           {row.original.agent_ref}
         </span>
       ),
@@ -801,7 +810,7 @@ export default function KnowledgeView() {
       accessorKey: 'name',
       header: t('prompts.name'),
       cell: ({ row }) => (
-        <span className="font-mono text-xs font-medium text-foreground">
+        <span className="font-mono text-caption font-medium text-foreground">
           {row.original.name}
         </span>
       ),
@@ -843,7 +852,7 @@ export default function KnowledgeView() {
       accessorKey: 'scope_ref',
       header: t('context.scopeRef'),
       cell: ({ row }) => (
-        <span className="font-mono text-xs text-foreground">
+        <span className="font-mono text-caption text-foreground">
           {row.original.scope_ref}
         </span>
       ),
@@ -924,6 +933,18 @@ export default function KnowledgeView() {
             <ForbiddenState />
           ) : (
             <>
+              {canWriteKb && (
+                <PagePrimaryAction>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => setKbEditorOpen(true)}
+                  >
+                    <Plus />
+                    {t('kbs.newKb')}
+                  </Button>
+                </PagePrimaryAction>
+              )}
               {/* El motor sirve UNA pagina (defaultLimit=100, sqlstore/generic.go:28) y publica
                   `has_more`. Sin este aviso, el numero de filas de la tabla se lee como un censo.
                   La regla vive en `_intel/notices.tsx` y exige `has_more === true`. */}
@@ -969,16 +990,6 @@ export default function KnowledgeView() {
                         </SelectItem>
                       </SelectContent>
                     </Select>
-                    {canWriteKb && (
-                      <Button
-                        variant="primary"
-                        size="sm"
-                        onClick={() => setKbEditorOpen(true)}
-                      >
-                        <Plus />
-                        {t('kbs.newKb')}
-                      </Button>
-                    )}
                   </div>
                 }
                 empty={
@@ -998,7 +1009,7 @@ export default function KnowledgeView() {
             <ForbiddenState />
           ) : (
             <>
-              <p className="mb-3 text-xs text-muted-foreground">
+              <p className="mb-3 text-caption text-muted-foreground">
                 {t('lineage.selfAudited')}
               </p>
               <ListTruncationBadge
@@ -1063,6 +1074,18 @@ export default function KnowledgeView() {
             <ForbiddenState />
           ) : (
             <>
+              {canWritePrompt && (
+                <PagePrimaryAction>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => setPromptEditorOpen(true)}
+                  >
+                    <Plus />
+                    {t('prompts.newPrompt')}
+                  </Button>
+                </PagePrimaryAction>
+              )}
               <ListTruncationBadge
                 query={prompts}
                 label={t('prompts.truncated', {
@@ -1084,18 +1107,6 @@ export default function KnowledgeView() {
                   setSelectedPrompt(r.id)
                   setPromptDetailOpen(true)
                 }}
-                toolbar={
-                  canWritePrompt ? (
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      onClick={() => setPromptEditorOpen(true)}
-                    >
-                      <Plus />
-                      {t('prompts.newPrompt')}
-                    </Button>
-                  ) : undefined
-                }
                 empty={
                   <EmptyState
                     title={t('empty.prompt.title')}
@@ -1133,7 +1144,22 @@ export default function KnowledgeView() {
             <ForbiddenState />
           ) : (
             <>
-              <p className="mb-3 text-xs text-muted-foreground">
+              {canWriteContext && (
+                <PagePrimaryAction>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => {
+                      setEditingPolicy(null)
+                      setContextEditorOpen(true)
+                    }}
+                  >
+                    <Plus />
+                    {t('context.newPolicy')}
+                  </Button>
+                </PagePrimaryAction>
+              )}
+              <p className="mb-3 text-caption text-muted-foreground">
                 {t('context.caption')}
               </p>
               <ListTruncationBadge
@@ -1160,21 +1186,6 @@ export default function KnowledgeView() {
                         setContextEditorOpen(true)
                       }
                     : undefined
-                }
-                toolbar={
-                  canWriteContext ? (
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      onClick={() => {
-                        setEditingPolicy(null)
-                        setContextEditorOpen(true)
-                      }}
-                    >
-                      <Plus />
-                      {t('context.newPolicy')}
-                    </Button>
-                  ) : undefined
                 }
                 empty={
                   <EmptyState
@@ -1289,7 +1300,9 @@ function MemoryTab({
   const { t } = useTranslation('knowledge')
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-xs text-muted-foreground">{t('memory.caption')}</p>
+      <p className="text-caption text-muted-foreground">
+        {t('memory.caption')}
+      </p>
       <div className="flex flex-wrap items-center gap-2">
         <div className="max-w-xs flex-1">
           <Input
@@ -1383,7 +1396,7 @@ function PortabilityPanel({
   return (
     <div className="flex flex-col gap-3 rounded-md border border-border p-3">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-sm font-medium">{t('portability.title')}</span>
+        <span className="text-body font-medium">{t('portability.title')}</span>
         <Button
           size="sm"
           variant="outline"
@@ -1395,7 +1408,7 @@ function PortabilityPanel({
       </div>
 
       {manifiesto ? (
-        <div className="flex flex-col gap-1 text-xs">
+        <div className="flex flex-col gap-1 text-caption">
           <span>{t('portability.exported', { n: manifiesto.count ?? 0 })}</span>
           {/* ⛔ LO QUE NO VIAJA, dicho igual de fuerte que lo que viaja. */}
           {(manifiesto.integrity_excluded ?? 0) > 0 ? (
@@ -1440,7 +1453,7 @@ function PortabilityPanel({
       ) : null}
 
       {resultado ? (
-        <div className="flex flex-col gap-1 text-xs">
+        <div className="flex flex-col gap-1 text-caption">
           <span>
             {t('portability.imported', { n: resultado.imported ?? 0 })}
           </span>

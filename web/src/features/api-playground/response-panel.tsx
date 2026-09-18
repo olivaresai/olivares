@@ -86,7 +86,7 @@ export function ResponsePanel({
     return (
       <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground">
         <FileText className="h-8 w-8 opacity-40" />
-        <p className="text-sm">{t('responsePanel.empty')}</p>
+        <p className="text-body">{t('responsePanel.empty')}</p>
       </div>
     )
   }
@@ -96,7 +96,7 @@ export function ResponsePanel({
       {/* Status bar */}
       <div className="flex items-center gap-3 border-b px-3 py-2">
         <StatusBadge status={response.status} />
-        <span className="text-xs text-muted-foreground">
+        <span className="text-caption text-muted-foreground">
           {response.statusText}
         </span>
         {isStreaming && (
@@ -105,7 +105,7 @@ export function ResponsePanel({
             {t('streaming')}
           </Badge>
         )}
-        <div className="ml-auto flex items-center gap-3 text-xs text-muted-foreground">
+        <div className="ml-auto flex items-center gap-3 text-caption text-muted-foreground">
           <span className="inline-flex items-center gap-1">
             <Clock className="h-3 w-3" />
             {t('responsePanel.duration', { duration: response.durationMs })}
@@ -140,7 +140,7 @@ export function ResponsePanel({
 
         <TabsContent value="headers" className="mx-3 space-y-1 overflow-y-auto">
           {Object.entries(response.headers).map(([key, value]) => (
-            <div key={key} className="flex gap-2 text-xs">
+            <div key={key} className="flex gap-2 text-caption">
               <code className="w-48 shrink-0 truncate font-semibold text-foreground">
                 {key}
               </code>

@@ -91,6 +91,7 @@ export function CalendarTab({ framework }: { framework: string | null }) {
               : cal.milestones
             return milestones.length === 0 ? (
               <EmptyState
+                description={t('calendar.emptyHint')}
                 icon={<CalendarClock />}
                 title={t('calendar.empty')}
               />
@@ -115,7 +116,11 @@ export function CalendarTab({ framework }: { framework: string | null }) {
         <AsyncSection query={calendarQ} skeletonHeight={180}>
           {(cal) =>
             cal.watchlist.length === 0 ? (
-              <EmptyState icon={<Eye />} title={t('calendar.watchlistEmpty')} />
+              <EmptyState
+                description={t('calendar.watchlistEmptyHint')}
+                icon={<Eye />}
+                title={t('calendar.watchlistEmpty')}
+              />
             ) : (
               <div className="flex flex-col gap-2">
                 {cal.watchlist.map((w) => (
@@ -135,7 +140,7 @@ function MilestoneRow({ milestone }: { milestone: RegulatoryMilestone }) {
   return (
     <div className="flex flex-col gap-1 rounded-md border border-border p-3">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="font-mono text-sm">{milestone.date}</span>
+        <span className="font-mono text-body">{milestone.date}</span>
         <Badge variant={statusTone(milestone.status)}>
           {t(`calendar.status.${milestone.status}`, {
             defaultValue: milestone.status,
@@ -146,9 +151,9 @@ function MilestoneRow({ milestone }: { milestone: RegulatoryMilestone }) {
           <Badge variant="neutral">{milestone.regime}</Badge>
         ) : null}
       </div>
-      <p className="text-xs">{milestone.effect}</p>
+      <p className="text-caption">{milestone.effect}</p>
       {milestone.note ? (
-        <p className="text-xs text-muted-foreground">{milestone.note}</p>
+        <p className="text-caption text-muted-foreground">{milestone.note}</p>
       ) : null}
       <SourceLine
         source={milestone.source}
@@ -168,9 +173,9 @@ function WatchlistRow({ item }: { item: WatchlistItem }) {
         </Badge>
         <span className="font-medium">{item.name}</span>
       </div>
-      {item.expected ? <p className="text-xs">{item.expected}</p> : null}
+      {item.expected ? <p className="text-caption">{item.expected}</p> : null}
       {item.note ? (
-        <p className="text-xs text-muted-foreground">{item.note}</p>
+        <p className="text-caption text-muted-foreground">{item.note}</p>
       ) : null}
       <SourceLine source={item.source} verifiedOn={item.verified_on} />
     </div>
@@ -189,7 +194,7 @@ function SourceLine({
 }) {
   const { t } = useTranslation('compliance')
   return (
-    <p className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
+    <p className="flex flex-wrap items-center gap-1 text-caption text-muted-foreground">
       <a
         href={source.url}
         target="_blank"

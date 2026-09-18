@@ -16,6 +16,7 @@
   "orgs": {
     "title": "Organizations",
     "empty": "No organizations yet",
+    "emptyHint": "Organizations appear here with the region their data is pinned to. Create an organization to start.",
     "colOrg": "Organization",
     "colRegion": "Region pin",
     "colActions": "Actions",

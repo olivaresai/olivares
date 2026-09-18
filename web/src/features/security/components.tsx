@@ -74,7 +74,7 @@ export function SafetyPostureSurfaces({
           className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-4"
         >
           <div className="flex items-center justify-between gap-2">
-            <h3 className="truncate font-mono text-sm text-foreground">
+            <h3 className="truncate font-mono text-body text-foreground">
               {p.subject_kind}
             </h3>
             <Badge variant="neutral">{formatInt(p.total)}</Badge>
@@ -85,13 +85,13 @@ export function SafetyPostureSurfaces({
               .map((sev) => (
                 <span key={sev} className="flex items-center gap-1">
                   <SeverityBadge severity={sev} />
-                  <span className="text-xs text-muted-foreground">
+                  <span className="text-caption text-muted-foreground">
                     {formatInt(p.by_severity[sev])}
                   </span>
                 </span>
               ))}
           </div>
-          <span className="text-xs text-muted-foreground">
+          <span className="text-caption text-muted-foreground">
             {t('safetyPosture.columns.open')}: {formatInt(p.open)}
           </span>
         </div>
@@ -166,7 +166,7 @@ export function FindingsTable({
         size: 148,
         cell: ({ row }) => (
           <span
-            className="block max-w-[124px] truncate font-mono text-xs text-muted-foreground"
+            className="block max-w-[124px] truncate font-mono text-caption text-muted-foreground"
             title={row.original.source}
           >
             {row.original.source}
@@ -190,10 +190,10 @@ export function FindingsTable({
         size: 420,
         cell: ({ row }) => (
           <div className="min-w-0 max-w-[420px]">
-            <p className="truncate text-sm text-foreground">
+            <p className="truncate text-body text-foreground">
               {row.original.title}
             </p>
-            <p className="truncate text-xs text-muted-foreground">
+            <p className="truncate text-caption text-muted-foreground">
               {/*the subject KIND is painted, not dumped. A connector may report
                   a posture about something the raw identifier does not explain: the
                   local connector emits `local.residency` per model held in memory
@@ -298,13 +298,13 @@ function DetectionRow({ detection }: { detection: Detection }) {
           <Badge variant="neutral">{t('guardrails.detectOnly')}</Badge>
         )}
       </div>
-      <p className="text-sm font-medium text-foreground">{detection.title}</p>
-      <p className="font-mono text-xs text-muted-foreground">
+      <p className="text-body font-medium text-foreground">{detection.title}</p>
+      <p className="font-mono text-caption text-muted-foreground">
         {detection.rule}
       </p>
       {detection.excerpt ? (
         // Already redacted — a label/placeholder, never the secret (docs/SECURITY-HARDENING.md).
-        <p className="rounded bg-muted px-2 py-1 font-mono text-xs text-muted-foreground">
+        <p className="rounded bg-muted px-2 py-1 font-mono text-caption text-muted-foreground">
           {detection.excerpt}
         </p>
       ) : null}
@@ -333,7 +333,7 @@ export function GuardrailVerdict({ result }: { result: InspectResult }) {
           })}
         </Badge>
         {result.finding_ids.length > 0 ? (
-          <span className="text-xs text-muted-foreground">
+          <span className="text-caption text-muted-foreground">
             {t('guardrails.findingsRecorded', {
               count: result.finding_ids.length,
             })}
@@ -345,7 +345,9 @@ export function GuardrailVerdict({ result }: { result: InspectResult }) {
         <CaveatNotice>{t('guardrails.detectiveNote')}</CaveatNotice>
       ) : null}
       {result.detections.length === 0 ? (
-        <p className="text-sm text-muted-foreground">{t('guardrails.clean')}</p>
+        <p className="text-body text-muted-foreground">
+          {t('guardrails.clean')}
+        </p>
       ) : (
         <div className="flex flex-col gap-2">
           {result.detections.map((d, i) => (
@@ -385,7 +387,7 @@ export function EnforcementTable({
       accessorKey: 'class',
       header: t('enforcement.columns.class'),
       cell: ({ row }) => (
-        <span className="font-mono text-sm text-foreground">
+        <span className="font-mono text-body text-foreground">
           {row.original.class === '*'
             ? t('enforcement.wildcard')
             : t(`guardrails.class.${row.original.class}`, {
@@ -414,7 +416,7 @@ export function EnforcementTable({
       header: t('enforcement.columns.governance'),
       cell: ({ row }) =>
         !row.original.enabled ? (
-          <span className="text-xs text-muted-foreground">—</span>
+          <span className="text-caption text-muted-foreground">—</span>
         ) : row.original.governed ? (
           <Badge variant="success">{t('enforcement.governed')}</Badge>
         ) : (
@@ -426,7 +428,7 @@ export function EnforcementTable({
       accessorKey: 'updated_at',
       header: t('enforcement.columns.updated'),
       cell: ({ row }) => (
-        <span className="text-xs text-muted-foreground">
+        <span className="text-caption text-muted-foreground">
           {formatDateTime(row.original.updated_at, i18n.language)}
         </span>
       ),
@@ -490,12 +492,12 @@ export function AnomalyCard({ anomaly }: { anomaly: Anomaly }) {
               <Badge variant="warning">{t('anomalies.approximate')}</Badge>
             ) : null}
           </div>
-          <p className="text-sm font-medium text-foreground">
+          <p className="text-body font-medium text-foreground">
             {approximate
               ? t('anomalies.suspectedTitle', { title: anomaly.title })
               : anomaly.title}
           </p>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-caption text-muted-foreground">
             <span className="font-mono">
               {anomaly.subject_kind}: {anomaly.subject_ref}
             </span>
@@ -503,16 +505,16 @@ export function AnomalyCard({ anomaly }: { anomaly: Anomaly }) {
             {formatDateTime(anomaly.occurred_at, i18n.language)}
           </p>
           {approximate ? (
-            <p className="text-xs text-muted-foreground">
+            <p className="text-caption text-muted-foreground">
               {t('anomalies.unreconciledNote')}
             </p>
           ) : null}
         </div>
         <div className="shrink-0 text-right">
-          <div className="text-xs text-muted-foreground">
+          <div className="text-caption text-muted-foreground">
             {t('anomalies.priority')}
           </div>
-          <div className="font-display text-lg font-semibold tabular-nums text-foreground">
+          <div className="font-display text-title tabular-nums text-foreground">
             {formatInt(anomaly.priority, i18n.language)}
           </div>
         </div>
@@ -525,7 +527,7 @@ export function AnomalyList({ anomalies }: { anomalies: Anomaly[] }) {
   const { t } = useTranslation('security')
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-xs text-muted-foreground">
+      <p className="text-caption text-muted-foreground">
         {t('anomalies.orderNote')}
       </p>
       {/* Respect the backend order (priority desc) — do not re-sort here. */}
@@ -640,7 +642,7 @@ export function CaseIntegrityPanel({
   return (
     <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-muted px-4 py-3">
       <div className="flex flex-col gap-1">
-        <span className="text-xs text-muted-foreground">
+        <span className="text-caption text-muted-foreground">
           {t('integrity.chain')}
         </span>
         <IntegrityBadge
@@ -649,7 +651,7 @@ export function CaseIntegrityPanel({
         />
       </div>
       <div className="flex flex-col gap-1">
-        <span className="text-xs text-muted-foreground">
+        <span className="text-caption text-muted-foreground">
           {t('integrity.checkpoints')}
         </span>
         {/* Same three answers as IntegrityPanel: a case opened on a ledger that
@@ -664,10 +666,10 @@ export function CaseIntegrityPanel({
         )}
       </div>
       <div className="flex flex-col gap-1">
-        <span className="text-xs text-muted-foreground">
+        <span className="text-caption text-muted-foreground">
           {t('integrity.attestedSeq')}
         </span>
-        <span className="font-mono text-sm tabular-nums text-foreground">
+        <span className="font-mono text-body tabular-nums text-foreground">
           {formatInt(integrity.attested_seq)} / {formatInt(integrity.head_seq)}
         </span>
       </div>

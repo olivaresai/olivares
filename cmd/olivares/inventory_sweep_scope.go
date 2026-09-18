@@ -16,7 +16,7 @@ import (
 )
 
 // inventorySweepScopeSource is the composition root's private answer to
-// inventory.SweepScopeSource (D08-C2a): which tenants the durable freshness
+// inventory.SweepScopeSource: which tenants the durable freshness
 // sweep should visit.
 //
 // It lives HERE, and not in the module, because reading the whole tenant

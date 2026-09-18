@@ -216,7 +216,7 @@ function VerificationVerdict({
       className="flex flex-col gap-2 rounded-lg border border-border bg-background p-3"
       aria-label={t(fresh ? 'verify.fresh' : 'verify.passive')}
     >
-      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+      <p className="text-caption font-semibold uppercase tracking-wide text-muted-foreground">
         {t(fresh ? 'verify.fresh' : 'verify.passive')}
       </p>
       <div className="flex flex-wrap items-center gap-1.5">
@@ -236,11 +236,11 @@ function VerificationVerdict({
         </Badge>
         {result.gap && <Badge variant="danger">{t('verify.gap')}</Badge>}
       </div>
-      <p className="text-xs text-muted-foreground">
+      <p className="text-caption text-muted-foreground">
         {t('verify.anchoredThrough', { idx: result.anchored_through })}
       </p>
       {!result.ok && (result.reason || result.break_at != null) && (
-        <p className="text-xs font-medium text-danger">
+        <p className="text-caption font-medium text-danger">
           {t('verify.breakAt', {
             idx: result.break_at ?? '—',
             reason: result.reason ?? '—',
@@ -252,7 +252,7 @@ function VerificationVerdict({
           {result.anchor_failures!.map((failure, index) => (
             <li
               key={`${failure.kind}-${failure.seq}-${failure.at_idx ?? 0}-${index}`}
-              className="font-mono text-xs text-danger"
+              className="font-mono text-caption text-danger"
             >
               {t('verify.failure', {
                 kind: failure.kind,

@@ -55,7 +55,7 @@ export function TopoList({
   return (
     <section className="rounded-lg border border-border bg-surface p-4">
       <div className="mb-4 flex items-center justify-between gap-3">
-        <h3 className="text-sm font-medium text-foreground">
+        <h3 className="text-body font-medium text-foreground">
           {t('editor.list')}
         </h3>
         {canWrite ? (
@@ -66,7 +66,7 @@ export function TopoList({
         ) : null}
       </div>
       {ordered.length === 0 ? (
-        <p className="py-8 text-center text-sm text-muted-foreground">
+        <p className="py-8 text-center text-body text-muted-foreground">
           {t('list.emptyHint')}
         </p>
       ) : (
@@ -102,12 +102,12 @@ export function TopoList({
                       isSelected ? 'bg-accent-strong' : 'bg-transparent',
                     )}
                   />
-                  <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted font-mono text-xs text-muted-foreground">
+                  <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted font-mono text-caption text-muted-foreground">
                     {index + 1}
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <code className="font-mono text-sm text-foreground">
+                      <code className="font-mono text-body text-foreground">
                         {step.ref}
                       </code>
                       <Badge variant="outline">{t(`kind.${step.kind}`)}</Badge>
@@ -118,7 +118,7 @@ export function TopoList({
                         </Badge>
                       ) : null}
                     </div>
-                    <p className="mt-1 text-xs text-muted-foreground">
+                    <p className="mt-1 text-caption text-muted-foreground">
                       {stepSummary(step, t)}
                     </p>
                     {stepErrors.length > 0 ? (
@@ -126,7 +126,7 @@ export function TopoList({
                         {stepErrors.map((error) => (
                           <li
                             key={error.message}
-                            className="text-xs text-danger"
+                            className="text-caption text-danger"
                           >
                             {validationMessage(error.message, t)}
                           </li>
@@ -157,11 +157,11 @@ export function TopoList({
                 </div>
 
                 <fieldset className="mt-3 border-t border-border pt-3">
-                  <legend className="px-1 text-xs font-medium text-foreground">
+                  <legend className="px-1 text-caption font-medium text-foreground">
                     {t('deps.title')}
                   </legend>
                   {candidates.length === 0 ? (
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-caption text-muted-foreground">
                       {t('deps.none')}
                     </p>
                   ) : (
@@ -177,7 +177,7 @@ export function TopoList({
                         return (
                           <label
                             key={dependency}
-                            className="flex min-h-6 items-center gap-2 text-xs text-foreground"
+                            className="flex min-h-6 items-center gap-2 text-caption text-foreground"
                           >
                             <Checkbox
                               checked={checked}
@@ -198,7 +198,7 @@ export function TopoList({
                     </div>
                   )}
                   {step.depends_on.length >= 8 ? (
-                    <p className="mt-2 text-xs text-warning">
+                    <p className="mt-2 text-caption text-warning">
                       {t('deps.limit')}
                     </p>
                   ) : null}

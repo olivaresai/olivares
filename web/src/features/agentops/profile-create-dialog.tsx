@@ -157,7 +157,7 @@ export function ProfileCreateDialog({
               placeholder={t('profiles.create.displayNamePlaceholder')}
             />
           </Field>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-caption text-muted-foreground">
             {localEnvironment
               ? t('profiles.create.environmentKnown', { env: localEnvironment })
               : t('profiles.create.environmentUnknown')}

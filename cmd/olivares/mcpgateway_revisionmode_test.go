@@ -20,7 +20,7 @@ import (
 	"github.com/olivaresai/olivares/modules/knowledge"
 )
 
-// mcpgateway_revisionmode_test.go — D07-1: the composed gateway states its MCP
+// mcpgateway_revisionmode_test.go — the composed gateway states its MCP
 // revision posture EXPLICITLY, without moving any default.
 //
 // Every case here runs through the REAL operator-config path — a JSON document on
@@ -447,7 +447,7 @@ func mcpGatewayReadBack(t *testing.T, out string) map[string]any {
 	return found[0]
 }
 
-// TestMCPGatewayRevisionControlsPresenceMatchesValue is the D07-1 R1 correction:
+// TestMCPGatewayRevisionControlsPresenceMatchesValue is an independent review's correction:
 // the PRESENCE of the two revision controls is derived from the same occurrence
 // as their VALUE, so the two can no longer disagree.
 //

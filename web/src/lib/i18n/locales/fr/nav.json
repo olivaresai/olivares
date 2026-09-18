@@ -291,6 +291,33 @@
     "recentEmpty": "Les modules ouverts apparaissent ici.",
     "recentScope": "Ouverts dans cet onglet. Effacés au rechargement, à la déconnexion ou au changement de compte ou d’organisation.",
     "recentRemove": "Retirer {{name}} des modules récents",
-    "recentClear": "Effacer les modules récents"
+    "recentClear": "Effacer les modules récents",
+    "pinRow": "Épingler {{name}} aux favoris (p)",
+    "unpinRow": "Détacher {{name}} des favoris (p)"
+  },
+  "scope": {
+    "tenant": "Organisation",
+    "workspace": "Espace de travail",
+    "environment": "Environnement",
+    "noTenant": "aucune",
+    "noWorkspace": "Aucun espace de travail",
+    "noEnvironment": "Non déclaré",
+    "hint": "Ce sous quoi la prochaine session s’exécutera."
+  },
+  "launcher": {
+    "label": "Nommez la session à démarrer",
+    "placeholder": "Nommer cette session…",
+    "profile": "Profil de fournisseur",
+    "profilePlaceholder": "Choisir un profil",
+    "workspace": "Espace de travail à monter",
+    "start": "Démarrer",
+    "backgroundHint": "Ctrl+Entrée la démarre et vous laisse ici, prêt pour la suivante.",
+    "noProfiles": "Aucun profil de fournisseur n’est enregistré, et une session ne peut pas démarrer sans lui.",
+    "addProvider": "Ajouter un profil de fournisseur",
+    "startedBackground": "Session démarrée. Le brouillon est libre pour la suivante.",
+    "startFailed": "La session n’a pas pu être démarrée.",
+    "noTenant": "Sélectionnez une organisation avant de démarrer une session.",
+    "noProfileRead": "Une session s’exécute sous un profil de fournisseur, et votre rôle n’inclut pas la permission de les lire.",
+    "readFailed": "Les profils de fournisseur n’ont pas pu être lus : impossible de démarrer une session d’ici."
   }
 }

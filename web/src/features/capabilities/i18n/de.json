@@ -213,6 +213,7 @@
       "delete": "Gelöscht"
     },
     "empty": "Keine Revisionen",
+    "emptyHint": "Jede Änderung an diesem Server wird als Revision aufbewahrt, die Sie vergleichen und wiederherstellen können. Die erste Bearbeitung erzeugt eine.",
     "truncated": "{{n}} Revisionen geladen; es gibt mehr",
     "truncatedHint": "Die Historie ist laenger als diese Seite. Eine hier fehlende Revision wurde deshalb nicht nie aufgezeichnet."
   },

@@ -51,7 +51,7 @@ export function CustomFields({
               onChange={(e) => set(i, { value: e.target.value })}
             />
           </div>
-          <label className="flex items-center gap-1 pb-2 text-xs text-muted-foreground">
+          <label className="flex items-center gap-1 pb-2 text-caption text-muted-foreground">
             <Switch
               checked={r.secret}
               onCheckedChange={(v) => set(i, { secret: v })}

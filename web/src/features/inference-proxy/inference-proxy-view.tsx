@@ -10,7 +10,7 @@
 // exposes no such route, and the console never fabricates one — classification runs
 // server-side at egress, which the section states honestly.
 import './i18n'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Waypoints, Plus, Trash2, Pencil } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -57,6 +57,7 @@ import {
   type ProxyConfig,
   type ResponseDLPMode,
 } from './api'
+import { StaticTable } from '@/components/data/static-table'
 
 const GATE_KEYS = [
   'gate_model_access',
@@ -141,7 +142,7 @@ function ContentFirewallCard() {
         <CardTitle>{t('firewall.title')}</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
-        <p className="text-sm text-muted-foreground">{t('firewall.intro')}</p>
+        <p className="text-body text-muted-foreground">{t('firewall.intro')}</p>
         {!canRead ? (
           <ForbiddenState />
         ) : firewallQ.isLoading ? (
@@ -154,7 +155,7 @@ function ContentFirewallCard() {
         ) : malformed || state === null ? (
           <div className="flex flex-col gap-2">
             <Badge variant="outline">{t('firewall.states.unreadable')}</Badge>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-body text-muted-foreground">
               {t('firewall.statesHint.unreadable')}
             </p>
             <Button
@@ -169,7 +170,7 @@ function ContentFirewallCard() {
         ) : (
           <div className="flex flex-col gap-2">
             <Badge variant="outline">{t(`firewall.states.${state}`)}</Badge>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-body text-muted-foreground">
               {t(`firewall.statesHint.${state}`)}
             </p>
             <Button
@@ -182,7 +183,9 @@ function ContentFirewallCard() {
             </Button>
           </div>
         )}
-        <p className="text-xs text-muted-foreground">{t('firewall.limit')}</p>
+        <p className="text-caption text-muted-foreground">
+          {t('firewall.limit')}
+        </p>
       </CardContent>
     </Card>
   )
@@ -225,7 +228,12 @@ function ConfigSection() {
 
   // Switching tenants abandons the edit. Carrying a draft across is not a convenience: the
   // form is bound to a config that no longer belongs to what is on screen.
-  useEffect(discard, [activeTenant])
+  const [boundTenant, setBoundTenant] = useState(activeTenant)
+  if (boundTenant !== activeTenant) {
+    setBoundTenant(activeTenant)
+    setDraft(null)
+    setMandatoryTouched(false)
+  }
 
   const save = usePrivilegedMutation({
     mutationFn: () => {
@@ -253,7 +261,7 @@ function ConfigSection() {
         <CardTitle>{t('config.title')}</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
-        <p className="text-sm text-muted-foreground">{t('config.intro')}</p>
+        <p className="text-body text-muted-foreground">{t('config.intro')}</p>
         {configQ.isLoading ? (
           <div role="status" className="flex justify-center py-6">
             <span className="sr-only">{t('common:states.loading')}</span>
@@ -432,8 +440,8 @@ function SwitchRow({
   return (
     <div className="flex items-start justify-between gap-4 py-2">
       <span className="min-w-0">
-        <span className="text-sm font-medium text-foreground">{label}</span>
-        <span className="block text-xs text-muted-foreground">{hint}</span>
+        <span className="text-body font-medium text-foreground">{label}</span>
+        <span className="block text-caption text-muted-foreground">{hint}</span>
       </span>
       <Switch
         checked={checked}
@@ -508,7 +516,7 @@ function DLPSection() {
         ) : null}
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
-        <p className="text-sm text-muted-foreground">{t('dlp.intro')}</p>
+        <p className="text-body text-muted-foreground">{t('dlp.intro')}</p>
         {/* El aviso va con la CUENTA CARGADA, no con el techo: «se muestran 1000» le dice al
             operador lo que tiene delante; «el techo es 1000» le dice un numero de configuracion
             que no le sirve para decidir si mirar mas. */}
@@ -518,7 +526,10 @@ function DLPSection() {
           hint={t('dlp.truncatedHint')}
         />
         {!canRead ? (
-          <EmptyState title={t('dlp.noRead')} />
+          <EmptyState
+            description={t('dlp.noReadHint')}
+            title={t('dlp.noRead')}
+          />
         ) : rulesQ.isLoading ? (
           <div role="status" className="flex justify-center py-6">
             <span className="sr-only">{t('common:states.loading')}</span>
@@ -530,34 +541,30 @@ function DLPSection() {
           <EmptyState title={t('dlp.empty')} description={t('dlp.emptyHint')} />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <StaticTable>
               <thead>
-                <tr className="border-b text-left text-xs uppercase tracking-wider text-muted-foreground">
-                  <th className="py-2 pr-4 font-medium">{t('dlp.colClass')}</th>
-                  <th className="py-2 pr-4 font-medium">
-                    {t('dlp.colAction')}
-                  </th>
-                  <th className="py-2 pr-4 font-medium">{t('dlp.colNote')}</th>
-                  <th className="py-2 pl-4 text-right font-medium">
+                <tr className="tracking-wider">
+                  <th>{t('dlp.colClass')}</th>
+                  <th>{t('dlp.colAction')}</th>
+                  <th>{t('dlp.colNote')}</th>
+                  <th className="text-right">
                     <span className="sr-only">{t('dlp.colActions')}</span>
                   </th>
                 </tr>
               </thead>
               <tbody>
                 {rulesQ.data?.items.map((r) => (
-                  <tr key={r.id ?? r.class} className="border-b last:border-0">
-                    <td className="py-2 pr-4 font-mono">{r.class}</td>
-                    <td className="py-2 pr-4">
+                  <tr key={r.id ?? r.class}>
+                    <td className="font-mono">{r.class}</td>
+                    <td>
                       <Badge
                         variant={r.action === 'deny' ? 'danger' : 'success'}
                       >
                         {t(`dlp.actions.${r.action}`)}
                       </Badge>
                     </td>
-                    <td className="py-2 pr-4 text-muted-foreground">
-                      {r.note ?? ''}
-                    </td>
-                    <td className="py-2 pl-4 text-right">
+                    <td className="text-muted-foreground">{r.note ?? ''}</td>
+                    <td className="text-right">
                       {canEdit ? (
                         <div className="flex justify-end gap-1">
                           <Button
@@ -584,7 +591,7 @@ function DLPSection() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </StaticTable>
           </div>
         )}
         {stepUpNeeded ? (
@@ -803,7 +810,7 @@ function DeviceSection() {
         <CardTitle>{t('device.title')}</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
-        <p className="text-sm text-muted-foreground">{t('device.intro')}</p>
+        <p className="text-body text-muted-foreground">{t('device.intro')}</p>
         {stepUpNeeded ? (
           <StepUpPanel minAal={AAL.HARDWARE} currentAal={aal} action="proxy" />
         ) : (

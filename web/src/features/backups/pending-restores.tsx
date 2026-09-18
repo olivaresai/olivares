@@ -45,13 +45,13 @@ export function PendingRestores() {
     <div className="mb-5 rounded-lg border border-amber-500/40 bg-amber-500/5 p-4">
       <div className="mb-3 flex items-center gap-2">
         <UserCheck className="size-4 text-amber-500" />
-        <h3 className="text-sm font-medium">{t('pending.title')}</h3>
+        <h3 className="text-body font-medium">{t('pending.title')}</h3>
       </div>
       <ul className="flex flex-col gap-2">
         {items.map((p) => (
           <li
             key={p.request_id}
-            className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-surface px-3 py-2 text-sm"
+            className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-surface px-3 py-2 text-body"
           >
             <div className="flex flex-col">
               <span>
@@ -60,10 +60,10 @@ export function PendingRestores() {
                     being asked "are you someone else?", and "token:<id>" does not
                     let them answer that. */}
                 {t('pending.requestedByPrefix')}{' '}
-                <strong>{p.initiator_user || p.initiator}</strong>{' '}
-                · {formatDateTime(p.created_at)}
+                <strong>{p.initiator_user || p.initiator}</strong> ·{' '}
+                {formatDateTime(p.created_at)}
               </span>
-              <span className="font-mono text-xs text-muted-foreground">
+              <span className="font-mono text-caption text-muted-foreground">
                 {p.initiator_user ? `${p.initiator} · ` : ''}
                 {p.request_id}
               </span>

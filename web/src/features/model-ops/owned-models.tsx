@@ -113,7 +113,7 @@ export function OwnedModelsTab() {
         header: t('owned.columns.provider'),
         cell: ({ row }) =>
           row.original.provider_ref ? (
-            <span className="font-mono text-xs text-muted-foreground">
+            <span className="font-mono text-caption text-muted-foreground">
               {row.original.provider_ref}
             </span>
           ) : (
@@ -124,7 +124,7 @@ export function OwnedModelsTab() {
         accessorKey: 'visibility',
         header: t('owned.columns.visibility'),
         cell: ({ row }) => (
-          <span className="text-xs text-muted-foreground">
+          <span className="text-caption text-muted-foreground">
             {row.original.visibility}
           </span>
         ),
@@ -381,7 +381,7 @@ function VersionsSection({
   return (
     <section className="flex flex-col gap-3">
       <div className="flex items-center justify-between gap-2">
-        <h3 className="text-sm font-medium text-foreground">
+        <h3 className="text-body font-medium text-foreground">
           {t('versions.title')}
         </h3>
         {canWrite && (
@@ -404,7 +404,7 @@ function VersionsSection({
       />
 
       {query.isLoading ? (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-caption text-muted-foreground">
           {t('common:states.loading')}
         </p>
       ) : query.error ? (
@@ -435,7 +435,7 @@ function VersionsSection({
                     className="flex flex-1 items-center gap-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     aria-expanded={active}
                   >
-                    <span className="font-mono text-xs">{v.version}</span>
+                    <span className="font-mono text-caption">{v.version}</span>
                     <StatusBadge status={v.status} />
                   </button>
                   <div className="flex items-center gap-1">

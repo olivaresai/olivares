@@ -49,6 +49,7 @@
     "description": "Every isolated execution, with the backend that ran it and whether it was scored.",
     "isolationNote": "Isolation is real, not faked: the runner and isolated flag are shown exactly as recorded. A degraded run was executed but not scored — it is not a pass.",
     "empty": "No runs yet",
+    "emptyHint": "Every scenario run is listed here with its verdict and its outputs. Run a scenario to record the first one.",
     "errored": "{{count}} error",
     "errored_one": "{{count}} error",
     "errored_other": "{{count}} errors",
@@ -66,6 +67,7 @@
   "outputs": {
     "title": "Step outputs",
     "empty": "No outputs recorded",
+    "emptyHint": "Whatever a scenario step writes is captured here. This run recorded no output.",
     "syntheticNote": "These are bounded synthetic outputs from the mock runner — not production output. A mock-miss is a deterministic marker; it never reached a real resource.",
     "mockHit": "Mock hit",
     "mockMiss": "Mock-miss"
@@ -79,6 +81,7 @@
     "completePartial": "Replay ended, but it is not the whole record",
     "unreadable": "Frames this view could not read: {{n}}. They arrived and were discarded, so the evidence they carried is missing here — this is not a clean replay.",
     "emptyUnreadable": "No step output could be read",
+    "emptyUnreadableHint": "Step output is streamed from the sandbox as the run proceeds. Nothing could be read back for this step.",
     "disconnected": "Not connected",
     "lost": "Connection lost — you have stopped seeing this run.",
     "lostHint": "This is NOT the run finishing: the connection ended before the engine signalled the end of the replay. The run's status is the one the engine recorded, shown in the runs table — it is never derived from this connection. Reconnect to resume; outputs already shown are not repeated.",

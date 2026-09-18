@@ -41,7 +41,7 @@ import {
   RefreshCw,
   Upload,
 } from 'lucide-react'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -257,7 +257,9 @@ export function AgentCoreExportView() {
     },
   })
 
-  applyRef.current = applyMutation.mutate
+  useEffect(() => {
+    applyRef.current = applyMutation.mutate
+  })
 
   if (!canExport) return <ForbiddenState />
 
@@ -276,10 +278,10 @@ export function AgentCoreExportView() {
         description={
           <span className="flex flex-col gap-2">
             <span>{t('agentcoreExport.notWiredBody')}</span>
-            <code className="mx-auto rounded bg-muted px-2 py-1 font-mono text-xs">
+            <code className="mx-auto rounded bg-muted px-2 py-1 font-mono text-caption">
               {CONFIG_ENV}
             </code>
-            <span className="text-xs">
+            <span className="text-caption">
               {t('agentcoreExport.notWiredCredentials')}
             </span>
           </span>
@@ -298,14 +300,14 @@ export function AgentCoreExportView() {
           visible on the real screen. */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-sm">
+          <CardTitle className="flex items-center gap-2 text-body">
             <ClipboardList className="size-4" />
             {t('agentcoreExport.planTitle')}
           </CardTitle>
         </CardHeader>
         <CardContent className="flex flex-wrap items-end gap-3">
           <label className="flex flex-col gap-1.5">
-            <span className="text-xs font-medium">
+            <span className="text-caption font-medium">
               {t('agentcoreExport.modeLabel')}
             </span>
             <Select
@@ -352,7 +354,7 @@ export function AgentCoreExportView() {
               : t('agentcoreExport.computePlan')}
           </Button>
 
-          <p className="w-full text-xs text-muted-foreground">
+          <p className="w-full text-caption text-muted-foreground">
             {t('agentcoreExport.modeHint')}
           </p>
         </CardContent>
@@ -360,13 +362,13 @@ export function AgentCoreExportView() {
 
       {planError && !notWired && (
         <Card className="border-danger/40">
-          <CardContent className="flex items-start gap-2 py-4 text-sm">
+          <CardContent className="flex items-start gap-2 py-4 text-body">
             <AlertTriangle className="mt-0.5 size-4 shrink-0 text-danger" />
             <span>
               <span className="font-medium">
                 {t('agentcoreExport.planFailed')}
               </span>
-              <span className="block text-xs text-muted-foreground">
+              <span className="block text-caption text-muted-foreground">
                 {planError.message}
               </span>
             </span>
@@ -376,13 +378,13 @@ export function AgentCoreExportView() {
 
       {planChanged && (
         <Card className="border-warning/50">
-          <CardContent className="flex items-start gap-2 py-4 text-sm">
+          <CardContent className="flex items-start gap-2 py-4 text-body">
             <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning" />
             <span>
               <span className="font-medium">
                 {t('agentcoreExport.planChangedTitle')}
               </span>
-              <span className="block text-xs text-muted-foreground">
+              <span className="block text-caption text-muted-foreground">
                 {t('agentcoreExport.planChangedBody')}
               </span>
             </span>
@@ -392,13 +394,13 @@ export function AgentCoreExportView() {
 
       {denied && (
         <Card className="border-warning/50">
-          <CardContent className="flex items-start gap-2 py-4 text-sm">
+          <CardContent className="flex items-start gap-2 py-4 text-body">
             <CircleSlash className="mt-0.5 size-4 shrink-0 text-warning" />
             <span>
               <span className="font-medium">
                 {t('agentcoreExport.deniedTitle')}
               </span>
-              <span className="block text-xs text-muted-foreground">
+              <span className="block text-caption text-muted-foreground">
                 {denied}
               </span>
             </span>
@@ -442,12 +444,14 @@ export function AgentCoreExportView() {
               pendingApply.mode ??
               t('agentcoreExport.modeTenantConfigured'),
           })}
-          tone={(pendingApply.plan.Deletes ?? []).length > 0 ? 'danger' : 'default'}
+          tone={
+            (pendingApply.plan.Deletes ?? []).length > 0 ? 'danger' : 'default'
+          }
           confirmLabel={t('agentcoreExport.confirmApply')}
           pending={applyMutation.isPending}
           onConfirm={() => applyMutation.mutate(pendingApply)}
         >
-          <div className="flex flex-col gap-2 text-sm">
+          <div className="flex flex-col gap-2 text-body">
             <p>
               {t('agentcoreExport.confirmCounts', {
                 creates: (pendingApply.plan.Creates ?? []).length,
@@ -455,12 +459,12 @@ export function AgentCoreExportView() {
                 deletes: (pendingApply.plan.Deletes ?? []).length,
               })}
             </p>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-caption text-muted-foreground">
               {t('agentcoreExport.confirmEngine', {
                 engine: pendingApply.plan.EngineID,
               })}
             </p>
-            <p className="font-mono text-xs break-all text-muted-foreground">
+            <p className="font-mono text-caption break-all text-muted-foreground">
               {t('agentcoreExport.confirmHash', {
                 hash: pendingApply.plan.PlanHash,
               })}
@@ -491,7 +495,7 @@ function PlanPanel({
   return (
     <Card>
       <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
-        <CardTitle className="flex items-center gap-2 text-sm">
+        <CardTitle className="flex items-center gap-2 text-body">
           <ClipboardList className="size-4" />
           {t('agentcoreExport.diffTitle')}
         </CardTitle>
@@ -504,7 +508,7 @@ function PlanPanel({
         {/* Counters interpolate `n`, never `count`: `count` is i18next's plural
             trigger and would demand a CLDR category set per language for what is
             a label with a number after it. */}
-        <div className="flex flex-wrap items-center gap-2 text-xs">
+        <div className="flex flex-wrap items-center gap-2 text-caption">
           <Badge variant="success">
             {t('agentcoreExport.creates', { n: (plan.Creates ?? []).length })}
           </Badge>
@@ -513,9 +517,7 @@ function PlanPanel({
               pintaban «0 updates» en ámbar y «0 deletes» en rojo. Un aviso a cero
               no avisa de nada y gasta la atención que el aviso de verdad necesita. */}
           <Badge
-            variant={
-              (plan.Updates ?? []).length > 0 ? 'warning' : 'neutral'
-            }
+            variant={(plan.Updates ?? []).length > 0 ? 'warning' : 'neutral'}
           >
             {t('agentcoreExport.updates', { n: (plan.Updates ?? []).length })}
           </Badge>
@@ -534,12 +536,12 @@ function PlanPanel({
 
         {/* The plan hash is shown because it IS the identity of what the operator
             reviewed, and it is what travels on apply. */}
-        <p className="font-mono text-xs break-all text-muted-foreground">
+        <p className="font-mono text-caption break-all text-muted-foreground">
           {t('agentcoreExport.planHash', { hash: plan.PlanHash })}
         </p>
 
         {all.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
+          <p className="text-body text-muted-foreground">
             {t('agentcoreExport.noChanges')}
           </p>
         ) : (
@@ -547,7 +549,7 @@ function PlanPanel({
             {all.map((c) => (
               <li
                 key={`${c.Op}:${c.Name}`}
-                className="flex flex-col gap-1 p-3 text-sm"
+                className="flex flex-col gap-1 p-3 text-body"
               >
                 <span className="flex flex-wrap items-center gap-2">
                   <Badge
@@ -561,7 +563,7 @@ function PlanPanel({
                   >
                     {t(`agentcoreExport.op.${c.Op}`, { defaultValue: c.Op })}
                   </Badge>
-                  <span className="font-mono text-xs">{c.Name}</span>
+                  <span className="font-mono text-caption">{c.Name}</span>
                   {c.EnforcementMode && (
                     <Badge variant="neutral">{c.EnforcementMode}</Badge>
                   )}
@@ -569,7 +571,7 @@ function PlanPanel({
                       enforced. Show BOTH sides rather than only the target. */}
                   {c.RemoteEnforcementMode &&
                     c.RemoteEnforcementMode !== c.EnforcementMode && (
-                      <span className="text-xs text-muted-foreground">
+                      <span className="text-caption text-muted-foreground">
                         {t('agentcoreExport.modeChange', {
                           from: c.RemoteEnforcementMode,
                           to: c.EnforcementMode,
@@ -578,7 +580,7 @@ function PlanPanel({
                     )}
                 </span>
                 {c.Statement && (
-                  <pre className="overflow-x-auto rounded bg-muted p-2 font-mono text-xs">
+                  <pre className="overflow-x-auto rounded bg-muted p-2 font-mono text-caption">
                     {c.Statement}
                   </pre>
                 )}
@@ -592,20 +594,20 @@ function PlanPanel({
             believes a policy reached AWS that never will. */}
         {unsupported.length > 0 && (
           <div className="flex flex-col gap-2 rounded border border-warning/50 p-3">
-            <span className="flex items-center gap-2 text-sm font-medium">
+            <span className="flex items-center gap-2 text-body font-medium">
               <FileWarning className="size-4 text-warning" />
               {t('agentcoreExport.unsupportedTitle', {
                 n: unsupported.length,
               })}
             </span>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-caption text-muted-foreground">
               {t('agentcoreExport.unsupportedBody')}
             </p>
             <ul className="flex flex-col gap-1">
               {unsupported.map((u, i) => (
                 <li
                   key={`${u.Item.Kind}:${u.Item.SubjectRef}:${u.Reason}:${i}`}
-                  className="text-xs"
+                  className="text-caption"
                 >
                   <span className="font-mono">
                     {u.Item.Kind}
@@ -631,20 +633,20 @@ function OutcomePanel({ outcome }: { outcome: AgentCoreApplyOutcome }) {
     return (
       <Card className="border-warning/50">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-sm">
+          <CardTitle className="flex items-center gap-2 text-body">
             <Hourglass className="size-4 text-warning" />
             {t('agentcoreExport.pendingTitle')}
           </CardTitle>
         </CardHeader>
-        <CardContent className="flex flex-col gap-2 text-sm">
+        <CardContent className="flex flex-col gap-2 text-body">
           <p>{t('agentcoreExport.pendingBody')}</p>
-          <p className="font-mono text-xs break-all">
+          <p className="font-mono text-caption break-all">
             {t('agentcoreExport.approvalRef', { ref: outcome.approvalRef })}
           </p>
-          <p className="font-mono text-xs break-all text-muted-foreground">
+          <p className="font-mono text-caption break-all text-muted-foreground">
             {t('agentcoreExport.planHash', { hash: outcome.planHash })}
           </p>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-caption text-muted-foreground">
             {t('agentcoreExport.pendingRetry')}
           </p>
         </CardContent>
@@ -658,7 +660,7 @@ function OutcomePanel({ outcome }: { outcome: AgentCoreApplyOutcome }) {
   return (
     <Card className={partial ? 'border-danger/40' : undefined}>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-sm">
+        <CardTitle className="flex items-center gap-2 text-body">
           {partial ? (
             <CircleSlash className="size-4 text-danger" />
           ) : (
@@ -669,25 +671,25 @@ function OutcomePanel({ outcome }: { outcome: AgentCoreApplyOutcome }) {
             : t('agentcoreExport.appliedTitle')}
         </CardTitle>
       </CardHeader>
-      <CardContent className="flex flex-col gap-2 text-sm">
+      <CardContent className="flex flex-col gap-2 text-body">
         {partial ? (
           <>
-            <p className="text-sm">
+            <p className="text-body">
               {t('agentcoreExport.partialCount', {
                 failed: failed.length,
                 total: outcome.results.length,
               })}
             </p>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-caption text-muted-foreground">
               {t('agentcoreExport.partialBody')}
             </p>
           </>
         ) : (
-          <p className="text-xs text-muted-foreground">
+          <p className="text-caption text-muted-foreground">
             {t('agentcoreExport.appliedCount', { n: outcome.results.length })}
           </p>
         )}
-        <p className="font-mono text-xs break-all text-muted-foreground">
+        <p className="font-mono text-caption break-all text-muted-foreground">
           {t('agentcoreExport.planHash', { hash: outcome.planHash })}
         </p>
         {outcome.results.length > 0 && (
@@ -695,10 +697,12 @@ function OutcomePanel({ outcome }: { outcome: AgentCoreApplyOutcome }) {
             {outcome.results.map((r, i) => (
               <li
                 key={`${r.op}:${r.name}:${i}`}
-                className="flex flex-col gap-1 p-2 text-xs"
+                className="flex flex-col gap-1 p-2 text-caption"
               >
                 <span className="flex flex-wrap items-center gap-2">
-                  <Badge variant={agentCoreResultFailed(r) ? 'danger' : 'neutral'}>
+                  <Badge
+                    variant={agentCoreResultFailed(r) ? 'danger' : 'neutral'}
+                  >
                     {r.op}
                   </Badge>
                   <span className="font-mono">{r.name}</span>

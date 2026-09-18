@@ -41,6 +41,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { useAuth } from '@/lib/auth/context'
 import { eventingApi, eventingKeys } from './api'
 import type { EgressPolicyStatus, EgressWriterFence } from './types'
+import { StaticTable } from '@/components/data/static-table'
 
 /**
  * The three-answer badge every field in this panel needs.
@@ -151,7 +152,7 @@ function CompatSummary({
   return (
     <div className="flex flex-col gap-2">
       {compat.seeded && !compat.intact ? (
-        <p role="alert" className="text-sm font-medium text-warning">
+        <p role="alert" className="text-body font-medium text-warning">
           {t('egress.compat.notIntact')}
         </p>
       ) : null}
@@ -288,13 +289,13 @@ export function EgressPolicyPanel({ canAdmin }: { canAdmin: boolean }) {
         </KvList>
         <div className="flex flex-col gap-4">
           <div>
-            <h3 className="mb-1 text-sm font-medium text-foreground">
+            <h3 className="mb-1 text-body font-medium text-foreground">
               {t('egress.fence.title')}
             </h3>
             <WriterFence fence={s.writer_fence} />
           </div>
           <div>
-            <h3 className="mb-1 text-sm font-medium text-foreground">
+            <h3 className="mb-1 text-body font-medium text-foreground">
               {t('egress.compat.title')}
             </h3>
             {/* ⛔ `canAdmin` AQUÍ NO ES REDUNDANTE CON EL SERVIDOR, y creerlo era el defecto.
@@ -318,7 +319,7 @@ export function EgressPolicyPanel({ canAdmin }: { canAdmin: boolean }) {
               //    `m.compat == nil`, cuando el informe falla y cuando la disposición no se pudo
               //    leer (`egressapi.go:176-200`). Sin tier la causa se sabe; CON tier, no — y ahí
               //    la pantalla dice que no llegó, no por qué.
-              <p className="text-sm text-muted-foreground">
+              <p className="text-body text-muted-foreground">
                 {canAdmin
                   ? t('egress.compat.notProvided')
                   : t('egress.compat.notServed')}
@@ -378,13 +379,13 @@ export function EgressCompatReport({ canAdmin }: { canAdmin: boolean }) {
             cifra: el informe parece completo y describe un conjunto que ha perdido miembros.
             El motor manda además su propia nota; se pinta la suya, no una mía. */}
         {r.seeded && !r.intact ? (
-          <p role="alert" className="text-sm font-medium text-warning">
+          <p role="alert" className="text-body font-medium text-warning">
             {t('egress.compat.notIntact')}
             {r.integrity_note ? ` — ${r.integrity_note}` : ''}
           </p>
         ) : null}
         {!r.seeded ? (
-          <p role="alert" className="text-sm text-warning">
+          <p role="alert" className="text-body text-warning">
             {t('egress.report.notSeeded')}
           </p>
         ) : null}
@@ -421,26 +422,18 @@ export function EgressCompatReport({ canAdmin }: { canAdmin: boolean }) {
           </KvList>
         ) : null}
         {!r.seeded ? null : r.authorities.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
+          <p className="text-body text-muted-foreground">
             {t('egress.report.noAuthorities')}
           </p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="text-xs uppercase text-muted-foreground">
+            <StaticTable>
+              <thead>
                 <tr>
-                  <th className="px-3 py-2 font-medium">
-                    {t('egress.report.authority')}
-                  </th>
-                  <th className="px-3 py-2 font-medium">
-                    {t('egress.report.kind')}
-                  </th>
-                  <th className="px-3 py-2 font-medium">
-                    {t('egress.report.uses')}
-                  </th>
-                  <th className="px-3 py-2 font-medium">
-                    {t('egress.report.effect')}
-                  </th>
+                  <th>{t('egress.report.authority')}</th>
+                  <th>{t('egress.report.kind')}</th>
+                  <th>{t('egress.report.uses')}</th>
+                  <th>{t('egress.report.effect')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -448,12 +441,10 @@ export function EgressCompatReport({ canAdmin }: { canAdmin: boolean }) {
                   .sort((a, b) => Number(a.covered) - Number(b.covered))
                   .map((a) => (
                     <tr key={`${a.kind}:${a.authority}`}>
-                      <td className="px-3 py-2 font-mono">{a.authority}</td>
-                      <td className="px-3 py-2 text-muted-foreground">
-                        {a.kind}
-                      </td>
-                      <td className="px-3 py-2 font-mono">{a.subscriptions}</td>
-                      <td className="px-3 py-2">
+                      <td className="font-mono">{a.authority}</td>
+                      <td className="text-muted-foreground">{a.kind}</td>
+                      <td className="font-mono">{a.subscriptions}</td>
+                      <td>
                         <Badge variant={a.covered ? 'neutral' : 'warning'}>
                           {a.covered
                             ? t('egress.report.survives')
@@ -463,7 +454,7 @@ export function EgressCompatReport({ canAdmin }: { canAdmin: boolean }) {
                     </tr>
                   ))}
               </tbody>
-            </table>
+            </StaticTable>
           </div>
         )}
       </CardContent>

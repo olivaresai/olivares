@@ -33,7 +33,7 @@ export function RedactionToggle({ value, permission }: RedactionToggleProps) {
   if (revealed && allowed) {
     return (
       <span className="inline-flex items-center gap-1.5">
-        <span className="break-all font-mono text-xs text-foreground">
+        <span className="break-all font-mono text-caption text-foreground">
           {value}
         </span>
         <Button
@@ -50,7 +50,7 @@ export function RedactionToggle({ value, permission }: RedactionToggleProps) {
 
   return (
     <span className="inline-flex items-center gap-1.5">
-      <span className="text-xs italic text-muted-foreground">
+      <span className="text-caption italic text-muted-foreground">
         {t('redaction.hidden')}
       </span>
       {allowed && (

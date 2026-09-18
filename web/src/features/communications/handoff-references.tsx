@@ -45,15 +45,15 @@ export function ReferenceEditor({
       aria-invalid={error ? true : undefined}
       aria-describedby={error ? `${idPrefix}-error` : undefined}
     >
-      <legend className="text-sm font-medium">{label}</legend>
-      <p className="text-xs text-muted-foreground">
+      <legend className="text-body font-medium">{label}</legend>
+      <p className="text-caption text-muted-foreground">
         {t('handoff.references.hint')}
       </p>
       {error ? (
         <p
           id={`${idPrefix}-error`}
           role="alert"
-          className="text-xs text-danger"
+          className="text-caption text-danger"
           data-slot="handoff-references-error"
         >
           {error}

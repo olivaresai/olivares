@@ -15,14 +15,14 @@ import (
 	"github.com/olivaresai/olivares/core/store"
 )
 
-// D02-A4, INCREMENT 1 — the strict cost reader and the amount/completeness algebra
+// THE FINANCIAL EVIDENCE, INCREMENT 1 — the strict cost reader and the amount/completeness algebra
 // a later increment will evaluate budget alerts with.
 //
 // NOTHING HERE IS WIRED. No production path calls it, no schema, DTO, SDK, event,
 // API or UI changes with it, and no classification it produces is persisted or
 // published. `evaluateBudgets`, `aggregatePeriod`, `scanSamples` and the reservation
 // ledger keep the behavior root already accepted; this file neither certifies them
-// nor is called by them. R4 stays open, and so does D02-A.
+// nor is called by them. The remaining review finding and the completeness cut stay open.
 //
 // The one fact this file exists to establish is the one the alert history cannot
 // state today: WHICH KIND OF NUMBER a consumption figure is.

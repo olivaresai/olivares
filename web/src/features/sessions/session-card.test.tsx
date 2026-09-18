@@ -94,6 +94,8 @@ import { ApiError } from '@/lib/api/errors'
 import { agentOpsApi } from '@/features/agentops/api'
 import { sessionsApi } from './api'
 import { SessionCard } from './session-card'
+import type { SessionTarget } from './session-target'
+import { useSessionResolution } from './use-session-resolution'
 
 const live: LiveDTO = {
   session_ref: 'sess-ours',
@@ -125,6 +127,35 @@ const run: RunDTO = {
   created_at: '2026-08-10T10:01:00Z',
 }
 
+/**
+ * The card no longer resolves the session itself: the surface that owns it does,
+ * once, and hands the answer down (the resolution carries an SSE subscription, and two
+ * callers would mean two connections to one row). These tests are about the CARD, so
+ * they keep addressing it by target and this wrapper does the one call the work surface
+ * makes. It is deliberately the real hook: a double here would let the card and the
+ * surface disagree about what "resolved" means, which is the thing the extraction
+ * exists to prevent.
+ */
+function CardForTarget({
+  target,
+  onClose,
+  onNavigate,
+}: {
+  target: SessionTarget | null
+  onClose: () => void
+  onNavigate?: (t: SessionTarget) => void
+}) {
+  const resolution = useSessionResolution(target)
+  return (
+    <SessionCard
+      open
+      resolution={resolution}
+      onClose={onClose}
+      onNavigate={onNavigate}
+    />
+  )
+}
+
 function renderCard(target: {
   sessionRef?: string
   runRef?: string
@@ -135,7 +166,7 @@ function renderCard(target: {
   })
   return render(
     <QueryClientProvider client={qc}>
-      <SessionCard target={target} onClose={() => {}} />
+      <CardForTarget target={target} onClose={() => {}} />
     </QueryClientProvider>,
   )
 }
@@ -547,7 +578,7 @@ describe('SessionCard — B2: a scoped row is named by its live_ref', () => {
     })
     render(
       <QueryClientProvider client={qc}>
-        <SessionCard
+        <CardForTarget
           target={{ liveRef: 'lr-managed-a' }}
           onClose={() => {}}
           onNavigate={onNavigate}

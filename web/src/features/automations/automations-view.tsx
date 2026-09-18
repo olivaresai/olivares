@@ -33,6 +33,7 @@ import { ListTruncationBadge, listaRecortada } from '@/features/_intel'
 import { automationsApi, automationsKeys, EVIDENCE_PAGE } from './api'
 import { WorkflowsTab } from './workflows/workflows-tab'
 import './i18n'
+import { StaticTable } from '@/components/data/static-table'
 
 export function AutomationsView() {
   const { t } = useTranslation('automations')
@@ -205,41 +206,32 @@ export function AutomationsView() {
                     onElevated={() => void eventTypes.refetch()}
                   />
                 ) : (
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-body text-muted-foreground">
                     {t('triggers.loadFailed')}
                   </p>
                 )
               ) : (eventTypes.data?.event_types.length ?? 0) === 0 ? (
-                <p className="text-sm text-muted-foreground">
+                <p className="text-body text-muted-foreground">
                   {t('triggers.empty')}
                 </p>
               ) : (
                 <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
+                  <StaticTable>
                     <thead>
-                      <tr className="border-b text-left text-muted-foreground">
-                        <th className="py-2 pr-4 font-medium">
-                          {t('triggers.typeColumn')}
-                        </th>
-                        <th className="py-2 pr-4 font-medium">
-                          {t('triggers.stabilityColumn')}
-                        </th>
-                        <th className="py-2 pr-4 font-medium">
-                          {t('triggers.permissionColumn')}
-                        </th>
-                        <th className="py-2 font-medium">
-                          {t('triggers.descriptionColumn')}
-                        </th>
+                      <tr>
+                        <th>{t('triggers.typeColumn')}</th>
+                        <th>{t('triggers.stabilityColumn')}</th>
+                        <th>{t('triggers.permissionColumn')}</th>
+                        <th>{t('triggers.descriptionColumn')}</th>
                       </tr>
                     </thead>
                     <tbody>
                       {eventTypes.data?.event_types.map((et) => (
-                        <tr
-                          key={et.type}
-                          className="border-b last:border-0 align-top"
-                        >
-                          <td className="py-2 pr-4 whitespace-nowrap">
-                            <code className="font-mono text-xs">{et.type}</code>
+                        <tr key={et.type} className="align-top">
+                          <td className="whitespace-nowrap">
+                            <code className="font-mono text-caption">
+                              {et.type}
+                            </code>
                             {routable.has(et.type) ? (
                               <Badge
                                 variant="outline"
@@ -250,7 +242,7 @@ export function AutomationsView() {
                               </Badge>
                             ) : null}
                           </td>
-                          <td className="py-2 pr-4">
+                          <td>
                             <Badge
                               variant={
                                 et.stability === 'stable'
@@ -261,18 +253,18 @@ export function AutomationsView() {
                               {et.stability}
                             </Badge>
                           </td>
-                          <td className="py-2 pr-4">
-                            <code className="font-mono text-xs">
+                          <td>
+                            <code className="font-mono text-caption">
                               {et.permission}
                             </code>
                           </td>
-                          <td className="py-2 text-muted-foreground">
+                          <td className="text-muted-foreground">
                             {et.description}
                           </td>
                         </tr>
                       ))}
                     </tbody>
-                  </table>
+                  </StaticTable>
                 </div>
               )}
             </CardContent>
@@ -353,7 +345,7 @@ function RailCard({
               onElevated={() => void query.refetch()}
             />
           ) : (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-body text-muted-foreground">
               {query.error instanceof ApiError && query.error.isForbidden
                 ? t('rails.forbidden')
                 : t('rails.loadFailed')}
@@ -366,7 +358,7 @@ function RailCard({
                 la tarjeta declaraba «hay más» y a continuación se desmentía. Declarar el recorte
                 y seguir llamando total a la página es peor que no declararlo, porque las dos
                 afirmaciones juntas parecen una sola verificada. */}
-            <p className="text-2xl font-semibold">
+            <p className="text-display">
               {t(
                 listaRecortada(query)
                   ? 'rails.countLoaded'

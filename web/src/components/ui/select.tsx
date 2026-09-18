@@ -50,7 +50,7 @@ export function SelectTrigger({
       {...heredado}
       className={cn(
         'flex h-8 w-full items-center justify-between gap-2 rounded-md border border-border-strong bg-surface px-2.5',
-        'text-sm text-foreground transition-colors outline-none',
+        'text-body text-foreground transition-colors outline-none',
         'data-[placeholder]:text-muted-foreground',
         'focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background',
         'aria-[invalid=true]:border-danger aria-[invalid=true]:ring-danger',
@@ -116,7 +116,7 @@ export function SelectLabel({
     <SelectPrimitive.Label
       data-slot="select-label"
       className={cn(
-        'px-2 py-1.5 text-xs font-medium text-muted-foreground',
+        'px-2 py-1.5 text-caption font-medium text-muted-foreground',
         className,
       )}
       {...props}
@@ -133,7 +133,7 @@ export function SelectItem({
     <SelectPrimitive.Item
       data-slot="select-item"
       className={cn(
-        'relative flex h-8 w-full cursor-default items-center rounded-sm py-1 pr-8 pl-2 text-sm outline-none select-none',
+        'relative flex h-8 w-full cursor-default items-center rounded-sm py-1 pr-8 pl-2 text-body outline-none select-none',
         'data-[highlighted]:bg-muted data-[highlighted]:text-foreground',
         'data-[state=checked]:text-accent-text',
         'data-[disabled]:pointer-events-none data-[disabled]:opacity-50',

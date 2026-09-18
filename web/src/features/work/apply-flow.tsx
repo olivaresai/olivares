@@ -104,7 +104,9 @@ function effectiveIntent(
  *    transcribir a mano un dato que la pantalla de al lado ya exhibe, y cada errata se paga con
  *    un `invalid_command` del motor. Con una sola fuente, los dos caminos siembran igual.
  */
-export function sembrarDesde(intent: WorkIntent | null): Record<string, string> {
+export function sembrarDesde(
+  intent: WorkIntent | null,
+): Record<string, string> {
   const body = (intent?.body ?? {}) as Record<string, unknown>
   const out: Record<string, string> = {}
   for (const [key, value] of Object.entries(body)) {
@@ -126,7 +128,13 @@ export function ApplyFlow({
   acceptanceState,
 }: ApplyFlowProps) {
   const { t } = useTranslation('work')
-  const [phase, setPhase] = useState<Phase>('planning')
+  const [phase, setPhase] = useState<Phase>(() =>
+    open &&
+    intent &&
+    requiredFieldsFor(intent.command, acceptanceState).length > 0
+      ? 'input'
+      : 'planning',
+  )
   const [plan, setPlan] = useState<Plan | null>(null)
   const [outcome, setOutcome] = useState<ApplyOutcome | null>(null)
   const [failure, setFailure] = useState<ApplyFailure | null>(null)
@@ -145,7 +153,9 @@ export function ApplyFlow({
   const [failureReason, setFailureReason] = useState<string | null>(null)
   /** En qué fase murió: decide si el reintento re-planifica o re-aplica. */
   const [fallaronEnPlan, setFallaronEnPlan] = useState(false)
-  const [values, setValues] = useState<Record<string, string>>({})
+  const [values, setValues] = useState<Record<string, string>>(() =>
+    sembrarDesde(intent),
+  )
 
   // What the engine will REQUIRE for this command. Empty for most; not empty for the
   // six actions that shipped inoperable in the first pass.
@@ -153,34 +163,13 @@ export function ApplyFlow({
     ? requiredFieldsFor(intent.command, acceptanceState)
     : []
 
-  const reset = useCallback(() => {
-    setPhase('planning')
-    setPlan(null)
-    setOutcome(null)
-    setFailure(null)
-    setFailureCode(null)
-    setFailureReason(null)
-    setFallaronEnPlan(false)
-    // ⛔ SEMBRADO DESDE LA PROPIA INTENCIÓN, y no es comodidad. Un contraste `sol max` midió el
-    // 2026-08-16 que los comandos de lease piden `holder_sid` —una identidad de SESIÓN— a un
-    // humano que no la tiene: la pantalla EXHIBE el titular en la fila de al lado y el diálogo
-    // le pedía que lo transcribiera. Un campo obligatorio que sólo se puede rellenar copiando lo
-    // que ya está en la misma pantalla no es una pregunta: es una trampa de transcripción, y
-    // cada error tipográfico se paga con un `invalid_command` del motor.
-    //
-    // Se siembra lo que la intención TRAE, no lo que el diálogo adivina: quien la levanta decide
-    // qué sabe. Y sigue siendo editable, porque un titular sembrado es un valor por defecto, no
-    // una afirmación — `takeover` existe justamente para nombrar a otro.
-    setValues(sembrarDesde(intent))
-  }, [intent])
-
   const runPlan = useCallback(
     async (withValues: Record<string, string>) => {
       if (!intent) return
       setPhase('planning')
       setFailure(null)
       setFailureCode(null)
-    setFailureReason(null)
+      setFailureReason(null)
       try {
         const p = await planWork(effectiveIntent(intent, fields, withValues))
         setPlan(p)
@@ -189,7 +178,6 @@ export function ApplyFlow({
         setFailure(classifyApplyFailure(err))
         setFailureCode(workErrorCode(err))
         setFailureReason(workErrorReason(err))
-      setFailureReason(workErrorReason(err))
         setFallaronEnPlan(true)
         setPhase('failed')
       }
@@ -204,22 +192,48 @@ export function ApplyFlow({
   // Keyed on intent.key rather than on `intent`, so a parent that rebuilds the object
   // each render cannot re-plan in a loop — and, more importantly, so a NEW intent (a
   // genuinely new intention, hence a new key) always gets its own plan.
+  //
+  // Reset happens during render when the session (open + key) changes. The effect
+  // only starts the network plan; it does not setState synchronously.
   const intentKey = intent?.key ?? null
+  const session = `${open ? '1' : '0'}:${intentKey ?? ''}`
+  const [boundSession, setBoundSession] = useState(session)
+  if (session !== boundSession) {
+    setBoundSession(session)
+    setPlan(null)
+    setOutcome(null)
+    setFailure(null)
+    setFailureCode(null)
+    setFailureReason(null)
+    setFallaronEnPlan(false)
+    setValues(sembrarDesde(intent))
+    setPhase(!open ? 'planning' : fields.length > 0 ? 'input' : 'planning')
+  }
+
   useEffect(() => {
-    if (!open || !intentKey) {
-      reset()
-      return
+    if (!open || !intentKey || fields.length > 0) return
+    const current = intent
+    if (!current) return
+    let cancelled = false
+    void (async () => {
+      try {
+        const p = await planWork(effectiveIntent(current, fields, {}))
+        if (cancelled) return
+        setPlan(p)
+        setPhase('planned')
+      } catch (err) {
+        if (cancelled) return
+        setFailure(classifyApplyFailure(err))
+        setFailureCode(workErrorCode(err))
+        setFailureReason(workErrorReason(err))
+        setFallaronEnPlan(true)
+        setPhase('failed')
+      }
+    })()
+    return () => {
+      cancelled = true
     }
-    if (fields.length > 0) {
-      // The operator has to supply what the engine demands BEFORE anything is planned.
-      // Planning without it would just render a ROTO plan the operator cannot act on.
-      // ⛔ SEMBRAR, NO BORRAR: `setValues({})` tiraba lo que la intención ya traía.
-      setValues(sembrarDesde(intent))
-      setPhase('input')
-      return
-    }
-    void runPlan({})
-    // runPlan closes over `intent`, which is pinned by its key for this effect.
+    // intent is pinned by intentKey; fields are a function of that command.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, intentKey])
 
@@ -268,7 +282,7 @@ export function ApplyFlow({
           ) : null}
 
           {phase === 'planning' ? (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-body text-muted-foreground">
               {t('apply.planning')}
             </p>
           ) : null}
@@ -364,27 +378,27 @@ function PlanPanel({ plan, intentKey }: { plan: Plan; intentKey: string }) {
   return (
     <div className="flex flex-col gap-3 rounded-lg border border-border p-4">
       <div className="flex items-center justify-between gap-3">
-        <span className="text-sm font-medium">{t('apply.planTitle')}</span>
+        <span className="text-body font-medium">{t('apply.planTitle')}</span>
         <VerdictBadge verdict={plan.verdict} />
       </div>
 
-      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
+      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-body">
         <dt className="text-muted-foreground">{t('apply.command')}</dt>
-        <dd className="font-mono text-xs">{plan.command}</dd>
+        <dd className="font-mono text-caption">{plan.command}</dd>
         <dt className="text-muted-foreground">{t('apply.permission')}</dt>
-        <dd className="font-mono text-xs">{plan.permission}</dd>
+        <dd className="font-mono text-caption">{plan.permission}</dd>
         <dt className="text-muted-foreground">{t('apply.eventType')}</dt>
-        <dd className="font-mono text-xs">{plan.event_type}</dd>
+        <dd className="font-mono text-caption">{plan.event_type}</dd>
       </dl>
 
       <div>
-        <p className="mb-1 text-sm text-muted-foreground">
+        <p className="mb-1 text-body text-muted-foreground">
           {t('apply.rowEffects')}
         </p>
         {plan.row_effects?.length ? (
           <ul className="flex flex-col gap-1">
             {plan.row_effects.map((e) => (
-              <li key={e} className="font-mono text-xs">
+              <li key={e} className="font-mono text-caption">
                 {e}
               </li>
             ))}
@@ -392,7 +406,7 @@ function PlanPanel({ plan, intentKey }: { plan: Plan; intentKey: string }) {
         ) : (
           /* A LIMPIO plan with no row effects genuinely means "this writes nothing".
              That is a real answer and is worth stating, not left as blank space. */
-          <p className="text-xs text-muted-foreground">
+          <p className="text-caption text-muted-foreground">
             {t('apply.noRowEffects')}
           </p>
         )}
@@ -400,12 +414,12 @@ function PlanPanel({ plan, intentKey }: { plan: Plan; intentKey: string }) {
 
       {plan.external_calls?.length ? (
         <div>
-          <p className="mb-1 text-sm text-muted-foreground">
+          <p className="mb-1 text-body text-muted-foreground">
             {t('apply.externalCalls')}
           </p>
           <ul className="flex flex-col gap-1">
             {plan.external_calls.map((c) => (
-              <li key={c} className="font-mono text-xs">
+              <li key={c} className="font-mono text-caption">
                 {c}
               </li>
             ))}
@@ -417,10 +431,12 @@ function PlanPanel({ plan, intentKey }: { plan: Plan; intentKey: string }) {
 
       {plan.plan_hash ? (
         <div className="flex items-center gap-2 border-t border-border pt-3">
-          <span className="text-xs text-muted-foreground">
+          <span className="text-caption text-muted-foreground">
             {t('apply.planHash')}
           </span>
-          <code className="font-mono text-xs break-all">{plan.plan_hash}</code>
+          <code className="font-mono text-caption break-all">
+            {plan.plan_hash}
+          </code>
         </div>
       ) : null}
 
@@ -432,9 +448,9 @@ function PlanPanel({ plan, intentKey }: { plan: Plan; intentKey: string }) {
           className="mt-0.5 size-4 shrink-0 text-muted-foreground"
         />
         <div className="min-w-0">
-          <p className="text-xs font-medium">{t('apply.keyTitle')}</p>
-          <code className="font-mono text-xs break-all">{intentKey}</code>
-          <p className="mt-1 text-xs text-muted-foreground">
+          <p className="text-caption font-medium">{t('apply.keyTitle')}</p>
+          <code className="font-mono text-caption break-all">{intentKey}</code>
+          <p className="mt-1 text-caption text-muted-foreground">
             {t('apply.keyHelp')}
           </p>
         </div>
@@ -450,7 +466,7 @@ function ResultPanel({ outcome }: { outcome: ApplyOutcome }) {
   return (
     <div className="flex flex-col gap-3 rounded-lg border border-border p-4">
       <div className="flex items-center justify-between gap-3">
-        <span className="flex items-center gap-2 text-sm font-medium">
+        <span className="flex items-center gap-2 text-body font-medium">
           {replayed ? (
             <RefreshCcw aria-hidden className="size-4" />
           ) : (
@@ -462,18 +478,22 @@ function ResultPanel({ outcome }: { outcome: ApplyOutcome }) {
       </div>
 
       {replayed ? (
-        <p className="text-sm text-muted-foreground">
+        <p className="text-body text-muted-foreground">
           {t('apply.replayedBody')}
         </p>
       ) : null}
 
-      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
+      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-body">
         <dt className="text-muted-foreground">{t('apply.commandId')}</dt>
-        <dd className="font-mono text-xs break-all">{result.command_id}</dd>
+        <dd className="font-mono text-caption break-all">
+          {result.command_id}
+        </dd>
         {result.result_id ? (
           <>
             <dt className="text-muted-foreground">{t('apply.resultId')}</dt>
-            <dd className="font-mono text-xs break-all">{result.result_id}</dd>
+            <dd className="font-mono text-caption break-all">
+              {result.result_id}
+            </dd>
           </>
         ) : null}
         {result.status ? (
@@ -487,11 +507,11 @@ function ResultPanel({ outcome }: { outcome: ApplyOutcome }) {
         {etag ? (
           <>
             <dt className="text-muted-foreground">{t('apply.etag')}</dt>
-            <dd className="font-mono text-xs">{etag}</dd>
+            <dd className="font-mono text-caption">{etag}</dd>
           </>
         ) : null}
         <dt className="text-muted-foreground">{t('apply.auditSeq')}</dt>
-        <dd className="font-mono text-xs">{result.audit_seq}</dd>
+        <dd className="font-mono text-caption">{result.audit_seq}</dd>
       </dl>
     </div>
   )
@@ -549,7 +569,7 @@ function FailurePanel({
   return (
     <div
       role="alert"
-      className="flex flex-col gap-2 rounded-lg border border-danger-line bg-danger-soft p-4 text-sm text-danger"
+      className="flex flex-col gap-2 rounded-lg border border-danger-line bg-danger-soft p-4 text-body text-danger"
     >
       <div className="flex items-center gap-2 font-medium">
         <ShieldAlert aria-hidden className="size-4 shrink-0" />
@@ -564,7 +584,7 @@ function FailurePanel({
         </p>
       ) : null}
       {code ? (
-        <p className="font-mono text-xs text-danger">
+        <p className="font-mono text-caption text-danger">
           {t('unavailable.code', { code })}
         </p>
       ) : null}
@@ -609,7 +629,7 @@ function RequiredFieldsForm({
   const { t } = useTranslation('work')
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-sm text-muted-foreground">{t('apply.inputIntro')}</p>
+      <p className="text-body text-muted-foreground">{t('apply.inputIntro')}</p>
       {fields.map((f) => (
         <Field
           key={f.name}

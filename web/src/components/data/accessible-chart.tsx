@@ -78,7 +78,7 @@ export function AccessibleChart<TRow extends TableRowData>({
     <figure aria-label={title} className={cn('flex flex-col gap-2', className)}>
       <div className="flex items-center justify-between gap-2">
         {!hideTitle ? (
-          <figcaption className="text-sm font-medium text-foreground">
+          <figcaption className="text-body font-medium text-foreground">
             {title}
           </figcaption>
         ) : (
@@ -124,7 +124,7 @@ export function AccessibleChart<TRow extends TableRowData>({
       )}
 
       {caption ? (
-        <p className="text-xs text-muted-foreground">{caption}</p>
+        <p className="text-caption text-muted-foreground">{caption}</p>
       ) : null}
     </figure>
   )

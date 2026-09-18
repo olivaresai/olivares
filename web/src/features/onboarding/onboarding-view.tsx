@@ -1098,7 +1098,10 @@ function PepStep({
         </Button>
       </div>
       {scopes.length === 0 ? (
-        <EmptyState title={t('steps.pep.noCheckins')} />
+        <EmptyState
+          description={t('steps.pep.noCheckinsHint')}
+          title={t('steps.pep.noCheckins')}
+        />
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">

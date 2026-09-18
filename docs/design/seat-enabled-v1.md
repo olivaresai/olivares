@@ -1,7 +1,7 @@
 # Seat spend-limit enabled state, v1
 
 SES1. Construction ratified September 12, 2026. Mandatory context: SDD 02 (data, transactions,
-FinOps), SDD 04 (console/CLI/configuration consistency) and the D06 exact-money
+FinOps), SDD 04 (console/CLI/configuration consistency) and the exact-money
 program.
 
 ## What this contract fixes

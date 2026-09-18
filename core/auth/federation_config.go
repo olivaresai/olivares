@@ -189,7 +189,7 @@ type MultiIDP interface {
 	// the capability is compiled into one binary and entitlement is per pack, so "present in
 	// the build" and "paid for" stopped being the same thing.
 	//
-	// AND WHY THE OBVIOUS FIX WAS REJECTED, measured by another lane against this repo's own
+	// AND WHY THE OBVIOUS FIX WAS REJECTED, measured independently against this repo's own
 	// enterprise/federation/groupmap.go: refusing to CONSTRUCT the capability when the term has
 	// lapsed is evaluated ONCE, at boot. That breaks the hot-apply contract addongate states at
 	// addongate.go:201-203, makes start-up ORDER decide the answer exactly where

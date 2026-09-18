@@ -167,7 +167,7 @@ export function IngestionHealthTable({
           <div className="flex flex-col gap-1">
             <StatusChip status={row.original.status} />
             {row.original.opt_in_gate ? (
-              <span className="text-xs text-muted-foreground">
+              <span className="text-caption text-muted-foreground">
                 {t('ingestion.gate')}:{' '}
                 <span className="font-mono">{row.original.opt_in_gate}</span>{' '}
                 <span className="font-medium">
@@ -201,7 +201,7 @@ export function IngestionHealthTable({
         accessorKey: 'last_seen',
         header: t('ingestion.columns.lastSeen'),
         cell: ({ row }) => (
-          <span className="text-xs text-muted-foreground">
+          <span className="text-caption text-muted-foreground">
             {formatDateTime(row.original.last_seen, i18n.language)}
           </span>
         ),
@@ -249,7 +249,7 @@ export function IngestionSourcesTable({
         accessorKey: 'name',
         header: t('sources.columns.source'),
         cell: ({ row }) => (
-          <span className="font-mono text-xs text-foreground">
+          <span className="font-mono text-caption text-foreground">
             {row.original.name}
           </span>
         ),
@@ -284,7 +284,7 @@ export function IngestionSourcesTable({
         header: t('sources.columns.signals'),
         cell: ({ row }) =>
           row.original.signals ? (
-            <span className="flex flex-wrap gap-x-2 gap-y-0.5 font-mono text-xs text-muted-foreground">
+            <span className="flex flex-wrap gap-x-2 gap-y-0.5 font-mono text-caption text-muted-foreground">
               {Object.entries(row.original.signals).map(([sig, n]) => (
                 <span key={sig}>
                   {sig}{' '}
@@ -302,7 +302,7 @@ export function IngestionSourcesTable({
         accessorKey: 'first_seen',
         header: t('sources.columns.firstSeen'),
         cell: ({ row }) => (
-          <span className="text-xs text-muted-foreground">
+          <span className="text-caption text-muted-foreground">
             {formatDateTime(row.original.first_seen, i18n.language)}
           </span>
         ),
@@ -311,7 +311,7 @@ export function IngestionSourcesTable({
         accessorKey: 'last_seen',
         header: t('sources.columns.lastSeen'),
         cell: ({ row }) => (
-          <span className="text-xs text-muted-foreground">
+          <span className="text-caption text-muted-foreground">
             {formatDateTime(row.original.last_seen, i18n.language)}
           </span>
         ),
@@ -372,7 +372,7 @@ export function TraceList({
             <span className="font-medium text-foreground">
               {row.original.root_name}
             </span>
-            <span className="font-mono text-xs text-muted-foreground">
+            <span className="font-mono text-caption text-muted-foreground">
               {row.original.trace_id}
             </span>
           </div>
@@ -382,7 +382,7 @@ export function TraceList({
         accessorKey: 'started_at',
         header: t('traces.columns.started'),
         cell: ({ row }) => (
-          <span className="text-xs text-muted-foreground">
+          <span className="text-caption text-muted-foreground">
             {formatDateTime(row.original.started_at, i18n.language)}
           </span>
         ),
@@ -554,7 +554,7 @@ export function TraceWaterfall({
         id: 'actor',
         header: t('traces.columns.actor'),
         cell: ({ row }) => (
-          <span className="font-mono text-xs text-muted-foreground">
+          <span className="font-mono text-caption text-muted-foreground">
             {actorLabel(row.original.span.actor, row.original.span.actor_kind)}
           </span>
         ),
@@ -570,7 +570,7 @@ export function TraceWaterfall({
         id: 'timing',
         header: t('traces.columns.timing'),
         cell: ({ row }) => (
-          <span className="font-mono text-xs tabular-nums text-muted-foreground">
+          <span className="font-mono text-caption tabular-nums text-muted-foreground">
             +{formatDuration(row.original.span.start_ms)} ·{' '}
             {formatDuration(row.original.span.duration_ms)}
           </span>
@@ -614,7 +614,7 @@ export function TraceWaterfall({
           aria-label={t('traces.legend')}
         >
           {[...actorColors.entries()].map(([actor, color]) => (
-            <span key={actor} className="flex items-center gap-1 text-xs">
+            <span key={actor} className="flex items-center gap-1 text-caption">
               <span
                 className="inline-block h-2.5 w-2.5 rounded-sm"
                 style={{ backgroundColor: color }}
@@ -639,7 +639,7 @@ export function TraceWaterfall({
               tabIndex={0}
               aria-pressed={selected}
               className={cn(
-                'grid grid-cols-[minmax(0,18rem)_1fr] items-center gap-3 rounded px-1 py-0.5 text-xs transition-colors',
+                'grid grid-cols-[minmax(0,18rem)_1fr] items-center gap-3 rounded px-1 py-0.5 text-caption transition-colors',
                 // A selected row is an `accent` FILL, so its ink has to be the ink that
                 // belongs on that fill. It used to keep the canvas inks, which are tuned
                 // for the canvas and unreadable on the accent in BOTH themes: measured
@@ -721,7 +721,7 @@ export function SpanDetailPanel({
   const { t } = useTranslation('observability')
   return (
     <div
-      className="rounded-md border bg-surface p-4 text-sm"
+      className="rounded-md border bg-surface p-4 text-body"
       role="region"
       aria-label={t('traces.detail.title')}
     >
@@ -731,7 +731,7 @@ export function SpanDetailPanel({
         </h4>
         <button
           onClick={onClose}
-          className="text-xs text-muted-foreground hover:text-foreground"
+          className="text-caption text-muted-foreground hover:text-foreground"
           aria-label={t('common:actions.close')}
         >
           ✕
@@ -739,7 +739,7 @@ export function SpanDetailPanel({
       </div>
       <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5">
         <dt className="text-muted-foreground">{t('traces.detail.spanId')}</dt>
-        <dd className="font-mono text-xs">{span.span_id}</dd>
+        <dd className="font-mono text-caption">{span.span_id}</dd>
         <dt className="text-muted-foreground">{t('traces.detail.name')}</dt>
         <dd>{span.name}</dd>
         <dt className="text-muted-foreground">{t('traces.detail.timing')}</dt>
@@ -751,7 +751,7 @@ export function SpanDetailPanel({
             <dt className="text-muted-foreground">
               {t('traces.detail.actor')}
             </dt>
-            <dd className="font-mono text-xs">{span.actor}</dd>
+            <dd className="font-mono text-caption">{span.actor}</dd>
           </>
         )}
         {span.actor_kind && (
@@ -769,7 +769,7 @@ export function SpanDetailPanel({
             <dt className="text-muted-foreground">
               {t('traces.detail.entityRef')}
             </dt>
-            <dd className="font-mono text-xs">{span.entity_ref}</dd>
+            <dd className="font-mono text-caption">{span.entity_ref}</dd>
           </>
         )}
         <dt className="text-muted-foreground">{t('traces.detail.kind')}</dt>
@@ -783,14 +783,16 @@ export function SpanDetailPanel({
       </dl>
       {span.attributes && Object.keys(span.attributes).length > 0 && (
         <div className="mt-3">
-          <h5 className="mb-1 text-xs font-medium text-muted-foreground">
+          <h5 className="mb-1 text-caption font-medium text-muted-foreground">
             {t('traces.detail.attributes')}
           </h5>
           <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
             {Object.entries(span.attributes).map(([k, v]) => (
               <Fragment key={k}>
-                <dt className="font-mono text-xs text-muted-foreground">{k}</dt>
-                <dd className="break-all font-mono text-xs">{v}</dd>
+                <dt className="font-mono text-caption text-muted-foreground">
+                  {k}
+                </dt>
+                <dd className="break-all font-mono text-caption">{v}</dd>
               </Fragment>
             ))}
           </dl>

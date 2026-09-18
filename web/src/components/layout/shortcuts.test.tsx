@@ -86,3 +86,99 @@ describe('GlobalShortcuts', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 })
+
+describe('GlobalShortcuts — the declared table', () => {
+  it('opens the palette on the chord the table declares, and from inside a field', async () => {
+    // ⌘K moved here from `command-menu.tsx` so the console has ONE keyboard authority.
+    // It is also the one chord that still works while typing: the palette is how an
+    // operator leaves a field they opened by accident.
+    const { useCommandStore } = await import('@/stores/command')
+    useCommandStore.setState({ open: false })
+    renderIntel(<GlobalShortcuts />)
+
+    fireEvent.keyDown(window, { key: 'k', metaKey: true })
+    expect(useCommandStore.getState().open).toBe(true)
+
+    useCommandStore.setState({ open: false })
+    const field = document.createElement('input')
+    document.body.appendChild(field)
+    fireEvent.keyDown(field, { key: 'k', ctrlKey: true })
+    expect(useCommandStore.getState().open).toBe(true)
+    field.remove()
+  })
+
+  it('focuses the launcher on `/`, and never while the operator is typing', () => {
+    renderIntel(<GlobalShortcuts />)
+    const field = document.createElement('input')
+    field.id = 'shell-launcher-input'
+    document.body.appendChild(field)
+
+    fireEvent.keyDown(window, { key: '/' })
+    expect(document.activeElement).toBe(field)
+
+    // …and a `/` typed INTO a field is a slash, not a command.
+    const other = document.createElement('input')
+    document.body.appendChild(other)
+    other.focus()
+    fireEvent.keyDown(other, { key: '/' })
+    expect(document.activeElement).toBe(other)
+    field.remove()
+    other.remove()
+  })
+
+  it('prints the table it resolves, with the context each row needs', () => {
+    renderIntel(<GlobalShortcuts />)
+    fireEvent.keyDown(window, { key: '?' })
+    // Every command in the table has a row: a binding that fires and is not printed
+    // would be a keyboard secret, which is the defect a declared table removes.
+    expect(screen.getByTestId('keybinding-rail.pin')).toHaveTextContent(
+      'in the session rail',
+    )
+    expect(screen.getByTestId('keybinding-palette.open')).toBeInTheDocument()
+    expect(
+      screen.getByTestId('keybinding-launcher.startBackground'),
+    ).toBeInTheDocument()
+  })
+
+  it('states the precedence rule, because two rows can share keys', () => {
+    renderIntel(<GlobalShortcuts />)
+    fireEvent.keyDown(window, { key: '?' })
+    expect(
+      screen.getByText(/the last one that applies wins/i),
+    ).toBeInTheDocument()
+  })
+
+  it('reports nothing when every rule is readable', () => {
+    // The shipped table has no invalid rule (`model.test.ts` asserts that too). This
+    // asserts the PAGE stays quiet when there is nothing to report, so the notice
+    // means something when it appears.
+    renderIntel(<GlobalShortcuts />)
+    fireEvent.keyDown(window, { key: '?' })
+    expect(screen.queryByTestId('keybinding-problems')).toBeNull()
+  })
+})
+
+describe('the palette focus contract, from the launcher', () => {
+  it('remembers the launcher field as the opener, so closing can hand focus back', async () => {
+    // §3.14 adopt row 1: the palette RETURNS focus to the composer on close. The
+    // mechanism is the store's `opener`, captured at open time; `CommandMenu` consumes
+    // it in `onCloseAutoFocus` and in its close effect, and the live spec walks the
+    // whole round trip in a real browser. What is provable here is the capture — and
+    // it is the half that would silently break if `⌘K` ever stopped running while a
+    // field has focus.
+    const { useCommandStore } = await import('@/stores/command')
+    useCommandStore.setState({ open: false, opener: null })
+    renderIntel(<GlobalShortcuts />)
+
+    const field = document.createElement('input')
+    field.id = 'shell-launcher-input'
+    document.body.appendChild(field)
+    field.focus()
+
+    fireEvent.keyDown(field, { key: 'k', metaKey: true })
+    expect(useCommandStore.getState().open).toBe(true)
+    expect(useCommandStore.getState().opener).toBe(field)
+    expect(useCommandStore.getState().takeOpener()).toBe(field)
+    field.remove()
+  })
+})

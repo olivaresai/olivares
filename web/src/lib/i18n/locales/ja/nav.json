@@ -291,6 +291,33 @@
     "recentEmpty": "開いたモジュールがここに表示されます。",
     "recentScope": "このタブで開いたモジュールです。再読み込み、ログアウト、アカウントや組織の変更で消去されます。",
     "recentRemove": "履歴から{{name}}を削除",
-    "recentClear": "履歴を消去"
+    "recentClear": "履歴を消去",
+    "pinRow": "{{name}} をお気に入りに固定 (p)",
+    "unpinRow": "{{name}} のお気に入り固定を解除 (p)"
+  },
+  "scope": {
+    "tenant": "組織",
+    "workspace": "ワークスペース",
+    "environment": "環境",
+    "noTenant": "なし",
+    "noWorkspace": "ワークスペースなし",
+    "noEnvironment": "未申告",
+    "hint": "次のセッションが実行される条件です。"
+  },
+  "launcher": {
+    "label": "開始するセッションに名前を付ける",
+    "placeholder": "このセッションに名前を付ける…",
+    "profile": "プロバイダープロファイル",
+    "profilePlaceholder": "プロファイルを選択",
+    "workspace": "マウントするワークスペース",
+    "start": "開始",
+    "backgroundHint": "Ctrl+Enter で開始し、この画面に残って次の準備ができます。",
+    "noProfiles": "プロバイダープロファイルが登録されていません。プロファイルなしではセッションを開始できません。",
+    "addProvider": "プロバイダープロファイルを追加",
+    "startedBackground": "セッションを開始しました。次の入力欄は空です。",
+    "startFailed": "セッションを開始できませんでした。",
+    "noTenant": "セッションを開始する前に組織を選択してください。",
+    "noProfileRead": "セッションはプロバイダープロファイルとして実行されますが、あなたのロールにはそれらを読む権限がありません。",
+    "readFailed": "プロバイダープロファイルを読み取れなかったため、ここからセッションを開始できません。"
   }
 }

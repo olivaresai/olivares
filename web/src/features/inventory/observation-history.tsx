@@ -105,12 +105,12 @@ export function ObservationHistory({
     <HistoryFrame title={t('history.title')}>
       <CaveatNotice tone="info">{t('history.coverageUnknown')}</CaveatNotice>
       {items.length === 0 ? (
-        <p role="status" className="mt-3 text-sm text-muted-foreground">
+        <p role="status" className="mt-3 text-body text-muted-foreground">
           {t('history.empty')}
         </p>
       ) : (
         <>
-          <p role="status" className="mt-3 text-xs text-muted-foreground">
+          <p role="status" className="mt-3 text-caption text-muted-foreground">
             {t('history.loaded', { count: items.length })}
           </p>
           <ul className="mt-2 flex flex-col gap-3">
@@ -123,7 +123,7 @@ export function ObservationHistory({
         </>
       )}
       {loadMorePending ? (
-        <p role="status" aria-busy="true" className="mt-3 text-xs">
+        <p role="status" aria-busy="true" className="mt-3 text-caption">
           {t('history.loadingMore')}
         </p>
       ) : null}
@@ -168,7 +168,7 @@ function HistoryFrame({
     <section className="mt-4 min-w-0" aria-labelledby={headingId}>
       <h3
         id={headingId}
-        className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+        className="mb-2 text-caption font-semibold uppercase tracking-wide text-muted-foreground"
       >
         {title}
       </h3>
@@ -187,7 +187,7 @@ function HistoryFailure({
   const { t } = useTranslation(['inventory', 'errors', 'common'])
   if (error instanceof ApiError && error.isNotFound) {
     return (
-      <p role="status" className="text-xs text-muted-foreground">
+      <p role="status" className="text-caption text-muted-foreground">
         {t('inventory:detail.gone')}
       </p>
     )
@@ -238,7 +238,7 @@ function ObservationCard({ item }: { item: ObservationItem }) {
   const registration = item.registration
   return (
     <article className="min-w-0 rounded-md border border-border p-3">
-      <h4 className="text-sm font-medium text-foreground">
+      <h4 className="text-body font-medium text-foreground">
         {t('history.receipt')}
       </h4>
       <KvList>
@@ -294,14 +294,14 @@ function RegistrationBlock({
     return (
       <div className="flex min-w-0 flex-col gap-1">
         <span>{t('history.registeredSnapshot')}</span>
-        <span className="break-all font-mono text-xs">
+        <span className="break-all font-mono text-caption">
           {t('history.sourceId')}: {registration.source_id}
         </span>
-        <span className="break-all font-mono text-xs">
+        <span className="break-all font-mono text-caption">
           {t('history.sourceRevision')}:{' '}
           {formatInt(registration.source_revision)}
         </span>
-        <span className="break-all font-mono text-xs">
+        <span className="break-all font-mono text-caption">
           {t('history.environmentRef')}: {registration.environment_ref}
         </span>
       </div>
@@ -351,7 +351,7 @@ export function EvidenceTime({
   return (
     <time dateTime={ts} className="min-w-0 break-words">
       <span>{abs}</span>
-      <span className="mt-0.5 block break-all text-xs text-muted-foreground">
+      <span className="mt-0.5 block break-all text-caption text-muted-foreground">
         {ts}
       </span>
     </time>

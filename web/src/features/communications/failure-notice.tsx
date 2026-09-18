@@ -39,7 +39,7 @@ export function FailureNotice({
       data-slot="failure-notice"
       data-failure-kind={failure.kind}
       className={cn(
-        'flex flex-col gap-1 rounded-md border px-3 py-2 text-sm',
+        'flex flex-col gap-1 rounded-md border px-3 py-2 text-body',
         warning
           ? 'border-warning-line bg-warning-soft text-warning'
           : calm
@@ -50,7 +50,7 @@ export function FailureNotice({
     >
       {title ? <p className="font-medium">{title}</p> : null}
       <p>{t(`failure.${failure.kind}`)}</p>
-      <dl className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs">
+      <dl className="flex flex-wrap gap-x-3 gap-y-0.5 text-caption">
         {failure.code ? (
           <div className="flex gap-1">
             <dt>{t('failure.code')}</dt>

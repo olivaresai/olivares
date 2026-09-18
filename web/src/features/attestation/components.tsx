@@ -84,7 +84,7 @@ export function ArtifactTable({ artifacts }: { artifacts: ReleaseArtifact[] }) {
         accessorKey: 'name',
         header: t('artifacts.columns.artifact'),
         cell: ({ row }) => (
-          <span className="font-mono text-xs break-all">
+          <span className="font-mono text-caption break-all">
             {row.original.name}
           </span>
         ),
@@ -93,7 +93,7 @@ export function ArtifactTable({ artifacts }: { artifacts: ReleaseArtifact[] }) {
         accessorKey: 'produced_by',
         header: t('artifacts.columns.producedBy'),
         cell: ({ row }) => (
-          <span className="text-xs text-muted-foreground">
+          <span className="text-caption text-muted-foreground">
             {row.original.produced_by}
           </span>
         ),
@@ -102,7 +102,7 @@ export function ArtifactTable({ artifacts }: { artifacts: ReleaseArtifact[] }) {
         accessorKey: 'signature_trust',
         header: t('artifacts.columns.signatureTrust'),
         cell: ({ row }) => (
-          <span className="text-xs text-foreground">
+          <span className="text-caption text-foreground">
             {row.original.signature_trust}
           </span>
         ),
@@ -124,7 +124,7 @@ export function ArtifactTable({ artifacts }: { artifacts: ReleaseArtifact[] }) {
         header: t('artifacts.columns.control'),
         cell: ({ row }) =>
           row.original.scp ? (
-            <span className="font-mono text-xs text-muted-foreground">
+            <span className="font-mono text-caption text-muted-foreground">
               {row.original.scp}
             </span>
           ) : (
@@ -163,12 +163,14 @@ function Row({
 }) {
   return (
     <div className="grid grid-cols-1 gap-x-3 gap-y-0.5 py-1.5 sm:grid-cols-[minmax(0,13rem)_1fr]">
-      <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
+      <dt className="text-caption font-medium text-muted-foreground">
+        {label}
+      </dt>
       <dd
         className={
           mono
-            ? 'min-w-0 font-mono text-xs break-all text-foreground'
-            : 'min-w-0 text-xs text-foreground'
+            ? 'min-w-0 font-mono text-caption break-all text-foreground'
+            : 'min-w-0 text-caption text-foreground'
         }
       >
         {children}
@@ -191,7 +193,7 @@ export function SlsaPanel({ slsa }: { slsa: SlsaProvenance }) {
           <ControlStatusBadge status="by_design" />
         ) : null}
         <VerifyStatusBadge status={slsa.status} />
-        <span className="font-mono text-xs text-muted-foreground">
+        <span className="font-mono text-caption text-muted-foreground">
           {slsa.scp}
         </span>
       </div>
@@ -227,7 +229,7 @@ export function SbomPanel({ sbom }: { sbom: SbomContract }) {
         accessorKey: 'key',
         header: t('sbom.cisa.columns.element'),
         cell: ({ row }) => (
-          <span className="text-xs font-medium text-foreground">
+          <span className="text-caption font-medium text-foreground">
             {row.original.key}
           </span>
         ),
@@ -249,7 +251,7 @@ export function SbomPanel({ sbom }: { sbom: SbomContract }) {
         accessorKey: 'carried_by',
         header: t('sbom.cisa.columns.carriedBy'),
         cell: ({ row }) => (
-          <span className="text-xs text-muted-foreground">
+          <span className="text-caption text-muted-foreground">
             {row.original.carried_by}
           </span>
         ),
@@ -267,7 +269,7 @@ export function SbomPanel({ sbom }: { sbom: SbomContract }) {
           </Badge>
         ))}
         <VerifyStatusBadge status={sbom.status} />
-        <span className="font-mono text-xs text-muted-foreground">
+        <span className="font-mono text-caption text-muted-foreground">
           {sbom.scp}
         </span>
       </div>
@@ -288,7 +290,7 @@ export function SbomPanel({ sbom }: { sbom: SbomContract }) {
       </dl>
 
       <div className="flex flex-col gap-2">
-        <p className="text-sm font-medium text-foreground">
+        <p className="text-body font-medium text-foreground">
           {t('sbom.cisa.title')}
         </p>
         {/* DRAFT, throughout: pre-decisional public-comment, NOT law/finalized. */}
@@ -325,7 +327,7 @@ export function VexPanel({ vex }: { vex: VexContract }) {
         accessorKey: 'vuln_id',
         header: t('vex.columns.vuln'),
         cell: ({ row }) => (
-          <span className="font-mono text-xs">{row.original.vuln_id}</span>
+          <span className="font-mono text-caption">{row.original.vuln_id}</span>
         ),
       },
       {
@@ -351,7 +353,7 @@ export function VexPanel({ vex }: { vex: VexContract }) {
         header: t('vex.columns.justification'),
         cell: ({ row }) =>
           row.original.justification ? (
-            <span className="font-mono text-xs text-muted-foreground">
+            <span className="font-mono text-caption text-muted-foreground">
               {row.original.justification}
             </span>
           ) : (
@@ -362,7 +364,7 @@ export function VexPanel({ vex }: { vex: VexContract }) {
         accessorKey: 'author',
         header: t('vex.columns.author'),
         cell: ({ row }) => (
-          <span className="text-xs text-muted-foreground">
+          <span className="text-caption text-muted-foreground">
             {row.original.author}
           </span>
         ),
@@ -374,11 +376,11 @@ export function VexPanel({ vex }: { vex: VexContract }) {
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2">
         <VerifyStatusBadge status={vex.status} />
-        <span className="font-mono text-xs text-muted-foreground">
+        <span className="font-mono text-caption text-muted-foreground">
           {vex.scp}
         </span>
       </div>
-      <p className="text-xs text-muted-foreground">{vex.driver}</p>
+      <p className="text-caption text-muted-foreground">{vex.driver}</p>
       <DataTable<VexStatement>
         columns={columns}
         data={vex.statements}
@@ -391,7 +393,7 @@ export function VexPanel({ vex }: { vex: VexContract }) {
           />
         }
       />
-      <p className="font-mono text-xs text-muted-foreground">
+      <p className="font-mono text-caption text-muted-foreground">
         {vex.attestation_predicate}
       </p>
     </div>
@@ -413,7 +415,7 @@ export function ScorecardPanel({
         accessorKey: 'name',
         header: t('scorecard.columns.check'),
         cell: ({ row }) => (
-          <span className="font-mono text-xs text-foreground">
+          <span className="font-mono text-caption text-foreground">
             {row.original.name}
           </span>
         ),
@@ -422,14 +424,16 @@ export function ScorecardPanel({
         accessorKey: 'what',
         header: t('scorecard.columns.what'),
         cell: ({ row }) => (
-          <span className="text-xs text-foreground">{row.original.what}</span>
+          <span className="text-caption text-foreground">
+            {row.original.what}
+          </span>
         ),
       },
       {
         accessorKey: 'evidence',
         header: t('scorecard.columns.evidence'),
         cell: ({ row }) => (
-          <span className="text-xs text-muted-foreground">
+          <span className="text-caption text-muted-foreground">
             {row.original.evidence}
           </span>
         ),
@@ -473,7 +477,7 @@ export function ScorecardPanel({
           </div>
         </AccessibleChart>
         <div className="flex flex-col gap-2">
-          <p className="text-sm font-medium text-foreground">
+          <p className="text-body font-medium text-foreground">
             {t('scorecard.checksTitle')}
           </p>
           <DataTable<ScorecardCheck>
@@ -534,7 +538,7 @@ export function SlaPanel({ pv }: { pv: PatchVelocity }) {
         accessorKey: 'cvss_range',
         header: t('sla.columns.cvss'),
         cell: ({ row }) => (
-          <span className="font-mono text-xs text-muted-foreground">
+          <span className="font-mono text-caption text-muted-foreground">
             {row.original.cvss_range}
           </span>
         ),
@@ -543,7 +547,7 @@ export function SlaPanel({ pv }: { pv: PatchVelocity }) {
         accessorKey: 'target',
         header: t('sla.columns.target'),
         cell: ({ row }) => (
-          <span className="text-xs font-medium text-foreground">
+          <span className="text-caption font-medium text-foreground">
             {row.original.target}
           </span>
         ),
@@ -569,18 +573,18 @@ export function SlaPanel({ pv }: { pv: PatchVelocity }) {
 
       <div className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center gap-2">
-          <p className="text-sm font-medium text-foreground">
+          <p className="text-body font-medium text-foreground">
             {t('sla.cadenceTitle')}
           </p>
           <VerifyStatusBadge status={pv.status} />
-          <span className="font-mono text-xs text-muted-foreground">
+          <span className="font-mono text-caption text-muted-foreground">
             {pv.scp}
           </span>
         </div>
         <dl>
           <Row label={t('sla.schedule')}>{pv.schedule}</Row>
         </dl>
-        <ol className="flex list-decimal flex-col gap-1 pl-5 text-xs text-muted-foreground">
+        <ol className="flex list-decimal flex-col gap-1 pl-5 text-caption text-muted-foreground">
           {pv.steps.map((s) => (
             <li key={s}>{s}</li>
           ))}
@@ -604,15 +608,15 @@ export function AirgapPanel({
     <div className="flex flex-col gap-5">
       <div className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center gap-2">
-          <p className="text-sm font-medium text-foreground">
+          <p className="text-body font-medium text-foreground">
             {t('airgap.bundleTitle')}
           </p>
           <VerifyStatusBadge status={airgap.status} />
         </div>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-caption text-muted-foreground">
           {t('airgap.bundleIntro')}
         </p>
-        <ul className="flex list-disc flex-col gap-1 pl-5 text-xs text-muted-foreground">
+        <ul className="flex list-disc flex-col gap-1 pl-5 text-caption text-muted-foreground">
           {airgap.composition.map((c) => (
             <li key={c}>{c}</li>
           ))}
@@ -640,11 +644,11 @@ export function AirgapPanel({
 
       <div className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center gap-2">
-          <p className="text-sm font-medium text-foreground">
+          <p className="text-body font-medium text-foreground">
             {t('airgap.chartTitle')}
           </p>
           <VerifyStatusBadge status={helm.status} />
-          <span className="font-mono text-xs text-muted-foreground">
+          <span className="font-mono text-caption text-muted-foreground">
             {helm.scp}
           </span>
         </div>

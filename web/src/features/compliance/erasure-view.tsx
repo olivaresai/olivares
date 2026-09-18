@@ -172,7 +172,11 @@ export function ErasureTab({
   if (!canRead) {
     return (
       <SectionCard title={t('erasure.title')}>
-        <EmptyState icon={<Trash2 />} title={t('erasure.noAccess')} />
+        <EmptyState
+          description={t('erasure.noAccessHint')}
+          icon={<Trash2 />}
+          title={t('erasure.noAccess')}
+        />
       </SectionCard>
     )
   }
@@ -286,25 +290,25 @@ function ErasureRow({
               {t(`erasure.status.${req.status}`, { defaultValue: req.status })}
             </Badge>
             <span className="font-medium">{req.case_ref}</span>
-            <span className="text-sm text-muted-foreground">
+            <span className="text-body text-muted-foreground">
               {req.subject_kind}
             </span>
           </div>
           {/* The subject is detokenized while the key lives and becomes "[ERASED]"
             after the crypto-shred. That transition IS the visible proof, so it is
             rendered rather than smoothed over. */}
-          <p className="text-xs text-muted-foreground">
+          <p className="text-caption text-muted-foreground">
             {t('erasure.subject')}:{' '}
             <span className="text-foreground">
               {req.subject ?? req.subject_token}
             </span>
           </p>
           {req.data_classes.length > 0 ? (
-            <p className="text-xs text-muted-foreground">
+            <p className="text-caption text-muted-foreground">
               {t('erasure.classes', { list: req.data_classes.join(', ') })}
             </p>
           ) : null}
-          <p className="text-xs text-muted-foreground">
+          <p className="text-caption text-muted-foreground">
             {t('erasure.requestedBy', {
               actor: req.requested_by,
               at: req.created_at,
@@ -382,13 +386,18 @@ function CustodyChain({ id }: { id: string }) {
   if (q.isPending) return <Skeleton className="h-16 w-full" />
   if (eventos.length === 0)
     return (
-      <p className="text-xs text-muted-foreground">{t('erasure.noCustody')}</p>
+      <p className="text-caption text-muted-foreground">
+        {t('erasure.noCustody')}
+      </p>
     )
 
   return (
     <ol className="flex flex-col gap-1 border-t border-border pt-2">
       {eventos.map((e) => (
-        <li key={e.id} className="flex flex-wrap items-center gap-2 text-xs">
+        <li
+          key={e.id}
+          className="flex flex-wrap items-center gap-2 text-caption"
+        >
           <Badge variant="outline">
             {t(`erasure.event.${e.event}`, { defaultValue: e.event })}
           </Badge>
@@ -690,7 +699,7 @@ function ExecuteErasureDialog({
               {blocked.holds.map((h) => (
                 <li
                   key={h.id}
-                  className="rounded-md border border-border p-2 text-xs"
+                  className="rounded-md border border-border p-2 text-caption"
                 >
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge variant="warning">
@@ -713,7 +722,7 @@ function ExecuteErasureDialog({
             </CaveatNotice>
           ) : null}
           {blocked.kind === 'rtbf_coordinator' ? (
-            <div className="flex flex-col gap-2 text-xs">
+            <div className="flex flex-col gap-2 text-caption">
               {blocked.blockers.length > 0 ? (
                 <div>
                   <p className="mb-1 font-medium">
@@ -804,7 +813,7 @@ function ExecuteErasureDialog({
           <ShieldAlert className="mt-0.5 size-4 shrink-0" />
           <span>{t('erasure.dialog.irreversible')}</span>
         </CaveatNotice>
-        <div className="rounded-md border border-border p-2 text-xs">
+        <div className="rounded-md border border-border p-2 text-caption">
           <p>
             {t('erasure.subject')}:{' '}
             <span className="font-medium">
@@ -862,7 +871,7 @@ function ReceiptDialog({
         </DialogHeader>
         <AsyncSection query={receiptQ} skeletonHeight={240}>
           {(r) => (
-            <div className="flex flex-col gap-3 text-xs">
+            <div className="flex flex-col gap-3 text-caption">
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant={r.key_shredded ? 'success' : 'warning'}>
                   {r.key_shredded
@@ -1053,7 +1062,7 @@ function DataSubjectLookup({ onClose }: { onClose: () => void }) {
         {query ? (
           <AsyncSection query={statusQ} skeletonHeight={160}>
             {(s) => (
-              <div className="flex flex-col gap-2 text-xs">
+              <div className="flex flex-col gap-2 text-caption">
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge variant={s.verified ? 'success' : 'neutral'}>
                     {t(`erasure.state.${s.state}`, { defaultValue: s.state })}

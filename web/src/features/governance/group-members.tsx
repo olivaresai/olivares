@@ -81,7 +81,7 @@ export function GroupMembersSheet({
               {t('members.transitive')}
             </Label>
           </div>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-caption text-muted-foreground">
             {t('members.transitiveHint')}
           </p>
         </div>
@@ -106,7 +106,10 @@ export function GroupMembersSheet({
           ) : query.error ? (
             <ErrorState retry={() => query.refetch()} />
           ) : members.length === 0 ? (
-            <EmptyState title={t('members.empty')} />
+            <EmptyState
+              description={t('members.emptyHint')}
+              title={t('members.empty')}
+            />
           ) : (
             <ul className="flex flex-col gap-2">
               {members.map((m, i) => (
@@ -114,12 +117,12 @@ export function GroupMembersSheet({
                   key={`${m.member_ref}:${i}`}
                   className="flex items-center justify-between gap-2 rounded-md border border-border bg-surface px-2.5 py-1.5"
                 >
-                  <span className="truncate font-mono text-xs text-foreground">
+                  <span className="truncate font-mono text-caption text-foreground">
                     {m.member_ref}
                   </span>
                   <div className="flex shrink-0 items-center gap-1.5">
                     {m.via && (
-                      <span className="text-xs text-muted-foreground">
+                      <span className="text-caption text-muted-foreground">
                         {t('members.via')}{' '}
                         <span className="font-mono">{m.via}</span>
                       </span>

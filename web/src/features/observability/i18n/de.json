@@ -91,6 +91,7 @@
     "loadingMore": "Wird geladen…",
     "waterfallTitle": "Span-Wasserfall",
     "selectPrompt": "Wählen Sie einen Trace aus, um seinen Span-Wasserfall anzuzeigen.",
+    "selectPromptHint": "Wählen Sie einen Trace aus der Liste, um jeden erzeugten Span mit Zeiten und Fehlern zu sehen.",
     "exportBtn": "OTLP exportieren",
     "exportTitle": "OTLP-kompatibles JSON für Jaeger / Tempo / Datadog herunterladen",
     "legend": "Akteurlegende",

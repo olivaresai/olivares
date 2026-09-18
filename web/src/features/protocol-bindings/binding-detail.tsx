@@ -74,7 +74,7 @@ export function ProtocolBindingDetailSheet({
           {({ binding, etag }) => (
             <div className="space-y-5 py-2">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="font-mono text-sm font-medium">
+                <span className="font-mono text-body font-medium">
                   {binding.id}
                 </span>
                 <ProtocolVerdictBadge verdict={binding.observation_verdict} />
@@ -138,48 +138,48 @@ function BindingOverview({
   const { t } = useTranslation('protocolBindings')
   return (
     <section>
-      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
+      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-body">
         <dt className="text-muted-foreground">{t('fields.bindingSpec')}</dt>
-        <dd className="break-all font-mono text-xs">
+        <dd className="break-all font-mono text-caption">
           {binding.binding_spec_id} · {t('fields.generation')}{' '}
           {binding.binding_spec_generation}
         </dd>
         <dt className="text-muted-foreground">{t('fields.direction')}</dt>
         <dd>{t(`direction.${binding.direction}`)}</dd>
         <dt className="text-muted-foreground">{t('fields.peerAuthority')}</dt>
-        <dd className="break-all font-mono text-xs">
+        <dd className="break-all font-mono text-caption">
           {binding.peer_authority}
         </dd>
         <dt className="text-muted-foreground">{t('detail.remoteResource')}</dt>
-        <dd className="break-all font-mono text-xs">
+        <dd className="break-all font-mono text-caption">
           {binding.remote_resource_ref}
         </dd>
         <dt className="text-muted-foreground">{t('binding.external')}</dt>
-        <dd className="break-all font-mono text-xs">
+        <dd className="break-all font-mono text-caption">
           {binding.external_kind}:{binding.external_id || '—'}
         </dd>
         <dt className="text-muted-foreground">{t('binding.states')}</dt>
-        <dd className="font-mono text-xs">
+        <dd className="font-mono text-caption">
           {binding.local_state || '—'} ↔ {binding.remote_state || '—'}{' '}
           {binding.remote_revision ? `@${binding.remote_revision}` : ''}
         </dd>
         <dt className="text-muted-foreground">{t('binding.owner')}</dt>
-        <dd className="break-all font-mono text-xs">
+        <dd className="break-all font-mono text-caption">
           {binding.owner_kind || '—'}:{binding.owner_ref || '—'} · epoch{' '}
           {binding.owner_epoch ?? '—'} · fence {binding.lease_fence ?? '—'}
         </dd>
         <dt className="text-muted-foreground">{t('fields.etag')}</dt>
-        <dd className="font-mono text-xs">{etag ?? '—'}</dd>
+        <dd className="font-mono text-caption">{etag ?? '—'}</dd>
         <dt className="text-muted-foreground">{t('fields.specHash')}</dt>
-        <dd className="break-all font-mono text-xs">
+        <dd className="break-all font-mono text-caption">
           {binding.pinned_spec_hash || '—'}
         </dd>
         <dt className="text-muted-foreground">{t('fields.mappingHash')}</dt>
-        <dd className="break-all font-mono text-xs">
+        <dd className="break-all font-mono text-caption">
           {binding.pinned_mapping_hash || '—'}
         </dd>
         <dt className="text-muted-foreground">{t('fields.lossesHash')}</dt>
-        <dd className="break-all font-mono text-xs">
+        <dd className="break-all font-mono text-caption">
           {binding.pinned_losses_hash || '—'}
         </dd>
       </dl>
@@ -191,15 +191,17 @@ function BindingEvidence({ binding }: { binding: ProtocolBinding }) {
   const { t } = useTranslation('protocolBindings')
   return (
     <section>
-      <h3 className="mb-2 text-sm font-medium">{t('binding.evidenceTitle')}</h3>
+      <h3 className="mb-2 text-body font-medium">
+        {t('binding.evidenceTitle')}
+      </h3>
       <ol className="space-y-2">
-        <li className="rounded-md border border-border p-3 text-xs">
+        <li className="rounded-md border border-border p-3 text-caption">
           <p className="font-medium">{t('binding.created')}</p>
           <time dateTime={binding.created_at} className="text-muted-foreground">
             {binding.created_at}
           </time>
         </li>
-        <li className="rounded-md border border-border p-3 text-xs">
+        <li className="rounded-md border border-border p-3 text-caption">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="font-medium">{t('binding.lastObservation')}</p>
             <ProtocolVerdictBadge verdict={binding.observation_verdict} />
@@ -217,7 +219,7 @@ function BindingEvidence({ binding }: { binding: ProtocolBinding }) {
             </p>
           ) : null}
         </li>
-        <li className="rounded-md border border-border p-3 text-xs">
+        <li className="rounded-md border border-border p-3 text-caption">
           <p className="font-medium">{t('binding.lastEvent')}</p>
           <p className="mt-1 break-all font-mono">
             #{binding.last_event_seq} · {binding.last_event_id || '—'}
@@ -408,7 +410,7 @@ export function ProtocolBindingReconcileDialog({
             'testing',
             'applying',
           ].includes(phase) ? (
-            <p role="status" className="text-sm text-muted-foreground">
+            <p role="status" className="text-body text-muted-foreground">
               {t(`reconcile.phase.${phase}`)}
             </p>
           ) : null}
@@ -485,10 +487,10 @@ function ReconcilePlanPanel({
   return (
     <section className="rounded-md border border-border p-3">
       <div className="flex items-center justify-between gap-2">
-        <h3 className="text-sm font-medium">{t('reconcile.plan')}</h3>
+        <h3 className="text-body font-medium">{t('reconcile.plan')}</h3>
         <ProtocolVerdictBadge verdict={plan.verdict} />
       </div>
-      <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
+      <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-caption">
         <dt className="text-muted-foreground">{t('fields.planHash')}</dt>
         <dd className="break-all font-mono">{plan.plan_hash}</dd>
         <dt className="text-muted-foreground">{t('fields.etag')}</dt>
@@ -522,15 +524,15 @@ function AssessmentPanel({
   return (
     <section className="rounded-md border border-border p-3">
       <div className="flex items-center justify-between gap-2">
-        <h3 className="text-sm font-medium">{title}</h3>
+        <h3 className="text-body font-medium">{title}</h3>
         <ProtocolVerdictBadge verdict={assessment.verdict} />
       </div>
-      <p className="mt-2 font-mono text-xs">{assessment.code}</p>
-      <p className="mt-1 text-xs text-muted-foreground">
+      <p className="mt-2 font-mono text-caption">{assessment.code}</p>
+      <p className="mt-1 text-caption text-muted-foreground">
         {assessment.observed_at}
       </p>
       {replayed ? (
-        <p className="mt-1 text-xs text-info">{t('outcome.replayed')}</p>
+        <p className="mt-1 text-caption text-info">{t('outcome.replayed')}</p>
       ) : null}
       <Checks checks={assessment.checks} />
     </section>
@@ -544,7 +546,7 @@ function Checks({ checks }: { checks: ProtocolBindingAssessment['checks'] }) {
       {checks.map((check, index) => (
         <li
           key={`${check.name}-${index}`}
-          className="flex flex-wrap items-center justify-between gap-2 rounded border border-border px-2 py-1.5 text-xs"
+          className="flex flex-wrap items-center justify-between gap-2 rounded border border-border px-2 py-1.5 text-caption"
         >
           <span className="font-mono">{check.name}</span>
           <ProtocolVerdictBadge verdict={check.verdict} />

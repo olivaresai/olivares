@@ -34,7 +34,7 @@ import (
 //     by name first, so the alias is unreachable and reads as though it worked.
 //
 // A THIRD property is deliberately NOT asserted, and is written down here rather than left
-// for the next reader to rediscover, because it is a live ambiguity this lane does not own:
+// for the next reader to rediscover, because it is a live ambiguity this test does not own:
 // two siblings may currently claim the SAME alias, and which one answers is registration
 // order. `simpleListCmd` (cmd_compliance.go:1632-1644) hardcodes `Aliases: ["list"]` for the
 // noun command it builds, which is right when a parent has one such child and ambiguous when
@@ -113,7 +113,7 @@ func TestNoAliasCollidesWithASiblingName(t *testing.T) {
 // costCentersUKAlias is the invocation under test, named once. It is a literal the US-locale
 // spell linter flags and must: the linter cannot tell an accepted invocation from prose, and
 // the tree's mechanism for that is `.golangci.yml`'s ignore-rules (`mitre`, `mosquitto`),
-// which is the integration lane's call rather than this lane's. Naming it once keeps the count of
+// which is an integration decision rather than this test's. Naming it once keeps the count of
 // unavoidable findings at one instead of four.
 const costCentersUKAlias = "cost-centres"
 
@@ -158,7 +158,7 @@ func TestTheBritishSpellingOfCostCentresStillResolves(t *testing.T) {
 // A SECOND ASYMMETRY IS REPORTED AND NOT ASSERTED, following this file's habit of writing down
 // what it declines to enforce: some `ls`-named commands carry no `list` alias. That direction is
 // weaker — the canonical spelling already resolves there — and enforcing it would edit dozens of
-// commands this lane does not own. The counts are logged by the test below so the next reader
+// commands outside this test's subject. The counts are logged by the test below so the next reader
 // sees today's number instead of this comment's.
 func TestEveryListCommandAlsoAnswersToLs(t *testing.T) {
 	root := newRootCmd()

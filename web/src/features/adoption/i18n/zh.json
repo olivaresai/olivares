@@ -84,7 +84,8 @@
     "title": "每日趋势",
     "description": "所选视角随时间变化的生产力。",
     "lensLabel": "视角",
-    "empty": "此范围内无活动记录。"
+    "empty": "此范围内无活动记录。",
+    "emptyHint": "采用趋势由所选时间范围内的会话计算得出。放宽时间范围以覆盖有活动的日期。"
   },
   "teams": {
     "title": "按团队",
@@ -100,6 +101,7 @@
     "title": "按开发者",
     "description": "来自管理员 Analytics 数据源的每位开发者 ROI。",
     "empty": "此范围内无按开发者的活动记录。",
+    "emptyHint": "当开发者在此时间范围内运行会话后，按开发者统计的活动会显示在这里。放宽时间范围可覆盖更多天。",
     "locked": "按开发者视图受限",
     "lockedHint": "查看单个开发者的生产力需要 adoption:developer:read 权限（默认拒绝）。",
     "columns": {

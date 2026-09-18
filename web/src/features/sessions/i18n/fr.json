@@ -95,7 +95,8 @@
   "tabs": {
     "sessions": "Sessions",
     "workspaces": "Espaces de travail",
-    "profiles": "Profils de fournisseur"
+    "profiles": "Profils de fournisseur",
+    "table": "Tableau"
   },
   "partial": {
     "noLiveRead": "Les sessions observées ne sont pas affichées : votre rôle n’inclut pas sessions:live:read. Les sessions lancées ci-dessous sont la part qui a pu être lue, pas le tableau complet.",
@@ -212,5 +213,108 @@
     "stopped": "Arrêtée",
     "failed": "Échouée",
     "cleaned": "Nettoyée"
+  },
+  "address": {
+    "retired": "La session ouverte a été fermée. Votre accès à la moitié dont elle provient a changé. Sélectionnez une ligne pour ouvrir une session avec votre accès actuel."
+  },
+  "work": {
+    "worked": "a travaillé {{duration}}",
+    "toolCalls_one": "{{count}} appel d’outil",
+    "toolCalls_other": "{{count}} appels d’outil",
+    "events_one": "{{count}} événement",
+    "events_other": "{{count}} événements",
+    "toolCalls_many": "{{count}} appels d’outil",
+    "events_many": "{{count}} événements"
+  },
+  "rail": {
+    "label": "Rail de travail",
+    "group": {
+      "active": "Actives",
+      "attention": "En attente de vous",
+      "settled": "Terminées"
+    },
+    "groupEmpty": {
+      "active": "Rien ne tourne en ce moment.",
+      "attention": "Rien ne vous attend.",
+      "settled": "Aucune session n’est encore terminée."
+    },
+    "pin": "Épingler",
+    "unpin": "Détacher",
+    "pinnedMark": "Épinglée",
+    "rowMenu": "Actions pour {{name}}",
+    "noObservation": "Aucune télémétrie n’est encore arrivée pour cette session.",
+    "emptyTitle": "Aucune session pour l’instant",
+    "emptyDescription": "Chaque session que ce déploiement observe ou lance apparaît ici, groupée selon ce qu’elle attend de vous."
+  },
+  "surface": {
+    "paneSwitcher": "Choisir un volet",
+    "pane": {
+      "rail": "Sessions",
+      "narrative": "Travail",
+      "context": "Contexte"
+    }
+  },
+  "narrative": {
+    "noneTitle": "Sélectionnez une session",
+    "noneDescription": "Choisissez une session dans le rail pour lire ce qu’elle a fait, avec ses preuves à côté.",
+    "openDetail": "Contrôles complets",
+    "noObjective": "Le moteur n’a signalé aucun objectif pour cette session : sa référence est affichée à la place.",
+    "notReadTitle": "Cette session n’a pas pu être lue",
+    "menu": "Actions pour {{name}}"
+  },
+  "evidence": {
+    "checks": {
+      "title": "Vérifications",
+      "empty": "Cette session n’a signalé aucun constat."
+    },
+    "activity": {
+      "title": "Derniers tours",
+      "empty": "Cette session n’a fait aucun appel d’outil ni MCP."
+    },
+    "resources": {
+      "title": "Ressources touchées",
+      "empty": "Aucune entrée ne nomme de ressource."
+    },
+    "forbiddenTitle": "Preuves non autorisées",
+    "forbiddenDescription": "Votre rôle n’inclut pas la permission de lire la télémétrie des sessions.",
+    "errorTitle": "Les preuves n’ont pas pu être lues",
+    "errorDescription": "La lecture de la chronologie n’a pas répondu. Une liste vide ici signifierait que la session n’a rien fait, ce qui est un autre fait.",
+    "atLeast_one": "au moins {{count}}",
+    "atLeast_other": "au moins {{count}}",
+    "touches_one": "{{count}} entrée",
+    "touches_other": "{{count}} entrées",
+    "atLeast_many": "au moins {{count}}",
+    "touches_many": "{{count}} entrées"
+  },
+  "context": {
+    "noneTitle": "Aucune session sélectionnée",
+    "noneDescription": "La portée sous laquelle une session s’est exécutée, et les références pour la retrouver, apparaissent ici.",
+    "scopeTitle": "Portée",
+    "scopeHint": "Ce à quoi cette session s’applique. Ce sont les valeurs sous lesquelles elle s’est exécutée, pas celles sélectionnées maintenant.",
+    "tenant": "Organisation",
+    "workspace": "Espace de travail",
+    "environment": "Environnement",
+    "provider": "Fournisseur",
+    "profile": "Profil de fournisseur",
+    "traceTitle": "Trace",
+    "traceHint": "Les références sous lesquelles cette session est connue, et ce que le plan a enregistré à son sujet.",
+    "sessionRef": "Référence de session",
+    "liveRef": "Référence de ligne",
+    "runRef": "Référence d’exécution",
+    "canonicalSid": "Identifiant canonique de session",
+    "binding": "Liaison de source",
+    "engine": "Moteur de l’agent",
+    "posture": "Posture de gouvernance",
+    "governance": "Ce que le plan a enregistré",
+    "pepOn": "Les appels d’outils sont contrôlés en ligne.",
+    "pepOff": "Les appels d’outils ne sont pas contrôlés en ligne.",
+    "recordOn": "L’entrée et la sortie sont ancrées comme preuve.",
+    "recordOff": "L’entrée et la sortie ne sont pas enregistrées.",
+    "approval": "Approbation",
+    "none": "Aucune",
+    "notDeclared": "Non déclaré",
+    "copy": "Copier",
+    "copied": "Copié",
+    "copyRef": "Copier {{value}}"
   }
 }

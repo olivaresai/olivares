@@ -130,7 +130,7 @@ export function ChannelSheet({
                   defaultValue: channel.content_protection,
                 })}
               </Badge>
-              <span className="text-xs text-muted-foreground">
+              <span className="text-caption text-muted-foreground">
                 {t('access.label')}:
               </span>
               <AccessBadges access={catalogAccess} />
@@ -202,8 +202,10 @@ export function ChannelSheet({
                 {formatDateTime(channel.updated_at, i18n.language)}
               </KvRow>
             </KvList>
-            <p className="text-xs text-muted-foreground">{t('access.hint')}</p>
-            <p className="text-xs text-muted-foreground">{sendHint}</p>
+            <p className="text-caption text-muted-foreground">
+              {t('access.hint')}
+            </p>
+            <p className="text-caption text-muted-foreground">{sendHint}</p>
           </div>
         ) : null}
         <SheetFooter>

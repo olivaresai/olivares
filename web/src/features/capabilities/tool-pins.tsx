@@ -71,7 +71,7 @@ function Fingerprint({ value }: { value: string }) {
       : value
   return (
     <code
-      className="block max-w-52 truncate font-mono text-xs text-muted-foreground"
+      className="block max-w-52 truncate font-mono text-caption text-muted-foreground"
       title={value}
     >
       {truncated}
@@ -86,7 +86,7 @@ function FingerprintPair({ pin }: { pin: DriftedToolPin }) {
   return (
     <dl className="grid min-w-0 flex-1 gap-2 sm:grid-cols-2">
       <div className="min-w-0">
-        <dt className="mb-1 text-xs font-medium text-muted-foreground">
+        <dt className="mb-1 text-caption font-medium text-muted-foreground">
           {t('toolPins.pinnedFingerprint')}
         </dt>
         <dd>
@@ -94,7 +94,7 @@ function FingerprintPair({ pin }: { pin: DriftedToolPin }) {
         </dd>
       </div>
       <div className="min-w-0">
-        <dt className="mb-1 text-xs font-medium text-danger">
+        <dt className="mb-1 text-caption font-medium text-danger">
           {t('toolPins.driftFingerprint')}
         </dt>
         <dd>
@@ -196,7 +196,7 @@ export function ToolPinsTab({ canWrite }: { canWrite: boolean }) {
       accessorKey: 'tool',
       header: t('toolPins.tool'),
       cell: ({ row }) => (
-        <span className="font-mono text-xs font-medium text-foreground">
+        <span className="font-mono text-caption font-medium text-foreground">
           {row.original.tool}
         </span>
       ),
@@ -300,24 +300,24 @@ export function ToolPinsTab({ canWrite }: { canWrite: boolean }) {
         >
           <div className="mb-1.5 flex items-center gap-2 text-warning">
             <AlertTriangle className="size-4" aria-hidden />
-            <h2 className="text-sm font-semibold">
+            <h2 className="text-body font-semibold">
               {t('toolPins.conflictTitle', { tool: conflict.tool })}
             </h2>
           </div>
-          <p className="mb-3 text-xs text-muted-foreground">
+          <p className="mb-3 text-caption text-muted-foreground">
             {t('toolPins.conflictBody')}
           </p>
           {!conflict.fresh ? (
             // Three states, not two: until this conflict's refetch lands there is no
             // current state to show, and saying so beats showing the reviewed row twice
             // or announcing that the pin is gone.
-            <p className="text-xs text-muted-foreground">
+            <p className="text-caption text-muted-foreground">
               {t('toolPins.conflictReloading')}
             </p>
           ) : conflictPin ? (
             <dl className="grid gap-3 sm:grid-cols-2">
               <div className="min-w-0">
-                <dt className="mb-1 text-xs font-medium text-muted-foreground">
+                <dt className="mb-1 text-caption font-medium text-muted-foreground">
                   {t('toolPins.conflictReviewed', {
                     version: conflict.expectedVersion,
                   })}
@@ -327,7 +327,7 @@ export function ToolPinsTab({ canWrite }: { canWrite: boolean }) {
                 </dd>
               </div>
               <div className="min-w-0">
-                <dt className="mb-1 text-xs font-medium text-foreground">
+                <dt className="mb-1 text-caption font-medium text-foreground">
                   {t('toolPins.conflictCurrent', {
                     version: conflictPin.version,
                   })}
@@ -342,7 +342,7 @@ export function ToolPinsTab({ canWrite }: { canWrite: boolean }) {
               </div>
             </dl>
           ) : (
-            <p className="text-xs font-medium text-foreground">
+            <p className="text-caption font-medium text-foreground">
               {t('toolPins.conflictGone')}
             </p>
           )}
@@ -361,14 +361,14 @@ export function ToolPinsTab({ canWrite }: { canWrite: boolean }) {
         <section className="rounded-lg border border-danger-line bg-danger-soft/40 p-4">
           <div className="mb-1.5 flex items-center gap-2 text-danger">
             <AlertTriangle className="size-4" aria-hidden />
-            <h2 className="text-sm font-semibold">
+            <h2 className="text-body font-semibold">
               {t('toolPins.driftsTitle')}
             </h2>
             <Badge variant="danger" className="tabular-nums">
               {drifts.length}
             </Badge>
           </div>
-          <p className="mb-3 text-xs text-muted-foreground">
+          <p className="mb-3 text-caption text-muted-foreground">
             {t('toolPins.driftsHint')}
           </p>
           <ul className="flex flex-col gap-2">
@@ -379,13 +379,13 @@ export function ToolPinsTab({ canWrite }: { canWrite: boolean }) {
               >
                 <div className="min-w-0 lg:w-56">
                   <p
-                    className="truncate font-mono text-xs font-medium text-foreground"
+                    className="truncate font-mono text-caption font-medium text-foreground"
                     title={pin.tool}
                   >
                     {pin.tool}
                   </p>
                   {pin.drift_at && (
-                    <p className="mt-1 text-xs text-muted-foreground">
+                    <p className="mt-1 text-caption text-muted-foreground">
                       {t('toolPins.driftObserved')}{' '}
                       <RelTimeLabel ts={pin.drift_at} />
                     </p>
@@ -419,11 +419,11 @@ export function ToolPinsTab({ canWrite }: { canWrite: boolean }) {
         <div className="mb-3">
           <h2
             id="tool-pins-heading"
-            className="text-sm font-semibold text-foreground"
+            className="text-body font-semibold text-foreground"
           >
             {t('toolPins.title')}
           </h2>
-          <p className="mt-1 text-xs text-muted-foreground">
+          <p className="mt-1 text-caption text-muted-foreground">
             {t('toolPins.description')}
           </p>
         </div>

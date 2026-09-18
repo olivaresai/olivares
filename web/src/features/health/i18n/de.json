@@ -75,6 +75,7 @@
     "pick": "Subjekt",
     "pickPlaceholder": "Subjekt auswählen…",
     "pickEmpty": "Noch keine überwachten Subjekte zum Berichten vorhanden.",
+    "pickEmptyHint": "Ein SLA-Bericht wird aus überwachten Subjekten gebildet. Fügen Sie einem Subjekt eine Health-Prüfung hinzu, damit darüber berichtet werden kann.",
     "pickPrompt": {
       "title": "Subjekt auswählen",
       "description": "Wählen Sie ein überwachtes Subjekt, um dessen Verfügbarkeit im Vergleich zum Ziel zu sehen, rekonstruiert aus dem Zuverlässigkeits-Hauptbuch."

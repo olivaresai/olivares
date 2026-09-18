@@ -19,7 +19,7 @@
 //     "absent": the operator sees the current state and what they see is what
 //     is written, so an untouched allowlist can never be silently cleared by a
 //     serialiser that turned it into null.
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import {
@@ -148,12 +148,18 @@ function ListEditor({
         </Field>
       )}
       {state === 'empty' && (
-        <p className="text-xs text-warning" data-testid={`${testId}-warning`}>
+        <p
+          className="text-caption text-warning"
+          data-testid={`${testId}-warning`}
+        >
           {t(`routines.editor.${kind}EmptyWarning`)}
         </p>
       )}
       {state === 'unreadable' && (
-        <p className="text-xs text-danger" data-testid={`${testId}-unreadable`}>
+        <p
+          className="text-caption text-danger"
+          data-testid={`${testId}-unreadable`}
+        >
           {t('routines.editor.unreadableWarning')}
         </p>
       )}
@@ -197,8 +203,10 @@ export function RoutinePolicyEditorDialog({
 
   // Seed from the policy every time the dialog opens on a (possibly different)
   // row: a stale form would write another policy's values under this one's id.
-  useEffect(() => {
-    if (!open) return
+  const seedKey = open ? (policy?.id ?? 'new') : 'closed'
+  const [seeded, setSeeded] = useState('unseeded')
+  if (open && seeded !== seedKey) {
+    setSeeded(seedKey)
     if (!policy) {
       setName('')
       setScopeKind('tenant')
@@ -212,45 +220,48 @@ export function RoutinePolicyEditorDialog({
       setCronEntries('')
       setEnvState('unset')
       setEnvEntries('')
-      return
+    } else {
+      setName(policy.name)
+      setScopeKind((policy.scope_kind as RoutineScopeKind) ?? 'tenant')
+      setScopeRef(policy.scope_ref ?? '')
+      setEnabled(policy.enabled)
+      setHasFloor(policy.max_cadence_seconds !== 0)
+      setFloor(
+        String(
+          policy.max_cadence_seconds === 0
+            ? ROUTINE_CADENCE_MIN
+            : policy.max_cadence_seconds,
+        ),
+      )
+      setMaxActive(String(policy.max_active_routines))
+      setRequireApproval(policy.require_approval)
+      const cron = routineListState(
+        policy.allowed_cron_patterns,
+        policy.allowed_cron_patterns_unreadable,
+      )
+      setCronState(cron)
+      // An unreadable column projects as [], so seeding the textarea from it would
+      // offer the operator an empty list as if it were the stored content.
+      setCronEntries(
+        policy.allowed_cron_patterns_unreadable
+          ? ''
+          : (policy.allowed_cron_patterns ?? []).join('\n'),
+      )
+      const envs = routineListState(
+        policy.blocked_environments,
+        policy.blocked_environments_unreadable,
+      )
+      setEnvState(envs)
+      setEnvEntries(
+        policy.blocked_environments_unreadable
+          ? ''
+          : (policy.blocked_environments ?? []).join('\n'),
+      )
     }
-    setName(policy.name)
-    setScopeKind((policy.scope_kind as RoutineScopeKind) ?? 'tenant')
-    setScopeRef(policy.scope_ref ?? '')
-    setEnabled(policy.enabled)
-    setHasFloor(policy.max_cadence_seconds !== 0)
-    setFloor(
-      String(
-        policy.max_cadence_seconds === 0
-          ? ROUTINE_CADENCE_MIN
-          : policy.max_cadence_seconds,
-      ),
-    )
-    setMaxActive(String(policy.max_active_routines))
-    setRequireApproval(policy.require_approval)
-    const cron = routineListState(
-      policy.allowed_cron_patterns,
-      policy.allowed_cron_patterns_unreadable,
-    )
-    setCronState(cron)
-    // An unreadable column projects as [], so seeding the textarea from it would
-    // offer the operator an empty list as if it were the stored content.
-    setCronEntries(
-      policy.allowed_cron_patterns_unreadable
-        ? ''
-        : (policy.allowed_cron_patterns ?? []).join('\n'),
-    )
-    const envs = routineListState(
-      policy.blocked_environments,
-      policy.blocked_environments_unreadable,
-    )
-    setEnvState(envs)
-    setEnvEntries(
-      policy.blocked_environments_unreadable
-        ? ''
-        : (policy.blocked_environments ?? []).join('\n'),
-    )
-  }, [open, policy])
+  }
+  if (!open && seeded !== 'closed') {
+    setSeeded('closed')
+  }
 
   const cadenceSeconds = hasFloor ? Number(floor) : 0
   const activeCap = Number(maxActive)
@@ -265,7 +276,8 @@ export function RoutinePolicyEditorDialog({
    */
   const errors = useMemo(() => {
     const out: Record<string, string> = {}
-    if (!isEdit && name.trim() === '') out.name = t('routines.editor.nameRequired')
+    if (!isEdit && name.trim() === '')
+      out.name = t('routines.editor.nameRequired')
     if (!isEdit) {
       if (scopeKind === 'tenant' && scopeRef.trim() !== '') {
         out.scopeRef = t('routines.editor.tenantScopeRef')
@@ -291,7 +303,11 @@ export function RoutinePolicyEditorDialog({
     }
     // Same trap on the cap, and here the silent value REMOVES a control:
     // Number('') is 0, and 0 means "no cap".
-    if (maxActive.trim() === '' || !Number.isInteger(activeCap) || activeCap < 0) {
+    if (
+      maxActive.trim() === '' ||
+      !Number.isInteger(activeCap) ||
+      activeCap < 0
+    ) {
       out.maxActive = t('routines.editor.capRange')
     }
     // "Only these patterns" with nothing listed is a deny-all the operator did
@@ -400,7 +416,9 @@ export function RoutinePolicyEditorDialog({
       <DialogContent className="max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
-            {isEdit ? t('routines.editor.editTitle') : t('routines.editor.newTitle')}
+            {isEdit
+              ? t('routines.editor.editTitle')
+              : t('routines.editor.newTitle')}
           </DialogTitle>
           <DialogDescription>
             {isEdit
@@ -420,7 +438,9 @@ export function RoutinePolicyEditorDialog({
             label={t('routines.editor.name')}
             required={!isEdit}
             error={errors.name}
-            description={isEdit ? t('routines.editor.nameImmutable') : undefined}
+            description={
+              isEdit ? t('routines.editor.nameImmutable') : undefined
+            }
           >
             {({ id, 'aria-invalid': ariaInvalid }) => (
               <Input
@@ -436,7 +456,9 @@ export function RoutinePolicyEditorDialog({
 
           <Field
             label={t('routines.editor.scopeKind')}
-            description={isEdit ? t('routines.editor.scopeImmutable') : undefined}
+            description={
+              isEdit ? t('routines.editor.scopeImmutable') : undefined
+            }
           >
             {({ id, 'aria-labelledby': labelledBy }) => (
               <Select
@@ -485,7 +507,7 @@ export function RoutinePolicyEditorDialog({
           )}
 
           <div className="flex items-center justify-between gap-4 rounded-md border border-border p-3">
-            <span className="text-sm font-medium text-foreground">
+            <span className="text-body font-medium text-foreground">
               {t('routines.editor.enabled')}
             </span>
             <Switch
@@ -499,7 +521,7 @@ export function RoutinePolicyEditorDialog({
           {/* 0 is a legal, meaningful value — not "the field is empty". */}
           <div className="flex flex-col gap-2 rounded-md border border-border p-3">
             <div className="flex items-center justify-between gap-4">
-              <span className="text-sm font-medium text-foreground">
+              <span className="text-body font-medium text-foreground">
                 {t('routines.editor.floorToggle')}
               </span>
               <Switch
@@ -533,7 +555,7 @@ export function RoutinePolicyEditorDialog({
                 )}
               </Field>
             ) : (
-              <p className="text-xs text-muted-foreground">
+              <p className="text-caption text-muted-foreground">
                 {t('routines.editor.noFloorHint')}
               </p>
             )}
@@ -559,7 +581,7 @@ export function RoutinePolicyEditorDialog({
           </Field>
 
           <div className="flex items-center justify-between gap-4 rounded-md border border-border p-3">
-            <span className="text-sm font-medium text-foreground">
+            <span className="text-body font-medium text-foreground">
               {t('routines.editor.requireApproval')}
             </span>
             <Switch

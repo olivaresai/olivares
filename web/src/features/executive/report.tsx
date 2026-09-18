@@ -30,11 +30,11 @@ export function ReportHeader({
     <div className="mb-6 hidden border-b border-border pb-4 print:block">
       <div className="flex items-center justify-between">
         <Wordmark />
-        <span className="font-display text-sm font-semibold text-foreground">
+        <span className="font-display text-body font-semibold text-foreground">
           {t('report.title')}
         </span>
       </div>
-      <dl className="mt-3 grid grid-cols-3 gap-2 text-xs text-muted-foreground">
+      <dl className="mt-3 grid grid-cols-3 gap-2 text-caption text-muted-foreground">
         <div>
           <dt className="uppercase tracking-wide">{t('report.tenant')}</dt>
           <dd className="font-medium text-foreground">{tenantLabel}</dd>
@@ -58,7 +58,7 @@ export function ReportHeader({
 export function ReportFooter() {
   const { t } = useTranslation('executive')
   return (
-    <p className="mt-6 hidden border-t border-border pt-3 text-xs text-muted-foreground print:block">
+    <p className="mt-6 hidden border-t border-border pt-3 text-caption text-muted-foreground print:block">
       {t('report.footer')}
     </p>
   )

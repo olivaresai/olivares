@@ -116,7 +116,7 @@ export function Combobox({
           data-slot="combobox-trigger"
           className={cn(
             'flex h-8 w-full items-center justify-between gap-2 rounded-md border border-border-strong bg-surface px-2.5',
-            'text-sm text-foreground transition-colors outline-none',
+            'text-body text-foreground transition-colors outline-none',
             'focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background',
             'aria-[invalid=true]:border-danger aria-[invalid=true]:ring-danger',
             'disabled:pointer-events-none disabled:opacity-50 disabled:bg-muted',

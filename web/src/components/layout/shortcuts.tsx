@@ -13,7 +13,17 @@ import {
 } from '@/components/ui/dialog'
 import { Kbd } from '@/components/ui/kbd'
 import { useViewAccess } from '@/features/navigation/authorization'
+import { RAIL_KEYS } from '@/features/navigation/rail-keys'
 import { FEATURE_VIEWS } from '@/features/registry'
+import {
+  auditKeybindings,
+  isTypingTarget,
+  resolveBinding,
+} from '@/lib/keybindings/model'
+import { COMMAND_GROUP, KEY_GROUPS, KEYBINDINGS } from '@/lib/keybindings/table'
+import { useCommandStore } from '@/stores/command'
+import { usePreferencesStore } from '@/stores/preferences'
+import { LAUNCHER_INPUT_ID } from './shell-launcher-id'
 
 /** How long a leader sequence stays armed after pressing `g`. */
 const SEQUENCE_TIMEOUT_MS = 1200
@@ -40,19 +50,6 @@ export const NAV_SHORTCUTS: ReadonlyArray<{ key: string; featureId: string }> =
     { key: 'k', featureId: 'knowledge' },
   ]
 
-/** True when the event originates somewhere typing is expected — shortcuts must
- * never steal keystrokes from a form control or an editable region. */
-function isTypingTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false
-  const tag = target.tagName
-  return (
-    tag === 'INPUT' ||
-    tag === 'TEXTAREA' ||
-    tag === 'SELECT' ||
-    target.isContentEditable
-  )
-}
-
 /** True while any Radix dialog/sheet is open — g-navigation behind a modal
  * would move the page under the operator's feet. */
 function modalIsOpen(): boolean {
@@ -61,8 +58,29 @@ function modalIsOpen(): boolean {
   )
 }
 
-/** Global keyboard shortcuts: `g`+letter navigation sequences and the
- * `?` help overlay. Mounted once in the app shell next to the ⌘K palette. */
+/** One chord, as keys an operator can read. `Mod` prints as ⌘ and the page says what
+ * that means away from a Mac; `Space` prints as its own name rather than a blank. */
+function chordTokens(keys: string): string[] {
+  return keys
+    .split('+')
+    .map((p) => p.trim())
+    .filter(Boolean)
+    .map((p) => (p.toLowerCase() === 'mod' ? '⌘' : p))
+}
+
+/**
+ * Global keyboard shortcuts. `g`+letter navigation sequences, and every
+ * chord the DECLARED TABLE holds, resolved through it rather than matched by hand.
+ *
+ * ⛔ THIS IS ALSO THE PAGE THAT DOCUMENTS THEM, and that is the design: the overlay
+ *    RENDERS the table, so the documentation cannot drift from the behaviour. A row
+ *    that fires and is not listed, or is listed and does not fire, is not reachable
+ *    from here.
+ *
+ * ⛔ AND IT REPORTS WHAT IT COULD NOT HONOUR. An invalid rule is ignored — never fatal
+ *    — but silence would leave the operator pressing a key that does nothing with no
+ *    way to learn why, so the page names it.
+ */
 export function GlobalShortcuts() {
   const { t } = useTranslation(['common', 'nav'])
   const navigate = useNavigate()
@@ -72,6 +90,7 @@ export function GlobalShortcuts() {
   const { navigable } = useViewAccess()
   const [helpOpen, setHelpOpen] = useState(false)
   const armedUntil = useRef(0)
+  const { valid, problems } = auditKeybindings(KEYBINDINGS)
 
   const visible = NAV_SHORTCUTS.filter(({ featureId }) => {
     const view = FEATURE_VIEWS.find((v) => v.id === featureId)
@@ -80,16 +99,55 @@ export function GlobalShortcuts() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.metaKey || e.ctrlKey || e.altKey) return
-      if (isTypingTarget(e.target)) return
+      // THE SHELL NEVER STEALS A KEYSTROKE FROM A FIELD. Every rule below is
+      // shell-wide (no `when`), so this guard is what keeps `/` and `?` from firing
+      // while the operator is typing a session name — including into the launcher,
+      // which listens for its own chords itself, in its own context.
+      const typing = isTypingTarget(e.target)
 
-      if (e.key === '?') {
+      // ⌘K FIRST, and it is the one chord that still works while typing: the palette
+      // is how an operator LEAVES a field they opened by accident. It moved here from
+      // `command-menu.tsx` so the console has ONE keyboard authority and one table.
+      const chordCommand = resolveBinding(KEYBINDINGS, e)
+      if (chordCommand === 'palette.open') {
+        e.preventDefault()
+        useCommandStore.getState().toggle()
+        return
+      }
+      // Folding the rail is the other chord that works WHILE TYPING, and for the
+      // same reason as the palette — it is how an operator gets the width back without
+      // leaving the field they are in. Both are modified chords, so neither can be
+      // typed by accident into a session name.
+      if (chordCommand === 'nav.toggleRail') {
+        e.preventDefault()
+        usePreferencesStore.getState().toggleSidebar()
+        return
+      }
+      if (typing) return
+
+      if (chordCommand === 'help.toggle') {
         e.preventDefault()
         armedUntil.current = 0
         setHelpOpen((v) => !v)
         return
       }
-      // Below here only the leader machinery — never with shift held.
+      if (chordCommand === 'launcher.focus') {
+        // `/` focuses the launcher. The element is found by id rather than by a ref
+        // through three components: this module must not import the launcher, whose
+        // queries would then load in every chunk that only wanted to move focus.
+        const field = document.getElementById(LAUNCHER_INPUT_ID)
+        if (!(field instanceof HTMLElement)) return
+        e.preventDefault()
+        armedUntil.current = 0
+        field.focus()
+        return
+      }
+
+      // Below here only the leader machinery — never with a modifier, never with
+      // shift held. It is NOT in the table: a leader sequence is two keystrokes with a
+      // timeout and a destination read from the feature registry, not a chord, and a
+      // second copy of that list here would go stale against the registry.
+      if (e.metaKey || e.ctrlKey || e.altKey) return
       if (e.shiftKey) return
       if (helpOpen || modalIsOpen()) return
 
@@ -121,31 +179,104 @@ export function GlobalShortcuts() {
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-4">
+          {/* THE TABLE, RENDERED. Not a hand-written list beside it: a row that fires
+              and is not printed here would be a keyboard secret, and a row printed here
+              that does not fire would be a lie — and both are possible the moment the
+              two are separate lists. */}
+          {KEY_GROUPS.map((group) => {
+            const rows = valid.filter(
+              ({ rule }) => COMMAND_GROUP[rule.command] === group,
+            )
+            if (rows.length === 0) return null
+            return (
+              <section key={group}>
+                <h3 className="mb-2 text-caption font-medium tracking-wider text-muted-foreground uppercase">
+                  {t(`common:keys.group.${group}`)}
+                </h3>
+                <dl className="flex flex-col gap-1.5 text-body">
+                  {rows.map(({ rule }, i) => (
+                    <div
+                      key={`${rule.command}:${i}`}
+                      className="flex items-center justify-between gap-3"
+                      data-testid={`keybinding-${rule.command}`}
+                    >
+                      <dt className="min-w-0 truncate">
+                        {t(`common:keys.command.${rule.command}`)}
+                        {rule.when ? (
+                          <span className="ml-1.5 text-caption text-muted-foreground">
+                            {t(`common:keys.when.${rule.when}`)}
+                          </span>
+                        ) : null}
+                      </dt>
+                      <dd className="flex shrink-0 gap-1">
+                        {chordTokens(rule.keys).map((token) => (
+                          <Kbd key={token}>{token}</Kbd>
+                        ))}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              </section>
+            )
+          })}
+
+          {/* PRECEDENCE, STATED. It is the whole rule, and an operator who reads two
+              rows with the same keys needs to know which one wins. */}
+          <p className="text-caption text-muted-foreground">
+            {t('common:keys.precedence')} {t('common:keys.modNote')}
+          </p>
+
+          {problems.length > 0 ? (
+            // IGNORED, NEVER FATAL — AND NEVER SILENT. A rule the console could not
+            // honour is named here, or the operator presses a key that does nothing
+            // with no way to find out why.
+            <p
+              className="text-caption text-danger"
+              data-testid="keybinding-problems"
+            >
+              {t('common:keys.problems', {
+                count: problems.length,
+                commands: problems
+                  .map((p) => p.rule.command || p.rule.keys)
+                  .join(', '),
+              })}
+            </p>
+          ) : null}
+
+          {/* THE RAIL'S OWN KEYS, from the module that implements them. They are not in
+              the chord table because the shell does not resolve them — `railKey` does,
+              inside the rail, the way `DataTable` owns the arrows of a grid. Printing
+              them here from their own source is what keeps the page honest about `p`. */}
           <section>
-            <h3 className="mb-2 text-xs font-medium tracking-wider text-muted-foreground uppercase">
-              {t('common:shortcuts.general')}
+            <h3 className="mb-2 text-caption font-medium tracking-wider text-muted-foreground uppercase">
+              {t('common:keys.group.navRail')}
             </h3>
-            <dl className="flex flex-col gap-1.5 text-sm">
-              <div className="flex items-center justify-between gap-3">
-                <dt>{t('common:shortcuts.openPalette')}</dt>
-                <dd className="flex gap-1">
-                  <Kbd>⌘</Kbd>
-                  <Kbd>K</Kbd>
-                </dd>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <dt>{t('common:shortcuts.showHelp')}</dt>
-                <dd>
-                  <Kbd>?</Kbd>
-                </dd>
-              </div>
+            <dl className="flex flex-col gap-1.5 text-body">
+              {RAIL_KEYS.map(({ command, keys }) => (
+                <div
+                  key={command}
+                  className="flex items-center justify-between gap-3"
+                  data-testid={`keybinding-${command}`}
+                >
+                  <dt className="min-w-0 break-words">
+                    {t(`common:keys.command.${command}`)}
+                  </dt>
+                  <dd className="flex shrink-0 gap-1">
+                    <Kbd>{keys}</Kbd>
+                  </dd>
+                </div>
+              ))}
             </dl>
+            <p className="mt-2 text-caption text-muted-foreground">
+              {t('common:keys.navRailNote')}
+            </p>
           </section>
+
           <section>
-            <h3 className="mb-2 text-xs font-medium tracking-wider text-muted-foreground uppercase">
+            <h3 className="mb-2 text-caption font-medium tracking-wider text-muted-foreground uppercase">
               {t('common:shortcuts.navigation')}
             </h3>
-            <dl className="grid grid-cols-1 gap-1.5 text-sm sm:grid-cols-2">
+            <dl className="grid grid-cols-1 gap-1.5 text-body sm:grid-cols-2">
               {visible.map(({ key, featureId }) => (
                 <div
                   key={featureId}

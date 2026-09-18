@@ -92,7 +92,7 @@ function PersonalLinks({
                 }
                 onNavigate?.()
               }}
-              className="flex min-h-8 min-w-0 flex-1 items-center gap-2.5 rounded-md px-2.5 text-sm text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-[status=active]:bg-accent-soft data-[status=active]:text-foreground"
+              className="flex min-h-8 min-w-0 flex-1 items-center gap-2.5 rounded-md px-2.5 text-body text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-[status=active]:bg-accent-soft data-[status=active]:text-foreground"
             >
               <Icon className="size-4 shrink-0" aria-hidden />
               <span className="truncate" title={label}>
@@ -194,7 +194,7 @@ function PersonalSection({
             className={
               collapsed
                 ? 'sr-only'
-                : 'text-xs font-medium text-muted-foreground'
+                : 'text-caption font-medium text-muted-foreground'
             }
           >
             {title}
@@ -213,7 +213,7 @@ function PersonalSection({
             ) : (
               <button
                 type="button"
-                className="min-h-8 shrink-0 rounded px-1 text-xs text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                className="min-h-8 shrink-0 rounded px-1 text-caption text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
               >
                 {openLabel}
               </button>
@@ -228,7 +228,7 @@ function PersonalSection({
               onNavigate={onNavigate}
             />
           ) : (
-            <p className="px-2.5 pb-1 text-xs leading-relaxed text-muted-foreground">
+            <p className="px-2.5 pb-1 text-caption leading-relaxed text-muted-foreground">
               {empty}
             </p>
           ))}
@@ -264,7 +264,7 @@ function PersonalSection({
                 }}
               />
             ) : (
-              <p className="py-3 text-sm text-muted-foreground">{empty}</p>
+              <p className="py-3 text-body text-muted-foreground">{empty}</p>
             )}
           </div>
           <Button

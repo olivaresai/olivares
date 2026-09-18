@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { fakeRouter } from '@/test/fake-router'
 import './i18n'
 
 /**
@@ -33,6 +34,15 @@ const { api, agentOps, authState } = vi.hoisted(() => ({
     can: ((_: string) => false) as (p: string) => boolean,
   },
 }))
+
+// The view's selection is the URL now, so it reads the location on every render.
+// Without a RouterProvider the real hook throws; this is the same in-memory location
+// double the other two view tests mount, and it keeps this file about the refresh
+// button and nothing else.
+vi.mock('@tanstack/react-router', async () => {
+  const { fakeRouterModule } = await import('@/test/fake-router')
+  return fakeRouterModule()
+})
 
 vi.mock('@/lib/auth/context', () => ({ useAuth: () => authState }))
 vi.mock('@/features/sessions/api', async (importOriginal) => ({
@@ -71,6 +81,7 @@ function botonRefresh() {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  fakeRouter.reset('/sessions')
   api.live.mockResolvedValue({ items: [], has_more: false })
   agentOps.listRuns.mockResolvedValue({ items: [], has_more: false })
   authState.can = () => false

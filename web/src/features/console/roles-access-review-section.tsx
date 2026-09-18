@@ -36,6 +36,7 @@ import {
   type AuthZenSearchResponse,
 } from './api'
 import { FormError } from './roles-shared'
+import { StaticTable } from '@/components/data/static-table'
 
 // --- main section ---------------------------------------------------------------
 
@@ -54,14 +55,15 @@ export function AccessReviewSection() {
     return (
       <section className="flex flex-col gap-3">
         <div>
-          <h2 className="text-base font-semibold text-foreground">
+          <h2 className="text-heading text-foreground">
             {t('granular.accessReview.title')}
           </h2>
-          <p className="max-w-2xl text-sm text-muted-foreground">
+          <p className="max-w-2xl text-body text-muted-foreground">
             {t('granular.accessReview.caption')}
           </p>
         </div>
         <EmptyState
+          description={t('granular.accessReview.readOnlyNoticeHint')}
           title={t('granular.accessReview.readOnlyNotice')}
           icon={<ShieldCheck />}
         />
@@ -72,10 +74,10 @@ export function AccessReviewSection() {
   return (
     <section className="flex flex-col gap-3">
       <div>
-        <h2 className="text-base font-semibold text-foreground">
+        <h2 className="text-heading text-foreground">
           {t('granular.accessReview.title')}
         </h2>
-        <p className="max-w-2xl text-sm text-muted-foreground">
+        <p className="max-w-2xl text-body text-muted-foreground">
           {t('granular.accessReview.caption')}
         </p>
       </div>
@@ -212,7 +214,7 @@ function SubjectSearchPanel() {
       </div>
 
       {mutation.isError && (
-        <p role="alert" className="text-sm text-danger">
+        <p role="alert" className="text-body text-danger">
           {t('granular.accessReview.loadError')}
         </p>
       )}
@@ -323,7 +325,7 @@ function ResourceSearchPanel() {
       </div>
 
       {mutation.isError && (
-        <p role="alert" className="text-sm text-danger">
+        <p role="alert" className="text-body text-danger">
           {t('granular.accessReview.loadError')}
         </p>
       )}
@@ -362,43 +364,38 @@ function SearchResultsTable({
 
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-sm text-muted-foreground">
+      <p className="text-body text-muted-foreground">
         {t('granular.accessReview.resultCount', { count: results.length })}
       </p>
 
       {results.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
+        <p className="text-body text-muted-foreground">
           {t('granular.accessReview.noResults')}
         </p>
       ) : (
         <div className="overflow-hidden rounded-lg border border-border">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
+          <StaticTable>
+            <thead>
               <tr>
-                <th className="px-3 py-2 font-medium">{typeLabel}</th>
-                <th className="px-3 py-2 font-medium">
-                  {t('granular.accessReview.resultId')}
-                </th>
+                <th>{typeLabel}</th>
+                <th>{t('granular.accessReview.resultId')}</th>
               </tr>
             </thead>
             <tbody>
               {results.map((r, i) => (
-                <tr
-                  key={`${r.type ?? ''}:${r.id ?? r.name ?? i}`}
-                  className="border-t border-border"
-                >
-                  <td className="px-3 py-2">
+                <tr key={`${r.type ?? ''}:${r.id ?? r.name ?? i}`}>
+                  <td>
                     <Badge variant="neutral">{r.type ?? '—'}</Badge>
                   </td>
-                  <td className="px-3 py-2">
-                    <span className="font-mono text-xs text-foreground">
+                  <td>
+                    <span className="font-mono text-caption text-foreground">
                       {r.name ? `${r.id} (${r.name})` : (r.id ?? '—')}
                     </span>
                   </td>
                 </tr>
               ))}
             </tbody>
-          </table>
+          </StaticTable>
         </div>
       )}
 
@@ -439,7 +436,7 @@ function ExportPanel() {
 
   return (
     <div className="flex flex-col gap-4">
-      <p className="text-sm text-muted-foreground">
+      <p className="text-body text-muted-foreground">
         {t('granular.accessReview.exportHint')}
       </p>
 
@@ -512,7 +509,7 @@ function AccessReviewPackView({ pack }: { pack: AccessReviewPack }) {
     <div className="flex flex-col gap-4 rounded-lg border border-border p-4">
       {/* Header: entry count + sealed status */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <span className="text-sm font-medium text-foreground">
+        <span className="text-body font-medium text-foreground">
           {t('granular.accessReview.exportEntries')}: {pack.entries.length}
         </span>
         <Badge variant={pack.integrity.sealed ? 'success' : 'warning'}>
@@ -524,14 +521,14 @@ function AccessReviewPackView({ pack }: { pack: AccessReviewPack }) {
 
       {/* Integrity section: SHA-256 + audit seq */}
       <div className="flex flex-col gap-1">
-        <p className="text-xs font-medium text-muted-foreground">
+        <p className="text-caption font-medium text-muted-foreground">
           {t('granular.accessReview.exportIntegrity')}
         </p>
-        <code className="break-all rounded bg-muted px-2 py-1 font-mono text-xs text-muted-foreground">
+        <code className="break-all rounded bg-muted px-2 py-1 font-mono text-caption text-muted-foreground">
           {pack.integrity.pack_sha256}
         </code>
         {pack.integrity.audit_seq !== undefined && (
-          <p className="text-xs text-muted-foreground">
+          <p className="text-caption text-muted-foreground">
             seq: {pack.integrity.audit_seq}
           </p>
         )}
@@ -539,57 +536,48 @@ function AccessReviewPackView({ pack }: { pack: AccessReviewPack }) {
 
       {/* Entries table */}
       {pack.entries.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
+        <p className="text-body text-muted-foreground">
           {t('granular.accessReview.noResults')}
         </p>
       ) : (
         <div className="overflow-hidden rounded-lg border border-border">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
+          <StaticTable>
+            <thead>
               <tr>
-                <th className="px-3 py-2 font-medium">
-                  {t('granular.accessReview.resultSubject')}
-                </th>
-                <th className="px-3 py-2 font-medium">
-                  {t('granular.accessReview.resultPermission')}
-                </th>
-                <th className="px-3 py-2 font-medium">
-                  {t('granular.accessReview.resultVia')}
-                </th>
-                <th className="px-3 py-2 font-medium">
-                  {t('granular.accessReview.resultReason')}
-                </th>
+                <th>{t('granular.accessReview.resultSubject')}</th>
+                <th>{t('granular.accessReview.resultPermission')}</th>
+                <th>{t('granular.accessReview.resultVia')}</th>
+                <th>{t('granular.accessReview.resultReason')}</th>
               </tr>
             </thead>
             <tbody>
               {pack.entries.map((entry, i) => (
                 <tr
                   key={`${entry.subject.type}:${entry.subject.id}:${entry.permission ?? i}`}
-                  className="border-t border-border"
                 >
-                  <td className="px-3 py-2">
-                    <span className="font-mono text-xs text-foreground">
+                  <td>
+                    <span className="font-mono text-caption text-foreground">
                       {entry.subject.display ?? entry.subject.id}
                     </span>
-                    <span className="ml-1 text-xs text-muted-foreground">
+                    <span className="ml-1 text-caption text-muted-foreground">
                       ({entry.subject.type})
                     </span>
                   </td>
-                  <td className="px-3 py-2">
-                    <code className="font-mono text-xs text-foreground">
+                  <td>
+                    <code className="font-mono text-caption text-foreground">
                       {entry.permission}
                     </code>
                   </td>
-                  <td className="px-3 py-2 text-xs text-muted-foreground">
+                  <td className="text-caption text-muted-foreground">
                     {entry.via}
                   </td>
-                  <td className="px-3 py-2 text-xs text-muted-foreground">
+                  <td className="text-caption text-muted-foreground">
                     {entry.reason}
                   </td>
                 </tr>
               ))}
             </tbody>
-          </table>
+          </StaticTable>
         </div>
       )}
     </div>

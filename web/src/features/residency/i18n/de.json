@@ -16,6 +16,7 @@
   "orgs": {
     "title": "Organisationen",
     "empty": "Noch keine Organisationen",
+    "emptyHint": "Organisationen erscheinen hier mit der Region, an die ihre Daten gebunden sind. Legen Sie eine Organisation an, um zu beginnen.",
     "colOrg": "Organisation",
     "colRegion": "Regionsbindung",
     "colActions": "Aktionen",

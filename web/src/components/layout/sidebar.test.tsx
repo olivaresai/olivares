@@ -338,7 +338,7 @@ describe('Sidebar search (P2-12, N1 index)', () => {
   it('finds a view by a NOUN it manages, not just by its label', async () => {
     // The whole point of the second axis. "identities" is not the label of
     // /access-map, /permissions or /console — it is the noun they manage, and an
-    // operator who thinks in thirteen words must still land on them.
+    // operator who thinks in those thirteen words must still land on them.
     const user = userEvent.setup()
     renderIntel(<Sidebar />)
 
@@ -606,8 +606,11 @@ describe('P10 — el borde inferior del nav no se lee como un item pisado', () =
     ).not.toBeNull()
     const fadePx = Number(mask![1] ?? mask![2])
 
+    // The rail's keyboard support put a ref, a keydown handler and `aria-keyshortcuts` on
+    // this element, so the className is no longer the next attribute. Match forward to
+    // it instead of pinning the attribute ORDER, which was never the property under test.
     const nav =
-      /aria-label=\{t\('common:a11y.mainNavigation'\)\}\s*className="([^"]+)"/.exec(
+      /aria-label=\{t\('common:a11y.mainNavigation'\)\}[\s\S]{0,400}?className="([^"]+)"/.exec(
         src,
       )
     expect(nav, 'no encuentro el className del nav principal').not.toBeNull()

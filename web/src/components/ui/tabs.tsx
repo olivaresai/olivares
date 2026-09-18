@@ -379,7 +379,7 @@ export function TabsTrigger({
   return (
     <Trigger
       className={cn(
-        'inline-flex h-9 shrink-0 items-center -mb-px px-3 text-sm font-medium whitespace-nowrap',
+        'inline-flex h-9 shrink-0 items-center -mb-px px-3 text-body font-medium whitespace-nowrap',
         'border-b-2 border-transparent text-muted-foreground transition-colors duration-100 ease-out',
         'hover:text-foreground',
         'data-[state=active]:text-foreground data-[state=active]:border-accent-text',

@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils'
 
 /**
  * Tooltip — the tiny on-hover/focus label over Radix Tooltip. Intentionally small:
- * `text-xs`, flat `bg-elevated` chip with a strong hairline and `shadow-md`. A
+ * `text-caption`, flat `bg-elevated` chip with a strong hairline and `shadow-md`. A
  * 400ms open delay keeps the UI calm; `skipDelayDuration={0}` so moving between
  * adjacent triggers still re-arms the delay. Radix handles pointer/keyboard focus
  * triggers and ARIA. Wrap the app (or a region) once in `TooltipProvider`.
@@ -41,7 +41,7 @@ export function TooltipContent({
         sideOffset={sideOffset}
         className={cn(
           'z-50 max-w-xs bg-elevated border border-border-strong rounded-md px-2 py-1',
-          'text-xs text-foreground shadow-md',
+          'text-caption text-foreground shadow-md',
           'transition-opacity duration-150 ease-out',
           'data-[state=delayed-open]:opacity-100 data-[state=instant-open]:opacity-100 data-[state=closed]:opacity-0',
           className,

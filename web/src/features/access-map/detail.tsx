@@ -61,7 +61,7 @@ export interface RecheckState {
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="grid grid-cols-[7rem_1fr] items-start gap-2 py-1.5 text-sm">
+    <div className="grid grid-cols-[7rem_1fr] items-start gap-2 py-1.5 text-body">
       <span className="text-muted-foreground">{label}</span>
       <span className="min-w-0 break-words text-foreground">{children}</span>
     </div>
@@ -69,7 +69,7 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
 }
 
 function Mono({ children }: { children: ReactNode }) {
-  return <span className="font-mono text-xs break-all">{children}</span>
+  return <span className="font-mono text-caption break-all">{children}</span>
 }
 
 export function AccessDetailSheet({
@@ -209,7 +209,7 @@ function EdgeDetail({
           {t('detail.edgeTitle')}
           <AccessModeBadge mode={edge.mode} />
         </SheetTitle>
-        <SheetDescription className="font-mono text-xs break-all">
+        <SheetDescription className="font-mono text-caption break-all">
           {edge.origin_ref || edge.origin_kind} →{' '}
           {edge.resource_ref || edge.resource_kind}
         </SheetDescription>
@@ -217,7 +217,7 @@ function EdgeDetail({
 
       <div className="overflow-y-auto text-left">
         {unexpected && (
-          <div className="mb-2 flex items-center gap-2 rounded-md border border-danger-line bg-danger-soft px-2.5 py-1.5 text-xs text-danger">
+          <div className="mb-2 flex items-center gap-2 rounded-md border border-danger-line bg-danger-soft px-2.5 py-1.5 text-caption text-danger">
             <span className="font-medium">{t('detail.unexpectedFlag')}</span>
           </div>
         )}
@@ -286,7 +286,7 @@ function EdgeDetail({
           </Row>
           {edge.attribution_reason && (
             <Row label={t('detail.reason')}>
-              <span className="text-xs text-muted-foreground">
+              <span className="text-caption text-muted-foreground">
                 {edge.attribution_reason}
               </span>
             </Row>
@@ -375,11 +375,11 @@ function AuthoritySection({
   return (
     <Section title={t('authority.title')}>
       <div className="py-2">
-        <p className="text-xs leading-snug text-foreground">
+        <p className="text-caption leading-snug text-foreground">
           {t(`authority.explain.${authority.cls}`)}
         </p>
         {authority.signals.length > 0 && (
-          <p className="mt-1.5 flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
+          <p className="mt-1.5 flex flex-wrap items-center gap-1 text-caption text-muted-foreground">
             {t('authority.declaredBy')}
             {authority.signals.map((s) => (
               <Badge key={s} variant="neutral" className="font-mono">
@@ -550,7 +550,7 @@ function AuthoritySection({
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div className="py-1.5">
-      <h3 className="mb-0.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+      <h3 className="mb-0.5 flex items-center gap-1.5 text-caption font-semibold uppercase tracking-wide text-muted-foreground">
         <Hash className="size-3 opacity-60" />
         {title}
       </h3>

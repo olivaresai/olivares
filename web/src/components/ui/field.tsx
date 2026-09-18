@@ -62,7 +62,7 @@ export function FieldDescription({
   return (
     <p
       data-slot="field-description"
-      className={cn('text-xs text-muted-foreground', className)}
+      className={cn('text-caption text-muted-foreground', className)}
       {...props}
     />
   )
@@ -78,7 +78,7 @@ export function FieldError({
     <p
       data-slot="field-error"
       role="alert"
-      className={cn('text-xs text-danger', className)}
+      className={cn('text-caption text-danger', className)}
       {...props}
     >
       {children}

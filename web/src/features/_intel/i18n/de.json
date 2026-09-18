@@ -93,6 +93,7 @@
   "timeline": {
     "title": "Rekonstruierter Zeitverlauf",
     "empty": "Keine Ereignisse im Zeitraum.",
+    "emptyHint": "Nachweis-Ereignisse erscheinen hier, sobald die Engine sie aufzeichnet. Erweitern Sie den Zeitraum, um ältere Ereignisse zu erreichen.",
     "seq": "seq"
   },
   "consumption": {

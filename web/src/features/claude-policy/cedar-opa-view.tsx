@@ -371,7 +371,7 @@ export function CedarOpaView({ active }: { active: boolean }) {
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2">
         <Badge variant="info">{t('pdp.liveBadge')}</Badge>
-        <span className="text-xs text-muted-foreground">
+        <span className="text-caption text-muted-foreground">
           {t('pdp.liveHint')}
         </span>
       </div>
@@ -399,7 +399,7 @@ export function CedarOpaView({ active }: { active: boolean }) {
       <div className="grid gap-4 lg:grid-cols-[1fr_22rem]">
         <div className="flex min-w-0 flex-col gap-3">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-medium text-muted-foreground">
+            <span className="text-caption font-medium text-muted-foreground">
               {t('pdp.engine')}
             </span>
             <Select
@@ -472,11 +472,11 @@ export function CedarOpaView({ active }: { active: boolean }) {
           {validateResult && (
             <SectionCard title={t('pdp.validateTitle')}>
               {validateResult.ok && validateResult.diagnostics.length === 0 ? (
-                <p className="text-xs text-success">{t('pdp.valid')}</p>
+                <p className="text-caption text-success">{t('pdp.valid')}</p>
               ) : (
                 <ul className="flex flex-col gap-1">
                   {validateResult.diagnostics.map((d, i) => (
-                    <li key={i} className="text-xs">
+                    <li key={i} className="text-caption">
                       <Badge
                         variant={d.severity === 'error' ? 'danger' : 'warning'}
                       >
@@ -526,7 +526,7 @@ export function CedarOpaView({ active }: { active: boolean }) {
                   {primaryLabel}
                 </Button>
                 {publishBlocked && (
-                  <span className="text-xs text-warning">
+                  <span className="text-caption text-warning">
                     {t('pdp.diff.publishBlocked')}
                   </span>
                 )}
@@ -640,7 +640,7 @@ export function CedarOpaView({ active }: { active: boolean }) {
         pending={publishMutation.isPending}
         onConfirm={() => publishMutation.mutate()}
       >
-        <p className="text-xs text-muted-foreground">
+        <p className="text-caption text-muted-foreground">
           {engine === 'cedar'
             ? t('pdp.publish.confirmNote')
             : t('pdp.publish.confirmNoteOpa')}
@@ -668,7 +668,7 @@ export function CedarOpaView({ active }: { active: boolean }) {
           if (rollbackTarget) rollbackMutation.mutate(rollbackTarget)
         }}
       >
-        <p className="text-xs text-muted-foreground">
+        <p className="text-caption text-muted-foreground">
           {rollbackTarget?.surface === 'opa'
             ? t('pdp.rollback.confirmNoteOpa')
             : t('pdp.rollback.confirmNote')}
@@ -788,14 +788,16 @@ function LiveActivationPanel({
   if (state.kind === 'loading') {
     return (
       <SectionCard title={t('pdp.live.title')}>
-        <p className="text-xs text-muted-foreground">{t('pdp.live.loading')}</p>
+        <p className="text-caption text-muted-foreground">
+          {t('pdp.live.loading')}
+        </p>
       </SectionCard>
     )
   }
   if (state.kind === 'unknown') {
     return (
       <SectionCard title={t('pdp.live.title')}>
-        <p className="flex items-start gap-1.5 text-xs text-warning">
+        <p className="flex items-start gap-1.5 text-caption text-warning">
           <TriangleAlert className="mt-px size-3.5 shrink-0" aria-hidden />
           {t('pdp.live.unknown')}
         </p>
@@ -809,7 +811,7 @@ function LiveActivationPanel({
         {live === 'applied' && (
           <>
             <Badge variant="success">{t('pdp.live.appliedBadge')}</Badge>
-            <span className="text-xs text-muted-foreground">
+            <span className="text-caption text-muted-foreground">
               {t('pdp.live.appliedBody')}
             </span>
           </>
@@ -817,7 +819,7 @@ function LiveActivationPanel({
         {live === 'deferred' && (
           <>
             <Badge variant="warning">{t('pdp.live.deferredBadge')}</Badge>
-            <span className="flex items-start gap-1.5 text-xs text-warning">
+            <span className="flex items-start gap-1.5 text-caption text-warning">
               <TriangleAlert className="mt-px size-3.5 shrink-0" aria-hidden />
               {t('pdp.live.deferredBody')}
             </span>
@@ -826,7 +828,7 @@ function LiveActivationPanel({
         {live === 'not_applicable' && (
           <>
             <Badge variant="info">{t('pdp.live.notApplicableBadge')}</Badge>
-            <span className="text-xs text-muted-foreground">
+            <span className="text-caption text-muted-foreground">
               {t('pdp.live.notApplicableBody', { engine })}
             </span>
           </>
@@ -834,7 +836,7 @@ function LiveActivationPanel({
         {live === 'no_policy' && (
           <>
             <Badge variant="outline">{t('pdp.live.noPolicyBadge')}</Badge>
-            <span className="text-xs text-muted-foreground">
+            <span className="text-caption text-muted-foreground">
               {t('pdp.live.noPolicyBody')}
             </span>
           </>
@@ -845,13 +847,13 @@ function LiveActivationPanel({
           policy — so this really is `applied` — while its POSITIVE grants have
           degraded to abstain. A green badge on its own would be a half-truth. */}
       {expired && (
-        <p className="mt-2 flex items-start gap-1.5 text-xs text-warning">
+        <p className="mt-2 flex items-start gap-1.5 text-caption text-warning">
           <TriangleAlert className="mt-px size-3.5 shrink-0" aria-hidden />
           {t('pdp.live.grantsExpired')}
         </p>
       )}
       {live !== 'not_applicable' && live !== 'no_policy' && (
-        <p className="mt-2 text-xs text-muted-foreground">
+        <p className="mt-2 text-caption text-muted-foreground">
           {t('pdp.live.processScope')}
         </p>
       )}
@@ -896,15 +898,17 @@ function PrePublishDiff({
         />
       )}
       {base.kind === 'loading' && (
-        <p className="text-xs text-muted-foreground">{t('pdp.diff.loading')}</p>
+        <p className="text-caption text-muted-foreground">
+          {t('pdp.diff.loading')}
+        </p>
       )}
       {base.kind === 'none' && (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-caption text-muted-foreground">
           {t('pdp.diff.noActive')}
         </p>
       )}
       {base.kind === 'unavailable' && (
-        <p className="flex items-start gap-1.5 text-xs text-warning">
+        <p className="flex items-start gap-1.5 text-caption text-warning">
           <TriangleAlert className="mt-px size-3.5 shrink-0" aria-hidden />
           {t('pdp.diff.unavailable')}
         </p>
@@ -943,7 +947,7 @@ function RollbackPreview({
   const language = target.surface === 'cedar' ? 'cedar' : 'rego'
   if (query.isLoading || baseQuery.isLoading) {
     return (
-      <p className="mt-2 text-xs text-muted-foreground">
+      <p className="mt-2 text-caption text-muted-foreground">
         {t('pdp.rollback.previewLoading')}
       </p>
     )
@@ -951,7 +955,7 @@ function RollbackPreview({
   const content = query.data?.content
   if (query.isError || content === undefined) {
     return (
-      <p className="mt-2 flex items-start gap-1.5 text-xs text-warning">
+      <p className="mt-2 flex items-start gap-1.5 text-caption text-warning">
         <TriangleAlert className="mt-px size-3.5 shrink-0" aria-hidden />
         {t('pdp.rollback.previewUnavailable', { n: target.revision })}
       </p>
@@ -962,7 +966,7 @@ function RollbackPreview({
   // rest of this screen exists to remove, so the two states are kept apart.
   if (baseQuery.isError || !baseQuery.data) {
     return (
-      <p className="mt-2 flex items-start gap-1.5 text-xs text-warning">
+      <p className="mt-2 flex items-start gap-1.5 text-caption text-warning">
         <TriangleAlert className="mt-px size-3.5 shrink-0" aria-hidden />
         {t('pdp.rollback.previewBaseUnavailable', { n: target.revision })}
       </p>
@@ -980,7 +984,7 @@ function RollbackPreview({
   if (!base) {
     return (
       <div className="mt-2">
-        <p className="mb-1.5 text-xs text-muted-foreground">
+        <p className="mb-1.5 text-caption text-muted-foreground">
           {t('pdp.rollback.previewNoActive', { n: target.revision })}
         </p>
         <CodeEditor
@@ -1023,7 +1027,7 @@ function EnforcedSurfaces({
     // There is no managed/adopted Rego surface, and nothing is enforced from this
     // process at all — claiming a union here would be a different half-truth.
     return (
-      <p className="mt-2 text-xs text-muted-foreground">
+      <p className="mt-2 text-caption text-muted-foreground">
         {t('pdp.diff.opaScope')}
       </p>
     )
@@ -1036,14 +1040,14 @@ function EnforcedSurfaces({
   // for the whole list, before any surface is described.
   if (surfaces.kind === 'loading') {
     return (
-      <p className="mt-2 text-xs text-muted-foreground">
+      <p className="mt-2 text-caption text-muted-foreground">
         {t('pdp.diff.surfacesLoading')}
       </p>
     )
   }
   if (surfaces.kind === 'unknown') {
     return (
-      <p className="mt-2 flex items-start gap-1.5 text-xs text-warning">
+      <p className="mt-2 flex items-start gap-1.5 text-caption text-warning">
         <TriangleAlert className="mt-px size-3.5 shrink-0" aria-hidden />
         {t('pdp.diff.surfacesUnknown')}
       </p>
@@ -1062,7 +1066,7 @@ function EnforcedSurfaces({
       : t('pdp.diff.surfaceNone')
 
   return (
-    <div className="mt-2 flex flex-col gap-1 text-xs text-muted-foreground">
+    <div className="mt-2 flex flex-col gap-1 text-caption text-muted-foreground">
       <p>{t('pdp.diff.unionNote')}</p>
       <ul className="flex flex-col gap-0.5">
         <li>
@@ -1122,7 +1126,7 @@ function LifecycleResultPanel({ outcome }: { outcome: LifecycleOutcome }) {
 
   return (
     <SectionCard title={title}>
-      <div className="flex flex-wrap items-center gap-2 text-xs">
+      <div className="flex flex-wrap items-center gap-2 text-caption">
         <Badge variant="outline">
           {t('pdp.result.revisionBadge', { n: revision })}
         </Badge>
@@ -1149,29 +1153,29 @@ function LifecycleResultPanel({ outcome }: { outcome: LifecycleOutcome }) {
 
       {live === 'deferred' ? (
         <>
-          <p className="mt-2 flex items-start gap-1.5 text-xs text-warning">
+          <p className="mt-2 flex items-start gap-1.5 text-caption text-warning">
             <TriangleAlert className="mt-px size-3.5 shrink-0" aria-hidden />
             {t('pdp.result.deferredBody', { n: revision })}
           </p>
           {/* No "reload now" button exists to offer: nothing reloads the PDP over
               HTTP. Name the three paths that DO re-activate it. */}
-          <p className="mt-1.5 text-xs text-muted-foreground">
+          <p className="mt-1.5 text-caption text-muted-foreground">
             {t('pdp.result.deferredRecovery')}
           </p>
         </>
       ) : live === 'applied' ? (
-        <p className="mt-2 text-xs text-muted-foreground">
+        <p className="mt-2 text-caption text-muted-foreground">
           {t('pdp.result.appliedBody', { n: revision })}
         </p>
       ) : live === 'not_applicable' ? (
-        <p className="mt-2 text-xs text-muted-foreground">
+        <p className="mt-2 text-caption text-muted-foreground">
           {t('pdp.result.versionedBody', { n: revision })}
         </p>
       ) : (
         // Not "versioned". We do not know what happened to the live engine, and
         // saying the calmest of the three would be the fabrication this panel
         // exists to prevent.
-        <p className="mt-2 flex items-start gap-1.5 text-xs text-warning">
+        <p className="mt-2 flex items-start gap-1.5 text-caption text-warning">
           <TriangleAlert className="mt-px size-3.5 shrink-0" aria-hidden />
           {t('pdp.result.unknownBody', { n: revision })}
         </p>
@@ -1213,12 +1217,12 @@ function GatePanel({
         // "We could not find out which revision is active" is NOT "no revision is
         // active". The gate result is per-revision, so without the active revision
         // this panel has nothing to report — say that, do not assert an empty history.
-        <p className="flex items-start gap-1.5 text-xs text-warning">
+        <p className="flex items-start gap-1.5 text-caption text-warning">
           <TriangleAlert className="mt-px size-3.5 shrink-0" aria-hidden />
           {t('pdp.gate.activeRevisionUnknown')}
         </p>
       ) : revision === undefined ? (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-caption text-muted-foreground">
           {t('pdp.gate.noActiveRevision', { engine })}
         </p>
       ) : (
@@ -1232,7 +1236,7 @@ function GatePanel({
               </Badge>
               {!status.available ? (
                 // No counters here, ever: `reason` is the whole truth we have.
-                <p className="text-xs text-warning">
+                <p className="text-caption text-warning">
                   {status.reason ?? t('pdp.gate.unavailableNoReason')}
                 </p>
               ) : status.results && status.results.length > 0 ? (
@@ -1240,7 +1244,7 @@ function GatePanel({
                   {status.results.map((r) => (
                     <li
                       key={r.name}
-                      className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs"
+                      className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-surface px-2.5 py-1.5 text-caption"
                     >
                       <Badge variant={r.passed ? 'success' : 'danger'}>
                         {r.passed ? t('pdp.gate.passed') : t('pdp.gate.failed')}
@@ -1253,7 +1257,7 @@ function GatePanel({
                   ))}
                 </ul>
               ) : (
-                <p className="text-xs text-muted-foreground">
+                <p className="text-caption text-muted-foreground">
                   {t('pdp.gate.noResults')}
                 </p>
               )}
@@ -1302,7 +1306,7 @@ function VersionHistory({
             }
           >
             {rows.length === 0 ? (
-              <p className="text-xs text-muted-foreground">
+              <p className="text-caption text-muted-foreground">
                 {t('pdp.history.empty')}
               </p>
             ) : (
@@ -1311,7 +1315,7 @@ function VersionHistory({
                   <li
                     // Composite: revision numbers are per-surface and collide.
                     key={`${v.surface}:${v.revision}`}
-                    className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs"
+                    className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-surface px-2.5 py-1.5 text-caption"
                   >
                     <Badge variant="outline">
                       {t('pdp.history.revision', { n: v.revision })}
@@ -1386,12 +1390,14 @@ function DecisionPanel({ decision }: { decision: PdpDecision }) {
           <Badge variant="warning">{t('pdp.notEvaluated')}</Badge>
         )}
         <Badge variant="outline">{decision.engine}</Badge>
-        <span className="text-xs text-muted-foreground">{decision.reason}</span>
+        <span className="text-caption text-muted-foreground">
+          {decision.reason}
+        </span>
       </div>
       {decision.chain && decision.chain.length > 0 && (
         <ol className="mt-2 flex flex-col gap-1">
           {decision.chain.map((c, i) => (
-            <li key={i} className="flex items-center gap-2 text-xs">
+            <li key={i} className="flex items-center gap-2 text-caption">
               <Badge variant={c.effect === 'forbid' ? 'danger' : 'outline'}>
                 {c.effect}
               </Badge>
@@ -1403,7 +1409,7 @@ function DecisionPanel({ decision }: { decision: PdpDecision }) {
           ))}
         </ol>
       )}
-      <p className="mt-2 text-xs text-muted-foreground">
+      <p className="mt-2 text-caption text-muted-foreground">
         {decision.engine === 'opa'
           ? t('pdp.decisionFooterOpa')
           : t('pdp.decisionFooter')}

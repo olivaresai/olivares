@@ -377,7 +377,7 @@ function SubscriptionsTab({
           ) : (
             <div className="flex flex-col gap-3">
               {canWrite ? (
-                <div className="flex items-center gap-2 px-1 text-sm text-muted-foreground">
+                <div className="flex items-center gap-2 px-1 text-body text-muted-foreground">
                   <Checkbox
                     checked={
                       allVisible
@@ -485,6 +485,7 @@ function SubscriptionsTab({
             description: t('history.description'),
             caption: t('history.scopeCaption'),
             empty: t('history.empty'),
+            emptyHint: t('history.emptyHint'),
             loading: t('common:states.loading'),
             loadMore: t('history.loadMore'),
             compareTitle: t('history.compareTitle'),
@@ -590,7 +591,7 @@ function ReplayDialog({
             </Field>
           </div>
           {result ? (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-body text-muted-foreground">
               {t('replay.total', { count: total })}
             </p>
           ) : null}
@@ -772,7 +773,10 @@ function EventsTab() {
       <AsyncSection query={eventsQ} skeletonHeight={240}>
         {() =>
           events.length === 0 ? (
-            <EmptyState title={t('events.empty')} />
+            <EmptyState
+              description={t('events.emptyHint')}
+              title={t('events.empty')}
+            />
           ) : (
             <div className="flex flex-col gap-2">
               {events.map((evt) => (
@@ -789,7 +793,7 @@ function EventsTab() {
                   {t('events.loadMore')}
                 </Button>
               ) : (
-                <p className="text-center text-xs text-muted-foreground">
+                <p className="text-center text-caption text-muted-foreground">
                   {t('events.noMore')}
                 </p>
               )}
@@ -935,7 +939,10 @@ function DeliveriesTab({
       <AsyncSection query={deliveriesQ} skeletonHeight={240}>
         {() =>
           deliveries.length === 0 ? (
-            <EmptyState title={t('deliveries.empty')} />
+            <EmptyState
+              description={t('deliveries.emptyHint')}
+              title={t('deliveries.empty')}
+            />
           ) : (
             <div className="flex flex-col gap-2">
               {deliveries.map((d) => (
@@ -1358,18 +1365,20 @@ function SubscriptionDialog({
               {eventTypesQ.data?.event_types.map((et) => (
                 <label
                   key={et.type}
-                  className="flex items-center gap-2 rounded px-1 py-0.5 text-sm hover:bg-muted"
+                  className="flex items-center gap-2 rounded px-1 py-0.5 text-body hover:bg-muted"
                 >
                   <Checkbox
                     checked={selectedEventTypes.includes(et.type)}
                     onCheckedChange={() => handleToggleEventType(et.type)}
                   />
-                  <span className="font-mono text-xs">{et.type}</span>
+                  <span className="font-mono text-caption">{et.type}</span>
                   {et.stability !== 'stable' ? (
                     <Badge variant="warning">{et.stability}</Badge>
                   ) : null}
                 </label>
-              )) ?? <p className="text-xs text-muted-foreground">Loading...</p>}
+              )) ?? (
+                <p className="text-caption text-muted-foreground">Loading...</p>
+              )}
             </div>
           </Field>
 
@@ -1574,7 +1583,7 @@ function SubscriptionDialog({
           </Field>
 
           <label className="flex items-center justify-between gap-2 rounded-md border border-border px-3 py-2">
-            <span className="text-sm text-foreground">
+            <span className="text-body text-foreground">
               {t('dialog.enabled')}
             </span>
             <Switch

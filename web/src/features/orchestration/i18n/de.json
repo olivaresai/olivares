@@ -37,6 +37,7 @@
     "filter": "Nach Zustand filtern",
     "allStates": "Alle Zustände",
     "empty": "Keine Flüsse in diesem Zustand",
+    "emptyHint": "Flows in diesem Zustand erscheinen hier mit ihrem nächsten Lauf. Ändern Sie den Zustandsfilter oder legen Sie einen Flow an.",
     "columns": {
       "supervisor": "Supervisor",
       "workers": "Worker",
@@ -179,7 +180,9 @@
     "description": "Nur-anhängender Datensatz der Auslöseentscheidungen für den ausgewählten Zeitplan. Eine Entscheidung wird genau so angezeigt, wie sie aufgelöst wurde — eine Genehmigung ist keine Betätigung.",
     "pick": "Zeitplan auswählen",
     "pickHint": "Wählen Sie einen Zeitplan aus, um sein Entscheidungs-Hauptbuch zu sehen.",
+    "pickHintDetail": "Das Journal zeigt jede Entscheidung, die der Planer für diesen Zeitplan getroffen hat, samt Begründung.",
     "empty": "Keine Entscheidungen aufgezeichnet",
+    "emptyHint": "Jedes Mal, wenn der Planer ein Vorkommen ausführt, überspringt oder verzögert, wird es hier festgehalten. Dieser Zeitplan hat noch nichts entschieden.",
     "gate": "Schranke",
     "plan": "Plan",
     "op": {
@@ -214,7 +217,8 @@
       "workflow": "Workflow"
     },
     "estateDescription": "Reines Anhänge-Protokoll aller Entscheidungen im Bestand, neueste zuerst. Enthält Entscheidungen, die zu keinem Zeitplan gehören.",
-    "forbidden": "Deine Rolle darf Zeitplan-Entscheidungen nicht lesen."
+    "forbidden": "Deine Rolle darf Zeitplan-Entscheidungen nicht lesen.",
+    "forbiddenHint": "Das Entscheidungsjournal hält fest, warum der Planer jedes Vorkommen ausgeführt, übersprungen oder verzögert hat. Bitten Sie eine Administratorin um die Leseberechtigung dafür."
   },
   "timeline": {
     "title": "Aktivitätsverlauf",
@@ -232,6 +236,7 @@
     "description": "Chronologische, ausschließlich ergänzte Snapshots dieses Zeitplans.",
     "scopeCaption": "Eine Wiederherstellung wendet nur veränderliche Felder erneut an — niemals Name, Subjektart oder Auslöserart.",
     "empty": "Keine Revisionen aufgezeichnet",
+    "emptyHint": "Jede Änderung an diesem Zeitplan wird als Revision aufbewahrt, die Sie vergleichen und wiederherstellen können. Die erste Bearbeitung erzeugt eine.",
     "loadMore": "Mehr laden",
     "compareTitle": "Snapshot-Unterschiede",
     "selectTwo": "Wählen Sie zwei Revisionen aus, um ihre Snapshots zu vergleichen.",

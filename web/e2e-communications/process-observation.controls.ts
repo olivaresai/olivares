@@ -5,6 +5,7 @@ import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { spawn, type ChildProcess } from 'node:child_process'
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import { after, describe, test } from 'node:test'
 import { fileURLToPath } from 'node:url'
@@ -33,11 +34,10 @@ import {
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const SHELL = fs.realpathSync('/bin/sh')
 const TRUE = fs.realpathSync('/bin/true')
+// The scratch root is the caller's TMPDIR, and `os.tmpdir()` when it declares none:
+// a hard-coded absolute path would tie this battery to one machine's layout.
 const CONTROL_ROOT = fs.mkdtempSync(
-  path.join(
-    process.env.TMPDIR ?? '/workspace/olivares-ai-control/tmp',
-    'k3-po-controls-',
-  ),
+  path.join(process.env.TMPDIR ?? os.tmpdir(), 'k3-po-controls-'),
 )
 fs.chmodSync(CONTROL_ROOT, 0o700)
 const STAY = path.join(CONTROL_ROOT, 'stay.sh')
