@@ -32,7 +32,7 @@ description: >-
   可导出为多种 SIEM 格式。
 - **发布版本经过签名且可离线验证。** 签名、SLSA 来源、SBOM
   和 OpenVEX 都可[在无网络访问的情况下验证](/zh/how-to/verify-a-release/)，
-  且产品提供[气隙（air-gap）包](/zh/how-to/air-gap-install/)。最新的带标签发布版本 **v26.9.0** 已发布，附有签名归档、原生软件包和容器镜像；API、schema 和模块表面在 1.0 之前仍可能变化。
+  且产品提供[气隙（air-gap）包](/zh/how-to/air-gap-install/)。最新的带标签发布版本 **v26.9.1** 已发布，附有签名归档、原生软件包和容器镜像；API、schema 和模块表面在 1.0 之前仍可能变化。
 
 ## 开放内核 —— 哪些开放、哪些属于企业版
 

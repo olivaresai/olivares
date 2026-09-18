@@ -35,7 +35,7 @@ cubre algo, la página lo dice en lugar de dar a entender que sí lo hace.
   en varios formatos SIEM.
 - **Las releases están firmadas y son verificables sin conexión.** Firma, procedencia SLSA, SBOM
   y OpenVEX pueden todos [verificarse sin acceso a red](/es/how-to/verify-a-release/),
-  y el producto incluye un [bundle air-gap](/es/how-to/air-gap-install/). La última release etiquetada, **v26.9.0**, está publicada con archivos firmados, paquetes nativos e imágenes de contenedor; las API, los esquemas y la superficie de módulos aún pueden cambiar antes de la 1.0.
+  y el producto incluye un [bundle air-gap](/es/how-to/air-gap-install/). La última release etiquetada, **v26.9.1**, está publicada con archivos firmados, paquetes nativos e imágenes de contenedor; las API, los esquemas y la superficie de módulos aún pueden cambiar antes de la 1.0.
 
 ## Open core — qué es abierto vs enterprise
 

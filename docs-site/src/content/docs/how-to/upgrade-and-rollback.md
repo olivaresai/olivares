@@ -47,7 +47,7 @@ version, so neither can be evaluated. The command refuses rather than guessing. 
 version you know is there and the guards stay armed:
 
 ```sh
-olivares upgrade --check --current-version 26.9.0
+olivares upgrade --check --current-version 26.9.1
 ```
 
 ## Release channels

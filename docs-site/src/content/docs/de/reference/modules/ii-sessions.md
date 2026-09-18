@@ -14,7 +14,7 @@ Estate materialisiert, hält Modul II ein **Live-Betriebs-Overlay** pro Session
 über demselben Beobachtungsstrom — und zeigt nur, was dieser Strom ehrlich
 trägt.
 
-v26.9.0 **startet** auch offizielle Anbieter-CLIs als eigene Kinder unter einem
+v26.9.1 **startet** auch offizielle Anbieter-CLIs als eigene Kinder unter einem
 [Anbieterprofil](/how-to/operate-provider-sessions/). Dieser verwaltete Pfad
 ist dasselbe Modul. Er ersetzt das Overlay nicht und führt zwei Homes, die
 dieselbe Anbieter-Session-ID bekanntgeben, nicht zusammen

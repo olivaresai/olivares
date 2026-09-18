@@ -29,8 +29,8 @@ edge 観測が運ぶのは識別子と read/write 分類のみです — SQL 本
 
 コネクタはコネクタ SDK をインポートし、製品からはそれ以外をインポートしません。`/core`（AGPL エンジン）を決してインポートしません。その境界は CI で強制され、それこそがコネクタを Apache-2.0 で出荷可能にし、サードパーティが copyleft の摩擦なしに独自のものを構築できるようにします。同じコネクタバイナリが in-process でも、gRPC 越しの out-of-process でも同一に動作します。完全な境界については [Open core とライセンス](/ja/explanation/open-core-and-licensing/) を参照してください。
 
-同じコネクタ kind のソースを複数登録して同時に実行できます（`CHANGELOG.md`
-`[26.9.0]` Fixed）。ランタイムは各ソースをコネクタの Descriptor 名でキーして
+同じコネクタ kind のソースを複数登録して同時に実行できます
+（`CHANGELOG.md` `[26.9.0]` Fixed）。ランタイムは各ソースをコネクタの Descriptor 名でキーして
 いたため、同じ kind の 2 行目は永続化され一覧に出てもエンジンが拒否していまし
 た。ソースはオペレーター自身の名前（ロスター行の `name`）で登録され、コネクタ
 descriptor はその横に置かれます。`grok-home-a` と `grok-home-b` は独自の設定と

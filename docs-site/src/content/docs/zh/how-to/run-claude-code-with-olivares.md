@@ -63,14 +63,14 @@ description: "在一台 Linux 主机上联合部署 Olivares 控制平面与 Cla
 
 ```sh
 # verify the engine image you build FROM (it is cosign-signed)
-cosign verify docker.io/olivaresai/olivares:26.9.0 \
+cosign verify docker.io/olivaresai/olivares:26.9.1 \
   --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 
 docker build -f Dockerfile.agentops \
   --build-arg OLIVARES_IMAGE=docker.io/olivaresai/olivares@sha256:<digest> \
   --build-arg CLAUDE_CHANNEL=stable \
-  -t olivares-agentops:26.9.0 .
+  -t olivares-agentops:26.9.1 .
 ```
 
 也可改用 `--build-arg CLAUDE_INSTALL=byo` 自带 `claude`（镜像不携带 `claude`；在运行时挂载你自己的，
@@ -79,7 +79,7 @@ docker build -f Dockerfile.agentops \
 ### 启动它
 
 ```sh
-export OLIVARES_AGENTOPS_IMAGE=olivares-agentops:26.9.0
+export OLIVARES_AGENTOPS_IMAGE=olivares-agentops:26.9.1
 docker compose -f deploy/compose/docker-compose.yml \
                -f deploy/compose/docker-compose.agentops.yml up -d
 ```

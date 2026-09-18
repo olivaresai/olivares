@@ -100,8 +100,8 @@ und das TLS-Material — sichern und schützen Sie es.
 Das Standard-Native-Layout ist `/var/lib/olivares`. Der signierte Service-Adapter
 (`install.sh --data-dir`, `scripts/install-service.sh`) lässt ein
 **benutzerdefiniertes** Datenverzeichnis nach **Form** zu, nicht nach Allowlist.
-Das Ownership-Manifest zeichnet `"layout": "custom"` auf (`CHANGELOG.md`
-`[26.9.0]` Added; `INSTALL.md`).
+Das Ownership-Manifest zeichnet `"layout": "custom"` auf
+(`CHANGELOG.md` `[26.9.0]` Added; `INSTALL.md`).
 
 SDD 04 §6: jedes konfigurierbare Feld erklärt Owner, Schema, akzeptierte Quellen
 und Validator. Hier besitzt der Adapter das dedizierte Verzeichnis; der Operator
@@ -173,7 +173,7 @@ Helm-Chart), damit Datenvolume, Ports und Erste-Start-Ablauf korrekt verdrahtet 
 Das Helm-Chart in `deploy/helm/olivares` stellt die control plane als **Core-StatefulSet** bereit
 (Single-Writer; sein Datenverzeichnis enthält den Signierschlüssel des Audit-Ledgers und
 das TLS-Material) und, für die verteilte Topologie, ein **Collectors-DaemonSet**, das
-Beobachtungen über **gRPC + mTLS** an den Core schickt. Das Engine-Release v26.9.0
+Beobachtungen über **gRPC + mTLS** an den Core schickt. Das Engine-Release v26.9.1
 veröffentlicht das Chart nicht in einer OCI-Registry; noch kein unabhängiger
 `chart-v*`-Tag hat den Workflow ausgeführt. Installieren Sie aus dem Checkout und
 pinnen Sie das veröffentlichte Container-Image per Digest.

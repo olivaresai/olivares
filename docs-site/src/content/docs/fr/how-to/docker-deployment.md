@@ -16,9 +16,9 @@ par défaut sécurisées : aucune crédential par défaut, un token de configura
 usage unique et TLS activé par défaut. Le port de l'hôte est publié sur toutes les
 interfaces, car c'est un serveur — restreignez-le délibérément, comme ci-dessous.
 
-:::note[Beta — 26.9.0 n'est pas encore publiée]
+:::note[Beta — 26.9.1 n'est pas encore publiée]
 Olivares AI est en **beta**. Les coordonnées d'image ci-dessous ne se résolvent
-**qu'après la publication de la release `26.9.0`** ; jusque-là, les
+**qu'après la publication de la release `26.9.1`** ; jusque-là, les
 registres n'ont rien à récupérer. Considérez ceci comme la forme de déploiement que
 vous utiliserez, non comme une garantie prête pour la production.
 :::
@@ -33,7 +33,7 @@ pour le scale-out, voir le chemin Kubernetes/Helm ci-dessous.
 Le pull de conteneur primaire est **Docker Hub** :
 
 ```bash
-docker pull docker.io/olivaresai/olivares:26.9.0
+docker pull docker.io/olivaresai/olivares:26.9.1
 ```
 
 Le même contenu est également publié sur `ghcr.io/olivaresai/olivares` — identique par
@@ -41,8 +41,8 @@ digest, utilisé comme sauvegarde et comme registre de build. Docker Hub appliqu
 de débit aux pulls **anonymes** ; ghcr.io n'impose aucune limite sur les pulls anonymes
 d'images publiques — `docker login` ou la coordonnée ghcr.io est donc la porte de sortie si un
 nœud de CI ou une flotte importante atteint le plafond. Les tags ne portent
-**aucun `v` initial** : `:26.9.0` épingle une release, `:latest` flotte, et
-`:26.9.0-fips` / `:26.9.0-stig` sont les variantes durcies. Les tags de base et
+**aucun `v` initial** : `:26.9.1` épingle une release, `:latest` flotte, et
+`:26.9.1-fips` / `:26.9.1-stig` sont les variantes durcies. Les tags de base et
 `:latest` sont multi-arch (`linux/amd64`, `linux/arm64`) ; `fips`/`stig` sont
 `amd64`-only.
 
@@ -54,7 +54,7 @@ même :
 
 ```bash
 IMAGE=docker.io/olivaresai/olivares          # fallback: ghcr.io/olivaresai/olivares (same digest)
-DIGEST="$(crane digest "$IMAGE:26.9.0")"
+DIGEST="$(crane digest "$IMAGE:26.9.1")"
 REF="$IMAGE@$DIGEST"
 
 cosign verify "$REF" \
@@ -92,7 +92,7 @@ docker run -d --name olivares \
   -v olivares-data:/var/lib/olivares \
   -p 8443:8443 \
   -p 8444:8444 \
-  docker.io/olivaresai/olivares:26.9.0 \
+  docker.io/olivaresai/olivares:26.9.1 \
   serve \
     --listen=0.0.0.0:8443 \
     --grpc-listen=0.0.0.0:8444 \
@@ -298,7 +298,7 @@ conteneur.
 ```bash
 # 1. Back up first (see §4).
 # 2. Pull the new release and re-verify it (see §1):
-docker pull docker.io/olivaresai/olivares:26.9.1
+docker pull docker.io/olivaresai/olivares:26.9.2
 
 # docker run:
 docker stop olivares && docker rm olivares
@@ -314,7 +314,7 @@ et re-vérifiez la nouvelle image avant de recréer.
 
 ## 8. Épingler par digest pour la production
 
-Les tags mutables (`:26.9.0`, `:latest`) sont pour l'évaluation. En production, épinglez
+Les tags mutables (`:26.9.1`, `:latest`) sont pour l'évaluation. En production, épinglez
 le **digest** que vous avez vérifié — un digest est immuable et correspond exactement à
 ce que vous avez validé :
 

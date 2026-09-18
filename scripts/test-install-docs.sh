@@ -133,6 +133,19 @@ sed -i 's#deploy/helm/olivares#deploy/helm/missing#g' \
 expect "mutant: one locale loses source command" 1 'current self-hosting.md anchor is absent'
 cp "$W/ja-self.good" "$TREE/docs-site/src/content/docs/ja/how-to/self-hosting.md"
 
+# ⛔ EL NOMBRE DEL PAQUETE SE COMPRUEBA EN LOS SIETE IDIOMAS, no solo en el ingles. Medido en
+# el corte de v26.9.1: veintiun nombres `olivares_<anterior>_linux_amd64.{deb,rpm,apk}` seguian
+# en pie tras barrer la version, porque NINGUNA de las dos expresiones de check-release-version.sh
+# los ve — las dos terminan en `\b` y el caracter siguiente es `_`, que es de palabra. Tres los
+# cazaba este sujeto por nombrarlos literalmente en ingles; los otros DIECIOCHO no los cazaba
+# nadie. El mutante muta una traduccion a proposito: en ingles ya estaba cubierto, y el nombre
+# que inyecta NO lleva version: un fixture con una version real caduca y ademas es una afirmacion.
+cp "$TREE/docs-site/src/content/docs/ru/how-to/install-from-packages.md" "$W/ru-pkg.good"
+sed -i "s/olivares_${VERSION#v}_linux_amd64[.]deb/olivares_ANTERIOR_linux_amd64.deb/" \
+	"$TREE/docs-site/src/content/docs/ru/how-to/install-from-packages.md"
+expect "mutant: one locale keeps a stale package name" 1 'localized package command'
+cp "$W/ru-pkg.good" "$TREE/docs-site/src/content/docs/ru/how-to/install-from-packages.md"
+
 printf '\n[VERIFICAR: mutant stale package name]\n' \
 	>>"$TREE/docs-site/src/content/docs/how-to/install-from-packages.md"
 expect "mutant: pre-release package marker returns" 1 'pre-release state'

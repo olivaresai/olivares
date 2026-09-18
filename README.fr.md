@@ -10,13 +10,13 @@
 
 [![License: AGPL-3.0-only](https://img.shields.io/badge/license-AGPL--3.0--only-blue)](LICENSING.md)
 [![SDK & connectors: Apache-2.0](https://img.shields.io/badge/SDK%20%26%20connectors-Apache--2.0-blue)](LICENSING.md)
-[![Release: v26.9.0](https://img.shields.io/badge/release-v26.9.0-28282B)](https://github.com/olivaresai/olivares/releases/tag/v26.9.0)
+[![Release: v26.9.1](https://img.shields.io/badge/release-v26.9.1-28282B)](https://github.com/olivaresai/olivares/releases/tag/v26.9.1)
 [![Status: beta](https://img.shields.io/badge/status-beta-F08000)](CHANGELOG.md)
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa)](CODE_OF_CONDUCT.md)
 
 </div>
 
-> **Bêta**, en développement actif. **v26.9.0** est livrée avec des archives signées, des paquets natifs et des images de conteneur. Ce qui fonctionne aujourd'hui, ce qui est à la demande et ce qui est au stade de la conception sont indiqués dans [Honnêteté et limites](docs-site/src/content/docs/start/honesty-and-limits.md).
+> **Bêta**, en développement actif. **v26.9.1** est livrée avec des archives signées, des paquets natifs et des images de conteneur. Ce qui fonctionne aujourd'hui, ce qui est à la demande et ce qui est au stade de la conception sont indiqués dans [Honnêteté et limites](docs-site/src/content/docs/start/honesty-and-limits.md).
 
 ## Ce que c'est
 
@@ -80,7 +80,7 @@ helm install olivares deploy/helm/olivares -n olivares-system --create-namespace
 kubectl create namespace olivares-system && kubectl apply -n olivares-system -f deploy/manifests/install.yaml
 ```
 
-**5 · Paquets Linux** — `.deb`, `.rpm`, `.apk` depuis la [page de la version](https://github.com/olivaresai/olivares/releases/tag/v26.9.0) : le binaire, un fichier env d'exemple, un utilisateur `olivares` sans login et une unité durcie ; le service n'est pas démarré pour vous.
+**5 · Paquets Linux** — `.deb`, `.rpm`, `.apk` depuis la [page de la version](https://github.com/olivaresai/olivares/releases/tag/v26.9.1) : le binaire, un fichier env d'exemple, un utilisateur `olivares` sans login et une unité durcie ; le service n'est pas démarré pour vous.
 
 ```sh
 sudo dpkg -i olivares_*_linux_amd64.deb        # Debian / Ubuntu   (sudo rpm -i … on RHEL / Fedora / SUSE; sudo apk add --allow-untrusted … on Alpine)

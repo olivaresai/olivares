@@ -71,8 +71,8 @@ this table as extra help text; it is that generated command.
 
 ### `agentops-layout` check
 
-`olivares doctor` reports a check named `agentops-layout` (`CHANGELOG.md`
-`[26.9.0]`; `cmd/olivares/cmd_doctor.go` `doctorAgentOpsCheck`). It is not a
+`olivares doctor` reports a check named `agentops-layout`
+(`CHANGELOG.md` `[26.9.0]`; `cmd/olivares/cmd_doctor.go` `doctorAgentOpsCheck`). It is not a
 subcommand. It measures the native AgentOps layout the ownership manifest
 records: the managed drop-in must exist with its mode and must name the
 recorded claude `HOME`, token dir and workspace; the runtime env must exist

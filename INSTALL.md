@@ -7,7 +7,7 @@ short version, and the deployment tutorials (Compose, Kubernetes/Helm, air-gappe
 [`docs-site/`](docs-site/).
 
 > **Beta.** Releases are cut from this repository. The binaries,
-> images and packages below **are published from the latest tagged release (`v26.9.0`)**;
+> images and packages below **are published from the latest tagged release (`v26.9.1`)**;
 > [building from source](#from-source) remains supported. Everything is self-hosted: the engine
 > makes no mandatory outbound calls at boot and verifying a licence never calls us. The one
 > command that reaches us is `olivares upgrade`, which fetches from the update channel unless
@@ -25,10 +25,10 @@ use [`scripts/verify-release.sh`](scripts/verify-release.sh) (see
 ## Versioning
 
 Releases use **CalVer**: `vYY.M.PATCH` — two-digit year, month, and the release number
-within that month. The latest public release is `v26.9.0` (September 2026); a same-month fix is
-`v26.9.1`. Container tags follow: `:26.9.0`, `:latest`, plus the `-fips` / `-stig` variants.
+within that month. The latest public release is `v26.9.1` (September 2026); a same-month fix is
+`v26.9.2`. Container tags follow: `:26.9.1`, `:latest`, plus the `-fips` / `-stig` variants.
 The maturity label (**beta**) is separate from the version; a release that should be flagged
-*pre-release* on GitHub is tagged with a suffix, e.g. `v26.9.0-beta.1`.
+*pre-release* on GitHub is tagged with a suffix, e.g. `v26.9.1-beta.1`.
 
 ---
 
@@ -108,7 +108,7 @@ removes it afterwards; pass `--install-cosign` to keep that verified copy next t
 curl -fsSL https://olivares.ai/olivares/install.sh | sh
 ```
 
-To pin a release: `curl -fsSL https://olivares.ai/olivares/install.sh | sh -s -- --version v26.9.0`.
+To pin a release: `curl -fsSL https://olivares.ai/olivares/install.sh | sh -s -- --version v26.9.1`.
 
 Use `--bindir "$HOME/.local/bin"` to select an absolute install directory. Verification
 cannot be bypassed and privilege escalation is always an explicit operator step. The
@@ -221,7 +221,7 @@ it by hand if you really mean to.
 ### Manual binary (tarball)
 
 ```sh
-ver=v26.9.0; os=linux; arch=amd64
+ver=v26.9.1; os=linux; arch=amd64
 base=https://github.com/olivaresai/olivares/releases/download/$ver
 curl -fsSLO $base/olivares_${ver#v}_${os}_${arch}.tar.gz
 curl -fsSLO $base/checksums.txt
@@ -290,16 +290,16 @@ is the **fallback**: the release pipeline builds and signs on ghcr.io and then c
 content to Docker Hub **by digest** (`cosign copy`), so both coordinates resolve to identical
 layers, signatures and attestations. Docker Hub applies a rate limit to **anonymous** pulls;
 ghcr.io does not rate-limit anonymous pulls of public images — `docker login` on Docker Hub, or
-switch the host to `ghcr.io`, if a CI node or a large fleet hits the ceiling. Tags: `:26.9.0`
-(pin a release), `:latest`, `:26.9.0-fips` (FIPS 140-3 mode, CMVP #5247) and `:26.9.0-stig`
+switch the host to `ghcr.io`, if a CI node or a large fleet hits the ceiling. Tags: `:26.9.1`
+(pin a release), `:latest`, `:26.9.1-fips` (FIPS 140-3 mode, CMVP #5247) and `:26.9.1-stig`
 (STIG-profiled UBI base) — see [SCP-09](docs/SCP-09-FIPS-STIG.md). The base and `:latest` tags
 are multi-arch (amd64/arm64); `-fips`/`-stig` are amd64-only. **For production, pin by digest**
 (`docker.io/olivaresai/olivares@sha256:…`); the mutable tags above are for evaluation only. Verify
-the image: `cosign verify docker.io/olivaresai/olivares:26.9.0 --certificate-identity-regexp
+the image: `cosign verify docker.io/olivaresai/olivares:26.9.1 --certificate-identity-regexp
 '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$'
 --certificate-oidc-issuer
 https://token.actions.githubusercontent.com` (the same verification works identically against the
-`ghcr.io/olivaresai/olivares:26.9.0` fallback — same digest, signatures and attestations).
+`ghcr.io/olivaresai/olivares:26.9.1` fallback — same digest, signatures and attestations).
 
 ### Docker Compose
 
@@ -360,8 +360,8 @@ don't permit it). Bring-your-own is supported too.
 
 ```sh
 docker build -f Dockerfile.agentops \
-  --build-arg OLIVARES_IMAGE=docker.io/olivaresai/olivares:26.9.0 -t olivares-agentops:26.9.0 .
-OLIVARES_AGENTOPS_IMAGE=olivares-agentops:26.9.0 \
+  --build-arg OLIVARES_IMAGE=docker.io/olivaresai/olivares:26.9.1 -t olivares-agentops:26.9.1 .
+OLIVARES_AGENTOPS_IMAGE=olivares-agentops:26.9.1 \
   docker compose -f deploy/compose/docker-compose.yml \
                  -f deploy/compose/docker-compose.agentops.yml up -d
 ```
@@ -470,7 +470,7 @@ olivares serve --seed-demo --insecure --listen 127.0.0.1:8443 --grpc-listen 127.
 ### Manual binary
 
 ```sh
-ver=v26.9.0; arch=arm64   # or amd64 on Intel
+ver=v26.9.1; arch=arm64   # or amd64 on Intel
 base=https://github.com/olivaresai/olivares/releases/download/$ver
 curl -fsSLO $base/olivares_${ver#v}_darwin_${arch}.tar.gz
 # ...verify (see Verifying a release), then:

@@ -72,14 +72,14 @@ Docker API へのアクセスが必要です（エンジンが意図的にデフ
 
 ```sh
 # verify the engine image you build FROM (it is cosign-signed)
-cosign verify docker.io/olivaresai/olivares:26.9.0 \
+cosign verify docker.io/olivaresai/olivares:26.9.1 \
   --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 
 docker build -f Dockerfile.agentops \
   --build-arg OLIVARES_IMAGE=docker.io/olivaresai/olivares@sha256:<digest> \
   --build-arg CLAUDE_CHANNEL=stable \
-  -t olivares-agentops:26.9.0 .
+  -t olivares-agentops:26.9.1 .
 ```
 
 代わりに `--build-arg CLAUDE_INSTALL=byo` で独自の `claude` を持ち込めます（イメージは `claude` なしで
@@ -88,7 +88,7 @@ docker build -f Dockerfile.agentops \
 ### 起動する
 
 ```sh
-export OLIVARES_AGENTOPS_IMAGE=olivares-agentops:26.9.0
+export OLIVARES_AGENTOPS_IMAGE=olivares-agentops:26.9.1
 docker compose -f deploy/compose/docker-compose.yml \
                -f deploy/compose/docker-compose.agentops.yml up -d
 ```

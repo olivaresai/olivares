@@ -527,9 +527,9 @@ export default defineConfig({
       ]),
       plugins: [
         // Versioning: ACTIVE. CalVer cuts exist (v26.8.0 shipped; canon is
-        // v26.9.0). The archived version remains a DATED DOCS SNAPSHOT — the
+        // v26.9.1). The archived version remains a DATED DOCS SNAPSHOT — the
         // 2026-06 public-launch baseline — not a fabricated product-release
-        // archive. Adding `{ slug: 'v26.9.0', label: 'v26.9.0' }` is a separate
+        // archive. Adding `{ slug: 'v26.9.1', label: 'v26.9.1' }` is a separate
         // maintainer-reviewed change (README.md §Versioning).
         starlightVersions({
           current: { label: 'Latest' },
