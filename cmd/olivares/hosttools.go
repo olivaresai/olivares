@@ -86,12 +86,12 @@ func newHostToolObserverAt(root string, rootErr error, home, pathEnv string) *ho
 		home, homeErr = "", errHostToolHomeUnavailable
 	}
 	network := &refusedNetwork{}
+	// cli-transport-exempt: refusedNetwork is this client's only transport and its RoundTrip
+	// refuses every request, so host-tool observation never reaches the network through it.
 	client := &http.Client{Transport: network}
 	claude := toolinstall.NewClaude(toolinstall.ClaudeOptions{
 		Verifier: toolinstall.UnavailableVerifier{},
-		// cli-transport-exempt: refusedNetwork is this client's only transport and its RoundTrip
-		// refuses every request, so host-tool observation never reaches the network through it.
-		Client: client,
+		Client:   client,
 	})
 	codex := toolinstall.NewCodex(toolinstall.CodexOptions{
 		Verifier: toolinstall.UnavailableSubjectVerifier{},
