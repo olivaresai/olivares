@@ -1032,7 +1032,7 @@ export const eventingTypes = { event_types: [] }
 // pantalla: la reprueba.
 //
 // ⛔ `egress-policy` y su `/compat` SÍ se sirven desde aquí desde el lote del pre-push: la
-// integración trajo las definiciones TIPADAS de `main` (#1622) y the integrator añadió
+// integración trajo las definiciones TIPADAS de `main` (#1622) y the maintainer añadió
 // sus dos entradas de ruta, que la unión de definiciones por sí sola no traía. Antes decía
 // `#1622` (`sol/truncation-honesty`, creada a las 12:34 de hoy, antes que esto) y los añade
 // MEJOR — tipados contra `EgressPolicyStatus` de `features/eventing/types`, con

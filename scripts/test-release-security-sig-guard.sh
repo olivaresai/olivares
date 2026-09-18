@@ -557,7 +557,7 @@ check "no security manifest -> the ceremony finishes green" "ordinary release" $
 # lines below it — the most expensive kind of stale comment, because it explains the opposite
 # of what the code enforces. A `.sig` FILENAME is not a signed pair: nothing here reads those
 # bytes. Red until #644 integrates real verification.
-# ⛔ DENY-CLOSED (the commerce lane decision, 2026-08-09). A NOMINAL SIGNATURE DOES NOT
+# ⛔ DENY-CLOSED (the commerce decision, 2026-08-09). A NOMINAL SIGNATURE DOES NOT
 # AUTHORIZE: an asset called security-manifest.json.sig proves a filename, not that anything
 # verified those bytes. Phase 1b re-clobbers the JSON only, so a signature over a PREVIOUS
 # manifest keeps the right name; a zero-byte file does too. Until #644 verifies bytes under

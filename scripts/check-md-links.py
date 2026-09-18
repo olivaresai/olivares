@@ -199,7 +199,7 @@ def unresolved(root, skips, files=None, routes=False):
                     findings.append(f"{rel}:{i}: {target}")
                     continue
                 # containment: the resolved target (symlinks included) must live
-                # INSIDE the scanned tree — ../RELEASE-VERSION exists in the hub
+                # INSIDE the scanned tree — ../RELEASE-VERSION exists in the full source tree
                 # but not in the export a visitor holds.
                 cand_real = os.path.realpath(cand)
                 if os.path.commonpath([root_real, cand_real]) != root_real:

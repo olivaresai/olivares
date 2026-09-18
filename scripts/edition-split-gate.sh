@@ -32,7 +32,7 @@ fi
 NOTE="PARTIALLY APPLICABLE: leg '$NAME' also verifies $SUBJECT, which is hub-only and curated"
 NOTE="$NOTE out of the public tree (see PUBLIC-EXPORT.md). Those entries are NOT checked here."
 NOTE="$NOTE The entries that do verify this tree run now, as '$PUBLIC_TASK', and a failure in"
-NOTE="$NOTE any of them fails this leg exactly as it would in the hub."
+NOTE="$NOTE any of them fails this leg exactly as it would in the full source tree."
 echo "edition-split-gate: $NOTE"
 if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
 	printf '### %s\n\n%s\n\n' "$NAME: PARTIALLY APPLICABLE (public tree)" "$NOTE" >>"$GITHUB_STEP_SUMMARY"

@@ -5,7 +5,7 @@
 #
 # check-prep-gate-impact.sh — which PREPARATION gates would a branch turn red when it lands?
 #
-# WHY THIS IS A SCRIPT AND NOT A LIST. On 2026-08-21 the integrator measured that 32 of the 56
+# WHY THIS IS A SCRIPT AND NOT A LIST. On 2026-08-21 the maintainer measured that 32 of the 56
 # open PRs redden a prep gate — the real bottleneck of the queue, ahead of merge conflicts — and
 # closed the message with the only instruction that survives: «re-derive this list against the
 # main of the day before each landing, NEVER against this message, which also expires». A list

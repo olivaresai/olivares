@@ -5,7 +5,7 @@
 # exec-workdir.sh — SOURCE THIS when a battery needs scratch space whose EXECUTE BIT IS
 # REAL. Not executable, not a program: it exists to be `.`-sourced and defines one function.
 #
-# THE ENVIRONMENT FACT (measured 2026-08-04, container in use by every lane):
+# THE ENVIRONMENT FACT (measured 2026-08-04, container in use by every contributor):
 #
 #     findmnt -no OPTIONS /tmp  ->  rw,nosuid,nodev,noexec,relatime,size=2097152k,…
 #

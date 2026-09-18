@@ -68,7 +68,7 @@
 #     receipts, in the CONTROL repository (olivares-ai-control), at the path below — on ONE
 #     line, because a path a reader cannot select and paste is a citation that still cannot
 #     be opened:
-#     assessments/engineering/r116-test-budget-sweep/receipts/census-instrument.go.txt
+#     an internal design note (not shipped)
 #  5. A duration held in a NAME is resolved from `NAME = <duration>` anywhere in the same
 #     DIRECTORY, not only from a package-level `const`, so two bindings of one name in one
 #     directory resolve to the last one read. MEASURED on this tree 2026-09-16: eleven such
@@ -247,7 +247,7 @@ awk -v maxs="$MAXS" -v window="$WINDOW" -v exf="$exempt_f" -v cof="$consts_f" \
 		code = $0
 		# ⛔ STRINGS AND COMMENTS GO FIRST, and the strings half is not pedantry: a
 		# `t.Fatalf("Open(ctx) returned nil store")` between a budget and its wait was
-		# reported as "the fixture inside the budget" — a FALSE RED in the fast lane, which
+		# reported as "the fixture inside the budget" — a FALSE RED in the fast path, which
 		# in a hook leg poisons the push of every branch on every box.
 		gsub(/"([^"\\]|\\.)*"/, "\"\"", code)
 		gsub(/`[^`]*`/, "``", code)

@@ -4,7 +4,7 @@
 //
 // check-wrangler-pin.mjs — the wrangler that is ABOUT TO RUN must be the pinned one.
 //
-// ⛔ WHY THIS EXISTS, AND IT IS NOT HYPOTHETICAL. On 2026-08-29 the hub's docs deploy carried a
+// ⛔ WHY THIS EXISTS, AND IT IS NOT HYPOTHETICAL. On 2026-08-29 the full source tree's docs deploy carried a
 // guard meant to stop an unpinned wrangler running with a production credential:
 //   npm --prefix docs-site exec --no-install -- wrangler --version
 // `--no-install` is an npx flag, NOT an `npm exec` flag. npm says so itself — `npm warn Unknown

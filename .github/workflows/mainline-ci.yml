@@ -25,7 +25,7 @@
 # opposite in the present tense, WITH the authority of "READ THAT FIRST", and pointing at `:94-95`,
 # which is not even where the `on:` block lives any more.
 #
-# This is the same shape that cost three lanes a retraction each on 2026-08-23 with
+# This is the same shape that cost three contributors a retraction each on 2026-08-23 with
 # `scripts/check-emitted-urls.sh`: a header stating a measured fact in the present, outliving the
 # fact. When three independent readers get it wrong the same day, the defect is in the text.
 #
@@ -42,7 +42,7 @@
 # was true only when a human remembered. That claim now lives in drills-nightly.yml, which has a
 # schedule, and scripts/check-readme-task-claims.sh refuses a workflow with no automatic trigger.
 #
-# Mainline CI — the green gate a PR needs, dispatched per branch by the integrator:
+# Mainline CI — the green gate a PR needs, dispatched per branch by the maintainer:
 # the structural lints, full build, the FULL no-race test suite plus the
 # concurrency-hot -race leg (test:functional + test:race-hot). This is a
 # DELIBERATE race-detection reduction on the slow cmd/olivares e2e tail, not
@@ -134,7 +134,7 @@ name: mainline-ci
 #   3. The -race legs run on EVERY PR since 2026-07-30 (the opt-in died with the
 #      billed-minutes regime). race-full.yml remains the full pre-release sweep.
 # MANUAL-ONLY REGIME (2026-08-02): per-push runs superseded each other and wasted
-# the three runners during the relaunch burst. The integrator dispatches runs when a
+# the three runners during the relaunch burst. The maintainer dispatches runs when a
 # verdict is actually needed; the automatic triggers return when release prep starts.
 # ⛔ EL DISPARADOR DE `push` VUELVE, Y LA CONDICION QUE LO PERMITE ES DE FRAN, NO MIA.
 #
@@ -714,7 +714,7 @@ jobs:
           # Y MIDE el espacio libre de cada candidato antes de probarlo: el «no space left» de hoy
           # salio tres pasos mas abajo, dentro de `go build`; con la cifra aqui se lee en este paso.
           # ⛔ EL BARRIDO VA EN SU PROPIO BUCLE, y es una correccion MEDIDA: F2 de la revision
-          # independiente del 2026-09-16 (assessments/engineering/r116-ci-host-residue-fixes/REVIEW.md).
+          # independiente del 2026-09-16 (an internal design note (not shipped)).
           # Dentro del bucle de seleccion solo alcanzaba a los candidatos probados ANTES del `break`,
           # asi que con /var/tmp elegido /dev/shm NO SE BARRIA NUNCA — justo el tmpfs cuyo residuo
           # tumbo la corrida 35076921214 y que en la 35081963451, con el barrido ya enviado, seguia
@@ -1752,7 +1752,7 @@ jobs:
       #
       # It goes in THIS job because control-plane is one of the four contexts main's protection
       # requires, so a red docs-site suite now blocks the merge — which is what "gates" means.
-      # Measured green before wiring, precisely so that adding it could not stop every lane:
+      # Measured green before wiring, precisely so that adding it could not stop every contributor:
       # 30 module dirs + 4 catalogue pages covered, and 467110 internal links resolving.
       #
       # The nightly is NOT where this belongs, unlike the quickstart drill: a nightly verifies
@@ -2148,8 +2148,8 @@ jobs:
   #
   # WHAT THIS JOB ACTUALLY ADDS, corrected the same day it landed. The first
   # version of this comment said those 12 tests "would have SKIPPED forever",
-  # and the hub told the lane that NO CI job ran ./modules with Postgres. That
-  # was FALSE, and the hub said it had measured it. What it measured was
+  # and reported that NO CI job ran ./modules with Postgres. That
+  # was FALSE, and it was reported as measured. What had been measured was
   # race-modules and race-rest; it never opened control-plane. Measured
   # properly afterwards:
   #
@@ -2401,7 +2401,7 @@ jobs:
           # Y MIDE el espacio libre de cada candidato antes de probarlo: el «no space left» de hoy
           # salio tres pasos mas abajo, dentro de `go build`; con la cifra aqui se lee en este paso.
           # ⛔ EL BARRIDO VA EN SU PROPIO BUCLE, y es una correccion MEDIDA: F2 de la revision
-          # independiente del 2026-09-16 (assessments/engineering/r116-ci-host-residue-fixes/REVIEW.md).
+          # independiente del 2026-09-16 (an internal design note (not shipped)).
           # Dentro del bucle de seleccion solo alcanzaba a los candidatos probados ANTES del `break`,
           # asi que con /var/tmp elegido /dev/shm NO SE BARRIA NUNCA — justo el tmpfs cuyo residuo
           # tumbo la corrida 35076921214 y que en la 35081963451, con el barrido ya enviado, seguia
@@ -2670,7 +2670,7 @@ jobs:
           # Y MIDE el espacio libre de cada candidato antes de probarlo: el «no space left» de hoy
           # salio tres pasos mas abajo, dentro de `go build`; con la cifra aqui se lee en este paso.
           # ⛔ EL BARRIDO VA EN SU PROPIO BUCLE, y es una correccion MEDIDA: F2 de la revision
-          # independiente del 2026-09-16 (assessments/engineering/r116-ci-host-residue-fixes/REVIEW.md).
+          # independiente del 2026-09-16 (an internal design note (not shipped)).
           # Dentro del bucle de seleccion solo alcanzaba a los candidatos probados ANTES del `break`,
           # asi que con /var/tmp elegido /dev/shm NO SE BARRIA NUNCA — justo el tmpfs cuyo residuo
           # tumbo la corrida 35076921214 y que en la 35081963451, con el barrido ya enviado, seguia
@@ -2934,7 +2934,7 @@ jobs:
           # Y MIDE el espacio libre de cada candidato antes de probarlo: el «no space left» de hoy
           # salio tres pasos mas abajo, dentro de `go build`; con la cifra aqui se lee en este paso.
           # ⛔ EL BARRIDO VA EN SU PROPIO BUCLE, y es una correccion MEDIDA: F2 de la revision
-          # independiente del 2026-09-16 (assessments/engineering/r116-ci-host-residue-fixes/REVIEW.md).
+          # independiente del 2026-09-16 (an internal design note (not shipped)).
           # Dentro del bucle de seleccion solo alcanzaba a los candidatos probados ANTES del `break`,
           # asi que con /var/tmp elegido /dev/shm NO SE BARRIA NUNCA — justo el tmpfs cuyo residuo
           # tumbo la corrida 35076921214 y que en la 35081963451, con el barrido ya enviado, seguia
@@ -3141,7 +3141,7 @@ jobs:
           # Y MIDE el espacio libre de cada candidato antes de probarlo: el «no space left» de hoy
           # salio tres pasos mas abajo, dentro de `go build`; con la cifra aqui se lee en este paso.
           # ⛔ EL BARRIDO VA EN SU PROPIO BUCLE, y es una correccion MEDIDA: F2 de la revision
-          # independiente del 2026-09-16 (assessments/engineering/r116-ci-host-residue-fixes/REVIEW.md).
+          # independiente del 2026-09-16 (an internal design note (not shipped)).
           # Dentro del bucle de seleccion solo alcanzaba a los candidatos probados ANTES del `break`,
           # asi que con /var/tmp elegido /dev/shm NO SE BARRIA NUNCA — justo el tmpfs cuyo residuo
           # tumbo la corrida 35076921214 y que en la 35081963451, con el barrido ya enviado, seguia
@@ -3223,7 +3223,7 @@ jobs:
   # WHY IT LEFT race-rest. Job 103739990067 of run 34763378851 died at `panic: test timed out
   # after 15m0s` naming TestOrchCadencePumpRunOncePassesAllBusinessTenants, which had been
   # running 1m23s. The retained diagnosis
-  # (assessments/engineering/r112-race-rest-cadence/REPORT.md) measured the alarm dump and the
+  # (an internal design note (not shipped)) measured the alarm dump and the
   # binary's own internal timestamps: 28 goroutines, exactly two of them blocked as long as a
   # minute, one runnable holder in flight, and every live goroutine descended from the running
   # test's goroutine — while roughly eight full composition-root estate boots at 67-80s each had
@@ -3401,7 +3401,7 @@ jobs:
           # Y MIDE el espacio libre de cada candidato antes de probarlo: el «no space left» de hoy
           # salio tres pasos mas abajo, dentro de `go build`; con la cifra aqui se lee en este paso.
           # ⛔ EL BARRIDO VA EN SU PROPIO BUCLE, y es una correccion MEDIDA: F2 de la revision
-          # independiente del 2026-09-16 (assessments/engineering/r116-ci-host-residue-fixes/REVIEW.md).
+          # independiente del 2026-09-16 (an internal design note (not shipped)).
           # Dentro del bucle de seleccion solo alcanzaba a los candidatos probados ANTES del `break`,
           # asi que con /var/tmp elegido /dev/shm NO SE BARRIA NUNCA — justo el tmpfs cuyo residuo
           # tumbo la corrida 35076921214 y que en la 35081963451, con el barrido ya enviado, seguia
@@ -3914,7 +3914,7 @@ jobs:
       # placement: the pre-push hook runs it too, but a hook is a client and --no-verify skips
       # it. THIS job is where both halves exist — the console's own TypeScript from the pnpm
       # install above, and the Go toolchain the check needs to run the engine (`go run
-      # ./tools/permsdump`) rather than model it. It is deliberately not in the Go-only lanes:
+      # ./tools/permsdump`) rather than model it. It is deliberately not in the Go-only jobs:
       # without node_modules the check exits 2 by design and would report a red that is about
       # the environment, not the code.
       - name: console permission checks agree with the engine
@@ -3954,7 +3954,7 @@ jobs:
       # que esta nota pone POR ESCRITO está satisfecha por partida doble:
       #   * the orchestrator: dos `pnpm run build` consecutivos en un worktree desechable,
       #     mismo node_modules, dieron 224/224 con el MISMO SHA-256 (41 s y 39 s).
-      #   * the integrator, sobre un árbol con base `main` y `pnpm install
+      #   * el mantenedor, sobre un árbol con base `main` y `pnpm install
       #     --frozen-lockfile`: el build reescribió los 224 ficheros de
       #     core/internal/webui/dist y `git status` sobre esa ruta salió VACÍO — el
       #     bundle commiteado es byte a byte lo que produce el fuente de hoy.
@@ -4444,7 +4444,7 @@ jobs:
     concurrency:
       group: mainline-ci-secrets-${{ github.ref }}-${{ github.run_id }}
       cancel-in-progress: true
-    # R89-C1 (assessments/engineering/r89-secrets-timeout, Root decision 2026-09-12): this job alone
+    # R89-C1 (an internal design note (not shipped), Root decision 2026-09-12): this job alone
     # reads CI_RUNNER_SECRETS, so its placement can move without moving any other job; unset, the
     # fallback is exactly the previous `vars.CI_RUNNER || 'ubuntu-latest'`. It moves placement only —
     # checkout, captured subject, rules, the 80m inner clock and 0/1/2 stay — and no runner choice
@@ -4924,7 +4924,7 @@ jobs:
   #     solo en el GANCHO ...... 150   <- el punto ciego de CI     (este job)
   #
   # ⚠ La primera version de este bloque decia 56/32/24/152, y le faltaba la CUARTA equivalencia sin
-  # `task` (`tokens:check`, que CI corre como `pnpm --dir web run tokens:check`). the kernel lane r4
+  # `task` (`tokens:check`, que CI corre como `pnpm --dir web run tokens:check`). the kernel owner r4
   # llego a `solo-CI 26` por otro camino y con otro sujeto — descubriendo que ocho de sus 34 las
   # invoca el gancho en su carril PESADO. Dos rutas, el mismo 26.
   #
@@ -4959,12 +4959,12 @@ jobs:
   # como «solo-gancho» y son falsos positivos.
   #
   # ⛔ Y la equivalencia no basta con LISTARLA: hay que verificar que el comando sigue en el
-  # fichero. the kernel lane lo midio en su propio gate — las encontraba en los COMENTARIOS del
+  # fichero. the kernel owner lo midio en su propio gate — las encontraba en los COMENTARIOS del
   # workflow, asi que borrando la invocacion real seguia en rc=0: verde por accidente. Una lista
   # de excepciones sin testigo caduca en silencio, igual que caduco la comparacion por nombre
   # corto que dio «64 de 64». El registro de la paridad NO vive en esta rama: es
   # an internal design note (not shipped), artefacto DERIVADO de scripts/check-gate-parity.sh, y los
-  # dos viajan en la rama de the kernel lane. Una lista sin su generador es un fichero que nadie lee.
+  # dos viajan en la rama de the kernel owner. Una lista sin su generador es un fichero que nadie lee.
   hook-only-legs:
     # Gated by the internal change gate, like every other code-input job: journal-only pushes
     # skip it. Eso es correcto aqui porque ninguno de los cuatro guiones CONSUME una ruta del
@@ -5044,7 +5044,7 @@ jobs:
     #
     # ⛔ LAS MEDIDAS EN CALIENTE DE UNA CAJA DE DESARROLLO **NO ORDENAN**: se escriben como condicion
     # y nada mas. `gate-parity` es el caso que lo demuestra y por eso va con nombre: **47 s en frio**
-    # (the kernel lane r4) frente a **355 ms** en caliente. Ordenarla por la caliente la habria subido seis
+    # (the kernel owner r4) frente a **355 ms** en caliente. Ordenarla por la caliente la habria subido seis
     # puestos con el metro equivocado.
     #
     # ⛔⛔ Y LA MISMA NOCHE, DOS HORAS DESPUES, ESA CIFRA CALIENTE SE DESMINTIO SOLA: `gate-parity` dio
@@ -5112,7 +5112,7 @@ jobs:
           #
           #     rev-parse --is-shallow-repository  ->  true
           #     check-int-12-no-land.sh            ->  "could not count int-12-pin..overlay-main-pin
-          #                                             on the hub"   rc=2
+          #                                             in this tree"   rc=2
           #
           # ⚠ Y `0` es SUFICIENTE, no la unica forma suficiente — acotado tras el contraste
           # `sol max` (F-01). Lo demostrado es «depth 1 falla, depth 0 funciona»: el guion necesita
@@ -5142,7 +5142,7 @@ jobs:
       # NODE FIRST, and in THIS job: `task lint:js-lexer` (a node consumer) runs below, and the
       # self-hosted runner ships no node — the same P0 that `check-workflow-node-setup` pins for
       # every other job. Without this step `lint:actions` is red on main and, being a fast-lane leg,
-      # kills every branch push of every lane (measured 2026-08-31 03:1xZ, KERNEL).
+      # kills every branch push of every contributor (measured 2026-08-31 03:1xZ, KERNEL).
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .node-version
@@ -5179,7 +5179,7 @@ jobs:
           # colgando de ese outcome, un `$RUNNER_TEMP` noexec habria dado paso VERDE y las cuatro
           # patas habrian medido el MONTAJE creyendo medir el arbol.
           #
-          # ⛔ Y EL PRECEDENTE TIENE DOS CONDICIONES, NO UNA. Lo cazo the kernel lane r4 revisando esta
+          # ⛔ Y EL PRECEDENTE TIENE DOS CONDICIONES, NO UNA. Lo cazo the kernel owner r4 revisando esta
           # rama: yo copie de `control-plane` (:647-687) la mitad EJECUTABLE y me deje la CORTA.
           # Su razon esta escrita alli (:654-658) y es medida: apuntar TMPDIR a $RUNNER_TEMP hizo
           # crecer la ruta a 118 caracteres y rompio un test de sockets — `sun_path` de un socket
@@ -5219,7 +5219,7 @@ jobs:
           # Y MIDE el espacio libre de cada candidato antes de probarlo: el «no space left» de hoy
           # salio tres pasos mas abajo, dentro de `go build`; con la cifra aqui se lee en este paso.
           # ⛔ EL BARRIDO VA EN SU PROPIO BUCLE, y es una correccion MEDIDA: F2 de la revision
-          # independiente del 2026-09-16 (assessments/engineering/r116-ci-host-residue-fixes/REVIEW.md).
+          # independiente del 2026-09-16 (an internal design note (not shipped)).
           # Dentro del bucle de seleccion solo alcanzaba a los candidatos probados ANTES del `break`,
           # asi que con /var/tmp elegido /dev/shm NO SE BARRIA NUNCA — justo el tmpfs cuyo residuo
           # tumbo la corrida 35076921214 y que en la 35081963451, con el barrido ya enviado, seguia
@@ -5290,7 +5290,7 @@ jobs:
           OLIVARES_INT12_ALLOW_NO_OVERLAY: '1'
         # ⛔ EL PASO DICE **CUAL DE LAS DOS MITADES** MIDIO, y no es adorno: sin esto, un verde que
         # se salto la remedida viva y un verde que comprobo las DOS se ven IGUAL en la interfaz.
-        # Lo levanto the kernel lane r4 revisando esta rama, aplicandome mi propia acotacion: la
+        # Lo levanto the kernel owner r4 revisando esta rama, aplicandome mi propia acotacion: la
         # asimetria vivia en el comentario de arriba, y **un requisito que vive en un comentario es
         # una suposicion sobre alguien que puede no existir**. Esta misma noche llevamos tres casos
         # de `SKIPPED` satisfaciendo un contexto requerido sin medir nada.
@@ -5522,7 +5522,7 @@ jobs:
       - name: gate parity (hook vs mainline-ci) — 212 s EN FRIO · corrida 33296406847 · 2026-08-30T06:49:49Z
         id: leg-gate-parity
         if: ${{ !cancelled() && steps.tools.outcome == 'success' && steps.tmpdir.outcome == 'success' }}
-        # ⛔ HUNK CONJUNTO CON the kernel lane r4 (a repository gate). Su gate compara lo que corre el gancho con lo
+        # ⛔ HUNK CONJUNTO CON the kernel owner r4 (a repository gate). Su gate compara lo que corre el gancho con lo
         # que corre este workflow, en los DOS sentidos, y hasta hoy no lo ejecutaba nadie: vivia en
         # el Taskfile y en ningun job. Un control que nadie ejecuta CALLA, y callar se lee como
         # verde — que es literalmente la clase que este job entero existe para cortar.

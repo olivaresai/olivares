@@ -17,7 +17,7 @@ ok() { printf 'ok   %s\n' "$1"; pass=$((pass + 1)); }
 bad() { printf 'FAIL %s\n' "$1" >&2; fail=$((fail + 1)); }
 
 # Built once and handed in: six throwaway trees would otherwise mean six `go build`s, which is
-# contention in a box shared by six lanes rather than caution.
+# contention in a box shared by six contributors rather than caution.
 export GOWORK=off
 MCBIN="$(mktemp -u "${TMPDIR:-/workspace/.olivares-tmptest}/mc-bin.XXXXXX")"
 ( cd "$ROOT/commercial/commerce-lint" && go build -o "$MCBIN" . ) >/dev/null 2>&1 || {

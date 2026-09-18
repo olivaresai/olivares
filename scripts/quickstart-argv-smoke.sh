@@ -19,7 +19,7 @@
 # tree a stranger clones BUILDS a binary and that THAT BINARY starts and reaches first-run
 # setup. Those are different claims — the acceptance of the public export ran neither until
 # today (it ran `task lint:spdx lint:boundary` and nothing else), so "a user who clones the
-# public repo has a product that starts" was an inference from the hub, never a measurement of
+# public repo has a product that starts" was an inference from the full source tree, never a measurement of
 # the export.
 #
 # Usage:  bash scripts/quickstart-argv-smoke.sh
@@ -42,7 +42,7 @@ WORK=""
 PID=""
 cleanup() {
   # ⛔ BY PID, NEVER BY COMMAND PATTERN. A pattern kill matches this script's own command line,
-  # and on a shared box it matches other lanes' processes too; this repository has a measured
+  # and on a shared box it matches other contributors' processes too; this repository has a measured
   # case of a session killing its own shell that way.
   #
   # ⛔ AND IT ESCALATES. The first version sent ONE TERM and then `wait` with no deadline, so a
@@ -92,7 +92,7 @@ fi
 # "I could not look".
 [ -x "$BIN" ] || fail "the build reported success and produced no executable at $BIN"
 
-# A free port, asked of the kernel rather than assumed: a hardcoded one turns another lane's
+# A free port, asked of the kernel rather than assumed: a hardcoded one turns another contributor's
 # listener into a failure of this script.
 pick_port() {
   python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()' 2>/dev/null

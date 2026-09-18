@@ -21,7 +21,7 @@
 # passed for the wrong reason and covered none of the twelve real forms.
 # G-02 33 assertions exercised the CLASSIFIER, and not one proved the HOOK obeys it: a
 # one-line `gate_class=fast` injected into the hook made a main push run the fast
-# lane, and the whole battery still reported 33/33 green. The hook is now RUN, end
+# path, and the whole battery still reported 33/33 green. The hook is now RUN, end
 # to end, against stub `task`/`git`, and MUTATED on purpose to prove those runs can
 # fail. An assertion that cannot go red is a decoration.
 # H-01 the parser was neither byte-exact nor equivalent to git: a NUL and an
@@ -39,7 +39,7 @@
 # with their own verdict, and every other class stays unconditional.
 # I-03 `$(...)` also DELETES NUL bytes: `fa<NUL>st` reached the hook as `fast`.
 # I-04 `honours_fast` forbade four heavy tasks by hand, so three could leak into the
-# fast lane with the battery green. Both lanes now compare the WHOLE observed
+# fast path with the battery green. Both paths now compare the WHOLE observed
 # sequence against a declared list, and there is one mutant per task in both
 # directions.
 # J-01 the "complete sequence" was the calls the hook made SYNCHRONOUSLY: a deferred
@@ -52,7 +52,7 @@
 # describes an observation this file really makes, and stops where it really stops.
 #
 # M-1 THE HEAVY TASKS ARE STUBS. Nothing here runs the real gate; what is proved is WHICH
-# tasks are invoked, in what order, and by which lane — never that they pass.
+# tasks are invoked, in what order, and by which path — never that they pass.
 # M-2 THE DRAIN SEES PROCESSES THAT STILL HOLD fd 9. The run passes an extra descriptor on
 # the same pipe as stdout and reads it to EOF, so a fork, a subshell or a detached
 # grandchild is waited for AS LONG AS IT KEEPS THAT DESCRIPTOR — bounded by a grace that
@@ -345,7 +345,7 @@ check "(f2) refs/integration-claims/* is signalling, not content" "verdict=${ver
 
 # --- (f3) ...but it does NOT launder a ref that IS content -------------------------------
 # The non-firing direction, and the one that matters: if the skip were a property of the PUSH
-# rather than of the ref, a claim travelling alongside main would drag main into the fast lane.
+# rather than of the ref, a claim travelling alongside main would drag main into the fast path.
 # Strictest-wins must still hold.
 classify "refs/heads/main $SOME refs/heads/main $ZERO
 refs/heads/claim $SOME refs/integration-claims/integrador-20260809T000000Z $ZERO"
@@ -369,13 +369,13 @@ refs/heads/claim $SOME refs/session-claims/reserved-by-a-lane $ZERO"
 [ "$verdict" = "full" ]
 check "(f2c) a session-claim travelling WITH main is still FULL" "verdict=${verdict:-<none>}" $?
 
-# ⛔ AND THE ARM MUST NOT REACH refs/heads/claim/*, which is where the integrator first put one.
-# Under refs/heads a skip would let arbitrary content through the branch lane, and this
+# ⛔ AND THE ARM MUST NOT REACH refs/heads/claim/*, which is where the maintainer first put one.
+# Under refs/heads a skip would let arbitrary content through the branch path, and this
 # classifier is pure bash by design so it cannot check that a claim carries none. A branch is a
-# branch: it gets the branch lane.
+# branch: it gets the branch path.
 classify "refs/heads/claim $SOME refs/heads/claim/reserved-by-a-lane $ZERO"
 [ "$verdict" = "fast" ]
-check "(f2d) refs/heads/claim/* is a BRANCH and gets the branch lane" "verdict=${verdict:-<none>}" $?
+check "(f2d) refs/heads/claim/* is a BRANCH and gets the branch path" "verdict=${verdict:-<none>}" $?
 
 # --- (f4) and an unknown namespace is still deny-closed ----------------------------------
 classify "refs/heads/x $SOME refs/not-a-known-namespace/x $ZERO"
@@ -398,7 +398,7 @@ refs/heads/dead $SOME refs/archive/old $ZERO"
 check "(f6) an archive ref travelling WITH main is still FULL" "verdict=${verdict:-<none>}" $?
 
 # --- (f7) and the exemption does NOT generalise to a namespace someone invents ------------
-# Another lane preserved work under refs/salvage/* the same afternoon. Naming ONE sanctioned
+# Another contributor preserved work under refs/salvage/* the same afternoon. Naming ONE sanctioned
 # namespace is the whole safety of f5: if any invented prefix were exempt, ungated content
 # would reach the server under a name of the pusher's choosing.
 classify "refs/heads/x $SOME refs/salvage/x $ZERO"
@@ -766,7 +766,7 @@ e2e_setup() { # <hook> <classifier> -> prints the fixture dir
 	# production behaviour and would otherwise turn every case in this battery red for a
 	# reason that has nothing to do with ref classification.
 	cp "$ROOT/scripts/lib/git-env.sh" "$dir/scripts/lib/git-env.sh" || return 1
-	# The gate's Postgres probe, stubbed: this battery is about which lane runs, not about
+	# The gate's Postgres probe, stubbed: this battery is about which path runs, not about
 	# whether THIS machine has a server.
 	printf '#!/usr/bin/env bash\necho "export OLIVARES_TEST_POSTGRES_DSN=stub"\n' \
  >"$dir/scripts/pg-test-env.sh" || return 1
@@ -810,9 +810,9 @@ e2e_run() { # <hook> <classifier> <stdin> [VAR=VAL ...]
 	#
 	# (J-01) THE HOOK RETURNING IS NOT THE HOOK FINISHING. Until round 7 this read the call log
 	# the instant the hook exited, so `(sleep 1; task tokens:check) &` injected into the fast
-	# lane ran a HEAVY task on a feature push and the battery still reported 217 passed / 0
+	# a push ran a HEAVY task on a feature branch and the battery still reported 217 passed / 0
 	# failed — measured with a persistent probe: hook_rc=0, tokens_immediate=0,
-	# tokens_after_2s=1. "The gate declared this lane clean before the expensive thing ran" is
+	# tokens_after_2s=1. "The gate declared this push clean before the expensive thing ran" is
 	# the exact shape of a green push that gated nothing.
 	#
 	# So the run holds an EXTRA inherited descriptor. fd 9 is a second handle on the same pipe
@@ -937,9 +937,9 @@ FAST_TAG="refs/tags/v26.8.0 $SOME refs/tags/v26.8.0 $ZERO"
 # plane and a live exporter to the retired provider survived two weeks unseen.
 # test:cloud:norace already called itself the "push gate correctness leg" in its own desc.
 #
-# EIGHT since 2026-08-06: `test:license-worker` joined the lane, first because it costs
+# EIGHT since 2026-08-06: `test:license-worker` joined the fast path, first because it costs
 # 4.05s. It was in mainline-ci and in NO local gate, so a `main` push could — and twice
-# did — land a red licence Worker and block every other lane behind it.
+# did — land a red licence Worker and block every other contributor behind it.
 HEAVY_TASKS=(test:license-worker build:cloud test:cloud:norace check:web tokens:check lint:format-ratchet lint:guide-docs lint:cockpit-strings lint:cockpit-strings:selftest lint:raw-palette test:web web:check build:go test sdk:check)
 heavy_declared="$(printf '%s\n' "${HEAVY_TASKS[@]}")"
 heavy_joined="$(printf '%s + ' "${HEAVY_TASKS[@]}")"
@@ -947,9 +947,9 @@ heavy_joined="${heavy_joined% + }"
 
 # THE FAST LINTS, DECLARED ONCE TOO (I-04, round 5). The heavy list above is what a feature
 # push must NOT run — and round 5 measured that "must not run" was being checked against four
-# names typed by hand, so three of the seven heavy tasks could leak into the fast lane with
+# names typed by hand, so three of the seven heavy tasks could leak into the fast path with
 # the battery still green. A prohibition list is only as good as its completeness, and nobody
-# maintains one. So the fast lane declares what it DOES run, the observed sequence is required
+# maintains one. So the fast path declares what it DOES run, the observed sequence is required
 # to equal it EXACTLY (nothing missing, nothing extra, in this order), and the heavy list it
 # is allowed to run is the empty one. Both directions then come from the same equality:
 # an eighth task appears, a declared one disappears, or the order drifts — all red.
@@ -1050,7 +1050,7 @@ honours_fast() { # <hook> <stdin>
 	# four hand-written prohibitions — `check:web`, `build:go`, `test`, `sdk:check` — so
 	# `tokens:check`, `test:web` and `web:check` could run on a feature push with the battery
 	# green. The observed sequence is now required to BE the declared fast list, and the heavy
-	# list observed in this lane is required to be the declared EMPTY one.
+	# list observed in this path is required to be the declared EMPTY one.
 	[ "$(observed_tasks)" = "$fast_declared" ] || return 1
 	[ -z "$(observed_heavy)" ] || return 1
 	! called_like "git commit-tree" || return 1
@@ -1098,7 +1098,7 @@ check "(G-02) a main push RUNS the full gate and takes the mutex" "rc=${e2e_rc}"
 [ "$(observed_heavy)" = "$heavy_declared" ]
 heavy_seq_rc=$?
 # The COUNT comes from the array, never from a word typed in the label. `test:license-worker`
-# joining the lane on 2026-08-06 would otherwise have left two assertions saying "seven"
+# joining the fast path on 2026-08-06 would otherwise have left two assertions saying "seven"
 # about eight tasks — a message that lies is the seed of the next hand-maintained list.
 check "(H-02) the heavy calls ARE the ${#HEAVY_TASKS[@]} declared, in order" \
 	"observed=[$(observed_heavy | tr '\n' ' ')]" "$heavy_seq_rc"
@@ -1125,7 +1125,7 @@ check "(H-02) and it says it is degraded, not silently different" "branch announ
 honours_fast "$HOOK" "$FAST_FEAT"
 check "(G-02) a feature push runs fast lints ONLY, no mutex" "rc=${e2e_rc}" $?
 
-# (S-07) The status stream rides the SAME fast lane, end to end: exactly the declared fast
+# (S-07) The status stream rides the SAME fast path, end to end: exactly the declared fast
 # sequence with lint:export first, an empty heavy list, and no mutex traffic. The equality
 # inside honours_fast is what makes mutant C below killable — a hook that skips one lint
 # only for status changes the observed sequence and goes red here.
@@ -1144,7 +1144,7 @@ honours_full "$HOOK" "$FAST_MAIN
 $FAST_FEAT"
 check "(G-02) multi-ref main+feature (other order) too" "rc=${e2e_rc}" $?
 
-# OLIVARES_FAST_PUSH=1 must not reach the heavy lane through the hook either — the escape is
+# OLIVARES_FAST_PUSH=1 must not reach the heavy path through the hook either — the escape is
 # reported ignored by the classifier, and the hook must not act on it independently.
 e2e_run "$HOOK" "$CLASSIFY" "$FAST_MAIN" OLIVARES_FAST_PUSH=1
 [ "$e2e_rc" -eq 0 ] && called "task test" && called "task build:go"
@@ -1207,7 +1207,7 @@ out_sa="$(bash "$mut_sa" <<<"$STATUS_LIVE" | cut -f1)"
 [ "$out_sa" = "full" ]
 check "(S-08) MUTANT 'status arm deleted' is CAUGHT" "mutant verdict=${out_sa:-<none>}" $?
 
-# B: the arm broadened to the whole namespace -> a sibling rides the fast lane under the
+# B: the arm broadened to the whole namespace -> a sibling rides the fast path under the
 # mutant, which is what S-02 discriminates.
 mut_sb="$WORK/classify-broad-status"
 sed 's|refs/status/live)|refs/status/*)|' "$CLASSIFY" >"$mut_sb"
@@ -1280,7 +1280,7 @@ done
 # was a vacuous test in the load-bearing place.
 #
 # A hand-written prohibition list is the same defect H-02 fixed in the other direction, so
-# the cure is the same: the fast lane DECLARES its list (FAST_LINTS, and an EMPTY heavy list)
+# the cure is the same: the fast path DECLARES its list (FAST_LINTS, and an EMPTY heavy list)
 # and the observed sequence is compared against both. These mutants are the proof, one per
 # heavy task, injected at the anchor — which sits BEFORE the fast lints, i.e. in the one
 # position `observed_heavy` alone could never see.
@@ -1297,7 +1297,7 @@ for t in "${HEAVY_TASKS[@]}"; do
 done
 
 # --- (J-01) A TASK THAT RUNS AFTER THE HOOK RETURNS IS STILL A TASK THAT RAN --------------
-# Round 7's first mutant: `(sleep 1; task tokens:check) >/dev/null 2>&1 &` in the fast lane.
+# Round 7's first mutant: `(sleep 1; task tokens:check) >/dev/null 2>&1 &` in the fast path.
 # Every assertion above passed — the observed sequence at the moment the hook exited WAS the
 # declared fast list — and a heavy task ran a second later. The equality was true and the
 # claim it supports ("a feature ref runs NO heavy task") was false, which is worse than a
@@ -1317,7 +1317,7 @@ for t in "${HEAVY_TASKS[@]}"; do
 done
 
 # ...and the drain must not have turned every honest run into a wait: the real hook still
-# reports its own status, not the harness's 125, and the fast lane is still clean.
+# reports its own status, not the harness's 125, and the fast path is still clean.
 honours_fast "$HOOK" "$FAST_FEAT"
 [ "$?" -eq 0 ] && [ "$e2e_rc" -eq 0 ]
 check "(J-01) and the real hook still passes the drained observation" "rc=${e2e_rc}" $?
@@ -1346,12 +1346,12 @@ check "(I-04) the hook's FAST banner names exactly the declared lints" \
 for t in "${FAST_LINTS[@]}"; do
 	mut_fastdrop="$(mutate_drop_task "$t")"
 	if [ -z "$mut_fastdrop" ] || ! bash -n "$mut_fastdrop" 2>/dev/null; then
- check "(I-04) MUTANT 'no task $t' is CAUGHT in the fast lane" "no usable mutant" 1
+ check "(I-04) MUTANT 'no task $t' is CAUGHT in the fast path" "no usable mutant" 1
  continue
 	fi
 	honours_fast "$mut_fastdrop" "$FAST_FEAT"
 	[ "$?" -ne 0 ]
-	check "(I-04) MUTANT 'no task $t' is CAUGHT in the fast lane" "mutant dies (rc=${e2e_rc})" $?
+	check "(I-04) MUTANT 'no task $t' is CAUGHT in the fast path" "mutant dies (rc=${e2e_rc})" $?
 done
 echo
 echo "G-05/H-06 — the toolchain check is unconditional, with ONE named exception"
@@ -1360,7 +1360,7 @@ echo "G-05/H-06 — the toolchain check is unconditional, with ONE named excepti
 # Round 2 made it true by moving the check in front of the `skip` verdict. Round 3 measured
 # the price with real git: `git push --delete stale-branch` on a machine without go-task was
 # refused, so tidying a branch required disabling the whole hook. H-06 re-decides — a push
-# whose EVERY line is a deletion has nothing to gate in any lane, gets its own verdict, and
+# whose EVERY line is a deletion has nothing to gate on any path, gets its own verdict, and
 # is the ONE exception; it is named here, in the hook and in CLAUDE.md/CONTRIBUTING.md.
 env -i PATH=/usr/bin:/bin HOME="$WORK" bash -c 'command -v task' >/dev/null 2>&1
 [ "$?" -ne 0 ]
@@ -1424,7 +1424,7 @@ echo
 echo "G-03 — an unusable verdict refuses, and 'unusable' now means what it says"
 
 # The hook used to read the first WORD of the first LINE. A classifier printing `fast` and
-# then `full` was accepted, and a main push took the fast lane. Exactly one line, exactly
+# then `full` was accepted, and a main push took the fast path. Exactly one line, exactly
 # `<verdict><TAB><non-empty reason>`.
 mkdir -p "$WORK/badrule/scripts/lib" || exit 1
 cp "$HOOK" "$WORK/badrule/pre-push" || exit 1
@@ -1460,7 +1460,7 @@ bad_verdict_case 'printf " fast\treason\n"' "a leading space before the verdict"
 # so the hook compared a string that had already lost them: a classifier printing two lines,
 # the second empty, satisfied "exactly one line" and its `fast` was obeyed on a main push.
 # Measured in round 3 with a mutated classifier — `wc -l` said 2, the hook said 0 and ran
-# the fast lane. The verdict is now captured with a sentinel, so the LFs survive to be judged.
+# the fast path. The verdict is now captured with a sentinel, so the LFs survive to be judged.
 bad_verdict_case 'printf "fast\treason\n\n"' "a trailing blank line after the verdict"
 bad_verdict_case 'printf "fast\treason\n\n\n\n"' "several trailing blank lines"
 bad_verdict_case 'printf "fast\treason"' "a verdict with NO terminating LF"
@@ -1506,7 +1506,7 @@ echo "THE MUTEX — this split changed WHO takes it, and nothing else"
 
 # The host mutex is NOT part of this change: it is byte-for-byte the one this repository
 # already had (the hook's N-4 states its known weaknesses, and DEFERRED D-1 the work that was
-# taken back out). What the split DID change is who reaches it — every lane on the box used
+# taken back out). What the split DID change is who reaches it — every contributor on the box used
 # to, and now only main and tags do. That is the only property asserted here, and it is
 # asserted against a stub `git` (M-4): no lifecycle, no contention, no remote.
 e2e_run "$HOOK" "$CLASSIFY" "$FAST_MAIN"
@@ -1533,7 +1533,7 @@ check "the hook consults the classifier" "wired" $?
 grep -q 'gate_class' "$HOOK"
 check "the hook branches on the verdict it got" "verdict consumed" $?
 
-# The mutex is the host-wide resource this split exists to stop every lane from taking.
+# The mutex is the host-wide resource this split exists to stop every contributor from taking.
 # It must be unreachable unless the verdict was `full`.
 awk '/gate_class" != "full"/ {seen=1} /acquire_gate_lock$/ && !seen {bad=1} END {exit bad}' "$HOOK"
 check "the host mutex sits BEHIND the full-gate branch" "no lock before the fast exit" $?
@@ -1546,7 +1546,7 @@ check "the host mutex sits BEHIND the full-gate branch" "no lock before the fast
 check "(G-01) the hook does not round-trip stdin through a variable" "classifier reads stdin" $?
 
 # G-06: the executable policy and the written one must agree. These files are the active
-# operating instructions for every lane; two of them used to describe the OLD hook (full
+# operating instructions for every contributor; two of them used to describe the OLD hook (full
 # gate on every push) while the hook did something else.
 # export-closure: hub-only CLAUDE.md — it contains private AI-agent and maintainer workflow for the development hub, not public contributor policy.
 # export-closure: hub-only sessions/status/HUB.md — it records live private session coordination and integration status, not public product behavior.
@@ -1622,7 +1622,7 @@ check "(H-02) CONTRIBUTING.md lists exactly the declared ${#HEAVY_TASKS[@]}" "${
 # M-5 said it plainly and nobody had acted on it: "the exact heavy sequence is compared against
 # CONTRIBUTING.md only … so a fast/heavy list edited in WORKFLOW.md, CLAUDE.md or HUB.md can stay
 # wrong". And it HAD gone wrong — CLAUDE.md was missing `lint:format-ratchet` while every other
-# copy carried it. Another lane had already restored the line by the time this check landed, which
+# copy carried it. Another contributor had already restored the line by the time this check landed, which
 # is exactly why the check is the fix and the line was not: a copy that only a human notices is a
 # copy that drifts again. CLAUDE.md is the file every session is ORDERED to obey, so a stale gate
 # list there is worse than in the contributor doc.
@@ -1714,7 +1714,7 @@ echo "GATE-O1 — opt-in observation of the ACTUAL task occurrences this hook ma
 #
 # WHAT IT DOES NOT PROVE, stated because the contract asks for exactly this distinction:
 #  * NOT that an instrumented REAL push behaves like an uninstrumented one. These are stub
-#    tasks that return in milliseconds; a real lane is hours of work with real descendants.
+#    tasks that return in milliseconds; a real gate is hours of work with real descendants.
 #  * NOT that the executing hook snapshot's bytes were identified. They are not, by
 #    construction, and the records say `unverified` rather than borrowing HEAD's identity.
 #  * NOT signal equivalence in general. One self-signalled child is one interleaving.

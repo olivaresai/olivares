@@ -9,7 +9,7 @@
 # WHY THIS EXISTS, and it is not hypothetical: it was measured on 2026-08-07 by walking into
 # it. Two raw NUL bytes went into commercial/license-worker/src/dodo/cohort.ts and four into
 # test/fakes.ts while composing a composite map key. They passed `tsc --noEmit`, 223 unit
-# tests, `lint:spdx`, and the entire fast-lint lane. The code even WORKED — U+0000 is a fine
+# tests, `lint:spdx`, and the entire fast-lint path. The code even WORKED — U+0000 is a fine
 # separator for a composite key, since no provider id or RFC3339 timestamp can contain one.
 #
 # WHAT IT BREAKS IS THE THING NOBODY TESTS. grep classifies a file containing a NUL as BINARY:
@@ -21,7 +21,7 @@
 # reads LINES gets nothing. This repository gates a great deal by grepping its own sources:
 # test/dodo-source-anchors.test.ts forbids response shapes at the source, check-spdx.sh reads
 # headers, check-export-closure.sh and check-secrets.sh walk the tree, and the pre-push hook's
-# fast lane is largely text ratchets. A NUL in a gated file can therefore silently blind the
+# fast path is largely text ratchets. A NUL in a gated file can therefore silently blind the
 # gate that guards it, while every other signal stays green. That is the exact failure class
 # this project keeps paying for: not a red, but a check that quietly stopped looking.
 #

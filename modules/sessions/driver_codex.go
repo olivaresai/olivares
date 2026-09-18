@@ -17,7 +17,7 @@ import (
 // The official Codex app-server driver (CLI 0.153.4).
 //
 // AUTHORITY. Every wire shape here comes from the generated schemas of THAT exact
-// CLI, retained under assessments/product/official-cli-drivers-lot/codex-schema/
+// CLI, retained under an internal design note (not shipped)
 // and hashed in the contract check. Nothing is guessed and nothing is copied from
 // another version: `initialize`/`initialized`, `account/read`, `thread/start`,
 // `thread/resume`, `thread/unsubscribe`, `turn/start`, `turn/steer`,

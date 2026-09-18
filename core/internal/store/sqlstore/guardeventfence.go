@@ -95,7 +95,7 @@ func canonicalGuardEventFenceForm(name, event string) guardEventFenceForm {
 // `CREATE EVENT TRIGGER` produces 'O', and measured on all four majors an 'O' fence DOES NOT
 // FIRE for a session that has set session_replication_role='replica' — a setting an ordinary
 // role can hold through `GRANT SET ON PARAMETER session_replication_role`, which is accepted
-// on 15, 16, 17 and 18 alike. The hub's earlier condition watched `event_triggers`, which does
+// on 15, 16, 17 and 18 alike. The earlier condition watched `event_triggers`, which does
 // not exist before 17; this is the wider door, open on every supported major.
 const guardEventFenceStateAlways = "A"
 

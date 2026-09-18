@@ -8,7 +8,7 @@
 - **Commit:** `20aa261f`
 
 This is the product-led assurance evidence the trust center links in place of an
-external audit (decision D22: automate/analyse/test in pre-release sessions, no
+external audit (the recorded decision: automate/analyse/test in pre-release sessions, no
 external pen-test yet). Regenerate with `task security:report`.
 
 ## Summary

@@ -413,11 +413,11 @@ check "preprod REQUIRES the transparency log, like production" "tlog on" $?
 # sitting in it is the one ingredient that turns a rehearsal into a real publication.
 run_pf pre DOCKERHUB_USERNAME=someone DOCKERHUB_TOKEN=secret
 [ "$rc" -ne 0 ] && grep -q 'holds PRODUCTION Docker Hub credentials' "$err"
-check "a preprod repository holding Docker Hub credentials refuses (§C.4.7)" "no secrets" $?
+check "a repository that declares that profile holding Docker Hub credentials refuses (§C.4.7)" "no secrets" $?
 
 run_pf pre HOMEBREW_TAP_GITHUB_TOKEN=secret
 [ "$rc" -ne 0 ] && grep -q 'Homebrew tap token' "$err"
-check "a preprod repository holding the PRODUCTION tap token refuses (§C.4.7)" "separate credential" $?
+check "a repository that declares that profile holding the PRODUCTION tap token refuses (§C.4.7)" "separate credential" $?
 
 run_pf pre HOMEBREW_PREPROD_TAP_GITHUB_TOKEN=
 [ "$rc" -ne 0 ] && grep -q 'HOMEBREW_PREPROD_TAP_GITHUB_TOKEN' "$err"

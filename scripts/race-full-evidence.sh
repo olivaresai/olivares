@@ -84,7 +84,7 @@ if green:
 # A run still in flight has conclusion None, so it is not success -- and treating that
 # as "no evidence" confuses "not yet" with "failed". Those are different answers and the
 # caller acts differently on each: one waits, the other stops the tag. Corrected after
-# making exactly this mistake about another lane push, using the rule this script exists
+# making exactly this mistake about another contributor push, using the rule this script exists
 # to enforce.
 running = [r for r in runs if r.get("status") != "completed"]
 if running:

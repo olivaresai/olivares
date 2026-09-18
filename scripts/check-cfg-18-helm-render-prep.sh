@@ -88,7 +88,7 @@ if start < 0 or end < 0 or end <= start:
     cannot("Taskfile lost lint:addon-sets / lint:addon-sets-gate")
 block = tf[start:end]
 if "bash scripts/check-helm-render.sh" in block:
-    fail("original check-helm-render.sh entered lint:addon-sets — LOOK 2 or helm in the fast lane")
+    fail("original check-helm-render.sh entered lint:addon-sets — LOOK 2 or helm in the fast path")
 print("json-ok")
 PY
 

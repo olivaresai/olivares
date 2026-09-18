@@ -26,11 +26,11 @@
 #
 #   hub  (for a private single-writer work repo; the repo is resolved from the current
 #         git context or passed with --repo — this script never hardcodes a private name)
-#     - Actions are DISABLED on the hub and it has a single writer, so requiring status
-#       checks or approvals would BLOCK every merge. Hub protection therefore requires NO
+#     - a work repository with a single writer cannot satisfy required status checks or
+#       approvals: either would BLOCK every merge. This profile therefore requires NO
 #       status checks and 0 approvals (no code-owners); the green gate is the LOCAL
 #       pre-push hook. force-push/deletion on main stay blocked.
-#     - no tag rulesets (release tags are cut on the public repo, not the hub).
+#     - no tag rulesets: release tags are cut on the public repository, not under this profile.
 #
 # The Terraform provider's own `vX.Y.Z` tag ruleset lives in its SEPARATE repo
 # (terraform-provider-olivares, with its own release tooling), NOT here.
@@ -93,7 +93,7 @@ done
 # a job skipped by a job-level `if:` does NOT block a required check, so a set that can all
 # skip at once evaporates into green. Every pr-ci job carries the same repository guard, and
 # that guard is what check-pr-ci-regime.sh pins — a rename would otherwise disable the whole
-# regime in silence. Measured on the hub 2026-08-01 and fixed there the same day.
+# regime in silence. Measured 2026-08-01 and fixed the same day.
 DEFAULT_PUBLIC_CONTEXTS="pr-lint,pr-build,pr-test,pr-web"
 case "$PROFILE" in
   public)
@@ -104,21 +104,21 @@ case "$PROFILE" in
     TAGS="${TAGS:-on}"
     ;;
   hub)
-    # Resolve the private hub repo from the current git context (never hardcode it —
+    # Resolve the work repository from the current git context (never hardcode it —
     # this script ships publicly). Pass --repo to override.
     REPO="${REPO:-$(gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null || true)}"
     [ -n "$REPO" ] || { echo "hub profile: run from the repo dir or pass --repo owner/repo" >&2; exit 2; }
-    # CORRECTED 2026-08-02. This said "none: Actions are off on the hub" and set no
+    # CORRECTED 2026-08-02. This said "none: Actions are off here" and set no
     # contexts at all. Both halves are false now, and the combination was armed:
-    # running this script would have WIPED the protection the hub actually relies on.
+    # running this script would have WIPED the protection this profile actually relies on.
     # Actions have been ON here since the self-hosted runners landed, and the live
     # protection requires these four with strict: true. They are recorded here so
     # settings-as-code reproduces reality instead of overwriting it.
     CONTEXTS="${CONTEXTS:-classify,control-plane,race-hot,web}"
-    # 0 IS the correct value here, and it is not laziness. Every lane in this repo
-    # pushes as the same identity, and GitHub refuses to let an author approve their
-    # own pull request ("Can not approve your own pull request", measured 2026-08-01
-    # on #458) — so any value above 0 would block EVERY merge on the hub. The >=1 that
+    # 0 IS the correct value here, and it is not laziness. Every push in a
+    # single-writer repository carries the same identity, and GitHub refuses to let an
+    # author approve their own pull request ("Can not approve your own pull request",
+    # measured 2026-08-01) — so any value above 0 would block EVERY merge. The >=1 that
     # belongs in the public profile above is exactly right there and impossible here.
     APPROVALS="${APPROVALS:-0}"
     CODE_OWNERS="${CODE_OWNERS:-off}"
@@ -257,5 +257,5 @@ echo "            gh api --paginate \"repos/${REPO}/actions/runs/\$R/jobs\" --jq
 echo "          done | sort -u"
 echo "      If any of those 403s, you have NOT measured the contexts — do not touch --contexts."
 echo "      A PARTIAL list read as complete is worse than no measurement: it authorises removal."
-echo "      Reconcile --contexts only against names you actually read. (The hub has Actions off,"
+echo "      Reconcile --contexts only against names you actually read. (With Actions off,"
 echo "      so validate on the public repo.)"

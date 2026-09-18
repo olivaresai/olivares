@@ -67,7 +67,7 @@ jobs:
     steps:
       # ⛔ WHICH SITE THIS RUN PUBLISHES IS DECIDED HERE, FROM A FIXED TABLE, BEFORE ANY CREDENTIAL.
       # This file ships in three repositories: the private development hub, the public Community
-      # repository and the Community preprod repository. Until 2026-09-12 every copy deployed
+      # repository and the Community repository that declares that profile. Until 2026-09-12 every copy deployed
       # docs-site/wrangler.jsonc, i.e. the PRODUCTION `olivares-docs` Worker on docs.olivares.ai, so the
       # preprod copy would have published production the first time it held a token.
       # The table is keyed by `github.repository_id`: GitHub assigns it, nobody dispatching can choose
@@ -82,7 +82,7 @@ jobs:
           case "${REPOSITORY_ID}" in
           1263277317) config=wrangler.jsonc host=docs.olivares.ai ;; # private development hub
           1268548683) config=wrangler.jsonc host=docs.olivares.ai ;; # olivaresai/olivares (public)
-          1269477539) config=wrangler.preprod.jsonc host=docs-preprod.olivaresai.dev ;; # olivares.preprod
+          1269477539) config=wrangler.preprod.jsonc host=docs-preprod.olivaresai.dev ;; # rehearsal target
           *)
             echo "::error::REFUSING: ${REPOSITORY} (repository id '${REPOSITORY_ID}') has no docs deploy target."
             echo "::error::Only the repository ids listed in this step may publish; none is derived from a name."

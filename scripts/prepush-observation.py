@@ -479,7 +479,7 @@ def _reject_repository_output(path: str) -> None:
 
     Two independent reasons, both measured elsewhere in this repository: a gate that
     writes into the worktree trips `check-tree-untouched.sh`, and anything under a
-    shared clone is picked up by the next lane's `git add`.
+    shared clone is picked up by the next contributor's `git add`.
     """
     root = os.path.realpath(REPO_ROOT)
     target = os.path.realpath(path)
@@ -734,7 +734,7 @@ def _sha256_file(path: str):
 
 
 def _expected_fast_sequence():
-    """Derive the ordered top-level task names of the FAST lane from the hook FILE.
+    """Derive the ordered top-level task names of the FAST path from the hook FILE.
 
     Same cut and the same invocation shape the repository's own gates use
     (`check-taskfile-graph.sh`, `scripts/test-prepush-refclass.sh`): strip indentation
@@ -1030,7 +1030,7 @@ def _utc_now() -> str:
 
 # ---------------------------------------------------------------------------------
 # The parent receipt reader, PINNED to the one schema this implementation has actually
-# seen (assessments/github/dev-sync-20260909-r34/attempt-01/normal-push.receipt.json).
+# seen (an internal design note (not shipped)).
 #
 # It reads `exit` and the two instants, and NOTHING ELSE crosses into the summary:
 # `argv` and `cwd` are execution context that would put a ref name and an absolute path

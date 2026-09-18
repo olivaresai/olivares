@@ -8,7 +8,7 @@ package main
 
 // ⚠ PROTOCOL-UNIT PROOF. connectStub below is an owned, in-process HTTP fixture that follows the
 // connect-v1 request/response shapes this client implements (license_connect_wire.go, provisional
-// per assessments/architecture/r115-connect-bc-coordination/ROOT-DIRECTION.md). It is NOT the
+// per an internal design note (not shipped)). It is NOT the
 // license Worker and NOT D1: its proofs, idempotent replay and fault injection model the protocol
 // contract so the CLIENT's persistence, verification and preservation rules can be driven through
 // the real command tree. The joint Worker/D1 client proof follows B's accepted delivery.

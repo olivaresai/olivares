@@ -28,9 +28,9 @@ MAP="${OLIVARES_C13CURP_MAP:-commercial/module-slug-package.json}"
 BRIDGE="${OLIVARES_C13CURP_BRIDGE:-scripts/check-module-bridge.sh}"
 
 # Sanctioned absence vs broken checkout. This gate reads design/ and commercial/, and the
-# curated public export drops both ON PURPOSE; in the hub the same absence is a broken
+# curated public export drops both ON PURPOSE; in the full source tree the same absence is a broken
 # checkout. The only honest discriminator is the marker the curation pipeline writes into
-# the exported tree and never tracks in the hub (same one check-public-counts.sh reads).
+# the exported tree and never tracks in the full source tree (same one check-public-counts.sh reads).
 # Measured 2026-08-31 from an exported tree with `git init`: without this, rc 2 — and the
 # canon's fail-closed rule turns "I could not look" into a rejected push in public.
 # NOT `[ -f .olivares-public-export ]`: hub-leg.sh:29-40 records that a bare marker is a

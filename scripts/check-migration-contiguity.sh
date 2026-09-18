@@ -19,7 +19,7 @@
 # direction of failure:
 #
 #   a duplicate number is LOUD  - two files share a prefix, the migrator refuses
-#                                 at boot, and the integrator renumbers at merge;
+#                                 at boot, and the maintainer renumbers at merge;
 #   a gap is SILENT             - everything boots, and one migration never runs.
 #
 # => The rule for a scalar migrator is max(existing)+1 IN THE TREE YOU MERGE INTO.

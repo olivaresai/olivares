@@ -118,7 +118,7 @@ note '==> G-2  the helper stamps the build and trims the paths'
 # The 2026-08-09 note below about intermittent empty execs on a loaded box is kept: this
 # does not disprove it, and a retry is cheap. But noexec is not a flake and must not be
 # reported as one — and the failure path below does NOT merely name it, it reads the exit
-# code and asks findmnt. The two halves came from two lanes on 2026-08-11 and neither
+# code and asks findmnt. The two halves came from two contributors on 2026-08-11 and neither
 # subsumes the other: this one PREVENTS the case, that one DIAGNOSES what is left.
 # lib/exec-workdir.sh already owns this environment fact and PROVES a candidate can run a
 # file before handing it back — checking `test -x` AND execve, because on a noexec mount
@@ -181,7 +181,7 @@ else
     # reader to the ldflags for a problem that was never there. An answer we could
     # not obtain is the could-not-look case, and this file already has one.
     #
-    # AND EMPTY IS NOT "A BUSY BOX" EITHER — measured 2026-08-11 by another lane.
+    # AND EMPTY IS NOT "A BUSY BOX" EITHER — measured 2026-08-11 by another contributor.
     # This gate blocked two consecutive pushes advising "re-run on a quieter box"
     # with 7,5 GiB of headroom free and the OOM counter unmoved. The cause was the
     # MOUNT: `mktemp -d` lands under /tmp, this container mounts /tmp `noexec`, and

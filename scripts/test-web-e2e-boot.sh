@@ -196,7 +196,7 @@ fi
 # returned 0/usable — validating the instrument against a foreign listener, which is
 # exactly "our engine died on bind, the stranger answered the probe". The mirror case cost
 # a real push: nobody answered, it concluded "/dev/tcp is broken" and exited 2 for what was
-# only a busy port. The hint is `$$ % 900` and five lanes share this host, so collisions
+# only a busy port. The hint is `$$ % 900` and five contributors share this host, so collisions
 # are ordinary — three colliding pairs were measured among live shells that morning.
 #
 # The assertion is NOT the return code: 0 is what the broken version returned too. It is
@@ -303,7 +303,7 @@ fi
 #   2. The backgrounded python inherited the write end of the substitution's pipe, so `$( )`
 #      could not return until its `time.sleep(120)` ran out. That single line was 120 s of the
 #      142 s this battery was said to cost, and that number was used to argue it into the
-#      heavy lane.
+#      heavy path.
 P=$((BASE_PORT + 4))
 fake_engine "${WORK}/bin-die2" die
 PF="${WORK}/pids.$RANDOM"; : >"$PF"
@@ -362,7 +362,7 @@ fi
 # substitution, which is precisely where the old array append was lost. An empty pidfile
 # here means the caller's trap has nothing to kill and the engine outlives the script —
 # the shape that left three of them squatting ports for a day and five hours.
-# FIRST FIELD ONLY. The line is `<pid> <starttime>` since the two lanes were merged, and
+# FIRST FIELD ONLY. The line is `<pid> <starttime>` since the two contributors were merged, and
 # `kill -0 "$(cat "$PF")"` would signal BOTH numbers — the second is not a pid of ours and
 # on this shared host could be somebody's. It also went red for the WRONG reason: kill
 # rejected the second word, not the child being absent.

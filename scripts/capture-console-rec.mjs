@@ -14,7 +14,7 @@ import { fileURLToPath } from 'url';
 const require_ = createRequire(import.meta.url);
 // Resolved from the repo's own web/ install so this tool needs no node_modules
 // of its own, and always uses the Playwright the repository pins.
-// Resolved from THIS file's location, never from a hardcoded worktree: every lane
+// Resolved from THIS file's location, never from a hardcoded worktree: every contributor
 // checks the repo out somewhere else, and a pinned absolute path only works in the
 // tree that wrote it.
 const PW_ROOT =

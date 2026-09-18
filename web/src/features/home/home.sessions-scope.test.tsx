@@ -5,9 +5,9 @@
 // The front door's LIVE SESSIONS and INVENTORY tiles and the topbar workspace selector.
 //
 // Both reads are tenant-wide. `GET /v1/m/sessions/live` takes no core-workspace
-// selector and its DTO carries none (assessments/product/sessions-effective-context-
+// selector and its DTO carries none (an internal design note (not shipped)
 // contract, ratified 2026-09-08); `GET /v1/m/inventory/summary` reads no request
-// filter and the catalog carries no workspace lineage (assessments/product/inventory-
+// filter and the catalog carries no workspace lineage (an internal design note (not shipped)
 // effective-workspace-scope, ratified the same day). The Sessions tile stopped sending
 // `workspace_id` first; until this change the Inventory tile still sent it and keyed
 // its query on the selection, so a W1→W2 switch re-fetched the SAME tenant-wide

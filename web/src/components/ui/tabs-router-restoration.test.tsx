@@ -16,7 +16,7 @@
 // cache therefore never holds the reveal, and what the router writes back after render is
 // the strip's position from an earlier location. jsdom fires no scroll events at all, so
 // each test dispatches, by hand and at that late moment, the one event Chromium delivered
-// late in the browser evidence (assessments/implementation/community-ui-composition,
+// late in the browser evidence (an internal design note (not shipped),
 // `known-horizontal-restoration`: 3/11 selected tabs visible at 390 px, scrollLeft 0).
 //
 // Geometry is the eleven /console tabs as measured at 390 px in that evidence; jsdom has

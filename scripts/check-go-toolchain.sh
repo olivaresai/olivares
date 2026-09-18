@@ -141,7 +141,7 @@ EOF
 # library advisory that the workspace bump fixes stays open in that module, and nothing says so.
 #
 # The census comes from `git ls-files`, not `find`: `find` grades whatever is lying in the tree —
-# scratch clones, build output, another lane's worktree — which is how a sibling gate once measured
+# scratch clones, build output, another contributor's worktree — which is how a sibling gate once measured
 # 163 files where the repository has 55.
 #
 # THE CENSUS HAS TWO SOURCES AND SAYS WHICH ONE IT USED. `git ls-files` grades the REPOSITORY;

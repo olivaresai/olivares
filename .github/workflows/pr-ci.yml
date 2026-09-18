@@ -15,18 +15,18 @@
 # saying "Expected — waiting for status to be reported" about jobs that can never report.
 #
 # ⛔ WHY IT IS A SEPARATE WORKFLOW AND NOT `pull_request` ADDED TO mainline-ci. Because that
-# would WEAKEN the private hub instead of equipping the public repository. The hub's own branch
-# protection requires four mainline-ci contexts (classify, control-plane, race-hot, web). Today
-# they never report on a PR, so they cannot be satisfied by accident. Give mainline-ci a
-# `pull_request` trigger and those four jobs would report on hub PRs as SKIPPED — and a job
-# skipped by a job-level `if:` does NOT block a required check (measured on the hub 2026-08-01
+# would WEAKEN branch protection instead of equipping the public repository. Branch
+# protection requires four mainline-ci contexts (classify, control-plane, race-hot, web). They
+# never report on a PR, so they cannot be satisfied by accident. Give mainline-ci a
+# `pull_request` trigger and those four jobs would report on a PR as SKIPPED — and a job
+# skipped by a job-level `if:` does NOT block a required check (measured 2026-08-01
 # and written into apply-branch-protection.sh). The whole required set would evaporate into
-# green. A regime for the public repository must not touch the hub's gate.
+# green. A regime for the public repository must not weaken that gate.
 #
-# ⛔ AND WHY EVERY JOB CARRIES A REPOSITORY GUARD. Closed the automatic-CI question on
-# 2026-08-02 for THIS repository — "no tiene sentido que sean automáticos con la cantidad de
-# desarrollo y PR y commits que tenemos" — and that decision is not reopened here. With the
-# guard, a pull request in the hub creates a run in which every job is skipped: no runner is
+# ⛔ AND WHY EVERY JOB CARRIES A REPOSITORY GUARD. Automatic CI on every pull request is not
+# wanted at the volume of changes this project carries, so the guard keeps the jobs inert
+# outside the public repository. With the
+# guard, a pull request elsewhere creates a run in which every job is skipped: no runner is
 # occupied, no minute is billed, nothing is superseded. In the public repository the guard is
 # true and the jobs run. The guard is not free of hazard — a rename would silently disable the
 # whole regime — so it is not left to vigilance: scripts/check-pr-ci-regime.sh pins that every
@@ -72,7 +72,7 @@ env:
   # anterior decia que el guard lo leia; era falso desde que existe, y se corrige aqui.
   #
   # ⛔ Y LA SEGUNDA RAMA DEL GUARD NO NOMBRA NINGUN REPOSITORIO, a proposito: este fichero viaja
-  # al arbol publico. `vars.OLIVARES_RELEASE_PROFILE` solo existe EN el repositorio de preprod,
+  # al arbol publico. `vars.OLIVARES_RELEASE_PROFILE` solo existe EN el repositorio que declara ese perfil,
   # asi que en el publico esa rama no puede alcanzarse.
   PUBLIC_REPO: olivaresai/olivares
 

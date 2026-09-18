@@ -11,7 +11,7 @@ package main
 // approved request and the exact pending completion, so the same command completes later with the same
 // approval and the same Idempotency-Key; every other refusal, the request step, ordinary operations and
 // owner-approved deletion end as before, and a lost successful completion replays exactly once
-// (assessments/integration/r115-commercial-composed-joint/capacity-correction-1).
+// (an internal design note (not shipped)).
 
 import (
 	"bytes"

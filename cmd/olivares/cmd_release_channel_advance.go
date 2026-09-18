@@ -97,12 +97,12 @@ func newReleaseVerifyChannelAdvanceCmd() *cobra.Command {
 			"read (NOT a clean result — treat it as unanswered).",
 		// ⛔ THE EXAMPLE IS A PLACEHOLDER, NOT A REAL REPOSITORY, and that is not style. This
 		// string is `--help` output: it SHIPS, and a value ships verbatim where a comment is
-		// scrubbed. Naming the maintainers' own disposable rehearsal repository here would put
+		// scrubbed. Naming a private organisation here would put
 		// a private org in front of every reader of the public binary. The export gate caught
 		// exactly this line on 2026-08-27.
 		Example: "  # before publishing the draft for v26.8.1\n" +
 			"  olivares release verify-channel-advance --candidate dist/stable-manifest.json\n\n" +
-			"  # against a disposable rehearsal repository, pinned to its tag\n" +
+			"  # against a disposable test repository, pinned to its tag\n" +
 			"  olivares release verify-channel-advance --candidate dist/stable-manifest.json \\\n" +
 			"    --endpoint https://github.com/<owner>/<repo>/releases/tag/<tag>",
 		SilenceUsage: true,

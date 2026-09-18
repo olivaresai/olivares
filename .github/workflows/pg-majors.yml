@@ -24,8 +24,8 @@
 # each pass floor-checked against ci/pg-majors-expectations.json. It does NOT
 # claim the F-09/F-10 guard conditions hold: those need the guard-side code
 # (verifiedPostgresMajors as a SET, the 16+ reachability predicate, the skip
-# removal) that lives in the-c4 lane. Landing this workflow first is the
-# permanent net; the guard lane closes the findings.
+# removal) that a separate change owns. Landing this workflow first is the
+# permanent net; that change closes the findings.
 
 name: pg-majors
 

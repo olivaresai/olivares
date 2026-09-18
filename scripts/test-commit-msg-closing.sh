@@ -83,7 +83,7 @@ for kw in "closed: #484" "closes #7" "close #7" "fixes #123" "fixed #123" "fix #
 	"resolves #9" "resolved #9" "resolve #9" "Closes #7" "CLOSED: #484"; do
 	rc="$(run "$HOOK_ABS" "docs(status): board update
 
-the lane says $kw and that is the problem")"
+the message says $kw and that is the problem")"
 	check "rechaza «$kw» en un commit solo-docs" "rc=$rc" 1 "$rc"
 done
 

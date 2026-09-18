@@ -1,7 +1,6 @@
 # State-only Policy storage, v1 (SES2-S)
 
-Ratified construction: `assessments/architecture/r87-seat-state-construction/STORE-ROOT-CONTRACT.md`
-(Root Astra, 2026-09-12). SDD 02/06 and D06. This is the storage increment only.
+Construction ratified 2026-09-12. SDD 02/06 and D06. This is the storage increment only.
 
 ## What it adds
 

@@ -4,12 +4,12 @@
 # Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 #
 # check-session-record.sh — a branch that changes CODE must also add or update a file under
-# `sessions/`. Without that record, a PR cannot be attributed to a lane, and attribution is what the
+# `sessions/`. Without that record, a PR cannot be attributed to a contributor, and attribution is what the
 # whole claim protocol rests on.
 #
 # ⛔ WHY IT EXISTS, and the case is worth keeping because I got the diagnosis WRONG without it.
 # Measured 2026-08-17: #824 and #853 both touch `cmd/olivares/` and conflict on five shared files.
-# #824 carries `an internal design note (not shipped)`, which names its lane on its first line. #853 carries NO
+# #824 carries `an internal design note (not shipped)`, which names its owner on its first line. #853 carries NO
 # session file at all, so I had to infer its owner from its contents — and I inferred wrong, publishing
 # to two mailboxes that TWO LANES had spent two days building the same bootstrap. They are SIBLING
 # BRANCHES OF ONE LANE (merge-base `fb1be4a03`), and its relay had ordered exactly that. Refuted
@@ -110,7 +110,7 @@ fi
 #   branch changing .githooks/pre-push and Taskfile.yml     → "CLEAN — none of them code"
 #
 # The hook decides WHICH GATES RUN FOR EVERY LANE, and the Taskfile defines what each of those gates
-# actually executes. A branch that rewrites either of them shipped with no lane attached, which is
+# actually executes. A branch that rewrites either of them shipped with no owner attached, which is
 # precisely the state this checker exists to refuse — and the failure it was written from was an
 # owner inferred wrong from contents.
 #
@@ -146,9 +146,9 @@ if [ "$record" -eq 1 ]; then
 fi
 
 say "check-session-record: NO SESSION RECORD — this branch changes code and touches nothing under sessions/." >&2
-say "  A PR with no session file cannot be attributed to a lane, and the claim protocol rests on" >&2
-say "  attribution. Measured 2026-08-17: with one PR missing its record, the integrator inferred its" >&2
+say "  A PR with no session file cannot be attributed to a contributor, and the claim protocol rests on" >&2
+say "  attribution. Measured 2026-08-17: with one PR missing its record, the maintainer inferred its" >&2
 say "  owner from the contents and inferred WRONG, publishing a duplicated-work finding to two" >&2
 say "  mailboxes that had to be retracted." >&2
-say "  repair: add sessions/<SNNN>-<slug>.md or sessions/status/<SNNN>.md naming the lane on its first line." >&2
+say "  repair: add sessions/<SNNN>-<slug>.md or sessions/status/<SNNN>.md naming its owner on the first line." >&2
 exit 1

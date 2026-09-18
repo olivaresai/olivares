@@ -355,7 +355,7 @@ month, release-of-month; the current release is `v26.9.0`).
 The first public release of Olivares AI — a beta, pre-1.0. Tag `v26.8.0` points at commit
 `f443e084` of the public repository (tagged 2026-09-01T08:06:57Z, published 11:15:52Z);
 release run `33485407512` finished with all eleven executed jobs green and
-`publish-ota-manifest` skipped by its own gate. The hub's changelog at the cut and the public
+`publish-ota-manifest` skipped by its own gate. The changelog at the cut and the published
 one at the tag are byte-identical, so every entry under **Added / Changed / Fixed / Security**
 below is what this tag contains. APIs, schemas and the module surface may still change before
 a stability commitment.

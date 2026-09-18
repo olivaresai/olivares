@@ -212,7 +212,7 @@ function makeRepo(
   // to carry typescript@6.0.3 — and fail 33 of its 34 cases in every worktree
   // `scripts/new-session.sh` creates. Measured 2026-08-08: 1/34 here, 34/34 with the
   // root pointed at web's store. A battery that only goes green at home is a battery
-  // that tests the home, and this one sits in the FAST lane, where it would have
+  // that tests the home, and this one sits in the FAST path, where it would have
   // reddened every feature push.
   if (unreadableStore) {
     const store = path.join(root, 'web', 'node_modules', '.pnpm')

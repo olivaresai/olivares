@@ -9,7 +9,7 @@
 # and 300 892 ms — its own 300s ceiling — under suite load, which is how it failed. Its
 # comment records an earlier raise from 60s, so the ceiling had already been bought once.
 #
-# It is a lint, so it runs in the lint lane. The ONLY thing that changes is where it
+# It is a lint, so it runs in the lint path. The ONLY thing that changes is where it
 # runs: same config, same rule, same file set, same verdict.
 #
 # Why the whole config and not just the rule: measured, a single-rule ESLint run is 5.9x
@@ -20,7 +20,7 @@
 # Why only this rule's messages are fatal: that is exactly what the vitest case asserted.
 # The other ESLint rules are NOT enforced by any gate today (`lint:web` is deliberately
 # skipped by .githooks/pre-push and no workflow invokes it); widening the verdict here
-# would be a different change, made silently, on a lane nobody has budgeted for.
+# would be a different change, made silently, on a contributor nobody has budgeted for.
 set -uo pipefail
 
 cd "$(dirname "$0")/.." || exit 2

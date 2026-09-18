@@ -7,12 +7,9 @@
     "clock_source": "container CLOCK_REALTIME via date -u during the measurement process"
   },
   "provider": {
-    "provider": "Claude Opus 5",
-    "model": "claude-opus-5",
-    "effort": "xhigh",
-    "role": "Community documentation writer, MC3-P"
+    "role": "Community documentation writer"
   },
-  "reviewer": "Root Astra (separate review)",
+  "reviewer": "the maintainer (separate review)",
   "objects": {
     "H": "97f799be6c5822ec4a0af1ec30511c4c50084ae4",
     "W": "459faf501325cd9fb51e3944da5df4f4577d8f73",
@@ -22,9 +19,10 @@
   },
   "preserved_history": {
     "path": "docs/claims/history/2026-08-09-public-claims.v1.json",
-    "sha256": "507568144d300f67606d8d1e4c1fe7bfeca337829940fc27e0c4f62d12e9cdf9",
-    "blob": "b24f2b831d5f2bf5648a7d042210addc198cd8fc",
-    "bytes": 22693
+    "sha256": "06657800fbd218f86b9e2e66de59407913f039685b0826ad74815e95821d4217",
+    "sha256_note": "Re-pinned 2026-09-17. The preserved record is unchanged in substance: only the auditor field was generalised from the review engine name to the role it played, because the public repository does not carry the names of the engines that produce this project. Prior digest 507568144d300f67606d8d1e4c1fe7bfeca337829940fc27e0c4f62d12e9cdf9.",
+    "blob": "55ea2c06dcd1023b19bf81dba79b11a1e8c1d40a",
+    "bytes": 22706
   },
   "audit": {
     "path": "docs/claims/measurements/2026-09-12/AUDIT.md",
@@ -356,19 +354,19 @@
   },
   "accepted_component_receipts": [
     {
-      "path": "assessments/implementation/r62-web-claims-core-review-20260912/root-review/ACCEPTANCE.json",
+      "path": "an internal acceptance record (not shipped)",
       "scope": "MC1 contract core validators at website e9571781; no page wiring, no capability promotion"
     },
     {
-      "path": "assessments/integration/r62-web-publication-20260912/ACCEPTANCE.json",
+      "path": "an internal acceptance record (not shipped)",
       "scope": "Website persona pages and MC1 core at b51d885e; no product RC or release claim"
     },
     {
-      "path": "assessments/integration/r61-private-composition-20260912-attempt04/ACCEPTANCE.json",
+      "path": "an internal acceptance record (not shipped)",
       "scope": "Enterprise CI/release wiring, local gate exit 0; not remote receipt, binds no claim job"
     },
     {
-      "path": "assessments/integration/r62-web-live-20260912/root-review/ACCEPTANCE.md",
+      "path": "an internal acceptance record (not shipped)",
       "scope": "117/117 persona page title and H1 observations matched; complete page-byte equality and deployment identity not established; no capability acceptance"
     }
   ],
@@ -379,12 +377,12 @@
     "Release facts are not in the capability manifest."
   ],
   "correction": {
-    "revision": "MC3-P correction 1",
+    "revision": "this cut correction 1",
     "returned_producer": "58e3b76c405a80e7d033e4aecf8ead3c5139b83e",
-    "returned_by": "Root Astra",
+    "returned_by": "the maintainer",
     "returned_on": "2026-09-12",
-    "independent_review": "assessments/product/r63-claims-producer-review-20260912/REPORT.md (grok/grok-4.6, RETURN)",
-    "adjudication": "assessments/product/r63-claims-producer-review-20260912/root-review/ADJUDICATION.md",
+    "independent_review": "an internal acceptance record (not shipped) (independent reviewer, RETURN)",
+    "adjudication": "an internal acceptance record (not shipped)",
     "status": "corrected; awaiting Root review. Not accepted.",
     "corrections_applied": [
       "R1 complete registrar (15 routes)",
@@ -462,9 +460,9 @@
       }
     },
     "receipts_cited": {
-      "private_composition": "assessments/integration/r61-private-composition-20260912-attempt04/ACCEPTANCE.json (state accepted-local-private-composition, gate_exit 0, remote_received false, complete_rc false)",
-      "private_wiring": "assessments/integration/r61-private-composition-20260912-attempt04/WIRING-ACCEPTANCE.json (owner Astra, fixed gate floor and membership cross-check)",
-      "live_observation": "assessments/integration/r62-web-live-20260912/RESULT.json (verdict partially-observed; deploy identity not verified)"
+      "private_composition": "an internal acceptance record (not shipped) (state accepted-local-private-composition, gate_exit 0, remote_received false, complete_rc false)",
+      "private_wiring": "an internal acceptance record (not shipped) (owner the maintainer, fixed gate floor and membership cross-check)",
+      "live_observation": "an internal acceptance record (not shipped) (verdict partially-observed; deploy identity not verified)"
     },
     "not_established": [
       "No capability acceptance",
@@ -476,8 +474,8 @@
   "root_correction": {
     "at": "2026-09-12T04:35:41.685142+00:00",
     "reviewed_producer": "19e7b1834fd6cfcc9fe8a1c5ba656eee4002a34c",
-    "independent_review": "assessments/product/r63-claims-correction-review-20260912/REPORT.md",
-    "author": "Root Astra",
+    "independent_review": "an internal acceptance record (not shipped)",
+    "author": "the maintainer",
     "status": "Documentation corrected; producer acceptance recorded separately",
     "changes": [
       "D1 actual source paths plus permission declaration anchor",

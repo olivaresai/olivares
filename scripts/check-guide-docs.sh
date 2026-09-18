@@ -22,7 +22,7 @@
 #      the same discipline scripts/check-console-perms.mjs established: a guard that parses
 #      the console with a different compiler is reading a different language than the one
 #      that ships. That check already runs earlier in the same push gate
-#      (.githooks/pre-push:598), so this stage adds no new precondition to the lane.
+#      (.githooks/pre-push:598), so this stage adds no new precondition to the push.
 #   2. scripts/guide-docs renders that JSON — plus the gRPC registration tables and
 #      core/release, both read with go/parser — into the pages' generated regions and
 #      compares. It is a standalone module built with GOWORK=off, like

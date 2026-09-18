@@ -16,7 +16,7 @@ import (
 // postgres_administrative_authority_test.go — the bank for RA2-A1.
 //
 // The nine canonical vectors below are ASTRA ROOT'S, copied verbatim from
-// assessments/product/retention-bound-authority/RA2-A1-CANONICAL-VECTORS.json
+// an internal design note (not shipped)
 // (sha256 657246b8311823d479c5cce380db713f36c8872a972cd3774752a062e0479132). They
 // were produced by an independent Python framing before this implementation existed
 // and were independently recomputed by the construction's reviewer. NOTHING here

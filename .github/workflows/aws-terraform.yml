@@ -91,11 +91,11 @@ on:
       #   3 · apply con image/engine_image -> task definitions y services.
       # Y `hostname` entra cuando su registro DNS exista, porque ACM valida por DNS.
       hostname:
-        description: "Root var.hostname. Empty means the PILOT name (api.cloud.olivaresai.dev); the production job never reads this input."
+        description: "Root var.hostname. Empty means the PILOT default declared in the job env; the production job never reads this input."
         required: false
         default: ""
       ingest_hostname:
-        description: "Root var.ingest_hostname (collector NLB name). Empty means the PILOT name (ingest.cloud.olivaresai.dev)."
+        description: "Root var.ingest_hostname (collector NLB name). Empty means the PILOT default declared in the job env."
         required: false
         default: ""
       await_certificate_validation:
@@ -326,10 +326,10 @@ jobs:
       # se prefiere a `-var` porque no imprime el valor en la línea de comando del paso.
       # Las cuatro vacías por defecto ⇒ el apply se comporta como antes de este cambio.
       # ⛔ LOS NOMBRES DEL PILOTO, EXPLÍCITOS, Y EL DEFAULT DE LA RAÍZ YA NO LOS DA.
-      # Decisión de del 2026-09-02 (ORD-49): producción es
-      # `api.cloud.olivares.ai` / `ingest.cloud.olivares.ai` y el piloto vive en la zona
-      # `olivaresai.dev`. Los defaults de la raíz SE QUEDAN en los de producción —también
-      # suyo—, y ahí está el filo: mientras hubo UN solo estate, «aplicar sin pasar nada»
+      # Producción es `api.cloud.olivares.ai` / `ingest.cloud.olivares.ai`; el piloto vive
+      # en una zona aparte, la que declaran los dos valores de abajo. Los defaults de la raíz
+      # SE QUEDAN en los de producción, y ahí está el filo: mientras hubo UN solo estate,
+      # «aplicar sin pasar nada»
       # significaba montar el definitivo y era correcto; con dos, un dispatch del piloto que
       # no rellenara el hostname **pediría el certificado ACM de PRODUCCIÓN y su CNAME**, y
       # los dos estates se pisarían sobre el mismo nombre.

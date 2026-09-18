@@ -9,7 +9,7 @@
 // assets runtime, it does not sit in the response path. The other obvious hook,
 // `docs-site/public/_headers`, IS THE WRONG PLACE because it is part of the build and ships to
 // PRODUCTION too — putting noindex there would deindex docs.olivares.ai. So the header needs
-// code, and the code has to exist only on the preprod side. This file is referenced by
+// code, and the code has to exist only on the non-production side. This file is referenced by
 // `wrangler.preprod.jsonc` and by nothing else; production keeps serving assets with no code in
 // its response path, which was a deliberate property of that config and stays one.
 //

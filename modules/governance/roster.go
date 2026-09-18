@@ -669,8 +669,8 @@ func (m *Module) handleRosterSync(w http.ResponseWriter, r *http.Request, mc api
 			// paid, because a lapsed license on one connector would 502 the whole roster.
 			// The enterprise conjur connector documents exactly this — its Snapshot is
 			// deliberately ungated, with a test pinning the reason, and its comment names
-			// this loop as "the hub change that unblocks it". Requested by another lane;
-			// the gate itself is theirs to add in enterprise/ once this lands.
+			// this loop as "the change that unblocks it"; the gate itself belongs in
+			// enterprise/ once this lands.
 			//
 			// The failure becomes a datum in the report rather than the end of the call.
 			// ⚠ DECLARADO, no introducido aquí: este debugf pasa el error CRUDO del conector, y

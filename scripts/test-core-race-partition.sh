@@ -821,7 +821,7 @@ fi
 # 4 failed, in partitions 1, 2 and 3. run() is the seam and removes both variables. This
 # section exports each state the job can hand down against that seam, and against a bare
 # child that bypasses it: a scrub only ever seen with nothing to scrub has never been seen to
-# work, and the pre-push lane inherits nothing.
+# work, and the pre-push path inherits nothing.
 
 # The values are read from the job, not typed here, so a fifth leg is a fifth state. The count
 # is the number of values, which is what `strategy.job-total` hands the job.
@@ -864,7 +864,7 @@ ambient() {
 ran_unpartitioned() { [ "$(rc)" = 0 ] && [ "$(cat "${TMP}/out")" = "./..." ]; }
 got() { printf 'rc=%s %s' "$(rc)" "$(head -c 24 "${TMP}/out" | tr '\n' ' ')"; }
 
-# (j) Nothing inherited, which is the pre-push lane. The seam and a bare child agree, and that
+# (j) Nothing inherited, which is the pre-push path. The seam and a bare child agree, and that
 #     agreement is what makes a bare child's answer below the state's doing, not the probe's.
 ambient seam - - echo
 seam="$(got)"

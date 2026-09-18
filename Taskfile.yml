@@ -664,7 +664,7 @@ tasks:
     #
     # ⛔ R112/HR1, 2026-09-13 — THIS RECIPE IS UNCHANGED, AND CI NOW RUNS IT FOUR TIMES. Job 103739990067 of run 34763378851 died at
     # `panic: test timed out after 15m0s` naming a test that had been running 1m23s; the
-    # diagnosis (assessments/engineering/r112-race-rest-cadence/REPORT.md) measured the alarm
+    # diagnosis (an internal design note (not shipped)) measured the alarm
     # dump and the binary's internal timestamps and found no goroutine blocked a minute, every
     # live goroutine descended from the running test, and about eight full estate boots at
     # 67-80s each already spent two thirds of the BINARY budget. The panic names the entry in
@@ -700,7 +700,7 @@ tasks:
       slowest gate — runs WEEKLY (race-full workflow) and locally on demand. Since
       2026-08-02 the pre-push hook runs it ONLY for main and tags (see
       lint:prepush-refclass); on a feature branch you invoke it yourself, or the
-      integrator does for the batch. The push CI gate uses test:functional +
+      maintainer does for the batch. The push CI gate uses test:functional +
       test:race-hot instead (this suite's cmd/olivares -race tail is ~36m, over the
       2-vCPU runner's 35m ceiling). See test:race-hot for the split rationale.
     cmds:
@@ -1011,7 +1011,7 @@ tasks:
       command README.md and INSTALL.md name as the first thing to run — and
       design/MATRIZ-DE-VALOR-RELEASE-2026-08.md marked that row NOT MEASURED for exactly that
       reason. It also runs from the EXPORT inside `task export:check`, which is where it
-      answers the question the hub cannot: that the tree a stranger clones starts.
+      answers the question a source checkout cannot: that the tree a stranger clones starts.
       Three answers: CLEAN, BROKEN, or COULD NOT LOOK (no curl, no free port, no toolchain).
     deps: [build:bin]
     cmds:
@@ -1124,7 +1124,7 @@ tasks:
       sets, because the battery adapts to its environment, and the first ran while this container
       held 105 worktrees, live processes with their cwd inside them and a foreign stash in the clone.
       The failure is not reproducible and is not a code defect. It is also not nothing: a battery
-      whose verdict depends on ambient conditions is one an intermittent red would teach a lane to
+      whose verdict depends on ambient conditions is one an intermittent red would teach a contributor to
       ignore, which is why it runs HERE, beside the report, rather than as a gate on the push path.
     cmds:
       - bash scripts/test-hub-hygiene.sh
@@ -1182,7 +1182,7 @@ tasks:
       wearing the costume of a control -- one file was a shell script, so `<<<<<<<` was a syntax
       error and the lint that ran it exited 2. In Markdown, YAML, JSON or a Go comment the push
       would have been GREEN. The census is the index PLUS unignored working files, so the author
-      staging a bad resolution is covered and another lane's scratch worktree is not. The triple
+      staging a bad resolution is covered and another contributor's scratch worktree is not. The triple
       must appear IN ORDER, or every document with a setext underline becomes a false positive and
       the gate gets deleted for crying wolf. Eleven cases; four mutations, four reds.
     cmds:
@@ -1193,15 +1193,15 @@ tasks:
     desc: >-
       The distance between a superproject's submodule pin and the branch that tree comes from.
       Written 2026-08-15 because both sides of that seam were green and both were telling the
-      truth: the enterprise CI honestly measures what it assembles, the hub gate honestly
-      measures the hub, and NOBODY measured the gap — so the binary we sell was being built from
-      a hub tree pinned at 08-08, 2083 commits back, declaring `toolchain go1.26.5`, i.e. with
+      truth: the enterprise CI honestly measures what it assembles, each gate honestly measures
+      its own tree, and NOBODY measured the gap — so the binary we sell was being built from
+      a source tree pinned at 08-08, 2083 commits back, declaring `toolchain go1.26.5`, i.e. with
       the seven CALLED vulnerabilities #775 had closed the night before. A stale pin does not
       fail; it checks out, it compiles and it ships.
-      HERE this runs only the battery: the hub has no submodule of its own, so the check itself
+      HERE this runs only the battery: this tree has no submodule of its own, so the check itself
       belongs in the enterprise workflow (`public/scripts/check-submodule-pin-distance.sh`, and
       `--release` on the release job, where the pin must BE the audited tree rather than
-      approximately it). Running the battery in the hub is not ceremony — the gate's own
+      approximately it). Running the battery here is not ceremony — the gate's own
       `rev-parse` bug, which made it answer STALE for a branch it had never found, was caught by
       this battery and by nothing else.
     cmds:
@@ -1229,7 +1229,7 @@ tasks:
       UNDECIDED (the choice is the owner's) this prints the divergence census and exits 0 —
       the lint:commerce report-mode precedent; the moment a version is written it enforces.
       Red-fixture battery runs first, and it classifies the tree with scripts/hub-leg.sh
-      --classify: in the hub it proves the census and the docs curation are READ from the
+      --classify: in the full source tree it proves the census and the docs curation are READ from the
       export script; in a stamped public export, where that script is absent by design, it
       proves the fallback census is the tree itself, walks to the shipped pins, and that no
       curated-out directory ships. An unknown tree is refused, not skipped.
@@ -1399,7 +1399,7 @@ tasks:
       2026-08-17 and it cannot -- production had 13 migrations applied and main 9, with four applied
       whose SQL is absent from the trunk. Git cannot see this: the files are not in main, so there is
       no conflict and no diff. The only way to know is to ask the DATABASE. NOT a push gate: it makes
-      a network call to production and only the hub holds the token. Its caller is a person running
+      a network call to production and only the release operator holds the token. Its caller is a person running
       the release checklist, and saying otherwise would be worse than admitting it. ~3s.
     cmds:
       - bash scripts/hub-leg.sh check:d1-trunk-parity scripts/check-d1-trunk-parity.sh
@@ -1470,7 +1470,7 @@ tasks:
       only URLs: two earlier versions produced false positives on Kubernetes API groups
       (health.olivares.ai, ops.olivares.ai), which are not hostnames and which no generic boundary can
       separate from a URL. It does NOT choose the destination -- subdomain or path is a product decision.
-      Human-called: it does DNS, which is exactly why it is not in the fast lane.
+      Human-called: it does DNS, which is exactly why it is not in the fast path.
     cmds:
       - bash scripts/hub-leg.sh check:published-domains scripts/check-published-domains.sh
 
@@ -1479,11 +1479,11 @@ tasks:
       Crosses the LIVE integration claims against their written adjudication in
       sessions/status/claims/. Measured 2026-08-17: the only rule was prose saying "wait if a claim is
       under 3h", so by omission a claim OVER 3h read as abandoned -- and one claim had been held for
-      three and a half days WITHOUT being abandoned, because its lane was paused deliberately.
-      Raising the threshold does not fix it: a STOPPED lane cannot declare itself paused, so the state
-      must be recordable by someone else (the integrator) or never at all. What this charges is a live
+      three and a half days WITHOUT being abandoned, because its owner was paused deliberately.
+      Raising the threshold does not fix it: a STOPPED worker cannot declare itself paused, so the state
+      must be recordable by someone else (the maintainer) or never at all. What this charges is a live
       claim with NO adjudication -- not a claim being old, since a legitimately paused one will be old
-      for days. NOT a push gate: it queries the remote, and only the integrator adjudicates. Use
+      for days. NOT a push gate: it queries the remote, and only the maintainer adjudicates. Use
       --local for a network-free (and explicitly STALE) reading.
     cmds:
       - bash scripts/hub-leg.sh check:claims scripts/check-claims.sh
@@ -1509,7 +1509,7 @@ tasks:
       blames a gate -- "no es tuyo", it prints, and it was; the push dies rc=1 on a false cause. And
       git transfers the ref RESOLVED AT TRANSFER TIME, not the sha the hook gated, so the commit
       added on top ships with no fast-lints. the orchestrator broke this rule THREE times in one night
-      after writing it down and warning the other four lanes -- which is the argument for a check
+      after writing it down and warning the other four contributors -- which is the argument for a check
       rather than for more care.
     cmds:
       - bash scripts/check-worktree-push-free.sh {{.CLI_ARGS}}
@@ -1543,9 +1543,9 @@ tasks:
 
   lint:baseline-shrink:
     desc: >-
-      Fast lane, pure git: if a push REMOVES entries from a ratchet baseline, it must also touch
+      Fast path, pure git: if a push REMOVES entries from a ratchet baseline, it must also touch
       something it removes. A commit that only deletes lines is indistinguishable from silencing the
-      gate. Written 2026-08-18 and paid for with main red for all five lanes: the translation-drift
+      gate. Written 2026-08-18 and paid for with main red for all five contributors: the translation-drift
       baseline landed at 75 entries, a branch then committed "tighten the drift baseline from 75 to 35"
       touching EXACTLY ONE FILE with 40 lines removed and zero translations retranslated, and merging it
       made the ratchet redden on files nobody had touched -- all 40 were still drifted that same day.
@@ -1559,7 +1559,7 @@ tasks:
 
   lint:relay-pointer:
     desc: >-
-      Fast lane, pure filesystem: the live-relay pointer in an internal mailbox must name a file
+      Fast path, pure filesystem: the live-relay pointer in an internal mailbox must name a file
       that EXISTS and is the HIGHEST-numbered relay on disk. That section declares itself the single
       source of truth and says whoever writes a new relay changes the line in the same commit -- and it
       was broken TWICE IN A ROW, pointing at RELEVO19 for three days while 21 and 22 both existed. The
@@ -1572,12 +1572,12 @@ tasks:
 
   lint:session-record:
     desc: >-
-      Fast lane, pure git: a branch that changes CODE must add or update a file under sessions/. A PR
-      with no session record cannot be attributed to a lane, and the whole claim protocol rests on
-      attribution. Written 2026-08-17 out of a finding the integrator got WRONG: a CLI branch carried
+      Fast path, pure git: a branch that changes CODE must add or update a file under sessions/. A PR
+      with no session record cannot be attributed to a contributor, and the whole claim protocol rests on
+      attribution. Written 2026-08-17 out of a finding the maintainer got WRONG: a CLI branch carried
       no session file, its owner was inferred from the contents, and a duplicated-work finding went to
-      two mailboxes claiming two lanes had spent two days building the same bootstrap. They were
-      SIBLING BRANCHES OF ONE LANE executing that lane's own relay, and the planning lane refuted it
+      two mailboxes claiming two contributors had spent two days building the same bootstrap. They were
+      SIBLING BRANCHES OF ONE OWNER executing that owner's own relay, and the planning notes refuted it
       from the tree. Detecting
       "duplicated work" needs judgement and this does not pretend to it; "this branch changed Go and
       touched nothing under sessions/" is a total predicate, so that is what it checks. Three answers:
@@ -1626,10 +1626,10 @@ tasks:
 
   lint:web-bundle-freshness:
     desc: >-
-      Fast lane, pure git, no build: if a push changes console sources that DO ship in the bundle and
+      Fast path, pure git, no build: if a push changes console sources that DO ship in the bundle and
       does not change core/internal/webui/dist, it says so here instead of two hours later on main. The
       embedded bundle fell behind FOUR times on 2026-08-17, each time reddening the `web` job on main --
-      the trunk of five lanes -- and each time the fix was the same one-line command. A failure that
+      the trunk of five contributors -- and each time the fix was the same one-line command. A failure that
       repeats four times in a day and is always fixed identically is not carelessness: it is a missing
       gate. NECESSARY condition, not sufficient: that the bundle changed would not prove it is the right
       bundle, and only `task web:check` proves that by rebuilding, which is why that one stays heavy.
@@ -1736,7 +1736,7 @@ tasks:
     desc: >-
       Verify complete, disjoint ownership of the modules, core and sqlstore-entry race
       inventories, selector bounds, and CI matrix wiring. Synthetic inventories and causal
-      controls run in both the fast pre-push lane and race-modules CI before the PostgreSQL
+      controls run in both the fast pre-push path and race-modules CI before the PostgreSQL
       race tests.
     cmds:
       - bash scripts/test-modules-race-partition.sh
@@ -1749,7 +1749,7 @@ tasks:
     desc: >-
       INT-05: runs the web repo's hub-fidelity RE-DERIVATION, which until now ran nowhere
       automatic. The web repo's own build checks the snapshot CONTRACT (shape, digests, freshness)
-      and says so itself: source re-derivation runs in npm test with the hub present. Each repo's CI
+      and says so itself: source re-derivation runs in npm test with the source tree present. Each repo's CI
       checks out only one tree, so this workspace is the only place the live comparison can happen --
       the same reason lint:brand-parity lives here. Cost of nobody running it, measured 2026-08-14:
       six fidelity checks red and the evaluator-facing OpenAPI spec 151 lines behind. ~2s.
@@ -1983,7 +1983,7 @@ tasks:
       Sale 1 si las filas no suman su total: una particion que no cuadra no es una particion.
       NO esta cableado en el hook: es un censo, no un gate.
     cmds:
-      - bash scripts/mailbox-cost-census.sh {{.CLI_ARGS}}
+      - bash scripts/hub-leg.sh mailbox:cost-census scripts/mailbox-cost-census.sh {{.CLI_ARGS}}
   rerere:build-postimages:
     desc: >-
       Lista las resoluciones de `rerere` cuyo postimage es una SALIDA DE BUILD — un sello de
@@ -2055,7 +2055,7 @@ tasks:
       - bash scripts/test-assert-cosign-binary.sh
       # AND the THREE-ANSWER battery for check-cosign-contract.sh (C15-P6). It rides HERE and
       # not beside its own gate for a measured reason: the contract gate needs a real cosign and
-      # does not run in the fast lane, so a battery hung there would almost never execute. This
+      # does not run in the fast path, so a battery hung there would almost never execute. This
       # one is hermetic — decoy binaries under the worktree, no cosign, no network — so it runs
       # everywhere this task runs. It exists because the difference between «broken» and «could
       # not look» is invisible to any shape lint: the gate used to answer 1 for a cosign that
@@ -2101,7 +2101,7 @@ tasks:
   lint:release-anchor-identity:live:
     desc: >-
       The same identity check against the LIVE repository Variables of olivaresai/olivares. ⛔ NOT
-      for the per-push fast lane and deliberately absent from .githooks/pre-push: it needs `gh`
+      for the per-push fast path and deliberately absent from .githooks/pre-push: it needs `gh`
       and the network, so contention or a rate limit would show up as a false red on somebody
       else's push — the class this house already pays for elsewhere. Its homes are
       release-preflight (which now calls the offline comparison at §C.4.8) and a scheduled run.
@@ -2484,7 +2484,7 @@ tasks:
     desc: >-
       Assert the working tree is EXACTLY as it was before the gates ran. A gate that modifies
       the tree while checking it is not discovered by whoever wrote it — it is discovered by
-      another lane's `git add -A`, already committed. Measured 2026-08-19: nothing in the
+      another contributor's `git add -A`, already committed. Measured 2026-08-19: nothing in the
       pre-push hook or in mainline-ci looked at the tree afterwards, and one battery mutates
       README.md on purpose as its negative control. Two modes, so it can bracket a run:
       `--snapshot <file>` before, `--compare <file>` after.
@@ -2517,8 +2517,8 @@ tasks:
   ci:branch-protection:
     desc: >-
       Read the LIVE branch protection of this repo and compare it against what
-      apply-branch-protection.sh declares for the hub profile. NOT a fast lint: it is one
-      authenticated network call, the same reason check:claims stays out of the pre-push lane.
+      apply-branch-protection.sh declares for this repository's profile. NOT a fast lint: it is one
+      authenticated network call, the same reason check:claims stays out of the pre-push path.
     cmds:
       - bash scripts/check-branch-protection.sh
 
@@ -2535,7 +2535,7 @@ tasks:
     desc: >-
       Report how close each test package ran to its per-binary `-timeout` in the last
       mainline-ci run. NOT a fast lint: it is one network call, the same reason check:claims
-      stays out of the pre-push lane. For the integrator and the lane watchdogs.
+      stays out of the pre-push path. For the maintainer and the watchdogs.
     cmds:
       - bash scripts/check-test-timeout-headroom.sh --fetch {{.CLI_ARGS}}
 
@@ -2566,7 +2566,7 @@ tasks:
       pre-fix bodies of the three tests the class was measured on must be red and their
       shipped remedies green. FOURTEEN mutants accredit the fourteen properties a naive
       implementation drops — ORDER, THRESHOLD, COMMENT immunity, STRING immunity (a fixture
-      head inside a `t.Fatalf` must not go red in the fast lane), send-vs-receive, the
+      head inside a `t.Fatalf` must not go red in the fast path), send-vs-receive, the
       millisecond divisor, the bare `time.Unit`, package-constant resolution, the DISCOVERY
       GUARD, DISCOVERY's own status in BOTH its statements (a directory `find` cannot descend,
       and a `sort` that dies after a PARTIAL write — the second graded against a truncated list,
@@ -2583,7 +2583,7 @@ tasks:
 
   lint:hub-battery:
     desc: >-
-      Self-test of scripts/hub-battery.sh's verdict discriminator. The battery is the integrator's
+      Self-test of scripts/hub-battery.sh's verdict discriminator. The battery is the maintainer's
       ONLY gate -- he pushes to main with --no-verify -- so a defect in how it classifies a verdict
       is a defect in the last filter before main. Six cases, four of them in the NON-firing
       direction, because turning a finding into "I could not look" is worse than the original red:
@@ -2642,7 +2642,7 @@ tasks:
 
   lint:ci-a11y-gate-wrap:selftest:
     desc: >-
-      Battery for the a11y job's wrapper (HUB-VITRINA, run 33926027726): the wrapper died when
+      Battery for the a11y job's wrapper (run 33926027726): the wrapper died when
       the log did NOT carry the defect line, because `grep -oE ... | head -1` under
       `bash -e -o pipefail` fails on no match. A control that dies when there is no defect --
       the same shape as `printf | grep -q` returning 141 on success. Five cases, and the one
@@ -2657,7 +2657,7 @@ tasks:
       A test that assigns a PACKAGE-level var must not be parallel. Whoever installs a test hook
       does not control who fires it: another test in the same package reaching that point writes
       into the first one's variable, and its assertion then judges somebody else's work -- a
-      borrowed number looks exactly like your own. Found 2026-08-24 by the kernel lane auditing its own
+      borrowed number looks exactly like your own. Found 2026-08-24 auditing its own
       observer; the package census turned up SEVEN in sqlstore with 27 installation sites, all safe
       today by a property NOBODY declares (none of the eight installing tests is parallel) in a
       package with 171 t.Parallel() and a parallelisation campaign under way. Keys on the
@@ -2867,7 +2867,7 @@ tasks:
       commit removing entries from a ratchet baseline has also touched something of what it removes,
       because a commit that ONLY deletes lines is indistinguishable from switching a gate off. Its
       own header carries the incident (2026-08-18: one file, 40 lines fewer, ZERO translations
-      touched; main went red on files nobody had edited, costing five lanes their day). It was a
+      touched; main went red on files nobody had edited, costing five contributors their day). It was a
       live hook leg with no test of its own — battery included, five of its six rows accredited by
       mutation and the sixth labelled in place as NOT accredited.
     cmds:
@@ -2878,7 +2878,7 @@ tasks:
       Prove the EU CRA readiness-pack guard, a live hook leg that had no test of its own. Eleven
       hermetic cases over throwaway packs via CRA_PACK_ROOT, with a positive control first. Two
       properties matter most and both are accredited by mutation: a re-verification between 180 and
-      400 days WARNS and does not fail (turning that warn into a fail blocks five lanes over a
+      400 days WARNS and does not fail (turning that warn into a fail blocks five contributors over a
       document that is still valid), and a host without GNU `date -d` yields PARTIAL rc=2 — never 0,
       never 1 — because the freshness was not checked and that is neither a defect nor a green.
     cmds:
@@ -2906,7 +2906,7 @@ tasks:
       afterwards whether it was ever used; the guard reads scripts/check-tree-untouched.sh from
       the tree of the BRANCH BEING PUSHED, which on 2026-08-22 was missing from all forty open
       branches, and the if fell through with no else to collect it. 9,691 zero-byte files in
-      /tmp, one per push per lane. Four cases including a NEGATIVE CONTROL that restores the old
+      /tmp, one per push per contributor. Four cases including a NEGATIVE CONTROL that restores the old
       form and requires it to leak, plus a syntax check so a mutant that cannot run is not read
       as a mutant that does not leak.
     cmds:
@@ -2948,8 +2948,8 @@ tasks:
       main and tags TAKE the host mutex while a feature ref never reaches it. The mutex
       itself is unchanged by this split and its lifecycle is NOT exercised here — see the
       hook's declared limitations. It kills one mutant per heavy task, one per fast lint,
-      one per heavy task LEAKING into the fast lane (synchronously and deferred to a
-      background subshell), plus three that force the wrong lane, because assertions that
+      one per heavy task LEAKING into the fast path (synchronously and deferred to a
+      background subshell), plus three that force the wrong path, because assertions that
       cannot go red prove nothing. Plus a
       legacy-regression section replaying every scenario against the pre-split rule, which
       must keep disagreeing. Hermetic: no gate and no remote is touched. It PRINTS its own
@@ -3084,7 +3084,7 @@ tasks:
       session table row, new-session.sh, the worktree path) and the harness kills a mutant
       per form, because a detector matching only new-session.sh reported ZERO with live
       collisions. It also proves the NOT-catching direction — a brief that deliberately
-      reuses another lane's worktree, which three of them do; a lettered sibling, whose
+      reuses another contributor's worktree, which three of them do; a lettered sibling, whose
       suffix makes it a different session from its parent; a brief editing itself; a board
       merely mentioning a number — since a check tested in one direction only is half a
       check. An unresolvable base or a missing repository exits 2 as "could not look" and is
@@ -3795,7 +3795,7 @@ tasks:
       - bash scripts/hub-leg.sh lint:cfg-02-dns-twophase:selftest scripts/test-cfg02-dns-twophase.sh
   lint:eco-20-tar16-prep:
     desc: >-
-      ECO-20 — TAR-16 owned by COMERCIAL (the commerce lane); interviews
+      ECO-20 — TAR-16 owned by COMERCIAL (the commerce owner); interviews
       stay with the owner; demand UNKNOWN. Unique leftover unique vs
       #1070. Does not edit REGISTRO-DECISIONES. Does not restack
       #1320-#1420.
@@ -5974,7 +5974,7 @@ tasks:
       re-measuring, against OLIVARES_ENT_DIR. Dry-run by default; add
       `-- --apply` to write. Run it in the SAME act that moves the
       overlay (runbook §6-bis.7): the overlay merge's own witnesses
-      cannot see the hub's actas. Hub-only, same subject as above.
+      cannot see those records. Hub-only, same subject as above.
     cmds:
       - bash scripts/hub-leg.sh remeasure:overlay-actas scripts/remeasure-overlay-actas.sh {{.CLI_ARGS}}
 
@@ -6442,7 +6442,7 @@ tasks:
   lint:disk-residue:selftest:
     desc: >-
       La bateria de `scripts/check-disk-residue.sh`, y NO es su `--selftest`: cubre los casos 9-16
-      que el contraste `gpt-5.6-sol` max del 2026-09-02 reprodujo como defectos del vigia, entre
+      que una revision independiente del 2026-09-02 reprodujo como defectos del vigia, entre
       ellos los DOS mutantes que sobrevivieron a la version original —anular el peso de un
       directorio y devolver una atribucion ficticia—. La mitad que decide es la que NO dispara: un
       vigia que acusa a un gate en curso hace que el carril deje de correrlo, y eso es peor que no
@@ -6459,7 +6459,7 @@ tasks:
       un defecto de PRODUCCION y no del banco: el censo llevaba un solo booleano `mirado`, asi que
       una raiz sana borraba el fallo de otra y el listado parcial de un `find` fallido se analizaba
       como completo — rc 0 CLEAN despues de omitir una raiz que se pidio. Cubren la tabla de
-      aceptacion del brief de la revision independiente `gpt-5.6-sol`, y su mecanismo determinista
+      aceptacion del brief de esa revision independiente, y su mecanismo determinista
       es un `find` de laboratorio que emite y falla, inyectado por PATH SOLO en la bateria: el
       guion de produccion no tiene ninguna variable para sustituir su `find`, ni debe tenerla.
     cmds:
@@ -6470,10 +6470,10 @@ tasks:
       Point at families of temporaries that DESERVE THEIR OWNER'S ATTENTION, by looking at what was
       left behind rather than at the code. Its subject is the BOX (the TMPDIRs), not the repository,
       so it is deliberately not a pre-push leg: passing over a clean tree says nothing about a dirty
-      box. Each lane runs it when closing. The verdict is SUSPECT and not "leak", and that is not
+      box. Each contributor runs it when closing. The verdict is SUSPECT and not "leak", and that is not
       caution but what the predicate measures: an earlier version of this claimed "no false positives
-      by construction" and a gpt-5.6-sol max contrast REFUTED IT BY EXECUTION on 2026-09-02
-      (design/CONTRASTE-DISK-RESIDUE-2026-09-02-CODEX.md), reproducing both directions — it accused a
+      by construction" and an independent contrast REFUTED IT BY EXECUTION on 2026-09-02,
+      reproducing both directions — it accused a
       live producer that held no descriptor at the sampling instant, it accused 120 entries that had
       already been DELETED while claiming they were still there, and it absolved 119 orphans because
       ONE sibling was alive. Its verdict was NO-LAND and it was right. Now: roots canonicalised and
@@ -6539,7 +6539,7 @@ tasks:
       ones took it to 22G and the same build returned 0. This is the THREE ANSWERS applied to
       the machine: without it a gate cannot tell "the code is broken" from "I could not look",
       and the reading a human makes at speed is the wrong one. Floor 15G (one full local gate
-      links eleven modules plus the connector plugins), warning band 30G so a lane is told
+      links eleven modules plus the connector plugins), warning band 30G so a contributor is told
       BEFORE the next agent's cache pushes it over. Instant: one `df`.
     cmds:
       - bash scripts/check-disk-headroom.sh
@@ -6551,10 +6551,10 @@ tasks:
       grep classifies a file containing a NUL as BINARY and answers `binary file matches` — a
       match with NO line and NO content — so `grep -q` and `grep -c` keep working while every
       pipeline that reads LINES gets nothing. This project gates a great deal by grepping its
-      own sources (the Dodo source anchors, check-spdx, export-closure, the fast lane's text
+      own sources (the Dodo source anchors, check-spdx, export-closure, the fast path's text
       ratchets), so one NUL can silently blind the gate guarding a file while every other signal
       stays green. MEASURED 2026-08-07 by walking into it: six raw NULs entered two
-      license-worker sources and passed tsc, 223 unit tests, lint:spdx and the whole fast lane.
+      license-worker sources and passed tsc, 223 unit tests, lint:spdx and the whole fast path.
       Real binaries are skipped by a DECLARED extension list plus anything .gitattributes marks
       `binary`, and the verdict PRINTS both counts — a check that will not say what it skipped
       is the fail-open shape docs/SECURITY-HARDENING.md forbids. Incompleteness of that list is safe by
@@ -6578,7 +6578,7 @@ tasks:
     desc: >-
       The gate that runs every other gate has to be reachable, and nothing was watching
       whether it still was. core.hooksPath lives in .git/config, which every LINKED WORKTREE
-      of a clone SHARES — 39 of them in the hub when this was written — and `task setup`
+      of a clone SHARES — 39 of them in the full source tree when this was written — and `task setup`
       asserts it exactly once, at install time. Four states make the hooks go silent and all
       four look identical from outside, a push that sails through: UNSET (git falls back to
       $GIT_COMMON_DIR/hooks, shared, which is not this repo's .githooks), ABSOLUTE (every
@@ -6650,14 +6650,14 @@ tasks:
       (origin/main carries none in its last 500). Nothing had ever asked it what it said about a
       bot. One case is about the battery itself: the hook EXPORTS OLIVARES_PUSH_REFS_FILE, so the
       first version measured the outer push instead of its own fixtures and passed 10/10 by hand
-      while failing 4 from a real push. FAST lane: throwaway repositories, no network, ~1s.
+      while failing 4 from a real push. FAST path: throwaway repositories, no network, ~1s.
     cmds:
       - bash scripts/hub-leg.sh lint:commit-identity-gate scripts/test-check-commit-identity.sh
 
   lint:hooks-path-gate:
     desc: >-
       The battery for lint:hooks-path — nine cases, each red one with a mutant that must
-      flip it green. FAST lane: it touches no network and builds only throwaway
+      flip it green. FAST path: it touches no network and builds only throwaway
       repositories, so it is deterministic and costs a second. It needs scratch space whose
       EXECUTE BIT IS REAL: on a noexec mount `test -x` answers false even when the bit is
       set (measured 2026-08-07), which would turn the clean case red and the
@@ -6729,7 +6729,7 @@ tasks:
       existed and none of the 214 "untracked" did. A probe file created in the clone was invisible
       to git. Nothing was dirty; the lens was. The cost is not the confusion but what the obvious
       remedies do under it: reset --hard or checkout -- . from there destroys the OTHER tree, which
-      is the class of both 2026-08-08 losses, and the hub's own config still carries
+      is the class of both 2026-08-08 losses, and the full source tree's own config still carries
       rescue/s441-canonical-worktree-2026-08-05 from an earlier round. Third occurrence. It
       compares the script's OWN physical path against rev-parse --show-toplevel rather than
       reading core.worktree, because reading the key is wrong in both directions: measured on git
@@ -6750,7 +6750,7 @@ tasks:
       rc=1 with EMPTY stderr, and the `fail` that names the guard was unreachable exactly when its
       condition was true. It fails BOTH ways: `grep | head -1` dies with no matches AND with many
       (head closes the pipe, grep gets SIGPIPE 141, pipefail propagates) — so it is green on a
-      small fixture and mute in production. Fast lane: bash + python3 only, no node. The baseline
+      small fixture and mute in production. Fast path: bash + python3 only, no node. The baseline
       is a LIST keyed by file+VARIABLE (ci/mute-pipefail-baseline.txt — under ci/ because it must
       TRAVEL with the gate in the public export, and design/ publishes zero paths), not a count and not a
       line number: a count lets substitution through, and line numbers move with any edit above.
@@ -6764,7 +6764,7 @@ tasks:
     desc: >-
       Refuse to publish from a git operation left half-done. A stopped rebase, an unresolved
       merge or cherry-pick leaves a tree that is INTERNALLY CONSISTENT, so every content gate
-      passes on it and a push publishes a PARTIAL state. Measured 2026-08-19 in the hub: a
+      passes on it and a push publishes a PARTIAL state. Measured 2026-08-19 in the full source tree: a
       rebase flattened a merge commit, stopped on the same conflict twice, and the publish
       chain ran three gates that all passed before pushing a detached HEAD to main. Reads
       .git, not the tree, so it costs milliseconds. Does NOT duplicate lint:conflict-markers,
@@ -6861,7 +6861,7 @@ tasks:
       request, not just in commits that touch code. Board and status files narrate PR
       state BY NUMBER, so they carry more of this risk than any source file here: on
       2026-08-04 a one-markdown board commit whose body read "is closed: #484" closed a
-      live pull request with 25 files, and the lane then worked for an hour against a
+      live pull request with 25 files, and its owner then worked for an hour against a
       board that claimed it was delivered. The guard does NOT ban the keyword — closing an
       issue from a commit is a legitimate feature and this repo removes none — it requires
       it to be DELIBERATE: refused when the commit ships no code, untouched when it does.
@@ -6880,7 +6880,7 @@ tasks:
       Prove the SCOPE half of the `commit-msg` guard, and the reason it exists. That hook has
       TWO judges: it runs `commitlint` when `node_modules/.bin/commitlint` is present and falls
       back to a regex when it is not — so the same message passes or fails depending on WHICH
-      DIRECTORY you commit from, and the hub clone has no node_modules. The footprint is in
+      DIRECTORY you commit from, and a full checkout has no node_modules. The footprint is in
       `main`: re-measured 2026-08-30 over 4000 commits, of 123 distinct scopes the strict judge
       rejected FOURTEEN, and eight commits of 2026-08-27 landed through the permissive one.
       The fix relaxes commitlint to `lower-case` rather than tightening the fallback, and that
@@ -6927,7 +6927,7 @@ tasks:
       # /tmp is tmpfs+noexec in the dev container: measured on 2026-08-12, a build under
       # the default TMPDIR dies at exit 126 with "permission denied" on a file whose exec
       # bit is set. Depending on the caller's environment would mean a fast lint that
-      # refuses every push of every lane unless someone remembered an export.
+      # refuses every push of every contributor unless someone remembered an export.
       - cmd: |
           TMPDIR="{{.ROOT_DIR}}/.error-mappers-tmp" bash scripts/check-error-mappers.sh --self-test
       - cmd: |
@@ -7015,7 +7015,7 @@ tasks:
       ALREADY EXISTED and neither stopped anything: on 2026-08-19 `grok-hook` landed on main
       visible and ungrouped, and a person caught it at integration. The reason is the one already
       measured with connectors/grok: only `go test` over cmd/olivares reaches those tests, which
-      is the HEAVY gate, so a branch lane never runs them. A correct test that does not run where
+      is the HEAVY gate, so a branch path never runs them. A correct test that does not run where
       you push is not a guard. 2s. The script REFUSES (exit 2) unless it sees each test report by
       name, because `go test -run` with a regex that matches nothing exits 0. It is not called
       `command-groups` because the same PR also landed SEVEN env keys read and none registered:
@@ -7052,7 +7052,7 @@ tasks:
       lint:d1-migrations as a dependency rather than living beside it in the `lint` aggregate,
       because the aggregate is NOT what runs: the pre-push hook and CI call individual `lint:*`
       tasks by name, so a new task hung off `lint` alone would never execute. This one is called
-      by the fast lane, which makes it the correct parent. lint:migrations:coverage joins it for
+      by the fast path, which makes it the correct parent. lint:migrations:coverage joins it for
       the same reason, and it is not optional: the gate graded 55 of the 94 migration-shaped
       files in the tree -- the 30 with a three-digit prefix, 22 of them the control plane's own,
       were never opened -- and check-migrations.sh's own self_test was GREEN throughout, because
@@ -7072,7 +7072,7 @@ tasks:
       individual `lint:*` tasks by name. Written after a session did exactly this to itself -- it
       censused every remote branch, found 014 and 015 claimed by live branches, and took 016 to
       avoid a name collision. Right about names, wrong about the direction of failure: a duplicate
-      number is LOUD (the migrator refuses at boot and the integrator renumbers at merge), a gap is
+      number is LOUD (the migrator refuses at boot and the maintainer renumbers at merge), a gap is
       SILENT. The rule for a scalar migrator is max(existing)+1 in the tree you merge into.
     cmds:
       # RETIRADA EL 2026-08-29 LA BATERIA `test-migration-contiguity` (sin ruta a proposito: el
@@ -7237,7 +7237,7 @@ tasks:
       and neither time was the SQL at fault: a four-digit-only glob left 30 real Postgres migrations
       unread while it printed a confident "55 migration(s)", and a raw `find .` census then graded
       whatever was lying in the tree -- 55 files in a clean worktree, 163 in the shared clone, 96 of
-      them another lane's scratch checkout. Both were fixed without a test, so both fixes were
+      them another contributor's scratch checkout. Both were fixed without a test, so both fixes were
       themselves unverified. Eleven cases, every fixture a real git repository because the census IS
       the index; case 0 is the calibration and cases 1-2 are the width counterfactual. Case 6 is the
       one that earned its place immediately: it caught the census control filtering BOTH sides with
@@ -7269,7 +7269,7 @@ tasks:
       unapplied one, and the duplicate table survives the rename. Three answers, and zero
       migrations found is RED, not green.
     cmds:
-      # ITS BATTERY RUNS FIRST, HERE. This task is reached by the fast lane through
+      # ITS BATTERY RUNS FIRST, HERE. This task is reached by the fast path through
       # `lint:migrations`' deps (the parent chosen for exactly that reason), so it is the point
       # where the 19 mutation cases can stop being a decoration. They had run ZERO times since
       # the gate landed: the counterfactual the description calls "the point" had never fired
@@ -7396,9 +7396,9 @@ tasks:
       # that are now the ONLY way to stage a divergence) and touch nothing in the repo.
       #
       # It installs web deps itself, like check:web, because it needs the console's OWN
-      # TypeScript to parse the console. Every other task in the fast lane is documented
+      # TypeScript to parse the console. Every other task in the fast path is documented
       # as pure Node precisely so it runs without them, and wiring a gate that goes red
-      # on a correct tree only teaches the lane to reach for --no-verify. Measured warm:
+      # on a correct tree only teaches contributors to reach for --no-verify. Measured warm:
       # install 1.8s + battery 15.5s + check 3.9s.
       - pnpm --dir web install --frozen-lockfile
       - node scripts/check-console-perms.selftest.mjs
@@ -7511,7 +7511,7 @@ tasks:
     desc: >-
       The two halves of the export sponsor exemption, proved by PLANTING the defect: the private org
       URL and a bare prose mention must still leak, while the public sponsors URL and FUNDING.yml's
-      bare handle must not. NOT in the fast lane on purpose -- it re-runs the whole export (233s on a
+      bare handle must not. NOT in the fast path on purpose -- it re-runs the whole export (233s on a
       quiet box; it tracks lint:export, so it scales with the machine), a cost lint:export already
       pays once per push. Run it by hand when the filter changes. Via hub-leg.sh: it calls
       export-public.sh, which is hub-only.
@@ -7592,7 +7592,7 @@ tasks:
       # directly, the published copy of this target died at exit 127 with the shell's own
       # "No such file or directory" — a published target that cannot run and does not say
       # why. hub-leg gives the three answers: run it (hub) / NOT APPLICABLE (stamped
-      # export) / refuse (neither). In the hub the executed command is unchanged.
+      # export) / refuse (neither). In the full source tree the executed command is unchanged.
       - cmd: |
           TMPDIR="{{.ROOT_DIR}}/.export-tmp" \
             bash scripts/hub-leg.sh lint:export scripts/export-public.sh --check
@@ -7616,6 +7616,41 @@ tasks:
       # guarda lee como reales. Guardada como sus hermanas para que el arbol publicado NOMBRE la razon
       # en vez de morir con exit 127.
       - bash scripts/hub-leg.sh lint:js-lexer scripts/test-js-lexer.sh
+
+  lint:public-prose:selftest:
+    desc: >-
+      MUTATION BATTERY for scripts/check-public-prose.sh, the leg that refuses to publish prose
+      describing the private development process instead of the product. 35 cases, BOTH
+      DIRECTIONS, and the no-fire half is the load-bearing one: three of the words this gate
+      judges — "lane", "integrator" and the model names — are ALSO product vocabulary here (the
+      QoS delivery lanes of the event bus, the API audience the SDK docs address, the catalogue
+      of models the connectors support), so a gate that only ever fires would be answered by
+      deleting product. Every rule therefore carries a no-fire case built from a line that
+      really ships: "Docker Hub's anonymous-pull rate limit", `hub-only`, `lane_path_for`,
+      "an integrator", a connector line listing the models it supports, and the maintainer's
+      full name on an ADR author line.
+      It also pins the two ways the ratchet could fail OPEN — a missing baseline and a baseline
+      that is not one decimal integer are COULD NOT LOOK, never a green — and asserts that every
+      rule pattern COMPILES under the grep on this box, which is not decoration: `grep` here
+      resolves to ugrep in one shell and GNU grep in another, and they disagree about a negated
+      class whose last character is `-`. Throwaway trees, no network, ~2 s.
+      The gate itself is not run from here: its subject is the EXPORT, and it runs as leg 8 of
+      the export leak gate, so `lint:export` and `export:check` are where a real tree is judged.
+    cmds:
+      # VIA hub-leg.sh: el vigia y su bateria estan curados fuera del export (nombran lo que
+      # prohiben), asi que el arbol publicado dice NOT APPLICABLE en vez de morir en 127.
+      - bash scripts/hub-leg.sh lint:public-prose:selftest scripts/test-public-prose.sh
+
+  lint:public-prose:
+    desc: >-
+      Run the public-prose gate over A CURATED EXPORT: `task lint:public-prose -- <dir>`. It
+      answers honestly about the tree it is given, so pointing it at a full source tree would be
+      measuring the wrong object — that tree legitimately carries the internal notes the export
+      removes — and the script REFUSES there (exit 2, `--anyway` overrides) rather than printing
+      a number that looks like debt. The enforcement point is `lint:export`, which runs this same
+      script as leg 8 over the tree it is about to publish, and `export:check`.
+    cmds:
+      - bash scripts/hub-leg.sh lint:public-prose scripts/check-public-prose.sh {{.CLI_ARGS}}
 
   lint:export-closure:
     desc: >-
@@ -7798,7 +7833,7 @@ tasks:
       is never printed — not on stdout, not on stderr, not under --verbose: a gate that
       echoes what it protects has published it to every CI log that ever ran it. ~4s.
     cmds:
-      # ITS BATTERY RUNS FIRST, HERE — the fast lane calls this task by name. 24 cases, including
+      # ITS BATTERY RUNS FIRST, HERE — the fast path calls this task by name. 24 cases, including
       # the one that asserts the RED report never prints the number on either stream, and none of
       # them had ever executed in a gate. ~5s, which is the price of the assertion being true.
       - task: lint:fiscal-id:selftest
@@ -7852,7 +7887,7 @@ tasks:
       merchant of record and the copy phrases the canon itself prohibits. STRICT,
       pinned: the mode is not caller-selectable (an ambient variable used to be
       interpolated as shell text — sol-max B14) — use lint:commerce:report to
-      inspect without failing. In the hub the canon is REQUIRED: a missing canon
+      inspect without failing. In the full source tree the canon is REQUIRED: a missing canon
       fails the gate; only a tree without the lint tool itself (the public
       export) is a no-op (sol-max B15).
     cmds:
@@ -7929,13 +7964,16 @@ tasks:
       #
       # Coste medido (mediana de cinco corridas, esta caja): **208 ms**. Antes decia «0s», que no
       # era reproducible.
-      - bash scripts/build-decision-index.sh --check
+      # VIA hub-leg.sh: el guion razona sobre `design/`, que el export retira, asi que esta
+      # curado fuera del arbol publicado. Sin el envoltorio la pata moriria alli con exit 127
+      # en vez de decir por que no corre.
+      - bash scripts/hub-leg.sh lint:decision-index scripts/build-decision-index.sh --check
 
   lint:decision-index:selftest:
     desc: MEM-03 — los testigos nombrados del constructor del indice (22 hoy; el propio selftest
       rehusa si bajan de 21, porque una bateria que solo puede pasar no es una bateria).
     cmds:
-      - bash scripts/build-decision-index.sh --self-test
+      - bash scripts/hub-leg.sh lint:decision-index:selftest scripts/build-decision-index.sh --self-test
 
   lint:docs-honesty:
     desc: C3/C6 supply-chain/install wording + the OTLP format-token and OCSF/Security-Lake guards.
@@ -8067,9 +8105,9 @@ tasks:
       ESLint pass over 777 files INSIDE a vitest worker: 148s and 113s alone, and 300 892 ms
       under suite load — its own 300s ceiling, already raised once from 60s per its comment.
       That is how it failed: the wall clock, not the assertion. It is a lint, so it runs in
-      the lint lane, in the HEAVY one for the same reason as its neighbour above — it needs
-      web deps and the fast lane cannot run node. Same config, same rule, same file set,
-      same verdict; only the lane changes.
+      the lint group, in the HEAVY one for the same reason as its neighbour above — it needs
+      web deps and the fast path cannot run node. Same config, same rule, same file set,
+      same verdict; only the group changes.
     cmds:
       - bash scripts/check-raw-palette.sh
 
@@ -8153,7 +8191,7 @@ tasks:
       only when that set GROWS. `format:check` hangs off lint:web (skipped by the push gate on
       purpose) and off fmt:check, and NO workflow invokes either — so measured 2026-08-15 against
       origin/main, 191 files under web/ do not pass the formatter and nothing said so. Wired in
-      the HEAVY lane, next to the other legs that need web deps: the fast lane cannot run node, so
+      the HEAVY path, next to the other legs that need web deps: the fast path cannot run node, so
       putting it there would fail every push from a tree without `task setup`. The baseline is a
       LIST (web/format-ratchet-baseline.txt), not a count, because a count lets substitution through
       — fix one file, break another, the total holds and the ratchet stays quiet.
@@ -8186,8 +8224,8 @@ tasks:
       toy tree it answers 2 CANNOT LOOK and rows "pass" for the wrong reason. It pins the new
       extension, its bucket neighbours and one data extension, proves the classification is
       load-bearing (without it the same file stops being source, which is why the gate returned 2),
-      and runs the real gate once end to end. Not a battery for the whole checker: that is another
-      lane's work.
+      and runs the real gate once end to end. Not a battery for the whole checker: that is
+      separate work.
     cmds:
       - bash scripts/test-spdx-awk.sh
 
@@ -8225,7 +8263,7 @@ tasks:
       Y su caso (a) es un CONTROL POSITIVO deliberado: si un buzon valido no pasa, ningun rojo de
       los demas significa nada.
     cmds:
-      - bash scripts/test-inbox-headings.sh
+      - bash scripts/hub-leg.sh lint:inbox:selftest scripts/test-inbox-headings.sh
 
   lint:publish-inbox-shape:
     desc: >-
@@ -8244,7 +8282,9 @@ tasks:
       these files by heading then sees it — one such split deleted 240 lines and seven
       messages on 2026-08-04. The artefact came back three times before this check existed.
     cmds:
-      - bash scripts/check-inbox-headings.sh
+      # VIA hub-leg.sh: el sujeto de esta pata son los buzones internos, que la curacion
+      # retira, asi que el guion esta curado fuera del arbol publicado.
+      - bash scripts/hub-leg.sh lint:inbox scripts/check-inbox-headings.sh
 
   lint:reserve-numbers:selftest:
     desc: la bateria de reserva de numeros de sesion (el guion existia y no lo llamaba nadie)
@@ -8543,7 +8583,7 @@ tasks:
 
   lint:addon-sets-gate:
     desc: >-
-      The battery for lint:addon-sets, in the FAST lane for the same reason lint:hooks-path-gate
+      The battery for lint:addon-sets, in the FAST path for the same reason lint:hooks-path-gate
       is: a battery nothing runs is a battery that proves nothing. Nine cases, half of them the
       NON-FIRING direction — a deriver that refuses every canon passes every "it refuses" case
       while making the cut impossible. Mutation 5/5 with named witnesses.
@@ -8823,7 +8863,7 @@ tasks:
       while being a downgrade. Closed sessions' briefs are HISTORY and are deliberately not
       checked: rewriting them would erase what those sessions were actually told.
     cmds:
-      # ITS BATTERY RUNS FIRST, HERE — the fast lane calls this task by name. The battery proves
+      # ITS BATTERY RUNS FIRST, HERE — the fast path calls this task by name. The battery proves
       # WHICH relay the gate reads, which is the half that can be silently wrong, and it had
       # never executed: the mtime defect it was written for would have come back unseen.
       - task: lint:brief-effort:selftest
@@ -8835,7 +8875,7 @@ tasks:
       Measured 2026-08-06: it picked the live relay by mtime, and mtime is not versioned —
       `git checkout` stamps every file with the checkout instant, so in a fresh clone the relays
       TIE, `-nt` is false on a tie, and the winner was whichever tied first. It read RELEVO3 of
-      08-04 instead of RELEVO9 of 08-05, rejecting a push over a HISTORY file on the hub's own
+      08-04 instead of RELEVO9 of 08-05, rejecting a push over a HISTORY file on its own
       main. The loud direction is the lucky one: the same tie can read a clean old relay while the
       live one orders the impossible thing and report OK. Selection is now by name (`sort -V`, so
       RELEVO10 follows RELEVO9) and both verdicts name the file they read.
@@ -8961,12 +9001,14 @@ tasks:
       or missing / COULD NOT LOOK (no git, no board, or an EMPTY list -- which would certify
       nothing while looking green).
     cmds:
-      # ITS BATTERY RUNS FIRST, HERE — the fast lane calls this task by name. Its own description
+      # ITS BATTERY RUNS FIRST, HERE — the fast path calls this task by name. Its own description
       # says the ratchet shipped WITHOUT a battery because a hand run "proves it worked ONCE on a
       # tree that no longer exists". The battery it then got was wired to nothing, which is the
       # same sentence one level up: 17 cases that could not fire when someone edits the gate.
       - task: lint:program-anchors:selftest
-      - bash scripts/check-program-anchors.sh
+      # VIA hub-leg.sh: el sujeto de esta pata son los documentos de programa internos, que el
+      # export retira, asi que el guion esta curado fuera del arbol publicado.
+      - bash scripts/hub-leg.sh lint:program-anchors scripts/check-program-anchors.sh
 
   lint:program-anchors:selftest:
     desc: >-
@@ -8980,7 +9022,7 @@ tasks:
       battery could not kill it: the near-miss fixture differed in LETTERS, where a wildcard cannot
       help, so the case meant to prove -F was measuring something else.
     cmds:
-      - bash scripts/with-clean-tmp.sh bash scripts/test-program-anchors.sh
+      - bash scripts/hub-leg.sh lint:program-anchors:selftest scripts/with-clean-tmp.sh bash scripts/test-program-anchors.sh
   lint:go-toolchain:
     desc: >-
       A module inside the go.work `use` list must not carry its own `toolchain` line, and its `go`
@@ -9002,7 +9044,7 @@ tasks:
       clients/go, and .golangci.yml declares gofmt under `formatters:`, which golangci-lint v2
       APPLIES rather than fails on. Three answers: clean / dirty naming each file / could not look.
     cmds:
-      # ITS BATTERY RUNS FIRST, HERE, because this is the task the fast lane calls by name.
+      # ITS BATTERY RUNS FIRST, HERE, because this is the task the fast path calls by name.
       # `lint:gofmt:selftest` existed from the first commit and NOTHING invoked it — five cases
       # that had never executed once, which is worse than no battery: the cases look like proof.
       - task: lint:gofmt:selftest
@@ -9110,9 +9152,9 @@ tasks:
       Does the LIVE docs.olivares.ai keep the promises this tree makes? Parses docs-site/public/_redirects
       and discovers the sections/locales from docs-site/src/content/docs, so it demands what the tree
       declares rather than a list typed in the gate. 0 al día · 1 el sitio está rancio o roto · 2 NO HE
-      PODIDO MIRAR. Deliberately NOT in the pre-push hook: it measures an EXTERNAL live site, and a lane's
+      PODIDO MIRAR. Deliberately NOT in the pre-push hook: it measures an EXTERNAL live site, and a contributor's
       push must not go red because a deploy nobody asked it for is pending. It is the verification step of
-      the docs-site-deploy workflow, and the integrator's probe.
+      the docs-site-deploy workflow, and the maintainer's probe.
     cmds:
       - bash scripts/check-docs-site-live.sh
 
@@ -9384,9 +9426,9 @@ tasks:
       RAN IT, so `task e2e:web` went back to writing an untrimmed, unstamped binary into the
       canonical path. A guard with no caller is not a guard.
 
-      FAST lane. Cost measured TWICE and it is not one number: 4.5 s with a warm build cache,
+      FAST path. Cost measured TWICE and it is not one number: 4.5 s with a warm build cache,
       21.9 s cold, because G-2 builds through the helper and reads the artifact back. The cold
-      figure is the honest one to plan the lane against — quoting only the warm one is how a
+      figure is the honest one to plan the gate against — quoting only the warm one is how a
       cost argument stops being true the first time somebody cleans a cache.
     cmds:
       - bash scripts/test-build-bin-parity.sh
@@ -9402,7 +9444,7 @@ tasks:
       day and five hours.
 
       FAST LANE, 26 s measured — and the number is here because it CORRECTED me. I first wired
-      this into the heavy lane citing 142 s. An adversarial review then found that 120 s of
+      this into the heavy path citing 142 s. An adversarial review then found that 120 s of
       those 142 were one defect in the battery itself: its squatter was started inside a
       command substitution, so the backgrounded process held the write end of the pipe and the
       substitution could not return until its 120 s sleep ran out. Fixing that dropped the run
@@ -9435,7 +9477,7 @@ tasks:
       scan across every rule), dependency vulnerabilities (govulncheck), the
       secret-scan status (gitleaks) and SBOM presence, rendered to
       docs/security/gate-report.md. This is the product-led assurance artifact the
-      trust center links in place of an external audit (D22). Regenerable; the
+      trust center links in place of an external audit. Regenerable; the
       re-executable adversarial security campaign consumes it.
     cmds:
       - bash scripts/security-report.sh

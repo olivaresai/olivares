@@ -1210,7 +1210,7 @@ func TestManagedStatementObjectsRefusesWhatItCannotName(t *testing.T) {
 // ---------------------------------------------------------------------------------------
 // The R2 corrections: intended outcomes for the six findings the independent review measured.
 // The reviewer's own probes, retained unchanged in
-// assessments/implementation/access-evidence-fresh-bootstrap/independent-review, assert the
+// an internal design note (not shipped), assert the
 // DEFECT and therefore go red against this tree. These are their positive counterparts.
 // ---------------------------------------------------------------------------------------
 

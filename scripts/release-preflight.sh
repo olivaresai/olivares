@@ -151,7 +151,7 @@ preprod)
 	#
 	# WHERE THE TUPLE COMES FROM, AND WHY IT DIFFERS FROM REHEARSAL. A rehearsal is dispatched
 	# by an INTERNAL, unexported workflow, which can carry the literals fixed and reviewed. A
-	# preprod act runs the EXPORTED release.yml INSIDE the preprod repository itself, so there
+	# preprod act runs the EXPORTED release.yml INSIDE the repository that declares that profile itself, so there
 	# is no unexported file to inject from: the only injection point is that repository's own
 	# variables. A repository variable is admin-mutable without review, and here that is SAFE —
 	# not because the variable is trusted, but because two checks below make a tampered value
@@ -162,7 +162,7 @@ preprod)
 	want_oci="${OLIVARES_PREPROD_EXPECTED_OCI:-}"
 	want_source="${OLIVARES_PREPROD_EXPECTED_SOURCE:-}"
 	if [ -z "$want_repo" ] || [ -z "$want_oci" ] || [ -z "$want_source" ]; then
-		fail "preprod mode requires the preprod repository to inject its expected destination tuple (OLIVARES_PREPROD_EXPECTED_REPO/_OCI/_SOURCE) — this public script embeds no preprod name, by design (§C.4.1)"
+		fail "preprod mode requires the repository that declares that profile to inject its expected destination tuple (OLIVARES_PREPROD_EXPECTED_REPO/_OCI/_SOURCE) — this public script embeds no preprod name, by design (§C.4.1)"
 	fi
 	# The two side destinations are derived from the validated tuple instead of accepting
 	# arbitrary settings: the image mirror is a child package, and the tap is a dedicated
@@ -192,7 +192,7 @@ preprod)
 	# arregla los tres a la vez y ensaya la ruta REAL, que es lo que la orden 36 pide.
 	#
 	# LO QUE ESTO SIGNIFICA, DICHO PARA QUE NADIE SE SORPRENDA: un acto en preprod deja el
-	# nombre del repositorio de preprod en registros públicos y permanentes. No es evitable
+	# nombre del repositorio que declara ese perfil en registros públicos y permanentes. No es evitable
 	# mientras SLSA sea obligatorio; es una consecuencia de ensayar el acto de verdad.
 	want_cosign_mode="keyless" want_tlog="true"
 	# The act is COMPLETE: the Docker-Hub-shaped copy goes to the child GHCR package and the
@@ -345,7 +345,7 @@ else
 	# well-formed — and the build job re-runs this same validator on the pair it
 	# generates, immediately after generating it.
 	if [ -n "${OLIVARES_LICENSE_PUBKEY:-}" ] || [ -n "${OLIVARES_OTA_PUBKEY:-}" ]; then
-		sh "$ROOT/scripts/check-release-pubkey.sh" || fail "the rehearsal repository declares release anchor variables and they are malformed (§C.4.8). Remove them (per-run pairs are generated in the build job) or fix them"
+		sh "$ROOT/scripts/check-release-pubkey.sh" || fail "this repository declares release anchor variables and they are malformed (§C.4.8). Remove them (per-run pairs are generated in the build job) or fix them"
 		license_fp="$(printf '%s' "${OLIVARES_LICENSE_PUBKEY}" | base64 -d | sha256sum | cut -c1-8)"
 		ota_fp="$(printf '%s' "${OLIVARES_OTA_PUBKEY}" | base64 -d | sha256sum | cut -c1-8)"
 		license_fp="declared/${license_fp} (superseded by per-run pair)"

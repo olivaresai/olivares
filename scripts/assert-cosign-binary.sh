@@ -188,7 +188,7 @@ if [ -n "$MIGRATION_COSIGN" ]; then
 	[ "$span_days" -le "$MAX_MIGRATION_DAYS" ] ||
 		die "the migration window is ${span_days} days, over the ${MAX_MIGRATION_DAYS}-day maximum. Finish the migration or re-open a shorter window deliberately."
 	# "Its own COMPLETE table" has to be ENFORCED, not merely asserted in a comment: a
-	# migration lane carrying one platform would refuse every other runner mid-migration —
+	# migration class carrying one platform would refuse every other runner mid-migration —
 	# a release outage discovered at the worst possible moment.
 	#
 	# Compare the PLATFORM SETS, not the row counts. Counting accepts a table with the right
@@ -280,18 +280,18 @@ fi
 # --- authenticate the BYTES BEFORE executing them ----------------------------------------
 # Order matters and an earlier revision had it backwards: it ran `cosign version` first and
 # hashed afterwards, so an unapproved binary was executed by the very check meant to decide
-# whether it should be. Digests are version-specific, so the hash alone selects the lane;
+# whether it should be. Digests are version-specific, so the hash alone selects the class;
 # the version is then a CROSS-CHECK on the table, not the gate.
 digest="$(_sha256 "$abs")"
 
-lane=""
+accept_class=""
 expected_version=""
 matched=""
 while read -r want name; do
 	[ -n "${want:-}" ] || continue
 	if [ "$digest" = "$want" ]; then
 		matched="$name"
-		lane="approved"
+		accept_class="approved"
 		expected_version="$APPROVED_COSIGN"
 		break
 	fi
@@ -309,7 +309,7 @@ if [ -z "$matched" ] && [ -n "$MIGRATION_COSIGN" ]; then
 				die "cosign $MIGRATION_COSIGN was approved only for the migration window that CLOSED on $MIGRATION_EXPIRES. Complete the migration (promote it to APPROVED_COSIGN) or open a new window deliberately; it is not approved by default."
 			fi
 			matched="$name"
-			lane="migration (window $MIGRATION_OPENED..$MIGRATION_EXPIRES)"
+			accept_class="migration (window $MIGRATION_OPENED..$MIGRATION_EXPIRES)"
 			expected_version="$MIGRATION_COSIGN"
 			break
 		fi
@@ -334,7 +334,7 @@ if [ -z "$matched" ]; then
 			echo "# This must NEVER be set in a job that publishes anything."
 			echo "############################################################################"
 		} >&2
-		lane="unofficial"
+		accept_class="unofficial"
 	else
 		echo "::error::cosign-binary: the sha256 of $abs is not a published artifact of any approved version." >&2
 		echo "  sha256: $digest" >&2
@@ -369,7 +369,7 @@ if [ "$quiet" = "1" ]; then
 	exit 0
 fi
 
-echo "cosign-binary: OK ($version, ${matched:-unofficial-accepted}, sha256 ${digest:0:16}…, lane: ${lane})"
+echo "cosign-binary: OK ($version, ${matched:-unofficial-accepted}, sha256 ${digest:0:16}…, class: ${accept_class})"
 echo "cosign-binary: verified binary is $abs"
 
 # --- ISOLATION: after authenticating it, take the binary OFF PATH ------------------------
@@ -393,7 +393,7 @@ echo "cosign-binary: verified binary is $abs"
 #   2. the SLSA container reusable workflow signs in a SEPARATE job with its own cosign
 #      v2.2.3 and is therefore OUTSIDE this control — see the residual in the session file.
 if [ "$isolate" = "1" ]; then
-	[ "$lane" != "unofficial" ] || die "--isolate refuses an unofficial binary."
+	[ "$accept_class" != "unofficial" ] || die "--isolate refuses an unofficial binary."
 
 	isodir="$(mktemp -d "$RUNNER_TEMP/olivares-cosign.XXXXXXXX")" || die "cannot create an isolation directory under $RUNNER_TEMP."
 	chmod 0700 "$isodir" || die "cannot restrict $isodir to 0700."
@@ -432,7 +432,7 @@ if [ -n "${GITHUB_STEP_SUMMARY:-}" ] && [ -w "${GITHUB_STEP_SUMMARY}" ]; then
 		echo "| field | value |"
 		echo "|---|---|"
 		echo "| version | \`$version\` |"
-		echo "| lane | \`$lane\` |"
+		echo "| class | \`$accept_class\` |"
 		echo "| artifact | \`${matched:-unofficial}\` |"
 		echo "| sha256 | \`$digest\` |"
 		echo "| path | \`$abs\` |"

@@ -127,7 +127,7 @@ S1="$(script_with accept)"
 set_table "$S1" APPROVED_DIGESTS "$good_sha" cosign-linux-amd64
 out="$(PATH="$GOOD:$PATH" bash "$S1" 2>&1)" && rc=0 || rc=$?
 if [ "$rc" -eq 0 ] && grep -q "OK (v2.6.4, cosign-linux-amd64"; then check "a published artifact of the approved version is accepted" "rc=0" 0; else check "a published artifact of the approved version is accepted" "rc=0" 1; fi <<<"$out"
-if grep -q "lane: approved"; then check "and reports which lane approved it" "lane named" 0; else check "and reports which lane approved it" "lane named" 1; fi <<<"$out"
+if grep -q "class: approved"; then check "and reports which class approved it" "class named" 0; else check "and reports which class approved it" "class named" 1; fi <<<"$out"
 if grep -q "verified binary is $GOOD/cosign"; then check "and prints the ABSOLUTE path it verified" "path echoed" 0; else check "and prints the ABSOLUTE path it verified" "path echoed" 1; fi <<<"$out"
 if grep -Fqx "OLIVARES_COSIGN_BIN=$GOOD/cosign" "$GITHUB_ENV"; then
 	check "the default handoff still writes the fixture command file" "verified path captured" 0
@@ -191,7 +191,7 @@ set +e
 # missing tool before it could report the missing cosign, and the case was measuring the
 # fixture rather than the subject.
 #
-# The ambient PATH is not that fixture either: any host with cosign installed — a lane's
+# The ambient PATH is not that fixture either: any host with cosign installed — a contributor's
 # ~/.local/bin on a shared home (2026-09-04), or a correctly provisioned CI runner — turns
 # this negative case into a verdict about THAT binary. So the subject gets a PATH built here:
 # one symlink per external tool the subject needs before it looks for cosign, each pointing
@@ -309,10 +309,10 @@ S_open="$(script_with mig-open \
 set_table "$S_open" APPROVED_DIGESTS "$good_sha" cosign-linux-amd64
 set_table "$S_open" MIGRATION_DIGESTS "$mig_sha" cosign-linux-amd64
 out_mig="$(PATH="$MIG:$PATH" bash "$S_open" 2>&1)" && rc_mig=0 || rc_mig=$?
-if [ "$rc_mig" -eq 0 ] && grep -q "lane: migration"; then check "an OPEN window accepts the migration version" "rc=0, lane reported" 0; else check "an OPEN window accepts the migration version" "rc=0, lane reported" 1; fi <<<"$out_mig"
+if [ "$rc_mig" -eq 0 ] && grep -q "class: migration"; then check "an OPEN window accepts the migration version" "rc=0, class reported" 0; else check "an OPEN window accepts the migration version" "rc=0, class reported" 1; fi <<<"$out_mig"
 
 out_still="$(PATH="$GOOD:$PATH" bash "$S_open" 2>&1)" && rc_still=0 || rc_still=$?
-if [ "$rc_still" -eq 0 ] && grep -q "lane: approved"; then check "and the primary version still works during the window" "both lanes live" 0; else check "and the primary version still works during the window" "both lanes live" 1; fi <<<"$out_still"
+if [ "$rc_still" -eq 0 ] && grep -q "class: approved"; then check "and the primary version still works during the window" "both paths live" 0; else check "and the primary version still works during the window" "both paths live" 1; fi <<<"$out_still"
 
 # The migration version must still be judged by DIGEST, not waved through by version.
 BADMIG="$WORK/badmig"
@@ -620,7 +620,7 @@ rc_fut=$?
 if [ "$rc_fut" -ne 0 ] && grep -q "may not be used before it opens"; then check "a window may not be used BEFORE it opens" "future-dated refused" 0; else check "a window may not be used BEFORE it opens" "future-dated refused" 1; fi <<<"$out_fut"
 
 # --- ROUND 5: the migration table must be as COMPLETE as the approved one -----------------
-# A one-platform lane would refuse every other runner mid-migration.
+# A one-platform class would refuse every other runner mid-migration.
 S_partial="$(script_with mig-partial \
 	"s|^MIGRATION_COSIGN=\"\"|MIGRATION_COSIGN=\"v3.1.2\"|" \
 	"s|^MIGRATION_OPENED=\"\"|MIGRATION_OPENED=\"$today\"|" \

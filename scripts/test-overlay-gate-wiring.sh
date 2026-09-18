@@ -10,7 +10,7 @@
 # `task lint:addon-sets` and `task lint:addon-sets-gate`; the Community derivation
 # aggregate reaches no live read; the hermetic reader battery keeps its caller. The live
 # reader needs the sibling private clone and this act's seal, which exist only at that
-# paired dev boundary, so a Community-only lane can never answer anything but 2 there.
+# paired dev boundary, so a Community-only checkout can never answer anything but 2 there.
 #
 # Second, narrow invariant: the exact-candidate facts battery is ONE plain `hub-leg.sh` item of
 # lint:addon-sets-gate:legs, and the judge sees that very line reached and executed. It is a
@@ -547,7 +547,7 @@ causal moved "moved-before-seal: the live read runs before the second seal refre
 hook = nth(hook, "\ntask lint:overlay-seal\n", "\ntask lint:overlay-live-facts\ntask lint:overlay-seal\n", 2, 2)' \
 	'count(hook, "\ntask lint:overlay-live-facts\n") == 1 and pos(hook, "\ntask lint:overlay-live-facts\n") < pos(hook, "\ntask lint:overlay-seal\n", 2)'
 
-causal moved_after "moved-after-derivation: the live read runs after the add-on lane" \
+causal moved_after "moved-after-derivation: the live read runs after the add-on step" \
 	'hook = once(hook, "\ntask lint:overlay-live-facts\n", "\n")
 hook = once(hook, "\ntask lint:addon-sets-gate\n", "\ntask lint:addon-sets-gate\ntask lint:overlay-live-facts\n")' \
 	'count(hook, "\ntask lint:overlay-live-facts\n") == 1 and pos(hook, "\ntask lint:overlay-live-facts\n") > pos(hook, "\ntask lint:addon-sets\n")'
@@ -583,8 +583,8 @@ refuses split_short "the dispatcher called with fewer arguments than its contrac
 
 # export-closure: fixture scripts/edition-split-gate-v2.sh — a SYNTHETIC name written into a
 # throwaway Taskfile mutant, never a dependency: the control needs a wrapper the judge has NOT
-# been taught, so the path must exist in neither the hub nor the export, and must not come to
-# exist. The class is `fixture`, not `absent-by-design` (that one requires the hub to HAVE the
+# been taught, so the path must exist in neither the full source tree nor the export, and must not come to
+# exist. The class is `fixture`, not `absent-by-design` (that one requires the full source tree to HAVE the
 # path) and not silence: the gate reads this published file as shell text, and a name it cannot
 # resolve is a dangling reference until somebody says which of the two it is. If a file of this
 # name ever appeared, this would stop being a fixture and become a real reference — which is the

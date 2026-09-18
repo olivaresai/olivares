@@ -6,9 +6,9 @@
 # check-hooks-path.sh — the gate that runs every other gate has to be reachable, and
 # nothing was watching whether it still was.
 #
-# WHY THIS EXISTS (2026-08-07). Another lane reported that `core.hooksPath` held an
-# ABSOLUTE path to the hub's working tree, and drew the consequence: a branch would not
-# run ITS hooks, it would run whatever `main` had checked out in the hub, while the TASKS
+# WHY THIS EXISTS (2026-08-07). Another contributor reported that `core.hooksPath` held an
+# ABSOLUTE path to the full source tree's working tree, and drew the consequence: a branch would not
+# run ITS hooks, it would run whatever `main` had checked out in the full source tree, while the TASKS
 # that hook invokes resolve against the branch's own older Taskfile — so every in-flight
 # branch's push breaks the moment a new task enters the hook on main, with a diff that has
 # nothing to do with it.
@@ -21,7 +21,7 @@
 # was at the time of P's measurement CANNOT be recovered: `.git/config` is not versioned.
 #
 # WHAT IS REAL, AND IS WHY THIS FILE EXISTS ANYWAY. `core.hooksPath` lives in
-# `.git/config`, which every linked worktree SHARES — 39 of them in the hub as this is
+# `.git/config`, which every linked worktree SHARES — 39 of them in the full source tree as this is
 # written. `task setup` writes it relative and asserts it, but that assertion runs ONCE, at
 # install time. A single `git config core.hooksPath /abs/path`, by a person or a tool,
 # converts the whole clone to P's failure mode for every worktree at once, and until now
@@ -29,7 +29,7 @@
 # guarantee — and the thing it guards is the gate that guards everything else.
 #
 # It is placed so it fires in both worlds. Relative: each worktree runs its own hook, which
-# carries this check. Absolute: the branch runs the hub's hook, which also carries it.
+# carries this check. Absolute: the branch runs the full source tree's hook, which also carries it.
 # There is no arrangement of the value that hides the check from the push it governs.
 #
 # THE FOUR WAYS THE HOOKS GO SILENT, all of which look identical from outside — a push that
@@ -47,7 +47,7 @@
 # still runs at all. Of the four failures above, exactly one has that property — and it is,
 # by luck rather than design, the one that was actually reported:
 #
-#   absolute        the hub's hook DOES run for every worktree, so this check runs with it
+#   absolute        the full source tree's hook DOES run for every worktree, so this check runs with it
 #                   and fires. COVERED where it matters most, because this is the failure
 #                   that keeps the machinery working while silently changing whose rules apply.
 #   unset           git runs no hook. Nothing local can observe this from inside a hook,
@@ -96,7 +96,7 @@ origin="${origin_line%%$'\t'*}"
 
 if [ -z "$value" ]; then
 	broken "core.hooksPath is NOT SET" \
-		"git falls back to \$GIT_COMMON_DIR/hooks, which every linked worktree of this clone shares and which is NOT this repository's .githooks/. Every push in every lane goes completely ungated, and nothing says so." \
+		"git falls back to \$GIT_COMMON_DIR/hooks, which every linked worktree of this clone shares and which is NOT this repository's .githooks/. Every push for every contributor goes completely ungated, and nothing says so." \
 		"task setup    (or: git config core.hooksPath .githooks)"
 fi
 

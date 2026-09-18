@@ -1675,7 +1675,7 @@ func TestGrokTheCancellationsClaimIsRecordedBeforeItsReplyIsWritten(t *testing.T
 //
 // Origin, because it is not mine: this is observation probe **O1**, authored
 // earlier and independently by the reviewer of `c336583d` (ClaudeD) in
-// `assessments/.../final-independent-review/reviewer_final_probe_test.go`, where it
+// `an internal design note (not shipped)`, where it
 // MEASURED 20 iterations of 20 consulting the authority after the cancellation had
 // already answered the request.
 //

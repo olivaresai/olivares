@@ -65,7 +65,7 @@
 // counted an identifier as "a query that never gets a cap" as soon as it saw it
 // assigned ANYTHING, so `q := buildQuery()` was reported capless. That produced 110
 // "no Limit" where the honest count is 3 decided plus 172 undecided — and 110 was
-// published as confirming another lane's independent census of ~105. Two numbers
+// published as confirming another contributor's independent census of ~105. Two numbers
 // from two methods landing near each other is arithmetic, not verification. What
 // held under both classifiers, and what this gate is actually for, is the
 // intersection: 3.

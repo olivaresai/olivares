@@ -18,7 +18,7 @@
 -- the shared validator before this lot. The number is not the invariant — the
 -- enumerated identities are — but a comment that disagrees with the catalog is a
 -- comment a later reader will trust. Captured on a real migrated database, fresh
--- and upgraded, in assessments/implementation/handoff-vacant-transfer-r2.
+-- and upgraded, in an internal design note (not shipped)
 --
 -- The body is the shared validator's own entity prologue, typed-reference loop
 -- and handoff branch, verbatim except for the accepted-state lease-effect rule:

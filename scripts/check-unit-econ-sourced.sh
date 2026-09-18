@@ -28,7 +28,7 @@ grep -q '4% + 40¢' "$SNAP" || fail "snapshot lost the remasured 4% + 40¢ headl
 grep -q '4% + 15¢' "$SNAP" || fail "snapshot lost the remasured India INR 4% + 15¢"
 # Negative control: the snapshot must not present a signed price.
 if grep -qiE 'price.*(signed|final|\$[0-9]+/mo)|precio firmado' "$SNAP"; then
-  fail "snapshot reads as a signed price — this lane does not decide price"
+  fail "snapshot reads as a signed price — this document does not decide price"
 fi
 
 python3 - "$LEDGER" <<'PY' || exit $?
@@ -57,7 +57,7 @@ if not isinstance(price, dict):
 if price.get("status") != "unsigned":
     fail(f"price.status is {price.get('status')!r}, must stay unsigned")
 if price.get("value") not in (None, "",):
-    fail(f"price.value is {price.get('value')!r} — this lane does not sign a price")
+    fail(f"price.value is {price.get('value')!r} — this document does not sign a price")
 
 figures = doc.get("figures")
 if not isinstance(figures, list) or not figures:

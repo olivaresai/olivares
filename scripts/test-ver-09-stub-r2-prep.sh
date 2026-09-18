@@ -109,7 +109,7 @@ if [ -f "$TMP/tree/scripts/check-commerce-preflight.sh" ]; then
     bad "live n_stub mutant is not Bash-valid"
   fi
 else
-  bad "live n_stub mutant lost the hub-only preflight fixture"
+  bad "live n_stub mutant lost those hub-only preflight fixture"
 fi
 run
 if [ "$(cat "$TMP/rc")" = 1 ]; then
@@ -136,7 +136,7 @@ if [ -f "$TMP/tree/scripts/check-commerce-preflight.sh" ]; then
     bad "live all-stub wiring mutant is not Bash-valid"
   fi
 else
-  bad "live all-stub wiring mutant lost the hub-only preflight fixture"
+  bad "live all-stub wiring mutant lost those hub-only preflight fixture"
 fi
 run
 if [ "$(cat "$TMP/rc")" = 1 ] && \
@@ -266,7 +266,7 @@ if [ -f "$TMP/tree/scripts/check-commerce-preflight.sh" ]; then
     bad "classify_r2 formatting no-fire is not Bash-valid"
   fi
 else
-  bad "classify_r2 formatting no-fire lost the hub-only preflight fixture"
+  bad "classify_r2 formatting no-fire lost those hub-only preflight fixture"
 fi
 run
 if [ "$(cat "$TMP/rc")" = 0 ]; then ok "no-fire: equivalent classify_r2 syntax stays CLEAN"

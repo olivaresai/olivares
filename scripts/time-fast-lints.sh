@@ -3,14 +3,14 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 #
-# time-fast-lints.sh — how long the fast lane ACTUALLY costs, per lint, today.
+# time-fast-lints.sh — how long the fast path ACTUALLY costs, per lint, today.
 #
 # WHY: CLAUDE.md carried "4m15s, measured 2026-08-02" until 2026-08-15, when timing it produced
 # 10m25s over 55 lints. Nobody lied; the number simply aged, in prose, in silence, while every
-# lane planned around it. A duration written down is a claim with a shelf life, and this is the
+# work planned around it. A duration written down is a claim with a shelf life, and this is the
 # thing that renews it.
 #
-# It is a REPORT, not a gate: how long the lane may cost is a judgement, and a threshold invented
+# It is a REPORT, not a gate: how long the fast path may cost is a judgement, and a threshold invented
 # here would be a number nobody can defend. It prints and refuses to grade.
 #
 # The list is DERIVED from the hook with `^[[:space:]]*task`, not retyped and not anchored at
@@ -20,14 +20,14 @@ set -uo pipefail
 blind() { printf 'time-fast-lints: UNVERIFIED — %s\n' "$*" >&2; exit 2; }
 ROOT="${OLIVARES_TIMING_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 cd "$ROOT" || blind "cannot enter $ROOT"
-[ -f .githooks/pre-push ] || blind "no .githooks/pre-push at $ROOT; there is no lane to time"
+[ -f .githooks/pre-push ] || blind "no .githooks/pre-push at $ROOT; there is no fast path to time"
 command -v task >/dev/null 2>&1 || blind "go-task is not on PATH"
 
 list="$(awk '/^[[:space:]]*task (lint:[a-z0-9:-]+|vet)$/ { sub(/^[[:space:]]*task /,""); print }
              /^[[:space:]]*task lint:prepush-refclass$/ { exit }' .githooks/pre-push)"
 n="$(printf '%s\n' "$list" | grep -c . || true)"
 [ "${n:-0}" -ge 10 ] || blind "derived only ${n:-0} lint(s) from the hook; 55 were called on 2026-08-15.
-  A collapse that large means the pattern broke, not that the lane shrank."
+  A collapse that large means the pattern broke, not that the fast path shrank."
 
 # ⛔ THE LOAD IS RECORDED WITH THE TIMES, and that is not decoration. The first run of this
 # script measured lint:disk-headroom at 39s; re-measured minutes later on a quieter box it was
@@ -56,6 +56,6 @@ EOF
 printf '\ntotal %ss (%dm%02ds) sequential over %s lint(s); %s did not exit 0.\n' \
 	"$total" "$((total / 60))" "$((total % 60))" "$n" "$failed"
 printf 'load was %s on %s cpu(s) at start, %s at end.\n' "$LOAD" "$CPUS" "$(cut -d' ' -f1-3 /proc/loadavg 2>/dev/null || echo '?')"
-printf 'A REPORT: what the lane may cost is a judgement, and a threshold invented here would be a\n'
+printf 'A REPORT: what the fast path may cost is a judgement, and a threshold invented here would be a\n'
 printf 'number nobody can defend. Cite this run, with its date, rather than a figure from prose.\n'
 exit 0

@@ -11,7 +11,7 @@
 // loss happens is silent: a noun stops being pointable when the last view claiming it
 // is renamed, and no heading changes. These assertions are the tripwire.
 //
-// The hub↔noun spans are DECLARED here, not asserted away. Two nouns reach three hubs
+// Hub-to-noun spans are DECLARED here, not asserted away. Two nouns reach three hubs
 // each; that is a real finding about the vocabulary (written up in
 // an internal design note (not shipped)) and pinning it means a
 // future change that widens or narrows a span has to say so on purpose.
@@ -84,7 +84,7 @@ describe('the thirteen nouns', () => {
     ).toEqual([])
   })
 
-  it('sends each noun to the hub its PRIMARY view actually sits in', () => {
+  it('sends each noun to whichever hub its PRIMARY view actually sits in', () => {
     const wrong = PRODUCT_NOUNS.filter(
       (n) => hubOf.get(n.views[0]) !== n.hub,
     ).map((n) => `${n.id}: declared ${n.hub}, primary view ${n.views[0]} is in ${hubOf.get(n.views[0])}`)
@@ -103,7 +103,7 @@ describe('the thirteen nouns', () => {
     )
     expect(
       actual,
-      `The hub spread of the nouns changed. This is the "trece sustantivos contra cinco\n` +
+      `The spread of the nouns across hubs changed. This is the "trece sustantivos contra cinco\n` +
         `hubs" tension, and it is meant to be visible: update DECLARED_SPANS *and* the\n` +
         `audit note if a noun genuinely moved, rather than filing it under whichever hub\n` +
         `objects least.`,

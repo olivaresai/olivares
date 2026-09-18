@@ -31,7 +31,7 @@ import (
 // boot went on to COMMIT the rollout classification transaction and to alter the tracker before
 // anything looked at the object that contradicted the whole class.
 //
-// The ratified frontier (assessments/product/access-evidence-upgrade-contract/fresh-bootstrap)
+// The ratified frontier (an internal design note (not shipped))
 // is not "the database is empty" and not "MAX(version)=0". It is:
 //
 //	an Olivares managed namespace with NO confirmed core migration, NO product object, and

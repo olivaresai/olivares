@@ -12,7 +12,7 @@ No conoce al creador. No prueba que una familia sea una fuga ni que no sea una c
 que cierra sus descriptores entre fases y reabre por nombre parece muerto mientras trabaja.
 
 ⛔ ESTE FICHERO AFIRMABA "no tiene falsos positivos por construccion". ERA FALSO, y lo refuto por
-EJECUCION el contraste `gpt-5.6-sol` max del 2026-09-02 (design/CONTRASTE-DISK-RESIDUE-2026-09-02-CODEX.md),
+EJECUCION una revision independiente del 2026-09-02,
 que reprodujo las dos direcciones del error sobre la version anterior:
 
   . productor vivo sin descriptor abierto en el instante de la foto      -> decia FUGA

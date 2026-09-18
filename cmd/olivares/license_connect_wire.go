@@ -23,9 +23,9 @@ import (
 // license_connect_wire.go is the connected client's transport and the ONLY place that knows the
 // request and response shapes of connect-v1.
 //
-// SHAPES: B's published wire, assessments/implementation/r115-connect-binding-current/PROTOCOL.md
+// SHAPES: B's published wire, an internal design note (not shipped)
 // (SHA-256 fb5cc1e8…, relayed by Root as the currently implemented wire at B commit c04256a4), under
-// the Root direction assessments/architecture/r115-connect-bc-coordination/ROOT-DIRECTION.md. It is
+// the Root direction an internal design note (not shipped) It is
 // not yet B's accepted final delivery; Root reports any bytes that change. Nothing outside this file
 // names a body or response field.
 

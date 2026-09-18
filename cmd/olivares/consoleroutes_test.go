@@ -1855,13 +1855,13 @@ const consoleUncoveredBudget = 37
 var consoleDeferredOperatorSurface = map[string]string{
 	// The first console increment of K3 (I1, web/src/features/communications) delivered the
 	// EIGHT callers of the journey channel → notice → inbox → delivery/message → Ack; the second
-	// (I2, assessments/product/k3-console-i2/IMPLEMENTATION-BRIEF.md) delivered the SEVEN of
+	// (I2, an internal design note (not shipped)) delivered the SEVEN of
 	// channel administration and the personal seen cursor — the administrable catalog, the grant
 	// history, PATCH, grant, revoke, cursor token and cursor advance — so their entries left this
 	// map too.
 	//
 	// AND THE FOUR HANDOFF ENTRIES LEFT IT WITH I3
-	// (assessments/product/k3-i3-console-construction/CONSTRUCTION-3.md), which delivered their
+	// (an internal design note (not shipped)), which delivered their
 	// callers in web/src/features/communications/api.ts: `offerHandoff` (POST /handoffs),
 	// `respondToHandoff` (POST /handoffs/{}/responses), `getHandoffDetail`
 	// (GET /deliveries/{}/handoff) and `listHandoffInbox` (GET /inbox/handoffs). They are

@@ -132,7 +132,7 @@ const (
 // the same matrix locally, and CI-detection variables are set by mainline-ci too. The
 // spec already states the closing condition as four PG_MAJOR_ASSERTED receipts (§5.4);
 // scripts/pg-majors-evaluate.py consumes only PG_MAJOR_DSN_VERIFIED today, which is
-// the hub's file and a proposal rather than a change made here.
+// another tool's file and a proposal rather than a change made here.
 func classifyMajorClaim(expectMajor string) majorClaim {
 	if strings.TrimSpace(expectMajor) != "" {
 		return majorClaimDeclared

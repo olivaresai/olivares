@@ -32,7 +32,7 @@
 # form-data, undici x3 - all at or past their first patched version in every lockfile); the
 # other ten (svgo, brace-expansion x3, undici, js-yaml x2, fast-xml-parser, postcss, adm-zip)
 # were cured by moving the vulnerable nodes inside their parents' existing ranges, see
-# olivares-ai-control assessments/implementation/r16-js-dependencies/REPORT.md.
+# olivares-ai-control an internal design note (not shipped)
 # The list is empty on purpose: an entry here is a decision with a reason and a date, and
 # today there is nothing to decide. A blocking advisory that cannot be bumped gets its own
 # entry, its own reason and its own date - never a renewed blanket expiry.

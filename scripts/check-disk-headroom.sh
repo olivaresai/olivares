@@ -50,8 +50,8 @@
 #   BROKEN      below the floor; a heavy gate WILL die and blame the code (exit 1)
 #   UNVERIFIED  df could not be read; nothing was measured (exit 2)
 #
-# The floor is 15G because that is the measured cost of one full local gate: the heavy lane
-# links eleven modules plus the connector plugin binaries. The warning band is 30G so a lane
+# The floor is 15G because that is the measured cost of one full local gate: the heavy path
+# links eleven modules plus the connector plugin binaries. The warning band is 30G so a contributor
 # is told BEFORE the next agent's cache pushes it over.
 set -euo pipefail
 
@@ -331,7 +331,7 @@ if [ "$avail_gb" -lt "$FLOOR_GB" ]; then
 	echo "  Largest consumers:"
 	hogs | sed 's/^/    /'
 	echo "  Usual cause: one GOCACHE per agent run. Reuse a shared cache; do not mint a new one."
-	echo "  NEVER 'go clean -cache': it is shared by three containers and kills the other lanes."
+	echo "  NEVER 'go clean -cache': it is shared by three containers and kills the other contributors."
 	exit 1
 fi
 

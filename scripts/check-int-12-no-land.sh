@@ -224,7 +224,7 @@ def git(*args, cwd):
 hub_dir = os.environ.get("OLIVARES_HUB_GIT_DIR", ".")
 rc, out, _ = git("rev-list", "--count", f"{pin58}..{ovl_pin}", cwd=hub_dir)
 if rc != 0:
-    cannot("could not count int-12-pin..overlay-main-pin on the hub")
+    cannot("could not count int-12-pin..overlay-main-pin on the full source tree")
 live_pair = int(out.strip() or "0")
 if live_pair != behind_pair:
     finding(f"live pin-behind-overlay-main-pin {live_pair} != measured {behind_pair}")

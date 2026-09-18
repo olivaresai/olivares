@@ -410,7 +410,7 @@ func TestObserverAttributesAHolderOwnedByAnotherRole(t *testing.T) {
 //
 // It timed `time.Since(start)` against an absolute ceiling of 4 × observerStopTimeout =
 // 400 ms. Nothing real happens inside that window — 5 of 5 runs measured 0.10 s exactly —
-// so the 300 ms of headroom bought nothing but scheduler latency, and the hub's sweep
+// so the 300 ms of headroom bought nothing but scheduler latency, and a timing sweep
 // REPRODUCED it red under load: at loadavg ~180, one run in 150 took 401.69 ms, on a tail
 // that is thick and continuous (0.17 / 0.20 / 0.28 / 0.30 / 0.40) rather than a rare jump.
 // A test that reddens when the host is busy accuses the code of what the machine did.
@@ -425,7 +425,7 @@ func TestObserverAttributesAHolderOwnedByAnotherRole(t *testing.T) {
 // So the assertion is now which of the two arms ran, which is exactly what the mutation
 // changes, and the only timing left is the 20× separation between the stop bound (100 ms)
 // and the ceiling on the goroutine finishing at all (observerProbeTimeout, 2 s). The tail
-// the hub measured tops out at 0.40 s, so the margin is no longer where the noise is.
+// the sweep measured tops out at 0.40 s, so the margin is no longer where the noise is.
 func TestObserverStopDoesNotSpendTheBudgetItExplains(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -552,7 +552,7 @@ WHERE datname = pg_catalog.current_database()`).Scan(&n); err != nil {
 // the holder is named WHILE the waiter is blocked, because pg_blocking_pids answers nothing
 // once the wait is over — and ordering is a causal claim, not a duration. Racing a
 // lock_timeout against a probe interval turned that claim into a bet on the host's load, and
-// the hub's sweep found two tests in this file making it.
+// a timing sweep found two tests in this file making it.
 //
 // The bound is a hang detector two orders of magnitude above observerProbeInterval, so a busy
 // scheduler cannot reach it and a missing attribution always does.

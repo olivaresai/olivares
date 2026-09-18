@@ -127,7 +127,7 @@ expect 1 "firing: the overlay pin was replaced with another 40-hex — a record 
 stage
 acta_set hub '"0000000000000000000000000000000000000000"'
 run
-expect 1 "firing: the hub pin was replaced"
+expect 1 "firing: the pinned source was replaced"
 
 stage
 acta_set lote '"C99-99"'

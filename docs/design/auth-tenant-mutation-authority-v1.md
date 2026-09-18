@@ -4,7 +4,7 @@
 # Auth-partition mutation authority barrier (ATA1) v1
 
 Status: implemented Store capability, September 2026. Applies to SDD 01, 02, 04 and
-06 and the D12 invitation recovery obligation. This is an additive Store capability.
+06 and the invitation recovery obligation. This is an additive Store capability.
 It is not an invitation API, an authorization decision, or a consumer protocol.
 
 ## Why it exists

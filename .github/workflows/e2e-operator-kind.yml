@@ -393,7 +393,7 @@ jobs:
         # ⛔ 29m, y NO se sube el techo del paso. CONTRA QUE SE COMPARA: contra el `timeout-minutes: 30`
         # de este paso. Subirlo a 46 arregla este gate y ROMPE otro — la suma de pasos del job pasaria a
         # 15+46 = 61 sobre un techo de job de 60, y `lint:ci-timeout-arithmetic` lo caza (medido: rc 1).
-        # Y la razon de fondo es de the integrator: los minutos 30-45 NUNCA EXISTIERON — el paso ya
+        # Y la razon de fondo es de the maintainer: los minutos 30-45 NUNCA EXISTIERON — el paso ya
         # moria a los 30 —, asi que bajar el reloj no retira cobertura que nadie tuviera; solo hace que el
         # que muerde sea `go test`, que ademas imprime el stack de todas las goroutines.
         # ⛔ EL «SIN MEDIDA» DE ESTA LINEA ERA CIERTO Y HOY ES FALSO, y por eso se sustituye en vez de

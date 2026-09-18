@@ -142,7 +142,7 @@ fi
 # marker triple, and this gate answered "CLEAN — 10987 file(s) examined". Without -z, git quotes
 # and escapes such a path, the scan looked for a name that does not exist, the xargs error was
 # swallowed and the [ -f ] guard skipped it in silence: two deny-closed nets in a row, both
-# crossed. Found by another lane with file:line rather than an argument.
+# crossed. Found by another contributor with file:line rather than an argument.
 #
 # It is checked as UNVERIFIED and not as DIRTY on purpose. What the gate must never do again is
 # call this tree clean; whether it can also read the file is a smaller question than whether it

@@ -82,7 +82,7 @@ echo "race-hot-tests: ${count} hot tests selected" >&2
 #
 # WHY. Job 103739990067 of run 34763378851 died at `panic: test timed out after 15m0s`
 # naming TestOrchCadencePumpRunOncePassesAllBusinessTenants, which had been running 1m23s.
-# The diagnosis (assessments/engineering/r112-race-rest-cadence/REPORT.md) measured the
+# The diagnosis (an internal design note (not shipped)) measured the
 # alarm dump and the binary's own internal timestamps: 28 goroutines, exactly two blocked as
 # long as a minute, one runnable holder in flight, every live goroutine descended from the
 # running test's goroutine — while roughly eight full composition-root estate boots at

@@ -23,7 +23,7 @@ import (
 	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
 )
 
-// Tests for the observe-and-report lane (C09 lot 4): reporting, notify, health,
+// Tests for the observe-and-report command group (C09 lot 4): reporting, notify, health,
 // accessmap, observability, consoleviews, adoption, identity, inventory, posture.
 //
 // EVERY DENY CASE CARRIES A REQUEST COUNTER AND A PAIRED POSITIVE CONTROL.
@@ -99,7 +99,7 @@ func (s *observeSpy) last(t *testing.T) observedRequest {
 	return s.requests[len(s.requests)-1]
 }
 
-// observeArgs appends the client flags every verb in this lane needs.
+// observeArgs appends the client flags every verb in this group needs.
 func observeArgs(server string, args ...string) []string {
 	return append(args, "--server", server, "--token", "test-token", "--tenant", "tenant-a")
 }
@@ -282,7 +282,7 @@ func TestLaneMapsServerRefusalsToTheExitContract(t *testing.T) {
 }
 
 // TestNotWiredIsReportedAsAProductBoundaryNotAFailure pins the one status this
-// lane classifies beyond httpErr. 501 from an unwired enterprise seam must not
+// group classifies beyond httpErr. 501 from an unwired enterprise seam must not
 // read as "request failed", and it must carry the engine's own reason.
 func TestNotWiredIsReportedAsAProductBoundaryNotAFailure(t *testing.T) {
 	spy := newObserveSpy(t, http.StatusNotImplemented,
@@ -878,7 +878,7 @@ func TestAdoptionDevelopersCanAskForItsTopN(t *testing.T) {
 		}
 	})
 	// DENY: a negative top-N is refused before the request, like every other
-	// limit in this lane.
+	// limit in this group.
 	t.Run("negative is refused at zero cost", func(t *testing.T) {
 		spy := newObserveSpy(t, http.StatusOK, `{"developers":[],"boundary":{}}`)
 		_, _, err := execRoot(t, observeArgs(spy.srv.URL,
@@ -1181,7 +1181,7 @@ func TestArtifactVerbsRequireAnExplicitDestination(t *testing.T) {
 // default to stdout SURVIVED the entire suite (M06). The behavior was never
 // wrong — the backstop was simply unreachable from the tests, and an unreachable
 // guard does not fail, it certifies. The fix is a witness, not a deletion: the
-// second layer is what protects the next caller added to this lane, who will not
+// second layer is what protects the next caller added to this group, who will not
 // have read the first.
 func TestTheArtifactBackstopRefusesAnEmptyDestination(t *testing.T) {
 	res := observeResult{status: http.StatusOK, raw: []byte("<html>doc</html>"), contentType: "text/html"}
@@ -1455,7 +1455,7 @@ func TestHealthWatchEmitsNDJSONAndDropsKeepalives(t *testing.T) {
 }
 
 // TestHealthWatchOutlivesTheOrdinaryRequestDeadline is the witness for a defect
-// this lane SHIPPED IN ITS FIRST DRAFT and a mutation run did not find, because
+// this group SHIPPED IN ITS FIRST DRAFT and a mutation run did not find, because
 // nothing was measuring it.
 //
 // http.Client.Timeout covers reading the BODY. So the ordinary ten-second CLI
@@ -1822,7 +1822,7 @@ func (r repeatReader) Read(p []byte) (int, error) {
 	return len(p), nil
 }
 
-// ---- the lane's own registration ----------------------------------------------------------
+// ---- the group's own registration ----------------------------------------------------------
 
 // TestEveryFamilyInTheLotIsRegistered is the positive control for the whole file:
 // without it, a family whose constructor was never added to the root would make

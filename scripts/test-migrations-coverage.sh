@@ -13,7 +13,7 @@
 #      "✓ 55 migration(s)" and exited 0 — a confident number about the wrong set;
 #   ·  a raw `find .` census then graded whatever happened to be lying in the working tree: measured
 #      2026-08-14 the same script graded 55 files in a clean worktree and 163 in the shared clone,
-#      96 of them from another lane's `.claude/worktrees/wf_*` and 12 from a directory a different
+#      96 of them from another contributor's `.claude/worktrees/wf_*` and 12 from a directory a different
 #      gate CREATES earlier in the same hook run.
 #
 # Both were fixed. Neither had a test, so both fixes were themselves unverified, and a third

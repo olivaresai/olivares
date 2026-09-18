@@ -17,7 +17,7 @@ import (
 )
 
 // workflow.go — CRUD + revision history for the governed DAG workflow.
-// The engine-first rule of D24: this file and the run engine landed BEFORE any
+// The engine-first rule: this file and the run engine landed BEFORE any
 // canvas; the editor is a client of these verbs, never the other way around.
 
 // workflowDTO projects a workflow row WITHOUT its step graph (the list shape).

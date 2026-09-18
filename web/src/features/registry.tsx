@@ -501,7 +501,7 @@ export type NounId =
 
 export interface ProductNoun {
   id: NounId
-  /** The hub this noun's ANCHOR view sits in — where someone asking for it belongs. */
+  /** Which hub holds this noun's ANCHOR view — where someone asking for it belongs. */
   hub: HubId
   /**
    * Views that read or write this noun as a first-class object OF THEIR OWN SURFACE —
@@ -606,7 +606,7 @@ export const PRODUCT_NOUNS: readonly ProductNoun[] = [
       // Exporting policy OUT to a remote AgentCore engine is still policy: it sits with
       // claudePolicy and routinePolicies rather than in UNNAMED, because the ratchet's own
       // note prefers giving a view back a noun to declaring it unfindable. Placed by the
-      // integrator when #694 landed without either census entry; console lane may overrule.
+      // maintainer when #694 landed without either census entry; console lane may overrule.
       'agentcoreExport',
       'inferenceProxy',
       'accessMap',
@@ -669,7 +669,7 @@ export function nounsForView(viewId: string): NounId[] {
 /**
  * THE NINE AREAS (N1, 2026-09-06) — the navigational structure the console is BROWSED by.
  *
- * Ratified by root (assessments/product/console-navigation-hierarchy/ROOT-DECISION.md) over the
+ * Ratified by root (an internal design note (not shipped)) over the
  * proposal's ROUTE-MAP: every published route keeps its path, permission, component, actions,
  * shortcuts, docs link, nouns and Saved Views namespace, and is additionally placed in exactly
  * ONE area and ONE section of it. The areas are a structure for finding things, never a
@@ -1947,7 +1947,7 @@ export const FEATURE_VIEWS: FeatureView[] = [
 
 /**
  * RETIRED PATHS THAT STILL RESOLVE. Empty on purpose: Re-hubbed all 51 views and
- * moved NOT ONE url, because the hub is a nav heading and the route tree is generated
+ * moved NOT ONE url, because a hub is a nav heading and the route tree is generated
  * from `path` (app/routes.tsx:84). Conservation here is structural, not compensated.
  *
  * The mechanism exists anyway, for the session that DOES move a path: add the entry and

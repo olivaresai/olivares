@@ -85,7 +85,7 @@ stage
 sed -i 's/state: closed/state: open/' "$TMP/tree/design/PRICING-CANON.md"
 run
 if [ "$(cat "$TMP/rc")" = 1 ]; then
-	ok "firing: opening a lane in the canon is FAIL"
+	ok "firing: opening a contributor in the canon is FAIL"
 else
 	bad "open lane should FAIL 1 ($(cat "$TMP/rc") $(cat "$TMP/err"))"
 fi

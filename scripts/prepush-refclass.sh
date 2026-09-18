@@ -19,7 +19,7 @@
 # malformed line, a NUL byte).
 #
 # THE THREE FAMILIES (GATES v3, 2026-08-02). The hook used to run the same full gate for
-# every ref while the written policy said otherwise and the lanes complied by hand with
+# every ref while the written policy said otherwise and the contributors complied by hand with
 # an environment variable. This file is the policy made executable:
 #
 #   refs/heads/main   -> full   the branch everything merges into; host mutex included.
@@ -27,13 +27,13 @@
 #                               release workflows only ever fire at tag time, so a tag
 #                               is the LAST moment a heavy defect can still be caught
 #                               before it is signed and published.
-#   refs/heads/*      -> fast   feature lanes: fast lints, no heavy gate, no mutex.
+#   refs/heads/*      -> fast   feature branches: fast lints, no heavy gate, no mutex.
 #   refs/gate-locks/* -> skip   the hook's own mutex signalling, never content.
 #   refs/session-claims/*   -> skip   a reserved session number, never content.
 #   refs/integration-claims/*
 #                     -> skip   the canon's anti-collision claim: a pointer, never content,
-#                               and MANDATED before an integrator pushes a batch.
-#   refs/status/live  -> fast   the ONE canonical status stream (D-4-status): lane status
+#                               and MANDATED before a maintainer pushes a batch.
+#   refs/status/live  -> fast   the ONE canonical status stream (D-4-status): status
 #                               documents only, cannot alter main. EXACT ref — any other
 #                               refs/status/* name takes the deny-closed default below.
 #   anything else     -> full   DENY-CLOSED: an unrecognised namespace is not a licence
@@ -42,10 +42,10 @@
 #
 # THE FOURTH VERDICT, `delete` (round 4, 2026-08-02). A push where EVERY line is a deletion
 # is the one operation that carries no commits at all: there is nothing to lint, build or
-# test, in any lane. It used to be folded into `skip` — and round 3 measured the price of
+# test, on any path. It used to be folded into `skip` — and round 3 measured the price of
 # that: because the hook's `task` check is unconditional and runs before a `skip` is
 # honoured, `git push --delete stale-branch` on a machine without go-task was REFUSED, so a
-# lane had to disable the whole hook (`--no-verify`) to tidy up a branch. Deletions now get
+# a contributor had to disable the whole hook (`--no-verify`) to tidy up a branch. Deletions now get
 # their own verdict, the hook names the exception, and every other class keeps the
 # unconditional toolchain requirement. A push that mixes a deletion with anything else is
 # NOT a deletion push: one gate-lock ref or one commit-carrying ref and the verdict is the
@@ -57,7 +57,7 @@
 #
 # OLIVARES_FAST_PUSH IS NO LONGER A UNIVERSAL ESCAPE. It downgrades nothing on main or
 # on a tag — there it is reported as ignored, and the full gate runs. On a feature branch
-# the fast lane is now the DEFAULT, so the variable is inert rather than forbidden.
+# the fast path is now the DEFAULT, so the variable is inert rather than forbidden.
 #
 # ---------------------------------------------------------------------------------------
 # DENY-CLOSED PARSING (round 2, 2026-08-02). The first revision split each line on
@@ -116,7 +116,7 @@
 # matters. What makes the residual gap SAFE is the direction of the failure: anything this
 # file does not recognise — including a destination outside `refs/`, which git fully
 # qualifies before the hook ever sees it — is classified `full`, never less. A divergence
-# can therefore cost a lane an hour of gate it did not owe; it cannot buy a cheaper gate.
+# can therefore cost a contributor an hour of gate it did not owe; it cannot buy a cheaper gate.
 set -uo pipefail
 # Byte semantics, not the caller's locale: see limit (2) above. Every character class in
 # this file — the field pattern, the ref validator, the sanitizer — is a class of BYTES.
@@ -328,14 +328,14 @@ if [ -n "$raw" ]; then
 			;;
 		refs/integration-claims/*)
 			# THE SAME CLASS AS THE MUTEX ABOVE, and it is here because the canon MANDATES
-			# publishing one of these before an integrator pushes a batch — it is a step of
+			# publishing one of these before a maintainer pushes a batch — it is a step of
 			# the sanctioned workflow, not an optional convenience.
 			#
 			# It used to fall through to the `*` arm and score FULL ("unrecognised ref"),
 			# which measured, on 2026-08-09, as a two-and-a-half-hour gate to publish a
 			# POINTER. The consequence is the one the deletion exception already exists to
 			# prevent: the only way to follow the anti-collision protocol was
-			# `git push --no-verify`, i.e. the rule taught every lane to disable the entire
+			# `git push --no-verify`, i.e. the rule taught every contributor to disable the entire
 			# hook on a step that gates nothing.
 			#
 			# It carries no content of its own. The OID it names reached the remote through
@@ -346,15 +346,15 @@ if [ -n "$raw" ]; then
 			;;
 		refs/session-claims/*)
 			# THE SAME CLASS AGAIN, for the reservation protocol that came out of four session
-			# number collisions on 2026-08-19/20. A lane that has picked a number but has
+			# number collisions on 2026-08-19/20. A contributor that has picked a number but has
 			# nothing pushable yet publishes `refs/session-claims/S<N>-<lane>` and the number
 			# stops being an announcement in a mailbox and becomes something countable.
 			#
 			# ⛔ IT IS DELIBERATELY **NOT** `refs/heads/claim/*`, and that corrects my own
-			#    proposal rather than someone else's. The integrator adopted the protocol
+			#    proposal rather than someone else's. The maintainer adopted the protocol
 			#    within ten minutes and reasonably read "a claim ref" as a branch, publishing
 			#    refs/heads/claim. Under refs/heads a skip verdict would let
-			#    ARBITRARY CONTENT through the branch lane, and this classifier cannot check
+			#    ARBITRARY CONTENT through the branch path, and this classifier cannot check
 			#    that a claim carries none: it is PURE BASH ON PURPOSE (see valid_remote_ref)
 			#    because "a gate that shells out per line would be one more thing that can be
 			#    missing when it matters", so there is no `merge-base --is-ancestor` available
@@ -367,7 +367,7 @@ if [ -n "$raw" ]; then
 			#
 			# The cost of getting the namespace wrong is the one the integration-claim arm
 			# already measured: falling through to `*` scores FULL, a reservation costs two and
-			# a half hours, and the only way to reserve is `--no-verify` — teaching every lane
+			# a half hours, and the only way to reserve is `--no-verify` — teaching every contributor
 			# to disable the whole hook on a step that gates nothing.
 			promote "$LEVEL_SKIP" "session-claim ref ${safe_ref} — a reserved number, never content"
 			;;
@@ -386,7 +386,7 @@ if [ -n "$raw" ]; then
 			#
 			# That is the third instance of one pattern, after the mutex and the claim: a
 			# namespace that gates nothing scoring strictest, and the rule thereby teaching
-			# every lane to disable the whole hook. Preserving work must never cost more than
+			# every contributor to disable the whole hook. Preserving work must never cost more than
 			# losing it.
 			#
 			# ⚠ THE LIMIT, NAMED: this is an exemption by TRUST, not by proof. Ungated content
@@ -398,7 +398,7 @@ if [ -n "$raw" ]; then
 		refs/status/live)
 			# ONE exact ref, not a namespace (D-4-status, 2026-08-03,
 			# an internal design note (not shipped)). The canonical status
-			# stream carries lane status documents only and cannot alter main, so it
+			# stream carries status documents only and cannot alter main, so it
 			# earns the fast lints — lint:export included. Every OTHER refs/status/*
 			# name deliberately falls through to the deny-closed default below: the
 			# exact ref is the capability.
@@ -451,7 +451,7 @@ escape=""
 if [ "${OLIVARES_FAST_PUSH:-0}" = "1" ]; then
 	case "$verdict" in
 	full) escape=" — OLIVARES_FAST_PUSH=1 IGNORED here: main and tags always take the full gate" ;;
-	fast) escape=" — OLIVARES_FAST_PUSH=1 is inert: the fast lane is already the default here" ;;
+	fast) escape=" — OLIVARES_FAST_PUSH=1 is inert: the fast path is already the default here" ;;
 	esac
 fi
 

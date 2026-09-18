@@ -18,7 +18,7 @@ import (
 // loginCapabilityLockWait caps ONE acquisition statement (ROOT-CONSTRUCTION-R5-1 §4).
 // An earlier parent deadline or a stricter server timeout still wins; connection and
 // server settings are never changed. Measured behavior of the child context with the
-// tree's pgx is retained under assessments/architecture/r105-login-lockwait-pg.
+// tree's pgx is retained under an internal design note (not shipped)
 const loginCapabilityLockWait = 5 * time.Second
 
 // sqliteLoginCapabilityTimeLayout is the canonical UTC text SQLite stores.

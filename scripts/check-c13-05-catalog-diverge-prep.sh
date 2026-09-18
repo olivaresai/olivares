@@ -39,7 +39,7 @@ HOLD="${OLIVARES_C1305P_HOLD:-design/HOLD-AIRS-AR-CRITERIOS-2026-08-18.md}"
 [ -r "$HOLD" ] || cannot "missing $HOLD"
 command -v python3 >/dev/null || cannot "no python3"
 
-# ── the canonical rendering decides the hub half ─────────────────────────────────────────────────
+# ── the canonical rendering decides the source-tree half ─────────────────────────────────────────────────
 #
 # rc 2 and rc 1 are propagated exactly as they arrive: turning a 2 into a 1 claims a finding nobody
 # measured, and turning it into a 0 is the silent green this repair removes. The scratch files live
@@ -143,7 +143,7 @@ except Exception as e:
     cannot(f"sold map is not readable: {e}")
 
 # The map must BE the derivation, and carry its digest. This is the "hash/slug-pack equality" the
-# plan asks for on the hub side; the byte comparison itself is done by
+# plan asks for on the source-tree side; the byte comparison itself is done by
 # `commerce-lint -module-catalog=check`, run above.
 if sold.get("schema") != "module-slug-package/v2":
     fail("the sold map is %r, not the generated module-slug-package/v2" % sold.get("schema"))

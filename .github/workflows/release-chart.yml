@@ -60,13 +60,13 @@ env:
 jobs:
   publish-chart:
     # PRODUCTION-REPOSITORY GUARD, same literal as release.yml's two entry jobs.
-    # added that guard to release.yml only, because the rehearsal design asked for it
+    # added that guard to release.yml only, because the design asked for it
     # there; but this workflow is also tag-triggered (`chart-v*`) and also requests
     # `packages: write` and `id-token: write`. Today a `chart-v*` tag in a fork or in
-    # the disposable rehearsal repository still FAILS, because the push destination is
+    # a disposable test repository still FAILS, because the push destination is
     # hard-wired to ghcr.io/olivaresai/charts and no other token can reach it — but it
     # fails LATE and by accident, after minting a Sigstore identity for a repository
-    # that has no business minting one. The rehearsal plan's mitigation is a manual
+    # that has no business minting one. The earlier mitigation is a manual
     # "disable every other workflow" step in the GitHub UI, which fails open if
     # forgotten. A literal guard fails closed and costs one line.
     # La valla se abre a preprod porque AHORA sí hay segunda valla detrás: el paso
@@ -76,7 +76,7 @@ jobs:
     #
     # Hasta las órdenes 36/37 este workflow no tenía preflight alguno (`grep -c` daba 0) y sus
     # destinos estaban cableados a producción. Abrir la condición sin lo de abajo habría
-    # dejado a un repositorio de preprod empujando gráficos al registro público con una sola
+    # dejado a un repositorio que declara ese perfil empujando gráficos al registro público con una sola
     # variable de por medio — se intentó, se midió y se revirtió el mismo día.
     if: github.repository == 'olivaresai/olivares' || vars.OLIVARES_RELEASE_PROFILE == 'preprod'
     # PINNED to a GitHub-hosted runner ON PURPOSE — do NOT route this through

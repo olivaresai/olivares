@@ -22,7 +22,7 @@
 #     goreleaser check, config CURED ... rc 0
 #     goreleaser check, config BROKEN .. rc 0      <- measured in both directions, 2026-09-01
 #
-# That validation runs ONLY in the publish phase. `--snapshot` skips it, so neither the hub witness
+# That validation runs ONLY in the publish phase. `--snapshot` skips it, so neither the source-tree witness
 # nor the mirror witness exercises it, and no earlier release attempt had reached that far. A defect
 # only a real publication can see is a defect that reaches production by definition.
 #

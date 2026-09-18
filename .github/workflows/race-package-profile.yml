@@ -134,7 +134,7 @@ jobs:
           # Y MIDE el espacio libre de cada candidato antes de probarlo: el «no space left» de hoy
           # salio tres pasos mas abajo, dentro de `go build`; con la cifra aqui se lee en este paso.
           # ⛔ EL BARRIDO VA EN SU PROPIO BUCLE, y es una correccion MEDIDA: F2 de la revision
-          # independiente del 2026-09-16 (assessments/engineering/r116-ci-host-residue-fixes/REVIEW.md).
+          # independiente del 2026-09-16 (an internal design note (not shipped)).
           # Dentro del bucle de seleccion solo alcanzaba a los candidatos probados ANTES del `break`,
           # asi que con /var/tmp elegido /dev/shm NO SE BARRIA NUNCA — justo el tmpfs cuyo residuo
           # tumbo la corrida 35076921214 y que en la 35081963451, con el barrido ya enviado, seguia

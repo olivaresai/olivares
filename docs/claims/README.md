@@ -9,8 +9,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 public and under which conditions. The public storefront does not author claim state: it
 synchronizes this manifest, validates it, and derives every visible label from it.
 
-Written from the adversarial public-claims truth-matrix audit of 2026-08-09 (Codex
-`gpt-5.6-sol`, report digest sha256 `505b6ef5…`, retained internally and pinned by
+Written from the adversarial public-claims truth-matrix audit of 2026-08-09 (report
+digest sha256 `505b6ef5…`, retained internally and pinned by
 `measurement.auditReportSha256`). **Every field in the manifest traces to a line of that report.**
 Nothing in it was widened by eye.
 
@@ -234,7 +234,7 @@ field by name.
 **Handoff, because this manifest was one carrier out of twenty-seven.** The other 26 are
 pre-existing files under `core/`, `connectors/`, `modules/`, `operator/`, the build scripts, the
 task file, the hooks and the CI workflows — none touched by this work, all outside the paths this
-contract may edit. The systemic fix belongs in the export curation itself, which is the integrator's
+contract may edit. The systemic fix belongs in the export curation itself, which is the maintainer's
 surface. To reproduce: run the public export into a scratch directory and grep the result for the
 private audits root.
 
@@ -369,10 +369,10 @@ disagrees — in either direction, so a rule change that nobody wrote down here 
 number typed wrong. The qualitative half (composition-exclusion letters refused, no shipped label
 affected) is a test in the battery, so it runs on every gate rather than on demand.
 
-## Handoff — the product-side gate belongs to the integrator
+## Handoff — the product-side gate belongs to the maintainer
 
 This contract does **not** wire the product gate, because `Taskfile.yml`, `.githooks/pre-push` and
-`.github/workflows/` are the integrator's surface and a mixed PR would collide. The contract and
+`.github/workflows/` are the maintainer's surface and a mixed PR would collide. The contract and
 its anchors, so it can be cabled without re-deriving anything:
 
 - **Task name:** `lint:public-claims`, read-only. It never modifies content.

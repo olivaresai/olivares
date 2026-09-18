@@ -13,7 +13,7 @@
 # scans between them, and every one came back clean — because both were scanning with `main`'s
 # config while the job was not.
 #
-# THE ACTUAL CAUSE, measured by another lane and verified here by ancestry:
+# THE ACTUAL CAUSE, measured by another contributor and verified here by ancestry:
 #   `.gitleaks.toml` is read BY RELATIVE PATH out of the checkout. Commit 2edf170f, which adds
 #   the nine-line exception for a webhook fixture whose value decodes to the hexadecimal digits
 #   in order, is on `main` and is NOT an ancestor of refs/pull/465/merge. So the job judged the
@@ -203,7 +203,7 @@ for _a in "$@"; do [ "$_a" = "--all-refs" ] && SCAN_SCOPE=all; done
 # ⛔ SCHEDULER PARALLELISM OF THE ONE ALL-REF DETECT (R89-C1, 2026-09-12). After the narrowed
 # extraction the sweep's remaining cost is gitleaks rule matching, and a Go binary with GOMAXPROCS
 # unset schedules on every CPU it sees — on a shared runner host, every job asks for all of them
-# (assessments/engineering/r89-secrets-timeout). So the sweep defaults to 4 and keeps a positive value
+# (an internal design note (not shipped)). So the sweep defaults to 4 and keeps a positive value
 # the caller already set. This is SCHEDULER parallelism, not reserved CPU: 4 cannot create cores that
 # another job owns. What is scanned, the rules, the attribution and the 0/1/2 do not change.
 # A malformed explicit value is refused before any work, like an explicit base that does not resolve
@@ -275,7 +275,7 @@ fi
 # global allowlist `an internal design note (not shipped)*\.md$` exempts them (detect.go checkCommitOrPathAllowed). So the sweep
 # may ask Git not to diff exactly `an internal design note (not shipped)**/*.md` — and ONLY when the guard below
 # proves that removes nothing the rules would have seen. Otherwise it is the full extraction, with
-# the same 0/1/2. Measured counterexamples the guard exists for (assessments/engineering/
+# the same 0/1/2. Measured counterexamples the guard exists for (an internal design note (not shipped)
 # secrets-exemption-equivalence-20260911):
 #   · an exempt mailbox that is ADDED can steal the rename source of a NON-exempt file: without the
 #     mailbox the file pairs with that source and loses added lines — a finding disappears;

@@ -584,7 +584,7 @@ const emptyDescriptorErr = "runtime: component descriptor has empty Name"
 // ⛔ THIS IS A REGRESSION BANK, and the regression was real. Separating the
 // registration name from the connector descriptor removed the only place that ever
 // checked the descriptor: every path reserved the REGISTRATION name, and "" was just
-// a name nobody had taken. Astra's independent overlay caught it on the live prepared
+// a name nobody had taken. An independent overlay caught it on the live prepared
 // path — the connector was Opened and registered with an empty Name and Component.
 // The bank asserts the whole surface, not the one entry point that was reported.
 func TestMalformedConnectorDescriptorIsRefusedBeforeStart(t *testing.T) {
@@ -653,7 +653,7 @@ func TestMalformedConnectorDescriptorIsRefusedLive(t *testing.T) {
 	bad = &namelessSource{}
 	check("AddSourceLiveNamed(nameless)", bad, rt.AddSourceLiveNamed(ctx, "slot-a", bad, sdk.Config{}, "acme", 0))
 
-	// The exact case Astra's overlay reproduced: the LEGACY prepared path.
+	// The exact case that overlay reproduced: the LEGACY prepared path.
 	bad = &namelessSource{}
 	check("AddPreparedSource(nameless)", bad, rt.AddPreparedSource(ctx, rt.PrepareInProcSource(bad), sdk.Config{}, "acme", 0))
 

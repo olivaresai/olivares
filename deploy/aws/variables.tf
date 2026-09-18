@@ -3,7 +3,7 @@
 
 variable "region" {
   type        = string
-  description = "Primary region. Ratified: us-east-1 (D10-bis §2.6)."
+  description = "Primary region. Ratified: us-east-1."
   default     = "us-east-1"
 }
 
@@ -68,16 +68,16 @@ variable "enable_ha_nat" {
 # `count = 1` y roto el apply en un argumento obligatorio. El dispatch de hoy no puede
 # hacerlo (sus entradas son cadenas), pero la invariante no debe depender de quién llama.
 # Quién les da valor y en qué orden: `.github/workflows/aws-terraform.yml`
-# (`workflow_dispatch` → `TF_VAR_*`) y `an internal design note (not shipped)`.
+# (`workflow_dispatch` → `TF_VAR_*`) y el runbook de despliegue.
 
-# ⛔ HOSTNAMES — CORREGIDOS EL 2026-09-01 POR ORDEN DE FRAN: todo el cloud vive bajo
-# `cloud.olivares.ai`. Su razón, literal: «para evitar los `-` y tener todo el cloud dentro de
-# cloud.olivares.ai». Los defaults `*.cloud.olivaresai.dev` que había aquí quedan RANCIOS.
+# ⛔ HOSTNAMES — CORREGIDOS EL 2026-09-01: todo el cloud vive bajo `cloud.olivares.ai`, para
+# evitar los `-` y tener todo el cloud dentro de un mismo nombre. Los defaults de la zona de
+# pruebas que había aquí quedan RANCIOS.
 #
 #   defaults de hoy   api.cloud.olivares.ai   ·  ingest.cloud.olivares.ai   (zona olivares.ai)
 #
-# Lo que decía antes, y se deja escrito porque explica de dónde venía el `.dev`: la orden 24
-# (2026-08-28) repartía sandbox en `*.cloud.olivaresai.dev` y producción en
+# Lo que decía antes, y se deja escrito porque explica de dónde venía el nombre de pruebas:
+# el reparto anterior (2026-08-28) ponía el sandbox en una zona aparte y producción en
 # `*.cloud.olivares.ai`, y por eso el default era el par de SANDBOX.
 #
 # ⚠ Y ESE REPARTO ES LO QUE LA CORRECCIÓN DESHACE, así que hay que decirlo en voz alta en vez

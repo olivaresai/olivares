@@ -896,7 +896,7 @@ TASKFILE="$ROOT/Taskfile.yml"
 # It happened on 2026-08-18 and the cause is worth keeping: the #856 merge silently reverted
 # the modules race cap 45m -> 30m. Nobody retuned anything on purpose. All twenty mutations
 # stopped applying, this battery refused (correctly -- a mutation that does not apply proves
-# nothing) with 34 fixture failures and NOTHING naming the cause, and five lanes were blocked
+# nothing) with 34 fixture failures and NOTHING naming the cause, and five contributors were blocked
 # by a merge artefact. The repair was to restore the Taskfile, not to chase the anchors.
 #
 # So the coupling is asserted ONCE, up front, and says what to do. One actionable line

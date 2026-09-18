@@ -26,7 +26,7 @@
 //
 // Es exactamente el fallo que esta guarda existe para impedir, cometido por ella misma: **un oráculo
 // sacado de una de las fuentes que vigila no puede ver lo que a esa fuente le falta.** Lo cazó
-// the integrator contando las TRES listas de rutas que hay en el árbol y que no derivan una de otra
+// the maintainer contando las TRES listas de rutas que hay en el árbol y que no derivan una de otra
 // (registro 53 · censo 58 · spec del arnés 53).
 //
 // ⇒ El denominador es ahora la **UNIÓN** de censo y registro. Una ruta escondida en cualquiera de

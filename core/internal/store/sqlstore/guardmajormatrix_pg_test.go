@@ -97,7 +97,7 @@ const (
 // The failure this closes was MEASURED, not imagined: the majors workflow exported envExpectMajor
 // per pass and no matrix DSNs, so all three matrix tests self-skipped in all four passes — and the
 // job's evaluator, which fails on any skip in a matrix package, would have gone red naming the
-// count and not the cause. The hub fixed its half; this is the half that keeps the hole shut if
+// count and not the cause. The other half was fixed there; this is the half that keeps the hole shut if
 // that line is ever refactored away.
 func classifyMatrixEnv(matrixDSNs, expectMajor string) matrixEnvVerdict {
 	switch {
