@@ -96,7 +96,8 @@ func TestSetupInteractivePostgres(t *testing.T) {
 // the product's one bind default, and that accepting every default still produces
 // a plan that validates.
 //
-// IT USED TO REQUIRE A LOOPBACK BIND (D18, 2026-09-17). The wizard had its own
+// IT USED TO REQUIRE A LOOPBACK BIND (until the server-defaults change of
+// 2026-09-17). The wizard had its own
 // answer to "where does this listen", so the product had two: a wizard-made
 // install was reachable only from the machine it was installed on while the same
 // engine started by hand was reachable from the network. One default, named in

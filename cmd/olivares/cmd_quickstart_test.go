@@ -52,7 +52,8 @@ func TestConsoleAddressFromABind(t *testing.T) {
 // into the insecure / demo paths: those flags do not exist on it. The secure
 // posture is structural, not a runtime check.
 //
-// IT NO LONGER ASSERTS A LOOPBACK BIND, and the reason is the point of D18: the
+// IT NO LONGER ASSERTS A LOOPBACK BIND, and the reason is the point of the
+// server-defaults change: the
 // bind was never what made this path secure. TLS is on, there are no default
 // credentials and first setup is gated by a single-use token — none of which
 // depends on where the socket is. What the loopback default did do was hide a
@@ -77,7 +78,8 @@ func TestNewQuickstartCmdSecureByConstruction(t *testing.T) {
 	}
 }
 
-// TestServeFamilyBindDefaultsAreTheWildcard is the regression row for D18: every
+// TestServeFamilyBindDefaultsAreTheWildcard is the regression row for the
+// server defaults: every
 // command that BINDS defaults to every interface, and every default is the one
 // constant. A command that spells its own default is how the product came to have
 // eight of them.

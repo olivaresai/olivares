@@ -281,7 +281,7 @@ func TestServeRecordsTheConsoleAddressForFirstBoot(t *testing.T) {
 
 // freeLoopbackAddr reserves a loopback port and releases it. The fixture needs a
 // concrete address to probe, and --insecure is refused off-host — which is the
-// guard D18 deliberately left in place.
+// guard the server-defaults change deliberately left in place.
 func freeLoopbackAddr(t *testing.T) string {
 	t.Helper()
 	lis, err := net.Listen("tcp", "127.0.0.1:0")
