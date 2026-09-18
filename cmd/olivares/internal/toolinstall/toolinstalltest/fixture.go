@@ -257,12 +257,18 @@ func ArtifactPath(version, plat string) string { return fmt.Sprintf("/%s/%s/clau
 // (Claude Code)" like the real tool and, when marker is non-empty, appends a
 // line to that file each time it runs, so a test can prove it never ran.
 func Executable(version, marker string) []byte {
+	return VersionReporter("Claude Code", version, marker)
+}
+
+// VersionReporter returns a harmless POSIX shell program that prints
+// "<version> (<name>)" like a provider CLI --version line.
+func VersionReporter(name, version, marker string) []byte {
 	var b strings.Builder
 	b.WriteString("#!/bin/sh\n# olivares toolinstall fixture: harmless version reporter\n")
 	if marker != "" {
 		fmt.Fprintf(&b, "printf 'ran\\n' >> '%s'\n", marker)
 	}
-	fmt.Fprintf(&b, "printf '%%s (Claude Code)\\n' '%s'\n", version)
+	fmt.Fprintf(&b, "printf '%%s (%s)\\n' '%s'\n", name, version)
 	return []byte(b.String())
 }
 
@@ -299,4 +305,16 @@ func ExecCapableDir(t testing.TB) string {
 	}
 	t.Fatalf("no exec-capable directory: t.TempDir() (TMPDIR=%q) and $HOME both refuse to execute a file; point TMPDIR at an exec-capable filesystem", os.Getenv("TMPDIR"))
 	return ""
+}
+
+// NameFirstVersionReporter returns a harmless POSIX shell program that prints
+// "<name> <version> (<build>)", the line shape the Grok Build and Codex CLIs
+// print. It exists because a fixture that prints the version first hides a
+// parser that reads the first field as the version: measured 2026-09-18
+// against Grok Build 1.0.34 from the official origin.
+func NameFirstVersionReporter(name, version, build string) []byte {
+	var b strings.Builder
+	b.WriteString("#!/bin/sh\n# olivares toolinstall fixture: harmless version reporter\n")
+	fmt.Fprintf(&b, "printf '%s %%s (%s)\\n' '%s'\n", name, build, version)
+	return []byte(b.String())
 }

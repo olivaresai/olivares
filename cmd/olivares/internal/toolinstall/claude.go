@@ -348,6 +348,10 @@ func (c *Claude) DefaultPaths(home string) []string {
 	return paths
 }
 
+func (c *Claude) ObserveAuth(home string) AuthObservation {
+	return observeLoginFile(claudeAuthPath(home))
+}
+
 func destinationFor(root, driver, version, vendorPlatform, binary string) Destination {
 	dir := filepath.Join(root, driver, version+"-"+vendorPlatform)
 	return Destination{Root: root, ReleaseDir: dir, Executable: filepath.Join(dir, "bin", binary)}

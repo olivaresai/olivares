@@ -45,8 +45,8 @@ Complete these before a launch. A missing item is a refusal, not a fallback.
 | Driver | Pin this environment variable | When it is unset |
 |---|---|---|
 | Claude Code | `OLIVARES_SESSION_RUNTIME_CLAUDE_BIN` (default `claude`) | the Claude path uses the default executable name |
-| Codex | `OLIVARES_SESSION_RUNTIME_CODEX_BIN` | Codex profiles stay observable and are not launchable |
-| Grok | `OLIVARES_SESSION_RUNTIME_GROK_BIN` | Grok profiles stay observable and are not launchable |
+| Codex | `OLIVARES_SESSION_RUNTIME_CODEX_BIN` | If unset, a **registered** managed install (`olivares agent tool install --driver codex`) pins the receipt executable. Otherwise Codex profiles stay observable and are not launchable. The engine does not search `PATH`. |
+| Grok | `OLIVARES_SESSION_RUNTIME_GROK_BIN` | If unset, a **registered** managed install (`olivares agent tool install --driver grok`) pins the receipt executable. Otherwise Grok profiles stay observable and are not launchable. The engine does not search `PATH`. |
 
 The value is the official binary this node may operate. The engine does not
 resolve `codex` or `grok` off `PATH`. The generated configuration table also

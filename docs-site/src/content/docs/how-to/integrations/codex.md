@@ -11,11 +11,12 @@ policy. Finally, `olivares codex-hook` routes sessions and tool decisions to the
 session authenticated through a personal ChatGPT subscription does not, by itself, grant access
 to the enterprise APIs.
 
-This page is the **connector and PEP-hook** path. It does not launch the official
-Codex CLI as a governed child. That operate path is
+This page is the **connector and PEP-hook** path. To install or verify the official
+CLI, record a probe receipt, and launch or stop a governed session, use
+[Install the Codex CLI](/how-to/install-codex-cli/). The operate path is
 [Operate a provider session](/how-to/operate-provider-sessions/)
-(`OLIVARES_SESSION_RUNTIME_CODEX_BIN` plus a provider profile;
-`CHANGELOG.md` `[26.9.0]`).
+(`OLIVARES_SESSION_RUNTIME_CODEX_BIN` or a managed install receipt, plus a
+provider profile).
 
 ## Add Codex
 

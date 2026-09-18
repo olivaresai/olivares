@@ -7,6 +7,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -35,35 +36,41 @@ var toolInstallEngine = func(ctx context.Context) *toolinstall.Engine {
 		verifier = v
 	}
 	claude := toolinstall.NewClaude(toolinstall.ClaudeOptions{Verifier: verifier})
-	return toolinstall.NewEngine(toolinstall.NewCatalog(claude), toolinstall.EngineOptions{InstallerVersion: version})
+	codex := toolinstall.NewCodex(toolinstall.CodexOptions{})
+	grok := toolinstall.NewGrok(toolinstall.GrokOptions{})
+	cat, err := toolinstall.NewCapabilityCatalog(toolinstall.NewCatalog(claude), codex, grok)
+	if err != nil {
+		return toolinstall.NewEngine(toolinstall.NewCatalog(claude), toolinstall.EngineOptions{InstallerVersion: version})
+	}
+	return toolinstall.NewEngineWithCapabilities(cat, toolinstall.EngineOptions{InstallerVersion: version})
 }
 
 func newAgentToolCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "tool",
-		Short: "Install and inventory official provider CLIs (Claude Code) from signed releases, locally",
+		Short: "Install and inventory official provider CLIs (Claude Code, Codex, Grok Build)",
 		Long: "tool installs an official provider command-line tool into a versioned directory that\n" +
 			"Olivares owns and records a typed receipt. It runs entirely on this host: no control\n" +
-			"plane, no server, no account. This release installs Claude Code for Linux x64 and arm64\n" +
-			"(glibc and musl); Codex, Grok Build, macOS and Windows are release work still ahead.\n\n" +
-			"What install does, in order: fetches the vendor's release manifest and its detached\n" +
-			"OpenPGP signature; verifies the signature with the local gpg in an isolated keyring that\n" +
-			"holds only the release-signing key pinned in this binary; downloads the one artifact the\n" +
-			"manifest names for the selected platform, bound to its exact size and SHA-256 before the\n" +
-			"first byte arrives; runs `<tool> --version` from an empty temporary home with a fixed\n" +
-			"minimal environment (no inherited PATH, no credentials, auto-update off); and only then\n" +
-			"places the release at <root>/<driver>/<version>-<platform>/bin/<driver> (directory\n" +
-			"mode 0755 so a shared root can serve it) beside receipt.json and the retained manifest,\n" +
-			"signature and key.\n\n" +
-			"What it never does: edit PATH, shell startup files or your home; read or use provider\n" +
-			"credentials or settings; overwrite or delete an existing version; run a vendor install\n" +
-			"script or the vendor's self-updating layout; continue when gpg is missing or the\n" +
-			"signature does not verify. An installed tool is not a registered profile and not a\n" +
-			"launched session; connecting it to sessions is a separate step.",
+			"plane, no server, no account. This release installs Claude Code (plan/v1, publisher-signed\n" +
+			"manifest) and Codex and Grok Build (plan/v2) for Linux amd64/arm64. macOS and Windows are\n" +
+			"release work still ahead.\n\n" +
+			"Verification class is per driver and is recorded on the receipt: Claude is publisher-signed\n" +
+			"OpenPGP; Codex is mixed-assurance (exact package digest plus publisher-signed subjects) and\n" +
+			"origin-install refuses when a subject verifier is unavailable; Grok is origin-only HTTPS\n" +
+			"plus a bounded probe, which is not a publisher signature.\n\n" +
+			"Channel names belong to the vendor, not to Olivares: the Grok origin publishes stable and\n" +
+			"answers 404 for latest, so --version stable is the pointer to ask for. A pointer the origin\n" +
+			"does not publish is reported as version_unknown with the URL and the status.\n\n" +
+			"What it never does: vendor the CLI into this repository; edit PATH, shell startup files or\n" +
+			"your home; read credential values; overwrite or delete an existing version; run a vendor\n" +
+			"install script. Probe --version is not authentication. An installed tool is not a launched\n" +
+			"session; `olivares agent session create` launches through a provider profile. A managed\n" +
+			"install can pin the session runtime when OLIVARES_SESSION_RUNTIME_*_BIN is unset.",
 		Example: "  olivares agent tool plan --driver claude --version latest\n" +
-			"  olivares agent tool install --driver claude --version 2.1.261 --yes\n" +
+			"  olivares agent tool install --driver grok --version stable --yes\n" +
+			"  olivares agent tool install --driver codex --version 0.153.4 --yes\n" +
 			"  olivares agent tool list -o json\n" +
-			"  olivares agent tool detect --probe",
+			"  olivares agent tool detect --driver grok --probe",
 	}
 	cmd.AddCommand(newAgentToolDetectCmd(), newAgentToolPlanCmd(), newAgentToolInstallCmd(), newAgentToolListCmd())
 	return cmd
@@ -77,7 +84,7 @@ type agentToolTarget struct {
 
 func (t *agentToolTarget) addFlags(cmd *cobra.Command) {
 	t.cmd = cmd
-	cmd.Flags().StringVar(&t.driver, "driver", "claude", "provider tool to install (this release: claude)")
+	cmd.Flags().StringVar(&t.driver, "driver", "claude", "provider tool to install: claude, codex or grok")
 	cmd.Flags().StringVar(&t.version, "version", "latest", "exact version (X.Y.Z) or the vendor pointer latest or stable")
 	cmd.Flags().StringVar(&t.platform, "platform", "", "target platform key: linux-x64, linux-arm64, linux-x64-musl, linux-arm64-musl (default: this host)")
 	addAgentToolRootFlag(cmd, &t.root)
@@ -146,6 +153,24 @@ func (t *agentToolTarget) request() (toolinstall.Request, error) {
 	return toolinstall.Request{Driver: t.driver, Version: t.version, Platform: platform, DestRoot: root, Source: t.source}, nil
 }
 
+func (t *agentToolTarget) requestV2() (toolinstall.RequestV2, error) {
+	root, err := resolveAgentToolRoot(t.root)
+	if err != nil {
+		return toolinstall.RequestV2{}, err
+	}
+	platform := toolinstall.HostPlatform()
+	if t.platform != "" {
+		if platform, err = toolinstall.ParsePlatform(t.platform); err != nil {
+			return toolinstall.RequestV2{}, exitcode.New(exitcode.Usage, err)
+		}
+	}
+	pv, _, err := toolinstall.PlatformV2For(t.driver, platform)
+	if err != nil {
+		return toolinstall.RequestV2{}, toolInstallExit(err)
+	}
+	return toolinstall.RequestV2{Driver: t.driver, Version: t.version, Platform: pv, DestRoot: root, Source: t.source}, nil
+}
+
 // resolveAgentToolRoot returns the absolute tools root: the flag as given, or
 // <data-dir>/tools from the same data-dir resolution every other command uses.
 func resolveAgentToolRoot(flag string) (string, error) {
@@ -204,11 +229,34 @@ func newAgentToolPlanCmd() *cobra.Command {
 			"  olivares agent tool plan --version 2.1.261 --platform linux-arm64 --out claude-2.1.261.plan.json",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			eng := toolInstallEngine(cmd.Context())
+			capab, err := eng.Capability(target.driver)
+			if err != nil {
+				return toolInstallExit(err)
+			}
+			if capab == toolinstall.ProviderCapabilityV2 {
+				req, err := target.requestV2()
+				if err != nil {
+					return err
+				}
+				plan, err := eng.PlanV2(cmd.Context(), req)
+				if err != nil {
+					return toolInstallExit(err)
+				}
+				raw, err := toolinstall.MarshalPlanV2(plan)
+				if err != nil {
+					return err
+				}
+				if err := writePlanFile(out, raw, plan.Digest, cmd); err != nil {
+					return err
+				}
+				return renderOut(cmd, func(w io.Writer) error { return renderToolPlanV2(w, plan) }, plan)
+			}
 			req, err := target.request()
 			if err != nil {
 				return err
 			}
-			plan, err := toolInstallEngine(cmd.Context()).Plan(cmd.Context(), req)
+			plan, err := eng.Plan(cmd.Context(), req)
 			if err != nil {
 				return toolInstallExit(err)
 			}
@@ -216,19 +264,8 @@ func newAgentToolPlanCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if out != "" {
-				f, err := os.OpenFile(out, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644) // #nosec G304 -- the operator names where their own plan file goes
-				if err != nil {
-					return exitcode.New(exitcode.Usage, fmt.Errorf("write plan: %w (an existing file is not overwritten)", err))
-				}
-				if _, err := f.Write(append(raw, '\n')); err != nil {
-					_ = f.Close()
-					return err
-				}
-				if err := f.Close(); err != nil {
-					return err
-				}
-				fmt.Fprintf(cmd.ErrOrStderr(), "plan written to %s (digest %s)\n", out, plan.Digest)
+			if err := writePlanFile(out, raw, plan.Digest, cmd); err != nil {
+				return err
 			}
 			return renderOut(cmd, func(w io.Writer) error { return renderToolPlan(w, plan) }, plan)
 		},
@@ -259,10 +296,24 @@ func newAgentToolInstallCmd() *cobra.Command {
 			"install holds the lock, the destination is damaged or occupied, or the plan changed;\n" +
 			"1 signature, size, hash or probe refusal (staging removed, nothing recorded).",
 		Example: "  olivares agent tool install --driver claude --version 2.1.261 --yes\n" +
+			"  olivares agent tool install --driver grok --version stable --yes\n" +
 			"  olivares agent tool install --plan claude-2.1.261.plan.json\n" +
 			"  olivares agent tool install --version stable --root /srv/olivares/tools --yes -o json",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			eng := toolInstallEngine(cmd.Context())
+			if planFile != "" {
+				schema, err := peekJSONSchema(planFile)
+				if err != nil {
+					return exitcode.New(exitcode.Usage, err)
+				}
+				if schema == toolinstall.PlanSchemaV2 {
+					return runAgentToolInstallV2(cmd, eng, &target, planFile, yes)
+				}
+			}
+			if target.driver == toolinstall.DriverCodex || target.driver == toolinstall.DriverGrok {
+				return runAgentToolInstallV2(cmd, eng, &target, planFile, yes)
+			}
 			var approved *toolinstall.Plan
 			if planFile != "" {
 				f, err := os.Open(planFile) // #nosec G304 -- the operator names the plan file they approved
@@ -282,7 +333,6 @@ func newAgentToolInstallCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			eng := toolInstallEngine(cmd.Context())
 			fresh, err := eng.Plan(cmd.Context(), req)
 			if err != nil {
 				return toolInstallExit(err)
@@ -491,6 +541,140 @@ func renderToolPlan(w io.Writer, p *toolinstall.Plan) error {
 			fmt.Fprintf(tw, "observed\tsha256 %s\t%d bytes (observed, not verified)\n", p.Existing.ExecutableSHA256, p.Existing.ExecutableSize)
 		}
 	}
+	return tw.Flush()
+}
+
+func writePlanFile(out string, raw []byte, digest string, cmd *cobra.Command) error {
+	if out == "" {
+		return nil
+	}
+	f, err := os.OpenFile(out, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644) // #nosec G304 -- the operator names where their own plan file goes
+	if err != nil {
+		return exitcode.New(exitcode.Usage, fmt.Errorf("write plan: %w (an existing file is not overwritten)", err))
+	}
+	if _, err := f.Write(append(raw, '\n')); err != nil {
+		_ = f.Close()
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	fmt.Fprintf(cmd.ErrOrStderr(), "plan written to %s (digest %s)\n", out, digest)
+	return nil
+}
+
+func peekJSONSchema(path string) (string, error) {
+	b, err := os.ReadFile(path) // #nosec G304 -- the operator names the plan file they approved
+	if err != nil {
+		return "", fmt.Errorf("open plan: %w", err)
+	}
+	var head struct {
+		Schema string `json:"schema"`
+	}
+	if err := json.Unmarshal(b, &head); err != nil {
+		return "", fmt.Errorf("plan file is not JSON: %w", err)
+	}
+	return head.Schema, nil
+}
+
+func runAgentToolInstallV2(cmd *cobra.Command, eng *toolinstall.Engine, target *agentToolTarget, planFile string, yes bool) error {
+	var approved *toolinstall.PlanV2
+	if planFile != "" {
+		f, err := os.Open(planFile) // #nosec G304 -- the operator names the plan file they approved
+		if err != nil {
+			return exitcode.New(exitcode.Usage, fmt.Errorf("open plan: %w", err))
+		}
+		approved, err = toolinstall.ReadPlanV2(f)
+		_ = f.Close()
+		if err != nil {
+			return toolInstallExit(err)
+		}
+		target.driver = approved.Selection.Driver
+		target.version = approved.Selection.RequestedVersion
+		target.root = approved.Selection.Destination.Root
+	}
+	req, err := target.requestV2()
+	if err != nil {
+		return err
+	}
+	if approved != nil {
+		req.Driver = approved.Selection.Driver
+		req.Version = approved.Selection.RequestedVersion
+		req.Platform = approved.Selection.Platform
+		req.DestRoot = approved.Selection.Destination.Root
+	}
+	fresh, err := eng.PlanV2(cmd.Context(), req)
+	if err != nil {
+		return toolInstallExit(err)
+	}
+	if err := renderToolPlanV2(cmd.ErrOrStderr(), fresh); err != nil {
+		return err
+	}
+	if approved != nil {
+		if approved.Digest != fresh.Digest {
+			return toolInstallExit(&toolinstall.Refusal{Kind: toolinstall.KindPlanChanged, Err: fmt.Errorf(
+				"the approved plan (digest %s) no longer matches the vendor's selection (digest %s); review a new plan", approved.Digest[:12], fresh.Digest[:12])})
+		}
+	} else {
+		if err := confirmToolInstallV2(cmd, yes, fresh); err != nil {
+			return err
+		}
+		approved = fresh
+	}
+	rec, plan, err := eng.InstallV2(cmd.Context(), req, approved, cmd.ErrOrStderr())
+	if err != nil {
+		return toolInstallExit(err)
+	}
+	result := struct {
+		Receipt *toolinstall.ReceiptV2 `json:"receipt"`
+		Plan    *toolinstall.PlanV2    `json:"plan"`
+	}{Receipt: rec, Plan: plan}
+	return renderOut(cmd, func(w io.Writer) error {
+		fmt.Fprintf(w, "install: %s %s (%s) verification %s\n", rec.Driver, rec.Version, rec.VendorPlatform, rec.VerificationKind)
+		return renderToolReceiptV2(w, rec)
+	}, result)
+}
+
+func confirmToolInstallV2(cmd *cobra.Command, assumeYes bool, plan *toolinstall.PlanV2) error {
+	if assumeYes {
+		return nil
+	}
+	in := cmd.InOrStdin()
+	if !interactiveStdin(in) {
+		return exitcode.New(exitcode.Usage, fmt.Errorf(
+			"refusing to install %s %s without confirmation: this session is not interactive — pass --yes, or write it with `plan --out` and run `install --plan`",
+			plan.Selection.Driver, plan.Selection.Version))
+	}
+	if _, err := fmt.Fprintf(cmd.ErrOrStderr(), "Download from %s (verification %s) and place the release at %s? [y/N]: ",
+		plan.Selection.Source.Package.URL, plan.Selection.Verification.Kind, plan.Selection.Destination.ReleaseDir); err != nil {
+		return exitcode.New(exitcode.Err, fmt.Errorf("the confirmation prompt could not be shown: %w", err))
+	}
+	line, _ := bufio.NewReader(in).ReadString('\n')
+	switch strings.ToLower(strings.TrimSpace(line)) {
+	case "y", "yes":
+		return nil
+	}
+	return exitcode.New(exitcode.Usage, errors.New("aborted: the install was not confirmed"))
+}
+
+func renderToolPlanV2(w io.Writer, p *toolinstall.PlanV2) error {
+	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+	fmt.Fprintf(tw, "plan\t%s\tschema %s\n", p.Digest, p.Schema)
+	fmt.Fprintf(tw, "driver\t%s %s\tplatform %s, requested %q via %s\n", p.Selection.Driver, p.Selection.Version, p.Selection.VendorPlatform, p.Selection.RequestedVersion, p.Selection.Channel)
+	fmt.Fprintf(tw, "package\t%s\n", p.Selection.Source.Package.URL)
+	fmt.Fprintf(tw, "verification\t%s\tpackage policy %s\n", p.Selection.Verification.Kind, p.Selection.PackagePolicyID)
+	fmt.Fprintf(tw, "destination\t%s\n", p.Selection.Destination.Executable)
+	return tw.Flush()
+}
+
+func renderToolReceiptV2(w io.Writer, r *toolinstall.ReceiptV2) error {
+	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+	fmt.Fprintf(tw, "executable\t%s\n", r.Destination.Executable)
+	fmt.Fprintf(tw, "fetched\t%d bytes, sha256 %s\n", r.FetchedObject.Size, r.FetchedObject.SHA256)
+	fmt.Fprintf(tw, "probe\t%s (%d ms)\n", strings.TrimSpace(strings.SplitN(r.Probe.Output, "\n", 2)[0]), r.Probe.DurationMS)
+	fmt.Fprintf(tw, "verification\t%s\t%s\n", r.VerificationKind, r.AuthObservation.Note)
+	fmt.Fprintf(tw, "installed\t%s by olivares %s, plan digest %s\n", r.InstalledAt.Format(time.RFC3339), r.InstallerVersion, r.PlanDigest)
+	fmt.Fprintf(tw, "receipt\t%s\n", filepath.Join(r.Destination.ReleaseDir, toolinstall.ReceiptFile))
 	return tw.Flush()
 }
 

@@ -77,8 +77,8 @@ type ResolvedProofV2 struct {
 //     unknown (Grok origin-only), this observation still carries the measured
 //     digest; that does not elevate provenance.
 type FetchedObjectObserved struct {
-	SHA256 string
-	Size   int64
+	SHA256 string `json:"sha256"`
+	Size   int64  `json:"size"`
 }
 
 // ObservedPayloadInventory is the closed payload PlaceV2 produced under the
@@ -89,7 +89,7 @@ type FetchedObjectObserved struct {
 // relative paths in canonical order. The fetched tar and staging marker are
 // not members.
 type ObservedPayloadInventory struct {
-	Members []ObservedMember
+	Members []ObservedMember `json:"members"`
 }
 
 // ObservedMember is one path PlaceV2 observed.
@@ -100,12 +100,15 @@ type ObservedPayloadInventory struct {
 //     empty SHA256 and Size 0; the contract hashes regulars, not directories.
 //     Role is not an observation: it lives on ExpectedLayout / PackagePolicyV2.
 type ObservedMember struct {
-	Path   string
-	Kind   string
-	SHA256 string
-	Size   int64
-	Mode   uint32
+	Path   string `json:"path"`
+	Kind   string `json:"kind"`
+	SHA256 string `json:"sha256"`
+	Size   int64  `json:"size"`
+	Mode   uint32 `json:"mode"`
 }
+
+// FetchedObjectObserved JSON field names used by receipt/v2.
+func (f FetchedObjectObserved) ready() bool { return f.SHA256 != "" && f.Size > 0 }
 
 // PackagePolicyV2 is the closed package verification policy VerifyPayload
 // applies to a placed inventory. It is a requirement set, not a verified status.

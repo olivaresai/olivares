@@ -38,6 +38,7 @@ const (
 // Engine orchestrates providers against a destination root.
 type Engine struct {
 	catalog          *Catalog
+	capabilities     *CapabilityCatalog
 	installerVersion string
 	now              func() time.Time
 	// beforePlace runs after the receipt is written and before the staging
@@ -61,8 +62,91 @@ func NewEngine(c *Catalog, o EngineOptions) *Engine {
 	return e
 }
 
-// Catalog exposes the registered providers.
+// NewEngineWithCapabilities wires a v1+v2 catalog. Claude stays on Provider
+// (plan/v1). Codex and Grok stay on PackageProviderV2 (plan/v2). The two
+// schemas never share a decoder.
+func NewEngineWithCapabilities(c *CapabilityCatalog, o EngineOptions) *Engine {
+	var v1 *Catalog
+	if c != nil {
+		v1 = c.v1
+	}
+	e := NewEngine(v1, o)
+	e.capabilities = c
+	return e
+}
+
+// Catalog exposes the v1 providers (Claude). DriverKeys is the union.
 func (e *Engine) Catalog() *Catalog { return e.catalog }
+
+// DriverKeys is the sorted union of v1 and v2 driver names.
+func (e *Engine) DriverKeys() []string {
+	if e != nil && e.capabilities != nil {
+		return e.capabilities.Keys()
+	}
+	if e == nil || e.catalog == nil {
+		return nil
+	}
+	return e.catalog.Keys()
+}
+
+// Capability reports the registered install schema for driver.
+func (e *Engine) Capability(driver string) (ProviderCapability, error) {
+	return e.capabilityOf(driver)
+}
+
+func (e *Engine) capabilityOf(driver string) (ProviderCapability, error) {
+	if e != nil && e.capabilities != nil {
+		return e.capabilities.Capability(driver)
+	}
+	if e == nil || e.catalog == nil {
+		return 0, refuse(KindUnsupportedProvider, "no providers are registered")
+	}
+	if _, err := e.catalog.Lookup(driver); err != nil {
+		return 0, err
+	}
+	return ProviderCapabilityV1, nil
+}
+
+func (e *Engine) v1Provider(driver string) (Provider, error) {
+	if e != nil && e.capabilities != nil {
+		return e.capabilities.LookupV1(driver)
+	}
+	if e == nil || e.catalog == nil {
+		return nil, refuse(KindUnsupportedProvider, "no providers are registered")
+	}
+	return e.catalog.Lookup(driver)
+}
+
+func (e *Engine) v2Provider(driver string) (PackageProviderV2, error) {
+	if e == nil || e.capabilities == nil {
+		return nil, refuse(KindUnsupportedProvider, "driver %q has no v2 installer in this engine", driver)
+	}
+	return e.capabilities.LookupV2(driver)
+}
+
+// ProviderDefaultPaths is the vendor search list Detect uses for driver.
+func (e *Engine) ProviderDefaultPaths(driver, home string) ([]string, error) {
+	capab, err := e.capabilityOf(driver)
+	if err != nil {
+		return nil, err
+	}
+	switch capab {
+	case ProviderCapabilityV1:
+		p, err := e.v1Provider(driver)
+		if err != nil {
+			return nil, err
+		}
+		return p.DefaultPaths(home), nil
+	case ProviderCapabilityV2:
+		p, err := e.v2Provider(driver)
+		if err != nil {
+			return nil, err
+		}
+		return p.DefaultPaths(home), nil
+	default:
+		return nil, refuse(KindUnsupportedProvider, "driver %q has no installer", driver)
+	}
+}
 
 func validateRequest(req Request) error {
 	if req.Driver == "" {
@@ -81,7 +165,14 @@ func (e *Engine) Plan(ctx context.Context, req Request) (*Plan, error) {
 	if err := validateRequest(req); err != nil {
 		return nil, err
 	}
-	p, err := e.catalog.Lookup(req.Driver)
+	capab, err := e.capabilityOf(req.Driver)
+	if err != nil {
+		return nil, err
+	}
+	if capab == ProviderCapabilityV2 {
+		return nil, refuse(KindInvalidRequest, "driver %q uses plan schema %s; use PlanV2", req.Driver, PlanSchemaV2)
+	}
+	p, err := e.v1Provider(req.Driver)
 	if err != nil {
 		return nil, err
 	}
@@ -140,7 +231,14 @@ func (e *Engine) Install(ctx context.Context, req Request, approved *Plan, progr
 	if err := validateRequest(req); err != nil {
 		return nil, nil, err
 	}
-	p, err := e.catalog.Lookup(req.Driver)
+	capab, err := e.capabilityOf(req.Driver)
+	if err != nil {
+		return nil, nil, err
+	}
+	if capab == ProviderCapabilityV2 {
+		return nil, nil, refuse(KindInvalidRequest, "driver %q uses plan schema %s; use InstallV2", req.Driver, PlanSchemaV2)
+	}
+	p, err := e.v1Provider(req.Driver)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -446,6 +544,28 @@ func ensureDir(root *os.Root, rel string, perm os.FileMode) error {
 	default:
 		return refuse(KindDestinationUnsafe, "inspect %s: %v", rel, err)
 	}
+}
+
+func ensureDirAll(root *os.Root, rel string, perm os.FileMode) error {
+	rel = filepath.Clean(rel)
+	if rel == "." || rel == string(filepath.Separator) {
+		return nil
+	}
+	var parts []string
+	for rel != "." && rel != "" {
+		parts = append([]string{rel}, parts...)
+		parent := filepath.Dir(rel)
+		if parent == rel {
+			break
+		}
+		rel = parent
+	}
+	for _, p := range parts {
+		if err := ensureDir(root, p, perm); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func writeFileExcl(root *os.Root, rel string, b []byte, perm os.FileMode) error {

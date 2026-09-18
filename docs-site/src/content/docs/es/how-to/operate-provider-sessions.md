@@ -50,8 +50,8 @@ no un respaldo.
 | Controlador | Fija esta variable de entorno | Si no está definida |
 |---|---|---|
 | Claude Code | `OLIVARES_SESSION_RUNTIME_CLAUDE_BIN` (predeterminado `claude`) | la vía Claude usa el nombre de ejecutable predeterminado |
-| Codex | `OLIVARES_SESSION_RUNTIME_CODEX_BIN` | los perfiles Codex siguen observables y no se pueden lanzar |
-| Grok | `OLIVARES_SESSION_RUNTIME_GROK_BIN` | los perfiles Grok siguen observables y no se pueden lanzar |
+| Codex | `OLIVARES_SESSION_RUNTIME_CODEX_BIN` | Si no está definida, una instalación gestionada **registrada** (`olivares agent tool install --driver codex`) fija el ejecutable del recibo. En caso contrario, los perfiles Codex siguen observables y no se pueden lanzar. El motor no busca en `PATH`. |
+| Grok | `OLIVARES_SESSION_RUNTIME_GROK_BIN` | Si no está definida, una instalación gestionada **registrada** (`olivares agent tool install --driver grok`) fija el ejecutable del recibo. En caso contrario, los perfiles Grok siguen observables y no se pueden lanzar. El motor no busca en `PATH`. |
 
 El valor es el binario oficial que este nodo puede operar. El motor no
 resuelve `codex` ni `grok` desde `PATH`. La tabla de configuración generada

@@ -204,14 +204,6 @@ func validGrokPlanV2() *PlanV2 {
 	}
 }
 
-func expectedMembersFromSpec(spec []memberSpec) []ExpectedMember {
-	out := make([]ExpectedMember, len(spec))
-	for i, s := range spec {
-		out[i] = ExpectedMember{Path: s.Path, Kind: s.Kind, Role: s.Role, FinalMode: s.Mode}
-	}
-	return out
-}
-
 func mustMarshalV2(t *testing.T, p *PlanV2) []byte {
 	t.Helper()
 	raw, err := MarshalPlanV2(p)

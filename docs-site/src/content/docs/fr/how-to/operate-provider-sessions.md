@@ -50,8 +50,8 @@ repli.
 | Pilote | Épinglez cette variable d’environnement | Lorsqu’elle n’est pas définie |
 |---|---|---|
 | Claude Code | `OLIVARES_SESSION_RUNTIME_CLAUDE_BIN` (défaut `claude`) | le chemin Claude utilise le nom d’exécutable par défaut |
-| Codex | `OLIVARES_SESSION_RUNTIME_CODEX_BIN` | les profils Codex restent observables et ne sont pas lançables |
-| Grok | `OLIVARES_SESSION_RUNTIME_GROK_BIN` | les profils Grok restent observables et ne sont pas lançables |
+| Codex | `OLIVARES_SESSION_RUNTIME_CODEX_BIN` | Lorsqu’elle n’est pas définie, une installation gérée **enregistrée** (`olivares agent tool install --driver codex`) épingle l’exécutable du reçu. Sinon, les profils Codex restent observables et ne sont pas lançables. Le moteur ne cherche pas dans `PATH`. |
+| Grok | `OLIVARES_SESSION_RUNTIME_GROK_BIN` | Lorsqu’elle n’est pas définie, une installation gérée **enregistrée** (`olivares agent tool install --driver grok`) épingle l’exécutable du reçu. Sinon, les profils Grok restent observables et ne sont pas lançables. Le moteur ne cherche pas dans `PATH`. |
 
 La valeur est le binaire officiel que ce nœud peut exploiter. Le moteur ne
 résout pas `codex` ni `grok` via `PATH`. La table de configuration générée

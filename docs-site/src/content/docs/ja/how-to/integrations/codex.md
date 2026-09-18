@@ -11,11 +11,12 @@ cost を読み取ります。`codex-managed-config` コネクターは、配備�
 して確認します。最後に `olivares codex-hook` が session と tool decision をローカル PEP に送ります。
 個人の ChatGPT subscription で認証された session だけでは、enterprise API へのアクセスは得られません。
 
-このページは **コネクターと PEP hook** の経路です。公式 Codex CLI をガバナンス対象の
-子として起動しません。その運用経路は
+このページは **コネクターと PEP hook** の経路です。公式 CLI のインストールや検証、
+プローブのレシートの記録、ガバナンス対象セッションの起動や停止には
+[Codex CLI をインストールする](/how-to/install-codex-cli/) を使います。運用経路は
 [プロバイダーセッションを運用する](/how-to/operate-provider-sessions/)
-です（`OLIVARES_SESSION_RUNTIME_CODEX_BIN` とプロバイダープロファイル、
-`CHANGELOG.md` `[26.9.0]`）。
+です（`OLIVARES_SESSION_RUNTIME_CODEX_BIN` または管理対象インストールのレシートと、
+プロバイダープロファイル）。
 
 ## Codex を追加する
 

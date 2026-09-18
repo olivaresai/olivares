@@ -42,8 +42,8 @@ v26.9.0 行为的来源：`CHANGELOG.md` 的 `[26.9.0]`（提供商配置文件�
 | 驱动程序 | 固定此环境变量 | 未设置时 |
 |---|---|---|
 | Claude Code | `OLIVARES_SESSION_RUNTIME_CLAUDE_BIN`（默认 `claude`） | Claude 路径使用默认可执行文件名 |
-| Codex | `OLIVARES_SESSION_RUNTIME_CODEX_BIN` | Codex 配置文件仍可观察，但不能启动 |
-| Grok | `OLIVARES_SESSION_RUNTIME_GROK_BIN` | Grok 配置文件仍可观察，但不能启动 |
+| Codex | `OLIVARES_SESSION_RUNTIME_CODEX_BIN` | 未设置时，**已注册**的托管安装（`olivares agent tool install --driver codex`）固定回执中的可执行文件。否则 Codex 配置文件仍可观察，但不能启动。引擎不会搜索 `PATH` |
+| Grok | `OLIVARES_SESSION_RUNTIME_GROK_BIN` | 未设置时，**已注册**的托管安装（`olivares agent tool install --driver grok`）固定回执中的可执行文件。否则 Grok 配置文件仍可观察，但不能启动。引擎不会搜索 `PATH` |
 
 值是本节点可以运行的官方二进制文件。引擎不会从 `PATH` 解析 `codex` 或
 `grok`。生成的配置表也以同样的注册规则列出

@@ -121,7 +121,7 @@ The default emits the same contract the engine serves at `GET /openapi.json` (th
 
 ## Complete command reference
 
-This section is generated from the command tree of the community (AGPL) build of the `olivares` binary at this commit. It covers 818 command nodes — the root command and 817 subcommands, of which 179 are groups that carry subcommands and 9 are hidden diagnostics — together with the 2727 flags they declare. It is regenerated from the binary rather than kept by hand, so a command or flag added without a documentation change fails the push gate.
+This section is generated from the command tree of the community (AGPL) build of the `olivares` binary at this commit. It covers 820 command nodes — the root command and 819 subcommands, of which 180 are groups that carry subcommands and 9 are hidden diagnostics — together with the 2730 flags they declare. It is regenerated from the binary rather than kept by hand, so a command or flag added without a documentation change fails the push gate.
 
 Nothing here is a stability promise: see [Stability](#stability) below for what may still change.
 
@@ -153,7 +153,7 @@ Command groups declare further flags that their own subcommands inherit. A flag 
 
 ### Command index
 
-All 818 commands, in alphabetical order.
+All 820 commands, in alphabetical order.
 
 | Command | Summary |
 |---|---|
@@ -188,7 +188,7 @@ All 818 commands, in alphabetical order.
 | [`olivares agent session resume`](#command-olivares-agent-session-resume) | Resume a stopped session |
 | [`olivares agent session rm`](#command-olivares-agent-session-rm) | Delete a cleaned session's record |
 | [`olivares agent session stop`](#command-olivares-agent-session-stop) | Stop a running session |
-| [`olivares agent tool`](#command-olivares-agent-tool) | Install and inventory official provider CLIs (Claude Code) from signed releases, locally |
+| [`olivares agent tool`](#command-olivares-agent-tool) | Install and inventory official provider CLIs (Claude Code, Codex, Grok Build) |
 | [`olivares agent tool detect`](#command-olivares-agent-tool-detect) | Report provider CLI executables on this host: managed releases, vendor default paths and PATH |
 | [`olivares agent tool install`](#command-olivares-agent-tool-install) | Verify, download, probe and place one signed release of a provider CLI |
 | [`olivares agent tool list`](#command-olivares-agent-tool-list) | List installed provider CLI releases under the tools root and re-check their bytes |
@@ -480,6 +480,8 @@ All 818 commands, in alphabetical order.
 | [`olivares governance rbac roles`](#command-olivares-governance-rbac-roles) | Custom roles: what each one grants, and what it takes away |
 | [`olivares governance rbac roles get`](#command-olivares-governance-rbac-roles-get) | One custom role, with its full permission set |
 | [`olivares governance rbac roles ls`](#command-olivares-governance-rbac-roles-ls) | List the custom roles |
+| [`olivares grok`](#command-olivares-grok) | Author Grok Build governance artifacts (managed requirements) |
+| [`olivares grok managed-config`](#command-olivares-grok-managed-config) | Render /etc/grok/requirements.toml from a governance Policy JSON |
 | [`olivares grok-hook`](#command-olivares-grok-hook) | Governed PEP hook client for Grok Build: forward a Grok hook to the control plane and relay the decision (deny-closed) |
 | [`olivares health`](#command-olivares-health) | Watch subject health, incidents, SLA and dependencies |
 | [`olivares health checks`](#command-olivares-health-checks) | Declare, inspect, probe and retire health checks |
@@ -1486,7 +1488,7 @@ olivares agent session stop <run-ref>
 
 #### Command: olivares agent tool
 
-Install and inventory official provider CLIs (Claude Code) from signed releases, locally
+Install and inventory official provider CLIs (Claude Code, Codex, Grok Build)
 
 ```
 olivares agent tool
@@ -1521,7 +1523,7 @@ olivares agent tool install
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--driver` | `string` | `claude` | provider tool to install (this release: claude) |
+| `--driver` | `string` | `claude` | provider tool to install: claude, codex or grok |
 | `--plan` | `string` | — | execute this plan file written by `plan --out`; it is the approval, so no prompt is shown |
 | `--platform` | `string` | — | target platform key: linux-x64, linux-arm64, linux-x64-musl, linux-arm64-musl (default: this host) |
 | `--root` | `string` | — | absolute directory that owns installed tools (default &lt;data-dir&gt;/tools, with data-dir from $OLIVARES_DATA_DIR or the installation default) |
@@ -1553,7 +1555,7 @@ olivares agent tool plan
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--driver` | `string` | `claude` | provider tool to install (this release: claude) |
+| `--driver` | `string` | `claude` | provider tool to install: claude, codex or grok |
 | `--out` | `string` | — | write the plan JSON (with its digest) to this new file for a later `install --plan` |
 | `--platform` | `string` | — | target platform key: linux-x64, linux-arm64, linux-x64-musl, linux-arm64-musl (default: this host) |
 | `--root` | `string` | — | absolute directory that owns installed tools (default &lt;data-dir&gt;/tools, with data-dir from $OLIVARES_DATA_DIR or the installation default) |
@@ -5563,6 +5565,30 @@ olivares governance rbac roles ls
 ```
 
 Declares no flags of its own; it takes those of [`olivares governance rbac roles`](#command-olivares-governance-rbac-roles) and the root command.
+
+#### Command: olivares grok
+
+Author Grok Build governance artifacts (managed requirements)
+
+```
+olivares grok
+```
+
+Declares no flags of its own; it takes those of [`olivares`](#command-olivares) and the root command.
+
+#### Command: olivares grok managed-config
+
+Render /etc/grok/requirements.toml from a governance Policy JSON
+
+```
+olivares grok managed-config
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--policy` | `string` | `-` | path to the governance Policy JSON ('-' = stdin) |
+| `--requirements-out` | `string` | `-` | output path for requirements.toml ('-' = stdout) |
+| `--validate` | `bool` | `false` | validate the policy renders to valid TOML, but write nothing |
 
 #### Command: olivares grok-hook
 
