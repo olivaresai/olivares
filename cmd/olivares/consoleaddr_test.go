@@ -205,7 +205,8 @@ func linesBetween(s, from, to string) int {
 // The earlier version of this row required the sentence "the URL above is the one
 // that works on this machine" and nothing else. That sentence was true and it was
 // the whole defect: the reader is on a server over SSH, and the single address the
-// panel offered is the one address their browser cannot open. D18 replaced it with
+// panel offered is the one address their browser cannot open. The server-defaults
+// change replaced it with
 // the list, so the row now measures the list — and still measures that nothing
 // claims reachability, which this process cannot observe.
 func TestAWildcardBindIsNamedAndNeverPromisesRemoteReach(t *testing.T) {
