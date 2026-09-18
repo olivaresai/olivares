@@ -1780,7 +1780,7 @@ run_finalizer GH_FETCH_FLAKY_NAME=checksums.txt GH_FETCH_DROP_FIRST=1
 [ "$rc" -ne 0 ] && [ "$(patch_count)" -eq 0 ]
 check "[mutant] with a single attempt the dropped transfer ends the ceremony" "the retry is causal" $?
 
-# M5 — the candidate read back through the tag route, which is what this lane replaced. The
+# M5 — the candidate read back through the tag route, which is what this change replaced. The
 # stub answers 404 for a draft exactly as GitHub does, so the nominal publication must die.
 restore_sut || blind "fixture"
 sed -i 's#--paginate "repos/${REPOSITORY}/releases?per_page=100"#"repos/${REPOSITORY}/releases/tags/${RELEASE_TAG}"#' "$SUT" || blind "mutant M5 did not apply"

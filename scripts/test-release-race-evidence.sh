@@ -9,7 +9,7 @@
 # WHY IT EXISTS. The step decides whether a tag may build on race evidence. On 2026-09-17 the
 # v26.9 release added one admitted non-equality directly on olivaresai/olivares (7263d082e8,
 # 37da5b582a): a green race-full on a commit whose diff to the tag is workflow-only. Ported to
-# the hub, that first form carried two defects, both measured on the real commits (a local
+# this repository, that first form carried two defects, both measured on the real commits (a local
 # clone of 1d84bd1788 with the v26.8.0 green f443e0844d as the only candidate):
 #
 #   · `printf | grep -qvE` under pipefail ADMITTED a 2,986-file product diff (131 KB of names)

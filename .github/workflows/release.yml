@@ -921,7 +921,7 @@ jobs:
             case "${st}" in
             '?? release-commit.txt') continue ;;
             # go.work.sum: the Go toolchain APPENDS workspace checksums during the build when the
-            # curated export's module set differs from the hub's (measured 2026-09-17, run
+            # published tree's module set differs from the source tree's (measured 2026-09-17, run
             # 35234189801: the only modification after goreleaser was ` M go.work.sum`). Toolchain
             # bookkeeping, not a product file rewritten in silence: its diff is printed here as
             # evidence; the phase-2 binding reads the run's recorded tree, not this file.
@@ -1176,7 +1176,7 @@ jobs:
             case "${st}" in
             '?? release-commit.txt') continue ;;
             # go.work.sum: the Go toolchain APPENDS workspace checksums during the build when the
-            # curated export's module set differs from the hub's (measured 2026-09-17, run
+            # published tree's module set differs from the source tree's (measured 2026-09-17, run
             # 35234189801: the only modification after goreleaser was ` M go.work.sum`). Toolchain
             # bookkeeping, not a product file rewritten in silence: its diff is printed here as
             # evidence; the phase-2 binding reads the run's recorded tree, not this file.
