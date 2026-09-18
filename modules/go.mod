@@ -12,6 +12,7 @@ require (
 	github.com/olivaresai/olivares/core v0.0.0
 	github.com/olivaresai/olivares/sdk v0.0.0
 	go.opentelemetry.io/otel/trace v1.46.0
+	golang.org/x/sys v0.47.0
 	modernc.org/sqlite v1.54.0
 )
 
@@ -67,7 +68,6 @@ require (
 	golang.org/x/exp v0.0.0-20251219203646-944ab1f22d93 // indirect
 	golang.org/x/net v0.58.0 // indirect
 	golang.org/x/sync v0.22.0 // indirect
-	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/text v0.41.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260819154853-08b0e4226688 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260819154853-08b0e4226688 // indirect

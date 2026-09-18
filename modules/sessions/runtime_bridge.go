@@ -8,11 +8,11 @@ import (
 	"context"
 	"errors"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
+	"github.com/olivaresai/olivares/modules/sessions/cliruntime"
 )
 
 // activityWriteInterval throttles last_activity_at writes: a busy session
@@ -526,46 +526,38 @@ func (m *Module) buildLaunchSpec(
 		}
 		args = drv.LaunchArgs(driverLaunch)
 	} else {
-		switch p.Transport {
-		case TransportStreamJSON:
-			// The supported headless control transport: bidirectional NDJSON over stdio.
-			args = append(args, "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--print")
-		case TransportRemoteControl:
+		// ⛔ THE CLAUDE ARGV IS NOT BUILT HERE, AND THAT IS THE r3 CORRECTION.
+		// This branch used to hold a SECOND copy of the `--print` stream-json form
+		// that cliruntime already declared, and the transport declared beside that
+		// other copy (cliruntime.LaunchTransport) therefore governed a path
+		// production did not take: changing the declaration for a kind changed
+		// nothing the engine launched. One table, consulted by the launch path that
+		// runs in production, is what makes the declaration load-bearing.
+		//
+		// the template's terms travel as argv the operator never chose. They
+		// are built from the SERVER's merge (templateapply.go), so a caller who
+		// skips the console and posts straight to /runs gets the same confinement;
+		// cliruntime is where the flag shapes of those terms live.
+		claude := cliruntime.LaunchRequest{
+			WorkDir:        dir,
+			Model:          p.Model,
+			Effort:         p.Effort,
+			PermissionMode: p.PermissionMode,
+			ResumeID:       resumeID,
+			AllowedTools:   p.AllowedTools,
+			Instructions:   p.Instructions,
+			Name:           p.Name,
+		}
+		if p.Transport == TransportRemoteControl {
 			// Lifecycle-only: I/O is relayed to Anthropic's cloud, not bridged (§0).
-			args = append(args, "--remote-control")
-			if p.Name != "" {
-				args = append(args, "--name", p.Name)
-			}
-		}
-		args = append(args, "--permission-mode", p.PermissionMode)
-		if p.Model != "" {
-			args = append(args, "--model", p.Model)
-		}
-		if p.Effort != "" {
-			args = append(args, "--effort", p.Effort)
-		}
-		// the template's terms, as argv the operator never chose. This is the line
-		// where a workspace template stops being a description and becomes a restriction —
-		// it is built from the SERVER's merge (templateapply.go), so a caller who skips the
-		// console and posts straight to /runs gets the same confinement.
-		//
-		// The allowlist travels as ONE comma-separated value rather than the flag's
-		// space-separated variadic form: a variadic `--allowedTools A B` would swallow the
-		// flags that follow it. Tool specs routinely contain spaces (`Bash(git *)`) and
-		// never commas — templateTerms refuses one that does, so the join is lossless.
-		//
-		// It is only a restriction in company: `--allowedTools` AUTO-APPROVES, it does not
-		// confine (connectors/claude SDKEvaluationOrder). What denies everything it does not
-		// name is the permission mode dontAsk that the merge pins alongside it. Emitting
-		// this flag without that mode would read as a lock-down and be a widening.
-		if len(p.AllowedTools) > 0 {
-			args = append(args, "--allowedTools", strings.Join(p.AllowedTools, ","))
-		}
-		if p.Instructions != "" {
-			args = append(args, "--append-system-prompt", p.Instructions)
-		}
-		if resumeID != "" {
-			args = append(args, "--resume", resumeID)
+			args = cliruntime.ClaudeRemoteControlArgs(claude)
+		} else {
+			// The governed stream-json form, and the DEFAULT for anything else:
+			// validateCreate already normalizes an empty transport to it, and a
+			// transport this function does not recognize must not fall through to an
+			// argv with no form flag at all — that would launch the vendor CLI
+			// INTERACTIVELY under a row that claims a bridged session.
+			args = cliruntime.ClaudeArgs(claude)
 		}
 	}
 

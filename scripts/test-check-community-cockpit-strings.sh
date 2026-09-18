@@ -169,7 +169,12 @@ if [ "${OLIVARES_COCKPIT_STRINGS_REAL:-1}" = "1" ]; then
 		fail=$((fail + 1))
 	else
 		bin="$WORK/olivares-community"
-		if ! (cd "$ROOT/cmd/olivares" && go build -o "$bin" . ) 2>"$WORK/build.err"; then
+		# La misma razón que en el gate: un `go build` pelado incrusta la ruta del
+		# checkout en cada referencia de fuente, así que este caso real juzgaba DÓNDE
+		# está el repositorio. Medido el 2026-09-18 desde un árbol de trabajo cuyo
+		# nombre lleva un marcador: ~1950 hallazgos, todos rutas, y el caso «binario
+		# community real → verde» en rojo. build_olivares_bin es la definición única.
+		if ! ( . "$ROOT/scripts/lib/build-bin.sh" && build_olivares_bin "$bin" ) 2>"$WORK/build.err"; then
 			echo "  ! el binario community no construyó: los casos reales NO se ejecutaron"
 			sed 's/^/      /' "$WORK/build.err"
 			fail=$((fail + 1))

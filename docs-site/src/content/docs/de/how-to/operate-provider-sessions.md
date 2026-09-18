@@ -195,6 +195,7 @@ bestätigten Provider-Empfang.
 - [Ihre erste Stunde](/how-to/first-hour/) — Setup-Token, AAL3, Claude-Credential-Quelle.
 - [Claude Code mit Olivares betreiben](/how-to/run-claude-code-with-olivares/) — Co-Deployment-Topologien.
 - [Codex integrieren](/how-to/integrations/codex/) / [Grok Build integrieren](/how-to/integrations/grok/) — Connector und PEP-Hook.
+- [Session-Runtime-API](/reference/session-runtime-api/) — Listen, Attach, Input, Stop; Community-PTY und Editionsgrenze.
 - [Live-Betrieb & Sessions](/reference/modules/ii-sessions/) — `live_ref` und Attribution.
 - [Konfiguration](/reference/configuration/) — Driver-Pin-Variablen.
 - [CLI-Referenz](/reference/cli/) — `olivares agent session *` (aus dem Binary generiert).

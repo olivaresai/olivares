@@ -161,6 +161,7 @@ Grok 中断使用 ACP `session/cancel`，这是没有确认的通知。中断会
 - [第一个小时](/how-to/first-hour/) — 安装令牌、AAL3、Claude 凭证来源。
 - [在 Olivares 中运行 Claude Code](/how-to/run-claude-code-with-olivares/) — 共存拓扑。
 - [集成 Codex](/how-to/integrations/codex/) / [集成 Grok Build](/how-to/integrations/grok/) — 连接器与 PEP hook。
+- [会话运行时 API](/reference/session-runtime-api/) — 列表、attach、input、stop；Community PTY 与版本边界。
 - [实时运行与会话](/reference/modules/ii-sessions/) — `live_ref` 与归属。
 - [配置](/reference/configuration/) — 驱动程序固定变量。
 - [CLI 参考](/reference/cli/) — `olivares agent session *`（从二进制生成）。

@@ -14,6 +14,7 @@ import (
 
 	executor "github.com/olivaresai/olivares/core/runtime/executor"
 	"github.com/olivaresai/olivares/modules/sessions"
+	"github.com/olivaresai/olivares/modules/sessions/cliruntime"
 )
 
 // sessionruntime.go is the OPERATE seam adapter: it wires the concrete
@@ -25,8 +26,26 @@ import (
 // on its own deny-closed seams, so can later swap the credential source for a
 // full per-tenant claude-wif exchange behind the SAME seam.
 //
-// DENY-CLOSED: the native runner is always wired (so the seam is satisfied), but
-// the inference credential is the load-bearing deny-closed default — without a
+// DENY-CLOSED: no runner ⇒ no launch. The Community host runner bridges stdio
+// PIPES, because the transport this module launches is a stdio protocol.
+//
+// ⛔ IT IS NOT A PSEUDO-TERMINAL, AND THAT IS MEASURED, NOT PREFERRED. This line
+// wired sessions.NewPTYRunner in an earlier revision. Claude Code 2.1.275
+// with the stream-json argv this module builds (`--print`) REFUSES a terminal on
+// stdin: it writes `Error: Input must be provided either through stdin or as a
+// prompt argument when using --print` on stderr and exits 1 without a single
+// protocol frame, so every managed Community run would have failed against the
+// real binary. sessions.NewPTYRunner stays implemented and covered for the
+// interactive form that will need it; the transport a launch form requires is
+// declared once, in cliruntime.LaunchTransport. The overlay Identity & Scale
+// listener is neither of these runners.
+//
+// ⛔ AND THE RUNNER IS NO LONGER NAMED HERE: IT IS ASKED FOR. Naming the right
+// runner in this file made the declaration decorative — sessionRunnerOption
+// resolves it through sessions.NewOfficialRunner, so changing
+// cliruntime.LaunchTransport for a kind changes what production launches.
+//
+// The inference credential is the load-bearing deny-closed default — without a
 // configured short-lived token source, a stream-json launch fails closed (no
 // static key). Two credential sources, both opt-in and deny-closed (the module is
 // unchanged either way — it only sees a Credential whose Token it injects as
@@ -71,13 +90,14 @@ const (
 )
 
 // buildSessionRuntimeOptions assembles the operate-runtime options for module II
-// from the environment. The native runner is always wired; the credential source
-// is wired only when a token file is configured (otherwise launches stay
-// deny-closed). The governance gates (LaunchGate/StopGate/Recorder) are left at
+// from the environment. The runner is wired from the launch-form declaration
+// (sessionRunnerOption) and is absent only when that declaration cannot be
+// served by one runner; the credential source is wired only when a token file
+// is configured (otherwise launches stay deny-closed). The governance gates (LaunchGate/StopGate/Recorder) are left at
 // their additive defaults here — Late-binds the real PEP/budget/kill-switch/
 // recording adapters.
 func buildSessionRuntimeOptions(getenv func(string) string, broker *wifCredentialBroker, log *slog.Logger) []sessions.Option {
-	opts := []sessions.Option{sessions.WithRunner(sessions.NewProcRunner())}
+	opts := sessionRunnerOption(log)
 	// HC1: the host-tools read's adapter. It captures its locations here and
 	// detects nothing until a request asks (hosttools.go).
 	obs := newHostToolObserver(getenv)
@@ -162,6 +182,53 @@ func pinOfficialSessionDriver(
 		}
 		log.Info("session runtime: the official "+driver+" driver is operable on this node", args...)
 	}
+}
+
+// sessionRunnerOption wires the session RUNNER the launch forms DECLARE they
+// need, and wires none when the declaration cannot be resolved.
+//
+// ⛔ IT DOES NOT NAME A RUNNER, AND THAT IS THE POINT. This line used to read
+// `sessions.WithRunner(sessions.NewProcRunner())`: the right runner, chosen for
+// the right reason, by a line that did not read the reason. An independent
+// review measured the consequence on 2026-09-18 — the transport declaration
+// (cliruntime.LaunchTransport) governed only the cliruntime driver, which has no
+// production caller, so this line and the declaration could disagree for ever
+// and every managed session would die on stderr with nothing red. Asking the
+// factory is what makes the declaration decide what production launches.
+//
+// A refusal leaves the module DENY-CLOSED (no runner ⇒ every launch fails
+// closed) and says so at ERROR. That is the honest answer to "the declared
+// transports of the official CLIs disagree, and I hold one runner": launching
+// some of them on a transport their own CLI refuses would be worse than
+// launching none, because the refusal is visible and the wrong transport is a
+// child that exits 1 before its first protocol frame.
+func sessionRunnerOption(log *slog.Logger) []sessions.Option {
+	runner, err := sessions.NewOfficialRunner(cliruntime.Kinds()...)
+	if err != nil {
+		if log != nil {
+			log.Error("session runtime: the declared launch transports of the official CLIs cannot be served by one runner; NO runner is wired and every managed launch is denied",
+				"error", err.Error(),
+				"declared_by", "modules/sessions/cliruntime.LaunchTransport",
+				"remedy", "one runner serves one transport: split the runner per kind before declaring two")
+		}
+		return nil
+	}
+	if log != nil {
+		// The transport is read back from the runner rather than restated, so this
+		// line cannot claim one thing while the factory returned another. A runner
+		// that does not implement the optional read says nothing, and nothing is
+		// logged as "not reported" instead of being assumed.
+		transport := "not reported by this runner"
+		if reporter, ok := runner.(sessions.RunnerTransportReporter); ok {
+			transport = string(reporter.ProvidesTransport())
+		}
+		log.Info("session runtime: the runner wired is the one the official launch forms declare",
+			"transport", transport,
+			"declared_for", strings.Join(cliruntime.Kinds(), ","),
+			"why", "the owned operate forms are stdio protocols; Claude Code's --print form refuses a terminal on stdin",
+			"limit", "the OpenCode driver registered below is outside that declaration: its ACP child speaks the same standard streams, but nothing declares that here")
+	}
+	return []sessions.Option{sessions.WithRunner(runner)}
 }
 
 // logSessionLaunchInspection records, once at boot, whether the wired Runner can

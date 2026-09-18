@@ -189,6 +189,7 @@ recibo confirmado del proveedor.
 - [Tu primera hora](/how-to/first-hour/) — token de configuración, AAL3, fuente de credencial Claude.
 - [Ejecutar Claude Code con Olivares](/how-to/run-claude-code-with-olivares/) — topologías de co-despliegue.
 - [Integrar Codex](/how-to/integrations/codex/) / [Integrar Grok Build](/how-to/integrations/grok/) — conector y hook PEP.
+- [API de runtime de sesión](/reference/session-runtime-api/) — listar, adjuntar, input, stop; PTY Community y corte de edición.
 - [Operación en vivo y sesiones](/reference/modules/ii-sessions/) — `live_ref` y atribución.
 - [Configuración](/reference/configuration/) — variables de fijación del controlador.
 - [Referencia CLI](/reference/cli/) — `olivares agent session *` (generada desde el binario).

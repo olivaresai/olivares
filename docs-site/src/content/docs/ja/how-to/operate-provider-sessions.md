@@ -183,6 +183,7 @@ interrupt は保留中の承認を解決し、取り消し、プロンプト自�
 - [最初の1時間](/how-to/first-hour/) — セットアップトークン、AAL3、Claude 資格情報ソース。
 - [Olivares で Claude Code を実行する](/how-to/run-claude-code-with-olivares/) — 同居トポロジ。
 - [Codex を統合する](/how-to/integrations/codex/) / [Grok Build を統合する](/how-to/integrations/grok/) — コネクターと PEP hook。
+- [セッションランタイム API](/reference/session-runtime-api/) — 一覧、attach、input、stop。Community PTY とエディション境界。
 - [ライブ運用とセッション](/reference/modules/ii-sessions/) — `live_ref` と帰属。
 - [設定](/reference/configuration/) — ドライバー固定変数。
 - [CLI リファレンス](/reference/cli/) — `olivares agent session *`（バイナリから生成）。

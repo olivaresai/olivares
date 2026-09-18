@@ -179,6 +179,7 @@ provider receipt.
 - [Your first hour](/how-to/first-hour/) — setup token, AAL3, Claude credential source.
 - [Run Claude Code with Olivares](/how-to/run-claude-code-with-olivares/) — co-deployment topologies.
 - [Integrate Codex](/how-to/integrations/codex/) / [Integrate Grok Build](/how-to/integrations/grok/) — connector and PEP hook.
+- [Session runtime API](/reference/session-runtime-api/) — list, attach, input, stop; Community PTY and edition cut.
 - [Live operation & sessions](/reference/modules/ii-sessions/) — `live_ref` and attribution.
 - [Configuration](/reference/configuration/) — driver pin variables.
 - [CLI reference](/reference/cli/) — `olivares agent session *` (generated from the binary).
