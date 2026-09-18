@@ -1,0 +1,112 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# The SHARD PARTITION of the pull-request functional suite (.github/workflows/pr-ci.yml).
+#
+# WHY IT EXISTS, measured on the hosted 4-vCPU runner (run 35293935807, 2026-09-18). The
+# suite ran in ONE job and took 77 min 8 s of step and 78 min 55 s of job over 280
+# packages. Two earlier runs of the same suite did not even finish: 264 packages green
+# and the 60-minute step ceiling cut them, twice. Raising the ceiling makes the suite
+# PASS; it does not make the answer ARRIVE, and every contribution waits for the answer.
+#
+# WHAT THE MEASUREMENT SAYS, because the split follows from it and not from taste. The
+# suite walks the workspace one module at a time, so three modules ran one after another
+# and their wall clocks simply added up: cmd/olivares 24.4 min, core 25.6 min, modules
+# 25.1 min — 75.1 of the 77.1. Inside a module the packages DO run in parallel, and the
+# measurement says how much: modules spent 2990.5 s of test time in 1506.7 s of wall
+# clock, so TWO packages at a time, not four. That number is what the split is sized
+# against, and it is the number to re-measure when the runner changes.
+#
+# THE FLOOR OF THIS MECHANISM, said plainly: one package, core/internal/store/sqlstore,
+# takes 1461.7 s — 24.4 min — on its own. No package-level split goes under it. Going
+# under it needs the test-family split that scripts/race-groups.json already does for the
+# -race sweep of this same package; that is the next step, not this one.
+#
+# THE PARTITION IS DECLARED, NOT COMPUTED. A hash of the package name balances nothing
+# when one package is 22 % of the clock, and it cannot be read: a person who adds a
+# package cannot tell where it landed, and a person who reads a red shard cannot tell
+# what else was in it. The lists below are the whole answer, and
+# scripts/check-pr-suite-shards.sh proves they cover the suite exactly once.
+#
+# FORMAT — one record per line, fields separated by whitespace, `#` starts a comment.
+#
+#   shard <name>                 declares a shard. THE ORDER IS THE MATRIX ORDER.
+#   pkg   <shard> <pattern>      an import-path pattern that shard owns.
+#                                `<path>/...` is the subtree; anything else is exact.
+#   leg   <shard> <task>         a Taskfile leg that shard runs after its packages.
+#   optional <pattern>           this pattern MAY match nothing, because the module it
+#                                names is not published in every tree. Everywhere else a
+#                                pattern that matches nothing is stale and is a finding.
+#   go-timeout-minutes <n>       `go test -timeout` inside a shard.
+#   step-ceiling-minutes <n>     the workflow step ceiling. Must exceed the go timeout.
+#   job-ceiling-minutes <n>      the workflow job ceiling.
+#
+# ASSIGNMENT RULE: THE LONGEST MATCHING PATTERN WINS — the same rule as
+# scripts/race-groups.json, and for the same reason: it lets a broad pattern and a
+# surgical one live side by side without either listing the other's packages.
+# `core/...` and `core/internal/...` both match core/internal/store/sqlstore; the second
+# is longer, so shard `a` owns it. Two patterns of the SAME length matching one package
+# is not a tie to break quietly — it is a package in two shards, and it is a finding.
+
+shard a
+shard b
+shard c
+
+# --- a — the longest package, and nothing that makes it wait.
+# core/internal/store/sqlstore is 1461.7 s of the suite's 6516.7 s and it spends that time
+# SERIALISED on Postgres, so it sets this shard's wall clock on its own. What joins it is
+# chosen for costing nothing to BUILD as well as nothing to run: the operator is not here
+# because its Kubernetes dependencies take 58 s to compile for 1.2 s of tests, and on this
+# shard 58 s of compilation is 58 s of the critical path.
+pkg a github.com/olivaresai/olivares/core/internal/...
+pkg a github.com/olivaresai/olivares/clients/...
+pkg a github.com/olivaresai/olivares/sdk/...
+pkg a github.com/olivaresai/olivares/terraform-provider-olivares/...
+
+# --- b — the second longest package, the third, and the connectors.
+# cmd/olivares is 1355.8 s and it is wall-clock bound: it polls and converges, so more
+# cores do not shorten it. modules/sessions (995.1 s) joins it because two packages that
+# each wait more than they compute overlap almost perfectly at two lanes, and because
+# leaving it in `c` made `c` the slowest shard of the three — 2990.5 s of modules over two
+# lanes is 1495 s, which is worse than the package this whole split is bounded by. The 178
+# connector packages cost 25.4 s of test time between them and fill what is left.
+pkg b github.com/olivaresai/olivares/cmd/...
+pkg b github.com/olivaresai/olivares/connectors/...
+pkg b github.com/olivaresai/olivares/modules/sessions/...
+
+# --- c — the rest of core, the rest of the modules, the operator, and the private legs.
+# No package here reaches 440 s (governance, 431.8 s), so this shard is bounded by its own
+# parallelism — 2670 s over two lanes — and not by any one member.
+pkg c github.com/olivaresai/olivares/core/...
+pkg c github.com/olivaresai/olivares/modules/...
+pkg c github.com/olivaresai/olivares/operator/...
+pkg c github.com/olivaresai/olivares-cloud-cp/...
+
+# The control plane is not published, so its packages are absent from the exported tree
+# and from the public repository. The pattern stays declared — the suite DOES run them
+# where they exist — and it is allowed to match nothing where they do not. An exemption
+# that keeps quiet is an exemption nobody reviews, so the gate prints it.
+optional github.com/olivaresai/olivares-cloud-cp/...
+
+# The three legs of `task test:functional` that run outside the workspace sweep. They are
+# scripts/private-leg.sh legs: where cloud/ and commercial/ exist they run, and in the
+# published tree they answer NOT APPLICABLE and exit 0. They are named here so that
+# "the union of the shards is the whole suite" is a claim about the whole suite.
+leg c test:cloud:norace
+leg c test:commerce
+leg c test:commerce-core:norace
+
+# --- the clocks -------------------------------------------------------------------
+# go-timeout 35m: the longest package measured 24.4 min, so this leaves 43 % of headroom
+# and still fires long before the step ceiling, which is the order that keeps the
+# diagnosis readable — Go panics with its goroutine dump and its package name, the step
+# ceiling only cancels.
+# step 45 / job 55: the slowest shard is predicted between 24.8 and 26.5 min. It is a
+# RANGE and not a number on purpose — the two complete runs of the same tree, an hour
+# apart, disagree by up to 16 % on the very package that bounds it (sqlstore 1461.7 s then
+# 1231.2 s). 45 min leaves at least 70 % of headroom over the top of that range, which is
+# what a ceiling is for. Re-measure it once the shards have run: a ceiling that was never
+# measured is a guess that nothing corrects.
+go-timeout-minutes 35
+step-ceiling-minutes 45
+job-ceiling-minutes 55
