@@ -827,7 +827,7 @@
     },
     {
       "name": "root-c",
-      "tests_now": 264,
+      "tests_now": 266,
       "minutes_est": 26.1,
       "families": [
         "ADeclared",
@@ -837,6 +837,8 @@
         "ATrace",
         "AValid",
         "AWildcard",
+        "ContainerAdvice",
+        "WildcardAdvice",
         "Admit",
         "Advice",
         "Artifact",
