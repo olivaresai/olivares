@@ -2207,6 +2207,7 @@ tasks:
           bash scripts/test-release-security-producer.sh || exit $?
           bash scripts/test-release-security-sig-guard.sh || exit $?
           bash scripts/test-release-finalize-stable.sh || exit $?
+          bash scripts/test-release-race-evidence.sh || exit $?
           bash scripts/test-release-preflight.sh || exit $?
           bash scripts/test-resolve-bare-manifest-digest.sh || exit $?
           bash scripts/test-cosign-verified-mode.sh || exit $?
