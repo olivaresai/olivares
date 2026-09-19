@@ -139,7 +139,7 @@ assert 'newDoctorCmd()' in main
 assert '"doctor": "observe"' in main
 assert 'const doctorSchema = "olivares.ai/doctor/v1"' in doctor
 assert 'code = exitcode.Usage // DIST-24-04' in doctor
-assert 'Values from the env file are never read into output' in doctor
+assert 'Values from the env file and hook PEP URLs are never read into output' in doctor
 assert 'cmd.Stdout = io.Discard' in doctor and 'cmd.Stderr = io.Discard' in doctor
 PY
 

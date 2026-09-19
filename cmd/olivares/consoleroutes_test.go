@@ -1020,7 +1020,7 @@ func walkEveryRoute(t *testing.T) map[string]bool {
 	if err != nil {
 		t.Fatal(err)
 	}
-	set, err := buildModules(signer, nil, nil, nil, nil, sourcesConfig{}, EditionConfig{}, log)
+	set, err := buildModules(signer, nil, nil, nil, nil, sourcesConfig{}, EditionConfig{}, t.TempDir(), log)
 	if err != nil {
 		t.Fatalf("build modules: %v", err)
 	}
@@ -1872,6 +1872,19 @@ var consoleDeferredOperatorSurface = map[string]string{
 	// The map is deliberately left EMPTY instead of deleted. It is the named, falsifiable
 	// inventory of console surface this repository defers on purpose, and the next increment
 	// that defers one needs somewhere to say so — with a reason, not a budget increase.
+	//
+	// Three are deferred here. Each had a typed console wrapper that NO screen called: a
+	// wrapper nobody calls satisfies this census and makes nothing possible from the console,
+	// which is the opposite of what the census asks. The wrappers left; the operations stay
+	// reachable from the API, the CLI and the generated clients. The increment that builds
+	// the screen adds its caller and removes its line — the loop above turns a
+	// declared-but-called operation red, so the line cannot outlive its reason.
+	"POST /v1/m/governance/decisions/replay": "historical decision reconstruction ships as API and " +
+		"`olivares policy replay`; its how-to says there is no console control in this increment",
+	"GET /v1/m/governance/decisions/{}/reconstruct": "same increment as decisions/replay: the console " +
+		"has no decision-detail screen that would show a reconstruction yet",
+	"GET /v1/m/sessions/providers/{}": "the providers screen lists, adds, tests, rotates and revokes; " +
+		"list and get return the same record, and there is no detail route that would read one",
 }
 
 func TestDirectAPIFetchSurfaceMutation(t *testing.T) {

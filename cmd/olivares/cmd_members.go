@@ -10,11 +10,11 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	"text/tabwriter"
 
 	"github.com/spf13/cobra"
 
 	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
+	"github.com/olivaresai/olivares/cmd/olivares/internal/termrender"
 )
 
 const (
@@ -126,16 +126,20 @@ func membersListCmd(client bootstrapClient) *cobra.Command {
 					_, err := fmt.Fprintln(out, "no members in this tenant")
 					return err
 				}
-				tw := tabwriter.NewWriter(out, 0, 2, 2, ' ', 0)
-				fmt.Fprintln(tw, "USER ID\tEMAIL\tROLE\tSTATUS\tSSO ONLY\tWORKSPACES\tGROUPS")
+				tbl := termrender.Table{Header: []string{"user id", "email", "role", "status", "sso only", "workspaces", "groups"}}
 				for _, m := range list.Items {
-					fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%t\t%s\t%s\n",
-						safeCLIValue(m.UserID, ""), safeCLIValue(m.Email, ""),
-						orDash(safeCLIValue(m.Role, "")), safeCLIValue(m.Status, ""), m.SSOOnly,
+					tbl.Rows = append(tbl.Rows, []string{
+						safeCLIValue(m.UserID, ""),
+						safeCLIValue(m.Email, ""),
+						orDash(safeCLIValue(m.Role, "")),
+						safeCLIValue(m.Status, ""),
+						flagCell(m.SSOOnly),
 						orDash(safeCLIValue(strings.Join(m.WorkspaceIDs, ","), "")),
-						orDash(safeCLIValue(strings.Join(m.Groups, ","), "")))
+						orDash(safeCLIValue(strings.Join(m.Groups, ","), "")),
+					})
 				}
-				return tw.Flush()
+				renderTo(out).Table(tbl)
+				return nil
 			}, json.RawMessage(raw))
 		},
 	}
@@ -245,15 +249,18 @@ func invitesListCmd(client bootstrapClient) *cobra.Command {
 					_, err := fmt.Fprintln(out, "no pending invitations in this tenant")
 					return err
 				}
-				tw := tabwriter.NewWriter(out, 0, 2, 2, ' ', 0)
-				fmt.Fprintln(tw, "ID\tEMAIL\tROLE\tEXPIRES\tCREATED")
+				tbl := termrender.Table{Header: []string{"id", "email", "role", "expires", "created"}}
 				for _, inv := range list.Items {
-					fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n",
-						safeCLIValue(inv.ID, ""), safeCLIValue(inv.Email, ""),
-						orDash(safeCLIValue(inv.Role, "")), safeCLIValue(inv.ExpiresAt, ""),
-						safeCLIValue(inv.CreatedAt, ""))
+					tbl.Rows = append(tbl.Rows, []string{
+						safeCLIValue(inv.ID, ""),
+						safeCLIValue(inv.Email, ""),
+						orDash(safeCLIValue(inv.Role, "")),
+						safeCLIValue(inv.ExpiresAt, ""),
+						safeCLIValue(inv.CreatedAt, ""),
+					})
 				}
-				return tw.Flush()
+				renderTo(out).Table(tbl)
+				return nil
 			}, json.RawMessage(raw))
 		},
 	}

@@ -1,5 +1,11 @@
 de/how-to/troubleshooting.md
+de/reference/configuration.md
 es/how-to/troubleshooting.md
+es/reference/configuration.md
 fr/how-to/troubleshooting.md
+fr/reference/configuration.md
 ja/how-to/troubleshooting.md
+ja/reference/configuration.md
 ru/how-to/troubleshooting.md
+ru/reference/configuration.md
+zh/reference/configuration.md

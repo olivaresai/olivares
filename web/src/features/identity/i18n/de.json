@@ -39,6 +39,7 @@
       "identity": "Verwaltung von Identität",
       "nhiLifecycleRotate": "Rotation eines NHI-Zugangsdatenwerts",
       "nhiLifecycleFinalize": "Endgültiger Abschluss der NHI-Außerbetriebnahme",
+      "providers": "Anbieter-Zugangsdaten registrieren oder widerrufen",
       "generic": "Diese Aktion",
       "console": "Verwalten von Konnektoren"
     },

@@ -355,7 +355,7 @@ export default defineConfig({
               label: 'Install & operate',
               items: [
                 { label: 'Self-host the control plane', slug: 'how-to/self-hosting' },
-                { label: 'Your first hour (as shipped)', slug: 'how-to/first-hour' },
+                { label: 'Your first hour (local, team, hybrid)', slug: 'how-to/first-hour' },
                 { label: 'Deploy with Docker', slug: 'how-to/docker-deployment' },
                 //(C-13, community plan): the .deb/.rpm/.apk path. No page on this
                 // site mentioned a package format before it — `self-hosting` Option 1 is the
@@ -388,6 +388,7 @@ export default defineConfig({
                 { label: 'Connect a source', slug: 'how-to/connect-a-source' },
                 { label: 'Connect Claude Code', slug: 'how-to/connect-claude-code' },
                 { label: 'Run Claude Code with Olivares', slug: 'how-to/run-claude-code-with-olivares' },
+                { label: 'Add a provider and launch an agent', slug: 'how-to/add-a-provider' },
                 { label: 'Operate a provider session', slug: 'how-to/operate-provider-sessions' },
                 { label: 'Governed data for Claude', slug: 'how-to/governed-data-for-claude' },
                 { label: 'Govern Postgres content', slug: 'how-to/govern-postgres-content' },

@@ -700,10 +700,17 @@ func TestUpgradedCustomEstateSurvivesDoctorPlanPreservePurge(t *testing.T) {
 	if err != nil {
 		t.Fatalf("plan: %v\n%s", err, out)
 	}
-	for _, want := range []string{"dropin", "runtime-env", "keep         workspace     /mnt/workspaces", "witness"} {
+	// The subject is WHICH ROWS the plan discloses, not the column widths it happened
+	// to have when the plan was hand-padded. A row is matched by its three cells on
+	// one line, so the assertion still fails if the verdict, the role or the path
+	// changes — and survives the table being laid out by the renderer.
+	for _, want := range []string{"dropin", "runtime-env", "witness"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("plan omitted %q:\n%s", want, out)
 		}
+	}
+	if !planRow(out, "keep", "workspace", "/mnt/workspaces") {
+		t.Errorf("plan omitted the kept external workspace:\n%s", out)
 	}
 	if out, err := runCLI(t, append([]string{"uninstall", "--preserve"}, args...)...); err != nil {
 		t.Fatalf("preserve: %v\n%s", err, out)
@@ -731,4 +738,26 @@ func TestUpgradedCustomEstateSurvivesDoctorPlanPreservePurge(t *testing.T) {
 	if got, err := os.ReadFile(filepath.Join(root, "mnt/workspaces/project/README")); err != nil || string(got) != "operator data" {
 		t.Fatalf("external workspace did not survive the lifecycle: %q, %v", got, err)
 	}
+}
+
+// planRow reports whether the uninstall plan has ONE line carrying all three cells,
+// in order. A row split across two lines, or a verdict that moved to another path,
+// fails it — which is what the callers are actually asking about.
+func planRow(out, action, role, path string) bool {
+	for _, line := range strings.Split(out, "\n") {
+		rest := line
+		ok := true
+		for _, cell := range []string{action, role, path} {
+			i := strings.Index(rest, cell)
+			if i < 0 {
+				ok = false
+				break
+			}
+			rest = rest[i+len(cell):]
+		}
+		if ok {
+			return true
+		}
+	}
+	return false
 }

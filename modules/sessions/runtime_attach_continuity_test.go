@@ -223,7 +223,7 @@ func TestAttachHTTP_OtherTenantRejectedBeforeFrames(t *testing.T) {
 
 func TestAttachHTTP_LagReportsDroppedAndNextSeq(t *testing.T) {
 	fr := &fakeRunner{}
-	m := New(WithRunner(fr), WithCredentialSource(staticCred()))
+	m := New(WithSessionWorkspaceRoot(t.TempDir()), WithRunner(fr), WithCredentialSource(staticCred()))
 	m.rt.ringFrames = 3
 	h := newHarness(t, m)
 	admin := h.adminLogin()

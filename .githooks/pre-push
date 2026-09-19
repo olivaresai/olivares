@@ -585,6 +585,7 @@ echo "pre-push:   cli-registries + agent-surfaces + connector-onboard + migratio
 echo "pre-push:   unreachable-build-guards + docker-context-sufficiency + token-template-form + i18n + i18n-anchors + engine-output + datatable-empty + console-perms +"
 echo "pre-push:   docs-parity + adr-not-published + public-counts + cli-coverage + console-route-docs + ci-env-reach +"
 echo "pre-push:   config-coverage + screenshot-freshness + motor-declarado + motor-declarado:selftest + cli-transport-exempt + cli-transport-exempt:selftest +"
+echo "pre-push:   cli-render + cli-render:selftest +"
 echo "pre-push:   watchdog-unpublished-work + gate-lock-order + client-callers + client-callers-selftest + kms-backends +"
 echo "pre-push:   release-version + launch-image-refs + screenshot-coverage + launch-placeholders + launch-counts + cloud-availability-claims + video-scene-anchors + docs-honesty +"
 echo "pre-push:   commerce + commerce-entity-fks + commerce-entity-fks:selftest + security-txt + cosign-pins + release-mechanics + installer-matrix + installer-matrix:selftest + package-repos + package-repos:selftest + package-publish + package-publish:selftest +"
@@ -1400,6 +1401,11 @@ task lint:motor-declarado
 task lint:motor-declarado:selftest
 task lint:cli-transport-exempt
 task lint:cli-transport-exempt:selftest
+# El trinquete de formateo a mano del terminal, con su bateria. Es glob + comparacion de
+# lineas: sin motor, sin BD, sin red, ~1 s los dos. Va en el carril rapido porque el momento
+# en que sirve es cuando alguien acaba de escribir un tabwriter nuevo, no una hora despues.
+task lint:cli-render
+task lint:cli-render:selftest
 task lint:watchdog-unpublished-work
 task lint:gate-lock-order
 # ⛔ RETIRADA DEL PUSH el 2026-08-29, y NO por ruido: por COSTE SIN AUTORIDAD.

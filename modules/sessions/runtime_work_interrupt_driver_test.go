@@ -217,6 +217,7 @@ func codexHTTPHarness(
 ) (*Module, *harness, string, model.TenantID, ProviderProfile) {
 	t.Helper()
 	m := New(append([]Option{
+		WithSessionWorkspaceRoot(t.TempDir()),
 		WithRunner(NewProcRunner()),
 		WithProviderDriver(NewCodexDriver()),
 		WithDriverProgram(providerDriverCodex, os.Args[0]),

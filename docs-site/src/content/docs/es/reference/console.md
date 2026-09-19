@@ -58,7 +58,7 @@ Seguridad e identidad, Despliegue, Observabilidad y evidencias, y Sistema y ajus
 
 <!-- BEGIN GENERATED olivares-console-routes — regenerate with `bash scripts/check-guide-docs.sh --write`; do not edit by hand -->
 
-La consola publica **75 rutas**. Todas figuran en las tablas siguientes, con el permiso que
+La consola publica **76 rutas**. Todas figuran en las tablas siguientes, con el permiso que
 requieren y la página de referencia que abre su enlace de ayuda dentro del producto.
 
 ### Operar
@@ -79,6 +79,7 @@ requieren y la página de referencia que abre su enlace de ayuda dentro del prod
 | Observabilidad | `/observability` | Salud de la ingesta por estándar y exploración de trazas | `health:status:read` | [reference/modules/observability](/es/reference/modules/observability/) |
 | Vínculos de fuentes | `/provider-bindings` | Dedica fuentes configuradas, en la revisión que aplicó este nodo, a perfiles de proveedor | `sessions:profile-binding:read` | [reference/modules/ii-sessions](/es/reference/modules/ii-sessions/) |
 | Perfiles de proveedor | `/provider-profiles` | Registra y administra los directorios de proveedor bajo los que se lanzan las sesiones, y lee su configuración bajo demanda | `sessions:profile:read` | [reference/modules/ii-sessions](/es/reference/modules/ii-sessions/) |
+| Proveedores | `/providers` | Registra las claves de API y los endpoints con los que arrancan las sesiones; pruébalos, rótalos y revócalos | `sessions:provider:read` | [how-to/add-a-provider](/es/how-to/add-a-provider/) |
 | Sandbox | `/sandbox` | Pruebas aisladas de agentes y replay | `sandbox:run:read` | [reference/modules/xvii-sandbox](/es/reference/modules/xvii-sandbox/) |
 | Sesiones | `/sessions` | Operación viva de agentes y cronologías | `sessions:live:read` | [reference/modules/ii-sessions](/es/reference/modules/ii-sessions/) |
 | Tenants | `/tenants` | Retira o restaura el servicio de un tenant | `system:admin` | [how-to/troubleshooting](/es/how-to/troubleshooting/) |

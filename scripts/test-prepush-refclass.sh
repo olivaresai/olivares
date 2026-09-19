@@ -968,6 +968,7 @@ FAST_LINTS=(
 	lint:unreachable-build-guards lint:docker-context-sufficiency lint:token-template-form lint:i18n lint:i18n-anchors lint:engine-output lint:datatable-empty lint:console-perms
 	lint:docs-parity lint:adr-not-published lint:public-counts lint:cli-coverage lint:console-route-docs lint:ci-env-reach
 	lint:config-coverage lint:screenshot-freshness lint:motor-declarado lint:motor-declarado:selftest lint:cli-transport-exempt lint:cli-transport-exempt:selftest
+	lint:cli-render lint:cli-render:selftest
 	lint:watchdog-unpublished-work lint:gate-lock-order lint:client-callers lint:client-callers-selftest lint:kms-backends
 	lint:release-version lint:launch-image-refs lint:screenshot-coverage lint:launch-placeholders lint:launch-counts lint:cloud-availability-claims lint:video-scene-anchors lint:docs-honesty
 	lint:commerce lint:commerce-entity-fks lint:commerce-entity-fks:selftest lint:security-txt lint:cosign-pins lint:release-mechanics lint:installer-matrix lint:installer-matrix:selftest lint:package-repos lint:package-repos:selftest lint:package-publish lint:package-publish:selftest

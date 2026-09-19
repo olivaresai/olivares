@@ -101,7 +101,7 @@ func terminalEvidenceUpgradeCase(t *testing.T, cfg store.Config) {
 	const runRef = "run-old-format-1"
 
 	// --- 1. a pre-P1 database holding genuine old-format rows -------------------
-	old := New(WithClock(&testClock{now: baseTime}), WithRunner(&fakeRunner{}),
+	old := New(WithSessionWorkspaceRoot(t.TempDir()), WithClock(&testClock{now: baseTime}), WithRunner(&fakeRunner{}),
 		WithCredentialSource(staticCred()))
 	var stripped bool
 	st, err := engine.Open(ctx, cfg, func(reg store.ExtensionRegistry) error {
@@ -147,7 +147,7 @@ func terminalEvidenceUpgradeCase(t *testing.T, cfg store.Config) {
 	}
 
 	// --- 2. reopen with the real post-P1 descriptor ------------------------------
-	fresh := New(WithClock(&testClock{now: baseTime}), WithRunner(&fakeRunner{}),
+	fresh := New(WithSessionWorkspaceRoot(t.TempDir()), WithClock(&testClock{now: baseTime}), WithRunner(&fakeRunner{}),
 		WithCredentialSource(staticCred()))
 	st2, err := engine.Open(ctx, cfg, fresh.RegisterSchema)
 	if err != nil {
@@ -231,7 +231,7 @@ func TestTerminalEvidenceFreshPostgresP1SchemaWritesAndReads(t *testing.T) {
 	}
 	pg := enginetest.IsolatedPostgres(t)
 	ctx := context.Background()
-	m := New(WithClock(&testClock{now: baseTime}), WithRunner(&fakeRunner{}),
+	m := New(WithSessionWorkspaceRoot(t.TempDir()), WithClock(&testClock{now: baseTime}), WithRunner(&fakeRunner{}),
 		WithCredentialSource(staticCred()))
 	st, err := engine.Open(ctx, store.Config{
 		Engine: store.EnginePostgres, DSN: pg.App, Debug: true,

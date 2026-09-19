@@ -48,6 +48,7 @@ import {
   IdCard,
   Inbox,
   KeyRound,
+  KeySquare,
   Layers,
   LayoutDashboard,
   LayoutTemplate,
@@ -174,6 +175,16 @@ const SessionsWorkspaceView = lazy(() =>
 const ProviderAdminView = lazy(() =>
   import('./agentops/provider-admin-view').then((m) => ({
     default: m.ProviderAdminView,
+  })),
+)
+
+// The CREDENTIAL plane, beside the profile plane above it and deliberately not
+// inside it. A profile says which home an official CLI runs under; a provider says
+// which credential it runs with. They have independent permission tiers, and before
+// this route `sessions:provider:read` was a permission with no screen.
+const ProvidersView = lazy(() =>
+  import('./providers/providers-view').then((m) => ({
+    default: m.ProvidersView,
   })),
 )
 
@@ -466,7 +477,7 @@ export const HUB_ORDER: HubId[] = [
 /**
  * THE THIRTEEN NOUNS — the OTHER language this console has to be explicable in.
  *
- * question (canon §0, and §5 of the audit that answered it) names thirteen
+ * The product question (canon §0, and §5 of the 2026-08-11 audit that answered it) names thirteen
  * things an engineer must be able to SEE and MANAGE: sessions, agents, connections,
  * identities, models, rules, automations, groups, states, workflows, tasks, protocols,
  * infrastructure. The hubs above are VERBS; these are the NOUNS, and a navigation that
@@ -517,7 +528,7 @@ export interface ProductNoun {
   views: readonly string[]
 }
 
-/** The thirteen nouns, in the order asked for them.*/
+/** The thirteen nouns, in the order the question above lists them. */
 export const PRODUCT_NOUNS: readonly ProductNoun[] = [
   {
     id: 'sessions',
@@ -526,6 +537,7 @@ export const PRODUCT_NOUNS: readonly ProductNoun[] = [
       'sessions',
       'agentops',
       'workspace-templates',
+      'providers',
       'providerProfiles',
       'providerBindings',
       'voice',
@@ -606,7 +618,7 @@ export const PRODUCT_NOUNS: readonly ProductNoun[] = [
       // Exporting policy OUT to a remote AgentCore engine is still policy: it sits with
       // claudePolicy and routinePolicies rather than in UNNAMED, because the ratchet's own
       // note prefers giving a view back a noun to declaring it unfindable. Placed by the
-      // maintainer when #694 landed without either census entry; console lane may overrule.
+      // maintainer when #694 landed without either census entry; a later console pass may move it.
       'agentcoreExport',
       'inferenceProxy',
       'accessMap',
@@ -1423,6 +1435,24 @@ export const FEATURE_VIEWS: FeatureView[] = [
     icon: Terminal,
     permission: 'sessions:run:read',
     element: lazyView(SessionsWorkspaceView, { entrance: 'operate' as const }),
+  },
+  {
+    // The credential a session launches with. It sits FIRST in the environments
+    // section because it is the first thing a new operator needs and the last thing
+    // the product used to offer: a profile with no credential launches nothing, and
+    // the answer to "where does my API key go" used to be a variable in the server's
+    // shell.
+    id: 'providers',
+    path: '/providers',
+    navigation: { kind: 'feature', areaId: 'ai', sectionId: 'environments' },
+    helpHref: '/how-to/add-a-provider',
+    hub: 'operate',
+    // KeySquare and not KeyRound: the icon guard requires one lucide glyph per view,
+    // and KeyRound is the channel-administration view's. Two screens sharing a glyph
+    // is how a sidebar stops being scannable.
+    icon: KeySquare,
+    permission: 'sessions:provider:read',
+    element: lazyView(ProvidersView),
   },
   {
     // The provider-profile plane's own door, gated on ITS read tier. The plane is

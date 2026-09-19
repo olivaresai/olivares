@@ -10,11 +10,11 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	"text/tabwriter"
 
 	"github.com/spf13/cobra"
 
 	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
+	"github.com/olivaresai/olivares/cmd/olivares/internal/termrender"
 )
 
 const orgsPath = "/v1/system/orgs"
@@ -109,15 +109,19 @@ func tenantsListCmd(client bootstrapClient) *cobra.Command {
 					_, err := fmt.Fprintln(out, "no tenants exist yet")
 					return err
 				}
-				tw := tabwriter.NewWriter(out, 0, 2, 2, ' ', 0)
-				fmt.Fprintln(tw, "TENANT ID\tNAME\tSLUG\tSTATUS\tREGION\tCREATED")
+				tbl := termrender.Table{Header: []string{"tenant id", "name", "slug", "status", "region", "created"}}
 				for _, o := range list.Items {
-					fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n",
-						safeCLIValue(o.TenantID, ""), safeCLIValue(o.Name, ""),
-						safeCLIValue(o.Slug, ""), safeCLIValue(o.Status, ""),
-						orDash(safeCLIValue(o.DataRegion, "")), safeCLIValue(o.CreatedAt, ""))
+					tbl.Rows = append(tbl.Rows, []string{
+						safeCLIValue(o.TenantID, ""),
+						safeCLIValue(o.Name, ""),
+						safeCLIValue(o.Slug, ""),
+						safeCLIValue(o.Status, ""),
+						orDash(safeCLIValue(o.DataRegion, "")),
+						safeCLIValue(o.CreatedAt, ""),
+					})
 				}
-				return tw.Flush()
+				renderTo(out).Table(tbl)
+				return nil
 			}, json.RawMessage(raw))
 		},
 	}

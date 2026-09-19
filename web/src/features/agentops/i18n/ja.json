@@ -139,6 +139,8 @@
     "effort": "Effort",
     "model": "モデル",
     "workspace": "ワークスペース",
+    "workspaceDirectory": "作業ディレクトリ",
+    "workspaceDirectoryOwn": "このセッション専用のディレクトリ",
     "created": "作成日時",
     "started": "開始日時",
     "lastActivity": "最終アクティビティ",
