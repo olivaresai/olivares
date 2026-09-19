@@ -642,8 +642,13 @@ func TestAgentToolDetectCorroboratesWithSignedManifestOnly(t *testing.T) {
 	// Bare --probe without a corroborating manifest runs nothing here: the
 	// vendor-layout copy is unregistered-observed and is skipped with the way to
 	// name it.
+	// The probe is a COLUMN since the first-hour walk of 2026-09-18, so
+	// "skipped: <reason>" under the PROBE header replaces the old
+	// "probe skipped: <reason>" sub-line.
+	// The negative is the executable's OWN output — the old `probe: ` prefix no
+	// longer exists anywhere, so asserting its absence would pass vacuously.
 	code, stdout, stderr = f.run("agent", "tool", "detect", "--root", f.root, "--probe")
-	if code != exitcode.OK || strings.Contains(stdout, "probe: ") || !strings.Contains(stdout, "probe skipped") || !strings.Contains(stdout, "--probe-path") || f.ran() != 0 {
+	if code != exitcode.OK || strings.Contains(stdout, "(Claude Code)") || !strings.Contains(stdout, "skipped: ") || !strings.Contains(stdout, "--probe-path") || f.ran() != 0 {
 		t.Fatalf("bare probe: %d ran=%d\n%s\n%s", code, f.ran(), stdout, stderr)
 	}
 	// With the verified manifest the same candidate is corroborated and runs.
@@ -651,13 +656,13 @@ func TestAgentToolDetectCorroboratesWithSignedManifestOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 	code, stdout, stderr = f.run("agent", "tool", "detect", "--root", f.root, "--manifest", manifestPath, "--manifest-sig", sigPath, "--probe")
-	if code != exitcode.OK || !strings.Contains(stdout, "probe: 2.1.261 (Claude Code)") || f.ran() != 1 {
+	if code != exitcode.OK || !strings.Contains(stdout, "2.1.261 (Claude Code)") || f.ran() != 1 {
 		t.Fatalf("corroborated probe: %d ran=%d\n%s\n%s", code, f.ran(), stdout, stderr)
 	}
 	// Naming the exact path runs it without any manifest.
 	vendorBin := filepath.Join(versions, "2.1.261")
 	code, stdout, stderr = f.run("agent", "tool", "detect", "--root", f.root, "--probe-path", vendorBin)
-	if code != exitcode.OK || !strings.Contains(stdout, "probe: 2.1.261 (Claude Code)") || f.ran() != 2 {
+	if code != exitcode.OK || !strings.Contains(stdout, "2.1.261 (Claude Code)") || f.ran() != 2 {
 		t.Fatalf("named probe: %d ran=%d\n%s\n%s", code, f.ran(), stdout, stderr)
 	}
 	// A relative name is a usage error; a missing named path exits 1 and says why.
@@ -728,7 +733,7 @@ func TestAgentToolDamagedReleaseIsNeverProbedAndListSaysWhy(t *testing.T) {
 	}
 	base := f.ran()
 	code, stdout, stderr = f.run("agent", "tool", "detect", "--root", f.root, "--probe")
-	if code != exitcode.OK || !strings.Contains(stdout, "probe skipped: never executed") || f.ran() != base {
+	if code != exitcode.OK || !strings.Contains(stdout, "skipped: never executed") || f.ran() != base {
 		t.Fatalf("bare probe on damaged: %d ran=%d\n%s\n%s", code, f.ran()-base, stdout, stderr)
 	}
 	code, stdout, stderr = f.run("agent", "tool", "detect", "--root", f.root, "--probe-path", exe)

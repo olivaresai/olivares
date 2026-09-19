@@ -176,7 +176,7 @@ func bootSchemaRegistrar(log *slog.Logger) (func(store.ExtensionRegistry) error,
 		return nil, fmt.Errorf("directory writer activation: signer: %w", err)
 	}
 	set, err := buildModules(signer, ed25519.NewKeyFromSeed(fixedSeed(1)), ed25519.NewKeyFromSeed(fixedSeed(2)),
-		nil, nil, sourcesConfig{}, EditionConfig{}, log)
+		nil, nil, sourcesConfig{}, EditionConfig{}, "", log)
 	if err != nil {
 		return nil, fmt.Errorf("directory writer activation: load module operator config: %w", err)
 	}

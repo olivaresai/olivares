@@ -15,6 +15,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
+	"github.com/olivaresai/olivares/cmd/olivares/internal/termrender"
 )
 
 // deprecatedOutputWarning is scoped ON PURPOSE (E8). `--format` means two
@@ -328,4 +329,83 @@ func selectedOutput(cmd *cobra.Command) (string, error) {
 		}
 	}
 	return "text", nil
+}
+
+// renderTo is the ONE place the command layer builds a renderer. Every command
+// writes its human form through a writer — renderOut hands its text branch one,
+// and the `print…` helpers take one so a test can drive them without a root
+// command — so one function taking an io.Writer is the whole seam.
+//
+// It is one line of forwarding today and that is the point: the colour and width
+// decisions live in the renderer, so the day this binary grows a `--no-color`
+// flag there is exactly one function to teach, instead of every call site that
+// happened to build its own.
+//
+// IT USED TO HAVE A TWIN, rendererFor(cmd *cobra.Command), and the twin is gone
+// because it was measured at ZERO callers on 2026-09-18 while renderTableOut
+// built its own renderer four lines below — so the file claimed a seam it did not
+// hold. A seam with no callers is a comment. The guard is now a test,
+// TestTheCommandLayerBuildsItsRendererInOnePlace, which reads the package and
+// fails if termrender.New appears anywhere in the command layer but here.
+//
+// The seam is HERE and not in the renderer package because the dependency has to
+// point this way. termrender knows about writers, environments and terminals; it
+// does not know what a command is, and a presentation package that imports the
+// command framework has been made to depend on its own caller.
+func renderTo(out io.Writer) *termrender.Renderer {
+	return termrender.New(out, termrender.Options{})
+}
+
+// countCell renders a count as a table cell. It exists so a converted table says what
+// it means at the call site — a cell is a string, and a caller that reaches for
+// fmt.Sprintf("%d") there is one step from reaching for the whole row. It is
+// generic over the integer widths this tree actually stores counts in, because a
+// helper that only took int sent every int64 count back to Sprintf.
+func countCell[T ~int | ~int32 | ~int64](n T) string { return strconv.FormatInt(int64(n), 10) }
+
+// flagCell and quoteCell are the other two cell shapes a converted table needs.
+// They exist for the same reason countCell does, and flagCell keeps the exact
+// spelling %t produced — a table that started saying "yes" where it used to say
+// "true" would be a silent change to what a reader (or a script that was never
+// supposed to read the text form, but does) sees. It is not called boolCell
+// because cmd_db.go already has one, and that one answers a different question:
+// whether a posture value was measured at all.
+func flagCell(b bool) string { return strconv.FormatBool(b) }
+
+func quoteCell(s string) string { return strconv.Quote(s) }
+
+// renderFieldsOut is renderOut for a record: one key/value block for text, the
+// same value as indented JSON for json.
+//
+// It is the Fields counterpart of renderTableOut, and it exists for the same
+// reason: a key/value block is the second shape this CLI prints over and over,
+// and every hand-built one had its own column padding, its own casing and its own
+// answer to an empty value — which was usually to print nothing, so an operator
+// could not tell an empty field from a line that got cut.
+func renderFieldsOut(cmd *cobra.Command, fields []termrender.Field, jsonVal any) error {
+	return renderOut(cmd, func(out io.Writer) error {
+		renderTo(out).Fields(fields)
+		return nil
+	}, jsonVal)
+}
+
+// renderTableOut is renderOut for a list whose text form is the terminal renderer's
+// Table primitive: one header, one row per item, and the record fallback when the
+// row does not fit the terminal.
+//
+// It exists so that the commands of the first hour stop each inventing a layout.
+// Measured 2026-09-18 walking the first hour: `agent tool detect` emitted two
+// tab-separated rows with DIFFERENT field counts and no header, so the operator
+// could not tell which value was which; `agent session ls` emitted one bare
+// tab-separated row of four unlabelled identifiers. Both are lists of records
+// with a fixed set of columns, which is exactly what Table is.
+//
+// JSON is untouched, and that is the contract this change leans on: a script
+// reads `-o json`, whose bytes are unchanged, and the text form is free to become
+// readable. The same argument the deprecated-alias code makes above.
+func renderTableOut(cmd *cobra.Command, t termrender.Table, jsonVal any) error {
+	return renderOut(cmd, func(out io.Writer) error {
+		renderTo(out).Table(t)
+		return nil
+	}, jsonVal)
 }

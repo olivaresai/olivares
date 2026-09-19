@@ -81,6 +81,14 @@ type LaunchRequest struct {
 	// AUTO-APPROVES what it names and confines nothing by itself: what denies
 	// everything else is the permission mode the same merge pins beside it.
 	AllowedTools []string
+	// ToolSurface is the set of BUILT-IN tools the child may have at all, and
+	// ToolSurfaceDeclared says the server decided one. It is a different axis from
+	// AllowedTools above: that one auto-approves what the child may already use,
+	// this one decides what the child HAS. The provider profile declares it, and an
+	// undeclared profile yields a DECLARED EMPTY surface, which is the deny-closed
+	// answer (an internal design note (not shipped)).
+	ToolSurface         []string
+	ToolSurfaceDeclared bool
 	// Instructions is appended to the child's system prompt.
 	Instructions string
 	// Name labels a lifecycle-only remote-control child. The stdio launch forms

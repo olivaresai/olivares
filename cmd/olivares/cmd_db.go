@@ -9,11 +9,11 @@ import (
 	"fmt"
 	"io"
 	"strings"
-	"text/tabwriter"
 
 	"github.com/spf13/cobra"
 
 	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
+	"github.com/olivaresai/olivares/cmd/olivares/internal/termrender"
 	coreengine "github.com/olivaresai/olivares/core/engine"
 	"github.com/olivaresai/olivares/core/store"
 )
@@ -114,14 +114,19 @@ func dbCheckCmd() *cobra.Command {
 				})
 			}
 			if err := renderOut(cmd, func(out io.Writer) error {
-				tw := tabwriter.NewWriter(out, 0, 2, 2, ' ', 0)
-				fmt.Fprintln(tw, "DSN\tREACHABLE\tROLE\tSUPERUSER\tBYPASSRLS\tVERDICT")
+				tbl := termrender.Table{Header: []string{"dsn", "reachable", "role", "superuser", "bypassrls", "verdict"}}
 				for _, result := range results {
-					fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n",
-						result.DSN, yesNo(result.Reachable), orDash(result.Role),
-						boolCell(result.Reachable, result.Superuser), boolCell(result.Reachable, result.BypassRLS), result.Verdict)
+					tbl.Rows = append(tbl.Rows, []string{
+						result.DSN,
+						yesNo(result.Reachable),
+						orDash(result.Role),
+						boolCell(result.Reachable, result.Superuser),
+						boolCell(result.Reachable, result.BypassRLS),
+						result.Verdict,
+					})
 				}
-				return tw.Flush()
+				renderTo(out).Table(tbl)
+				return nil
 			}, results); err != nil {
 				return err
 			}
@@ -504,6 +509,12 @@ func printInitResult(out io.Writer, spec store.PgProvisionSpec, res store.PgProv
 	if res.AdminPosture != nil {
 		printPosture(out, "  admin", res.AdminPosture, true)
 	}
+	// NOT the next-step primitive, and not reworded either. TestDBInitProvisioned...
+	// asserts this block is BYTE-IDENTICAL to its pre-VER-06 form, because `db init`
+	// is scripted: its stdout is read by the setup flows that turn these three
+	// spellings into files. The presentation rule loses to a published contract, and
+	// this comment is here so the next person does not rediscover that with a red
+	// test.
 	fmt.Fprintln(out, "\nNext: store each password in a 0600 file and point serve at it (the password stays out of the env file):")
 	fmt.Fprintf(out, "  --dsn=file:/etc/olivares/secrets/app.dsn        # %s\n", res.AppDSNHint)
 	if res.OwnerDSNHint != "" {

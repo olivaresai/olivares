@@ -63,6 +63,11 @@ type serveOptions struct {
 	// bindListener acquires each serve-family listener; nil means bindServeListener.
 	// Private and test-only: no flag sets it and it selects no alternate transport.
 	bindListener serveListenerBind
+	// quiet holds the engine's own log back to errors for THIS run (quickstart's
+	// --quiet). It changes the level and nothing else: the format is one format
+	// (enginelog.go), because a flag that also changed the shape of every line is
+	// what made one first hour produce two formats from one binary.
+	quiet bool
 }
 
 // newServeCmd runs the engine: the REST/web HTTP server and the gRPC server,
@@ -121,7 +126,7 @@ func newServeCmd() *cobra.Command {
 	})
 	cmd.Flags().StringVar(&opts.dsn, "dsn", "", "store DSN (default a SQLite file in the data dir). May be a file:<path> or env:<VAR> reference resolved at boot, so the password stays out of the env file")
 	cmd.Flags().StringVar(&opts.adminDSN, "admin-dsn", "", "Postgres: DSN of a dedicated NOSUPERUSER BYPASSRLS read role for first setup and cross-tenant operations (org listing, checkpoints, DR backup). Provision with olivares db init --admin-role; see deploy/postgres/README.md. Keep the app role NOSUPERUSER NOBYPASSRLS; never use a superuser here")
-	cmd.Flags().StringVar(&opts.ownerDSN, "owner-dsn", "", "Postgres only: DSN of the owner role that owns the schema and runs DDL/migrations. Set it to a SEPARATE NOSUPERUSER NOBYPASSRLS role to make --dsn a least-privilege non-owner app role with only DML grants (provision both with `olivares db init`). Empty = the --dsn role owns the schema (single-role). Accepts a file:/env: reference like --dsn")
+	cmd.Flags().StringVar(&opts.ownerDSN, "owner-dsn", "", "Postgres only: DSN of the owner role that owns the schema and runs DDL/migrations. Set it to a SEPARATE NOSUPERUSER NOBYPASSRLS role to make --dsn a least-privilege non-owner app role with only DML grants (provision both with 'olivares db init'). Empty = the --dsn role owns the schema (single-role). Accepts a file:/env: reference like --dsn")
 	cmd.Flags().StringVar(&opts.region, "region", "", "data-residency HOME region of THIS instance (e.g. eu, us). When set, the instance is region-scoped: it serves only tenants pinned to this region and denies cross-region access fail-closed. Empty = single-region mode, no residency enforcement")
 	cmd.Flags().StringSliceVar(&opts.knownRegions, "known-regions", nil, "comma-separated region codes valid across the whole deployment (e.g. eu,us); a tenant pin must be one of these. The home --region is always included. Only meaningful with --region set")
 	cmd.Flags().StringVar(&opts.tlsCert, "tls-cert", "", "TLS certificate PEM (default a self-signed cert in the data dir)")
@@ -145,7 +150,11 @@ func newServeCmd() *cobra.Command {
 // start serving. A preparation or bind failure therefore mints no new setup token.
 // This is the single secure boot/serve path shared by `serve` and `quickstart`.
 func runEngine(ctx context.Context, out io.Writer, opts serveOptions, announce func(context.Context, io.Writer, *engine, consoleAddress) error) error {
-	log := slog.Default()
+	// ONE format, installed before the first line (enginelog.go): logfmt with the
+	// timestamp in UTC, at the level the operator asked for. Every engine start goes
+	// through here, so `serve` and `quickstart` cannot disagree about the shape of a
+	// log line — they did until 2026-09-18, and --quiet was what changed it.
+	log := installEngineLogger(os.Stderr, osGetenv, opts.quiet)
 
 	// The declared browser address is resolved and validated FIRST — before the
 	// demo guard, before the bind guard, and above all before boot() creates a

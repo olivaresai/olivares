@@ -196,8 +196,8 @@ func bootstrapHTTPError(status int, raw []byte) error {
 				"sent does not carry one. An API token never can (it has no assurance level) and a "+
 				"password session starts at AAL1; a USER SESSION that completed the WebAuthn/PIV "+
 				"ceremony does, for 15 minutes. Run the ceremony in the console, then pass that "+
-				"session here with `olivares auth login --token-file <file>`: HTTP %d: %s",
-			status, trimAPIErrorBody(raw)))
+				"session here with `olivares auth login --token-file <file>`. %s",
+			describeAPIRefusal(status, []byte(trimAPIErrorBody(raw)))))
 	}
 	return httpErr(status, raw)
 }

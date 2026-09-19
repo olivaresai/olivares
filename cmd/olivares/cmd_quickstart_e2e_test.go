@@ -168,6 +168,11 @@ func TestQuickstartByArgvPrintsBannerAndSetupToken(t *testing.T) {
 	if !strings.Contains(got, "one-time token") {
 		t.Fatalf("the panel does not tell the operator what the token is for:\n%s", got)
 	}
+	for _, want := range []string{"olivares doctor", "olivares agent tool detect", "Privileged login"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("the panel does not name the first-hour next step %q:\n%s", want, got)
+		}
+	}
 	if _, err := os.Stat(filepath.Join(dataDir, "setup.token")); err != nil {
 		t.Fatalf("the engine did not persist a setup token store: %v", err)
 	}

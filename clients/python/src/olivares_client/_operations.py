@@ -11,7 +11,7 @@ from typing import TypedDict, cast
 from urllib.parse import quote
 
 API_VERSION = "v1"
-SPEC_HASH = "e6a336e16f9f4afd020e87b93bef0bac01d3736d43fbd93ff67cf52f8510536a"
+SPEC_HASH = "355fc51fbd8db2423b4137e563c46a72614aaab637b5bb054091e2f4d49e5d5b"
 STABILITY_POLICY = "https://olivares.ai/docs"
 
 class _AuthCapabilityQuestionRequired(TypedDict):
@@ -2891,6 +2891,20 @@ class OperationsMixin:
         Stability: beta.
         """
         return self._do("GET", "/v1/m/governance/breakglass/{id}/uses", "/v1/m/governance/breakglass/" + quote(str(id), safe="") + "/uses", query=query, tenant=tenant)
+
+    def post_v1_m_governance_decisions_replay(self, body, *, tenant=None, **query):
+        """POST /v1/m/governance/decisions/replay — Reconstructs a past authorization from the access-evidence ledger, never from the live policy.
+
+        Stability: beta.
+        """
+        return self._do_json_required("POST", "/v1/m/governance/decisions/replay", "/v1/m/governance/decisions/replay", body=body, query=query, tenant=tenant)
+
+    def get_v1_m_governance_decisions_by_id_reconstruct(self, id, *, tenant=None, **query):
+        """GET /v1/m/governance/decisions/{id}/reconstruct — Reconstructs one stored authorization decision from the access-evidence ledger, never from the live policy.
+
+        Stability: beta.
+        """
+        return self._do("GET", "/v1/m/governance/decisions/{id}/reconstruct", "/v1/m/governance/decisions/" + quote(str(id), safe="") + "/reconstruct", query=query, tenant=tenant)
 
     def get_v1_m_governance_emerging_identity_standards(self, *, tenant=None, **query):
         """GET /v1/m/governance/emerging-identity-standards — Surfaces the design-toward registry read-only, with an explicit disclaimer that it is tracked, not implemented (IDN-12).

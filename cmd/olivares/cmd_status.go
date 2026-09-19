@@ -11,12 +11,12 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	"text/tabwriter"
 	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
+	"github.com/olivaresai/olivares/cmd/olivares/internal/termrender"
 )
 
 type statusClientConfig struct {
@@ -87,36 +87,50 @@ func newStatusCmd() *cobra.Command {
 				degraded = exitcode.New(exitcode.Degraded, nil)
 			}
 			if err := renderOut(cmd, func(out io.Writer) error {
-				tw := tabwriter.NewWriter(out, 0, 2, 2, ' ', 0)
-				fmt.Fprintf(tw, "STATUS\t%s\n", res.Status)
+				r := renderTo(out)
+				head := []termrender.Field{{Key: "status", Value: res.Status, Role: componentRole(res.Status)}}
 				// Name the unprovisioned capabilities up front: exiting 0 must
 				// never be read as "everything is configured here".
 				if pending := notConfiguredComponents(res.Components); len(pending) > 0 {
-					fmt.Fprintf(tw, "NOT_CONFIGURED\t%s\n", strings.Join(pending, " "))
+					head = append(head, termrender.Field{
+						Key: "not_configured", Value: strings.Join(pending, " "), Role: termrender.RoleWarn,
+					})
 				}
-				fmt.Fprintf(tw, "UPDATED\t%s\n", res.Timestamp)
-				fmt.Fprintf(tw, "EMBEDDER_KIND\t%s\n", res.EmbedderKind)
-				fmt.Fprintf(tw, "RETRIEVAL_SEMANTIC\t%t\n", res.RetrievalSemantic)
-				fmt.Fprintf(tw, "GUARD_PROFILE\t%s\n", res.GuardProfile)
+				head = append(head,
+					termrender.Field{Key: "updated", Value: res.Timestamp},
+					termrender.Field{Key: "embedder_kind", Value: res.EmbedderKind},
+					termrender.Field{Key: "retrieval_semantic", Value: flagCell(res.RetrievalSemantic)},
+					termrender.Field{Key: "guard_profile", Value: res.GuardProfile},
+				)
 				if res.GuardDowngradeCount > 0 {
-					fmt.Fprintf(tw, "GUARD_DOWNGRADES\t%d\n", res.GuardDowngradeCount)
+					head = append(head, termrender.Field{
+						Key: "guard_downgrades", Value: countCell(res.GuardDowngradeCount), Role: termrender.RoleWarn,
+					})
 				}
 				if res.KnowledgeStatusReason != "" {
-					fmt.Fprintf(tw, "KNOWLEDGE_REASON\t%s\n", res.KnowledgeStatusReason)
+					head = append(head, termrender.Field{Key: "knowledge_reason", Value: res.KnowledgeStatusReason})
 				}
 				if res.GuardWarning != "" {
-					fmt.Fprintf(tw, "KNOWLEDGE_GUARD_WARNING\t%s\n", res.GuardWarning)
+					head = append(head, termrender.Field{
+						Key: "knowledge_guard_warning", Value: res.GuardWarning, Role: termrender.RoleWarn,
+					})
 				}
-				fmt.Fprintln(tw)
-				fmt.Fprintln(tw, "COMPONENT\tSTATUS\tDETAIL")
+				r.Fields(head)
+				r.Blank()
+				tbl := termrender.Table{
+					Header: []string{"component", "status", "detail"},
+					Empty:  "this engine reports no component",
+				}
 				for _, c := range res.Components {
 					detail := c.Reason
 					if c.Name == "knowledge" {
 						detail = fmt.Sprintf("embedder=%s semantic=%t guard=%s guard_downgrades=%d reason=%s guard_warning=%s", c.EmbedderKind, boolValue(c.RetrievalSemantic), c.GuardProfile, c.GuardDowngradeCount, c.Reason, c.GuardWarning)
 					}
-					fmt.Fprintf(tw, "%s\t%s\t%s\n", c.Name, c.Status, detail)
+					tbl.Rows = append(tbl.Rows, []string{c.Name, c.Status, detail})
+					tbl.Roles = append(tbl.Roles, []termrender.Role{0, componentRole(c.Status)})
 				}
-				return tw.Flush()
+				r.Table(tbl)
+				return nil
 			}, json.RawMessage(raw)); err != nil {
 				return err
 			}
@@ -205,6 +219,23 @@ func statusIsHealthy(status string) bool {
 
 // notConfiguredComponents lists, in the order the engine reported them, the
 // components that are present but unprovisioned.
+// componentRole colours a component's verdict from the closed set. "not
+// configured" is WARN and not FAIL: a capability nobody provisioned is a gap in
+// the install, and a fresh install that painted half its components red would
+// teach the operator that red is the normal colour of a new machine.
+func componentRole(status string) termrender.Role {
+	switch status {
+	case "ok", "healthy", "ready":
+		return termrender.RoleOK
+	case "degraded", "not_configured", "unknown":
+		return termrender.RoleWarn
+	case "fail", "failed", "unhealthy", "error":
+		return termrender.RoleFail
+	default:
+		return termrender.RoleNone
+	}
+}
+
 func notConfiguredComponents(components []statusComponent) []string {
 	var out []string
 	for _, c := range components {

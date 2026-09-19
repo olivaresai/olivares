@@ -259,8 +259,14 @@ func TestSupportBundleRedactsNonOKStatusBody(t *testing.T) {
 	if strings.Contains(err.Error(), supportSeededSecret) || strings.Contains(output.String(), supportSeededSecret) {
 		t.Fatalf("status error leaked the response body credential: err=%q output=%q", err, output.String())
 	}
-	if !strings.Contains(err.Error(), "collect status: HTTP 503: token=[redacted") {
-		t.Fatalf("status error = %q, want redacted HTTP 503 body", err)
+	// The three things this line has to keep, stated as three things rather than as
+	// one envelope: what was being done, the status a script logs, and the body
+	// with the credential taken out of it. The envelope's own wording is the
+	// presentation the renderer owns.
+	for _, want := range []string{"collect status:", "HTTP 503", "token=[redacted"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("status error = %q, want it to name %q", err, want)
+		}
 	}
 	if _, statErr := os.Stat(outPath); !errors.Is(statErr, os.ErrNotExist) {
 		t.Fatalf("failed status collection left an output bundle: %v", statErr)

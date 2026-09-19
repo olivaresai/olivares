@@ -419,7 +419,7 @@ func observeBool(v bool, yes, no string) string {
 // stdout explicitly, so the piping case is one word away and unambiguous.
 func observeArtifactFlag(cmd *cobra.Command, out *string) {
 	cmd.Flags().StringVar(out, "out", "",
-		"write the artifact here; `-` means stdout (required: these routes answer with a rendered document, not JSON)")
+		"write the artifact here; '-' means stdout (required: these routes answer with a rendered document, not JSON)")
 }
 
 // writeObserveArtifact stores the bytes and reports what was stored.

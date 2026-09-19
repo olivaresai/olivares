@@ -66,6 +66,7 @@
     "/posture-export",
     "/provider-bindings",
     "/provider-profiles",
+    "/providers",
     "/rate-limits",
     "/recordings",
     "/red-team",

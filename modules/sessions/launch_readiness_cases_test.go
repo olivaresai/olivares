@@ -29,7 +29,7 @@ func TestLaunchReadiness_MeasuredOperableTrueMissingSource(t *testing.T) {
 			runner := newInspectingRunner(t)
 			// Everything a launch needs EXCEPT the credential source: a wired runner,
 			// a real pinned executable, real homes, an authorized managed source.
-			m := New(WithRunner(runner), WithProgram(bins.present),
+			m := New(WithSessionWorkspaceRoot(t.TempDir()), WithRunner(runner), WithProgram(bins.present),
 				WithLaunchGate(refusingLaunchGate{t}), WithStopGate(refusingStopGate{t}))
 			m.UseExecutionEnvironmentRef(testEnvRef)
 			f := newReadinessFixture(t, be, m)
@@ -69,7 +69,7 @@ func TestLaunchReadiness_MeasuredOperableTrueMissingSource(t *testing.T) {
 				t.Fatal("readiness agreed with operable: the missing credential source was not detected")
 			}
 			// AFTER wiring the source — and nothing else — the same profile is ready.
-			wired := New(WithRunner(newInspectingRunner(t)), WithProgram(bins.present),
+			wired := New(WithSessionWorkspaceRoot(t.TempDir()), WithRunner(newInspectingRunner(t)), WithProgram(bins.present),
 				WithCredentialSource(mintRefusingCredentialSource{t}))
 			wired.UseExecutionEnvironmentRef(testEnvRef)
 			g := newReadinessFixture(t, freshEngine(t, be), wired)
@@ -106,7 +106,7 @@ func TestLaunchReadiness_AuthTransportMatrix(t *testing.T) {
 			// Codex and Grok are registered INDEPENDENTLY, exactly as the composition
 			// root registers them from two separate variables. Codex additionally has
 			// its OWN governed adapter; Grok deliberately has none.
-			m := New(
+			m := New(WithSessionWorkspaceRoot(t.TempDir()), 
 				WithRunner(newInspectingRunner(t)),
 				WithProgram(bins.present),
 				WithCredentialSource(mintRefusingCredentialSource{t}),
@@ -281,7 +281,7 @@ func TestLaunchReadiness_UnregisteredDriverIsConfigurationNotAbsence(t *testing.
 	for _, be := range readinessEngines(t) {
 		t.Run(be.name, func(t *testing.T) {
 			bins := newReadinessProgramFixtures(t)
-			bare := New(WithRunner(newInspectingRunner(t)), WithProgram(bins.present))
+			bare := New(WithSessionWorkspaceRoot(t.TempDir()), WithRunner(newInspectingRunner(t)), WithProgram(bins.present))
 			bare.UseExecutionEnvironmentRef(testEnvRef)
 			f := newReadinessFixture(t, be, bare)
 			cfgHome, userHome := readinessHomes(t)
@@ -299,7 +299,7 @@ func TestLaunchReadiness_UnregisteredDriverIsConfigurationNotAbsence(t *testing.
 				t.Fatal("operable must be false for a driver this node has not registered")
 			}
 
-			registered := New(WithRunner(newInspectingRunner(t)), WithProgram(bins.present),
+			registered := New(WithSessionWorkspaceRoot(t.TempDir()), WithRunner(newInspectingRunner(t)), WithProgram(bins.present),
 				WithProviderDriver(NewCodexDriver()), WithDriverProgram("codex", bins.present))
 			registered.UseExecutionEnvironmentRef(testEnvRef)
 			g := newReadinessFixture(t, freshEngine(t, be), registered)
@@ -375,7 +375,7 @@ func TestLaunchReadiness_NativeProgramObservation(t *testing.T) {
 						tc.require(t, tc.program)
 					}
 					runner := newInspectingRunner(t)
-					m := New(WithRunner(runner), WithProgram(tc.program),
+					m := New(WithSessionWorkspaceRoot(t.TempDir()), WithRunner(runner), WithProgram(tc.program),
 						WithCredentialSource(mintRefusingCredentialSource{t}))
 					m.UseExecutionEnvironmentRef(testEnvRef)
 					f := newReadinessFixture(t, freshEngine(t, be), m)
@@ -427,7 +427,7 @@ func TestLaunchReadiness_ProgramResolvedThroughPATH(t *testing.T) {
 		{"nowhere on PATH", "absentcli", ReadinessNotConfigured, codeProgramMissing},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			m := New(WithRunner(newInspectingRunner(t)), WithProgram(tc.program),
+			m := New(WithSessionWorkspaceRoot(t.TempDir()), WithRunner(newInspectingRunner(t)), WithProgram(tc.program),
 				WithCredentialSource(mintRefusingCredentialSource{t}))
 			m.UseExecutionEnvironmentRef(testEnvRef)
 			f := newReadinessFixture(t, freshEngine(t, be), m)
@@ -451,7 +451,7 @@ func TestLaunchReadiness_HomesAndForeignEnvironment(t *testing.T) {
 			bins := newReadinessProgramFixtures(t)
 
 			t.Run("a home that was removed", func(t *testing.T) {
-				m := New(WithRunner(newInspectingRunner(t)), WithProgram(bins.present),
+				m := New(WithSessionWorkspaceRoot(t.TempDir()), WithRunner(newInspectingRunner(t)), WithProgram(bins.present),
 					WithCredentialSource(mintRefusingCredentialSource{t}))
 				m.UseExecutionEnvironmentRef(testEnvRef)
 				f := newReadinessFixture(t, freshEngine(t, be), m)
@@ -474,7 +474,7 @@ func TestLaunchReadiness_HomesAndForeignEnvironment(t *testing.T) {
 			})
 
 			t.Run("a home whose alias now points elsewhere", func(t *testing.T) {
-				m := New(WithRunner(newInspectingRunner(t)), WithProgram(bins.present),
+				m := New(WithSessionWorkspaceRoot(t.TempDir()), WithRunner(newInspectingRunner(t)), WithProgram(bins.present),
 					WithCredentialSource(mintRefusingCredentialSource{t}))
 				m.UseExecutionEnvironmentRef(testEnvRef)
 				f := newReadinessFixture(t, freshEngine(t, be), m)
@@ -512,7 +512,7 @@ func TestLaunchReadiness_HomesAndForeignEnvironment(t *testing.T) {
 			})
 
 			t.Run("a profile of another execution environment", func(t *testing.T) {
-				m := New(WithRunner(newInspectingRunner(t)), WithProgram(bins.present),
+				m := New(WithSessionWorkspaceRoot(t.TempDir()), WithRunner(newInspectingRunner(t)), WithProgram(bins.present),
 					WithCredentialSource(mintRefusingCredentialSource{t}))
 				m.UseExecutionEnvironmentRef(testEnvRef)
 				f := newReadinessFixture(t, freshEngine(t, be), m)
@@ -542,7 +542,7 @@ func TestLaunchReadiness_HomesAndForeignEnvironment(t *testing.T) {
 			})
 
 			t.Run("a node with no execution environment identity", func(t *testing.T) {
-				m := New(WithRunner(newInspectingRunner(t)), WithProgram(bins.present),
+				m := New(WithSessionWorkspaceRoot(t.TempDir()), WithRunner(newInspectingRunner(t)), WithProgram(bins.present),
 					WithCredentialSource(mintRefusingCredentialSource{t}))
 				m.UseExecutionEnvironmentRef(testEnvRef)
 				f := newReadinessFixture(t, freshEngine(t, be), m)
@@ -567,7 +567,7 @@ func TestLaunchReadiness_ProfileLifecycle(t *testing.T) {
 	for _, be := range readinessEngines(t) {
 		t.Run(be.name, func(t *testing.T) {
 			bins := newReadinessProgramFixtures(t)
-			m := New(WithRunner(newInspectingRunner(t)), WithProgram(bins.present),
+			m := New(WithSessionWorkspaceRoot(t.TempDir()), WithRunner(newInspectingRunner(t)), WithProgram(bins.present),
 				WithCredentialSource(mintRefusingCredentialSource{t}))
 			m.UseExecutionEnvironmentRef(testEnvRef)
 			f := newReadinessFixture(t, be, m)

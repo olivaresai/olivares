@@ -61,7 +61,7 @@ func TestLaunchReadiness_EffectiveExecutionPermission(t *testing.T) {
 			// Everything else is ready on purpose: the program is the only thing that
 			// may move the verdict, so a change of aggregate cannot be attributed to
 			// anything else.
-			m := New(WithRunner(runner), WithProgram(bins.present),
+			m := New(WithSessionWorkspaceRoot(t.TempDir()), WithRunner(runner), WithProgram(bins.present),
 				WithLaunchGate(refusingLaunchGate{t}), WithStopGate(refusingStopGate{t}))
 			m.UseExecutionEnvironmentRef(testEnvRef)
 			f := newReadinessFixture(t, be, m)
@@ -127,7 +127,7 @@ func TestLaunchReadiness_EffectiveExecutionPermissionThroughPATH(t *testing.T) {
 	t.Setenv("PATH", dir)
 
 	runner := newInspectingRunner(t)
-	m := New(WithRunner(runner), WithProgram("pathdenied"))
+	m := New(WithSessionWorkspaceRoot(t.TempDir()), WithRunner(runner), WithProgram("pathdenied"))
 	m.UseExecutionEnvironmentRef(testEnvRef)
 	f := newReadinessFixture(t, be, m)
 	cfgHome, userHome := readinessHomes(t)
