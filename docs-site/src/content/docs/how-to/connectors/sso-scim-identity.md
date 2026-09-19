@@ -25,12 +25,13 @@ posture is honest by construction:
   secret-bearing flow value server-side — the CSRF state, the OIDC nonce,
   the PKCE verifier (only the S256 *challenge* goes to the provider).
   Authorization Code + **PKCE is always on**.
-- The default build ships the `NoFederation` provider: both endpoints return
-  `501 sso_not_configured` — the surface is advertised honestly with no IdP
-  wired. The federation provider that completes the protocol is part of the
-  enterprise build and is **configured by environment at boot**
-  (`OLIVARES_SSO_PROTOCOL`, the `OLIVARES_OIDC_*` set for OIDC, the
-  `OLIVARES_SAML_*` set for SAML).
+- **Single-IdP OIDC/SAML login is available in Community and Enterprise.**
+  Configure it through the console's managed SSO settings. When no managed
+  configuration exists, the engine uses the boot environment
+  (`OLIVARES_SSO_PROTOCOL`, `OLIVARES_OIDC_*` or `OLIVARES_SAML_*`). Without a
+  configured provider, the existing `NoFederation` fallback returns
+  `501 sso_not_configured`; this indicates missing configuration, not an
+  Enterprise-only protocol.
 - The redirect/ACS URI your IdP must carry is **exact**
   (`…/v1/auth/federation/callback` on your console origin — RFC 9700 exact
   matching, no prefix tricks).
@@ -57,8 +58,10 @@ The control plane is a standard SCIM 2.0 (RFC 7644) service provider at:
   integration — the same opaque-token model as the rest of the API, no
   separate SCIM secret type. The endpoint is always present (not
   feature-gated).
-- **Users** provisions and deprovisions principals; deprovisioning by your
-  IdP revokes access the moment HR says so.
+- **Users** provisions and deprovisions principals in Community and Enterprise.
+  Changes depend on delivery and successful processing of the SCIM request;
+  check its response and the affected access rather than treating an HR event
+  as proof of completed revocation. SCIM does not remove operating-system accounts.
 - **Groups** carries identity-to-group reference data. Each group can map to
   a control-plane role via `mapped_role` — and that mapping is
   **operator-owned**: it is set on the control-plane side and audited
@@ -120,8 +123,10 @@ accounts.
 
 ## Honest limits
 
-- **SSO completes in the enterprise build.** The seam, flow security and the
-  501 posture are in every build; the protocol provider is not.
+- **Single-IdP SSO is included in Community.** Multiple-IdP routing and
+  login-time group mapping are provided by the corresponding private identity
+  module. They do not change the availability of
+  general users, groups and permission management.
 - **A roster cannot fix a shared credential.** It can only tell you,
   honestly, that the credential is shared.
 - **SCIM is inbound provisioning** — the control plane does not push

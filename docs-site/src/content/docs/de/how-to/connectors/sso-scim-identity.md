@@ -25,12 +25,12 @@ Die Posture ist konstruktionsbedingt ehrlich:
   jeden geheimnisführenden Flow-Wert serverseitig — den CSRF-State, die
   OIDC-Nonce, den PKCE-Verifier (nur die S256-*Challenge* geht an den
   Provider). Authorization Code + **PKCE ist immer aktiv**.
-- Der Standard-Build liefert den `NoFederation`-Provider: beide Endpunkte geben
-  `501 sso_not_configured` zurück — die Oberfläche wird ehrlich beworben, ohne
-  angebundenen IdP. Der Federation-Provider, der das Protokoll vervollständigt,
-  ist Teil des Enterprise-Builds und wird **per Umgebung beim Boot
-  konfiguriert** (`OLIVARES_SSO_PROTOCOL`, das `OLIVARES_OIDC_*`-Set für OIDC,
-  das `OLIVARES_SAML_*`-Set für SAML).
+- **OIDC/SAML-Anmeldung mit einem IdP ist in Community und Enterprise verfügbar.**
+  Konfigurieren Sie sie über die verwalteten SSO-Einstellungen der Konsole.
+  Ohne verwaltete Konfiguration verwendet die Engine die Startumgebung
+  (`OLIVARES_SSO_PROTOCOL`, `OLIVARES_OIDC_*` oder `OLIVARES_SAML_*`). Ohne
+  konfigurierten Provider gibt `NoFederation` den Status `501 sso_not_configured`
+  zurück: Es fehlt die Konfiguration; das Protokoll ist nicht Enterprise vorbehalten.
 - Die Redirect-/ACS-URI, die Ihr IdP führen muss, ist **exakt**
   (`…/v1/auth/federation/callback` auf Ihrem Konsolen-Origin — RFC-9700-Exact-Matching,
   keine Präfix-Tricks).
@@ -58,8 +58,10 @@ Die Control Plane ist ein standardkonformer SCIM-2.0-Service-Provider (RFC
   SCIM-Integration — dasselbe Opaque-Token-Modell wie der Rest der API, kein
   separater SCIM-Geheimnistyp. Der Endpunkt ist immer vorhanden (nicht
   feature-gated).
-- **Users** provisioniert und deprovisioniert Principals; das Deprovisionieren
-  durch Ihren IdP entzieht den Zugriff in dem Moment, in dem HR es sagt.
+- **Users** provisioniert und deprovisioniert Identitäten in Community und Enterprise.
+  Änderungen setzen die Zustellung und erfolgreiche Verarbeitung der SCIM-Anfrage
+  voraus. Prüfen Sie die Antwort und die betroffenen Zugriffsrechte; ein HR-Ereignis
+  allein belegt keinen abgeschlossenen Entzug. SCIM entfernt keine Betriebssystemkonten.
 - **Groups** führt Identitäts-zu-Gruppe-Referenzdaten. Jede Gruppe kann über
   `mapped_role` auf eine Control-Plane-Rolle abgebildet werden — und dieses
   Mapping ist **operator-eigen**: es wird auf der Control-Plane-Seite gesetzt
@@ -122,9 +124,10 @@ schärfen Personen und Service-Accounts.
 
 ## Ehrliche Grenzen
 
-- **SSO wird im Enterprise-Build vollständig.** Der Seam, die
-  Flow-Sicherheit und die 501-Posture sind in jedem Build; der
-  Protokoll-Provider nicht.
+- **Community enthält SSO mit einem IdP.** Routing zwischen mehreren IdPs und
+  Gruppenzuordnung bei der Anmeldung bietet das entsprechende private
+  Identitätsmodul. Die allgemeine Verwaltung
+  von Benutzern, Gruppen und Berechtigungen bleibt in Community verfügbar.
 - **Ein Roster kann ein gemeinsam genutztes Credential nicht reparieren.** Es
   kann Ihnen nur ehrlich sagen, dass das Credential gemeinsam genutzt wird.
 - **SCIM ist Inbound-Provisionierung** — die Control Plane pusht keine

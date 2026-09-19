@@ -26,12 +26,12 @@ postura es honesta por construcción:
   mantiene del lado del servidor cada valor del flujo que porta secretos — el
   estado CSRF, el nonce OIDC, el verifier PKCE (solo el *challenge* S256 va al
   proveedor). Authorization Code + **PKCE está siempre activo**.
-- La build por defecto incluye el proveedor `NoFederation`: ambos endpoints
-  devuelven `501 sso_not_configured` — la superficie se anuncia honestamente sin
-  ningún IdP conectado. El proveedor de federación que completa el protocolo
-  forma parte de la build empresarial y se **configura por entorno en el
-  arranque** (`OLIVARES_SSO_PROTOCOL`, el conjunto `OLIVARES_OIDC_*` para OIDC,
-  el conjunto `OLIVARES_SAML_*` para SAML).
+- **El acceso OIDC/SAML con un único IdP está disponible en Community y Enterprise.**
+  Se configura desde los ajustes SSO administrados de la consola. Si no hay
+  configuración administrada, el motor usa las variables del arranque
+  (`OLIVARES_SSO_PROTOCOL`, `OLIVARES_OIDC_*` o `OLIVARES_SAML_*`). Sin un
+  proveedor configurado, `NoFederation` devuelve `501 sso_not_configured`:
+  indica que falta configuración, no que el protocolo sea exclusivo de Enterprise.
 - La URI de redirect/ACS que tu IdP debe portar es **exacta**
   (`…/v1/auth/federation/callback` en el origen de tu consola — coincidencia
   exacta según RFC 9700, sin trucos de prefijo).
@@ -58,8 +58,11 @@ El control plane es un proveedor de servicio SCIM 2.0 (RFC 7644) estándar en:
   integración SCIM — el mismo modelo de token opaco que el resto de la API, sin
   un tipo de secreto SCIM aparte. El endpoint está siempre presente (no está
   detrás de un feature gate).
-- **Users** aprovisiona y desaprovisiona principales; el desaprovisionamiento por
-  parte de tu IdP revoca el acceso en el momento en que RRHH lo dice.
+- **Users** aprovisiona y desaprovisiona identidades en Community y Enterprise.
+  Los cambios dependen de la entrega y del procesamiento correcto de la solicitud
+  SCIM; comprueba su respuesta y el acceso afectado, en lugar de considerar un
+  evento de RRHH como prueba de una revocación completada. SCIM no elimina
+  cuentas del sistema operativo.
 - **Groups** lleva los datos de referencia de identidad-a-grupo. Cada grupo puede
   mapearse a un rol del control plane mediante `mapped_role` — y ese mapeo es
   **propiedad del operador**: se establece en el lado del control plane y se
@@ -122,8 +125,10 @@ las personas y las cuentas de servicio.
 
 ## Límites honestos
 
-- **El SSO se completa en la build empresarial.** El seam, la seguridad del flujo
-  y la postura 501 están en todas las builds; el proveedor de protocolo no.
+- **Community incluye SSO con un único IdP.** La selección entre varios IdP y
+  el mapeo de grupos durante el acceso los proporciona el módulo privado de
+  identidad correspondiente. La gestión general de usuarios,
+  grupos y permisos sigue disponible en Community.
 - **Un roster no puede arreglar una credencial compartida.** Solo puede decirte,
   honestamente, que la credencial es compartida.
 - **SCIM es aprovisionamiento entrante** — el control plane no empuja identidades

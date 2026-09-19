@@ -20,10 +20,11 @@ sidebar:
 - 登录流的端点存在于每一个构建中，且引擎会把每一个携带机密的流值都保留在服务器端 ——
   CSRF state、OIDC nonce、PKCE verifier（只有 S256 *challenge* 会发往提供方）。
   Authorization Code + **PKCE 始终开启**。
-- 默认构建随附 `NoFederation` provider：两个端点都返回 `501 sso_not_configured` ——
-  在没有接入任何 IdP 的情况下，该表面被诚实地公示出来。完成该协议的 federation provider
-  是企业构建的一部分，并在引导时**通过环境变量配置**（`OLIVARES_SSO_PROTOCOL`，OIDC 用
-  `OLIVARES_OIDC_*` 一组，SAML 用 `OLIVARES_SAML_*` 一组）。
+- **Community 和 Enterprise 都支持单一 IdP 的 OIDC/SAML 登录。**
+  请通过控制台的托管 SSO 设置进行配置。没有托管配置时，引擎使用启动环境变量
+  （`OLIVARES_SSO_PROTOCOL`、`OLIVARES_OIDC_*` 或 `OLIVARES_SAML_*`）。
+  未配置提供方时，`NoFederation` 返回 `501 sso_not_configured`；这表示缺少配置，
+  并不表示该协议仅供 Enterprise 使用。
 - 你的 IdP 必须携带的 redirect/ACS URI 是**精确匹配**的（你控制台 origin 上的
   `…/v1/auth/federation/callback` —— 遵循 RFC 9700 的精确匹配，不存在前缀技巧）。
 
@@ -45,7 +46,9 @@ control plane 是一个标准的 SCIM 2.0（RFC 7644）服务提供方，位于�
 
 - **认证：** 在 SCIM 集成上使用一个绑定租户的 **admin/owner API token** —— 与 API 其余
   部分相同的不透明 token 模型，不存在单独的 SCIM 密钥类型。该端点始终存在（不受特性门控）。
-- **Users** 预配与撤销预配主体；由你的 IdP 撤销预配会在 HR 一发话的那一刻就吊销访问权限。
+- **Users** 在 Community 和 Enterprise 中预配及撤销预配身份。
+  变更取决于 SCIM 请求的送达和成功处理；应检查响应及受影响的访问权限，
+  不要仅凭人事事件就认定权限吊销已完成。SCIM 不会删除操作系统账户。
 - **Groups** 承载身份到组的引用数据。每个组都可以通过 `mapped_role` 映射到一个 control-plane
   角色 —— 而该映射是**由操作员拥有的**：它在 control-plane 一侧设置并被审计
   （`scim.group.role.map`）；IdP 的推送绝不会悄无声息地提升某个角色。被推送的组中的未知
@@ -98,8 +101,8 @@ AgentCore、SPIFFE 及同类）才是 firm 的逐 agent 信号；组/目录名�
 
 ## 诚实的局限
 
-- **SSO 在企业构建中才完成。** seam、流安全以及 501 态势存在于每一个构建中；协议
-  provider 则不然。
+- **Community 包含单一 IdP 的 SSO。** 多 IdP 路由及登录时的组映射由相应的
+  私有身份模块提供。常规用户、组和权限管理在 Community 中仍然可用。
 - **名册无法修复一个共享凭据。** 它只能诚实地告诉你该凭据是共享的。
 - **SCIM 是入站预配** —— control plane 不会把身份反向推送回你的 IdP，且
   Security-Event-Token 接收端是一个入站表面，而非出站 webhook。
