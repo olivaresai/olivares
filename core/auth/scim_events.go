@@ -285,6 +285,13 @@ func (a *Authenticator) SCIMSetMemberActive(ctx context.Context, actor Principal
 		if err := prepareUserAuthorityWrite(ctx, as, id); err != nil {
 			return err
 		}
+		// A successful preflight does not authorize a later transaction: a
+		// departure may have committed before we acquired the directory lock.
+		if _, ok, err := membershipOf(ctx, as, id, tenant); err != nil {
+			return err
+		} else if !ok {
+			return store.ErrNotFound
+		}
 		u, err := as.Users().Get(ctx, id)
 		if err != nil {
 			return err
