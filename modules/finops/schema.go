@@ -69,20 +69,27 @@ const (
 	// seq under a UNIQUE index — concurrent reservers collide on the seq and one
 	// retries, so the reserve→check→insert is serialized WITHOUT a process lock.
 	budgetReservationKind model.Kind = "finops.budget_reservation"
+	// admissionIdempotencyKind is the per-request idempotency index for the
+	// public admission API. It is NOT a second money ledger: the reserve
+	// rows remain the authority for headroom. This table maps one idempotency
+	// key onto the handle(s) already reserved so a retry cannot insert a second
+	// group. Unique on (tenant_id, idempotency_key).
+	admissionIdempotencyKind model.Kind = "finops.admission_idempotency"
 )
 
 const (
-	costSampleTable          = "finops_cost_sample"
-	budgetAlertTable         = "finops_budget_alert"
-	spendLimitAuditTable     = "finops_spend_limit_audit"
-	seatCountTable           = "finops_seat_count"
-	outcomeTable             = "finops_outcome"
-	costCenterTable          = "finops_cost_center"
-	costCenterMappingTable   = "finops_cost_center_mapping"
-	modelRateTable           = "finops_model_rate"
-	chargebackStatementTable = "finops_chargeback_statement"
-	statementLineTable       = "finops_statement_line"
-	budgetReservationTable   = "finops_budget_reservation"
+	costSampleTable           = "finops_cost_sample"
+	budgetAlertTable          = "finops_budget_alert"
+	spendLimitAuditTable      = "finops_spend_limit_audit"
+	seatCountTable            = "finops_seat_count"
+	outcomeTable              = "finops_outcome"
+	costCenterTable           = "finops_cost_center"
+	costCenterMappingTable    = "finops_cost_center_mapping"
+	modelRateTable            = "finops_model_rate"
+	chargebackStatementTable  = "finops_chargeback_statement"
+	statementLineTable        = "finops_statement_line"
+	budgetReservationTable    = "finops_budget_reservation"
+	admissionIdempotencyTable = "finops_admission_idempotency"
 )
 
 // Provenance values stored in colProvenance (mirroring sdk/model.CostProvenance).
@@ -297,6 +304,25 @@ const (
 	colResvHandle      = "handle" // groups the rows of one Reserve* call
 	colResvExpiresAt   = "expires_at"
 	colResvSettledAt   = "settled_at" // when it left the active state
+)
+
+// finops.admission_idempotency columns. One row per (tenant, key).
+const (
+	colAdmKey         = "idempotency_key"
+	colAdmPayloadHash = "payload_hash"
+	colAdmHandle      = "handle"
+	colAdmSpendHandle = "spend_handle"
+	colAdmScope       = "scope"
+	colAdmEstimate    = "estimate_micro_usd"
+	colAdmState       = "state"
+	// colAdmStateAt is when the row entered the state it is in, by the MODULE's
+	// clock. It is what bounds a replay: a row answers for retries of its own call
+	// only while it is young, and the module — not the store — has to stamp it,
+	// because the store's updated_at is the store's own observation and never the
+	// injected application clock (core/store/policy_state.go). Nullable: a row
+	// written before this column existed has none, which reads as "too old to
+	// replay" and sends the request to the ledger.
+	colAdmStateAt = "state_at"
 )
 
 // reservation lifecycle states.
@@ -584,7 +610,7 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 	// — applyModuleTables creates it on both a fresh DB and an in-place upgrade (it is
 	// a missing module table), so this is the "new migration" in descriptor form; no
 	// existing descriptor is modified.
-	return reg.Register(model.EntityDescriptor{
+	if err := reg.Register(model.EntityDescriptor{
 		Kind:  budgetReservationKind,
 		Table: budgetReservationTable,
 		Fields: []model.FieldSpec{
@@ -638,6 +664,31 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 			// The lookup a v1 hold read issues: a parent's complete child set.
 			Name:    "finops_reservation_attempt_idx",
 			Columns: []string{model.ColTenantID, colResvAttemptRef},
+		}},
+	}); err != nil {
+		return err
+	}
+
+	// Idempotency index for Reserve/Commit/Release. Additive table; not a
+	// second money ledger. A retry with the same key reuses the handle already
+	// reserved. A retry with a different payload is a conflict.
+	return reg.Register(model.EntityDescriptor{
+		Kind:  admissionIdempotencyKind,
+		Table: admissionIdempotencyTable,
+		Fields: []model.FieldSpec{
+			{Name: colAdmKey, Kind: model.KindText, Indexed: true},
+			{Name: colAdmPayloadHash, Kind: model.KindText},
+			{Name: colAdmHandle, Kind: model.KindText, Indexed: true},
+			{Name: colAdmSpendHandle, Kind: model.KindText, Nullable: true},
+			{Name: colAdmScope, Kind: model.KindText},
+			{Name: colAdmEstimate, Kind: model.KindInt},
+			{Name: colAdmState, Kind: model.KindText, Indexed: true},
+			{Name: colAdmStateAt, Kind: model.KindText, Nullable: true},
+		},
+		Indexes: []model.IndexSpec{{
+			Name:    "finops_admission_idempotency_key_uniq",
+			Columns: []string{model.ColTenantID, colAdmKey},
+			Unique:  true,
 		}},
 	})
 }

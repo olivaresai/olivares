@@ -75,6 +75,10 @@
       "throttle": "Limiter le débit",
       "block": "Bloquer"
     },
+    "admission": {
+      "holds": "Réservations retenues et non soldées : {{n}}",
+      "drift": "le registre a dérivé de ce que ses appelants ont soldé"
+    },
     "dialog": {
       "title": "Nouveau budget",
       "name": "Nom",

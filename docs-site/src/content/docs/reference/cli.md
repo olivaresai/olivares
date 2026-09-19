@@ -121,7 +121,7 @@ The default emits the same contract the engine serves at `GET /openapi.json` (th
 
 ## Complete command reference
 
-This section is generated from the command tree of the community (AGPL) build of the `olivares` binary at this commit. It covers 820 command nodes — the root command and 819 subcommands, of which 180 are groups that carry subcommands and 9 are hidden diagnostics — together with the 2730 flags they declare. It is regenerated from the binary rather than kept by hand, so a command or flag added without a documentation change fails the push gate.
+This section is generated from the command tree of the community (AGPL) build of the `olivares` binary at this commit. It covers 826 command nodes — the root command and 825 subcommands, of which 181 are groups that carry subcommands and 9 are hidden diagnostics — together with the 2734 flags they declare. It is regenerated from the binary rather than kept by hand, so a command or flag added without a documentation change fails the push gate.
 
 Nothing here is a stability promise: see [Stability](#stability) below for what may still change.
 
@@ -153,7 +153,7 @@ Command groups declare further flags that their own subcommands inherit. A flag 
 
 ### Command index
 
-All 820 commands, in alphabetical order.
+All 826 commands, in alphabetical order.
 
 | Command | Summary |
 |---|---|
@@ -389,6 +389,12 @@ All 820 commands, in alphabetical order.
 | [`olivares findings`](#command-olivares-findings) | Export governed security findings |
 | [`olivares findings export`](#command-olivares-findings-export) | Export all matching findings as SARIF 2.1.0 |
 | [`olivares finops`](#command-olivares-finops) | Report AI spend and value, and govern budgets, rates and cost centers |
+| [`olivares finops admission`](#command-olivares-finops-admission) | Reserve spend before an effect and reconcile the hold ledger |
+| [`olivares finops admission commit`](#command-olivares-finops-admission-commit) | Commit a reservation with the measured cost |
+| [`olivares finops admission reconcile`](#command-olivares-finops-admission-reconcile) | Run reservation reconciliation and emit drift findings |
+| [`olivares finops admission reconciliation`](#command-olivares-finops-admission-reconciliation) | Compare reservations against commits |
+| [`olivares finops admission release`](#command-olivares-finops-admission-release) | Release an unused reservation |
+| [`olivares finops admission reserve`](#command-olivares-finops-admission-reserve) | Reserve estimated spend before an effect |
 | [`olivares finops alerts`](#command-olivares-finops-alerts) | List budget threshold alerts |
 | [`olivares finops budgets`](#command-olivares-finops-budgets) | Govern spend budgets and read their status |
 | [`olivares finops budgets create`](#command-olivares-finops-budgets-create) | Create a budget |
@@ -4466,6 +4472,74 @@ olivares finops
 | `--timeout` | `duration` | `10s` | **inherited**. request timeout |
 | `--token` | `string` | — | **inherited**. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
 | `--token-file` | `string` | — | **inherited**. read the API bearer token from a file, or - for stdin |
+
+#### Command: olivares finops admission
+
+Reserve spend before an effect and reconcile the hold ledger
+
+```
+olivares finops admission
+```
+
+Declares no flags of its own; it takes those of [`olivares finops`](#command-olivares-finops) and the root command.
+
+#### Command: olivares finops admission commit
+
+Commit a reservation with the measured cost
+
+```
+olivares finops admission commit
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--data` | `string` | — | request document: inline JSON, @FILE, or - for stdin |
+
+#### Command: olivares finops admission reconcile
+
+Run reservation reconciliation and emit drift findings
+
+```
+olivares finops admission reconcile
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--data` | `string` | — | request document: inline JSON, @FILE, or - for stdin |
+
+#### Command: olivares finops admission reconciliation
+
+Compare reservations against commits
+
+```
+olivares finops admission reconciliation
+```
+
+Declares no flags of its own; it takes those of [`olivares finops admission`](#command-olivares-finops-admission) and the root command.
+
+#### Command: olivares finops admission release
+
+Release an unused reservation
+
+```
+olivares finops admission release
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--data` | `string` | — | request document: inline JSON, @FILE, or - for stdin |
+
+#### Command: olivares finops admission reserve
+
+Reserve estimated spend before an effect
+
+```
+olivares finops admission reserve
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--data` | `string` | — | request document: inline JSON, @FILE, or - for stdin |
 
 #### Command: olivares finops alerts
 

@@ -1116,34 +1116,51 @@ func pctOf(part, whole int64) int {
 // SpendDims is the attribution of a prospective request, used by the pre-flight
 // budget check. It is the public, provider-neutral subset of the cost dimensions an
 // actuation seam (modelrouter / orchestration HITL gate) knows BEFORE a call.
+//
+// The JSON names are the ones every other FinOps body uses. They are spelled out
+// because this type crosses the wire on the admission reserve body, and Go's
+// default field names would have made that ONE object the only PascalCase
+// document in the module — frozen into the published schema and the SDKs.
 type SpendDims struct {
-	ProviderRef, ModelRef, AgentRef, SessionRef, Team, Project string
-	WorkspaceRef, APIKeyRef, ServiceTier, ContextWindow        string
-	InferenceGeo, Gateway, CostType                            string
+	ProviderRef string `json:"provider_ref,omitempty"`
+	ModelRef    string `json:"model_ref,omitempty"`
+	AgentRef    string `json:"agent_ref,omitempty"`
+	SessionRef  string `json:"session_ref,omitempty"`
+	Team        string `json:"team,omitempty"`
+	Project     string `json:"project,omitempty"`
+
+	WorkspaceRef  string `json:"workspace_ref,omitempty"`
+	APIKeyRef     string `json:"api_key_ref,omitempty"`
+	ServiceTier   string `json:"service_tier,omitempty"`
+	ContextWindow string `json:"context_window,omitempty"`
+
+	InferenceGeo string `json:"inference_geo,omitempty"`
+	Gateway      string `json:"gateway,omitempty"`
+	CostType     string `json:"cost_type,omitempty"`
 	// IdentityRef is the FIRM roster identity (NHI/SPIFFE) the request runs as,
 	// if the seam already knows it. Usually empty: the actuation seams carry only the
 	// AgentRef (a free-text ref), so CheckBudget resolves the firm identity itself from
 	// AgentRef/APIKeyRef/Actor when an identity-scoped budget exists — the seam stays
 	// money-free and unchanged.
-	IdentityRef string
+	IdentityRef string `json:"identity_ref,omitempty"`
 	// RoutineRef is the Claude Code Routine (trigger) ref that originated the
 	// spend. Populated by the orchestration seam when a scheduled/routine fire carries
 	// a trigger id. Enables per-routine enforcing budgets (Denial-of-Wallet for
 	// autonomous periodic agents).
-	RoutineRef string
+	RoutineRef string `json:"routine_ref,omitempty"`
 	// CostCenterRef is the accounting cost center code the request is
 	// attributed to, if the seam already knows it. Usually empty at pre-flight:
 	// CheckBudget resolves the CC from the mapping rules when a CC-scoped budget
 	// exists and the seam did not supply it.
-	CostCenterRef string
+	CostCenterRef string `json:"cost_center_ref,omitempty"`
 	// UserGroupRefs are directory group ids the acting user is a member of in the
 	// tenant (the same identifiers auth.Principal.GroupsIn returns). FinOps cannot
 	// resolve these from SpendDims because the seam deliberately carries no user id.
-	UserGroupRefs []string
+	UserGroupRefs []string `json:"user_group_refs,omitempty"`
 	// AgentGroupRefs are agent-group slugs the acting agent belongs to. Seams may
 	// supply them, but CheckBudget resolves them from AgentRef only when an enforcing
 	// agent_group budget exists.
-	AgentGroupRefs []string
+	AgentGroupRefs []string `json:"agent_group_refs,omitempty"`
 }
 
 // BudgetCheck is the pre-flight decision: whether a prospective request is within

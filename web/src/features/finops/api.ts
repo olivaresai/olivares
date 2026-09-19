@@ -23,6 +23,7 @@ import type { ListResponse } from '@/lib/api/types'
 import { useSessionStore } from '@/stores/session'
 import { useTenantStore } from '@/stores/tenant'
 import type {
+  AdmissionReconciliation,
   Alert,
   AllocationResponse,
   Budget,
@@ -154,6 +155,16 @@ export const finopsApi = {
     http.get<AllocationResponse>(`${BASE}/spend/allocation`, {
       query: { ...params },
     }),
+
+  /** El libro de reservas de admisión frente a lo que sus llamantes liquidaron. Es la
+   *  LECTURA (permiso de lectura de presupuestos): informa de la deriva y no barre ni
+   *  emite hallazgo — eso lo hace `POST /admission/reconcile`, que es el trabajo y pide
+   *  escritura. Por eso la consola llama a ésta y no a aquélla. */
+  admissionReconciliation: (request?: TenantRequestOptions) =>
+    http.get<AdmissionReconciliation>(
+      `${BASE}/admission/reconciliation`,
+      request,
+    ),
   forecast: (period: string) =>
     http.get<ForecastResponse>(`${BASE}/forecast`, { query: { period } }),
   recommendations: () =>
@@ -379,6 +390,8 @@ export const finopsKeys = {
     params === undefined
       ? (['finops', tenant, 'allocation'] as const)
       : (['finops', tenant, 'allocation', params] as const),
+  admissionReconciliation: (tenant: string | null) =>
+    ['finops', tenant, 'admission', 'reconciliation'] as const,
   forecast: (tenant: string | null, period: string) =>
     ['finops', tenant, 'forecast', period] as const,
   recommendations: (tenant: string | null) =>

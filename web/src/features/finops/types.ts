@@ -407,6 +407,30 @@ export interface ReconciliationResponse {
   truncated: boolean
 }
 
+// --- admission reconciliation (GET /admission/reconciliation) ----------------
+
+/** GET /admission/reconciliation (admission_reconcile.go:AdmissionReconciliation).
+ *  El libro de RESERVAS frente a lo que sus llamantes liquidaron: una retención que
+ *  nunca recibió Commit ni Release es deriva, y la deriva se publica como hallazgo de
+ *  postura, nunca como una corrección silenciosa.
+ *
+ *  ⚠ Esta ruta es la LECTURA y no toca nada: `swept_expired` sale 0 y `finding_ref`
+ *  vacío porque barrer y emitir es del trabajo `POST /admission/reconcile`, que pide
+ *  permiso de ESCRITURA. Una retención vencida que el trabajo aún no ha barrido se ve
+ *  aquí como `active_lapsed`, no como `expired_unsettled`. */
+export interface AdmissionReconciliation {
+  swept_expired: number
+  active: number
+  committed: number
+  released: number
+  expired_unsettled: number
+  active_lapsed: number
+  idempotency_orphans: number
+  drift: boolean
+  finding_ref?: string
+  note?: string
+}
+
 // --- multi-agent allocation (GET /spend/allocation) --------------------------
 
 /** One resource an agent's cost was allocated to (allocation.go:allocationResourceDTO). */

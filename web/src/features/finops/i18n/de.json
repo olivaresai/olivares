@@ -73,6 +73,10 @@
       "throttle": "Drosseln",
       "block": "Blockieren"
     },
+    "admission": {
+      "holds": "Reservierte, nicht abgerechnete Vormerkungen: {{n}}",
+      "drift": "das Buch weicht von dem ab, was seine Aufrufer abgerechnet haben"
+    },
     "dialog": {
       "title": "Neues Budget",
       "name": "Name",

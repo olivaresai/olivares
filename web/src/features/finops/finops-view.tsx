@@ -1662,6 +1662,42 @@ function AllocationSection({ range }: { range: { since: string } }) {
 
 // --- budgets tab (fans out a status query per budget) ------------------------
 
+/** La línea de admisión, junto a los presupuestos cuyas retenciones cuenta.
+ *
+ *  Llama a `GET /admission/reconciliation`, que es la LECTURA: informa de las
+ *  retenciones que nadie liquidó y no barre ninguna (barrer y emitir el hallazgo
+ *  es `POST /admission/reconcile`, que pide escritura y lo hace el motor en su
+ *  propio ciclo). Vive DENTRO de `TenantBudgetsTab`, así que hereda el mismo
+ *  `finops:budget:read` que piden sus vecinas: la conciliación es lectura de
+ *  presupuestos y no un permiso aparte.
+ *
+ *  ⛔ Y CALLA cuando no hay nada que contar. Una línea que siempre está deja de
+ *  leerse, y el estado sano —ninguna retención pendiente y ninguna deriva— es el
+ *  abrumadoramente habitual. */
+function AdmissionDriftLine() {
+  const { t } = useTranslation(['finops'])
+  const { activeTenant } = useAuth()
+  const reconQ = useQuery({
+    queryKey: finopsKeys.admissionReconciliation(activeTenant),
+    queryFn: () => finopsApi.admissionReconciliation({ tenant: activeTenant }),
+    enabled: !!activeTenant,
+  })
+  const report = reconQ.data
+  // Un fallo de esta lectura no es una pantalla rota: los presupuestos de al lado
+  // siguen siendo lo que el operador vino a ver, así que no se anuncia aquí.
+  if (!report || (report.active === 0 && !report.drift)) return null
+  return (
+    <p
+      data-testid="admission-drift"
+      role="status"
+      className="mt-3 text-xs text-muted-foreground"
+    >
+      {t('budgets.admission.holds', { n: report.active })}
+      {report.drift ? ` — ${t('budgets.admission.drift')}` : null}
+    </p>
+  )
+}
+
 export function BudgetsTab({ canWrite }: { canWrite: boolean }) {
   const { activeTenant, can } = useAuth()
   // Read authority owns the query/form lifetime, independently of write access.
@@ -1816,6 +1852,7 @@ function TenantBudgetsTab({ canWrite }: { canWrite: boolean }) {
             )
           }
         </AsyncSection>
+        <AdmissionDriftLine />
       </SectionCard>
 
       <SectionCard

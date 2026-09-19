@@ -23898,6 +23898,667 @@
         "x-stability": "beta"
       }
     },
+    "/v1/m/finops/admission/commit": {
+      "post": {
+        "description": "Settles a reservation with the cost the effect actually incurred, returning whatever headroom the estimate over-reserved.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "actual_micro_usd": {
+                    "description": "The measured cost. Ingest the spend first, so the ceiling never under-counts during settlement.",
+                    "format": "int64",
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "handle": {
+                    "description": "The reservation handle Reserve returned. An empty handle is accepted and settles nothing: a request admitted with no enforcing target has no hold to commit.",
+                    "type": "string"
+                  },
+                  "spend_handle": {
+                    "description": "The per-seat spend-limit handle, when the reservation took one. Settled with the same measured cost.",
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Settles a reservation with the cost the effect actually incurred, returning whatever headroom the estimate over-reserved.",
+        "x-olivares-request-body-disposition": "schema-published",
+        "x-required-permission": "finops:budget:write",
+        "x-stability": "beta"
+      }
+    },
+    "/v1/m/finops/admission/reconcile": {
+      "post": {
+        "description": "Sweeps holds that expired unsettled, compares what remains against the commits and releases its callers made, and emits a posture finding when the ledger drifted.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Sweeps holds that expired unsettled, compares what remains against the commits and releases its callers made, and emits a posture finding when the ledger drifted.",
+        "x-olivares-request-body-disposition": "bodyless",
+        "x-required-permission": "finops:budget:write",
+        "x-stability": "beta"
+      }
+    },
+    "/v1/m/finops/admission/reconciliation": {
+      "get": {
+        "description": "Reports the reservation ledger against its commits and releases: how many holds are active, settled or lapsed, and whether the ledger drifted from what its callers settled.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Reports the reservation ledger against its commits and releases: how many holds are active, settled or lapsed, and whether the ledger drifted from what its callers settled.",
+        "x-required-permission": "finops:budget:read",
+        "x-stability": "beta"
+      }
+    },
+    "/v1/m/finops/admission/release": {
+      "post": {
+        "description": "Returns an unused hold to its budget when the effect did not happen, so an abandoned reservation stops withholding headroom from the next caller.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "handle": {
+                    "description": "The reservation handle to return unused. An empty handle is accepted and releases nothing.",
+                    "type": "string"
+                  },
+                  "spend_handle": {
+                    "description": "The per-seat spend-limit handle, when the reservation took one.",
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Returns an unused hold to its budget when the effect did not happen, so an abandoned reservation stops withholding headroom from the next caller.",
+        "x-olivares-request-body-disposition": "schema-published",
+        "x-required-permission": "finops:budget:write",
+        "x-stability": "beta"
+      }
+    },
+    "/v1/m/finops/admission/reserve": {
+      "post": {
+        "description": "Holds estimated spend against every enforcing budget that scopes the request, and against the actor's own spend limit when one is named.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "actor_ref": {
+                    "description": "When set, the per-seat spend limit of that actor is reserved as well as the pooled budgets.",
+                    "type": "string"
+                  },
+                  "dims": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "agent_group_refs": {
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      },
+                      "agent_ref": {
+                        "type": "string"
+                      },
+                      "api_key_ref": {
+                        "type": "string"
+                      },
+                      "context_window": {
+                        "type": "string"
+                      },
+                      "cost_center_ref": {
+                        "type": "string"
+                      },
+                      "cost_type": {
+                        "type": "string"
+                      },
+                      "gateway": {
+                        "type": "string"
+                      },
+                      "identity_ref": {
+                        "type": "string"
+                      },
+                      "inference_geo": {
+                        "type": "string"
+                      },
+                      "model_ref": {
+                        "type": "string"
+                      },
+                      "project": {
+                        "type": "string"
+                      },
+                      "provider_ref": {
+                        "type": "string"
+                      },
+                      "routine_ref": {
+                        "type": "string"
+                      },
+                      "service_tier": {
+                        "type": "string"
+                      },
+                      "session_ref": {
+                        "type": "string"
+                      },
+                      "team": {
+                        "type": "string"
+                      },
+                      "user_group_refs": {
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      },
+                      "workspace_ref": {
+                        "type": "string"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "estimate_micro_usd": {
+                    "description": "The a-priori hold. Zero still refuses an unreadable store and an exhausted cap; it inserts a reservation row only where an enforcing target matches.",
+                    "format": "int64",
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "groups": {
+                    "description": "Directory group ids used to resolve the actor's spend limit.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "idempotency_key": {
+                    "description": "Bound to the tenant, the scope and the canonical payload. The same key with the same payload replays the original reservation; with a different payload it is a 409.",
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "scope": {
+                    "enum": [
+                      "session_launch",
+                      "model_gateway",
+                      "scheduled_job"
+                    ],
+                    "type": "string"
+                  },
+                  "unreachable": {
+                    "default": "deny",
+                    "description": "What a budget store that cannot be read answers. Omitted, empty and unrecognised all mean deny: an outage is not permission. Allow is the explicit, per-request opt-in to the historical fail-open behaviour.",
+                    "enum": [
+                      "",
+                      "deny",
+                      "allow"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "scope",
+                  "idempotency_key"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Holds estimated spend against every enforcing budget that scopes the request, and against the actor's own spend limit when one is named.",
+        "x-olivares-request-body-disposition": "schema-published",
+        "x-required-permission": "finops:budget:write",
+        "x-stability": "beta"
+      }
+    },
     "/v1/m/finops/alerts": {
       "get": {
         "description": "Lists the budget alerts, optionally filtered by budget_id.",

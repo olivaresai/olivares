@@ -2196,6 +2196,16 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 			log.Warn("retention-sweep: could not register the sweep loop on the scheduler; periodic retention disposition disabled", "err", err)
 		}
 	}
+	// The FinOps admission reconciliation: sweeps holds whose caller died before
+	// settling them and reports the drift that is left, on the same scheduler and
+	// with the same leader gate as the sweep above. Without it the job has a route,
+	// a CLI verb and no in-process caller, so the console's drift read describes a
+	// ledger nobody ever reconciles.
+	if recon := newAdmissionReconciler(st, set.finops, log); recon != nil {
+		if err := recon.register(rt); err != nil {
+			log.Warn("finops-admission-reconcile: could not register the reconciliation loop on the scheduler; lapsed budget holds will only be retired by their TTL", "err", err)
+		}
+	}
 	// the report schedule pump — fires DUE scheduled reports per tenant
 	// and records each run. nil in the community build (the reporting scheduler is
 	// not wired) or when the operator disabled the cadence — no rug-pull.

@@ -33,6 +33,16 @@ func (c *mcpTaskBudgetChecker) CheckSpendLimit(context.Context, model.TenantID, 
 	return finops.SpendLimitCheck{Allowed: true}, nil
 }
 
+func (c *mcpTaskBudgetChecker) Reserve(_ context.Context, _ model.TenantID, req finops.AdmissionRequest) (finops.Reservation, error) {
+	c.dims = req.Dims
+	return fakeAdmissionReserve(c.chk, c.err, req)
+}
+
+func (c *mcpTaskBudgetChecker) Commit(context.Context, model.TenantID, string, int64) error {
+	return nil
+}
+func (c *mcpTaskBudgetChecker) Release(context.Context, model.TenantID, string) error { return nil }
+
 func TestMCPTaskGateBudgetAdapter(t *testing.T) {
 	ctx := context.Background()
 	tenant := model.TenantID("tenant_test")
@@ -63,11 +73,11 @@ func TestMCPTaskGateBudgetAdapter(t *testing.T) {
 		}
 	})
 
-	t.Run("checker error fails open", func(t *testing.T) {
+	t.Run("checker error fails closed", func(t *testing.T) {
 		checker := &mcpTaskBudgetChecker{err: errors.New("finops unavailable")}
 		dec, err := (mcpTaskGate{fin: checker, tenant: tenant}).AuthorizeTask(ctx, intent)
-		if err != nil || !dec.Allow {
-			t.Fatalf("budget checker errors must fail open, got %+v err=%v", dec, err)
+		if err != nil || dec.Allow {
+			t.Fatalf("budget checker errors must fail closed, got %+v err=%v", dec, err)
 		}
 	})
 }

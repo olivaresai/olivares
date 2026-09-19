@@ -70,6 +70,15 @@ var finopsOpenAPIContracts = map[string]finopsOpenAPIContract{
 	http.MethodPost + " /statements/generate": {
 		schema: finopsGenerateStatementsSchema,
 	},
+	http.MethodPost + " /admission/reserve": {
+		schema: finopsAdmissionReserveSchema,
+	},
+	http.MethodPost + " /admission/commit": {
+		schema: finopsAdmissionCommitSchema,
+	},
+	http.MethodPost + " /admission/release": {
+		schema: finopsAdmissionReleaseSchema,
+	},
 }
 
 // finopsRequestBody returns the complete OpenAPI 3.1 requestBody for a known
@@ -104,7 +113,12 @@ func finopsRequestBodyDeclarationFor(r moduleRoute) (finopsRequestBodyDeclaratio
 	case http.MethodDelete + " /budgets/{id}",
 		http.MethodDelete + " /cost-centers/{id}",
 		http.MethodDelete + " /cost-centers/{id}/mappings/{mid}",
-		http.MethodDelete + " /model-rates/{id}":
+		http.MethodDelete + " /model-rates/{id}",
+		// The reconciliation JOB takes its whole subject from the authenticated
+		// tenant: handleAdmissionReconcile never touches r.Body. The CLI offers an
+		// optional --data for symmetry with its siblings, which is a CLI affordance
+		// and not a contract; publishing a requestBody here would invent one.
+		http.MethodPost + " /admission/reconcile":
 		return finopsRequestBodyDeclaration{kind: finopsBodyless}, true
 	default:
 		return finopsRequestBodyDeclaration{}, false
@@ -329,6 +343,97 @@ func finopsOutcomeIngestSchema() map[string]any {
 		oaObj("required", oaEnum("occurred_at")),
 	}
 	return schema
+}
+
+// finopsAdmissionScopeSchema is the closed set Reserve validates against
+// (validateAdmissionRequest refuses anything else with 400). It is spelled here
+// rather than left open because a caller that guesses a scope gets no reservation
+// and, having guessed, would keep the effect it never admitted.
+func finopsAdmissionScopeSchema() map[string]any {
+	return oaObj(
+		"type", "string",
+		"enum", oaEnum("session_launch", "model_gateway", "scheduled_job"),
+	)
+}
+
+// finopsSpendDimsSchema projects finops.SpendDims, the provider-neutral attribution
+// an enforcing budget matches on. Every member is optional: a request that names
+// none is still admitted against the global budgets that scope the tenant.
+func finopsSpendDimsSchema() map[string]any {
+	properties := finopsStrings(
+		"provider_ref", "model_ref", "agent_ref", "session_ref", "team", "project",
+		"workspace_ref", "api_key_ref", "service_tier", "context_window",
+		"inference_geo", "gateway", "cost_type", "identity_ref", "routine_ref",
+		"cost_center_ref",
+	)
+	properties["user_group_refs"] = oaObj("type", "array", "items", oaObj("type", "string"))
+	properties["agent_group_refs"] = oaObj("type", "array", "items", oaObj("type", "string"))
+	return finopsObjectSchema(properties)
+}
+
+func finopsAdmissionReserveSchema() map[string]any {
+	return finopsObjectSchema(oaObj(
+		"scope", finopsAdmissionScopeSchema(),
+		"dims", finopsSpendDimsSchema(),
+		"actor_ref", oaObj(
+			"type", "string",
+			"description", "When set, the per-seat spend limit of that actor is reserved as well as the pooled budgets.",
+		),
+		"groups", oaObj(
+			"type", "array",
+			"items", oaObj("type", "string"),
+			"description", "Directory group ids used to resolve the actor's spend limit.",
+		),
+		"estimate_micro_usd", oaObj(
+			"type", "integer", "format", "int64", "minimum", 0,
+			"description", "The a-priori hold. Zero still refuses an unreadable store and an exhausted cap; it inserts a reservation row only where an enforcing target matches.",
+		),
+		"idempotency_key", oaObj(
+			"type", "string", "minLength", 1, "maxLength", 256,
+			"description", "Bound to the tenant, the scope and the canonical payload. The same key with the same payload replays the original reservation; with a different payload it is a 409.",
+		),
+		"unreachable", oaObj(
+			"type", "string",
+			"enum", oaEnum("", "deny", "allow"),
+			"default", "deny",
+			"description", "What a budget store that cannot be read answers. Omitted, empty and unrecognised all mean deny: an outage is not permission. Allow is the explicit, per-request opt-in to the historical fail-open behaviour.",
+		),
+	), "scope", "idempotency_key")
+}
+
+// finopsAdmissionCommitSchema and its release sibling publish NO required list,
+// and that is the handler's behaviour rather than an omission: Commit and Release
+// treat an absent or empty handle as a no-op, because a request admitted with no
+// enforcing target has no hold to settle. A required list here would document a
+// rejection that never happens.
+func finopsAdmissionCommitSchema() map[string]any {
+	return finopsObjectSchema(oaObj(
+		"handle", oaObj(
+			"type", "string",
+			"description", "The reservation handle Reserve returned. An empty handle is accepted and settles nothing: a request admitted with no enforcing target has no hold to commit.",
+		),
+		"actual_micro_usd", oaObj(
+			"type", "integer", "format", "int64", "minimum", 0,
+			"description", "The measured cost. Ingest the spend first, so the ceiling never under-counts during settlement.",
+		),
+		"spend_handle", oaObj(
+			"type", "string",
+			"description", "The per-seat spend-limit handle, when the reservation took one. Settled with the same measured cost.",
+		),
+	))
+}
+
+func finopsAdmissionReleaseSchema() map[string]any {
+	return finopsObjectSchema(oaObj(
+		"handle", oaObj(
+			"type", "string",
+			"description", "The reservation handle to return unused. An empty handle is accepted and releases nothing.",
+		),
+		"spend_handle", oaObj(
+			"type", "string",
+			"description", "The per-seat spend-limit handle, when the reservation took one.",
+		),
+	))
 }
 
 // These are response DTOs, not mutation inputs. Decimal money is a STRING: neither

@@ -1217,8 +1217,7 @@ func mapMCPGateStatus(neutral string) mcpc.GateStatus {
 
 // mcpTaskGate adapts the FinOps pre-flight budget check to durable MCP task creation.
 // A durable task is treated as long-lived session spend: definitive block/throttle caps
-// deny the handle before the client learns it; checker errors fail open like the other
-// budget adapters.
+// deny the handle before the client learns it; checker errors fail closed.
 type mcpTaskGate struct {
 	fin    budgetChecker
 	tenant model.TenantID
@@ -1231,22 +1230,43 @@ func (g mcpTaskGate) AuthorizeTask(ctx context.Context, intent mcpc.TaskIntent) 
 	if g.fin == nil || g.tenant.IsZero() {
 		return mcpc.TaskGateDecision{Allow: true}, nil
 	}
-	chk, err := g.fin.CheckBudget(ctx, g.tenant, finops.SpendDims{
-		AgentRef:   intent.Subject,
-		SessionRef: intent.TaskID,
-		Gateway:    "mcp",
-		CostType:   "task",
+	key := strings.TrimSpace(intent.TaskID)
+	if key == "" {
+		key = model.NewID().String()
+	}
+	res, err := g.fin.Reserve(ctx, g.tenant, finops.AdmissionRequest{
+		Scope: finops.AdmissionScopeScheduledJob,
+		Dims: finops.SpendDims{
+			AgentRef:   intent.Subject,
+			SessionRef: intent.TaskID,
+			Gateway:    "mcp",
+			CostType:   "task",
+		},
+		// A durable task's cost is accounted as it runs, not here, so this gate has
+		// nothing to settle and takes no hold (engineGateNoEstimate, budgetgate.go).
+		EstimateMicroUSD: engineGateNoEstimate,
+		IdempotencyKey:   "mcp_task/" + key,
+		Unreachable:      engineReserveUnreachable,
 	})
 	if err != nil {
 		if g.log != nil {
-			g.log.Error("mcp task-gate: budget check failed; allowing task creation (fail-open)", "err", err)
+			g.log.Error("mcp task-gate: budget reserve failed; denying task creation (fail-closed)", "err", err)
 		}
-		return mcpc.TaskGateDecision{Allow: true}, nil
-	}
-	if !chk.Allowed {
 		return mcpc.TaskGateDecision{
-			Allow: false, Reason: "task budget " + budgetActionLabel(chk.Action),
-			DeniedStatus: budgetStatus(chk.Action),
+			Allow: false, Reason: "task budget control unavailable (deny-closed)",
+			DeniedStatus: http.StatusServiceUnavailable,
+		}, nil
+	}
+	if !res.Allowed {
+		if res.Reason == finops.ReasonStoreUnreachable {
+			return mcpc.TaskGateDecision{
+				Allow: false, Reason: "task budget control unavailable (deny-closed)",
+				DeniedStatus: http.StatusServiceUnavailable,
+			}, nil
+		}
+		return mcpc.TaskGateDecision{
+			Allow: false, Reason: "task budget " + budgetActionLabel(res.Action),
+			DeniedStatus: budgetStatus(res.Action),
 		}, nil
 	}
 	return mcpc.TaskGateDecision{Allow: true}, nil

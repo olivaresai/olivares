@@ -71,6 +71,10 @@
       "throttle": "限流",
       "block": "阻断"
     },
+    "admission": {
+      "holds": "已预留且未结算的保留：{{n}}",
+      "drift": "该账本已与其调用方的结算结果产生偏差"
+    },
     "dialog": {
       "title": "新建预算",
       "name": "名称",

@@ -141,6 +141,11 @@ func (p availabilityPosture) String() string {
 // fail-closed on the enterprise edition (evidence-grade availability) and fail-open elsewhere
 // (preserve the community default). An invalid value is fail-closed + LOUD (a typo must never
 // silently weaken the gate — the same stance as the audit-spool mode loader).
+//
+// This is the posture of the session LAUNCH GATE over a control it cannot READ. It is not, and
+// must never become, the posture FinOps admission answers with when it cannot reserve: that one
+// is engineReserveUnreachable (budgetgate.go), deny for every in-process caller, because a
+// reservation the engine could not write is not headroom it may hand out.
 func resolveAvailabilityPosture(raw, edition string, log *slog.Logger) availabilityPosture {
 	switch strings.ToLower(strings.TrimSpace(raw)) {
 	case "fail-open":
@@ -228,35 +233,88 @@ type sessionLaunchGate struct {
 
 var _ sessions.LaunchGate = (*sessionLaunchGate)(nil)
 
+// recordBudgetUnavailable is the ONE record a launch leaves when the budget
+// control could not answer: the ledger was unreachable, or the admission call
+// itself failed. Both postures write it and both write it at ERROR, because the
+// interesting half is the quiet one — a fail-open community launch starts a
+// session with no cap enforcing anything, and nothing else in the engine says so.
+//
+// outcome is what the gate DID with the refusal (launched / refused). Without it
+// the two postures are indistinguishable in a log search, which is exactly the
+// question an operator arrives with. cause is nil when admission answered with a
+// deny rather than an error: there is no error to report, and an empty err field
+// would suggest one was lost.
+func (g *sessionLaunchGate) recordBudgetUnavailable(outcome string, cause error) {
+	if g.log == nil {
+		return
+	}
+	args := []any{"posture", g.budgetPosture.String(), "outcome", outcome, "reason", finops.ReasonStoreUnreachable}
+	if cause != nil {
+		args = append(args, "err", cause)
+	}
+	g.log.Error("session launch-gate: budget check failed", args...)
+}
+
 func (g *sessionLaunchGate) Authorize(ctx context.Context, tenant model.TenantID, intent sessions.LaunchIntent) (sessions.LaunchDecision, error) {
 	// 1. Budget pre-flight. A read error follows the configured availability
 	//    posture; a definitive cap always denies with 402 (block) / 429 (throttle) so
 	//    a session/identity at its limit does not start.
 	if g.fin != nil {
-		chk, err := g.fin.CheckBudget(ctx, tenant, finops.SpendDims{
-			AgentRef: intent.AgentRef, SessionRef: intent.RunRef, ModelRef: intent.Model,
-			// The session's workspace is its FinOps WorkspaceRef dimension, so a
-			// workspace-scoped enforcing budget also caps the launch. CheckBudget resolves
-			// the firm identity itself from AgentRef when an identity budget exists.
-			WorkspaceRef: intent.WorkspaceRef,
+		key := strings.TrimSpace(intent.RunRef)
+		if key == "" {
+			key = model.NewID().String()
+		}
+		res, err := g.fin.Reserve(ctx, tenant, finops.AdmissionRequest{
+			Scope: finops.AdmissionScopeSessionLaunch,
+			Dims: finops.SpendDims{
+				AgentRef: intent.AgentRef, SessionRef: intent.RunRef, ModelRef: intent.Model,
+				WorkspaceRef: intent.WorkspaceRef,
+			},
+			// A launch never learns what the session went on to spend — that arrives
+			// later, per request, on the bus — so it has nothing to commit or release
+			// and takes no hold. engineGateNoEstimate is the whole rule (budgetgate.go).
+			EstimateMicroUSD: engineGateNoEstimate,
+			IdempotencyKey:   "session_launch/" + key,
+			// Admission's own rule, NOT this gate's posture: an unreachable ledger
+			// never returns a handle. What the posture decides is what the LAUNCH
+			// then does with that deny, below.
+			Unreachable: engineReserveUnreachable,
 		})
 		switch {
 		case err != nil:
-			if g.log != nil {
-				g.log.Error("session launch-gate: budget check failed", "posture", g.budgetPosture.String(), "err", err)
-			}
 			if g.budgetPosture == availabilityFailClosed {
+				g.recordBudgetUnavailable("refused", err)
 				return sessions.LaunchDecision{
 					Allowed:      false,
 					Reason:       "session budget control unavailable (deny-closed)",
 					DeniedStatus: http.StatusServiceUnavailable,
 				}, nil
 			}
-		case !chk.Allowed:
+			g.recordBudgetUnavailable("launched", err)
+		case !res.Allowed:
+			if res.Reason == finops.ReasonStoreUnreachable {
+				// A ledger that cannot be read answers this gate with a DENY and a nil
+				// error, so the record has to be written here: the posture decides what
+				// the launch does with that refusal, and both answers are worth an
+				// operator's attention. Fail-closed refused a launch someone asked for;
+				// fail-open started a session with no cap enforcing anything, which is
+				// the one that would otherwise pass in silence. The outcome field is what
+				// separates the two in a log search.
+				if g.budgetPosture == availabilityFailClosed {
+					g.recordBudgetUnavailable("refused", nil)
+					return sessions.LaunchDecision{
+						Allowed:      false,
+						Reason:       "session budget control unavailable (deny-closed)",
+						DeniedStatus: http.StatusServiceUnavailable,
+					}, nil
+				}
+				g.recordBudgetUnavailable("launched", nil)
+				break
+			}
 			return sessions.LaunchDecision{
 				Allowed:      false,
-				Reason:       "session budget " + budgetActionLabel(chk.Action), // money-free (docs/SECURITY-HARDENING.md)
-				DeniedStatus: budgetStatus(chk.Action),
+				Reason:       "session budget " + budgetActionLabel(res.Action), // money-free (docs/SECURITY-HARDENING.md)
+				DeniedStatus: budgetStatus(res.Action),
 			}, nil
 		}
 	}

@@ -21075,6 +21075,553 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/v1/m/finops/admission/commit': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Settles a reservation with the cost the effect actually incurred, returning whatever headroom the estimate over-reserved.
+     * @description Settles a reservation with the cost the effect actually incurred, returning whatever headroom the estimate over-reserved.
+     */
+    post: {
+      parameters: {
+        query?: never
+        header?: {
+          /** @description Target tenant id; required when the principal can act in more than one tenant. */
+          'X-Olivares-Tenant'?: string
+        }
+        path?: never
+        cookie?: never
+      }
+      requestBody: {
+        content: {
+          'application/json': {
+            /**
+             * Format: int64
+             * @description The measured cost. Ingest the spend first, so the ceiling never under-counts during settlement.
+             */
+            actual_micro_usd?: number
+            /** @description The reservation handle Reserve returned. An empty handle is accepted and settles nothing: a request admitted with no enforcing target has no hold to commit. */
+            handle?: string
+            /** @description The per-seat spend-limit handle, when the reservation took one. Settled with the same measured cost. */
+            spend_handle?: string
+          }
+        }
+      }
+      responses: {
+        /** @description OK */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description bad request */
+        400: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description unauthenticated */
+        401: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description not found */
+        404: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description conflict / setup required */
+        409: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description rate limited */
+        429: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+      }
+    }
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/v1/m/finops/admission/reconcile': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Sweeps holds that expired unsettled, compares what remains against the commits and releases its callers made, and emits a posture finding when the ledger drifted.
+     * @description Sweeps holds that expired unsettled, compares what remains against the commits and releases its callers made, and emits a posture finding when the ledger drifted.
+     */
+    post: {
+      parameters: {
+        query?: never
+        header?: {
+          /** @description Target tenant id; required when the principal can act in more than one tenant. */
+          'X-Olivares-Tenant'?: string
+        }
+        path?: never
+        cookie?: never
+      }
+      requestBody?: never
+      responses: {
+        /** @description OK */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description bad request */
+        400: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description unauthenticated */
+        401: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description not found */
+        404: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description conflict / setup required */
+        409: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description rate limited */
+        429: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+      }
+    }
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/v1/m/finops/admission/reconciliation': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Reports the reservation ledger against its commits and releases: how many holds are active, settled or lapsed, and whether the ledger drifted from what its callers settled.
+     * @description Reports the reservation ledger against its commits and releases: how many holds are active, settled or lapsed, and whether the ledger drifted from what its callers settled.
+     */
+    get: {
+      parameters: {
+        query?: never
+        header?: {
+          /** @description Target tenant id; required when the principal can act in more than one tenant. */
+          'X-Olivares-Tenant'?: string
+        }
+        path?: never
+        cookie?: never
+      }
+      requestBody?: never
+      responses: {
+        /** @description OK */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description bad request */
+        400: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description unauthenticated */
+        401: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description not found */
+        404: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description conflict / setup required */
+        409: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description rate limited */
+        429: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+      }
+    }
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/v1/m/finops/admission/release': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Returns an unused hold to its budget when the effect did not happen, so an abandoned reservation stops withholding headroom from the next caller.
+     * @description Returns an unused hold to its budget when the effect did not happen, so an abandoned reservation stops withholding headroom from the next caller.
+     */
+    post: {
+      parameters: {
+        query?: never
+        header?: {
+          /** @description Target tenant id; required when the principal can act in more than one tenant. */
+          'X-Olivares-Tenant'?: string
+        }
+        path?: never
+        cookie?: never
+      }
+      requestBody: {
+        content: {
+          'application/json': {
+            /** @description The reservation handle to return unused. An empty handle is accepted and releases nothing. */
+            handle?: string
+            /** @description The per-seat spend-limit handle, when the reservation took one. */
+            spend_handle?: string
+          }
+        }
+      }
+      responses: {
+        /** @description OK */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description bad request */
+        400: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description unauthenticated */
+        401: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description not found */
+        404: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description conflict / setup required */
+        409: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description rate limited */
+        429: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+      }
+    }
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/v1/m/finops/admission/reserve': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Holds estimated spend against every enforcing budget that scopes the request, and against the actor's own spend limit when one is named.
+     * @description Holds estimated spend against every enforcing budget that scopes the request, and against the actor's own spend limit when one is named.
+     */
+    post: {
+      parameters: {
+        query?: never
+        header?: {
+          /** @description Target tenant id; required when the principal can act in more than one tenant. */
+          'X-Olivares-Tenant'?: string
+        }
+        path?: never
+        cookie?: never
+      }
+      requestBody: {
+        content: {
+          'application/json': {
+            /** @description When set, the per-seat spend limit of that actor is reserved as well as the pooled budgets. */
+            actor_ref?: string
+            dims?: {
+              agent_group_refs?: string[]
+              agent_ref?: string
+              api_key_ref?: string
+              context_window?: string
+              cost_center_ref?: string
+              cost_type?: string
+              gateway?: string
+              identity_ref?: string
+              inference_geo?: string
+              model_ref?: string
+              project?: string
+              provider_ref?: string
+              routine_ref?: string
+              service_tier?: string
+              session_ref?: string
+              team?: string
+              user_group_refs?: string[]
+              workspace_ref?: string
+            }
+            /**
+             * Format: int64
+             * @description The a-priori hold. Zero still refuses an unreadable store and an exhausted cap; it inserts a reservation row only where an enforcing target matches.
+             */
+            estimate_micro_usd?: number
+            /** @description Directory group ids used to resolve the actor's spend limit. */
+            groups?: string[]
+            /** @description Bound to the tenant, the scope and the canonical payload. The same key with the same payload replays the original reservation; with a different payload it is a 409. */
+            idempotency_key: string
+            /** @enum {string} */
+            scope: 'session_launch' | 'model_gateway' | 'scheduled_job'
+            /**
+             * @description What a budget store that cannot be read answers. Omitted, empty and unrecognised all mean deny: an outage is not permission. Allow is the explicit, per-request opt-in to the historical fail-open behaviour.
+             * @default deny
+             * @enum {string}
+             */
+            unreachable?: '' | 'deny' | 'allow'
+          }
+        }
+      }
+      responses: {
+        /** @description OK */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description bad request */
+        400: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description unauthenticated */
+        401: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description not found */
+        404: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description conflict / setup required */
+        409: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description rate limited */
+        429: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+      }
+    }
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/v1/m/finops/alerts': {
     parameters: {
       query?: never

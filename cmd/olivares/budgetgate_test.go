@@ -168,21 +168,27 @@ func (s stubChecker) CheckSpendLimit(context.Context, model.TenantID, string, []
 	return finops.SpendLimitCheck{Allowed: true}, nil
 }
 
-// TestBudgetGateAdaptersFailOpenOnError proves all three composition-root adapters map a
-// FinOps error to ALLOW (fail-open), even when the (ignored) check says DENY — a FinOps
-// outage must never take down actuation.
-func TestBudgetGateAdaptersFailOpenOnError(t *testing.T) {
+func (s stubChecker) Reserve(_ context.Context, _ model.TenantID, req finops.AdmissionRequest) (finops.Reservation, error) {
+	return fakeAdmissionReserve(s.chk, s.err, req)
+}
+
+func (s stubChecker) Commit(context.Context, model.TenantID, string, int64) error { return nil }
+func (s stubChecker) Release(context.Context, model.TenantID, string) error       { return nil }
+
+// TestBudgetGateAdaptersFailClosedOnError proves all three composition-root adapters map a
+// FinOps error to DENY (fail-closed). A store outage is not permission.
+func TestBudgetGateAdaptersFailClosedOnError(t *testing.T) {
 	ctx := context.Background()
 	boom := stubChecker{chk: finops.BudgetCheck{Allowed: false, Action: "block", BudgetID: "x"}, err: errSyntheticOutage}
 
-	if d, err := (orchBudgetGate{fin: boom}).Check(ctx, "t", orchestration.BudgetDims{}); err != nil || !d.Allowed {
-		t.Fatalf("orch adapter must fail OPEN on a checker error, got %+v err=%v", d, err)
+	if d, err := (orchBudgetGate{fin: boom}).Check(ctx, "t", orchestration.BudgetDims{}); err != nil || d.Allowed || d.Action != "block" {
+		t.Fatalf("orch adapter must fail CLOSED on a checker error, got %+v err=%v", d, err)
 	}
-	if d, err := (voiceBudgetGate{fin: boom}).Check(ctx, "t", voice.BudgetDims{}); err != nil || !d.Allowed {
-		t.Fatalf("voice adapter must fail OPEN on a checker error, got %+v err=%v", d, err)
+	if d, err := (voiceBudgetGate{fin: boom}).Check(ctx, "t", voice.BudgetDims{}); err != nil || d.Allowed || d.Action != "block" {
+		t.Fatalf("voice adapter must fail CLOSED on a checker error, got %+v err=%v", d, err)
 	}
-	if d, err := (modelsBudgetGate{fin: boom}).Check(ctx, "t", models.BudgetDims{}); err != nil || !d.Allowed {
-		t.Fatalf("models adapter must fail OPEN on a checker error, got %+v err=%v", d, err)
+	if d, err := (modelsBudgetGate{fin: boom}).Check(ctx, "t", models.BudgetDims{}); err != nil || d.Allowed || d.Action != "block" {
+		t.Fatalf("models adapter must fail CLOSED on a checker error, got %+v err=%v", d, err)
 	}
 
 	// And when the checker SUCCEEDS with a deny, the adapter maps it through unchanged.

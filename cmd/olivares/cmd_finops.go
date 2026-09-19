@@ -74,6 +74,66 @@ func newFinOpsCmd() *cobra.Command {
 		newFinOpsRecommendationsCmd(c),
 		newFinOpsTeamSummaryCmd(c),
 		newFinOpsComparisonCmd(c),
+		newFinOpsAdmissionCmd(c),
+	)
+	return cmd
+}
+
+func newFinOpsAdmissionCmd(c modelstackClient) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "admission",
+		Short: "Reserve spend before an effect and reconcile the hold ledger",
+		Long: "Reserve estimated spend before a billable effect, commit the measured cost, release\n" +
+			"an unused hold, and reconcile reservations against commits. A deny is money-free.\n" +
+			"An unreachable budget store refuses the request unless unreachable=allow is set.",
+		Example: `  olivares finops admission reserve --data @reserve.json
+  olivares finops admission reconciliation -o json`,
+		Args: cobra.NoArgs,
+	}
+	cmd.AddCommand(
+		newModelstackWriteCmd(c, modelstackWriteSpec{
+			Use:     "reserve",
+			Short:   "Reserve estimated spend before an effect",
+			Long:    "Reserve estimated micro-USD against every enforcing budget that scopes the request.",
+			Example: `  olivares finops admission reserve --data @reserve.json -o json`,
+			Method:  http.MethodPost,
+			Target:  modelstackTarget{Collection: "/admission/reserve"},
+			Body:    modelstackBodyRequired,
+		}),
+		newModelstackWriteCmd(c, modelstackWriteSpec{
+			Use:     "commit",
+			Short:   "Commit a reservation with the measured cost",
+			Long:    "Settle a reservation after the effect completed. Ingest the actual spend first.",
+			Example: `  olivares finops admission commit --data '{"handle":"...","actual_micro_usd":1000}'`,
+			Method:  http.MethodPost,
+			Target:  modelstackTarget{Collection: "/admission/commit"},
+			Body:    modelstackBodyRequired,
+		}),
+		newModelstackWriteCmd(c, modelstackWriteSpec{
+			Use:     "release",
+			Short:   "Release an unused reservation",
+			Long:    "Return unused headroom when the effect did not complete.",
+			Example: `  olivares finops admission release --data '{"handle":"..."}'`,
+			Method:  http.MethodPost,
+			Target:  modelstackTarget{Collection: "/admission/release"},
+			Body:    modelstackBodyRequired,
+		}),
+		newModelstackGetCmd(c, modelstackGetSpec{
+			Use:     "reconciliation",
+			Short:   "Compare reservations against commits",
+			Long:    "Show reservation-ledger drift. Drift is a posture finding, not a silent rewrite.",
+			Example: `  olivares finops admission reconciliation -o json`,
+			Target:  modelstackTarget{Collection: "/admission/reconciliation"},
+		}),
+		newModelstackWriteCmd(c, modelstackWriteSpec{
+			Use:     "reconcile",
+			Short:   "Run reservation reconciliation and emit drift findings",
+			Long:    "Sweep expired holds, compare reservations to commits, and emit a posture finding on drift.",
+			Example: `  olivares finops admission reconcile -o json`,
+			Method:  http.MethodPost,
+			Target:  modelstackTarget{Collection: "/admission/reconcile"},
+			Body:    modelstackBodyOptional,
+		}),
 	)
 	return cmd
 }
