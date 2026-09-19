@@ -58,7 +58,7 @@ Sécurité & identité, Déploiement, Observabilité & preuves, puis Système & 
 
 <!-- BEGIN GENERATED olivares-console-routes — regenerate with `bash scripts/check-guide-docs.sh --write`; do not edit by hand -->
 
-La console publie **75 routes**. Elles figurent toutes dans les tableaux ci-dessous, avec la
+La console publie **76 routes**. Elles figurent toutes dans les tableaux ci-dessous, avec la
 permission requise et la page de référence ouverte par leur lien d'aide dans le produit.
 
 ### Exploiter
@@ -79,6 +79,7 @@ permission requise et la page de référence ouverte par leur lien d'aide dans l
 | Observabilité | `/observability` | Santé de l'ingestion par standard et exploration des traces | `health:status:read` | [reference/modules/observability](/fr/reference/modules/observability/) |
 | Liaisons de sources | `/provider-bindings` | Dédiez des sources configurées, à la révision appliquée par ce nœud, à des profils de fournisseur | `sessions:profile-binding:read` | [reference/modules/ii-sessions](/fr/reference/modules/ii-sessions/) |
 | Profils de fournisseur | `/provider-profiles` | Enregistrez et administrez les répertoires de fournisseur sous lesquels les sessions se lancent, et lisez leur configuration à la demande | `sessions:profile:read` | [reference/modules/ii-sessions](/fr/reference/modules/ii-sessions/) |
+| Fournisseurs | `/providers` | Enregistrez les clés d'API et les points de terminaison avec lesquels les sessions démarrent ; testez-les, changez-les et révoquez-les | `sessions:provider:read` | [how-to/add-a-provider](/fr/how-to/add-a-provider/) |
 | Bac à sable | `/sandbox` | Test isolé des agents et relecture | `sandbox:run:read` | [reference/modules/xvii-sandbox](/fr/reference/modules/xvii-sandbox/) |
 | Sessions | `/sessions` | Opération des agents en direct et chronologies | `sessions:live:read` | [reference/modules/ii-sessions](/fr/reference/modules/ii-sessions/) |
 | Locataires | `/tenants` | Retirer ou rétablir le service d'un locataire | `system:admin` | [how-to/troubleshooting](/fr/how-to/troubleshooting/) |

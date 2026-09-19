@@ -267,7 +267,14 @@ type moduleSet struct {
 // inferenceDoer is the trace-instrumented HTTP transport for the engine→Claude hop
 // (OBS-03; nil = untraced default); log backs the connector-dispatcher provisioning
 // warnings.
-func buildModules(signer *audit.Signer, catalogSigner, policySigner ed25519.PrivateKey, auditPriors []ed25519.PublicKey, inferenceDoer modelprovider.Doer, srcCfg sourcesConfig, edition EditionConfig, log *slog.Logger) (moduleSet, error) {
+// dataDir is the engine's RESOLVED data directory. It is a parameter rather than
+// a re-derivation because two commands over one installation must not disagree
+// about where it is: `doctor` and `quickstart` did (measured 2026-09-18), and the
+// same defect reached the sessions plane — the host-tool observer resolved the
+// managed-tools root from the environment default while the engine ran on a
+// directory named by --data-dir, so an official CLI installed into the engine's
+// own tools root was never registered as a driver.
+func buildModules(signer *audit.Signer, catalogSigner, policySigner ed25519.PrivateKey, auditPriors []ed25519.PublicKey, inferenceDoer modelprovider.Doer, srcCfg sourcesConfig, edition EditionConfig, dataDir string, log *slog.Logger) (moduleSet, error) {
 	modelGatewayProfiles, err := loadModelGatewayProfiles(osGetenv, log)
 	if err != nil {
 		return moduleSet{}, err
@@ -373,8 +380,13 @@ func buildModules(signer *audit.Signer, catalogSigner, policySigner ed25519.Priv
 	if err != nil {
 		return moduleSet{}, err
 	}
-	sm := sessions.New(append(buildSessionRuntimeOptions(osGetenv, wifBroker, log),
+	sm := sessions.New(append(buildSessionRuntimeOptions(osGetenv, wifBroker, dataDir, log),
 		sessions.WithManagedStopAdmissionTimeout(managedStopAdmission))...)
+	// the place a session with NO registered workspace works in, bound
+	// through the door that reports a refusal. A refused root does not stop the
+	// engine — it deny-closes exactly those launches, and the ERROR line names the
+	// remedy — so the error is reported here and not returned.
+	_ = useSessionWorkspaceRoot(sm, dataDir, log)
 	logSessionLaunchInspection(sm, log)
 	// II→XII: the monitor samples REAL sessions from the module-II live read-model
 	// within a short configurable recency window (OLIVARES_EVALS_MONITOR_WINDOW).
@@ -710,6 +722,14 @@ func buildModules(signer *audit.Signer, catalogSigner, policySigner ed25519.Priv
 	// now is in time.
 	live := liveingest.New(liveingest.WithObservedRefInspection(osGetenv("OLIVARES_LIVEINGEST_INSPECT_OBSERVED_REFS") == "1"))
 	ci.bindRuntimeCostSink(live)
+	// v26.10: and the SESSIONS plane publishes through the same producer. Until this
+	// line existed, a governed session's real cost reached no ledger at all
+	// (sessioncostsink.go names the measurement). Late-bound for the same reason as
+	// the judge's sink above: `live`'s Host exists only at Init, and its publish
+	// methods are nil-safe, so binding the stable pointer here is in time.
+	if sm != nil {
+		sm.UseSessionCostSink(&sessionCostSink{sink: live, log: log})
+	}
 	// a governed A2A scheduled-fire is also a COMMUNICATION fact — make it visible
 	// in module IV's graph (an a2a edge) + the SOC feed (an a2a_delegation finding) via
 	// the same in-process producer. Late-bound (live's Host exists only at Init) and

@@ -110,8 +110,20 @@ func TestProfiledLaunch_PersistsSnapshotBeforeSpawnAndBindsScopedAlias(t *testin
 	if v, ok := envValue(spec, "ANTHROPIC_AUTH_TOKEN"); !ok || v != "tok-secret" {
 		t.Fatal("the governed inference credential must still reach the child")
 	}
-	if spec.Dir != "" {
+	// ⛔ THIS ASSERTION USED TO BE `spec.Dir != ""`, AND THAT EMPTY STRING WAS THE
+	// DEFECT IT PINNED. B1's point stands and is kept: a profile's HOME must never
+	// become the working directory. What changed on 2026-09-18 is what an unworkspaced
+	// run gets INSTEAD — an empty Dir is not "no directory", it is the engine's own
+	// process cwd, which the golden path measured a governed child running in. So the
+	// two homes are still refused, and the directory is now the session's own.
+	if spec.Dir == a.ConfigHome || spec.Dir == a.UserHome {
 		t.Fatalf("a profile must not become the working directory: %q", spec.Dir)
+	}
+	if spec.Dir == "" {
+		t.Fatal("an unworkspaced run got an EMPTY working directory, which the native runner reads as the engine's own cwd")
+	}
+	if filepath.Base(spec.Dir) != dto.RunRef {
+		t.Fatalf("the working directory is not this session's own: %q (run %s)", spec.Dir, dto.RunRef)
 	}
 
 	// The init frame binds the SCOPED alias inside the run-row transaction.
@@ -603,7 +615,7 @@ func TestProfiledLaunch_RealChildFixtureReceivesHomes(t *testing.T) {
 // enabled by composition; once enabled it launches and reports the references.
 func TestProfiledLaunch_HTTPEndpointGate(t *testing.T) {
 	fr := &fakeRunner{initSID: "sess-http"}
-	m := New(WithRunner(fr), WithCredentialSource(staticCred()))
+	m := New(WithSessionWorkspaceRoot(t.TempDir()), WithRunner(fr), WithCredentialSource(staticCred()))
 	m.UseExecutionEnvironmentRef(testEnvRef)
 	h := newHarness(t, m)
 	admin := h.adminLogin()

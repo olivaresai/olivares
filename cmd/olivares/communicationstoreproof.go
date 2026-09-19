@@ -39,6 +39,20 @@ type communicationStoreProof struct {
 	Ready             bool      `json:"ready"`
 	Blockers          []string  `json:"blockers,omitempty"`
 	ObservedAt        time.Time `json:"observed_at"`
+	// AwaitingActivation reports that every blocker is one the OPERATOR's own
+	// activation ceremony clears — the staged directory-writer control and the
+	// generation/epoch coverage that follows it. It is what separates "K3 is not
+	// turned on yet" from "K3 is broken", and it exists because an ORDINARY FIRST
+	// BOOT logged the second at ERROR while being the first (measured
+	// 2026-09-18: `writer_control_not_enforced: mode="staged"`,
+	// `directory_epoch_coverage_incomplete` and
+	// `expected_generation_below_activation: 1` — three blockers, all of them
+	// "nobody has run `olivares db activate-directory-writer` yet").
+	//
+	// It is FALSE whenever any OTHER blocker is present, including beside these: an
+	// unverified schema next to a staged writer is not a posture waiting for a
+	// ceremony.
+	AwaitingActivation bool `json:"awaiting_activation"`
 }
 
 // communicationStoreProofWitness composes the historical session-guard
@@ -133,17 +147,24 @@ func (w *communicationStoreProofWitness) prove(ctx context.Context, guardVerifie
 	proof.ControlMode, proof.WriterPosture = status.ControlMode, status.WriterPosture
 	proof.EpochCoverageComplete, proof.ExpectedGeneration = status.EpochCoverageComplete, status.ExpectedGeneration
 	proof.HistoricalEnabled = status.Enabled
+	// activationPending counts the blockers the operator's OWN ceremony clears, so a
+	// caller can tell an un-activated posture from a broken one without parsing the
+	// sentences this function prints.
+	activationPending := 0
 	if status.ControlMode != store.DirectoryControlEnforced {
 		proof.Blockers = append(proof.Blockers,
 			fmt.Sprintf("writer_control_not_enforced: mode=%q (run `olivares db activate-directory-writer` and reopen)",
 				status.ControlMode))
+		activationPending++
 	}
 	if !status.EpochCoverageComplete {
 		proof.Blockers = append(proof.Blockers, "directory_epoch_coverage_incomplete")
+		activationPending++
 	}
 	if status.ExpectedGeneration < 2 {
 		proof.Blockers = append(proof.Blockers,
 			fmt.Sprintf("expected_generation_below_activation: %d", status.ExpectedGeneration))
+		activationPending++
 	}
 	switch status.WriterPosture {
 	case store.DirectoryWriterSplitOwner, store.DirectoryWriterSingleRoleCapability,
@@ -187,6 +208,7 @@ func (w *communicationStoreProofWitness) prove(ctx context.Context, guardVerifie
 	}
 	proof.SchemaVerified = schemaVerified
 	proof.Ready = len(proof.Blockers) == 0
+	proof.AwaitingActivation = awaitingActivationOnly(len(proof.Blockers), activationPending)
 	return proof, nil
 }
 
@@ -236,3 +258,16 @@ func (w *communicationStoreProofWitness) Proof() communicationStoreProof {
 }
 
 var _ sessions.CommunicationStoreReadinessWitness = (*communicationStoreProofWitness)(nil)
+
+// awaitingActivationOnly decides whether an incomplete proof is merely
+// UN-ACTIVATED, and it is a named function rather than an expression because the
+// boot log's LEVEL hangs off it: INFO with a remedy, or ERROR.
+//
+// Both conditions are load-bearing. There must be at least one activation-pending
+// blocker, or a proof blocked by something else entirely would be excused by
+// arithmetic. And EVERY blocker must be one of them: a guard or schema failure
+// beside a staged writer is not a posture waiting for a ceremony, and an operator
+// who runs the ceremony would find it still blocked with no line saying why.
+func awaitingActivationOnly(blockers, activationPending int) bool {
+	return activationPending > 0 && blockers == activationPending
+}

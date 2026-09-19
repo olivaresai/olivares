@@ -9,10 +9,10 @@ import (
 	"io"
 	"os"
 	"strings"
-	"text/tabwriter"
 
 	"github.com/spf13/cobra"
 
+	"github.com/olivaresai/olivares/cmd/olivares/internal/termrender"
 	"github.com/olivaresai/olivares/core/auth"
 )
 
@@ -72,12 +72,17 @@ func secretsListCmd() *cobra.Command {
 					_, err := fmt.Fprintln(out, "no secrets stored")
 					return err
 				}
-				tw := tabwriter.NewWriter(out, 0, 2, 2, ' ', 0)
-				fmt.Fprintln(tw, "NAME\tHINT\tDESCRIPTION\tUPDATED")
+				tbl := termrender.Table{Header: []string{"name", "hint", "description", "updated"}}
 				for _, item := range items {
-					fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", item.Name, item.Hint, item.Description, item.UpdatedAt)
+					tbl.Rows = append(tbl.Rows, []string{
+						item.Name,
+						item.Hint,
+						item.Description,
+						item.UpdatedAt,
+					})
 				}
-				return tw.Flush()
+				renderTo(out).Table(tbl)
+				return nil
 			}, items)
 		},
 	}

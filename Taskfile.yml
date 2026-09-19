@@ -1017,6 +1017,28 @@ tasks:
     cmds:
       - bash scripts/quickstart-argv-smoke.sh
 
+  smoke:first-hour:
+    desc: >-
+      First-hour local shape, headless: install → register one coding agent →
+      govern a session (allow one tool, deny another) → assert evidence rows.
+      SQLite, no docker, no Postgres. Replays the commands on the First hour
+      guide local shape against the real binary.
+    deps: [build:bin]
+    cmds:
+      - bash scripts/first-hour-smoke.sh
+
+  smoke:provider-onboarding:
+    desc: >-
+      Provider path, headless: register a credential from the CLI (key on
+      stdin) → test the connection against a recorded provider double without
+      spending → bind it to a profile → launch a session and assert the child
+      received THAT credential → revoke and assert the next launch is refused by
+      name. Asserts the credential appears in no response, no log and no file
+      under the data dir. SQLite, no docker, no Postgres, no vendor account.
+    deps: [build:bin]
+    cmds:
+      - bash scripts/provider-onboarding-smoke.sh
+
   smoke:examples:
     desc: >-
       Examples contract: run every examples/<scenario>/smoke.sh against the
@@ -6295,6 +6317,49 @@ tasks:
       integracion; esto acerca el invariante a quien escribe el codigo.
     cmds:
       - bash scripts/check-cli-transport-exempt.sh
+
+  lint:cli-render:
+    desc: >-
+      El TRINQUETE del formateo a mano del terminal. Cuenta, por fichero y por clase, las rutas de
+      salida de `cmd/olivares` que construyen una tabla, un bloque clave/valor, un marcador de
+      estado, un sobre de transporte o una linea de paso siguiente A MANO, en vez de pedirselos al
+      renderer, y las compara con `docs/cli-render-baseline.txt`. Medido el 2026-09-18: 96 rutas en
+      39 ficheros. La limpieza es finita y la costumbre no — cada una de esas 96 fue alguien
+      haciendo lo razonable en su sitio, y el terminal es inconsistente porque nada contaba. Muerde
+      en LAS DOS direcciones: por encima de su fila es una ruta nueva; por debajo pide bajar la fila
+      en el mismo commit, porque un trinquete que recupera holgura en silencio es un contador. Tres
+      respuestas: 0 en su linea base, 1 hallazgo, 2 no he podido mirar (sin linea base, sin
+      paquete, sin toolchain de Go, o el barrido dejo de ver el paquete). La regla `table` la
+      decide un lector go/ast (`scripts/cli-render-tabwriter`) porque su sujeto es un TIPO y un
+      tipo se resuelve, no se busca: el 2026-09-19 una revision independiente paso la forma regex
+      por tres puertas que compilaban (import aliased, fabrica en una variable, fabrica en un
+      modulo hermano).
+    cmds:
+      # TMPDIR SE FIJA AQUI Y NO SE DEJA AL LLAMADOR, igual que lint:error-mappers: el gate
+      # construye el lector de la regla table y luego lo EJECUTA, y /tmp es tmpfs+noexec en el
+      # contenedor de desarrollo — un binario construido alli muere con exit 126 y el mensaje
+      # desnudo es «permission denied» sobre un fichero con el bit de ejecucion puesto.
+      - cmd: |
+          TMPDIR="{{.ROOT_DIR}}/.cli-render-tmp" bash scripts/check-cli-render.sh --gate
+
+  lint:cli-render:selftest:
+    desc: >-
+      Bateria de check-cli-render.sh — 38 casillas hermeticas, cada una en las DOS direcciones donde
+      las hay: la tabla nueva sin fila y la misma salida por el renderer, la fila excedida y la fila
+      justa, el trinquete que aguanta y el que sube diciendo a cuanto bajar, la linea base ausente y
+      la fila sin razon saliendo 2, el suelo de poblacion, la bandera desconocida, el comentario que
+      no es una salida, el propio renderer que no cuenta, el estado entre parentesis que no es un
+      sobre y el sobre que si, el rechazo tipado bajo internal/ que no cuenta, el censo con su
+      cabecera y sus clases, y las TRES PUERTAS que una revision independiente midio verdes el
+      2026-09-19 — import aliased de text/tabwriter, fabrica guardada en una variable, fabrica en un
+      modulo hermano del workspace — cada una con su contraria por el renderer, mas el modulo
+      hermano ilegible que sale 2 en vez de reabrir la puerta en silencio. Ninguna lee el arbol
+      real, asi que dicen lo mismo el dia que alguien arregle la ultima ruta.
+    cmds:
+      # Mismo TMPDIR que lint:cli-render y por la misma razon: cada casilla invoca el gate, que
+      # construye y ejecuta su lector.
+      - cmd: |
+          TMPDIR="{{.ROOT_DIR}}/.cli-render-tmp" bash scripts/test-check-cli-render.sh
 
   lint:cli-transport-exempt:selftest:
     desc: >-

@@ -109,6 +109,67 @@ jobs:
       - name: licence headers and the AGPL boundary
         run: task lint:spdx lint:boundary
 
+      # Capture the existing generator's outputs on the hosted runner.
+      - name: record the generation inputs
+        env:
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          receipt="$RUNNER_TEMP/sdk-generation"
+          mkdir -p "$receipt"
+          git rev-parse HEAD > "$receipt/checkout.sha"
+          printf '%s\n' "$PR_HEAD" > "$receipt/pr-head.sha"
+          go version > "$receipt/toolchain.txt"
+          sha256sum go.work go.work.sum web/openapi/openapi.json web/openapi/openapi.beta.json \
+            clients/generator/*.go clients/generator/go.mod > "$receipt/inputs.sha256"
+      - name: regenerate the SDKs with their existing generator
+        run: |
+          set -euo pipefail
+          receipt="$RUNNER_TEMP/sdk-generation"
+          if go run ./clients/generator -spec web/openapi/openapi.json \
+            -beta web/openapi/openapi.beta.json -out clients > "$receipt/generator.log" 2>&1; then
+            printf '0\n' > "$receipt/generator.exit"
+          else
+            rc=$?
+            printf '%s\n' "$rc" > "$receipt/generator.exit"
+            cat "$receipt/generator.log"
+            exit "$rc"
+          fi
+          paths=(
+            clients/go/operations.gen.go clients/go/version.gen.go
+            clients/python/src/olivares_client/_operations.py
+            clients/typescript/src/operations.gen.ts clients/typescript/src/version.gen.ts
+            clients/java/src/main/java/ai/olivares/client/Client.java
+            clients/java/src/main/java/ai/olivares/client/ApiMetadata.java
+          )
+          # A recreated untracked file is invisible to git diff. Every fixed
+          # output must exist in the reviewed index before its patch is usable.
+          if ! git ls-files --error-unmatch -- "${paths[@]}" > /dev/null; then
+            echo "::error::a declared SDK output is absent from the committed index"
+            exit 1
+          fi
+          sha256sum "${paths[@]}" > "$receipt/outputs.sha256"
+          git diff --binary -- "${paths[@]}" > "$receipt/generated-sdk.patch"
+          if git diff --quiet -- "${paths[@]}"; then
+            :
+          else
+            rc=$?
+            if [[ "$rc" -ne 1 ]]; then
+              echo "::error::could not compare generated SDKs with their committed snapshots"
+              exit 2
+            fi
+            echo "::error::generated SDKs differ from their committed snapshots; inspect the generation artifact"
+            exit 1
+          fi
+      - name: retain generation evidence, including a stale-output patch
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sdk-generation-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/sdk-generation/
+          retention-days: 7
+          if-no-files-found: error
+
   pr-build:
     if: github.repository == 'olivaresai/olivares' || vars.OLIVARES_RELEASE_PROFILE == 'preprod'
     runs-on: ubuntu-latest
@@ -138,6 +199,69 @@ jobs:
           command -v task || { echo "::error::go install reported OK and task is not on PATH"; exit 1; }
       - name: every workspace module compiles
         run: task build:go
+      - name: build the development CLI with its first-party connectors
+        run: task build:bin
+      - name: verify and package the development CLI
+        env:
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          bundle="$RUNNER_TEMP/cli-development-verification"
+          mkdir -p "$bundle"
+          checkout_sha="$(git rev-parse HEAD)"
+          expected_commit="$(git rev-parse --short HEAD)"
+          if [[ "$checkout_sha" != "$GITHUB_SHA" || ! "$PR_HEAD" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::the checkout or PR identity is not the expected Actions candidate"
+            exit 1
+          fi
+          git diff --exit-code --quiet HEAD --
+          test -s bin/olivares
+          test -x bin/olivares
+          install -m 0755 bin/olivares "$bundle/olivares"
+          # Read the retained executable's stamp; never replace it with a declared SHA.
+          timeout 30s "$bundle/olivares" --output json version > "$bundle/version.json"
+          target_os="$(go env GOOS)"
+          target_arch="$(go env GOARCH)"
+          if ! jq -e -s --arg commit "$expected_commit" --arg os "$target_os" --arg arch "$target_arch" '
+            length == 1 and (.[0] |
+              type == "object" and .commit == $commit and .os == $os and .arch == $arch
+              and (.version | type == "string" and length > 0)
+              and (.date | type == "string" and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"))
+              and (.go | type == "string" and startswith("go")))
+          ' "$bundle/version.json" > /dev/null; then
+            echo "::error::the executable does not report the expected development build stamp"
+            exit 1
+          fi
+          go version > "$bundle/toolchain.txt"
+          (cd "$bundle" && go version -m ./olivares) > "$bundle/buildinfo.txt"
+          binary_sha="$(sha256sum "$bundle/olivares" | cut -d ' ' -f 1)"
+          jq -n --arg checkout "$checkout_sha" --arg pr_head "$PR_HEAD" \
+            --arg repository "$GITHUB_REPOSITORY" --arg run "$GITHUB_RUN_ID" \
+            --arg attempt "$GITHUB_RUN_ATTEMPT" --arg sha256 "$binary_sha" \
+            --slurpfile version "$bundle/version.json" '{
+              schema: "olivares.cli-development-verification/v1",
+              qualification: "development verification only; not a signed release",
+              build_task: "task build:bin",
+              checkout_sha: $checkout, pr_head_sha: $pr_head,
+              repository: $repository, run_id: $run, run_attempt: $attempt,
+              binary: {path: "olivares", sha256: $sha256, version: $version[0]}
+            }' > "$bundle/manifest.json"
+          (
+            cd "$bundle"
+            sha256sum olivares manifest.json version.json toolchain.txt buildinfo.txt > SHA256SUMS
+            sha256sum --check SHA256SUMS
+          )
+          # The tar preserves executable mode; only these fixed files enter the artifact.
+          tar -czf "$RUNNER_TEMP/cli-development-verification.tar.gz" -C "$bundle" \
+            olivares manifest.json version.json toolchain.txt buildinfo.txt SHA256SUMS
+      - name: retain the verified development CLI
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cli-development-verification
+          path: ${{ runner.temp }}/cli-development-verification.tar.gz
+          retention-days: 7
+          compression-level: 0
+          if-no-files-found: error
 
   # ⛔ THE SUITE IS SPLIT BY A DECLARED PACKAGE LIST, AND THAT IS THE WHOLE CHANGE.
   # Measured on the hosted 4-vCPU runner over two runs of the same tree: 264 packages
@@ -256,7 +380,25 @@ jobs:
         timeout-minutes: 55
         env:
           OLIVARES_TEST_SHARD: ${{ matrix.shard }}
-        run: task test:functional:shard
+        # Record sampled host resources after normal exit or TERM when the shell can run
+        # the trap and its log reaches GitHub. Shutdown-signal/143 observations on 2026-09-19
+        # did not identify their cause. These host samples are not process RSS; neither a
+        # missing report nor a low sampled peak proves or excludes OOM. SIGKILL, host loss
+        # or lost logs can prevent publication. Explicit unavailable-data paths in the
+        # witness print COULD NOT LOOK and return zero; the test command owns its verdict.
+        run: |
+          set -euo pipefail
+          WITNESS="$RUNNER_TEMP/resource-witness-${{ matrix.shard }}.txt"
+          bash scripts/ci-resource-witness.sh start "$WITNESS" >/dev/null
+          witness_said=""
+          witness() {
+            if [ -z "$witness_said" ]; then
+              witness_said=yes
+              bash scripts/ci-resource-witness.sh report "$WITNESS"
+            fi
+          }
+          trap witness EXIT TERM
+          task test:functional:shard
 
   # ⛔ THE ONE NAME THE BRANCH PROTECTION ASKS FOR, AND IT MUST BE ABLE TO SAY NO.
   # A matrix job does not report under its job id: it reports `pr-test-shard (a)`,
@@ -340,5 +482,23 @@ jobs:
           export PATH="$GOBIN:$PATH"
           go install github.com/go-task/task/v3/cmd/task@v3.51.1
           command -v task || { echo "::error::go install reported OK and task is not on PATH"; exit 1; }
+      # Retain generation before the existing freshness check can reject a stale
+      # committed bundle. Generation is development evidence, not acceptance.
+      - name: verify the capture helper with isolated fake build fixtures
+        run: timeout 60s python3 scripts/test-capture-web-generation.py
+      - name: generate and capture the complete console bundle
+        id: web-generation
+        env:
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: python3 scripts/capture-web-generation.py
+      - name: retain the generated console bundle
+        if: success() && steps.web-generation.outcome == 'success'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: web-generation-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/web-generation-artifact/
+          retention-days: 7
+          compression-level: 0
+          if-no-files-found: error
       - name: the console checks, and the embedded bundle matches its sources
         run: task check:web web:check

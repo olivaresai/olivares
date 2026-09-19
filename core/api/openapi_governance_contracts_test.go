@@ -30,6 +30,7 @@ func TestGovernanceRequestBodiesClassifyAllMutations(t *testing.T) {
 		{http.MethodPost, "/pdp/dry-run", governanceBodyful},
 		{http.MethodPost, "/pdp/publish", governanceBodyful},
 		{http.MethodPost, "/pdp/rollback", governanceBodyful},
+		{http.MethodPost, "/decisions/replay", governanceBodyful},
 		{http.MethodPost, "/approvals", governanceBodyful},
 		{http.MethodPost, "/approvals/{id}/decisions", governanceBodyful},
 		{http.MethodPost, "/approvals/{id}/cancel", governanceBodyless},
@@ -72,7 +73,7 @@ func TestGovernanceRequestBodiesClassifyAllMutations(t *testing.T) {
 	}
 
 	wantCounts := map[governanceRequestBodyKind]int{
-		governanceBodyful:         36,
+		governanceBodyful:         37,
 		governanceBodyless:        14,
 		governanceBodyNoDerivable: 0,
 		governanceBodyPending:     0,
@@ -111,8 +112,8 @@ func TestGovernanceRequestBodiesClassifyAllMutations(t *testing.T) {
 			t.Errorf("%s returned a body with ok=false: %#v", key, body)
 		}
 	}
-	if len(seen) != 50 {
-		t.Fatalf("classified %d mutations, want 50", len(seen))
+	if len(seen) != 51 {
+		t.Fatalf("classified %d mutations, want 51", len(seen))
 	}
 	if !reflect.DeepEqual(gotCounts, wantCounts) {
 		t.Fatalf("classification counts = %#v, want %#v", gotCounts, wantCounts)
@@ -135,6 +136,7 @@ func TestGovernanceRequestBodiesMatchHandlerDTOs(t *testing.T) {
 		{http.MethodPost, "/approvals", []string{"action", "escalate_in_seconds", "expires_in_seconds", "reason", "required_approvals", "subject_kind", "subject_ref"}, []string{"action"}, true},
 		{http.MethodPost, "/approvals/{id}/decisions", []string{"decision", "note"}, []string{"decision"}, true},
 		{http.MethodPost, "/approvals/{id}/consume", []string{"consumer_id", "policy_version"}, []string{"consumer_id"}, true},
+		{http.MethodPost, "/decisions/replay", []string{"action", "action_vocabulary", "at", "decision_id", "principal", "resource", "resource_kind", "source_instance"}, nil, true},
 		{http.MethodPost, "/agents", []string{"criticality", "identity_ref", "source", "sponsor_ref"}, []string{"identity_ref", "sponsor_ref"}, false},
 	}
 
@@ -207,6 +209,14 @@ func TestGovernanceRequestBodyConditions(t *testing.T) {
 	agent := governanceSchemaFromBody(t, agentBody)
 	if agent["additionalProperties"] != true {
 		t.Fatal("agent registration must preserve the handler's unknown-field tolerance")
+	}
+
+	replayBody, _ := governanceRequestBody(moduleRoute{
+		ns: "governance", method: http.MethodPost, pattern: "/decisions/replay",
+	})
+	replay := governanceSchemaFromBody(t, replayBody)
+	if got := len(replay["anyOf"].([]any)); got != 2 {
+		t.Fatalf("replay selector anyOf has %d branches, want 2", got)
 	}
 }
 

@@ -49,7 +49,7 @@ func writeAttachPeer(t *testing.T) string {
 
 func TestAttachHTTP_CutWhileLiveThenCursorReconciles(t *testing.T) {
 	script := writeAttachPeer(t)
-	m := New(
+	m := New(WithSessionWorkspaceRoot(t.TempDir()),
 		WithRunner(NewProcRunner()),
 		WithProgram(script),
 		WithCredentialSource(staticCred()),

@@ -15,12 +15,12 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"text/tabwriter"
 	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
+	"github.com/olivaresai/olivares/cmd/olivares/internal/termrender"
 	"github.com/olivaresai/olivares/cmd/olivares/internal/toolinstall"
 )
 
@@ -271,7 +271,7 @@ func newAgentToolPlanCmd() *cobra.Command {
 		},
 	}
 	target.addFlags(cmd)
-	cmd.Flags().StringVar(&out, "out", "", "write the plan JSON (with its digest) to this new file for a later `install --plan`")
+	cmd.Flags().StringVar(&out, "out", "", "write the plan JSON (with its digest) to this new file for a later 'install --plan'")
 	return cmd
 }
 
@@ -367,7 +367,7 @@ func newAgentToolInstallCmd() *cobra.Command {
 		},
 	}
 	target.addFlags(cmd)
-	cmd.Flags().StringVar(&planFile, "plan", "", "execute this plan file written by `plan --out`; it is the approval, so no prompt is shown")
+	cmd.Flags().StringVar(&planFile, "plan", "", "execute this plan file written by 'plan --out'; it is the approval, so no prompt is shown")
 	addYesFlag(cmd, &yes)
 	return cmd
 }
@@ -491,8 +491,8 @@ func newAgentToolDetectCmd() *cobra.Command {
 			if cands == nil {
 				cands = []toolinstall.Candidate{}
 			}
-			if err := renderListOut(cmd, cands, fmt.Sprintf("no %s executable found under %s, the vendor default paths or PATH", driver, rootPath),
-				func(w io.Writer, c toolinstall.Candidate) error { return renderToolCandidate(w, c) }, cands); err != nil {
+			if err := renderTableOut(cmd, toolCandidateTable(cands,
+				fmt.Sprintf("no %s executable found under %s, the vendor default paths or PATH", driver, rootPath)), cands); err != nil {
 				return err
 			}
 			// A probe that was asked for and did not run is a failed request:
@@ -502,8 +502,8 @@ func newAgentToolDetectCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&driver, "driver", "claude", "provider tool to look for")
 	addAgentToolRootFlag(cmd, &root)
-	cmd.Flags().BoolVar(&probe, "probe", false, "run `--version` for registered and manifest-corroborated candidates only, from an empty temporary home (an observed path is not permission to run it)")
-	cmd.Flags().StringArrayVar(&probePaths, "probe-path", nil, "exact absolute path of one candidate to run `--version` on (repeatable); required for unregistered-observed paths; damaged releases are never run")
+	cmd.Flags().BoolVar(&probe, "probe", false, "run '--version' for registered and manifest-corroborated candidates only, from an empty temporary home (an observed path is not permission to run it)")
+	cmd.Flags().StringArrayVar(&probePaths, "probe-path", nil, "exact absolute path of one candidate to run '--version' on (repeatable); required for unregistered-observed paths; damaged releases are never run")
 	cmd.Flags().StringVar(&manifestPath, "manifest", "", "a vendor release manifest to corroborate candidates against (verified with --manifest-sig under the pinned key)")
 	cmd.Flags().StringVar(&sigPath, "manifest-sig", "", "the detached OpenPGP signature of --manifest")
 	return cmd
@@ -525,23 +525,43 @@ func readBounded(path string, limit int64) ([]byte, error) {
 	return b, nil
 }
 
+// renderToolPlan writes the install plan as one key/value block.
+//
+// The third tabwriter column this used to have is folded into the value with an
+// em dash. A third column is a table's shape applied to a record: it aligned a
+// note nobody reads in a column, and it made the widest line in the block the
+// one that decided the layout of every other one.
 func renderToolPlan(w io.Writer, p *toolinstall.Plan) error {
-	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	fmt.Fprintf(tw, "plan\t%s\taction: %s\n", p.Digest, p.Action)
-	fmt.Fprintf(tw, "driver\t%s %s\tplatform %s (%s), requested %q via %s\n", p.Driver, p.Version, p.VendorPlatform, p.Platform, p.RequestedVersion, p.Channel)
-	fmt.Fprintf(tw, "source\t%s\t%s\n", p.Source.Kind, p.Source.BaseURL)
-	fmt.Fprintf(tw, "artifact\t%s\t%d bytes, sha256 %s\n", p.Source.ArtifactURL, p.Artifact.Size, p.Artifact.SHA256)
-	fmt.Fprintf(tw, "signed\t%s\tprimary key %s, signing key %s, %s\n", p.Provenance.Class, p.Provenance.KeyFingerprint, p.Provenance.SigningKeyFingerprint, p.Provenance.SignatureCreated.Format(time.RFC3339))
-	fmt.Fprintf(tw, "verifier\t%s\tmanifest sha256 %s\n", p.Provenance.Verifier, p.Provenance.ManifestSHA256)
-	fmt.Fprintf(tw, "destination\t%s\n", p.Destination.Executable)
-	fmt.Fprintf(tw, "verified\t%s\n", strings.Join(p.Verified, ", "))
+	fields := []termrender.Field{
+		{Key: "plan", Value: p.Digest + " — action: " + p.Action},
+		{Key: "driver", Value: fmt.Sprintf("%s %s — platform %s (%s), requested %q via %s",
+			p.Driver, p.Version, p.VendorPlatform, p.Platform, p.RequestedVersion, p.Channel)},
+		{Key: "source", Value: p.Source.Kind + " — " + p.Source.BaseURL},
+		{Key: "artifact", Value: fmt.Sprintf("%s — %d bytes, sha256 %s",
+			p.Source.ArtifactURL, p.Artifact.Size, p.Artifact.SHA256)},
+		{Key: "signed", Value: fmt.Sprintf("%s — primary key %s, signing key %s, %s",
+			p.Provenance.Class, p.Provenance.KeyFingerprint, p.Provenance.SigningKeyFingerprint,
+			p.Provenance.SignatureCreated.Format(time.RFC3339))},
+		{Key: "verifier", Value: p.Provenance.Verifier + " — manifest sha256 " + p.Provenance.ManifestSHA256},
+		{Key: "destination", Value: p.Destination.Executable},
+		{Key: "verified", Value: strings.Join(p.Verified, ", ")},
+	}
 	if p.Existing != nil {
-		fmt.Fprintf(tw, "existing\treceipt=%t executable=%t\t%s\n", p.Existing.ReceiptPresent, p.Existing.ExecutablePresent, p.Existing.Note)
+		fields = append(fields, termrender.Field{
+			Key: "existing",
+			Value: fmt.Sprintf("receipt=%t executable=%t — %s",
+				p.Existing.ReceiptPresent, p.Existing.ExecutablePresent, p.Existing.Note),
+		})
 		if p.Existing.ExecutableSHA256 != "" {
-			fmt.Fprintf(tw, "observed\tsha256 %s\t%d bytes (observed, not verified)\n", p.Existing.ExecutableSHA256, p.Existing.ExecutableSize)
+			fields = append(fields, termrender.Field{
+				Key: "observed",
+				Value: fmt.Sprintf("sha256 %s — %d bytes (observed, not verified)",
+					p.Existing.ExecutableSHA256, p.Existing.ExecutableSize),
+			})
 		}
 	}
-	return tw.Flush()
+	renderTo(w).Fields(fields)
+	return nil
 }
 
 func writePlanFile(out string, raw []byte, digest string, cmd *cobra.Command) error {
@@ -658,35 +678,45 @@ func confirmToolInstallV2(cmd *cobra.Command, assumeYes bool, plan *toolinstall.
 }
 
 func renderToolPlanV2(w io.Writer, p *toolinstall.PlanV2) error {
-	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	fmt.Fprintf(tw, "plan\t%s\tschema %s\n", p.Digest, p.Schema)
-	fmt.Fprintf(tw, "driver\t%s %s\tplatform %s, requested %q via %s\n", p.Selection.Driver, p.Selection.Version, p.Selection.VendorPlatform, p.Selection.RequestedVersion, p.Selection.Channel)
-	fmt.Fprintf(tw, "package\t%s\n", p.Selection.Source.Package.URL)
-	fmt.Fprintf(tw, "verification\t%s\tpackage policy %s\n", p.Selection.Verification.Kind, p.Selection.PackagePolicyID)
-	fmt.Fprintf(tw, "destination\t%s\n", p.Selection.Destination.Executable)
-	return tw.Flush()
+	renderTo(w).Fields([]termrender.Field{
+		{Key: "plan", Value: p.Digest + " — schema " + p.Schema},
+		{Key: "driver", Value: fmt.Sprintf("%s %s — platform %s, requested %q via %s",
+			p.Selection.Driver, p.Selection.Version, p.Selection.VendorPlatform,
+			p.Selection.RequestedVersion, p.Selection.Channel)},
+		{Key: "package", Value: p.Selection.Source.Package.URL},
+		{Key: "verification", Value: p.Selection.Verification.Kind + " — package policy " + p.Selection.PackagePolicyID},
+		{Key: "destination", Value: p.Selection.Destination.Executable},
+	})
+	return nil
 }
 
 func renderToolReceiptV2(w io.Writer, r *toolinstall.ReceiptV2) error {
-	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	fmt.Fprintf(tw, "executable\t%s\n", r.Destination.Executable)
-	fmt.Fprintf(tw, "fetched\t%d bytes, sha256 %s\n", r.FetchedObject.Size, r.FetchedObject.SHA256)
-	fmt.Fprintf(tw, "probe\t%s (%d ms)\n", strings.TrimSpace(strings.SplitN(r.Probe.Output, "\n", 2)[0]), r.Probe.DurationMS)
-	fmt.Fprintf(tw, "verification\t%s\t%s\n", r.VerificationKind, r.AuthObservation.Note)
-	fmt.Fprintf(tw, "installed\t%s by olivares %s, plan digest %s\n", r.InstalledAt.Format(time.RFC3339), r.InstallerVersion, r.PlanDigest)
-	fmt.Fprintf(tw, "receipt\t%s\n", filepath.Join(r.Destination.ReleaseDir, toolinstall.ReceiptFile))
-	return tw.Flush()
+	renderTo(w).Fields([]termrender.Field{
+		{Key: "executable", Value: r.Destination.Executable},
+		{Key: "fetched", Value: fmt.Sprintf("%d bytes, sha256 %s", r.FetchedObject.Size, r.FetchedObject.SHA256)},
+		{Key: "probe", Value: fmt.Sprintf("%s (%d ms)",
+			strings.TrimSpace(strings.SplitN(r.Probe.Output, "\n", 2)[0]), r.Probe.DurationMS)},
+		{Key: "verification", Value: r.VerificationKind + " — " + r.AuthObservation.Note},
+		{Key: "installed", Value: fmt.Sprintf("%s by olivares %s, plan digest %s",
+			r.InstalledAt.Format(time.RFC3339), r.InstallerVersion, r.PlanDigest)},
+		{Key: "receipt", Value: filepath.Join(r.Destination.ReleaseDir, toolinstall.ReceiptFile)},
+	})
+	return nil
 }
 
 func renderToolReceipt(w io.Writer, r *toolinstall.Receipt) error {
-	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	fmt.Fprintf(tw, "executable\t%s\n", r.Destination.Executable)
-	fmt.Fprintf(tw, "artifact\t%d bytes, sha256 %s\n", r.Artifact.Size, r.Artifact.SHA256)
-	fmt.Fprintf(tw, "probe\t%s (%d ms)\n", strings.TrimSpace(strings.SplitN(r.Probe.Output, "\n", 2)[0]), r.Probe.DurationMS)
-	fmt.Fprintf(tw, "signed\t%s by %s (signing key %s)\n", r.Provenance.Class, r.Provenance.KeyFingerprint, r.Provenance.SigningKeyFingerprint)
-	fmt.Fprintf(tw, "installed\t%s by olivares %s, plan digest %s\n", r.InstalledAt.Format(time.RFC3339), r.InstallerVersion, r.PlanDigest)
-	fmt.Fprintf(tw, "receipt\t%s\n", filepath.Join(r.Destination.ReleaseDir, toolinstall.ReceiptFile))
-	return tw.Flush()
+	renderTo(w).Fields([]termrender.Field{
+		{Key: "executable", Value: r.Destination.Executable},
+		{Key: "artifact", Value: fmt.Sprintf("%d bytes, sha256 %s", r.Artifact.Size, r.Artifact.SHA256)},
+		{Key: "probe", Value: fmt.Sprintf("%s (%d ms)",
+			strings.TrimSpace(strings.SplitN(r.Probe.Output, "\n", 2)[0]), r.Probe.DurationMS)},
+		{Key: "signed", Value: fmt.Sprintf("%s by %s (signing key %s)",
+			r.Provenance.Class, r.Provenance.KeyFingerprint, r.Provenance.SigningKeyFingerprint)},
+		{Key: "installed", Value: fmt.Sprintf("%s by olivares %s, plan digest %s",
+			r.InstalledAt.Format(time.RFC3339), r.InstallerVersion, r.PlanDigest)},
+		{Key: "receipt", Value: filepath.Join(r.Destination.ReleaseDir, toolinstall.ReceiptFile)},
+	})
+	return nil
 }
 
 func renderToolInventory(w io.Writer, inv *toolinstall.Inventory) error {
@@ -697,8 +727,9 @@ func renderToolInventory(w io.Writer, inv *toolinstall.Inventory) error {
 	if len(inv.Installed) == 0 {
 		fmt.Fprintf(w, "no releases recorded under %s\n", inv.Root)
 	} else {
-		tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(tw, "DRIVER\tVERSION\tPLATFORM\tSTATE\tSHA256\tINSTALLED\tEXECUTABLE")
+		tbl := termrender.Table{
+			Header: []string{"driver", "version", "platform", "state", "sha256", "installed", "executable"},
+		}
 		for _, in := range inv.Installed {
 			state := in.State
 			if in.Reason != "" {
@@ -708,11 +739,12 @@ func renderToolInventory(w io.Writer, inv *toolinstall.Inventory) error {
 			if !in.InstalledAt.IsZero() {
 				installed = in.InstalledAt.Format(time.RFC3339)
 			}
-			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n", in.Driver, in.Version, in.VendorPlatform, state, shortDigest(in.SHA256), installed, in.Executable)
+			tbl.Rows = append(tbl.Rows, []string{
+				in.Driver, in.Version, in.VendorPlatform, state,
+				shortDigest(in.SHA256), installed, in.Executable,
+			})
 		}
-		if err := tw.Flush(); err != nil {
-			return err
-		}
+		renderTo(w).Table(tbl)
 	}
 	for _, lo := range inv.Leftovers {
 		fmt.Fprintf(w, "leftover staging: %s (%s)\n", lo.Path, lo.Note)
@@ -723,41 +755,83 @@ func renderToolInventory(w io.Writer, inv *toolinstall.Inventory) error {
 	return nil
 }
 
-func renderToolCandidate(w io.Writer, c toolinstall.Candidate) error {
-	line := fmt.Sprintf("%s\t%s\t%s", c.Path, c.Origin, c.Match)
-	if c.Version != "" {
-		line += "\tversion " + c.Version
+// toolCandidateTable lays the candidates out as the records they are.
+//
+// MEASURED 2026-09-18 walking the first hour: the previous form appended a field
+// only when it had a value, so two candidates on one host printed rows of
+// DIFFERENT lengths, tab-separated, with no header — and the operator could not
+// tell whether the fourth field was a version, a size or a symlink target. Every
+// candidate now answers the same columns, and a column it has nothing for says
+// so rather than shifting the ones after it.
+//
+// The columns are wider than a terminal, on purpose: a SHA-256 beside an absolute
+// path does not fit 80 and must not be truncated, so Table's record fallback is
+// the form an operator will normally see. That is the primitive's decision, not
+// this function's — here the job is only to stop the columns from moving.
+//
+// The probe is a COLUMN and not a sub-line under the row. In the record form it
+// reads as "PROBE  claude 2.1.276 (67 ms)" beside the file's own facts, which is
+// where an operator looks for it; as a sub-line it was the one piece of a
+// candidate that no label introduced.
+func toolCandidateTable(cands []toolinstall.Candidate, empty string) termrender.Table {
+	t := termrender.Table{
+		Header: []string{"path", "origin", "match", "version", "size", "sha256", "resolves to", "probe", "note"},
+		Empty:  empty,
 	}
-	if c.SHA256 != "" {
-		line += fmt.Sprintf("\t%d bytes sha256 %s", c.Size, c.SHA256)
-	}
-	if c.IsSymlink {
-		line += "\t-> " + c.Resolved
-	}
-	if c.Note != "" {
-		line += "\t" + c.Note
-	}
-	if _, err := fmt.Fprintln(w, line); err != nil {
-		return err
-	}
-	if c.ProbeSkipped != "" {
-		_, err := fmt.Fprintf(w, "    probe skipped: %s\n", c.ProbeSkipped)
-		return err
-	}
-	if c.ProbeError != "" && c.Probe == nil {
-		_, err := fmt.Fprintf(w, "    probe failed: %s\n", c.ProbeError)
-		return err
-	}
-	if c.Probe != nil {
-		out := strings.TrimSpace(strings.SplitN(c.Probe.Output, "\n", 2)[0])
-		if c.ProbeError != "" {
-			_, err := fmt.Fprintf(w, "    probe failed: %s\n", c.ProbeError)
-			return err
+	for _, c := range cands {
+		size := ""
+		if c.SHA256 != "" {
+			size = fmt.Sprintf("%d bytes", c.Size)
 		}
-		_, err := fmt.Fprintf(w, "    probe: %s (%d ms)\n", out, c.Probe.DurationMS)
-		return err
+		resolved := ""
+		if c.IsSymlink {
+			resolved = c.Resolved
+		}
+		probe, probeRole := toolProbeCell(c)
+		t.Rows = append(t.Rows, []string{c.Path, c.Origin, c.Match, c.Version, size, c.SHA256, resolved, probe, c.Note})
+		t.Roles = append(t.Roles, []termrender.Role{
+			termrender.RoleNone, termrender.RoleNone, toolMatchRole(c.Match),
+			termrender.RoleNone, termrender.RoleNone, termrender.RoleNone, termrender.RoleNone, probeRole,
+		})
 	}
-	return nil
+	return t
+}
+
+// toolProbeCell says what running the executable produced, in the order the
+// candidate can answer it: a probe that was refused, a probe that ran and failed,
+// a probe that ran, or nothing at all because none was asked for.
+//
+// ProbeError is checked before Probe because a candidate can carry both: the
+// probe ran, and it failed. Reading Probe first would report the output of a run
+// the engine classified as a failure.
+func toolProbeCell(c toolinstall.Candidate) (string, termrender.Role) {
+	switch {
+	case c.ProbeSkipped != "":
+		return "skipped: " + c.ProbeSkipped, termrender.RoleWarn
+	case c.ProbeError != "":
+		return "failed: " + c.ProbeError, termrender.RoleFail
+	case c.Probe != nil:
+		out := strings.TrimSpace(strings.SplitN(c.Probe.Output, "\n", 2)[0])
+		return fmt.Sprintf("%s (%d ms)", out, c.Probe.DurationMS), termrender.RoleOK
+	default:
+		return "", termrender.RoleNone
+	}
+}
+
+// toolMatchRole colours the match class. Only `damaged` is a failure: an
+// unregistered path is an ordinary finding on a host where the operator installed
+// the vendor's CLI themselves, and colouring it red would misreport the host.
+func toolMatchRole(match string) termrender.Role {
+	switch match {
+	case toolinstall.MatchRegistered, toolinstall.MatchManifestCorroborated:
+		return termrender.RoleOK
+	case toolinstall.MatchDamaged:
+		return termrender.RoleFail
+	case toolinstall.MatchUnverified:
+		return termrender.RoleWarn
+	default: // unregistered-observed, and anything a newer engine reports
+		return termrender.RoleNone
+	}
 }
 
 func shortDigest(h string) string {

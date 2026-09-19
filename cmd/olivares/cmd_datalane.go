@@ -16,11 +16,11 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"text/tabwriter"
 
 	"github.com/spf13/cobra"
 
 	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
+	"github.com/olivaresai/olivares/cmd/olivares/internal/termrender"
 )
 
 // The governed-data lane: the three module APIs that share the `source` /
@@ -221,9 +221,9 @@ func datalaneSegment(seg string) (string, error) {
 func datalaneHTTPError(what string, status int, body []byte) error {
 	if status == http.StatusNotFound {
 		return exitcode.New(exitcode.NotFound, fmt.Errorf(
-			"request failed: HTTP 404: %s (either the entity does not exist, or this engine "+
-				"was built without the %s module, which serves the whole /v1/m/%s namespace)",
-			strings.TrimSpace(string(body)), what, what))
+			"%s (either the entity does not exist, or this engine was built without the %s "+
+				"module, which serves the whole /v1/m/%s namespace)",
+			describeAPIRefusal(status, body), what, what))
 	}
 	return httpErr(status, body)
 }
@@ -333,20 +333,19 @@ func datalaneRenderList(cmd *cobra.Command, what string, raw []byte, emptyNote s
 			_, err := fmt.Fprintln(out, emptyNote)
 			return err
 		}
-		tw := tabwriter.NewWriter(out, 0, 2, 2, ' ', 0)
-		heads := make([]string, 0, len(cols))
+		tbl := termrender.Table{Header: make([]string, 0, len(cols))}
 		for _, c := range cols {
-			heads = append(heads, c.head)
+			tbl.Header = append(tbl.Header, c.head)
 		}
-		fmt.Fprintln(tw, strings.Join(heads, "\t"))
 		for _, item := range page.Items {
 			cells := make([]string, 0, len(cols))
 			for _, c := range cols {
 				cells = append(cells, datalaneCell(item, c.key))
 			}
-			fmt.Fprintln(tw, strings.Join(cells, "\t"))
+			tbl.Rows = append(tbl.Rows, cells)
 		}
-		return tw.Flush()
+		renderTo(out).Table(tbl)
+		return nil
 	}, json.RawMessage(raw))
 	if err != nil {
 		return err

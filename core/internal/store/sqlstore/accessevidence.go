@@ -881,6 +881,12 @@ func (r *accessEvidenceRepo) AppendAuthorizationDecision(
 		return zero, err
 	}
 	d := in.Decision
+	stamped, stampErr := sdk.StampDecisionReconstructionFields(d)
+	if stampErr != nil {
+		return zero, fmt.Errorf("%w: %v", store.ErrAccessEvidenceInvalid, stampErr)
+	}
+	d = stamped
+	in.Decision = d
 	questionDigest, err := d.Question.Digest()
 	if err != nil {
 		return zero, fmt.Errorf("%w: %v", store.ErrAccessEvidenceInvalid, err)
@@ -927,6 +933,28 @@ func (r *accessEvidenceRepo) AuthorizationDecision(ctx context.Context, id model
 		return model.AuthorizationDecision{}, wrapUnavailableErr(err)
 	}
 	return decodeAuthorizationDecision(rec)
+}
+
+// AuthorizationDecisionsForQuestion returns the decisions recorded against one
+// canonical question, oldest first by the instant the fact occurred.
+func (r *accessEvidenceRepo) AuthorizationDecisionsForQuestion(ctx context.Context, questionDigest string) ([]model.AuthorizationDecision, error) {
+	recs, _, err := r.decisions.List(ctx, model.Query{
+		Filters: []model.Filter{{Column: "question_digest", Op: model.OpEq, Value: questionDigest}},
+		Sort:    []model.Sort{{Column: colAEOccurredAt}},
+		Limit:   maxLimit,
+	})
+	if err != nil {
+		return nil, wrapUnavailableErr(err)
+	}
+	out := make([]model.AuthorizationDecision, 0, len(recs))
+	for _, rec := range recs {
+		d, derr := decodeAuthorizationDecision(rec)
+		if derr != nil {
+			return nil, derr
+		}
+		out = append(out, d)
+	}
+	return out, nil
 }
 
 // DecisionCompleteness reports what the RETAINED data supports for one stored

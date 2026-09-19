@@ -59,6 +59,11 @@ olivares-data/
 /.list-page-discarded-tmp/
 /.cli-walk-tmp/
 
+# check-cli-render.sh builds its table-rule reader (scripts/cli-render-tabwriter) and then
+# EXECUTES it; /tmp is noexec in the dev container, so the build lands here (same reason as
+# .error-mappers-tmp/ above). Trap-cleaned.
+/.cli-render-tmp/
+
 # openapi-op-descriptions gate's repo-local scratch. That gate COMPILES a binary and RUNS it, so
 # it needs a scratch that is writable AND executable; /tmp is tmpfs+noexec in the dev container.
 # The script CHOOSES its scratch (TMPDIR, then this, then /var/tmp) rather than having the task

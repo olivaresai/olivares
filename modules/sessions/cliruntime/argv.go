@@ -89,6 +89,20 @@ func claudeGovernedTail(req LaunchRequest) []string {
 	if len(req.AllowedTools) > 0 {
 		args = append(args, "--allowedTools", strings.Join(req.AllowedTools, ","))
 	}
+	// ⛔ AND THIS ONE DOES CONFINE, WHICH IS WHY IT IS A SEPARATE FLAG. `--tools`
+	// selects the child's BUILT-IN tool surface from the official set, and the CLI
+	// documents `""` as "disable all tools" — it is what the child's own init frame
+	// reports back, so it is checkable rather than asserted. The server emits it for
+	// every profiled launch: the declared surface, or nothing at all when the
+	// profile declared nothing.
+	//
+	// It travels as ONE comma-separated value for the same reason --allowedTools
+	// does: `--tools A B` is variadic and would swallow the flags that follow it.
+	// Built-in tool names carry no comma, so the join is lossless, and the server
+	// refuses a declared name that contains one.
+	if req.ToolSurfaceDeclared {
+		args = append(args, "--tools", strings.Join(req.ToolSurface, ","))
+	}
 	if instructions := req.Instructions; instructions != "" {
 		args = append(args, "--append-system-prompt", instructions)
 	}

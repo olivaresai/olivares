@@ -210,6 +210,19 @@ type AuthorizationDecision struct {
 	QuestionDigest string
 }
 
+// PolicyVersionKnown reports whether this row named the policy version it was
+// decided under. A legacy row that predates the stamp is unknown, not a
+// stand-in for the live authoring revision.
+func (d AuthorizationDecision) PolicyVersionKnown() bool {
+	return d.Decision.PolicyVersionKnown()
+}
+
+// InputsDigestKnown reports whether this row named the digest of the inputs it
+// consumed.
+func (d AuthorizationDecision) InputsDigestKnown() bool {
+	return d.Decision.InputsDigestKnown()
+}
+
 // AccessEvidenceCompleteness is the store's own verdict on whether a decision's
 // recorded inputs suffice to re-evaluate it. It is computed from the RESOLVED
 // dependencies, so it is a fact about the retained data rather than a repeat of

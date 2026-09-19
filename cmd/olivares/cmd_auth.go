@@ -894,7 +894,7 @@ func fetchAuthWhoami(ctx context.Context, resolved cliResolvedConfig, flags *aut
 		return authWhoamiResponse{}, exitcode.New(exitcode.Auth, fmt.Errorf("authentication rejected by server (HTTP %d)", resp.StatusCode))
 	}
 	if resp.StatusCode != http.StatusOK {
-		err := fmt.Errorf("whoami request failed: HTTP %d", resp.StatusCode)
+		err := fmt.Errorf("%s", describeAPIRefusal(resp.StatusCode, nil))
 		if resp.StatusCode >= 500 {
 			return authWhoamiResponse{}, exitcode.New(exitcode.Server, err)
 		}

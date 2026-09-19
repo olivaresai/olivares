@@ -663,7 +663,12 @@ export function WorkComposer({
       >
         {t('nav:launcher.advanced')}
       </summary>
-      <div className="absolute inset-x-0 bottom-full z-20 mb-1 flex flex-col gap-2 rounded-md border border-border bg-elevated p-2 shadow-lg">
+      <div
+        className={cn(
+          'absolute inset-x-0 z-20 flex flex-col gap-2 rounded-md border border-border bg-elevated p-2 shadow-lg',
+          frame === 'docked' ? 'bottom-full mb-1' : 'top-full mt-1',
+        )}
+      >
         <div className="flex flex-col gap-2">{pickers}</div>
         {scope}
       </div>
