@@ -138,9 +138,8 @@ func (p availabilityPosture) String() string {
 }
 
 // resolveAvailabilityPosture picks the posture: an explicit env value wins; unset defaults to
-// fail-closed on the enterprise edition (evidence-grade availability) and fail-open elsewhere
-// (preserve the community default). An invalid value is fail-closed + LOUD (a typo must never
-// silently weaken the gate — the same stance as the audit-spool mode loader).
+// fail-closed: a store that cannot be read is not permission. An invalid value is
+// fail-closed + LOUD (a typo must never silently weaken the gate).
 func resolveAvailabilityPosture(raw, edition string, log *slog.Logger) availabilityPosture {
 	switch strings.ToLower(strings.TrimSpace(raw)) {
 	case "fail-open":
@@ -148,10 +147,8 @@ func resolveAvailabilityPosture(raw, edition string, log *slog.Logger) availabil
 	case "fail-closed":
 		return availabilityFailClosed
 	case "":
-		if edition == "enterprise" {
-			return availabilityFailClosed
-		}
-		return availabilityFailOpen
+		_ = edition
+		return availabilityFailClosed
 	default:
 		if log != nil {
 			log.Error("session launch-gate: invalid availability posture; using fail-closed", "value", raw)
@@ -233,17 +230,27 @@ func (g *sessionLaunchGate) Authorize(ctx context.Context, tenant model.TenantID
 	//    posture; a definitive cap always denies with 402 (block) / 429 (throttle) so
 	//    a session/identity at its limit does not start.
 	if g.fin != nil {
-		chk, err := g.fin.CheckBudget(ctx, tenant, finops.SpendDims{
-			AgentRef: intent.AgentRef, SessionRef: intent.RunRef, ModelRef: intent.Model,
-			// The session's workspace is its FinOps WorkspaceRef dimension, so a
-			// workspace-scoped enforcing budget also caps the launch. CheckBudget resolves
-			// the firm identity itself from AgentRef when an identity budget exists.
-			WorkspaceRef: intent.WorkspaceRef,
+		key := strings.TrimSpace(intent.RunRef)
+		if key == "" {
+			key = model.NewID().String()
+		}
+		unreachable := finops.UnreachableDeny
+		if g.budgetPosture == availabilityFailOpen {
+			unreachable = finops.UnreachableAllow
+		}
+		res, err := g.fin.Reserve(ctx, tenant, finops.AdmissionRequest{
+			Scope: finops.AdmissionScopeSessionLaunch,
+			Dims: finops.SpendDims{
+				AgentRef: intent.AgentRef, SessionRef: intent.RunRef, ModelRef: intent.Model,
+				WorkspaceRef: intent.WorkspaceRef,
+			},
+			IdempotencyKey: "session_launch/" + key,
+			Unreachable:    unreachable,
 		})
 		switch {
 		case err != nil:
 			if g.log != nil {
-				g.log.Error("session launch-gate: budget check failed", "posture", g.budgetPosture.String(), "err", err)
+				g.log.Error("session launch-gate: budget reserve failed", "posture", g.budgetPosture.String(), "err", err)
 			}
 			if g.budgetPosture == availabilityFailClosed {
 				return sessions.LaunchDecision{
@@ -252,11 +259,21 @@ func (g *sessionLaunchGate) Authorize(ctx context.Context, tenant model.TenantID
 					DeniedStatus: http.StatusServiceUnavailable,
 				}, nil
 			}
-		case !chk.Allowed:
+		case !res.Allowed:
+			if res.Reason == finops.ReasonStoreUnreachable {
+				if g.budgetPosture == availabilityFailClosed {
+					return sessions.LaunchDecision{
+						Allowed:      false,
+						Reason:       "session budget control unavailable (deny-closed)",
+						DeniedStatus: http.StatusServiceUnavailable,
+					}, nil
+				}
+				break
+			}
 			return sessions.LaunchDecision{
 				Allowed:      false,
-				Reason:       "session budget " + budgetActionLabel(chk.Action), // money-free (docs/SECURITY-HARDENING.md)
-				DeniedStatus: budgetStatus(chk.Action),
+				Reason:       "session budget " + budgetActionLabel(res.Action), // money-free (docs/SECURITY-HARDENING.md)
+				DeniedStatus: budgetStatus(res.Action),
 			}, nil
 		}
 	}
@@ -799,8 +816,8 @@ func wireSessionGovernance(set moduleSet, st store.Store, stopDeny *stopDenyReco
 		// stays INFO: the gate IS composed. But two of its nine key/value pairs carry the
 		// opposite of good news — a posture of fail-open means that when this process cannot
 		// READ the budget ledger or the context policy, the launch is ALLOWED. On the
-		// community edition that is the default (resolveAvailabilityPosture), so the operator
-		// most likely to be affected is the one who set nothing.
+		// default is fail-closed. The operator who wants availability over
+		// evidence must set the env to fail-open, and this WARN names that switch.
 		//
 		// Announcing it as a pair inside a message that reads "governance wired" is the
 		// fourth answer wearing the first one's clothes. The log-level rule this repository

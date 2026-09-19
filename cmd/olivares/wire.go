@@ -666,12 +666,12 @@ func buildModules(signer *audit.Signer, catalogSigner, policySigner ed25519.Priv
 	// (FIN-08): wire the FinOps pre-flight budget gate into the actuation seams
 	// (orchestration fire, voice open) and the model-router (resolve). The SAME finops
 	// instance is in the module set below, so the engine's UseData wires its store before
-	// any request reaches CheckBudget. Unlike the approval gate / dispatcher this needs
+	// any request reaches Reserve. Unlike the approval gate / dispatcher this needs
 	// NO operator config — FinOps is in-process — so it is ALWAYS wired: an exhausted
 	// enforcing budget (action=throttle|block) now DENIES the spend (deny-closed) instead
 	// of only emitting the finops_budget_cap finding. The gate is opt-in by nature (no
-	// enforcing budget ⇒ never denies) and fails OPEN on a FinOps read error, so wiring it
-	// can never take down actuation. See budgetgate.go.
+	// enforcing budget ⇒ never denies) and fails CLOSED on a FinOps read error.
+	// See budgetgate.go.
 	fin := finops.New()
 	orchOpts = append(orchOpts, orchestration.WithBudgetGate(orchBudgetGate{fin: fin, log: log}))
 	voiceOpts = append(voiceOpts, voice.WithBudgetGate(voiceBudgetGate{fin: fin, log: log}))

@@ -299,6 +299,10 @@ type proxySession struct {
 	// carried so the sizing phase (5g) can apply MaxContextTokens without a second
 	// decision-plane read (the two-phase chain).
 	ctxPol knowledge.EffectivePolicy
+	// reservationHandle is the FinOps admission hold taken before the forward.
+	// Commit/Release in Finalize. Empty when GateBudget is off or nothing was held.
+	reservationHandle string
+	spendHandle       string
 }
 
 // Authorize runs the PRE-forward governed gate chain for one /v1/messages call, then the
@@ -399,6 +403,9 @@ func (d *inferenceProxyDecider) AuthorizeBatch(ctx context.Context, requests []c
 	// clean (same deny-closed semantics: any entry's window/budget deny kills the batch).
 	for i := range governed {
 		if deny, ok := d.runSizingAndBudget(ctx, governed[i].Params, id, sessions[i]); !ok {
+			for j := 0; j < i; j++ {
+				d.releaseAdmission(ctx, sessions[j])
+			}
 			return claudeapi.ProxyBatchDecision{
 				Allow:     false,
 				Status:    deny.decision.Status,
@@ -448,6 +455,9 @@ func (d *inferenceProxyDecider) FinalizeBatch(ctx context.Context, sessAny any, 
 	decision := "allow"
 	if out.UpstreamErr {
 		decision = "upstream-error"
+		d.releaseAdmission(ctx, sess)
+	} else {
+		d.commitAdmission(ctx, sess, 0)
 	}
 	d.anchorBatchOutcome(ctx, sess, out, decision)
 }
@@ -1010,32 +1020,58 @@ func (d *inferenceProxyDecider) runSizingAndBudget(ctx context.Context, req clau
 		}
 	}
 
-	// 6. Budget admission, FAIL-OPEN — the deliberate exception, AFTER every
-	//    security gate. A read error never blocks inference; only a firm cap denies (block
-	//    ⇒ 402, throttle ⇒ 429), money-free (docs/SECURITY-HARDENING.md).
+	// 6. Budget admission: Reserve BEFORE the forward. A store that cannot be
+	//    read denies (fail-closed). A firm cap denies (block ⇒ 402, throttle ⇒ 429),
+	//    money-free (docs/SECURITY-HARDENING.md). The handle is committed or released in Finalize.
 	if pol.GateBudget {
 		dims := d.spendDims(req, sessionRef)
 		dims.UserGroupRefs = principal.GroupsIn(tenant)
-		// The snapshot's sessionRef IS principal.AgentIdentity (newResolvedIdentity keeps
-		// them in lockstep) — consumed via the seam so every gate sees the SAME binding.
 		dims.AgentRef = sessionRef
-		if bc, berr := d.budget.CheckBudget(ctx, tenant, dims); berr == nil && !bc.Allowed {
+		key := "model_gateway/" + sessionRef + "/" + hex.EncodeToString(sess.inputDigest)
+		if sess.inputDigest == nil {
+			key = "model_gateway/" + sessionRef + "/" + newRequestRef()
+		}
+		res, rerr := d.budget.Reserve(ctx, tenant, finops.AdmissionRequest{
+			Scope:            finops.AdmissionScopeModelGateway,
+			Dims:             dims,
+			ActorRef:         actor,
+			Groups:           principal.GroupsIn(tenant),
+			EstimateMicroUSD: proxyAdmissionEstimate(req),
+			IdempotencyKey:   key,
+		})
+		if rerr != nil {
+			res := gateDeny(gateCodeBudget, sdk.FailurePolicyDeny, http.StatusServiceUnavailable, "api_error", finops.ReasonStoreUnreachable)
+			res.decision.Headers = noRetryHeader()
+			return res, false
+		}
+		if !res.Allowed {
 			code, class := gateCodeBudget, sdk.FailurePolicyDeny
 			status, errType, reason := http.StatusPaymentRequired, "billing_error", "budget limit reached"
-			if strings.EqualFold(bc.Action, "throttle") {
+			if res.Reason == finops.ReasonStoreUnreachable {
+				code, status, errType, reason = gateCodeBudget, http.StatusServiceUnavailable, "api_error", finops.ReasonStoreUnreachable
+			} else if res.SpendLimit {
+				// A per-seat spend limit is not a pooled budget, and the
+				// apps-gateway contract publishes that distinction.
+				reason = "spend limit reached"
+			} else if strings.EqualFold(res.Action, "throttle") {
 				code, status, errType, reason = gateCodeBudgetThrottle, http.StatusTooManyRequests, "rate_limit_error", "budget throttle in effect"
 			}
-			res := gateDeny(code, class, status, errType, reason)
-			res.decision.Headers = noRetryHeader()
-			return res, false
+			out := gateDeny(code, class, status, errType, reason)
+			out.decision.Headers = noRetryHeader()
+			return out, false
 		}
-		if sc, serr := d.budget.CheckSpendLimit(ctx, tenant, actor, principal.GroupsIn(tenant)); serr == nil && !sc.Allowed {
-			res := gateDeny(gateCodeSpendLimit, sdk.FailurePolicyDeny, http.StatusPaymentRequired, "billing_error", "spend limit reached")
-			res.decision.Headers = noRetryHeader()
-			return res, false
-		}
+		sess.reservationHandle = res.Handle
+		sess.spendHandle = res.SpendHandle
 	}
 	return gateResult{}, true
+}
+
+func proxyAdmissionEstimate(req claudeapi.MessageRequest) int64 {
+	est := int64(10_000) // $0.01 floor until a product default estimate is chosen
+	if req.MaxTokens > 0 {
+		est += int64(req.MaxTokens) * 10
+	}
+	return est
 }
 
 // gateDeny builds a semantic deny: the legacy transport presentation plus the stable
@@ -1195,18 +1231,42 @@ func (d *inferenceProxyDecider) spendDims(req claudeapi.MessageRequest, sessionR
 
 // reconcileCost publishes the per-request cost sample(s) + forensic finding(s) on the bus.
 func (d *inferenceProxyDecider) reconcileCost(ctx context.Context, sess *proxySession, out claudeapi.ProxyForwardResult) {
-	if d.bus == nil || out.UpstreamErr {
+	if out.UpstreamErr {
+		d.releaseAdmission(ctx, sess)
 		return
 	}
-	samples, findings := d.inf.RuntimeObservations(out.Response, sess.sessionRef, d.clock(), false)
-	for _, s := range samples {
-		if s.Actor == "" {
-			s.Actor = sess.actor
+	var actual int64
+	if d.inf != nil {
+		samples, findings := d.inf.RuntimeObservations(out.Response, sess.sessionRef, d.clock(), false)
+		for _, s := range samples {
+			if s.Actor == "" {
+				s.Actor = sess.actor
+			}
+			actual += s.CostMicroUSD
+			d.publish(ctx, sess.tenant, s)
 		}
-		d.publish(ctx, sess.tenant, s)
+		for _, f := range findings {
+			d.publish(ctx, sess.tenant, f)
+		}
 	}
-	for _, f := range findings {
-		d.publish(ctx, sess.tenant, f)
+	d.commitAdmission(ctx, sess, actual)
+}
+
+func (d *inferenceProxyDecider) commitAdmission(ctx context.Context, sess *proxySession, actual int64) {
+	if d.budget == nil || sess.reservationHandle == "" {
+		return
+	}
+	if err := d.budget.Commit(ctx, sess.tenant, sess.reservationHandle, actual); err != nil && d.log != nil {
+		d.log.Warn("inference-proxy: admission commit failed", "err", err)
+	}
+}
+
+func (d *inferenceProxyDecider) releaseAdmission(ctx context.Context, sess *proxySession) {
+	if d.budget == nil || sess.reservationHandle == "" {
+		return
+	}
+	if err := d.budget.Release(ctx, sess.tenant, sess.reservationHandle); err != nil && d.log != nil {
+		d.log.Warn("inference-proxy: admission release failed", "err", err)
 	}
 }
 

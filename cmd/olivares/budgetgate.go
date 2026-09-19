@@ -33,16 +33,18 @@ import (
 // reason come back (NEVER a USD amount — feedback_no_dollar_amounts_users; the
 // SpendMicroUSD/LimitMicroUSD of finops.BudgetCheck are deliberately dropped).
 //
-// FAIL OPEN (per finops.CheckBudget's own documented contract): a FinOps read error
-// never denies actuation — the adapter logs it and allows. The finops_budget_cap
-// finding remains the backstop. An exhausted budget that is DEFINITIVELY over its cap
-// is what denies (deny-closed enforcement); an outage does not.
+// FAIL CLOSED by default: an unreachable budget store denies. The historical
+// fail-open path remains only when AdmissionRequest.Unreachable is explicitly
+// allow. An exhausted budget that is DEFINITIVELY over its cap still denies.
 
 // budgetChecker is the narrow slice of the FinOps module the gates depend on. Depending
 // on the capability (not the concrete *finops.Module) keeps the adapters unit-testable.
 type budgetChecker interface {
 	CheckBudget(ctx context.Context, tenant model.TenantID, dims finops.SpendDims) (finops.BudgetCheck, error)
 	CheckSpendLimit(ctx context.Context, tenant model.TenantID, actorRef string, groups []string) (finops.SpendLimitCheck, error)
+	Reserve(ctx context.Context, tenant model.TenantID, req finops.AdmissionRequest) (finops.Reservation, error)
+	Commit(ctx context.Context, tenant model.TenantID, handle string, actualMicroUSD int64) error
+	Release(ctx context.Context, tenant model.TenantID, handle string) error
 }
 
 var _ budgetChecker = (*finops.Module)(nil)
@@ -56,15 +58,19 @@ type orchBudgetGate struct {
 var _ orchestration.BudgetGate = orchBudgetGate{}
 
 func (g orchBudgetGate) Check(ctx context.Context, tenant model.TenantID, dims orchestration.BudgetDims) (orchestration.BudgetDecision, error) {
-	chk, err := g.fin.CheckBudget(ctx, tenant, finops.SpendDims{AgentRef: dims.AgentRef, RoutineRef: dims.RoutineRef})
+	res, err := g.fin.Reserve(ctx, tenant, finops.AdmissionRequest{
+		Scope:          finops.AdmissionScopeScheduledJob,
+		Dims:           finops.SpendDims{AgentRef: dims.AgentRef, RoutineRef: dims.RoutineRef},
+		IdempotencyKey: "scheduled_job/" + model.NewID().String(),
+	})
 	if err != nil {
 		if g.log != nil {
-			g.log.Error("budget-gate: orchestration check failed; allowing fire (fail-open)", "err", err)
+			g.log.Error("budget-gate: orchestration reserve failed; denying fire (fail-closed)", "err", err)
 		}
-		return orchestration.BudgetDecision{Allowed: true}, nil
+		return orchestration.BudgetDecision{Allowed: false, Action: "block", Reason: finops.ReasonStoreUnreachable}, nil
 	}
 	return orchestration.BudgetDecision{
-		Allowed: chk.Allowed, Action: chk.Action, BudgetRef: chk.BudgetID, Reason: chk.Reason,
+		Allowed: res.Allowed, Action: res.Action, BudgetRef: res.BudgetID, Reason: res.Reason,
 	}, nil
 }
 
@@ -79,17 +85,21 @@ type voiceBudgetGate struct {
 var _ voice.BudgetGate = voiceBudgetGate{}
 
 func (g voiceBudgetGate) Check(ctx context.Context, tenant model.TenantID, dims voice.BudgetDims) (voice.BudgetDecision, error) {
-	chk, err := g.fin.CheckBudget(ctx, tenant, finops.SpendDims{
-		AgentRef: dims.AgentRef, SessionRef: dims.SessionRef, ModelRef: dims.ModelRef, ProviderRef: dims.ProviderRef,
+	res, err := g.fin.Reserve(ctx, tenant, finops.AdmissionRequest{
+		Scope: finops.AdmissionScopeSessionLaunch,
+		Dims: finops.SpendDims{
+			AgentRef: dims.AgentRef, SessionRef: dims.SessionRef, ModelRef: dims.ModelRef, ProviderRef: dims.ProviderRef,
+		},
+		IdempotencyKey: "voice_open/" + model.NewID().String(),
 	})
 	if err != nil {
 		if g.log != nil {
-			g.log.Error("budget-gate: voice check failed; allowing open (fail-open)", "err", err)
+			g.log.Error("budget-gate: voice reserve failed; denying open (fail-closed)", "err", err)
 		}
-		return voice.BudgetDecision{Allowed: true}, nil
+		return voice.BudgetDecision{Allowed: false, Action: "block", Reason: finops.ReasonStoreUnreachable}, nil
 	}
 	return voice.BudgetDecision{
-		Allowed: chk.Allowed, Action: chk.Action, BudgetRef: chk.BudgetID, Reason: chk.Reason,
+		Allowed: res.Allowed, Action: res.Action, BudgetRef: res.BudgetID, Reason: res.Reason,
 	}, nil
 }
 
@@ -112,14 +122,18 @@ func (g *evalsBudgetGate) Check(ctx context.Context, tenant model.TenantID, dims
 	if g.fin == nil {
 		return evals.BudgetDecision{Allowed: true}, nil
 	}
-	chk, err := g.fin.CheckBudget(ctx, tenant, finops.SpendDims{ModelRef: dims.JudgeModelRef})
+	res, err := g.fin.Reserve(ctx, tenant, finops.AdmissionRequest{
+		Scope:          finops.AdmissionScopeScheduledJob,
+		Dims:           finops.SpendDims{ModelRef: dims.JudgeModelRef},
+		IdempotencyKey: "evals_judge/" + model.NewID().String(),
+	})
 	if err != nil {
 		if g.log != nil {
-			g.log.Error("budget-gate: evals gate check failed; allowing (fail-open)", "err", err)
+			g.log.Error("budget-gate: evals reserve failed; denying (fail-closed)", "err", err)
 		}
-		return evals.BudgetDecision{Allowed: true}, nil
+		return evals.BudgetDecision{Allowed: false, Action: "block", Reason: finops.ReasonStoreUnreachable}, nil
 	}
-	return evals.BudgetDecision{Allowed: chk.Allowed, Action: chk.Action, Reason: chk.Reason}, nil
+	return evals.BudgetDecision{Allowed: res.Allowed, Action: res.Action, Reason: res.Reason}, nil
 }
 
 // modelsBudgetGate adapts the FinOps pre-flight to the model-router resolve seam.
@@ -131,19 +145,22 @@ type modelsBudgetGate struct {
 var _ models.BudgetGate = modelsBudgetGate{}
 
 func (g modelsBudgetGate) Check(ctx context.Context, tenant model.TenantID, dims models.BudgetDims) (models.BudgetDecision, error) {
-	chk, err := g.fin.CheckBudget(ctx, tenant, finops.SpendDims{
-		// SessionRef lets finops resolve a firm IDENTITY budget for the routed
-		// spend — the model-access budget tie-in. CheckBudget resolves the identity
-		// from the session itself; an empty ref leaves the check provider/model-scoped.
-		ProviderRef: dims.ProviderRef, ModelRef: dims.ModelRef, SessionRef: dims.SessionRef,
+	res, err := g.fin.Reserve(ctx, tenant, finops.AdmissionRequest{
+		Scope: finops.AdmissionScopeModelGateway,
+		Dims: finops.SpendDims{
+			// SessionRef lets finops resolve a firm IDENTITY budget for the routed
+			// spend — the model-access budget tie-in.
+			ProviderRef: dims.ProviderRef, ModelRef: dims.ModelRef, SessionRef: dims.SessionRef,
+		},
+		IdempotencyKey: "model_route/" + model.NewID().String(),
 	})
 	if err != nil {
 		if g.log != nil {
-			g.log.Error("budget-gate: models check failed; allowing route (fail-open)", "err", err)
+			g.log.Error("budget-gate: models reserve failed; denying route (fail-closed)", "err", err)
 		}
-		return models.BudgetDecision{Allowed: true}, nil
+		return models.BudgetDecision{Allowed: false, Action: "block", Reason: finops.ReasonStoreUnreachable}, nil
 	}
 	return models.BudgetDecision{
-		Allowed: chk.Allowed, Action: chk.Action, BudgetRef: chk.BudgetID, Reason: chk.Reason,
+		Allowed: res.Allowed, Action: res.Action, BudgetRef: res.BudgetID, Reason: res.Reason,
 	}, nil
 }

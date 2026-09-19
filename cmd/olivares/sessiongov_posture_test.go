@@ -28,7 +28,7 @@ func TestResolveAvailabilityPosture(t *testing.T) {
 		{name: "explicit fail-closed wins in community", raw: "fail-closed", edition: "community", want: availabilityFailClosed},
 		{name: "explicit value is normalized", raw: "  FAIL-OPEN ", edition: "enterprise", want: availabilityFailOpen},
 		{name: "enterprise default", edition: "enterprise", want: availabilityFailClosed},
-		{name: "community default", edition: "community", want: availabilityFailOpen},
+		{name: "community default", edition: "community", want: availabilityFailClosed},
 		{name: "invalid fails closed", raw: "fail-clsoed", edition: "community", want: availabilityFailClosed},
 	}
 
