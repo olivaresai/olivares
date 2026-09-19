@@ -110,7 +110,7 @@ function Block({
   const { t } = useTranslation('sessions')
   return (
     <section className="border-t border-border first:border-t-0">
-      <h4>
+      <h3>
         <button
           type="button"
           onClick={onToggle}
@@ -135,7 +135,7 @@ function Block({
             {bounded ? t('evidence.atLeast', { count }) : count}
           </span>
         </button>
-      </h4>
+      </h3>
       {/* RENDERED ALWAYS, HIDDEN WHEN COLLAPSED. `aria-controls` above names this
           element, and an `aria-controls` pointing at an id that is not in the document
           is an invalid attribute value — a gate finding, and a screen reader following
