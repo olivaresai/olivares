@@ -32,9 +32,136 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${ROOT}"
 
 TMP="$(mktemp -d)"
-trap 'rm -rf "${TMP}"; [ -n "${SRV_PID:-}" ] && kill "${SRV_PID}" 2>/dev/null || true' EXIT
+cleanup() {
+  local pid
+  for pid in "${SRV_PID:-}" "${SRV3_PID:-}"; do
+    [ -z "${pid}" ] || kill "${pid}" 2>/dev/null || true
+  done
+  if [ -s "${TMP}/workflow-engine.pid" ]; then
+    kill "$(cat "${TMP}/workflow-engine.pid")" 2>/dev/null || true
+  fi
+  rm -rf "${TMP}"
+}
+trap cleanup EXIT
 
 fail() { echo "FAIL: $*" >&2; exit 1; }
+
+PW_DIR="$(node --input-type=module - <<'JS'
+import { createRequire } from 'node:module'
+import { dirname } from 'node:path'
+import { pathToFileURL } from 'node:url'
+const require = createRequire(pathToFileURL(`${process.cwd()}/web/package.json`))
+console.log(dirname(require.resolve('@playwright/test/package.json')))
+JS
+)" || fail "install the declared web dependencies before testing console-walk"
+
+# Replay the nightly's real run block under the runner's bash -e semantics. The
+# disposable engine only supplies a setup token; result 2 comes from the real
+# loader in a fresh checkout without dependencies, as in the failed nightly.
+mkdir -p "${TMP}/layout/scripts" "${TMP}/layout/web" "${TMP}/bin"
+cp scripts/console-walk.mjs "${TMP}/layout/scripts/console-walk.mjs"
+cp web/package.json "${TMP}/layout/web/package.json"
+awk '
+  /^      - name: console walk against a live engine / { step = 1; next }
+  step && /^      - / { exit }
+  step && /^        run: \|/ { body = 1; next }
+  step && body { sub(/^          /, ""); print }
+' .github/workflows/drills-nightly.yml > "${TMP}/workflow.sh"
+grep -q 'task -x console:walk' "${TMP}/workflow.sh" \
+  || fail "could not extract the nightly console walk run block"
+
+cat > "${TMP}/bin/go" <<'SH'
+#!/usr/bin/env bash
+set -eu
+cat > "$RUNNER_TEMP/olivares" <<'ENGINE'
+#!/usr/bin/env bash
+echo "$$" > "$WALK_TEST_TMP/workflow-engine.pid"
+echo 'olst_TESTONLY'
+exec sleep 30
+ENGINE
+chmod +x "$RUNNER_TEMP/olivares"
+SH
+cat > "${TMP}/bin/task" <<'SH'
+#!/usr/bin/env bash
+if [ "$WALK_TEST_RC" = 2 ]; then
+  exec env -u OLIVARES_WALK_PW node "$WALK_TEST_TMP/layout/scripts/console-walk.mjs"
+fi
+if [ "$WALK_TEST_RC" = driver ]; then
+  [ -f "$WALK_TEST_TMP/browser-install" ] || exit 72
+  exec env -u OLIVARES_WALK_PW OLIVARES_WALK_CHROMIUM="$WALK_TEST_TMP/no-browser" \
+    OLIVARES_WALK_OUT="$WALK_TEST_TMP/driver-out" \
+    node "$WALK_TEST_TMP/layout/scripts/console-walk.mjs"
+fi
+exit "$WALK_TEST_RC"
+SH
+# Browser installation is a separate boundary. This replay must not download
+# anything. The install fixture exposes the real dependency only when the
+# workflow provisions the locked web graph; removing that command must fail.
+cat > "${TMP}/bin/pnpm" <<'SH'
+#!/usr/bin/env bash
+set -eu
+if [ "$WALK_TEST_RC" = driver ]; then
+  case "$*" in
+    '--dir web install --frozen-lockfile')
+      mkdir -p "$WALK_TEST_TMP/layout/web/node_modules/@playwright"
+      ln -s "$WALK_TEST_PW_DIR" "$WALK_TEST_TMP/layout/web/node_modules/@playwright/test"
+      ;;
+    '--dir web exec playwright install --with-deps chromium')
+      touch "$WALK_TEST_TMP/browser-install"
+      ;;
+    *) exit 72 ;;
+  esac
+fi
+SH
+printf '#!/usr/bin/env bash\nexit 0\n' > "${TMP}/bin/npx"
+# A regression must never run the old process-pattern cleanup on this host.
+printf '#!/usr/bin/env bash\nexit 73\n' > "${TMP}/bin/pkill"
+chmod +x "${TMP}/bin/"*
+
+for expected in 2 1 0 driver; do
+  mkdir -p "${TMP}/workflow-${expected}"
+  : > "${TMP}/workflow-${expected}/output"
+  set +e
+  PATH="${TMP}/bin:${PATH}" WALK_TEST_TMP="${TMP}" WALK_TEST_RC="${expected}" \
+    WALK_TEST_PW_DIR="${PW_DIR}" \
+    RUNNER_TEMP="${TMP}/workflow-${expected}" \
+    GITHUB_OUTPUT="${TMP}/workflow-${expected}/output" \
+    bash -e "${TMP}/workflow.sh" > "${TMP}/workflow-${expected}/log" 2>&1
+  workflow_rc=$?
+  set -e
+  # Keep failed test attempts bounded too: the old unguarded pipeline leaves
+  # its engine alive when bash -e exits before the reporting code.
+  engine_alive=0
+  if [ -s "${TMP}/workflow-engine.pid" ]; then
+    engine_pid="$(cat "${TMP}/workflow-engine.pid")"
+    if kill -0 "${engine_pid}" 2>/dev/null; then
+      engine_alive=1
+      kill "${engine_pid}" 2>/dev/null || true
+    fi
+    rm "${TMP}/workflow-engine.pid"
+  fi
+  [ "${workflow_rc}" = 0 ] \
+    || { cat "${TMP}/workflow-${expected}/log" >&2; fail "nightly exited ${workflow_rc} before reporting walk result ${expected}"; }
+  [ "${engine_alive}" = 0 ] || fail "nightly left its engine alive after walk result ${expected}"
+  failed=true
+  [ "${expected}" != 0 ] || failed=false
+  grep -qx "failed=${failed}" "${TMP}/workflow-${expected}/output" \
+    || fail "nightly did not classify walk result ${expected} as failed=${failed}"
+  if [ "${expected}" = 2 ]; then
+    grep -q 'console-walk: cannot load playwright' "${TMP}/workflow-${expected}/log" \
+      || fail "the workflow's exit-2 test did not reach the real loader refusal"
+  fi
+  if [ "${expected}" = driver ]; then
+    grep -q 'playwright loaded via web/ @playwright/test' "${TMP}/workflow-${expected}/log" \
+      || { cat "${TMP}/workflow-${expected}/log" >&2; fail "nightly did not provision its declared web driver"; }
+    grep -q 'no browser could be launched' "${TMP}/workflow-${expected}/log" \
+      || fail "the provisioned driver did not reach browser startup"
+  fi
+done
+echo "OK: nightly provisions the declared driver, reports walk results 0/1/2, and reaps its engine."
+
+# The browser leg reuses that pnpm layout: no root playwright and no direct
+# web/playwright link. Only @playwright/test is visible to the copied real loader.
 
 # ---------------------------------------------------------------------------
 # The decoy console. Four screens, four known answers.
@@ -109,8 +236,9 @@ set +e
 OLIVARES_WALK_BASE="http://127.0.0.1:${PORT}" \
 OLIVARES_WALK_OUT="${TMP}/out" \
 OLIVARES_WALK_IDLE_MS=2000 \
-OLIVARES_WALK_TOKEN= \
-  node scripts/console-walk.mjs > "${TMP}/walk.log" 2>&1
+OLIVARES_WALK_TOKEN='' \
+OLIVARES_WALK_PW='' \
+  node "${TMP}/layout/scripts/console-walk.mjs" > "${TMP}/walk.log" 2>&1
 RC=$?
 set -e
 
@@ -118,6 +246,9 @@ if [ "${RC}" = "2" ]; then
   echo "----- walk output -----" >&2; cat "${TMP}/walk.log" >&2
   fail "the walk could not look (exit 2). That is not a clean run and not a verdict."
 fi
+
+grep -q 'playwright loaded via web/ @playwright/test' "${TMP}/walk.log" \
+  || { cat "${TMP}/walk.log" >&2; fail "the walk did not load the declared web dependency"; }
 
 grep -q 'route/sse.*(streaming)' "${TMP}/walk.log" \
   || { cat "${TMP}/walk.log" >&2; fail "/sse was not classified STREAMING — a held-open text/event-stream is the feature working, and reporting it as a timeout is the false finding this walk already paid for once."; }
@@ -197,7 +328,6 @@ grep -q 'there-is-no-playwright-here' "${TMP}/walk2.log" \
 # ---------------------------------------------------------------------------
 DECOY_ROUTES=clean,stall node "${TMP}/decoy.mjs" > "${TMP}/port3" 2>"${TMP}/decoy3.err" &
 SRV3_PID=$!
-trap 'rm -rf "${TMP}"; for p in ${SRV_PID:-} ${SRV3_PID:-}; do kill "${p}" 2>/dev/null || true; done' EXIT
 for _ in $(seq 1 50); do [ -s "${TMP}/port3" ] && break; sleep 0.1; done
 PORT3="$(cat "${TMP}/port3" 2>/dev/null || true)"
 [ -n "${PORT3}" ] || { cat "${TMP}/decoy3.err" >&2; fail "stall-only decoy never reported a port"; }
@@ -206,7 +336,7 @@ set +e
 OLIVARES_WALK_BASE="http://127.0.0.1:${PORT3}" \
 OLIVARES_WALK_OUT="${TMP}/out3" \
 OLIVARES_WALK_IDLE_MS=2000 \
-OLIVARES_WALK_TOKEN= \
+OLIVARES_WALK_TOKEN='' \
   node scripts/console-walk.mjs > "${TMP}/walk3.log" 2>&1
 RC3=$?
 set -e

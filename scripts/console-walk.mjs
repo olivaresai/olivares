@@ -239,7 +239,7 @@ try {
 } catch (e) {
   console.error('console-walk: no browser could be launched — nothing was measured.')
   console.error(`  ${e && e.message}`)
-  console.error('  install one (`npx playwright install chromium`) or set OLIVARES_WALK_CHROMIUM.')
+  console.error('  install one (`pnpm --dir web exec playwright install chromium`) or set OLIVARES_WALK_CHROMIUM.')
   process.exit(2)
 }
 
