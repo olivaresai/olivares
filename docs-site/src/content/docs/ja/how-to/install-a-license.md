@@ -170,3 +170,5 @@ olivares license uninstall --data-dir /var/lib/olivares --yes
 - **このモデルの仕組み** — サブスクリプションがスイッチではなくアーティファクトへの
   アクセスである理由 — は[オープンコアとライセンス](/ja/explanation/open-core-and-licensing/)で
   説明しています。
+- **購入 → 返金のリハーサル**（実カードではなくサンドボックスのフィクスチャを使用）は
+  [コマーシャルサイクルをリハーサルする](/how-to/rehearse-commercial-cycle/) を参照してください。

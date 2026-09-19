@@ -173,3 +173,5 @@ vous reveniez au précédent.
 - **Ce que contient chaque offre** se trouve dans les pages de tarification, pas ici.
 - **Comment fonctionne le modèle** — pourquoi un abonnement donne accès aux artefacts plutôt
   que d'agir comme un interrupteur — est expliqué dans [Open core et licences](/fr/explanation/open-core-and-licensing/).
+- **La répétition achat → remboursement** (fixtures de bac à sable, pas une vraie carte) est
+  [Répéter le cycle commercial](/how-to/rehearse-commercial-cycle/).

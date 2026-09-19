@@ -174,3 +174,5 @@ back.
 - **What each plan contains** lives in the pricing pages, not here.
 - **How the model works** — why a subscription is access to artifacts rather than a switch —
   is [Open core and licensing](/explanation/open-core-and-licensing/).
+- **The purchase → refund rehearsal** (sandbox fixtures, not a live card) is
+  [Rehearse the commercial cycle](/how-to/rehearse-commercial-cycle/).
