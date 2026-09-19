@@ -50,8 +50,8 @@ func (a *Authenticator) CompleteSSO(ctx context.Context, id FederatedIdentity, i
 	// a peer outside the configured CIDRs is refused BEFORE the local user is found or
 	// JIT-provisioned. require-SSO is NOT consulted here: this IS the SSO path it exists
 	// to permit. A nil login policy (the open build) is a no-op — byte-identical to today.
-	if err := a.enforceNetwork(ctx, ip); err != nil {
-		a.auditLoginBlocked(ctx, "anonymous", ip, "network_not_allowed")
+	attempt, err := a.beginLogin(ctx, ip)
+	if err != nil {
 		return "", model.AuthSession{}, err
 	}
 	// D4 — a SCIM-authoritative IdP makes SCIM the sole authority: SSO never
@@ -88,7 +88,7 @@ func (a *Authenticator) CompleteSSO(ctx context.Context, id FederatedIdentity, i
 	// point, so a refused session (for example ErrLoginEnforcementComponentAbsent) returns
 	// here with no subject binding, no group membership and no completion audit event. An
 	// earlier independent posture check would not serialize through that commit.
-	token, sess, err := a.mintSession(ctx, user, ip, "sso.login", []string{"sso"})
+	token, sess, err := a.mintSession(ctx, attempt, user, "sso.login", federatedLogin, nil)
 	if err != nil {
 		return "", model.AuthSession{}, err
 	}

@@ -182,6 +182,10 @@ func (a *Authenticator) OnboardMember(ctx context.Context, actor Principal, tena
 // oracle). It throttles nothing here because the token itself is the high-entropy
 // gate; a brute force would have to guess a 256-bit secret.
 func (a *Authenticator) AcceptInvite(ctx context.Context, token, password, ip string) (string, model.AuthSession, error) {
+	attempt, err := a.beginLogin(ctx, ip)
+	if err != nil {
+		return "", model.AuthSession{}, err
+	}
 	if len(password) < MinPasswordLen {
 		return "", model.AuthSession{}, ErrWeakPassword
 	}
@@ -189,81 +193,70 @@ func (a *Authenticator) AcceptInvite(ctx context.Context, token, password, ip st
 	if !ok {
 		return "", model.AuthSession{}, ErrInviteInvalid
 	}
-	var (
-		user model.User
-		sess model.AuthSession
-		tok  string
-	)
-	err := a.st.AuthMutate(ctx, func(as store.AuthScope) error {
-		// R5: the absent-component guard runs before Users.Update takes directory/user
-		// authority, so a refusal leaves the invite, the user and the ledger unchanged.
-		if err := a.guardNewLoginSession(ctx, as); err != nil {
-			return err
-		}
-		invites, _, err := as.Invites().List(ctx, byEq("selector", selector, 1))
+	var user model.User
+	var invite model.UserInvite
+	if err := a.st.AuthView(ctx, func(as store.AuthScope) error {
+		var err error
+		invite, user, err = a.pendingInvite(ctx, as, selector, secret)
+		return err
+	}); err != nil {
+		return "", model.AuthSession{}, err
+	}
+	// The invitation proves identity before password-policy evaluation. Hashing is
+	// outside the write transaction, like password Login, and invalid tokens never
+	// reach it. Both decisive records are revalidated before their first mutation.
+	hash, err := HashPassword(password)
+	if err != nil {
+		return "", model.AuthSession{}, err
+	}
+	return a.mintSession(ctx, attempt, user, "user.invite.accept", passwordLogin, func(as store.AuthScope) error {
+		inv, u, err := a.pendingInvite(ctx, as, selector, secret)
 		if err != nil {
 			return err
 		}
-		if len(invites) == 0 {
+		if inv.ID != invite.ID || inv.Version != invite.Version || u.ID != user.ID || u.Version != user.Version {
 			return ErrInviteInvalid
 		}
-		inv := invites[0]
-		now := a.clock.Now()
-		// The validity window is half-open, [created, ExpiresAt): an invite is
-		// expired from ExpiresAt onward, so the exact expiration instant is already
-		// too late. Written as "now is not strictly before ExpiresAt" because
-		// Timestamp exposes only Before.
-		if inv.AcceptedAt != nil || !now.Before(inv.ExpiresAt) || !SecretMatches(secret, inv.SecretHash) {
-			return ErrInviteInvalid
-		}
-		// The token is proven valid — only NOW pay for the argon2 hash, so an
-		// unauthenticated caller spraying bogus tokens cannot force expensive
-		// hashing (the cheap, high-entropy token check gates it).
-		hash, err := HashPassword(password)
-		if err != nil {
-			return err
-		}
-		// Resolve the invited account by the invite's email (the account was created
-		// at invite time). Defensive: a missing account voids the invite.
-		users, _, err := as.Users().List(ctx, byEq("email", normalizeEmail(inv.Email), 1))
-		if err != nil {
-			return err
-		}
-		if len(users) == 0 {
-			return ErrInviteInvalid
-		}
-		u := users[0]
 		u.PasswordHash = hash
 		u.Status = model.StatusActive
-		if u, err = as.Users().Update(ctx, u); err != nil {
+		if _, err := as.Users().Update(ctx, u); err != nil {
 			return err
 		}
+		now := a.clock.Now()
 		inv.AcceptedAt = &now
 		if _, err := as.Invites().Update(ctx, inv); err != nil {
 			return err
 		}
-		// The activation is attributed to the account itself (the invitee redeeming
-		// their own invite), never to an email or the issuing admin.
-		if _, err := as.Audit().Append(ctx, model.AuditDraft{
+		_, err = as.Audit().Append(ctx, model.AuditDraft{
 			Actor: "user:" + u.ID.String(), ActorKind: model.ActorUser,
 			Action: "user.invite.accept", TargetKind: "core.user_invite", TargetID: inv.ID,
-		}); err != nil {
-			return err
-		}
-		user = u
-		// Mint the session in the same transaction so activation and credential
-		// commit atomically. A password-set login is AAL1 with amr ["pwd"].
-		t, s, err := a.mintSessionTx(ctx, as, user, ip, "user.invite.accept", []string{"pwd"})
-		if err != nil {
-			return err
-		}
-		tok, sess = t, s
-		return nil
+		})
+		return err
 	})
+}
+
+// pendingInvite reads both authority records without writing. The caller must
+// revalidate them in its mutation after work performed outside the store scope.
+func (a *Authenticator) pendingInvite(ctx context.Context, as store.AuthScope, selector, secret string) (model.UserInvite, model.User, error) {
+	invites, _, err := as.Invites().List(ctx, byEq("selector", selector, 1))
 	if err != nil {
-		return "", model.AuthSession{}, err
+		return model.UserInvite{}, model.User{}, err
 	}
-	return tok, sess, nil
+	if len(invites) == 0 {
+		return model.UserInvite{}, model.User{}, ErrInviteInvalid
+	}
+	inv := invites[0]
+	if inv.AcceptedAt != nil || !a.clock.Now().Before(inv.ExpiresAt) || !SecretMatches(secret, inv.SecretHash) {
+		return model.UserInvite{}, model.User{}, ErrInviteInvalid
+	}
+	users, _, err := as.Users().List(ctx, byEq("email", normalizeEmail(inv.Email), 1))
+	if err != nil {
+		return model.UserInvite{}, model.User{}, err
+	}
+	if len(users) == 0 {
+		return model.UserInvite{}, model.User{}, ErrInviteInvalid
+	}
+	return inv, users[0], nil
 }
 
 // ListPendingInvites returns a tenant's unaccepted, unexpired invitations (no
