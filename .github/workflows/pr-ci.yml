@@ -256,7 +256,29 @@ jobs:
         timeout-minutes: 55
         env:
           OLIVARES_TEST_SHARD: ${{ matrix.shard }}
-        run: task test:functional:shard
+        # ⛔ THE STEP PUBLISHES ITS OWN RESOURCE FIGURES, AND IT PUBLISHES THEM WHEN IT DIES.
+        # On 2026-09-19 two shards of this job and one functional step of mainline-ci ended with
+        # `The runner has received a shutdown signal` and exit 143 after 19, 29 and 45 minutes of
+        # SILENCE. The log carried those two lines and nothing else: no memory figure, no process
+        # count, no free space — so the first question a diagnosis asks ("was the machine out of
+        # anything?") could only be answered by reproducing the run. The trap fires on the step's
+        # own TERM, which is the signal the runner sends on its way out and the one go-task
+        # already reports as `Signal received: "terminated"`, so the three numbers survive exactly
+        # the death that most needs them. The witness never fails a step: it answers COULD NOT
+        # LOOK and exits 0, because a witness that can turn a job red is a witness nobody installs.
+        run: |
+          set -euo pipefail
+          WITNESS="$RUNNER_TEMP/resource-witness-${{ matrix.shard }}.txt"
+          bash scripts/ci-resource-witness.sh start "$WITNESS" >/dev/null
+          witness_said=""
+          witness() {
+            if [ -z "$witness_said" ]; then
+              witness_said=yes
+              bash scripts/ci-resource-witness.sh report "$WITNESS"
+            fi
+          }
+          trap witness EXIT TERM
+          task test:functional:shard
 
   # ⛔ THE ONE NAME THE BRANCH PROTECTION ASKS FOR, AND IT MUST BE ABLE TO SAY NO.
   # A matrix job does not report under its job id: it reports `pr-test-shard (a)`,

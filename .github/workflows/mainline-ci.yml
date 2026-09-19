@@ -2000,7 +2000,30 @@ jobs:
         # los dos techos muerdan no puede dar veredicto completo ni ponerse verde. 120 es COTA, no
         # medida — ninguno de los cuatro paquetes ha TERMINADO nunca en esta pata.
         timeout-minutes: 120
-        run: task test:functional 2>&1 | tee "$RUNNER_TEMP/ci-fail-test-functional.log" && rm "$RUNNER_TEMP/ci-fail-test-functional.log"
+        # ⛔ Y EL PASO PUBLICA SUS PROPIAS CIFRAS DE MAQUINA, TAMBIEN CUANDO MUERE. El 2026-09-19
+        # este paso acabo en `The runner has received a shutdown signal` y exit 143 a los 19 min
+        # de entrar en el paquete raiz, con el log mudo: ni memoria, ni procesos, ni disco. El
+        # trap salta con el TERM del propio paso —la senal que manda el runner al irse— asi que
+        # las tres cifras sobreviven justo a la muerte que las necesita. El testigo nunca tumba
+        # un paso: responde COULD NOT LOOK y sale 0.
+        #
+        # `set -euo pipefail` y el `rm` en su propia linea conservan la disciplina que esta
+        # cabecera ya exige (:181): el estado de salida es el de `task` y no el del `tee`, y el
+        # log de fallo solo se borra cuando el paso ha ido bien.
+        run: |
+          set -euo pipefail
+          WITNESS="$RUNNER_TEMP/resource-witness-functional.txt"
+          bash scripts/ci-resource-witness.sh start "$WITNESS" >/dev/null
+          witness_said=""
+          witness() {
+            if [ -z "$witness_said" ]; then
+              witness_said=yes
+              bash scripts/ci-resource-witness.sh report "$WITNESS"
+            fi
+          }
+          trap witness EXIT TERM
+          task test:functional 2>&1 | tee "$RUNNER_TEMP/ci-fail-test-functional.log"
+          rm "$RUNNER_TEMP/ci-fail-test-functional.log"
       # NOTE: test:race-hot moved to the parallel `race-hot` job (2026-07-24) —
       # the workspace -race leg alone exceeded this job's old budget.
       - name: client SDK codegen drift (snapshot → Go/Python/TS operation layers)
