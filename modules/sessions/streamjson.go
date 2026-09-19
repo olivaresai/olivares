@@ -41,3 +41,11 @@ func parseStreamJSON(line []byte) (streamJSONFrame, bool) {
 func (f streamJSONFrame) isInit() bool {
 	return f.Type == "system" && f.Subtype == "init" && f.SessionID != ""
 }
+
+// isResult reports whether the frame is a turn's result message — the one that
+// carries the METERING of what the turn cost (runtime_usage.go decodes it).
+//
+// Metering is not the frame BODY this file refuses to decode: a token count and a
+// price are numbers about a turn, not the prompt, the completion or a tool
+// argument. Nothing else in the result frame is read.
+func (f streamJSONFrame) isResult() bool { return f.Type == "result" }

@@ -18,7 +18,7 @@ import (
 // credential through that same identity).
 func TestListRuns_ByClaudeSessionID(t *testing.T) {
 	fr := &fakeRunner{}
-	m := New(WithRunner(fr), WithCredentialSource(staticCred()))
+	m := New(WithSessionWorkspaceRoot(t.TempDir()), WithRunner(fr), WithCredentialSource(staticCred()))
 	h := newHarness(t, m)
 	admin := h.adminLogin()
 	tenantA := h.createOrg(admin, "acme")

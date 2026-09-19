@@ -20,6 +20,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
+	"github.com/olivaresai/olivares/cmd/olivares/internal/termrender"
 )
 
 // The model stack is the three API modules that share the "model" vocabulary:
@@ -174,8 +175,7 @@ func (c modelstackClient) do(cmd *cobra.Command, method, path, query string, bod
 //
 // Everything else keeps httpErr's mapping, including 5xx → 6.
 func modelstackHTTPError(res modelstackResult) error {
-	body := strings.TrimSpace(string(res.Raw))
-	base := fmt.Errorf("request failed: HTTP %d: %s", res.Status, body)
+	base := fmt.Errorf("%s", describeAPIRefusal(res.Status, res.Raw))
 	switch res.Status {
 	case http.StatusBadRequest:
 		return exitcode.New(exitcode.Usage, base)
@@ -694,20 +694,19 @@ func modelstackRenderRows(cmd *cobra.Command, spec modelstackListSpec, items []j
 			_, err := fmt.Fprintln(out, spec.EmptyNote)
 			return err
 		}
-		tw := tabwriter.NewWriter(out, 0, 2, 2, ' ', 0)
-		headers := make([]string, 0, len(spec.Columns))
+		tbl := termrender.Table{Header: make([]string, 0, len(spec.Columns))}
 		for _, col := range spec.Columns {
-			headers = append(headers, col.Header)
+			tbl.Header = append(tbl.Header, col.Header)
 		}
-		fmt.Fprintln(tw, strings.Join(headers, "\t"))
 		for _, row := range rows {
 			cells := make([]string, 0, len(spec.Columns))
 			for _, col := range spec.Columns {
 				cells = append(cells, modelstackCell(row[col.Key]))
 			}
-			fmt.Fprintln(tw, strings.Join(cells, "\t"))
+			tbl.Rows = append(tbl.Rows, cells)
 		}
-		return tw.Flush()
+		renderTo(out).Table(tbl)
+		return nil
 	}, jsonVal)
 }
 

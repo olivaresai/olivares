@@ -2000,7 +2000,29 @@ jobs:
         # los dos techos muerdan no puede dar veredicto completo ni ponerse verde. 120 es COTA, no
         # medida — ninguno de los cuatro paquetes ha TERMINADO nunca en esta pata.
         timeout-minutes: 120
-        run: task test:functional 2>&1 | tee "$RUNNER_TEMP/ci-fail-test-functional.log" && rm "$RUNNER_TEMP/ci-fail-test-functional.log"
+        # Record sampled host resources on EXIT/TERM when the shell and log transport remain
+        # available. The observed shutdown signal/143 did not establish the cause. These
+        # samples are host memory use, not process RSS, and can miss intervening peaks.
+        # SIGKILL or host loss can prevent a report; missing evidence is not a zero reading.
+        # Explicit unavailable-data paths print COULD NOT LOOK and return zero.
+        #
+        # `set -euo pipefail` y el `rm` en su propia linea conservan la disciplina que esta
+        # cabecera ya exige (:181): el estado de salida es el de `task` y no el del `tee`, y el
+        # log de fallo solo se borra cuando el paso ha ido bien.
+        run: |
+          set -euo pipefail
+          WITNESS="$RUNNER_TEMP/resource-witness-functional.txt"
+          bash scripts/ci-resource-witness.sh start "$WITNESS" >/dev/null
+          witness_said=""
+          witness() {
+            if [ -z "$witness_said" ]; then
+              witness_said=yes
+              bash scripts/ci-resource-witness.sh report "$WITNESS"
+            fi
+          }
+          trap witness EXIT TERM
+          task test:functional 2>&1 | tee "$RUNNER_TEMP/ci-fail-test-functional.log"
+          rm "$RUNNER_TEMP/ci-fail-test-functional.log"
       # NOTE: test:race-hot moved to the parallel `race-hot` job (2026-07-24) —
       # the workspace -race leg alone exceeded this job's old budget.
       - name: client SDK codegen drift (snapshot → Go/Python/TS operation layers)

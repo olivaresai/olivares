@@ -66,8 +66,34 @@ var (
 // and PATH ONCE. The root uses the CLI's own resolution (resolveAgentToolRoot,
 // same precedence as `olivares agent tool detect`); nothing is re-read per
 // request, and no detection runs here.
+//
+// Prefer newHostToolObserverForDataDir inside the ENGINE: this form re-derives the
+// data directory from the environment, which is not the same thing as the
+// directory the running engine was given.
 func newHostToolObserver(getenv func(string) string) *hostToolObserver {
+	return newHostToolObserverForDataDir("", getenv)
+}
+
+// newHostToolObserverForDataDir is the same observer over the data directory the
+// ENGINE actually runs on.
+//
+// ⛔ WHY THE PARAMETER EXISTS, MEASURED 2026-09-18.
+// The boot hint said a driver could be registered with `olivares agent tool
+// install --driver grok`, and installing into the engine's own `<data-dir>/tools`
+// left it unregistered: only the environment variable worked. The cause was here
+// — resolveAgentToolRoot("") resolves OLIVARES_DATA_DIR / XDG / $HOME, so an
+// engine started with `--data-dir D` and no variable looked for managed installs
+// under ~/.local/share/olivares while its own tools lived under D. The receipt
+// was valid, the release was `installed`, and the observer was reading another
+// directory. An empty dataDir keeps the historical resolution, which is what the
+// CLI's own commands want.
+func newHostToolObserverForDataDir(dataDir string, getenv func(string) string) *hostToolObserver {
 	root, rootErr := resolveAgentToolRoot("")
+	if declared := strings.TrimSpace(dataDir); declared != "" {
+		if abs, err := filepath.Abs(declared); err == nil {
+			root, rootErr = filepath.Join(abs, "tools"), nil
+		}
+	}
 	home := ""
 	if h, err := os.UserHomeDir(); err == nil {
 		home = strings.TrimSpace(h)

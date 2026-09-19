@@ -64,6 +64,13 @@ export interface RunDTO {
   effort?: Effort | string
   model_ref?: string
   workspace_ref?: string
+  /**
+   * The HOST directory this session's child was started in: the registered
+   * workspace's canonical root, or the directory of its own the engine created for
+   * the run. It is shown by NAME because until v26.10 a session with no workspace
+   * ran in the ENGINE's own working directory and nothing on any surface said so.
+   */
+  workspace_path?: string
   /** The workspace template this run was last launched under, if any.*/
   template_id?: string
   isolation: Isolation
@@ -145,6 +152,11 @@ export interface ProviderProfileDTO {
    * provider-compatible credential through that driver's governed adapter. They
    * are distinct authorizations with no fallback; absent authorizes neither. */
   auth_source?: 'provider_account_home' | 'managed_injection' | (string & {})
+  /** The registered PROVIDER this profile's managed launches resolve their
+   * credential from. Absent means none is named, and the host's own credential
+   * variables decide — exactly the behaviour every profile had before v26.10. It is a
+   * reference: no key, no hint, no endpoint travels with it. */
+  provider_record_ref?: string
   created_at?: string
   updated_at?: string
   retired_at?: string
@@ -175,6 +187,12 @@ export interface CreateProfileRequest {
   user_home: string
   display_name?: string
   environment_ref?: string
+  /** The authorized authentication source. Absent authorizes neither, which
+   * refuses every launch whose driver requires one. */
+  auth_source?: 'provider_account_home' | 'managed_injection' | (string & {})
+  /** Bind a registered provider in the same authorized call, so deploying an
+   * agent is one step rather than a checklist. */
+  provider_record_ref?: string
 }
 
 /** PATCH /provider-profiles/{ref} body — the ONLY post-creation mutation: a label
@@ -184,6 +202,10 @@ export interface CreateProfileRequest {
 export interface PatchProfileRequest {
   display_name?: string
   state?: 'active' | 'disabled'
+  auth_source?: 'provider_account_home' | 'managed_injection' | (string & {})
+  /** Bind (or unbind, with "") the registered provider this profile's managed
+   * launches use. A LIVE child keeps the one its own launch resolved. */
+  provider_record_ref?: string
 }
 
 /** One source→profile binding (GET /provider-source-bindings): ONE configured source,

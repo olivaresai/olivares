@@ -30,27 +30,57 @@ const (
 // transcript, or process arguments (minimal-data, docs/SECURITY-HARDENING.md). The inference
 // token is injected in-memory and discarded; only its non-sensitive id lands.
 const (
-	colRunRef          = "run_ref"
-	colRunName         = "name"
-	colTransport       = "transport"
-	colPermissionMode  = "permission_mode"
-	colEffort          = "effort"
-	colRunModelRef     = "model_ref"
-	colWorkspaceRef    = "workspace_ref"
-	colTemplateID      = "template_id"       // the workspace template whose terms govern this run
-	colTemplateVersion = "template_version"  // the REVISION of it this run was launched from
-	colTemplateCeiling = "max_duration_secs" // the session-duration ceiling this run was launched under
-	colIsolation       = "isolation"
-	colState           = "state"
-	colClaudeSessionID = "claude_session_id"
-	colPID             = "pid"
-	colCredentialID    = "credential_id"
-	colExitCode        = "exit_code"
-	colReason          = "reason"
-	colLastEventSeq    = "last_event_seq"
-	colStartedAt       = "started_at"
-	colLastActivityAt  = "last_activity_at"
-	colStoppedAt       = "stopped_at"
+	colRunRef         = "run_ref"
+	colRunName        = "name"
+	colTransport      = "transport"
+	colPermissionMode = "permission_mode"
+	colEffort         = "effort"
+	colRunModelRef    = "model_ref"
+	colWorkspaceRef   = "workspace_ref"
+	// colRunWorkspacePath is the EFFECTIVE working directory this run's child was
+	// started in: the canonical root of the registered workspace it named, or the
+	// directory of its own this plane created under the data directory when it
+	// named none (runtime_workspace_dir.go). It is a path and never a secret, and
+	// it is what makes "where did this session run" answerable instead of
+	// inferable: on 2026-09-18 that question could only be answered by reading the
+	// child's own init frame. Nullable: a run that predates the column reads as
+	// "not recorded", which is honest, and is never assigned today's directory
+	// after the fact.
+	colRunWorkspacePath = "workspace_path"
+	// colRunWorkspaceDirOwned is the OWNERSHIP fact the release purge acts on: did
+	// THIS module create the directory named by colRunWorkspacePath, for THIS run?
+	//
+	// ⛔ IT IS NOT DERIVABLE FROM THE PATH, and that is the whole reason it exists.
+	// The same column carries the canonical root of a REGISTERED workspace, and an
+	// operator may register one that sits directly under this node's own session
+	// root — at which point every string predicate the purge can make on the path
+	// alone ("its parent is my root") says "mine" about the operator's project.
+	//
+	// ⛔ AND IT IS A COLUMN RATHER THAN A MARKER INSIDE THE DIRECTORY, deliberately.
+	// A marker file would live where the session's own child process has write
+	// access, and the directory this guard must never remove IS one the child can
+	// write to — so a marker is forgeable by exactly the thing being guarded
+	// against. This column is written by this module alone, on a row no session
+	// reaches, and it survives a restart because the run table is durable.
+	//
+	// Nullable, and read DENY-CLOSED: absent or false means "not proven mine", and
+	// an unproven directory is never removed. A row that predates the column
+	// therefore leaks its directory rather than risking someone else's.
+	colRunWorkspaceDirOwned = "workspace_dir_owned"
+	colTemplateID           = "template_id"       // the workspace template whose terms govern this run
+	colTemplateVersion      = "template_version"  // the REVISION of it this run was launched from
+	colTemplateCeiling      = "max_duration_secs" // the session-duration ceiling this run was launched under
+	colIsolation            = "isolation"
+	colState                = "state"
+	colClaudeSessionID      = "claude_session_id"
+	colPID                  = "pid"
+	colCredentialID         = "credential_id"
+	colExitCode             = "exit_code"
+	colReason               = "reason"
+	colLastEventSeq         = "last_event_seq"
+	colStartedAt            = "started_at"
+	colLastActivityAt       = "last_activity_at"
+	colStoppedAt            = "stopped_at"
 	// Governance facts: the non-sensitive launch-decision posture persisted
 	// on the run so the portal renders the per-session governance panel without the
 	// secrets that decided it. References and flags only — never a token, env value,
@@ -129,6 +159,12 @@ const (
 	// legacy run and on a profile that names no source.
 	colRunProviderAuthSource = "provider_auth_source"
 	colRunProviderAuthState  = "provider_auth_state"
+	// colRunProviderRecordRef (v26.10) is the PROVIDER RECORD this run's credential
+	// was resolved from. It is a reference and never a value, it is written with
+	// the rest of the snapshot BEFORE the spawn, and it is what makes "which
+	// credential authorised this session" answerable after a rotation, a rebinding
+	// or a revocation. NULL on a legacy run and on a profile that names none.
+	colRunProviderRecordRef = "provider_record_ref"
 	// colRunLiveRef (B2) is the id of the plane's MANAGED live row for this run,
 	// written by the bridge in the transaction that proved the run owns its
 	// announced provider id (runtime_profile.go). It is the run→row half of the
@@ -136,6 +172,19 @@ const (
 	// never a lookup by bare external id. NULL for a legacy run and for a profiled
 	// run whose id was never captured.
 	colRunLiveRef = "live_ref"
+
+	// The metering of the governed turns this run has taken, credited from the
+	// official CLI's own result frames (runtime_usage.go). Counts and money, never
+	// a prompt or a completion: a token count is not content (docs/SECURITY-HARDENING.md).
+	//
+	// All four are NULLABLE and that is load-bearing, not expand-contract hygiene:
+	// NULL means the driver reported NO usage, which is UNKNOWN. Zero would be a
+	// claim that the turn was free, and what was measured on 2026-09-18 was the
+	// opposite defect — a turn whose cost was on the wire and nowhere else.
+	colRunInputTokens   = "input_tokens"
+	colRunOutputTokens  = "output_tokens"
+	colRunCostMicroUSD  = "cost_micro_usd"
+	colRunUsageModelRef = "usage_model_ref"
 )
 
 // sessions.run_event columns (append-only ledger; per-session hash anchor).
@@ -177,6 +226,14 @@ func (m *Module) registerRuntimeSchema(reg store.ExtensionRegistry) error {
 			{Name: colEffort, Kind: model.KindText, Nullable: true},
 			{Name: colRunModelRef, Kind: model.KindText, Nullable: true},
 			{Name: colWorkspaceRef, Kind: model.KindText, Nullable: true},
+			// Nullable for the expand-contract reason every stamp below gives: an
+			// existing sessions_run gains it on the next boot (reconcileColumns) and a
+			// row that predates it carries no recorded directory.
+			{Name: colRunWorkspacePath, Kind: model.KindText, Nullable: true},
+			// Nullable for the same expand-contract reason, and read deny-closed: a run
+			// that predates it cannot PROVE the directory is this plane's, so release
+			// leaves it alone instead of removing a path it cannot account for.
+			{Name: colRunWorkspaceDirOwned, Kind: model.KindBool, Nullable: true},
 			// the template this run was last launched under. A reference, never the
 			// template's body — the terms are re-resolved from the template row on every
 			// launch and resume, so a tightened template governs the next relaunch rather
@@ -246,7 +303,15 @@ func (m *Module) registerRuntimeSchema(reg store.ExtensionRegistry) error {
 			// row that predates them reads as "no authorized source, readiness unknown".
 			{Name: colRunProviderAuthSource, Kind: model.KindText, Nullable: true},
 			{Name: colRunProviderAuthState, Kind: model.KindText, Nullable: true},
+			{Name: colRunProviderRecordRef, Kind: model.KindText, Nullable: true},
 			{Name: colRunLiveRef, Kind: model.KindText, Nullable: true},
+			// Nullable = UNKNOWN, never zero: see the constants. A run that predates
+			// these columns gains them on the next boot (reconcileColumns) and reads as
+			// "the provider reported no usage", which is what was true.
+			{Name: colRunInputTokens, Kind: model.KindInt, Nullable: true},
+			{Name: colRunOutputTokens, Kind: model.KindInt, Nullable: true},
+			{Name: colRunCostMicroUSD, Kind: model.KindInt, Nullable: true},
+			{Name: colRunUsageModelRef, Kind: model.KindText, Nullable: true},
 		},
 		// The run's authorization lineage. Unset is HIDDEN, never the tenant
 		// default: see colRunAuthzWorkspaceID. Declaring it is also what turns a

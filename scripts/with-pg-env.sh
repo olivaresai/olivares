@@ -87,4 +87,74 @@ case " $* " in
 		;;
 esac
 
+# --- SOFT GO RUNTIME MEMORY TARGET FOR COMMANDS WITHOUT -race -------------------------
+#
+# Hosted jobs observed on 2026-09-19 ended with a shutdown signal and exit 143,
+# without a test-failure line. Those observations do not establish OOM as the cause.
+# Local sampling found substantial root-package memory use, motivating this mitigation.
+# The early comparisons were cut short; their sampled peaks and counts of tests started
+# do not establish a completed-run memory bound or a marginal wall-clock cost.
+#
+# Public PR 67, run 35446229978 at 095e1ffbde44403d73534d4717ce2fae0bf3a0bb,
+# completed once with GOMEMLIMIT=4191344640 (about 3.90 GiB). The root package took
+# 2207.705 s under its 2700 s timeout. The witness's highest sample was 12.74 GiB
+# used of 15.61 GiB for the HOST (MemTotal - MemAvailable), not root-process RSS.
+# This is one completion with observed margins, not a paired causal comparison or
+# evidence that future shutdowns cannot occur. Keep the witness on later candidates.
+#
+# GOMEMLIMIT targets memory managed by each Go runtime, not total process RSS or the
+# aggregate host. It is soft: Go may exceed it to avoid excessive GC work. It does not
+# prevent an OS-level OOM. See https://go.dev/doc/gc-guide#Memory_limit.
+# The exported value also reaches Go toolchain subprocesses; compilation can be affected.
+#
+# Leave -race commands to the separate package-parallelism policy above, and preserve
+# an explicit GOMEMLIMIT. Neither policy is a guarantee against memory exhaustion.
+case " $* " in
+	*" -race "*) : ;;  # el detector ya esta acotado por el ancho de paquetes de arriba
+	*" test "*)
+		if [ -z "${GOMEMLIMIT:-}" ]; then
+			# Las DOS lecturas llevan su ruta en una variable, con la real por defecto. Es la
+			# unica costura, y existe para que la bateria del envoltorio
+			# (scripts/test-pg-test-env.sh) pueda apuntarlas a ficheros y ver la derivacion
+			# —y su rama ilegible— sin un cgroup propio ni una maquina de 16 GiB.
+			_wpe_cgroup_file="${OLIVARES_WPE_CGROUP_MAX:-/sys/fs/cgroup/memory.max}"
+			_wpe_meminfo_file="${OLIVARES_WPE_MEMINFO:-/proc/meminfo}"
+			# El tope real de la maquina: el del cgroup si lo hay, y si no la memoria fisica.
+			_wpe_bytes=""
+			if [ -r "${_wpe_cgroup_file}" ]; then
+				_wpe_bytes="$(cat "${_wpe_cgroup_file}" 2>/dev/null || true)"
+			fi
+			case "${_wpe_bytes:-max}" in
+				''|max|*[!0-9]*)
+					# Sin cgroup con tope: MemTotal, que viene en KiB.
+					#
+					# ⛔ LA MULTIPLICACION SE HACE EN EL SHELL Y NO EN awk, y esto lo cazo la
+					# bateria de este envoltorio, no una revision. `awk '{print $2 * 1024}'`
+					# imprime **1,71799e+10** para una maquina de 16 GiB —notacion cientifica
+					# por OFMT y coma decimal por el locale— y `printf "%d"` la recorta a
+					# 2147483647. Las dos formas fallan la comprobacion de digitos de este
+					# mismo `case`, asi que el techo NO se ponia: inerte EXACTAMENTE en la
+					# maquina SIN tope de cgroup, que es el runner alojado al que va dirigido.
+					# Medido 2026-09-19.
+					_wpe_kib="$(awk '/^MemTotal:/ {print $2; exit}' "${_wpe_meminfo_file}" 2>/dev/null || true)"
+					case "${_wpe_kib:-}" in
+						''|*[!0-9]*) _wpe_bytes="" ;;
+						*) _wpe_bytes=$(( _wpe_kib * 1024 )) ;;
+					esac
+					;;
+			esac
+			if [ -n "${_wpe_bytes}" ] && [ "${_wpe_bytes}" -gt 0 ]; then
+				# One quarter of the detected memory, with a 2.5 GiB floor. This is a
+				# per-runtime target inherited by tests and toolchain subprocesses, not
+				# a reservation or an exemption for compilation. Exactly 16 GiB gives
+				# 4 GiB; the diagnostic's integer GiB display truncates other values.
+				_wpe_limit=$(( _wpe_bytes / 4 ))
+				[ "${_wpe_limit}" -lt 2684354560 ] && _wpe_limit=2684354560
+				export GOMEMLIMIT="${_wpe_limit}"
+				echo "with-pg-env: sin -race sobre una maquina de $(( _wpe_bytes / 1073741824 )) GiB → GOMEMLIMIT=${_wpe_limit} ($(( _wpe_limit / 1073741824 )) GiB)" >&2
+			fi
+		fi
+		;;
+esac
+
 exec "$@"

@@ -25,9 +25,12 @@ import {
   KeyRound,
   Plug,
   RefreshCw,
+  KeyRound as KeyRoundIcon,
+  PlugZap,
   Rocket,
   ScrollText,
   ShieldCheck,
+  Terminal,
   Users,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
@@ -66,6 +69,17 @@ import type {
 } from '@/features/console/api'
 import { claudePolicyApi } from '@/features/claude-policy/api'
 import type { PolicyDistributionView } from '@/features/claude-policy/types'
+// The two steps that were missing from a wizard whose stated subject is the
+// operator's first hour. Its five steps ended at the policy enforcement point, so a
+// wizard about getting started stopped before the product does anything.
+import '@/features/providers/i18n'
+import { providerKeys, providersApi } from '@/features/providers/api'
+import { ProviderCreateDialog } from '@/features/providers/provider-create-dialog'
+import type { ProviderRecordDTO } from '@/features/providers/types'
+import '@/features/agentops/i18n'
+import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
+import { useAuthBoundary } from '@/features/agentops/auth-boundary'
+import type { ProviderProfileDTO, RunDTO } from '@/features/agentops/types'
 import { useAuth } from '@/lib/auth/context'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
 // The same name→slug derivation the first-organization form uses (src/lib/utils):
@@ -121,6 +135,31 @@ export function OnboardingView() {
     queryKey: ['onboarding', tenant, 'pep-distribution'],
     queryFn: () => claudePolicyApi.getDistribution(PEP_SURFACE),
     enabled,
+    retry: false,
+  })
+  // Both reads are the AUTHORITATIVE ones for their step, in the same spirit as
+  // the four above: `setup_status` would not know whether a provider works, and a
+  // profile that exists is not a session that ran.
+  const boundary = useAuthBoundary()
+  const providersQ = useQuery({
+    queryKey: providerKeys.list(tenant, boundary.epoch),
+    queryFn: ({ signal }) => providersApi.list(undefined, { signal }),
+    enabled: enabled && can('sessions:provider:read'),
+    retry: false,
+  })
+  const profilesQ = useQuery({
+    queryKey: agentOpsKeys.profiles(tenant, boundary.epoch),
+    queryFn: ({ signal }) => agentOpsApi.listProfiles(undefined, { signal }),
+    enabled: enabled && can('sessions:profile:read'),
+    retry: false,
+  })
+  const runsQ = useQuery({
+    queryKey: agentOpsKeys.runs(tenant, { limit: 5 }),
+    // `listRuns` takes a READ SCOPE, not a bare options bag: the scope carries the
+    // tenant the read is pinned to as well as the signal.
+    queryFn: ({ signal }) =>
+      agentOpsApi.listRuns({ limit: 5 }, { tenant, signal }),
+    enabled: enabled && can('sessions:run:read'),
     retry: false,
   })
 
@@ -183,6 +222,34 @@ export function OnboardingView() {
       ? 'awaiting'
       : 'pending'
 
+  // Step 6. A registered provider is NOT verified: registering is not evidence
+  // that a credential works, and only a connection test is. The middle state is the
+  // honest one, and it is the same rule the source step already applies to a
+  // registered-but-not-running source.
+  const providers = providersQ.data?.items ?? []
+  const activeProviders = providers.filter((p) => p.state === 'active')
+  const workingProvider = activeProviders.find((p) => p.probe_state === 'ok')
+  const providerState: StepState = workingProvider
+    ? 'verified'
+    : activeProviders.length > 0
+      ? 'awaiting'
+      : 'pending'
+
+  // Step 7. Verified means a session RAN under a profile that names a credential.
+  // A profile on its own launches nothing, and a profile bound to nothing launches
+  // only where the host's own variables happen to be set.
+  const profiles = (profilesQ.data?.items ?? []).filter(
+    (p) => p.state === 'active',
+  )
+  const boundProfile = profiles.find((p) => p.provider_record_ref)
+  const runs = runsQ.data?.items ?? []
+  const agentState: StepState =
+    boundProfile && runs.length > 0
+      ? 'verified'
+      : profiles.length > 0
+        ? 'awaiting'
+        : 'pending'
+
   const states: StepState[] = [
     dbReady ? 'verified' : 'pending',
     hasWorkspace ? 'verified' : 'pending',
@@ -192,6 +259,8 @@ export function OnboardingView() {
     // keeps the badge honest to the source's real backend status (the thesis).
     runningSource ? 'verified' : hasSource ? 'awaiting' : 'pending',
     pepState,
+    providerState,
+    agentState,
   ]
   const total = states.length
   const done = states.filter((s) => s === 'verified').length
@@ -203,6 +272,9 @@ export function OnboardingView() {
     void membersQ.refetch()
     void sourcesQ.refetch()
     void distributionQ.refetch()
+    void providersQ.refetch()
+    void profilesQ.refetch()
+    void runsQ.refetch()
   }
 
   const handleDismiss = () => {
@@ -224,7 +296,10 @@ export function OnboardingView() {
     workspacesQ.isFetching ||
     membersQ.isFetching ||
     sourcesQ.isFetching ||
-    distributionQ.isFetching
+    distributionQ.isFetching ||
+    providersQ.isFetching ||
+    profilesQ.isFetching ||
+    runsQ.isFetching
 
   return (
     <div className="flex flex-col gap-4 p-6">
@@ -347,6 +422,37 @@ export function OnboardingView() {
               state={pepState}
               distribution={distributionQ.data}
               onRefresh={() => void distributionQ.refetch()}
+            />
+          </StepCard>
+
+          <StepCard
+            n={6}
+            icon={KeyRoundIcon}
+            title={t('steps.providers.title')}
+            hint={t('steps.providers.hint')}
+            state={states[5]}
+          >
+            <ProviderStep
+              state={providerState}
+              providers={activeProviders}
+              tenant={tenant}
+              epoch={boundary.epoch}
+              onRefresh={() => void providersQ.refetch()}
+            />
+          </StepCard>
+
+          <StepCard
+            n={7}
+            icon={Terminal}
+            title={t('steps.agent.title')}
+            hint={t('steps.agent.hint')}
+            state={states[6]}
+          >
+            <AgentStep
+              state={agentState}
+              profiles={profiles}
+              runs={runs}
+              hasProvider={Boolean(workingProvider)}
             />
           </StepCard>
         </div>
@@ -1155,3 +1261,256 @@ function PepStep({
 }
 
 export default OnboardingView
+
+// --- step 6: providers -------------------------------------------------------
+
+/**
+ * ProviderStep — register the credential a session launches with, and TEST it here.
+ *
+ * The step is green only when a provider answered a connection test. That is the
+ * same rule step 4 applies to a source: a registered source that is not running is
+ * `awaiting`, never green, because registering is an intention and running is a
+ * fact. A registered credential nobody has tested is exactly the same shape.
+ */
+function ProviderStep({
+  state,
+  providers,
+  tenant,
+  epoch,
+  onRefresh,
+}: {
+  state: StepState
+  providers: ProviderRecordDTO[]
+  tenant: string | null
+  epoch: number
+  onRefresh: () => void
+}) {
+  const { t } = useTranslation(['onboarding', 'providers', 'common'])
+  const { can } = useAuth()
+  const canWrite = can('sessions:provider:write')
+  const [createOpen, setCreateOpen] = useState(false)
+
+  const test = usePrivilegedMutation<string, ProviderRecordDTO>({
+    mutationFn: (ref) => providersApi.test(ref),
+    invalidateKeys: () => [providerKeys.list(tenant, epoch)],
+    stepUpAction: 'providers',
+    successMessage: (record) =>
+      record.probe_state === 'ok'
+        ? t('providers:probe.okHint')
+        : record.probe_state === 'refused'
+          ? t('providers:probe.refusedHint')
+          : t('providers:probe.unreachableHint'),
+    onDone: () => onRefresh(),
+  })
+
+  if (providers.length === 0) {
+    return (
+      <div className="flex flex-col gap-3">
+        <CaveatNotice tone="warning">{t('steps.providers.none')}</CaveatNotice>
+        {canWrite ? (
+          <>
+            <div>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => setCreateOpen(true)}
+              >
+                <KeyRoundIcon className="size-3.5" />
+                {t('steps.providers.addCta')}
+              </Button>
+            </div>
+            <ProviderCreateDialog
+              open={createOpen}
+              onOpenChange={setCreateOpen}
+              onCreated={(record) => test.mutate(record.provider_ref)}
+            />
+          </>
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            {t('steps.providers.noPermission')}
+          </p>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <CaveatNotice tone={state === 'verified' ? 'neutral' : 'warning'}>
+        {state === 'verified'
+          ? t('steps.providers.working', { n: providers.length })
+          : t('steps.providers.untested')}
+      </CaveatNotice>
+      <ul className="flex flex-col gap-1">
+        {providers.map((p) => (
+          <li
+            key={p.provider_ref}
+            className="flex flex-wrap items-center gap-2 text-sm"
+          >
+            <span className="font-medium text-foreground">
+              {p.display_name}
+            </span>
+            <span className="text-xs text-muted-foreground">
+              {t(`providers:kinds.${p.kind}`)}
+            </span>
+            <Badge
+              variant={
+                p.probe_state === 'ok'
+                  ? 'success'
+                  : p.probe_state === 'refused'
+                    ? 'warning'
+                    : 'outline'
+              }
+            >
+              {p.probe_state === 'ok'
+                ? t('providers:probe.ok')
+                : p.probe_state === 'refused'
+                  ? t('providers:probe.refused')
+                  : p.probe_state === 'unreachable'
+                    ? t('providers:probe.unreachable')
+                    : t('providers:probe.never')}
+            </Badge>
+            {canWrite && (
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={test.isPending}
+                onClick={() => test.mutate(p.provider_ref)}
+              >
+                <PlugZap className="size-3.5" />
+                {t('providers:actions.test')}
+              </Button>
+            )}
+          </li>
+        ))}
+      </ul>
+      <div className="flex flex-wrap gap-2">
+        {canWrite && (
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setCreateOpen(true)}
+          >
+            {t('steps.providers.addAnother')}
+          </Button>
+        )}
+        <Button asChild variant="ghost" size="sm">
+          <Link to={'/providers' as never}>
+            {t('steps.providers.manageCta')}
+          </Link>
+        </Button>
+      </div>
+      {/* The dialog is NOT wrapped in `Privileged`: that wrapper renders the
+          ceremony IN PLACE of its children, so a closed dialog would paint a
+          step-up panel inside the step. The demand is raised at dispatch by
+          usePrivilegedMutation, which is what the dialogs on /providers do. */}
+      {canWrite && (
+        <ProviderCreateDialog
+          open={createOpen}
+          onOpenChange={setCreateOpen}
+          onCreated={(record) => test.mutate(record.provider_ref)}
+        />
+      )}
+    </div>
+  )
+}
+
+// --- step 7: agents and the first session ------------------------------------
+
+/**
+ * AgentStep — does a profile exist, does it name a credential, and has a session
+ * actually run under it.
+ *
+ * The three questions are kept apart because the product used to answer them as
+ * one. A profile that exists is not a profile that can launch, and a profile that
+ * can launch is not a session that ran. This step says which of the three is true.
+ */
+function AgentStep({
+  state,
+  profiles,
+  runs,
+  hasProvider,
+}: {
+  state: StepState
+  profiles: ProviderProfileDTO[]
+  runs: RunDTO[]
+  hasProvider: boolean
+}) {
+  const { t } = useTranslation(['onboarding', 'agentops', 'common'])
+
+  if (profiles.length === 0) {
+    return (
+      <div className="flex flex-col gap-3">
+        <CaveatNotice tone="warning">
+          {hasProvider
+            ? t('steps.agent.noProfile')
+            : t('steps.agent.noProviderFirst')}
+        </CaveatNotice>
+        <div>
+          <Button asChild variant="primary" size="sm">
+            <Link to={'/provider-profiles' as never}>
+              {t('steps.agent.registerCta')}
+            </Link>
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
+  const bound = profiles.filter((p) => p.provider_record_ref)
+  const unbound = profiles.length - bound.length
+
+  return (
+    <div className="flex flex-col gap-3">
+      <CaveatNotice tone={state === 'verified' ? 'neutral' : 'warning'}>
+        {state === 'verified'
+          ? t('steps.agent.ran', { n: runs.length })
+          : bound.length === 0
+            ? t('steps.agent.noneBound')
+            : t('steps.agent.neverLaunched')}
+      </CaveatNotice>
+      <ul className="flex flex-col gap-1">
+        {profiles.map((p) => (
+          <li
+            key={p.profile_ref}
+            className="flex flex-wrap items-center gap-2 text-sm"
+          >
+            <span className="font-medium text-foreground">
+              {p.display_name || p.profile_ref}
+            </span>
+            <span className="text-xs text-muted-foreground">{p.driver}</span>
+            <Badge variant={p.provider_record_ref ? 'success' : 'outline'}>
+              {p.provider_record_ref
+                ? t('steps.agent.bound')
+                : t('steps.agent.unbound')}
+            </Badge>
+            {/* `operable` is the engine's own legacy enablement flag, and it is
+                reported as what it is: this node has a registered runner for that
+                driver. It is not a launch guarantee, and the step does not present
+                it as one. */}
+            <Badge variant={p.operable ? 'neutral' : 'outline'}>
+              {p.operable
+                ? t('steps.agent.runnerRegistered')
+                : t('steps.agent.runnerMissing')}
+            </Badge>
+          </li>
+        ))}
+      </ul>
+      {unbound > 0 && (
+        <p className="text-xs text-muted-foreground">
+          {t('steps.agent.unboundHint', { n: unbound })}
+        </p>
+      )}
+      <div className="flex flex-wrap gap-2">
+        <Button asChild variant="primary" size="sm">
+          <Link to={'/agentops' as never}>{t('steps.agent.launchCta')}</Link>
+        </Button>
+        <Button asChild variant="ghost" size="sm">
+          <Link to={'/provider-profiles' as never}>
+            {t('steps.agent.manageCta')}
+          </Link>
+        </Button>
+      </div>
+    </div>
+  )
+}

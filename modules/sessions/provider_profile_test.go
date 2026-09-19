@@ -172,7 +172,7 @@ func TestProviderProfile_LifecycleSurvivesRestart(t *testing.T) {
 			if _, err := m.PatchProfile(ctx, tenant, a.Ref, ProfilePatch{State: &disabled}); err != nil {
 				t.Fatalf("disable: %v", err)
 			}
-			if _, err := m.resolveLaunchProfile(ctx, tenant, a.Ref); !errors.Is(err, ErrProfileDisabled) {
+			if _, _, err := m.resolveLaunchProfile(ctx, tenant, a.Ref); !errors.Is(err, ErrProfileDisabled) {
 				t.Fatalf("disabled profile resolved for launch: %v", err)
 			}
 			active := ProfileActive
@@ -198,7 +198,7 @@ func TestProviderProfile_LifecycleSurvivesRestart(t *testing.T) {
 			if _, err := m.PatchProfile(ctx, tenant, a.Ref, ProfilePatch{State: &active}); !errors.Is(err, ErrProfileRetired) {
 				t.Fatalf("re-activating a retired profile = %v, want ErrProfileRetired", err)
 			}
-			if _, err := m.resolveLaunchProfile(ctx, tenant, a.Ref); !errors.Is(err, ErrProfileRetired) {
+			if _, _, err := m.resolveLaunchProfile(ctx, tenant, a.Ref); !errors.Is(err, ErrProfileRetired) {
 				t.Fatalf("retired profile resolved for launch: %v", err)
 			}
 			a2 := mustCreateProfile(t, m, tenant, CreateProfileInput{Driver: "claude", ConfigHome: configA, UserHome: userA, DisplayName: "home A (renamed)"})
@@ -327,18 +327,18 @@ func TestProviderProfile_HomeValidation(t *testing.T) {
 	if _, err := m.CreateProfile(ctx, tenant, CreateProfileInput{Driver: "claude", ConfigHome: configA, UserHome: userA}); !errors.Is(err, ErrEnvironmentUnavailable) {
 		t.Fatalf("create without environment = %v, want ErrEnvironmentUnavailable", err)
 	}
-	if _, err := m.resolveLaunchProfile(ctx, tenant, p.Ref); !errors.Is(err, ErrEnvironmentUnavailable) {
+	if _, _, err := m.resolveLaunchProfile(ctx, tenant, p.Ref); !errors.Is(err, ErrEnvironmentUnavailable) {
 		t.Fatalf("resolve without environment = %v, want ErrEnvironmentUnavailable", err)
 	}
 	// A profile of another environment is shown but never launched here.
 	m.rt.environmentRef = "env-elsewhere"
-	if _, err := m.resolveLaunchProfile(ctx, tenant, p.Ref); !errors.Is(err, ErrProfileForeignEnvironment) {
+	if _, _, err := m.resolveLaunchProfile(ctx, tenant, p.Ref); !errors.Is(err, ErrProfileForeignEnvironment) {
 		t.Fatalf("foreign resolve = %v, want ErrProfileForeignEnvironment", err)
 	}
 	// A driver without an operated runner is observable, not launchable.
 	m.rt.environmentRef = testEnvRef
 	codex := mustCreateProfile(t, m, tenant, CreateProfileInput{Driver: "codex", ConfigHome: userA, UserHome: userA})
-	if _, err := m.resolveLaunchProfile(ctx, tenant, codex.Ref); !errors.Is(err, ErrProfileDriverNotOperable) {
+	if _, _, err := m.resolveLaunchProfile(ctx, tenant, codex.Ref); !errors.Is(err, ErrProfileDriverNotOperable) {
 		t.Fatalf("codex resolve = %v, want ErrProfileDriverNotOperable", err)
 	}
 	// A home that disappeared after registration refuses the launch before any
@@ -352,7 +352,7 @@ func TestProviderProfile_HomeValidation(t *testing.T) {
 	if err := os.RemoveAll(movedReal); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := m.resolveLaunchProfile(ctx, tenant, q.Ref); statusOf(err) != http.StatusUnprocessableEntity {
+	if _, _, err := m.resolveLaunchProfile(ctx, tenant, q.Ref); statusOf(err) != http.StatusUnprocessableEntity {
 		t.Fatalf("resolve on a vanished home = %v, want 422", err)
 	}
 }

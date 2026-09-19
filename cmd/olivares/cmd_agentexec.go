@@ -15,11 +15,11 @@ import (
 	"os"
 	"sort"
 	"strings"
-	"text/tabwriter"
 
 	"github.com/spf13/cobra"
 
 	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
+	"github.com/olivaresai/olivares/cmd/olivares/internal/termrender"
 )
 
 // cmd_agentexec.go is the shared substrate for the EIGHT command trees that
@@ -478,47 +478,35 @@ func renderAgentExecList(cmd *cobra.Command, client *authClientFlags, res agentE
 //
 // render-exempt: text leg of renderOut; every call site witnessed by a test.
 func writeAgentExecTable(out io.Writer, client *authClientFlags, items []json.RawMessage, cols []string) error {
-	tw := tabwriter.NewWriter(out, 0, 2, 2, ' ', 0)
-	headers := make([]string, 0, len(cols))
-	for _, c := range cols {
-		headers = append(headers, strings.ToUpper(c))
-	}
-	if _, err := fmt.Fprintln(tw, strings.Join(headers, "\t")); err != nil {
-		return err
-	}
+	tbl := termrender.Table{Header: append(make([]string, 0, len(cols)), cols...)}
 	for _, item := range items {
 		fields := agentExecFields(item)
 		cells := make([]string, 0, len(cols))
 		for _, c := range cols {
 			cells = append(cells, agentExecCell(fields, c, client))
 		}
-		if _, err := fmt.Fprintln(tw, strings.Join(cells, "\t")); err != nil {
-			return err
-		}
+		tbl.Rows = append(tbl.Rows, cells)
 	}
-	return tw.Flush()
+	renderTo(out).Table(tbl)
+	return nil
 }
 
 // renderAgentExecObject renders one object: the named scalar fields as aligned
 // `key: value` lines for -o text, the engine's own bytes for -o json.
 func renderAgentExecObject(cmd *cobra.Command, client *authClientFlags, res agentExecResult, keys []string) error {
 	fields := agentExecFields(res.raw)
-	return renderOut(cmd, func(out io.Writer) error {
-		tw := tabwriter.NewWriter(out, 0, 2, 2, ' ', 0)
-		shown := keys
-		if len(shown) == 0 {
-			shown = agentExecSortedKeys(fields)
+	shown := keys
+	if len(shown) == 0 {
+		shown = agentExecSortedKeys(fields)
+	}
+	block := make([]termrender.Field, 0, len(shown))
+	for _, k := range shown {
+		if _, ok := fields[k]; !ok {
+			continue
 		}
-		for _, k := range shown {
-			if _, ok := fields[k]; !ok {
-				continue
-			}
-			if _, err := fmt.Fprintf(tw, "%s\t%s\n", k, agentExecCell(fields, k, client)); err != nil {
-				return err
-			}
-		}
-		return tw.Flush()
-	}, json.RawMessage(res.raw))
+		block = append(block, termrender.Field{Key: k, Value: agentExecCell(fields, k, client)})
+	}
+	return renderFieldsOut(cmd, block, json.RawMessage(res.raw))
 }
 
 // renderAgentExecDeleted renders a successful delete. The engine answers 204 with

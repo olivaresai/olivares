@@ -119,7 +119,7 @@ trap cleanup EXIT HUP INT TERM
 # Declaring the number closes it: a run that measures less than this battery claims to measure
 # is a FAILED run, whatever its individual cases said. Raise it deliberately when you add a
 # case — a diff that changes this line is exactly the review signal you want.
-EXPECTED_CASES=149
+EXPECTED_CASES=157
 
 pass=0
 fail=0
@@ -618,6 +618,55 @@ check "the wrapper says why it refused" "diagnostic present" $?
 env -u OLIVARES_TEST_POSTGRES_DSN -u OLIVARES_TEST_POSTGRES_ADMIN_DSN -u OLIVARES_TEST_POSTGRES_SUPERUSER_DSN OLIVARES_PG_LOCAL_DEFAULTS=1 OLIVARES_PG_PROBE=false bash "$WRAP" true >/dev/null 2>"$WORK/wrapwarn.err"
 grep -q "PARTIAL" "$WORK/wrapwarn.err"
 check "the PARTIAL warning survives stdout capture" "reaches stderr" $?
+
+# --- with-pg-env.sh: the MEMORY CEILING of a test binary without the detector -------------
+# The wrapper derives a GOMEMLIMIT for `go test` runs that carry no -race, because the root
+# package's binary grows to 8693 MiB and never returns it (measured 2026-09-19) and does not
+# fit beside its neighbours on a 16 GiB runner. Four properties, and none of them is
+# observable on a machine that happens to have the cgroup and the memory the branch reads:
+# the derivation, the floor, the two regimes it must NOT touch, and the silence when the
+# figures cannot be read. The wrapper's only seam for this is the two file paths.
+WPE_ENV=(env -u OLIVARES_TEST_POSTGRES_DSN -u OLIVARES_TEST_POSTGRES_ADMIN_DSN
+	-u OLIVARES_TEST_POSTGRES_SUPERUSER_DSN -u GOMEMLIMIT
+	OLIVARES_PG_LOCAL_DEFAULTS=1 OLIVARES_PG_PROBE=true)
+# 16 GiB, the hosted runner's own size, so the expected answer is the one that ships.
+printf '17179869184\n' >"$WORK/memmax-16g"
+printf 'MemTotal:       16777216 kB\nMemFree:          100 kB\n' >"$WORK/meminfo-16g"
+# 8 GiB: a quarter is 2 GiB, UNDER the floor, so the floor is what must answer.
+printf '8589934592\n' >"$WORK/memmax-8g"
+# A cgroup with no ceiling and a /proc that carries no MemTotal: nothing to derive from.
+printf 'max\n' >"$WORK/memmax-none"
+printf 'SwapTotal:       0 kB\n' >"$WORK/meminfo-blind"
+
+wpe_limit() { # echo the GOMEMLIMIT the wrapper handed the child, or `unset`
+	"${WPE_ENV[@]}" "$@" bash "$WRAP" sh -c 'echo "${GOMEMLIMIT:-unset}"' test 2>/dev/null
+}
+
+[ "$(wpe_limit OLIVARES_WPE_CGROUP_MAX="$WORK/memmax-16g")" = 4294967296 ]
+check "go test without -race gets a quarter of the cgroup ceiling" "4 GiB on a 16 GiB machine" $?
+
+"${WPE_ENV[@]}" OLIVARES_WPE_CGROUP_MAX="$WORK/memmax-16g" bash "$WRAP" true test >/dev/null 2>"$WORK/wpe-say.err"
+grep -q "GOMEMLIMIT=4294967296" "$WORK/wpe-say.err"
+check "and it ANNOUNCES the ceiling it applied, on stderr" "an override that keeps quiet is one nobody notices" $?
+
+[ "$(wpe_limit OLIVARES_WPE_CGROUP_MAX="$WORK/memmax-none" OLIVARES_WPE_MEMINFO="$WORK/meminfo-16g")" = 4294967296 ]
+check "a cgroup with NO ceiling falls back to MemTotal" "same 4 GiB, read from /proc" $?
+
+[ "$(wpe_limit OLIVARES_WPE_CGROUP_MAX="$WORK/memmax-8g")" = 2684354560 ]
+check "a small machine never goes under the 2.5 GiB floor" "the floor is above compile's measured 2282 MiB" $?
+
+[ "$("${WPE_ENV[@]}" OLIVARES_WPE_CGROUP_MAX="$WORK/memmax-16g" bash "$WRAP" sh -c 'echo "${GOMEMLIMIT:-unset}"' test -race 2>/dev/null)" = unset ]
+check "a -race run is left ALONE" "its shadow memory is legitimate" $?
+
+[ "$("${WPE_ENV[@]}" GOMEMLIMIT=123456789 OLIVARES_WPE_CGROUP_MAX="$WORK/memmax-16g" bash "$WRAP" sh -c 'echo "${GOMEMLIMIT:-unset}"' test 2>/dev/null)" = 123456789 ]
+check "an explicit GOMEMLIMIT is never overwritten" "the caller knows its box better" $?
+
+"${WPE_ENV[@]}" OLIVARES_WPE_CGROUP_MAX="$WORK/memmax-none" OLIVARES_WPE_MEMINFO="$WORK/meminfo-blind" \
+	bash "$WRAP" sh -c 'echo "${GOMEMLIMIT:-unset}"' test >"$WORK/wpe-blind.out" 2>"$WORK/wpe-blind.err"
+grep -qx unset "$WORK/wpe-blind.out"
+check "figures it cannot read leave the ceiling UNSET" "no guess from an unreadable machine" $?
+! grep -q "GOMEMLIMIT" "$WORK/wpe-blind.err"
+check "and it says nothing at all in that case" "silence, not a line about a ceiling it did not set" $?
 
 # --- EVERY MODULE TREE THAT TOUCHES POSTGRES IS RACED *ON* POSTGRES ----------------------
 # THE INVERSION, AND WHY THE TRIPWIRE WAS NOT DELETED (2026-08-01).

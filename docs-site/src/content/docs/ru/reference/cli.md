@@ -157,7 +157,7 @@ diff. Это источник истины для отрендеренного [
 
 ## Complete command reference
 
-This section is generated from the command tree of the community (AGPL) build of the `olivares` binary at this commit. It covers 820 command nodes — the root command and 819 subcommands, of which 180 are groups that carry subcommands and 9 are hidden diagnostics — together with the 2730 flags they declare. It is regenerated from the binary rather than kept by hand, so a command or flag added without a documentation change fails the push gate.
+This section is generated from the command tree of the community (AGPL) build of the `olivares` binary at this commit. It covers 837 command nodes — the root command and 836 subcommands, of which 183 are groups that carry subcommands and 9 are hidden diagnostics — together with the 2884 flags they declare. It is regenerated from the binary rather than kept by hand, so a command or flag added without a documentation change fails the push gate.
 
 Nothing here is a stability promise: see [Stability](#stability) below for what may still change.
 
@@ -189,7 +189,7 @@ Command groups declare further flags that their own subcommands inherit. A flag 
 
 ### Command index
 
-All 820 commands, in alphabetical order.
+All 837 commands, in alphabetical order.
 
 | Command | Summary |
 |---|---|
@@ -211,7 +211,14 @@ All 820 commands, in alphabetical order.
 | [`olivares adoption teams`](#command-olivares-adoption-teams) | Break adoption down by team |
 | [`olivares adoption trend`](#command-olivares-adoption-trend) | Show a per-day series for ONE lens |
 | [`olivares agent`](#command-olivares-agent) | Operate governed provider sessions (launch, attach, interrupt, stop, resume, clean up) |
+| [`olivares agent deploy`](#command-olivares-agent-deploy) | Find an official CLI on this host and register the profile a session launches under |
 | [`olivares agent managed-settings`](#command-olivares-agent-managed-settings) | Render the Claude Code managed-settings.json that governs operated sessions (PEP hook) |
+| [`olivares agent profile`](#command-olivares-agent-profile) | Register and inspect provider profiles (which home an official CLI runs under) |
+| [`olivares agent profile create`](#command-olivares-agent-profile-create) | Register a provider profile for homes that already exist on this node |
+| [`olivares agent profile get`](#command-olivares-agent-profile-get) | Show one provider profile |
+| [`olivares agent profile ls`](#command-olivares-agent-profile-ls) | List the provider profiles this tenant has registered |
+| [`olivares agent profile rm`](#command-olivares-agent-profile-rm) | Retire a provider profile for good |
+| [`olivares agent profile update`](#command-olivares-agent-profile-update) | Change a profile's label, state, authorization or session policy |
 | [`olivares agent session`](#command-olivares-agent-session) | Manage the lifecycle of governed provider sessions |
 | [`olivares agent session attach`](#command-olivares-agent-session-attach) | Stream a live session's I/O (server-sent events) to stdout |
 | [`olivares agent session cleanup`](#command-olivares-agent-session-cleanup) | Release a stopped session (mark cleaned) |
@@ -816,8 +823,18 @@ All 820 commands, in alphabetical order.
 | [`olivares orchestration workflows runs ls`](#command-olivares-orchestration-workflows-runs-ls) | List one workflow's runs, newest first |
 | [`olivares orchestration workflows set-steps`](#command-olivares-orchestration-workflows-set-steps) | Replace a workflow's whole step graph (PUT — one unit, one hash) |
 | [`olivares orchestration workflows update`](#command-olivares-orchestration-workflows-update) | Partially update a workflow's metadata — only the flags you type are sent |
+| [`olivares policy`](#command-olivares-policy) | Reconstruct historical policy decisions from the evidence ledger |
+| [`olivares policy replay`](#command-olivares-policy-replay) | Replay a past authorization from the ledger, never from the live policy |
 | [`olivares posture`](#command-olivares-posture) | Export the tenant's governance posture as one document |
 | [`olivares posture export`](#command-olivares-posture-export) | Export inventory, drift and findings as one posture document |
+| [`olivares provider`](#command-olivares-provider) | Register, test and withdraw the provider credentials sessions launch with |
+| [`olivares provider add`](#command-olivares-provider-add) | Register a provider credential with the control plane |
+| [`olivares provider bind`](#command-olivares-provider-bind) | Make a provider profile launch with this credential |
+| [`olivares provider get`](#command-olivares-provider-get) | Show one registered provider |
+| [`olivares provider ls`](#command-olivares-provider-ls) | List the registered provider credentials |
+| [`olivares provider rm`](#command-olivares-provider-rm) | Withdraw a provider credential for good |
+| [`olivares provider rotate`](#command-olivares-provider-rotate) | Replace a provider's credential in place |
+| [`olivares provider test`](#command-olivares-provider-test) | Ask the provider which models it serves, with the registered credential — exit 7 when the provider REFUSES it, 8 when the endpoint is unreachable |
 | [`olivares quickstart`](#command-olivares-quickstart) | Start Olivares AI for the first time — secure by default, one command to the console |
 | [`olivares quickstart governed-rag`](#command-olivares-quickstart-governed-rag) | Prepare live governed data for Claude Code (S3/Drive -&gt; semantic KB -&gt; MCP retrieval) |
 | [`olivares readyz`](#command-olivares-readyz) | Probe this host's local engine readiness without curl |
@@ -1274,6 +1291,31 @@ olivares agent
 
 Declares no flags of its own; it takes those of [`olivares`](#command-olivares) and the root command.
 
+#### Command: olivares agent deploy
+
+Find an official CLI on this host and register the profile a session launches under
+
+```
+olivares agent deploy <claude|codex|grok|opencode>
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--ca-cert` | `string` | — | PEM CA bundle used to verify the control plane (default: the active client context) |
+| `--config-home` | `string` | — | the CLI's configuration home (default: this driver's own under $HOME) |
+| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed dev planes only) |
+| `--install` | `bool` | `false` | install the official CLI from its signed release when none is found |
+| `--name` | `string` | — | label for the profile (default: the driver's name) |
+| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--provider` | `string` | — | registered provider to bind; without it the host's own credential variables decide |
+| `--root` | `string` | — | absolute directory that owns installed tools (default &lt;data-dir&gt;/tools, with data-dir from $OLIVARES_DATA_DIR or the installation default) |
+| `--server` | `string` | — | control-plane base URL (default $OLIVARES_SERVER_URL or the active client context) |
+| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | request timeout |
+| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--user-home` | `string` | — | the child's user home (default: $HOME) |
+| `--yes` | `bool` | `false` | with --install, approve the installation plan without a second prompt |
+
 #### Command: olivares agent managed-settings
 
 Render the Claude Code managed-settings.json that governs operated sessions (PEP hook)
@@ -1292,6 +1334,132 @@ olivares agent managed-settings
 | `--pep-command` | `string` | `olivares claude-hook` | the managed PreToolUse PEP-client command (deny-closed: required unless --no-hook) |
 | `--redact` | `bool` | `true` | also install the paired PostToolUse output-redaction hook |
 | `--timeout` | `int` | `5` | PEP hook timeout in seconds (a hung control plane must fail fast, deny-closed) |
+
+#### Command: olivares agent profile
+
+Register and inspect provider profiles (which home an official CLI runs under)
+
+```
+olivares agent profile
+```
+
+Declares no flags of its own; it takes those of [`olivares agent`](#command-olivares-agent) and the root command.
+
+#### Command: olivares agent profile create
+
+Register a provider profile for homes that already exist on this node
+
+```
+olivares agent profile create
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--auth-source` | `string` | — | provider_account_home (the login saved in the homes) or managed_injection (a credential the engine supplies) |
+| `--ca-cert` | `string` | — | PEM CA bundle used to verify the control plane (default: the active client context) |
+| `--config-home` | `string` | — | **required**. absolute path of the CLI's configuration home on the control-plane host |
+| `--driver` | `string` | — | **required**. official CLI this profile launches: claude, codex, grok or opencode |
+| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed dev planes only) |
+| `--json` | `bool` | `false` | deprecated alias for -o json |
+| `--name` | `string` | — | your own label for this profile |
+| `--permission-mode` | `string` | — | permission mode those sessions run under: default \| acceptEdits \| plan \| auto \| dontAsk \| bypassPermissions |
+| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--provider` | `string` | — | registered provider reference to bind in the same call (needs --auth-source managed_injection) |
+| `--server` | `string` | — | control-plane base URL (default $OLIVARES_SERVER_URL or the active client context) |
+| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | request timeout |
+| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--tools` | `stringSlice` | `[]` | the built-in tools sessions under this profile may use (repeatable or comma-separated; --tools "" declares NONE). Undeclared is deny-closed: the child launches with no built-in tools |
+| `--user-home` | `string` | — | **required**. absolute path of the child's user home on the control-plane host |
+
+#### Command: olivares agent profile get
+
+Show one provider profile
+
+```
+olivares agent profile get <profile-ref>
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--ca-cert` | `string` | — | PEM CA bundle used to verify the control plane (default: the active client context) |
+| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed dev planes only) |
+| `--json` | `bool` | `false` | deprecated alias for -o json |
+| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | control-plane base URL (default $OLIVARES_SERVER_URL or the active client context) |
+| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | request timeout |
+| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
+
+#### Command: olivares agent profile ls
+
+List the provider profiles this tenant has registered
+
+```
+olivares agent profile ls
+```
+
+Aliases: `list`
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--ca-cert` | `string` | — | PEM CA bundle used to verify the control plane (default: the active client context) |
+| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed dev planes only) |
+| `--json` | `bool` | `false` | deprecated alias for -o json |
+| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | control-plane base URL (default $OLIVARES_SERVER_URL or the active client context) |
+| `--state` | `string` | — | only profiles in this state (active, disabled or retired) |
+| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | request timeout |
+| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
+
+#### Command: olivares agent profile rm
+
+Retire a provider profile for good
+
+```
+olivares agent profile rm <profile-ref>
+```
+
+Aliases: `retire`
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--ca-cert` | `string` | — | PEM CA bundle used to verify the control plane (default: the active client context) |
+| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed dev planes only) |
+| `--json` | `bool` | `false` | deprecated alias for -o json |
+| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | control-plane base URL (default $OLIVARES_SERVER_URL or the active client context) |
+| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | request timeout |
+| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--yes` | `bool` | `false` | confirm the irreversible retirement |
+
+#### Command: olivares agent profile update
+
+Change a profile's label, state, authorization or session policy
+
+```
+olivares agent profile update <profile-ref>
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--auth-source` | `string` | — | provider_account_home, managed_injection, or "" to withdraw the authorization |
+| `--ca-cert` | `string` | — | PEM CA bundle used to verify the control plane (default: the active client context) |
+| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed dev planes only) |
+| `--json` | `bool` | `false` | deprecated alias for -o json |
+| `--name` | `string` | — | your own label for this profile |
+| `--permission-mode` | `string` | — | permission mode those sessions run under, or "" to withdraw the declaration |
+| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--provider` | `string` | — | registered provider reference this profile's managed launches use |
+| `--server` | `string` | — | control-plane base URL (default $OLIVARES_SERVER_URL or the active client context) |
+| `--state` | `string` | — | active or disabled (a disabled profile refuses new launches; running children keep theirs) |
+| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | request timeout |
+| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--tools` | `stringSlice` | `[]` | the built-in tools sessions under this profile may use (repeatable or comma-separated; --tools "" declares NONE) |
+| `--unbind-provider` | `bool` | `false` | clear the bound provider and return to the host-wide credential |
 
 #### Command: olivares agent session
 
@@ -1545,8 +1713,8 @@ olivares agent tool detect
 | `--driver` | `string` | `claude` | provider tool to look for |
 | `--manifest` | `string` | — | a vendor release manifest to corroborate candidates against (verified with --manifest-sig under the pinned key) |
 | `--manifest-sig` | `string` | — | the detached OpenPGP signature of --manifest |
-| `--probe` | `bool` | `false` | run `--version` for registered and manifest-corroborated candidates only, from an empty temporary home (an observed path is not permission to run it) |
-| `--probe-path` | `stringArray` | `[]` | exact absolute path of one candidate to run `--version` on (repeatable); required for unregistered-observed paths; damaged releases are never run |
+| `--probe` | `bool` | `false` | run '--version' for registered and manifest-corroborated candidates only, from an empty temporary home (an observed path is not permission to run it) |
+| `--probe-path` | `stringArray` | `[]` | exact absolute path of one candidate to run '--version' on (repeatable); required for unregistered-observed paths; damaged releases are never run |
 | `--root` | `string` | — | absolute directory that owns installed tools (default &lt;data-dir&gt;/tools, with data-dir from $OLIVARES_DATA_DIR or the installation default) |
 
 #### Command: olivares agent tool install
@@ -1560,7 +1728,7 @@ olivares agent tool install
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--driver` | `string` | `claude` | provider tool to install: claude, codex or grok |
-| `--plan` | `string` | — | execute this plan file written by `plan --out`; it is the approval, so no prompt is shown |
+| `--plan` | `string` | — | execute this plan file written by 'plan --out'; it is the approval, so no prompt is shown |
 | `--platform` | `string` | — | target platform key: linux-x64, linux-arm64, linux-x64-musl, linux-arm64-musl (default: this host) |
 | `--root` | `string` | — | absolute directory that owns installed tools (default &lt;data-dir&gt;/tools, with data-dir from $OLIVARES_DATA_DIR or the installation default) |
 | `--source` | `string` | — | http(s) base URL of a mirror carrying the vendor's release layout (default: the official origin); the pinned signing key is required either way |
@@ -1592,7 +1760,7 @@ olivares agent tool plan
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--driver` | `string` | `claude` | provider tool to install: claude, codex or grok |
-| `--out` | `string` | — | write the plan JSON (with its digest) to this new file for a later `install --plan` |
+| `--out` | `string` | — | write the plan JSON (with its digest) to this new file for a later 'install --plan' |
 | `--platform` | `string` | — | target platform key: linux-x64, linux-arm64, linux-x64-musl, linux-arm64-musl (default: this host) |
 | `--root` | `string` | — | absolute directory that owns installed tools (default &lt;data-dir&gt;/tools, with data-dir from $OLIVARES_DATA_DIR or the installation default) |
 | `--source` | `string` | — | http(s) base URL of a mirror carrying the vendor's release layout (default: the official origin); the pinned signing key is required either way |
@@ -1854,7 +2022,7 @@ olivares audit archive verify
 | `--dir` | `string` | — | **required**. archive directory to verify (the export's --out) |
 | `--event-pubkey` | `stringArray` | `[]` | per-event Ed25519 public key pin, repeatable (raw base64), optionally epoch-FENCED as "&lt;base64&gt;@&lt;last_seq&gt;" (retired generation, valid only up to that sequence) or "&lt;base64&gt;@&lt;lo&gt;:&lt;hi&gt;" (explicit window); a bare key is the current generation. Pins REPLACE the archive's advisory keys.json — pin EVERY generation with its boundary (the audit.key.rotation marker's prior_last_seq) for the attacker-resistant fenced check; without a boundary a retired key is trusted for every sequence |
 | `--pubkey` | `stringArray` | `[]` | checkpoint public key pin, repeatable: raw base64 Ed25519, or "&lt;alg&gt;:&lt;base64 DER SPKI&gt;" for an off-box key. Pins REPLACE the archive's advisory keys.json (docs/SECURITY-HARDENING.md §5) |
-| `--pubkey-alg` | `string` | — | algorithm of a SINGLE bare --pubkey (compat form, as in `audit verify`) |
+| `--pubkey-alg` | `string` | — | algorithm of a SINGLE bare --pubkey (compat form, as in 'audit verify') |
 | `--strict` | `bool` | `false` | exit non-zero if the archive fails to verify; for on-call cron/CI. The default exits 0 and reports status only in the JSON |
 
 #### Command: olivares audit checkpoint
@@ -1940,7 +2108,7 @@ olivares audit recover
 | `--dsn` | `string` | — | store DSN (default a SQLite file in the data dir) |
 | `--engine` | `string` | `sqlite` | store engine: sqlite or postgres |
 | `--pubkey` | `stringArray` | `[]` | **required**. required pinned off-box checkpoint public key, repeatable: raw base64 Ed25519 or "&lt;alg&gt;:&lt;base64 DER SPKI&gt;" |
-| `--pubkey-alg` | `string` | — | algorithm of a SINGLE bare --pubkey (compat form, as in `audit verify`) |
+| `--pubkey-alg` | `string` | — | algorithm of a SINGLE bare --pubkey (compat form, as in 'audit verify') |
 | `--reason` | `string` | — | operator reason recorded in the signed recovery evidence |
 | `--requested-by` | `string` | — | non-secret requester identity recorded in the signed recovery evidence |
 | `--tenant` | `string` | — | tenant id whose corrupt audit tail will be sealed (default $OLIVARES_TENANT) |
@@ -1958,7 +2126,7 @@ olivares audit verify
 | `--data-dir` | `string` | — | data directory (default $OLIVARES_DATA_DIR, an existing ./olivares-data, else $XDG_DATA_HOME/olivares or ~/.local/share/olivares) |
 | `--dsn` | `string` | — | store DSN (default a SQLite file in the data dir) |
 | `--engine` | `string` | `sqlite` | store engine: sqlite or postgres |
-| `--event-pubkey` | `stringArray` | `[]` | per-event Ed25519 public key pin, repeatable (raw base64), optionally epoch-FENCED as "&lt;base64&gt;@&lt;last_seq&gt;" (retired generation, valid only up to that sequence) or "&lt;base64&gt;@&lt;lo&gt;:&lt;hi&gt;" (explicit window); a bare key is the current key. Pins REPLACE the advisory defaults — pin EVERY generation with its boundary (`keys status` lists prior_public_keys; the boundary is the audit.key.rotation marker's prior_last_seq). Without a boundary a retired key is trusted for every sequence |
+| `--event-pubkey` | `stringArray` | `[]` | per-event Ed25519 public key pin, repeatable (raw base64), optionally epoch-FENCED as "&lt;base64&gt;@&lt;last_seq&gt;" (retired generation, valid only up to that sequence) or "&lt;base64&gt;@&lt;lo&gt;:&lt;hi&gt;" (explicit window); a bare key is the current key. Pins REPLACE the advisory defaults — pin EVERY generation with its boundary ('keys status' lists prior_public_keys; the boundary is the audit.key.rotation marker's prior_last_seq). Without a boundary a retired key is trusted for every sequence |
 | `--from` | `int64` | `1` | first sequence of the structural walk (a recovered epoch begins at its recover_seq; genesis remains the default) |
 | `--pubkey` | `stringArray` | `[]` | checkpoint public key pin, repeatable (key rotation): raw base64 Ed25519, or "&lt;alg&gt;:&lt;base64 DER SPKI&gt;" for an off-box key (default: the engine's own keys — advisory only; pin OFF-BOX keys for an attacker-resistant check, docs/SECURITY-HARDENING.md §5) |
 | `--pubkey-alg` | `string` | — | algorithm of a SINGLE bare --pubkey (compat form): ed25519 (raw, default) \| ecdsa-p256-sha256 \| ecdsa-p384-sha384 \| rsa-pkcs1-sha256 \| rsa-pss-sha256 (DER SubjectPublicKeyInfo); with multiple --pubkey use the "&lt;alg&gt;:&lt;base64&gt;" form |
@@ -3413,7 +3581,7 @@ olivares consoleviews create
 | `--feature-id` | `string` | — | the console feature this view belongs to (lowercase slug, required) |
 | `--name` | `string` | — | the view's name, unique per feature and owner (required) |
 | `--params` | `string` | — | the view's parameters as a JSON object |
-| `--params-file` | `string` | — | read the parameters JSON from a file; `-` reads stdin |
+| `--params-file` | `string` | — | read the parameters JSON from a file; '-' reads stdin |
 | `--shared` | `bool` | `false` | make the view visible to the whole tenant (only you can still change it) |
 
 #### Command: olivares consoleviews get
@@ -3467,7 +3635,7 @@ olivares consoleviews update <view-id>
 | `--description` | `string` | — | the description; omitting it CLEARS the stored one |
 | `--name` | `string` | — | the view's name (required: this is a replace, not a patch) |
 | `--params` | `string` | — | the view's parameters as a JSON object |
-| `--params-file` | `string` | — | read the parameters JSON from a file; `-` reads stdin |
+| `--params-file` | `string` | — | read the parameters JSON from a file; '-' reads stdin |
 | `--shared` | `bool` | `false` | share with the tenant; omitting it makes the view private again |
 
 #### Command: olivares db
@@ -3840,10 +4008,10 @@ olivares doctor
 | `--ca-cert` | `string` | — | PEM trust anchor (default &lt;data-dir&gt;/tls.crt) |
 | `--check-updates` | `bool` | `false` | also run the signed channel check (network; may record fresh CRL observations) |
 | `--config` | `string` | — | service env file (default follows --mode) |
-| `--data-dir` | `string` | — | service data directory (default follows --mode) |
+| `--data-dir` | `string` | — | service data directory (default $OLIVARES_DATA_DIR, else follows --mode) |
 | `--init` | `string` | `auto` | init adapter: auto \| systemd \| openrc \| launchd |
 | `--mode` | `string` | `auto` | service scope: auto \| user \| system |
-| `--server` | `string` | `https://127.0.0.1:8443` | local HTTPS engine origin |
+| `--server` | `string` | `https://127.0.0.1:8443` | local engine origin (default: the bind the running engine recorded in &lt;data-dir&gt;/console.json, else https://127.0.0.1:8443). Passing it wins over the recording and must be an https origin |
 | `--timeout` | `duration` | `10s` | deadline for each init/network subprocess |
 | `--unit` | `string` | — | service unit/plist path (default follows --mode and --init) |
 
@@ -7670,7 +7838,7 @@ olivares license verify <license-blob>
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--data-dir` | `string` | — | also trust this data directory's administrative license trust (see `license trust`) |
+| `--data-dir` | `string` | — | also trust this data directory's administrative license trust (see 'license trust') |
 | `--manifest` | `string` | — | OTA channel manifest to read the license CRL from (its signature must verify) |
 | `--manifest-sig` | `string` | — | detached manifest signature (default &lt;manifest&gt;.sig) |
 | `--ota-pubkey` | `string` | — | base64 or @file Ed25519 OTA key for the manifest (default: the key embedded in this build) |
@@ -9074,12 +9242,12 @@ olivares notify routes create
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--dedup-window` | `int64` | `0` | seconds within which an identical signal is suppressed |
-| `--destination` | `string` | — | the provisioned destination to send to (required; see `notify destinations`) |
+| `--destination` | `string` | — | the provisioned destination to send to (required; see 'notify destinations') |
 | `--enabled` | `bool` | `true` | whether the route may fire |
 | `--match-kind` | `stringSlice` | `[]` | finding kind to match, repeatable |
 | `--match-source` | `stringSlice` | `[]` | signal source to match, repeatable |
 | `--match-subject-kind` | `stringSlice` | `[]` | subject kind to match, repeatable |
-| `--match-type` | `stringSlice` | `[]` | event type to match, repeatable (see `notify match-types`) |
+| `--match-type` | `stringSlice` | `[]` | event type to match, repeatable (see 'notify match-types') |
 | `--min-severity` | `string` | — | severity floor: info, low, medium, high or critical (empty = no floor) |
 | `--name` | `string` | — | the route's name (required, unique in the tenant) |
 | `--priority` | `int64` | `0` | ordering among matching routes |
@@ -9174,12 +9342,12 @@ olivares notify routes update <route-id>
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--dedup-window` | `int64` | `0` | seconds within which an identical signal is suppressed |
-| `--destination` | `string` | — | the provisioned destination to send to (required; see `notify destinations`) |
+| `--destination` | `string` | — | the provisioned destination to send to (required; see 'notify destinations') |
 | `--enabled` | `bool` | `true` | whether the route may fire |
 | `--match-kind` | `stringSlice` | `[]` | finding kind to match, repeatable |
 | `--match-source` | `stringSlice` | `[]` | signal source to match, repeatable |
 | `--match-subject-kind` | `stringSlice` | `[]` | subject kind to match, repeatable |
-| `--match-type` | `stringSlice` | `[]` | event type to match, repeatable (see `notify match-types`) |
+| `--match-type` | `stringSlice` | `[]` | event type to match, repeatable (see 'notify match-types') |
 | `--min-severity` | `string` | — | severity floor: info, low, medium, high or critical (empty = no floor) |
 | `--name` | `string` | — | the route's name |
 | `--priority` | `int64` | `0` | ordering among matching routes |
@@ -9655,6 +9823,45 @@ olivares orchestration workflows update <id>
 | `--enabled` | `bool` | `true` | enable or disable the workflow |
 | `--name` | `string` | — | rename the workflow |
 
+#### Command: olivares policy
+
+Reconstruct historical policy decisions from the evidence ledger
+
+```
+olivares policy
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--allow-cleartext` | `bool` | `false` | **inherited**. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
+| `--ca-cert` | `string` | — | **inherited**. PEM file containing an additional trusted root CA (default: current context) |
+| `--insecure` | `bool` | `false` | **inherited**. skip TLS certificate verification (DANGEROUS; development only) |
+| `--pin-sha256` | `stringArray` | `[]` | **inherited**. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
+| `--server` | `string` | — | **inherited**. control-plane base URL (default $OLIVARES_SERVER_URL, then current context) |
+| `--tenant` | `string` | — | **inherited**. tenant id (default $OLIVARES_TENANT, then current context) |
+| `--timeout` | `duration` | `10s` | **inherited**. request timeout |
+| `--token` | `string` | — | **inherited**. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
+| `--token-file` | `string` | — | **inherited**. read the API bearer token from a file, or - for stdin |
+
+#### Command: olivares policy replay
+
+Replay a past authorization from the ledger, never from the live policy
+
+```
+olivares policy replay
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--action` | `string` | — | exact action / permission recorded on the question |
+| `--action-vocabulary` | `string` | — | vocabulary of --action (required to match a stored question that named one) |
+| `--at` | `string` | — | instant to reconstruct (RFC3339); required unless --decision-id is set |
+| `--decision-id` | `string` | — | reconstruct this stored decision row |
+| `--principal` | `string` | — | principal / actor reference recorded on the question |
+| `--resource` | `string` | — | resource reference recorded on the question |
+| `--resource-kind` | `string` | — | resource kind recorded on the question |
+| `--source-instance` | `string` | — | origin instance that makes the resource reference canonical |
+
 #### Command: olivares posture
 
 Export the tenant's governance posture as one document
@@ -9687,9 +9894,166 @@ olivares posture export
 |---|---|---|---|
 | `--category` | `string` | — | match a finding kind or subject kind |
 | `--kind` | `string` | — | narrow the inventory half to one entity kind |
-| `--out` | `string` | — | write the document verbatim here; `-` means stdout (default: render a summary) |
+| `--out` | `string` | — | write the document verbatim here; '-' means stdout (default: render a summary) |
 | `--severity` | `string` | — | minimum finding severity: low, medium, high or critical |
 | `--strict` | `bool` | `true` | exit 7 (degraded) when the engine truncated any half of the export; --strict=false exits 0 instead |
+
+#### Command: olivares provider
+
+Register, test and withdraw the provider credentials sessions launch with
+
+```
+olivares provider
+```
+
+Declares no flags of its own; it takes those of [`olivares`](#command-olivares) and the root command.
+
+#### Command: olivares provider add
+
+Register a provider credential with the control plane
+
+```
+olivares provider add
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--base-url` | `string` | — | https endpoint override (required for openai_compatible) |
+| `--ca-cert` | `string` | — | PEM CA bundle used to verify the control plane (default: the active client context) |
+| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed dev planes only) |
+| `--key-env` | `string` | — | read the credential from this environment variable instead of stdin (never pass the key as a flag value) |
+| `--kind` | `string` | — | **required**. anthropic \| openai \| xai \| openai_compatible |
+| `--name` | `string` | — | **required**. your own name for this credential; it is what a picker shows |
+| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--profile` | `string` | — | provider profile reference to bind this credential to in the same run |
+| `--server` | `string` | — | control-plane base URL (default $OLIVARES_SERVER_URL or the active client context) |
+| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | request timeout |
+| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
+
+#### Command: olivares provider bind
+
+Make a provider profile launch with this credential
+
+```
+olivares provider bind <provider-ref>
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--ca-cert` | `string` | — | PEM CA bundle used to verify the control plane (default: the active client context) |
+| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed dev planes only) |
+| `--json` | `bool` | `false` | deprecated alias for -o json |
+| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--profile` | `string` | — | **required**. provider profile reference |
+| `--server` | `string` | — | control-plane base URL (default $OLIVARES_SERVER_URL or the active client context) |
+| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | request timeout |
+| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--unbind` | `bool` | `false` | clear the profile's binding instead of setting one |
+
+#### Command: olivares provider get
+
+Show one registered provider
+
+```
+olivares provider get <provider-ref>
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--ca-cert` | `string` | — | PEM CA bundle used to verify the control plane (default: the active client context) |
+| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed dev planes only) |
+| `--json` | `bool` | `false` | deprecated alias for -o json |
+| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | control-plane base URL (default $OLIVARES_SERVER_URL or the active client context) |
+| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | request timeout |
+| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
+
+#### Command: olivares provider ls
+
+List the registered provider credentials
+
+```
+olivares provider ls
+```
+
+Aliases: `list`
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--ca-cert` | `string` | — | PEM CA bundle used to verify the control plane (default: the active client context) |
+| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed dev planes only) |
+| `--json` | `bool` | `false` | deprecated alias for -o json |
+| `--kind` | `string` | — | only providers of this kind |
+| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | control-plane base URL (default $OLIVARES_SERVER_URL or the active client context) |
+| `--state` | `string` | — | only providers in this state (active or revoked) |
+| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | request timeout |
+| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
+
+#### Command: olivares provider rm
+
+Withdraw a provider credential for good
+
+```
+olivares provider rm <provider-ref>
+```
+
+Aliases: `revoke`
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--ca-cert` | `string` | — | PEM CA bundle used to verify the control plane (default: the active client context) |
+| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed dev planes only) |
+| `--json` | `bool` | `false` | deprecated alias for -o json |
+| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | control-plane base URL (default $OLIVARES_SERVER_URL or the active client context) |
+| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | request timeout |
+| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--yes` | `bool` | `false` | confirm the irreversible withdrawal |
+
+#### Command: olivares provider rotate
+
+Replace a provider's credential in place
+
+```
+olivares provider rotate <provider-ref>
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--ca-cert` | `string` | — | PEM CA bundle used to verify the control plane (default: the active client context) |
+| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed dev planes only) |
+| `--json` | `bool` | `false` | deprecated alias for -o json |
+| `--key-env` | `string` | — | read the credential from this environment variable instead of stdin (never pass the key as a flag value) |
+| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | control-plane base URL (default $OLIVARES_SERVER_URL or the active client context) |
+| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | request timeout |
+| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
+
+#### Command: olivares provider test
+
+Ask the provider which models it serves, with the registered credential — exit 7 when the provider REFUSES it, 8 when the endpoint is unreachable
+
+```
+olivares provider test <provider-ref>
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--ca-cert` | `string` | — | PEM CA bundle used to verify the control plane (default: the active client context) |
+| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed dev planes only) |
+| `--json` | `bool` | `false` | deprecated alias for -o json |
+| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | control-plane base URL (default $OLIVARES_SERVER_URL or the active client context) |
+| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | request timeout |
+| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
 
 #### Command: olivares quickstart
 
@@ -9705,7 +10069,7 @@ olivares quickstart
 | `--grpc-listen` | `string` | `:8444` | gRPC listen address. The default :8444 is EVERY interface, like --listen; bind 127.0.0.1:8444 to restrict it |
 | `--listen` | `string` | `:8443` | HTTP (REST + web console) listen address. The default :8443 is EVERY interface (0.0.0.0 and, where the kernel has IPv6, ::); bind 127.0.0.1:8443 to restrict it to this host |
 | `--public-url` | `string` | — | the address a browser reaches this console at, as scheme://host[:port] (e.g. https://olivares.example.com). It is what the startup panel prints and what the WebAuthn relying party is derived from, and it is independent of --listen: declare it when the engine sits behind a reverse proxy, binds a wildcard, or is reached by a name that is not the bind. Defaults to $OLIVARES_PUBLIC_URL; passing the flag wins over the environment, and passing it EMPTY clears it. Start-time only: a change takes a restart |
-| `--quiet` | `bool` | `false` | print only the guided panel, holding the engine's startup checks back to errors (they are still evaluated, and `olivares status` reports the same posture) |
+| `--quiet` | `bool` | `false` | print only the guided panel, holding the engine's startup checks back to errors (they are still evaluated, and 'olivares status' reports the same posture) |
 
 #### Command: olivares quickstart governed-rag
 
@@ -10356,7 +10720,7 @@ Aliases: `generate`
 | `--framework` | `string` | — | compliance-evidence only: filter by framework |
 | `--from` | `string` | — | window start: RFC3339 or YYYY-MM-DD |
 | `--locale` | `string` | — | i18n locale for the rendered report (default en) |
-| `--out` | `string` | — | write the artifact here; `-` means stdout (required: these routes answer with a rendered document, not JSON) |
+| `--out` | `string` | — | write the artifact here; '-' means stdout (required: these routes answer with a rendered document, not JSON) |
 | `--team` | `string` | — | finops-report only: filter by team |
 | `--to` | `string` | — | window end: RFC3339 or YYYY-MM-DD |
 
@@ -10438,7 +10802,7 @@ olivares reporting schedules run <schedule-id> <run-id>
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--out` | `string` | — | write the artifact here; `-` means stdout (required: these routes answer with a rendered document, not JSON) |
+| `--out` | `string` | — | write the artifact here; '-' means stdout (required: these routes answer with a rendered document, not JSON) |
 
 #### Command: olivares reporting schedules runs
 
@@ -10472,7 +10836,7 @@ olivares reporting templates get <report-type>
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--out` | `string` | — | write the artifact here; `-` means stdout (required: these routes answer with a rendered document, not JSON) |
+| `--out` | `string` | — | write the artifact here; '-' means stdout (required: these routes answer with a rendered document, not JSON) |
 
 #### Command: olivares reporting templates rm
 
@@ -10919,7 +11283,7 @@ olivares serve
 | `--known-regions` | `stringSlice` | `[]` | comma-separated region codes valid across the whole deployment (e.g. eu,us); a tenant pin must be one of these. The home --region is always included. Only meaningful with --region set |
 | `--license` | `string` | — | path to a commercial license file (informational only) |
 | `--listen` | `string` | `:8443` | HTTP (REST + web) listen address. The default :8443 is EVERY interface (0.0.0.0 and, where the kernel has IPv6, ::) — this is a server. Bind 127.0.0.1:8443 to restrict it to this host |
-| `--owner-dsn` | `string` | — | Postgres only: DSN of the owner role that owns the schema and runs DDL/migrations. Set it to a SEPARATE NOSUPERUSER NOBYPASSRLS role to make --dsn a least-privilege non-owner app role with only DML grants (provision both with `olivares db init`). Empty = the --dsn role owns the schema (single-role). Accepts a file:/env: reference like --dsn |
+| `--owner-dsn` | `string` | — | Postgres only: DSN of the owner role that owns the schema and runs DDL/migrations. Set it to a SEPARATE NOSUPERUSER NOBYPASSRLS role to make --dsn a least-privilege non-owner app role with only DML grants (provision both with 'olivares db init'). Empty = the --dsn role owns the schema (single-role). Accepts a file:/env: reference like --dsn |
 | `--public-url` | `string` | — | the address a browser reaches this console at, as scheme://host[:port] (e.g. https://olivares.example.com). It is what the startup panel prints and what the WebAuthn relying party is derived from, and it is independent of --listen: declare it when the engine sits behind a reverse proxy, binds a wildcard, or is reached by a name that is not the bind. Defaults to $OLIVARES_PUBLIC_URL; passing the flag wins over the environment, and passing it EMPTY clears it. Start-time only: a change takes a restart |
 | `--region` | `string` | — | data-residency HOME region of THIS instance (e.g. eu, us). When set, the instance is region-scoped: it serves only tenants pinned to this region and denies cross-region access fail-closed. Empty = single-region mode, no residency enforcement |
 | `--reuse-port` | `bool` | `false` | bind listeners with SO_REUSEPORT so a NEW instance can hold the same ports while this one drains — enables a zero-downtime restart/upgrade handover on a single node (Linux/BSD; docs/UPGRADE-AND-ROLLBACK.md) |
@@ -11611,7 +11975,7 @@ olivares superadmin disable
 | `--dsn` | `string` | — | store DSN (default a SQLite file in the data dir) |
 | `--email` | `string` | — | superadmin email (alternative to --id) |
 | `--engine` | `string` | `sqlite` | store engine: sqlite or postgres |
-| `--id` | `string` | — | superadmin user id (see `superadmin status`) |
+| `--id` | `string` | — | superadmin user id (see 'superadmin status') |
 | `--reason` | `string` | — | REQUIRED: why this privileged operation is being performed (recorded in the audit ledger) |
 
 #### Command: olivares superadmin enable
@@ -11629,7 +11993,7 @@ olivares superadmin enable
 | `--dsn` | `string` | — | store DSN (default a SQLite file in the data dir) |
 | `--email` | `string` | — | superadmin email (alternative to --id) |
 | `--engine` | `string` | `sqlite` | store engine: sqlite or postgres |
-| `--id` | `string` | — | superadmin user id (see `superadmin status`) |
+| `--id` | `string` | — | superadmin user id (see 'superadmin status') |
 | `--reason` | `string` | — | REQUIRED: why this privileged operation is being performed (recorded in the audit ledger) |
 
 #### Command: olivares superadmin status
@@ -11872,7 +12236,7 @@ olivares tokens issue
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--name` | `string` | — | human label for the token (required; shown in `tokens ls`) |
+| `--name` | `string` | — | human label for the token (required; shown in 'tokens ls') |
 | `--role` | `string` | `viewer` | role the bound token carries: viewer, editor, admin or owner |
 | `--superadmin` | `bool` | `false` | mint a CROSS-TENANT superadmin token instead of a tenant-bound one (superadmin callers only) |
 
@@ -11948,7 +12312,7 @@ olivares upgrade
 | `--bundle` | `string` | — | install from a local air-gap bundle directory or .tar.gz (no network at all; installing needs a live installed license, verified offline; --check does not) |
 | `--channel` | `string` | `stable` | release channel: stable \| security (lts is accepted by the validator, but no lts line is published) |
 | `--check` | `bool` | `false` | show the upgrade plan (current -&gt; available, channel, CVEs) without swapping |
-| `--connect` | `bool` | `false` | with --enterprise: refresh this data directory's connected credential and download token by proof of possession (`license connect`) instead of a pasted token; works when the installed credential has expired. It refreshes only when upgrade runs: a timer runs it on --timer-schedule, not at the credential's refresh planning boundary |
+| `--connect` | `bool` | `false` | with --enterprise: refresh this data directory's connected credential and download token by proof of possession ('license connect') instead of a pasted token; works when the installed credential has expired. It refreshes only when upgrade runs: a timer runs it on --timer-schedule, not at the credential's refresh planning boundary |
 | `--current-version` | `string` | — | declare the version installed at --target when it cannot be probed (cross-arch staging, a noexec mount, or a build from source); keeps anti-rollback and min_version armed instead of guessing |
 | `--data-dir` | `string` | — | data directory (license + install-id) (default $OLIVARES_DATA_DIR, an existing ./olivares-data, else $XDG_DATA_HOME/olivares or ~/.local/share/olivares) |
 | `--download-protocol` | `string` | `release-v1` | gated download protocol for --enterprise: release-v1 (default; resolves one consistent {version,set,manifest,signature} tuple) or legacy (the existing per-request /download route, for a custom or older gateway). A 404 from the new route is a compatibility diagnostic, not an automatic downgrade |
@@ -11956,7 +12320,7 @@ olivares upgrade
 | `--enterprise` | `bool` | `false` | upgrade the licensed enterprise edition (gated download; needs a live license) |
 | `--force-rollback` | `bool` | `false` | allow installing an OLDER version than the running one (records an audit entry) |
 | `--if-eligible` | `bool` | `false` | only proceed if this node is in the manifest's staged-rollout cohort (used by the timer) |
-| `--install-timer` | `bool` | `false` | emit an opt-in systemd timer+service that runs `upgrade --if-eligible` in a maintenance window |
+| `--install-timer` | `bool` | `false` | emit an opt-in systemd timer+service that runs 'upgrade --if-eligible' in a maintenance window |
 | `--license` | `string` | — | explicit license file path (enterprise; highest precedence) |
 | `--os` | `string` | `linux` | target OS to download for |
 | `--pubkey` | `string` | — | base64 or @file Ed25519 OTA key to verify against (default: the key embedded in this build) |

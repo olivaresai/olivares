@@ -2,14 +2,19 @@
   "taken_at": "2026-09-19T10:23:07Z",
   "commit": "d6c7b1be29469223fd6625371a49f250168fd3d3",
   "tree_dirty": false,
-  "views": 91,
-  "captures": 182,
+  "views": 92,
+  "captures": 184,
   "unpaired": [],
   "empty_panels": [
     {
       "id": "communications-protocol-bindings",
       "paneles_vacios": 1,
       "texto_main": 404
+    },
+    {
+      "id": "providers",
+      "paneles_vacios": 1,
+      "texto_main": 435
     },
     {
       "id": "provider-bindings",
@@ -2041,6 +2046,36 @@
       "sha256": "7beec002b49546acf843ee669d00fccd8f3fdb8814d664ec7101f3bf142b7d8f"
     },
     {
+      "id": "providers",
+      "theme": "dark",
+      "route": "/providers",
+      "h1": "Providers",
+      "vacios": 1,
+      "filas": 0,
+      "tablas_vacias": 1,
+      "hay_main": true,
+      "texto_main": 435,
+      "claves_crudas": 0,
+      "claves_crudas_vistas": [],
+      "recorte_declarado": null,
+      "sha256": "a2ceb296dc76a776c6f227e22fa25e87f4c265c1d693a2677f7ec50d5e1744b7"
+    },
+    {
+      "id": "providers",
+      "theme": "light",
+      "route": "/providers",
+      "h1": "Providers",
+      "vacios": 1,
+      "filas": 0,
+      "tablas_vacias": 1,
+      "hay_main": true,
+      "texto_main": 435,
+      "claves_crudas": 0,
+      "claves_crudas_vistas": [],
+      "recorte_declarado": null,
+      "sha256": "0d3e68769c768e15f07da202b27d6ad37bc792c18ba501a99f775d348906fc5f"
+    },
+    {
       "id": "rate-limits",
       "theme": "dark",
       "route": "/rate-limits",
@@ -2879,6 +2914,18 @@
       "claves_crudas_vistas": [],
       "recorte_declarado": null,
       "sha256": "6d7180bc96ca436472e8f7a76e9f9e8fa97d1346bc8004e4331511952901a427"
+    }
+  ],
+  "partial_retakes": [
+    {
+      "ids": [
+        "providers"
+      ],
+      "taken_at": "2026-09-19T19:05:00Z",
+      "commit": "5e9aaa1859c1efe466223753b7dfcb3120124b2e",
+      "built_by": "GitHub Actions run 35454852539 attempt 1, artifact 10587857810 (no local build)",
+      "note": "the two providers takes were added to the manifest of the full recapture above; every other take keeps the commit and time of that recapture. `commit` is the checkout the captured binary was built from (the pull request head merged onto main); `pr_head` is the pull request head itself",
+      "pr_head": "7096b9222491266346f8bea7f30bf1ae15f29250"
     }
   ]
 }

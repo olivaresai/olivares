@@ -14,10 +14,10 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"text/tabwriter"
 
 	"github.com/spf13/cobra"
 
+	"github.com/olivaresai/olivares/cmd/olivares/internal/termrender"
 	coreengine "github.com/olivaresai/olivares/core/engine"
 	"github.com/olivaresai/olivares/core/store"
 )
@@ -277,47 +277,97 @@ type migrationStatusItem struct {
 	AppliedAt string `json:"applied_at"`
 }
 
-// printMigrationStatus renders the applied migrations as a table plus an
-// expand/contract/reverted summary, and a rollback caution when any contract
-// migration is present.
-func printMigrationStatus(out io.Writer, recs []store.MigrationRecord) error {
-	if len(recs) == 0 {
-		_, err := fmt.Fprintln(out, "no schema-migration tracking tables found (the engine has not migrated this database yet)")
-		return err
+// migrationPhaseOf and migrationStateOf are the two derived cells, named so the
+// table and the counts read them the same way. An empty phase is "expand": the
+// engine wrote rows before the column existed, and the additive kind is what it
+// wrote.
+func migrationPhaseOf(r store.MigrationRecord) string {
+	if r.Phase == "" {
+		return "expand"
 	}
-	// render-exempt: this IS the text branch. printMigrationStatus is the
-	// textFn renderOut calls; the JSON branch renders the same records.
-	tw := tabwriter.NewWriter(out, 0, 2, 2, ' ', 0)
-	fmt.Fprintln(tw, "TRACKING TABLE\tVERSION\tPHASE\tSTATE\tAPPLIED AT\tNAME")
-	var expand, contract, reverted int
+	return r.Phase
+}
+
+func migrationStateOf(r store.MigrationRecord) string {
+	if r.Reverted {
+		return "reverted"
+	}
+	return "applied"
+}
+
+// migrationStatusTable is the applied migrations as the renderer's Table: one
+// header, one row per record, and the record fallback when the row does not fit
+// the terminal. A contract row is coloured warn, which is the same judgement the
+// caution below the table makes in words.
+func migrationStatusTable(recs []store.MigrationRecord) termrender.Table {
+	rows := make([][]string, 0, len(recs))
+	roles := make([][]termrender.Role, 0, len(recs))
 	for _, r := range recs {
-		phase := r.Phase
-		if phase == "" {
-			phase = "expand"
-		}
-		state := "applied"
-		if r.Reverted {
-			state = "reverted"
-			reverted++
-		}
+		phase := migrationPhaseOf(r)
+		role := termrender.RoleNone
 		if phase == "contract" {
+			role = termrender.RoleWarn
+		}
+		rows = append(rows, []string{
+			r.Table, countCell(r.Version), phase, migrationStateOf(r), orDash(r.AppliedAt), r.Name,
+		})
+		roles = append(roles, []termrender.Role{
+			termrender.RoleNone, termrender.RoleNone, role, termrender.RoleNone,
+			termrender.RoleNone, termrender.RoleNone,
+		})
+	}
+	return termrender.Table{
+		Header: []string{"tracking table", "version", "phase", "state", "applied at", "name"},
+		Rows:   rows,
+		Roles:  roles,
+		Empty:  "no schema-migration tracking tables found (the engine has not migrated this database yet)",
+	}
+}
+
+// migrationStatusCounts is the tally the closing line reports.
+func migrationStatusCounts(recs []store.MigrationRecord) (expand, contract, reverted int) {
+	for _, r := range recs {
+		if migrationPhaseOf(r) == "contract" {
 			contract++
 		} else {
 			expand++
 		}
-		fmt.Fprintf(tw, "%s\t%d\t%s\t%s\t%s\t%s\n", r.Table, r.Version, phase, state, orDash(r.AppliedAt), r.Name)
+		if r.Reverted {
+			reverted++
+		}
 	}
-	if err := tw.Flush(); err != nil {
-		return err
+	return expand, contract, reverted
+}
+
+// drawMigrationStatus writes the applied migrations as a table plus an
+// expand/contract/reverted tally, and a rollback caution when any contract
+// migration is present.
+//
+// THE TALLY IS NOT THE Summary PRIMITIVE, and that is a decision rather than an
+// omission. Summary writes its counts as "N ok, N warn, N fail", and expand and
+// contract are not verdicts: an expand is not "ok" and a contract is not a
+// warning about the migration, it is a fact about rolling the BINARY back across
+// it. Renaming them into the role words would make the line shorter and say
+// something the command does not mean.
+func drawMigrationStatus(r *termrender.Renderer, recs []store.MigrationRecord) {
+	r.Table(migrationStatusTable(recs))
+	if len(recs) == 0 {
+		return
 	}
-	if _, err := fmt.Fprintf(out, "\n%d migration(s): %d expand, %d contract, %d reverted.\n", len(recs), expand, contract, reverted); err != nil {
-		return err
-	}
+	expand, contract, reverted := migrationStatusCounts(recs)
+	r.Blank()
+	r.Line(fmt.Sprintf("%d migration(s): %d expand, %d contract, %d reverted.",
+		len(recs), expand, contract, reverted))
 	if contract > 0 {
-		fmt.Fprintln(out, "Note: a CONTRACT migration is a destructive cleanup. Rolling the BINARY back to a")
-		fmt.Fprintln(out, "release from before a contract is unsafe — the older code may depend on what the")
-		_, err := fmt.Fprintln(out, "contract removed. See docs/UPGRADE-AND-ROLLBACK.md before rolling back across one.")
-		return err
+		r.Line("Note: a CONTRACT migration is a destructive cleanup. Rolling the BINARY back to a")
+		r.Line("release from before a contract is unsafe — the older code may depend on what the")
+		r.Line("contract removed. See docs/UPGRADE-AND-ROLLBACK.md before rolling back across one.")
 	}
+}
+
+// printMigrationStatus is the text branch renderOut calls; the JSON branch
+// renders the same records.
+func printMigrationStatus(out io.Writer, recs []store.MigrationRecord) error {
+	drawMigrationStatus(renderTo(out), recs)
 	return nil
 }

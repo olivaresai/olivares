@@ -13,24 +13,27 @@ import type { ReactElement, ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import './i18n'
 
-const { consoleApi, policyApi, authState } = vi.hoisted(() => ({
-  consoleApi: {
-    setupStatus: vi.fn(),
-    listWorkspaces: vi.fn(),
-    listMembers: vi.fn(),
-    listSources: vi.fn(),
-    listConnectors: vi.fn(),
-    createWorkspace: vi.fn(),
-    onboard: vi.fn(),
-    testConnector: vi.fn(),
-    putConnector: vi.fn(),
-  },
-  policyApi: {
-    getDistribution: vi.fn(),
-    getVersion: vi.fn(),
-  },
-  authState: { can: (_p: string): boolean => true },
-}))
+const { consoleApi, policyApi, authState, providersApi, agentOpsApi } =
+  vi.hoisted(() => ({
+    providersApi: { list: vi.fn(), test: vi.fn() },
+    agentOpsApi: { listProfiles: vi.fn(), listRuns: vi.fn() },
+    consoleApi: {
+      setupStatus: vi.fn(),
+      listWorkspaces: vi.fn(),
+      listMembers: vi.fn(),
+      listSources: vi.fn(),
+      listConnectors: vi.fn(),
+      createWorkspace: vi.fn(),
+      onboard: vi.fn(),
+      testConnector: vi.fn(),
+      putConnector: vi.fn(),
+    },
+    policyApi: {
+      getDistribution: vi.fn(),
+      getVersion: vi.fn(),
+    },
+    authState: { can: (_p: string): boolean => true },
+  }))
 
 vi.mock('@/lib/auth/context', () => ({ useAuth: () => authState }))
 vi.mock('@/features/identity/assurance', () => ({
@@ -52,6 +55,16 @@ vi.mock('@/features/claude-policy/api', async (importOriginal) => {
   const actual =
     await importOriginal<typeof import('@/features/claude-policy/api')>()
   return { ...actual, claudePolicyApi: policyApi }
+})
+vi.mock('@/features/providers/api', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@/features/providers/api')>()
+  return { ...actual, providersApi }
+})
+vi.mock('@/features/agentops/api', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@/features/agentops/api')>()
+  return { ...actual, agentOpsApi }
 })
 
 import { OnboardingView } from './onboarding-view'
@@ -75,6 +88,11 @@ function wrap(ui: ReactElement) {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  // v26.10 added two steps whose reads are their own; seeded EMPTY so the counter
+  // reflects a clean plane and the two new steps are honestly unverified.
+  providersApi.list.mockResolvedValue({ items: [] })
+  agentOpsApi.listProfiles.mockResolvedValue({ items: [] })
+  agentOpsApi.listRuns.mockResolvedValue({ items: [] })
   try {
     localStorage.removeItem('olivares.onboarding.dismissed')
   } catch {
@@ -109,8 +127,9 @@ describe('OnboardingView', () => {
 
   it('reflects real backend state in the progress counter', async () => {
     wrap(<OnboardingView />)
-    // Only the database step is complete server-side → 1 of 5.
-    expect(await screen.findByText(/1 of 5 verified/i)).toBeInTheDocument()
+    // Only the database step is complete server-side → 1 of 7 (v26.10 added
+    // the providers step and the agents step; neither is verified on a clean plane).
+    expect(await screen.findByText(/1 of 7 verified/i)).toBeInTheDocument()
   })
 
   it('does NOT verify the source step for a registered-but-failed source', async () => {
@@ -128,7 +147,7 @@ describe('OnboardingView', () => {
     wrap(<OnboardingView />)
     // The database step is verified, but a registered source whose live status is
     // 'failed' is NOT counted — the badge stays honest, so progress is still 1 of 5.
-    expect(await screen.findByText(/1 of 5 verified/i)).toBeInTheDocument()
+    expect(await screen.findByText(/1 of 7 verified/i)).toBeInTheDocument()
     expect(
       await screen.findByText(/registered but not yet running/i),
     ).toBeInTheDocument()
@@ -153,7 +172,7 @@ describe('OnboardingView', () => {
     })
 
     wrap(<OnboardingView />)
-    expect(await screen.findByText(/1 of 5 verified/i)).toBeInTheDocument()
+    expect(await screen.findByText(/1 of 7 verified/i)).toBeInTheDocument()
 
     await user.type(screen.getByLabelText(/workspace name/i), 'Platform')
     await user.click(screen.getByRole('button', { name: /create workspace/i }))
@@ -166,7 +185,7 @@ describe('OnboardingView', () => {
       }),
     )
     // Progress advances to 2 of 5 — driven by the re-fetched roster, not the mutation.
-    expect(await screen.findByText(/2 of 5 verified/i)).toBeInTheDocument()
+    expect(await screen.findByText(/2 of 7 verified/i)).toBeInTheDocument()
   })
 
   it('shows the PEP step as active only when a host attested (distribution verified)', async () => {

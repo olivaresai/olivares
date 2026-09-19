@@ -403,6 +403,13 @@ export function RunInfo({ run }: { run: RunDTO }) {
       <KvRow label={t('info.workspace')} mono align="start">
         {run.workspace_ref || none}
       </KvRow>
+      <KvRow label={t('info.workspaceDirectory')} mono align="start">
+        {run.workspace_path
+          ? run.workspace_ref
+            ? run.workspace_path
+            : `${run.workspace_path} (${t('info.workspaceDirectoryOwn')})`
+          : none}
+      </KvRow>
       <KvRow label={t('info.claudeSessionId')} mono align="start">
         {run.claude_session_id || none}
       </KvRow>

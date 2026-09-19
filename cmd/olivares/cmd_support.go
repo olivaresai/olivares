@@ -154,7 +154,7 @@ func (o *supportBundleOptions) run(cmd *cobra.Command, configExplicit bool) erro
 				if len(redacted) > maxSupportStatusErrorBytes {
 					redacted = append(append([]byte(nil), redacted[:maxSupportStatusErrorBytes]...), []byte("... [truncated]")...)
 				}
-				return fmt.Errorf("collect status: HTTP %d: %s", statusCode, strings.TrimSpace(string(redacted)))
+				return fmt.Errorf("collect status: %s", describeAPIRefusal(statusCode, redacted))
 			}
 			// A TRANSPORT failure here aborts the WHOLE bundle, and it is the one
 			// failure the default install walks straight into: `olivares quickstart`

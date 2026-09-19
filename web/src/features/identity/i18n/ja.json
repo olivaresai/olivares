@@ -39,6 +39,7 @@
       "identity": "アイデンティティの管理",
       "nhiLifecycleRotate": "非人間アイデンティティの認証情報ローテーション",
       "nhiLifecycleFinalize": "非人間アイデンティティ廃止の確定",
+      "providers": "プロバイダーの資格情報を登録または失効させる",
       "generic": "この操作",
       "console": "コネクターの管理"
     },

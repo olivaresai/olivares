@@ -13,7 +13,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"text/tabwriter"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -21,6 +20,7 @@ import (
 
 	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
 	"github.com/olivaresai/olivares/cmd/olivares/firstparty"
+	"github.com/olivaresai/olivares/cmd/olivares/internal/termrender"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/runtime"
@@ -606,14 +606,11 @@ func writeSourcePlan(out io.Writer, rep sourcePlanReport) error {
 		// when the selected output is text and marshals the very same value for
 		// -o json. The E2 gate reads per occurrence and cannot see across the
 		// function boundary, so the reason is stated here where the table is built.
-		tw := tabwriter.NewWriter(out, 0, 2, 2, ' ', 0)
-		fmt.Fprintln(tw, "  FIELD\tFROM\tTO")
+		tbl := termrender.Table{Header: []string{"field", "from", "to"}}
 		for _, ch := range rep.Changes {
-			fmt.Fprintf(tw, "  %s\t%s\t%s\n", ch.Field, orDash(ch.From), orDash(ch.To))
+			tbl.Rows = append(tbl.Rows, []string{ch.Field, orDash(ch.From), orDash(ch.To)})
 		}
-		if err := tw.Flush(); err != nil {
-			return err
-		}
+		renderTo(out).Table(tbl)
 	}
 	fmt.Fprintln(out)
 	writeSourceCheck(out, rep.Check)
@@ -631,14 +628,19 @@ func writeSourceCheck(out io.Writer, c sourceCheck) {
 	default:
 		fmt.Fprintln(out, "configuration: `sources set` would PERSIST it and a running engine would NOT WIRE it")
 	}
+	// ASCII tokens, not glyphs. U+2717 is a replacement character on a host without
+	// the font and a mojibake pair in a non-UTF-8 locale, and this output is read
+	// from journalctl and pasted into support tickets as often as it is read on a
+	// terminal. `[--]` is "not measured", which is a third answer and not a pass.
+	r := renderTo(out)
 	for _, p := range c.Problems {
-		fmt.Fprintf(out, "  ✗ [%s] %s\n", p.At, p.Message)
+		r.StatusLine(termrender.Status{Role: termrender.RoleFail, Label: p.At, Detail: p.Message})
 	}
 	for _, w := range c.Warnings {
-		fmt.Fprintf(out, "  ! %s\n", w)
+		r.StatusLine(termrender.Status{Role: termrender.RoleWarn, Label: w})
 	}
 	for _, u := range c.NotChecked {
-		fmt.Fprintf(out, "  ? not checked here: %s\n", u)
+		r.StatusLine(termrender.Status{Role: termrender.RoleNone, Label: "not checked here", Detail: u})
 	}
 }
 

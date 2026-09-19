@@ -39,6 +39,7 @@
       "identity": "Managing identity",
       "nhiLifecycleRotate": "Rotating a non-human identity credential",
       "nhiLifecycleFinalize": "Finalizing non-human identity offboarding",
+      "providers": "Registering or withdrawing a provider credential",
       "generic": "This action",
       "console": "Managing connectors"
     },

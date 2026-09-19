@@ -14,6 +14,8 @@ import (
 	"path/filepath"
 	"sort"
 	"time"
+
+	"github.com/olivaresai/olivares/cmd/olivares/internal/termrender"
 )
 
 // Operation is one of the three public uninstall modes.
@@ -158,13 +160,19 @@ func Execute(m *Manifest, opts Options) error {
 			}
 		}
 	}
-	for _, item := range items {
-		if item.Note != "" {
-			fmt.Fprintf(opts.Out, "  %-12s %-13s %s (%s)\n", item.Action, item.Role, item.Path, item.Note)
-			continue
-		}
-		fmt.Fprintf(opts.Out, "  %-12s %-13s %s\n", item.Action, item.Role, item.Path)
+	// One table, with its columns named. The hand-padded form had no header, so an
+	// operator reading `keep  system-user  /var/lib/olivares` had to infer which of
+	// the three words was the verdict; and the padding was a guess (12 and 13
+	// columns) that a longer action or role silently overran.
+	plan := termrender.Table{
+		Header: []string{"action", "role", "path", "note"},
+		Empty:  "nothing to remove",
 	}
+	for _, item := range items {
+		plan.Rows = append(plan.Rows, []string{item.Action, item.Role, item.Path, item.Note})
+		plan.Roles = append(plan.Roles, []termrender.Role{uninstallActionRole(item.Action)})
+	}
+	termrender.New(opts.Out, termrender.Options{}).Table(plan)
 	if opts.Operation == Plan {
 		return nil
 	}
@@ -874,4 +882,14 @@ func run(runner func(string, ...string) error, name string, args ...string) erro
 	cmd.Stdout = io.Discard
 	cmd.Stderr = io.Discard
 	return cmd.Run()
+}
+
+// uninstallActionRole colours the verdict column. "remove" is the destructive one
+// and it is the only WARN: "keep" and "skip" are the plan deciding NOT to touch
+// something, which is the safe outcome and must not read as a problem.
+func uninstallActionRole(action string) termrender.Role {
+	if action == "remove" {
+		return termrender.RoleWarn
+	}
+	return termrender.RoleMuted
 }

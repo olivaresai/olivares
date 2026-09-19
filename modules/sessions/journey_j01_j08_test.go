@@ -51,7 +51,7 @@ func journeyRunner(t *testing.T) Runner {
 
 func journeyModule(t *testing.T, runner Runner, program string) (*Module, *harness, string, model.TenantID) {
 	t.Helper()
-	m := New(
+	m := New(WithSessionWorkspaceRoot(t.TempDir()),
 		WithRunner(runner),
 		WithProgram(program),
 		WithCredentialSource(staticCred()),
@@ -282,7 +282,7 @@ func TestJourneyJ07_StopReapAndReattachHonesty(t *testing.T) {
 
 func TestJourneyJ08_ReconnectCursorDoesNotDuplicate(t *testing.T) {
 	script := writeAttachPeer(t)
-	m := New(
+	m := New(WithSessionWorkspaceRoot(t.TempDir()),
 		WithRunner(journeyRunner(t)),
 		WithProgram(script),
 		WithCredentialSource(staticCred()),

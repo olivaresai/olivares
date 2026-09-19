@@ -90,7 +90,7 @@ type grokHTTPFixture struct {
 
 func newGrokHTTPFixture(t *testing.T, org, authSource string, opts ...Option) *grokHTTPFixture {
 	t.Helper()
-	m := New(grokRuntimeOptions(opts...)...)
+	m := New(grokRuntimeOptions(append(opts, WithSessionWorkspaceRoot(t.TempDir()))...)...)
 	m.UseExecutionEnvironmentRef(testEnvRef)
 	m.EnableProfiledLaunches()
 	h := newHarness(t, m)

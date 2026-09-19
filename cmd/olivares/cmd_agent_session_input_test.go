@@ -440,7 +440,15 @@ func TestAgentSessionInterruptSuccessWithoutBody(t *testing.T) {
 	if strings.Contains(strings.ToLower(p.lastType()), "json") {
 		t.Fatalf("unfenced interrupt must not set JSON Content-Type, got %q", p.lastType())
 	}
-	if !strings.Contains(out, "run-lab-1") || !strings.Contains(out, `"state":"running"`) {
+	// Read the record as a DOCUMENT, not as a byte sequence. The CLI indents what
+	// the engine answered since the first-hour walk of 2026-09-18 (a session's
+	// ledger was one 900-character line), and an assertion that spells
+	// `"state":"running"` is testing the spacing rather than the record.
+	var printed map[string]any
+	if uerr := json.Unmarshal([]byte(out), &printed); uerr != nil {
+		t.Fatalf("stdout is not the record: %v (%q)", uerr, out)
+	}
+	if printed["run_ref"] != "run-lab-1" || printed["state"] != "running" {
 		t.Fatalf("stdout must print the updated record, got %q", out)
 	}
 }

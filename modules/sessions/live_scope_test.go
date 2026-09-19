@@ -40,7 +40,7 @@ const dupID = "sess-dup"
 func openProfiledRuntime(t *testing.T, be profileBackend, opts ...Option) (*Module, store.Store, *testClock) {
 	t.Helper()
 	clk := &testClock{now: baseTime}
-	m := New(append([]Option{WithClock(clk)}, opts...)...)
+	m := New(append([]Option{WithClock(clk), WithSessionWorkspaceRoot(t.TempDir())}, opts...)...)
 	m.UseExecutionEnvironmentRef(testEnvRef)
 	st, err := engine.Open(context.Background(), store.Config{Engine: be.engine, DSN: be.dsn, Debug: true}, m.RegisterSchema)
 	if err != nil {
@@ -392,7 +392,7 @@ func TestManagedLive_ProvenByBridgeOnly(t *testing.T) {
 // and a fake runner announcing dupID on every launch.
 func profiledHTTP(t *testing.T, fr *fakeRunner, clk *testClock) (*harness, string, model.TenantID, string, string) {
 	t.Helper()
-	m := New(WithRunner(fr), WithCredentialSource(staticCred()), WithClock(clk))
+	m := New(WithSessionWorkspaceRoot(t.TempDir()), WithRunner(fr), WithCredentialSource(staticCred()), WithClock(clk))
 	m.UseExecutionEnvironmentRef(testEnvRef)
 	m.EnableProfiledLaunches()
 	h := newHarness(t, m)
@@ -783,7 +783,7 @@ func TestProfiledLaunch_HTTPCompositionWithRealChild(t *testing.T) {
 	if err := os.WriteFile(script, []byte(body), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	m := New(WithRunner(NewProcRunner()), WithProgram(script), WithCredentialSource(staticCred()), WithStopWaitDelay(2*time.Second))
+	m := New(WithSessionWorkspaceRoot(t.TempDir()), WithRunner(NewProcRunner()), WithProgram(script), WithCredentialSource(staticCred()), WithStopWaitDelay(2*time.Second))
 	m.UseExecutionEnvironmentRef(testEnvRef)
 	m.EnableProfiledLaunches()
 	h := newHarness(t, m)

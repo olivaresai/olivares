@@ -606,7 +606,7 @@ func TestWorkK2SessionOwnedItemCompletesItsExecutionLoop(t *testing.T) {
 func TestWorkK2RunBindingProvesSIDAndDerivesAgentRef(t *testing.T) {
 	runner := &fakeRunner{}
 	resolver := newK2WorkIdentity()
-	m := New(
+	m := New(WithSessionWorkspaceRoot(t.TempDir()),
 		WithRunner(runner),
 		WithCredentialSource(staticCred()),
 		WithWorkIdentityResolver(resolver),
@@ -1160,7 +1160,7 @@ func TestWorkK2SessionOwnerRefMustBeACanonicalSID(t *testing.T) {
 // dangerous state; leaving it alone would have been protecting the hole.
 func TestWorkK2AgentTokenRunCarriesItsAuthenticatedAgent(t *testing.T) {
 	runner := &fakeRunner{}
-	m := New(WithRunner(runner), WithCredentialSource(staticCred()),
+	m := New(WithSessionWorkspaceRoot(t.TempDir()), WithRunner(runner), WithCredentialSource(staticCred()),
 		WithWorkIdentityResolver(allowWorkIdentity{}), WithWorkContentGuard(allowWorkContent{}))
 	h := newHarness(t, m)
 	admin := h.adminLogin()

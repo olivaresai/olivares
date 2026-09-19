@@ -27,7 +27,7 @@ import (
 // compared against the declaration, for every kind the declaration covers.
 func TestSessionRuntimeCompositionWiresTheDeclaredTransport(t *testing.T) {
 	t.Parallel()
-	m := sessions.New(buildSessionRuntimeOptions(func(string) string { return "" }, nil, nil)...)
+	m := sessions.New(buildSessionRuntimeOptions(func(string) string { return "" }, nil, "", nil)...)
 	got := m.RunnerTransport()
 	if got == "" {
 		t.Fatal("the composition root wired a runner that does not report its transport, or wired none at all; " +

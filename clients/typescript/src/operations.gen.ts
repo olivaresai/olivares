@@ -3635,6 +3635,24 @@ export class Client extends ClientCore {
   }
 
   /**
+   * POST /v1/m/governance/decisions/replay — Reconstructs a past authorization from the access-evidence ledger, never from the live policy.
+   *
+   * Stability: beta.
+   */
+  postV1MGovernanceDecisionsReplay(body: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.doJsonRequired("POST", "/v1/m/governance/decisions/replay", "/v1/m/governance/decisions/replay", body, opts);
+  }
+
+  /**
+   * GET /v1/m/governance/decisions/{id}/reconstruct — Reconstructs one stored authorization decision from the access-evidence ledger, never from the live policy.
+   *
+   * Stability: beta.
+   */
+  getV1MGovernanceDecisionsByIdReconstruct(id: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/m/governance/decisions/{id}/reconstruct", `/v1/m/governance/decisions/${encodeURIComponent(id)}/reconstruct`, undefined, opts);
+  }
+
+  /**
    * GET /v1/m/governance/emerging-identity-standards — Surfaces the design-toward registry read-only, with an explicit disclaimer that it is tracked, not implemented (IDN-12).
    *
    * Stability: beta.
@@ -7070,6 +7088,60 @@ export class Client extends ClientCore {
    */
   postV1MSessionsProviderSourceBindingsByRefRevoke(ref: string, opts?: RequestOptions): Promise<Json> {
     return this.do("POST", "/v1/m/sessions/provider-source-bindings/{ref}/revoke", `/v1/m/sessions/provider-source-bindings/${encodeURIComponent(ref)}/revoke`, undefined, opts);
+  }
+
+  /**
+   * GET /v1/m/sessions/providers — Lists the tenant's registered providers as kinds, names and hints, never a credential.
+   *
+   * Stability: beta.
+   */
+  getV1MSessionsProviders(opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/m/sessions/providers", "/v1/m/sessions/providers", undefined, opts);
+  }
+
+  /**
+   * POST /v1/m/sessions/providers — Registers one provider credential; the engine seals the value and returns only a four-character hint.
+   *
+   * Stability: beta.
+   */
+  postV1MSessionsProviders(body: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.doJsonRequired("POST", "/v1/m/sessions/providers", "/v1/m/sessions/providers", body, opts);
+  }
+
+  /**
+   * GET /v1/m/sessions/providers/{ref} — Returns one registered provider by its reference, without its credential.
+   *
+   * Stability: beta.
+   */
+  getV1MSessionsProvidersByRef(ref: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/m/sessions/providers/{ref}", `/v1/m/sessions/providers/${encodeURIComponent(ref)}`, undefined, opts);
+  }
+
+  /**
+   * PATCH /v1/m/sessions/providers/{ref} — Renames a provider, changes its endpoint and/or rotates its credential in place.
+   *
+   * Stability: beta.
+   */
+  patchV1MSessionsProvidersByRef(ref: string, body: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.doJsonRequired("PATCH", "/v1/m/sessions/providers/{ref}", `/v1/m/sessions/providers/${encodeURIComponent(ref)}`, body, opts);
+  }
+
+  /**
+   * POST /v1/m/sessions/providers/{ref}/revoke — Withdraws a provider credential for good; the record keeps its id so the sessions it authorized still read truthfully.
+   *
+   * Stability: beta.
+   */
+  postV1MSessionsProvidersByRefRevoke(ref: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("POST", "/v1/m/sessions/providers/{ref}/revoke", `/v1/m/sessions/providers/${encodeURIComponent(ref)}/revoke`, undefined, opts);
+  }
+
+  /**
+   * POST /v1/m/sessions/providers/{ref}/test — Asks the provider which models it serves with the registered credential; it sends no completion and spends nothing.
+   *
+   * Stability: beta.
+   */
+  postV1MSessionsProvidersByRefTest(ref: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("POST", "/v1/m/sessions/providers/{ref}/test", `/v1/m/sessions/providers/${encodeURIComponent(ref)}/test`, undefined, opts);
   }
 
   /**

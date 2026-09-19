@@ -16,7 +16,7 @@ import (
 
 func TestProfileAuthority_RequiresProfileForNewAndUnprovenResume(t *testing.T) {
 	fr := &fakeRunner{initSID: "legacy-without-home"}
-	m := New(WithRunner(fr), WithCredentialSource(staticCred()))
+	m := New(WithSessionWorkspaceRoot(t.TempDir()), WithRunner(fr), WithCredentialSource(staticCred()))
 	m.UseExecutionEnvironmentRef(testEnvRef)
 	h := newHarness(t, m)
 	admin := h.adminLogin()

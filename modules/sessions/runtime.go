@@ -30,6 +30,11 @@ type runtimeState struct {
 	stopGate   StopGate
 	recorder   Recorder
 	classifier Classifier // DLP classifier for governed file reads (nil = no labels / deny-mode fails closed)
+	// costSink posts what a governed turn cost to the tenant's spend ledger
+	// (runtime_usage.go). nil is a NAMED gap, warned once per run: there is no
+	// no-op sink, because "nothing reached the ledger" is the defect this port
+	// exists to close.
+	costSink SessionCostSink
 	// workSessionCreds is late-bound by the composition root after core/auth is
 	// constructed. When wired, a launch with a live Claim must receive an exact,
 	// short-lived kernel bearer or the launch fails closed.
@@ -44,6 +49,30 @@ type runtimeState struct {
 	// mint/renew can never inherit that bypass.
 	recoveryWorkSessionCreds          WorkSessionCredentialSource
 	recoveryCommunicationSessionCreds CommunicationSessionCredentialSource
+
+	// sessionWorkspaceRoot is where a run with NO registered workspace gets a
+	// directory of its own (<root>/<run_ref>), wired by the composition root from
+	// the engine's data directory. Empty is DENY-CLOSED for such a run
+	// (runtime_workspace_dir.go): the alternative is the engine's own working
+	// directory, which is the defect that root exists to remove.
+	sessionWorkspaceRoot string
+	// sessionWorkspaceRootRefusal is why a root the composition root OFFERED was
+	// not taken (runtime_workspace_dir.go, validateSessionWorkspaceRoot). It is
+	// kept so a refused wiring answers with the reason and its remedy instead of
+	// with the generic "nothing is wired": an operator who configured a root and
+	// sees "not wired" has no way to learn that the value they set is the problem.
+	sessionWorkspaceRootRefusal error
+	// dirOwner is the ownership condition the session-workspace root is validated
+	// with (runtime_workspace_dir.go). Nil is the platform's own check; a control
+	// substitutes one to measure another condition on its own.
+	dirOwner dirOwnerFunc
+	// workspaceRegistryScanRows is how many of a tenant's workspace registrations
+	// one release reads before it refuses to conclude that none of them sits under
+	// the directory it is about to remove (runtime_workspace_dir.go). Zero is the
+	// default bound; a control lowers it so the REFUSAL past the bound can be
+	// measured without registering thousands of workspaces. A field and not a
+	// package variable, so one test's bound cannot race another's.
+	workspaceRegistryScanRows int
 
 	program string // the executable to launch ("claude")
 	// drivers is the OPERABLE set of registered provider drivers, keyed by driver
@@ -60,6 +89,15 @@ type runtimeState struct {
 	providerCreds map[string]ProviderCredentialSource
 	// approvalGate authorizes provider approval requests. DENY-CLOSED default.
 	approvalGate ProviderApprovalGate
+	// providerVault seals and opens the values of the tenant's PROVIDER RECORDS
+	// (v26.10). nil is the deny-closed state and the only honest one: a module holds
+	// no key, so with no vault the engine refuses to STORE a credential rather
+	// than storing one it cannot protect.
+	providerVault ProviderSecretVault
+	// providerProbe answers the connection test. nil refuses the test by name and
+	// says that launching is unaffected — the two are separate capabilities, and
+	// conflating them would report a deployment as broken for lacking a diagnostic.
+	providerProbe ProviderProbe
 	// productVersion is what Olivares calls itself in a provider handshake. The
 	// composition root supplies the build's value; the module invents none.
 	productVersion string
@@ -357,6 +395,18 @@ type liveRun struct {
 	// deadline is the template's session-duration ceiling, nil when unbounded.
 	// It is stopped by finalize/teardown so an early exit leaves no timer behind.
 	deadline runTimer
+
+	// usage credits the CUMULATIVE metering of each result frame as a delta
+	// (runtime_usage.go). It lives on the live run because the provider's counters
+	// restart with every incarnation: the durable sum is on the row.
+	usage usageAccount
+	// costSinkUnwiredReported dedups the "this session's cost reaches no ledger"
+	// warning to once per run instead of once per turn.
+	costSinkUnwiredReported bool
+	// workspaceRef is the launch's operator-facing workspace reference, kept for
+	// the spend ledger's workspace dimension. It is the launch INPUT, not the
+	// authorization lineage, exactly like the column of the same name.
+	workspaceRef string
 }
 
 func liveKey(tenant model.TenantID, runRef string) string {
@@ -439,11 +489,42 @@ type CreateRunParams struct {
 	Effort         string
 	Model          string
 	WorkspaceRef   string
-	Isolation      Isolation
-	EnvAllow       []string // allowlisted host env var NAMES to forward to the child
-	ResumeOf       string   // a run_ref to resume (optional; reserved for future use)
-	Actor          string
-	ActorKind      string
+	// WorkspaceDir is the HOST directory this launch's work lands in: the
+	// canonical root of the registered workspace named above, or — when none is
+	// named — the directory of its OWN this plane created for the run
+	// (<session-workspace-root>/<run_ref>, runtime_workspace_dir.go). It is
+	// recorded on the row so "where did this session run" is answerable without
+	// reading the child's own frames.
+	//
+	// SERVER-SET ONLY — the request DTO has no such field — and deliberately OUT
+	// of the K4 launch digest (`json:"-"`): for an unworkspaced run it derives
+	// from a reference minted AFTER the dispatch reservation, so it is not part of
+	// the semantic request, and including it would change every digest already
+	// dispatched.
+	WorkspaceDir string `json:"-"`
+	// WorkspaceDirOwned says whether THIS module created WorkspaceDir for THIS
+	// run. It is what the release purge acts on, and it is carried explicitly
+	// rather than inferred from the path because the path cannot tell the two
+	// apart (runtime_schema.go, colRunWorkspaceDirOwned). Server-set and
+	// `json:"-"` for the same reasons WorkspaceDir is.
+	WorkspaceDirOwned bool `json:"-"`
+	// ToolSurface is the tool surface the PROFILE declared for this launch, and
+	// ToolSurfaceDeclared says whether the profile declared one at all
+	// (provider_profile_policy.go). Server-set from the profile, never from the
+	// wire, and `json:"-"` for the same reason WorkspaceDir is: it is re-resolved
+	// on every launch and resume, so it is not part of the semantic request the K4
+	// digest pins.
+	//
+	// A profiled launch whose profile declared NOTHING is deny-closed: the child
+	// gets no built-in tools. The two fields are kept apart so the reason can be
+	// told to an operator.
+	ToolSurface         []string `json:"-"`
+	ToolSurfaceDeclared bool     `json:"-"`
+	Isolation           Isolation
+	EnvAllow            []string // allowlisted host env var NAMES to forward to the child
+	ResumeOf            string   // a run_ref to resume (optional; reserved for future use)
+	Actor               string
+	ActorKind           string
 	// AgentRef is the AUTHENTICATED agent identity driving this launch
 	// (auth.Principal.AgentIdentity), and it is a SEPARATE fact from the audit
 	// actor on purpose. An agent-OBO token authenticates as kind "token" with
@@ -779,6 +860,11 @@ func (m *Module) createRunInternal(
 	if err != nil {
 		return runDTO{}, err
 	}
+	if ws != nil {
+		// A named workspace is the effective directory, and it is the OPERATOR's
+		// directory: this plane records it and never creates or removes it.
+		p.WorkspaceDir = ws.rootReal
+	}
 	// the kill-switch, checked FIRST and on its own. It used to travel inside
 	// preflight, which was fine while nothing wrote before the gates; SG-02-b's
 	// admission preamble does write, and a stopped estate must still write NOTHING.
@@ -804,6 +890,28 @@ func (m *Module) createRunInternal(
 	// acquired against it, so the gate is asked about a launch that has an identity and
 	// a holder instead of about an empty string.
 	runRef := string(model.NewID())
+	// a run that named NO registered workspace gets a directory of its
+	// OWN here — created BEFORE the claim, the gates, any credential and the row,
+	// so a node that cannot make one refuses the launch with nothing durable
+	// behind it. The alternative it replaces is not "no directory": it is the
+	// engine's own working directory (runtime_workspace_dir.go).
+	//
+	// `rowCommitted` + the defer are what keep a refused launch from leaving an
+	// empty directory behind: os.Remove only succeeds on an empty one, so a child
+	// that wrote something keeps its bytes.
+	rowCommitted := false
+	if ws == nil {
+		dir, derr := m.prepareRunWorkspaceDir(runRef)
+		if derr != nil {
+			return runDTO{}, derr
+		}
+		p.WorkspaceDir, p.WorkspaceDirOwned = dir, true
+		defer func() {
+			if !rowCommitted {
+				discardEmptyRunWorkspaceDir(dir)
+			}
+		}()
+	}
 	var identityWorkspace model.ID
 	claimHolder := p.Actor
 	if work != nil {
@@ -875,6 +983,9 @@ func (m *Module) createRunInternal(
 		}
 		return runDTO{}, errors.Join(err, revokeErr)
 	}
+	// The row exists: from here the session's own directory belongs to a run an
+	// operator can see, and releasing that run is what removes it (cleanupRun).
+	rowCommitted = true
 	if work != nil {
 		if err := m.bindWorkLaunch(
 			ctx, tenant, p, work.reservation, runRef, lease,
@@ -922,6 +1033,7 @@ func (m *Module) createRunInternal(
 				proc: proc, ring: newOutputRing(m.rt.ringFrames, m.rt.ringBytes),
 				cancel: cancel, finalizedCh: make(chan struct{}),
 				recordIO: pr.recordIO, agentRef: intent.AgentRef, claim: lease, profile: p.ProviderHome,
+				workspaceRef:                    p.WorkspaceRef,
 				launchID:                        runtimeCreds.launchID,
 				workCredentialID:                runtimeCreds.work.ID,
 				workCredentialNotAfter:          runtimeCreds.work.NotAfter,
@@ -976,6 +1088,7 @@ func (m *Module) createRunInternal(
 		proc: proc, ring: newOutputRing(m.rt.ringFrames, m.rt.ringBytes),
 		cancel: cancel, finalizedCh: make(chan struct{}),
 		recordIO: pr.recordIO, agentRef: intent.AgentRef, claim: lease, profile: p.ProviderHome,
+		workspaceRef:                    p.WorkspaceRef,
 		launchID:                        runtimeCreds.launchID,
 		workCredentialID:                runtimeCreds.work.ID,
 		workCredentialNotAfter:          runtimeCreds.work.NotAfter,
@@ -1081,7 +1194,7 @@ func (m *Module) resumeRun(ctx context.Context, tenant model.TenantID, runRef, a
 	// retired/disabled profile, a home that moved or vanished, or another execution
 	// environment refuses here — before the reservation, before Runner, before any
 	// credential is minted. A legacy run (no snapshot) is not assigned today's HOME.
-	profile, err := m.revalidateStoredProfile(ctx, tenant, rec)
+	profile, storedPolicy, err := m.revalidateStoredProfile(ctx, tenant, rec)
 	if err != nil {
 		return runDTO{}, err
 	}
@@ -1092,7 +1205,29 @@ func (m *Module) resumeRun(ctx context.Context, tenant model.TenantID, runRef, a
 	if err != nil {
 		return runDTO{}, err
 	}
+	// a run with no registered workspace continues in the SAME directory
+	// of its own it ran in, re-created if the release of another session (or an
+	// operator) removed it. The path is derived from the run reference, so it is
+	// deterministic — and that is what lets the stored value be COMPARED instead of
+	// trusted: a stored directory that is not the one this node would compute means
+	// the root moved, and a session does not silently continue somewhere else. It
+	// is refused, exactly as a profiled run refuses a home that moved.
+	resumeDir := ""
+	if ws == nil {
+		resumeDir, err = m.prepareRunWorkspaceDir(runRef)
+		if err != nil {
+			return runDTO{}, err
+		}
+		if stored := rec.String(colRunWorkspacePath); stored != "" && stored != resumeDir {
+			return runDTO{}, conflictErr(
+				"this session ran in a directory this node no longer resolves to; " +
+					"resume is refused rather than continued somewhere else")
+		}
+	} else {
+		resumeDir = ws.rootReal
+	}
 	p := CreateRunParams{
+		WorkspaceDir: resumeDir, WorkspaceDirOwned: ws == nil,
 		Transport: transport, PermissionMode: rec.String(colPermissionMode),
 		Effort: rec.String(colEffort), Model: rec.String(colRunModelRef),
 		WorkspaceRef: rec.String(colWorkspaceRef), Isolation: Isolation(rec.String(colIsolation)),
@@ -1109,6 +1244,12 @@ func (m *Module) resumeRun(ctx context.Context, tenant model.TenantID, runRef, a
 		p.ProviderProfileRef = profile.ProfileID
 		snap := profile
 		p.ProviderHome = &snap
+		// The session policy is re-applied from the CURRENT profile, for the same
+		// reason the template is re-resolved and the gates are re-run: a tightened
+		// policy governs the relaunch rather than the one the run was born under.
+		if err := applySessionPolicy(&p, profile.Driver, storedPolicy); err != nil {
+			return runDTO{}, err
+		}
 	}
 	// the template is RE-RESOLVED on resume, exactly as the governance gates are
 	// re-run below, and for the same reason — the posture a session runs under is the
@@ -1246,6 +1387,7 @@ func (m *Module) resumeRun(ctx context.Context, tenant model.TenantID, runRef, a
 				proc: proc, ring: newOutputRing(m.rt.ringFrames, m.rt.ringBytes),
 				cancel: cancel, finalizedCh: make(chan struct{}),
 				recordIO: pr.recordIO, agentRef: intent.AgentRef, claim: lease, profile: p.ProviderHome,
+				workspaceRef:                    p.WorkspaceRef,
 				launchID:                        launchID,
 				workCredentialID:                runtimeCreds.work.ID,
 				workCredentialNotAfter:          runtimeCreds.work.NotAfter,
@@ -1285,6 +1427,7 @@ func (m *Module) resumeRun(ctx context.Context, tenant model.TenantID, runRef, a
 		proc: proc, ring: newOutputRing(m.rt.ringFrames, m.rt.ringBytes),
 		cancel: cancel, finalizedCh: make(chan struct{}),
 		recordIO: pr.recordIO, agentRef: intent.AgentRef, claim: lease, profile: p.ProviderHome,
+		workspaceRef:                    p.WorkspaceRef,
 		launchID:                        launchID,
 		workCredentialID:                runtimeCreds.work.ID,
 		workCredentialNotAfter:          runtimeCreds.work.NotAfter,
@@ -1344,6 +1487,12 @@ func (m *Module) resumeRun(ctx context.Context, tenant model.TenantID, runRef, a
 			rec[colPermissionMode] = p.PermissionMode
 			setOrNull(rec, colEffort, p.Effort)
 			setOrNull(rec, colRunModelRef, p.Model)
+			// The directory the child was just spawned in. A run that predates the
+			// column adopts the one it is now running in; a run that already carried
+			// one was compared against it above and refused if it differed, so this
+			// write never MOVES a session — it only records what it could not before.
+			setOrNull(rec, colRunWorkspacePath, p.WorkspaceDir)
+			rec[colRunWorkspaceDirOwned] = p.WorkspaceDirOwned
 			if p.TemplateID != "" {
 				rec[colTemplateVersion] = p.TemplateVersion
 			}
@@ -1671,9 +1820,21 @@ func (m *Module) sendTextInputLoaded(
 }
 
 // cleanupRun releases a stopped session: it blocks resume (clears the Claude
-// session id) and marks the row cleaned. The PHYSICAL transcript purge in
-// ~/.claude is a documented best-effort gap hardened in — v1 does NOT claim
-// to have purged on-disk state, it records the operator's intent to release.
+// session id), REMOVES the session's own workspace directory when this plane
+// created one, and marks the row cleaned.
+//
+// The PHYSICAL transcript purge in the provider's own configuration home
+// (~/.claude) remains a documented best-effort gap: this plane does not own that
+// directory. What it does own — since 2026-09-18 — is the per-run directory it
+// created under its own root, so release now purges THAT and says which of the
+// two happened in the ledger detail. A session that ran in a REGISTERED
+// workspace keeps every byte, and the reason it does is the ROW, not the path:
+// removeOwnRunWorkspaceDir reads the ownership fact this module recorded when it
+// created the directory, and refuses everything it cannot prove is its own — and
+// then refuses again when the tenant's registry claims that directory or
+// anything inside it, because the removal is recursive and a directory this
+// module created can have been registered as a workspace since, at its own path
+// or at a project the operator made within it.
 func (m *Module) cleanupRun(ctx context.Context, tenant model.TenantID, runRef, actor, actorKind string) (runDTO, error) {
 	// serialize with resume/stop/delete on this run; a caller that is gone does not wait for it
 	release, err := m.rt.lockRunContext(ctx, liveKey(tenant, runRef))
@@ -1693,9 +1854,44 @@ func (m *Module) cleanupRun(ctx context.Context, tenant model.TenantID, runRef, 
 		return runDTO{}, err
 	}
 	m.rt.dropLive(tenant, runRef) // free the ring (the process is already gone)
+	detail := "session released (on-disk transcript purge deferred)"
+	// The ledger states WHICH of the outcomes happened. "Removed" used to be
+	// reported for a directory that was already gone and for a link that was
+	// unlinked while its target survived; a release is evidence, and evidence that
+	// says the same thing about three different events is worth nothing.
+	switch res := m.removeOwnRunWorkspaceDir(ctx, tenant, rec); res.outcome {
+	case purgeRemoved:
+		detail = "session released (its own workspace directory removed; provider transcript purge deferred)"
+	case purgeNothingThere:
+		detail = "session released (no directory of its own was there to remove; provider transcript purge deferred)"
+	case purgeKept:
+		// The bytes are somebody's registered workspace now — the directory itself
+		// or something inside it — or this node could not prove it may remove them.
+		// Naming the registration, and distinguishing "somebody owns this" from
+		// "this node could not finish asking", is the difference between a ledger an
+		// operator can act on and one that just stops mentioning the directory.
+		switch res.kept {
+		case keptRegisteredAtThePath:
+			detail = "session released (its workspace directory kept: workspace " + res.heldBy +
+				" is registered at that path; provider transcript purge deferred)"
+		case keptRegisteredInside:
+			detail = "session released (its workspace directory kept: workspace " + res.heldBy +
+				" is registered inside it; provider transcript purge deferred)"
+		case keptRegistryUnreadable:
+			detail = "session released (nothing was removed: this node could not read the workspace " +
+				"registry, so what is registered there is unknown; provider transcript purge deferred)"
+		case keptRegistryUnbounded:
+			detail = "session released (nothing was removed: this tenant has more registered " +
+				"workspaces than a release reads, so none registered inside that directory could be " +
+				"ruled out; provider transcript purge deferred)"
+		default:
+			detail = "session released (nothing was removed: this node could not prove the directory " +
+				"is one it created; provider transcript purge deferred)"
+		}
+	}
 	updated, err := m.transition(ctx, tenant, runRef, transitionInput{
 		event: "cleaned", toState: stateCleaned,
-		detail: "session released (on-disk transcript purge deferred)",
+		detail: detail,
 		actor:  actor, actorKind: actorKind,
 		mutate: func(rec model.Record) { rec[colClaudeSessionID] = nil },
 	})
@@ -2201,6 +2397,11 @@ func (m *Module) persistCreateWithWork(
 		setIf(row, colEffort, p.Effort)
 		setIf(row, colRunModelRef, p.Model)
 		setIf(row, colWorkspaceRef, p.WorkspaceRef)
+		setIf(row, colRunWorkspacePath, p.WorkspaceDir)
+		// Written in BOTH directions, never only when true: an explicit false is a
+		// recorded "this directory is not mine", which is what the release purge
+		// needs to read. Absent would be indistinguishable from a legacy row.
+		row[colRunWorkspaceDirOwned] = p.WorkspaceDirOwned
 		setIf(row, colTemplateID, p.TemplateID)
 		if p.TemplateID != "" {
 			row[colTemplateVersion] = p.TemplateVersion

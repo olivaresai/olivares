@@ -10,9 +10,10 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"text/tabwriter"
 
 	"github.com/spf13/cobra"
+
+	"github.com/olivaresai/olivares/cmd/olivares/internal/termrender"
 )
 
 // `olivares capabilities` — WHAT THIS ESTATE CAN ACTUALLY DO, and where each ability came from.
@@ -162,21 +163,20 @@ func capabilitiesServersListCmd(flags *authClientFlags) *cobra.Command {
 					_, err := fmt.Fprintln(out, "no MCP servers")
 					return err
 				}
-				tw := tabwriter.NewWriter(out, 0, 2, 2, ' ', 0)
-				if _, err := fmt.Fprintln(tw, "ID\tNAME\tTRANSPORT\tSTATUS\tCONNECTION\tTOOLS\tCONFIG\tENDPOINT"); err != nil {
-					return err
-				}
+				tbl := termrender.Table{Header: []string{"id", "name", "transport", "status", "connection", "tools", "config", "endpoint"}}
 				for _, s := range list.Items {
-					if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%d\t%s\t%s\n",
-						observeCell(s.ID), observeCell(s.Name), observeCell(s.Transport),
-						observeCell(s.Status), observeCell(s.Connection), s.ToolCount,
-						observeBool(s.HasConfig, "yes", "no"), observeCell(s.Endpoint)); err != nil {
-						return err
-					}
+					tbl.Rows = append(tbl.Rows, []string{
+						observeCell(s.ID),
+						observeCell(s.Name),
+						observeCell(s.Transport),
+						observeCell(s.Status),
+						observeCell(s.Connection),
+						countCell(s.ToolCount),
+						observeBool(s.HasConfig, "yes", "no"),
+						observeCell(s.Endpoint),
+					})
 				}
-				if err := tw.Flush(); err != nil {
-					return err
-				}
+				renderTo(out).Table(tbl)
 				return observeTruncationNote(out, observePage{Cursor: list.Cursor, HasMore: list.HasMore}, cmd.CommandPath())
 			}, observeJSON(res.raw))
 		},
@@ -207,18 +207,20 @@ func capabilitiesServersGetCmd(flags *authClientFlags) *cobra.Command {
 				return err
 			}
 			return renderOut(cmd, func(out io.Writer) error {
-				tw := tabwriter.NewWriter(out, 0, 2, 2, ' ', 0)
-				if _, err := fmt.Fprintln(tw, "ID\tNAME\tTRANSPORT\tSTATUS\tCONNECTION\tTOOLS\tSKILLS\tRESOURCES\tENDPOINT"); err != nil {
-					return err
-				}
-				if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%d\t%d\t%d\t%s\n",
-					observeCell(d.ID), observeCell(d.Name), observeCell(d.Transport),
-					observeCell(d.Status), observeCell(d.Connection),
-					len(d.Tools), len(d.Skills), len(d.Resources),
-					observeCell(d.Endpoint)); err != nil {
-					return err
-				}
-				return tw.Flush()
+				tbl := termrender.Table{Header: []string{"id", "name", "transport", "status", "connection", "tools", "skills", "resources", "endpoint"}}
+				tbl.Rows = append(tbl.Rows, []string{
+					observeCell(d.ID),
+					observeCell(d.Name),
+					observeCell(d.Transport),
+					observeCell(d.Status),
+					observeCell(d.Connection),
+					countCell(len(d.Tools)),
+					countCell(len(d.Skills)),
+					countCell(len(d.Resources)),
+					observeCell(d.Endpoint),
+				})
+				renderTo(out).Table(tbl)
+				return nil
 			}, observeJSON(res.raw))
 		},
 	}
@@ -258,21 +260,18 @@ func capabilitiesSkillsCmd(flags *authClientFlags) *cobra.Command {
 					_, err := fmt.Fprintln(out, "no skills")
 					return err
 				}
-				tw := tabwriter.NewWriter(out, 0, 2, 2, ' ', 0)
-				if _, err := fmt.Fprintln(tw, "ID\tNAME\tSOURCE\tVERSION\tSTATUS\tSERVER"); err != nil {
-					return err
-				}
+				tbl := termrender.Table{Header: []string{"id", "name", "source", "version", "status", "server"}}
 				for _, s := range list.Items {
-					if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n",
-						observeCell(s.ID), observeCell(s.Name), observeCell(s.Source),
-						observeCell(s.Version), observeCell(s.Status),
-						observeCell(s.MCPServerID)); err != nil {
-						return err
-					}
+					tbl.Rows = append(tbl.Rows, []string{
+						observeCell(s.ID),
+						observeCell(s.Name),
+						observeCell(s.Source),
+						observeCell(s.Version),
+						observeCell(s.Status),
+						observeCell(s.MCPServerID),
+					})
 				}
-				if err := tw.Flush(); err != nil {
-					return err
-				}
+				renderTo(out).Table(tbl)
 				return observeTruncationNote(out, observePage{Cursor: list.Cursor, HasMore: list.HasMore}, cmd.CommandPath())
 			}, observeJSON(res.raw))
 		},
@@ -317,22 +316,19 @@ func capabilitiesToolsCmd(flags *authClientFlags) *cobra.Command {
 					_, err := fmt.Fprintln(out, "no tools")
 					return err
 				}
-				tw := tabwriter.NewWriter(out, 0, 2, 2, ' ', 0)
-				if _, err := fmt.Fprintln(tw, "ID\tNAME\tKIND\tREAD-ONLY\tDESTRUCTIVE\tTRUST\tSERVER"); err != nil {
-					return err
-				}
+				tbl := termrender.Table{Header: []string{"id", "name", "kind", "read-only", "destructive", "trust", "server"}}
 				for _, t := range list.Items {
-					if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
-						observeCell(t.ID), observeCell(t.Name), observeCell(t.Kind),
+					tbl.Rows = append(tbl.Rows, []string{
+						observeCell(t.ID),
+						observeCell(t.Name),
+						observeCell(t.Kind),
 						observeBool(t.ReadOnlyHint, "yes", "no"),
 						observeBool(t.DestructiveHint, "YES", "no"),
-						observeCell(t.AnnotationTrust), observeCell(t.MCPServerID)); err != nil {
-						return err
-					}
+						observeCell(t.AnnotationTrust),
+						observeCell(t.MCPServerID),
+					})
 				}
-				if err := tw.Flush(); err != nil {
-					return err
-				}
+				renderTo(out).Table(tbl)
 				return observeTruncationNote(out, observePage{Cursor: list.Cursor, HasMore: list.HasMore}, cmd.CommandPath())
 			}, observeJSON(res.raw))
 		},
@@ -426,24 +422,21 @@ func capabilitiesWiringCmd(flags *authClientFlags) *cobra.Command {
 					_, err := fmt.Fprintln(out, "no capability is wired to anything yet")
 					return err
 				}
-				tw := tabwriter.NewWriter(out, 0, 2, 2, ' ', 0)
-				if _, err := fmt.Fprintln(tw,
-					"ORIGIN\tKIND\tCAPABILITY\tKIND\tTOOL\tSIGNALS\tSEEN\tFIRST\tLAST"); err != nil {
-					return err
-				}
+				tbl := termrender.Table{Header: []string{"origin", "kind", "capability", "kind", "tool", "signals", "seen", "first", "last"}}
 				for _, e := range g.Edges {
-					if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%d\t%s\t%s\n",
-						observeCell(e.OriginRef), observeCell(e.OriginKind),
-						observeCell(e.CapabilityRef), observeCell(e.CapabilityKind),
-						observeCell(e.ToolRef), observeCell(strings.Join(e.SignalSources, ",")),
-						e.OccurrenceCount, observeCell(e.FirstSeen),
-						observeCell(e.LastSeen)); err != nil {
-						return err
-					}
+					tbl.Rows = append(tbl.Rows, []string{
+						observeCell(e.OriginRef),
+						observeCell(e.OriginKind),
+						observeCell(e.CapabilityRef),
+						observeCell(e.CapabilityKind),
+						observeCell(e.ToolRef),
+						observeCell(strings.Join(e.SignalSources, ",")),
+						countCell(e.OccurrenceCount),
+						observeCell(e.FirstSeen),
+						observeCell(e.LastSeen),
+					})
 				}
-				if err := tw.Flush(); err != nil {
-					return err
-				}
+				renderTo(out).Table(tbl)
 				if _, err := fmt.Fprintf(out, "%d node(s), %d edge(s)\n",
 					len(g.Nodes), len(g.Edges)); err != nil {
 					return err
