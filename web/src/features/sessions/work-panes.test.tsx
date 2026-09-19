@@ -264,6 +264,21 @@ describe('SessionEvidence — inside the narrative', () => {
     expect(api.timelineById).toHaveBeenCalledTimes(1)
   })
 
+  it('names its blocks ONE level under the session name, so no heading level is skipped', async () => {
+    api.timelineById.mockResolvedValue(page([]))
+    renderNarrative()
+    await screen.findByTestId('evidence-toggle-checks')
+    const levels = Array.from(
+      screen
+        .getByTestId('session-narrative')
+        .querySelectorAll('h1,h2,h3,h4,h5,h6'),
+    ).map((h) => Number(h.tagName.slice(1)))
+    expect(levels.length).toBeGreaterThan(1)
+    levels.forEach((level, i) => {
+      if (i > 0) expect(level - levels[i - 1]).toBeLessThanOrEqual(1)
+    })
+  })
+
   it('tells a full page as a FLOOR, not as a total', async () => {
     api.timelineById.mockResolvedValue(
       page(
