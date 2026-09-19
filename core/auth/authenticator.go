@@ -476,8 +476,8 @@ func (a *Authenticator) Login(ctx context.Context, emailRaw, password, ip string
 	// BEFORE any credential work (cheap, deny-closed, no account oracle: an IP block
 	// reveals nothing about which accounts exist). A nil login policy (the open build /
 	// a test embedder) is a no-op, so this is byte-identical to today there.
-	if err := a.enforceNetwork(ctx, ip); err != nil {
-		a.auditLoginBlocked(ctx, "anonymous", ip, "network_not_allowed")
+	attempt, err := a.beginLogin(ctx, ip)
+	if err != nil {
 		return "", model.AuthSession{}, err
 	}
 
@@ -527,17 +527,7 @@ func (a *Authenticator) Login(ctx context.Context, emailRaw, password, ip string
 		return "", model.AuthSession{}, ErrInvalidCredentials
 	}
 
-	// require-SSO. The password is CORRECT here; refuse the PASSWORD login when
-	// the scope requires SSO (deny-closed). Checking AFTER the credential verify keeps
-	// this from being an oracle — a wrong password already returned ErrInvalidCredentials
-	// above, so only the legitimate account holder ever sees "use SSO". The SSO
-	// completion path (CompleteSSO) is never routed here. nil policy ⇒ no-op (open build).
-	if err := a.enforceRequireSSO(ctx, user); err != nil {
-		a.auditLoginBlocked(ctx, "user:"+user.ID.String(), ip, "sso_required")
-		return "", model.AuthSession{}, err
-	}
-
-	token, sess, err := a.mintSession(ctx, user, ip, "auth.login", []string{"pwd"})
+	token, sess, err := a.mintSession(ctx, attempt, user, "auth.login", passwordLogin, nil)
 	if err != nil {
 		return "", model.AuthSession{}, err
 	}
@@ -550,10 +540,23 @@ func (a *Authenticator) Login(ctx context.Context, emailRaw, password, ip string
 // user and records action (e.g. "auth.login" for password login, "sso.login" for
 // federation) on the ledger in the same transaction. It performs NO credential
 // check — the caller has already established the identity (password, or a
-// validated SSO assertion). amr names the method(s) that established it; every
+// validated SSO assertion). method names how it was established; every
 // fresh session starts at AAL1 — assurance is only ever raised by a verified
 // step-up ceremony (ElevateSession), never at mint time (fail-closed).
-func (a *Authenticator) mintSession(ctx context.Context, user model.User, ip, action string, amr []string) (string, model.AuthSession, error) {
+func (a *Authenticator) mintSession(ctx context.Context, attempt *loginAttempt, user model.User, action string, method sessionLoginMethod, activate func(store.AuthScope) error) (string, model.AuthSession, error) {
+	if attempt == nil || (method != passwordLogin && method != federatedLogin) {
+		return "", model.AuthSession{}, ErrInvalidCredentials
+	}
+	// Credential verification has finished. Policy reads and refusal auditing run
+	// outside the mutation: a policy may itself read the store. An invitation's
+	// activation callback runs only after this same password-policy decision.
+	if method == passwordLogin {
+		if err := a.enforceRequireSSO(ctx, user); err != nil {
+			a.auditLoginBlocked(ctx, "user:"+user.ID.String(), attempt.ip, "sso_required")
+			return "", model.AuthSession{}, err
+		}
+	}
+	ip, amr := attempt.ip, []string{string(method)}
 	var (
 		tok  string
 		sess model.AuthSession
@@ -563,6 +566,11 @@ func (a *Authenticator) mintSession(ctx context.Context, user model.User, ip, ac
 		// first, before the session create takes directory/user authority.
 		if err := a.guardNewLoginSession(ctx, as); err != nil {
 			return err
+		}
+		if activate != nil {
+			if err := activate(as); err != nil {
+				return err
+			}
 		}
 		t, s, err := a.mintSessionTx(ctx, as, user, ip, action, amr)
 		tok, sess = t, s
@@ -574,9 +582,8 @@ func (a *Authenticator) mintSession(ctx context.Context, user model.User, ip, ac
 }
 
 // mintSessionTx mints a fresh opaque session for user and audits it INSIDE the
-// caller's auth transaction. It is the shared core of mintSession and any flow
-// that must activate an account and mint its session atomically (e.g. accepting
-// an onboarding invite — onboarding.go). A fresh session is always AAL1; assurance
+// caller's auth transaction. Only mintSession calls it, after policy admission and
+// any atomic account activation. A fresh session is always AAL1; assurance
 // is only ever raised by a verified step-up ceremony (ElevateSession).
 func (a *Authenticator) mintSessionTx(ctx context.Context, as store.AuthScope, user model.User, ip, action string, amr []string) (string, model.AuthSession, error) {
 	// R5 defense at the create seam: the guard is idempotent, so a caller that already

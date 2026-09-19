@@ -23,10 +23,10 @@ import (
 // NetworkAllowCIDRs) and decides. The open binary literally has no code to enforce —
 // the GitLab ee/ seam, not a flag that disables linked code.
 //
-// HONEST LIMITS (docs/SECURITY-HARDENING.md, never overstated). The enforcement is VERIFIED-DEPLOYED
-// over the engine's own login routes — Authenticator.Login (password) and CompleteSSO
-// (federated completion) — NEVER "impossible to bypass". It covers the two ways a
-// human establishes a first-party session; it does NOT cover an already-issued token
+// The policy covers password login, invite acceptance and federated completion. Network policy
+// precedes credential work; password policy also covers an invite setting its first
+// password. These are the first-party session entry points; it does NOT cover an
+// already-issued token
 // presented to the API (that credential was minted by an earlier, allowed login), nor
 // any non-login access path, and the IP allow-list trusts the real transport peer
 // (clientIP = RemoteAddr, not a spoofable X-Forwarded-For). It is a login-surface
@@ -52,15 +52,15 @@ var ErrNetworkNotAllowed = errors.New("auth: network_not_allowed: login is not p
 
 // LoginPolicy is the RESERVED ENTERPRISE login-enforcement capability. The default
 // (AGPL) binary wires nil (WithLoginPolicy is never called, or called with nil), which
-// means NO enforcement — Login and CompleteSSO behave byte-identically to today. The
-// enterprise build wires a closed engine (enterprise/ssoenforce) that resolves the
+// means NO enforcement over Login, AcceptInvite and CompleteSSO. The enterprise
+// build wires a closed engine (enterprise/ssoenforce) that resolves the
 // stored posture and decides. The two methods are consulted at the two login decision
 // points; both are deny-closed (any non-nil error blocks the login).
 type LoginPolicy interface {
 	// AllowNetwork reports whether a login from peer IP ip is permitted by the
-	// scope's network allow-list. It is consulted on EVERY login path (password and
-	// SSO completion) BEFORE any credential work, so a network-blocked peer never
-	// reaches password verification or JIT provisioning. nil = permitted (the common
+	// scope's network allow-list. It is consulted on EVERY login path (password,
+	// invite acceptance and SSO completion) BEFORE any credential work, so a blocked
+	// peer never reaches password verification or JIT provisioning. nil = permitted (the common
 	// case: no allow-list configured ⇒ permit all). A non-nil error blocks the login:
 	// ErrNetworkNotAllowed for an IP outside a configured list, or a wrapped
 	// store/parse error (fail-closed — a posture the engine cannot read or a malformed
@@ -68,9 +68,9 @@ type LoginPolicy interface {
 	AllowNetwork(ctx context.Context, ip string) error
 
 	// RequireSSO reports whether a PASSWORD login for user must be refused because the
-	// scope requires SSO. It is consulted in Authenticator.Login ONLY, after the
-	// password is verified and just before the session is minted; the SSO completion
-	// path (CompleteSSO) is NEVER routed through here — require-SSO blocks password
+	// scope requires SSO. It is consulted after a password or valid invitation
+	// proves the account identity and before any activation or session mutation. SSO
+	// completion (CompleteSSO) is NEVER routed through here — require-SSO blocks password
 	// logins, and permitting SSO is its whole point. nil = permitted. A non-nil error
 	// blocks: ErrSSORequired when SSO is required, or a wrapped fail-closed error. The
 	// enterprise engine refuses a password login only when an IdP is actually ACTIVE
@@ -164,3 +164,24 @@ func (a *Authenticator) auditLoginBlocked(ctx context.Context, actor, ip, reason
 		a.log.Error("auth: recording blocked login", "err", aerr, "reason", reason)
 	}
 }
+
+// loginAttempt carries a peer admitted before credential verification or account
+// provisioning. Session issuance requires it; an absent attempt cannot mint a session.
+type loginAttempt struct {
+	ip string
+}
+
+func (a *Authenticator) beginLogin(ctx context.Context, ip string) (*loginAttempt, error) {
+	if err := a.enforceNetwork(ctx, ip); err != nil {
+		a.auditLoginBlocked(ctx, "anonymous", ip, "network_not_allowed")
+		return nil, err
+	}
+	return &loginAttempt{ip: ip}, nil
+}
+
+type sessionLoginMethod string
+
+const (
+	passwordLogin  sessionLoginMethod = "pwd"
+	federatedLogin sessionLoginMethod = "sso"
+)

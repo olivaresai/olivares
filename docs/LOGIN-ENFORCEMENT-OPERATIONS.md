@@ -184,6 +184,16 @@ The 503 does not promise that a retry alone will help. It resolves when an opera
 session issued before the condition appeared keeps working until it expires or is revoked;
 the refusal applies to new logins.
 
+**Accepting an invitation also creates a password session.** When login policy is
+installed, its network rule applies before the invitation is checked. Once the
+invitation proves the account identity, require-SSO applies just as it does after
+a correct password. A refusal returns `network_not_allowed` or `sso_required`
+(HTTP 403), records `auth.login.blocked`, and leaves the invitation pending, the
+password unchanged and no new session. A permitted retry can use the same token
+before it expires. SSO login remains a separate flow; it does not redeem an
+invitation. An installation without a login policy retains ordinary invitation
+acceptance.
+
 ## 9. SSO completion, precisely
 
 For a federated login, the engine **issues the session first** and waits for that transaction
