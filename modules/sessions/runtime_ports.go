@@ -542,6 +542,65 @@ type RecordedFrame struct {
 	At     time.Time
 }
 
+// SessionCostSample is what ONE governed turn of an operated session cost, as the
+// provider itself reported it on its own result frame. It is the module's own
+// shape on purpose: the composition root maps it onto the estate's cost-sample
+// bus (cmd/olivares), so this module depends on no observation vocabulary and no
+// FinOps type.
+//
+// Every field is a reference, a count or money. There is no prompt, no
+// completion, no credential and no path.
+type SessionCostSample struct {
+	// RunRef is the operated session; SessionRef is its canonical session identity
+	// when admission gave it one.
+	RunRef     string
+	SessionRef string
+	// ModelRef is the model the provider reported using. Empty means the driver
+	// reported a cost without naming a model, which is recorded as such.
+	ModelRef string
+	// ProviderRef is the driver that was billed (claude, codex, grok, …).
+	ProviderRef string
+	// WorkspaceRef is the operator-facing workspace this run named, for the
+	// finance workspace dimension. Empty when the run named none.
+	WorkspaceRef string
+	// AgentRef is the authenticated agent identity that drove the launch, for
+	// per-agent chargeback. Empty for a human-driven session.
+	AgentRef string
+
+	// InputTokens is the TOTAL input volume (uncached + cache-write + cache-read),
+	// which is the meaning the estate's cost sample documents; the two cache
+	// counters below are a breakdown OF it, not an addition to it.
+	InputTokens         int64
+	OutputTokens        int64
+	CacheReadTokens     int64
+	CacheCreationTokens int64
+	// CostMicroUSD is this turn's cost in millionths of a US dollar.
+	CostMicroUSD int64
+	// CostFromProviderClient records that the money above came from the official
+	// CLI's OWN result frame rather than from a token count this plane priced.
+	//
+	// ⛔ IT IS NOT "BILLED". The estate's cost vocabulary reserves `billed` for a
+	// figure the provider's own COST API reported and a finance team can reconcile
+	// against an invoice; an official CLI's `total_cost_usd` is the client's own
+	// arithmetic over its own usage. The consumer therefore labels these samples
+	// estimated, and this flag says which shape produced them instead of implying
+	// an authority nobody granted.
+	CostFromProviderClient bool
+	// OccurredAt is when the turn's result frame arrived.
+	OccurredAt time.Time
+}
+
+// SessionCostSink posts a governed turn's cost to the tenant's spend ledger.
+//
+// ⛔ UNWIRED IS A NAMED GAP, NOT A DEFAULT. There is no no-op implementation
+// here: the module warns once per run that the session's cost reaches no ledger,
+// because that is exactly the state the golden path measured (a real turn, a real
+// price on the wire, `samples 0` on the ledger) and it must not be able to look
+// like success. The session's own counters are recorded either way.
+type SessionCostSink interface {
+	PublishSessionCost(ctx context.Context, tenant model.TenantID, sample SessionCostSample) error
+}
+
 // Recorder receives the live I/O of an operated session for governed recording.
 // Record is offered one bridged frame; Finalize is called once when the session's
 // I/O ends (the process exited and the output drained) so the recorder can flush and

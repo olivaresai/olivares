@@ -898,7 +898,7 @@ func workVerdict(value any) string {
 }
 
 func workHTTPError(status int, body []byte) error {
-	base := fmt.Errorf("request failed: HTTP %d: %s", status, strings.TrimSpace(string(body)))
+	base := fmt.Errorf("%s", describeAPIRefusal(status, body))
 	var envelope struct {
 		Verdict string `json:"verdict"`
 		Error   struct {

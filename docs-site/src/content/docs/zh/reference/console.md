@@ -43,7 +43,7 @@ description: >-
 
 <!-- BEGIN GENERATED olivares-console-routes — regenerate with `bash scripts/check-guide-docs.sh --write`; do not edit by hand -->
 
-控制台发布 **75 条路由**。以下表格列出了每一条路由、所需权限，以及产品内帮助链接
+控制台发布 **76 条路由**。以下表格列出了每一条路由、所需权限，以及产品内帮助链接
 打开的参考页面。
 
 ### 运维
@@ -64,6 +64,7 @@ description: >-
 | 可观测性 | `/observability` | 按标准查看摄取健康状况和追踪下钻 | `health:status:read` | [reference/modules/observability](/zh/reference/modules/observability/) |
 | 来源绑定 | `/provider-bindings` | 将已配置的来源，以本节点应用的修订版本，专用于提供商配置文件 | `sessions:profile-binding:read` | [reference/modules/ii-sessions](/zh/reference/modules/ii-sessions/) |
 | 提供商配置文件 | `/provider-profiles` | 登记并管理会话启动所依据的提供商主目录，并按需读取其配置 | `sessions:profile:read` | [reference/modules/ii-sessions](/zh/reference/modules/ii-sessions/) |
+| 提供商 | `/providers` | 注册会话启动时使用的 API 密钥与端点；可测试、更换和吊销 | `sessions:provider:read` | [how-to/add-a-provider](/zh/how-to/add-a-provider/) |
 | 沙箱 | `/sandbox` | 隔离的 Agent 测试与重放 | `sandbox:run:read` | [reference/modules/xvii-sandbox](/zh/reference/modules/xvii-sandbox/) |
 | 会话 | `/sessions` | 实时 Agent 操作和时间线 | `sessions:live:read` | [reference/modules/ii-sessions](/zh/reference/modules/ii-sessions/) |
 | 租户 | `/tenants` | 撤销或恢复租户服务 | `system:admin` | [how-to/troubleshooting](/zh/how-to/troubleshooting/) |

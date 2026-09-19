@@ -460,7 +460,7 @@ func declaredReadinessConstants(t *testing.T, file string) map[string][]string {
 // "Launchable" one layer down.
 func TestLaunchReadinessWithoutAStoreCertifiesNothing(t *testing.T) {
 	t.Parallel()
-	m := New(WithRunner(NewProcRunner()))
+	m := New(WithSessionWorkspaceRoot(t.TempDir()), WithRunner(NewProcRunner()))
 	m.UseExecutionEnvironmentRef(testEnvRef)
 	doc, err := m.EvaluateLaunchReadiness(context.Background(), model.TenantID(uuid.NewString()),
 		"ppf_"+string(model.NewID()), LaunchReadinessSelection{

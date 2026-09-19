@@ -39,7 +39,7 @@ func governanceRequestBody(r moduleRoute) (map[string]any, bool) {
 	), true
 }
 
-// governanceRequestBodyDeclarationFor classifies all 50 mutations registered
+// governanceRequestBodyDeclarationFor classifies all 51 mutations registered
 // by the governance module. The sibling claude-policy and claude-agents modules
 // have different namespaces and are intentionally outside this catalog.
 func governanceRequestBodyDeclarationFor(r moduleRoute) (governanceRequestBodyDeclaration, bool) {
@@ -70,6 +70,8 @@ func governanceRequestBodyDeclarationFor(r moduleRoute) (governanceRequestBodyDe
 		return governanceBodyDeclaration(governancePDPEngineSourceSchema(true)), true
 	case http.MethodPost + " /pdp/rollback":
 		return governanceBodyDeclaration(governancePDPRollbackSchema()), true
+	case http.MethodPost + " /decisions/replay":
+		return governanceBodyDeclaration(governanceDecisionReplaySchema()), true
 	case http.MethodPost + " /breakglass":
 		return governanceBodyDeclaration(governanceBreakGlassActivateSchema()), true
 	case http.MethodPost + " /breakglass/consume":
@@ -300,6 +302,38 @@ func governanceApprovalConsumeSchema() map[string]any {
 		"consumer_id", oaObj("type", "string", "minLength", 1, "maxLength", 128),
 		"policy_version", oaObj("type", "string", "maxLength", 128),
 	), "consumer_id")
+}
+
+func governanceDecisionReplaySchema() map[string]any {
+	// handleReplayDecision decodes reconstructBody with unknown fields refused.
+	// DecisionID, when non-blank, selects that stored row; otherwise At,
+	// Principal and Action are required. JSON null is not accepted into the
+	// string fields, so omitted (empty string after trim) is the only absence.
+	schema := governanceClosedObject(oaObj(
+		"action", oaObj("type", "string"),
+		"action_vocabulary", oaObj("type", "string"),
+		"at", oaObj("type", "string"),
+		"decision_id", oaObj("type", "string"),
+		"principal", oaObj("type", "string"),
+		"resource", oaObj("type", "string"),
+		"resource_kind", oaObj("type", "string"),
+		"source_instance", oaObj("type", "string"),
+	))
+	schema["anyOf"] = []any{
+		oaObj(
+			"required", []string{"decision_id"},
+			"properties", oaObj("decision_id", oaObj("type", "string", "minLength", 1)),
+		),
+		oaObj(
+			"required", []string{"action", "at", "principal"},
+			"properties", oaObj(
+				"action", oaObj("type", "string", "minLength", 1),
+				"at", oaObj("type", "string", "minLength", 1),
+				"principal", oaObj("type", "string", "minLength", 1),
+			),
+		),
+	}
+	return schema
 }
 
 func governanceAgentRegistrationSchema() map[string]any {

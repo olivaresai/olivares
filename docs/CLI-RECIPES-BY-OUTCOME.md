@@ -132,18 +132,38 @@ once an inference credential source is wired; its tool-calls are PEP-governed on
 which of the two you have.
 
 ```sh
-# 1. Register the host directory the session is allowed to see.
+# 1. Register the credential the session launches with, and prove it works.
+#    The key is read from stdin: a flag value lands in the shell history.
+olivares provider add --kind anthropic --name "Anthropic (prod)" < key.txt
+olivares provider test prv_123
+
+# 2. Register the host directory the session is allowed to see.
 olivares agent workspace add /srv/projects/acme --name acme --mode ro --dlp deny
 olivares agent workspace ls -o json
 
-# 2. Launch. --workspace takes the workspace_ref from the step above.
-olivares agent session create --name acme-1 --workspace ws-123 --model opus --permission-mode plan
+# 3. Register the profile the session runs under, bound to that provider.
+olivares agent profile create --driver claude \
+  --config-home /home/ops/.claude --user-home /home/ops --name "Claude (ops)" \
+  --auth-source managed_injection --provider prv_123
 
-# 3. Watch it, feed it, stop it.
+# 4. Launch. --workspace takes the workspace_ref from step 2 and
+#    --provider-profile the profile_ref from step 3.
+olivares agent session create --name acme-1 --workspace ws-123 \
+  --provider-profile ppf_123 --model opus --permission-mode plan
+
+# 5. Watch it, feed it, stop it.
 olivares agent session ls
 olivares agent session get run-123 -o json
 olivares agent session stop run-123
 ```
+
+⛔ **`--provider-profile` IS REQUIRED, and this recipe omitted it until 2026-09-17.**
+The engine enables profiled launches unconditionally (`cmd/olivares/boot.go`
+`EnableProfiledLaunches`), and `resolveLaunchProfileInto` answers **400 `select a
+provider profile before launching a session`** to a create with no profile. The old
+four-line form could not have worked on any shipped v26.9 server. Steps 1 and 3 are
+new in v26.10: before it, the credential lived in a host environment variable
+and there was no CLI verb for a profile at all.
 
 **The ordering that no single command's help states:** `rm` refuses a stopped session
 with **HTTP 409 `session must be cleaned before delete (state=stopped)`**. The lifecycle
@@ -154,12 +174,20 @@ olivares agent session cleanup run-123
 olivares agent session rm run-123
 ```
 
-⚠ **Before you launch, wire the credential source — the refusal does not say so.**
-With no `OLIVARES_SESSION_RUNTIME_WIF` or `OLIVARES_SESSION_RUNTIME_TOKEN_FILE`, the
-engine announces at boot that *«stream-json launches are deny-closed»*, but the launch
-itself answers **HTTP 500 `internal error`** and writes **no reason to the server log**.
-Measured on 2026-08-10, same request one variable apart: **500** without the credential
-source, **201 `state=running`** with it. If a launch 500s, check that boot line first.
+⛔ **THIS PARAGRAPH SAID THE REFUSAL WAS A SILENT 500. IT IS NO LONGER TRUE, and
+leaving it would send an operator hunting a bug the engine already fixed.** The 2026-08-10
+measurement was correct when it was taken. Since then `denyClosedErr` classifies the
+unwired credential source explicitly (`modules/sessions/runtime.go`): the launch answers
+**503** with the sentence *«inference credential source is not wired; stream-json launches
+are deny-closed (set OLIVARES_SESSION_RUNTIME_WIF or OLIVARES_SESSION_RUNTIME_TOKEN_FILE).
+remote-control launches do not need it»*, and a WIRED-but-unreadable token file answers 503
+with its own distinct sentence. The remedy is named in the answer.
+
+⚠ **And from v26.10 those variables are no longer the only path.** A profile bound to a
+registered provider (step 1 above) resolves its credential from that provider, and the host
+variables apply only to profiles that name none. A bound credential that cannot be produced
+**denies** the launch — it does not fall back to the host's, because that would run the
+session on an account nobody selected for it.
 
 **Executed 2026-08-10:** `workspace add` → `session create` (201, `state=running
 transport=stream-json isolation=native`) → `ls` → `get` → `stop` (`state=stopped

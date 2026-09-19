@@ -175,6 +175,15 @@ func launchAuthSource(p CreateRunParams) string {
 	return p.ProviderHome.AuthSource
 }
 
+// launchProviderRecordRef is the PROVIDER RECORD this launch was resolved against
+// ("" when the profile names none, which is every profile that predates v26.10).
+func launchProviderRecordRef(p CreateRunParams) string {
+	if p.ProviderHome == nil {
+		return ""
+	}
+	return p.ProviderHome.ProviderRecordRef
+}
+
 // requireAuthSourceForDriver refuses, deny-closed, a launch of a driver that has
 // no explicitly authorized authentication source. The historical Claude path is
 // exempt BY NAME and only when the profile names no source: that exemption is
@@ -223,6 +232,37 @@ func (m *Module) mintLaunchAuthority(
 		// The authorized account home is the credential. Requiring an injected key
 		// on top of it is exactly the conflation §5.1 forbids.
 		return Credential{}, nil, nil
+	}
+	if ref := launchProviderRecordRef(p); ref != "" {
+		if p.Transport == TransportRemoteControl {
+			// ⛔ REMOTE-CONTROL IS NOT A TRANSPORT A REGISTERED CREDENTIAL CAN SERVE,
+			// and this is a refusal rather than a silent skip.
+			//
+			// The historical path mints NOTHING for remote-control on purpose: that
+			// transport relays the session through the operator's own subscription
+			// OAuth, which this module does not issue (createRun's own comment says
+			// so). Injecting a registered key would change which identity the session
+			// runs as. Skipping the injection quietly would be worse in a different
+			// way — the operator bound a credential and it was not used, and nothing
+			// said so.
+			//
+			// So the combination is refused with both halves named, the same answer
+			// this plane gives to every other conflict it cannot rank.
+			return Credential{}, nil, &runErr{
+				http.StatusUnprocessableEntity,
+				"remote-control runs under the provider's own subscription login, so a profile bound to a registered provider cannot launch under it; launch with stream-json, or unbind the provider from this profile",
+			}
+		}
+		// The operator NAMED a credential for this profile, so that credential
+		// is the answer for every driver — including Claude, whose historical
+		// host-wide source is below and stays exactly as it was for every profile
+		// that names no record.
+		//
+		// Most-specific-wins, and it is not a preference: a record is bound to ONE
+		// profile by an authorized operator, while the host variables are a
+		// deployment-wide default. Reading the default over the explicit selection
+		// is the silent account change the profile plane exists to prevent.
+		return m.mintFromProviderRecord(ctx, tenant, driver, ref)
 	}
 	if driver == providerDriverClaude {
 		cred, err := m.maybeMint(ctx, tenant, runRef, p.Transport)
@@ -282,6 +322,108 @@ func validateProviderCredentialEnv(env []EnvVar) error {
 			strings.HasPrefix(item.Name, "CLAUDE_") ||
 			strings.HasPrefix(item.Name, "OPENCODE_") {
 			return forbiddenErr("launch denied: the provider credential adapter named " + item.Name + ", which it does not own")
+		}
+	}
+	return validateExplicitEnv(env)
+}
+
+// mintFromProviderRecord resolves the credential of a NAMED provider record and
+// returns the environment the child receives.
+//
+// ⛔ THERE IS NO FALLBACK HERE, AND THAT IS THE DESIGN. Every failure below denies
+// the launch: a revoked record, a kind this driver cannot read, a vault that cannot
+// open the value. Falling through to the host-wide credential would run the session
+// on an account the operator did not select for it — the exact failure the profile
+// plane's §5 was written to prevent, arriving through a door that did not exist
+// when §5 was written.
+func (m *Module) mintFromProviderRecord(
+	ctx context.Context,
+	tenant model.TenantID,
+	driver, ref string,
+) (Credential, []EnvVar, error) {
+	if m.rt.providerVault == nil {
+		return Credential{}, nil, &runErr{
+			http.StatusServiceUnavailable,
+			"this provider profile names a registered provider, and no sealed credential vault is wired on this node to open it (the launch is denied; it does not fall back to a host credential)",
+		}
+	}
+	rec, err := m.GetProviderRecord(ctx, tenant, ref)
+	if err != nil {
+		return Credential{}, nil, err
+	}
+	if rec.State != ProviderRecordActive {
+		return Credential{}, nil, &runErr{
+			http.StatusConflict,
+			"the provider this profile is bound to is revoked; bind an active provider before launching",
+		}
+	}
+	if !recordServesDriver(rec.Kind, driver) {
+		// Re-checked HERE and not only when the binding was written: a driver's
+		// operability and a record's kind are read at different times, and a check
+		// that only runs at write time is a check that expires.
+		return Credential{}, nil, &runErr{
+			http.StatusUnprocessableEntity,
+			"the provider bound to this profile is a " + rec.Kind + " credential, which driver " + driver + " does not read",
+		}
+	}
+	if driver == providerDriverClaude && m.rt.baseURL != "" && rec.BaseURL != "" {
+		// Two endpoints were configured for one launch: the deployment's inference
+		// gateway and this record's own. Neither is wrong and this layer cannot rank
+		// them, so the conflict is REFUSED rather than ordered — the same answer
+		// validateProfiledInjectedEnv gives when a gate and a profile both claim a
+		// variable. Ordering it silently would route a session through a gateway the
+		// operator thought they had bypassed, or the reverse.
+		//
+		// ⛔ SCOPED TO THE CLAUDE DRIVER, AND THAT IS NOT A HEDGE. `m.rt.baseURL` is
+		// wired from OLIVARES_SESSION_RUNTIME_BASE_URL and injected as
+		// ANTHROPIC_BASE_URL by the frame-driven bridge — it is an Anthropic variable
+		// and it reaches no other driver. Refusing a codex or grok launch for a
+		// collision that cannot occur would be a rule that OVER-blocks, and an
+		// over-blocking rule costs an operator a launch for a conflict that does not
+		// exist just as surely as an under-blocking one costs them a wrong identity.
+		return Credential{}, nil, &runErr{
+			http.StatusConflict,
+			"this launch has two endpoints: the deployment inference gateway and the bound provider's own base_url; clear one of them",
+		}
+	}
+	key, err := m.rt.providerVault.Open(ctx, tenant, rec.SecretRef)
+	if err != nil {
+		return Credential{}, nil, openFailure(err)
+	}
+	env := providerRecordEnv(rec.Kind, rec.BaseURL, string(key))
+	if len(env) == 0 {
+		return Credential{}, nil, &runErr{
+			http.StatusUnprocessableEntity,
+			"the provider bound to this profile has a kind this node cannot turn into a credential environment",
+		}
+	}
+	if err := validateRecordCredentialEnv(rec.Kind, env); err != nil {
+		return Credential{}, nil, err
+	}
+	// Nothing about the value reaches the run row. The record ref already travels in
+	// the launch snapshot and the K4 digest, so "which credential authorized this
+	// session" is answerable without a credential stamp of its own.
+	return Credential{}, env, nil
+}
+
+// validateRecordCredentialEnv checks a record-backed injection against the CLOSED
+// set its own KIND declares.
+//
+// It is a second validator and not a relaxation of validateProviderCredentialEnv,
+// and the difference is the point. That one governs a THIRD-PARTY adapter wired
+// through WithProviderCredentialSource, and it bans ANTHROPIC_*, CLAUDE_*,
+// OPENCODE_* and OLIVARES_* precisely so one provider's adapter can never name
+// another's variables. A first-party anthropic record has to set ANTHROPIC_API_KEY,
+// so it cannot pass that rule — and weakening that rule to let it through would
+// weaken it for every adapter it was written to constrain.
+//
+// Two closed sets, each proving its own property, cost twelve lines and prove more
+// than one rule with an exception carved into it.
+func validateRecordCredentialEnv(kind string, env []EnvVar) error {
+	allowed := providerRecordEnvNames(kind)
+	for _, item := range env {
+		if _, ok := allowed[item.Name]; !ok {
+			return forbiddenErr("launch denied: a " + kind + " provider may not set " + item.Name)
 		}
 	}
 	return validateExplicitEnv(env)

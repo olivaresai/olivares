@@ -154,7 +154,7 @@ func newRootCmd() *cobra.Command {
 	root.PersistentFlags().VarP(&outputFlagValue{value: "text"}, "output", "o",
 		"global output format: text or json (report commands keep json unless -o is given)")
 	_ = root.RegisterFlagCompletionFunc("output", completeOutput)
-	root.AddCommand(newQuickstartCmd(), newFirstBootCmd(), newSetupCmd(), newConfigCmd(), newAuthCmd(), newDBCmd(), newMigrateCmd(), newVersionCmd(), newStatusCmd(), newReadyzCmd(), newDoctorCmd(), newWebUIFilesCmd(), newServeCmd(), newCollectorCmd(), newLicenseCmd(), newUpgradeCmd(), newUninstallCmd(), newReleaseCmd(), newAuditCmd(), newDDILCmd(), newDRCmd(), newOpenAPICmd(), newClaudeHookCmd(), newCodexHookCmd(), newGrokHookCmd(), newHookPEPCmd(), newKeysCmd(), newEvalsCmd(), newAgentCmd(), newWorkCmd(), newCodexCmd(), newGrokCmd(), newMCPCmd(), newThreatIntelCmd(), newHooksCmd(), newSecretsCmd(), newSourcesCmd(), newConnectorCmd(), newSuperadminCmd(), newEventingCmd(), newSecurityCmd(), newFindingsCmd(), newComplianceCmd(), newSupportCmd(), newCompletionCmd(root), newCommandsCmd(), newFirstPartyBinsCmd(), newExtractCmd(), newTokensCmd(), newUsersCmd(), newMembersCmd(), newTenantsCmd(), newGovernanceCmd(), newCapabilitiesCmd())
+	root.AddCommand(newQuickstartCmd(), newFirstBootCmd(), newSetupCmd(), newConfigCmd(), newAuthCmd(), newDBCmd(), newMigrateCmd(), newVersionCmd(), newStatusCmd(), newReadyzCmd(), newDoctorCmd(), newWebUIFilesCmd(), newServeCmd(), newCollectorCmd(), newLicenseCmd(), newUpgradeCmd(), newUninstallCmd(), newReleaseCmd(), newAuditCmd(), newDDILCmd(), newDRCmd(), newOpenAPICmd(), newClaudeHookCmd(), newCodexHookCmd(), newGrokHookCmd(), newHookPEPCmd(), newKeysCmd(), newEvalsCmd(), newAgentCmd(), newProviderCmd(), newWorkCmd(), newCodexCmd(), newGrokCmd(), newMCPCmd(), newThreatIntelCmd(), newHooksCmd(), newSecretsCmd(), newSourcesCmd(), newConnectorCmd(), newSuperadminCmd(), newEventingCmd(), newSecurityCmd(), newFindingsCmd(), newComplianceCmd(), newSupportCmd(), newCompletionCmd(root), newCommandsCmd(), newFirstPartyBinsCmd(), newExtractCmd(), newTokensCmd(), newUsersCmd(), newMembersCmd(), newTenantsCmd(), newGovernanceCmd(), newPolicyCmd(), newCapabilitiesCmd())
 	// The observe-and-report lane: one top-level command per module namespace it
 	// covers, named after the namespace so `olivares <ns>` and /v1/m/<ns>/ are the
 	// same word. Their shared transport is cmd_observeplane.go.
@@ -185,6 +185,9 @@ func newRootCmd() *cobra.Command {
 	// subcommand inside a group printed the group's help to STDOUT and exited
 	// 0 — `olivares agent typo` was indistinguishable from success to `set -e`.
 	enforceSubcommandContract(root)
+	// After every command is registered, so the first-hour path is stamped onto
+	// the real tree and a rename shows up as a missing path.
+	installFirstHourHelp(root)
 	return root
 }
 
@@ -204,7 +207,11 @@ var commandGroups = map[string]string{
 	// `grok` authors the managed requirements file, exactly as `codex` does, so it
 	// belongs in the same group. It arrived without one and a VISIBLE command with
 	// no group is absent from help by topic: it exists and cannot be found.
-	"grok":     "operate",
+	"grok": "operate",
+	// `provider` is SETUP and not operate, deliberately: registering the credential a
+	// session launches with is something a new operator does once, in the first hour,
+	// beside `connector` and `keys` — not something they do while operating a session.
+	"provider": "setup",
 	"eventing": "operate", "sources": "operate", "secrets": "operate", "work": "operate",
 	"superadmin": "operate", "support": "operate",
 	// Govern.
@@ -259,7 +266,7 @@ var commandGroups = map[string]string{
 	//   `capabilities` INVENTARÍA: qué servidores hay conectados y qué herramientas y skills
 	//   traen. Es la pregunta de `inventory`, que está en observe. NO va con `mcp` —que sí
 	//   está en govern— porque `mcp pins` DECIDE qué puede ejecutarse y esto sólo describe.
-	"governance": "govern", "capabilities": "observe",
+	"governance": "govern", "policy": "govern", "capabilities": "observe",
 }
 
 // addOnOnlyCommands are the top-level groups whose every verb answers

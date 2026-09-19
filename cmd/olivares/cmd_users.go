@@ -10,11 +10,11 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	"text/tabwriter"
 
 	"github.com/spf13/cobra"
 
 	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
+	"github.com/olivaresai/olivares/cmd/olivares/internal/termrender"
 )
 
 const (
@@ -278,17 +278,15 @@ func renderUserList(cmd *cobra.Command, raw []byte, emptyNote string) error {
 			_, err := fmt.Fprintln(out, emptyNote)
 			return err
 		}
-		tw := tabwriter.NewWriter(out, 0, 2, 2, ' ', 0)
-		fmt.Fprintln(tw, "ID\tEMAIL\tDISPLAY NAME\tSTATUS\tSUPERADMIN\tCREATED")
+		tbl := termrender.Table{Header: []string{"id", "email", "display name", "status", "superadmin", "created"}}
 		for _, u := range list.Items {
-			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%t\t%s\n",
+			tbl.Rows = append(tbl.Rows, []string{
 				safeCLIValue(u.ID, ""), safeCLIValue(u.Email, ""),
 				orDash(safeCLIValue(u.DisplayName, "")), safeCLIValue(u.Status, ""),
-				u.IsSuperadmin, safeCLIValue(u.CreatedAt, ""))
+				flagCell(u.IsSuperadmin), safeCLIValue(u.CreatedAt, ""),
+			})
 		}
-		if err := tw.Flush(); err != nil {
-			return err
-		}
+		renderTo(out).Table(tbl)
 		return writeMorePages(out, list.HasMore, list.Cursor)
 	}, json.RawMessage(raw))
 }

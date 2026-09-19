@@ -60,6 +60,7 @@ const (
 	domainAccessQuestion = "olivares.access-evidence.question.v1"
 	domainAccessRecord   = "olivares.access-evidence.record.v1"
 	domainAccessArtifact = "olivares.access-evidence.artifact.v1"
+	domainAccessInputs   = "olivares.access-evidence.inputs.v1"
 )
 
 // ArtifactDigestAlgorithm names the digest scheme ArtifactContentDigest
@@ -842,6 +843,15 @@ type AuthorizationDecisionContent struct {
 	// EvidenceRef is the ledger anchor the producer already holds for this
 	// decision, a pointer for verification and not a receipt.
 	EvidenceRef string `json:"evidence_ref,omitempty"`
+	// PolicyVersionID is the identity of the policy version this decision was
+	// taken under: the retained policy-artifact id, or the local
+	// "surface:revision" pair when that is what the evaluator consumed. It is
+	// NOT the route-witness PolicyVersion (a maximum of independent fact
+	// versions) and it is NOT inferred from the live authoring revision.
+	// Empty means unknown: a legacy row, never a fabricated current revision.
+	PolicyVersionID string `json:"policy_version_id,omitempty"`
+	// InputsDigest is the canonical digest of Inputs. Empty means unknown.
+	InputsDigest string `json:"inputs_digest,omitempty"`
 }
 
 // AccessEvidenceEventType implements AccessEvidenceContent.
@@ -849,6 +859,61 @@ func (AuthorizationDecisionContent) AccessEvidenceEventType() string {
 	return EventTypeAuthorizationDecision
 }
 func (AuthorizationDecisionContent) isAccessEvidenceContent() {}
+
+// PolicyVersionKnown reports whether the decision named the policy version it
+// was taken under. Empty is unknown, never "use whatever is live now".
+func (d AuthorizationDecisionContent) PolicyVersionKnown() bool {
+	return strings.TrimSpace(d.PolicyVersionID) != ""
+}
+
+// InputsDigestKnown reports whether the decision named the digest of the inputs
+// it consumed.
+func (d AuthorizationDecisionContent) InputsDigestKnown() bool {
+	return strings.TrimSpace(d.InputsDigest) != ""
+}
+
+// AccessInputsDigest returns the canonical, domain-separated digest of the
+// typed inputs a decision consumed. Two decisions that consumed the same
+// inputs produce the same digest; the empty slice hashes to a defined value
+// rather than being left blank (blank is reserved for "unknown").
+func AccessInputsDigest(inputs []AccessDependency) (string, error) {
+	if inputs == nil {
+		inputs = []AccessDependency{}
+	}
+	return canonicalDigest(domainAccessInputs, inputs)
+}
+
+// StampDecisionReconstructionFields fills PolicyVersionID and InputsDigest
+// when the producer omitted them and the recorded inputs are enough to name
+// them honestly. It never invents a live authoring revision. A producer that
+// already set InputsDigest to a value that does not match the inputs is
+// refused: that is an overclaim, not a stamp.
+func StampDecisionReconstructionFields(d AuthorizationDecisionContent) (AuthorizationDecisionContent, error) {
+	computed, err := AccessInputsDigest(d.Inputs)
+	if err != nil {
+		return d, err
+	}
+	switch {
+	case strings.TrimSpace(d.InputsDigest) == "":
+		d.InputsDigest = computed
+	case d.InputsDigest != computed:
+		return d, fmt.Errorf("access evidence: inputs_digest %q does not match the recorded inputs (%s)",
+			d.InputsDigest, computed)
+	}
+	if strings.TrimSpace(d.PolicyVersionID) == "" {
+		d.PolicyVersionID = firstRequiredPolicyArtifactRef(d.Inputs)
+	}
+	return d, nil
+}
+
+func firstRequiredPolicyArtifactRef(inputs []AccessDependency) string {
+	for _, in := range inputs {
+		if in.Required && in.Kind == DependencyPolicyArtifact && strings.TrimSpace(in.Ref) != "" {
+			return strings.TrimSpace(in.Ref)
+		}
+	}
+	return ""
+}
 
 // ---------------------------------------------------------------------------
 // Envelope and canonical digests

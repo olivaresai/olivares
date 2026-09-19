@@ -112,7 +112,20 @@ func (e *Engine) InstallV2(ctx context.Context, req RequestV2, approved *PlanV2,
 	if err != nil {
 		return nil, plan, refuse(KindDestinationNotWritable, "create fetched object: %v", err)
 	}
-	got, ferr := p.FetchV2(ctx, plan, f)
+	// The stream is OBSERVED, not intercepted: the file is still fsynced and
+	// closed through its own handle below, and the provider still computes the
+	// digest from the bytes it writes. Grok declares only a MAXIMUM size
+	// (SizeStateBounded), so a percentage is not always available and the counter
+	// says bytes in that case rather than inventing a denominator.
+	total := int64(0)
+	if plan.Selection.FetchedObject.SizeState == SizeStateExact {
+		total = plan.Selection.FetchedObject.Size
+	}
+	counted := newFetchProgress(f, progress, total)
+	got, ferr := p.FetchV2(ctx, plan, counted)
+	if ferr == nil {
+		counted.done()
+	}
 	if ferr == nil {
 		ferr = f.Sync()
 		if ferr != nil {

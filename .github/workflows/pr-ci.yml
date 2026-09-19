@@ -109,6 +109,67 @@ jobs:
       - name: licence headers and the AGPL boundary
         run: task lint:spdx lint:boundary
 
+      # Capture the existing generator's outputs on the hosted runner.
+      - name: record the generation inputs
+        env:
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          receipt="$RUNNER_TEMP/sdk-generation"
+          mkdir -p "$receipt"
+          git rev-parse HEAD > "$receipt/checkout.sha"
+          printf '%s\n' "$PR_HEAD" > "$receipt/pr-head.sha"
+          go version > "$receipt/toolchain.txt"
+          sha256sum go.work go.work.sum web/openapi/openapi.json web/openapi/openapi.beta.json \
+            clients/generator/*.go clients/generator/go.mod > "$receipt/inputs.sha256"
+      - name: regenerate the SDKs with their existing generator
+        run: |
+          set -euo pipefail
+          receipt="$RUNNER_TEMP/sdk-generation"
+          if go run ./clients/generator -spec web/openapi/openapi.json \
+            -beta web/openapi/openapi.beta.json -out clients > "$receipt/generator.log" 2>&1; then
+            printf '0\n' > "$receipt/generator.exit"
+          else
+            rc=$?
+            printf '%s\n' "$rc" > "$receipt/generator.exit"
+            cat "$receipt/generator.log"
+            exit "$rc"
+          fi
+          paths=(
+            clients/go/operations.gen.go clients/go/version.gen.go
+            clients/python/src/olivares_client/_operations.py
+            clients/typescript/src/operations.gen.ts clients/typescript/src/version.gen.ts
+            clients/java/src/main/java/ai/olivares/client/Client.java
+            clients/java/src/main/java/ai/olivares/client/ApiMetadata.java
+          )
+          # A recreated untracked file is invisible to git diff. Every fixed
+          # output must exist in the reviewed index before its patch is usable.
+          if ! git ls-files --error-unmatch -- "${paths[@]}" > /dev/null; then
+            echo "::error::a declared SDK output is absent from the committed index"
+            exit 1
+          fi
+          sha256sum "${paths[@]}" > "$receipt/outputs.sha256"
+          git diff --binary -- "${paths[@]}" > "$receipt/generated-sdk.patch"
+          if git diff --quiet -- "${paths[@]}"; then
+            :
+          else
+            rc=$?
+            if [[ "$rc" -ne 1 ]]; then
+              echo "::error::could not compare generated SDKs with their committed snapshots"
+              exit 2
+            fi
+            echo "::error::generated SDKs differ from their committed snapshots; inspect the generation artifact"
+            exit 1
+          fi
+      - name: retain generation evidence, including a stale-output patch
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sdk-generation-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/sdk-generation/
+          retention-days: 7
+          if-no-files-found: error
+
   pr-build:
     if: github.repository == 'olivaresai/olivares' || vars.OLIVARES_RELEASE_PROFILE == 'preprod'
     runs-on: ubuntu-latest

@@ -5,29 +5,25 @@
 package main
 
 import (
-	"os"
-	"path/filepath"
 	"testing"
-
-	"github.com/olivaresai/olivares/modules/sessions"
 )
 
-func TestManagedGrokInstallPinsSessionDriver(t *testing.T) {
-	dir := t.TempDir()
-	obs := newHostToolObserverAt(filepath.Join(dir, "tools"), nil, dir, dir)
-	if got := obs.latestProgram("grok"); got != "" {
-		t.Fatalf("empty root must not pin: %q", got)
-	}
+// TestSessionWorkspaceRootIsUnderTheDataDirectory pins the derivation of the
+// per-session workspace root, including the two cases that yield none — because
+// "no root" is deny-closed for a workspaceless launch, and a guessed absolute path
+// would put a session's files somewhere nobody configured.
+func TestSessionWorkspaceRootIsUnderTheDataDirectory(t *testing.T) {
+	t.Parallel()
 
-	t.Setenv("OLIVARES_DATA_DIR", dir)
-	opts := buildSessionRuntimeOptions(func(k string) string {
-		if k == envSessionGrokBin || k == envSessionCodexBin {
-			return ""
+	if got := sessionWorkspaceRootFor("/var/lib/olivares"); got != "/var/lib/olivares/session-workspaces" {
+		t.Fatalf("root = %q", got)
+	}
+	if got := sessionWorkspaceRootFor("/var/lib/olivares/"); got != "/var/lib/olivares/session-workspaces" {
+		t.Fatalf("a trailing separator changed the root: %q", got)
+	}
+	for _, in := range []string{"", "   ", "relative/path"} {
+		if got := sessionWorkspaceRootFor(in); got != "" {
+			t.Fatalf("data directory %q yielded root %q; want none", in, got)
 		}
-		return os.Getenv(k)
-	}, nil, nil)
-	m := sessions.New(opts...)
-	if m == nil {
-		t.Fatal("module")
 	}
 }

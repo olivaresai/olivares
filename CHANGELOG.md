@@ -37,6 +37,56 @@ month, release-of-month; the current release is `v26.9.1`).
 
 ### Added
 
+- **A console built around the work.** The session is the unit of work: one screen lists
+  every agent session on the plane in a keyboard-navigable rail grouped by what each session
+  needs (active, waiting for you, settled), opens one into the narrative of the run with its
+  checks, last turns and touched resources inline, keeps its scope and identifiers beside it,
+  and carries a composer that launches or continues a governed session. A session is
+  addressable: a link opens it cold, survives a reload and follows Back and Forward, and the
+  authority checks still decide. Names come from one ladder (run name, summary, goal, action,
+  "Untitled session"); a raw reference is never painted as a name and stays reachable in the
+  identifiers block. Overview, agents, provider profiles and audit follow the same frame —
+  title, description and actions on one line in one shared page header, tables that fill
+  their region including at zero rows, every truncated sentence carrying its full text — and
+  the chrome shrinks to a 48 px header and one 36 px title line. The first screen after login
+  offers the next action to a principal authorized to take it, and every empty state says
+  what the surface will show, in seven languages. States are told in words as well as colour,
+  the work rail declares itself busy while its first read is in flight, headings never skip a
+  level on the session screens, and a burst of work-stream events costs two list reads
+  instead of one per event. Measured against the embedded console of the built binary in both
+  themes at 1440, 1180 and 390 px; one known limit is unchanged: the audit screen's name is
+  cut at 1180 px by its own block of controls. The documentation's console captures are
+  retaken from this console.
+
+- **An auditor can ask what a policy decided on a past date.** `olivares policy replay`
+  answers from the evidence ledger — the recorded policy version and the inputs that decision
+  consumed — and never from the policy that is active today, so Monday's allow can be
+  replayed after Tuesday's revoke. The same reconstruction is available over the API and from
+  the console's governance client. The how-to says what a reconstruction proves and what it
+  cannot prove.
+
+- **The official Codex and Grok command-line clients install beside Claude Code.**
+  `olivares agent tool install` and the `codex` / `grok` command families install, verify and
+  record each client from its origin with the same receipt model. The Grok origin is verified
+  end to end (download, checksum, launch, version). The Codex origin answers 403 to an
+  unauthenticated verification, so the installer labels that origin **unverified** in the
+  receipt and in the documentation instead of claiming a check it cannot make.
+
+- **One declared contract for launching an official client in a governed session.** The
+  arguments each client needs are built from a single table, the transport each form requires
+  (pipes or a terminal) is declared beside it, and the engine asks that declaration which
+  runner to wire: a client that refuses a terminal on its standard input is launched on
+  pipes. Launch, attach, input, answer by name, reconnect, stop and resume are exercised
+  against the three real clients without a model turn.
+
+- **A written contract for the model gateway.** One `CreateMessage` call with streaming, tool
+  use, usage accounting and cancellation, and a conformance suite that every driver must pass
+  over each driver, protocol and transport the product ships. Drivers report their
+  capabilities through the contract, and errors carry the provider's classification (rate
+  limit, context length, authentication, transient) so retry and budget decisions do not
+  parse messages. The contract and a guide to writing a driver are in the reference
+  documentation.
+
 - `olivares first-boot` answers "what now?" without a shell. It reads the installation's
   data directory and prints the address or addresses the console answers at, plus whether
   first setup is still pending — no credential and no network, so it works against the
@@ -114,6 +164,14 @@ month, release-of-month; the current release is `v26.9.1`).
   (`sha256sum` or `shasum`) otherwise, and it names the missing tools when neither
   exists. On a minimal image the missing tool read as "refusing to replace existing
   service file" on the second `--start` invocation.
+
+### Security
+
+- The Backstage connector resolves `adm-zip` 0.6.1
+  ([GHSA-7q85-xj36-vmfc](https://github.com/advisories/GHSA-7q85-xj36-vmfc): uncontrolled
+  memory allocation from the declared uncompressed size, high). `adm-zip` is a transitive
+  dependency of the connector's three workspaces; an override pins `^0.6.1` and the three
+  lockfiles move that package alone. The engine binary does not contain it.
 
 ## [26.9.0] - 2026-09-16
 

@@ -655,7 +655,7 @@ func TestLaunchForWorkReplaySurvivesStoreReopen(t *testing.T) {
 	dsn := filepath.Join(t.TempDir(), "runtime-work-launch.db")
 	clk := &testClock{now: baseTime}
 	runnerBeforeRestart := &fakeRunner{}
-	m1 := New(
+	m1 := New(WithSessionWorkspaceRoot(t.TempDir()), 
 		WithClock(clk), WithRunner(runnerBeforeRestart), WithCredentialSource(staticCred()),
 		WithWorkIdentityResolver(allowWorkIdentity{}), WithWorkContentGuard(allowWorkContent{}),
 	)
@@ -693,7 +693,7 @@ func TestLaunchForWorkReplaySurvivesStoreReopen(t *testing.T) {
 	}
 
 	runnerAfterRestart := &fakeRunner{}
-	m2 := New(
+	m2 := New(WithSessionWorkspaceRoot(t.TempDir()), 
 		WithClock(clk), WithRunner(runnerAfterRestart), WithCredentialSource(staticCred()),
 		WithWorkIdentityResolver(allowWorkIdentity{}), WithWorkContentGuard(allowWorkContent{}),
 	)

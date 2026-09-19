@@ -34,10 +34,14 @@ const (
 )
 
 func providerProfilePermissions() []auth.Permission {
-	return []auth.Permission{
+	out := []auth.Permission{
 		permProfileRead, permProfileWrite, permProfileAdmin,
 		permProfileBindingRead, permProfileBindingWrite, permProfileBindingAdmin,
 	}
+	// The provider-RECORD tiers travel with the profile tiers because they are
+	// declared as one plane, and a role that can administer profiles is not thereby
+	// allowed to register credentials — the tiers stay independent.
+	return append(out, providerRecordPermissions()...)
 }
 
 // providerProfileRoutes mounts the B1 administration surface under /v1/m/sessions/.
@@ -60,6 +64,7 @@ func (m *Module) providerProfileRoutes(reg api.RouteRegistrar) {
 	reg.Handle("POST", "/provider-source-bindings", permProfileBindingWrite, m.handleCreateBinding)
 	reg.Handle("GET", "/provider-source-bindings/{ref}", permProfileBindingRead, m.handleGetBinding)
 	reg.Handle("POST", "/provider-source-bindings/{ref}/revoke", permProfileBindingAdmin, m.handleRevokeBinding)
+	m.providerRecordRoutes(reg)
 }
 
 // providerProfileDTO is the NORMAL view of a profile: references and labels.
@@ -100,9 +105,21 @@ type providerProfileDTO struct {
 	// which refuses every launch whose driver requires one). It is an
 	// authorization, never a credential and never a path.
 	AuthSource string `json:"auth_source,omitempty"`
-	CreatedAt  string `json:"created_at,omitempty"`
-	UpdatedAt  string `json:"updated_at,omitempty"`
-	RetiredAt  string `json:"retired_at,omitempty"`
+	// ProviderRecordRef names the registered provider this profile's managed
+	// launches use ("" = none, and the host-wide credential decides, exactly as it
+	// did before v26.10). It is a reference: no key, no hint, no endpoint.
+	ProviderRecordRef string `json:"provider_record_ref,omitempty"`
+	// SessionTools is the DECLARED tool surface every session under this profile
+	// gets, and SessionToolsDeclared is whether the operator declared one at all.
+	// Undeclared is deny-closed at launch — the child gets no built-in tools — so
+	// the two are separate fields rather than an empty list standing for both.
+	SessionTools         []string `json:"session_tools,omitempty"`
+	SessionToolsDeclared bool     `json:"session_tools_declared"`
+	// SessionPermissionMode is the declared permission mode ("" = none declared).
+	SessionPermissionMode string `json:"session_permission_mode,omitempty"`
+	CreatedAt             string `json:"created_at,omitempty"`
+	UpdatedAt         string `json:"updated_at,omitempty"`
+	RetiredAt         string `json:"retired_at,omitempty"`
 }
 
 // providerProfileConfigurationDTO is the authorized configuration read: the
@@ -127,6 +144,15 @@ type createProfileRequest struct {
 	// identity: provider_account_home or managed_injection. Empty authorizes
 	// neither, which is a refusal for every driver that needs one.
 	AuthSource string `json:"auth_source"`
+	// ProviderRecordRef optionally binds the new profile to a registered provider
+	// in the same authorized call, so deploying an agent is one step.
+	ProviderRecordRef string `json:"provider_record_ref"`
+	// SessionTools declares the tool surface sessions under this profile get. A
+	// null field declares NOTHING, which is deny-closed at launch; `[]` declares no
+	// tools out loud. The pointer is what keeps those two apart over JSON.
+	SessionTools *[]string `json:"session_tools"`
+	// SessionPermissionMode declares the permission mode those sessions run under.
+	SessionPermissionMode string `json:"session_permission_mode"`
 }
 
 // patchProfileRequest is the only post-creation mutation: a label and/or an
@@ -139,6 +165,15 @@ type patchProfileRequest struct {
 	// It is not identity, so it does not create a new profile id; a LIVE child
 	// keeps the source its own launch was authorized under.
 	AuthSource *string `json:"auth_source"`
+	// ProviderRecordRef binds (or unbinds, with "") the registered provider this
+	// profile's managed launches use. A LIVE child keeps the one its own launch
+	// resolved.
+	ProviderRecordRef *string `json:"provider_record_ref"`
+	// SessionTools re-declares the tool surface; `null` inside the pointer
+	// withdraws the declaration and returns the profile to deny-closed.
+	SessionTools *[]string `json:"session_tools"`
+	// SessionPermissionMode re-declares the permission mode; "" withdraws it.
+	SessionPermissionMode *string `json:"session_permission_mode"`
 }
 
 type providerBindingDTO struct {
@@ -166,7 +201,11 @@ func (m *Module) toProfileDTO(p ProviderProfile) providerProfileDTO {
 	return providerProfileDTO{
 		ProfileRef: p.Ref, Driver: p.Driver, EnvironmentRef: p.EnvironmentRef,
 		DisplayName: p.DisplayName, State: p.State, AuthSource: p.AuthSource,
-		LocalEnvironment: local,
+		ProviderRecordRef:     p.ProviderRecordRef,
+		SessionTools:          p.SessionTools,
+		SessionToolsDeclared:  p.SessionToolsDeclared,
+		SessionPermissionMode: p.SessionPermissionMode,
+		LocalEnvironment:      local,
 		Operable: local && p.State == ProfileActive && m.driverOperable(p.Driver) &&
 			requireAuthSourceForDriver(p.Driver, p.AuthSource) == nil,
 		CreatedAt: p.CreatedAt, UpdatedAt: p.UpdatedAt, RetiredAt: p.RetiredAt,
@@ -207,7 +246,10 @@ func (m *Module) handleCreateProfile(w http.ResponseWriter, r *http.Request, mc 
 	prof, err := m.CreateProfile(r.Context(), mc.Tenant, CreateProfileInput{
 		Driver: body.Driver, ConfigHome: body.ConfigHome, UserHome: body.UserHome,
 		DisplayName: body.DisplayName, EnvironmentRef: body.EnvironmentRef,
-		AuthSource: body.AuthSource,
+		AuthSource: body.AuthSource, ProviderRecordRef: body.ProviderRecordRef,
+		SessionTools:         derefTools(body.SessionTools),
+		SessionToolsDeclared: body.SessionTools != nil,
+		SessionPermissionMode: body.SessionPermissionMode,
 	})
 	if err != nil {
 		writeRunErr(w, err)
@@ -232,8 +274,10 @@ func (m *Module) handlePatchProfile(w http.ResponseWriter, r *http.Request, mc a
 	if !decodeJSONBody(w, r, &body) {
 		return
 	}
-	if body.DisplayName == nil && body.State == nil && body.AuthSource == nil {
-		writeJSON(w, http.StatusBadRequest, errorBody("nothing to change: provide display_name, state and/or auth_source"))
+	if body.DisplayName == nil && body.State == nil && body.AuthSource == nil &&
+		body.ProviderRecordRef == nil && body.SessionTools == nil && body.SessionPermissionMode == nil {
+		writeJSON(w, http.StatusBadRequest, errorBody(
+			"nothing to change: provide display_name, state, auth_source, provider_record_ref, session_tools and/or session_permission_mode"))
 		return
 	}
 	if body.State != nil {
@@ -249,6 +293,9 @@ func (m *Module) handlePatchProfile(w http.ResponseWriter, r *http.Request, mc a
 	}
 	prof, err := m.PatchProfile(r.Context(), mc.Tenant, chi.URLParam(r, "ref"), ProfilePatch{
 		DisplayName: body.DisplayName, State: body.State, AuthSource: body.AuthSource,
+		ProviderRecordRef:     body.ProviderRecordRef,
+		SessionTools:          body.SessionTools,
+		SessionPermissionMode: body.SessionPermissionMode,
 	})
 	if err != nil {
 		writeRunErr(w, err)
@@ -337,4 +384,14 @@ func (m *Module) handleRevokeBinding(w http.ResponseWriter, r *http.Request, mc 
 		return
 	}
 	writeJSON(w, http.StatusOK, toBindingDTO(b))
+}
+
+// derefTools reads an optional declaration off the wire. A null field is "not
+// declared" and an empty array is "declared none"; the caller passes the
+// presence separately, so this only unwraps the value.
+func derefTools(in *[]string) []string {
+	if in == nil {
+		return nil
+	}
+	return *in
 }

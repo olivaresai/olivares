@@ -988,7 +988,7 @@ func licenseVerifyCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&pubB64, "pubkey", "", "base64 Ed25519 public key (default: embedded key)")
-	cmd.Flags().StringVar(&dataDir, "data-dir", "", "also trust this data directory's administrative license trust (see `license trust`)")
+	cmd.Flags().StringVar(&dataDir, "data-dir", "", "also trust this data directory's administrative license trust (see 'license trust')")
 	cmd.Flags().StringVar(&manifestPath, "manifest", "", "OTA channel manifest to read the license CRL from (its signature must verify)")
 	cmd.Flags().StringVar(&manifestSig, "manifest-sig", "", "detached manifest signature (default <manifest>.sig)")
 	cmd.Flags().StringVar(&otaPub, "ota-pubkey", "", "base64 or @file Ed25519 OTA key for the manifest (default: the key embedded in this build)")

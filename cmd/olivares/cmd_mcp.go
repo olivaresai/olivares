@@ -11,11 +11,11 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	"text/tabwriter"
 
 	"github.com/spf13/cobra"
 
 	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
+	"github.com/olivaresai/olivares/cmd/olivares/internal/termrender"
 )
 
 const (
@@ -108,18 +108,18 @@ func newMCPPinsListCmd(client mcpPinsClient) *cobra.Command {
 				return exitcode.New(exitcode.Server, fmt.Errorf("decode tool pins response: %w", err))
 			}
 			return renderOut(cmd, func(out io.Writer) error {
-				tw := tabwriter.NewWriter(out, 0, 2, 2, ' ', 0)
-				fmt.Fprintln(tw, "TOOL\tFINGERPRINT\tPINNED\tCOUNT\tDRIFT")
+				tbl := termrender.Table{Header: []string{"tool", "fingerprint", "pinned", "count", "drift"}}
 				for _, pin := range pins.Items {
-					fmt.Fprintf(tw, "%s\t%s\t%s\t%d\t%s\n",
+					tbl.Rows = append(tbl.Rows, []string{
 						safeCLIValue(pin.Tool, ""),
 						formatMCPFingerprint(pin.Fingerprint),
 						defaultMCPTableValue(pin.PinnedAt),
-						pin.PinCount,
+						countCell(pin.PinCount),
 						formatMCPFingerprint(pin.DriftFingerprint),
-					)
+					})
 				}
-				return tw.Flush()
+				renderTo(out).Table(tbl)
+				return nil
 			}, json.RawMessage(raw))
 		},
 	}

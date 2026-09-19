@@ -56,7 +56,7 @@ description: >-
 
 <!-- BEGIN GENERATED olivares-console-routes — regenerate with `bash scripts/check-guide-docs.sh --write`; do not edit by hand -->
 
-Консоль публикует **75 маршрутов**. Каждый из них приведён в таблицах ниже вместе с требуемым
+Консоль публикует **76 маршрутов**. Каждый из них приведён в таблицах ниже вместе с требуемым
 разрешением и справочной страницей, которую открывает встроенная ссылка помощи.
 
 ### Эксплуатация
@@ -77,6 +77,7 @@ description: >-
 | Наблюдаемость | `/observability` | Здоровье приёма по стандартам и детализация трассировок | `health:status:read` | [reference/modules/observability](/ru/reference/modules/observability/) |
 | Привязки источников | `/provider-bindings` | Выделение настроенных источников, в применённой этим узлом ревизии, профилям провайдеров | `sessions:profile-binding:read` | [reference/modules/ii-sessions](/ru/reference/modules/ii-sessions/) |
 | Профили провайдеров | `/provider-profiles` | Регистрация и администрирование домашних каталогов провайдеров, под которыми запускаются сессии, и чтение их конфигурации по запросу | `sessions:profile:read` | [reference/modules/ii-sessions](/ru/reference/modules/ii-sessions/) |
+| Провайдеры | `/providers` | Регистрация API-ключей и конечных точек, с которыми запускаются сессии; их проверка, замена и отзыв | `sessions:provider:read` | [how-to/add-a-provider](/ru/how-to/add-a-provider/) |
 | Песочница | `/sandbox` | Изолированное тестирование и воспроизведение агентов | `sandbox:run:read` | [reference/modules/xvii-sandbox](/ru/reference/modules/xvii-sandbox/) |
 | Сессии | `/sessions` | Текущая работа агентов и временные шкалы | `sessions:live:read` | [reference/modules/ii-sessions](/ru/reference/modules/ii-sessions/) |
 | Арендаторы | `/tenants` | Приостановка и восстановление обслуживания арендатора | `system:admin` | [how-to/troubleshooting](/ru/how-to/troubleshooting/) |
