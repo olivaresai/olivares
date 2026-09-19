@@ -7,7 +7,6 @@ package main
 import (
 	"context"
 	"strconv"
-	"strings"
 
 	"github.com/olivaresai/olivares/connectors/claude"
 	claudeapi "github.com/olivaresai/olivares/connectors/claude-api"
@@ -45,7 +44,13 @@ const hookFirewallSignalSource = "hooks_pep"
 // and returns the verdict. A nil inspector or empty content is a clean pass (Forward true) — so
 // the default AGPL build is fully inert. It is the hook-path analog of
 // inferenceProxyDecider.runContentInspector.
-func (d *claudeHookDecider) runHookFirewall(ctx context.Context, tenant model.TenantID, actor string, in claude.HookDecisionInput) claudeapi.ContentInspectionDecision {
+//
+// The firewall's actor is the agent the credential proves, never the declared hint: a hint
+// that selected an agent-scoped policy would let any credential of the tenant borrow another
+// agent's exemption by naming it. A request whose agent cannot be proven (resolveHookAgent) is
+// handed over as unbindable, so an agent-scoped policy denies it instead of falling through to
+// a broader one.
+func (d *claudeHookDecider) runHookFirewall(ctx context.Context, tenant model.TenantID, actor string, agent hookAgent, in claude.HookDecisionInput) claudeapi.ContentInspectionDecision {
 	if d.hookInspector == nil {
 		return claudeapi.ContentInspectionDecision{Forward: true}
 	}
@@ -57,11 +62,12 @@ func (d *claudeHookDecider) runHookFirewall(ctx context.Context, tenant model.Te
 	// healthy inspector returns its own no-op (Forward, zero meter) for empty content, so this
 	// costs nothing in the normal case (no spurious finding or billable meter is emitted).
 	dec := d.hookInspector.Inspect(ctx, claudeapi.ContentInspectionInput{
-		Tenant:    tenant.String(),
-		ActorRef:  strings.TrimSpace(in.Identity.Agent),
-		Direction: claudeapi.InspectDirectionRequest,
-		Channels:  collected.Channels,
-		Unscanned: collected.Unscanned,
+		Tenant:          tenant.String(),
+		ActorRef:        agent.proven,
+		UnbindableAgent: agent.unbindable,
+		Direction:       claudeapi.InspectDirectionRequest,
+		Channels:        collected.Channels,
+		Unscanned:       collected.Unscanned,
 	})
 	d.publishHookInspectionFindings(ctx, tenant, in.Tool, dec.Findings)
 	d.emitHookInspectionMeter(ctx, tenant, in.Tool, dec.Meter)

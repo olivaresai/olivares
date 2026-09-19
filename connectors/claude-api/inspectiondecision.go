@@ -33,7 +33,7 @@ const (
 type ContentInspectionInput struct {
 	Tenant          string // resolved tenant key ("" = the global scope)
 	ActorRef        string // authenticated acting agent ref ("" when none is bound)
-	UnbindableAgent bool   // true for an API token whose authenticated identity has no agent binding
+	UnbindableAgent bool   // true when no agent can be bound: an API token with no agent binding; on the hooks PEP, any credential that proves no agent
 	Direction       string // request | response
 	Model           string
 	Channels        []ContentChannel // the collected content (CollectRequestContent/CollectResponseContent)
