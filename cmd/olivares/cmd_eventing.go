@@ -16,11 +16,11 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"text/tabwriter"
 	"time"
 
 	"github.com/spf13/cobra"
 
+	"github.com/olivaresai/olivares/cmd/olivares/internal/termrender"
 	"github.com/olivaresai/olivares/connectors/webhook"
 	"github.com/olivaresai/olivares/core/egress"
 	"github.com/olivaresai/olivares/core/model"
@@ -201,14 +201,21 @@ func eventingSubListCmd() *cobra.Command {
 						_, err := fmt.Fprintln(out, "no subscriptions")
 						return err
 					}
-					tw := tabwriter.NewWriter(out, 0, 2, 2, ' ', 0)
-					fmt.Fprintln(tw, "ID\tNAME\tENABLED\tENDPOINT\tROLE\tEVENT_TYPES\tAUTH_TYPE\tCREATED")
+					tbl := termrender.Table{Header: []string{"id", "name", "enabled", "endpoint", "role", "event_types", "auth_type", "created"}}
 					for _, item := range items {
-						fmt.Fprintf(tw, "%s\t%s\t%t\t%s\t%s\t%s\t%s\t%s\n",
-							item.ID, item.Name, item.Enabled, ellipsis(item.Endpoint, 50), item.Role,
-							item.EventTypes, item.AuthType, item.CreatedAt)
+						tbl.Rows = append(tbl.Rows, []string{
+							item.ID,
+							item.Name,
+							flagCell(item.Enabled),
+							ellipsis(item.Endpoint, 50),
+							item.Role,
+							item.EventTypes,
+							item.AuthType,
+							item.CreatedAt,
+						})
 					}
-					return tw.Flush()
+					renderTo(out).Table(tbl)
+					return nil
 				}, items)
 			})
 		},
@@ -285,24 +292,22 @@ func eventingSubGetCmd() *cobra.Command {
 					InitInterval: r.String(evtColSubInitInterval),
 					CreatedAt:    r.String(model.ColCreatedAt),
 				}
-				return renderOut(cmd, func(out io.Writer) error {
-					tw := tabwriter.NewWriter(out, 0, 2, 2, ' ', 0)
-					fmt.Fprintf(tw, "ID\t%s\n", item.ID)
-					fmt.Fprintf(tw, "NAME\t%s\n", item.Name)
-					fmt.Fprintf(tw, "DESCRIPTION\t%s\n", item.Description)
-					fmt.Fprintf(tw, "ENABLED\t%t\n", item.Enabled)
-					fmt.Fprintf(tw, "ENDPOINT\t%s\n", item.Endpoint)
-					fmt.Fprintf(tw, "ROLE\t%s\n", item.Role)
-					fmt.Fprintf(tw, "EVENT_TYPES\t%s\n", item.EventTypes)
-					fmt.Fprintf(tw, "SOURCES\t%s\n", item.Sources)
-					fmt.Fprintf(tw, "AUTH_TYPE\t%s\n", item.AuthType)
-					fmt.Fprintf(tw, "AUTH_HEADER\t%s\n", item.AuthHeader)
-					fmt.Fprintf(tw, "AUTH_HINT\t%s\n", item.AuthHint)
-					fmt.Fprintf(tw, "SECRET_HINT\t%s\n", item.SecretHint)
-					fmt.Fprintf(tw, "MAX_ATTEMPTS\t%s\n", item.MaxAttempts)
-					fmt.Fprintf(tw, "INITIAL_INTERVAL\t%s\n", item.InitInterval)
-					fmt.Fprintf(tw, "CREATED\t%s\n", item.CreatedAt)
-					return tw.Flush()
+				return renderFieldsOut(cmd, []termrender.Field{
+					{Key: "id", Value: item.ID},
+					{Key: "name", Value: item.Name},
+					{Key: "description", Value: item.Description},
+					{Key: "enabled", Value: flagCell(item.Enabled)},
+					{Key: "endpoint", Value: item.Endpoint},
+					{Key: "role", Value: item.Role},
+					{Key: "event_types", Value: item.EventTypes},
+					{Key: "sources", Value: item.Sources},
+					{Key: "auth_type", Value: item.AuthType},
+					{Key: "auth_header", Value: item.AuthHeader},
+					{Key: "auth_hint", Value: item.AuthHint},
+					{Key: "secret_hint", Value: item.SecretHint},
+					{Key: "max_attempts", Value: item.MaxAttempts},
+					{Key: "initial_interval", Value: item.InitInterval},
+					{Key: "created", Value: item.CreatedAt},
 				}, item)
 			})
 		},
@@ -1149,14 +1154,21 @@ func eventingDeliveriesListCmd() *cobra.Command {
 						_, err := fmt.Fprintln(out, "no deliveries")
 						return err
 					}
-					tw := tabwriter.NewWriter(out, 0, 2, 2, ' ', 0)
-					fmt.Fprintln(tw, "ID\tSUBSCRIPTION\tEVENT_TYPE\tSEQ\tSTATUS\tATTEMPTS\tLAST_STATUS\tLAST_ATTEMPT")
+					tbl := termrender.Table{Header: []string{"id", "subscription", "event_type", "seq", "status", "attempts", "last_status", "last_attempt"}}
 					for _, item := range items {
-						fmt.Fprintf(tw, "%s\t%s\t%s\t%d\t%s\t%d\t%s\t%s\n",
-							item.ID, item.Subscription, item.EventType, item.EventSeq, item.Status,
-							item.Attempts, item.LastStatus, item.LastAttempt)
+						tbl.Rows = append(tbl.Rows, []string{
+							item.ID,
+							item.Subscription,
+							item.EventType,
+							countCell(item.EventSeq),
+							item.Status,
+							countCell(item.Attempts),
+							item.LastStatus,
+							item.LastAttempt,
+						})
 					}
-					return tw.Flush()
+					renderTo(out).Table(tbl)
+					return nil
 				}, items)
 			})
 		},
@@ -1234,14 +1246,20 @@ func eventingDeadLettersListCmd() *cobra.Command {
 						_, err := fmt.Fprintln(out, "no dead-lettered deliveries")
 						return err
 					}
-					tw := tabwriter.NewWriter(out, 0, 2, 2, ' ', 0)
-					fmt.Fprintln(tw, "ID\tSUBSCRIPTION\tEVENT_TYPE\tSEQ\tATTEMPTS\tLAST_STATUS\tEVENT_ID")
+					tbl := termrender.Table{Header: []string{"id", "subscription", "event_type", "seq", "attempts", "last_status", "event_id"}}
 					for _, item := range items {
-						fmt.Fprintf(tw, "%s\t%s\t%s\t%d\t%d\t%s\t%s\n",
-							item.ID, item.Subscription, item.EventType, item.EventSeq, item.Attempts,
-							item.LastStatus, item.EventID)
+						tbl.Rows = append(tbl.Rows, []string{
+							item.ID,
+							item.Subscription,
+							item.EventType,
+							countCell(item.EventSeq),
+							countCell(item.Attempts),
+							item.LastStatus,
+							item.EventID,
+						})
 					}
-					return tw.Flush()
+					renderTo(out).Table(tbl)
+					return nil
 				}, items)
 			})
 		},
@@ -1414,13 +1432,18 @@ func eventingEventsListCmd() *cobra.Command {
 						_, err := fmt.Fprintln(out, "no events")
 						return err
 					}
-					tw := tabwriter.NewWriter(out, 0, 2, 2, ' ', 0)
-					fmt.Fprintln(tw, "SEQ\tTYPE\tSOURCE\tEVENT_ID\tOCCURRED_AT")
+					tbl := termrender.Table{Header: []string{"seq", "type", "source", "event_id", "occurred_at"}}
 					for _, item := range items {
-						fmt.Fprintf(tw, "%d\t%s\t%s\t%s\t%s\n",
-							item.Seq, item.Type, item.Source, ellipsis(item.EventID, 36), item.OccurredAt)
+						tbl.Rows = append(tbl.Rows, []string{
+							countCell(item.Seq),
+							item.Type,
+							item.Source,
+							ellipsis(item.EventID, 36),
+							item.OccurredAt,
+						})
 					}
-					return tw.Flush()
+					renderTo(out).Table(tbl)
+					return nil
 				}, items)
 			})
 		},

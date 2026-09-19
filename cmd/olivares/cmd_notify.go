@@ -286,9 +286,9 @@ func addNotifyRouteFlags(cmd *cobra.Command, f *notifyRouteFlags, nameRequired b
 		nameHelp += " (required, unique in the tenant)"
 	}
 	cmd.Flags().StringVar(&f.name, "name", "", nameHelp)
-	cmd.Flags().StringVar(&f.destination, "destination", "", "the provisioned destination to send to (required; see `notify destinations`)")
+	cmd.Flags().StringVar(&f.destination, "destination", "", "the provisioned destination to send to (required; see 'notify destinations')")
 	cmd.Flags().StringVar(&f.minSeverity, "min-severity", "", "severity floor: info, low, medium, high or critical (empty = no floor)")
-	cmd.Flags().StringSliceVar(&f.matchTypes, "match-type", nil, "event type to match, repeatable (see `notify match-types`)")
+	cmd.Flags().StringSliceVar(&f.matchTypes, "match-type", nil, "event type to match, repeatable (see 'notify match-types')")
 	cmd.Flags().StringSliceVar(&f.matchKinds, "match-kind", nil, "finding kind to match, repeatable")
 	cmd.Flags().StringSliceVar(&f.matchSources, "match-source", nil, "signal source to match, repeatable")
 	cmd.Flags().StringSliceVar(&f.matchSubjectKinds, "match-subject-kind", nil, "subject kind to match, repeatable")

@@ -9,9 +9,11 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"text/tabwriter"
+	"strconv"
 
 	"github.com/spf13/cobra"
+
+	"github.com/olivaresai/olivares/cmd/olivares/internal/termrender"
 )
 
 // `olivares governance nhi` — the non-human identities: who owns them, when they last rotated,
@@ -103,26 +105,24 @@ func nhiListCmd(flags *authClientFlags) *cobra.Command {
 					_, err := fmt.Fprintln(out, "no non-human identity matches")
 					return err
 				}
-				tw := tabwriter.NewWriter(out, 0, 2, 2, ' ', 0)
-				if _, err := fmt.Fprintln(tw,
-					"IDENTITY\tKIND\tCRIT\tOWNER\tROTATED\tSTALE\tENFORCE\tOFFBOARD\tORPHAN"); err != nil {
-					return err
+				t := termrender.Table{
+					Header: []string{"identity", "kind", "crit", "owner", "rotated", "stale", "enforce", "offboard", "orphan"},
+					Empty:  "no non-human identity matches this query",
 				}
 				for _, n := range list.Items {
 					orphan := "no"
+					role := termrender.RoleNone
 					if n.Orphaned {
-						orphan = "YES"
+						orphan, role = "YES", termrender.RoleWarn
 					}
-					if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+					t.Rows = append(t.Rows, []string{
 						observeCell(n.IdentityRef), observeCell(n.Kind), observeCell(n.Criticality),
 						observeCell(n.OwnerRef), observeCell(n.RotatedAt), observeCell(n.Staleness),
-						observeCell(n.Enforcement), observeCell(n.OffboardState), orphan); err != nil {
-						return err
-					}
+						observeCell(n.Enforcement), observeCell(n.OffboardState), orphan,
+					})
+					t.Roles = append(t.Roles, []termrender.Role{0, 0, 0, 0, 0, 0, 0, 0, role})
 				}
-				if err := tw.Flush(); err != nil {
-					return err
-				}
+				renderTo(out).Table(t)
 				return observeTruncationNote(out, observePage{Cursor: list.Cursor, HasMore: list.HasMore}, cmd.CommandPath())
 			}, observeJSON(res.raw))
 		},
@@ -186,7 +186,7 @@ func nhiPostureCmd(flags *authClientFlags) *cobra.Command {
 					p.Total, p.Critical, p.RotationKnown, p.Total, p.RotationCoverage*100); err != nil {
 					return err
 				}
-				tw := tabwriter.NewWriter(out, 0, 2, 2, ' ', 0)
+				fields := make([]termrender.Field, 0, 8)
 				for _, row := range []struct {
 					label string
 					n     int
@@ -195,11 +195,10 @@ func nhiPostureCmd(flags *authClientFlags) *cobra.Command {
 					{"orphaned", p.Orphaned}, {"unsponsored", p.Unsponsored}, {"owned", p.Owned},
 					{"soft-deleted", p.SoftDeleted}, {"finalized", p.Finalized},
 				} {
-					if _, err := fmt.Fprintf(tw, "%s\t%d\n", row.label, row.n); err != nil {
-						return err
-					}
+					fields = append(fields, termrender.Field{Key: row.label, Value: strconv.Itoa(row.n)})
 				}
-				return tw.Flush()
+				renderTo(out).Fields(fields)
+				return nil
 			}, observeJSON(res.raw))
 		},
 	}
@@ -318,18 +317,18 @@ func nhiEventsCmd(flags *authClientFlags) *cobra.Command {
 					_, err := fmt.Fprintln(out, "no lifecycle event recorded for this identity")
 					return err
 				}
-				tw := tabwriter.NewWriter(out, 0, 2, 2, ' ', 0)
-				if _, err := fmt.Fprintln(tw, "WHEN\tEVENT\tACTOR\tDETAIL"); err != nil {
-					return err
+				t := termrender.Table{
+					Header: []string{"when", "event", "actor", "detail"},
+					Empty:  "no event recorded for this identity",
 				}
 				for _, e := range list.Items {
-					if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n",
+					t.Rows = append(t.Rows, []string{
 						observeCell(e.OccurredAt), observeCell(e.Event),
-						observeCell(e.Actor), observeCell(e.Detail)); err != nil {
-						return err
-					}
+						observeCell(e.Actor), observeCell(e.Detail),
+					})
 				}
-				return tw.Flush()
+				renderTo(out).Table(t)
+				return nil
 			}, observeJSON(res.raw))
 		},
 	}

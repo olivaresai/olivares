@@ -9,10 +9,12 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
-	"text/tabwriter"
 
 	"github.com/spf13/cobra"
+
+	"github.com/olivaresai/olivares/cmd/olivares/internal/termrender"
 )
 
 // `olivares governance rbac` — WHO CAN DO WHAT, and with what vocabulary.
@@ -86,27 +88,24 @@ func rbacCatalogCmd(flags *authClientFlags) *cobra.Command {
 			if err := res.decode(&c); err != nil {
 				return err
 			}
-			return renderOut(cmd, func(out io.Writer) error {
-				tw := tabwriter.NewWriter(out, 0, 2, 2, ' ', 0)
-				for _, row := range []struct {
-					label string
-					vals  []string
-				}{
-					{"kinds (grantable)", c.Kinds},
-					{"tree-kinds (scope picker)", c.TreeKinds},
-					{"module permissions", c.Permissions},
-					{"verbs", c.Verbs},
-					{"built-in roles", c.BuiltinRoles},
-					{"scope trees", c.ScopeTrees},
-					{"subject kinds", c.SubjectKinds},
-				} {
-					if _, err := fmt.Fprintf(tw, "%s\t%s\n", row.label,
-						observeCell(strings.Join(row.vals, " "))); err != nil {
-						return err
-					}
-				}
-				return tw.Flush()
-			}, observeJSON(res.raw))
+			fields := make([]termrender.Field, 0, 7)
+			for _, row := range []struct {
+				label string
+				vals  []string
+			}{
+				{"kinds (grantable)", c.Kinds},
+				{"tree-kinds (scope picker)", c.TreeKinds},
+				{"module permissions", c.Permissions},
+				{"verbs", c.Verbs},
+				{"built-in roles", c.BuiltinRoles},
+				{"scope trees", c.ScopeTrees},
+				{"subject kinds", c.SubjectKinds},
+			} {
+				fields = append(fields, termrender.Field{
+					Key: row.label, Value: observeCell(strings.Join(row.vals, " ")),
+				})
+			}
+			return renderFieldsOut(cmd, fields, observeJSON(res.raw))
 		},
 	}
 }
@@ -152,22 +151,18 @@ func rbacDelegationCmd(flags *authClientFlags) *cobra.Command {
 						return err
 					}
 				}
-				if len(d.Domains) == 0 {
-					_, err := fmt.Fprintln(out, "no delegation domain")
-					return err
-				}
-				tw := tabwriter.NewWriter(out, 0, 2, 2, ' ', 0)
-				if _, err := fmt.Fprintln(tw, "SCOPE-TREE\tREF\tCLASS\tPERMISSIONS"); err != nil {
-					return err
+				t := termrender.Table{
+					Header: []string{"scope-tree", "ref", "class", "permissions"},
+					Empty:  "no delegation domain",
 				}
 				for _, x := range d.Domains {
-					if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n",
+					t.Rows = append(t.Rows, []string{
 						observeCell(x.ScopeTree), observeCell(x.ScopeRef),
-						observeCell(x.ScopeClass), observeCell(strings.Join(x.Permissions, " "))); err != nil {
-						return err
-					}
+						observeCell(x.ScopeClass), observeCell(strings.Join(x.Permissions, " ")),
+					})
 				}
-				return tw.Flush()
+				renderTo(out).Table(t)
+				return nil
 			}, observeJSON(res.raw))
 		},
 	}
@@ -219,23 +214,19 @@ func rbacRolesCmd(flags *authClientFlags) *cobra.Command {
 				return err
 			}
 			return renderOut(cmd, func(out io.Writer) error {
-				if len(list.Items) == 0 {
-					_, err := fmt.Fprintln(out, "no custom role")
-					return err
-				}
-				tw := tabwriter.NewWriter(out, 0, 2, 2, ' ', 0)
-				if _, err := fmt.Fprintln(tw, "NAME\tBASE\tPERMISSIONS\tGROUPS\tEXCLUDES\tCREATED-BY"); err != nil {
-					return err
+				t := termrender.Table{
+					Header: []string{"name", "base", "permissions", "groups", "excludes", "created-by"},
+					Empty:  "no custom role",
 				}
 				for _, r := range list.Items {
-					if _, err := fmt.Fprintf(tw, "%s\t%s\t%d\t%d\t%d\t%s\n",
+					t.Rows = append(t.Rows, []string{
 						observeCell(r.Name), observeCell(r.BaseRole),
-						len(r.Permissions), len(r.Groups), len(r.Excludes),
-						observeCell(r.CreatedBy)); err != nil {
-						return err
-					}
+						strconv.Itoa(len(r.Permissions)), strconv.Itoa(len(r.Groups)),
+						strconv.Itoa(len(r.Excludes)), observeCell(r.CreatedBy),
+					})
 				}
-				return tw.Flush()
+				renderTo(out).Table(t)
+				return nil
 			}, observeJSON(res.raw))
 		},
 	})
@@ -271,14 +262,13 @@ func rbacRolesCmd(flags *authClientFlags) *cobra.Command {
 // subtractions were not reported look identical if the line is omitted, and that is the field
 // that decides what the role actually grants.
 func rbacRenderRole(out io.Writer, r cliCustomRole) error {
-	if _, err := fmt.Fprintf(out, "name:        %s\ndisplay:     %s\nbase role:   %s\n",
-		observeCell(r.Name), observeCell(r.DisplayName), observeCell(r.BaseRole)); err != nil {
-		return err
+	fields := []termrender.Field{
+		{Key: "name", Value: observeCell(r.Name)},
+		{Key: "display", Value: observeCell(r.DisplayName)},
+		{Key: "base role", Value: observeCell(r.BaseRole)},
 	}
 	if r.Description != "" {
-		if _, err := fmt.Fprintf(out, "description: %s\n", r.Description); err != nil {
-			return err
-		}
+		fields = append(fields, termrender.Field{Key: "description", Value: r.Description})
 	}
 	for _, row := range []struct {
 		label string
@@ -288,12 +278,11 @@ func rbacRenderRole(out io.Writer, r cliCustomRole) error {
 		if v == "" {
 			v = "(none)"
 		}
-		if _, err := fmt.Fprintf(out, "%-12s %s\n", row.label+":", v); err != nil {
-			return err
-		}
+		fields = append(fields, termrender.Field{Key: row.label, Value: v})
 	}
-	_, err := fmt.Fprintf(out, "created by:  %s\n", observeCell(r.CreatedBy))
-	return err
+	fields = append(fields, termrender.Field{Key: "created by", Value: observeCell(r.CreatedBy)})
+	renderTo(out).Fields(fields)
+	return nil
 }
 
 type cliPermGroup struct {
@@ -337,22 +326,18 @@ func rbacPermGroupsCmd(flags *authClientFlags) *cobra.Command {
 				return err
 			}
 			return renderOut(cmd, func(out io.Writer) error {
-				if len(list.Items) == 0 {
-					_, err := fmt.Fprintln(out, "no permission group")
-					return err
-				}
-				tw := tabwriter.NewWriter(out, 0, 2, 2, ' ', 0)
-				if _, err := fmt.Fprintln(tw, "NAME\tDISPLAY\tPERMISSIONS\tCREATED-BY"); err != nil {
-					return err
+				t := termrender.Table{
+					Header: []string{"name", "display", "permissions", "created-by"},
+					Empty:  "no permission group",
 				}
 				for _, g := range list.Items {
-					if _, err := fmt.Fprintf(tw, "%s\t%s\t%d\t%s\n",
+					t.Rows = append(t.Rows, []string{
 						observeCell(g.Name), observeCell(g.DisplayName),
-						len(g.Permissions), observeCell(g.CreatedBy)); err != nil {
-						return err
-					}
+						strconv.Itoa(len(g.Permissions)), observeCell(g.CreatedBy),
+					})
 				}
-				return tw.Flush()
+				renderTo(out).Table(t)
+				return nil
 			}, observeJSON(res.raw))
 		},
 	})
@@ -440,28 +425,24 @@ func rbacGrantsCmd(flags *authClientFlags) *cobra.Command {
 				return err
 			}
 			return renderOut(cmd, func(out io.Writer) error {
-				if len(list.Items) == 0 {
-					_, err := fmt.Fprintln(out, "no scoped grant")
-					return err
-				}
-				tw := tabwriter.NewWriter(out, 0, 2, 2, ' ', 0)
-				if _, err := fmt.Fprintln(tw, "ID\tSUBJECT\tKIND\tROLE\tCUSTOM\tSCOPE-TREE\tSCOPE-REF\tCLASS"); err != nil {
-					return err
+				t := termrender.Table{
+					Header: []string{"id", "subject", "kind", "role", "custom", "scope-tree", "scope-ref", "class"},
+					Empty:  "no scoped grant",
 				}
 				for _, g := range list.Items {
 					custom := "no"
 					if g.RoleCustom {
 						custom = "yes"
 					}
-					if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+					t.Rows = append(t.Rows, []string{
 						observeCell(g.ID), observeCell(g.SubjectRef), observeCell(g.SubjectKind),
 						observeCell(g.Role), custom, observeCell(g.ScopeTree),
-						observeCell(g.ScopeRef), observeCell(g.ScopeClass)); err != nil {
-						return err
-					}
+						observeCell(g.ScopeRef), observeCell(g.ScopeClass),
+					})
 				}
-				if err := tw.Flush(); err != nil {
-					return err
+				renderTo(out).Table(t)
+				if len(list.Items) == 0 {
+					return nil
 				}
 				_, err := fmt.Fprintf(out, "%d grant(s)\n", len(list.Items))
 				return err

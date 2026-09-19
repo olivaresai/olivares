@@ -90,6 +90,7 @@
     "postureExport": "ポスチャエクスポート",
     "automations": "オートメーション",
     "agentcoreExport": "AgentCore エクスポート",
+    "providers": "プロバイダー",
     "providerProfiles": "プロバイダープロファイル",
     "providerBindings": "ソースバインディング"
   },
@@ -155,6 +156,7 @@
     "reporting": "ガバナンスレポートを生成・ダウンロード",
     "postureExport": "コントロールタワー向けにグラウンドトゥルースのポスチャをエクスポート",
     "automations": "3つのオートメーションレールとトリガーカタログ",
+    "providers": "セッションが起動するときに使う API キーとエンドポイントを登録し、テスト・交換・失効を行います",
     "providerProfiles": "セッションの起動元となるプロバイダーのホームを登録・管理し、必要に応じてその設定を読み取る",
     "providerBindings": "構成済みソースを、このノードが適用したリビジョンでプロバイダープロファイルに専用化する",
     "routinePolicies": "Claude Code ルーチンのための実行間隔の下限、同時実行の上限、承認要件、cron 許可リスト、ブロックされた環境",

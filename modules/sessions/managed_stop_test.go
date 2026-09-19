@@ -73,7 +73,7 @@ func newManagedStopFixture(t *testing.T, cfg store.Config) *managedStopFixture {
 func newManagedStopFixtureWith(t *testing.T, cfg store.Config, opts ...Option) *managedStopFixture {
 	t.Helper()
 	clk := &testClock{now: time.Now().UTC()}
-	m := New(append([]Option{WithClock(clk), WithManagedStopAdmissionTimeout(30 * time.Second)}, opts...)...)
+	m := New(append([]Option{WithClock(clk), WithManagedStopAdmissionTimeout(30 * time.Second), WithSessionWorkspaceRoot(t.TempDir())}, opts...)...)
 	ctx := context.Background()
 	st, err := engine.Open(ctx, cfg, m.RegisterSchema)
 	if err != nil {

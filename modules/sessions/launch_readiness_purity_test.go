@@ -26,7 +26,7 @@ func TestLaunchReadiness_HasNoEffects(t *testing.T) {
 		t.Run(be.name, func(t *testing.T) {
 			bins := newReadinessProgramFixtures(t)
 			runner := newInspectingRunner(t)
-			m := New(
+			m := New(WithSessionWorkspaceRoot(t.TempDir()),
 				WithRunner(runner),
 				WithProgram(bins.present),
 				// Every one of these fails the test if the read touches it. They are
@@ -133,7 +133,7 @@ func TestLaunchReadiness_PermissionsAndConfidentiality(t *testing.T) {
 		t.Run(be.name, func(t *testing.T) {
 			bins := newReadinessProgramFixtures(t)
 			runner := newInspectingRunner(t)
-			m := New(WithRunner(runner), WithProgram(bins.present),
+			m := New(WithSessionWorkspaceRoot(t.TempDir()), WithRunner(runner), WithProgram(bins.present),
 				WithCredentialSource(mintRefusingCredentialSource{t}))
 			m.UseExecutionEnvironmentRef(testEnvRef)
 			f := newReadinessFixture(t, be, m)
@@ -202,7 +202,7 @@ func TestLaunchReadiness_PermissionsAndConfidentiality(t *testing.T) {
 func TestLaunchReadiness_SafeErrorsFromAHostileInspector(t *testing.T) {
 	be := readinessEngines(t)[0]
 	leak := "/very/secret/path --token sk-ant-LEAKED"
-	m := New(WithRunner(errorInspector{err: errors.New("inspect " + leak)}),
+	m := New(WithSessionWorkspaceRoot(t.TempDir()), WithRunner(errorInspector{err: errors.New("inspect " + leak)}),
 		WithProgram("claude"), WithCredentialSource(mintRefusingCredentialSource{t}))
 	m.UseExecutionEnvironmentRef(testEnvRef)
 	f := newReadinessFixture(t, be, m)
@@ -240,7 +240,7 @@ func (e errorInspector) InspectLaunch(context.Context, RunnerInspection) (Runner
 // to change, and yields unknown — never "not installed" and never ready.
 func TestLaunchReadiness_RunnerWithoutTheOptionalSeam(t *testing.T) {
 	be := readinessEngines(t)[0]
-	m := New(WithRunner(plainRunner{}), WithProgram("claude"),
+	m := New(WithSessionWorkspaceRoot(t.TempDir()), WithRunner(plainRunner{}), WithProgram("claude"),
 		WithCredentialSource(mintRefusingCredentialSource{t}))
 	m.UseExecutionEnvironmentRef(testEnvRef)
 	f := newReadinessFixture(t, be, m)
@@ -273,7 +273,7 @@ func (plainRunner) Launch(context.Context, LaunchSpec) (Process, error) {
 // uninspectable one: the first is a known wiring gap, the second is uncertainty.
 func TestLaunchReadiness_NoRunnerWired(t *testing.T) {
 	be := readinessEngines(t)[0]
-	m := New(WithProgram("claude"), WithCredentialSource(mintRefusingCredentialSource{t}))
+	m := New(WithSessionWorkspaceRoot(t.TempDir()), WithProgram("claude"), WithCredentialSource(mintRefusingCredentialSource{t}))
 	m.UseExecutionEnvironmentRef(testEnvRef)
 	f := newReadinessFixture(t, be, m)
 	cfgHome, userHome := readinessHomes(t)
@@ -297,7 +297,7 @@ func TestLaunchReadiness_NoRunnerWired(t *testing.T) {
 func TestLaunchReadiness_IsolationUnsupported(t *testing.T) {
 	be := readinessEngines(t)[0]
 	bins := newReadinessProgramFixtures(t)
-	m := New(WithRunner(newInspectingRunner(t)), WithProgram(bins.present),
+	m := New(WithSessionWorkspaceRoot(t.TempDir()), WithRunner(newInspectingRunner(t)), WithProgram(bins.present),
 		WithCredentialSource(mintRefusingCredentialSource{t}))
 	m.UseExecutionEnvironmentRef(testEnvRef)
 	f := newReadinessFixture(t, be, m)
@@ -328,7 +328,7 @@ func TestLaunchReadiness_IsolationUnsupported(t *testing.T) {
 func TestLaunchReadiness_QueryRejection(t *testing.T) {
 	be := readinessEngines(t)[0]
 	bins := newReadinessProgramFixtures(t)
-	m := New(WithRunner(newInspectingRunner(t)), WithProgram(bins.present),
+	m := New(WithSessionWorkspaceRoot(t.TempDir()), WithRunner(newInspectingRunner(t)), WithProgram(bins.present),
 		WithCredentialSource(mintRefusingCredentialSource{t}))
 	m.UseExecutionEnvironmentRef(testEnvRef)
 	f := newReadinessFixture(t, be, m)
@@ -375,7 +375,7 @@ func TestLaunchReadiness_ProfileChangedDuringInspection(t *testing.T) {
 		t.Run(be.name, func(t *testing.T) {
 			bins := newReadinessProgramFixtures(t)
 			mutator := &mutatingInspector{native: NewProcRunner()}
-			m := New(WithRunner(mutator), WithProgram(bins.present),
+			m := New(WithSessionWorkspaceRoot(t.TempDir()), WithRunner(mutator), WithProgram(bins.present),
 				WithCredentialSource(mintRefusingCredentialSource{t}))
 			m.UseExecutionEnvironmentRef(testEnvRef)
 			f := newReadinessFixture(t, be, m)
@@ -450,7 +450,7 @@ func TestLaunchReadiness_RuntimeCredentialWiring(t *testing.T) {
 
 	readOne := func(t *testing.T, prepare func(m *Module)) (SessionLaunchReadiness, *Module) {
 		t.Helper()
-		m := New(WithRunner(newInspectingRunner(t)), WithProgram(bins.present),
+		m := New(WithSessionWorkspaceRoot(t.TempDir()), WithRunner(newInspectingRunner(t)), WithProgram(bins.present),
 			WithCredentialSource(mintRefusingCredentialSource{t}))
 		m.UseExecutionEnvironmentRef(testEnvRef)
 		prepare(m)
@@ -580,7 +580,7 @@ func TestLaunchReadinessAggregationPrecedence(t *testing.T) {
 func TestLaunchReadinessPanelIsComplete(t *testing.T) {
 	be := readinessEngines(t)[0]
 	bins := newReadinessProgramFixtures(t)
-	m := New(WithRunner(newInspectingRunner(t)), WithProgram(bins.present))
+	m := New(WithSessionWorkspaceRoot(t.TempDir()), WithRunner(newInspectingRunner(t)), WithProgram(bins.present))
 	m.UseExecutionEnvironmentRef(testEnvRef)
 	f := newReadinessFixture(t, be, m)
 	cfgHome, userHome := readinessHomes(t)

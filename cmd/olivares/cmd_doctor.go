@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -29,6 +30,7 @@ import (
 
 	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
 	"github.com/olivaresai/olivares/cmd/olivares/internal/localinstall"
+	"github.com/olivaresai/olivares/cmd/olivares/internal/termrender"
 	"github.com/olivaresai/olivares/core/license"
 	"github.com/olivaresai/olivares/core/release"
 )
@@ -38,9 +40,14 @@ const doctorSchema = "olivares.ai/doctor/v1"
 type doctorOptions struct {
 	mode, init, dataDir, config, unit string
 	binary, server, caCert            string
-	auditTenant                       string
-	checkUpdates                      bool
-	timeout                           time.Duration
+	// serverExplicit records that the operator named the origin. Without it, a
+	// default that HAPPENS to equal the recorded address is indistinguishable
+	// from a deliberate one, and the difference decides whether doctor may
+	// substitute what the engine wrote.
+	serverExplicit bool
+	auditTenant    string
+	checkUpdates   bool
+	timeout        time.Duration
 }
 
 type doctorBuild struct {
@@ -70,13 +77,17 @@ type doctorCheck struct {
 }
 
 type doctorReport struct {
-	Schema  string        `json:"schema"`
-	Overall string        `json:"overall"`
-	Mode    string        `json:"mode"`
-	Init    string        `json:"init"`
-	Build   doctorBuild   `json:"build"`
-	Paths   doctorPaths   `json:"paths"`
-	Checks  []doctorCheck `json:"checks"`
+	Schema  string `json:"schema"`
+	Overall string `json:"overall"`
+	Mode    string `json:"mode"`
+	Init    string `json:"init"`
+	// InstallShape is HOW this installation was made, and it decides which checks
+	// are REQUIRED (doctorInstallShape). It is reported rather than implied so an
+	// operator reading a green report can see which posture was judged.
+	InstallShape string        `json:"install_shape"`
+	Build        doctorBuild   `json:"build"`
+	Paths        doctorPaths   `json:"paths"`
+	Checks       []doctorCheck `json:"checks"`
 }
 
 type doctorDeps struct {
@@ -178,6 +189,91 @@ func defaultDoctorDeps() doctorDeps {
 	}
 }
 
+// doctorInstallShape is HOW an installation was made, because the required set
+// depends on it and until 2026-09-18 it did not.
+//
+// ⛔ WHAT WAS MEASURED, 2026-09-18. `olivares quickstart --data-dir D` reached a
+// console, minted its setup token, created an administrator — and `olivares doctor`
+// reported OVERALL unhealthy with FIVE required checks failing or unknown:
+// `configuration`, `service-unit`, `install-manifest`, `ownership` and
+// `init-state`. Every remedy named the pinned service installer, which quickstart
+// is the alternative TO. The command the first hour ends on told a correct install
+// it was broken, and the operator's evidence that they had followed the guided path
+// was a red report.
+//
+// The five are not wrong about what they measured: there IS no env file, no unit, no
+// ownership manifest and no service manager on a quickstart install. They were wrong
+// to be REQUIRED, because they measure a posture this installation never claimed.
+//
+// ⛔ AND THE CLASSIFICATION IS EVIDENCE, NOT A FLAG. A `--shape local` option would
+// let an operator silence a genuinely broken service install by naming the wrong
+// shape, which is exactly the kind of self-report this command exists to replace.
+// The shape is read off the filesystem: a service install LEAVES an ownership
+// manifest and/or a unit behind, and nothing else does. A manifest that exists and
+// cannot be read still means "service", so a permission problem inside a service
+// install stays a service install with a failing check — never a local install with
+// nothing to check.
+const (
+	// installShapeService is the pinned service installer's posture: a unit, an env
+	// file, an ownership manifest, a service account and a service manager.
+	installShapeService = "service"
+	// installShapeLocal is `quickstart`/`serve` over a data directory: the engine,
+	// its data and nothing else. It is a FIRST-CLASS shape, not a half-finished
+	// service install.
+	installShapeLocal = "local"
+)
+
+// detectDoctorInstallShape classifies the installation from what it left on disk.
+func detectDoctorInstallShape(deps doctorDeps, o doctorOptions, manifest string) string {
+	for _, path := range []string{manifest, o.unit} {
+		if path == "" {
+			continue
+		}
+		if _, err := deps.stat(path); err == nil || !errors.Is(err, fs.ErrNotExist) {
+			// Exists, or could not be examined. Both mean a service install is being
+			// looked at: "I cannot read it" is never "it is not there".
+			return installShapeService
+		}
+	}
+	return installShapeLocal
+}
+
+// serviceShapedChecks are the checks that measure the SERVICE posture and nothing
+// else. On a local install they are not applicable — not passing, and not failing.
+var serviceShapedChecks = map[string]string{
+	"configuration": "this installation has no service env file; a local engine takes its configuration from its flags and environment. " +
+		"Install it as a service (INSTALL.md) if you want one",
+	"service-unit": "this installation has no service unit; the engine runs in the foreground. " +
+		"Install it as a service (INSTALL.md) to get one",
+	"install-manifest": "this installation has no ownership manifest; only the pinned service installer writes one",
+	"ownership":        "ownership is a service-install record; a local engine's files belong to the account that started it",
+	"init-state":       "this installation is not managed by a service manager; `olivares status` reports whether the engine is up",
+	"service-account":  "a local engine runs as the account that started it; only a service install creates the no-login `olivares` account",
+}
+
+// relaxLocalInstallChecks turns the service-shaped checks into `not_applicable`
+// for a local install, so a correct quickstart can reach healthy and each remedy
+// names something that applies to it.
+//
+// It only ever RELAXES, and only for a check that is not already passing: a
+// service-shaped check that passed on a local install (an operator who happens to
+// keep an env file, say) keeps its pass, because it measured something real.
+func relaxLocalInstallChecks(shape string, checks []doctorCheck) []doctorCheck {
+	if shape != installShapeLocal {
+		return checks
+	}
+	for i := range checks {
+		remedy, service := serviceShapedChecks[checks[i].Name]
+		if !service || checks[i].Status == "pass" {
+			continue
+		}
+		checks[i].Status = "not_applicable"
+		checks[i].Required = false
+		checks[i].Remediation = remedy
+	}
+	return checks
+}
+
 func newDoctorCmd() *cobra.Command {
 	o := &doctorOptions{mode: "auto", init: "auto", server: "https://127.0.0.1:8443", timeout: 10 * time.Second}
 	cmd := &cobra.Command{
@@ -185,7 +281,19 @@ func newDoctorCmd() *cobra.Command {
 		Short: "Diagnose this host installation without printing secrets",
 		Long: "doctor checks the installed binary and verification anchors, local paths and modes,\n" +
 			"service account and init state, TLS live/ready probes, store status, license, and\n" +
-			"optional audit/update checks. Values from the env file are never read into output.\n\n" +
+			"optional audit/update checks. It also reports first-hour readiness: whether an\n" +
+			"official coding agent is on PATH, whether the hook PEP env is set, and the next\n" +
+			"first-hour step. Those first-hour checks are optional and never fail a healthy\n" +
+			"install. Values from the env file and hook PEP URLs are never read into output.\n\n" +
+			"WHICH CHECKS ARE REQUIRED DEPENDS ON HOW THE INSTALLATION WAS MADE, and doctor\n" +
+			"classifies that from the filesystem rather than from a flag: a service install\n" +
+			"leaves an ownership manifest and/or a unit behind (install_shape=service), and\n" +
+			"`quickstart`/`serve` over a data directory leave neither (install_shape=local).\n" +
+			"On a local install the service-shaped checks — the env file, the unit, the\n" +
+			"ownership manifest, the service account and the init state — report\n" +
+			"not_applicable instead of failing, because they measure a posture that\n" +
+			"installation never claimed. A manifest that exists and cannot be READ still\n" +
+			"counts as a service install: 'I cannot look' is never 'there is nothing there'.\n\n" +
 			"Exit 0 means healthy, 1 a measured defect, and 2 that a required check could not\n" +
 			"be measured. `health` remains the separate remote subject-health namespace.",
 		Example: "  olivares doctor --mode system --data-dir /var/lib/olivares\n" +
@@ -193,6 +301,7 @@ func newDoctorCmd() *cobra.Command {
 			"  olivares doctor --audit-tenant t_abc123 --check-updates",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			o.serverExplicit = cmd.Flags().Changed("server")
 			report, code, err := runDoctor(cmd.Context(), o, defaultDoctorDeps())
 			if err != nil {
 				return err
@@ -209,11 +318,12 @@ func newDoctorCmd() *cobra.Command {
 	f := cmd.Flags()
 	f.StringVar(&o.mode, "mode", o.mode, "service scope: auto | user | system")
 	f.StringVar(&o.init, "init", o.init, "init adapter: auto | systemd | openrc | launchd")
-	f.StringVar(&o.dataDir, "data-dir", "", "service data directory (default follows --mode)")
+	f.StringVar(&o.dataDir, "data-dir", "", "service data directory (default $OLIVARES_DATA_DIR, else follows --mode)")
 	f.StringVar(&o.config, "config", "", "service env file (default follows --mode)")
 	f.StringVar(&o.unit, "unit", "", "service unit/plist path (default follows --mode and --init)")
 	f.StringVar(&o.binary, "binary", "", "installed olivares binary (default: this executable)")
-	f.StringVar(&o.server, "server", o.server, "local HTTPS engine origin")
+	f.StringVar(&o.server, "server", o.server, "local engine origin (default: the bind the running engine recorded in <data-dir>/console.json, else "+
+		"https://127.0.0.1:8443). Passing it wins over the recording and must be an https origin")
 	f.StringVar(&o.caCert, "ca-cert", "", "PEM trust anchor (default <data-dir>/tls.crt)")
 	f.DurationVar(&o.timeout, "timeout", o.timeout, "deadline for each init/network subprocess")
 	f.StringVar(&o.auditTenant, "audit-tenant", "", "also run strict local audit verification for this tenant")
@@ -257,12 +367,14 @@ func runDoctor(ctx context.Context, raw *doctorOptions, deps doctorDeps) (doctor
 	}
 	licKey := doctorAnchor(license.KeyOrigin(), license.KeyFingerprint())
 	otaKey := doctorAnchor(release.KeyOrigin(), release.KeyFingerprint())
+	manifestPath := filepath.Join(o.dataDir, "install-manifest.json")
+	shape := detectDoctorInstallShape(deps, o, manifestPath)
 	report := doctorReport{
-		Schema: doctorSchema, Overall: "healthy", Mode: o.mode, Init: o.init,
+		Schema: doctorSchema, Overall: "healthy", Mode: o.mode, Init: o.init, InstallShape: shape,
 		Build: doctorBuild{Version: version, Commit: commit, Date: date, OS: runtime.GOOS,
 			Arch: runtime.GOARCH, LicenseKey: licKey, OTAKey: otaKey},
 		Paths: doctorPaths{Binary: o.binary, DataDir: o.dataDir, Config: o.config,
-			Unit: o.unit, Manifest: filepath.Join(o.dataDir, "install-manifest.json")},
+			Unit: o.unit, Manifest: manifestPath},
 	}
 	add := func(c doctorCheck) { report.Checks = append(report.Checks, c) }
 
@@ -307,6 +419,15 @@ func runDoctor(ctx context.Context, raw *doctorOptions, deps doctorDeps) (doctor
 	add(doctorLicenseCheck(o.dataDir))
 	add(doctorAuditCheck(ctx, deps, o))
 	add(doctorChannelCheck(ctx, deps, o))
+	agentHour := doctorFirstHourCodingAgent(deps)
+	pepHour := doctorFirstHourHookPEP(deps)
+	add(agentHour)
+	add(pepHour)
+	add(doctorFirstHourNextStep(agentHour, pepHour))
+
+	// The required set depends on HOW this installation was made, and the relaxation
+	// runs BEFORE the verdict so a correct local install can reach healthy.
+	report.Checks = relaxLocalInstallChecks(shape, report.Checks)
 
 	code := exitcode.OK
 	for _, c := range report.Checks {
@@ -366,8 +487,26 @@ func resolveDoctorPaths(o *doctorOptions, deps doctorDeps) error {
 			return doctorUsage("cannot resolve an absolute home for --mode user")
 		}
 	}
+	// dataDirSource names where o.dataDir came from, so that "must be absolute"
+	// below names the thing the operator actually set instead of a flag they
+	// never typed.
+	dataDirSource := "--data-dir"
 	if o.dataDir == "" {
-		if o.mode == "system" {
+		// OLIVARES_DATA_DIR FIRST, in every mode, because it is what the rest of
+		// this binary does: defaultDataDir() (boot.go) documents it as step 1 of
+		// its precedence, "an explicit statement, honored verbatim". Read
+		// verbatim here too, for the same reason: if the two functions trimmed
+		// differently they would resolve different directories from one variable.
+		//
+		// MEASURED 2026-09-18 walking the first hour: `olivares quickstart
+		// --data-dir D` started an engine in D, its panel said "Confirm this host
+		// with olivares doctor", and doctor looked in $HOME/.local/share/olivares
+		// and reported four required checks failed or unknown. The two commands
+		// of one guided path disagreed about where the installation was, and the
+		// operator's evidence that they had followed it was a red report.
+		if declared := deps.getenv("OLIVARES_DATA_DIR"); declared != "" {
+			o.dataDir, dataDirSource = declared, "OLIVARES_DATA_DIR"
+		} else if o.mode == "system" {
 			if deps.goos == "darwin" {
 				o.dataDir = "/Library/Application Support/Olivares"
 			} else {
@@ -415,7 +554,7 @@ func resolveDoctorPaths(o *doctorOptions, deps doctorDeps) error {
 		}
 	}
 	paths := []struct{ name, path string }{
-		{"--binary", o.binary}, {"--data-dir", o.dataDir}, {"--config", o.config},
+		{"--binary", o.binary}, {dataDirSource, o.dataDir}, {"--config", o.config},
 		{"--unit", o.unit}, {"--ca-cert", o.caCert},
 	}
 	for _, item := range paths {
@@ -434,6 +573,30 @@ func resolveDoctorPaths(o *doctorOptions, deps doctorDeps) error {
 	if err != nil || u.Scheme != "https" || u.Host == "" ||
 		u.User != nil || (u.Path != "" && u.Path != "/") || u.RawQuery != "" || u.Fragment != "" {
 		return doctorUsage("--server must be an https origin without credentials, path, query or fragment")
+	}
+	// THE ORIGIN THE ENGINE ACTUALLY WROTE DOWN, unless the operator named one.
+	//
+	// MEASURED 2026-09-18: `quickstart --listen 127.0.0.1:18443` recorded that
+	// bind in <data-dir>/console.json — `olivares first-boot` reads the same file
+	// and printed the right console address — and doctor still probed the
+	// compiled-in :8443, reporting livez, readyz and store as "start the service"
+	// against a service that was running. Three required checks were unknown
+	// because two commands over one data directory disagreed about a port one of
+	// them had written down.
+	//
+	// AFTER the check above, and that order is the whole point: an engine started
+	// with --insecure records a plain-HTTP bind, and the rule that `--server` is
+	// https-only is a rule about what the OPERATOR may ask for. Substituting
+	// before the check turned a legitimate insecure first hour into
+	// "--server must be an https origin" — a usage error naming a flag nobody
+	// passed. doctorOriginFromConsoleState is what keeps this safe: it builds the
+	// origin itself and returns "" for anything it cannot spell.
+	if !o.serverExplicit {
+		if state, err := readConsoleState(o.dataDir); err == nil {
+			if origin := doctorOriginFromConsoleState(state); origin != "" {
+				o.server = origin
+			}
+		}
 	}
 	return nil
 }
@@ -456,10 +619,26 @@ func doctorBuildCheck(licKey, otaKey string) doctorCheck {
 		c.Status, c.Remediation = "fail", "replace the build: license and OTA trust domains must not share a key"
 		return c
 	}
-	if version != "dev" && (commit == "none" || release.KeyOrigin() == "none") {
+	if version != "dev" && !doctorSourceStamp(version, commit) && (commit == "none" || release.KeyOrigin() == "none") {
 		c.Status, c.Remediation = "fail", "replace the unstamped or OTA-anchorless release binary"
 	}
 	return c
+}
+
+// doctorSourceStamp recognizes the tagless Git stamp produced by build-bin.sh.
+// It records provenance, not a release claim. Unknown labels and release tags
+// still require release anchors; a hash must match the separately stamped commit.
+func doctorSourceStamp(buildVersion, buildCommit string) bool {
+	hash := strings.TrimSuffix(buildVersion, "-dirty")
+	if hash != buildCommit || len(hash) < 4 || len(hash) > 40 {
+		return false
+	}
+	for _, c := range hash {
+		if !(c >= '0' && c <= '9' || c >= 'a' && c <= 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 func doctorFileCheck(deps doctorDeps, name, path string, required bool, modes []fs.FileMode) doctorCheck {
@@ -494,7 +673,10 @@ func doctorDirCheck(deps doctorDeps, path string, modes []fs.FileMode) doctorChe
 	info, err := deps.stat(path)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
-			c.Status, c.Remediation = "fail", "create it through the pinned service installer"
+			// The data directory is required in BOTH shapes, so its remedy names both
+			// ways of making one: a missing data directory on a local install is not a
+			// reason to send the operator to the service installer.
+			c.Status, c.Remediation = "fail", "create it with `olivares quickstart --data-dir <dir>`, or through the pinned service installer"
 		} else {
 			c.Status, c.Remediation = "unknown", "make the path stat-readable and rerun doctor"
 		}
@@ -1095,18 +1277,239 @@ func doctorChannelCheck(ctx context.Context, deps doctorDeps, o doctorOptions) d
 	return c
 }
 
+// firstHourCodingAgents is the closed set of official CLIs the first hour
+// accepts as "one coding agent". Order is detection order, not preference.
+var firstHourCodingAgents = []string{"claude", "codex", "grok"}
+
+// doctorFirstHourCodingAgent reports whether an official coding agent is on
+// PATH. Required is false: a fresh install is healthy before the operator
+// connects an agent. Absence is unknown, never fail — fail would mark the
+// whole doctor report unhealthy and hide the next-step hint.
+func doctorFirstHourCodingAgent(deps doctorDeps) doctorCheck {
+	c := doctorCheck{Name: "first-hour-coding-agent", Required: false}
+	for _, name := range firstHourCodingAgents {
+		path, err := deps.lookPath(name)
+		if err == nil && strings.TrimSpace(path) != "" {
+			c.Status, c.Detail = "pass", "official CLI on PATH: "+name
+			return c
+		}
+	}
+	c.Status = "unknown"
+	c.Detail = "no official coding agent (claude, codex, grok) on PATH"
+	c.Remediation = "install one official CLI on this host, then run olivares agent tool detect"
+	return c
+}
+
+// doctorFirstHourHookPEP reports whether the operator's environment names a
+// hook PEP. It never prints the URL or the config path: those can carry a
+// token in a query or a policy path under a home directory.
+func doctorFirstHourHookPEP(deps doctorDeps) doctorCheck {
+	c := doctorCheck{Name: "first-hour-hook-pep", Required: false}
+	switch {
+	case strings.TrimSpace(deps.getenv("OLIVARES_HOOK_PEP_CONFIG")) != "":
+		c.Status, c.Detail = "pass", "OLIVARES_HOOK_PEP_CONFIG is set"
+	case strings.TrimSpace(deps.getenv("OLIVARES_HOOK_PEP_URL")) != "":
+		c.Status, c.Detail = "pass", "OLIVARES_HOOK_PEP_URL is set"
+	default:
+		c.Status = "unknown"
+		c.Detail = "hook PEP is not wired"
+		c.Remediation = "write a deny-closed hook policy and set OLIVARES_HOOK_PEP_CONFIG"
+	}
+	return c
+}
+
+// doctorFirstHourNextStep always passes. It is the sentence the operator
+// reads when doctor does not fail the install but the first hour is not done.
+func doctorFirstHourNextStep(agent, pep doctorCheck) doctorCheck {
+	c := doctorCheck{Name: "first-hour-next-step", Required: false, Status: "pass"}
+	switch {
+	case agent.Status != "pass":
+		c.Detail = "install one official coding agent (claude, codex or grok) on this host, then run olivares agent tool detect"
+	case pep.Status != "pass":
+		c.Detail = "wire OLIVARES_HOOK_PEP_CONFIG with a deny-closed policy, then replay a Read allow and a Bash deny"
+	default:
+		c.Detail = "run a governed session (allow one tool, deny another) and read GET /v1/audit?action=hook.tool"
+	}
+	return c
+}
+
 func renderDoctor(cmd *cobra.Command, report doctorReport) error {
 	return renderOut(cmd, func(out io.Writer) error {
-		tw := newTabWriter(out)
-		fmt.Fprintf(tw, "OVERALL\t%s\nMODE\t%s\nINIT\t%s\n", report.Overall, report.Mode, report.Init)
-		fmt.Fprintf(tw, "VERSION\t%s\nCOMMIT\t%s\n", report.Build.Version, report.Build.Commit)
-		fmt.Fprintln(tw, "\nCHECK\tSTATUS\tREQUIRED\tDETAIL\tREMEDIATION")
-		for _, check := range report.Checks {
-			fmt.Fprintf(tw, "%s\t%s\t%t\t%s\t%s\n", check.Name, check.Status, check.Required,
-				check.Detail, check.Remediation)
-		}
-		return tw.Flush()
+		drawDoctor(renderTo(out), report)
+		return nil
 	}, report)
+}
+
+// doctorStatusRole maps a check's recorded status onto the renderer's four
+// semantic roles.
+//
+// "unknown" and "not_applicable" BOTH become RoleNone, which StatusLine writes as
+// `[--]`, and that is the decision this function exists to make: the token set is
+// closed at four, and neither of those two is a measured verdict. They are not the
+// same fact, so the DETAIL keeps them apart — "not requested; pass --audit-tenant"
+// against "no supported init adapter was detected". What must never happen is
+// either of them reading as `[ok]`, which is exactly what a fifth token invented
+// here would drift into.
+func doctorStatusRole(status string) termrender.Role {
+	switch status {
+	case "pass":
+		return termrender.RoleOK
+	case "warn":
+		return termrender.RoleWarn
+	case "fail":
+		return termrender.RoleFail
+	default:
+		return termrender.RoleNone
+	}
+}
+
+// doctorOverallRole colours the one word an operator reads first.
+func doctorOverallRole(overall string) termrender.Role {
+	switch overall {
+	case "healthy":
+		return termrender.RoleOK
+	case "unhealthy":
+		return termrender.RoleFail
+	default:
+		return termrender.RoleNone
+	}
+}
+
+// doctorHeaderFields is the report's own facts, separated from the writing of
+// them so the golden test drives the same data the command does.
+func doctorHeaderFields(report doctorReport) []termrender.Field {
+	return []termrender.Field{
+		{Key: "overall", Value: report.Overall, Role: doctorOverallRole(report.Overall)},
+		{Key: "mode", Value: report.Mode},
+		{Key: "init", Value: report.Init},
+		{Key: "version", Value: report.Build.Version},
+		{Key: "commit", Value: report.Build.Commit},
+	}
+}
+
+// doctorCheckTable is the verdict list: one row per check, three NARROW columns.
+//
+// WHY THE DETAIL IS NOT A COLUMN, and this is the whole defect measured on 2026-09-18.
+// The old form put CHECK, STATUS, REQUIRED, DETAIL and REMEDIATION in one
+// tabwriter. Its widest cell is a 96-column sentence, so the row is about 140
+// columns and no ordinary terminal shows it: the columns collapse and REMEDIATION
+// wraps under DETAIL. Three columns measure 23 + 2 + 6 + 2 + 8 = 41, which holds
+// at 80 and at 100 with room to spare, and the sentences go below where a sentence
+// belongs. The STATUS cell is the renderer's own token, asked for by name, because
+// a command that typed "[ok]" would drift from the closed set and trip the render
+// gate's status rule in the same line.
+func doctorCheckTable(report doctorReport) termrender.Table {
+	rows := make([][]string, 0, len(report.Checks))
+	roles := make([][]termrender.Role, 0, len(report.Checks))
+	for _, check := range report.Checks {
+		role := doctorStatusRole(check.Status)
+		rows = append(rows, []string{check.Name, termrender.StatusToken(role), flagCell(check.Required)})
+		roles = append(roles, []termrender.Role{termrender.RoleNone, role, termrender.RoleNone})
+	}
+	return termrender.Table{
+		Header: []string{"check", "status", "required"},
+		Rows:   rows,
+		Roles:  roles,
+		Empty:  "doctor ran no checks, which is itself a defect: report it with olivares support bundle",
+	}
+}
+
+// doctorDetailFields is what each check MEASURED, in check order, and it carries
+// the remediation on the same line when there is one. The line is a SENTENCE, so
+// drawDoctor folds it at the terminal width with a hanging indent under the key —
+// `| fix:` stays in the same field because the remediation is only readable beside
+// what it remedies.
+//
+// Every check appears, not only the failing ones. `build-and-anchors` passing with
+// "version=dev commit=none license-key=dev/54091177" is the fact an operator came
+// for; dropping the details of passing checks would make the report shorter and
+// answer fewer questions.
+func doctorDetailFields(report doctorReport) []termrender.Field {
+	fields := make([]termrender.Field, 0, len(report.Checks))
+	for _, check := range report.Checks {
+		value := strings.TrimSpace(check.Detail)
+		if fix := strings.TrimSpace(check.Remediation); fix != "" {
+			if value == "" {
+				value = "fix: " + fix
+			} else {
+				value += " | fix: " + fix
+			}
+		}
+		fields = append(fields, termrender.Field{
+			Key:   check.Name,
+			Value: value,
+			Role:  doctorStatusRole(check.Status),
+		})
+	}
+	return fields
+}
+
+// doctorSummaryCounts is the one line the report ends with, as R9 of the terminal
+// contract asks for: the counts by role.
+func doctorSummaryCounts(report doctorReport) map[termrender.Role]int {
+	counts := map[termrender.Role]int{}
+	for _, check := range report.Checks {
+		counts[doctorStatusRole(check.Status)]++
+	}
+	return counts
+}
+
+// doctorSummaryClause names the two facts the counts cannot: how many checks ran,
+// and how many of the REQUIRED ones are not a pass. The second is what decides the
+// exit code, so it is the one an operator needs beside the counts.
+func doctorSummaryClause(report doctorReport) string {
+	unmeasured, requiredOpen := 0, 0
+	for _, check := range report.Checks {
+		if doctorStatusRole(check.Status) == termrender.RoleNone {
+			unmeasured++
+		}
+		if check.Required && check.Status != "pass" {
+			requiredOpen++
+		}
+	}
+	clause := strconv.Itoa(len(report.Checks)) + " checks"
+	if unmeasured > 0 {
+		clause += ", " + strconv.Itoa(unmeasured) + " not measured"
+	}
+	clause += ", " + strconv.Itoa(requiredOpen) + " required and not passing"
+	return clause
+}
+
+// doctorNextCommand is the exact command an operator runs after reading this
+// report, which R2 of the terminal contract asks every output to name.
+//
+// The order is the order of the operator's problem. A required check that is not a
+// pass is the reason the exit code is non-zero, and the FIX entries above say what
+// to change; the command that re-measures them is doctor itself. With the install
+// healthy, the next step is the first hour's, and doctor's own annotation already
+// names it — read from the same table the help section uses, so the terminal and
+// the help cannot disagree.
+func doctorNextCommand(report doctorReport) string {
+	for _, check := range report.Checks {
+		if check.Required && check.Status != "pass" {
+			return "olivares doctor"
+		}
+	}
+	return firstHourNextCommands["doctor"]
+}
+
+// drawDoctor writes the whole text form. It takes a renderer rather than a writer
+// so a test can drive it at a stated terminal width, which is the only way to
+// assert that the columns hold at 80 and at 100.
+func drawDoctor(r *termrender.Renderer, report doctorReport) {
+	r.Fields(doctorHeaderFields(report))
+	r.Blank()
+	r.Table(doctorCheckTable(report))
+	r.Blank()
+	r.Line("DETAIL")
+	// WrappedFields and not Fields: these values are SENTENCES, and the difference
+	// was measured on 2026-09-19 — fifteen DETAIL lines over 80 columns,
+	// the widest 158, and byte-identical at 80 and at 120. One block that overflows
+	// a narrow terminal and wastes a wide one.
+	r.WrappedFields(doctorDetailFields(report))
+	r.Blank()
+	r.Summary(doctorSummaryCounts(report), doctorSummaryClause(report))
+	r.Next(doctorNextCommand(report))
 }
 
 // doctorFileUID is deliberately small and Linux/macOS-only, matching the service
@@ -1127,4 +1530,52 @@ func doctorFileUID(info fs.FileInfo) (uint32, bool) {
 		return 0, false
 	}
 	return uint32(uid.Uint()), true
+}
+
+// doctorOriginFromConsoleState turns the engine's recorded bind into the LOCAL
+// origin doctor probes.
+//
+// It deliberately uses Listen and not Browse. Browse is the address a BROWSER
+// reaches the console at, and when the operator declared --public-url it names a
+// reverse proxy that this host may not be able to resolve at all. doctor's
+// livez/readyz/store checks are local probes of a local process, so the bind is
+// the right fact and the public URL is the wrong one.
+//
+// A wildcard bind is answered on loopback: ":8443" and "0.0.0.0:8443" mean "every
+// interface", and of those the one this host can always reach is 127.0.0.1.
+// Returning "" means "nothing usable was recorded", and the caller keeps its own
+// default rather than inventing an origin.
+func doctorOriginFromConsoleState(state consoleState) string {
+	listen := strings.TrimSpace(state.Listen)
+	if listen == "" {
+		return ""
+	}
+	host, port, err := net.SplitHostPort(listen)
+	if err != nil {
+		return ""
+	}
+	// This origin does NOT go through the --server check (see resolveDoctorPaths
+	// for why), so a bind this function cannot spell cleanly is REFUSED here
+	// rather than handed to a URL parser. And refused, not repaired: trimming
+	// "127.0.0.1\n" back to "127.0.0.1" would silently turn a malformed record
+	// into a probe of a host nobody recorded, which is the same class of guess
+	// this whole change exists to remove. An empty host is the one exception —
+	// ":8443" is how a wildcard bind is spelled — and it is mapped, below.
+	unspellable := func(field string) bool {
+		return strings.ContainsFunc(field, func(r rune) bool {
+			return r <= ' ' || r == 0x7f || r == '/' || r == '@' || r == '?' || r == '#'
+		})
+	}
+	if port == "" || unspellable(port) || unspellable(host) {
+		return ""
+	}
+	switch host {
+	case "", "0.0.0.0", "::":
+		host = "127.0.0.1"
+	}
+	scheme := "https"
+	if state.Insecure {
+		scheme = "http"
+	}
+	return scheme + "://" + net.JoinHostPort(host, port)
 }

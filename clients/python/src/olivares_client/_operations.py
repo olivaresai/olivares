@@ -11,7 +11,7 @@ from typing import TypedDict, cast
 from urllib.parse import quote
 
 API_VERSION = "v1"
-SPEC_HASH = "e6a336e16f9f4afd020e87b93bef0bac01d3736d43fbd93ff67cf52f8510536a"
+SPEC_HASH = "b18a87a70003b7429595eb2f4d8a89947645a1288141ccc501fe5d8995b764eb"
 STABILITY_POLICY = "https://olivares.ai/docs"
 
 class _AuthCapabilityQuestionRequired(TypedDict):
@@ -2892,6 +2892,20 @@ class OperationsMixin:
         """
         return self._do("GET", "/v1/m/governance/breakglass/{id}/uses", "/v1/m/governance/breakglass/" + quote(str(id), safe="") + "/uses", query=query, tenant=tenant)
 
+    def post_v1_m_governance_decisions_replay(self, body, *, tenant=None, **query):
+        """POST /v1/m/governance/decisions/replay — Reconstructs a past authorization from the access-evidence ledger, never from the live policy.
+
+        Stability: beta.
+        """
+        return self._do_json_required("POST", "/v1/m/governance/decisions/replay", "/v1/m/governance/decisions/replay", body=body, query=query, tenant=tenant)
+
+    def get_v1_m_governance_decisions_by_id_reconstruct(self, id, *, tenant=None, **query):
+        """GET /v1/m/governance/decisions/{id}/reconstruct — Reconstructs one stored authorization decision from the access-evidence ledger, never from the live policy.
+
+        Stability: beta.
+        """
+        return self._do("GET", "/v1/m/governance/decisions/{id}/reconstruct", "/v1/m/governance/decisions/" + quote(str(id), safe="") + "/reconstruct", query=query, tenant=tenant)
+
     def get_v1_m_governance_emerging_identity_standards(self, *, tenant=None, **query):
         """GET /v1/m/governance/emerging-identity-standards — Surfaces the design-toward registry read-only, with an explicit disclaimer that it is tracked, not implemented (IDN-12).
 
@@ -5548,6 +5562,48 @@ class OperationsMixin:
         Stability: beta.
         """
         return self._do("POST", "/v1/m/sessions/provider-source-bindings/{ref}/revoke", "/v1/m/sessions/provider-source-bindings/" + quote(str(ref), safe="") + "/revoke", query=query, tenant=tenant)
+
+    def get_v1_m_sessions_providers(self, *, tenant=None, **query):
+        """GET /v1/m/sessions/providers — Lists the tenant's registered providers as kinds, names and hints, never a credential.
+
+        Stability: beta.
+        """
+        return self._do("GET", "/v1/m/sessions/providers", "/v1/m/sessions/providers", query=query, tenant=tenant)
+
+    def post_v1_m_sessions_providers(self, body, *, tenant=None, **query):
+        """POST /v1/m/sessions/providers — Registers one provider credential; the engine seals the value and returns only a four-character hint.
+
+        Stability: beta.
+        """
+        return self._do_json_required("POST", "/v1/m/sessions/providers", "/v1/m/sessions/providers", body=body, query=query, tenant=tenant)
+
+    def get_v1_m_sessions_providers_by_ref(self, ref, *, tenant=None, **query):
+        """GET /v1/m/sessions/providers/{ref} — Returns one registered provider by its reference, without its credential.
+
+        Stability: beta.
+        """
+        return self._do("GET", "/v1/m/sessions/providers/{ref}", "/v1/m/sessions/providers/" + quote(str(ref), safe=""), query=query, tenant=tenant)
+
+    def patch_v1_m_sessions_providers_by_ref(self, ref, body, *, tenant=None, **query):
+        """PATCH /v1/m/sessions/providers/{ref} — Renames a provider, changes its endpoint and/or rotates its credential in place.
+
+        Stability: beta.
+        """
+        return self._do_json_required("PATCH", "/v1/m/sessions/providers/{ref}", "/v1/m/sessions/providers/" + quote(str(ref), safe=""), body=body, query=query, tenant=tenant)
+
+    def post_v1_m_sessions_providers_by_ref_revoke(self, ref, *, tenant=None, **query):
+        """POST /v1/m/sessions/providers/{ref}/revoke — Withdraws a provider credential for good; the record keeps its id so the sessions it authorized still read truthfully.
+
+        Stability: beta.
+        """
+        return self._do("POST", "/v1/m/sessions/providers/{ref}/revoke", "/v1/m/sessions/providers/" + quote(str(ref), safe="") + "/revoke", query=query, tenant=tenant)
+
+    def post_v1_m_sessions_providers_by_ref_test(self, ref, *, tenant=None, **query):
+        """POST /v1/m/sessions/providers/{ref}/test — Asks the provider which models it serves with the registered credential; it sends no completion and spends nothing.
+
+        Stability: beta.
+        """
+        return self._do("POST", "/v1/m/sessions/providers/{ref}/test", "/v1/m/sessions/providers/" + quote(str(ref), safe="") + "/test", query=query, tenant=tenant)
 
     def get_v1_m_sessions_runs(self, *, tenant=None, **query):
         """GET /v1/m/sessions/runs — sessions module route (requires sessions:run:read)

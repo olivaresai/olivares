@@ -1,0 +1,122 @@
+{
+  "title": "提供方",
+  "subtitle": "会话启动时使用的凭据。注册一次即可；引擎会将其封存，并在启动时交给代理。",
+  "nav": "提供方",
+  "add": "添加提供方",
+  "empty": {
+    "title": "尚未注册任何提供方",
+    "description": "没有凭据，会话无法启动。添加 Anthropic、OpenAI 或 xAI 的 API 密钥，或任何兼容 OpenAI 的端点的密钥；引擎会将其封存并在启动时使用。密钥不会再次显示。",
+    "action": "添加你的第一个提供方"
+  },
+  "emptyFiltered": {
+    "title": "没有提供方符合此筛选条件",
+    "description": "清除筛选条件即可查看所有已注册的提供方。",
+    "action": "显示全部"
+  },
+  "forbidden": {
+    "title": "你无权读取此租户的提供方",
+    "description": "读取已注册的提供方需要 sessions:provider:read。请向该租户的管理员申请。"
+  },
+  "columns": {
+    "name": "名称",
+    "kind": "类型",
+    "key": "密钥",
+    "state": "状态",
+    "connection": "连接"
+  },
+  "kinds": {
+    "anthropic": "Anthropic",
+    "openai": "OpenAI",
+    "xai": "xAI",
+    "openai_compatible": "兼容 OpenAI"
+  },
+  "kindHints": {
+    "anthropic": "Claude Code。注入 ANTHROPIC_API_KEY。",
+    "openai": "Codex。注入 OPENAI_API_KEY。",
+    "xai": "Grok。注入 XAI_API_KEY。",
+    "openai_compatible": "任何 OpenAI 形态的端点。注入 OPENAI_API_KEY 和 OPENAI_BASE_URL；端点为必填。"
+  },
+  "states": {
+    "active": "有效",
+    "revoked": "已吊销"
+  },
+  "probe": {
+    "never": "未测试",
+    "ok": "已接受",
+    "refused": "被拒绝",
+    "unreachable": "无法连通",
+    "neverHint": "还没有人测试过这份凭据。注册本身并不能证明它可用。",
+    "okHint": "提供方作出了响应并接受了这份凭据。",
+    "refusedHint": "提供方作出了响应并拒绝了这份凭据。请更换密钥。",
+    "unreachableHint": "端点没有响应。这并不能说明凭据本身有任何问题。",
+    "models": "{{n}} 个模型",
+    "latency": "{{ms}} 毫秒",
+    "at": "测试于 {{when}}"
+  },
+  "actions": {
+    "test": "测试连接",
+    "testing": "测试中…",
+    "rotate": "更换密钥",
+    "revoke": "吊销",
+    "details": "详情"
+  },
+  "create": {
+    "title": "添加提供方",
+    "description": "引擎会封存该密钥且永不返回。你只会看到四个字符的提示，再无其他。",
+    "kind": "提供方",
+    "kindPlaceholder": "选择提供方",
+    "name": "名称",
+    "nameHint": "你为这份凭据起的名字。选择器中显示的就是它。",
+    "namePlaceholder": "Anthropic（生产）",
+    "baseURL": "端点",
+    "baseURLHint": "留空表示使用提供方的官方端点。必须是 https。",
+    "baseURLPlaceholder": "https://llm.example.com",
+    "apiKey": "API 密钥",
+    "apiKeyHint": "只发送一次，由引擎封存，永不返回到此浏览器。",
+    "apiKeyPlaceholder": "粘贴密钥",
+    "submit": "添加提供方",
+    "submitting": "封存中…",
+    "cancel": "取消",
+    "success": "提供方已注册。请测试连接以确认它可用。",
+    "testNext": "立即测试连接"
+  },
+  "rotate": {
+    "title": "更换此提供方的密钥",
+    "description": "新密钥在同一引用下替换旧密钥，因此所有已绑定的配置档案继续可用。已在运行的会话仍保留它启动时的凭据。",
+    "verdictCleared": "先前的连接测试结果会被清除：针对一份已不存在的凭据所得出的结论，并不能证明替换它的那一份可用。",
+    "submit": "更换密钥",
+    "submitting": "封存中…",
+    "success": "密钥已更换。请测试连接以确认新密钥可用。"
+  },
+  "revoke": {
+    "title": "吊销此提供方",
+    "description": "此操作会销毁已封存的凭据。对该引用而言无法撤销。",
+    "consequence": "所有绑定到它的提供方配置档案都将拒绝启动，并指名这个提供方。提供方那一侧的凭据不会被吊销：请在他们自己的控制台中操作。",
+    "confirm": "吊销",
+    "success": "提供方已吊销，其封存的凭据已被销毁。"
+  },
+  "detail": {
+    "title": "提供方",
+    "reference": "引用",
+    "endpoint": "端点",
+    "officialEndpoint": "提供方的官方端点",
+    "created": "注册于",
+    "revoked": "吊销于",
+    "models": "最近一次测试列出的模型",
+    "noModels": "尚无模型列表。请测试连接。",
+    "close": "关闭"
+  },
+  "vaultUnavailable": {
+    "title": "此部署无法保存提供方凭据",
+    "description": "没有接入封存式凭据保管库，因此引擎拒绝保存密钥，而不是保存一份它无法保护的密钥。需要管理员配置机密封存器。"
+  },
+  "next": {
+    "title": "下一步：部署一个代理",
+    "description": "仅有凭据不会启动任何东西。把它绑定到提供方配置档案，在该档案下启动的会话就会使用它。",
+    "action": "前往提供方配置档案"
+  },
+  "truncation": {
+    "label": "正在显示 {{n}} 个提供方；还有更多",
+    "hint": "此列表只是一页。请缩小范围，或使用 `olivares provider ls` 获取完整集合。"
+  }
+}

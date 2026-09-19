@@ -135,7 +135,13 @@ func stopModuleAtCleanup(t *testing.T, m *Module) {
 func newRuntimeHarness(t *testing.T, opts ...Option) (*Module, store.Store, model.TenantID, *testClock) {
 	t.Helper()
 	clk := &testClock{now: baseTime}
-	m := New(append([]Option{WithClock(clk)}, opts...)...)
+	// every harnessed module gets a session-workspace root, because a run
+	// with no registered workspace is DENY-CLOSED without one — the alternative
+	// being the engine's own working directory, which is the defect that option
+	// removes. It is PREPENDED, so a test that wants another root (or wants to
+	// clear it and prove the refusal) still wins with its own option.
+	base := []Option{WithClock(clk), WithSessionWorkspaceRoot(t.TempDir())}
+	m := New(append(base, opts...)...)
 	ctx := context.Background()
 	st, err := engine.Open(ctx, store.Config{Engine: store.EngineSQLite, DSN: ":memory:", Debug: true}, m.RegisterSchema)
 	if err != nil {

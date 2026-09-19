@@ -81,6 +81,65 @@ func WithClassifier(c Classifier) Option {
 	}
 }
 
+// WithSessionWorkspaceRoot names the directory under which a session with NO
+// registered workspace gets a working directory of its OWN (<root>/<run_ref>).
+// The composition root derives it from the engine's data directory.
+//
+// Unwired, such a launch is REFUSED rather than started in the engine's own
+// working directory — which is what it did until this option existed, measured on
+// the golden path: the child's init frame reported the engine's cwd byte for byte.
+// A run that names a registered workspace is unaffected and keeps using it.
+// ⛔ THE VALUE IS VALIDATED HERE, NOT WHERE IT IS USED. A release removes a
+// direct child of this directory recursively, so a root of "/" would make every
+// top-level directory of the host a candidate. An Option cannot return an error,
+// so a refused value leaves the node UNWIRED — every unworkspaced launch is then
+// deny-closed and reports the reason and its remedy, which is the honest outcome
+// for a wiring mistake. UseSessionWorkspaceRoot below says the same thing to a
+// caller that can hear it.
+func WithSessionWorkspaceRoot(dir string) Option {
+	return func(m *Module) {
+		_ = m.setSessionWorkspaceRoot(dir)
+	}
+}
+
+// SessionWorkspaceRootConfigured reports whether this node can give a session
+// with NO registered workspace a directory of its own. It is the composition
+// root's observation seam: a boot that offered a root reports the state the
+// module is actually IN — deny-closed or serving — instead of the value it hoped
+// to wire.
+func (m *Module) SessionWorkspaceRootConfigured() bool {
+	return m.sessionWorkspaceRootConfigured()
+}
+
+// UseSessionWorkspaceRoot late-binds the same root, for the composition roots
+// that resolve the data directory after the module is constructed. It returns
+// the refusal (runtime_workspace_dir.go, validateSessionWorkspaceRoot) so a late
+// binder learns immediately instead of at the first launch; an empty value is
+// ignored and is not an error, so a partial wiring cannot erase a configured
+// root by passing "".
+func (m *Module) UseSessionWorkspaceRoot(dir string) error {
+	return m.setSessionWorkspaceRoot(dir)
+}
+
+// WithSessionCostSink wires the port that posts a governed turn's cost to the
+// tenant's spend ledger. Unwired, the run's own counters are still recorded and
+// the module says once per session that its cost reaches no ledger.
+func WithSessionCostSink(sink SessionCostSink) Option {
+	return func(m *Module) {
+		if sink != nil {
+			m.rt.costSink = sink
+		}
+	}
+}
+
+// UseSessionCostSink late-binds the same port: the composition root builds this
+// module BEFORE the observation publisher whose Host exists only at Init.
+func (m *Module) UseSessionCostSink(sink SessionCostSink) {
+	if sink != nil {
+		m.rt.costSink = sink
+	}
+}
+
 // WithProgram overrides the launched executable (default "claude"); used by tests
 // to inject a fake claude binary.
 func WithProgram(program string) Option {
@@ -511,3 +570,49 @@ func (m *Module) EnableProfiledLaunches() { m.rt.profiledLaunchesEnabled = true 
 
 // ProfiledLaunchesEnabled reports the switch above.
 func (m *Module) ProfiledLaunchesEnabled() bool { return m.rt.profiledLaunchesEnabled }
+
+// WithProviderSecretVault wires the port that seals provider-record credentials
+// outside this module's partition (v26.10). Unwired, registering a provider is
+// refused with the wiring named: the engine never stores a credential in the
+// clear, and "I have nowhere safe to put this" is an answer, not a failure.
+func WithProviderSecretVault(v ProviderSecretVault) Option {
+	return func(m *Module) {
+		if v != nil {
+			m.rt.providerVault = v
+		}
+	}
+}
+
+// WithProviderProbe wires the non-spending connection test (v26.10). Unwired, the
+// test is refused and says that launching is unaffected.
+func WithProviderProbe(p ProviderProbe) Option {
+	return func(m *Module) {
+		if p != nil {
+			m.rt.providerProbe = p
+		}
+	}
+}
+
+// UseProviderSecretVault late-binds the sealing port, for the same reason the
+// governance gates are late-bound: the composition root builds this module BEFORE
+// it builds the store the vault is implemented over.
+func (m *Module) UseProviderSecretVault(v ProviderSecretVault) {
+	if v != nil {
+		m.rt.providerVault = v
+	}
+}
+
+// UseProviderProbe late-binds the connection test.
+func (m *Module) UseProviderProbe(p ProviderProbe) {
+	if p != nil {
+		m.rt.providerProbe = p
+	}
+}
+
+// ProviderVaultWired reports whether a sealing port is available, so a console or
+// a CLI can present an honest "provider registration is disabled on this
+// deployment" posture instead of discovering it one refused request at a time.
+func (m *Module) ProviderVaultWired() bool { return m.rt.providerVault != nil }
+
+// ProviderProbeWired reports whether the connection test is available.
+func (m *Module) ProviderProbeWired() bool { return m.rt.providerProbe != nil }

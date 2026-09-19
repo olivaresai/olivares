@@ -197,7 +197,7 @@ type codexTextFixture struct {
 
 func newCodexTextFixture(t *testing.T, org, thread string) *codexTextFixture {
 	t.Helper()
-	m := New(
+	m := New(WithSessionWorkspaceRoot(t.TempDir()),
 		WithRunner(NewProcRunner()),
 		WithProviderDriver(NewCodexDriver()),
 		WithDriverProgram(providerDriverCodex, os.Args[0]),

@@ -259,7 +259,7 @@ func openProductStoreForFixture(t *testing.T, dsn string) (store.Store, error) {
 	}
 	set, err := buildModules(signer,
 		ed25519.NewKeyFromSeed(fixedSeed(1)), ed25519.NewKeyFromSeed(fixedSeed(2)),
-		nil, nil, sourcesConfig{}, EditionConfig{}, log)
+		nil, nil, sourcesConfig{}, EditionConfig{}, t.TempDir(), log)
 	if err != nil {
 		t.Fatal(err)
 	}

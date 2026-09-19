@@ -1,0 +1,122 @@
+{
+  "title": "Providers",
+  "subtitle": "The credential a session launches with. Register it once; the engine seals it and hands it to the agent at launch.",
+  "nav": "Providers",
+  "add": "Add provider",
+  "empty": {
+    "title": "No provider registered yet",
+    "description": "A session cannot launch without a credential. Add the API key of Anthropic, OpenAI or xAI — or any OpenAI-compatible endpoint — and the engine seals it and uses it at launch. The key is never shown again.",
+    "action": "Add your first provider"
+  },
+  "emptyFiltered": {
+    "title": "No provider matches this filter",
+    "description": "Clear the filter to see every registered provider.",
+    "action": "Show all"
+  },
+  "forbidden": {
+    "title": "You cannot read the providers of this tenant",
+    "description": "Reading registered providers needs sessions:provider:read. Ask an administrator of this tenant for it."
+  },
+  "columns": {
+    "name": "Name",
+    "kind": "Kind",
+    "key": "Key",
+    "state": "State",
+    "connection": "Connection"
+  },
+  "kinds": {
+    "anthropic": "Anthropic",
+    "openai": "OpenAI",
+    "xai": "xAI",
+    "openai_compatible": "OpenAI-compatible"
+  },
+  "kindHints": {
+    "anthropic": "Claude Code. Injects ANTHROPIC_API_KEY.",
+    "openai": "Codex. Injects OPENAI_API_KEY.",
+    "xai": "Grok. Injects XAI_API_KEY.",
+    "openai_compatible": "Any OpenAI-shaped endpoint. Injects OPENAI_API_KEY and OPENAI_BASE_URL; the endpoint is required."
+  },
+  "states": {
+    "active": "Active",
+    "revoked": "Revoked"
+  },
+  "probe": {
+    "never": "Not tested",
+    "ok": "Accepted",
+    "refused": "Refused",
+    "unreachable": "Unreachable",
+    "neverHint": "Nobody has tested this credential. Registering it is not evidence that it works.",
+    "okHint": "The provider answered and accepted this credential.",
+    "refusedHint": "The provider answered and rejected this credential. Rotate it.",
+    "unreachableHint": "The endpoint did not answer. This says nothing about the credential.",
+    "models": "{{n}} models",
+    "latency": "{{ms}} ms",
+    "at": "Tested {{when}}"
+  },
+  "actions": {
+    "test": "Test connection",
+    "testing": "Testing…",
+    "rotate": "Rotate key",
+    "revoke": "Revoke",
+    "details": "Details"
+  },
+  "create": {
+    "title": "Add a provider",
+    "description": "The engine seals the key and never returns it. You will see a four-character hint and nothing more.",
+    "kind": "Provider",
+    "kindPlaceholder": "Choose a provider",
+    "name": "Name",
+    "nameHint": "Your own name for this credential. It is what a picker shows.",
+    "namePlaceholder": "Anthropic (production)",
+    "baseURL": "Endpoint",
+    "baseURLHint": "Leave empty for the provider's official endpoint. Must be https.",
+    "baseURLPlaceholder": "https://llm.example.com",
+    "apiKey": "API key",
+    "apiKeyHint": "Sent once, sealed by the engine, never returned to this browser.",
+    "apiKeyPlaceholder": "Paste the key",
+    "submit": "Add provider",
+    "submitting": "Sealing…",
+    "cancel": "Cancel",
+    "success": "Provider registered. Test the connection to confirm it works.",
+    "testNext": "Test connection now"
+  },
+  "rotate": {
+    "title": "Rotate this provider's key",
+    "description": "The new key replaces the old one under the same reference, so every profile bound to it keeps working. A session already running keeps the credential it started with.",
+    "verdictCleared": "The previous connection test is cleared: a verdict measured on a credential that no longer exists is not evidence about the one replacing it.",
+    "submit": "Rotate key",
+    "submitting": "Sealing…",
+    "success": "Key rotated. Test the connection to confirm the new one works."
+  },
+  "revoke": {
+    "title": "Revoke this provider",
+    "description": "This destroys the sealed credential. It cannot be undone for this reference.",
+    "consequence": "Every provider profile bound to it will refuse to launch, naming this provider. The credential is not revoked at the provider itself: do that in their own console.",
+    "confirm": "Revoke",
+    "success": "Provider revoked and its sealed credential destroyed."
+  },
+  "detail": {
+    "title": "Provider",
+    "reference": "Reference",
+    "endpoint": "Endpoint",
+    "officialEndpoint": "The provider's official endpoint",
+    "created": "Registered",
+    "revoked": "Revoked",
+    "models": "Models the last test listed",
+    "noModels": "No model list yet. Test the connection.",
+    "close": "Close"
+  },
+  "vaultUnavailable": {
+    "title": "This deployment cannot store a provider credential",
+    "description": "No sealed credential vault is wired, so the engine refuses to store a key rather than storing one it cannot protect. An administrator must configure the secret sealer."
+  },
+  "next": {
+    "title": "Next: deploy an agent",
+    "description": "A credential on its own does not launch anything. Bind it to a provider profile, and a session launched under that profile uses it.",
+    "action": "Go to provider profiles"
+  },
+  "truncation": {
+    "label": "Showing {{n}} providers; there are more",
+    "hint": "This list is one page. Narrow it, or use `olivares provider ls` for the full set."
+  }
+}

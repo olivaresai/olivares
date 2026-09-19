@@ -9,10 +9,10 @@ import (
 	"fmt"
 	"io"
 	"strings"
-	"text/tabwriter"
 
 	"github.com/spf13/cobra"
 
+	"github.com/olivaresai/olivares/cmd/olivares/internal/termrender"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 )
@@ -76,14 +76,11 @@ func superadminStatusCmd() *cobra.Command {
 					_, err := fmt.Fprintln(out, "no superadmin accounts")
 					return err
 				}
-				tw := tabwriter.NewWriter(out, 0, 2, 2, ' ', 0)
-				fmt.Fprintln(tw, "ID\tEMAIL\tSTATUS")
+				tbl := termrender.Table{Header: []string{"id", "email", "status"}}
 				for _, u := range admins {
-					fmt.Fprintf(tw, "%s\t%s\t%s\n", u.ID, u.Email, u.Status)
+					tbl.Rows = append(tbl.Rows, []string{string(u.ID), u.Email, string(u.Status)})
 				}
-				if err := tw.Flush(); err != nil {
-					return err
-				}
+				renderTo(out).Table(tbl)
 				_, err := fmt.Fprintf(out,
 					"\n%d active superadmin(s); the last active one cannot be disabled.\n", active)
 				return err
@@ -179,7 +176,7 @@ func superadminSetActiveCmd(use string, active bool, short string) *cobra.Comman
 	}
 	addStoreFlags(cmd, &dataDir, &engine, &dsn)
 	addLocalActorFlags(cmd, &actorFlag, &reasonFlag)
-	cmd.Flags().StringVar(&id, "id", "", "superadmin user id (see `superadmin status`)")
+	cmd.Flags().StringVar(&id, "id", "", "superadmin user id (see 'superadmin status')")
 	cmd.Flags().StringVar(&email, "email", "", "superadmin email (alternative to --id)")
 	return cmd
 }

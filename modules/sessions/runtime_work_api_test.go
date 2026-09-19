@@ -30,7 +30,7 @@ type runtimeWorkAPIFixture struct {
 func newRuntimeWorkAPIFixture(t *testing.T) runtimeWorkAPIFixture {
 	t.Helper()
 	runner := &fakeRunner{}
-	m := New(
+	m := New(WithSessionWorkspaceRoot(t.TempDir()),
 		WithRunner(runner),
 		WithCredentialSource(staticCred()),
 		WithWorkIdentityResolver(allowWorkIdentity{}),
@@ -153,7 +153,7 @@ func TestRuntimeWorkAPIInputSelectsFenceAndRejectsFallback(t *testing.T) {
 func TestRuntimeWorkAPIStopIsFencedAndEmptyBodyStaysLegacy(t *testing.T) {
 	t.Run("legacy empty body", func(t *testing.T) {
 		runner := &fakeRunner{}
-		m := New(WithRunner(runner), WithCredentialSource(staticCred()))
+		m := New(WithSessionWorkspaceRoot(t.TempDir()), WithRunner(runner), WithCredentialSource(staticCred()))
 		h := newHarness(t, m)
 		admin := h.adminLogin()
 		tenant := h.createOrg(admin, "runtime-stop-legacy")

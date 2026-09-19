@@ -1007,7 +1007,7 @@ func testRuntimeDualResumeReservationIsCrossModuleAtomic(
 	}
 	oldFence := stoppedRecord.Int(colClaimFence)
 
-	m2 := New(WithClock(clk), WithRunner(runner2), WithCredentialSource(staticCred()), WithStopGate(gate))
+	m2 := New(WithSessionWorkspaceRoot(t.TempDir()), WithClock(clk), WithRunner(runner2), WithCredentialSource(staticCred()), WithStopGate(gate))
 	m2.UseData(m1.data)
 	stopModuleAtCleanup(t, m2)
 	wireDualCredentialProbe(m2, probe)

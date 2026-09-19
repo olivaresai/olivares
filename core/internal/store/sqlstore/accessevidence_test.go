@@ -7,6 +7,7 @@ package sqlstore
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"go/ast"
@@ -1253,4 +1254,73 @@ func rawRowCount(t *testing.T, st store.Store, tenant model.TenantID, table stri
 		t.Fatalf("count %s: %v", table, err)
 	}
 	return n
+}
+
+func assertDecisionReconstructionStamp(t *testing.T, st store.Store, tenant model.TenantID) {
+	t.Helper()
+	ctx := context.Background()
+	artifact := retainArtifact(t, st, tenant, "stamp-artifact", "permit(principal, action, resource);")
+	var decision model.AuthorizationDecision
+	if err := st.Mutate(ctx, tenant, func(sc store.Scope) error {
+		res, err := sc.AccessEvidence().AppendAuthorizationDecision(ctx, store.AuthorizationDecisionAppend{
+			AccessEvidenceAppend: appendMeta(t, sdk.EventTypeAuthorizationDecision, "stamp-decision"),
+			Decision:             decisionContent(sdk.AccessDependency{Kind: sdk.DependencyPolicyArtifact, Ref: artifact.ID.String(), Required: true}),
+		})
+		decision = res.Record
+		return err
+	}); err != nil {
+		t.Fatalf("append decision: %v", err)
+	}
+	if decision.Decision.PolicyVersionID != artifact.ID.String() {
+		t.Fatalf("policy_version_id = %q, want artifact %q (not an authoring revision, not unknown)",
+			decision.Decision.PolicyVersionID, artifact.ID)
+	}
+	if !decision.InputsDigestKnown() {
+		t.Fatal("new decision row must carry inputs_digest")
+	}
+	digest, err := sdk.AccessInputsDigest(decision.Decision.Inputs)
+	if err != nil {
+		t.Fatalf("inputs digest: %v", err)
+	}
+	if decision.Decision.InputsDigest != digest {
+		t.Fatalf("stored inputs_digest %q != recomputed %q", decision.Decision.InputsDigest, digest)
+	}
+
+	qdig, err := evidenceQuestion().Digest()
+	if err != nil {
+		t.Fatalf("question digest: %v", err)
+	}
+	if err := st.View(ctx, tenant, func(sc store.Scope) error {
+		rows, err := sc.AccessEvidence().AuthorizationDecisionsForQuestion(ctx, qdig)
+		if err != nil {
+			return err
+		}
+		if len(rows) != 1 || rows[0].ID != decision.ID {
+			t.Errorf("decisions for question = %d rows, want the stamped row", len(rows))
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("list by question: %v", err)
+	}
+}
+
+func TestDecisionReconstructionStampSQLite(t *testing.T) {
+	st := openSQLiteAt(t, filepath.Join(t.TempDir(), "stamp.db"))
+	tenant := provisionTenant(t, st, "stamp-sqlite")
+	assertDecisionReconstructionStamp(t, st, tenant)
+}
+
+func TestLegacyDecisionJSONStaysUnknownOnRead(t *testing.T) {
+	// The "migration" for old rows is honesty, not backfill: a content document
+	// that never named a policy version remains unknown after decode. Fabricating
+	// the live authoring revision would be the defect this test exists to catch.
+	raw := []byte(`{"schema_version":1,"question":{"schema_version":1,"actor_ref":"a","action":"read"},"purpose":"live_authorization","evaluator":"cedar","evaluator_version":"3","outcome":"allow","reason_code":"x","replay_completeness":"unknown","authorization_point":"t"}`)
+	var d sdk.AuthorizationDecisionContent
+	if err := json.Unmarshal(raw, &d); err != nil {
+		t.Fatalf("legacy decode: %v", err)
+	}
+	rec := model.AuthorizationDecision{Decision: d}
+	if rec.PolicyVersionKnown() || rec.InputsDigestKnown() {
+		t.Fatalf("legacy row must stay unknown, got %+v", rec.Decision)
+	}
 }

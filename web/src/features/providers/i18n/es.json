@@ -1,0 +1,122 @@
+{
+  "title": "Proveedores",
+  "subtitle": "La credencial con la que arranca una sesión. Regístrala una vez; el motor la sella y se la entrega al agente en el lanzamiento.",
+  "nav": "Proveedores",
+  "add": "Añadir proveedor",
+  "empty": {
+    "title": "Todavía no hay ningún proveedor registrado",
+    "description": "Una sesión no puede arrancar sin credencial. Añade la clave de API de Anthropic, OpenAI o xAI —o de cualquier endpoint compatible con OpenAI— y el motor la sella y la usa en el lanzamiento. La clave no se vuelve a mostrar.",
+    "action": "Añade tu primer proveedor"
+  },
+  "emptyFiltered": {
+    "title": "Ningún proveedor coincide con este filtro",
+    "description": "Quita el filtro para ver todos los proveedores registrados.",
+    "action": "Mostrar todos"
+  },
+  "forbidden": {
+    "title": "No puedes leer los proveedores de este inquilino",
+    "description": "Leer los proveedores registrados requiere sessions:provider:read. Pídeselo a una administradora de este inquilino."
+  },
+  "columns": {
+    "name": "Nombre",
+    "kind": "Tipo",
+    "key": "Clave",
+    "state": "Estado",
+    "connection": "Conexión"
+  },
+  "kinds": {
+    "anthropic": "Anthropic",
+    "openai": "OpenAI",
+    "xai": "xAI",
+    "openai_compatible": "Compatible con OpenAI"
+  },
+  "kindHints": {
+    "anthropic": "Claude Code. Inyecta ANTHROPIC_API_KEY.",
+    "openai": "Codex. Inyecta OPENAI_API_KEY.",
+    "xai": "Grok. Inyecta XAI_API_KEY.",
+    "openai_compatible": "Cualquier endpoint con forma de OpenAI. Inyecta OPENAI_API_KEY y OPENAI_BASE_URL; el endpoint es obligatorio."
+  },
+  "states": {
+    "active": "Activo",
+    "revoked": "Revocado"
+  },
+  "probe": {
+    "never": "Sin probar",
+    "ok": "Aceptada",
+    "refused": "Rechazada",
+    "unreachable": "Inalcanzable",
+    "neverHint": "Nadie ha probado esta credencial. Registrarla no es prueba de que funcione.",
+    "okHint": "El proveedor contestó y aceptó esta credencial.",
+    "refusedHint": "El proveedor contestó y rechazó esta credencial. Rótala.",
+    "unreachableHint": "El endpoint no contestó. Esto no dice nada sobre la credencial.",
+    "models": "{{n}} modelos",
+    "latency": "{{ms}} ms",
+    "at": "Probada {{when}}"
+  },
+  "actions": {
+    "test": "Probar conexión",
+    "testing": "Probando…",
+    "rotate": "Rotar clave",
+    "revoke": "Revocar",
+    "details": "Detalles"
+  },
+  "create": {
+    "title": "Añadir un proveedor",
+    "description": "El motor sella la clave y no la devuelve nunca. Verás una pista de cuatro caracteres y nada más.",
+    "kind": "Proveedor",
+    "kindPlaceholder": "Elige un proveedor",
+    "name": "Nombre",
+    "nameHint": "Tu propio nombre para esta credencial. Es lo que muestra un selector.",
+    "namePlaceholder": "Anthropic (producción)",
+    "baseURL": "Endpoint",
+    "baseURLHint": "Déjalo vacío para el endpoint oficial del proveedor. Tiene que ser https.",
+    "baseURLPlaceholder": "https://llm.ejemplo.com",
+    "apiKey": "Clave de API",
+    "apiKeyHint": "Se envía una vez, la sella el motor y no vuelve nunca a este navegador.",
+    "apiKeyPlaceholder": "Pega la clave",
+    "submit": "Añadir proveedor",
+    "submitting": "Sellando…",
+    "cancel": "Cancelar",
+    "success": "Proveedor registrado. Prueba la conexión para confirmar que funciona.",
+    "testNext": "Probar la conexión ahora"
+  },
+  "rotate": {
+    "title": "Rotar la clave de este proveedor",
+    "description": "La clave nueva sustituye a la anterior bajo la misma referencia, así que todos los perfiles vinculados siguen funcionando. Una sesión que ya está corriendo conserva la credencial con la que arrancó.",
+    "verdictCleared": "Se borra la prueba de conexión anterior: un veredicto medido sobre una credencial que ya no existe no es prueba sobre la que la sustituye.",
+    "submit": "Rotar clave",
+    "submitting": "Sellando…",
+    "success": "Clave rotada. Prueba la conexión para confirmar que la nueva funciona."
+  },
+  "revoke": {
+    "title": "Revocar este proveedor",
+    "description": "Esto destruye la credencial sellada. No se puede deshacer para esta referencia.",
+    "consequence": "Todos los perfiles de proveedor vinculados se negarán a lanzar, nombrando a este proveedor. La credencial no se revoca en el proveedor: eso se hace en su propia consola.",
+    "confirm": "Revocar",
+    "success": "Proveedor revocado y su credencial sellada destruida."
+  },
+  "detail": {
+    "title": "Proveedor",
+    "reference": "Referencia",
+    "endpoint": "Endpoint",
+    "officialEndpoint": "El endpoint oficial del proveedor",
+    "created": "Registrado",
+    "revoked": "Revocado",
+    "models": "Modelos que listó la última prueba",
+    "noModels": "Todavía no hay lista de modelos. Prueba la conexión.",
+    "close": "Cerrar"
+  },
+  "vaultUnavailable": {
+    "title": "Este despliegue no puede guardar una credencial de proveedor",
+    "description": "No hay ningún almacén sellado de credenciales conectado, así que el motor se niega a guardar una clave en vez de guardar una que no puede proteger. Una administradora tiene que configurar el sellador de secretos."
+  },
+  "next": {
+    "title": "Siguiente: despliega un agente",
+    "description": "Una credencial por sí sola no lanza nada. Vincúlala a un perfil de proveedor y una sesión lanzada bajo ese perfil la usará.",
+    "action": "Ir a los perfiles de proveedor"
+  },
+  "truncation": {
+    "label": "Se muestran {{n}} proveedores; hay más",
+    "hint": "Esta lista es una página. Acótala, o usa `olivares provider ls` para el conjunto completo."
+  }
+}

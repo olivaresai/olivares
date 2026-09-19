@@ -22,7 +22,7 @@ import (
 // The module's own batteries cannot notice: they inject their own runner.
 func TestSessionRuntimeCompositionWiresAnInspectableRunner(t *testing.T) {
 	t.Parallel()
-	opts := buildSessionRuntimeOptions(func(string) string { return "" }, nil, nil)
+	opts := buildSessionRuntimeOptions(func(string) string { return "" }, nil, "", nil)
 	if m := sessions.New(opts...); !m.LaunchInspectionAvailable() {
 		t.Fatal("the runner the composition root wires cannot be inspected without launching, so launch " +
 			"readiness would answer unknown for the runner and the program on every profile in production")
@@ -94,7 +94,7 @@ func TestSessionRuntimeCompositionRegistersDriversIndependently(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			m := sessions.New(buildSessionRuntimeOptions(env(tc.vars), nil, nil)...)
+			m := sessions.New(buildSessionRuntimeOptions(env(tc.vars), nil, "", nil)...)
 			got := m.OperableProviderDrivers()
 			if len(got) != len(tc.want) {
 				t.Fatalf("operable drivers = %v, want %v", got, tc.want)

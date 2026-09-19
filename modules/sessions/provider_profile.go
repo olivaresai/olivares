@@ -58,6 +58,12 @@ const (
 	// home slot. Empty means no source was authorized, which is a refusal for
 	// every driver except the historical Claude path it predates.
 	colPPAuthSource = "auth_source"
+	// colPPProviderRecordRef names the PROVIDER RECORD this profile's managed
+	// launches resolve their credential from (v26.10). Empty keeps the historical
+	// behaviour exactly: the host-wide credential source decides. It is an
+	// authorization like auth_source — mutable, absent from the home slot, and not
+	// applied to a live child, which keeps the record its own launch resolved.
+	colPPProviderRecordRef = "provider_record_ref"
 )
 
 // Profile lifecycle states.
@@ -133,10 +139,21 @@ type ProviderProfile struct {
 	State          string
 	// AuthSource is the authorized authentication source ("" = none authorized).
 	AuthSource string
-	Version    int64
-	CreatedAt  string
-	UpdatedAt  string
-	RetiredAt  string
+	// ProviderRecordRef names the provider record this profile's managed launches
+	// use ("" = none; the host-wide source decides, as it always has).
+	ProviderRecordRef string
+	// SessionTools / SessionToolsDeclared and SessionPermissionMode are the
+	// DECLARED session policy (provider_profile_policy.go). Undeclared is
+	// deny-closed at launch, so the two are kept apart: a nil declaration is "the
+	// operator said nothing" and an empty declared list is "the operator said
+	// none".
+	SessionTools          []string
+	SessionToolsDeclared  bool
+	SessionPermissionMode string
+	Version               int64
+	CreatedAt             string
+	UpdatedAt             string
+	RetiredAt             string
 }
 
 // ProviderHomeSnapshot is the non-secret launch snapshot resolved server-side from a
@@ -159,6 +176,14 @@ type ProviderHomeSnapshot struct {
 	// digest, while a launch that does carry a source digests it and a second
 	// dispatch under another source is a conflict rather than a replay.
 	AuthSource string `json:"auth_source,omitempty"`
+	// ProviderRecordRef is the PROVIDER RECORD this launch resolves its credential
+	// from (v26.10), resolved with the rest of this snapshot before intent, gates and
+	// reservation. `omitempty` is load-bearing for exactly the reason AuthSource
+	// gives above it: a profile that names no record encodes to the same bytes as
+	// before, so every already-dispatched K4 digest is preserved, while a launch
+	// that DOES carry a record digests it — and a second dispatch of the same key
+	// under another record is a conflict rather than a replay.
+	ProviderRecordRef string `json:"provider_record_ref,omitempty"`
 }
 
 // CreateProfileInput is the validated create request.
@@ -173,6 +198,19 @@ type CreateProfileInput struct {
 	// EnvironmentRef may be empty (this node's environment) or equal to it. A
 	// foreign environment cannot have its paths validated here, so it is refused.
 	EnvironmentRef string
+	// ProviderRecordRef optionally binds the profile to a registered provider
+	// credential at creation. It is accepted here so "deploy an agent" is ONE
+	// authorized call instead of two, which is what makes the console step a step
+	// and not a checklist. Empty leaves the profile on the host-wide credential.
+	ProviderRecordRef string
+	// SessionTools declares the tool surface every session under this profile gets
+	// (provider_profile_policy.go). A nil declaration is UNDECLARED, which is
+	// deny-closed at launch; a non-nil empty declaration says "no tools" out loud.
+	SessionTools         []string
+	SessionToolsDeclared bool
+	// SessionPermissionMode declares the permission mode those sessions run under.
+	// Empty declares none and leaves the launch's own validated mode in place.
+	SessionPermissionMode string
 }
 
 // registerProviderProfileSchema declares the three B1 entities: the profile, the
@@ -197,6 +235,18 @@ func (m *Module) registerProviderProfileSchema(reg store.ExtensionRegistry) erro
 			// Nullable: an existing profile gains the column on the next boot and reads
 			// as "no authorized source", which is the deny-closed value.
 			{Name: colPPAuthSource, Kind: model.KindText, Nullable: true},
+			// Nullable for the same reason and with the same reading: an existing
+			// profile gains the column and reads as "no provider record named", which
+			// is exactly today's behaviour (the host environment decides). It is NOT
+			// part of the home slot: binding a record is an authorization, not an
+			// identity, so it does not create another profile id.
+			{Name: colPPProviderRecordRef, Kind: model.KindText, Nullable: true},
+			// The declared SESSION POLICY (provider_profile_policy.go). Nullable is the
+			// contract, not hygiene: NULL means the operator declared nothing, which is
+			// deny-closed — the child is launched with no built-in tools. A profile that
+			// predates the columns therefore reads as undeclared, which is what it is.
+			{Name: colPPSessionTools, Kind: model.KindText, Nullable: true},
+			{Name: colPPSessionPermissionMode, Kind: model.KindText, Nullable: true},
 		},
 		Indexes: []model.IndexSpec{
 			{Name: "sessions_provider_profile_ref_uniq", Columns: []string{model.ColTenantID, colPPRef}, Unique: true},
@@ -209,6 +259,13 @@ func (m *Module) registerProviderProfileSchema(reg store.ExtensionRegistry) erro
 		return err
 	}
 	if err := m.registerProviderBindingSchema(reg); err != nil {
+		return err
+	}
+	// The provider RECORD plane. It is declared beside the profile because the
+	// two are one subject — a profile says which home a child runs under and a
+	// record says which credential it runs with — and because a record is reachable
+	// only through the profile that names it.
+	if err := m.registerProviderRecordSchema(reg); err != nil {
 		return err
 	}
 	return m.registerProviderAliasSchema(reg)
@@ -370,20 +427,25 @@ func (m *Module) localEnvironment() (string, error) {
 // --- store operations ---------------------------------------------------------
 
 func profileFromRecord(rec model.Record) ProviderProfile {
+	policy := decodeSessionPolicy(rec)
 	return ProviderProfile{
-		ID:             model.ID(rec.String(model.ColID)),
-		Ref:            rec.String(colPPRef),
-		Driver:         rec.String(colPPDriver),
-		EnvironmentRef: rec.String(colPPEnvRef),
-		ConfigHome:     rec.String(colPPConfigHome),
-		UserHome:       rec.String(colPPUserHome),
-		DisplayName:    rec.String(colPPDisplayName),
-		State:          rec.String(colPPState),
-		AuthSource:     rec.String(colPPAuthSource),
-		Version:        rec.Int(model.ColVersion),
-		CreatedAt:      rec.String(model.ColCreatedAt),
-		UpdatedAt:      rec.String(model.ColUpdatedAt),
-		RetiredAt:      rec.String(colPPRetiredAt),
+		ID:                    model.ID(rec.String(model.ColID)),
+		Ref:                   rec.String(colPPRef),
+		Driver:                rec.String(colPPDriver),
+		EnvironmentRef:        rec.String(colPPEnvRef),
+		ConfigHome:            rec.String(colPPConfigHome),
+		UserHome:              rec.String(colPPUserHome),
+		DisplayName:           rec.String(colPPDisplayName),
+		State:                 rec.String(colPPState),
+		AuthSource:            rec.String(colPPAuthSource),
+		ProviderRecordRef:     rec.String(colPPProviderRecordRef),
+		SessionTools:          policy.Tools,
+		SessionToolsDeclared:  policy.ToolsDeclared,
+		SessionPermissionMode: policy.PermissionMode,
+		Version:               rec.Int(model.ColVersion),
+		CreatedAt:             rec.String(model.ColCreatedAt),
+		UpdatedAt:             rec.String(model.ColUpdatedAt),
+		RetiredAt:             rec.String(colPPRetiredAt),
 	}
 }
 
@@ -401,6 +463,43 @@ func findProfileRec(ctx context.Context, sc store.Scope, ref string) (model.Reco
 		return nil, ErrProfileNotFound
 	}
 	return recs[0], nil
+}
+
+// validateRecordBinding resolves the PROVIDER RECORD a profile wants to bind and
+// refuses, deny-closed, an unknown ref, a revoked record and a credential this
+// driver's CLI cannot read.
+//
+// It runs inside the SAME transaction that writes the binding, and that is not
+// tidiness: reading the record first and writing the binding afterwards leaves a
+// window in which the record is revoked between the two, and the profile ends up
+// naming a credential the plane already withdrew.
+//
+// The same check runs AGAIN at launch (mintLaunchAuthority). A check that only runs
+// at write time is a check that expires: a record can be revoked, and a driver's
+// operability can change, between binding a profile and launching it.
+func validateRecordBinding(ctx context.Context, sc store.Scope, driver, ref string) error {
+	if ref == "" {
+		return nil
+	}
+	if !validProviderRecordRef(ref) {
+		return ErrProviderRecordNotFound
+	}
+	rec, err := findProviderRecordRec(ctx, sc, ref)
+	if err != nil {
+		return err
+	}
+	if rec.String(colPRState) != ProviderRecordActive {
+		return ErrProviderRecordRevoked
+	}
+	kind := rec.String(colPRKind)
+	if !recordServesDriver(kind, driver) {
+		return &runErr{
+			http.StatusUnprocessableEntity,
+			"a " + kind + " credential is not readable by driver " + driver +
+				"; bind a provider of a kind this driver reads, or register an openai_compatible provider with its endpoint",
+		}
+	}
+	return nil
 }
 
 // CreateProfile registers a new profile for a home on THIS environment. The
@@ -439,11 +538,20 @@ func (m *Module) CreateProfile(ctx context.Context, tenant model.TenantID, in Cr
 	if err != nil {
 		return ProviderProfile{}, err
 	}
+	recordRef := strings.TrimSpace(in.ProviderRecordRef)
+	policyTools, policyMode, err := validateSessionPolicyInput(
+		driver, in.SessionTools, in.SessionToolsDeclared, in.SessionPermissionMode)
+	if err != nil {
+		return ProviderProfile{}, err
+	}
 	ref := newProfileRef()
 	var out ProviderProfile
 	err = m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(providerProfileKind)
 		if err != nil {
+			return err
+		}
+		if err := validateRecordBinding(ctx, sc, driver, recordRef); err != nil {
 			return err
 		}
 		rec := model.Record{
@@ -456,7 +564,14 @@ func (m *Module) CreateProfile(ctx context.Context, tenant model.TenantID, in Cr
 			colPPState:       ProfileActive,
 			colPPHomeSlot:    activeHomeSlot(env, driver, configHome),
 			colPPAuthSource:  authSource,
+
+			colPPProviderRecordRef: recordRef,
 		}
+		// The declaration is written only when there IS one: an absent column is the
+		// deny-closed "nothing was declared", and writing "" would make the two
+		// indistinguishable.
+		setIf(rec, colPPSessionTools, policyTools)
+		setIf(rec, colPPSessionPermissionMode, policyMode)
 		created, err := repo.Create(ctx, rec)
 		if err != nil {
 			return err
@@ -534,6 +649,18 @@ type ProfilePatch struct {
 	// source its own launch was authorized under, and the next launch resolves the
 	// current one.
 	AuthSource *string
+	// ProviderRecordRef binds (or unbinds, with "") the provider record this
+	// profile's managed launches use. Like AuthSource it is an authorization and
+	// not identity, and like AuthSource it does not reach a LIVE process: a running
+	// child keeps the record its own launch resolved.
+	ProviderRecordRef *string
+	// SessionTools re-declares the tool surface, and a non-nil pointer to a nil
+	// slice WITHDRAWS the declaration (back to deny-closed). Like the two above it
+	// is an authorization and not identity, and like them it does not reach a live
+	// child: a running session keeps the surface its own launch was given.
+	SessionTools *[]string
+	// SessionPermissionMode re-declares the permission mode; "" withdraws it.
+	SessionPermissionMode *string
 }
 
 // PatchProfile renames and/or transitions a profile in ONE validated transaction.
@@ -570,6 +697,15 @@ func (m *Module) PatchProfile(ctx context.Context, tenant model.TenantID, ref st
 		}
 		authSource = a
 	}
+	var recordRef string
+	if p.ProviderRecordRef != nil {
+		recordRef = strings.TrimSpace(*p.ProviderRecordRef)
+	}
+	if p.SessionPermissionMode != nil {
+		if mode := strings.TrimSpace(*p.SessionPermissionMode); mode != "" && !validPermissionModes[mode] {
+			return ProviderProfile{}, badRequest("invalid permission_mode in the profile's session policy")
+		}
+	}
 	var out ProviderProfile
 	err := m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(providerProfileKind)
@@ -590,6 +726,29 @@ func (m *Module) PatchProfile(ctx context.Context, tenant model.TenantID, ref st
 		}
 		if p.AuthSource != nil {
 			rec[colPPAuthSource] = authSource
+		}
+		if p.ProviderRecordRef != nil {
+			// Validated against the profile's OWN driver, read from the row rather than
+			// from the request: the driver is immutable, so the row is the authority,
+			// and a caller cannot widen the compatibility check by naming another one.
+			if err := validateRecordBinding(ctx, sc, rec.String(colPPDriver), recordRef); err != nil {
+				return err
+			}
+			rec[colPPProviderRecordRef] = recordRef
+		}
+		if p.SessionTools != nil {
+			// The DRIVER is read from the row, never from the request: it is immutable,
+			// so the row is the authority, and a caller cannot declare a policy for a
+			// driver whose launch form cannot express one by naming another driver.
+			tools, _, terr := validateSessionPolicyInput(
+				rec.String(colPPDriver), *p.SessionTools, *p.SessionTools != nil, "")
+			if terr != nil {
+				return terr
+			}
+			setOrNull(rec, colPPSessionTools, tools)
+		}
+		if p.SessionPermissionMode != nil {
+			setOrNull(rec, colPPSessionPermissionMode, strings.TrimSpace(*p.SessionPermissionMode))
 		}
 		if p.State != nil {
 			switch *p.State {
@@ -620,16 +779,30 @@ func (m *Module) PatchProfile(ctx context.Context, tenant model.TenantID, ref st
 // gate, claim or credential: an unknown ref, a disabled or retired profile, a
 // profile owned by another environment, a driver this runner cannot operate, and
 // a home that no longer resolves to its registered location.
-func (m *Module) resolveLaunchProfile(ctx context.Context, tenant model.TenantID, ref string) (ProviderHomeSnapshot, error) {
+func (m *Module) resolveLaunchProfile(ctx context.Context, tenant model.TenantID, ref string) (ProviderHomeSnapshot, sessionPolicy, error) {
 	env, err := m.localEnvironment()
 	if err != nil {
-		return ProviderHomeSnapshot{}, err
+		return ProviderHomeSnapshot{}, sessionPolicy{}, err
 	}
 	prof, err := m.GetProfile(ctx, tenant, ref)
 	if err != nil {
-		return ProviderHomeSnapshot{}, err
+		return ProviderHomeSnapshot{}, sessionPolicy{}, err
 	}
-	return m.snapshotForLaunch(prof, env)
+	snap, err := m.snapshotForLaunch(prof, env)
+	return snap, profileSessionPolicy(prof), err
+}
+
+// profileSessionPolicy is the profile's DECLARED session policy
+// (provider_profile_policy.go). It is deliberately NOT part of
+// ProviderHomeSnapshot: the snapshot's JSON is the K4 dispatch digest, and a
+// policy is a launch TERM re-resolved on every launch and resume, like the
+// template's terms — not an identity the digest must pin.
+func profileSessionPolicy(prof ProviderProfile) sessionPolicy {
+	return sessionPolicy{
+		Tools:          prof.SessionTools,
+		ToolsDeclared:  prof.SessionToolsDeclared,
+		PermissionMode: prof.SessionPermissionMode,
+	}
 }
 
 // snapshotForLaunch is the profile→snapshot check shared by create and resume.
@@ -662,6 +835,7 @@ func (m *Module) snapshotForLaunch(prof ProviderProfile, env string) (ProviderHo
 	return ProviderHomeSnapshot{
 		ProfileID: prof.Ref, Driver: prof.Driver, EnvironmentRef: prof.EnvironmentRef,
 		ConfigHome: prof.ConfigHome, UserHome: prof.UserHome, AuthSource: prof.AuthSource,
+		ProviderRecordRef: prof.ProviderRecordRef,
 	}, nil
 }
 
@@ -696,26 +870,27 @@ const providerDriverClaude = "claude"
 // resume: same id, same environment, same homes, state still launchable. The
 // comparison is over the immutable identity and the current state — a rename in
 // between is fine; a moved home, a retire or a foreign environment is not.
-func (m *Module) revalidateStoredProfile(ctx context.Context, tenant model.TenantID, rec model.Record) (ProviderHomeSnapshot, error) {
+func (m *Module) revalidateStoredProfile(ctx context.Context, tenant model.TenantID, rec model.Record) (ProviderHomeSnapshot, sessionPolicy, error) {
 	stored := ProviderHomeSnapshot{
 		ProfileID: rec.String(colRunProfileID), Driver: rec.String(colRunProfileDriver),
 		EnvironmentRef: rec.String(colRunProfileEnvRef),
 		ConfigHome:     rec.String(colRunProfileConfigHome), UserHome: rec.String(colRunProfileUserHome),
-		AuthSource: rec.String(colRunProviderAuthSource),
+		AuthSource:        rec.String(colRunProviderAuthSource),
+		ProviderRecordRef: rec.String(colRunProviderRecordRef),
 	}
 	if stored.ProfileID == "" {
 		if m.rt.profiledLaunchesEnabled {
-			return ProviderHomeSnapshot{}, conflictErr("legacy session has no proven provider home and cannot be continued")
+			return ProviderHomeSnapshot{}, sessionPolicy{}, conflictErr("legacy session has no proven provider home and cannot be continued")
 		}
-		return ProviderHomeSnapshot{}, nil // a legacy run: no profile was ever persisted
+		return ProviderHomeSnapshot{}, sessionPolicy{}, nil // a legacy run: no profile was ever persisted
 	}
 	env, err := m.localEnvironment()
 	if err != nil {
-		return ProviderHomeSnapshot{}, err
+		return ProviderHomeSnapshot{}, sessionPolicy{}, err
 	}
 	prof, err := m.GetProfile(ctx, tenant, stored.ProfileID)
 	if err != nil {
-		return ProviderHomeSnapshot{}, err
+		return ProviderHomeSnapshot{}, sessionPolicy{}, err
 	}
 	if stored.AuthSource != "" && prof.AuthSource != stored.AuthSource {
 		// The authentication source this run was launched under is an AUTHORIZATION,
@@ -727,9 +902,24 @@ func (m *Module) revalidateStoredProfile(ctx context.Context, tenant model.Tenan
 		// A run whose stored source is EMPTY predates the authorization entirely, so
 		// there is nothing to retain; it adopts the profile's current decision, the
 		// same way the resume already re-resolves the template and re-runs the gates.
-		return ProviderHomeSnapshot{}, &runErr{
+		return ProviderHomeSnapshot{}, sessionPolicy{}, &runErr{
 			http.StatusConflict,
 			"the profile's authorized authentication source changed since this session was launched; launch a new session under the current authorization",
+		}
+	}
+	if stored.ProviderRecordRef != "" && prof.ProviderRecordRef != stored.ProviderRecordRef {
+		// The registered credential this run was launched under is an AUTHORIZATION,
+		// exactly like the source above, and it moves for exactly the same reasons: an
+		// operator rebound the profile. Continuing would resume the conversation on a
+		// credential nobody approved for it, which is the silent account change this
+		// plane refuses everywhere else.
+		//
+		// A run whose stored record is EMPTY predates the binding entirely, so there is
+		// nothing to retain and it adopts the profile's current decision — the same
+		// reading the empty auth source gets.
+		return ProviderHomeSnapshot{}, sessionPolicy{}, &runErr{
+			http.StatusConflict,
+			"the provider bound to this profile changed since this session was launched; launch a new session under the current binding",
 		}
 	}
 	if prof.EnvironmentRef != stored.EnvironmentRef || prof.ConfigHome != stored.ConfigHome ||
@@ -737,7 +927,11 @@ func (m *Module) revalidateStoredProfile(ctx context.Context, tenant model.Tenan
 		// The row says the profile is not what this run was launched under. A
 		// profile row cannot change these, so this is corruption or a foreign
 		// write; either way it is not proof of the previous home.
-		return ProviderHomeSnapshot{}, &runErr{http.StatusConflict, "the run's persisted home does not match its profile; refusing to continue on an unproven home"}
+		return ProviderHomeSnapshot{}, sessionPolicy{}, &runErr{http.StatusConflict, "the run's persisted home does not match its profile; refusing to continue on an unproven home"}
 	}
-	return m.snapshotForLaunch(prof, env)
+	snap, err := m.snapshotForLaunch(prof, env)
+	// The policy is RE-RESOLVED from the CURRENT profile, exactly as the template's
+	// terms are on resume: the posture a session continues under is today's, not the
+	// one it was born with.
+	return snap, profileSessionPolicy(prof), err
 }

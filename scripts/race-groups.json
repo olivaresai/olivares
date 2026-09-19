@@ -84,8 +84,7 @@
             "Trusted",
             "Verify",
             "View",
-            "Workspace"
-          ]
+            "Workspace", "DecisionReconstruction", "LegacyDecision"]
         },
         {
           "name": "b",
@@ -421,8 +420,7 @@
             "Valid",
             "Whoami",
             "Wif",
-            "Workspace"
-          ]
+            "Workspace", "MondayAllow", "Reconstruct", "HelperProcessReconstruct"]
         }
       ]
     },
@@ -478,7 +476,9 @@
             "WorkCheck",
             "WorkCreate",
             "WorkEffective",
-            "WorkIllegal", "PTYRunner"]
+            "WorkIllegal", "PTYRunner",
+            "ADeclared", "ADriver", "AProfilePolicy", "ASessionWorkspace", "ASymlinked", "BoundRecord", "CumulativeFrames", "FlatUsage", "GovernedTurn", "RecordBinding",
+            "RecordServes", "RemoveRunWorkspace", "ResultFrameUsage", "TokensWithoutMoney", "UseSessionWorkspace"]
         },
         {
           "name": "b",
@@ -973,7 +973,20 @@
         "Verify",
         "Voice",
         "Web",
-        "Webhook"
+        "Webhook",
+        "AManifest",
+        "AUsable",
+        "Awaiting",
+        "DescribeAPI",
+        "ExactRef",
+        "ExampleHint",
+        "ExemptCommands",
+        "GovernanceRich",
+        "GovernanceTables",
+        "HTTPErr",
+        "NextCommand",
+        "ProfileRecord",
+        "Relaxation"
       ]
     },
     {

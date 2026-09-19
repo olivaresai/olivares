@@ -107,7 +107,7 @@ type consoleViewParamsFlags struct {
 func addConsoleViewParamsFlags(cmd *cobra.Command, f *consoleViewParamsFlags) {
 	cmd.Flags().StringVar(&f.params, "params", "", "the view's parameters as a JSON object")
 	cmd.Flags().StringVar(&f.paramsFile, "params-file", "",
-		"read the parameters JSON from a file; `-` reads stdin")
+		"read the parameters JSON from a file; '-' reads stdin")
 }
 
 // resolve returns the params document, refusing locally what the engine would

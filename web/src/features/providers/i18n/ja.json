@@ -1,0 +1,122 @@
+{
+  "title": "プロバイダー",
+  "subtitle": "セッションが起動するときに使う資格情報です。一度登録すれば、エンジンが封印し、起動時にエージェントへ渡します。",
+  "nav": "プロバイダー",
+  "add": "プロバイダーを追加",
+  "empty": {
+    "title": "まだプロバイダーが登録されていません",
+    "description": "資格情報がなければセッションは起動できません。Anthropic、OpenAI、xAI の API キー、または OpenAI 互換のエンドポイントのキーを追加してください。エンジンがそれを封印し、起動時に使用します。キーは二度と表示されません。",
+    "action": "最初のプロバイダーを追加"
+  },
+  "emptyFiltered": {
+    "title": "この絞り込みに一致するプロバイダーはありません",
+    "description": "絞り込みを解除すると、登録済みのすべてのプロバイダーが表示されます。",
+    "action": "すべて表示"
+  },
+  "forbidden": {
+    "title": "このテナントのプロバイダーを読み取る権限がありません",
+    "description": "登録済みプロバイダーの読み取りには sessions:provider:read が必要です。このテナントの管理者に依頼してください。"
+  },
+  "columns": {
+    "name": "名前",
+    "kind": "種類",
+    "key": "キー",
+    "state": "状態",
+    "connection": "接続"
+  },
+  "kinds": {
+    "anthropic": "Anthropic",
+    "openai": "OpenAI",
+    "xai": "xAI",
+    "openai_compatible": "OpenAI 互換"
+  },
+  "kindHints": {
+    "anthropic": "Claude Code。ANTHROPIC_API_KEY を注入します。",
+    "openai": "Codex。OPENAI_API_KEY を注入します。",
+    "xai": "Grok。XAI_API_KEY を注入します。",
+    "openai_compatible": "OpenAI 形式の任意のエンドポイント。OPENAI_API_KEY と OPENAI_BASE_URL を注入します。エンドポイントは必須です。"
+  },
+  "states": {
+    "active": "有効",
+    "revoked": "失効"
+  },
+  "probe": {
+    "never": "未テスト",
+    "ok": "受理",
+    "refused": "拒否",
+    "unreachable": "到達不能",
+    "neverHint": "この資格情報はまだ誰もテストしていません。登録しただけでは動作の証拠になりません。",
+    "okHint": "プロバイダーが応答し、この資格情報を受理しました。",
+    "refusedHint": "プロバイダーが応答し、この資格情報を拒否しました。キーを交換してください。",
+    "unreachableHint": "エンドポイントが応答しませんでした。これは資格情報については何も示しません。",
+    "models": "{{n}} 個のモデル",
+    "latency": "{{ms}} ミリ秒",
+    "at": "テスト日時 {{when}}"
+  },
+  "actions": {
+    "test": "接続をテスト",
+    "testing": "テスト中…",
+    "rotate": "キーを交換",
+    "revoke": "失効させる",
+    "details": "詳細"
+  },
+  "create": {
+    "title": "プロバイダーを追加",
+    "description": "エンジンがキーを封印し、二度と返しません。表示されるのは 4 文字のヒントだけです。",
+    "kind": "プロバイダー",
+    "kindPlaceholder": "プロバイダーを選択",
+    "name": "名前",
+    "nameHint": "この資格情報に付けるあなた自身の名前です。選択肢にはこれが表示されます。",
+    "namePlaceholder": "Anthropic（本番）",
+    "baseURL": "エンドポイント",
+    "baseURLHint": "空のままにするとプロバイダーの公式エンドポイントを使います。https である必要があります。",
+    "baseURLPlaceholder": "https://llm.example.com",
+    "apiKey": "API キー",
+    "apiKeyHint": "一度だけ送信され、エンジンが封印し、このブラウザーには二度と返されません。",
+    "apiKeyPlaceholder": "キーを貼り付け",
+    "submit": "プロバイダーを追加",
+    "submitting": "封印中…",
+    "cancel": "キャンセル",
+    "success": "プロバイダーを登録しました。接続をテストして動作を確認してください。",
+    "testNext": "今すぐ接続をテスト"
+  },
+  "rotate": {
+    "title": "このプロバイダーのキーを交換",
+    "description": "新しいキーが同じ参照の下で古いキーを置き換えるので、紐づいたすべてのプロファイルはそのまま動きます。実行中のセッションは起動時の資格情報を保持します。",
+    "verdictCleared": "以前の接続テスト結果は消去されます。すでに存在しない資格情報について測った判定は、それを置き換えた資格情報の証拠にはなりません。",
+    "submit": "キーを交換",
+    "submitting": "封印中…",
+    "success": "キーを交換しました。接続をテストして新しいキーを確認してください。"
+  },
+  "revoke": {
+    "title": "このプロバイダーを失効させる",
+    "description": "封印された資格情報を破棄します。この参照については元に戻せません。",
+    "consequence": "紐づいたすべてのプロバイダープロファイルは、このプロバイダーの名前を挙げて起動を拒否します。プロバイダー側では失効しません。それは各社のコンソールで行ってください。",
+    "confirm": "失効させる",
+    "success": "プロバイダーを失効させ、封印された資格情報を破棄しました。"
+  },
+  "detail": {
+    "title": "プロバイダー",
+    "reference": "参照",
+    "endpoint": "エンドポイント",
+    "officialEndpoint": "プロバイダーの公式エンドポイント",
+    "created": "登録日時",
+    "revoked": "失効日時",
+    "models": "直近のテストが列挙したモデル",
+    "noModels": "まだモデル一覧がありません。接続をテストしてください。",
+    "close": "閉じる"
+  },
+  "vaultUnavailable": {
+    "title": "この配備ではプロバイダーの資格情報を保存できません",
+    "description": "封印された資格情報保管庫が接続されていないため、エンジンは保護できないキーを保存する代わりに、保存を拒否します。管理者がシークレット封印器を設定する必要があります。"
+  },
+  "next": {
+    "title": "次は、エージェントを配備します",
+    "description": "資格情報だけでは何も起動しません。プロバイダープロファイルに紐づけると、そのプロファイルで起動したセッションがそれを使います。",
+    "action": "プロバイダープロファイルへ"
+  },
+  "truncation": {
+    "label": "{{n}} 件のプロバイダーを表示中。さらにあります",
+    "hint": "この一覧は 1 ページです。絞り込むか、`olivares provider ls` で全件を確認してください。"
+  }
+}

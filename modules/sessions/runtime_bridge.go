@@ -126,9 +126,18 @@ func (m *Module) onStdout(ctx context.Context, lr *liveRun, data []byte, at time
 			m.touchActivity(ctx, lr, at)
 			return
 		}
-		if sj, ok := parseStreamJSON(data); ok && sj.isInit() {
-			m.captureSessionID(ctx, lr, sj.SessionID, at)
-			return
+		if sj, ok := parseStreamJSON(data); ok {
+			if sj.isInit() {
+				m.captureSessionID(ctx, lr, sj.SessionID, at)
+				return
+			}
+			// What the turn COST, credited from the frame that reports it
+			// (runtime_usage.go). It advances last_activity_at in its own row write, so
+			// a credited frame does not also need touchActivity — and a frame that
+			// carries no metering falls through to the ordinary activity path.
+			if sj.isResult() && m.recordTurnUsage(ctx, lr, data, at) {
+				return
+			}
 		}
 		m.touchActivity(ctx, lr, at)
 	}
@@ -545,8 +554,13 @@ func (m *Module) buildLaunchSpec(
 			PermissionMode: p.PermissionMode,
 			ResumeID:       resumeID,
 			AllowedTools:   p.AllowedTools,
-			Instructions:   p.Instructions,
-			Name:           p.Name,
+			// The profile's declared tool surface (provider_profile_policy.go). A
+			// profiled launch always carries the decision; an unprofiled legacy launch
+			// carries none and its argv is unchanged to the byte.
+			ToolSurface:         p.ToolSurface,
+			ToolSurfaceDeclared: p.ToolSurfaceDeclared,
+			Instructions:        p.Instructions,
+			Name:                p.Name,
 		}
 		if p.Transport == TransportRemoteControl {
 			// Lifecycle-only: I/O is relayed to Anthropic's cloud, not bridged (§0).
@@ -668,13 +682,21 @@ func (m *Module) buildLaunchSpec(
 // launchWorkspaceTarget resolves the child's working directory and, for a
 // containerized launch, its bind mount.
 //
-// ref→path is GOVERNED. A run with no workspace keeps the empty Dir
-// (the native runner falls back to the process cwd). A resolved workspace sets the
-// working directory; for native that is the canonical host root, for a container it
-// is the in-container target plus the bind mount the runner consumes.
+// ref→path is GOVERNED. A resolved workspace sets the working directory;
+// for native that is the canonical host root, for a container it is the
+// in-container target plus the bind mount the runner consumes.
+//
+// ⛔ A RUN WITH NO WORKSPACE NO LONGER RETURNS AN EMPTY DIR, and that is the
+// correction of 2026-09-18. An empty Dir is not "no directory": the native runner
+// falls back to the ENGINE's process cwd, and the golden path measured a governed
+// child reporting the engine's own directory as its cwd, byte for byte, on the
+// default path the console composer takes. Such a run is now given a directory of
+// its own (runtime_workspace_dir.go) before it is persisted, so this function
+// returns it. An empty value here means the caller resolved neither, which
+// createRunInternal refuses before reaching this point.
 func launchWorkspaceTarget(p CreateRunParams, ws *resolvedWorkspace) (string, *WorkspaceMount) {
 	if ws == nil {
-		return "", nil
+		return p.WorkspaceDir, nil
 	}
 	switch p.Isolation {
 	case IsolationContainer, IsolationSandbox:

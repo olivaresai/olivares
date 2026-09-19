@@ -432,7 +432,7 @@ func TestBuildModulesRefusesInvalidExplicitPDPConfig(t *testing.T) {
 	t.Setenv("OLIVARES_PDP_ENGINE", "cedar")
 	t.Setenv("OLIVARES_PDP_CEDAR_FILE", filepath.Join(t.TempDir(), "absent.cedar"))
 
-	set, err := buildModules(pdpTestSigner(t), nil, nil, nil, nil, sourcesConfig{}, EditionConfig{}, discardLog())
+	set, err := buildModules(pdpTestSigner(t), nil, nil, nil, nil, sourcesConfig{}, EditionConfig{}, t.TempDir(), discardLog())
 	if err == nil {
 		t.Fatalf("buildModules accepted an unreadable configured Cedar policy: %d module(s)", len(set.all))
 	}
@@ -452,7 +452,7 @@ func TestBuildModulesAcceptsValidConfiguredCedarPolicy(t *testing.T) {
 	t.Setenv("OLIVARES_PDP_ENGINE", "cedar")
 	t.Setenv("OLIVARES_PDP_CEDAR_FILE", pdpPolicyFile(t, "valid.cedar", pdpForbidSecret))
 
-	set, err := buildModules(pdpTestSigner(t), nil, nil, nil, nil, sourcesConfig{}, EditionConfig{}, discardLog())
+	set, err := buildModules(pdpTestSigner(t), nil, nil, nil, nil, sourcesConfig{}, EditionConfig{}, t.TempDir(), discardLog())
 	if err != nil {
 		t.Fatalf("a valid configured Cedar policy was rejected: %v", err)
 	}

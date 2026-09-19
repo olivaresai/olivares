@@ -1151,7 +1151,7 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	// Construct and register every Fase C module (wire.go is the only file that
 	// imports both /core and /modules). They must be added to the runtime BEFORE the
 	// store opens so rt.RegisterSchema fans their schema out at construction.
-	set, err := buildModules(signer, catalogKey.priv, policyKey.priv, auditKey.priors, tracer.AnthropicHTTPClient(nil), srcCfg, editionConfigFrom(cfg), log)
+	set, err := buildModules(signer, catalogKey.priv, policyKey.priv, auditKey.priors, tracer.AnthropicHTTPClient(nil), srcCfg, editionConfigFrom(cfg), cfg.DataDir, log)
 	if err != nil {
 		return nil, fmt.Errorf("load module operator config: %w", err)
 	}
@@ -1484,9 +1484,34 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 			// the directory status, schema and epochs. A failed or incomplete
 			// proof keeps K3 store readiness OFF with its blockers logged, but must
 			// not take unrelated product surfaces down.
+			//
+			// ⛔ AND AN ORDINARY FIRST BOOT IS NOT AN ERROR, which is what it said
+			// until 2026-09-18. Measured on a clean `quickstart`: this
+			// line fired at ERROR with a 700-character `%+v` of a Go struct, and its
+			// three blockers were `writer_control_not_enforced: mode="staged"`,
+			// `directory_epoch_coverage_incomplete` and
+			// `expected_generation_below_activation: 1` — every one of them "nobody
+			// has run `olivares db activate-directory-writer` yet". K3 is a rollout
+			// an operator ACTIVATES; a posture waiting for a ceremony is a posture,
+			// and printing it as the engine's only red line on a correct first boot
+			// is how a clean start gets read as a broken product.
+			//
+			// The level therefore follows the CLASSIFICATION (AwaitingActivation),
+			// not the mere presence of an error: INFO with the command that changes
+			// it when the proof is only un-activated, ERROR when anything else blocks
+			// it. --quiet shows the second and not the first, which is the whole
+			// point of the distinction.
 			if err := communicationComposition.reconcileAndVerify(ctx); err != nil {
-				log.Error("sessions: communication store proof incomplete; K3 store readiness remains off",
-					"err", err, "proof", communicationComposition.store.Proof())
+				proof := communicationComposition.store.Proof()
+				if proof.AwaitingActivation {
+					log.Info("sessions: the communication store is staged and not activated, so K3 store readiness is off",
+						"remedy", "olivares db activate-directory-writer, then restart the engine",
+						"blockers", strings.Join(proof.Blockers, "; "),
+						"unaffected", "sessions, providers and every other surface of this engine")
+				} else {
+					log.Error("sessions: communication store proof incomplete; K3 store readiness remains off",
+						"err", err, "proof", proof)
+				}
 			} else {
 				log.Info("sessions: communication store proof established",
 					"proof", communicationComposition.store.Proof())
@@ -1791,6 +1816,19 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 		// driver it does not operate. Legacy rows remain readable/stoppable; new
 		// launches and unproven legacy continuations cannot use an ambient home.
 		set.sessions.EnableProfiledLaunches()
+		// The provider-record plane. The VAULT is wired only when the engine has
+		// a sealer — with none, registering a provider is refused with the wiring
+		// named, which is the honest answer: the engine never stores a credential it
+		// cannot protect. The PROBE is always available; it is an outbound model-list
+		// call and it sends no completion.
+		if secretStoreSealerPresent {
+			set.sessions.UseProviderSecretVault(providerSecretVault{store: secretStore})
+		} else {
+			log.Warn("sessions: provider registration is disabled; no secret sealer is available",
+				"effect", "the console and the CLI refuse to register a provider and say so",
+				"unchanged", "launching with the host credential variables")
+		}
+		set.sessions.UseProviderProbe(newProviderProbe())
 	}
 
 	// In-place edition: resolve the commercial license by precedence (explicit

@@ -71,8 +71,18 @@ func sessionsClosureRequestBodyDeclarationFor(r moduleRoute) (sessionsClosureReq
 		return sessionsClosureBodyDeclaration(true, sessionsPatchProviderProfileSchema()), true
 	case http.MethodPost + " /provider-source-bindings":
 		return sessionsClosureBodyDeclaration(true, sessionsCreateProviderBindingSchema()), true
+	case http.MethodPost + " /providers":
+		return sessionsClosureBodyDeclaration(true, sessionsCreateProviderSchema()), true
+	case http.MethodPatch + " /providers/{ref}":
+		return sessionsClosureBodyDeclaration(true, sessionsPatchProviderSchema()), true
 	case http.MethodPost + " /provider-profiles/{ref}/retire",
-		http.MethodPost + " /provider-source-bindings/{ref}/revoke":
+		http.MethodPost + " /provider-source-bindings/{ref}/revoke",
+		// The connection TEST is bodyless on purpose: everything it needs —
+		// which provider, which endpoint, which credential — is already the stored
+		// record, and a body would be a second place to say it. The revoke is
+		// bodyless for the reason its siblings are: the reference IS the request.
+		http.MethodPost + " /providers/{ref}/test",
+		http.MethodPost + " /providers/{ref}/revoke":
 		return sessionsClosureRequestBodyDeclaration{kind: sessionsClosureBodyless}, true
 	// ⛔ /runs/{ref}/interrupt IS NOT IN THIS LIST ANY MORE, and the omission is the
 	// point: it now accepts an OPTIONAL fenced body, declared beside its two sibling
@@ -245,6 +255,7 @@ func sessionsCreateProviderProfileSchema() map[string]any {
 		"display_name", sessionsClosureOptionalString("Editable label; trimmed, at most 200 bytes, no control characters."),
 		"environment_ref", sessionsClosureOptionalString("Optional; when present must equal this node's execution environment (a foreign environment cannot have its homes validated here)."),
 		"auth_source", sessionsClosureNullable(oaObj("type", "string", "enum", oaEnum("", "provider_account_home", "managed_injection"), "description", "Authorized authentication source for this profile: provider_account_home (the child uses the saved login inside its own homes) or managed_injection (a provider-compatible credential minted by that driver's governed adapter). They are distinct authorizations with no fallback between them; empty authorizes neither and refuses every launch whose driver requires one.")),
+		"provider_record_ref", sessionsClosureOptionalString("Optional: the registered provider whose credential this profile's managed launches use. Empty leaves the host's own credential variables in charge, which is every profile's behaviour before v26.10. The engine refuses a credential whose kind this driver cannot read."),
 	), "driver", "config_home", "user_home")
 }
 
@@ -256,6 +267,34 @@ func sessionsPatchProviderProfileSchema() map[string]any {
 		"display_name", sessionsClosureOptionalString("An explicit string replaces the stored label; null/omission preserves it."),
 		"state", sessionsClosureNullable(oaObj("type", "string", "enum", oaEnum("active", "disabled"), "description", "Reversible lifecycle transition; retired is refused here.")),
 		"auth_source", sessionsClosureNullable(oaObj("type", "string", "enum", oaEnum("", "provider_account_home", "managed_injection"), "description", "Re-authorizes (or, with the empty string, withdraws) the authentication source. It is not identity, so it does not create a new profile id; a live child keeps the source its own launch was authorized under.")),
+		"provider_record_ref", sessionsClosureOptionalString("Binds (or, with the empty string, unbinds) the registered provider this profile's managed launches use. Like auth_source it is an authorization and not identity, and it does not reach a live child: a running session keeps the provider its own launch resolved."),
+	))
+}
+
+// sessionsCreateProviderSchema mirrors createProviderRecordRequest. api_key is
+// the ONLY field that carries a credential; it travels in this body and appears in no
+// response, no log line and no row — the record stores a locator and a four-character
+// hint. base_url is required for openai_compatible, which has no official endpoint to
+// assume; the engine enforces that and this description says so rather than trying to
+// express a conditional requirement in the schema.
+func sessionsCreateProviderSchema() map[string]any {
+	return sessionsClosureClosedObject(oaObj(
+		"kind", oaObj("type", "string", "enum", oaEnum("anthropic", "openai", "xai", "openai_compatible"), "description", "What the credential IS, independent of which CLI reads it. The set is closed because a kind decides which environment variables a launched child receives."),
+		"display_name", oaObj("type", "string", "minLength", 1, "description", "Your own name for this credential; it is what a picker shows. Unique among active providers of the same kind, case-folded."),
+		"base_url", sessionsClosureOptionalString("Absolute https endpoint override. Empty uses the provider's official endpoint; REQUIRED for openai_compatible. A URL carrying userinfo is refused: a credential must not travel in a field that is published in every read."),
+		"api_key", oaObj("type", "string", "minLength", 8, "description", "The credential. Sealed at rest by the engine and never returned by any read, including immediately after this write. Lose it and rotate; there is no read that recovers it."),
+	), "kind", "display_name", "api_key")
+}
+
+// sessionsPatchProviderSchema mirrors patchProviderRecordRequest: rename,
+// re-endpoint and/or ROTATE. `kind` is absent because a record's kind decides what is
+// injected into a child, so changing it under an existing binding would redefine every
+// launch that binding authorizes — registering another record is the honest way.
+func sessionsPatchProviderSchema() map[string]any {
+	return sessionsClosureClosedObject(oaObj(
+		"display_name", sessionsClosureOptionalString("An explicit string replaces the stored name; null/omission preserves it."),
+		"base_url", sessionsClosureOptionalString("An explicit string replaces the stored endpoint; null/omission preserves it."),
+		"api_key", sessionsClosureNullable(oaObj("type", "string", "minLength", 8, "description", "Rotates the credential in place: it reseals under the SAME reference, so every profile bound to this provider keeps working and the NEXT launch uses the new value — a session already running keeps the one it started with. The previous connection test is cleared, because a verdict measured on a credential that no longer exists is not evidence about the one replacing it.")),
 	))
 }
 
