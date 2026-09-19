@@ -245,7 +245,7 @@ func TestSessionRuntimeHostToolObserverCapturesLocationsAtComposition(t *testing
 }
 
 func TestSessionRuntimeCompositionWiresTheHostToolObserver(t *testing.T) {
-	opts := buildSessionRuntimeOptions(func(string) string { return "" }, nil, nil)
+	opts := buildSessionRuntimeOptions(func(string) string { return "" }, nil, "", nil)
 	if !sessions.New(opts...).HostToolObservationAvailable() {
 		t.Fatal("the composition root does not wire the host-tools observer, so the read would answer unknown on every profile")
 	}

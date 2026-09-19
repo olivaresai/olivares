@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -168,8 +169,18 @@ func runFirstBoot(dest io.Writer, dataDir string, newToken bool) error {
 		return withReportFailure(out, nil)
 	}
 
-	fmt.Fprint(out, "Setup is PENDING: no administrator exists yet. Finish it in the console with\n"+
-		"the one-time token.\n")
+	// The CONSOLE and the CLI, in that order, because both are real routes and the
+	// walk measured that only one of them was ever named. `olivares auth bootstrap`
+	// completes setup against the running engine without a browser, which is the
+	// only route on a headless host — and it is the one an operator reading THIS
+	// output is already positioned to take.
+	fmt.Fprintf(out, "Setup is PENDING: no administrator exists yet. Finish it in the console with\n"+
+		"the one-time token, or from this terminal by pasting that token in:\n\n"+
+		"  olivares auth bootstrap --server %s \\\n"+
+		"    --ca-cert %s \\\n"+
+		"    --setup-token-file - \\\n"+
+		"    --email you@example.com --password-file <file> --save-context\n",
+		firstBootConsoleOrPlaceholder(state, stateErr), filepath.Join(dataDir, "tls.crt"))
 	if !newToken {
 		fmt.Fprintf(out, "\nThe token cannot be shown again: this engine stores only its SHA-256, so the\n"+
 			"original exists nowhere. It was printed ONCE, when the engine first started —\n"+
@@ -239,4 +250,17 @@ func writeConsoleAddresses(out io.Writer, state consoleState) {
 	if state.Advice != "" {
 		fmt.Fprintf(out, "\n%s\n", state.Advice)
 	}
+}
+
+// firstBootConsoleOrPlaceholder is the address to put in the printed command.
+//
+// When the console record could not be read, the report says so above and this
+// returns a placeholder rather than an empty string: a command with a blank
+// --server is one an operator would run and not understand, while <console-url>
+// is visibly theirs to fill in.
+func firstBootConsoleOrPlaceholder(state consoleState, stateErr error) string {
+	if stateErr == nil && strings.TrimSpace(state.Browse) != "" {
+		return state.Browse
+	}
+	return "<console-url>"
 }

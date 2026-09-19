@@ -164,8 +164,8 @@ func newUpgradeCmd() *cobra.Command {
 	f.BoolVarP(&o.assumeYes, "yes", "y", false, "do not prompt for confirmation before swapping")
 	f.BoolVar(&o.forceRollback, "force-rollback", false, "allow installing an OLDER version than the running one (records an audit entry)")
 	f.BoolVar(&o.ifEligible, "if-eligible", false, "only proceed if this node is in the manifest's staged-rollout cohort (used by the timer)")
-	f.BoolVar(&o.installTimer, "install-timer", false, "emit an opt-in systemd timer+service that runs `upgrade --if-eligible` in a maintenance window")
-	f.BoolVar(&o.connect, "connect", false, "with --enterprise: refresh this data directory's connected credential and download token by proof of possession (`license connect`) instead of a pasted token; works when the installed credential has expired. It refreshes only when upgrade runs: a timer runs it on --timer-schedule, not at the credential's refresh planning boundary")
+	f.BoolVar(&o.installTimer, "install-timer", false, "emit an opt-in systemd timer+service that runs 'upgrade --if-eligible' in a maintenance window")
+	f.BoolVar(&o.connect, "connect", false, "with --enterprise: refresh this data directory's connected credential and download token by proof of possession ('license connect') instead of a pasted token; works when the installed credential has expired. It refreshes only when upgrade runs: a timer runs it on --timer-schedule, not at the credential's refresh planning boundary")
 	f.StringVar(&o.timerDir, "timer-dir", "", "write the systemd units to this directory instead of printing them")
 	f.StringVar(&o.timerSchedule, "timer-schedule", "Sun *-*-* 03:00:00", "systemd OnCalendar expression for the auto-check timer; when omitted, an --enterprise --connect timer runs daily (*-*-* 03:00:00)")
 	f.DurationVar(&o.timeout, "timeout", 5*time.Minute, "overall network timeout")
@@ -550,10 +550,10 @@ func runUpgrade(cmd *cobra.Command, o *upgradeOptions) error {
 	return renderOut(cmd, func(w io.Writer) error {
 		fmt.Fprintf(w, "\ninstalled: %s is now %s\n", target, newVer)
 		fmt.Fprintf(w, "rollback: the previous binary is backed up at %s (restore it to revert)\n", backup)
-		fmt.Fprintln(w, "next: restart the service to run the new binary — for zero downtime use a drain +")
-		if _, werr := fmt.Fprintln(w, "      handover (single node) or a rolling restart (HA); see docs/UPGRADE-AND-ROLLBACK.md."); werr != nil {
-			return werr
-		}
+		r := renderTo(w)
+		r.Next("restart the service to run the new binary")
+		r.Line("      for zero downtime use a drain + handover (single node) or a rolling restart")
+		r.Line("      (HA); see docs/UPGRADE-AND-ROLLBACK.md.")
 		if o.enterprise {
 			_, werr := fmt.Fprintln(w, "      then `olivares enterprise enable <preset>` to activate the add-ons.")
 			return werr

@@ -1,0 +1,58 @@
+# cli-render-baseline.txt — the hand-formatted output paths of `cmd/olivares` that are
+# still hand-formatted, one row per file, with the reason each one is still here.
+#
+# Derived with `bash scripts/check-cli-render.sh --census`; enforced by
+# `task lint:cli-render`. A file over its row fails (a new hand-formatted path). A file
+# UNDER its row also fails, asking for the row to come down in the same commit: a ratchet
+# that lets a number regain slack in silence is a counter.
+#
+# A row is <count><TAB><file><TAB><reason>, and the reason is not optional. A number
+# without one is somebody typing a figure, not somebody making a decision — the gate
+# refuses to read a row that has no reason and says so.
+#
+# NO COUNT IS WRITTEN IN THIS COMMENT. The rows below are the count, and the gate prints
+# the totals it measured on every run. A figure typed into prose here went stale inside one
+# working day the first time this file was written ("the thirteen below", against eleven
+# rows) — a number a reader can check against the file underneath it is the only kind worth
+# printing.
+#
+# TWO CLASSES OF ROW, and a reader is entitled to know which one they are looking at.
+#
+#   IMPOSSIBLE — the renderer's primitives would say something DIFFERENT from what the
+#   command means: a published byte contract, a buffer that becomes a file, a key that is a
+#   dotted JSON path and not a label. These do not come down without changing the primitive
+#   or breaking the contract, and each says which.
+#
+#   DEFERRED — the renderer would say the same thing and nobody has moved it yet. Every
+#   `newTabWriter` family below is this class, and it is written as such rather than dressed
+#   up as an exception. They became VISIBLE on 2026-09-18 (r2), when the table rule learned
+#   that this tree builds its tables through a local factory and not through
+#   `tabwriter.NewWriter` at the call site: before that rule the census saw one of them. They
+#   are not new code, and this file is where they stop being invisible.
+#
+#   Why deferred and not swept: the one mechanical factory conversion attempted here
+#   (cmd_compliance.go, fifteen call sites) flattened a conditional block and made a legal
+#   hold that had NOT been released print two fields about its release. It was measured and
+#   withdrawn. A family comes down with its own golden, not in a sweep.
+#
+1	cmd/olivares/render.go	IMPOSSIBLE: the generic status flattener writes DOTTED JSON PATHS, and the Fields primitive upper-cases its key because a key is a short label. LICENSE.ENTITLEMENTS[0].FEATURE is not a label. Routing it through Table instead would either add a header row these ~25 report commands have never printed, or fall back to records keyed "field 1"/"field 2".
+1	cmd/olivares/cmd_work.go	IMPOSSIBLE: the same generic flattener, called directly (writeStatusLines). It moves when render.go does; splitting them would give one binary two answers for one shape.
+1	cmd/olivares/cmd_modelstack.go	IMPOSSIBLE: the same generic flattener, called directly. Same reason as cmd_work.go.
+1	cmd/olivares/cmd_support.go	IMPOSSIBLE: rendered into a buffer that becomes a FILE inside the support tarball, never written to a terminal. The renderer's colour and width decisions have no subject here.
+1	cmd/olivares/cmd_db.go	IMPOSSIBLE: the `db init` block is scripted. TestDBInitProvisioned... asserts it is BYTE-IDENTICAL to its pre-VER-06 form, because the setup flows read that stdout and turn its three flag spellings into files. Rewording it to drop the "Next:" heading was written, measured against that test, and put back. A presentation rule loses to a published contract.
+2	cmd/olivares/cmd_release_manifest.go	IMPOSSIBLE: the signing ceremony's policy block, whose `!!` marks the fields a custodian must confirm before signing. StatusLine would give it an ASCII token but not the column alignment a reviewer scans, and the alert would survive only as colour — which is absent in a pipe, and this block is read through one.
+2	cmd/olivares/cmd_audit_observe_report.go	IMPOSSIBLE TODAY, and it is the RENDERER that is missing a feature, not the command: a two-level breakdown (per-grant totals, then indented per-source and per-decision counts under each). Every primitive writes at column zero and the indent is what carries the nesting. It comes down when a primitive can indent, and not before.
+1	cmd/olivares/cmd_db_directory.go	IMPOSSIBLE: the next step is "restart every engine on this store", which is neither one command nor this host's command. It travels inside a lines slice the caller joins, alongside the reason it is required.
+1	cmd/olivares/cmd_quickstart.go	IMPOSSIBLE: the welcome panel's prose block, where `Next:` is a heading over two sentences. The panel's ACTUAL next commands — the auth bootstrap route and `olivares agent tool detect` — are printed separately and already named.
+1	cmd/olivares/cmd_migrate.go	IMPOSSIBLE: the next-step line of `migrate apply`. It names a SQL grant an operator performs OUTSIDE this binary, against deploy/postgres/01-app-role.sql; `next:` means "run this", and there is nothing here to run. The table this row also covered until r2 (printMigrationStatus) is now on the renderer: its recorded reason — a compared parity oracle carrying a render-exempt marker that said so — was not supported by the tree, and a reason a reader cannot check is the same defect as no reason.
+15	cmd/olivares/cmd_compliance.go	DEFERRED: the shared newTabWriter FACTORY (cmd_compliance.go:371) plus its fourteen call sites in this file. The mechanical conversion of this family is the one that was measured and withdrawn — a released-only block was flattened into an unconditional one — so this family is the reason the rest are deferred rather than swept.
+9	cmd/olivares/cmd_notify.go	DEFERRED: nine factory tables — renderNotifyRoute, routes ls/test/revisions, match-types, evaluate, deliveries, outbox ls/redeliver.
+7	cmd/olivares/cmd_health.go	DEFERRED: seven factory tables — renderHealthStatusList, sla, dependencies, events, renderHealthIncident, incidents ls, renderHealthCheck.
+5	cmd/olivares/cmd_adoption.go	DEFERRED: five factory tables — summary, trend, teams, developers, discrepancy.
+5	cmd/olivares/cmd_identity.go	DEFERRED: five factory tables — sso, external-keys, residency, and two in wif.
+5	cmd/olivares/cmd_observability.go	DEFERRED: five factory tables — two in ingestion-health, traces ls, traces get, attestation.
+4	cmd/olivares/cmd_accessmap.go	DEFERRED: four factory tables — renderAccessMapGraph, drift, renderAttackPaths, attack-path summary.
+4	cmd/olivares/cmd_inventory.go	DEFERRED: four factory tables — two in summary, entities ls, entities get.
+4	cmd/olivares/cmd_reporting.go	DEFERRED: four factory tables — reports ls, renderReportingSchedules, schedules runs, renderReportingBranding.
+2	cmd/olivares/cmd_consoleviews.go	DEFERRED: two factory tables — renderConsoleView and ls.
+2	cmd/olivares/cmd_posture.go	DEFERRED: two factory tables, both in posture export.

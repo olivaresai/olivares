@@ -106,9 +106,9 @@ Templates:
 				return err
 			}
 			if sdkPath == "" {
-				fmt.Fprintln(advice, "next: add the SDK replace directive(s) from README.md, then run go test ./...")
+				renderTo(advice).Next("add the SDK replace directive(s) from README.md, then run go test ./...")
 			} else {
-				fmt.Fprintln(advice, "next: cd "+target+" && go test ./... && ./scripts/check-boundary.sh")
+				renderTo(advice).Next("cd " + target + " && go test ./... && ./scripts/check-boundary.sh")
 			}
 			return nil
 		},

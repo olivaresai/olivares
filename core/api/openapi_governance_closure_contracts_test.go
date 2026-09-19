@@ -24,6 +24,7 @@ func TestGovernanceClosureRequirednessMatchesDecoders(t *testing.T) {
 		{ns: "governance", method: http.MethodPost, pattern: "/pdp/dry-run"},
 		{ns: "governance", method: http.MethodPost, pattern: "/pdp/publish"},
 		{ns: "governance", method: http.MethodPost, pattern: "/pdp/rollback"},
+		{ns: "governance", method: http.MethodPost, pattern: "/decisions/replay"},
 		{ns: "governance", method: http.MethodPost, pattern: "/breakglass"},
 		{ns: "governance", method: http.MethodPost, pattern: "/breakglass/consume"},
 		{ns: "governance", method: http.MethodPost, pattern: "/breakglass/{id}/review"},

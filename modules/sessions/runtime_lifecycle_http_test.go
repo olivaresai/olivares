@@ -45,7 +45,7 @@ func resumeFlagValue(spec LaunchSpec) (string, bool) {
 func lifecycleHarness(t *testing.T, sid string) (*Module, *fakeRunner, *harness, string, model.TenantID, string) {
 	t.Helper()
 	fr := &fakeRunner{initSID: sid}
-	m := New(WithRunner(fr), WithCredentialSource(staticCred()))
+	m := New(WithSessionWorkspaceRoot(t.TempDir()), WithRunner(fr), WithCredentialSource(staticCred()))
 	m.UseExecutionEnvironmentRef(testEnvRef)
 	h := newHarness(t, m)
 	admin := h.adminLogin()

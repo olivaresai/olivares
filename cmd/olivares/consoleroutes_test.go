@@ -1020,7 +1020,7 @@ func walkEveryRoute(t *testing.T) map[string]bool {
 	if err != nil {
 		t.Fatal(err)
 	}
-	set, err := buildModules(signer, nil, nil, nil, nil, sourcesConfig{}, EditionConfig{}, log)
+	set, err := buildModules(signer, nil, nil, nil, nil, sourcesConfig{}, EditionConfig{}, t.TempDir(), log)
 	if err != nil {
 		t.Fatalf("build modules: %v", err)
 	}

@@ -582,6 +582,9 @@ func (deniedAccessEvidence) AuthorityTransitionsFor(ctx context.Context, subject
 func (deniedAccessEvidence) ActionObservationsForQuestion(ctx context.Context, questionDigest string) ([]model.ActionObservation, error) {
 	return nil, denied(deniedAccessEvidenceWhat)
 }
+func (deniedAccessEvidence) AuthorizationDecisionsForQuestion(ctx context.Context, questionDigest string) ([]model.AuthorizationDecision, error) {
+	return nil, denied(deniedAccessEvidenceWhat)
+}
 func (deniedAccessEvidence) DecisionCompleteness(ctx context.Context, id model.ID) (model.AccessEvidenceCompleteness, error) {
 	return model.AccessEvidenceCompleteness{}, denied(deniedAccessEvidenceWhat)
 }

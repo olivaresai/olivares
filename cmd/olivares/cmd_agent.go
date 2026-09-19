@@ -20,6 +20,7 @@ import (
 	"github.com/spf13/pflag"
 
 	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
+	"github.com/olivaresai/olivares/cmd/olivares/internal/termrender"
 )
 
 // cmd_agent.go is the operator CLI for the governed session runtime:
@@ -173,6 +174,8 @@ func newAgentCmd() *cobra.Command {
 			"  olivares agent tool install --driver claude --version latest --yes",
 	}
 	cmd.AddCommand(newAgentSessionCmd())
+	cmd.AddCommand(newAgentProfileCmd())
+	cmd.AddCommand(newAgentDeployCmd())
 	cmd.AddCommand(newAgentWorkspaceCmd())
 	cmd.AddCommand(newAgentManagedSettingsCmd())
 	cmd.AddCommand(newAgentToolCmd())
@@ -336,10 +339,16 @@ func newAgentSessionListCmd() *cobra.Command {
 			if err := json.Unmarshal(b, &resp); err != nil {
 				return err
 			}
-			return renderListOut(cmd, resp.Items, "no sessions", func(out io.Writer, it map[string]any) error {
-				_, err := fmt.Fprintf(out, "%s\t%s\t%s\t%s\n", str(it, "run_ref"), str(it, "state"), str(it, "transport"), str(it, "name"))
-				return err
-			}, json.RawMessage(b))
+			table := termrender.Table{
+				Header: []string{"run-ref", "state", "transport", "name"},
+				Empty:  "no sessions",
+			}
+			for _, it := range resp.Items {
+				state := str(it, "state")
+				table.Rows = append(table.Rows, []string{str(it, "run_ref"), state, str(it, "transport"), str(it, "name")})
+				table.Roles = append(table.Roles, []termrender.Role{termrender.RoleNone, sessionStateRole(state)})
+			}
+			return renderTableOut(cmd, table, json.RawMessage(b))
 		},
 	}
 	cfg.addFlags(cmd)
@@ -748,6 +757,12 @@ func newAgentSessionDeleteCmd() *cobra.Command {
 
 // printRun prints a run DTO response (human summary or raw JSON), mapping a
 // non-success status to an error.
+//
+// The summary names the DIRECTORY the session works in and what it has COST,
+// because those were the two questions this plane could not answer on 2026-09-18:
+// the child ran in the engine's own working directory and nothing here said so,
+// and a real turn's price was on the driver's wire and on no surface an operator
+// reads.
 func printRun(cmd *cobra.Command, status int, b []byte, want int) error {
 	if status != want {
 		return httpErr(status, b)
@@ -757,19 +772,106 @@ func printRun(cmd *cobra.Command, status int, b []byte, want int) error {
 		return err
 	}
 	return renderOut(cmd, func(out io.Writer) error {
-		_, err := fmt.Fprintf(out, "run %s state=%s transport=%s isolation=%s\n",
-			str(run, "run_ref"), str(run, "state"), str(run, "transport"), str(run, "isolation"))
+		if _, err := fmt.Fprintf(out, "run %s state=%s transport=%s isolation=%s\n",
+			str(run, "run_ref"), str(run, "state"), str(run, "transport"), str(run, "isolation")); err != nil {
+			return err
+		}
+		if dir := str(run, "workspace_path"); dir != "" {
+			if ref := str(run, "workspace_ref"); ref != "" {
+				if _, err := fmt.Fprintf(out, "workspace %s (%s)\n", dir, ref); err != nil {
+					return err
+				}
+			} else if _, err := fmt.Fprintf(out, "workspace %s (this session's own directory)\n", dir); err != nil {
+				return err
+			}
+		}
+		_, err := fmt.Fprintln(out, runCostLine(run))
 		return err
 	}, json.RawMessage(b))
 }
 
+// runCostLine is what a session has cost so far, or the honest absence of it.
+//
+// ⛔ UNKNOWN IS NOT ZERO, and the sentence says which one it is. A driver that
+// reports no usage leaves the fields absent, and printing "cost 0.0000 USD" for
+// that case would claim a turn was free. A session that has not taken a turn yet
+// is a third thing and reads as such.
+func runCostLine(run map[string]any) string {
+	in, hasIn := intField(run, "input_tokens")
+	out, hasOut := intField(run, "output_tokens")
+	cost, hasCost := intField(run, "cost_micro_usd")
+	if !hasIn && !hasOut && !hasCost {
+		return "cost unknown (this session's driver has reported no usage)"
+	}
+	line := fmt.Sprintf("cost %.4f USD (tokens in %d, out %d)",
+		float64(cost)/1_000_000, in, out)
+	if model := str(run, "usage_model_ref"); model != "" {
+		line += " on " + model
+	}
+	return line + " — the provider's own figure, not an invoice"
+}
+
+// intField reads a JSON number the engine may legitimately omit. The second
+// return is PRESENCE: absent and zero are different answers here.
+func intField(run map[string]any, key string) (int64, bool) {
+	raw, ok := run[key]
+	if !ok || raw == nil {
+		return 0, false
+	}
+	switch v := raw.(type) {
+	case float64:
+		return int64(v), true
+	case int64:
+		return v, true
+	case json.Number:
+		n, err := v.Int64()
+		return n, err == nil
+	default:
+		return 0, false
+	}
+}
+
+// printRaw writes an API response the command did not model as a DTO.
+//
+// It INDENTS a JSON body, which every caller of this function has. Measured
+// 2026-09-18 walking the first hour: `agent session events` printed its ledger as
+// one 900-character line, and that ledger is the record an operator reads to find
+// out why a session failed — two events, each with a state transition, a detail
+// and an audit sequence, none of them findable by eye. Every other report command
+// in this binary indents (renderOut marshals with the same two spaces), so the
+// odd one out was this path, not the choice.
+//
+// A body that is not JSON is written through untouched rather than refused: this
+// function's job is to show the operator what the engine said, and an engine that
+// answered 200 with something unparseable is exactly when that matters most.
 func printRaw(cmd *cobra.Command, b []byte) error {
-	_, err := cmd.OutOrStdout().Write(append(bytes.TrimRight(b, "\n"), '\n'))
+	body := bytes.TrimRight(b, "\n")
+	var indented bytes.Buffer
+	if json.Indent(&indented, body, "", "  ") == nil {
+		body = indented.Bytes()
+	}
+	_, err := cmd.OutOrStdout().Write(append(body, '\n'))
 	return err
 }
 
+// httpErr turns an API refusal into the sentence an operator reads.
+//
+// MEASURED 2026-09-18 walking the first hour, verbatim:
+//
+//	request failed: HTTP 422: {"error":{"code":"invalid_argument","message":
+//	"set auth_source to provider_account_home or managed_injection"}}
+//
+// The engine had written a usable sentence and the CLI printed the envelope
+// around it. "request failed" is the least informative part of that line and it
+// came first; the part that says what to do was inside two levels of JSON.
+//
+// So the message leads with what happened, in the operator's terms, and carries
+// the status and the code as a parenthetical — nothing is dropped, because the
+// code is what a support conversation quotes and the status is what a script
+// logged. A body that is not the envelope is kept verbatim: an engine that
+// answered with something else is exactly when the raw bytes matter.
 func httpErr(status int, b []byte) error {
-	err := fmt.Errorf("request failed: HTTP %d: %s", status, strings.TrimSpace(string(b)))
+	err := fmt.Errorf("%s", describeAPIRefusal(status, b))
 	switch {
 	case status == http.StatusUnauthorized || status == http.StatusForbidden:
 		return exitcode.New(exitcode.Auth, err)
@@ -784,9 +886,71 @@ func httpErr(status int, b []byte) error {
 	}
 }
 
+// sessionStateRole colours a session's state in the ls table.
+//
+// The set is the one `--state` accepts, so a state that stops being rendered here
+// is a state the flag stopped accepting. `failed` is the only failure: `stopped`
+// and `cleaned` are ordinary ends of a session's life and colouring them red
+// would teach the operator to ignore red.
+func sessionStateRole(state string) termrender.Role {
+	switch state {
+	case "running", "idle":
+		return termrender.RoleOK
+	case "failed":
+		return termrender.RoleFail
+	case "stopped", "cleaned":
+		return termrender.RoleMuted
+	default: // pending, and anything a newer engine reports
+		return termrender.RoleNone
+	}
+}
+
 func str(m map[string]any, k string) string {
 	if v, ok := m[k].(string); ok {
 		return v
 	}
 	return ""
+}
+
+// apiErrorEnvelope is the shape the engine answers refusals with.
+type apiErrorEnvelope struct {
+	Error struct {
+		Code    string `json:"code"`
+		Message string `json:"message"`
+	} `json:"error"`
+}
+
+// describeAPIRefusal builds the sentence. It is separate from httpErr so it can
+// be tested against real captured bodies without a server.
+func describeAPIRefusal(status int, b []byte) string {
+	lead := "the engine refused this request"
+	switch {
+	case status == http.StatusUnauthorized || status == http.StatusForbidden:
+		lead = "the engine refused this request"
+	case status == http.StatusNotFound:
+		lead = "the engine has no such record"
+	case status == http.StatusConflict:
+		lead = "the engine refused this request because it conflicts with what is already there"
+	case status == http.StatusUnprocessableEntity || status == http.StatusBadRequest:
+		lead = "the engine rejected this request"
+	case status >= http.StatusInternalServerError:
+		lead = "the engine failed to handle this request"
+	}
+
+	raw := strings.TrimSpace(string(b))
+	var env apiErrorEnvelope
+	if json.Unmarshal(b, &env) == nil && strings.TrimSpace(env.Error.Message) != "" {
+		detail := strings.TrimSpace(env.Error.Message)
+		// A code that only repeats the message adds nothing: the engine answers
+		// {"code":"forbidden","message":"forbidden"} on a plain refusal, and
+		// "forbidden (HTTP 403 forbidden)" is three sayings of one fact.
+		if code := strings.TrimSpace(env.Error.Code); code != "" && !strings.EqualFold(code, detail) {
+			return fmt.Sprintf("%s: %s (HTTP %d %s)", lead, detail, status, code)
+		}
+		return fmt.Sprintf("%s: %s (HTTP %d)", lead, detail, status)
+	}
+	if raw == "" {
+		return fmt.Sprintf("%s, and said nothing about why (HTTP %d)", lead, status)
+	}
+	return fmt.Sprintf("%s (HTTP %d): %s", lead, status, raw)
 }

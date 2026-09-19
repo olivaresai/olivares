@@ -9,9 +9,11 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"text/tabwriter"
+	"strconv"
 
 	"github.com/spf13/cobra"
+
+	"github.com/olivaresai/olivares/cmd/olivares/internal/termrender"
 )
 
 // `olivares governance` — THE LARGEST API FAMILY WITH NO OPERATOR SURFACE.
@@ -196,24 +198,43 @@ func governanceKillSwitchListCmd(flags *authClientFlags) *cobra.Command {
 }
 
 func writeKillSwitchTable(out io.Writer, rows []cliKillSwitch) error {
-	tw := tabwriter.NewWriter(out, 0, 2, 2, ' ', 0)
-	if _, err := fmt.Fprintln(tw, "ID\tSCOPE\tTARGET\tSTATUS\tSOURCE\tENGAGED BY\tENGAGED AT\tREVIEWED\tREASON"); err != nil {
-		return err
+	renderTo(out).Table(killSwitchTable(rows))
+	return nil
+}
+
+func killSwitchTable(rows []cliKillSwitch) termrender.Table {
+	t := termrender.Table{
+		Header: []string{"id", "scope", "target", "status", "source", "engaged by", "engaged at", "reviewed", "reason"},
+		Empty:  "no kill switch is engaged",
 	}
 	for _, k := range rows {
 		target := k.ScopeRef
 		if target == "" {
 			target = k.AgentExternalID
 		}
-		if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+		t.Rows = append(t.Rows, []string{
 			observeCell(k.ID), observeCell(k.ScopeKind), observeCell(target),
 			observeCell(k.Status), observeCell(k.Source), observeCell(k.EngagedBy),
 			observeCell(k.EngagedAt), observeBool(k.Reviewed, "yes", "no"),
-			observeCell(k.Reason)); err != nil {
-			return err
-		}
+			observeCell(k.Reason),
+		})
+		t.Roles = append(t.Roles, []termrender.Role{0, 0, 0, governanceStatusRole(k.Status)})
 	}
-	return tw.Flush()
+	return t
+}
+
+// governanceStatusRole colours a lifecycle status cell. An engaged kill switch and
+// an active break-glass grant are WARN and not FAIL: they are controls working as
+// designed, and colouring a working control red teaches an operator to ignore red.
+func governanceStatusRole(status string) termrender.Role {
+	switch status {
+	case "engaged", "active", "pending":
+		return termrender.RoleWarn
+	case "released", "expired", "revoked", "resolved":
+		return termrender.RoleMuted
+	default:
+		return termrender.RoleNone
+	}
 }
 
 // `governance breakglass` — the SECOND slice, and it is cheaper than the first for a reason worth
@@ -380,37 +401,35 @@ func governanceBreakGlassUsesCmd(flags *authClientFlags) *cobra.Command {
 					_, err := fmt.Fprintln(out, "this grant was never used")
 					return err
 				}
-				tw := tabwriter.NewWriter(out, 0, 2, 2, ' ', 0)
-				if _, err := fmt.Fprintln(tw, "ACTION\tSUBJECT\tREF\tUSED BY\tUSED AT"); err != nil {
-					return err
-				}
+				t := termrender.Table{Header: []string{"action", "subject", "ref", "used by", "used at"}}
 				for _, u := range list.Items {
-					if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n",
+					t.Rows = append(t.Rows, []string{
 						observeCell(u.Action), observeCell(u.SubjectKind), observeCell(u.SubjectRef),
-						observeCell(u.UsedBy), observeCell(u.UsedAt)); err != nil {
-						return err
-					}
+						observeCell(u.UsedBy), observeCell(u.UsedAt),
+					})
 				}
-				return tw.Flush()
+				renderTo(out).Table(t)
+				return nil
 			}, observeJSON(res.raw))
 		},
 	}
 }
 
 func writeBreakGlassTable(out io.Writer, rows []cliBreakGlass) error {
-	tw := tabwriter.NewWriter(out, 0, 2, 2, ' ', 0)
-	if _, err := fmt.Fprintln(tw, "ID\tACTION\tSTATUS\tACTIVATED BY\tACTIVATED AT\tEXPIRES\tUSES\tREVIEWED\tREASON"); err != nil {
-		return err
+	t := termrender.Table{
+		Header: []string{"id", "action", "status", "activated by", "activated at", "expires", "uses", "reviewed", "reason"},
+		Empty:  "no break-glass grant has been activated",
 	}
 	for _, g := range rows {
-		if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%d\t%s\t%s\n",
+		t.Rows = append(t.Rows, []string{
 			observeCell(g.ID), observeCell(g.MatchAction), observeCell(g.Status),
 			observeCell(g.ActivatedBy), observeCell(g.ActivatedAt), observeCell(g.ExpiresAt),
-			g.UseCount, observeBool(g.Reviewed, "yes", "no"), observeCell(g.Reason)); err != nil {
-			return err
-		}
+			strconv.FormatInt(g.UseCount, 10), observeBool(g.Reviewed, "yes", "no"), observeCell(g.Reason),
+		})
+		t.Roles = append(t.Roles, []termrender.Role{0, 0, governanceStatusRole(g.Status)})
 	}
-	return tw.Flush()
+	renderTo(out).Table(t)
+	return nil
 }
 
 // `governance approvals` — the third slice, and the one with the most consumers already inside
@@ -579,43 +598,41 @@ func governanceApprovalsDecisionsCmd(flags *authClientFlags) *cobra.Command {
 					_, err := fmt.Fprintln(out, "nobody has voted on this approval yet")
 					return err
 				}
-				tw := tabwriter.NewWriter(out, 0, 2, 2, ' ', 0)
-				if _, err := fmt.Fprintln(tw, "DECISION\tDECIDER\tUSER\tDECIDED AT\tNOTE"); err != nil {
-					return err
-				}
+				t := termrender.Table{Header: []string{"decision", "decider", "user", "decided at", "note"}}
 				for _, d := range list.Items {
-					if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n",
+					t.Rows = append(t.Rows, []string{
 						observeCell(d.Decision), observeCell(d.Decider), observeCell(d.DeciderUser),
-						observeCell(d.DecidedAt), observeCell(d.Note)); err != nil {
-						return err
-					}
+						observeCell(d.DecidedAt), observeCell(d.Note),
+					})
 				}
-				return tw.Flush()
+				renderTo(out).Table(t)
+				return nil
 			}, observeJSON(res.raw))
 		},
 	}
 }
 
 func writeApprovalTable(out io.Writer, rows []cliApproval) error {
-	tw := tabwriter.NewWriter(out, 0, 2, 2, ' ', 0)
-	if _, err := fmt.Fprintln(tw, "ID\tACTION\tSUBJECT\tSTATUS\tTIER\tVOTES\tREQUESTED BY\tEXPIRES\tESCALATED"); err != nil {
-		return err
+	t := termrender.Table{
+		Header: []string{"id", "action", "subject", "status", "tier", "votes", "requested by", "expires", "escalated"},
+		Empty:  "no approval is waiting",
 	}
 	for _, a := range rows {
 		subject := a.SubjectRef
 		if subject == "" {
 			subject = a.SubjectKind
 		}
-		if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%d+/%d- of %d\t%s\t%s\t%s\n",
+		t.Rows = append(t.Rows, []string{
 			observeCell(a.ID), observeCell(a.Action), observeCell(subject),
 			observeCell(a.Status), observeCell(a.RiskTier),
-			a.ApproveCount, a.RejectCount, a.RequiredApprovals,
+			fmt.Sprintf("%d+/%d- of %d", a.ApproveCount, a.RejectCount, a.RequiredApprovals),
 			observeCell(a.RequestedBy), observeCell(a.ExpiresAt),
-			observeBool(a.Escalated, "yes", "no")); err != nil {
-			return err
-		}
+			observeBool(a.Escalated, "yes", "no"),
+		})
+		t.Roles = append(t.Roles, []termrender.Role{0, 0, 0, governanceStatusRole(a.Status)})
 	}
-	return tw.Flush()
+	renderTo(out).Table(t)
+	return nil
 }
 
 // `governance guardian` — the automatic arm of the plane: rules that turn a finding into an
@@ -710,21 +727,17 @@ func governanceGuardianRulesCmd(flags *authClientFlags) *cobra.Command {
 					_, err := fmt.Fprintln(out, "no guardian rules")
 					return err
 				}
-				tw := tabwriter.NewWriter(out, 0, 2, 2, ' ', 0)
-				if _, err := fmt.Fprintln(tw, "ID\tNAME\tARMED\tMATCHES\tMIN SEVERITY\tACTION\tMODE\tTIER"); err != nil {
-					return err
+				t := termrender.Table{
+					Header: []string{"id", "name", "armed", "matches", "min severity", "action", "mode", "tier"},
 				}
 				for _, r := range list.Items {
-					if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+					t.Rows = append(t.Rows, []string{
 						observeCell(r.ID), observeCell(r.Name), observeBool(r.Enabled, "yes", "no"),
 						observeCell(r.MatchKinds), observeCell(r.MinSeverity), observeCell(r.Action),
-						observeCell(r.Mode), observeCell(r.AgentTier)); err != nil {
-						return err
-					}
+						observeCell(r.Mode), observeCell(r.AgentTier),
+					})
 				}
-				if err := tw.Flush(); err != nil {
-					return err
-				}
+				renderTo(out).Table(t)
 				return observeTruncationNote(out, observePage{Cursor: list.Cursor, HasMore: list.HasMore}, cmd.CommandPath())
 			}, observeJSON(res.raw))
 		},
@@ -768,25 +781,24 @@ func governanceGuardianActionsCmd(flags *authClientFlags) *cobra.Command {
 					_, err := fmt.Fprintln(out, "guardian has taken no action")
 					return err
 				}
-				tw := tabwriter.NewWriter(out, 0, 2, 2, ' ', 0)
-				if _, err := fmt.Fprintln(tw, "RULE\tFINDING\tSEVERITY\tTARGET\tACTION\tMODE\tSTATUS\tAPPROVAL\tKILLSWITCH\tAT"); err != nil {
-					return err
+				t := termrender.Table{
+					Header: []string{"rule", "finding", "severity", "target", "action", "mode", "status", "approval", "killswitch", "at"},
 				}
 				for _, a := range list.Items {
 					target := a.TargetRef
 					if target == "" {
 						target = a.TargetKind
 					}
-					if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+					t.Rows = append(t.Rows, []string{
 						observeCell(a.RuleName), observeCell(a.FindingKind), observeCell(a.Severity),
 						observeCell(target), observeCell(a.Action), observeCell(a.Mode),
 						observeCell(a.Status), observeCell(a.ApprovalID), observeCell(a.KillswitchID),
-						observeCell(a.ExecutedAt)); err != nil {
-						return err
-					}
+						observeCell(a.ExecutedAt),
+					})
 				}
-				if err := tw.Flush(); err != nil {
-					return err
+				renderTo(out).Table(t)
+				if false {
+					_ = t
 				}
 				return observeTruncationNote(out, observePage{Cursor: list.Cursor, HasMore: list.HasMore}, cmd.CommandPath())
 			}, observeJSON(res.raw))

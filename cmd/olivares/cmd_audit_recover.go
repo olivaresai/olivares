@@ -445,7 +445,7 @@ func auditRecoverCmdWithDeps(deps auditRecoverDeps) *cobra.Command {
 	addStoreFlags(cmd, &dataDir, &engineKind, &dsn)
 	cmd.Flags().StringVar(&tenant, "tenant", "", "tenant id whose corrupt audit tail will be sealed (default $OLIVARES_TENANT)")
 	cmd.Flags().StringArrayVar(&pubSpecs, "pubkey", nil, "required pinned off-box checkpoint public key, repeatable: raw base64 Ed25519 or \"<alg>:<base64 DER SPKI>\"")
-	cmd.Flags().StringVar(&pubAlg, "pubkey-alg", "", "algorithm of a SINGLE bare --pubkey (compat form, as in `audit verify`)")
+	cmd.Flags().StringVar(&pubAlg, "pubkey-alg", "", "algorithm of a SINGLE bare --pubkey (compat form, as in 'audit verify')")
 	cmd.Flags().StringVar(&archiveDir, "archive-dir", "", "optional off-box archive directory that must verify and cover the trusted prefix")
 	cmd.Flags().StringVar(&reason, "reason", "", "operator reason recorded in the signed recovery evidence")
 	cmd.Flags().StringVar(&requestedBy, "requested-by", "", "non-secret requester identity recorded in the signed recovery evidence")

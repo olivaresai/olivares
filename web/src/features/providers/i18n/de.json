@@ -1,0 +1,122 @@
+{
+  "title": "Anbieter",
+  "subtitle": "Die Zugangsdaten, mit denen eine Sitzung startet. Einmal registrieren; die Engine versiegelt sie und übergibt sie dem Agenten beim Start.",
+  "nav": "Anbieter",
+  "add": "Anbieter hinzufügen",
+  "empty": {
+    "title": "Noch kein Anbieter registriert",
+    "description": "Ohne Zugangsdaten kann keine Sitzung starten. Fügen Sie den API-Schlüssel von Anthropic, OpenAI oder xAI hinzu — oder von einem beliebigen OpenAI-kompatiblen Endpunkt — und die Engine versiegelt ihn und verwendet ihn beim Start. Der Schlüssel wird nie wieder angezeigt.",
+    "action": "Ersten Anbieter hinzufügen"
+  },
+  "emptyFiltered": {
+    "title": "Kein Anbieter passt zu diesem Filter",
+    "description": "Entfernen Sie den Filter, um alle registrierten Anbieter zu sehen.",
+    "action": "Alle anzeigen"
+  },
+  "forbidden": {
+    "title": "Sie dürfen die Anbieter dieses Mandanten nicht lesen",
+    "description": "Das Lesen registrierter Anbieter erfordert sessions:provider:read. Bitten Sie eine Administratorin dieses Mandanten darum."
+  },
+  "columns": {
+    "name": "Name",
+    "kind": "Art",
+    "key": "Schlüssel",
+    "state": "Zustand",
+    "connection": "Verbindung"
+  },
+  "kinds": {
+    "anthropic": "Anthropic",
+    "openai": "OpenAI",
+    "xai": "xAI",
+    "openai_compatible": "OpenAI-kompatibel"
+  },
+  "kindHints": {
+    "anthropic": "Claude Code. Setzt ANTHROPIC_API_KEY.",
+    "openai": "Codex. Setzt OPENAI_API_KEY.",
+    "xai": "Grok. Setzt XAI_API_KEY.",
+    "openai_compatible": "Jeder Endpunkt in OpenAI-Form. Setzt OPENAI_API_KEY und OPENAI_BASE_URL; der Endpunkt ist erforderlich."
+  },
+  "states": {
+    "active": "Aktiv",
+    "revoked": "Widerrufen"
+  },
+  "probe": {
+    "never": "Nicht getestet",
+    "ok": "Akzeptiert",
+    "refused": "Abgelehnt",
+    "unreachable": "Nicht erreichbar",
+    "neverHint": "Niemand hat diese Zugangsdaten getestet. Sie zu registrieren ist kein Beleg dafür, dass sie funktionieren.",
+    "okHint": "Der Anbieter hat geantwortet und diese Zugangsdaten akzeptiert.",
+    "refusedHint": "Der Anbieter hat geantwortet und diese Zugangsdaten abgelehnt. Wechseln Sie den Schlüssel.",
+    "unreachableHint": "Der Endpunkt hat nicht geantwortet. Das sagt nichts über die Zugangsdaten aus.",
+    "models": "{{n}} Modelle",
+    "latency": "{{ms}} ms",
+    "at": "Getestet {{when}}"
+  },
+  "actions": {
+    "test": "Verbindung testen",
+    "testing": "Wird getestet…",
+    "rotate": "Schlüssel wechseln",
+    "revoke": "Widerrufen",
+    "details": "Details"
+  },
+  "create": {
+    "title": "Anbieter hinzufügen",
+    "description": "Die Engine versiegelt den Schlüssel und gibt ihn nie zurück. Sie sehen einen Hinweis aus vier Zeichen und sonst nichts.",
+    "kind": "Anbieter",
+    "kindPlaceholder": "Anbieter wählen",
+    "name": "Name",
+    "nameHint": "Ihr eigener Name für diese Zugangsdaten. Das zeigt eine Auswahl an.",
+    "namePlaceholder": "Anthropic (Produktion)",
+    "baseURL": "Endpunkt",
+    "baseURLHint": "Leer lassen für den offiziellen Endpunkt des Anbieters. Muss https sein.",
+    "baseURLPlaceholder": "https://llm.beispiel.de",
+    "apiKey": "API-Schlüssel",
+    "apiKeyHint": "Einmal gesendet, von der Engine versiegelt, nie an diesen Browser zurückgegeben.",
+    "apiKeyPlaceholder": "Schlüssel einfügen",
+    "submit": "Anbieter hinzufügen",
+    "submitting": "Wird versiegelt…",
+    "cancel": "Abbrechen",
+    "success": "Anbieter registriert. Testen Sie die Verbindung, um zu bestätigen, dass er funktioniert.",
+    "testNext": "Verbindung jetzt testen"
+  },
+  "rotate": {
+    "title": "Schlüssel dieses Anbieters wechseln",
+    "description": "Der neue Schlüssel ersetzt den alten unter derselben Referenz, also funktionieren alle gebundenen Profile weiter. Eine bereits laufende Sitzung behält die Zugangsdaten, mit denen sie gestartet ist.",
+    "verdictCleared": "Der vorherige Verbindungstest wird gelöscht: ein Urteil über Zugangsdaten, die es nicht mehr gibt, belegt nichts über die, die sie ersetzen.",
+    "submit": "Schlüssel wechseln",
+    "submitting": "Wird versiegelt…",
+    "success": "Schlüssel gewechselt. Testen Sie die Verbindung, um den neuen zu bestätigen."
+  },
+  "revoke": {
+    "title": "Diesen Anbieter widerrufen",
+    "description": "Das zerstört die versiegelten Zugangsdaten. Für diese Referenz ist es nicht rückgängig zu machen.",
+    "consequence": "Jedes daran gebundene Anbieterprofil verweigert den Start und nennt diesen Anbieter. Beim Anbieter selbst werden die Zugangsdaten nicht widerrufen: das tun Sie in dessen eigener Konsole.",
+    "confirm": "Widerrufen",
+    "success": "Anbieter widerrufen und seine versiegelten Zugangsdaten zerstört."
+  },
+  "detail": {
+    "title": "Anbieter",
+    "reference": "Referenz",
+    "endpoint": "Endpunkt",
+    "officialEndpoint": "Der offizielle Endpunkt des Anbieters",
+    "created": "Registriert",
+    "revoked": "Widerrufen",
+    "models": "Modelle, die der letzte Test aufgelistet hat",
+    "noModels": "Noch keine Modellliste. Testen Sie die Verbindung.",
+    "close": "Schließen"
+  },
+  "vaultUnavailable": {
+    "title": "Diese Installation kann keine Anbieter-Zugangsdaten speichern",
+    "description": "Es ist kein versiegelter Tresor verdrahtet, daher verweigert die Engine das Speichern eines Schlüssels, statt einen zu speichern, den sie nicht schützen kann. Eine Administratorin muss den Secret-Sealer konfigurieren."
+  },
+  "next": {
+    "title": "Als Nächstes: einen Agenten bereitstellen",
+    "description": "Zugangsdaten allein starten nichts. Binden Sie sie an ein Anbieterprofil, dann verwendet sie eine unter diesem Profil gestartete Sitzung.",
+    "action": "Zu den Anbieterprofilen"
+  },
+  "truncation": {
+    "label": "{{n}} Anbieter angezeigt; es gibt mehr",
+    "hint": "Diese Liste ist eine Seite. Grenzen Sie sie ein, oder nutzen Sie `olivares provider ls` für den vollständigen Satz."
+  }
+}

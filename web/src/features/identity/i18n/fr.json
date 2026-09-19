@@ -39,6 +39,7 @@
       "identity": "Gestion de l’identité",
       "nhiLifecycleRotate": "Rotation d’un identifiant d’identité non humaine",
       "nhiLifecycleFinalize": "Finalisation du retrait d’une identité non humaine",
+      "providers": "Enregistrer ou retirer un identifiant de fournisseur",
       "generic": "Cette action",
       "console": "Gestion des connecteurs"
     },

@@ -198,6 +198,11 @@ type AccessEvidenceRepo interface {
 	// one canonical question digest — the separate stages of one action, not a
 	// merged verdict about it.
 	ActionObservationsForQuestion(ctx context.Context, questionDigest string) ([]model.ActionObservation, error)
+	// AuthorizationDecisionsForQuestion returns the decisions recorded against
+	// one canonical question digest, oldest first by the instant the fact
+	// occurred. It is history, not a current verdict: a later reconstruction
+	// selects among these rows and never consults the live policy.
+	AuthorizationDecisionsForQuestion(ctx context.Context, questionDigest string) ([]model.AuthorizationDecision, error)
 	// DecisionCompleteness reports what the RETAINED data supports for one
 	// decision, independently of what its producer claimed.
 	DecisionCompleteness(ctx context.Context, id model.ID) (model.AccessEvidenceCompleteness, error)

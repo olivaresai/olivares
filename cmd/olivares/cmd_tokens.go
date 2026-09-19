@@ -12,11 +12,11 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
-	"text/tabwriter"
 
 	"github.com/spf13/cobra"
 
 	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
+	"github.com/olivaresai/olivares/cmd/olivares/internal/termrender"
 )
 
 const tokensPath = "/v1/tokens"
@@ -87,6 +87,16 @@ type cliIssuedToken struct {
 	RevokedID string `json:"revoked_id,omitempty"`
 }
 
+// revokedRole mutes a revoked token's row rather than colouring it red. A revoked
+// token is a completed lifecycle step, not a failure, and a list where half the
+// rows are red is a list nobody reads for red.
+func revokedRole(revoked bool) termrender.Role {
+	if revoked {
+		return termrender.RoleMuted
+	}
+	return termrender.RoleNone
+}
+
 func tokensListCmd(client bootstrapClient) *cobra.Command {
 	var includeRevoked bool
 	var limit int
@@ -121,18 +131,19 @@ func tokensListCmd(client bootstrapClient) *cobra.Command {
 					_, err := fmt.Fprintln(out, "no API tokens visible to this caller")
 					return err
 				}
-				tw := tabwriter.NewWriter(out, 0, 2, 2, ' ', 0)
-				fmt.Fprintln(tw, "ID\tNAME\tTENANT\tROLE\tSUPERADMIN\tREVOKED\tLAST USED\tCREATED")
+				tbl := termrender.Table{
+					Header: []string{"id", "name", "tenant", "role", "superadmin", "revoked", "last used", "created"},
+				}
 				for _, t := range list.Items {
-					fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%t\t%t\t%s\t%s\n",
+					tbl.Rows = append(tbl.Rows, []string{
 						safeCLIValue(t.ID, ""), safeCLIValue(t.Name, ""),
 						orDash(safeCLIValue(t.BoundTenantID, "")), orDash(safeCLIValue(t.Role, "")),
-						t.IsSuperadmin, t.Revoked,
-						orDash(safeCLIValue(derefOrEmpty(t.LastUsedAt), "")), safeCLIValue(t.CreatedAt, ""))
+						flagCell(t.IsSuperadmin), flagCell(t.Revoked),
+						orDash(safeCLIValue(derefOrEmpty(t.LastUsedAt), "")), safeCLIValue(t.CreatedAt, ""),
+					})
+					tbl.Roles = append(tbl.Roles, []termrender.Role{0, 0, 0, 0, 0, revokedRole(t.Revoked)})
 				}
-				if err := tw.Flush(); err != nil {
-					return err
-				}
+				renderTo(out).Table(tbl)
 				return writeMorePages(out, list.HasMore, list.Cursor)
 			}, json.RawMessage(raw))
 		},
@@ -205,7 +216,7 @@ func tokensIssueCmd(client bootstrapClient) *cobra.Command {
 			return renderIssuedToken(cmd, raw, "issued")
 		},
 	}
-	cmd.Flags().StringVar(&name, "name", "", "human label for the token (required; shown in `tokens ls`)")
+	cmd.Flags().StringVar(&name, "name", "", "human label for the token (required; shown in 'tokens ls')")
 	cmd.Flags().StringVar(&role, "role", "viewer", "role the bound token carries: viewer, editor, admin or owner")
 	cmd.Flags().BoolVar(&superadmin, "superadmin", false, "mint a CROSS-TENANT superadmin token instead of a tenant-bound one (superadmin callers only)")
 	_ = cmd.RegisterFlagCompletionFunc("role", completeTokenRole)

@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -96,12 +97,21 @@ const (
 // is configured (otherwise launches stay deny-closed). The governance gates (LaunchGate/StopGate/Recorder) are left at
 // their additive defaults here — Late-binds the real PEP/budget/kill-switch/
 // recording adapters.
-func buildSessionRuntimeOptions(getenv func(string) string, broker *wifCredentialBroker, log *slog.Logger) []sessions.Option {
+func buildSessionRuntimeOptions(getenv func(string) string, broker *wifCredentialBroker, dataDir string, log *slog.Logger) []sessions.Option {
 	opts := sessionRunnerOption(log)
 	// HC1: the host-tools read's adapter. It captures its locations here and
-	// detects nothing until a request asks (hosttools.go).
-	obs := newHostToolObserver(getenv)
+	// detects nothing until a request asks (hosttools.go). It is given the ENGINE's
+	// own data directory, never the environment default: an official CLI installed
+	// into `<data-dir>/tools` is what registers its driver at the next boot, and
+	// re-deriving the root here made that fail for every engine started with
+	// --data-dir (measured 2026-09-18).
+	obs := newHostToolObserverForDataDir(dataDir, getenv)
 	opts = append(opts, sessions.WithHostToolObserver(obs))
+	// the session-workspace root is NOT wired here. It is bound after
+	// construction by useSessionWorkspaceRoot, through the door that REPORTS a
+	// refusal — an Option cannot return one, and a refused root that nobody hears
+	// about is a node whose unworkspaced launches all fail with a reason only the
+	// caller of the first one ever reads.
 
 	if bin := strings.TrimSpace(getenv(envSessionClaudeBin)); bin != "" {
 		opts = append(opts, sessions.WithProgram(bin))
@@ -148,6 +158,72 @@ func buildSessionRuntimeOptions(getenv func(string) string, broker *wifCredentia
 	return opts
 }
 
+// sessionWorkspaceDirName is the subdirectory of the data directory that holds
+// one directory per session that named no registered workspace. It sits beside
+// `tools` and the store, under the data directory's own 0700 and its .gitignore.
+const sessionWorkspaceDirName = "session-workspaces"
+
+// sessionWorkspaceRootFor derives that root from the engine's resolved data
+// directory. An empty or relative data directory yields NO root, which the module
+// treats as deny-closed: a guessed absolute path would be worse than a refusal,
+// because it would put a session's files somewhere nobody configured.
+func sessionWorkspaceRootFor(dataDir string) string {
+	dataDir = strings.TrimSpace(dataDir)
+	if dataDir == "" || !filepath.IsAbs(dataDir) {
+		return ""
+	}
+	return filepath.Join(filepath.Clean(dataDir), sessionWorkspaceDirName)
+}
+
+// useSessionWorkspaceRoot binds that root at BOOT, through the module's
+// error-returning door, and reports what the node ended up able to do.
+//
+// ⛔ WHY NOT THE OPTION, MEASURED 2026-09-18. `WithSessionWorkspaceRoot` cannot
+// return anything — an Option is `func(*Module)` — so a refused root left this
+// engine silently unable to launch any session without a registered workspace,
+// and the only place that said so was the 503 the FIRST such launch returned to
+// whoever happened to make it. The validation existed and had no production
+// caller: the refusal is a configuration fact, and configuration facts belong in
+// the boot log, once, with their remedy.
+//
+// The state is READ BACK from the module rather than inferred from the return,
+// so the line describes what the node is actually doing. A refusal is not fatal
+// to the engine: every other launch, and every launch that names a registered
+// workspace, is unaffected — so this reports and continues.
+func useSessionWorkspaceRoot(m *sessions.Module, dataDir string, log *slog.Logger) error {
+	if m == nil {
+		return nil
+	}
+	root := sessionWorkspaceRootFor(dataDir)
+	if root == "" {
+		if log != nil {
+			log.Warn("session runtime: no data directory is known here, so a session without a workspace cannot be given a directory of its own and is refused",
+				"effect", "launches that name a registered workspace are unaffected",
+				"why", "the alternative would be the engine's own working directory, which a governed session must never inherit")
+		}
+		return nil
+	}
+	err := m.UseSessionWorkspaceRoot(root)
+	if err == nil && m.SessionWorkspaceRootConfigured() {
+		if log != nil {
+			log.Info("session runtime: a session with no registered workspace gets a directory of its own",
+				"root", root,
+				"removed", "when the operator releases the session, unless a registered workspace claims that path")
+		}
+		return nil
+	}
+	if err == nil {
+		err = errors.New("the module did not take the root and reported no reason")
+	}
+	if log != nil {
+		log.Error("session runtime: the session-workspace root derived from this engine's data directory was REFUSED, so a session with no registered workspace is deny-closed on this node",
+			"root", root,
+			"remedy", err.Error(),
+			"unaffected", "launches that name a registered workspace")
+	}
+	return err
+}
+
 func pinOfficialSessionDriver(
 	opts *[]sessions.Option,
 	getenv func(string) string,
@@ -166,8 +242,16 @@ func pinOfficialSessionDriver(
 	}
 	if bin == "" {
 		if log != nil {
+			// The hint names what ACHIEVES the registration, and both halves are
+			// measured. Until 2026-09-18 it offered `agent tool install` while only the
+			// variable worked: the observer re-derived the tools root from
+			// the environment, so an install into the engine's own `<data-dir>/tools`
+			// was never seen. It is seen now — at the NEXT BOOT, because registration
+			// happens at construction, and a hint that omitted the restart would be
+			// half true in the same way the old one was.
 			log.Info("session runtime: no "+driver+" driver registered; profiles are observable and not launchable",
-				"set", envName+" or install with olivares agent tool install --driver "+driver)
+				"set", envName+" to a pinned official binary",
+				"or", "olivares agent tool install --driver "+driver+", then restart the engine")
 		}
 		return
 	}

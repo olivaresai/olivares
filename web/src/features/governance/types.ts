@@ -293,6 +293,40 @@ export interface DecisionDTO {
   note?: string
 }
 
+/** Closed set of answers GET /decisions/{id}/reconstruct and POST /decisions/replay return. */
+export type ReconstructStatus =
+  'reconstructed' | 'mismatch' | 'unsupported' | 'insufficient'
+
+/** Write body of POST /decisions/replay. Either decision_id, or at+principal+action. */
+export interface ReplayDecisionInput {
+  at?: string
+  principal?: string
+  resource?: string
+  resource_kind?: string
+  source_instance?: string
+  action?: string
+  action_vocabulary?: string
+  decision_id?: string
+}
+
+/** Answer of GET /decisions/{id}/reconstruct and POST /decisions/replay. */
+export interface ReconstructResultDTO {
+  status: ReconstructStatus | string
+  could_not_reconstruct: boolean
+  missing?: string
+  outcome?: string
+  recorded_outcome?: string
+  policy_version_id?: string
+  policy_version_recorded: boolean
+  inputs_digest?: string
+  decision_id?: string
+  artifact_id?: string
+  evaluator?: string
+  at?: string
+  used_live_policy: boolean
+  reason_code?: string
+}
+
 /**
  * Mirror the engine's separation-of-duties guard for hiding the Approve/Reject
  * controls before the round-trip (gap #8): the decision endpoint 403s when the

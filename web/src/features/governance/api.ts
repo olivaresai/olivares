@@ -43,7 +43,9 @@ import type {
   PolicyDTO,
   PolicyInput,
   RosterReport,
+  ReconstructResultDTO,
   ReviewBreakGlassInput,
+  ReplayDecisionInput,
   RoutinePolicyDTO,
   RoutinePostureDTO,
   CreateRoutinePolicyInput,
@@ -115,6 +117,17 @@ export const governanceApi = {
     http.put<PolicyDTO>(`${BASE}/policies/${encodeURIComponent(id)}`, input),
   deletePolicy: (id: string) =>
     http.delete<void>(`${BASE}/policies/${encodeURIComponent(id)}`),
+
+  // Historical reconstruction from the access-evidence ledger. Read-tier
+  // (governance:policy:read): it re-evaluates a retained artifact and never
+  // changes enforcement. GET reconstructs one stored row; POST names either
+  // that row or a principal/action/instant.
+  reconstructDecision: (id: string) =>
+    http.get<ReconstructResultDTO>(
+      `${BASE}/decisions/${encodeURIComponent(id)}/reconstruct`,
+    ),
+  replayDecision: (input: ReplayDecisionInput) =>
+    http.post<ReconstructResultDTO>(`${BASE}/decisions/replay`, input),
 
   // --- approval queue (HITL) -------------------------------------------------
   listApprovals: (params?: ListParams & { status?: string; action?: string }) =>

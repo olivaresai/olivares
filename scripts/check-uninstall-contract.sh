@@ -152,7 +152,20 @@ for token in (
 ):
     assert token in uninstall
 assert uninstall.index("through a symlink") < uninstall.index("stopService(m, opts.Run)")
-assert uninstall.index("corroborateLayout(m, opts.Root)") < uninstall.index('fmt.Fprintf(opts.Out, "  %-12s')
+# The plan is printed as ONE table through the terminal renderer. The order that matters
+# is unchanged: the second witness is consulted BEFORE anything is shown to the operator.
+# It is asserted twice, because a marker only proves the order of the call it spells:
+# the table print comes after the corroboration, and NO use of the operator's output
+# other than its nil default precedes the corroboration, whatever the call is named.
+corroborated = uninstall.index("corroborateLayout(m, opts.Root)")
+assert corroborated < uninstall.index("termrender.New(opts.Out, termrender.Options{}).Table(plan)")
+nil_default = ("opts.Out == nil {", "opts.Out = io.Discard")
+at, early = uninstall.find("opts.Out"), []
+while at != -1 and at < corroborated:
+    if not any(uninstall.startswith(form, at) for form in nil_default):
+        early.append(uninstall.count("\n", 0, at) + 1)
+    at = uninstall.find("opts.Out", at + 1)
+assert not early, f"uninstall.go writes to the operator before the layout is corroborated: line(s) {early}"
 assert uninstall.index("writeWitness(m, opts.Root, opts.Operation, pending)") < uninstall.index("removeExact(target)")
 assert 'Role: "workspace"' in uninstall and 'Role: "witness"' in uninstall
 # The service is stopped only when this estate holds the live definition, and the shared

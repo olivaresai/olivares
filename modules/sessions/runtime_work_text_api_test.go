@@ -23,7 +23,7 @@ import (
 // HTTP contract as much as in the port: the handler refused `text` whenever
 // `work_lease_fence` was present, so a work-bound driver run had no door at all.
 func TestRuntimeWorkAPIFencedTextReachesTheDriver(t *testing.T) {
-	m := New(
+	m := New(WithSessionWorkspaceRoot(t.TempDir()), 
 		WithRunner(NewProcRunner()),
 		WithProviderDriver(NewCodexDriver()),
 		WithDriverProgram(providerDriverCodex, os.Args[0]),

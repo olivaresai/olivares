@@ -141,6 +141,8 @@
     "effort": "Effort",
     "model": "Modelo",
     "workspace": "Workspace",
+    "workspaceDirectory": "Directorio de trabajo",
+    "workspaceDirectoryOwn": "su propio directorio para esta sesión",
     "created": "Creada",
     "started": "Arrancada",
     "lastActivity": "Última actividad",

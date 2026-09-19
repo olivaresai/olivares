@@ -7,6 +7,7 @@ package sessions
 import (
 	"context"
 	"errors"
+	"net/http"
 	"path/filepath"
 	"strings"
 	"time"
@@ -186,8 +187,11 @@ func (m *Module) resolveLaunchProfileInto(ctx context.Context, tenant model.Tena
 			return badRequest("env_allow may not name " + name + " for a profiled launch: the profile owns it")
 		}
 	}
-	snap, err := m.resolveLaunchProfile(ctx, tenant, p.ProviderProfileRef)
+	snap, policy, err := m.resolveLaunchProfile(ctx, tenant, p.ProviderProfileRef)
 	if err != nil {
+		return err
+	}
+	if err := applySessionPolicy(p, snap.Driver, policy); err != nil {
 		return err
 	}
 	if snap.Driver == providerDriverClaude && p.Effort != "" && !validEffortLevels[p.Effort] {
@@ -237,6 +241,7 @@ func setProfileSnapshot(rec model.Record, snap *ProviderHomeSnapshot) {
 		rec[colRunProfileConfigHome] = nil
 		rec[colRunProfileUserHome] = nil
 		setOrNull(rec, colRunProviderAuthSource, "")
+		setOrNull(rec, colRunProviderRecordRef, "")
 		return
 	}
 	rec[colRunProfileID] = snap.ProfileID
@@ -248,6 +253,10 @@ func setProfileSnapshot(rec model.Record, snap *ProviderHomeSnapshot) {
 	// spawn, so what a run was launched under is durable rather than re-derived
 	// from a profile row that may have been re-authorized since.
 	setOrNull(rec, colRunProviderAuthSource, snap.AuthSource)
+	// Persisted for the same reason and at the same moment: which registered
+	// credential this run was launched under is a fact about the launch, not a
+	// property of the profile row as it reads today.
+	setOrNull(rec, colRunProviderRecordRef, snap.ProviderRecordRef)
 }
 
 // captureProfiledSessionID binds the provider's session id under the run's
@@ -368,3 +377,47 @@ func (m *Module) captureRegisteredProfiledSessionID(ctx context.Context, lr *liv
 			"run_ref", lr.runRef, "err", redactErr(err))
 	}
 }
+
+// applySessionPolicy imposes the profile's DECLARED session policy on a launch
+// (provider_profile_policy.go), and is the point at which "the product governs
+// which profile launches and then narrows nothing" stops being true.
+//
+// Two rules, and both are decisions rather than conveniences:
+//
+//  1. THE TOOL SURFACE IS DENY-CLOSED. A profiled launch whose profile declares
+//     nothing gets an EMPTY surface, which the Claude form emits as `--tools ""`.
+//     The measured alternative is what the golden path found: 34 tools including
+//     Bash, Write and Edit, handed to a child in a directory nobody chose.
+//
+//  2. THE DECLARED PERMISSION MODE DOES NOT OVERRIDE A TEMPLATE. A workspace
+//     template's terms are approval-bound and re-resolved per launch; a profile is
+//     an identity. Letting the identity rewrite an approved term would let a
+//     profile WIDEN a restriction somebody approved, so the profile's mode applies
+//     only to a launch that carries no template, and a template's own mode stands.
+//
+// A driver whose owned launch form cannot express a tool surface never receives
+// one: the declaration is refused when it is MADE (validateSessionPolicyInput), so
+// reaching here with one is a stored policy from before that check — it is
+// dropped, loudly, rather than silently ignored.
+func applySessionPolicy(p *CreateRunParams, driver string, policy sessionPolicy) error {
+	if policy.PermissionMode != "" {
+		if !validPermissionModes[policy.PermissionMode] {
+			return &runErr{http.StatusUnprocessableEntity,
+				"the provider profile declares a permission mode this runtime does not accept"}
+		}
+		if p.TemplateID == "" {
+			p.PermissionMode = policy.PermissionMode
+		}
+	}
+	if !driverExpressesToolSurface(driver) {
+		if policy.ToolsDeclared {
+			return &runErr{http.StatusUnprocessableEntity,
+				"the provider profile declares a tool policy, and driver " + driver +
+					" negotiates its tool surface in its own protocol: the launch is refused rather than started under a policy nobody applies"}
+		}
+		return nil
+	}
+	p.ToolSurface, p.ToolSurfaceDeclared = policy.effectiveTools(), true
+	return nil
+}
+

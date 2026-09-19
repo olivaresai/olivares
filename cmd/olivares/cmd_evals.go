@@ -188,7 +188,7 @@ func newEvalsGateCmd() *cobra.Command {
 				return err
 			}
 			if status != http.StatusOK && status != http.StatusCreated {
-				return fmt.Errorf("gate request failed: HTTP %d: %s", status, strings.TrimSpace(string(body)))
+				return fmt.Errorf("running the evals gate: %s", describeAPIRefusal(status, body))
 			}
 			var gate struct {
 				ID               string   `json:"id"`
@@ -387,7 +387,7 @@ func runLabelSession(ctx context.Context, cfg *evalsClientConfig, stdin io.Reade
 			return fmt.Errorf("posting label for %s: %w", cand.CaseKey, err)
 		}
 		if status != http.StatusCreated {
-			return fmt.Errorf("posting label for %s: HTTP %d: %s", cand.CaseKey, status, strings.TrimSpace(string(body)))
+			return fmt.Errorf("posting label for %s: %s", cand.CaseKey, describeAPIRefusal(status, body))
 		}
 		labeled++
 		fmt.Fprintf(out, "  saved (%d labeled so far)\n", labeled)
@@ -395,8 +395,11 @@ func runLabelSession(ctx context.Context, cfg *evalsClientConfig, stdin io.Reade
 	if err := scan.Err(); err != nil {
 		return err
 	}
-	fmt.Fprintf(out, "\nsession done: %d labeled, %d skipped, %d already labeled (resumed)\n", labeled, skipped, resumed)
-	fmt.Fprintf(out, "next: POST /v1/m/evals/calibration/run {\"set_name\":%q,\"judge_model\":\"<pin>\"} to measure the judge\n", set)
+	r := renderTo(out)
+	r.Blank()
+	r.Line(fmt.Sprintf("session done: %d labeled, %d skipped, %d already labeled (resumed)", labeled, skipped, resumed))
+	r.Next(fmt.Sprintf("POST /v1/m/evals/calibration/run {\"set_name\":%q,\"judge_model\":\"<pin>\"}", set))
+	r.Line("      (this is what measures the judge)")
 	return nil
 }
 
@@ -435,7 +438,7 @@ func labeledCaseKeys(ctx context.Context, cfg *evalsClientConfig, set string) (m
 			return nil, err
 		}
 		if status != http.StatusOK {
-			return nil, fmt.Errorf("listing labeled items: HTTP %d: %s", status, strings.TrimSpace(string(body)))
+			return nil, fmt.Errorf("listing labeled items: %s", describeAPIRefusal(status, body))
 		}
 		var page struct {
 			Items []struct {
