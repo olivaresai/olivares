@@ -463,7 +463,7 @@ describe('Tabs — the current tab is revealed again after geometry changes', ()
     expect(document.activeElement).toBe(tabs[10])
     expect(list.scrollLeft).toBe(134)
     // 390: the strip is now 16–374 (358 px); with scrollLeft still 134 the same tab
-    // reports 1033–1168, entirely outside — the review's measurement.
+    // reports 1033–1168, entirely outside — as measured.
     layout(list, {
       scrollWidth: 1286,
       clientWidth: 358,

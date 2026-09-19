@@ -19,9 +19,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { DataTable, type TableColumn } from '@/components/data/data-table'
 import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
 import { EmptyState } from '@/components/ui/empty-state'
-import { PageHeader } from '@/components/ui/page-header'
+import { PageHeader, WORK_CHROME_ROW } from '@/components/ui/page-header'
 import {
   Select,
   SelectContent,
@@ -29,7 +28,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
 import {
@@ -46,7 +44,7 @@ import { ApiError } from '@/lib/api/errors'
 import { useAuth } from '@/lib/auth/context'
 import { formatInt, formatMicroUsd, formatTokens } from '@/lib/format'
 import { useValidatedUrlState } from '@/lib/hooks/use-url-state'
-import { UrlStateNotice } from '@/features/shared'
+import { NamesUnreadNotice, UrlStateNotice } from '@/features/shared'
 import { cn } from '@/lib/utils'
 import { sessionsApi, sessionsKeys } from './api'
 import {
@@ -66,12 +64,14 @@ import { CcStateBadge } from './cc-state-badge'
 import {
   mergeSessions,
   primaryRun,
-  sessionLabel,
   sessionSearchKey,
+  sessionTitle,
   type Provenance,
   type UnifiedSession,
 } from './provenance'
 import { SessionCard } from './session-card'
+import { chooseDefaultAddress } from './default-selection'
+import { groupSessions, railOrder } from './session-groups'
 import { useSessionPins } from './use-session-pins'
 import { useSessionResolution } from './use-session-resolution'
 import { WorkSurface } from './work-surface'
@@ -397,6 +397,7 @@ function Inner({
   const canLiveRead = can('sessions:live:read')
   const canRunRead = can('sessions:run:read')
   const canRunWrite = can('sessions:run:write')
+  const canProfileRead = can('sessions:profile:read')
 
   const [tab, setTab] = useState('sessions')
   const [state, setState] = useState<string>(ALL)
@@ -432,7 +433,7 @@ function Inner({
    * report is rendered — a deep link that quietly ignored half of what it was handed
    * would show the recipient a different screen than the author saw.
    */
-  const [address, patchAddress, addressIssues] = useValidatedUrlState(
+  const [urlAddress, patchAddress, addressIssues] = useValidatedUrlState(
     SESSION_ADDRESS_KEYS,
     decodeSessionAddress,
     { history: 'push' },
@@ -487,6 +488,23 @@ function Inner({
       }),
     [activeTenant, boundary.epoch],
   )
+
+  const profilesQuery = useQuery({
+    queryKey: agentOpsKeys.profiles(activeTenant, boundary.epoch, {
+      limit: 200,
+    }),
+    queryFn: ({ signal }) =>
+      agentOpsApi.listProfiles({ limit: 200 }, { signal }),
+    enabled: canProfileRead && !!activeTenant,
+  })
+  const profileNameByRef = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const p of profilesQuery.data?.items ?? []) {
+      const name = p.display_name?.trim() || p.driver
+      if (name) map.set(p.profile_ref, name)
+    }
+    return map
+  }, [profilesQuery.data])
 
   /**
    * ⛔ A NEW READER DOES NOT INHERIT THE PREVIOUS ONE'S PERMISSION TO PAINT.
@@ -831,6 +849,85 @@ function Inner({
   )
 
   /**
+   * THE SURFACE OPENS ON THE SESSION THAT MOST NEEDS A PERSON.
+   *
+   * ⛔ THE FLAGSHIP SCREEN OF THIS CYCLE ARRIVED EMPTY. With no session in the address
+   *    the narrative pane said `Select a session`, the context pane said `No session
+   *    selected` — two empty states side by side saying the same thing — and 60 % of
+   *    the screen was blank on arrival. A DOCUMENT may legitimately open empty. A
+   *    WORKBENCH never does: the reference opens on the thread that needs attention,
+   *    and so does this.
+   *
+   * ⛔ AND IT IS NOT A NEW ORDERING. `railOrder(groupSessions(...))` is the rail's OWN
+   *    reading order — needs attention first, then working, then settled, most recent
+   *    activity inside each — so the session the surface opens on is exactly the row
+   *    the rail puts at the top. A second ordering computed here would have been a
+   *    second answer to a question the rail already answers, and the two would have
+   *    disagreed the first time a group changed.
+   *
+   * ⛔ IT DOES NOT WRITE THE URL, AND THAT IS THE POINT. The address stays what the
+   *    author of a link wrote: a link that names no session still names no session, and
+   *    the recipient sees the same default the author saw rather than a url that
+   *    rewrote itself under them. `patchAddress` still owns every real choice — the
+   *    moment the operator opens a row, the address is theirs. The retired-selection
+   *    machinery below is untouched for the same reason: a default is not a selection
+   *    that was refused.
+   */
+  /**
+   * ⛔ AND IT NEVER OPENS ON A SESSION THIS EPISODE ALREADY RETIRED. That is the R2
+   *    invariant — *"restoring a read bit cannot revive a selected target"* — and a
+   *    default that ignored it would look exactly like the revival R2 forbids, even
+   *    though nothing here is a selection. The latch below is cleared only when the URL
+   *    names a session that resolves, i.e. when the operator chooses again, so a row
+   *    whose authority walked away stays out of the default until they do.
+   */
+  const [retiredAddress, setRetiredAddress] = useState<string | null>(null)
+
+  /**
+   * ⛔ AND IT DECIDES ONCE, WHICH IS A CORRECTION MEASURED IN A BROWSER, NOT A
+   *    REFINEMENT. The first version of this default recomputed on every change to
+   *    `sessions`, and `sessions` is a MERGE of two queries that answer at different
+   *    times and is then updated by a tenant-wide stream. `task -x console:walk` against
+   *    the seeded engine caught what that costs, and it was the walk's only finding on
+   *    77 screens:
+   *
+   *        200    /v1/m/sessions/live/sess-coder-9c21
+   *        FAILED /v1/m/sessions/stream?ref=sess-coder-9c21   net::ERR_ABORTED
+   *        200    /v1/m/sessions/live/by-id/01a0b46a-b277-…
+   *
+   *    The run half arrived first, the default resolved to a run-keyed address, the work
+   *    pane subscribed to its stream — and then the observed half landed, the merged row
+   *    changed address shape, and the subscription was torn down mid-open.
+   *
+   *    An aborted stream is the cheap half of the cost. The expensive half is that the
+   *    surface MOVED under whoever was reading it: a default that follows the list makes
+   *    the newest session steal the pane from the one an operator opened the screen to
+   *    read. A default is a starting point, not a live query.
+   *
+   *    So: nothing is defaulted while either half is still loading — "the session that
+   *    most needs a person" cannot be decided from half a list — and once a default is
+   *    chosen it is LATCHED. It moves only if its row leaves the list or is retired, and
+   *    any real selection is the operator's, through `patchAddress`.
+   */
+  const [latchedDefault, setLatchedDefault] = useState<string | null>(null)
+  const railOrdered = useMemo(
+    () => railOrder(groupSessions(sessions)),
+    [sessions],
+  )
+  const listSettling = liveQuery.isLoading || runsQuery.isLoading
+  const railDefault = chooseDefaultAddress({
+    settling: listSettling,
+    order: railOrdered,
+    retiredAddress,
+    latched: latchedDefault,
+  })
+  // Adjusted during render, like the address latch below and for the same reason: this
+  // is where the change is observable, and the guard makes it converge in one pass.
+  if (!listSettling && railDefault !== latchedDefault) {
+    setLatchedDefault(railDefault)
+  }
+
+  /**
    * THE ADDRESS BECOMES AN ADMITTED SELECTION — ONCE, WHEN IT CHANGES.
    *
    * Adjusted during render because that is where the change is observable and an effect
@@ -848,12 +945,14 @@ function Inner({
    * reads are answered by the engine, which refuses what this principal may not read.
    */
   const [seenAddress, setSeenAddress] = useState<string | null>(null)
-  if (seenAddress !== address.address) {
-    setSeenAddress(address.address)
-    const intent = address.address ? targetFromAddress(address.address) : null
+  if (seenAddress !== urlAddress.address) {
+    setSeenAddress(urlAddress.address)
+    const intent = urlAddress.address
+      ? targetFromAddress(urlAddress.address)
+      : null
     if (!intent) setSelection(null)
     else {
-      const row = sessions.find((s) => addressOf(s) === address.address)
+      const row = sessions.find((s) => addressOf(s) === urlAddress.address)
       setSelection({
         episode: episodio,
         needsLive: !!row?.live,
@@ -915,6 +1014,20 @@ function Inner({
   // column).
   const originUnknown = !runAdmitted || runsQuery.isError
 
+  // THE PROFILE DIRECTORY WAS NOT READ, and WHICH of the two ways it was not read.
+  // Refused and failed are separate lines because they are separate facts: one is a
+  // grant the reader does not hold, the other an answer that did not arrive, and only
+  // the second is worth retrying. Both are withheld unless a row in this table actually
+  // paints the dash — the cell falls back to the driver the row itself declares, so a
+  // table that never needed the directory gets no notice about it.
+  const profileNamesUnread = sessions.some(
+    (s) =>
+      s.profileRef && !profileNameByRef.get(s.profileRef) && !s.live?.provider,
+  )
+  const profileNamesRefused = !canProfileRead && profileNamesUnread
+  const profileNamesFailed =
+    canProfileRead && profilesQuery.isError && profileNamesUnread
+
   // An error blanks the table ONLY when it leaves nothing to show. A failed run lookup
   // while the observed half answered must not throw away the rows that DID arrive: it
   // becomes the "origin not read" column and the notice above, which is the honest
@@ -930,18 +1043,32 @@ function Inner({
         accessorFn: (s) => sessionSearchKey(s),
         header: t('cols.session'),
         cell: ({ row }) => {
-          const label = sessionLabel(row.original)
+          const label = sessionTitle(row.original, t('untitled'))
           const ref = row.original.sessionRef
+          /* ONE LINE, AND THE REFERENCE IS NOT LOST. The cell stacked the label over
+             the session reference, which with the INSTANCE column's own stack made
+             every row 110 px — and the widest column carried the least information.
+             The reference stays: it is still what `accessorFn: sessionSearchKey`
+             searches, so typing an id still finds the row; it is on the `title` here;
+             and it is printed in full in the inspector's identifiers block. */
+          /* …AND THE ROW STAYS ADDRESSABLE WITHOUT BEING READABLE. `data-address`
+             paints nothing: it carries the row's ADDRESS — `addressOf(s) === s.key`,
+             one of `sess:`/`live:`/`run:` plus the reference — which is the same string
+             the URL carries and the rail paints as `data-address` (work-rail.tsx:106).
+             It exists because once the label became a NAME, nothing in the row's DOM
+             named which session the row is: every unnamed observed row paints the same
+             `Untitled session`, so a test (or any other reader) locating a row by its
+             text can no longer tell two of them apart — and an assertion that a row
+             LEFT would hold for a row that never announced itself. The address is the
+             one name that covers all three row kinds: `sessionRef` alone is undefined
+             on a run-only row. */
           return (
-            <span className="flex flex-col">
-              <span className="font-mono text-caption font-medium text-foreground">
-                {label}
-              </span>
-              {ref && ref !== label && (
-                <span className="font-mono text-[11px] text-muted-foreground">
-                  {ref}
-                </span>
-              )}
+            <span
+              className="block truncate text-caption font-medium text-foreground"
+              data-address={addressOf(row.original)}
+              title={ref && ref !== label ? `${label} · ${ref}` : label}
+            >
+              {label}
             </span>
           )
         },
@@ -961,7 +1088,7 @@ function Inner({
         ),
       },
       {
-        // B2: which provider INSTANCE the row belongs to — the profile it is attributed
+        // Which provider INSTANCE the row belongs to — the profile it is attributed
         // to and the channel it was folded from. Legacy rows honestly show nothing.
         id: 'instance',
         accessorFn: (s) => s.profileRef ?? s.attribution ?? '',
@@ -972,15 +1099,44 @@ function Inner({
           const scoped = !!a && a !== 'legacy'
           if (!scoped && !s.profileRef)
             return <span className="text-muted-foreground">—</span>
+          /* ⛔ A FIELD LABEL IS NOT A VALUE, AND THIS RUNG USED TO BE ONE. The last
+             fallback here was `t('context.profile')` — "Provider profile", the label
+             the context pane puts BESIDE this reference — so a refused
+             `sessions:profile:read`, a failed lookup and a reference outside the page
+             the engine returned all painted a name no profile in the estate carries,
+             and the three were indistinguishable from a real one.
+
+             The ladder is now facts only: the name the directory read answered, else
+             the driver THIS ROW declares (`live.provider`), else nothing. With nothing
+             the cell paints the same quiet dash an empty cell paints and keeps the
+             whole reference on `title=` — the one place this screen has always left an
+             identifier reachable without reading it out. */
+          const profileName = s.profileRef
+            ? (profileNameByRef.get(s.profileRef) ?? s.live?.provider ?? null)
+            : null
           return (
-            <span className="flex flex-col items-start gap-0.5">
+            <span className="flex min-w-0 items-center gap-1.5">
               {scoped && <AttributionChip attribution={a} />}
               {s.profileRef && (
                 <span
-                  className="font-mono text-[11px] text-muted-foreground"
+                  className="min-w-0 truncate text-[11px] text-muted-foreground"
                   title={s.profileRef}
                 >
-                  {s.profileRef}
+                  {profileName ?? (
+                    /* ⛔ THE DASH SAYS "not known" TO A READER WHO CANNOT SEE IT. On its
+                       own it is a glyph, and the only accessible text on this cell was
+                       the raw `ppf_…` reference on `title` — which names the profile
+                       without saying that its NAME is the thing missing. The words are
+                       `sr-only` and not an `aria-label`: an `aria-label` on a generic
+                       `span` with no role is not reliably exposed. The reference stays
+                       on `title=`, where it always was. */
+                    <>
+                      <span aria-hidden="true">{'—'}</span>
+                      <span className="sr-only">
+                        {t('cols.instanceUnknown')}
+                      </span>
+                    </>
+                  )}
                 </span>
               )}
             </span>
@@ -994,8 +1150,12 @@ function Inner({
         cell: ({ row }) => {
           const s = row.original
           const run = primaryRun(s.runs)
+          /* `flex-nowrap`: the observed state and the run state are two
+             facts about one row and they belong on one line. `flex-wrap` stacked them
+             the moment the column narrowed, which doubled the height of every row in
+             the table to keep two 20 px badges apart. */
           return (
-            <span className="flex flex-wrap items-center gap-1">
+            <span className="flex flex-nowrap items-center gap-1">
               {s.live && <CcStateBadge state={s.live.cc_state} />}
               {run && <RunStateBadge state={run.state} />}
               {!s.live && !run && (
@@ -1093,7 +1253,7 @@ function Inner({
           ),
       },
     ],
-    [t, lang, originUnknown],
+    [t, lang, originUnknown, profileNameByRef],
   )
 
   /**
@@ -1141,24 +1301,65 @@ function Inner({
    * Both halves are adjusted during render; the clearing itself is a navigation and
    * lives in the effect below, which sets no state.
    */
-  const [retiredAddress, setRetiredAddress] = useState<string | null>(null)
-  if (address.address && !target && retiredAddress !== address.address)
-    setRetiredAddress(address.address)
-  if (address.address && target && retiredAddress !== null)
+  /* ⛔ THE RETIREMENT MACHINERY READS THE **URL**, NOT THE EFFECTIVE ADDRESS, and the
+     difference is the whole reason the two are separate values. A retirement
+     is a statement about a session the OPERATOR chose: their link named it and their
+     authority moved. The surface's default named nothing and was chosen by nobody, so
+     it can neither be retired nor produce the notice that says a choice expired — and
+     a `patchAddress` clearing a key that is already absent would be a navigation for
+     no reason on every render of an empty address. The state itself is declared beside
+     `railDefault` above, because the default reads it. */
+  if (urlAddress.address && !target && retiredAddress !== urlAddress.address)
+    setRetiredAddress(urlAddress.address)
+  if (urlAddress.address && target && retiredAddress !== null)
     setRetiredAddress(null)
 
-  const addressToClear = address.address && !target ? address.address : null
+  const addressToClear =
+    urlAddress.address && !target ? urlAddress.address : null
   useEffect(() => {
     if (!addressToClear) return
     patchAddress({ [SESSION_PARAM]: undefined }, { history: 'replace' })
   }, [addressToClear, patchAddress])
 
   /**
+   * WHAT THE SURFACE SHOWS: the admitted target the URL named, or — when the URL names
+   * none — the top row of the rail's own order.
+   *
+   * ⛔ THE DEFAULT DOES NOT GO THROUGH THE SELECTION MACHINERY, AND THE FIRST ATTEMPT
+   *    AT THIS DID. Writing it into `address` upstream looked tidier and was wrong in a
+   *    way a test caught: `setSelection` only re-runs when the address STRING changes,
+   *    so a row that was already the default kept a selection stamped before an
+   *    authority change, and clicking it — the same string — re-ran nothing. The row
+   *    stayed unopenable. Measured on
+   *    `sessions-workspace-view.partial-read-authority.test.tsx`, case
+   *    `spr-auth/joined-run-out/observed-target`.
+   *
+   * ⇒ The machinery exists for the HARD case: an address that arrives cold from a link
+   *   with no list behind it, which has to be admitted before anything is shown. A
+   *   default never arrives cold — it is READ OFF `sessions`, which is already the
+   *   admitted, half-stripped join — so it is derived fresh on every render and an
+   *   authority change moves it in the same render that strips the row.
+   *
+   * ⛔ AND IT IS NOT A SELECTION. It writes no URL, so a link that named no session
+   *   still names none and its recipient sees the same default its author saw; it is
+   *   never retired, because nobody chose it; and `retiredAddress` is excluded from it,
+   *   so the R2 invariant — a read bit coming back cannot revive a target the operator
+   *   never re-chose — holds by construction and not by argument.
+   */
+  const shownTarget =
+    target ?? (railDefault ? targetFromAddress(railDefault) : null)
+  const shownAddress = target ? urlAddress.address : railDefault
+  const address = useMemo(
+    () => ({ ...urlAddress, address: shownAddress }),
+    [urlAddress, shownAddress],
+  )
+
+  /**
    * THE OPEN SESSION, RESOLVED ONCE. The panes and the detail card are two views of
    * one answer, and the resolution carries an SSE subscription — so it is read here
    * and handed down, rather than each surface asking the engine for the same row.
    */
-  const resolution = useSessionResolution(target)
+  const resolution = useSessionResolution(shownTarget)
 
   /**
    * OPENING A SESSION IS A NAVIGATION, and the address is the only thing written here.
@@ -1223,189 +1424,99 @@ function Inner({
   const pins = useSessionPins()
 
   const showWorkspaces = canRunRead
-  // B1: the provider-profile plane has its OWN read tier, independent of runs — the
+  // The provider-profile plane has its OWN read tier, independent of runs — the
   // tab follows that permission, and the panel checks write/admin at each control.
   const showProfiles = can('sessions:profile:read')
   const canBindingRead = can('sessions:profile-binding:read')
   const title = entrance === 'operate' ? t('operateTitle') : t('title')
   const subtitle =
     entrance === 'operate' ? t('operateSubtitle') : t('unifiedSubtitle')
+  const loadingCounts = liveQuery.isLoading || runsQuery.isLoading
+  const countText = loadingCounts
+    ? ''
+    : [
+        `${formatInt(counts.total, lang)} ${t('summary.total')}`,
+        `${originUnknown ? '—' : formatInt(counts.launched, lang)} ${t('summary.launched')}`,
+        `${originUnknown ? '—' : formatInt(counts.discovered, lang)} ${t('summary.discovered')}`,
+        `${formatInt(counts.attention, lang)} ${t('summary.attention')}`,
+      ].join(' · ')
 
   return (
-    <div className="flex h-full flex-col gap-4">
-      <PageHeader
-        icon={entrance === 'operate' ? Terminal : Activity}
-        title={title}
-        description={subtitle}
-        actions={
-          <div className="flex items-center gap-2">
-            {canLiveRead && <LiveDot status={streamStatus} />}
-            {hayFuenteLegible && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={refrescarLegibles}
-                disabled={
-                  (canLiveRead && liveQuery.isFetching) ||
-                  (canRunRead && runsQuery.isFetching)
-                }
-              >
-                <RefreshCw
-                  className={cn(
-                    'size-3.5',
-                    ((canLiveRead && liveQuery.isFetching) ||
-                      (canRunRead && runsQuery.isFetching)) &&
-                      'animate-spin',
-                  )}
-                />
-                {t('refresh')}
-              </Button>
-            )}
-          </div>
-        }
-        primaryAction={
-          canRunWrite ? (
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => setCreateOpen(true)}
-            >
-              <Plus className="size-3.5" />
-              {t('launch')}
-            </Button>
-          ) : undefined
-        }
-      />
-
-      {/* ⛔ THE SUMMARY AND THE NOTICES SIT ABOVE THE TABS, and that is a
-          correction rather than a move. They describe the READS behind this
-          screen — what was counted, what could not be read, which page is
-          truncated — and those facts do not change with the presentation the
-          operator chose. Inside one tab they were a claim about the table; a
-          second copy inside the other would have been two places to keep in step. */}
-      {/* A REJECTED PARAMETER AND A RETIRED SELECTION ARE DIFFERENT FACTS, and they
-          are two notices rather than one: the first says the link you were handed
-          named something this console does not understand, the second says the link
-          was fine and your authority moved. Telling an operator to fix a URL that
-          was never wrong is how a console teaches the wrong lesson. */}
-      <UrlStateNotice issues={addressIssues} />
-      {retiredAddress && (
-        <p
-          role="status"
-          data-testid="sessions-address-retired"
-          className="rounded-md border border-border bg-muted px-2.5 py-2 text-caption text-muted-foreground"
-        >
-          {t('address.retired')}
-        </p>
-      )}
-      {/* WHAT THIS INVENTORY ACTUALLY COVERS. Every read behind it — the observed
-          list, the run list and the stream — is tenant-wide: none of them takes a
-          core-workspace selector, and neither DTO carries a workspace. Saying so
-          beside the counts is the honest half of removing the filter that was being
-          sent and ignored; a number the operator reads as "in my workspace" is
-          worse than a number labelled for what it is. It describes the SCOPE, not a
-          grant and not completeness — `partial.truncated` still owns the page
-          disclosure, and the notices still own what could not be read. */}
-      <p
-        className="text-caption text-muted-foreground"
-        data-testid="sessions-scope-note"
+    /* WORK MODE. `min-h-0` and `flex-1` so this screen DIVIDES the viewport
+       it was given instead of stacking inside a page that scrolls: every block above the
+       tabs is `shrink-0`, the tab body is `flex-1 min-h-0`, and each pane scrolls on its
+       own. `px-4 py-3` because the work frame carries no padding of its own — a
+       workbench's regions own theirs, and a frame that padded them would take 32 px off
+       the work on every side to no purpose. */
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col px-4 py-3 sm:px-6">
+      <Tabs
+        value={tab}
+        onValueChange={setTab}
+        /* `gap-2` and not `gap-3`: the chrome row, the notices and the panes are one
+           column, and eight pixels is what keeps the first rail row inside its budget
+           once the strip no longer costs a line of its own. */
+        className="flex min-h-0 flex-1 flex-col gap-2"
       >
-        {tn('workspace.tenantWide')}
-      </p>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Tile
-          label={t('summary.total')}
-          value={counts.total}
-          locale={lang}
-          loading={liveQuery.isLoading || runsQuery.isLoading}
-        />
-        {/* ⛔ MISSING METADATA IS NOT ZERO INVENTORY. These two tiles repeat the
-            ORIGIN column's claim, so they answer to the column's rule: with the run
-            half unread there is nothing to count launches against, and "0" would
-            report an empty inventory where the honest answer is that nobody looked.
-            The mark is the same "—" the row cells use, carrying the column's own
-            explanation. */}
-        <Tile
-          label={t('summary.launched')}
-          value={counts.launched}
-          locale={lang}
-          loading={runsQuery.isLoading}
-          unknown={originUnknown}
-          unknownHint={t('card.provenance.unknownExplain')}
-        />
-        <Tile
-          label={t('summary.discovered')}
-          value={counts.discovered}
-          locale={lang}
-          loading={liveQuery.isLoading}
-          unknown={originUnknown}
-          unknownHint={t('card.provenance.unknownExplain')}
-        />
-        <Tile
-          label={t('summary.attention')}
-          value={counts.attention}
-          tone={counts.attention > 0 ? 'danger' : undefined}
-          locale={lang}
-          loading={liveQuery.isLoading || runsQuery.isLoading}
-        />
-      </div>
-
-      {!canLiveRead && (
-        <p className="rounded-md border border-border bg-muted px-2.5 py-2 text-caption text-muted-foreground">
-          {t('partial.noLiveRead')}
-        </p>
-      )}
-      {!canRunRead && (
-        <p className="rounded-md border border-border bg-muted px-2.5 py-2 text-caption text-muted-foreground">
-          {t('partial.noRunRead')}
-        </p>
-      )}
-      {canRunRead && runsQuery.isError && (
-        <p className="rounded-md border border-warning-line bg-warning-soft px-2.5 py-2 text-caption text-warning">
-          {t('partial.runLookupFailed')}
-        </p>
-      )}
-      {canLiveRead && liveQuery.isError && (
-        <p className="rounded-md border border-warning-line bg-warning-soft px-2.5 py-2 text-caption text-warning">
-          {t('partial.liveLookupFailed')}
-        </p>
-      )}
-      {truncated && (
-        <p className="rounded-md border border-warning-line bg-warning-soft px-2.5 py-2 text-caption text-warning">
-          {t('partial.truncated')}
-        </p>
-      )}
-
-      <Tabs value={tab} onValueChange={setTab}>
-        <TabsList>
-          <TabsTrigger value="sessions">{t('tabs.sessions')}</TabsTrigger>
-          {/* ⛔ THE TABLE IS NOT DELETED, IT IS A TAB (the answer to a problem is never
-              to remove a function). The surface tells an operator what
-              each session is doing; the table sorts two hundred of them by cost and
-              searches every reference. They are different instruments, and this screen
-              keeps both. */}
-          <TabsTrigger value="table">{t('tabs.table')}</TabsTrigger>
-          {showWorkspaces && (
-            <TabsTrigger value="workspaces">{t('tabs.workspaces')}</TabsTrigger>
-          )}
-          {showProfiles && (
-            <TabsTrigger value="profiles">{t('tabs.profiles')}</TabsTrigger>
-          )}
-        </TabsList>
-
-        <TabsContent value="sessions" className="mt-4 flex flex-col gap-4">
-          <WorkSurface
-            sessions={sessions}
-            loading={liveQuery.isLoading || runsQuery.isLoading}
-            address={address}
-            resolution={resolution}
-            pinned={pins.pinned}
-            onTogglePin={pins.toggle}
-            onOpen={abrirDelCarril}
-            onPane={elegirPanel}
-            onEvidence={elegirEvidencia}
-            onOpenDetail={() => setDetailOpen(true)}
-            emptyAction={
+        {/* ⛔ TITLE AND TAB STRIP SHARE ONE 36 px ROW, AND THEY USED TO BE TWO.
+            Measured on the seeded estate at 1440×900: a 24 px title line, a 12 px gap and
+            a 36 px strip put the first rail row at y=181 against a budget of 136 — 45 px
+            of chrome above the work, on the screen this console opens on. The shape is
+            the one `/console` and `/provider-profiles` already carry: the header shrinks,
+            the strip takes what is left, and the counts and the scope note stay on the
+            title line where they were. */}
+        <div
+          data-slot="work-chrome"
+          className={cn(WORK_CHROME_ROW, 'shrink-0')}
+        >
+          <PageHeader
+            className="min-w-0"
+            actionsPanelAnchor="row"
+            icon={entrance === 'operate' ? Terminal : Activity}
+            title={title}
+            description={
+              <>
+                {subtitle}
+                {countText ? (
+                  <>
+                    {' '}
+                    <span data-testid="sessions-summary">
+                      {countText}
+                      {' · '}
+                      <span data-testid="sessions-scope-note">
+                        {tn('workspace.tenantWide')}
+                      </span>
+                    </span>
+                  </>
+                ) : null}
+              </>
+            }
+            actions={
+              <div className="flex items-center gap-2">
+                {canLiveRead && <LiveDot status={streamStatus} />}
+                {hayFuenteLegible && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={refrescarLegibles}
+                    disabled={
+                      (canLiveRead && liveQuery.isFetching) ||
+                      (canRunRead && runsQuery.isFetching)
+                    }
+                  >
+                    <RefreshCw
+                      className={cn(
+                        'size-3.5',
+                        ((canLiveRead && liveQuery.isFetching) ||
+                          (canRunRead && runsQuery.isFetching)) &&
+                          'animate-spin',
+                      )}
+                    />
+                    {t('refresh')}
+                  </Button>
+                )}
+              </div>
+            }
+            primaryAction={
               canRunWrite ? (
                 <Button
                   variant="primary"
@@ -1418,55 +1529,173 @@ function Inner({
               ) : undefined
             }
           />
-        </TabsContent>
+          <TabsList className="min-w-0">
+            <TabsTrigger value="sessions">{t('tabs.sessions')}</TabsTrigger>
+            {/* ⛔ THE TABLE IS NOT DELETED, IT IS A TAB (the answer to a problem is never
+              to remove a function). The surface tells an operator what
+              each session is doing; the table sorts two hundred of them by cost and
+              searches every reference. They are different instruments, and this screen
+              keeps both. */}
+            <TabsTrigger value="table">{t('tabs.table')}</TabsTrigger>
+            {showWorkspaces && (
+              <TabsTrigger value="workspaces">
+                {t('tabs.workspaces')}
+              </TabsTrigger>
+            )}
+            {showProfiles && (
+              <TabsTrigger value="profiles">{t('tabs.profiles')}</TabsTrigger>
+            )}
+          </TabsList>
+        </div>
 
-        <TabsContent value="table" className="mt-4 flex flex-col gap-4">
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <Select value={source} onValueChange={setSource}>
-              <SelectTrigger
-                className="h-7 w-auto min-w-[9rem] text-caption"
-                aria-label={t('allSources')}
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL}>{t('allSources')}</SelectItem>
-                <SelectItem value="launched">
-                  {t('card.provenance.launched')}
-                </SelectItem>
-                <SelectItem value="discovered">
-                  {t('card.provenance.discovered')}
-                </SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={state} onValueChange={setState}>
-              <SelectTrigger
-                className="h-7 w-auto min-w-[11rem] text-caption"
-                aria-label={t('allStates')}
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL}>{t('allStates')}</SelectItem>
-                {OBSERVED_STATES.map((s) => (
-                  <SelectItem key={`obs:${s}`} value={`obs:${s}`}>
-                    {t('facet.observed', { state: t(`state.${s}`) })}
-                  </SelectItem>
-                ))}
-                {RUN_STATES.map((s) => (
-                  <SelectItem key={`run:${s}`} value={`run:${s}`}>
-                    {t('facet.run', { state: t(`runState.${s}`) })}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+        <UrlStateNotice issues={addressIssues} />
+        {retiredAddress && (
+          <p
+            role="status"
+            data-testid="sessions-address-retired"
+            className="rounded-md border border-border bg-muted px-2.5 py-2 text-caption text-muted-foreground"
+          >
+            {t('address.retired')}
+          </p>
+        )}
 
-          <DataTable
-            columns={columns}
-            data={rows}
-            isLoading={liveQuery.isLoading || runsQuery.isLoading}
-            /* THE REPLACEMENT IS FOR WHEN NOTHING IS LEFT TO SHOW, and its condition is
+        {!canLiveRead && (
+          <p className="rounded-md border border-border bg-muted px-2.5 py-2 text-caption text-muted-foreground">
+            {t('partial.noLiveRead')}
+          </p>
+        )}
+        {!canRunRead && (
+          <p className="rounded-md border border-border bg-muted px-2.5 py-2 text-caption text-muted-foreground">
+            {t('partial.noRunRead')}
+          </p>
+        )}
+        {canRunRead && runsQuery.isError && (
+          <p className="rounded-md border border-warning-line bg-warning-soft px-2.5 py-2 text-caption text-warning">
+            {t('partial.runLookupFailed')}
+          </p>
+        )}
+        {canLiveRead && liveQuery.isError && (
+          <p className="rounded-md border border-warning-line bg-warning-soft px-2.5 py-2 text-caption text-warning">
+            {t('partial.liveLookupFailed')}
+          </p>
+        )}
+        {truncated && (
+          <p className="rounded-md border border-warning-line bg-warning-soft px-2.5 py-2 text-caption text-warning">
+            {t('partial.truncated')}
+          </p>
+        )}
+        {/* ⛔ THE INSTANCE CELL'S DASH HAS FOUR CAUSES AND SAYS ONE THING. Refused (the
+            grant is absent, so the read is never made), refused by the engine, failed,
+            and "the profile is older than the page the engine returned" all reach the
+            same quiet dash. The row can only be honest about the VALUE; WHICH of the
+            four happened is a fact about the READ, and only this surface holds it.
+            Said once for the table, in the shape the findings table already uses, and
+            only when it changes something: a table with no unnamed profile in it gets
+            no line regretting a read it did not need. The fourth cause stays silent on
+            purpose — there the read ANSWERED, and "it is not in this page" is what the
+            truncation notice above already says. */}
+        {profileNamesRefused && (
+          <NamesUnreadNotice testId="sessions-profile-names-refused">
+            {t('partial.noProfileRead')}
+          </NamesUnreadNotice>
+        )}
+        {profileNamesFailed && (
+          <NamesUnreadNotice testId="sessions-profile-names-failed">
+            {t('partial.profileLookupFailed')}
+          </NamesUnreadNotice>
+        )}
+
+        <div
+          data-testid="sessions-panes"
+          className="flex min-h-0 flex-1 flex-col"
+        >
+          <TabsContent
+            value="sessions"
+            className="flex min-h-0 flex-1 flex-col gap-3 pt-0"
+          >
+            <WorkSurface
+              sessions={sessions}
+              loading={liveQuery.isLoading || runsQuery.isLoading}
+              address={address}
+              resolution={resolution}
+              pinned={pins.pinned}
+              onTogglePin={pins.toggle}
+              onOpen={abrirDelCarril}
+              onPane={elegirPanel}
+              onEvidence={elegirEvidencia}
+              onOpenDetail={() => setDetailOpen(true)}
+              /* ⛔ NOT A SECOND PRIMARY. The page header already carries
+               `New session` as THE verb of this screen; a second primary of the same
+               weight three centimetres below it, inside an empty state, meant the
+               screen had two firsts and therefore none. It is an outline now: the same
+               action, the same dialog, offered where the operator is looking without
+               competing with the header's own. And it only appears at all with
+               `sessions:run:write`, which has not changed. */
+              emptyAction={
+                canRunWrite ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCreateOpen(true)}
+                  >
+                    <Plus className="size-3.5" />
+                    {t('launch')}
+                  </Button>
+                ) : undefined
+              }
+            />
+          </TabsContent>
+
+          <TabsContent
+            value="table"
+            className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pt-0"
+          >
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <Select value={source} onValueChange={setSource}>
+                <SelectTrigger
+                  className="h-7 w-auto min-w-[9rem] text-caption"
+                  aria-label={t('allSources')}
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL}>{t('allSources')}</SelectItem>
+                  <SelectItem value="launched">
+                    {t('card.provenance.launched')}
+                  </SelectItem>
+                  <SelectItem value="discovered">
+                    {t('card.provenance.discovered')}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={state} onValueChange={setState}>
+                <SelectTrigger
+                  className="h-7 w-auto min-w-[11rem] text-caption"
+                  aria-label={t('allStates')}
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL}>{t('allStates')}</SelectItem>
+                  {OBSERVED_STATES.map((s) => (
+                    <SelectItem key={`obs:${s}`} value={`obs:${s}`}>
+                      {t('facet.observed', { state: t(`state.${s}`) })}
+                    </SelectItem>
+                  ))}
+                  {RUN_STATES.map((s) => (
+                    <SelectItem key={`run:${s}`} value={`run:${s}`}>
+                      {t('facet.run', { state: t(`runState.${s}`) })}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <DataTable
+              columns={columns}
+              data={rows}
+              isLoading={liveQuery.isLoading || runsQuery.isLoading}
+              /* THE REPLACEMENT IS FOR WHEN NOTHING IS LEFT TO SHOW, and its condition is
                unchanged on purpose: both readable halves have to be out before the grid
                becomes a state. Admission decides what is PAINTED; this decides whether
                there is a table at all, and conflating them would turn one half's refusal
@@ -1474,57 +1703,64 @@ function Inner({
                against. `TableError` then reports what actually happened (step-up before
                plain 403, network apart from both — data-table.tsx:932), so a 5xx is never
                dressed as a permission denial. */
-            error={
-              (!canLiveRead || liveQuery.isError) &&
-              (!canRunRead || runsQuery.isError)
-                ? (liveQuery.error ?? runsQuery.error)
-                : undefined
-            }
-            onRetry={refrescarLegibles}
-            getRowId={(s) => s.key}
-            onRowClick={abrirFila}
-            searchable
-            searchPlaceholder={t('search')}
-            stickyHeader
-            label={t('title')}
-            empty={
-              <EmptyState
-                icon={<Activity />}
-                title={t('empty.title')}
-                description={t('empty.description')}
-              />
-            }
-          />
-        </TabsContent>
+              error={
+                (!canLiveRead || liveQuery.isError) &&
+                (!canRunRead || runsQuery.isError)
+                  ? (liveQuery.error ?? runsQuery.error)
+                  : undefined
+              }
+              onRetry={refrescarLegibles}
+              getRowId={(s) => s.key}
+              onRowClick={abrirFila}
+              searchable
+              searchPlaceholder={t('search')}
+              stickyHeader
+              label={t('title')}
+              empty={
+                <EmptyState
+                  icon={<Activity />}
+                  title={t('empty.title')}
+                  description={t('empty.description')}
+                />
+              }
+            />
+          </TabsContent>
 
-        {showWorkspaces && (
-          <TabsContent value="workspaces" className="mt-4">
-            <WorkspacesPanel />
-          </TabsContent>
-        )}
-        {showProfiles && (
-          <TabsContent value="profiles" className="mt-4 flex flex-col gap-3">
-            {/* The plane also has its own doors, each entered on its own read tier. */}
-            <p className="text-caption text-muted-foreground">
-              {ta('profiles.view.crossHint')}{' '}
-              <Link to={'/provider-profiles' as never} className="underline">
-                {ta('profiles.view.openProfiles')}
-              </Link>
-              {canBindingRead && (
-                <>
-                  {' · '}
-                  <Link
-                    to={'/provider-bindings' as never}
-                    className="underline"
-                  >
-                    {ta('profiles.view.openBindings')}
-                  </Link>
-                </>
-              )}
-            </p>
-            <ProfilesPanel />
-          </TabsContent>
-        )}
+          {showWorkspaces && (
+            <TabsContent
+              value="workspaces"
+              className="min-h-0 flex-1 overflow-y-auto pt-0"
+            >
+              <WorkspacesPanel />
+            </TabsContent>
+          )}
+          {showProfiles && (
+            <TabsContent
+              value="profiles"
+              className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pt-0"
+            >
+              {/* The plane also has its own doors, each entered on its own read tier. */}
+              <p className="text-caption text-muted-foreground">
+                {ta('profiles.view.crossHint')}{' '}
+                <Link to={'/provider-profiles' as never} className="underline">
+                  {ta('profiles.view.openProfiles')}
+                </Link>
+                {canBindingRead && (
+                  <>
+                    {' · '}
+                    <Link
+                      to={'/provider-bindings' as never}
+                      className="underline"
+                    >
+                      {ta('profiles.view.openBindings')}
+                    </Link>
+                  </>
+                )}
+              </p>
+              <ProfilesPanel />
+            </TabsContent>
+          )}
+        </div>
       </Tabs>
 
       <RunCreateDialog open={createOpen} onOpenChange={setCreateOpen} />
@@ -1571,50 +1807,5 @@ function ProvenanceChip({
       )}
       {t(`card.provenance.${key}`)}
     </span>
-  )
-}
-
-function Tile({
-  label,
-  value,
-  tone,
-  locale,
-  loading,
-  unknown,
-  unknownHint,
-}: {
-  label: string
-  value: number
-  tone?: 'danger'
-  locale?: string
-  loading?: boolean
-  /** The half this number counts was not read: say so instead of printing a total
-   * derived from evidence nobody has. */
-  unknown?: boolean
-  unknownHint?: string
-}) {
-  return (
-    <Card className="p-3">
-      <div className="text-caption text-muted-foreground">{label}</div>
-      {loading ? (
-        <Skeleton className="mt-1 h-7 w-12" />
-      ) : unknown ? (
-        <div
-          className="font-display text-display tabular-nums text-muted-foreground"
-          title={unknownHint}
-        >
-          —
-        </div>
-      ) : (
-        <div
-          className={cn(
-            'font-display text-display tabular-nums',
-            tone === 'danger' ? 'text-danger' : 'text-foreground',
-          )}
-        >
-          {formatInt(value, locale)}
-        </div>
-      )}
-    </Card>
   )
 }

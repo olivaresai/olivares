@@ -54,31 +54,48 @@ export function NextStep() {
       >
         {t('next.title')}
       </h2>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      {/* ONE LINE PER VERB. Three 96 px cards — a 36 px icon chip beside a
+          heading and a wrapping description — were 96 px of the front door spent on
+          three links. One line each, 44 px, same three verbs, same three destinations,
+          same permissions: the description follows the title in the muted register and
+          truncates with it. The verb is what an operator reads; its explanation is
+          what they read if the verb was not enough. */}
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
         {offered.map(({ step, view }) => {
           const Icon = view!.icon
+          const full = `${t(`next.${step.id}.title`)} · ${t(
+            `next.${step.id}.description`,
+          )}`
           return (
             <Link
               key={step.id}
               to={view!.path as never}
               data-testid={`home-next-step-${step.id}`}
-              className="group flex items-start gap-3 rounded-lg border border-border bg-surface p-4 shadow-xs outline-none transition hover:border-accent-line hover:bg-elevated focus-visible:ring-2 focus-visible:ring-ring"
+              title={full}
+              className="group flex min-w-0 items-center gap-2 rounded-lg border border-border bg-surface px-3 py-2.5 outline-none transition hover:border-accent-line hover:bg-elevated focus-visible:ring-2 focus-visible:ring-ring"
             >
-              <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent-soft-foreground [&_svg]:size-5">
-                <Icon />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="flex items-center gap-1.5 text-heading text-foreground">
+              {/* ⛔ THE ICON IS MUTED, AND IT WAS THE ACCENT. The bar spends the one
+                  orange on three things only — selection, the primary action, and
+                  links — and this glyph is none of them: it repeats what the verb
+                  beside it already says. An accent that also decorates stops marking
+                  anything, which is what an independent review measured here. */}
+              <Icon
+                aria-hidden
+                className="size-4 shrink-0 text-muted-foreground"
+              />
+              <span className="min-w-0 flex-1 truncate text-body" title={full}>
+                <span className="font-medium text-foreground">
                   {t(`next.${step.id}.title`)}
-                  <ArrowRight
-                    aria-hidden
-                    className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5"
-                  />
                 </span>
-                <span className="mt-0.5 block text-body text-muted-foreground">
+                <span className="text-muted-foreground">
+                  {' · '}
                   {t(`next.${step.id}.description`)}
                 </span>
               </span>
+              <ArrowRight
+                aria-hidden
+                className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5"
+              />
             </Link>
           )
         })}

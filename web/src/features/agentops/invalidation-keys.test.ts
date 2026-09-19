@@ -54,7 +54,7 @@ describe('claves de invalidación de agentops', () => {
     expect(agentOpsKeys.workspaces(t, { limit: 50 })).toHaveLength(4)
   })
 
-  // B1: las dos listas del plano de perfiles siguen la MISMA regla que workspaces — la
+  // Las dos listas del plano de perfiles siguen la MISMA regla que workspaces — la
   // clave sin params es prefijo de la que usa la lista y no arrastra un elemento de más —,
   // y la configuración (la única lectura con rutas) cuelga de SU perfil: invalidar el perfil
   // la alcanza, invalidar la lista no la toca, y todas llevan el inquilino en el mismo hueco.

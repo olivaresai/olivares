@@ -361,3 +361,43 @@ describe('HealthView — incidents resolve RBAC', () => {
     expect(await screen.findByText('Possible evasion')).toBeInTheDocument()
   })
 })
+
+/**
+ * THE SENTENCE NAMED THE NEXT STEP AND THE SCREEN DID NOT OFFER IT.
+ *
+ * "Once a health check is declared for an agent or MCP server, its liveness appears
+ * here" is true, and the place a check is declared is the Checks tab of this very
+ * page: one click away and never mentioned. The census counted this among the ten
+ * empty states with no action.
+ */
+describe('HealthView — the empty status list', () => {
+  beforeEach(() => {
+    vi.mocked(healthApi.status).mockResolvedValue({
+      items: [],
+      has_more: false,
+    })
+  })
+
+  it('offers the tab where a check is declared', async () => {
+    const user = userEvent.setup()
+    renderView()
+    const declare = await screen.findByRole('button', {
+      name: 'Declare a check',
+    })
+    await user.click(declare)
+    // The door leads somewhere: the Checks tab is now the selected one.
+    await waitFor(() =>
+      expect(
+        screen.getByRole('tab', { name: 'Checks' }).getAttribute('data-state'),
+      ).toBe('active'),
+    )
+  })
+
+  it('offers no door to a reader who may not declare one', async () => {
+    // An empty state never offers a control that answers 403 on the other side.
+    perm.write = false
+    renderView()
+    await screen.findByText('No subjects monitored yet')
+    expect(screen.queryByRole('button', { name: 'Declare a check' })).toBeNull()
+  })
+})

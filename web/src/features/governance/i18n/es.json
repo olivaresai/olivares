@@ -658,7 +658,8 @@
     "notWiredBody": "No hay ningún exportador de AgentCore configurado para este inquilino, así que el motor rechaza la petición. Un operador la habilita en el host apuntando esta variable al fichero de configuración de la exportación:",
     "notWiredCredentials": "Ese fichero es del operador y contiene credenciales de escritura de AWS. La consola nunca lo muestra, ni lo pide, ni lo edita.",
     "deniedTitle": "El motor ha rechazado esta exportación",
-    "pageTitle": "Exportación a AgentCore"
+    "pageTitle": "Exportación a AgentCore",
+    "emptyAction": "Calcular el primer plan"
   },
   "registerAgent": {
     "action": "Registrar agente",

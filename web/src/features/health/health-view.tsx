@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { EmptyState } from '@/components/ui/empty-state'
 import { ErrorState, ForbiddenState } from '@/components/ui/error-state'
+import { CaveatNotice } from '@/features/_intel'
 import { PageHeader } from '@/components/ui/page-header'
 import {
   Select,
@@ -87,6 +88,9 @@ export function HealthView() {
   const { t } = useTranslation('health')
   const { activeTenant, can } = useAuth()
   const canReadChecks = can('health:check:read')
+  // Declaring a check is what puts a subject on this page; the tab that does it is
+  // one click away, and it is only a door for a reader who may walk through it.
+  const canDeclareCheck = canReadChecks && can('health:check:write')
 
   const [stateFacet, setStateFacet] = useState<string>(ALL)
   const [kindFacet, setKindFacet] = useState<string>(ALL)
@@ -167,14 +171,19 @@ export function HealthView() {
       <PageHeader
         icon={HeartPulse}
         title={t('title')}
-        description={
-          <span className="space-y-1">
-            <span className="block max-w-2xl">{t('subtitle')}</span>
-            <span className="flex items-center gap-1.5 text-caption">
-              <ShieldCheck className="size-3.5 shrink-0 text-confidence-attributed" />
-              {t('auditedNote')}
-            </span>
-          </span>
+        /* ⛔ THE TITLE LINE IS ONE LINE, AND THIS DESCRIPTION WAS TWO. `PageHeader`
+           renders the description as a single truncated line beside the heading; a
+           node with two block children stacks inside it regardless, and the title
+           block measured 45 px against the 40 px budget on this route and on the
+           only other one that did the same. The subtitle is the description; the
+           audited note is a notice, which is the slot the header already has for
+           exactly this kind of honesty marker. */
+        description={t('subtitle')}
+        notices={
+          <CaveatNotice tone="info">
+            <ShieldCheck className="size-3.5 shrink-0 text-confidence-attributed" />
+            {t('auditedNote')}
+          </CaveatNotice>
         }
         actions={
           <div className="flex items-center gap-3">
@@ -281,6 +290,9 @@ export function HealthView() {
                 setStateFacet={setStateFacet}
                 kindFacet={kindFacet}
                 setKindFacet={setKindFacet}
+                onDeclare={
+                  canDeclareCheck ? () => setActiveTab('checks') : null
+                }
               />
             </TabsContent>
 
@@ -362,6 +374,7 @@ function StatusTab({
   setStateFacet,
   kindFacet,
   setKindFacet,
+  onDeclare,
 }: {
   rows: StatusDTO[]
   isLoading: boolean
@@ -372,6 +385,9 @@ function StatusTab({
   setStateFacet: (v: string) => void
   kindFacet: string
   setKindFacet: (v: string) => void
+  /** Open the tab where a check is declared, or `null` for a reader who may not
+   *  declare one — an empty state never offers a door that answers 403. */
+  onDeclare: (() => void) | null
 }) {
   const { t } = useTranslation('health')
 
@@ -550,19 +566,31 @@ function StatusTab({
         searchable
         searchPlaceholder={t('status.searchPlaceholder')}
         stickyHeader
-        empty={<StatusEmpty />}
+        empty={<StatusEmpty onDeclare={onDeclare} />}
       />
     </div>
   )
 }
 
-function StatusEmpty() {
+function StatusEmpty({ onDeclare }: { onDeclare: (() => void) | null }) {
   const { t } = useTranslation('health')
+  // ⛔ THE SENTENCE NAMED THE NEXT STEP AND THE SCREEN DID NOT OFFER IT. "Once a health
+  //    check is declared for an agent or MCP server, its liveness appears here" is
+  //    true, and the place a check is declared is the Checks tab of this very page —
+  //    one tab away and never mentioned. The action goes where the requirement is
+  //    stated, and only for a reader who holds `health:check:write`.
   return (
     <EmptyState
       icon={<HeartPulse />}
       title={t('status.empty.title')}
       description={t('status.empty.description')}
+      action={
+        onDeclare ? (
+          <Button variant="primary" size="sm" onClick={onDeclare}>
+            {t('status.empty.declare')}
+          </Button>
+        ) : null
+      }
     />
   )
 }

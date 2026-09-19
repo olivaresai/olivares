@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { act } from 'react'
 import { renderIntel, screen, waitFor, within } from '@/test/intel'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -43,8 +44,14 @@ vi.mock('@/lib/auth/context', () => ({
     },
   }),
 }))
+// The stream is replaced by a HANDLE on the view's own `onEvent`, so a case can replay
+// a burst through exactly the path the engine's SSE frames take.
+const stream = vi.hoisted(() => ({ emit: null as null | (() => void) }))
 vi.mock('./stream', () => ({
-  useWorkStream: () => ({ status: 'connected' as const }),
+  useWorkStream: ({ onEvent }: { onEvent: () => void }) => {
+    stream.emit = onEvent
+    return { status: 'connected' as const }
+  },
 }))
 vi.mock('./api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./api')>()
@@ -52,6 +59,7 @@ vi.mock('./api', async (importOriginal) => {
 })
 
 import { WorkView } from './work-view'
+import { WORK_REFRESH_WINDOW_MS } from './coalesce'
 import { useWorkspaceStore } from '@/stores/workspace'
 import './i18n'
 import '@/features/_intel'
@@ -301,5 +309,49 @@ describe('I3 correction — offer from the item sheet', () => {
     expect(limits).toHaveTextContent(
       /cannot cancel or roll back a command already sent/i,
     )
+  })
+})
+
+describe('WorkView — a stream burst costs two list reads, not sixty', () => {
+  it('counts the requests, because a test that counted refreshes would have passed on the defect', async () => {
+    // ⛔ WHAT WAS MEASURED, and it is the reason this case exists. The operator walk of
+    //    2026-09-18 opened `/work` ONCE against a seeded estate and recorded 60 aborted
+    //    reads of `GET /v1/m/sessions/work-items?limit=100` — one per stream event,
+    //    each cancelling the one before it, because the view invalidated the whole work
+    //    key on every event while the list query carried an abort signal.
+    //
+    // ⛔ AND THE ASSERTION IS A COUNT ON PURPOSE. "the list is up to date" was true on
+    //    the defect: it was true sixty times. The only thing that tells the fix from the
+    //    defect is how many requests it took.
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      renderIntel(<WorkView />)
+      await waitFor(() => expect(api.listWorkItems).toHaveBeenCalled())
+      const afterFirstRead = api.listWorkItems.mock.calls.length
+      expect(stream.emit).not.toBeNull()
+
+      await act(async () => {
+        for (let i = 0; i < 60; i++) stream.emit?.()
+      })
+      await waitFor(() =>
+        expect(api.listWorkItems.mock.calls.length).toBeGreaterThan(
+          afterFirstRead,
+        ),
+      )
+      // The leading edge fired one read: sixty events so far, one read so far.
+      expect(api.listWorkItems.mock.calls.length - afterFirstRead).toBe(1)
+
+      // The window closes and spends the ONE refresh it owes for the other 59.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(WORK_REFRESH_WINDOW_MS)
+      })
+      await waitFor(() =>
+        expect(api.listWorkItems.mock.calls.length - afterFirstRead).toBe(2),
+      )
+      // Two. Never sixty.
+      expect(api.listWorkItems.mock.calls.length - afterFirstRead).toBe(2)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

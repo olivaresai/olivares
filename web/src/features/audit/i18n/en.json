@@ -4,6 +4,7 @@
   "subtitleSystem": "The system-tenant chain of cross-tenant administrative operations (read-only).",
   "searchLoaded": "Filter loaded rows only (client-side)…",
   "filters": {
+    "open": "Filters",
     "title": "Server-side ledger filters",
     "q": "Search ledger",
     "qPlaceholder": "Action, actor, target kind or ID",
@@ -62,6 +63,7 @@
   },
   "export": {
     "action": "Export",
+    "options": "Export options",
     "formatLabel": "Export format",
     "fromSeq": "From seq",
     "toSeq": "To seq",

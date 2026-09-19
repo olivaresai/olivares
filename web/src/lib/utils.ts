@@ -20,7 +20,7 @@ import { extendTailwindMerge } from 'tailwind-merge'
  *    `DeploymentIdentity` asks for `text-caption` (12px/18px) and the signed-out screen
  *    rendered it with `class="text-muted-foreground pb-6 text-center"` at **14px/22px**.
  *    The class was not overridden — it was gone. Four call sites had it at that tip
- *    (`deployment-identity.tsx:42`, `shell-launcher.tsx:101` and `:293`,
+ *    (`deployment-identity.tsx:42`, `work-composer.tsx:101` and `:293`,
  *    `ref-chip.tsx:60`), and every one of them is a component that composes through
  *    `cn`, which is all of them.
  *

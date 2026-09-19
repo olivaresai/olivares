@@ -195,6 +195,25 @@ export function OwnedModelsTab() {
           <EmptyState
             title={t('empty.ownedModels.title')}
             description={t('empty.ownedModels.description')}
+            // The description says "Register a … model"; the button is that sentence
+            // made clickable. It is the SAME action the section header offers, and it
+            // is offered on the same right: a reader without `canWrite` is told what
+            // the surface will hold and is not shown a door that answers 403.
+            action={
+              canWrite ? (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => {
+                    setEditing(null)
+                    setEditorOpen(true)
+                  }}
+                >
+                  <Plus />
+                  {t('owned.new')}
+                </Button>
+              ) : null
+            }
           />
         }
       />

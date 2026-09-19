@@ -25,7 +25,13 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { SavedViewsMenu } from '@/features/saved-views'
-import { isoDayBound, RelTimeLabel, UrlStateNotice } from '@/features/shared'
+import {
+  isoDayBound,
+  NamedRef,
+  RelTimeLabel,
+  UrlStateNotice,
+  useMemberNames,
+} from '@/features/shared'
 import { useAuth } from '@/lib/auth/context'
 import { formatInt } from '@/lib/format'
 import {
@@ -158,8 +164,12 @@ function rfc3339FromDay(value: string): string | undefined {
 
 export function RecordingsView() {
   const { t, i18n } = useTranslation('recordings')
+  const { t: tShared } = useTranslation('shared')
   const lang = i18n.language
   const { activeTenant } = useAuth()
+  // Who the recorded subject IS. The roster read is the people tab's own, gated on the
+  // same right, and it answers null rather than guessing when it is not permitted.
+  const memberNames = useMemberNames()
   const navigate = useNavigate()
 
   const [filters, patchUrlState, urlIssues] = useValidatedUrlState(
@@ -271,19 +281,27 @@ export function RecordingsView() {
         id: 'subject',
         accessorKey: 'subject',
         header: t('cols.subject'),
+        // ⛔ A PERSON, NOT `user:01a0b580-…`, AND ON ONE LINE. This cell stacked the
+        //    subject reference over the same uuid again and measured 45 px against the
+        //    36 px row budget — the tallest row in the console. Both halves were the
+        //    same fact written twice, and neither of them said who it was.
+        //
+        //    The name comes from the roster the people tab reads. Without that right,
+        //    or for a subject that is not a person, the cell paints what the engine
+        //    sent and the whole reference stays on `title`.
         cell: ({ row }) => {
           const s = row.original
+          const person = s.subject_kind === 'user'
           return (
-            <div className="min-w-0">
-              <div className="truncate font-mono text-caption font-medium text-foreground">
-                {s.subject}
-              </div>
-              {s.subject_user && (
-                <div className="truncate font-mono text-caption text-muted-foreground">
-                  {s.subject_user}
-                </div>
-              )}
-            </div>
+            <NamedRef
+              className="max-w-[320px]"
+              mono={!person}
+              name={
+                person ? memberNames.nameOf(s.subject_user ?? s.subject) : null
+              }
+              reference={s.subject}
+              fallback={person ? tShared('names.unknownUser') : s.subject}
+            />
           )
         },
       },
@@ -365,7 +383,7 @@ export function RecordingsView() {
         },
       },
     ],
-    [t, lang],
+    [t, tShared, lang, memberNames],
   )
 
   return (

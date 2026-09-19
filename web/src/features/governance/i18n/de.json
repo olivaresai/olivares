@@ -655,7 +655,8 @@
     "notWiredBody": "Für diesen Mandanten ist kein AgentCore-Exporter konfiguriert, daher lehnt die Engine die Anfrage ab. Ein Betreiber aktiviert ihn auf dem Host, indem er diese Variable auf die Export-Konfigurationsdatei zeigen lässt:",
     "notWiredCredentials": "Diese Datei gehört dem Betreiber und enthält AWS-Schreibanmeldedaten. Die Konsole zeigt sie nie an, fragt sie nie ab und bearbeitet sie nie.",
     "deniedTitle": "Die Engine hat diesen Export abgelehnt",
-    "pageTitle": "AgentCore-Export"
+    "pageTitle": "AgentCore-Export",
+    "emptyAction": "Ersten Plan berechnen"
   },
   "registerAgent": {
     "action": "Agent registrieren",

@@ -14,6 +14,8 @@ import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { ApiError } from '@/lib/api/errors'
+import { clippingAncestors } from '@/test/clipping'
+import { stubViewportWidth } from '@/test/viewport'
 import type { AuditEventDTO } from '@/lib/api/types'
 
 const toast = vi.hoisted(() => ({
@@ -57,6 +59,17 @@ vi.mock('@/features/saved-views', () => ({
     </button>
   ),
 }))
+
+// The directories the ledger names a reference from: the people roster and the
+// workspace list, each the read the console already makes for its own screen.
+const directory = vi.hoisted(() => ({
+  listMembers: vi.fn(),
+  listWorkspaces: vi.fn(),
+}))
+vi.mock('@/features/console/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/features/console/api')>()
+  return { ...actual, consoleApi: { ...actual.consoleApi, ...directory } }
+})
 
 const api = vi.hoisted(() => ({
   list: vi.fn(),
@@ -185,6 +198,23 @@ beforeEach(() => {
   navigate.mockReset()
   auth.isSuperadmin = false
   auth.activeTenant = 't1'
+  auth.can = (() => true) as unknown as typeof auth.can
+  directory.listMembers.mockReset()
+  directory.listWorkspaces.mockReset()
+  directory.listMembers.mockResolvedValue({
+    items: [
+      {
+        user_id: '01a0b580-4f7e-79b5-a98c-32aa681a4502',
+        display_name: 'Alice Ng',
+        email: 'a@n.test',
+      },
+    ],
+    has_more: false,
+  })
+  directory.listWorkspaces.mockResolvedValue({
+    items: [{ id: 'ws-1', name: 'Billing', slug: 'billing' }],
+    has_more: false,
+  })
   window.history.replaceState(null, '', '/audit')
   api.list.mockResolvedValue({ items: [], has_more: false })
   api.systemList.mockResolvedValue({ items: [], has_more: false })
@@ -197,6 +227,52 @@ beforeEach(() => {
 afterEach(() => {
   vi.clearAllMocks()
   window.history.replaceState(null, '', '/')
+})
+
+describe('AuditView — first work row', () => {
+  afterEach(() => stubViewportWidth(1440))
+
+  // The filter card + evidence card + self-audit strip sat above the ledger
+  // and put the first tbody row at y=569. Advanced fields open in a popover
+  // so they do not push the table down. The browser pins the pixel.
+  it('keeps advanced filters in a popover, not a card above the ledger', async () => {
+    api.list.mockResolvedValue({ items: [ev1], has_more: false })
+    wrap(<AuditView />)
+    const row = await screen.findByText('agent.create')
+    expect(row.closest('[data-slot="data-table"]')).toBeTruthy()
+    expect(screen.queryByRole('textbox', { name: 'Actor' })).toBeNull()
+    const chrome = screen
+      .getByRole('heading', { level: 1 })
+      .closest('[data-slot="work-chrome"]')
+    expect(chrome).toBeTruthy()
+    await userEvent.click(screen.getByRole('button', { name: /^filters$/i }))
+    expect(await screen.findByRole('textbox', { name: 'Actor' })).toBeVisible()
+    expect(screen.getByText('agent.create')).toBeInTheDocument()
+  })
+
+  // ⛔ AND ON A PHONE EVERY ONE OF THOSE CONTROLS IS BEHIND THE DISCLOSURE, WHICH THE ROW
+  //    USED TO CLIP. The row was `h-9 … overflow-hidden` and the panel opens `absolute
+  //    top-full` inside it: measured at 390×844, the panel's box ran y 98→244 inside a row
+  //    that ended at 100, `elementFromPoint` at its centre answered a `td`, and the scope
+  //    select, the filters, the saved views and the export were unreachable. The walk is
+  //    over CLASSES because jsdom loads no stylesheet (`@/test/clipping`); the computed
+  //    overflow and the hit test are measured by `code-r4/probe/panel.mjs`.
+  it('phone: nothing between the open panel and the page clips it', async () => {
+    api.list.mockResolvedValue({ items: [ev1], has_more: false })
+    stubViewportWidth(390)
+    wrap(<AuditView />)
+    const toggle = await screen.findByTestId('page-actions-toggle')
+    await userEvent.click(toggle)
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    const panel = document.querySelector(
+      '[data-slot="page-actions"]',
+    ) as HTMLElement
+    // Joined, so a failure NAMES the element that cut the panel on its one line.
+    expect(clippingAncestors(panel).join(' | ')).toBe('')
+    expect(
+      within(panel).getByRole('button', { name: /^filters$/i }),
+    ).toBeInTheDocument()
+  })
 })
 
 describe('AuditView — ledger list', () => {
@@ -226,12 +302,14 @@ describe('AuditView — ledger list', () => {
 
   it('sends validated server-side filters and RFC3339 UTC bounds', async () => {
     wrap(<AuditView />)
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole('button', { name: /^filters$/i }))
 
-    await userEvent.type(
+    await user.type(
       await screen.findByRole('textbox', { name: 'Actor' }),
       'user:alice',
     )
-    await userEvent.type(
+    await user.type(
       screen.getByRole('textbox', { name: 'Action prefix' }),
       'agent.',
     )
@@ -426,16 +504,19 @@ describe('AuditView — export', () => {
   it('exports with the active server filters when the toggle is on', async () => {
     exp.fetchAuditExport.mockResolvedValue(new Blob(['cef-bytes']))
     wrap(<AuditView />)
-    await userEvent.type(
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole('button', { name: /^filters$/i }))
+    await user.type(
       await screen.findByRole('textbox', { name: 'Actor' }),
       'user:alice',
     )
+    await user.click(screen.getByRole('button', { name: /export options/i }))
     expect(
       screen.getByRole('checkbox', {
         name: 'Use current filters & range',
       }),
     ).toBeChecked()
-    await userEvent.click(screen.getByRole('button', { name: /^export$/i }))
+    await user.click(screen.getByRole('button', { name: /^export$/i }))
 
     await waitFor(() =>
       expect(exp.fetchAuditExport).toHaveBeenCalledWith('cef', {
@@ -447,15 +528,16 @@ describe('AuditView — export', () => {
   it('exports an optional inclusive sequence range', async () => {
     exp.fetchAuditExport.mockResolvedValue(new Blob(['cef-bytes']))
     wrap(<AuditView />)
-    await userEvent.type(
+    const user = userEvent.setup()
+    await user.click(
+      await screen.findByRole('button', { name: /export options/i }),
+    )
+    await user.type(
       await screen.findByRole('spinbutton', { name: 'From seq' }),
       '10',
     )
-    await userEvent.type(
-      screen.getByRole('spinbutton', { name: 'To seq' }),
-      '25',
-    )
-    await userEvent.click(screen.getByRole('button', { name: /^export$/i }))
+    await user.type(screen.getByRole('spinbutton', { name: 'To seq' }), '25')
+    await user.click(screen.getByRole('button', { name: /^export$/i }))
 
     await waitFor(() =>
       expect(exp.fetchAuditExport).toHaveBeenCalledWith('cef', {
@@ -542,7 +624,11 @@ describe('AuditView refuses an impossible ledger bound', () => {
   })
 
   it('sends the minute its control shows, not the nanoseconds the URL carried', async () => {
-    window.history.replaceState(null, '', '/audit?since=2026-07-24T12%3A30%3A45.123456789Z')
+    window.history.replaceState(
+      null,
+      '',
+      '/audit?since=2026-07-24T12%3A30%3A45.123456789Z',
+    )
     wrap(<AuditView />)
 
     await waitFor(() => expect(api.list).toHaveBeenCalled())
@@ -579,5 +665,89 @@ describe('P3 — la columna de tiempo tiene ancho propio', () => {
       ancho,
       'la columna de tiempo no pide anchura: volveria a los 78 px en los que «6 minutes ago» ocupa tres lineas',
     ).toBeGreaterThanOrEqual(110)
+  })
+})
+
+/**
+ * THE LEDGER READS AS PEOPLE AND KINDS, NOT AS UUIDS.
+ *
+ * The census measured four raw identifiers on this route: the actor column wrote every
+ * principal as `user:<uuid>`, and the target column led with `core.audit_event:` and a
+ * whole uuid. Both are evidence and both stay — on `title`, in the short form that
+ * matches a log line, and in the detail sheet. What changes is which of the two the
+ * reader sees first.
+ */
+describe('AuditView — the reference a row names', () => {
+  const evUser: AuditEventDTO = {
+    ...ev1,
+    actor: 'user:01a0b580-4f7e-79b5-a98c-32aa681a4502',
+    target_kind: 'core.workspace',
+    target_id: 'ws-1',
+  }
+  const evOpaque: AuditEventDTO = {
+    ...ev2,
+    actor: 'user:01a0b580-0000-0000-0000-000000000000',
+    actor_kind: 'user',
+    target_kind: 'evals.suite',
+    target_id: '01a0b580-4d33-7e39-af6e-e35c160f03f3',
+  }
+
+  it('names the person who acted and the workspace that was acted on', async () => {
+    api.list.mockResolvedValue({
+      items: [evUser],
+      has_more: false,
+      head_seq: 12,
+    })
+    wrap(<AuditView />)
+    expect(await screen.findByText('Alice Ng')).toBeInTheDocument()
+    expect(await screen.findByText('Billing')).toBeInTheDocument()
+    expect(
+      screen.getByText('Alice Ng').closest('[title]')?.getAttribute('title'),
+    ).toBe('user:01a0b580-4f7e-79b5-a98c-32aa681a4502')
+  })
+
+  it('leads an unnameable target with its kind and keeps the pair on the tooltip', async () => {
+    api.list.mockResolvedValue({
+      items: [evOpaque],
+      has_more: false,
+      head_seq: 13,
+    })
+    wrap(<AuditView />)
+    const kind = await screen.findByText('evals.suite')
+    expect(kind.closest('[title]')?.getAttribute('title')).toBe(
+      'evals.suite: 01a0b580-4d33-7e39-af6e-e35c160f03f3',
+    )
+    expect(screen.getByText('01a0b580')).toBeInTheDocument()
+  })
+
+  it('opens no cell with a raw identifier', async () => {
+    api.list.mockResolvedValue({
+      items: [evUser, evOpaque],
+      has_more: false,
+      head_seq: 13,
+    })
+    wrap(<AuditView />)
+    await screen.findByText('Alice Ng')
+    // The census rule, asserted where the census measures it: a cell may CARRY an
+    // identifier, and may not OPEN with one.
+    const raw = /^[0-9a-f]{8}-|^ppf_|^sess-/
+    for (const cell of document.querySelectorAll('tbody td')) {
+      expect((cell.textContent ?? '').trim()).not.toMatch(raw)
+    }
+  })
+
+  it('shows the ledger’s own actor when the roster may not be read', async () => {
+    auth.can = ((permission: string) =>
+      permission !== 'user:read') as unknown as typeof auth.can
+    api.list.mockResolvedValue({
+      items: [evUser],
+      has_more: false,
+      head_seq: 12,
+    })
+    wrap(<AuditView />)
+    expect(
+      await screen.findByText('user:01a0b580-4f7e-79b5-a98c-32aa681a4502'),
+    ).toBeInTheDocument()
+    expect(directory.listMembers).not.toHaveBeenCalled()
   })
 })

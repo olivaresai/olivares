@@ -17,6 +17,7 @@ import {
   Wrench,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { useSessionNames } from '@/features/shared'
 import { cn } from '@/lib/utils'
 import type { OriginNodeData, ResourceNodeData } from './graph-model'
 
@@ -86,6 +87,9 @@ export function OriginNode({
   selected,
 }: NodeProps<Node<OriginNodeData>>) {
   const { t } = useTranslation('accessMap')
+  const sessionNames = useSessionNames()
+  const sessionName =
+    data.kind === 'session' ? sessionNames.nameOf(data.label) : null
   const Icon = ORIGIN_ICON[data.kind] ?? Bot
   return (
     <div
@@ -105,11 +109,21 @@ export function OriginNode({
         <Icon />
       </span>
       <div className="min-w-0">
+        {/* ⛔ A SESSION NODE IS NAMED BY WHAT IT WAS DOING. An origin that is an agent
+            or an identity carries a name a person chose; a session carries only the
+            reference the ingest stream gave it, and the census counted two of them on
+            this map. The live page says what the session was doing; where it says
+            nothing — and for a reader without `sessions:live:read` — the reference
+            stands, because on a graph a node with no label at all is worse than a
+            node labelled by its reference. The reference is on `title` either way. */}
         <div
-          className="max-w-[170px] truncate font-mono text-caption text-foreground"
+          className={cn(
+            'max-w-[170px] truncate text-caption text-foreground',
+            !sessionName && 'font-mono',
+          )}
           title={data.label}
         >
-          {data.label}
+          {sessionName ?? data.label}
         </div>
         <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
           {t(`kinds.${data.kind}`, { defaultValue: data.kind })}

@@ -330,8 +330,11 @@ function ApprovalsTab({ active }: { active: boolean }) {
 
   const emptyNode =
     statusFilter === 'pending' ? (
+      // ⛔ AN EMPTY QUEUE IS NOT A TASK. Nothing is owed here and nothing is
+      // wrong: the reader is told so in one line, with no icon panel and no
+      // manufactured button. `quiet` makes the second one impossible.
       <EmptyState
-        icon={<ListChecks />}
+        quiet
         title={t('approvals.emptyPending')}
         description={t('approvals.emptyPendingHint')}
       />

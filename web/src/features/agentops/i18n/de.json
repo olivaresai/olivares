@@ -153,8 +153,10 @@
   "live": {
     "inputPlaceholder": "Eine NDJSON-Zeile an stdin senden…",
     "inputAria": "Sitzungs-Eingabezeile",
-    "textPlaceholder": "Eine Nachricht an die Sitzung senden…",
-    "textAria": "Sitzungsnachricht",
+    "textPlaceholder": "Einen Satz senden…",
+    "textAria": "Sitzungszug",
+    "advanced": "Erweitert · Rohzeile",
+    "advancedHint": "Eine NDJSON-Zeile an stdin senden. Das Satzfeld ist die Vorgabe.",
     "send": "Senden",
     "noOutput": "Noch keine Ausgabe.",
     "waiting": "Warten auf Ausgabe…",
@@ -329,6 +331,8 @@
     "title": "Anbieterprofile",
     "subtitle": "Die dauerhafte Identität einer konfigurierten Anbieterinstanz auf einer Ausführungsumgebung: welcher Treiber sie bedient und unter welchem Konfigurationsverzeichnis eine gestartete Sitzung läuft. Ein Profil registriert bereits vorhandene Verzeichnisse — es installiert nichts und meldet sich nirgends an.",
     "register": "Profil registrieren",
+    "nextAction": "Ein Profil registrieren",
+    "rowMenu": "Zeilenaktionen für {{name}}",
     "search": "Profile durchsuchen…",
     "allStates": "Alle Zustände",
     "cols": {

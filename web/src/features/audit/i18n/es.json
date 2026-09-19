@@ -4,6 +4,7 @@
   "subtitleSystem": "La cadena del tenant de sistema con las operaciones administrativas entre tenants (solo lectura).",
   "searchLoaded": "Filtrar solo las filas cargadas (en el cliente)…",
   "filters": {
+    "open": "Filtros",
     "title": "Filtros del registro en el servidor",
     "q": "Buscar en el registro",
     "qPlaceholder": "Acción, actor, tipo de destino o ID",
@@ -62,6 +63,7 @@
   },
   "export": {
     "action": "Exportar",
+    "options": "Opciones de exportación",
     "formatLabel": "Formato de exportación",
     "fromSeq": "Desde seq",
     "toSeq": "Hasta seq",

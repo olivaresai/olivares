@@ -38,6 +38,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { useSessionNames } from '@/features/shared'
 import { DataTable, type TableColumn } from '@/components/data/data-table'
 import { StatusBadge } from '@/components/data/badges'
 import { Badge, type BadgeVariant } from '@/components/ui/badge'
@@ -103,6 +104,9 @@ export interface CommNodeData extends Record<string, unknown> {
 
 function CommNode({ data }: NodeProps<Node<CommNodeData>>) {
   const { t } = useTranslation('orchestration')
+  const sessionNames = useSessionNames()
+  const sessionName =
+    data.kind === 'session' ? sessionNames.nameOf(data.ref) : null
   const Icon = NODE_ICON[data.kind] ?? Bot
   return (
     <div
@@ -127,11 +131,19 @@ function CommNode({ data }: NodeProps<Node<CommNodeData>>) {
         <Icon />
       </span>
       <div className="min-w-0">
+        {/* ⛔ A SESSION NODE IS NAMED BY WHAT IT WAS DOING — the same rule the access
+            map follows, for the same two references the census counted here. Where
+            the live page carries nothing, and for a reader without
+            `sessions:live:read`, the reference stands: an unlabelled node on a graph
+            is worse than one labelled by its reference. */}
         <div
-          className="max-w-[170px] truncate font-mono text-caption text-foreground"
+          className={cn(
+            'max-w-[170px] truncate text-caption text-foreground',
+            !sessionName && 'font-mono',
+          )}
           title={data.ref}
         >
-          {data.ref}
+          {sessionName ?? data.ref}
         </div>
         <div className="flex items-center gap-1.5">
           <span className="text-[10px] font-medium tracking-wide text-muted-foreground uppercase">
@@ -313,7 +325,10 @@ export function FlowsTable({ flows }: { flows: FlowDTO[] }) {
         accessorKey: 'supervisor_ref',
         header: t('flows.columns.supervisor'),
         cell: ({ row }) => (
-          <span className="font-mono text-caption text-foreground">
+          <span
+            className="block truncate font-mono text-caption text-foreground"
+            title={row.original.supervisor_ref}
+          >
             {row.original.supervisor_ref}
           </span>
         ),
@@ -326,7 +341,14 @@ export function FlowsTable({ flows }: { flows: FlowDTO[] }) {
             <span className="font-mono tabular-nums">
               {formatInt(row.original.worker_count, i18n.language)}
             </span>
-            <span className="max-w-[260px] truncate text-[11px] text-muted-foreground">
+            {/* The full roster on `title`: the cell truncates at 260 px and a worker
+                cut off there is a worker the reader cannot name at all. The refs
+                themselves stay — the flow DTO carries no display name for a worker,
+                and a ref that is true beats a blank that is not. */}
+            <span
+              className="max-w-[260px] truncate text-[11px] text-muted-foreground"
+              title={row.original.workers.join(', ')}
+            >
               {row.original.workers.join(', ')}
             </span>
           </div>

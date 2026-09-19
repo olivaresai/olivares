@@ -9,7 +9,7 @@ import { renderIntel, screen } from '@/test/intel'
 import { expectNoRawI18nKeys } from '@/test/i18n-keys'
 import type { LiveDTO } from '@/features/sessions/types'
 import { RecentWork } from './recent-work'
-import { RECENT_WORK_ROWS, workLine } from './work-line'
+import { RECENT_WORK_ROWS, sessionNameLadder, workLine } from './work-line'
 import './i18n'
 import '@/features/sessions/i18n'
 
@@ -83,14 +83,64 @@ describe('workLine — the sentence degrades, it never invents', () => {
     ).toEqual({ text: 'create_issue · github/create_issue', from: 'action' })
   })
 
-  it('and last to the session reference — never to prose', () => {
+  it('falls back to untitled rather than painting the session id as the name', () => {
     // This is the case the DEMO ESTATE produces: measured 2026-09-17 against
     // `serve --seed-demo`, not one seeded row carries a summary or a goal.
-    expect(workLine(row())).toEqual({ text: 'sess-coder-7a3f', from: 'ref' })
+    expect(workLine(row())).toEqual({
+      text: '',
+      from: 'untitled',
+      id: 'sess-coder-7a3f',
+    })
   })
 
   it('treats whitespace as absent', () => {
-    expect(workLine(row({ summary: '   ', goal: '  ' })).from).toBe('ref')
+    expect(workLine(row({ summary: '   ', goal: '  ' })).from).toBe('untitled')
+  })
+})
+
+/**
+ * THE ONE LADDER, RUNG BY RUNG. It is measured here, beside `workLine`, because it is
+ * `workLine` plus one rung — the name the operator typed — and the whole reason it
+ * exists is that four surfaces used to answer "what is this session called" with four
+ * different walks of it.
+ */
+describe('sessionNameLadder — one ladder for every surface', () => {
+  it('the operator\u2019s own name outranks every fact the engine sent', () => {
+    expect(
+      sessionNameLadder('deploy-api', row({ summary: 'Filed PR #7723' }), 'U'),
+    ).toEqual({ text: 'deploy-api', from: 'run' })
+  })
+
+  it('then the front door\u2019s own rungs, in its own order', () => {
+    expect(
+      sessionNameLadder(null, row({ summary: 'S', goal: 'G' }), 'U'),
+    ).toEqual({
+      text: 'S',
+      from: 'summary',
+    })
+    expect(sessionNameLadder(null, row({ goal: 'G' }), 'U')).toEqual({
+      text: 'G',
+      from: 'goal',
+    })
+    expect(
+      sessionNameLadder(null, row({ current_action: 'create_issue' }), 'U'),
+    ).toEqual({ text: 'create_issue', from: 'action' })
+  })
+
+  it('then the caller\u2019s word — and never the reference', () => {
+    const answer = sessionNameLadder(null, row(), 'Untitled session')
+    expect(answer).toEqual({ text: 'Untitled session', from: 'untitled' })
+    // The rule this whole ladder exists to keep: the id is not the row name.
+    expect(answer.text).not.toContain('sess-')
+  })
+
+  it('with no live half at all there is nothing to say, and it says so', () => {
+    // A launched run whose telemetry has not arrived is a real state.
+    expect(sessionNameLadder(null, null, 'U')).toEqual({
+      text: 'U',
+      from: 'untitled',
+    })
+    expect(sessionNameLadder('  ', row({ goal: 'G' }), 'U').from).toBe('goal')
   })
 })
 
@@ -226,5 +276,55 @@ describe('the row opens the SESSION, not the room', () => {
     // One link per row: a badge link plus a text link plus a time link would be three
     // tab stops that all go to the same place.
     expect(screen.getAllByRole('link')).toHaveLength(2) // the row + "open all"
+  })
+})
+
+describe('RecentWork — names, not ids', () => {
+  it('the truncated sentence carries the full text on title=', () => {
+    renderIntel(
+      <RecentWork
+        sessions={[row({ summary: 'Filed PR #7723' })]}
+        state="ready"
+        canStartSession
+      />,
+    )
+    const truncated = screen
+      .getByTestId('home-recent-row')
+      .querySelector('.truncate')
+    expect(truncated?.getAttribute('title')).toMatch(/Filed PR #7723/)
+  })
+
+  it('paints Untitled session, never sess-* as the row name', () => {
+    renderIntel(<RecentWork sessions={[row()]} state="ready" canStartSession />)
+    const rowEl = screen.getByTestId('home-recent-row')
+    expect(rowEl).toHaveTextContent('Untitled session')
+    expect(rowEl.textContent ?? '').not.toMatch(/\bsess-/)
+    expect(rowEl.getAttribute('title') ?? '').toMatch(/sess-coder-7a3f/)
+  })
+})
+
+describe('RecentWork — the list starts the work', () => {
+  it('does not put a Recent work card above the first row', () => {
+    // Header 48 + title 24 + composer 64 = 136. A titled card (title, description,
+    // "All sessions") above the first row was the rest of the 268 px measured there.
+    // What this guarantees is the DOM under that measurement: the first row is the
+    // list's first child, with no card heading between them.
+    renderIntel(
+      <RecentWork
+        sessions={[row({ summary: 'Filed PR #7723' })]}
+        state="ready"
+        canStartSession
+      />,
+    )
+    const list = screen.getByTestId('home-recent-rows')
+    const firstRow = screen.getByTestId('home-recent-row')
+    expect(list.firstElementChild).toBe(firstRow.closest('li'))
+    const heading = screen.getByRole('heading', { name: 'Recent work' })
+    expect(heading).toHaveClass('sr-only')
+    expect(screen.queryByText(/five most recent sessions/i)).toBeNull()
+    expect(screen.getByTestId('home-recent-all')).toHaveAttribute(
+      'href',
+      '/sessions',
+    )
   })
 })

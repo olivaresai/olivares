@@ -109,7 +109,9 @@ export function DriftView({ active }: { active: boolean }) {
             const items = data.items ?? []
             if (items.length === 0) {
               return (
+                // No drift is the good state. One line, no panel, no button.
                 <EmptyState
+                  quiet
                   title={t('drift.emptyTitle')}
                   description={t('drift.emptyBody')}
                 />

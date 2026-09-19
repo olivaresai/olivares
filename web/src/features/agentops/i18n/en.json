@@ -153,8 +153,10 @@
   "live": {
     "inputPlaceholder": "Send an NDJSON line to stdin…",
     "inputAria": "Session input line",
-    "textPlaceholder": "Send a message to the session…",
-    "textAria": "Session message",
+    "textPlaceholder": "Send a sentence…",
+    "textAria": "Session turn",
+    "advanced": "Advanced · raw line",
+    "advancedHint": "Send one NDJSON line to stdin. The sentence field is the default.",
     "send": "Send",
     "noOutput": "No output yet.",
     "waiting": "Waiting for output…",
@@ -329,6 +331,8 @@
     "title": "Provider profiles",
     "subtitle": "The durable identity of one configured provider instance on one execution environment: which driver serves it and the configuration home a launched session runs under. A profile registers homes that already exist — it installs nothing and logs nothing in.",
     "register": "Register profile",
+    "nextAction": "Register a profile",
+    "rowMenu": "Row actions for {{name}}",
     "search": "Search profiles…",
     "allStates": "All states",
     "cols": {

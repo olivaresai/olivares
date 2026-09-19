@@ -4,7 +4,7 @@
 import { SlidersHorizontal } from 'lucide-react'
 import { useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
-import { PageHeader } from '@/components/ui/page-header'
+import { PageHeader, WORK_CHROME_ROW } from '@/components/ui/page-header'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   useValidatedUrlState,
@@ -103,14 +103,19 @@ export default function ConsoleView() {
   )
 
   return (
-    <div className="flex flex-col gap-6">
-      <PageHeader
-        title={t('console:title')}
-        description={t('console:subtitle')}
-        icon={SlidersHorizontal}
-      />
-      <Tabs value={tab} onValueChange={setTab}>
-        <TabsList>
+    <Tabs value={tab} onValueChange={setTab}>
+      {/* Title and the one control line share a 36 px row so the first table
+          row can sit at y ≤ 136 (header 48 + this row + thead). A stacked
+          title, then tabs, then a section heading is what measured 272. */}
+      <div data-slot="work-chrome" className={WORK_CHROME_ROW}>
+        <PageHeader
+          className="min-w-0"
+          actionsPanelAnchor="row"
+          title={t('console:title')}
+          description={t('console:subtitle')}
+          icon={SlidersHorizontal}
+        />
+        <TabsList className="min-w-0">
           <TabsTrigger value="people">{t('console:tabs.people')}</TabsTrigger>
           <TabsTrigger value="agents">{t('console:tabs.agents')}</TabsTrigger>
           <TabsTrigger value="sso">{t('console:tabs.sso')}</TabsTrigger>
@@ -129,40 +134,40 @@ export default function ConsoleView() {
           <TabsTrigger value="apiKeys">{t('console:tabs.apiKeys')}</TabsTrigger>
           <TabsTrigger value="license">{t('console:tabs.license')}</TabsTrigger>
         </TabsList>
-        <TabsContent value="people">
-          <PeopleTab />
-        </TabsContent>
-        <TabsContent value="agents">
-          <AgentsTab />
-        </TabsContent>
-        <TabsContent value="sso">
-          <SSOTab />
-        </TabsContent>
-        <TabsContent value="scopes">
-          <ScopesTab />
-        </TabsContent>
-        <TabsContent value="roles">
-          <RolesTab />
-        </TabsContent>
-        <TabsContent value="bindings">
-          <BindingsTab />
-        </TabsContent>
-        <TabsContent value="secrets">
-          <SecretsTab />
-        </TabsContent>
-        <TabsContent value="connectors">
-          <ConnectorsTab />
-        </TabsContent>
-        <TabsContent value="wsConnectors">
-          <WorkspaceConnectorsTab />
-        </TabsContent>
-        <TabsContent value="apiKeys">
-          <ApiKeysTab />
-        </TabsContent>
-        <TabsContent value="license">
-          <LicenseTab />
-        </TabsContent>
-      </Tabs>
-    </div>
+      </div>
+      <TabsContent value="people" className="pt-0">
+        <PeopleTab />
+      </TabsContent>
+      <TabsContent value="agents" className="pt-0">
+        <AgentsTab />
+      </TabsContent>
+      <TabsContent value="sso" className="pt-0">
+        <SSOTab />
+      </TabsContent>
+      <TabsContent value="scopes" className="pt-0">
+        <ScopesTab />
+      </TabsContent>
+      <TabsContent value="roles" className="pt-0">
+        <RolesTab />
+      </TabsContent>
+      <TabsContent value="bindings" className="pt-0">
+        <BindingsTab />
+      </TabsContent>
+      <TabsContent value="secrets" className="pt-0">
+        <SecretsTab />
+      </TabsContent>
+      <TabsContent value="connectors" className="pt-0">
+        <ConnectorsTab />
+      </TabsContent>
+      <TabsContent value="wsConnectors" className="pt-0">
+        <WorkspaceConnectorsTab />
+      </TabsContent>
+      <TabsContent value="apiKeys" className="pt-0">
+        <ApiKeysTab />
+      </TabsContent>
+      <TabsContent value="license" className="pt-0">
+        <LicenseTab />
+      </TabsContent>
+    </Tabs>
   )
 }

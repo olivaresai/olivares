@@ -6,7 +6,6 @@ import { Boxes, RefreshCw } from 'lucide-react'
 import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
 import { PageHeader } from '@/components/ui/page-header'
 import {
   Select,
@@ -78,6 +77,7 @@ export function InventoryView() {
         icon={Boxes}
         title={t('title')}
         description={t('subtitle')}
+        notices={<CaveatNotice tone="info">{t('scope.note')}</CaveatNotice>}
         actions={
           <Button
             variant="ghost"
@@ -92,11 +92,6 @@ export function InventoryView() {
           </Button>
         }
       />
-
-      {/* Scope of the read, stated where the numbers are. This names what the
-          QUERY covers — not access granted, not a complete estate (truncation is
-          flagged separately below). */}
-      <CaveatNotice tone="info">{t('scope.note')}</CaveatNotice>
 
       {/* Summary tiles. AsyncSection maps the query to the four honest states:
           pending → skeleton, 403 → calm forbidden (never a zero estate), failure →
@@ -307,25 +302,25 @@ function SummaryTiles({ data }: { data: InventorySummary }) {
           kind facet above keeps every option (see kindOptions). Strict `=== true`:
           a cast is not a runtime check. */}
       {data.truncated === true ? <TruncatedNotice /> : null}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-        <StatTile label={t('summary.total')} value={totals.total} />
-        <StatTile
+      <ul className="flex flex-wrap items-baseline gap-x-5 gap-y-1 text-body">
+        <SummaryFact label={t('summary.total')} value={totals.total} />
+        <SummaryFact
           label={t('summary.active')}
           value={totals.active}
           tone="success"
         />
-        <StatTile
+        <SummaryFact
           label={t('summary.stale')}
           value={totals.stale}
           tone={totals.stale > 0 ? 'warning' : undefined}
         />
-        <StatTile label={t('summary.kinds')} value={totals.kinds} />
-      </div>
+        <SummaryFact label={t('summary.kinds')} value={totals.kinds} />
+      </ul>
     </div>
   )
 }
 
-function StatTile({
+function SummaryFact({
   label,
   value,
   tone,
@@ -335,18 +330,18 @@ function StatTile({
   tone?: 'success' | 'warning'
 }) {
   return (
-    <Card className="p-3">
-      <div className="text-caption text-muted-foreground">{label}</div>
-      <div
+    <li className="flex items-baseline gap-1.5">
+      <span className="text-caption text-muted-foreground">{label}</span>
+      <span
         className={cn(
-          'font-display text-display tabular-nums',
+          'tabular-nums font-medium',
           tone === 'success' && 'text-success',
           tone === 'warning' && 'text-warning',
           !tone && 'text-foreground',
         )}
       >
         {formatInt(value)}
-      </div>
-    </Card>
+      </span>
+    </li>
   )
 }

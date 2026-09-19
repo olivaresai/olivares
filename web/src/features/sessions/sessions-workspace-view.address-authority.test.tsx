@@ -10,6 +10,11 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fakeRouter } from '@/test/fake-router'
+import {
+  createSessionRowLocator,
+  sessAddress,
+  type SessionRowLocator,
+} from '@/test/session-row-locator'
 import { createQueryClient } from '@/lib/api/query'
 import type { LiveDTO } from './types'
 
@@ -23,6 +28,7 @@ const harness = vi.hoisted(() => {
     timelineById: vi.fn(),
     listRuns: vi.fn(),
     getRun: vi.fn(),
+    listProfiles: vi.fn(),
     perms,
     auth: {
       activeTenant: 'tenant-a' as string | null,
@@ -89,9 +95,17 @@ vi.mock('./api', async (importOriginal) => ({
   },
 }))
 
+// `listProfiles` is answered EXPLICITLY even though these cases never grant
+// `sessions:profile:read`: the view added that read in `8e8aafd19f`, and a seam left
+// undefined turns "the query stayed disabled" and "the query ran and exploded" into the
+// same green. The profile half of the screen is the partial-read file's subject.
 vi.mock('@/features/agentops/api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/features/agentops/api')>()),
-  agentOpsApi: { listRuns: harness.listRuns, getRun: harness.getRun },
+  agentOpsApi: {
+    listRuns: harness.listRuns,
+    getRun: harness.getRun,
+    listProfiles: harness.listProfiles,
+  },
 }))
 
 import { SessionsWorkspaceView } from './sessions-workspace-view'
@@ -158,20 +172,32 @@ function renderView(qc = makeClient(), table = true) {
   return { qc, again, ...result }
 }
 
-async function rowFor(label: string) {
-  const cell = await screen.findByText(label)
-  return cell.closest('tr') as HTMLElement
+/**
+ * ⛔ ROWS ARE FOUND BY ADDRESS, NOT BY TEXT. The cell paints a NAME now
+ *    (`8e8aafd19f`), and these fixtures carry no run name, no summary and no goal — so
+ *    every one of them paints the same `Untitled session` and `findByText('rev-a')`
+ *    finds nothing at all. `data-address` carries the row's address, which is the
+ *    same string the URL below is asserted to hold.
+ */
+let rows: SessionRowLocator
+const A_ADDRESS = sessAddress('rev-a')
+const B_ADDRESS = sessAddress('rev-b')
+
+async function rowFor(address: string, setupName: string) {
+  return rows.find(address, setupName)
 }
 
 const card = () => screen.queryByTestId('rev-card')
 
 beforeEach(() => {
   vi.clearAllMocks()
+  rows = createSessionRowLocator()
   fakeRouter.reset('/sessions')
   harness.auth.activeTenant = 'tenant-a'
   grant('sessions:live:read', 'sessions:run:read')
   harness.live.mockResolvedValue({ items: [LIVE_A, LIVE_B], has_more: false })
   harness.listRuns.mockResolvedValue({ items: [], has_more: false })
+  harness.listProfiles.mockResolvedValue({ items: [], has_more: false })
   harness.liveOne.mockResolvedValue(RESOLVED_A)
   harness.liveById.mockResolvedValue(RESOLVED_A)
   harness.timeline.mockResolvedValue({ items: [], has_more: false })
@@ -182,24 +208,24 @@ describe('the address contract keeps the one-way retirement — A → B → A', 
   it('walks A → B → A by clicks and by Back, and the card follows the address', async () => {
     const user = userEvent.setup()
     renderView()
-    await user.click(await rowFor('rev-a'))
+    await user.click(await rowFor(A_ADDRESS, 'rev/aba/row-a'))
     expect(await screen.findByTestId('rev-card')).toHaveTextContent(
       'sess:rev-a',
     )
     expect(fakeRouter.url()).toBe('/sessions?session=sess%3Arev-a')
 
-    await user.click(await rowFor('rev-b'))
+    await user.click(await rowFor(B_ADDRESS, 'rev/aba/row-b'))
     expect(await screen.findByTestId('rev-card')).toHaveTextContent(
       'sess:rev-b',
     )
 
-    await user.click(await rowFor('rev-a'))
+    await user.click(await rowFor(A_ADDRESS, 'rev/aba/row-a-again'))
     expect(await screen.findByTestId('rev-card')).toHaveTextContent(
       'sess:rev-a',
     )
     expect(fakeRouter.depth()).toBe(4)
 
-    await user.click(await rowFor('rev-b'))
+    await user.click(await rowFor(B_ADDRESS, 'rev/aba/row-b-again'))
     await waitFor(() => expect(card()).toHaveTextContent('sess:rev-b'))
     act(() => fakeRouter.back())
     await waitFor(() => expect(card()).toHaveTextContent('sess:rev-a'))
@@ -214,20 +240,36 @@ describe('a RETIRED address that comes back through Back', () => {
 
     // A is opened and its per-session read answers: the resolution's cache entry for A
     // exists under the admission that was granted.
-    await user.click(await rowFor('rev-a'))
+    await user.click(await rowFor(A_ADDRESS, 'rev/retired/row-a'))
     await waitFor(() =>
       expect(card()).toHaveTextContent('paint:rev-a-resolved'),
     )
     expect(harness.liveOne).toHaveBeenCalledTimes(1)
 
     // B is opened: a second history entry, so A's entry survives the cleanup below.
-    await user.click(await rowFor('rev-b'))
+    await user.click(await rowFor(B_ADDRESS, 'rev/retired/row-b'))
     await waitFor(() => expect(card()).toHaveTextContent('sess:rev-b'))
 
     // THE READ BIT LEAVES. B is retired, the notice is shown and the bar is cleaned.
+    //
+    // POSITIVE CONTROL for the absences below: both rows were located by this locator
+    // a moment ago, and they are asserted gone by the SAME locator — so "the row left"
+    // is a statement about the view rather than about a string nobody paints.
     grant('sessions:run:read')
     again()
     await waitFor(() => expect(card()).toBeNull())
+    expect(
+      rows.gone(A_ADDRESS, 'rev/retired/observed-half-excluded', {
+        andNoRowAtAll: true,
+      }),
+      'rev/retired/observed-half-excluded',
+    ).toBeNull()
+    expect(
+      rows.gone(B_ADDRESS, 'rev/retired/other-observed-row-excluded', {
+        andNoRowAtAll: true,
+      }),
+      'rev/retired/other-observed-row-excluded',
+    ).toBeNull()
     expect(screen.getByTestId('sessions-address-retired')).toBeVisible()
     await waitFor(() => expect(fakeRouter.url()).toBe('/sessions'))
 
@@ -247,7 +289,7 @@ describe('a RETIRED address that comes back through Back', () => {
   it('a COLD deep link arriving with the live bit already gone paints nothing', async () => {
     grant('sessions:run:read')
     fakeRouter.reset('/sessions?session=sess%3Arev-a')
-    renderView()
+    const { again } = renderView()
     await act(async () => {
       await new Promise((r) => setTimeout(r, 30))
     })
@@ -255,6 +297,22 @@ describe('a RETIRED address that comes back through Back', () => {
     expect(card()).toHaveTextContent('paint:none')
     expect(card()).toHaveTextContent('unknown:true')
     expect(harness.liveOne).not.toHaveBeenCalled()
+
+    // POSITIVE CONTROL, in this case rather than by appeal to another one: "no read
+    // was made" only means something if a read WOULD have been made here. Grant the
+    // bit on the same address and the same mount, and the read happens and paints.
+    grant('sessions:live:read', 'sessions:run:read')
+    again()
+    await waitFor(() =>
+      expect(
+        harness.liveOne,
+        'rev/cold/control-the-read-does-happen',
+      ).toHaveBeenCalledTimes(1),
+    )
+    await waitFor(() =>
+      expect(card()).toHaveTextContent('paint:rev-a-resolved'),
+    )
+    expect(card()).toHaveTextContent('unknown:false')
   })
 
   it('the NARRATIVE pane paints no stale half either', async () => {
@@ -274,6 +332,15 @@ describe('a RETIRED address that comes back through Back', () => {
     await act(async () => {
       await new Promise((r) => setTimeout(r, 60))
     })
+    // POSITIVE CONTROL: the pane DOES paint the per-session read while the admission
+    // holds. Without this line the assertion at the end of the case — that it paints
+    // no stale half — would hold for a pane that never painted anything.
+    await waitFor(() =>
+      expect(
+        screen.getByTestId('session-narrative'),
+        'rev/narrative/control-the-admitted-half-is-painted',
+      ).toHaveTextContent('rev-a-resolved'),
+    )
     await user.click(await railRow('sess:rev-b'))
     await waitFor(() => expect(fakeRouter.url()).toContain('sess%3Arev-b'))
 

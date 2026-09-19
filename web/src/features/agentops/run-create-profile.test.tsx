@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// B2 — the launch dialog is where a session gets a provider PROFILE. What leaves the
+// the launch dialog is where a session gets a provider PROFILE. What leaves the
 // browser is the profile reference and nothing else: the homes are resolved and
 // validated by the engine, which is why a client cannot post itself a home. No
 // profile is ever pre-selected — "the only profile" is a coincidence, not a choice —

@@ -41,8 +41,12 @@ export function IntelPage({
   children: ReactNode
   className?: string
 }) {
+  // `gap-4` and `pb-4`, from `gap-5 pb-10`: 40 px of bottom padding inside a page that
+  // already has the frame's own `py-4` was 40 px of nothing at the end of 27 views, and
+  // the frame is now the scroll container that owns that padding
+  // (components/layout/page-frames.tsx).
   return (
-    <div className={cn('flex flex-col gap-5 pb-10', className)}>
+    <div className={cn('flex flex-col gap-4 pb-4', className)}>
       {/* ⛔ THE HEADER IS `PageHeader`, NOT A SECOND COPY OF IT. Until 2026-09-17
           this file carried its own `<header>` + `<h1>` + description + actions, and
           `components/ui/page-header.tsx` carried another — the same block, written

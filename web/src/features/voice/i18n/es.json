@@ -129,7 +129,7 @@
     "columns": {
       "when": "Cuándo",
       "outcome": "Desenlace",
-      "session": "Ref de sesión",
+      "session": "Sesión",
       "agent": "Agente",
       "actor": "Actor",
       "reason": "Motivo del motor"

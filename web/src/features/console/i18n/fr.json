@@ -123,7 +123,8 @@
     "revoke": "Révoquer",
     "revokeTitle": "Révoquer l'invitation",
     "revokeBody": "Le lien d'invitation pour {{email}} cessera de fonctionner immédiatement.",
-    "revoked": "Invitation révoquée."
+    "revoked": "Invitation révoquée.",
+    "inviteFirst": "Inviter le premier utilisateur"
   },
   "members": {
     "title": "Membres actifs",
@@ -482,6 +483,7 @@
     "title": "Agents",
     "caption": "Enregistrez et maintenez les agents individuels gouvernés par ce tenant.",
     "create": "Nouvel agent",
+    "nextAction": "Déployer un agent",
     "createTitle": "Nouvel agent",
     "editTitle": "Modifier l'agent",
     "formCaption": "Définissez l'identité de l'agent, son type d'exécution, son périmètre d'espace de travail et des attributs JSON facultatifs.",
@@ -502,6 +504,9 @@
     "jsonHint": "Objet JSON facultatif.",
     "jsonObjectError": "Les libellés et les métadonnées doivent être des objets JSON valides.",
     "notSet": "Non défini",
+    "id": "ID",
+    "rowMenu": "Actions de ligne pour {{name}}",
+    "workspaceUnknown": "Espace de travail inconnu",
     "none": "Aucun agent pour le moment.",
     "noneHint": "Créez un agent pour limiter l'accès, les règles et l'audit à une exécution individuelle.",
     "edit": "Modifier",

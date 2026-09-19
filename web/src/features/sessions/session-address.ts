@@ -14,7 +14,7 @@
 // every row a stable identity (`provenance.ts`): `live:<live_ref>` for a profile-scoped
 // row, `sess:<session_ref>` for a legacy one, `run:<run_ref>` for a run whose managed
 // row has not been proven yet. That key is ALREADY the unambiguous name of a session on
-// this plane, it already survives two homes announcing one provider id (B2), and the
+// this plane, it already survives two homes announcing one provider id, and the
 // card already knows how to open each of its three shapes. Minting a second identifier
 // for the URL would have been a second answer to a question that has one.
 //

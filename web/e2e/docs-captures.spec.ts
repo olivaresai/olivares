@@ -180,6 +180,24 @@ async function esperaTablasCargadas(page: import('@playwright/test').Page) {
 }
 
 /**
+ * ⛔ D09: TWO PUBLISHED CAPTURES WERE OF A LOADING SKELETON, and this is why.
+ *    `049-communications` and `053-communications-inbox` in the 2026-09-18 review set
+ *    show six grey placeholder bars where the table should be. Their cells called
+ *    `eligeWorkspaceConcretoK3`, which is what STARTS the K3 read — and then photographed
+ *    the screen without waiting for it. The harness's own oracles passed, because the
+ *    heading and the tab were correct: the picture was of the right screen, mid-flight.
+ *
+ *    Choosing the workspace and waiting for what that choice loads are one step, so they
+ *    are one function. `esperaTablasCargadas` REFUSES (its `toHaveCount(0)` fails) rather
+ *    than publishing if the read never settles, which is the half that matters: a capture
+ *    that cannot be taken must not be taken.
+ */
+async function eligeWorkspaceK3YEspera(page: import('@playwright/test').Page) {
+  await eligeWorkspaceConcretoK3(page)
+  await esperaTablasCargadas(page)
+}
+
+/**
  * K3 I1 — the three doors of the communications room need an EXPLICIT workspace, like
  * protocol-bindings above: with «All workspaces» selected the product paints «Select a
  * workspace» and makes no K3 request, so the capture would be a notice, not the screen.
@@ -554,13 +572,13 @@ const VIEWS: {
     id: 'communications',
     path: '/communications',
     heading: /^Communications$/,
-    despues: eligeWorkspaceConcretoK3,
+    despues: eligeWorkspaceK3YEspera,
   },
   {
     id: 'communications-inbox',
     path: '/communications/inbox',
     heading: /^Communications inbox$/,
-    despues: eligeWorkspaceConcretoK3,
+    despues: eligeWorkspaceK3YEspera,
   },
   {
     id: 'communications-new',

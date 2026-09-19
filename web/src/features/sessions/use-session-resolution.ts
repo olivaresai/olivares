@@ -11,7 +11,7 @@
 //    by `live_ref` when the row is profile-scoped, by the bare id for a legacy row,
 //    through the run when the card was opened on one. Writing that a second time inside
 //    the panes would have been a second answer to the question the card already
-//    answers — and the two would have disagreed the first time B2 changed.
+//    answers — and the two would have disagreed the first time that join changed.
 //
 // ⛔ AND IT IS CALLED ONCE PER OPEN SESSION, NOT ONCE PER SURFACE. The stream
 //    subscription lives in here. Two callers would mean two SSE connections to the same
@@ -49,7 +49,7 @@ export interface SessionResolution {
   live: LiveDTO | undefined
   /** Every run the engine linked to this session, plus the seed run it was opened on. */
   runs: RunDTO[]
-  /** B2: observation rows sharing a managed row's profile and provider id. */
+  /** Observation rows sharing a managed row's profile and provider id. */
   related: LiveDTO[]
   streamStatus: ReturnType<typeof useLiveStream>['status']
   /** The operate half was not READ — which is not the same as "there is none". */
@@ -84,7 +84,7 @@ export function useSessionResolution(
   })
   const seed = seedRunQuery.data
   const seedProfiled = !!seed?.provider_profile_ref
-  // The identity this card resolves by (B2). A live_ref names ONE row; a bare
+  // The identity this card resolves by. A live_ref names ONE row; a bare
   // session id names the LEGACY row and nothing else — two homes may announce the
   // same id, so it is never a name for a profile-scoped row. A profiled run whose
   // id has not been proven yet resolves by neither: its observed half is honestly
@@ -156,7 +156,7 @@ export function useSessionResolution(
       ? override
       : (liveQuery.data ?? undefined)
 
-  // B2: the observation rows that share a MANAGED row's profile and provider id —
+  // The observation rows that share a MANAGED row's profile and provider id —
   // telemetry that arrived through a source bound to the same profile. They are
   // shown BESIDE the run, never merged into it: the plane proved the process, not
   // that those frames are its.

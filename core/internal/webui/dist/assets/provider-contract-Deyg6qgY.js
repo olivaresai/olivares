@@ -1,0 +1,1 @@
+function e(e){let t=e.provider_driver?.trim();return t&&t!==`claude`?`text`:`line`}var t=[`HOME`,`CLAUDE_CONFIG_DIR`,`CODEX_HOME`,`GROK_HOME`];function n(e){let n=new Set(t);return e.split(`,`).map(e=>e.trim()).filter(e=>n.has(e))}export{e as n,n as t};

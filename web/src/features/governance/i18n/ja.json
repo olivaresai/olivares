@@ -652,7 +652,8 @@
     "notWiredBody": "このテナント用の AgentCore エクスポーターが構成されていないため、エンジンは要求を拒否します。オペレーターはホスト上で、この変数をエクスポート構成ファイルに向けることで有効化します:",
     "notWiredCredentials": "このファイルはオペレーターのものであり、AWS の書き込み認証情報を含みます。コンソールがそれを表示・要求・編集することは決してありません。",
     "deniedTitle": "エンジンがこのエクスポートを拒否しました",
-    "pageTitle": "AgentCore エクスポート"
+    "pageTitle": "AgentCore エクスポート",
+    "emptyAction": "最初のプランを計算"
   },
   "registerAgent": {
     "action": "エージェントを登録",

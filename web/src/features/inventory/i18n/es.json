@@ -1,5 +1,6 @@
 {
   "title": "Inventario",
+  "unnamed": "Sin nombre",
   "subtitle": "Todos los agentes, sesiones, MCP, modelos e identidades descubiertos en tu infraestructura.",
   "refresh": "Actualizar",
   "scope": {
@@ -118,7 +119,8 @@
   "empty": {
     "catalog": {
       "title": "Aún no se han descubierto entidades del estate",
-      "description": "Las entidades aparecen conforme las observaciones de los conectores informan de agentes, sesiones, identidades, capacidades MCP, modelos, proveedores o recursos."
+      "description": "Las entidades aparecen conforme las observaciones de los conectores informan de agentes, sesiones, identidades, capacidades MCP, modelos, proveedores o recursos.",
+      "action": "Abrir capacidades"
     }
   }
 }

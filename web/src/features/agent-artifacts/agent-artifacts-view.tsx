@@ -311,6 +311,21 @@ function ArtifactRegistry() {
           <EmptyState
             title={t('registry.empty')}
             description={t('registry.emptyHint')}
+            // "An artifact never registered is not represented in the BOM" states a
+            // consequence; the next action is the registration itself, and it is the
+            // same button the section header carries, on the same right.
+            action={
+              canWrite ? (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => setCreateOpen(true)}
+                >
+                  <Plus />
+                  {t('registry.new')}
+                </Button>
+              ) : null
+            }
           />
         }
         toolbar={

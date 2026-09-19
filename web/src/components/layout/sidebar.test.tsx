@@ -45,7 +45,18 @@ vi.mock('@tanstack/react-router', () => ({
 
 const canMock = vi.fn((_permission: string) => true)
 vi.mock('@/lib/auth/context', () => ({
-  useAuth: () => ({ can: (p: string) => canMock(p) }),
+  // `grants: []` and `isSuperadmin: false` — the rail carries the organisation and
+  // workspace switchers since the work-first pass, and with no membership to choose
+  // between
+  // both render `null`. These tests are about the NAVIGATION, so the honest mock is the
+  // one that makes the scope block empty rather than the one that populates it.
+  useAuth: () => ({
+    can: (p: string) => canMock(p),
+    grants: [],
+    isSuperadmin: false,
+    activeTenant: null,
+    setActiveTenant: () => {},
+  }),
 }))
 
 import i18n from 'i18next'

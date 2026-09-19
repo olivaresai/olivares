@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// B1 — source→profile bindings. The identity a binding posts is the roster row's
+// source→profile bindings. The identity a binding posts is the roster row's
 // PERSISTENT id and the revision THIS node applied, both read from the roster and
 // never from a name; a row this node has not applied cannot be chosen; and the
 // three binding tiers act independently of the profile tiers.

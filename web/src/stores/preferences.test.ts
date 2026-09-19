@@ -30,6 +30,15 @@ describe('DENSITY_ROW', () => {
     }
   })
 
+  it('makes the header strip one row tall INCLUDING the rule it carries', () => {
+    for (const [density, row] of Object.entries(DENSITY_ROW)) {
+      // `border-collapse` draws the hairline under the header inside the strip's own
+      // box, so a header given the row's height measures one pixel more than a row.
+      expect(row.headPx, density).toBe(row.px - 1)
+      expect(row.headClassName, density).toBe(`h-[${row.headPx}px]`)
+    }
+  })
+
   it('gives comfortable rows vertical padding and compact rows none', () => {
     expect(DENSITY_ROW.comfortable.className.split(' ')).toContain('py-1')
     expect(DENSITY_ROW.compact.className.split(' ')).toContain('py-0')

@@ -1,5 +1,6 @@
 {
   "title": "Inventory",
+  "unnamed": "Unnamed",
   "subtitle": "Every agent, session, MCP, model and identity discovered across your estate.",
   "refresh": "Refresh",
   "scope": {
@@ -118,7 +119,8 @@
   "empty": {
     "catalog": {
       "title": "No estate entities discovered yet",
-      "description": "Entities appear as connector observations report agents, sessions, identities, MCP capabilities, models, providers, or resources."
+      "description": "Entities appear as connector observations report agents, sessions, identities, MCP capabilities, models, providers, or resources.",
+      "action": "Open capabilities"
     }
   }
 }

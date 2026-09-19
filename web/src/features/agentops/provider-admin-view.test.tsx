@@ -7,8 +7,12 @@
 // the two tiers reads only that plane — no profile, run or live request leaves the
 // browser for a binding-only reader, and no binding request for a profile-only one.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { PageActionsProvider } from '@/components/ui/page-actions'
+import { clippingAncestors } from '@/test/clipping'
+import { stubViewportWidth } from '@/test/viewport'
 
 const auth = vi.hoisted(() => ({
   perms: new Set<string>(),
@@ -48,7 +52,9 @@ function wrap(entrance: 'profiles' | 'bindings') {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={qc}>
-      <ProviderAdminView entrance={entrance} />
+      <PageActionsProvider>
+        <ProviderAdminView entrance={entrance} />
+      </PageActionsProvider>
     </QueryClientProvider>,
   )
 }
@@ -133,5 +139,76 @@ describe('ProviderAdminView — two doors, one room', () => {
       'aria-selected',
       'true',
     )
+  })
+})
+
+describe('ProviderAdminView — first work row', () => {
+  afterEach(() => stubViewportWidth(1440))
+
+  // The visual bar: header 48 + title ≤ 40 + one 48 px control line = 136.
+  // A stacked title, then tabs, then a subtitle/register band, then the table
+  // search row is what measured y=293. Title and tabs share one 36 px row
+  // (work-chrome); the register verb lands in that row; the table follows.
+  it('puts the tab strip on the same line as the title', async () => {
+    auth.perms = new Set([PR, BR])
+    wrap('profiles')
+    await screen.findByRole('heading', { name: 'Provider profiles' })
+    const chrome = screen
+      .getByRole('tablist')
+      .closest('[data-slot="work-chrome"]')
+    expect(chrome).toBeTruthy()
+    expect(chrome).toContainElement(screen.getByRole('heading', { level: 1 }))
+  })
+
+  it('lifts the register verb into the title line and leaves no section heading above the table', async () => {
+    auth.perms = new Set([PR, BR, 'sessions:profile:write'])
+    api.listProfiles.mockResolvedValue({
+      items: [
+        {
+          profile_ref: 'ppf_a',
+          driver: 'claude',
+          environment_ref: 'xenv_1',
+          display_name: 'Home A',
+          state: 'active',
+          local_environment: true,
+          operable: true,
+        },
+      ],
+      has_more: false,
+    })
+    wrap('profiles')
+    await screen.findByText('Home A')
+    const chrome = screen
+      .getByRole('tablist')
+      .closest('[data-slot="work-chrome"]')
+    expect(chrome).toContainElement(screen.getByRole('heading', { level: 1 }))
+    expect(
+      document.querySelector('[data-slot="page-actions"]'),
+    ).toContainElement(screen.getByRole('button', { name: 'Register profile' }))
+    expect(screen.queryByRole('heading', { name: /^profiles$/i })).toBeNull()
+  })
+
+  // ⛔ AND ON A PHONE THAT VERB IS BEHIND THE DISCLOSURE, WHICH THE ROW USED TO CLIP.
+  //    The row was `h-9 … overflow-hidden` and the panel opens `absolute top-full` inside
+  //    it: measured at 390×844, `elementFromPoint` at the panel's centre answered the
+  //    table underneath and a click aimed at Register profile never reached it. The walk
+  //    is over CLASSES because jsdom loads no stylesheet (`@/test/clipping`); the computed
+  //    overflow and the hit test are measured in a browser by `code-r4/probe/panel.mjs`.
+  it('phone: nothing between the open panel and the page clips it', async () => {
+    const user = userEvent.setup()
+    auth.perms = new Set([PR, BR, 'sessions:profile:write'])
+    stubViewportWidth(390)
+    wrap('profiles')
+    const toggle = await screen.findByTestId('page-actions-toggle')
+    await user.click(toggle)
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    const panel = document.querySelector(
+      '[data-slot="page-actions"]',
+    ) as HTMLElement
+    // Joined, so a failure NAMES the element that cut the panel on its one line.
+    expect(clippingAncestors(panel).join(' | ')).toBe('')
+    expect(
+      within(panel).getByRole('button', { name: 'Register profile' }),
+    ).toBeInTheDocument()
   })
 })

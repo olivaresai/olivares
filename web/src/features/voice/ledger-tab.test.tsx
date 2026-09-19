@@ -24,6 +24,17 @@ const api = vi.hoisted(() => ({
   policies: vi.fn(),
   allDecisions: vi.fn(),
 }))
+// LA MISMA ESCALERA QUE EL RESTO DE LA CONSOLA, con una respuesta fija: `sess-live-01`
+// tiene nombre y `sess-ghost-77` no. Las dos ramas en la misma tabla, que es lo que
+// distingue «pinta el nombre» de «pinta lo que sea».
+vi.mock('@/features/shared', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/features/shared')>()),
+  useSessionNames: () => ({
+    ready: true,
+    nameOf: (reference?: string | null) =>
+      reference === 'sess-live-01' ? 'deploy-api' : null,
+  }),
+}))
 vi.mock('./api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./api')>()
   return { ...actual, voiceApi: { ...actual.voiceApi, ...api } }
@@ -113,6 +124,25 @@ describe('DecisionsTable — una denegación no se pinta tranquila', () => {
     expect(body).not.toMatch(/no session|sin sesión|not found/i)
   })
 
+  it('la columna de sesión pinta el NOMBRE, con la referencia en el title', () => {
+    // ⛔ ESTA COLUMNA PINTABA `session_ref` ENTERO, que es la regla que el resto de la
+    //    consola dejó de romper: el identificador no es el nombre de la fila. La
+    //    referencia no se pierde — `NamedRef` la lleva en `title=` — y sigue siendo lo
+    //    que este registro identifica.
+    renderIntel(<DecisionsTable decisions={decisionsFixture} />)
+    const table = screen.getByRole('grid')
+    const named = within(table).getByText('deploy-api')
+    expect(named).toBeInTheDocument()
+    expect(named.closest('[title]')?.getAttribute('title')).toBe('sess-live-01')
+    // Control en la MISMA tabla: las filas cuyo nombre nadie sabe dicen «sin título» con
+    // su referencia al lado, no un nombre inventado ni una celda vacía.
+    const untitled = within(table).getAllByText('Untitled session')
+    expect(untitled.length).toBeGreaterThan(0)
+    expect(untitled[0]?.closest('[title]')?.getAttribute('title')).toMatch(
+      /^sess-/,
+    )
+  })
+
   it('trae el motivo que redacta el MOTOR, no una glosa de la consola', () => {
     renderIntel(<DecisionsTable decisions={decisionsFixture} />)
     const table = screen.getByRole('grid')
@@ -191,5 +221,46 @@ describe('VoiceView — la pestaña del ledger', () => {
     expect(voiceKeys.ledger('t1', { limit: 10 })).not.toEqual(
       voiceKeys.ledger('t2', { limit: 10 }),
     )
+  })
+})
+
+/**
+ * EL ESTADO VACÍO DE UNA PESTAÑA CUYA ACCIÓN VIVE EN OTRA.
+ *
+ * `/voice` abre en Sessions, y esa lista solo se llena cuando existe una política —
+ * que se crea en la pestaña siguiente. El estado vacío NOMBRABA ese destino («once a
+ * governed open is dispatched against a voice policy») y no llevaba a él: quien
+ * acababa de leer que no hay nada tenía que deducir a dónde ir. Las pestañas pasaron
+ * a ser controladas para que el estado vacío pueda moverlas.
+ */
+describe('Los estados vacíos de /voice llevan su siguiente acción', () => {
+  const vacio = (texto: string | RegExp) =>
+    screen.getByText(texto).closest('[data-slot="empty-state"]') as HTMLElement
+
+  it('manda de una lista de sesiones vacía a la pestaña de políticas', async () => {
+    const user = userEvent.setup()
+    renderIntel(<VoiceView />)
+    await screen.findByText('No voice sessions')
+    await user.click(
+      within(vacio('No voice sessions')).getByRole('button', {
+        name: 'Policies',
+      }),
+    )
+    expect(screen.getByRole('tab', { name: 'Policies' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
+  })
+
+  it('ofrece crear la primera política donde se lee que no hay ninguna', async () => {
+    const user = userEvent.setup()
+    renderIntel(<VoiceView />)
+    await user.click(await screen.findByRole('tab', { name: 'Policies' }))
+    await screen.findByText('No voice policies')
+    expect(
+      within(vacio('No voice policies')).getByRole('button', {
+        name: 'New policy',
+      }),
+    ).toBeInTheDocument()
   })
 })

@@ -162,10 +162,25 @@
     }
   },
   "layout": {
-    "$description": "The authenticated shell's content width. It was the arbitrary `max-w-[1440px]` in app-layout.tsx — a number with no name, which is how a second screen ends up with a different one. As a `--container-*` entry Tailwind emits `max-w-page`, so there is a utility to reach for instead of a bracket.",
+    "$description": "The authenticated shell's geometry, named rather than bracketed. `container-page` was the arbitrary `max-w-[1440px]` in app-layout.tsx — a number with no name, which is how a second screen ends up with a different one; as a `--container-*` entry Tailwind emits `max-w-page`. The `console-*` entries are the C1 shell's pixel budgets (design/v26.10/C1-console-work-first.md §3.1.2): the header height every width shares, the rail and inspector widths, and the two row heights — a management table row and a work list row. They are declared here so a density decision moves in one place or not at all.",
     "$type": "dimension",
     "container-page": {
       "$value": "90rem"
+    },
+    "console-header-height": {
+      "$value": "3rem"
+    },
+    "console-rail-width": {
+      "$value": "16rem"
+    },
+    "console-inspector-width": {
+      "$value": "20rem"
+    },
+    "console-row-height": {
+      "$value": "2.25rem"
+    },
+    "console-list-row-height": {
+      "$value": "2.5rem"
     }
   }
 }

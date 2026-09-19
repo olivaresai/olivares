@@ -149,6 +149,19 @@ function TargetsTab() {
               <EmptyState
                 title={t('targets.empty')}
                 description={t('targets.emptyHint')}
+                // "Register one of your own agents as a candidate" — the same button
+                // the section header carries, on the same right.
+                action={
+                  canAdmin ? (
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      onClick={() => setRegisterOpen(true)}
+                    >
+                      {t('targets.register')}
+                    </Button>
+                  ) : null
+                }
               />
             ) : (
               <TargetsTable

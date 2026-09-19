@@ -302,6 +302,7 @@
     "noTenant": "keine",
     "noWorkspace": "Kein Arbeitsbereich",
     "noEnvironment": "Nicht angegeben",
+    "thisNode": "Dieser Knoten",
     "hint": "Worunter die nächste Sitzung laufen wird."
   },
   "launcher": {
@@ -318,6 +319,18 @@
     "startFailed": "Die Sitzung konnte nicht gestartet werden.",
     "noTenant": "Wählen Sie eine Organisation, bevor Sie eine Sitzung starten.",
     "noProfileRead": "Eine Sitzung läuft als Anbieterprofil, und Ihre Rolle enthält keine Berechtigung, diese zu lesen.",
-    "readFailed": "Die Anbieterprofile konnten nicht gelesen werden, daher kann von hier keine Sitzung gestartet werden."
+    "readFailed": "Die Anbieterprofile konnten nicht gelesen werden, daher kann von hier keine Sitzung gestartet werden.",
+    "send": "Senden",
+    "turnPlaceholder": "Einen Satz senden…",
+    "turnAria": "Sitzungszug",
+    "attachedRunning": "Läuft",
+    "attachedWaiting": "Wartet auf Sie",
+    "attachedSettled": "Beendet",
+    "advanced": "Erweitert",
+    "advancedHint": "Eine NDJSON-Zeile an stdin senden. Das Satzfeld ist die Vorgabe.",
+    "wirePlaceholder": "Eine NDJSON-Zeile an stdin senden…",
+    "wireAria": "Sitzungseingabezeile",
+    "turnFailed": "Die Sitzung konnte diesen Zug nicht annehmen.",
+    "sendBackgroundHint": "Strg+Eingabe sendet und lässt den Entwurf für den nächsten Satz bereit."
   }
 }

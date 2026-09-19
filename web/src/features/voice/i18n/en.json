@@ -129,7 +129,7 @@
     "columns": {
       "when": "When",
       "outcome": "Outcome",
-      "session": "Session ref",
+      "session": "Session",
       "agent": "Agent",
       "actor": "Actor",
       "reason": "Engine's reason"

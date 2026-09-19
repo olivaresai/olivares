@@ -57,7 +57,7 @@ export function SessionTimeline({
 }: {
   /** The LEGACY timeline of a bare provider session id (the events with no live_ref). */
   sessionRef?: string
-  /** The timeline of exactly ONE live row (B2). Preferred whenever the row is known:
+  /** The timeline of exactly ONE live row. Preferred whenever the row is known:
    * a scoped row has no other name, and a legacy row's is the same events. */
   liveRef?: string
 }) {

@@ -8,9 +8,21 @@ import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CatalogEntry, EntityDetail, InventorySummary } from './types'
 
+const auth = vi.hoisted(() => ({ denied: new Set<string>() }))
 vi.mock('@/lib/auth/context', () => ({
-  useAuth: () => ({ activeTenant: 't1', can: () => true }),
+  useAuth: () => ({
+    activeTenant: 't1',
+    can: (permission: string) => !auth.denied.has(permission),
+  }),
 }))
+
+// What a session WAS DOING: the live page the front door already reads.
+const live = vi.hoisted(() => ({ live: vi.fn() }))
+vi.mock('@/features/sessions/api', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@/features/sessions/api')>()
+  return { ...actual, sessionsApi: { ...actual.sessionsApi, ...live } }
+})
 
 vi.mock('@tanstack/react-router', () => ({
   //useUrlState follows the location, so the mock has to answer it.
@@ -98,6 +110,29 @@ function renderView() {
 }
 
 beforeEach(() => {
+  auth.denied = new Set()
+  live.live.mockReset()
+  live.live.mockResolvedValue({
+    items: [
+      {
+        session_ref: 'sess-coder-7a3f',
+        cc_state: 'idle',
+        current_action: 'create_issue',
+        current_resource: 'github/create_issue',
+        input_tokens: 0,
+        output_tokens: 0,
+        cost_micro_usd: 0,
+        event_count: 0,
+        tool_call_count: 0,
+        first_event_at: '2026-09-18T10:00:00Z',
+        last_event_at: '2026-09-18T10:00:10Z',
+        duration_seconds: 10,
+        live_ref: 'lr-1',
+        attribution: 'legacy',
+      },
+    ],
+    has_more: false,
+  })
   vi.mocked(inventoryApi.summary).mockResolvedValue(summary)
   vi.mocked(inventoryApi.entities).mockResolvedValue({
     items: entries,
@@ -113,18 +148,34 @@ beforeEach(() => {
 describe('InventoryView', () => {
   it('shows estate summary tiles', async () => {
     renderView()
-    // Total 4, active 3, stale 1 derived from the by-kind summary. The tiles now
+    // Total 4, active 3, stale 1 derived from the by-kind summary. The figures now
     // render only once the summary has ANSWERED (AsyncSection), so by then the
     // catalog rows — and their own "Stale" chip — are on the page too: the label is
-    // read inside its tile, together with the figure it labels.
+    // read beside the figure it labels.
     expect(await screen.findByText('Entities')).toBeInTheDocument()
-    const grid = screen.getByText('Entities').parentElement!
-      .parentElement as HTMLElement
-    const tile = (label: string) =>
-      within(grid).getByText(label).parentElement as HTMLElement
-    expect(within(tile('Entities')).getByText('4')).toBeInTheDocument()
-    expect(within(tile('Active')).getByText('3')).toBeInTheDocument()
-    expect(within(tile('Stale')).getByText('1')).toBeInTheDocument()
+    const summary = screen.getByText('Entities').closest('ul') as HTMLElement
+    expect(within(summary).getByText('4')).toBeInTheDocument()
+    expect(within(summary).getByText('3')).toBeInTheDocument()
+    expect(within(summary).getByText('1')).toBeInTheDocument()
+  })
+
+  it('paints each catalog name as one line and keeps the ref off the cell text', async () => {
+    renderView()
+    const name = await screen.findByText('prod-orchestrator')
+    const cell = name.closest('td')!
+    expect(cell.textContent).not.toMatch(/sess-orch/)
+    expect(name.closest('[title]')?.getAttribute('title')).toMatch(/sess-orch/)
+  })
+
+  it('offers the next action when the catalog is empty', async () => {
+    vi.mocked(inventoryApi.entities).mockResolvedValue({
+      items: [],
+      has_more: false,
+    })
+    renderView()
+    expect(
+      await screen.findByRole('link', { name: 'Open capabilities' }),
+    ).toHaveAttribute('href', '/capabilities')
   })
 
   it('lists catalog entries and flags a stale one', async () => {
@@ -149,5 +200,81 @@ describe('InventoryView', () => {
     expect(vi.mocked(inventoryApi.entities)).toHaveBeenCalledWith(
       expect.objectContaining({ limit: expect.any(Number) }),
     )
+  })
+})
+
+/**
+ * A SESSION ENTITY IS NOT ITS REFERENCE.
+ *
+ * Every other entity in this catalog carries a name a person chose. A session
+ * materialises from the ingest stream with none, so the column painted
+ * `sess-coder-7a3f` — one of the two raw identifiers the census measured here. What a
+ * session has is what it was doing, and the live page reports it.
+ */
+describe('InventoryView — a session in the catalog', () => {
+  const sessions: CatalogEntry[] = [
+    {
+      kind: 'session',
+      entity_id: 's1',
+      name: 'sess-coder-7a3f',
+      ref: 'sess-coder-7a3f',
+      status: 'active',
+      signal_sources: ['otel'],
+      first_seen: '2026-09-18T10:00:00Z',
+      last_seen: '2026-09-18T10:00:10Z',
+      occurrence_count: 3,
+    },
+    {
+      kind: 'session',
+      entity_id: 's2',
+      name: 'sess-coder-9c21',
+      ref: 'sess-coder-9c21',
+      status: 'active',
+      signal_sources: ['otel'],
+      first_seen: '2026-09-18T09:00:00Z',
+      last_seen: '2026-09-18T09:01:00Z',
+      occurrence_count: 1,
+    },
+  ]
+
+  it('paints what the session was doing, with the reference reachable', async () => {
+    vi.mocked(inventoryApi.entities).mockResolvedValue({
+      items: sessions,
+      has_more: false,
+    })
+    renderView()
+    const label = await screen.findByText('create_issue · github/create_issue')
+    expect(label.closest('[title]')?.getAttribute('title')).toContain(
+      'sess-coder-7a3f',
+    )
+  })
+
+  it('says a session has no title rather than printing its reference as one', async () => {
+    // `sess-coder-9c21` is seeded with no action, goal or summary. The honest line is
+    // "Untitled session" with the reference beside it — not the reference alone.
+    vi.mocked(inventoryApi.entities).mockResolvedValue({
+      items: sessions,
+      has_more: false,
+    })
+    renderView()
+    const untitled = await screen.findByText('Untitled session')
+    const cell = untitled.closest('td')!
+    expect(cell.textContent?.startsWith('Untitled session')).toBe(true)
+    expect(within(cell).getByText('sess-coder-9c21')).toBeInTheDocument()
+  })
+
+  it('opens no cell with a raw reference, with or without the live read', async () => {
+    auth.denied = new Set(['sessions:live:read'])
+    vi.mocked(inventoryApi.entities).mockResolvedValue({
+      items: sessions,
+      has_more: false,
+    })
+    renderView()
+    await screen.findAllByText('Untitled session')
+    expect(live.live).not.toHaveBeenCalled()
+    const raw = /^[0-9a-f]{8}-|^ppf_|^sess-/
+    for (const cell of document.querySelectorAll('tbody td')) {
+      expect((cell.textContent ?? '').trim()).not.toMatch(raw)
+    }
   })
 })

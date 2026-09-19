@@ -353,6 +353,14 @@ describe('Scenario authoring — the console calls what the engine already serve
     ).not.toBeInTheDocument()
   })
 
+  /**
+   * The empty state, addressed by its own handle. `role="status"` does NOT identify
+   * it — `AsyncSection`'s loading skeleton carries the same role, so a query by role
+   * matches the spinner on the first render and the assertion reads a skeleton.
+   */
+  const vacio = (texto: string | RegExp) =>
+    screen.getByText(texto).closest('[data-slot="empty-state"]') as HTMLElement
+
   it('tells a read-only principal WHO can author, when the list is empty', async () => {
     api.scenarios.mockResolvedValue({ items: [], has_more: false })
     auth.perms = new Set(['sandbox:scenario:read'])
@@ -376,9 +384,44 @@ describe('Scenario authoring — the console calls what the engine already serve
     expect(
       await screen.findByText(/Record the first synthetic fixture/i),
     ).toBeInTheDocument()
+    // TWO doors to one action, and that is the point: the section header carries it
+    // for a populated list, and the empty state carries it where the reader is
+    // actually looking when there is nothing to read. Both open the same editor.
+    const nuevos = screen.getAllByRole('button', { name: 'New scenario' })
+    expect(nuevos).toHaveLength(2)
     expect(
-      screen.getByRole('button', { name: 'New scenario' }),
+      within(vacio(/Record the first synthetic fixture/i)).getByRole('button', {
+        name: 'New scenario',
+      }),
     ).toBeInTheDocument()
+  })
+
+  it('offers the read-only principal no door that would answer 403', async () => {
+    api.scenarios.mockResolvedValue({ items: [], has_more: false })
+    auth.perms = new Set(['sandbox:scenario:read'])
+    const user = userEvent.setup()
+    renderIntel(<SandboxView />)
+    await user.click(screen.getByRole('tab', { name: 'Scenarios' }))
+    await screen.findByText(/authored by a caller holding/i)
+    expect(
+      screen.queryByRole('button', { name: 'New scenario' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('sends the reader from an empty run list to the tab that fills it', async () => {
+    // The run list is empty until a scenario exists, and the author button is in
+    // another tab. The empty state names that tab AND goes there.
+    api.runs.mockResolvedValue({ items: [], has_more: false })
+    const user = userEvent.setup()
+    renderIntel(<SandboxView />)
+    await screen.findByText('No runs yet')
+    await user.click(
+      within(vacio('No runs yet')).getByRole('button', { name: 'Scenarios' }),
+    )
+    expect(screen.getByRole('tab', { name: 'Scenarios' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
   })
 })
 

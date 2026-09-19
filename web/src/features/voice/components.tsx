@@ -17,6 +17,7 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { CategoryBarChart } from '@/components/charts'
 import { AccessibleChart } from '@/components/data/accessible-chart'
 import { HashChip, MetricStat, SectionCard, StatGrid } from '@/features/_intel'
+import { NamedRef, useSessionNames } from '@/features/shared'
 import {
   formatDuration,
   formatInt,
@@ -439,6 +440,10 @@ export function OpStatusBadge({ status }: { status: string }) {
 
 export function DecisionsTable({ decisions }: { decisions: VoiceDecision[] }) {
   const { t, i18n } = useTranslation('voice')
+  const { t: tShared } = useTranslation('shared')
+  // The ONE lookup every other table on this console consults, and the reason this
+  // column stopped painting a reference as if it were a name.
+  const sessionNames = useSessionNames()
   const columns = useMemo<TableColumn<VoiceDecision>[]>(
     () => [
       {
@@ -472,11 +477,30 @@ export function DecisionsTable({ decisions }: { decisions: VoiceDecision[] }) {
         //    de la otra pestaña daría un falso «no existe» en cuanto ESA lista venga
         //    recortada, que es su estado por defecto. Ausente + incompleto = no lo sé, y
         //    no lo sé no se pinta como un hecho.
-        cell: ({ row }) => (
-          <span className="font-mono text-caption text-foreground">
-            {row.original.session_ref || '—'}
-          </span>
-        ),
+        //
+        // ⛔ Y POR ESO MISMO LA REFERENCIA DEJA DE SER EL NOMBRE. Esta columna pintaba
+        //    `session_ref` entero, que es justo lo que el resto de la consola dejó de
+        //    hacer: el identificador nunca es el nombre de la fila. La respuesta la da
+        //    la MISMA escalera que las demás tablas (`useSessionNames`), y cuando no la
+        //    sabe —sin `sessions:live:read`, o una sesión fuera de la página que el
+        //    motor devuelve— la fila dice «sin título» con la referencia al lado, que
+        //    sigue siendo exactamente lo que este registro identifica. Nada se pierde:
+        //    `NamedRef` la lleva entera en `title=` y en su forma corta.
+        cell: ({ row }) => {
+          const reference = row.original.session_ref
+          if (!reference)
+            return (
+              <span className="text-caption text-muted-foreground">{'—'}</span>
+            )
+          return (
+            <NamedRef
+              className="text-caption text-foreground"
+              name={sessionNames.nameOf(reference)}
+              reference={reference}
+              fallback={tShared('names.untitledSession')}
+            />
+          )
+        },
       },
       {
         accessorKey: 'agent_ref',
@@ -519,7 +543,10 @@ export function DecisionsTable({ decisions }: { decisions: VoiceDecision[] }) {
         ),
       },
     ],
-    [t, i18n.language],
+    // ⚠ `sessionNames` KEEPS ITS IDENTITY while its answer does (entity-names.ts), so
+    //   naming it here rebuilds these columns when the names arrive and not on every
+    //   render — which is the whole reason that lookup memoises its object.
+    [t, tShared, i18n.language, sessionNames],
   )
   return (
     <DataTable<VoiceDecision>

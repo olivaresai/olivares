@@ -54,7 +54,7 @@ import {
   isLiveRun,
   isScopedRow,
   primaryRun,
-  sessionLabel,
+  sessionNaming,
   type Capability,
   type ControlLevel,
   type UnifiedSession,
@@ -107,8 +107,8 @@ export function SessionCard({
    */
   resolution: SessionResolution
   onClose: () => void
-  /** Open another row from inside the card (B2: the observation rows that share a
-   * managed run's profile and id are separate rows, reachable from it). */
+  /** Open another row from inside the card: the observation rows that share a
+   * managed run's profile and id are separate rows, reachable from it. */
   onNavigate?: (target: SessionTarget) => void
 }) {
   const target = resolution.target
@@ -168,6 +168,9 @@ function CardBody({
   // controlLevel and capabilities, surfacing again through the picker. The list still
   // reports the SESSION's reach, which is the right unit there.
   const control = controlLevel(run ? [run] : session.runs)
+  // The one ladder, same call the rail makes — so the sheet and the row that opened it
+  // can never tell the same session two different names.
+  const naming = sessionNaming(session, t('untitled'))
 
   if (loading) {
     return (
@@ -186,8 +189,28 @@ function CardBody({
           ) : (
             <Activity className="size-4 text-accent-text" />
           )}
-          <span className="truncate font-mono text-body">
-            {sessionLabel(session)}
+          {/* ⛔ A DETAIL SHEET IS NOT NAMED BY ITS REFERENCE, and this was the last
+              surface that was. `sessionLabel`'s second rung used to be `sessionRef`, so
+              a discovered session with no run and no telemetry titled itself
+              `sess-found` — in monospace, which reads as a value rather than a name —
+              while the table two panes left called the same row "Untitled session".
+              Nothing is hidden: the distinguishing tail stays beside the word, the
+              whole reference is on the hover, and the identifiers block below prints
+              every one of them in full, which is what a detail sheet is FOR. */}
+          <span
+            data-testid="session-card-title"
+            className="truncate text-body"
+            title={[naming.name, naming.shortId, naming.reference]
+              .filter((part, i, all) => part && all.indexOf(part) === i)
+              .join(' · ')}
+          >
+            {naming.name}
+            {naming.shortId ? (
+              <span className="font-mono text-caption text-muted-foreground">
+                {' '}
+                {naming.shortId}
+              </span>
+            ) : null}
           </span>
         </SheetTitle>
         <SheetDescription className="flex flex-wrap items-center gap-2">
@@ -697,7 +720,7 @@ function RunActions({
   )
 }
 
-/** B2: observation rows that share a managed run's profile and provider id. Read
+/** Observation rows that share a managed run's profile and provider id. Read
  * beside the run, opened as their own rows — never folded into the run's evidence. */
 function RelatedObservations({
   rows,

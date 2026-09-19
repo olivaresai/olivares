@@ -170,14 +170,18 @@
       "any": "Archivierte und nicht archivierte",
       "false": "Nur nicht archivierte",
       "true": "Nur archivierte"
-    }
+    },
+    "clear": "Filter zurücksetzen"
   },
   "items": {
     "title": "Arbeitseinheiten",
     "subtitle": "Filter schränken den gesamten Speicher ein, nicht nur die angezeigte Seite.",
     "empty": {
       "title": "Keine Arbeitseinheit passt",
-      "body": "Nichts im Speicher entspricht diesen Filtern. Das ist eine echte, vollständige Antwort: Die Engine hat den Speicher gelesen und keine gefunden."
+      "body": "Nichts im Speicher entspricht diesen Filtern. Das ist eine echte, vollständige Antwort: Die Engine hat den Speicher gelesen und keine gefunden.",
+      "allTitle": "Noch keine Arbeitseinheiten",
+      "allBody": "Arbeitseinheiten erscheinen hier, sobald Sitzungen, Agenten und Bedienende sie erfassen. Das ist eine echte, vollständige Antwort: Die Engine hat den Speicher gelesen und keine gefunden.",
+      "start": "Sitzung starten"
     }
   },
   "lease": {

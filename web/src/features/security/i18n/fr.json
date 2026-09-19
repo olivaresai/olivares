@@ -13,6 +13,7 @@
     "description": "Constats de garde-fous, d’anomalies et d’investigation. La preuve est une empreinte — il n’y a aucune charge utile à déployer.",
     "empty": "Aucun constat",
     "emptyHint": "Les constats apparaissent à mesure que les garde-fous, la détection d’anomalies et l’investigation enregistrent des preuves.",
+    "namesUnread": "Certains noms de session n'ont pas pu être lus ; ces lignes affichent donc leur référence.",
     "export": {
       "action": "Exporter en SARIF",
       "busy": "Export en cours…",

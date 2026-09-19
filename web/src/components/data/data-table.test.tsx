@@ -426,7 +426,7 @@ describe('DataTable — density preference', () => {
   const headerClasses = () =>
     screen.getAllByRole('columnheader').map((c) => c.className)
 
-  it('applies the comfortable row height to header and body by default', () => {
+  it('applies the comfortable density to header and body by default', () => {
     render(
       <DataTable
         columns={columns}
@@ -439,9 +439,15 @@ describe('DataTable — density preference', () => {
     const tokens = DENSITY_ROW.comfortable.className.split(' ')
     for (const c of cellClasses())
       expect(c.split(' ')).toEqual(expect.arrayContaining(tokens))
+    // ⛔ THE HEADER IS ONE ROW TALL INCLUDING ITS RULE, so it is the density's HEADER
+    //    token and not the row's: `border-collapse` draws the hairline inside the strip,
+    //    and a header given `h-9` measured 36 where a row measures 36 + no rule, which is
+    //    the pixel that put `/audit`'s first row at 137 against a budget of 136.
+    const headTokens = DENSITY_ROW.comfortable.headClassName.split(' ')
     for (const c of headerClasses())
-      expect(c.split(' ')).toEqual(expect.arrayContaining(tokens))
+      expect(c.split(' ')).toEqual(expect.arrayContaining(headTokens))
     expect(headerClasses()[0].split(' ')).not.toContain('py-2')
+    expect(headerClasses()[0].split(' ')).not.toContain('h-9')
   })
 
   it('switches every row to compact when the preference changes, without remounting', () => {
@@ -458,9 +464,16 @@ describe('DataTable — density preference', () => {
     expect(wrapper()).toHaveAttribute('data-density', 'compact')
     const compact = DENSITY_ROW.compact.className.split(' ')
     const comfortable = DENSITY_ROW.comfortable.className.split(' ')
-    for (const c of [...cellClasses(), ...headerClasses()]) {
+    for (const c of cellClasses()) {
       expect(c.split(' ')).toEqual(expect.arrayContaining(compact))
       for (const token of comfortable) expect(c.split(' ')).not.toContain(token)
+    }
+    for (const c of headerClasses()) {
+      expect(c.split(' ')).toEqual(
+        expect.arrayContaining(DENSITY_ROW.compact.headClassName.split(' ')),
+      )
+      for (const token of DENSITY_ROW.comfortable.headClassName.split(' '))
+        expect(c.split(' ')).not.toContain(token)
     }
     // Same element, re-rendered — not a new table.
     expect(screen.getAllByRole('gridcell')[0]).toBe(firstCell)
@@ -707,12 +720,26 @@ describe('DataTable — density preference', () => {
       await waitFor(() =>
         expect(document.activeElement?.getAttribute('role')).toBe('gridcell'),
       )
-      // bottom 700 > region bottom 640 ⇒ the region scrolls down by the 60 px overflow.
-      await waitFor(() => expect(scroller.scrollTop).toBe(160))
+      // The cell sits at 660 and is one row tall, so its bottom overflows the region's
+      // 640 by `20 + rowHeight`, and the region scrolls down by exactly that.
+      //
+      // ⛔ DERIVED FROM THE DENSITY, NOT WRITTEN AS 160. It WAS 160, and the
+      // console's step from a
+      //    40 px comfortable row to 36 turned this case red while the behaviour it
+      //    measures was untouched: the mock already builds its boxes from
+      //    `DENSITY_ROW.comfortable.px`, so a literal here asserted the old constant
+      //    against a new layout. A test that has to be edited whenever a token moves
+      //    teaches the next author to edit the test.
+      await waitFor(() =>
+        expect(scroller.scrollTop).toBe(120 + DENSITY_ROW.comfortable.px),
+      )
       // Now the next cell reports itself 10 px under the 40 px sticky header
       // (layout top 90 − current shift 60 = viewport top 30 < header bottom 40).
       cellTop = 90
       await user.keyboard('{ArrowDown}')
+      // 150 is density-independent here and that is arithmetic, not luck: the region has
+      // to put the cell's top at the header's bottom (40) from a layout top of 90, and
+      // the row's height cancels out of that subtraction.
       await waitFor(() => expect(scroller.scrollTop).toBe(150))
       expect(scrollIntoView.mock.calls.length).toBe(scrollIntoViewCalls)
     } finally {
@@ -933,5 +960,49 @@ describe('DataTable — the state is a sibling of the table, not a row in it', (
     expect(stateBlock()).toHaveLength(0)
     expect(screen.getByRole('grid')).toHaveAttribute('aria-rowcount', '3')
     expect(bodyRows()).toHaveLength(2)
+  })
+})
+
+/**
+ * A ROW THAT HOLDS A CONTROL IS STILL A 36 PX ROW — the same rule `StaticTable`
+ * carries, pinned here so the two primitives cannot drift apart on it.
+ *
+ * Measured in a real browser against the seeded estate: `/security` 37 px and
+ * `/backups` 40.5 px, both back to exactly 36 when the cell holding the button was
+ * emptied, while emptying any text cell beside it changed nothing. jsdom has no layout
+ * engine, so this pins the RULE; the pixel is the browser probe's job.
+ */
+describe('DataTable rows that hold a control', () => {
+  it('takes the vertical padding off the cell that holds one', () => {
+    render(
+      <DataTable
+        columns={columns}
+        data={make(1)}
+        getRowId={(r) => r.id}
+        empty={BENCH_EMPTY}
+      />,
+    )
+    const cell = screen.getByRole('grid').querySelector('tbody td')!
+    const classes = cell.className.split(/\s+/)
+    expect(classes).toContain('has-[button]:py-0')
+    expect(classes).toContain('has-[a]:py-0')
+    expect(classes).toContain('has-[input]:py-0')
+    expect(classes).toContain('has-[select]:py-0')
+  })
+
+  it('keeps the height token and the padding the ordinary row needs', () => {
+    render(
+      <DataTable
+        columns={columns}
+        data={make(1)}
+        getRowId={(r) => r.id}
+        empty={BENCH_EMPTY}
+      />,
+    )
+    const cell = screen.getByRole('grid').querySelector('tbody td')!
+    const classes = cell.className.split(/\s+/)
+    for (const token of DENSITY_ROW.comfortable.className.split(/\s+/)) {
+      expect(classes).toContain(token)
+    }
   })
 })

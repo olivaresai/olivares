@@ -11,8 +11,10 @@ import {
   within,
 } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { clippingAncestors } from '@/test/clipping'
 import { fakeRouter } from '@/test/fake-router'
+import { stubViewportWidth } from '@/test/viewport'
 import type { RunDTO } from '@/features/agentops/types'
 import type { LiveDTO } from './types'
 
@@ -87,7 +89,7 @@ vi.mock('./api', async (importOriginal) => ({
 
 vi.mock('@/features/agentops/api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/features/agentops/api')>()),
-  agentOpsApi: { listRuns: vi.fn(), getRun: vi.fn() },
+  agentOpsApi: { listRuns: vi.fn(), getRun: vi.fn(), listProfiles: vi.fn() },
 }))
 
 import { agentOpsApi } from '@/features/agentops/api'
@@ -184,29 +186,38 @@ beforeEach(() => {
     items: [launchedRun],
     has_more: false,
   })
+  vi.mocked(agentOpsApi.listProfiles).mockResolvedValue({
+    items: [],
+    has_more: false,
+  })
 })
 
 describe('SessionsWorkspaceView — one destination, both origins', () => {
   it('lists discovered and launched sessions in ONE table, each labelled', async () => {
     renderView()
-    const found = await rowFor('sess-found')
+    const found = await rowFor('Untitled session')
     expect(within(found).getByText('Discovered')).toBeInTheDocument()
     // The launched one is titled by the name its operator typed at launch.
     const ours = await rowFor('nightly-indexer')
     expect(within(ours).getByText('Launched')).toBeInTheDocument()
     // …and it is ONE row, not two: the observed and operate halves folded together.
-    // The session id stays ON that row (as the secondary line) so it remains
-    // searchable — naming the row after the run must not hide the id the ledger,
-    // the API and any saved deep link use.
+    // The session id stays ON that row so it remains searchable — naming the row after
+    // the run must not hide the id the ledger, the API and any saved deep link use.
     expect(screen.getAllByRole('row')).toHaveLength(3) // header + 2 sessions
-    expect(within(ours).getByText('sess-ours')).toBeInTheDocument()
+    // The id is no longer a SECOND LINE — that stack, with the
+    // INSTANCE column's own, made every row 110 px. It is on the cell's `title` and it
+    // is still what the column searches, which is the property that matters here and
+    // the one the search test below exercises.
+    expect(
+      within(ours).getByTitle('nightly-indexer · sess-ours'),
+    ).toBeInTheDocument()
   })
 
   it('shows the control level per row, from the plane and not from the caller', async () => {
     renderView()
     const ours = await rowFor('nightly-indexer')
     expect(within(ours).getByText('Full control')).toBeInTheDocument()
-    const found = await rowFor('sess-found')
+    const found = await rowFor('Untitled session')
     expect(within(found).getByText('Observe only')).toBeInTheDocument()
   })
 
@@ -220,11 +231,11 @@ describe('SessionsWorkspaceView — one destination, both origins', () => {
   it('filters by origin without making the operator guess a section', async () => {
     const user = userEvent.setup()
     renderView()
-    await screen.findByText('sess-found')
+    await screen.findByText('Untitled session')
     await user.click(screen.getByLabelText('All sources'))
     await user.click(await screen.findByRole('option', { name: 'Launched' }))
     await waitFor(() =>
-      expect(screen.queryByText('sess-found')).not.toBeInTheDocument(),
+      expect(screen.queryByText('Untitled session')).not.toBeInTheDocument(),
     )
     expect(screen.getByText('nightly-indexer')).toBeInTheDocument()
   })
@@ -232,7 +243,7 @@ describe('SessionsWorkspaceView — one destination, both origins', () => {
   it('opens the SAME card from either kind of row', async () => {
     const user = userEvent.setup()
     renderView()
-    await user.click(await rowFor('sess-found'))
+    await user.click(await rowFor('Untitled session'))
     expect(await screen.findByTestId('card')).toHaveTextContent(
       'card:sess-found|',
     )
@@ -258,7 +269,7 @@ describe('SessionsWorkspaceView — the third answer', () => {
   it('says the operate half was NOT READ rather than calling everything discovered', async () => {
     perms.delete('sessions:run:read')
     renderView()
-    await screen.findByText('sess-found')
+    await screen.findAllByText('Untitled session')
     expect(vi.mocked(agentOpsApi.listRuns)).not.toHaveBeenCalled()
     expect(
       screen.getByText(/Launched sessions are not shown/i),
@@ -277,7 +288,7 @@ describe('SessionsWorkspaceView — the third answer', () => {
     renderView()
     // The observed rows that DID arrive are still shown — a failed run lookup must not
     // throw away data the other half returned.
-    await screen.findByText('sess-found')
+    await screen.findAllByText('Untitled session')
     expect(screen.getByText(/run lookup failed/i)).toBeInTheDocument()
     const table = screen.getByRole('grid')
     expect(within(table).queryAllByText('Discovered')).toHaveLength(0)
@@ -316,7 +327,7 @@ describe('SessionsWorkspaceView — the third answer', () => {
     await user.click(screen.getByLabelText('All states'))
     await user.click(await screen.findByRole('option', { name: 'Run: Failed' }))
     await waitFor(() =>
-      expect(screen.queryByText('sess-found')).not.toBeInTheDocument(),
+      expect(screen.queryByText('Untitled session')).not.toBeInTheDocument(),
     )
     expect(screen.getByText('broken')).toBeInTheDocument()
   })
@@ -337,7 +348,7 @@ describe('SessionsWorkspaceView — the third answer', () => {
       has_more: true,
     })
     renderView()
-    await screen.findByText('sess-found')
+    await screen.findByText('Untitled session')
     expect(
       screen.getByText(/most recent page, not the whole estate/i),
     ).toBeInTheDocument()
@@ -345,7 +356,7 @@ describe('SessionsWorkspaceView — the third answer', () => {
 
   it('says nothing about truncation when both pages are complete', async () => {
     renderView()
-    await screen.findByText('sess-found')
+    await screen.findByText('Untitled session')
     expect(
       screen.queryByText(/most recent page, not the whole estate/i),
     ).not.toBeInTheDocument()
@@ -359,7 +370,7 @@ describe('SessionsWorkspaceView — two doors, one room', () => {
       await screen.findByRole('heading', { name: 'Claude Code' }),
     ).toBeInTheDocument()
     // …and still lists the sessions Olivares only discovered.
-    expect(await screen.findByText('sess-found')).toBeInTheDocument()
+    expect(await screen.findByText('Untitled session')).toBeInTheDocument()
   })
 
   it('keeps the observe framing on the /sessions door', async () => {
@@ -402,7 +413,7 @@ describe('SessionsWorkspaceView — two doors, one room', () => {
 
   it('offers the launch action only to a principal who can write runs', async () => {
     renderView()
-    await screen.findByText('sess-found')
+    await screen.findByText('Untitled session')
     expect(
       screen.queryByRole('button', { name: /New session/i }),
     ).not.toBeInTheDocument()
@@ -414,10 +425,10 @@ describe('SessionsWorkspaceView — two doors, one room', () => {
   })
 })
 
-// B2 — two homes of one provider may announce ONE session id. The list keys rows by
+// Two homes of one provider may announce ONE session id. The list keys rows by
 // their own live_ref, joins a profiled run only to the row the plane proved for it,
 // and opens a scoped row by live_ref.
-describe('SessionsWorkspaceView — B2: two homes, one provider session id', () => {
+describe('SessionsWorkspaceView — two homes, one provider session id', () => {
   const managedA: LiveDTO = {
     ...observed,
     session_ref: 'sess-dup',
@@ -466,12 +477,59 @@ describe('SessionsWorkspaceView — B2: two homes, one provider session id', () 
     const a = await rowFor('home-a')
     const b = await rowFor('home-b')
     expect(screen.getAllByRole('row')).toHaveLength(3) // header + 2 sessions
-    expect(within(a).getByText('ppf_a')).toBeInTheDocument()
-    expect(within(b).getByText('ppf_b')).toBeInTheDocument()
+    expect(within(a).queryByText('ppf_a')).toBeNull()
+    expect(within(b).queryByText('ppf_b')).toBeNull()
     expect(within(a).getByText('Managed by Olivares')).toBeInTheDocument()
     expect(within(a).getByText('Launched')).toBeInTheDocument()
     expect(within(b).getByText('$0.001')).toBeInTheDocument()
     expect(within(a).getByText('$0.042')).toBeInTheDocument()
+  })
+
+  it('paints zero table cells that start with a raw ppf_ or sess- identifier', async () => {
+    perms.add('sessions:profile:read')
+    vi.mocked(sessionsApi.live).mockResolvedValue({
+      items: [managedA, managedB],
+      has_more: false,
+    })
+    vi.mocked(agentOpsApi.listRuns).mockResolvedValue({
+      items: [runA, runB],
+      has_more: false,
+    })
+    vi.mocked(agentOpsApi.listProfiles).mockResolvedValue({
+      items: [
+        {
+          profile_ref: 'ppf_a',
+          driver: 'claude',
+          environment_ref: 'xenv_1',
+          display_name: 'Home A',
+          state: 'active',
+          local_environment: true,
+          operable: true,
+        },
+        {
+          profile_ref: 'ppf_b',
+          driver: 'claude',
+          environment_ref: 'xenv_1',
+          display_name: 'Home B',
+          state: 'active',
+          local_environment: true,
+          operable: true,
+        },
+      ],
+      has_more: false,
+    })
+    renderView()
+    const a = await rowFor('home-a')
+    await waitFor(() =>
+      expect(within(a).getByText('Home A')).toBeInTheDocument(),
+    )
+    expect(within(a).getByTitle('ppf_a')).toBeInTheDocument()
+    expect(
+      within(await rowFor('home-b')).getByText('Home B'),
+    ).toBeInTheDocument()
+    for (const cell of screen.getAllByRole('gridcell')) {
+      expect(cell.textContent?.trim() ?? '').not.toMatch(/^(ppf_|sess-)/)
+    }
   })
 
   it('opens the card by live_ref for a scoped row', async () => {
@@ -500,9 +558,9 @@ describe('SessionsWorkspaceView — B2: two homes, one provider session id', () 
     })
     renderView()
     const own = await rowFor('home-a')
-    // 'sess-dup' is the legacy row's label AND the profiled row's secondary id line,
-    // so the legacy row is the one whose title is the bare id.
-    const legacy = (await screen.findAllByText('sess-dup'))
+    // The legacy row has no run name, so it paints the observed action, not the
+    // bare session id. The profiled row is titled by the name the operator typed.
+    const legacy = (await screen.findAllByText('Untitled session'))
       .map((el) => el.closest('tr') as HTMLElement)
       .find((tr) => tr !== own) as HTMLElement
     expect(screen.getAllByRole('row')).toHaveLength(3)
@@ -519,6 +577,55 @@ describe('SessionsWorkspaceView — B2: two homes, one provider session id', () 
  * Every case below drives the REAL location double (`@/test/fake-router`), so what is
  * asserted is the address bar an operator would copy, and not a prop.
  */
+describe('SessionsWorkspaceView — chrome above the work', () => {
+  it('folds the counts AND the tab strip onto the title line', async () => {
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false, gcTime: 0 } },
+    })
+    render(
+      <QueryClientProvider client={qc}>
+        <SessionsWorkspaceView entrance="observe" />
+      </QueryClientProvider>,
+    )
+    const heading = await screen.findByRole('heading', { name: 'Sessions' })
+    const summary = await screen.findByTestId('sessions-summary')
+    expect(heading.parentElement).toContainElement(summary)
+    const panes = screen.getByTestId('sessions-panes')
+    // The strip used to be the pane header, one 36 px band under the title. It is on
+    // the title line now, so the panes begin with the work itself.
+    expect(panes).not.toContainElement(screen.getByRole('tablist'))
+    expect(heading.closest('[data-slot="work-chrome"]')).toContainElement(
+      screen.getByRole('tablist'),
+    )
+    expect(panes).toContainElement(await screen.findByTestId('work-rail'))
+    expect(panes).not.toContainElement(summary)
+  })
+})
+
+describe('SessionsWorkspaceView — the surface opens on work, not on nothing', () => {
+  it('opens on the top row of the rail when the address names no session', async () => {
+    // The flagship work screen of this cycle arrived with nothing
+    // selected
+    // — the narrative pane saying `Select a session`, the context pane saying `No
+    // session selected`, and 60 % of the screen blank. With no session in the
+    // address the surface opens on the session the RAIL puts first, which is its own
+    // order — needs attention, then working, then settled, most recent inside each.
+    fakeRouter.reset('/sessions')
+    renderView()
+    const card = await screen.findByTestId('card')
+    expect(card.textContent).not.toBe('')
+  })
+
+  it('does not write the default into the URL, so a link that named nothing still does', async () => {
+    // A default is not a selection. A surface that rewrote the address under its reader
+    // would hand a recipient a different link than its author copied.
+    fakeRouter.reset('/sessions')
+    renderView()
+    await screen.findByTestId('card')
+    expect(fakeRouter.url()).toBe('/sessions')
+  })
+})
+
 describe('SessionsWorkspaceView — the address bar holds the session', () => {
   it('opens a session COLD from a deep link, with no click and no list behind it', async () => {
     // The whole point: nothing is loaded yet when the address is read, so the card has
@@ -539,7 +646,7 @@ describe('SessionsWorkspaceView — the address bar holds the session', () => {
   it('writes the address when a row is clicked — the URL is the only writer', async () => {
     const user = userEvent.setup()
     renderView()
-    await user.click(await rowFor('sess-found'))
+    await user.click(await rowFor('Untitled session'))
     await screen.findByTestId('card')
     expect(fakeRouter.url()).toBe('/sessions?session=sess%3Asess-found')
   })
@@ -547,7 +654,7 @@ describe('SessionsWorkspaceView — the address bar holds the session', () => {
   it('Back returns to the session read a moment ago, and Forward goes on again', async () => {
     const user = userEvent.setup()
     renderView()
-    await user.click(await rowFor('sess-found'))
+    await user.click(await rowFor('Untitled session'))
     await screen.findByTestId('card')
     await user.click(await rowFor('nightly-indexer'))
     expect(await screen.findByTestId('card')).toHaveTextContent(
@@ -565,13 +672,21 @@ describe('SessionsWorkspaceView — the address bar holds the session', () => {
     )
   })
 
-  it('closing the card takes the session out of the address', async () => {
+  it('closing the card takes the session out of the address, and the surface falls back to the rail', async () => {
+    // ⛔ THIS USED TO ASSERT THAT THE SURFACE WENT EMPTY, and that was the defect the
+    //    measurement recorded: the flagship work screen arriving with nothing
+    //    selected, two empty states side by side saying the same thing. Since the
+    //    work-first pass
+    //    an address that names no session means the surface shows the top row of the
+    //    rail's OWN order, so what this case must say is that the session the URL named
+    //    is no longer the one open — not that nothing is.
     fakeRouter.reset('/sessions?session=sess%3Asess-found')
     renderView()
-    await screen.findByTestId('card')
+    const closed = (await screen.findByTestId('card')).textContent
+    expect(closed).toContain('sess-found')
     act(() => fakeRouter.go('/sessions'))
     await waitFor(() =>
-      expect(screen.queryByTestId('card')).not.toBeInTheDocument(),
+      expect(screen.getByTestId('card').textContent).not.toBe(closed),
     )
   })
 
@@ -595,7 +710,7 @@ describe('SessionsWorkspaceView — the address bar holds the session', () => {
     // sit in quietly.
     const user = userEvent.setup()
     const { rerender } = renderView()
-    await user.click(await rowFor('sess-found'))
+    await user.click(await rowFor('Untitled session'))
     await screen.findByTestId('card')
 
     perms.delete('sessions:live:read')
@@ -610,10 +725,140 @@ describe('SessionsWorkspaceView — the address bar holds the session', () => {
         <SessionsWorkspaceView entrance="observe" />
       </QueryClientProvider>,
     )
+    // The RETIRED session is not what is open — the surface falls back to the top row
+    // that survived the withdrawal, which is a different, currently admitted one
+    // `railDefault` excludes the retired address by construction, so the
+    // R2 invariant holds here too: a read bit coming back cannot revive it.
     await waitFor(() =>
-      expect(screen.queryByTestId('card')).not.toBeInTheDocument(),
+      expect(screen.queryByTestId('card')?.textContent ?? '').not.toContain(
+        'sess-found',
+      ),
     )
     expect(await screen.findByTestId('sessions-address-retired')).toBeVisible()
     await waitFor(() => expect(fakeRouter.url()).toBe('/sessions'))
+  })
+})
+
+describe('SessionsWorkspaceView — one chrome row above the work', () => {
+  afterEach(() => stubViewportWidth(1440))
+
+  /** The surface, not the table: this is the screen an operator arrives on. */
+  function renderSurface() {
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false, gcTime: 0 } },
+    })
+    return render(
+      <QueryClientProvider client={qc}>
+        <SessionsWorkspaceView entrance="observe" />
+      </QueryClientProvider>,
+    )
+  }
+
+  // Measured on the seeded estate at 1440×900: title line 24, gap 12, tab strip 36 —
+  // the first rail row at y=181 against a budget of 136. The strip joins the title
+  // line, which is the shape /console and /provider-profiles already carry.
+  it('paints the title and the tab strip on the same 36 px row', async () => {
+    renderSurface()
+    await screen.findAllByRole('tab', { name: 'Table' })
+    const chrome = document.querySelector('[data-slot="work-chrome"]')
+    expect(chrome).not.toBeNull()
+    expect(chrome!.className).toMatch(/\bh-9\b/)
+    expect(
+      within(chrome as HTMLElement).getByRole('heading', { level: 1 }),
+    ).toHaveTextContent('Sessions')
+    expect(
+      within(chrome as HTMLElement).getByRole('tablist'),
+    ).toBeInTheDocument()
+  })
+
+  it('keeps the counts and the scope note on that same line', async () => {
+    renderSurface()
+    const chrome = (await waitFor(() => {
+      const el = document.querySelector('[data-slot="work-chrome"]')
+      expect(el).not.toBeNull()
+      return el
+    })) as HTMLElement
+    await waitFor(() =>
+      expect(
+        within(chrome).getByTestId('sessions-summary'),
+      ).toBeInTheDocument(),
+    )
+    expect(
+      within(chrome).getByTestId('sessions-scope-note'),
+    ).toBeInTheDocument()
+  })
+
+  // Measured at 1440: the description was cut from 1454 px to 797 with no `title` at
+  // all — the attribute was there a round earlier and a later one lost it, because the
+  // description on THIS screen is a node (the counts and the scope note ride in it) and
+  // `title` takes a string. The walk is what catches the next one here instead of in a
+  // browser: every truncating element in the header owes the reader the whole text.
+  it('leaves no truncating element in the header without a title', async () => {
+    renderSurface()
+    const chrome = (await waitFor(() => {
+      const el = document.querySelector('[data-slot="work-chrome"]')
+      expect(el).not.toBeNull()
+      return el
+    })) as HTMLElement
+    await waitFor(() =>
+      expect(
+        within(chrome).getByTestId('sessions-summary'),
+      ).toBeInTheDocument(),
+    )
+    const header = chrome.querySelector(
+      '[data-slot="page-header"]',
+    ) as HTMLElement
+    const naked = [...header.querySelectorAll('.truncate')].filter(
+      (el) => !el.closest('[title]'),
+    )
+    expect(naked.map((el) => (el.textContent ?? '').slice(0, 40))).toEqual([])
+    const described = within(chrome).getByTestId('sessions-summary')
+      .parentElement as HTMLElement
+    expect(described.getAttribute('title')).toContain('Tenant-wide')
+  })
+
+  /**
+   * ⛔ THE PANEL IS PAINTED AND UNTOUCHABLE WHEN THE ROW CLIPS IT, and no assertion this
+   *    round had could see that. The disclosure opens a panel `absolute top-full` INSIDE
+   *    the chrome row; the row was `h-9 … overflow-hidden`, so at 390×844 the panel's box
+   *    ran y 94→168 inside a row that ended at 96 and `elementFromPoint` at its centre
+   *    answered the table underneath — Launch, Refresh, Register and Export unreachable on
+   *    all four screens, with `aria-expanded` true and no `hidden` class, which is exactly
+   *    what the round-3 oracle asserted.
+   *
+   *    The walk is over CLASSES because jsdom loads no stylesheet (see `@/test/clipping`);
+   *    the computed fact is measured in a browser by `code-r4/probe/panel.mjs`.
+   */
+  it('phone: nothing between the open panel and the page clips it', async () => {
+    const user = userEvent.setup()
+    perms.add('sessions:run:write')
+    stubViewportWidth(390)
+    renderSurface()
+    const toggle = await screen.findByTestId('page-actions-toggle')
+    await user.click(toggle)
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    const panel = document.querySelector(
+      '[data-slot="page-actions"]',
+    ) as HTMLElement
+    // Joined, so a failure NAMES the element that cut the panel on its one line.
+    expect(clippingAncestors(panel).join(' | ')).toBe('')
+    expect(
+      within(panel).getByRole('button', { name: 'New session' }),
+    ).toBeInTheDocument()
+  })
+
+  // Nothing between the chrome and the panes but the notices, and those only when
+  // something has to be said: a tab strip of its own there is what cost the 45 px.
+  it('puts the panes straight under the chrome row, with no strip between them', async () => {
+    renderSurface()
+    const panes = await screen.findByTestId('sessions-panes')
+    const chrome = document.querySelector('[data-slot="work-chrome"]')!
+    expect(chrome.parentElement).toBe(panes.parentElement)
+    expect(panes.previousElementSibling).toBe(chrome)
+    expect(panes.querySelector('[role="tablist"]')).toBeNull()
+    // The tab body starts flush under the strip; `pt-4` there is a second gap.
+    for (const panel of panes.querySelectorAll('[role="tabpanel"]')) {
+      expect(panel.className).toMatch(/\bpt-0\b/)
+    }
   })
 })

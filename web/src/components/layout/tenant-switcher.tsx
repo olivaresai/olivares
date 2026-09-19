@@ -15,15 +15,13 @@ import {
 import { systemApi } from '@/lib/api/endpoints'
 import { queryKeys } from '@/lib/api/query'
 import { useAuth } from '@/lib/auth/context'
+import { cn } from '@/lib/utils'
+import { shortId } from './tenant-label'
 
 interface TenantOption {
   tenant: string
   label: string
   sub?: string
-}
-
-function shortId(id: string): string {
-  return id.length > 10 ? `${id.slice(0, 8)}…` : id
 }
 
 /**
@@ -32,7 +30,7 @@ function shortId(id: string): string {
  * propagated as X-Olivares-Tenant on every request. (The engine does not expose
  * org NAMES to non-superadmins — minimum data — so members see a short id + role.)
  */
-export function TenantSwitcher() {
+export function TenantSwitcher({ className }: { className?: string } = {}) {
   const { t } = useTranslation(['auth', 'common'])
   const { grants, activeTenant, setActiveTenant, isSuperadmin } = useAuth()
 
@@ -68,11 +66,16 @@ export function TenantSwitcher() {
   if (!isSuperadmin && options.length <= 1) {
     return (
       <span
-        className="inline-flex h-8 min-w-0 items-center gap-1.5 rounded-md px-2 text-body text-muted-foreground"
+        className={cn(
+          'inline-flex h-8 min-w-0 items-center gap-1.5 rounded-md px-2 text-body text-muted-foreground',
+          className,
+        )}
         title={activeLabel}
       >
         <Building2 className="size-4 shrink-0" />
-        <span className="max-w-[12rem] truncate">{activeLabel}</span>
+        <span className="max-w-[12rem] truncate" title={activeLabel}>
+          {activeLabel}
+        </span>
       </span>
     )
   }
@@ -86,11 +89,16 @@ export function TenantSwitcher() {
         <Button
           variant="ghost"
           size="base"
-          className="min-w-24 max-w-[14rem] shrink gap-1.5"
+          className={cn('min-w-24 max-w-[14rem] shrink gap-1.5', className)}
           title={activeLabel}
         >
           <Building2 className="size-4 text-muted-foreground" />
-          <span className="truncate">{activeLabel}</span>
+          <span
+            className="min-w-0 flex-1 truncate text-left"
+            title={activeLabel}
+          >
+            {activeLabel}
+          </span>
           <ChevronsUpDown className="size-3.5 shrink-0 text-muted-foreground" />
         </Button>
       </DropdownMenuTrigger>
@@ -102,9 +110,14 @@ export function TenantSwitcher() {
             onSelect={() => setActiveTenant(o.tenant)}
           >
             <span className="flex min-w-0 flex-col">
-              <span className="truncate">{o.label}</span>
+              <span className="truncate" title={o.label}>
+                {o.label}
+              </span>
               {o.sub && (
-                <span className="truncate font-mono text-caption text-muted-foreground">
+                <span
+                  className="truncate font-mono text-caption text-muted-foreground"
+                  title={o.sub}
+                >
                   {o.sub}
                 </span>
               )}

@@ -170,14 +170,18 @@
       "any": "Archivées et non archivées",
       "false": "Non archivées uniquement",
       "true": "Archivées uniquement"
-    }
+    },
+    "clear": "Effacer les filtres"
   },
   "items": {
     "title": "Unités de travail",
     "subtitle": "Les filtres restreignent l'ensemble du magasin, pas seulement la page affichée.",
     "empty": {
       "title": "Aucune unité ne correspond",
-      "body": "Rien dans le magasin ne correspond à ces filtres. C'est une réponse réelle et complète : le moteur a lu le magasin et n'en a trouvé aucune."
+      "body": "Rien dans le magasin ne correspond à ces filtres. C'est une réponse réelle et complète : le moteur a lu le magasin et n'en a trouvé aucune.",
+      "allTitle": "Aucune unité de travail pour le moment",
+      "allBody": "Les unités de travail apparaissent ici à mesure que les sessions, les agents et les opérateurs les enregistrent. C'est une réponse réelle et complète : le moteur a lu le magasin et n'en a trouvé aucune.",
+      "start": "Démarrer une session"
     }
   },
   "lease": {

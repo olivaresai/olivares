@@ -67,7 +67,8 @@
     "searchPlaceholder": "搜索对象…",
     "empty": {
       "title": "暂无受监控的对象",
-      "description": "一旦为某个智能体或 MCP 服务器声明了健康检查，其存活性便会显示在此处。"
+      "description": "一旦为某个智能体或 MCP 服务器声明了健康检查，其存活性便会显示在此处。",
+      "declare": "声明检查"
     }
   },
   "sla": {

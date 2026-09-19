@@ -152,8 +152,10 @@
   "live": {
     "inputPlaceholder": "向 stdin 发送一行 NDJSON……",
     "inputAria": "会话输入行",
-    "textPlaceholder": "向会话发送一条消息……",
-    "textAria": "会话消息",
+    "textPlaceholder": "发送一句话……",
+    "textAria": "会话回合",
+    "advanced": "高级 · 原始行",
+    "advancedHint": "向 stdin 发送一行 NDJSON。默认是句子栏。",
     "send": "发送",
     "noOutput": "暂无输出。",
     "waiting": "正在等待输出……",
@@ -328,6 +330,8 @@
     "title": "提供商配置文件",
     "subtitle": "一个执行环境上一个已配置提供商实例的持久身份：由哪个驱动提供服务，以及启动的会话在哪个配置主目录下运行。配置文件只登记已存在的主目录，不安装任何内容，也不登录任何账户。",
     "register": "登记配置文件",
+    "nextAction": "登记一个配置文件",
+    "rowMenu": "{{name}} 的行操作",
     "search": "搜索配置文件…",
     "allStates": "所有状态",
     "cols": {

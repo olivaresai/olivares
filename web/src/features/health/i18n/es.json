@@ -67,7 +67,8 @@
     "searchPlaceholder": "Buscar sujeto…",
     "empty": {
       "title": "Aún no hay sujetos monitorizados",
-      "description": "Cuando se declare un check de salud para un agente o servidor MCP, su liveness aparecerá aquí."
+      "description": "Cuando se declare un check de salud para un agente o servidor MCP, su liveness aparecerá aquí.",
+      "declare": "Declarar una comprobación"
     }
   },
   "sla": {

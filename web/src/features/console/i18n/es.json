@@ -123,7 +123,8 @@
     "revoke": "Revocar",
     "revokeTitle": "Revocar invitación",
     "revokeBody": "El enlace de invitación de {{email}} dejará de funcionar de inmediato.",
-    "revoked": "Invitación revocada."
+    "revoked": "Invitación revocada.",
+    "inviteFirst": "Invitar al primer usuario"
   },
   "members": {
     "title": "Miembros activos",
@@ -482,6 +483,7 @@
     "title": "Agentes",
     "caption": "Registra y mantiene los agentes individuales gobernados por este tenant.",
     "create": "Nuevo agente",
+    "nextAction": "Desplegar un agente",
     "createTitle": "Nuevo agente",
     "editTitle": "Editar agente",
     "formCaption": "Define la identidad del agente, el tipo de runtime, el alcance de Workspace y atributos JSON opcionales.",
@@ -502,6 +504,9 @@
     "jsonHint": "Objeto JSON opcional.",
     "jsonObjectError": "Las etiquetas y los metadatos deben ser objetos JSON válidos.",
     "notSet": "Sin definir",
+    "id": "ID",
+    "rowMenu": "Acciones de fila para {{name}}",
+    "workspaceUnknown": "Espacio de trabajo desconocido",
     "none": "Aún no hay agentes.",
     "noneHint": "Crea un agente para acotar acceso, políticas y auditoría a un runtime individual.",
     "edit": "Editar",

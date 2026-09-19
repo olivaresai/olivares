@@ -47,6 +47,7 @@
     "colTime": "Zeit",
     "colFilters": "Filter",
     "colCounts": "Anzahl",
-    "counts": "{{inventory}} Inventar · {{findings}} Befunde · {{drift}} Drift"
+    "counts": "{{inventory}} Inventar · {{findings}} Befunde · {{drift}} Drift",
+    "emptyAction": "Posture jetzt exportieren"
   }
 }

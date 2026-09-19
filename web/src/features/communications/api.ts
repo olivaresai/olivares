@@ -660,7 +660,7 @@ export interface CursorTokenOutcome {
  * authority even when a surface passes no guard of its own. The preparation has no
  * intent yet — it is the call that mints the token an intent will carry — so an
  * absent guard would leave NOTHING between a moved authority and the wire. Making
- * it required means the shape the review found cannot be written again.
+ * it required means the shape that was found cannot be written again.
  */
 export type PreparationOptions = TenantRequestOptions & {
   guard: () => void

@@ -1,5 +1,6 @@
 {
   "title": "Inventaire",
+  "unnamed": "Sans nom",
   "subtitle": "Chaque agent, session, MCP, modèle et identité découvert dans votre parc.",
   "refresh": "Actualiser",
   "scope": {
@@ -118,7 +119,8 @@
   "empty": {
     "catalog": {
       "title": "Aucune entité du parc découverte",
-      "description": "Les entités apparaissent lorsque les observations des connecteurs signalent des agents, des sessions, des identités, des capacités MCP, des modèles, des fournisseurs ou des ressources."
+      "description": "Les entités apparaissent lorsque les observations des connecteurs signalent des agents, des sessions, des identités, des capacités MCP, des modèles, des fournisseurs ou des ressources.",
+      "action": "Ouvrir les capacités"
     }
   }
 }

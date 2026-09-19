@@ -5,15 +5,10 @@ import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { ArrowRight, Bot, Boxes, FolderOpen, Layers, Users } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { StaticTable } from '@/components/data/static-table'
+import { XScroll } from '@/components/data/scroll-edges'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
 import { EmptyState } from '@/components/ui/empty-state'
 import {
   IntelPage,
@@ -22,12 +17,11 @@ import {
   StatGrid,
 } from '@/features/_intel'
 import { useAuth } from '@/lib/auth/context'
-import { cuentaConSuelo } from './count-floor'
 import { formatInt } from '@/lib/format'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { cuentaConSuelo } from './count-floor'
 import { workspaceDashboardApi, workspaceDashboardKeys } from './api'
 import './i18n'
-import { StaticTable } from '@/components/data/static-table'
 
 export function WorkspaceDashboardView() {
   const { t } = useTranslation(['workspaceDashboard', 'common'])
@@ -38,9 +32,15 @@ export function WorkspaceDashboardView() {
     return (
       <IntelPage icon={Layers} title={t('workspaceDashboard:title')}>
         <EmptyState
-          icon={<Layers />}
-          title={t('workspaceDashboard:title')}
+          title={t('workspaceDashboard:selectTitle')}
           description={t('workspaceDashboard:selectPrompt')}
+          action={
+            <Button asChild size="sm">
+              <Link to={'/inventory' as never}>
+                {t('workspaceDashboard:viewInventory')}
+              </Link>
+            </Button>
+          }
         />
       </IntelPage>
     )
@@ -86,23 +86,25 @@ function WorkspaceDashboard({
   })
 
   const s = summaryQ.data
-  const title = s?.name ?? workspaceName ?? workspaceId
+  const title = s?.name || workspaceName || t('workspaceDashboard:title')
 
   return (
     <IntelPage
       icon={Layers}
       title={title}
       description={
-        s && (
-          <span className="flex items-center gap-2 font-mono text-body text-muted-foreground">
-            {s.slug}
+        s?.slug ? (
+          <span className="flex min-w-0 items-center gap-2 text-caption text-muted-foreground">
+            <span className="truncate" title={s.slug}>
+              {s.slug}
+            </span>
             {s.is_default && (
               <Badge variant="neutral">
                 {t('workspaceDashboard:defaultBadge')}
               </Badge>
             )}
           </span>
-        )
+        ) : undefined
       }
     >
       <StatGrid>
@@ -152,164 +154,131 @@ function WorkspaceDashboard({
         />
       </StatGrid>
 
-      <div className="grid gap-5 lg:grid-cols-2">
-        {/* Agents table */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-3">
-            <div>
-              <CardTitle>{t('workspaceDashboard:recentAgents')}</CardTitle>
-              <CardDescription>
-                {s
-                  ? `${cuentaConSuelo(s.agent_count, s.agent_count_capped, formatInt)} ${t('workspaceDashboard:agents').toLowerCase()}`
-                  : ''}
-              </CardDescription>
-            </div>
-            <Button variant="ghost" size="sm" asChild>
-              <Link to={'/inventory' as never}>
-                {t('workspaceDashboard:viewAll')}{' '}
-                <ArrowRight className="ml-1 size-3.5" />
-              </Link>
-            </Button>
-          </CardHeader>
-          <CardContent>
-            <ListTruncationBadge
-              query={agentsQ}
-              label={t('workspaceDashboard:truncation.label', {
-                n: agentsQ.data?.items?.length,
-              })}
-              hint={t('workspaceDashboard:truncation.hint')}
-              className="px-0 pt-0 pb-3"
-            />
-            {agentsQ.data?.items.length === 0 ? (
-              <p className="py-4 text-center text-body text-muted-foreground">
-                {t('workspaceDashboard:noAgents')}
-              </p>
-            ) : (
-              <div className="overflow-hidden rounded-lg border border-border">
-                <StaticTable>
-                  <thead>
-                    <tr>
-                      <th>{t('workspaceDashboard:name')}</th>
-                      <th>{t('workspaceDashboard:kind')}</th>
-                      <th>{t('workspaceDashboard:status')}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {agentsQ.data?.items.map((a) => (
-                      <tr key={a.id} className="align-top">
-                        <td className="font-medium">{a.name}</td>
-                        <td>
-                          <Badge variant="outline">{a.kind}</Badge>
-                        </td>
-                        <td>
-                          <Badge
-                            variant={
-                              a.status === 'active' ? 'success' : 'neutral'
-                            }
-                          >
-                            {a.status}
-                          </Badge>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </StaticTable>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+      <section className="flex flex-col gap-2">
+        <div className="flex min-h-8 items-center justify-between gap-2">
+          <h2 className="text-overline text-muted-foreground uppercase">
+            {t('workspaceDashboard:recentAgents')}
+          </h2>
+          <Button variant="ghost" size="sm" asChild>
+            <Link to={'/inventory' as never}>
+              {t('workspaceDashboard:viewAll')}{' '}
+              <ArrowRight className="ml-1 size-3.5" />
+            </Link>
+          </Button>
+        </div>
+        <ListTruncationBadge
+          query={agentsQ}
+          label={t('workspaceDashboard:truncation.label', {
+            n: agentsQ.data?.items?.length,
+          })}
+          hint={t('workspaceDashboard:truncation.hint')}
+          className="px-0 pt-0 pb-1"
+        />
+        {agentsQ.data?.items.length === 0 ? (
+          <EmptyState
+            title={t('workspaceDashboard:noAgents')}
+            description={t('workspaceDashboard:noAgentsHint')}
+            action={
+              <Button asChild size="sm" variant="secondary">
+                <Link to={'/inventory' as never}>
+                  {t('workspaceDashboard:viewInventory')}
+                </Link>
+              </Button>
+            }
+          />
+        ) : (
+          <XScroll contentKey={agentsQ.data?.items.length}>
+            <StaticTable oneLine>
+              <thead>
+                <tr>
+                  <th>{t('workspaceDashboard:name')}</th>
+                  <th>{t('workspaceDashboard:kind')}</th>
+                  <th>{t('workspaceDashboard:status')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {agentsQ.data?.items.map((a) => (
+                  <tr key={a.id}>
+                    <td className="font-medium">{a.name}</td>
+                    <td>
+                      <Badge variant="outline">{a.kind}</Badge>
+                    </td>
+                    <td>
+                      <Badge
+                        variant={a.status === 'active' ? 'success' : 'neutral'}
+                      >
+                        {a.status}
+                      </Badge>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </StaticTable>
+          </XScroll>
+        )}
+      </section>
 
-        {/* Agent groups table */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-3">
-            <div>
-              <CardTitle>{t('workspaceDashboard:recentGroups')}</CardTitle>
-              <CardDescription>
-                {s
-                  ? `${cuentaConSuelo(s.group_count, s.group_count_capped, formatInt)} ${t('workspaceDashboard:groups').toLowerCase()}`
-                  : ''}
-              </CardDescription>
-            </div>
-            <Button variant="ghost" size="sm" asChild>
-              <Link to={'/console' as never}>
-                {t('workspaceDashboard:viewAll')}{' '}
-                <ArrowRight className="ml-1 size-3.5" />
-              </Link>
-            </Button>
-          </CardHeader>
-          <CardContent>
-            <ListTruncationBadge
-              query={groupsQ}
-              label={t('workspaceDashboard:truncation.label', {
-                n: groupsQ.data?.items?.length,
-              })}
-              hint={t('workspaceDashboard:truncation.hint')}
-              className="px-0 pt-0 pb-3"
-            />
-            {groupsQ.data?.items.length === 0 ? (
-              <p className="py-4 text-center text-body text-muted-foreground">
-                {t('workspaceDashboard:noGroups')}
-              </p>
-            ) : (
-              <div className="overflow-hidden rounded-lg border border-border">
-                <StaticTable>
-                  <thead>
-                    <tr>
-                      <th>{t('workspaceDashboard:name')}</th>
-                      <th>{t('workspaceDashboard:slug')}</th>
-                      <th>{t('workspaceDashboard:status')}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {groupsQ.data?.items.map((g) => (
-                      <tr key={g.id} className="align-top">
-                        <td className="font-medium">{g.name}</td>
-                        <td className="font-mono text-caption">{g.slug}</td>
-                        <td>
-                          <Badge
-                            variant={
-                              g.status === 'active' ? 'success' : 'neutral'
-                            }
-                          >
-                            {g.status}
-                          </Badge>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </StaticTable>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Workspace metadata */}
-      {summaryQ.data && (
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle>{t('workspaceDashboard:workspaceInfo')}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-body sm:grid-cols-4">
-              <div>
-                <dt className="text-muted-foreground">
-                  {t('workspaceDashboard:slug')}
-                </dt>
-                <dd className="font-mono">{s?.slug}</dd>
-              </div>
-              <div>
-                <dt className="text-muted-foreground">
-                  {t('workspaceDashboard:status')}
-                </dt>
-                <dd className="capitalize">
-                  {s?.slug === 'default' ? 'active (default)' : 'active'}
-                </dd>
-              </div>
-            </dl>
-          </CardContent>
-        </Card>
-      )}
+      <section className="flex flex-col gap-2">
+        <div className="flex min-h-8 items-center justify-between gap-2">
+          <h2 className="text-overline text-muted-foreground uppercase">
+            {t('workspaceDashboard:recentGroups')}
+          </h2>
+          <Button variant="ghost" size="sm" asChild>
+            <Link to={'/console' as never}>
+              {t('workspaceDashboard:viewAll')}{' '}
+              <ArrowRight className="ml-1 size-3.5" />
+            </Link>
+          </Button>
+        </div>
+        <ListTruncationBadge
+          query={groupsQ}
+          label={t('workspaceDashboard:truncation.label', {
+            n: groupsQ.data?.items?.length,
+          })}
+          hint={t('workspaceDashboard:truncation.hint')}
+          className="px-0 pt-0 pb-1"
+        />
+        {groupsQ.data?.items.length === 0 ? (
+          <EmptyState
+            title={t('workspaceDashboard:noGroups')}
+            description={t('workspaceDashboard:noGroupsHint')}
+            action={
+              <Button asChild size="sm" variant="secondary">
+                <Link to={'/console' as never}>
+                  {t('workspaceDashboard:viewAll')}
+                </Link>
+              </Button>
+            }
+          />
+        ) : (
+          <XScroll contentKey={groupsQ.data?.items.length}>
+            <StaticTable oneLine>
+              <thead>
+                <tr>
+                  <th>{t('workspaceDashboard:name')}</th>
+                  <th>{t('workspaceDashboard:slug')}</th>
+                  <th>{t('workspaceDashboard:status')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {groupsQ.data?.items.map((g) => (
+                  <tr key={g.id}>
+                    <td className="font-medium">{g.name}</td>
+                    <td className="font-mono text-caption">{g.slug}</td>
+                    <td>
+                      <Badge
+                        variant={g.status === 'active' ? 'success' : 'neutral'}
+                      >
+                        {g.status}
+                      </Badge>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </StaticTable>
+          </XScroll>
+        )}
+      </section>
     </IntelPage>
   )
 }

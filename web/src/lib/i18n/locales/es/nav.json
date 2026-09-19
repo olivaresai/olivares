@@ -302,6 +302,7 @@
     "noTenant": "ninguna",
     "noWorkspace": "Sin espacio de trabajo",
     "noEnvironment": "No declarado",
+    "thisNode": "Este nodo",
     "hint": "Con qué se ejecutará la próxima sesión."
   },
   "launcher": {
@@ -318,6 +319,18 @@
     "startFailed": "No se ha podido iniciar la sesión.",
     "noTenant": "Selecciona una organización antes de iniciar una sesión.",
     "noProfileRead": "Una sesión se ejecuta con un perfil de proveedor, y tu rol no incluye permiso para leerlos.",
-    "readFailed": "No se han podido leer los perfiles de proveedor, así que no se puede iniciar una sesión desde aquí."
+    "readFailed": "No se han podido leer los perfiles de proveedor, así que no se puede iniciar una sesión desde aquí.",
+    "send": "Enviar",
+    "turnPlaceholder": "Envía una frase…",
+    "turnAria": "Turno de la sesión",
+    "attachedRunning": "En ejecución",
+    "attachedWaiting": "Te espera",
+    "attachedSettled": "Cerrada",
+    "advanced": "Avanzado",
+    "advancedHint": "Envía una línea NDJSON a stdin. El campo de frase es el valor por defecto.",
+    "wirePlaceholder": "Envía una línea NDJSON a stdin…",
+    "wireAria": "Línea de entrada de la sesión",
+    "turnFailed": "La sesión no ha podido aceptar este turno.",
+    "sendBackgroundHint": "Ctrl+Entrar envía y deja el borrador listo para la siguiente frase."
   }
 }

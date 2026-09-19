@@ -90,6 +90,7 @@ export function VoiceView() {
   const [policyOpen, setPolicyOpen] = useState(false)
   // La sesion elegida manda: sin ella el flujo SSE no se abre y las decisiones no se
   // piden — el motor exige el ref y devuelve 400 sin el.
+  const [tab, setTab] = useState('sessions')
   const [selectedRef, setSelectedRef] = useState<string | null>(null)
   const [editing, setEditing] = useState<VoicePolicy | null>(null)
 
@@ -112,7 +113,11 @@ export function VoiceView() {
         </Button>
       }
     >
-      <Tabs defaultValue="sessions">
+      {/* CONTROLLED, so an empty state can carry its own next action. The sessions
+          list fills only when a policy exists, and the policy editor lives in the
+          next tab: with uncontrolled tabs the only honest empty state was a sentence
+          that named a destination the reader had to find. */}
+      <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
           <TabsTrigger value="sessions">{t('tabs.sessions')}</TabsTrigger>
           <TabsTrigger value="policies">{t('tabs.policies')}</TabsTrigger>
@@ -138,6 +143,15 @@ export function VoiceView() {
                     <EmptyState
                       title={t('sessions.empty')}
                       description={t('sessions.emptyHint')}
+                      action={
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => setTab('policies')}
+                        >
+                          {t('tabs.policies')}
+                        </Button>
+                      }
                     />
                   ) : (
                     <SessionsTable
@@ -191,6 +205,21 @@ export function VoiceView() {
                     <EmptyState
                       title={t('policies.empty')}
                       description={t('policies.emptyHint')}
+                      action={
+                        canWritePolicy ? (
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            onClick={() => {
+                              setEditing(null)
+                              setPolicyOpen(true)
+                            }}
+                          >
+                            <Plus />
+                            {t('policies.new')}
+                          </Button>
+                        ) : null
+                      }
                     />
                   ) : (
                     <PoliciesTable

@@ -3,7 +3,7 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
-import { LogOut, Moon, Search, Sun } from 'lucide-react'
+import { LogOut, Moon, Play, Search, Sun } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
@@ -108,7 +108,7 @@ function PaletteBody() {
   const { t } = useTranslation(['nav', 'common', 'auth'])
   const setOpen = useCommandStore((s) => s.setOpen)
   const navigate = useNavigate()
-  const { activeTenant, logout } = useAuth()
+  const { activeTenant, can, logout } = useAuth()
   const { navigable } = useViewAccess()
   // The verbs' own authority, which is NOT the view's (see features/navigation/command-actions).
   const { authorized: mayRun, capture } = useCommandActionAuthority()
@@ -186,8 +186,29 @@ function PaletteBody() {
 
   const searchHits = searchQ.data?.results ?? []
 
+  /**
+   * ONE ROW, AND THE NAME IS WHAT GETS THE WIDTH.
+   *
+   * ⛔ THE CONTEXT USED TO BE A `shrink-0` SIBLING OF THE NAME, and that one class was
+   *    the whole defect. `shrink-0` means "take whatever you need"; the name was the
+   *    only flexible element left, so the name was the only thing that could give way.
+   *    The result measured at 390 px: five of eight rows cut
+   *    the module name to 8–11 characters (`Communi…`, `New cha…`, `Channel a…`) while
+   *    `Work & communications › Communications` held 60 % of the row. The palette is
+   *    the console's fastest path, and at a phone width it could not be read.
+   *
+   * ⇒ The context moves to the SECOND LINE, beside the description. Line one is the
+   *   name and nothing else, so it truncates LAST — it is the only element there and
+   *   it has the whole row. The place an operator typed against is never the place
+   *   that gives way.
+   *
+   * The context is first on line two and the description second, because the context
+   * disambiguates (two doors into one screen) while the description elaborates; when
+   * the line has to be cut, the disambiguation is what must survive.
+   */
   const renderNav = (e: NavSearchEntry) => {
     const Icon = e.icon
+    const context = e.kind === 'area' ? t('nav:directory.area') : e.context
     return (
       <CommandItem
         key={`${e.kind}:${e.id}`}
@@ -196,15 +217,20 @@ function PaletteBody() {
       >
         <Icon />
         <span className="flex min-w-0 flex-1 flex-col">
-          <span className="truncate">{e.label}</span>
-          {e.description ? (
-            <span className="truncate text-caption text-muted-foreground">
-              {e.description}
+          <span className="truncate" data-slot="palette-name">
+            {e.label}
+          </span>
+          {context || e.description ? (
+            <span
+              // `leading-4`: the caption's own 18 px line box put the two-line row
+              // at 44 px exactly, which is the budget with nothing left over. 16 px
+              // leaves 2 px, and a 12 px glyph does not need 18.
+              className="truncate text-caption leading-4 text-muted-foreground"
+              data-slot="palette-context"
+            >
+              {[context, e.description].filter(Boolean).join(' · ')}
             </span>
           ) : null}
-        </span>
-        <span className="ml-2 shrink-0 text-caption text-muted-foreground">
-          {e.kind === 'area' ? t('nav:directory.area') : e.context}
         </span>
       </CommandItem>
     )
@@ -257,6 +283,28 @@ function PaletteBody() {
       }),
     )
     .filter((x) => x !== null)
+  /**
+   * STARTING WORK, FROM ANYWHERE, FOR ZERO PIXELS.
+   *
+   * The shell used to carry a 90 px composer on all 77 authenticated routes so that
+   * starting a session was one gesture away. The palette is already always mounted and
+   * already ⌘K, so it satisfies the same requirement and costs nothing; the composer
+   * itself now lives in the work pane of the two screens where starting work IS the
+   * work, which is where it can stand beside the list the run will join.
+   *
+   * ⛔ IT IS GATED BY THE VERB'S OWN PERMISSION, not by a page's. `sessions:run:write`
+   *    is what `WorkComposer` itself checks before rendering anything, and it is what
+   *    the engine enforces — a palette row that led to a 403 would be the dead end the
+   *    front door stopped offering.
+   *
+   * It NAVIGATES and does not launch: the run needs a provider profile the server
+   * cannot default, so a one-keystroke launch would either be impossible or would
+   * have to invent the one field that must be chosen.
+   */
+  const startSessionLabel = t('common:commandPalette.startSession')
+  const showStartSession =
+    can('sessions:run:write') && !!activeTenant && shows(startSessionLabel)
+
   const lightLabel = t('common:theme.light')
   const darkLabel = t('common:theme.dark')
   const signOutLabel = t('auth:account.signOut')
@@ -265,7 +313,11 @@ function PaletteBody() {
   const showDark = shows(`${themeLabel} ${darkLabel}`)
   const showSignOut = shows(signOutLabel)
   const anyAction =
-    actionItems.length > 0 || showLight || showDark || showSignOut
+    actionItems.length > 0 ||
+    showStartSession ||
+    showLight ||
+    showDark ||
+    showSignOut
 
   return (
     <>
@@ -294,10 +346,19 @@ function PaletteBody() {
                     onSelect={() => go(route)}
                   >
                     <Icon />
-                    <span className="min-w-0 flex-1 truncate">{hit.name}</span>
-                    <span className="ml-2 shrink-0 text-caption text-muted-foreground">
-                      {featureId ? t(`nav:items.${featureId}`) : hit.kind}
-                      {hit.detail ? ` · ${hit.detail}` : ''}
+                    {/* Same rule as `renderNav`: the entity's own name owns line one
+                        and the module it lives in goes below it. */}
+                    <span className="flex min-w-0 flex-1 flex-col">
+                      <span className="truncate" data-slot="palette-name">
+                        {hit.name}
+                      </span>
+                      <span
+                        className="truncate text-caption leading-4 text-muted-foreground"
+                        data-slot="palette-context"
+                      >
+                        {featureId ? t(`nav:items.${featureId}`) : hit.kind}
+                        {hit.detail ? ` · ${hit.detail}` : ''}
+                      </span>
                     </span>
                   </CommandItem>
                 )
@@ -362,6 +423,16 @@ function PaletteBody() {
 
         {anyAction ? (
           <CommandGroup heading={t('common:commandPalette.actions')}>
+            {showStartSession ? (
+              <CommandItem
+                value={`session:start ${startSessionLabel}`}
+                data-testid="palette-start-session"
+                onSelect={() => go('/sessions')}
+              >
+                <Play />
+                {startSessionLabel}
+              </CommandItem>
+            ) : null}
             {actionItems}
             {showLight ? (
               <CommandItem

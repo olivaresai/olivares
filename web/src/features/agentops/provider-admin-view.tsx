@@ -4,7 +4,7 @@
 import { IdCard, Link2 } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { PageHeader } from '@/components/ui/page-header'
+import { PageHeader, WORK_CHROME_ROW } from '@/components/ui/page-header'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useAuth } from '@/lib/auth/context'
 import { useAuthBoundary } from './auth-boundary'
@@ -70,25 +70,30 @@ function Inner({ entrance }: { entrance: ProviderAdminEntrance }) {
   const bindingsDoor = entrance === 'bindings'
 
   return (
-    <div className="flex h-full flex-col gap-4">
-      <PageHeader
-        icon={bindingsDoor ? Link2 : IdCard}
-        title={
-          bindingsDoor
-            ? t('profiles.view.bindingsTitle')
-            : t('profiles.view.profilesTitle')
-        }
-        description={
-          bindingsDoor
-            ? t('profiles.bindings.subtitle')
-            : t('profiles.subtitle')
-        }
-      />
-      <Tabs
-        value={effective}
-        onValueChange={(v) => setTab(v as ProviderAdminEntrance)}
-      >
-        <TabsList>
+    <Tabs
+      value={effective}
+      onValueChange={(v) => setTab(v as ProviderAdminEntrance)}
+    >
+      {/* Title and the one control line share a 36 px row so the first table
+          row can sit at y ≤ 136 (header 48 + this row + thead). A stacked
+          title, then tabs, then a subtitle/register band is what measured 293. */}
+      <div data-slot="work-chrome" className={WORK_CHROME_ROW}>
+        <PageHeader
+          className="min-w-0"
+          actionsPanelAnchor="row"
+          icon={bindingsDoor ? Link2 : IdCard}
+          title={
+            bindingsDoor
+              ? t('profiles.view.bindingsTitle')
+              : t('profiles.view.profilesTitle')
+          }
+          description={
+            bindingsDoor
+              ? t('profiles.bindings.subtitle')
+              : t('profiles.subtitle')
+          }
+        />
+        <TabsList className="min-w-0">
           {canProfiles && (
             <TabsTrigger value="profiles">
               {t('profiles.view.tabProfiles')}
@@ -100,17 +105,17 @@ function Inner({ entrance }: { entrance: ProviderAdminEntrance }) {
             </TabsTrigger>
           )}
         </TabsList>
-        {canProfiles && (
-          <TabsContent value="profiles" className="mt-4">
-            <ProfilesPanel describe={!bindingsDoor ? false : true} />
-          </TabsContent>
-        )}
-        {canBindings && (
-          <TabsContent value="bindings" className="mt-4">
-            <BindingsTable describe={bindingsDoor ? false : true} />
-          </TabsContent>
-        )}
-      </Tabs>
-    </div>
+      </div>
+      {canProfiles && (
+        <TabsContent value="profiles" className="pt-0">
+          <ProfilesPanel describe={false} pageSurface />
+        </TabsContent>
+      )}
+      {canBindings && (
+        <TabsContent value="bindings" className="pt-0">
+          <BindingsTable describe={false} />
+        </TabsContent>
+      )}
+    </Tabs>
   )
 }

@@ -2,12 +2,25 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
-import { Eye, EyeOff, Fingerprint, Plus } from 'lucide-react'
+import {
+  Eye,
+  EyeOff,
+  Fingerprint,
+  MoreHorizontal,
+  Plus,
+  Search,
+} from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
-import { DataTable, type TableColumn } from '@/components/data/data-table'
+import { FillingTable, TableRegion } from '@/components/data/filling-table'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import {
   Dialog,
@@ -18,7 +31,12 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { EmptyState } from '@/components/ui/empty-state'
+import { ErrorState, ForbiddenState } from '@/components/ui/error-state'
 import { Field } from '@/components/ui/field'
+import {
+  PagePrimaryAction,
+  PageSecondaryActions,
+} from '@/components/ui/page-actions'
 import { Input } from '@/components/ui/input'
 import { KvList, KvRow } from '@/components/ui/kv'
 import {
@@ -37,9 +55,14 @@ import {
 } from '@/components/ui/sheet'
 import { Spinner } from '@/components/ui/spinner'
 import { toast } from '@/components/ui/toaster'
+import { NamedRef } from '@/features/shared'
+import { StepUpRequiredState } from '@/components/layout/step-up-state'
+import { ApiError, NetworkError, isEvidenceUnavailable } from '@/lib/api/errors'
 import { useAuth } from '@/lib/auth/context'
 import { formatDateTime } from '@/lib/format'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
+import { HIDDEN_ON_PHONE } from '@/lib/hooks/use-is-phone'
+import { cn } from '@/lib/utils'
 import { agentOpsApi, agentOpsKeys, PROFILE_PAGE } from './api'
 import { AuthorityLostError, useAuthBoundary } from './auth-boundary'
 import { BindingsTable } from './bindings-table'
@@ -61,7 +84,7 @@ const ALL = '__all__'
 const STATES = ['active', 'disabled', 'retired'] as const
 
 /**
- * ProfilesPanel — the administration surface of the provider-profile plane (B1):
+ * ProfilesPanel — the administration surface of the provider-profile plane:
  * list, register, rename, enable/disable, retire, and the admin-only configuration
  * read, with the source bindings of each profile beside it.
  *
@@ -76,24 +99,46 @@ const STATES = ['active', 'disabled', 'retired'] as const
  * `operable` is the legacy enablement flag, not a launch guarantee; the sheet
  * loads the selected profile's launch-readiness point read.
  */
-export function ProfilesPanel({ describe = true }: { describe?: boolean }) {
+export function ProfilesPanel({
+  describe = true,
+  pageSurface = false,
+}: {
+  describe?: boolean
+  /** When this panel IS the page (the `/provider-profiles` room), the register
+   *  verb and the filters belong on the title line, not in a band above the
+   *  table. The sessions workspace embeds this panel and leaves them in place. */
+  pageSurface?: boolean
+}) {
   const boundary = useAuthBoundary()
   // Remount on the AUTHORITY BOUNDARY — principal, tenant, credential. The query keys
   // are tenant-scoped, which isolates the CACHE; the remount is what clears what is
   // on SCREEN — an open sheet, a revealed configuration, a pending confirmation, a
   // selection, a filter — so nothing read for one operator is painted, or acted on,
   // under the next.
-  return <ProfilesPanelInner key={boundary.key} describe={describe} />
+  return (
+    <ProfilesPanelInner
+      key={boundary.key}
+      describe={describe}
+      pageSurface={pageSurface}
+    />
+  )
 }
 
-function ProfilesPanelInner({ describe }: { describe: boolean }) {
-  const { t, i18n } = useTranslation('agentops')
+function ProfilesPanelInner({
+  describe,
+  pageSurface,
+}: {
+  describe: boolean
+  pageSurface: boolean
+}) {
+  const { t } = useTranslation(['agentops', 'common'])
   const { activeTenant, can } = useAuth()
   const boundary = useAuthBoundary()
   const canRead = can('sessions:profile:read')
   const canWrite = can('sessions:profile:write')
 
   const [state, setState] = useState<string>(ALL)
+  const [needle, setNeedle] = useState('')
   const [createOpen, setCreateOpen] = useState(false)
   const [selected, setSelected] = useState<ProviderProfileDTO | null>(null)
   // The state facet's trigger stays mounted whatever the table shows; the empty
@@ -137,88 +182,20 @@ function ProfilesPanelInner({ describe }: { describe: boolean }) {
     () => query.data?.pages.flatMap((p) => p.items) ?? [],
     [query.data],
   )
+  const visible = useMemo(() => {
+    const q = needle.trim().toLowerCase()
+    if (!q) return rows
+    return rows.filter((p) =>
+      `${p.display_name ?? ''} ${p.profile_ref} ${p.driver} ${p.environment_ref}`
+        .toLowerCase()
+        .includes(q),
+    )
+  }, [rows, needle])
   // This node's execution environment, exactly as the server reported it on a
   // local profile. Unknown until one exists; the dialog says so rather than guess.
   const localEnvironment = useMemo(
     () => rows.find((p) => p.local_environment)?.environment_ref,
     [rows],
-  )
-
-  const columns = useMemo<TableColumn<ProviderProfileDTO>[]>(
-    () => [
-      {
-        id: 'name',
-        header: t('profiles.cols.name'),
-        accessorFn: (p) => `${p.display_name ?? ''} ${p.profile_ref}`,
-        cell: ({ row }) => (
-          <span className="flex flex-col">
-            <span className="font-medium text-foreground">
-              {row.original.display_name || row.original.profile_ref}
-            </span>
-            {row.original.display_name && (
-              <span className="font-mono text-[11px] text-muted-foreground">
-                {row.original.profile_ref}
-              </span>
-            )}
-          </span>
-        ),
-      },
-      {
-        accessorKey: 'driver',
-        header: t('profiles.cols.driver'),
-        cell: ({ getValue }) => (
-          <span className="font-mono text-caption text-foreground">
-            {getValue<string>()}
-          </span>
-        ),
-      },
-      {
-        id: 'environment',
-        header: t('profiles.cols.environment'),
-        accessorFn: (p) => p.environment_ref,
-        cell: ({ row }) => <EnvironmentCell profile={row.original} />,
-      },
-      {
-        accessorKey: 'state',
-        header: t('profiles.cols.state'),
-        cell: ({ getValue }) => <StateBadge state={getValue<string>()} />,
-      },
-      {
-        id: 'operable',
-        header: t('profiles.cols.launch'),
-        accessorFn: (p) => (p.operable ? 1 : 0),
-        cell: ({ row }) => <OperableBadge profile={row.original} />,
-      },
-      {
-        accessorKey: 'created_at',
-        header: t('profiles.cols.created'),
-        cell: ({ getValue }) => (
-          <span className="text-caption text-muted-foreground">
-            {formatDateTime(getValue<string>(), i18n.language)}
-          </span>
-        ),
-      },
-      {
-        id: 'actions',
-        header: '',
-        enableSorting: false,
-        cell: ({ row }) => (
-          <div className="flex justify-end">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={(e) => {
-                e.stopPropagation()
-                setSelected(row.original)
-              }}
-            >
-              {t('profiles.actions.details')}
-            </Button>
-          </div>
-        ),
-      },
-    ],
-    [t, i18n.language],
   )
 
   if (!canRead) {
@@ -229,78 +206,98 @@ function ProfilesPanelInner({ describe }: { describe: boolean }) {
     )
   }
 
+  const registerButton = canWrite ? (
+    <Button variant="primary" size="sm" onClick={() => setCreateOpen(true)}>
+      <Plus className="size-3.5" />
+      {t('profiles.register')}
+    </Button>
+  ) : null
+
+  const stateFilter = (
+    <Select value={state} onValueChange={setState}>
+      <SelectTrigger
+        ref={stateTriggerRef}
+        className="h-7 w-auto min-w-[9rem] text-caption"
+        aria-label={t('profiles.allStates')}
+      >
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value={ALL}>{t('profiles.allStates')}</SelectItem>
+        {STATES.map((s) => (
+          <SelectItem key={s} value={s}>
+            {t(`profiles.state.${s}`)}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  )
+
+  const pageFilters = (
+    <>
+      <div className="relative max-w-xs">
+        <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          value={needle}
+          onChange={(e) => setNeedle(e.target.value)}
+          placeholder={t('profiles.search')}
+          className="pl-8"
+          aria-label={t('common:actions.search')}
+        />
+      </div>
+      {stateFilter}
+    </>
+  )
+
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-start justify-between gap-3">
-        {describe ? (
-          <p className="text-body text-muted-foreground">
-            {t('profiles.subtitle')}
-          </p>
-        ) : (
-          <span />
-        )}
-        {canWrite && (
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={() => setCreateOpen(true)}
-          >
-            <Plus className="size-3.5" />
-            {t('profiles.register')}
-          </Button>
-        )}
-      </div>
+      {pageSurface ? (
+        <>
+          {registerButton ? (
+            <PagePrimaryAction>{registerButton}</PagePrimaryAction>
+          ) : null}
+          <PageSecondaryActions>{pageFilters}</PageSecondaryActions>
+        </>
+      ) : (
+        <>
+          <div className="flex items-start justify-between gap-3">
+            {describe ? (
+              <p className="text-body text-muted-foreground">
+                {t('profiles.subtitle')}
+              </p>
+            ) : (
+              <span />
+            )}
+            {registerButton}
+          </div>
+          <div className="flex items-center gap-2">{pageFilters}</div>
+        </>
+      )}
 
-      <DataTable
-        columns={columns}
-        data={rows}
-        isLoading={query.isLoading}
-        error={query.error}
-        onRetry={() => void query.refetch()}
-        getRowId={(p) => p.profile_ref}
-        onRowClick={(p) => setSelected(p)}
-        searchable
-        searchPlaceholder={t('profiles.search')}
-        toolbar={
-          <Select value={state} onValueChange={setState}>
-            <SelectTrigger
-              ref={stateTriggerRef}
-              className="h-7 w-auto min-w-[9rem] text-caption"
-              aria-label={t('profiles.allStates')}
-            >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL}>{t('profiles.allStates')}</SelectItem>
-              {STATES.map((s) => (
-                <SelectItem key={s} value={s}>
-                  {t(`profiles.state.${s}`)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        }
-        stickyHeader
-        hasMore={!!query.hasNextPage}
-        onLoadMore={() => void query.fetchNextPage()}
-        isFetchingMore={query.isFetchingNextPage}
-        label={t('profiles.title')}
-        // DataTable paints `empty` only for a SUCCESSFUL read with no rows: loading,
-        // 403, step-up and lookup failures take precedence inside it, so neither node
-        // below can appear over an error, and the clear action never reaches one.
-        // Which node is a question the CALLER must answer, because `state` narrows the
-        // list on the SERVER (`params`): an empty page under a state filter is what the
-        // engine returned for that state, and says nothing about the other states — so
-        // the copy names the filter and offers to drop it, and claims nothing else.
-        empty={
-          state === ALL ? (
+      {query.isLoading ? (
+        <div className="flex justify-center py-8">
+          <Spinner />
+        </div>
+      ) : query.error ? (
+        <ProfileListError
+          error={query.error}
+          onRetry={() => void query.refetch()}
+        />
+      ) : rows.length === 0 ? (
+        /* ⛔ ZERO ROWS TAKES THE SAME REGION THE TABLE WOULD HAVE, and it used to take
+           none. Every other row count goes through `FillingTable`, whose region reaches
+           the fold and whose foot absorbs the surplus; an empty page rendered a centred
+           panel 220 px tall at the top of a 900 px frame — measured in Chromium against
+           the 772 px region the same screen gives its rows — and left the rest empty and
+           unbordered. The one count where a dead half is CERTAIN was the one count the
+           decision did not cover. `TableRegion` is that same piece, not a copy of its
+           height: with it, the empty page measures 770 inside 772. */
+        state === ALL ? (
+          <TableRegion fill={pageSurface}>
             <EmptyState
+              className={cn(pageSurface && 'flex-1')}
               icon={<Fingerprint />}
               title={t('profiles.empty.title')}
-              // No create workflow of its own: the one control that registers a
-              // profile is the header button, gated by `sessions:profile:write`. A
-              // writer is pointed at it by its own label; a reader is told which
-              // permission is missing, not that the product cannot be used.
               description={
                 canWrite
                   ? t('profiles.empty.registerHint', {
@@ -309,8 +306,11 @@ function ProfilesPanelInner({ describe }: { describe: boolean }) {
                   : t('profiles.empty.noWrite')
               }
             />
-          ) : (
+          </TableRegion>
+        ) : (
+          <TableRegion fill={pageSurface}>
             <EmptyState
+              className={cn(pageSurface && 'flex-1')}
               icon={<Fingerprint />}
               title={t('profiles.filteredEmpty.title')}
               description={t('profiles.filteredEmpty.description', {
@@ -326,9 +326,29 @@ function ProfilesPanelInner({ describe }: { describe: boolean }) {
                 </Button>
               }
             />
-          )
-        }
-      />
+          </TableRegion>
+        )
+      ) : visible.length === 0 ? (
+        <TableRegion fill={pageSurface}>
+          <EmptyState
+            className={cn(pageSurface && 'flex-1')}
+            icon={<Fingerprint />}
+            title={t('common:states.noResults')}
+            description={t('common:states.noResultsHint')}
+          />
+        </TableRegion>
+      ) : (
+        <ProfilesTable
+          profiles={visible}
+          onOpen={setSelected}
+          hasMore={!!query.hasNextPage}
+          onLoadMore={() => void query.fetchNextPage()}
+          isFetchingMore={query.isFetchingNextPage}
+          fill={pageSurface}
+          canWrite={canWrite}
+          onCreate={() => setCreateOpen(true)}
+        />
+      )}
 
       {canWrite && (
         <ProfileCreateDialog
@@ -353,26 +373,205 @@ function ProfilesPanelInner({ describe }: { describe: boolean }) {
   )
 }
 
+function ProfilesTable({
+  profiles,
+  onOpen,
+  hasMore,
+  onLoadMore,
+  isFetchingMore,
+  fill,
+  canWrite,
+  onCreate,
+}: {
+  profiles: ProviderProfileDTO[]
+  onOpen: (profile: ProviderProfileDTO) => void
+  hasMore: boolean
+  onLoadMore: () => void
+  isFetchingMore: boolean
+  fill: boolean
+  canWrite: boolean
+  onCreate: () => void
+}) {
+  const { t, i18n } = useTranslation(['agentops', 'common'])
+  return (
+    <FillingTable
+      fill={fill}
+      oneLine
+      colSpan={7}
+      // ⛔ THE QUIET LINE BELONGS TO THE PAGE SURFACE. Embedded as a tab inside the
+      //    sessions workspace this panel already declares `Register` as that screen's
+      //    verb, through the header's own slot — a second offer of the same verb three
+      //    centimetres below it is the "two firsts and therefore none" the work-first
+      //    pass closed elsewhere on this very screen.
+      nextAction={
+        fill && canWrite ? (
+          /* ⛔ IT IS A BUTTON, AND IT USED TO BE `<a href="#register-profile">` WITH THE
+             NAVIGATION CANCELLED. No element in the document carries that id — so the
+             address bar, "copy link", a middle-click and a new tab all led to a fragment
+             that resolves to nothing, and a reader was offered a destination that does
+             not exist. The line does not GO anywhere: it opens the same dialog the
+             header's verb opens, in place. A control that acts is a button, and the
+             difference is not vocabulary — a button answers Space as well as Enter, and
+             it is announced as a command instead of as a link to somewhere. */
+          <button
+            type="button"
+            data-testid="profiles-next-action"
+            className="text-accent-text underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            onClick={onCreate}
+          >
+            {t('profiles.nextAction')}
+          </button>
+        ) : undefined
+      }
+      after={
+        hasMore ? (
+          <div className="flex justify-center border-t border-border p-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onLoadMore}
+              disabled={isFetchingMore}
+            >
+              {isFetchingMore
+                ? t('common:states.loading')
+                : t('common:table.loadMore')}
+            </Button>
+          </div>
+        ) : null
+      }
+    >
+      <thead>
+        <tr>
+          <th>{t('profiles.cols.name')}</th>
+          <th className={HIDDEN_ON_PHONE}>{t('profiles.cols.driver')}</th>
+          <th className={HIDDEN_ON_PHONE}>{t('profiles.cols.environment')}</th>
+          <th>{t('profiles.cols.state')}</th>
+          <th className={HIDDEN_ON_PHONE}>{t('profiles.cols.launch')}</th>
+          <th className={HIDDEN_ON_PHONE}>{t('profiles.cols.created')}</th>
+          <th />
+        </tr>
+      </thead>
+      <tbody>
+        {profiles.map((profile) => {
+          const label = profile.display_name || profile.profile_ref
+          return (
+            <tr
+              key={profile.profile_ref}
+              className="cursor-pointer"
+              onClick={() => onOpen(profile)}
+            >
+              <td title={profile.profile_ref}>
+                <NamedRef
+                  className="font-medium text-foreground"
+                  name={profile.display_name}
+                  reference={profile.profile_ref}
+                  fallback={label}
+                />
+              </td>
+              <td
+                className={`font-mono text-caption text-muted-foreground ${HIDDEN_ON_PHONE}`}
+              >
+                {profile.driver}
+              </td>
+              <td className={HIDDEN_ON_PHONE} title={profile.environment_ref}>
+                <EnvironmentCell profile={profile} />
+              </td>
+              <td>
+                <StateBadge state={profile.state} />
+              </td>
+              <td className={HIDDEN_ON_PHONE}>
+                <OperableBadge profile={profile} />
+              </td>
+              <td
+                className={`text-caption text-muted-foreground ${HIDDEN_ON_PHONE}`}
+              >
+                {profile.created_at
+                  ? formatDateTime(profile.created_at, i18n.language)
+                  : null}
+              </td>
+              <td
+                className="text-right"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label={t('profiles.rowMenu', { name: label })}
+                    >
+                      <MoreHorizontal />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onSelect={() => onOpen(profile)}>
+                      {t('profiles.actions.details')}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </td>
+            </tr>
+          )
+        })}
+      </tbody>
+    </FillingTable>
+  )
+}
+
+function ProfileListError({
+  error,
+  onRetry,
+}: {
+  error: unknown
+  onRetry: () => void
+}) {
+  const { t } = useTranslation('errors')
+  if (error instanceof ApiError && error.isStepUpRequired) {
+    return <StepUpRequiredState action="generic" onElevated={onRetry} />
+  }
+  if (error instanceof ApiError && error.isForbidden) {
+    return (
+      <ForbiddenState
+        title={t('forbidden.title')}
+        description={t('forbidden.description')}
+      />
+    )
+  }
+  if (isEvidenceUnavailable(error)) {
+    return (
+      <ErrorState
+        title={t('evidenceUnavailable.title')}
+        description={t('evidenceUnavailable.description')}
+        retry={onRetry}
+        requestId={error.requestId}
+      />
+    )
+  }
+  const isNetwork = error instanceof NetworkError
+  return (
+    <ErrorState
+      title={isNetwork ? t('network.title') : t('serverError.title')}
+      description={
+        isNetwork ? t('network.description') : t('serverError.description')
+      }
+      retry={onRetry}
+      requestId={error instanceof ApiError ? error.requestId : undefined}
+    />
+  )
+}
+
 function EnvironmentCell({ profile }: { profile: ProviderProfileDTO }) {
   const { t } = useTranslation('agentops')
-  const local = profile.local_environment
+  const name = profile.local_environment
+    ? t('profiles.environment.local')
+    : t('profiles.environment.foreign')
   return (
-    <span className="flex flex-col items-start gap-0.5">
-      <span
-        className="font-mono text-caption text-muted-foreground"
-        title={profile.environment_ref}
-      >
-        {profile.environment_ref}
-      </span>
-      <Badge
-        variant={local ? 'accent' : 'warning'}
-        title={local ? undefined : t('profiles.environment.foreignHint')}
-      >
-        {local
-          ? t('profiles.environment.local')
-          : t('profiles.environment.foreign')}
-      </Badge>
-    </span>
+    <NamedRef
+      className="text-foreground"
+      name={name}
+      reference={profile.environment_ref}
+      fallback={name}
+    />
   )
 }
 

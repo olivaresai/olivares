@@ -65,18 +65,23 @@ function suffix(f: (typeof FRAMINGS)[number]) {
 /**
  * Set the persisted preferences BEFORE the first document of this origin. The theme
  * store reads `olivares.theme` RAW (no JSON) before first paint, and the language store
- * reads its own key as JSON; pinning the language keeps the review set in one language
- * rather than in whatever a previous run left behind.
+ * reads its own key as a RAW language code.
+ *
+ * ⛔ AND IT USED TO WRITE THAT KEY AS JSON, WHICH PINNED NOTHING. `olivares.lang` is
+ *    `detection.lookupLocalStorage` for i18next's browser detector (`lib/i18n/index.ts`),
+ *    and that detector stores a bare code: it read `{"state":{"lang":"en"},…}` as an
+ *    unsupported language, fell through to `navigator`, and painted the console in
+ *    whatever locale the container happens to have. Measured on this box, 2026-09-18:
+ *    every screen came back in Spanish with the JSON pin in place, and in English with
+ *    `'en'`. A review set whose language depends on the machine cannot be compared with
+ *    the set it is supposed to be compared with.
  */
 async function prefer(page: Page, theme: 'light' | 'dark', tenant: string) {
   await page.addInitScript(
     ([t, tn]) => {
       try {
         window.localStorage.setItem('olivares.theme', t)
-        window.localStorage.setItem(
-          'olivares.lang',
-          JSON.stringify({ state: { lang: 'en' }, version: 0 }),
-        )
+        window.localStorage.setItem('olivares.lang', 'en')
         window.localStorage.setItem(
           'olivares.tenant',
           JSON.stringify({ state: { activeTenant: tn }, version: 0 }),
@@ -124,18 +129,29 @@ async function shoot(page: Page, name: string) {
 
 /** The console shell has painted its navigation. */
 async function shellReady(page: Page) {
+  // ⛔ THE SCOPE LINE IS NOT A SHELL FACT ANY MORE (C1 §3.1.4). This used to wait for
+  //    `shell-scope-line`, which was true when the launcher was docked to the bottom of
+  //    every authenticated viewport. The launcher is gone from the shell — it cost about
+  //    90 px of all 77 routes to serve the ~17 that can start a run — so the two things
+  //    that ARE on every authenticated route are the rail and the header, and those are
+  //    what "the shell is up" now means.
   await page.getByRole('navigation').first().waitFor({ timeout: 30_000 })
-  await page.getByTestId('shell-scope-line').waitFor({ timeout: 30_000 })
+  await page.locator('[data-slot="topbar"]').waitFor({ timeout: 30_000 })
 }
 
 /**
- * Wait until the shell launcher has DECIDED what it is. It renders the scope line and
+ * Wait until the work composer has DECIDED what it is. It renders the scope line and
  * nothing else while the provider-profile plane is still answering — deliberately, so a
  * deployment with no profile never paints a field it is about to remove. A capture taken
  * inside that window photographs a control that is about to vanish.
+ *
+ * ⛔ AND IT IS ONLY MOUNTED WHERE STARTING WORK IS THE WORK (C1 §3.1.4): home and the
+ *    session work surface. Calling this on any other route would wait 30 s for a control
+ *    the product no longer puts there, which is a spec asking for a screen that does not
+ *    exist — the same defect the pane-switcher correction fixed in the other direction.
  */
-async function launcherSettled(page: Page) {
-  await page.getByTestId('shell-launcher').waitFor({ timeout: 30_000 })
+async function composerSettled(page: Page) {
+  await page.getByTestId('work-composer').waitFor({ timeout: 30_000 })
   await page
     .locator(
       '[data-testid="launcher-input"], [data-testid="launcher-add-provider"], [data-testid="launcher-blocked"]',
@@ -201,7 +217,7 @@ test.describe('console review captures', () => {
         await signIn(page)
         await page.goto('/')
         await shellReady(page)
-        await launcherSettled(page)
+        await composerSettled(page)
         // The next-action row and the recent-work list are two separate reads; the
         // heading alone would photograph the page before either answered.
         await page.waitForLoadState('networkidle').catch(() => {})
@@ -262,7 +278,7 @@ test.describe('console review captures', () => {
           .getByTestId('narrative-loading')
           .waitFor({ state: 'detached', timeout: 30_000 })
           .catch(() => {})
-        await launcherSettled(page)
+        await composerSettled(page)
         // The launcher, OPEN: `/` is the declared chord that hands it focus, and the
         // focus ring is what "open" looks like on a field that is always present.
         const field = page.getByTestId('launcher-input')
@@ -280,7 +296,7 @@ test.describe('console review captures', () => {
         await signIn(page)
         await page.goto('/')
         await shellReady(page)
-        await launcherSettled(page)
+        await composerSettled(page)
         // `Mod+k` is the declared row (`lib/keybindings/table.ts`), resolved by the
         // shell's one keyboard authority. Pressing the real chord is the point: a
         // store call would photograph a dialog the keyboard cannot open.
@@ -301,7 +317,7 @@ test.describe('console review captures', () => {
         await signIn(page)
         await page.goto('/')
         await shellReady(page)
-        await launcherSettled(page)
+        await composerSettled(page)
         // ARRIVING FROM THE ADDRESS BAR is exactly a fresh document with focus on the
         // body: the first Tab reaches the skip link, the second the first real control.
         // Nothing is clicked, so `:focus-visible` is the keyboard ring and not a

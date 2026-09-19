@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
 import { Field } from '@/components/ui/field'
+import { PageHeader } from '@/components/ui/page-header'
 import {
   Select,
   SelectContent,
@@ -20,9 +21,16 @@ import { SUPPORTED_LANGUAGES, setLanguage, type LanguageCode } from '@/lib/i18n'
 import { usePreferencesStore, type Density } from '@/stores/preferences'
 import { useThemeStore, type Theme } from '@/stores/theme'
 
+/**
+ * One fact about this deployment or this principal: label left, value right.
+ *
+ * `py-1.5` and not `py-2.5`: 20 px of padding around a 20 px line made a
+ * 40 px row for one short value, and this page is eleven of them. 32 px keeps the row
+ * above the 24 px pointer target with the value still vertically centred.
+ */
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="flex items-center justify-between gap-4 py-2.5">
+    <div className="flex min-h-8 items-center justify-between gap-4 py-1.5">
       <dt className="text-body text-muted-foreground">{label}</dt>
       <dd className="min-w-0 truncate text-right text-body text-foreground">
         {children}
@@ -49,15 +57,21 @@ export function SettingsPage() {
   )?.code ?? 'en') as LanguageCode
 
   return (
-    <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="font-display text-display text-foreground">
-          {t('settings:title')}
-        </h1>
-        <p className="text-body text-muted-foreground">
-          {t('settings:subtitle')}
-        </p>
-      </div>
+    /* ⛔ THE LAST HAND-ROLLED HEADER IN THE CONSOLE, AND IT IS NOW THE SHARED ONE.
+       This page carried its own `<h1 className="font-display text-display">` plus a
+       description paragraph — the exact block `PageHeader` owns, at the size the ladder
+       had before the work-first pass stepped it down. Two copies of one decision is
+       how three
+       heading sizes happened last time; the primitive is the fix, not a second edit.
+
+       `max-w-3xl`: a settings form is read as a column, and a label–value row stretched
+       to 1104 px puts its value a hand's width from its name. The frame's `max-w-page`
+       is right for a table and wrong for this. */
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
+      <PageHeader
+        title={t('settings:title')}
+        description={t('settings:subtitle')}
+      />
 
       <Tabs defaultValue="profile">
         <TabsList>
@@ -71,15 +85,31 @@ export function SettingsPage() {
         </TabsList>
 
         <TabsContent value="profile">
-          <Card className="max-w-2xl p-5">
+          <Card className="p-5">
             <dl className="divide-y divide-border">
               {principal?.display_name && (
                 <Row label={t('settings:profile.displayName')}>
                   {principal.display_name}
                 </Row>
               )}
+              {/* ⛔ AN IDENTIFIER IS SHOWN WHERE IT IS THE THING BEING DESCRIBED, and
+                  here it is: `user:01a0…` is the principal's actor, the string the audit
+                  ledger and every policy name it by. That is the exact case the
+                  own rule carves out — "an id is shown only where it is the thing
+                  being operated on" — and the display name above it is the human
+                  rendering. What it gets is a `title`, so a truncated actor can still be
+                  read and copied. */}
               <Row label={t('settings:profile.actor')}>
-                <span className="font-mono text-caption">
+                {/* `data-slot="identifier"` is the DECLARATION, and it is what makes
+                    the rule above checkable instead of a matter of opinion. A census
+                    that hunts identifiers cannot tell "a uuid leaked into a table
+                    cell" from "the identifier IS the subject of this row" by looking
+                    at the text; the surface that means the second one says so. */}
+                <span
+                  data-slot="identifier"
+                  className="font-mono text-caption"
+                  title={principal?.actor}
+                >
                   {principal?.actor}
                 </span>
               </Row>
@@ -104,7 +134,7 @@ export function SettingsPage() {
         </TabsContent>
 
         <TabsContent value="appearance">
-          <Card className="flex max-w-2xl flex-col gap-5 p-5">
+          <Card className="flex flex-col gap-5 p-5">
             <Field
               label={t('settings:appearance.theme')}
               htmlFor="theme"
@@ -174,7 +204,7 @@ export function SettingsPage() {
         </TabsContent>
 
         <TabsContent value="about">
-          <Card className="max-w-2xl p-5">
+          <Card className="p-5">
             <dl className="divide-y divide-border">
               <Row label={t('settings:about.version')}>
                 <span className="font-mono text-caption">

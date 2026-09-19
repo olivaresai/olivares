@@ -3,6 +3,7 @@
   "subtitle": "Operación de agentes en vivo: qué hace cada sesión ahora mismo, sus tokens, coste y cadencia, actualizado por un flujo en directo.",
   "refresh": "Actualizar",
   "search": "Buscar sesión, agente, acción…",
+  "untitled": "Sesión sin título",
   "allStates": "Todos los estados",
   "summary": {
     "active": "Activas",
@@ -25,7 +26,8 @@
     "lastSeen": "Visto por última vez",
     "provenance": "Origen",
     "control": "Control",
-    "instance": "Instancia"
+    "instance": "Instancia",
+    "instanceUnknown": "Nombre del perfil de proveedor desconocido"
   },
   "state": {
     "active": "Activa",
@@ -103,7 +105,9 @@
     "noRunRead": "No se muestran las sesiones lanzadas: tu rol no incluye sessions:run:read. Una sesión de abajo que figure como descubierta puede haberla lanzado Olivares: esta lista no ha podido comprobarlo.",
     "truncated": "Esta es la página más reciente, no todo el parque. Aquí el origen se cruza sobre lo que está cargado, así que una sesión cuya ejecución ya no aparece puede figurar como descubierta; abre la sesión para que responda el motor.",
     "runLookupFailed": "No se ha podido leer la mitad lanzada: falló la consulta de ejecuciones. Las filas de abajo son lo que devolvió la mitad observada; el origen figura como no leído en vez de adivinado.",
-    "liveLookupFailed": "No se ha podido leer la mitad observada: falló la consulta en vivo. Las filas de abajo son las lanzadas; las columnas de telemetría están vacías porque no se ha podido leer nada, no porque no haya."
+    "liveLookupFailed": "No se ha podido leer la mitad observada: falló la consulta en vivo. Las filas de abajo son las lanzadas; las columnas de telemetría están vacías porque no se ha podido leer nada, no porque no haya.",
+    "noProfileRead": "No se muestran los nombres de los perfiles de proveedor: tu rol no incluye sessions:profile:read. La columna Instancia lleva en su lugar la referencia del perfil de cada fila.",
+    "profileLookupFailed": "No se han podido leer los nombres de los perfiles de proveedor: falló la consulta de perfiles. La columna Instancia lleva en su lugar la referencia del perfil de cada fila."
   },
   "card": {
     "tabs": {
@@ -258,7 +262,7 @@
     "noneTitle": "Selecciona una sesión",
     "noneDescription": "Elige una sesión en el carril para leer lo que hizo, con su evidencia al lado.",
     "openDetail": "Controles completos",
-    "noObjective": "El motor no ha reportado ningún objetivo para esta sesión, así que se muestra su referencia.",
+    "noObjective": "El motor no ha reportado ningún objetivo para esta sesión.",
     "notReadTitle": "No se ha podido leer esta sesión",
     "menu": "Acciones de {{name}}"
   },
@@ -315,6 +319,32 @@
     "notDeclared": "No declarado",
     "copy": "Copiar",
     "copied": "Copiado",
-    "copyRef": "Copiar {{value}}"
+    "copyRef": "Copiar {{value}}",
+    "identifiersTitle": "Identificadores",
+    "identifiersHint": "Referencias para copiar. No son los nombres de la línea de ámbito.",
+    "wireTitle": "Cable",
+    "wireHint": "El marco en bruto de la línea seleccionada. La conversación es la vista por defecto.",
+    "wireEmpty": "Selecciona una línea de la conversación para ver su marco en bruto.",
+    "thisNode": "Este nodo",
+    "noWorkspace": "Sin espacio de trabajo",
+    "cwdWarning": "Esta sesión no tiene espacio de trabajo. El controlador ha informado de su directorio de trabajo como {{cwd}}."
+  },
+  "conversation": {
+    "log": "Conversación",
+    "waiting": "Esperando a la sesión…",
+    "empty": "Aún no hay turnos. Envía una frase abajo.",
+    "ended": "El flujo de E/S de la sesión ha terminado.",
+    "lag": "{{count}} marco(s) perdidos — la salida de abajo continúa después del hueco.",
+    "operator": "Tú",
+    "assistant": "Asistente",
+    "tool": "Herramienta",
+    "system": "Sistema",
+    "result": "Resultado",
+    "unknown": "Marco no reconocido",
+    "inspect": "Mostrar en el inspector",
+    "args": "Argumentos",
+    "toolResult": "Resultado",
+    "tokens": "{{input}} entrada · {{output}} salida",
+    "cwdWarning": "Esta sesión no tiene espacio de trabajo. El controlador ha informado de su directorio de trabajo como {{cwd}}."
   }
 }

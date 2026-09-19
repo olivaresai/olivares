@@ -37,5 +37,14 @@
     "savedViewRejected_other": "{{count}} values saved in “{{name}}” could not be used ({{keys}}); the view fell back to its defaults.",
     "thisSavedView": "this saved view",
     "dismiss": "Dismiss"
+  },
+  "workspaceRequired": {
+    "use": "Use {{name}}",
+    "choose": "Choose a workspace"
+  },
+  "names": {
+    "untitledSession": "Untitled session",
+    "unknownUser": "Unknown user",
+    "unknownWorkspace": "Unknown workspace"
   }
 }

@@ -302,6 +302,7 @@
     "noTenant": "无",
     "noWorkspace": "不挂载工作区",
     "noEnvironment": "未声明",
+    "thisNode": "本节点",
     "hint": "下一个会话将在此范围内运行。"
   },
   "launcher": {
@@ -318,6 +319,18 @@
     "startFailed": "无法启动会话。",
     "noTenant": "请先选择组织，然后再启动会话。",
     "noProfileRead": "会话以提供方配置身份运行，而您的角色不包含读取这些配置的权限。",
-    "readFailed": "无法读取提供方配置，因此无法从这里启动会话。"
+    "readFailed": "无法读取提供方配置，因此无法从这里启动会话。",
+    "send": "发送",
+    "turnPlaceholder": "发送一句话…",
+    "turnAria": "会话回合",
+    "attachedRunning": "运行中",
+    "attachedWaiting": "等待你",
+    "attachedSettled": "已结束",
+    "advanced": "高级",
+    "advancedHint": "向 stdin 发送一行 NDJSON。默认是句子栏。",
+    "wirePlaceholder": "向 stdin 发送一行 NDJSON…",
+    "wireAria": "会话输入行",
+    "turnFailed": "会话无法接受此回合。",
+    "sendBackgroundHint": "Ctrl+Enter 发送并保留草稿以写下一句。"
   }
 }

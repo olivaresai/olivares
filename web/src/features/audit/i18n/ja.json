@@ -4,6 +4,7 @@
   "subtitleSystem": "テナント横断の管理操作を記録するシステムテナントのチェーン（読み取り専用）。",
   "searchLoaded": "読み込み済みの行のみをフィルター（クライアント側）…",
   "filters": {
+    "open": "フィルター",
     "title": "サーバー側の台帳フィルター",
     "q": "台帳を検索",
     "qPlaceholder": "操作、実行者、対象種別または ID",
@@ -62,6 +63,7 @@
   },
   "export": {
     "action": "エクスポート",
+    "options": "エクスポートの設定",
     "formatLabel": "エクスポート形式",
     "fromSeq": "開始 seq",
     "toSeq": "終了 seq",

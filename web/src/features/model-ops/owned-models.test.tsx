@@ -10,7 +10,13 @@
 // Este fichero no existía: `owned-models.tsx` tenía 863 líneas y ninguna casilla.
 import type { ReactNode } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -82,6 +88,34 @@ beforeEach(() => {
 afterEach(() => vi.clearAllMocks())
 
 describe('El parque de modelos propios', () => {
+  /**
+   * EL ESTADO VACÍO LLEVA SU SIGUIENTE ACCIÓN. Su descripción decía «Register a hosted,
+   * fine-tuned or imported model…» y no había nada que pulsar: el botón vivía en la
+   * cabecera de la sección, fuera de donde mira quien acaba de leer que no hay nada.
+   * Y va con el MISMO derecho que la cabecera, así que a quien no puede escribir no se
+   * le ofrece una puerta que responde 403.
+   */
+  it('ofrece registrar el primero cuando el parque está vacío', async () => {
+    api.ownedModels.mockResolvedValue({ items: [], has_more: false })
+    wrap(<OwnedModelsTab />)
+    const vacio = (
+      await screen.findByText('No owned models registered yet')
+    ).closest('[data-slot="empty-state"]') as HTMLElement
+    const user = userEvent.setup()
+    await user.click(within(vacio).getByRole('button', { name: 'New model' }))
+    expect(await screen.findByText('New owned model')).toBeInTheDocument()
+  })
+
+  it('no ofrece esa puerta a quien solo puede leer', async () => {
+    api.ownedModels.mockResolvedValue({ items: [], has_more: false })
+    authState.can = (p: string) => p !== 'models:registry:write'
+    wrap(<OwnedModelsTab />)
+    const vacio = (
+      await screen.findByText('No owned models registered yet')
+    ).closest('[data-slot="empty-state"]') as HTMLElement
+    expect(within(vacio).queryByRole('button')).toBeNull()
+  })
+
   it('pide el techo real del motor', async () => {
     wrap(<OwnedModelsTab />)
     await waitFor(() => expect(api.ownedModels).toHaveBeenCalled())

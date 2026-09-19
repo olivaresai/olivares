@@ -29,6 +29,11 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { PageHeader } from '@/components/ui/page-header'
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover'
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -37,15 +42,15 @@ import {
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from '@/components/ui/toaster'
-import {
-  CaveatNotice,
-  HashChip,
-  IntegrityBadge,
-  SelfAuditNotice,
-} from '@/features/_intel'
+import { HashChip, IntegrityBadge } from '@/features/_intel'
 import { SavedViewsMenu } from '@/features/saved-views'
 import { isoMinuteBound } from '@/features/shared'
-import { RelTimeLabel } from '@/features/shared'
+import {
+  NamedRef,
+  RelTimeLabel,
+  useMemberNames,
+  useWorkspaceNames,
+} from '@/features/shared'
 import { auditApi } from '@/lib/api/endpoints'
 import { useFailedActionReporter } from '@/lib/hooks/use-privileged-mutation'
 import { ApiError } from '@/lib/api/errors'
@@ -151,7 +156,7 @@ function rfc3339FromLocal(value: string): string | undefined {
 }
 
 export function AuditView() {
-  const { t, i18n } = useTranslation('audit')
+  const { t, i18n } = useTranslation(['audit', 'intel'])
   const lang = i18n.language
   const { activeTenant, isSuperadmin } = useAuth()
 
@@ -210,6 +215,11 @@ export function AuditView() {
     patchUrlState(patch)
   }
 
+  // The two directories this ledger can name a reference from — the people roster and
+  // the workspace list, each the read the console already makes for its own screen.
+  const memberNames = useMemberNames()
+  const workspaceNames = useWorkspaceNames()
+
   const columns = useMemo<TableColumn<AuditEventDTO>[]>(
     () => [
       {
@@ -250,13 +260,25 @@ export function AuditView() {
         id: 'actor',
         accessorFn: (e) => `${e.actor} ${e.actor_kind}`,
         header: t('cols.actor'),
+        // ⛔ WHO ACTED, NOT `user:01a0b580-…`. The ledger writes a principal as
+        //    `user:<uuid>`, and a column of those is a column an operator cannot read:
+        //    the census counted four raw identifiers on this route and this was one of
+        //    them. The name comes from the roster the people tab reads, under the same
+        //    right; without it, or for an actor that is not a person (`system`, a
+        //    token), the ledger's own value stands and the whole of it is on `title`.
         cell: ({ row }) => {
           const e = row.original
+          const person = e.actor_kind === 'user'
+          const name = person ? memberNames.nameOf(e.actor) : null
           return (
             <div className="flex min-w-0 items-center gap-1.5">
-              <span className="truncate font-mono text-caption text-foreground">
-                {e.actor || t('detail.actorSystem')}
-              </span>
+              <NamedRef
+                className="text-caption text-foreground"
+                mono={!name}
+                name={name}
+                reference={e.actor || 'system'}
+                fallback={e.actor || t('detail.actorSystem')}
+              />
               <Badge variant="neutral">
                 {t(`actorKind.${e.actor_kind}`, {
                   defaultValue: e.actor_kind || '—',
@@ -272,15 +294,36 @@ export function AuditView() {
           e.target_id ? `${e.target_kind ?? ''} ${e.target_id}` : '',
         header: t('cols.target'),
         enableSorting: false,
+        // ⛔ WHAT WAS ACTED ON, LED BY ITS KIND. The cell read `core.audit_event:` and
+        //    then a whole uuid, which is an identifier where the reader needs a
+        //    subject. The kind leads now, the id follows as the short form that
+        //    matches a log line, and the pair stays whole on `title` and in the detail
+        //    sheet — where an identifier IS the thing being operated on. Where the
+        //    console holds a directory for the kind (a workspace, a person), the name
+        //    is painted instead.
         cell: ({ row }) => {
           const e = row.original
           if (!e.target_id && !e.target_kind)
             return <span className="text-muted-foreground">—</span>
+          const named =
+            e.target_kind === 'core.workspace'
+              ? workspaceNames.nameOf(e.target_id)
+              : e.target_kind === 'core.user'
+                ? memberNames.nameOf(e.target_id)
+                : null
           return (
-            <span className="truncate font-mono text-caption text-muted-foreground">
-              {e.target_kind ? `${e.target_kind}:` : ''}
-              {e.target_id || '—'}
-            </span>
+            <NamedRef
+              className="text-caption text-muted-foreground"
+              mono={!named}
+              name={named}
+              reference={e.target_id || e.target_kind || ''}
+              title={
+                e.target_kind && e.target_id
+                  ? `${e.target_kind}: ${e.target_id}`
+                  : e.target_kind || e.target_id
+              }
+              fallback={e.target_kind || e.target_id || '—'}
+            />
           )
         },
       },
@@ -302,64 +345,68 @@ export function AuditView() {
         ),
       },
     ],
-    [t, lang],
+    [t, lang, memberNames, workspaceNames],
   )
 
   return (
-    <div className="flex h-full flex-col gap-4">
-      <PageHeader
-        icon={FileCheck2}
-        title={t('title')}
-        description={t(isSystem ? 'subtitleSystem' : 'subtitle')}
-        actions={
-          isSuperadmin ? (
-            <Select
-              value={scope}
-              onValueChange={(value) =>
-                patchUrlState({
-                  scope: value === 'system' ? 'system' : undefined,
-                })
-              }
-            >
-              <SelectTrigger
-                className="h-8 w-auto min-w-[11rem] text-caption"
-                aria-label={t('scope.label')}
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="tenant">{t('scope.tenant')}</SelectItem>
-                <SelectItem value="system">{t('scope.system')}</SelectItem>
-              </SelectContent>
-            </Select>
-          ) : undefined
-        }
-      />
-
-      {/* Reading the ledger is itself recorded in the ledger. */}
-      <SelfAuditNotice />
-
-      <AuditFilterBar
-        filters={filters}
-        onChange={(key, value) => patchUrlState({ [key]: value })}
-        onClearAll={() =>
-          patchUrlState(
-            Object.fromEntries(FILTER_KEYS.map((key) => [key, undefined])),
-          )
-        }
-      />
-
-      {isSystem ? (
-        <CaveatNotice>{t('scope.systemHint')}</CaveatNotice>
-      ) : (
-        <EvidenceControls filters={filters} />
-      )}
+    <div className="flex h-full min-h-0 flex-col">
+      {/* Title + the one filter line share 36 px so the first ledger row can
+          sit at y ≤ 136. The filter card, evidence card and self-audit strip
+          stacked above the table are what measured 569. */}
+      <div data-slot="work-chrome" className="flex h-9 min-w-0 items-center">
+        <PageHeader
+          className="min-w-0 w-full"
+          icon={FileCheck2}
+          title={t('title')}
+          description={t(isSystem ? 'scope.systemHint' : 'subtitle')}
+          actions={
+            <>
+              {isSuperadmin ? (
+                <Select
+                  value={scope}
+                  onValueChange={(value) =>
+                    patchUrlState({
+                      scope: value === 'system' ? 'system' : undefined,
+                    })
+                  }
+                >
+                  <SelectTrigger
+                    className="h-7 w-auto min-w-[11rem] text-caption"
+                    aria-label={t('scope.label')}
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="tenant">{t('scope.tenant')}</SelectItem>
+                    <SelectItem value="system">{t('scope.system')}</SelectItem>
+                  </SelectContent>
+                </Select>
+              ) : null}
+              <AuditFilterBar
+                filters={filters}
+                onChange={(key, value) => patchUrlState({ [key]: value })}
+                onClearAll={() =>
+                  patchUrlState(
+                    Object.fromEntries(
+                      FILTER_KEYS.map((key) => [key, undefined]),
+                    ),
+                  )
+                }
+              />
+              <SavedViewsMenu
+                featureId="audit"
+                params={savedViewParams}
+                onApply={applySavedView}
+              />
+              {isSystem ? null : <EvidenceControls filters={filters} />}
+            </>
+          }
+        />
+      </div>
+      <p className="sr-only">{t('intel:notices.selfAudited')}</p>
 
       {scannedThrough !== undefined && (
-        <div
-          role="status"
-          className="rounded-md border border-info-line bg-info-soft px-3 py-2 text-body text-info"
-        >
+        <div role="status" className="px-0 py-1 text-caption text-info">
           {t('scan.incomplete', {
             seq: formatInt(scannedThrough, lang),
           })}
@@ -374,15 +421,6 @@ export function AuditView() {
         onRetry={() => void listQuery.refetch()}
         getRowId={(r) => r.id}
         onRowClick={(r) => setSelected(r)}
-        searchable
-        searchPlaceholder={t('searchLoaded')}
-        toolbar={
-          <SavedViewsMenu
-            featureId="audit"
-            params={savedViewParams}
-            onApply={applySavedView}
-          />
-        }
         stickyHeader
         hasMore={listQuery.hasNextPage}
         onLoadMore={() => void listQuery.fetchNextPage()}
@@ -458,71 +496,75 @@ function AuditFilterBar({
     )
 
   return (
-    <section
-      aria-label={t('filters.title')}
-      className="rounded-lg border border-border bg-surface p-3"
-    >
-      <div className="mb-3 flex items-center gap-2 text-body font-medium text-foreground">
-        <Filter className="size-4 text-muted-foreground" aria-hidden />
-        {t('filters.title')}
-      </div>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {textFields.map((field) => (
-          <label key={field.key} className="flex min-w-0 flex-col gap-1">
-            <span className="text-caption font-medium text-muted-foreground">
-              {field.label}
-            </span>
-            <Input
-              value={filters[field.key] ?? ''}
-              onChange={(event) =>
-                onChange(field.key, event.currentTarget.value || undefined)
-              }
-              placeholder={field.placeholder}
-              mono={field.key !== 'q'}
-            />
-          </label>
-        ))}
-        {(['since', 'until'] as const).map((key) => (
-          <label key={key} className="flex min-w-0 flex-col gap-1">
-            <span className="text-caption font-medium text-muted-foreground">
-              {t(`filters.${key}`)}
-            </span>
-            <Input
-              type="datetime-local"
-              value={localDateTimeValue(filters[key])}
-              onChange={(event) =>
-                onChange(key, rfc3339FromLocal(event.currentTarget.value))
-              }
-            />
-          </label>
-        ))}
-      </div>
-
-      {active.length > 0 && (
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          {active.map(([key, value]) => (
-            <Badge key={key} variant="accent" className="gap-1.5">
-              <span className="max-w-64 truncate">
-                {labelFor(key)}: {value}
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="secondary" size="sm">
+          <Filter className="size-3.5" />
+          {t('filters.open')}
+          {active.length > 0 ? (
+            <Badge variant="neutral">{active.length}</Badge>
+          ) : null}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-[min(32rem,calc(100vw-2rem))]">
+        <div className="grid gap-3 sm:grid-cols-2">
+          {textFields.map((field) => (
+            <label key={field.key} className="flex min-w-0 flex-col gap-1">
+              <span className="text-caption font-medium text-muted-foreground">
+                {field.label}
               </span>
-              <button
-                type="button"
-                className="-my-1.5 -mr-1.5 rounded-sm p-1.5 text-accent-soft-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
-                aria-label={t('filters.clearOne', {
-                  filter: labelFor(key),
-                })}
-                onClick={() => onChange(key, undefined)}
-              >
-                <X className="size-3" aria-hidden />
-              </button>
-            </Badge>
+              <Input
+                value={filters[field.key] ?? ''}
+                onChange={(event) =>
+                  onChange(field.key, event.currentTarget.value || undefined)
+                }
+                placeholder={field.placeholder}
+                mono={field.key !== 'q'}
+              />
+            </label>
           ))}
-          <Button variant="ghost" size="sm" onClick={onClearAll}>
-            {t('filters.clearAll')}
-          </Button>
+          {(['since', 'until'] as const).map((key) => (
+            <label key={key} className="flex min-w-0 flex-col gap-1">
+              <span className="text-caption font-medium text-muted-foreground">
+                {t(`filters.${key}`)}
+              </span>
+              <Input
+                type="datetime-local"
+                value={localDateTimeValue(filters[key])}
+                onChange={(event) =>
+                  onChange(key, rfc3339FromLocal(event.currentTarget.value))
+                }
+              />
+            </label>
+          ))}
         </div>
-      )}
-    </section>
+
+        {active.length > 0 && (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            {active.map(([key, value]) => (
+              <Badge key={key} variant="accent" className="gap-1.5">
+                <span className="max-w-64 truncate">
+                  {labelFor(key)}: {value}
+                </span>
+                <button
+                  type="button"
+                  className="-my-1.5 -mr-1.5 rounded-sm p-1.5 text-accent-soft-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                  aria-label={t('filters.clearOne', {
+                    filter: labelFor(key),
+                  })}
+                  onClick={() => onChange(key, undefined)}
+                >
+                  <X className="size-3" aria-hidden />
+                </button>
+              </Badge>
+            ))}
+            <Button variant="ghost" size="sm" onClick={onClearAll}>
+              {t('filters.clearAll')}
+            </Button>
+          </div>
+        )}
+      </PopoverContent>
+    </Popover>
   )
 }
 
@@ -602,9 +644,14 @@ function EvidenceControls({ filters }: { filters: AuditFilters }) {
   const v = verifyQuery.data
 
   return (
-    <section className="rounded-lg border border-border bg-surface p-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-2">
+    <div className="flex items-center gap-1">
+      <Popover
+        open={verifyOn}
+        onOpenChange={(open) => {
+          setVerifyOn(open)
+        }}
+      >
+        <PopoverTrigger asChild>
           <Button
             variant="secondary"
             size="sm"
@@ -617,96 +664,11 @@ function EvidenceControls({ filters }: { filters: AuditFilters }) {
             <ShieldCheck className="size-3.5" />
             {t('verify.action')}
           </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setKeyOn((on) => !on)}
-          >
-            <KeyRound className="size-3.5" />
-            {t('pubkey.action')}
-          </Button>
-        </div>
-
-        <div className="flex flex-wrap items-end gap-2">
-          <label className="flex flex-col gap-1">
-            <span className="text-caption text-muted-foreground">
-              {t('export.fromSeq')}
-            </span>
-            <Input
-              type="number"
-              min={1}
-              step={1}
-              value={fromSeq}
-              onChange={(event) => setFromSeq(event.currentTarget.value)}
-              className="w-24"
-              placeholder={t('export.optional')}
-            />
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-caption text-muted-foreground">
-              {t('export.toSeq')}
-            </span>
-            <Input
-              type="number"
-              min={1}
-              step={1}
-              value={toSeq}
-              onChange={(event) => setToSeq(event.currentTarget.value)}
-              className="w-24"
-              placeholder={t('export.optional')}
-            />
-          </label>
-          <Select
-            value={format}
-            onValueChange={(f) => setFormat(f as ExportFormat)}
-          >
-            <SelectTrigger
-              className="h-8 w-auto min-w-[7rem] text-caption"
-              aria-label={t('export.formatLabel')}
-            >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {EXPORT_FORMATS.map((f) => (
-                <SelectItem key={f} value={f}>
-                  {t(`export.format.${f}`)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => exportM.mutate()}
-            disabled={exportM.isPending}
-          >
-            <FileDown className="size-3.5" />
-            {t('export.action')}
-          </Button>
-        </div>
-      </div>
-      <label className="mt-3 flex items-center gap-2 text-caption text-muted-foreground">
-        <Checkbox
-          checked={useCurrent}
-          onCheckedChange={(checked) => setUseCurrentOverride(checked === true)}
-        />
-        {t('export.useCurrent')}
-      </label>
-
-      {/* Server-side chain + checkpoint verdict — rendered, never computed. */}
-      {verifyOn && (
-        <div
-          className="mt-3 border-t border-border pt-3"
-          role="status"
-          aria-live="polite"
-          aria-atomic="true"
-        >
+        </PopoverTrigger>
+        <PopoverContent align="end" className="w-[min(28rem,calc(100vw-2rem))]">
           {verifyQuery.isFetching && !v ? (
             <Skeleton className="h-9 w-full" />
           ) : verifyQuery.error ? (
-            // A request-level failure is "verdict unavailable", NOT a confirmed
-            // break — render it muted (never the danger-red reserved for a real
-            // tamper finding). The Verify button stays the retry affordance.
             <p className="text-caption text-muted-foreground">
               {t('verify.failed')}
             </p>
@@ -719,9 +681,6 @@ function EvidenceControls({ filters }: { filters: AuditFilters }) {
                     checked: formatInt(v.chain.checked, lang),
                   })}
                 </Badge>
-                {/* Zero signed checkpoints is "no attestation coverage", NOT a
-                    healthy green pass — the structural chain can be intact while
-                    nothing has been signed yet. Render it neutral, never success. */}
                 {v.checkpoints.status === 'pending' ? (
                   <Badge variant="neutral">{t('verify.noCheckpoints')}</Badge>
                 ) : (
@@ -747,11 +706,6 @@ function EvidenceControls({ filters }: { filters: AuditFilters }) {
                   {v.chain.reason ? ` — ${v.chain.reason}` : ''}
                 </p>
               )}
-              {/* The loud line belongs to a checkpoint that EXISTS and does not
-                  verify. A ledger that has simply not been attested yet reports
-                  `pending` and gets the neutral badge above — printing
-                  "Checkpoint signature failed at seq 0" on a healthy first-boot
-                  install is how an operator learns to ignore this red. */}
               {v.checkpoints.status === 'failed' && (
                 <p className="text-caption font-medium text-danger">
                   {t('verify.checkpointBreak', {
@@ -762,12 +716,16 @@ function EvidenceControls({ filters }: { filters: AuditFilters }) {
               )}
             </div>
           ) : null}
-        </div>
-      )}
-
-      {/* Ed25519 checkpoint key — for an external party to verify an export offline. */}
-      {keyOn && (
-        <div className="mt-3 border-t border-border pt-3">
+        </PopoverContent>
+      </Popover>
+      <Popover open={keyOn} onOpenChange={setKeyOn}>
+        <PopoverTrigger asChild>
+          <Button variant="ghost" size="sm">
+            <KeyRound className="size-3.5" />
+            {t('pubkey.action')}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent align="end" className="w-[min(28rem,calc(100vw-2rem))]">
           {pubkeyQuery.isFetching && !pubkeyQuery.data ? (
             <Skeleton className="h-9 w-full" />
           ) : pubkeyQuery.error ? (
@@ -793,9 +751,85 @@ function EvidenceControls({ filters }: { filters: AuditFilters }) {
           <p className="mt-1.5 text-caption text-muted-foreground">
             {t('pubkey.hint')}
           </p>
-        </div>
-      )}
-    </section>
+        </PopoverContent>
+      </Popover>
+
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button variant="ghost" size="sm">
+            {t('export.options')}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent align="end" className="w-[min(24rem,calc(100vw-2rem))]">
+          <div className="flex flex-wrap items-end gap-2">
+            <label className="flex flex-col gap-1">
+              <span className="text-caption text-muted-foreground">
+                {t('export.fromSeq')}
+              </span>
+              <Input
+                type="number"
+                min={1}
+                step={1}
+                value={fromSeq}
+                onChange={(event) => setFromSeq(event.currentTarget.value)}
+                className="w-24"
+                placeholder={t('export.optional')}
+              />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-caption text-muted-foreground">
+                {t('export.toSeq')}
+              </span>
+              <Input
+                type="number"
+                min={1}
+                step={1}
+                value={toSeq}
+                onChange={(event) => setToSeq(event.currentTarget.value)}
+                className="w-24"
+                placeholder={t('export.optional')}
+              />
+            </label>
+            <Select
+              value={format}
+              onValueChange={(f) => setFormat(f as ExportFormat)}
+            >
+              <SelectTrigger
+                className="h-8 w-auto min-w-[7rem] text-caption"
+                aria-label={t('export.formatLabel')}
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {EXPORT_FORMATS.map((f) => (
+                  <SelectItem key={f} value={f}>
+                    {t(`export.format.${f}`)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <label className="mt-3 flex items-center gap-2 text-caption text-muted-foreground">
+            <Checkbox
+              checked={useCurrent}
+              onCheckedChange={(checked) =>
+                setUseCurrentOverride(checked === true)
+              }
+            />
+            {t('export.useCurrent')}
+          </label>
+        </PopoverContent>
+      </Popover>
+      <Button
+        variant="secondary"
+        size="sm"
+        onClick={() => exportM.mutate()}
+        disabled={exportM.isPending}
+      >
+        <FileDown className="size-3.5" />
+        {t('export.action')}
+      </Button>
+    </div>
   )
 }
 

@@ -4,6 +4,7 @@
   "subtitleSystem": "Die Kette des System-Mandanten mit den mandantenübergreifenden Verwaltungsvorgängen (schreibgeschützt).",
   "searchLoaded": "Nur geladene Zeilen filtern (clientseitig)…",
   "filters": {
+    "open": "Filter",
     "title": "Serverseitige Hauptbuch-Filter",
     "q": "Hauptbuch durchsuchen",
     "qPlaceholder": "Aktion, Akteur, Zielart oder ID",
@@ -62,6 +63,7 @@
   },
   "export": {
     "action": "Exportieren",
+    "options": "Exportoptionen",
     "formatLabel": "Exportformat",
     "fromSeq": "Von seq",
     "toSeq": "Bis seq",

@@ -496,3 +496,75 @@ describe('CommandMenu', () => {
     qc.clear()
   })
 })
+
+/**
+ * THE ROW: the NAME owns line one, and it is the only element that can give way.
+ *
+ * ⛔ THESE CASES EXIST BECAUSE THEIR ABSENCE WAS MEASURED. An independent review ran
+ *    the mutation this row was designed against — the name's column turned back into a
+ *    `shrink-0` row sibling of its context — and all 19 cases in this file passed. The
+ *    design claimed an oracle for the rule; the rule had none. The defect it protects
+ *    against was real and recorded: at 390 px five of eight rows cut the module name to
+ *    8–11 characters (`Communi…`, `New cha…`) while the path held 60 % of the row.
+ *
+ * ⛔ AND THEY ARE ABOUT STRUCTURE, NOT ABOUT PIXELS, because jsdom lays nothing out.
+ *    What makes the name truncate last is that it is the ONLY flexible child of the
+ *    row: a `flex-1 min-w-0` column with the name alone on its first line. That is a
+ *    fact about the DOM, and it is exactly the fact the mutation changes. The pixels
+ *    themselves are measured in a browser by this pass's probe.
+ */
+describe('the palette row gives its width to the name', () => {
+  const firstRow = () => screen.getAllByRole('option')[0] as HTMLElement
+
+  /** The row's second line. It is REQUIRED to be there: an absent one is the mutation
+   *  this file could not see, not a shape a palette row is allowed to take. */
+  function paletteContext(row: HTMLElement): HTMLElement {
+    const el = row.querySelector('[data-slot="palette-context"]')
+    expect(el, 'the palette row has a second line').not.toBeNull()
+    return el as HTMLElement
+  }
+
+  it('puts the name alone on line one, in the row\'s only flexible child', () => {
+    openPalette()
+    const nameEl = firstRow().querySelector(
+      '[data-slot="palette-name"]',
+    ) as HTMLElement
+    expect(nameEl).not.toBeNull()
+
+    // The column that holds the name: flexible, and allowed to shrink. `min-w-0` is
+    // the load-bearing half — without it the text sets its own floor and the row
+    // overflows instead of truncating.
+    const column = nameEl.parentElement as HTMLElement
+    expect(column).toHaveClass('flex', 'min-w-0', 'flex-1', 'flex-col')
+
+    // The name truncates, and it is FIRST in that column: the context is the second
+    // line, never a sibling competing for the same one.
+    expect(nameEl).toHaveClass('truncate')
+    expect(column.firstElementChild).toBe(nameEl)
+    // ⛔ UNCONDITIONAL, AND IT USED TO BE `if (context) { … }`. A guarded assertion is
+    //    a SWITCH the code under test holds: renaming `data-slot="palette-context"` to
+    //    anything at all left this file at 21/21 passed, with the context's position and
+    //    its height decision unasserted. The row this case opens on always has a second
+    //    line, so there is nothing to guard against — only something to stop measuring.
+    const context = paletteContext(firstRow())
+    expect(context.parentElement).toBe(column)
+    expect(context.previousElementSibling).toBe(nameEl)
+
+    // And nothing ELSE in the row may be flexible: an icon or a shortcut that could
+    // grow would take the width back from the name one class at a time.
+    const flexible = [...firstRow().children].filter((el) =>
+      /\bflex-1\b/.test(el.className),
+    )
+    expect(flexible).toEqual([column])
+  })
+
+  it('keeps the row inside its height budget', () => {
+    openPalette()
+    // A palette row is allowed 44 px and the two-line row measured 48 with `py-1`
+    // (22 px body + 18 px caption + 8 px padding), which is why both numbers below are
+    // what they are. jsdom cannot measure a box, so what is pinned here is the pair of
+    // decisions the measurement produced; the browser probe owns the pixels.
+    expect(firstRow()).toHaveClass('py-0.5', 'min-h-9')
+    expect(paletteContext(firstRow())).toHaveClass('leading-4')
+  })
+})

@@ -83,6 +83,30 @@
     font-feature-settings: 'zero' 1;
   }
 
+  /* ⛔ THE INTER CHARACTER VARIANTS ABOVE ARE INTER'S, AND EVERY FACE INHERITED THEM.
+   * `font-feature-settings` on `body` is declared for the reason its own comment gives
+   * — disambiguating 0/O and 1/l/I in ids, ports and hashes — and it names Inter while
+   * doing it. But the property INHERITS, so `cv05`, `ss01` and `cv01` were also being
+   * asked of Space Grotesk, where those tags index a different set of alternates (or
+   * none), and of any other family a component reaches for. The monospace rule above
+   * already escaped it by declaring its own value; the display face did not.
+   *
+   * A stat numeral was measured painting with OVERLAPPING glyphs,
+   * `Sessions 11` and `Needs attention 1`, reproduced in two independent captures at
+   * 390 px — on elements carrying `font-display text-display tabular-nums`, which is
+   * precisely the combination of a variable display face with an inherited feature set
+   * meant for another family plus a `tnum` request. Resetting the inherited set for the
+   * display face removes that cause.
+   *
+   * HONEST LABEL: this is the most likely cause and it is NOT a confirmed reproduction.
+   * The review's own reviewer checklist asks whether it reproduces outside Chromium at
+   * deviceScaleFactor 2, and this container has no second engine to ask. What is
+   * claimed is that the display face no longer inherits a feature set declared for
+   * Inter — which is true by construction, and a defect on its own terms. */
+  .font-display {
+    font-feature-settings: normal;
+  }
+
   /* Focus: a ring, never a glow. Components opt out with `outline-none` and draw
    * their own ring; native focusables (links, inputs) get this AA-visible outline. */
   :focus-visible {

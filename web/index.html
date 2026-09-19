@@ -35,9 +35,9 @@
     <meta name="twitter:image" content="/og-image.png" />
     <title>Olivares AI — Ground truth for enterprise AI</title>
     <!--
-      No-FOUC theme bootstrap. Applies the persisted theme (or the OS preference)
-      to <html> BEFORE first paint, so the operator never sees a light flash on a
-      dark setup. Under the CSP Level 3 policy (script-src 'nonce-…' 'strict-dynamic',
+      No-FOUC theme bootstrap. Applies the persisted theme (DARK when nothing is
+      stored, since C1) to <html> BEFORE first paint, so the operator never sees a
+      light flash on a dark setup. Under the CSP Level 3 policy (script-src 'nonce-…' 'strict-dynamic',
       see cmd/olivares/webui.go), this inline script is authorized by the same
       per-response nonce the server injects into the __CSP_NONCE__ placeholder.
     -->
@@ -48,9 +48,13 @@
           var prefersDark = window.matchMedia(
             '(prefers-color-scheme: dark)',
           ).matches
+          /* Dark unless the operator said otherwise (C1 3.9). MUST stay identical to
+             readStored + resolveDark in src/stores/theme.ts: this runs before any
+             bundle, so a disagreement is a visible flash of the wrong theme. */
           var dark =
             stored === 'dark' ||
-            ((stored === 'system' || !stored) && prefersDark)
+            !stored ||
+            (stored === 'system' && prefersDark)
           var root = document.documentElement
           root.classList.toggle('dark', dark)
           root.style.colorScheme = dark ? 'dark' : 'light'

@@ -39,5 +39,14 @@
     "savedViewRejected_other": "{{count}} valores guardados en «{{name}}» no se pudieron usar ({{keys}}); la vista ha vuelto a sus valores por defecto.",
     "thisSavedView": "esta vista guardada",
     "dismiss": "Descartar"
+  },
+  "workspaceRequired": {
+    "use": "Usar {{name}}",
+    "choose": "Elige un workspace"
+  },
+  "names": {
+    "untitledSession": "Sesión sin título",
+    "unknownUser": "Usuario desconocido",
+    "unknownWorkspace": "Espacio de trabajo desconocido"
   }
 }

@@ -14,11 +14,19 @@
 //    reference does — `ws-production`, `ppf_anthropic-team` — and cutting its middle
 //    out destroys the only part an operator reads.
 //
+// ⛔ AND WHAT IT PAINTS IS THE DISTINGUISHING TAIL (`refTail`), NOT THE WHOLE VALUE. The
+//    chip lives in a 280 px pane, so a 36-character uuid was already cut by the browser
+//    — at its HEAD, which under uuid v7 is the minting timestamp and identical on every
+//    row of one session's inspector. The tail tells them apart. The whole value is on
+//    `title`, in the accessible name, and on the clipboard: the chip still copies it
+//    entire, which is the reason it is a button and not a line of text.
+//
 // ⛔ AND AN ABSENT REFERENCE IS NOT AN EMPTY ONE. With nothing to copy this renders the
 //    caller's own sentence for absence, never a button that copies "".
 import { Check, Copy } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
+import { refTail } from '@/features/shared/entity-names'
 import { cn } from '@/lib/utils'
 import './i18n'
 
@@ -54,6 +62,9 @@ export function RefChip({
       type="button"
       onClick={copy}
       data-testid="ref-chip"
+      // The whole value, for a reader whose chip paints only its distinguishing tail —
+      // and it is the value the click copies, which has not changed.
+      title={value}
       aria-label={t('context.copyRef', { value })}
       className={cn(
         'group inline-flex max-w-full items-center gap-1.5 rounded-sm border border-border bg-muted px-1.5 py-0.5',
@@ -62,7 +73,7 @@ export function RefChip({
         className,
       )}
     >
-      <span className="truncate">{value}</span>
+      <span className="truncate">{refTail(value)}</span>
       {copied ? (
         <Check className="size-3 shrink-0 text-success" aria-hidden />
       ) : (

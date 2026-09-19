@@ -30,6 +30,7 @@ import type {
   KeyRef,
 } from './types'
 import { StaticTable } from '@/components/data/static-table'
+import { XScroll } from '@/components/data/scroll-edges'
 
 // --- capability matrix -------------------------------------------------------
 
@@ -41,8 +42,8 @@ export function CapabilityMatrix({ catalog }: { catalog: CatalogResponse }) {
       description={t('catalog.description')}
       noPadding
     >
-      <div className="overflow-x-auto">
-        <StaticTable>
+      <XScroll contentKey={catalog.models.length}>
+        <StaticTable oneLine>
           <thead>
             <tr>
               <th className="sticky left-0 z-10">{t('catalog.family')}</th>
@@ -102,7 +103,7 @@ export function CapabilityMatrix({ catalog }: { catalog: CatalogResponse }) {
             })}
           </tbody>
         </StaticTable>
-      </div>
+      </XScroll>
     </SectionCard>
   )
 }
@@ -120,8 +121,8 @@ export function PricingTable({ catalog }: { catalog: CatalogResponse }) {
             date: formatDate(catalog.pricing_as_of, i18n.language),
           })}
         </CaveatNotice>
-        <div className="overflow-x-auto">
-          <StaticTable>
+        <XScroll contentKey={catalog.models.length}>
+          <StaticTable oneLine>
             <thead>
               <tr>
                 <th>{t('catalog.family')}</th>
@@ -179,7 +180,7 @@ export function PricingTable({ catalog }: { catalog: CatalogResponse }) {
               ))}
             </tbody>
           </StaticTable>
-        </div>
+        </XScroll>
       </div>
     </SectionCard>
   )
@@ -203,7 +204,12 @@ export function ResidencyBadges({ model }: { model: CatalogModel }) {
   }
   const mult = model.us_inference_burndown_mult
   return (
-    <div className="flex flex-wrap gap-1">
+    /* `flex-nowrap`: three region badges WRAPPED inside a narrow
+       column, so `/models`'s pricing row was 79 px at 1440 and 123 px at 390 — measured
+       — and every other row in the table paid the same height. The badges are one fact
+       about one model; they stay on one line and the table scrolls, which the edge hint
+       now makes visible. */
+    <div className="flex flex-nowrap gap-1">
       {regions.map((r) => (
         <Badge key={r} variant="neutral">
           <span className="font-mono uppercase">{r}</span>
@@ -231,7 +237,8 @@ export function TierEligibility({ tiers }: { tiers?: string[] }) {
     )
   }
   return (
-    <div className="flex flex-wrap gap-1">
+    /* One line, for the same reason as the residency badges above. */
+    <div className="flex flex-nowrap gap-1">
       {tiers.map((tier) => (
         <Badge key={tier} variant="outline">
           {t(`catalog.tier.${tier}`, { defaultValue: humanize(tier) })}

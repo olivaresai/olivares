@@ -177,8 +177,16 @@ const TYPE_STEPS = [
   'overline',
 ]
 const TYPE_SUBKEYS = ['line-height', 'letter-spacing', 'font-weight']
-// The shell's content width, named instead of bracketed.
-const LAYOUT = ['container-page']
+// The shell's geometry, named instead of bracketed: the content width, and the C1
+// pixel budgets (header height, rail and inspector widths, the two row heights).
+const LAYOUT = [
+  'container-page',
+  'console-header-height',
+  'console-rail-width',
+  'console-inspector-width',
+  'console-row-height',
+  'console-list-row-height',
+]
 // The two keys Tailwind reads for EVERY `transition*` utility. There is no
 // `--duration-*` namespace in Tailwind 4 (`duration-150` is a bare-number utility),
 // so these two are the only place a console-wide motion decision can be made once.
@@ -305,7 +313,7 @@ for (const step of TYPE_STEPS) {
 }
 themeLines.push('')
 themeLines.push(
-  '  /* Layout — the shell content width, named rather than bracketed */',
+  '  /* Layout — the shell geometry, named rather than bracketed */',
 )
 for (const name of LAYOUT) {
   if (!primMap.has(name))

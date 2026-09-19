@@ -37,5 +37,14 @@
     "savedViewRejected_other": "{{count}} in „{{name}}“ gespeicherte Werte konnten nicht verwendet werden ({{keys}}); die Ansicht hat auf ihre Standardwerte zurückgesetzt.",
     "thisSavedView": "diese gespeicherte Ansicht",
     "dismiss": "Schliessen"
+  },
+  "workspaceRequired": {
+    "use": "{{name}} verwenden",
+    "choose": "Workspace auswählen"
+  },
+  "names": {
+    "untitledSession": "Sitzung ohne Titel",
+    "unknownUser": "Unbekannter Benutzer",
+    "unknownWorkspace": "Unbekannter Arbeitsbereich"
   }
 }

@@ -2,12 +2,20 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// Structure of the responsive topbar (console-ui-layout-density, 2026-09-06). jsdom
-// does not lay out, so the pixel facts (no overlap at 1440/1024/390, the ellipsis)
-// live in the browser evidence; what is pinned here is what those pixels depend on:
-// one DOM instance of every control, the context row wrapper, the Tab order equal to
-// the reading order, the parent crumb keeping its accessible name in its condensed
-// form, and the page crumb carrying its full title.
+// Structure of the responsive topbar. jsdom does not lay out, so the pixel facts (no
+// overlap at 1440/1024/390, the ellipsis) live in the browser evidence; what is pinned
+// here is what those pixels depend on: ONE ROW at every width, one DOM instance of
+// every control, the Tab order equal to the reading order, the parent crumb keeping its
+// accessible name in its condensed form, and the page crumb carrying its full title.
+//
+// ⛔ THE CONTEXT ROW IS GONE, AND THE ASSERTIONS THAT PINNED IT ARE REPLACED RATHER
+//    THAN DELETED. The bar carried a second 40 px row below `lg` holding the
+//    organisation and workspace switchers, and the consequence measured 52 % of a
+//    390×844 phone spent on chrome before any content. The switchers
+//    moved to the rail (`sidebar.tsx`), where the scope belongs, and the checks below
+//    now say the opposite of what they used to say: there is NO `topbar-context`
+//    wrapper, and no switcher in this bar. A test that had merely been deleted would
+//    have left nothing saying which way it must be.
 import { within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
@@ -100,10 +108,11 @@ describe('Topbar — responsive structure', () => {
     renderIntel(<Topbar onMenuClick={() => {}} />)
     const header = bar()
     expect(header.tagName).toBe('HEADER')
-    // The bar wraps below lg and is a single row from lg; it never grows into `main`.
-    expect(header).toHaveClass('flex-wrap', 'lg:flex-nowrap', 'shrink-0')
-    // Tab order = DOM order: the context wrapper precedes theme/account in the DOM
-    // (the desktop arrangement); below lg it is visually the second row.
+    // ONE ROW AT EVERY WIDTH, and its height is the token — not an emergent property
+    // of whatever happens to be in it.
+    expect(header).toHaveClass('flex-nowrap', 'shrink-0')
+    expect(header.className).toContain('h-[var(--console-header-height)]')
+    expect(header.className).not.toContain('flex-wrap')
 
     const trail = within(header).getByRole('navigation', { name: 'Breadcrumb' })
     // N1: /console is «Administration» under System & settings; the trail is the
@@ -145,62 +154,53 @@ describe('Topbar — responsive structure', () => {
       within(header).getByRole('button', { name: 'Notifications' }),
     ).toBeInTheDocument()
 
-    const context = header.querySelector(
-      '[data-slot="topbar-context"]',
-    ) as HTMLElement
-    expect(context).toHaveClass(
-      'basis-full',
-      'order-last',
-      'lg:contents',
-      'border-t',
-    )
-    const tenant = within(context).getByRole('button', { name: /01a0776d/ })
-    expect(tenant).toHaveClass('shrink', 'min-w-24')
-    expect(tenant).toHaveAttribute('title', expect.stringContaining('01a0776d'))
-    const workspace = await within(context).findByRole('button', {
-      name: /All workspaces/,
-    })
-    expect(workspace).toHaveClass('shrink', 'min-w-24')
-    expect(workspace).toHaveAttribute('title', 'All workspaces')
-    // Theme and account stay in row one (direct children of the bar, after the
-    // context wrapper in DOM order = desktop order).
+    // NO SECOND ROW AND NO SCOPE CONTROL IN THIS BAR. Both switchers live in the rail
+    // now; the bar must not grow a second copy of either.
+    expect(header.querySelector('[data-slot="topbar-context"]')).toBeNull()
+    expect(
+      within(header).queryByRole('button', { name: /01a0776d/ }),
+    ).toBeNull()
+    expect(
+      within(header).queryByRole('button', { name: /All workspaces/ }),
+    ).toBeNull()
+    // Theme and account are still the last two controls of the one row.
     const theme = within(header).getByRole('button', { name: /theme/i })
     const account = within(header).getByRole('button', { name: 'Account' })
-    expect(context.contains(theme)).toBe(false)
-    expect(context.contains(account)).toBe(false)
     expect(
-      context.compareDocumentPosition(theme) & Node.DOCUMENT_POSITION_FOLLOWING,
+      theme.compareDocumentPosition(account) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy()
     // Exactly one of each: no duplicated control for the narrow layout.
-    expect(
-      within(header).getAllByRole('button', { name: /01a0776d/ }),
-    ).toHaveLength(1)
     expect(
       within(header).getAllByRole('button', { name: 'Account' }),
     ).toHaveLength(1)
   })
 
-  it('Tab order is the reading order: trail, actions, then the context row', async () => {
+  it('Tab order is the reading order, and it no longer detours through a second row', async () => {
     const user = userEvent.setup()
     renderIntel(<Topbar onMenuClick={() => {}} />)
-    await within(bar()).findByRole('button', { name: /All workspaces/ })
+    await within(bar()).findByRole('button', { name: 'Search' })
     const names: string[] = []
-    for (let i = 0; i < 9; i++) {
+    for (let i = 0; i < 8; i++) {
       await user.tab()
       const el = document.activeElement as HTMLElement
       names.push(el.getAttribute('aria-label') ?? el.textContent?.trim() ?? '')
     }
-    expect(names).toEqual([
+    // The old sequence visited the context row between Notifications and the theme
+    // toggle — an irregularity the retired comment documented as a stated trade. With
+    // one row there is nothing to detour through: the order is simply the DOM.
+    // `FavoriteButton` is absent here: it renders nothing without a personal-navigation
+    // partition, and this test mounts the bar alone. That is its real behaviour, not a
+    // gap in the mock.
+    expect(names.slice(0, 6)).toEqual([
       'Open menu',
       'System & settings', // the icon variant (first in DOM; jsdom does not apply sm:hidden)
       'System & settings',
       'Search',
       'Open documentation for this view',
       'Notifications',
-      expect.stringMatching(/01a0776d/),
-      expect.stringMatching(/All workspaces/),
-      expect.stringMatching(/theme/i),
     ])
+    expect(names[6]).toMatch(/theme/i)
+    expect(names[7]).toBe('Account')
   })
 
   it('the search text label and shortcut hint show only from xl; the button keeps its name', () => {

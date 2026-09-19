@@ -483,7 +483,7 @@ describe('an I1 intent carries the authority it was confirmed under, and the tra
       USER_A,
       { workspace_id: WS, target: 'c2n1.target' },
       // The cast is deliberate and is itself part of the evidence: `guard` is
-      // REQUIRED on `PreparationOptions`, so the unguarded shape the review found
+      // REQUIRED on `PreparationOptions`, so the unguarded shape that was found
       // no longer type-checks and can only be reached by forcing it here.
       { tenant: 't1', guard } as { tenant: string; guard: () => void },
     )
@@ -724,7 +724,7 @@ function mountQueued(viaBegin: boolean) {
   return { qc, unmount: r.unmount }
 }
 
-describe('queued mutate(intent) then a SAME-TURN rotation (the review witness)', () => {
+describe('queued mutate(intent) then a SAME-TURN rotation (the reported witness)', () => {
   afterEach(() => {
     current = null
     settle = null

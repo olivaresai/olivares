@@ -221,3 +221,35 @@ describe('PeopleTab members roster', () => {
     )
   })
 })
+
+/**
+ * "INVITE SOMEONE TO ADD THE FIRST ONE" NAMED A CONTROL THIS PANEL DID NOT CARRY.
+ *
+ * The onboard control is at the top of the page, with the whole user table between it
+ * and the invitations panel, so from here the sentence is an instruction about
+ * somewhere else. The census counted this among the ten empty states with no action.
+ */
+describe('PeopleTab — the empty invitations panel', () => {
+  it('opens the onboard dialog, under a name of its own', async () => {
+    const user = userEvent.setup()
+    wrap(<PeopleTab />)
+    const fromEmpty = await screen.findByRole('button', {
+      name: 'Invite the first user',
+    })
+    // Two controls, one dialog, two names: a query for either finds exactly one.
+    expect(
+      screen.getAllByRole('button', { name: 'Onboard user' }),
+    ).toHaveLength(1)
+    await user.click(fromEmpty)
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+  })
+
+  it('offers no door to a reader who may not invite', async () => {
+    authState.can = (p: string) => p !== 'membership:write'
+    wrap(<PeopleTab />)
+    await screen.findByText('No pending invitations.')
+    expect(
+      screen.queryByRole('button', { name: 'Invite the first user' }),
+    ).toBeNull()
+  })
+})

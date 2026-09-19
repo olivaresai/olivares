@@ -225,6 +225,7 @@ function AccionesSandbox({
 export function SandboxView() {
   const { t } = useTranslation('sandbox')
   const { activeTenant, can, confinedWorkspace } = useAuth()
+  const [tab, setTab] = useState('runs')
   const [openRun, setOpenRun] = useState<Run | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
   const [archiving, setArchiving] = useState<Scenario | null>(null)
@@ -281,7 +282,11 @@ export function SandboxView() {
       }
       notices={<SelfAuditNotice />}
     >
-      <Tabs defaultValue="runs">
+      {/* CONTROLLED, so an empty state can carry its own next action. A run only
+          exists once a scenario has been authored, and the author button lives in the
+          third tab; uncontrolled tabs left the first screen of the route naming a
+          destination the reader had to go and find. */}
+      <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
           <TabsTrigger value="runs">{t('tabs.runs')}</TabsTrigger>
           <TabsTrigger value="comparisons">{t('tabs.comparisons')}</TabsTrigger>
@@ -312,6 +317,15 @@ export function SandboxView() {
                     <EmptyState
                       description={t('runs.emptyHint')}
                       title={t('runs.empty')}
+                      action={
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => setTab('scenarios')}
+                        >
+                          {t('tabs.scenarios')}
+                        </Button>
+                      }
                     />
                   ) : (
                     <RunsTable runs={list.items} onRowClick={setOpenRun} />
@@ -341,6 +355,15 @@ export function SandboxView() {
                   <EmptyState
                     title={t('comparisons.empty')}
                     description={t('comparisons.emptyHint')}
+                    action={
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => setTab('runs')}
+                      >
+                        {t('tabs.runs')}
+                      </Button>
+                    }
                   />
                 ) : (
                   <div className="grid gap-3 md:grid-cols-2">
@@ -400,6 +423,22 @@ export function SandboxView() {
                         : confined
                           ? t('scenarios.emptyHintConfined')
                           : t('scenarios.emptyHintReadOnly')
+                    }
+                    // The action follows the description it belongs to: only the
+                    // principal whose hint says "author the first one" is given the
+                    // button that does it.
+                    action={
+                      canCreate ? (
+                        <Button
+                          type="button"
+                          variant="primary"
+                          size="sm"
+                          onClick={() => setCreateOpen(true)}
+                        >
+                          <Plus className="size-3.5" aria-hidden />
+                          {t('scenarios.create.action')}
+                        </Button>
+                      ) : null
                     }
                   />
                 ) : (

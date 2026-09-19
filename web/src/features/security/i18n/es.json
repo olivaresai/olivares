@@ -13,6 +13,7 @@
     "description": "Hallazgos de guardrail, anomalía y forense. La evidencia es una huella — no hay payload que expandir.",
     "empty": "Sin hallazgos",
     "emptyHint": "Los hallazgos aparecen a medida que guardrails, detección de anomalías y forense registran evidencia.",
+    "namesUnread": "No se han podido leer algunos nombres de sesión, así que esas filas muestran su referencia.",
     "export": {
       "action": "Exportar SARIF",
       "busy": "Exportando…",

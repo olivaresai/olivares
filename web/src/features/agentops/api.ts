@@ -74,7 +74,7 @@ export interface RunListParams {
    * page narrowing, and answered with legacy (unprofiled) runs only: a profiled run
    * is found by `live_ref`. Empty/absent lists every run. */
   claude_session_id?: string
-  /** B2: the run the plane PROVED owns a live row (the managed row's run, written by
+  /** The run the plane PROVED owns a live row (the managed row's run, written by
    * the bridge in the transaction that bound the id). An observed, source or legacy
    * row has no proven run: the answer is empty, never "the first match". */
   live_ref?: string
@@ -146,16 +146,33 @@ export const agentOpsApi = {
    * before any child effect, and rightly: its child is a JSON-RPC peer that would
    * read the line as a method call. Use `inputText` for those — the two are separate
    * operations on purpose, and neither is derived from the other's payload.
+   *
+   * A work-bound run presents the fence observed on that exact run, exactly as
+   * `olivares agent session input --line … --work-lease-fence N` does: one sibling
+   * key, omitted entirely when there is none.
    */
-  input: (r: string, line: string) =>
-    http.post<{ accepted: boolean }>(`${RUNS}/${ref(r)}/input`, { line }),
+  input: (r: string, line: string, workLeaseFence?: number) =>
+    http.post<{ accepted: boolean }>(
+      `${RUNS}/${ref(r)}/input`,
+      workLeaseFence === undefined
+        ? { line }
+        : { line, work_lease_fence: workLeaseFence },
+    ),
   /**
    * Send one TURN to a session driven by an owned provider protocol (202 accepted).
    * The driver encodes the text as that provider's own turn method; the console never
    * builds a protocol frame itself.
+   *
+   * Work-bound runs present their fence here too — the fenced plane is the ONLY one a
+   * stamped run answers on, and it is reached with the same sibling key the CLI sends.
    */
-  inputText: (r: string, text: string) =>
-    http.post<{ accepted: boolean }>(`${RUNS}/${ref(r)}/input`, { text }),
+  inputText: (r: string, text: string, workLeaseFence?: number) =>
+    http.post<{ accepted: boolean }>(
+      `${RUNS}/${ref(r)}/input`,
+      workLeaseFence === undefined
+        ? { text }
+        : { text, work_lease_fence: workLeaseFence },
+    ),
   /** Cancel the active turn while retaining the owned process and conversation.
    * Work-bound runs must present the fence observed on that exact run. */
   interrupt: (r: string, workLeaseFence?: number) =>
@@ -171,7 +188,7 @@ export const agentOpsApi = {
   deleteRun: (r: string) =>
     http.delete<{ deleted: boolean }>(`${RUNS}/${ref(r)}`),
 
-  // --- Provider profiles (B1/B2; references and labels, never a path) ----------
+  // --- Provider profiles (references and labels, never a path) ----------
   // Gated by `sessions:profile:{read,write,admin}`: read lists/gets, write creates
   // and renames/enables/disables, admin retires (irreversible) and reads the
   // configuration — the ONLY call that carries a path, so it is issued on demand
@@ -235,7 +252,7 @@ export const agentOpsApi = {
       }),
     ),
 
-  // --- Source → profile bindings (B1) ------------------------------------------
+  // --- Source → profile bindings ------------------------------------------
   // Gated by `sessions:profile-binding:{read,write,admin}` — independent of the
   // profile tiers. Creating one ALSO needs source administration (`system:admin`),
   // checked by the engine's composition port.

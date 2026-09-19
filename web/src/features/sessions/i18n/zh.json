@@ -3,6 +3,7 @@
   "subtitle": "智能体实时运行情况——每个会话当前正在执行的操作、其 token、成本与节奏，通过实时流持续更新。",
   "refresh": "刷新",
   "search": "搜索会话、智能体、操作……",
+  "untitled": "未命名会话",
   "allStates": "所有状态",
   "summary": {
     "active": "活跃",
@@ -25,7 +26,8 @@
     "lastSeen": "最后活动",
     "provenance": "来源",
     "control": "可控程度",
-    "instance": "实例"
+    "instance": "实例",
+    "instanceUnknown": "提供方配置名称未知"
   },
   "state": {
     "active": "活跃",
@@ -103,7 +105,9 @@
     "noRunRead": "未显示已启动的会话：你的角色不包含 sessions:run:read。下面标为“已发现”的会话仍可能由 Olivares 启动——此列表无法核对。",
     "truncated": "这是最近的一页，不是全部资产。此处的来源只在已加载的数据上比对，因此运行记录已滚出该页的会话可能显示为“已发现”；打开会话，让引擎来回答。",
     "runLookupFailed": "已启动的那一半读取失败：运行查询出错。下面的行是被观察的那一半返回的内容；来源标记为“未读取”，而不是猜测。",
-    "liveLookupFailed": "被观察的那一半读取失败：实时查询出错。下面的行是已启动的会话；遥测列为空是因为没能读到，而不是因为没有。"
+    "liveLookupFailed": "被观察的那一半读取失败：实时查询出错。下面的行是已启动的会话；遥测列为空是因为没能读到，而不是因为没有。",
+    "noProfileRead": "未显示提供方配置名称：你的角色不包含 sessions:profile:read。“实例”列改为显示每行的配置引用。",
+    "profileLookupFailed": "未能读取提供方配置名称：配置查询出错。“实例”列改为显示每行的配置引用。"
   },
   "card": {
     "tabs": {
@@ -254,7 +258,7 @@
     "noneTitle": "请选择一个会话",
     "noneDescription": "在工作栏中选择一个会话，即可查看它做了什么，旁边附有证据。",
     "openDetail": "完整控制项",
-    "noObjective": "引擎未报告该会话的目标，因此改为显示其引用标识。",
+    "noObjective": "引擎未报告该会话的目标。",
     "notReadTitle": "无法读取该会话",
     "menu": "{{name}} 的操作"
   },
@@ -307,6 +311,32 @@
     "notDeclared": "未声明",
     "copy": "复制",
     "copied": "已复制",
-    "copyRef": "复制 {{value}}"
+    "copyRef": "复制 {{value}}",
+    "identifiersTitle": "标识符",
+    "identifiersHint": "供复制的引用。它们不是范围行上的名称。",
+    "wireTitle": "线路",
+    "wireHint": "所选行的原始帧。默认视图是对话。",
+    "wireEmpty": "在对话中选择一行以查看其原始帧。",
+    "thisNode": "本节点",
+    "noWorkspace": "无工作区",
+    "cwdWarning": "此会话没有工作区。驱动程序将其工作目录报告为 {{cwd}}。"
+  },
+  "conversation": {
+    "log": "对话",
+    "waiting": "正在等待会话…",
+    "empty": "尚无回合。请在下方发送一句话。",
+    "ended": "会话的输入输出流已结束。",
+    "lag": "丢失 {{count}} 帧 — 下方输出在缺口之后继续。",
+    "operator": "你",
+    "assistant": "助手",
+    "tool": "工具",
+    "system": "系统",
+    "result": "结果",
+    "unknown": "无法识别的帧",
+    "inspect": "在检查器中显示",
+    "args": "参数",
+    "toolResult": "结果",
+    "tokens": "输入 {{input}} · 输出 {{output}}",
+    "cwdWarning": "此会话没有工作区。驱动程序将其工作目录报告为 {{cwd}}。"
   }
 }

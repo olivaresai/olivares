@@ -1,7 +1,6 @@
 {
   "title": "Resumen",
-  "description": "Tu patrimonio de IA de un vistazo: inventario, actividad, riesgo, cumplimiento, gasto y salud.",
-  "asOfNote": "Agregados en vivo de los últimos 30 días, sobre los módulos que tu rol puede abrir. Cada tarjeta enlaza con su módulo; abre el informe ejecutivo para el resumen completo y el PDF.",
+  "description": "Tu patrimonio de IA de un vistazo: agregados de 30 días sobre los módulos que tu rol puede abrir.",
   "openReport": "Informe ejecutivo",
   "range": "últimos 30 días",
   "next": {
@@ -27,7 +26,8 @@
     "emptyDescription": "Aquí aparece cada ejecución de un motor conectado, con lo que hizo, cuánto duró y cuánto costó.",
     "unavailableTitle": "No se ha podido cargar el trabajo reciente",
     "unavailableDescription": "La lectura de sesiones no ha respondido. Las cifras de arriba no se ven afectadas.",
-    "open": "Abrir la sesión: {{what}}"
+    "open": "Abrir la sesión: {{what}}",
+    "untitled": "Sesión sin título"
   },
   "tiles": {
     "inventory": {
@@ -52,7 +52,8 @@
     "spend": {
       "label": "Gasto",
       "caption": "{{range}}",
-      "projected": "{{amount}} proyectado al ritmo actual"
+      "projected": "{{amount}} proyectado al ritmo actual",
+      "projectedOver": "{{amount}} proyectado al ritmo actual — por encima del gasto hasta ahora"
     },
     "health": {
       "label": "Salud y SLA",

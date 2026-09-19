@@ -614,3 +614,29 @@ describe('AgentCore export — the surface is REACHABLE', () => {
     ).not.toBeInTheDocument()
   })
 })
+
+/**
+ * THE EMPTY STATE CARRIES THE ACTION ITS OWN SENTENCE NAMES.
+ *
+ * "Compute a plan to see exactly which AgentCore policies would be created, updated or
+ * deleted" — and the panel offered nothing to press. A first attempt at this reused
+ * the control row's own label and made the accessible name ambiguous in 17 existing
+ * tests, so the two controls are named apart: each query finds exactly one.
+ */
+describe('AgentCoreExportView — the empty plan panel', () => {
+  it('computes the plan, under a name of its own', async () => {
+    const user = userEvent.setup()
+    wrap(<AgentCoreExportView />)
+    expect(
+      screen.getAllByRole('button', { name: /compute plan/i }),
+    ).toHaveLength(1)
+    const fromEmpty = screen.getByRole('button', {
+      name: 'Compute the first plan',
+    })
+    http.post.mockResolvedValue(planWithHash(REVIEWED_HASH))
+    await user.click(fromEmpty)
+    // It runs the SAME plan call the control row runs, and the diff it computed is
+    // the one on screen.
+    await screen.findByText(new RegExp(REVIEWED_HASH))
+  })
+})

@@ -16,8 +16,8 @@ export type Density = 'compact' | 'comfortable'
  * header/body/skeleton row heights, for the virtualizer's row estimate and for the
  * sticky-header scroll padding, so the four cannot drift apart.
  *
- * Values are the console's spacing scale (Tailwind `h-8` = 2 rem = 32 px, `h-10` =
- * 2.5 rem = 40 px), the same scale that sizes the base controls (`Button` base `h-8`,
+ * Values are the console's spacing scale (Tailwind `h-8` = 2 rem = 32 px, `h-9` =
+ * 2.25 rem = 36 px), the same scale that sizes the base controls (`Button` base `h-8`,
  * inputs, icon buttons `size-8`). Measured on the rendered console
  * (console-ui-current-baseline, 2026-09-06): the previous pair was `h-7`/`h-8`
  * (28/32 px) as a MINIMUM height on cells whose content was already taller, so the
@@ -27,17 +27,53 @@ export type Density = 'compact' | 'comfortable'
  *
  * A row is a MINIMUM height plus vertical cell padding: `comfortable` adds 4 px above
  * and below the content, `compact` none. A single-line row and a row holding a 32 px
- * control therefore sit exactly at the minimum in both densities (40 / 32), while a
- * two-line row — the common case in this console: a name over an id — is 49 px
- * comfortable and 41 px compact, so the preference is visible on every row kind
- * rather than only on the rare single-line one.
+ * control therefore sit exactly at the minimum in both densities (36 / 32).
+ *
+ * ⛔ A TWO-LINE ROW IS NO LONGER "the common case in this console", and that sentence
+ *    used to be here. It was true and it was the defect: the measurement put
+ *    the sessions table at 110 px a row because its widest column stacked a badge over
+ *    a three-line profile reference, and four other tables the same way. The
+ *    work-first pass made
+ *    those cells ONE line each — nothing dropped, the identifiers on `title` and in the
+ *    detail pane, which is where an identifier is the thing being operated on. The
+ *    preference is still visible on a row holding a control or two lines of content; it
+ *    is simply no longer the case that most rows are two lines.
  *
  * `px` is the number the row virtualizer estimates with before it measures the real
  * element; `stores/preferences.test.ts` pins that it equals the `h-*` token.
+ *
+ * ⛔ `headPx` IS `px` MINUS ONE, AND THE ONE IS THE RULE. The header strip carries the
+ *    hairline that separates it from the first row, and `border-collapse` draws that
+ *    hairline INSIDE the row box it belongs to. A header cell given the row's own `h-*`
+ *    therefore measures one pixel MORE than a row — which is exactly the pixel that put
+ *    `/audit`'s first ledger row at y=137 against a budget of 136, while the two screens
+ *    built on `StaticTable` (whose header is a caption line plus `py-2`, 34 + 1) landed
+ *    at 136. One row tall means one row tall INCLUDING the rule, at either density, and
+ *    `preferences.test.ts` pins the subtraction so the pair cannot drift.
  */
-export const DENSITY_ROW: Record<Density, { className: string; px: number }> = {
-  compact: { className: 'h-8 py-0', px: 32 },
-  comfortable: { className: 'h-10 py-1', px: 40 },
+export const DENSITY_ROW: Record<
+  Density,
+  { className: string; px: number; headClassName: string; headPx: number }
+> = {
+  compact: {
+    className: 'h-8 py-0',
+    px: 32,
+    headClassName: 'h-[31px]',
+    headPx: 31,
+  },
+  // ⛔ 36 px, AND IT WAS 40. `--console-row-height: 2.25rem` is the
+  //    budget the design declares for a management table row, and `h-9` is that value
+  //    on this scale. The step down is one row of type, not a redesign: a single-line
+  //    row is still governed by this minimum (20 px of text plus `py-1`'s 8 px is 28),
+  //    it is still well above the 24 px WCAG 2.5.8 pointer target, and it still leaves
+  //    room for the inset focus ring. Over the 60-row page `/audit` loads it is 240 px
+  //    of viewport returned — four more rows on a 900 px screen.
+  comfortable: {
+    className: 'h-9 py-1',
+    px: 36,
+    headClassName: 'h-[35px]',
+    headPx: 35,
+  },
 }
 
 /** The `h-*` token of a density class (the minimum row height). */

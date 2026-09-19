@@ -47,6 +47,7 @@
     "colTime": "时间",
     "colFilters": "筛选",
     "colCounts": "计数",
-    "counts": "{{inventory}} 清点 · {{findings}} 发现 · {{drift}} 偏移"
+    "counts": "{{inventory}} 清点 · {{findings}} 发现 · {{drift}} 偏移",
+    "emptyAction": "立即导出态势"
   }
 }

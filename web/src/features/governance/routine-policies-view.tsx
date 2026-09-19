@@ -35,6 +35,7 @@ import { DataTable, type TableColumn } from '@/components/data/data-table'
 import { ApiError } from '@/lib/api/errors'
 import { useAuth } from '@/lib/auth/context'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
+import { NamedRef, useMemberNames, useWorkspaceNames } from '@/features/shared'
 import { governanceApi, governanceKeys } from './api'
 import { RoutinePolicyEditorDialog } from './routine-policy-editor'
 import './i18n'
@@ -200,6 +201,11 @@ export function RoutinePoliciesView() {
     return out
   }, [postureQ.data, policies])
 
+  // The two directories a policy scope can be named from — the switcher's workspace
+  // list and the people roster, each already read by the screen that owns it.
+  const workspaceNames = useWorkspaceNames()
+  const memberNames = useMemberNames()
+
   const columns = useMemo<TableColumn<RoutinePolicyDTO, unknown>[]>(() => {
     const base: TableColumn<RoutinePolicyDTO, unknown>[] = [
       {
@@ -222,14 +228,40 @@ export function RoutinePoliciesView() {
       {
         id: 'scope',
         header: t('routines.cols.scope'),
-        cell: ({ row }) => (
-          <span className="text-caption text-muted-foreground">
-            {t(`routines.scope.${row.original.scope_kind}`, {
-              defaultValue: row.original.scope_kind,
-            })}
-            {row.original.scope_ref ? ` · ${row.original.scope_ref}` : ''}
-          </span>
-        ),
+        // ⛔ THE SCOPE IS A PLACE, AND A PLACE HAS A NAME. The cell printed
+        //    `Workspace · 01a0b580-4d1f-7c87-…`: the census counted it as the raw
+        //    identifier on this route, and it is the cheapest of them to close because
+        //    the workspace list is the switcher's own read. A user-scoped policy is
+        //    named from the roster the same way; anything the console holds no
+        //    directory for keeps the reference it was given.
+        cell: ({ row }) => {
+          const p = row.original
+          const kind = t(`routines.scope.${p.scope_kind}`, {
+            defaultValue: p.scope_kind,
+          })
+          if (!p.scope_ref)
+            return (
+              <span className="text-caption text-muted-foreground">{kind}</span>
+            )
+          const named =
+            p.scope_kind === 'workspace'
+              ? workspaceNames.nameOf(p.scope_ref)
+              : p.scope_kind === 'user'
+                ? memberNames.nameOf(p.scope_ref)
+                : null
+          return (
+            <span className="flex min-w-0 items-center gap-1.5 text-caption text-muted-foreground">
+              <span className="shrink-0">{kind}</span>
+              <span aria-hidden>·</span>
+              <NamedRef
+                mono={!named}
+                name={named}
+                reference={p.scope_ref}
+                fallback={p.scope_ref}
+              />
+            </span>
+          )
+        },
       },
       {
         accessorKey: 'enabled',
@@ -332,7 +364,7 @@ export function RoutinePoliciesView() {
         ),
       } as TableColumn<RoutinePolicyDTO, unknown>,
     ]
-  }, [canAdmin, t])
+  }, [canAdmin, t, workspaceNames, memberNames])
 
   if (!canRead) return <ForbiddenState data-testid="routine-forbidden" />
   // Aseguramiento ANTES que rol: si el motor ofrece la ceremonia, se ofrece.
@@ -498,14 +530,21 @@ export function RoutinePoliciesView() {
           <p
             data-testid="posture-applied-scope"
             data-stale={scopeDrifted ? 'true' : 'false'}
+            title={effective.scope_workspace_ref || undefined}
             className={
               scopeDrifted
                 ? 'text-caption font-medium text-warning'
                 : 'text-caption text-muted-foreground'
             }
           >
+            {/* The line that says WHICH scope the posture was resolved for names the
+                workspace, for the same reason the scope column does: `Resolved for
+                workspace 01a0b5d8-…` tells an operator nothing they can act on. The
+                reference stays on `title`, and a workspace the switcher's page does
+                not carry keeps the reference it was given. */}
             {t('routines.posture.resolvedFor', {
               workspace:
+                workspaceNames.nameOf(effective.scope_workspace_ref) ||
                 effective.scope_workspace_ref ||
                 t('routines.posture.defaultWorkspace'),
               user: effective.scope_user_known
@@ -708,6 +747,23 @@ export function RoutinePoliciesView() {
           <EmptyState
             title={t('empty.routinePolicies.title')}
             description={t('empty.routinePolicies.description')}
+            // "Create a routine policy to set cadence floors…" — the same button the
+            // page header carries, on the same right.
+            action={
+              canAdmin ? (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => {
+                    setEditing(null)
+                    setEditorOpen(true)
+                  }}
+                >
+                  <Plus />
+                  {t('routines.newPolicy')}
+                </Button>
+              ) : null
+            }
           />
         }
       />

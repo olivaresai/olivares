@@ -3,6 +3,7 @@
   "subtitle": "Opération des agents en direct — ce que chaque session fait à l’instant même, ses tokens, son coût et sa cadence, mis à jour via un flux en direct.",
   "refresh": "Actualiser",
   "search": "Rechercher une session, un agent, une action…",
+  "untitled": "Session sans titre",
   "allStates": "Tous les états",
   "summary": {
     "active": "Actif",
@@ -25,7 +26,8 @@
     "lastSeen": "Vu pour la dernière fois",
     "provenance": "Origine",
     "control": "Contrôle",
-    "instance": "Instance"
+    "instance": "Instance",
+    "instanceUnknown": "Nom du profil de fournisseur inconnu"
   },
   "state": {
     "active": "Actif",
@@ -103,7 +105,9 @@
     "noRunRead": "Les sessions lancées ne sont pas affichées : votre rôle n’inclut pas sessions:run:read. Une session indiquée ci-dessous comme découverte peut avoir été lancée par Olivares — cette liste n’a pas pu le vérifier.",
     "truncated": "Ceci est la page la plus récente, pas l’ensemble du parc. L’origine y est recoupée sur ce qui est chargé : une session dont l’exécution est sortie de la page peut apparaître comme découverte ; ouvrez la session pour que le moteur réponde.",
     "runLookupFailed": "La moitié « lancées » n’a pas pu être lue : la requête sur les exécutions a échoué. Les lignes ci-dessous sont ce qu’a renvoyé la moitié observée ; l’origine est indiquée comme non lue plutôt que devinée.",
-    "liveLookupFailed": "La moitié observée n’a pas pu être lue : la requête en direct a échoué. Les lignes ci-dessous sont les sessions lancées ; les colonnes de télémétrie sont vides parce que rien n’a pu être lu, pas parce qu’il n’y a rien."
+    "liveLookupFailed": "La moitié observée n’a pas pu être lue : la requête en direct a échoué. Les lignes ci-dessous sont les sessions lancées ; les colonnes de télémétrie sont vides parce que rien n’a pu être lu, pas parce qu’il n’y a rien.",
+    "noProfileRead": "Les noms des profils de fournisseur ne sont pas affichés : votre rôle n’inclut pas sessions:profile:read. La colonne Instance porte à la place la référence du profil de chaque ligne.",
+    "profileLookupFailed": "Les noms des profils de fournisseur n’ont pas pu être lus : la requête sur les profils a échoué. La colonne Instance porte à la place la référence du profil de chaque ligne."
   },
   "card": {
     "tabs": {
@@ -258,7 +262,7 @@
     "noneTitle": "Sélectionnez une session",
     "noneDescription": "Choisissez une session dans le rail pour lire ce qu’elle a fait, avec ses preuves à côté.",
     "openDetail": "Contrôles complets",
-    "noObjective": "Le moteur n’a signalé aucun objectif pour cette session : sa référence est affichée à la place.",
+    "noObjective": "Le moteur n’a signalé aucun objectif pour cette session.",
     "notReadTitle": "Cette session n’a pas pu être lue",
     "menu": "Actions pour {{name}}"
   },
@@ -315,6 +319,32 @@
     "notDeclared": "Non déclaré",
     "copy": "Copier",
     "copied": "Copié",
-    "copyRef": "Copier {{value}}"
+    "copyRef": "Copier {{value}}",
+    "identifiersTitle": "Identifiants",
+    "identifiersHint": "Références à copier. Ce ne sont pas les noms de la ligne d’étendue.",
+    "wireTitle": "Fil",
+    "wireHint": "Le cadre brut de la ligne sélectionnée. La conversation est la vue par défaut.",
+    "wireEmpty": "Sélectionnez une ligne de la conversation pour voir son cadre brut.",
+    "thisNode": "Ce nœud",
+    "noWorkspace": "Aucun espace de travail",
+    "cwdWarning": "Cette session n’a pas d’espace de travail. Le pilote a déclaré son répertoire de travail comme {{cwd}}."
+  },
+  "conversation": {
+    "log": "Conversation",
+    "waiting": "En attente de la session…",
+    "empty": "Pas encore de tours. Envoyez une phrase ci-dessous.",
+    "ended": "Le flux d’E/S de la session est terminé.",
+    "lag": "{{count}} cadre(s) perdu(s) — la sortie ci-dessous reprend après le trou.",
+    "operator": "Vous",
+    "assistant": "Assistant",
+    "tool": "Outil",
+    "system": "Système",
+    "result": "Résultat",
+    "unknown": "Cadre non reconnu",
+    "inspect": "Afficher dans l’inspecteur",
+    "args": "Arguments",
+    "toolResult": "Résultat",
+    "tokens": "{{input}} entrées · {{output}} sorties",
+    "cwdWarning": "Cette session n’a pas d’espace de travail. Le pilote a déclaré son répertoire de travail comme {{cwd}}."
   }
 }

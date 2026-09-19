@@ -124,13 +124,17 @@ export function IngestionHealthTable({
         accessorKey: 'label',
         header: t('ingestion.columns.standard'),
         cell: ({ row }) => (
-          <div className="flex flex-col gap-0.5">
-            <span className="font-medium text-foreground">
+          /* ONE LINE, name › detail. The standard's name sat over its upstream
+             repo and ref, and the row measured 49 px against the 36 px table
+             budget. The name never gives way; the upstream coordinates truncate
+             first and already carried their full value on `title`. */
+          <div className="flex min-w-0 items-baseline gap-2">
+            <span className="min-w-0 flex-1 truncate font-medium text-foreground">
               {row.original.label}
             </span>
             {row.original.upstream_repo && row.original.upstream_ref ? (
               <span
-                className="font-mono text-[11px] leading-tight text-muted-foreground"
+                className="min-w-0 shrink truncate font-mono text-[11px] text-muted-foreground"
                 title={`${row.original.upstream_repo} ${row.original.upstream_ref}`}
               >
                 {row.original.upstream_repo} {row.original.upstream_ref}
@@ -164,10 +168,14 @@ export function IngestionHealthTable({
         accessorKey: 'status',
         header: t('ingestion.columns.status'),
         cell: ({ row }) => (
-          <div className="flex flex-col gap-1">
+          /* ONE LINE. The status chip sat over its opt-in gate note, and between
+             this column and the standard's name the row measured 49 px against the
+             36 px table budget. The chip is the status; the gate is its detail and
+             truncates after it. */
+          <div className="flex min-w-0 items-center gap-2">
             <StatusChip status={row.original.status} />
             {row.original.opt_in_gate ? (
-              <span className="text-caption text-muted-foreground">
+              <span className="min-w-0 truncate text-caption text-muted-foreground">
                 {t('ingestion.gate')}:{' '}
                 <span className="font-mono">{row.original.opt_in_gate}</span>{' '}
                 <span className="font-medium">

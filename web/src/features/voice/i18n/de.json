@@ -129,7 +129,7 @@
     "columns": {
       "when": "Wann",
       "outcome": "Ergebnis",
-      "session": "Sitzungs-Ref",
+      "session": "Sitzung",
       "agent": "Agent",
       "actor": "Akteur",
       "reason": "Begründung der Engine"

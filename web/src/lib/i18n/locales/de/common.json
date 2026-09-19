@@ -85,6 +85,7 @@
     "empty": "Keine Treffer.",
     "navigation": "Navigation",
     "actions": "Aktionen",
+    "startSession": "Sitzung starten",
     "results": "Ergebnisse",
     "searchResults": "Treffer in Ihren Daten",
     "searchTruncated": "Weitere Treffer vorhanden — Suche verfeinern.",
@@ -145,7 +146,8 @@
     "primarySidebar": "Primär",
     "mainNavigation": "Hauptnavigation",
     "graphControls": "Diagrammsteuerung",
-    "graphMinimap": "Graph-Minimap"
+    "graphMinimap": "Graph-Minimap",
+    "pageActions": "Seitenaktionen"
   },
   "privileged": {
     "auditedNotice": "Diese Aktion wird im manipulationssicheren Audit-Hauptbuch aufgezeichnet.",

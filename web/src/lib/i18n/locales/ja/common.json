@@ -85,6 +85,7 @@
     "empty": "一致する項目がありません。",
     "navigation": "ナビゲーション",
     "actions": "アクション",
+    "startSession": "セッションを開始",
     "results": "結果",
     "searchResults": "データ内の結果",
     "searchTruncated": "さらに一致があります — 検索を絞り込んでください。",
@@ -145,7 +146,8 @@
     "primarySidebar": "メイン",
     "mainNavigation": "メインナビゲーション",
     "graphControls": "グラフ操作",
-    "graphMinimap": "グラフのミニマップ"
+    "graphMinimap": "グラフのミニマップ",
+    "pageActions": "ページの操作"
   },
   "privileged": {
     "auditedNotice": "この操作は改ざん検知可能な監査台帳に記録されます。",

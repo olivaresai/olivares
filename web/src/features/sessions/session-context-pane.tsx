@@ -20,10 +20,15 @@
 //    `posture` is the WEAKEST value the engine saw across the producing connectors,
 //    `pep_provisioned` and `record_io` are stored on the run. A blank badge tells the
 //    truth where "enforced" by default would not (features/sessions/types.ts).
+import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Compass } from 'lucide-react'
+import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
+import { useAuthBoundary } from '@/features/agentops/auth-boundary'
 import { useAuth } from '@/lib/auth/context'
+import { useTenantLabel } from '@/components/layout/tenant-label'
+import type { ConversationItem } from './conversation-frames'
 import { primaryRun } from './provenance'
 import { RefChip } from './ref-chip'
 import type { SessionResolution } from './use-session-resolution'
@@ -46,13 +51,46 @@ function Row({
 
 export function SessionContextPane({
   resolution,
+  inspected,
 }: {
   resolution: SessionResolution
+  inspected?: ConversationItem | null
 }) {
   const { t } = useTranslation('sessions')
-  const { activeTenant } = useAuth()
+  const { activeTenant, can } = useAuth()
+  const boundary = useAuthBoundary()
+  const org = useTenantLabel()
   const { target, session, live } = resolution
   const run = primaryRun(session.runs)
+  const canReadWorkspaces = can('sessions:workspace:read')
+  const canReadProfiles = can('sessions:profile:read')
+  const workspacesQuery = useQuery({
+    queryKey: agentOpsKeys.workspaces(activeTenant),
+    queryFn: () => agentOpsApi.listWorkspaces({ limit: 200 }),
+    enabled: canReadWorkspaces && !!activeTenant && !!run?.workspace_ref,
+  })
+  const workspaceName =
+    workspacesQuery.data?.items.find(
+      (w) => w.workspace_ref === run?.workspace_ref,
+    )?.name ?? null
+  const profileRef = live?.provider_profile_ref || run?.provider_profile_ref
+  const profilesQuery = useQuery({
+    queryKey: agentOpsKeys.profiles(activeTenant, boundary.epoch, {
+      limit: 200,
+    }),
+    queryFn: ({ signal }) =>
+      agentOpsApi.listProfiles({ limit: 200 }, { signal }),
+    enabled: canReadProfiles && !!activeTenant && !!profileRef,
+  })
+  const profileName =
+    profilesQuery.data?.items
+      .find((p) => p.profile_ref === profileRef)
+      ?.display_name?.trim() ||
+    profilesQuery.data?.items.find((p) => p.profile_ref === profileRef)
+      ?.driver ||
+    live?.provider ||
+    run?.provider_driver ||
+    null
 
   if (!target)
     return (
@@ -68,7 +106,7 @@ export function SessionContextPane({
 
   return (
     <div className="flex flex-col gap-4" data-testid="session-context">
-      <section>
+      <section data-testid="context-scope">
         <h3 className="text-caption font-medium text-foreground">
           {t('context.scopeTitle')}
         </h3>
@@ -77,16 +115,21 @@ export function SessionContextPane({
         </p>
         <dl className="mt-1 divide-y divide-border">
           <Row label={t('context.tenant')}>
-            <RefChip value={activeTenant} absent={none} />
+            <span className="text-caption text-foreground">
+              {org.name || none}
+            </span>
           </Row>
           <Row label={t('context.workspace')}>
-            <RefChip value={run?.workspace_ref} absent={none} />
+            <span className="text-caption text-foreground">
+              {workspaceName || t('context.noWorkspace')}
+            </span>
           </Row>
           <Row label={t('context.environment')}>
-            <RefChip
-              value={live?.environment_ref || run?.provider_environment_ref}
-              absent={none}
-            />
+            <span className="text-caption text-foreground">
+              {live?.environment_ref || run?.provider_environment_ref
+                ? t('context.thisNode')
+                : notDeclared}
+            </span>
           </Row>
           <Row label={t('context.provider')}>
             {live?.provider || run?.provider_driver ? (
@@ -100,22 +143,43 @@ export function SessionContextPane({
             )}
           </Row>
           <Row label={t('context.profile')}>
-            <RefChip
-              value={live?.provider_profile_ref || run?.provider_profile_ref}
-              absent={none}
-            />
+            {profileName ? (
+              <span
+                className="text-caption text-foreground"
+                title={profileRef || undefined}
+              >
+                {profileName}
+              </span>
+            ) : (
+              <span className="text-caption text-muted-foreground">{none}</span>
+            )}
           </Row>
         </dl>
       </section>
 
-      <section>
+      <section data-testid="context-identifiers">
         <h3 className="text-caption font-medium text-foreground">
-          {t('context.traceTitle')}
+          {t('context.identifiersTitle')}
         </h3>
         <p className="text-caption text-muted-foreground">
-          {t('context.traceHint')}
+          {t('context.identifiersHint')}
         </p>
         <dl className="mt-1 divide-y divide-border">
+          <Row label={t('context.tenant')}>
+            <RefChip value={org.tenant || activeTenant} absent={none} />
+          </Row>
+          <Row label={t('context.workspace')}>
+            <RefChip value={run?.workspace_ref} absent={none} />
+          </Row>
+          <Row label={t('context.environment')}>
+            <RefChip
+              value={live?.environment_ref || run?.provider_environment_ref}
+              absent={none}
+            />
+          </Row>
+          <Row label={t('context.profile')}>
+            <RefChip value={profileRef} absent={none} />
+          </Row>
           <Row label={t('context.sessionRef')}>
             <RefChip value={session.sessionRef} absent={none} />
           </Row>
@@ -172,6 +236,27 @@ export function SessionContextPane({
             </Row>
           ) : null}
         </dl>
+      </section>
+
+      <section>
+        <h3 className="text-caption font-medium text-foreground">
+          {t('context.wireTitle')}
+        </h3>
+        <p className="text-caption text-muted-foreground">
+          {t('context.wireHint')}
+        </p>
+        {inspected ? (
+          <pre
+            data-testid="context-wire"
+            className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-all rounded-md border border-border bg-muted p-2 font-mono text-caption text-foreground"
+          >
+            {inspected.raw.join('\n')}
+          </pre>
+        ) : (
+          <p className="mt-2 text-caption text-muted-foreground">
+            {t('context.wireEmpty')}
+          </p>
+        )}
       </section>
     </div>
   )

@@ -20,8 +20,15 @@ import { useRunAttach } from './attach'
 import { agentOpsApi } from './api'
 import { AuthorityLostError, useAuthBoundary } from './auth-boundary'
 import { runInputMode } from './provider-contract'
+import { sessionTurnBody } from './session-turn'
 import type { AttachFrame, RunDTO } from './types'
+import { isWorkBound, workLeaseFenceFor } from './work-fence'
+import {
+  mapConversationFrames,
+  type ConversationItem,
+} from '@/features/sessions/conversation-frames'
 import './i18n'
+import '@/features/sessions/i18n'
 
 const MAX_FRAMES = 5000
 
@@ -109,13 +116,10 @@ function LiveConsoleSession({ run }: { run: RunDTO }) {
   }, [])
 
   const [line, setLine] = useState('')
+  const [wire, setWire] = useState('')
   const inputMode = runInputMode(run)
-  const workBound = [
-    run.work_item_id,
-    run.work_lease_fence,
-    run.work_dispatch_key,
-    run.work_owner_epoch,
-  ].some((value) => value !== undefined)
+  const items = mapConversationFrames(frames.map((f) => f.line))
+  const workBound = isWorkBound(run)
   const workFenceValid =
     !workBound ||
     (Number.isSafeInteger(run.work_lease_fence) &&
@@ -191,14 +195,23 @@ function LiveConsoleSession({ run }: { run: RunDTO }) {
     },
   })
   const inputMutation = useMutation({
-    mutationFn: (l: string) =>
-      inputMode === 'text'
-        ? agentOpsApi.inputText(run.run_ref, l)
-        : agentOpsApi.input(run.run_ref, l),
+    mutationFn: (payload: { value: string; asWire: boolean }) => {
+      const body = sessionTurnBody(run, payload.value, payload.asWire)
+      // The SAME fence the interrupt above presents. A work-bound run has one
+      // control plane, and a turn is a control on it: sent unfenced it is refused
+      // with 409 before the child sees a byte.
+      const fence = workLeaseFenceFor(run)
+      return 'text' in body
+        ? agentOpsApi.inputText(run.run_ref, body.text, fence)
+        : agentOpsApi.input(run.run_ref, body.line, fence)
+    },
     // Cleared ONLY on an accepted response: a refused turn (400, 409, 503 UNKNOWN)
     // leaves the operator's text in the box, because losing it would make a retry a
     // retype and an UNKNOWN indistinguishable from a send.
-    onSuccess: () => setLine(''),
+    onSuccess: (_ok, payload) => {
+      if (payload.asWire) setWire('')
+      else setLine('')
+    },
     onError: (err) => {
       if (err instanceof ApiError) toast.error(err.message)
       else toast.error(t('live.inputNotAllowed'))
@@ -210,7 +223,13 @@ function LiveConsoleSession({ run }: { run: RunDTO }) {
     e.preventDefault()
     const l = line.trim()
     if (!l || inputMutation.isPending) return
-    inputMutation.mutate(l)
+    inputMutation.mutate({ value: l, asWire: false })
+  }
+  const onSubmitWire = (e: FormEvent) => {
+    e.preventDefault()
+    const l = wire.trim()
+    if (!l || inputMutation.isPending) return
+    inputMutation.mutate({ value: l, asWire: true })
   }
 
   if (isRemote) {
@@ -289,23 +308,15 @@ function LiveConsoleSession({ run }: { run: RunDTO }) {
         tabIndex={0}
         role="log"
         aria-label={t('detail.live')}
-        className="h-80 overflow-auto rounded-md border border-border bg-surface p-2 font-mono text-caption leading-relaxed focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background"
+        className="h-80 overflow-auto rounded-md border border-border bg-surface p-2 text-body leading-snug focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background"
       >
-        {frames.length === 0 ? (
+        {items.length === 0 ? (
           <p className="p-2 text-muted-foreground">
             {status === 'open' ? t('live.waiting') : t('live.noOutput')}
           </p>
         ) : (
-          frames.map((f, i) => (
-            <div
-              key={`${f.seq}-${i}`}
-              className={cn(
-                'whitespace-pre-wrap break-all',
-                f.stream === 'stderr' ? 'text-danger' : 'text-foreground',
-              )}
-            >
-              {f.line}
-            </div>
+          items.map((item) => (
+            <LiveConversationLine key={item.id} item={item} />
           ))
         )}
       </div>
@@ -314,16 +325,9 @@ function LiveConsoleSession({ run }: { run: RunDTO }) {
         <Input
           value={line}
           onChange={(e) => setLine(e.target.value)}
-          placeholder={t(
-            inputMode === 'text'
-              ? 'live.textPlaceholder'
-              : 'live.inputPlaceholder',
-          )}
-          aria-label={t(
-            inputMode === 'text' ? 'live.textAria' : 'live.inputAria',
-          )}
+          placeholder={t('live.textPlaceholder')}
+          aria-label={t('live.textAria')}
           disabled={!canSend || inputMutation.isPending}
-          mono
         />
         <Button
           type="submit"
@@ -335,11 +339,83 @@ function LiveConsoleSession({ run }: { run: RunDTO }) {
           {t('live.send')}
         </Button>
       </form>
+      <details className="text-caption text-muted-foreground">
+        <summary className="cursor-pointer outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
+          {t('live.advanced')}
+        </summary>
+        <p className="mt-1">{t('live.advancedHint')}</p>
+        <form
+          onSubmit={onSubmitWire}
+          className="mt-1.5 flex items-center gap-2"
+        >
+          <Input
+            value={wire}
+            onChange={(e) => setWire(e.target.value)}
+            placeholder={t('live.inputPlaceholder')}
+            aria-label={t('live.inputAria')}
+            disabled={!canSend || inputMutation.isPending}
+            mono
+          />
+          <Button
+            type="submit"
+            variant="secondary"
+            size="sm"
+            disabled={!canSend || !wire.trim() || inputMutation.isPending}
+          >
+            {t('live.send')}
+          </Button>
+        </form>
+      </details>
       {!canSend && !isRemote && (
         <p className="text-caption text-muted-foreground">
           {t('live.inputNotAllowed')}
         </p>
       )}
+    </div>
+  )
+}
+
+function LiveConversationLine({ item }: { item: ConversationItem }) {
+  const { t } = useTranslation('sessions')
+  if (item.kind === 'tool') {
+    return (
+      <div
+        data-testid="conversation-item"
+        data-kind="tool"
+        className="flex min-h-9 items-center gap-2 py-1 text-caption"
+      >
+        <span className="font-medium">
+          {item.toolName ?? t('conversation.tool')}
+        </span>
+        {item.toolArgsSummary ? (
+          <span className="truncate text-muted-foreground">
+            {item.toolArgsSummary}
+          </span>
+        ) : null}
+      </div>
+    )
+  }
+  if (item.kind === 'system' || item.kind === 'result') {
+    return (
+      <div
+        data-testid="conversation-item"
+        data-kind={item.kind}
+        className="py-0.5 text-caption text-muted-foreground"
+      >
+        {item.summary}
+      </div>
+    )
+  }
+  return (
+    <div
+      data-testid="conversation-item"
+      data-kind={item.kind}
+      className={cn(
+        'whitespace-pre-wrap break-words py-1',
+        item.kind === 'unknown' && 'font-mono text-caption',
+      )}
+    >
+      {item.text || item.summary}
     </div>
   )
 }

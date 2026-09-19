@@ -92,7 +92,7 @@ export function RunCreateDialog({
   const [templateId, setTemplateId] = useState<string>(
     initialTemplateId ?? NONE,
   )
-  // B2 requires an explicit profile selection before creating a session.
+  // The engine requires an explicit profile selection before creating a session.
   const [profileRef, setProfileRef] = useState<string>(NONE)
 
   // Adjust the draft when the parent opens another template. This is a guarded

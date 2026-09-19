@@ -373,6 +373,17 @@ function SubscriptionsTab({
             <EmptyState
               title={t('subscriptions.empty')}
               description={t('subscriptions.emptyHint')}
+              // "Create a subscription to start receiving webhook events" is the
+              // sentence; this is it made clickable, on the same right the section
+              // header asks for, so a reader who cannot write sees no 403 door.
+              action={
+                canWrite ? (
+                  <Button variant="primary" size="sm" onClick={onNew}>
+                    <Plus />
+                    {t('subscriptions.new')}
+                  </Button>
+                ) : null
+              }
             />
           ) : (
             <div className="flex flex-col gap-3">

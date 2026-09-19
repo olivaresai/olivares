@@ -13,6 +13,7 @@
     "description": "Guardrail, anomaly and forensic findings. Evidence is a fingerprint — there is no payload to expand.",
     "empty": "No findings",
     "emptyHint": "Findings appear as guardrails, anomaly detection and forensics record evidence.",
+    "namesUnread": "Some session names could not be read, so those rows show their reference.",
     "export": {
       "action": "Export SARIF",
       "busy": "Exporting…",

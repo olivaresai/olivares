@@ -3,6 +3,7 @@
   "subtitle": "Live-Betrieb von Agenten — was jede Sitzung gerade tut, ihre Tokens, Kosten und Taktung, aktualisiert über einen Live-Stream.",
   "refresh": "Aktualisieren",
   "search": "Sitzung, Agent, Aktion suchen…",
+  "untitled": "Unbenannte Sitzung",
   "allStates": "Alle Zustände",
   "summary": {
     "active": "Aktiv",
@@ -25,7 +26,8 @@
     "lastSeen": "Zuletzt gesehen",
     "provenance": "Herkunft",
     "control": "Steuerung",
-    "instance": "Instanz"
+    "instance": "Instanz",
+    "instanceUnknown": "Name des Anbieterprofils nicht bekannt"
   },
   "state": {
     "active": "Aktiv",
@@ -103,7 +105,9 @@
     "noRunRead": "Gestartete Sitzungen werden nicht angezeigt: Ihre Rolle enthält sessions:run:read nicht. Eine unten als entdeckt geführte Sitzung kann dennoch von Olivares gestartet worden sein – diese Liste konnte es nicht prüfen.",
     "truncated": "Dies ist die neueste Seite, nicht der gesamte Bestand. Die Herkunft wird hier über das Geladene verknüpft: Eine Sitzung, deren Lauf aus der Seite gefallen ist, kann als entdeckt erscheinen; öffnen Sie die Sitzung, damit die Engine antwortet.",
     "runLookupFailed": "Die gestartete Hälfte konnte nicht gelesen werden: die Lauf-Abfrage schlug fehl. Die Zeilen unten sind, was die beobachtete Hälfte lieferte; die Herkunft wird als nicht gelesen ausgewiesen statt geraten.",
-    "liveLookupFailed": "Die beobachtete Hälfte konnte nicht gelesen werden: die Live-Abfrage schlug fehl. Die Zeilen unten sind die gestarteten; die Telemetriespalten sind leer, weil nichts gelesen werden konnte, nicht weil es nichts gibt."
+    "liveLookupFailed": "Die beobachtete Hälfte konnte nicht gelesen werden: die Live-Abfrage schlug fehl. Die Zeilen unten sind die gestarteten; die Telemetriespalten sind leer, weil nichts gelesen werden konnte, nicht weil es nichts gibt.",
+    "noProfileRead": "Namen der Anbieterprofile werden nicht angezeigt: Ihre Rolle enthält sessions:profile:read nicht. Die Spalte Instanz führt stattdessen die Profilreferenz jeder Zeile.",
+    "profileLookupFailed": "Die Namen der Anbieterprofile konnten nicht gelesen werden: die Profil-Abfrage schlug fehl. Die Spalte Instanz führt stattdessen die Profilreferenz jeder Zeile."
   },
   "card": {
     "tabs": {
@@ -256,7 +260,7 @@
     "noneTitle": "Sitzung auswählen",
     "noneDescription": "Wählen Sie eine Sitzung in der Leiste, um zu lesen, was sie getan hat — mit ihren Belegen daneben.",
     "openDetail": "Alle Steuerungen",
-    "noObjective": "Die Engine hat für diese Sitzung kein Ziel gemeldet; daher wird ihre Referenz angezeigt.",
+    "noObjective": "Die Engine hat für diese Sitzung kein Ziel gemeldet.",
     "notReadTitle": "Diese Sitzung konnte nicht gelesen werden",
     "menu": "Aktionen für {{name}}"
   },
@@ -311,6 +315,32 @@
     "notDeclared": "Nicht angegeben",
     "copy": "Kopieren",
     "copied": "Kopiert",
-    "copyRef": "{{value}} kopieren"
+    "copyRef": "{{value}} kopieren",
+    "identifiersTitle": "Kennungen",
+    "identifiersHint": "Referenzen zum Kopieren. Das sind nicht die Namen in der Bereichszeile.",
+    "wireTitle": "Leitung",
+    "wireHint": "Der Rohrahmen der gewählten Zeile. Die Unterhaltung ist die Standardansicht.",
+    "wireEmpty": "Wählen Sie eine Zeile in der Unterhaltung, um ihren Rohrahmen zu sehen.",
+    "thisNode": "Dieser Knoten",
+    "noWorkspace": "Kein Arbeitsbereich",
+    "cwdWarning": "Diese Sitzung hat keinen Arbeitsbereich. Der Treiber hat sein Arbeitsverzeichnis als {{cwd}} gemeldet."
+  },
+  "conversation": {
+    "log": "Unterhaltung",
+    "waiting": "Warten auf die Sitzung…",
+    "empty": "Noch keine Züge. Senden Sie unten einen Satz.",
+    "ended": "Der E/A-Strom der Sitzung ist beendet.",
+    "lag": "{{count}} Rahmen verloren — die Ausgabe darunter setzt nach der Lücke fort.",
+    "operator": "Sie",
+    "assistant": "Assistent",
+    "tool": "Werkzeug",
+    "system": "System",
+    "result": "Ergebnis",
+    "unknown": "Unbekannter Rahmen",
+    "inspect": "Im Inspektor zeigen",
+    "args": "Argumente",
+    "toolResult": "Ergebnis",
+    "tokens": "{{input}} ein · {{output}} aus",
+    "cwdWarning": "Diese Sitzung hat keinen Arbeitsbereich. Der Treiber hat sein Arbeitsverzeichnis als {{cwd}} gemeldet."
   }
 }

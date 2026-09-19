@@ -82,7 +82,7 @@ function addressInUrl(page: Page): string | null {
  * is exactly how the first run of this spec failed.
  */
 async function launcherSettled(page: Page) {
-  await page.getByTestId('shell-launcher').waitFor()
+  await page.getByTestId('work-composer').waitFor()
   await page
     .locator(
       '[data-testid="launcher-input"], [data-testid="launcher-add-provider"], [data-testid="launcher-blocked"]',
@@ -306,7 +306,7 @@ test.describe('the work surface', () => {
     await prefer(page, 'dark', 'en')
     await signIn(page)
     await page.goto('/')
-    const scope = page.getByTestId('shell-scope-line')
+    const scope = page.getByTestId('work-scope-line')
     await expect(scope).toBeVisible()
     await expect(scope).toContainText(demoTenant.slice(0, 8))
 
@@ -314,7 +314,7 @@ test.describe('the work surface', () => {
     //    The demo seed registers no provider profile, so what this deployment can show
     //    is the state with none, and that is what is asserted. Starting a session from
     //    the launcher needs a registered provider record and is asserted where one exists.
-    const launcher = page.getByTestId('shell-launcher')
+    const launcher = page.getByTestId('work-composer')
     await expect(launcher).toBeVisible()
     await launcherSettled(page)
     const hasField = await page.getByTestId('launcher-input').count()

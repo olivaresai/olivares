@@ -2,12 +2,26 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { useQuery } from '@tanstack/react-query'
-import { Bot, PauseCircle, Pencil, Plus, ShieldOff, Trash2 } from 'lucide-react'
+import {
+  Bot,
+  MoreHorizontal,
+  PauseCircle,
+  Pencil,
+  Plus,
+  ShieldOff,
+  Trash2,
+} from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import {
   Dialog,
   DialogContent,
@@ -17,6 +31,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { EmptyState } from '@/components/ui/empty-state'
+import { PagePrimaryAction } from '@/components/ui/page-actions'
 import { ErrorState, ForbiddenState } from '@/components/ui/error-state'
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
@@ -34,6 +49,7 @@ import { ListTruncationBadge } from '@/features/_intel'
 import type { AgentDTO } from '@/lib/api/types'
 import { useAuth } from '@/lib/auth/context'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
+import { HIDDEN_ON_PHONE } from '@/lib/hooks/use-is-phone'
 import {
   consoleApi,
   consoleKeys,
@@ -41,8 +57,9 @@ import {
   type AgentStatus,
   type WorkspaceDTO,
 } from './api'
+import { NamedRef } from '@/features/shared'
 import { FormError } from './roles-shared'
-import { StaticTable } from '@/components/data/static-table'
+import { FillingTable, TableRegion } from '@/components/data/filling-table'
 
 /** ⛔ EL 200 ERA UN NÚMERO A MANO por debajo del techo real del motor: ni pedía lo que da, ni
  *  decía nada al quedarse corto. `maxLimit` es 1000 (`sqlstore/generic.go:29`). */
@@ -112,35 +129,24 @@ export function AgentsTab() {
 
   if (!canRead) {
     return (
-      <div className="pt-4">
-        <ForbiddenState
-          icon={<ShieldOff />}
-          title={t('console:agents.readOnlyNotice')}
-        />
-      </div>
+      <ForbiddenState
+        icon={<ShieldOff />}
+        title={t('console:agents.readOnlyNotice')}
+      />
     )
   }
 
   return (
-    <div className="flex flex-col gap-4 pt-4">
-      <section className="flex flex-col gap-3">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h2 className="text-heading text-foreground">
-              {t('console:agents.title')}
-            </h2>
-            <p className="max-w-2xl text-body text-muted-foreground">
-              {t('console:agents.caption')}
-            </p>
-          </div>
-          {canWrite ? (
-            <Button onClick={() => setCreateOpen(true)}>
-              <Plus />
-              {t('console:agents.create')}
-            </Button>
-          ) : null}
-        </div>
-
+    <div className="flex flex-col gap-2">
+      {canWrite ? (
+        <PagePrimaryAction>
+          <Button size="sm" onClick={() => setCreateOpen(true)}>
+            <Plus />
+            {t('console:agents.create')}
+          </Button>
+        </PagePrimaryAction>
+      ) : null}
+      <section className="flex flex-col gap-2">
         {/* ⛔ EL AVISO ES DE WORKSPACES, NO DE AGENTES, y por eso vive fuera del condicional de
             la tabla. Esta consulta pide el techo del almacen pero su `has_more` no se leia: un
             workspace mas alla de la pagina no desaparece de la pantalla — sale como ID CRUDO en la
@@ -173,7 +179,7 @@ export function AgentsTab() {
           query={agents}
           label={t('console:agents.truncated', { n: rows.length })}
           hint={t('console:agents.truncatedHint')}
-          className="px-0 pt-0 pb-3"
+          className="px-0 py-0"
           filas={rows.length}
         />
         {agents.isLoading ? (
@@ -183,16 +189,26 @@ export function AgentsTab() {
         ) : agents.isError ? (
           <ErrorState retry={() => void agents.refetch()} />
         ) : rows.length === 0 ? (
-          <EmptyState
-            icon={<Bot />}
-            title={t('console:agents.none')}
-            description={t('console:agents.noneHint')}
-          />
+          /* ⛔ ZERO ROWS TAKES THE SAME REGION THE TABLE WOULD HAVE, and it used to take
+             none — the one count where a dead half is CERTAIN was the one count that
+             went round `FillingTable`, leaving a centred panel 220 px tall at the top of
+             the frame — measured in Chromium at 1440×900, against the 772 px region the
+             same screen gives its rows — and the rest empty and unbordered. `TableRegion`
+             is that same piece, so the height is stated once for both row counts. */
+          <TableRegion fill>
+            <EmptyState
+              className="flex-1"
+              icon={<Bot />}
+              title={t('console:agents.none')}
+              description={t('console:agents.noneHint')}
+            />
+          </TableRegion>
         ) : (
           <AgentsTable
             agents={rows}
             workspaces={workspaceMap}
             canWrite={canWrite}
+            onCreate={() => setCreateOpen(true)}
             onEdit={setEditing}
             onDeactivate={setDeactivateTarget}
             onDelete={setDeleteTarget}
@@ -270,6 +286,7 @@ function AgentsTable({
   agents,
   workspaces,
   canWrite,
+  onCreate,
   onEdit,
   onDeactivate,
   onDelete,
@@ -277,88 +294,112 @@ function AgentsTable({
   agents: AgentDTO[]
   workspaces: Map<string, WorkspaceDTO>
   canWrite: boolean
+  onCreate: () => void
   onEdit: (agent: AgentDTO) => void
   onDeactivate: (agent: AgentDTO) => void
   onDelete: (agent: AgentDTO) => void
 }) {
   const { t } = useTranslation('console')
   return (
-    <div className="overflow-hidden rounded-lg border border-border">
-      <StaticTable>
-        <thead>
-          <tr>
-            <th>{t('agents.name')}</th>
-            <th>{t('agents.kind')}</th>
-            <th>{t('agents.status')}</th>
-            <th>{t('agents.externalId')}</th>
-            <th>{t('agents.workspace')}</th>
-            <th />
-          </tr>
-        </thead>
-        <tbody>
-          {agents.map((agent) => (
-            <tr key={agent.id} className="align-top">
-              <td>
-                <div className="flex flex-col gap-1">
-                  <span className="font-medium text-foreground">
-                    {agent.name}
-                  </span>
-                  <span className="font-mono text-caption text-muted-foreground">
-                    {agent.id}
-                  </span>
-                </div>
-              </td>
-              <td className="font-mono text-caption text-muted-foreground">
-                {agent.kind}
-              </td>
-              <td>
-                <Badge
-                  variant={agent.status === 'active' ? 'success' : 'neutral'}
-                >
-                  {t(`agents.statuses.${agent.status}`, agent.status)}
-                </Badge>
-              </td>
-              <td className="font-mono text-caption text-muted-foreground">
-                {agent.external_id || t('agents.notSet')}
-              </td>
-              <td>{workspaceLabel(t, workspaces, agent.workspace_id)}</td>
-              <td className="text-right">
-                {canWrite ? (
-                  <div className="flex flex-wrap justify-end gap-1">
+    <FillingTable
+      fill
+      oneLine
+      colSpan={6}
+      nextAction={
+        canWrite ? (
+          /* The same control as the profiles table's, for the same reason: this line
+             opens the header's own dialog in place, so it is a button. The `#deploy-agent`
+             fragment it used to carry named no element in the document. */
+          <button
+            type="button"
+            data-testid="agents-next-action"
+            className="text-accent-text underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            onClick={onCreate}
+          >
+            {t('agents.nextAction')}
+          </button>
+        ) : undefined
+      }
+    >
+      <thead>
+        <tr>
+          <th>{t('agents.name')}</th>
+          <th className={HIDDEN_ON_PHONE}>{t('agents.kind')}</th>
+          <th>{t('agents.status')}</th>
+          <th className={HIDDEN_ON_PHONE}>{t('agents.externalId')}</th>
+          <th className={HIDDEN_ON_PHONE}>{t('agents.workspace')}</th>
+          <th />
+        </tr>
+      </thead>
+      <tbody>
+        {agents.map((agent) => (
+          <tr key={agent.id}>
+            <td title={agent.id}>
+              <NamedRef
+                className="font-medium text-foreground"
+                name={agent.name}
+                reference={agent.id}
+                fallback={agent.name}
+              />
+            </td>
+            <td
+              className={`font-mono text-caption text-muted-foreground ${HIDDEN_ON_PHONE}`}
+            >
+              {agent.kind}
+            </td>
+            <td>
+              <Badge
+                variant={agent.status === 'active' ? 'success' : 'neutral'}
+              >
+                {t(`agents.statuses.${agent.status}`, agent.status)}
+              </Badge>
+            </td>
+            <td
+              className={`font-mono text-caption text-muted-foreground ${HIDDEN_ON_PHONE}`}
+            >
+              {agent.external_id || t('agents.notSet')}
+            </td>
+            <td className={HIDDEN_ON_PHONE}>
+              {workspaceLabel(t, workspaces, agent.workspace_id)}
+            </td>
+            <td className="text-right">
+              {canWrite ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
                     <Button
                       variant="ghost"
-                      size="sm"
-                      onClick={() => onEdit(agent)}
+                      size="icon-sm"
+                      aria-label={t('agents.rowMenu', { name: agent.name })}
                     >
+                      <MoreHorizontal />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onSelect={() => onEdit(agent)}>
                       <Pencil />
                       {t('agents.edit')}
-                    </Button>
+                    </DropdownMenuItem>
                     {agent.status !== 'inactive' ? (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => onDeactivate(agent)}
-                      >
+                      <DropdownMenuItem onSelect={() => onDeactivate(agent)}>
                         <PauseCircle />
                         {t('agents.deactivate')}
-                      </Button>
+                      </DropdownMenuItem>
                     ) : null}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => onDelete(agent)}
+                    <DropdownMenuItem
+                      variant="destructive"
+                      onSelect={() => onDelete(agent)}
                     >
                       <Trash2 />
                       {t('agents.delete')}
-                    </Button>
-                  </div>
-                ) : null}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </StaticTable>
-    </div>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : null}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </FillingTable>
   )
 }
 
@@ -445,6 +486,11 @@ function AgentForm({
       </DialogHeader>
 
       <div className="flex flex-col gap-4">
+        {isEdit && agent ? (
+          <Field label={t('console:agents.id')} htmlFor="agent-id">
+            <Input id="agent-id" value={agent.id} readOnly mono />
+          </Field>
+        ) : null}
         <div className="grid gap-3 md:grid-cols-2">
           <Field label={t('console:agents.name')} htmlFor="agent-name" required>
             <Input
@@ -591,18 +637,23 @@ function workspaceLabel(
   const workspace = workspaces.get(workspaceId)
   if (!workspace) {
     return (
-      <code className="break-all font-mono text-caption text-muted-foreground">
-        {workspaceId}
-      </code>
+      <NamedRef
+        className="text-muted-foreground"
+        name={t('agents.workspaceUnknown')}
+        reference={workspaceId}
+        fallback={t('agents.workspaceUnknown')}
+        title={workspaceId}
+      />
     )
   }
   return (
-    <div className="flex flex-col gap-1">
-      <span className="text-foreground">{workspace.name}</span>
-      <span className="font-mono text-caption text-muted-foreground">
-        {workspace.slug}
-      </span>
-    </div>
+    <NamedRef
+      className="text-foreground"
+      name={workspace.name}
+      reference={workspace.slug}
+      fallback={workspace.name}
+      title={workspace.slug}
+    />
   )
 }
 
