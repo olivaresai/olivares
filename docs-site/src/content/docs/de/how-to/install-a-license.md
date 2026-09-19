@@ -175,3 +175,5 @@ bis Sie es zurücktauschen.
 - **Was jeder Plan enthält**, steht auf den Preisseiten, nicht hier.
 - **Wie das Modell funktioniert** — warum ein Abonnement Zugriff auf Artefakte und keinen
   Schalter darstellt — erklärt [Open Core & Lizenzierung](/de/explanation/open-core-and-licensing/).
+- **Die Probe von Kauf → Erstattung** (Sandbox-Fixtures, keine echte Karte) ist
+  [Den kommerziellen Zyklus proben](/how-to/rehearse-commercial-cycle/).

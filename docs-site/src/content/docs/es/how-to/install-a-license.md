@@ -170,3 +170,5 @@ el binario enterprise sigue comportándose como tal hasta que vuelvas a cambiarl
 - **Qué incluye cada plan** está en las páginas de precios, no aquí.
 - **Cómo funciona el modelo** —por qué una suscripción da acceso a artefactos en vez de ser un
   interruptor— se explica en [Open core y licencias](/es/explanation/open-core-and-licensing/).
+- **El ensayo de compra → reembolso** (con fixtures de sandbox, no con una tarjeta real) es
+  [Ensayar el ciclo comercial](/how-to/rehearse-commercial-cycle/).

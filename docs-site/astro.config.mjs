@@ -377,6 +377,7 @@ export default defineConfig({
                 // license goes. The steps existed only in INSTALL.md and
                 // docs/UPGRADE-AND-ROLLBACK.md — repo files the site does not serve.
                 { label: 'Install a license', slug: 'how-to/install-a-license' },
+                { label: 'Rehearse the commercial cycle', slug: 'how-to/rehearse-commercial-cycle' },
                 { label: 'Monitor with Prometheus', slug: 'how-to/monitor-with-prometheus' },
                 { label: 'Troubleshooting', slug: 'how-to/troubleshooting' },
               ],

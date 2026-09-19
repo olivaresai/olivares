@@ -149,3 +149,5 @@ olivares license uninstall --data-dir /var/lib/olivares --yes
 - **每个套餐包含的内容**位于定价页面，而不在这里。
 - **该模式如何运作**——为什么订阅提供的是制品访问权限，而不是一个开关——请参阅
   [开放内核与授权许可](/zh/explanation/open-core-and-licensing/)。
+- **购买 → 退款的演练**（使用沙箱夹具，而非真实卡片）请参阅
+  [演练商业周期](/how-to/rehearse-commercial-cycle/)。
