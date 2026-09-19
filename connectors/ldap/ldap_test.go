@@ -165,7 +165,9 @@ func openSource(t *testing.T, fc *fakeConn, extra map[string]string) *Source {
 	t.Helper()
 	s := New()
 	s.dial = func(string) (Conn, error) { return fc, nil }
-	settings := map[string]string{"url": "ldap://dir:389", "base_dn": "dc=corp", "bind_dn": "cn=reader,dc=corp", "bind_password": testBindPassword}
+	// Successful bound fixtures opt into TLS. The unsafe historical default is
+	// retained separately in TestTransportRejectsUnsafeBindBeforeDial.
+	settings := map[string]string{"url": "ldap://dir:389", "base_dn": "dc=corp", "bind_dn": "cn=reader,dc=corp", "bind_password": testBindPassword, "start_tls": "true"}
 	for k, v := range extra {
 		settings[k] = v
 	}
