@@ -486,7 +486,7 @@ jobs:
       # `node24`, como `actions/checkout@v7.0.1` y `actions/setup-go@v7.0.0` que este
       # mismo workflow ya corre en estos runners: no estrena runtime.
       - name: assume the sandbox apply role (OIDC → STS)
-        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
           role-to-assume: ${{ env.AWS_ROLE_ARN }}
           aws-region: us-east-1
@@ -773,7 +773,7 @@ jobs:
           "$RUNNER_TEMP/bin/aws" --version
 
       - name: assume the production apply role (OIDC → STS)
-        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
           role-to-assume: ${{ env.AWS_ROLE_ARN }}
           aws-region: us-east-1
