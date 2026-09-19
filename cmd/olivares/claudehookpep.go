@@ -547,6 +547,11 @@ func (d *claudeHookDecider) decide(ctx context.Context, in claude.HookDecisionIn
 		actor = principal.Actor()
 	}
 	version := firstNonEmptyStr(rt.policy.Version, hookPEPPolicyVersionFallback)
+	agent := resolveHookAgent(principal, authErr, in.Identity.Agent)
+	if agent.contradicted() && d.log != nil {
+		d.log.Warn("hook-pep: declared agent differs from the agent the credential proves; the credential's agent governs",
+			"tenant", tenant.String(), "agent", agent.proven, "declared_agent", ellipsis(agent.hint, maxLoggedHookAgentHint))
+	}
 
 	// 2b. Non-enforceable events: context/observe events and the INVERTED
 	//     Stop/SubagentStop cannot be blocked by a hook return — a "block" on Stop would KEEP
@@ -580,9 +585,10 @@ func (d *claudeHookDecider) decide(ctx context.Context, in claude.HookDecisionIn
 	//     — the offboarding cascade and the staleness block reaching the actuation surface.
 	//     Fail-closed on a lookup error, consistent with the governed PEP's posture; a clean
 	//     "not blocked" (or an unmanaged/unresolvable agent) proceeds, so it never breaks
-	//     day-1 operations. The agent ref is advisory unless requireFirm validated it.
-	if rt.enforceNHI && d.nhiEnforcer != nil && strings.TrimSpace(in.Identity.Agent) != "" {
-		blocked, why, nerr := d.nhiEnforcer.NHIEnforcementForAgentRef(ctx, tenant, in.Identity.Agent)
+	//     day-1 operations. The agent is the credential's; the declared hint stands in only
+	//     when the credential binds none (hookAgent.restrictRef).
+	if agentRef := agent.restrictRef(); rt.enforceNHI && d.nhiEnforcer != nil && agentRef != "" {
+		blocked, why, nerr := d.nhiEnforcer.NHIEnforcementForAgentRef(ctx, tenant, agentRef)
 		if nerr != nil {
 			return deny("NHI lifecycle enforcement check failed (deny-closed)", actor, tier, version), tenant, nil, nil
 		}
@@ -598,13 +604,13 @@ func (d *claudeHookDecider) decide(ctx context.Context, in claude.HookDecisionIn
 	//     stop (the stop outranks the emergency valve; recovery is the governed
 	//     dual-control re-enable). Fail-closed on a state read error; the deny
 	//     is recorded to the tamper-evident ledger (throttled) — the evidence
-	//     pack's "PEP decisions" leg.
+	//     pack's "PEP decisions" leg. The agent is resolved as for the NHI gate.
 	if d.stops != nil {
 		st, kerr := d.stops.KillSwitchState(ctx, tenant)
 		if kerr != nil {
 			return deny("kill-switch state unreadable (deny-closed)", actor, tier, version), tenant, nil, nil
 		}
-		agentRef := strings.TrimSpace(in.Identity.Agent)
+		agentRef := agent.restrictRef()
 		if stopID, stopped := st.Stopped(agentRef); stopped {
 			d.stopRec.record(ctx, tenant, stopID, "hooks-pep", firstNonEmptyStr(agentRef, in.Tool), actor)
 			return deny("emergency stop active (kill switch "+stopID.String()+"); all governed tool-calls are denied until a dual-control re-enable", actor, tier, version), tenant, nil, nil
@@ -687,9 +693,10 @@ func (d *claudeHookDecider) decide(ctx context.Context, in claude.HookDecisionIn
 	//     will shadow (so the DLP inspection covers the call that will actually run). Keep the
 	//     enforce skip for a local deny we will honor regardless (an INVARIANT local deny, or
 	//     enforce mode): running the (regex) inspection, billing its meter and emitting findings
-	//     for a call we deny anyway is wasted work and a spurious billable event.
+	//     for a call we deny anyway is wasted work and a spurious billable event. Its agent-scoped
+	//     policy is selected by the credential's agent only, never by the declared hint.
 	if disp.decision != claude.DecisionDeny || (observe && disp.class == auth.ClassPolicy) {
-		if fw := d.runHookFirewall(ctx, tenant, actor, in); !fw.Forward {
+		if fw := d.runHookFirewall(ctx, tenant, actor, agent, in); !fw.Forward {
 			return deny(firstNonEmptyStr(fw.Reason, "blocked by Olivares hook content firewall"), actor, tier, version), tenant, nil, nil
 		}
 	}
@@ -1097,6 +1104,52 @@ func (d *claudeHookDecider) resolveTenant(hint string, p auth.Principal, authErr
 		}
 	}
 	return model.TenantID(""), tenantResolution{reason: "tenant not declared and not inferable; deny-closed"}
+}
+
+// maxLoggedHookAgentHint bounds the caller-chosen agent hint a mismatch log line repeats.
+const maxLoggedHookAgentHint = 128
+
+// hookAgent is the agent a governed hook request acts as, decided once per request from the
+// authenticated credential. proven is the agent the credential binds (credentialAgent; "" when
+// it binds none); unbindable marks a request an agent-scoped policy cannot be matched to; hint is
+// the agent the hook client declared (X-Olivares-Hook-Agent), which is advisory only.
+type hookAgent struct {
+	proven     string
+	unbindable bool
+	hint       string
+}
+
+// resolveHookAgent derives the request's agent from the credential alone. Every request to the
+// hooks PEP is an agent's tool-call, so a credential that proves no agent — an API token with no
+// agent binding, a human session, no credential at all — is unbindable whatever the client
+// declares: whether the agent is proven must not depend on an optional header its caller can
+// simply leave out. That is deliberately stricter than the inline proxy, which treats a human
+// session as a person rather than an agent; the hook path therefore takes only the proven agent
+// from credentialAgent, not its classification. The hint never changes the classification; it
+// only names an agent for the restrict-only checks (restrictRef).
+func resolveHookAgent(p auth.Principal, authErr error, declared string) hookAgent {
+	a := hookAgent{hint: strings.TrimSpace(declared)}
+	if authErr == nil {
+		a.proven, _ = credentialAgent(p)
+	}
+	a.unbindable = a.proven == ""
+	return a
+}
+
+// restrictRef is the agent the checks that can only ADD a denial consult (the agent-scoped
+// emergency stop, the NHI lifecycle block): the credential's agent, else the declared hint.
+// A hint can never select a policy — only the proven agent does (runHookFirewall).
+func (a hookAgent) restrictRef() string {
+	if a.proven != "" {
+		return a.proven
+	}
+	return a.hint
+}
+
+// contradicted reports a declared agent that differs from the one the credential proves; the
+// hint is then ignored and the mismatch logged.
+func (a hookAgent) contradicted() bool {
+	return a.proven != "" && a.hint != "" && a.hint != a.proven
 }
 
 // gateViaHITL opens/finds a governed approval bound to the plan hash and maps its status.

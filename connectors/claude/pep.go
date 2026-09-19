@@ -65,8 +65,9 @@ const (
 
 // HookIdentity is the firm-identity attribution context for a tool-call: the
 // tenant the call belongs to and the agent/org/account hints. The decider resolves the
-// AUTHORITATIVE principal from the bearer credential; these refine attribution and let
-// a policy bind a rule to a specific agent.
+// AUTHORITATIVE principal — and the agent, when the credential binds one — from the
+// bearer credential; these refine attribution. Agent never selects an agent-scoped
+// policy: a policy bound to an agent matches only the agent the credential proves.
 type HookIdentity struct {
 	Tenant  string
 	Agent   string
