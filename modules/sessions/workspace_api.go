@@ -74,7 +74,7 @@ func (m *Module) handleCreateWorkspace(w http.ResponseWriter, r *http.Request, m
 func (m *Module) handleListWorkspaces(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
 	out, err := m.listWorkspaces(r.Context(), mc.Tenant, listQuery(r))
 	if err != nil {
-		writeStoreError(w, err)
+		writeRunErr(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, out)

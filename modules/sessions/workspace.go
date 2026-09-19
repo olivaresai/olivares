@@ -120,8 +120,8 @@ func (m *Module) createWorkspace(ctx context.Context, tenant model.TenantID, p C
 		}); aerr != nil {
 			return aerr
 		}
-		out = toWorkspaceDTO(created)
-		return nil
+		out, err = toWorkspaceDTO(created)
+		return err
 	})
 	if err != nil {
 		return workspaceDTO{}, err
@@ -144,12 +144,19 @@ func (m *Module) listWorkspaces(ctx context.Context, tenant model.TenantID, q mo
 			return err
 		}
 		for _, rec := range recs {
-			out.Items = append(out.Items, toWorkspaceDTO(rec))
+			dto, err := toWorkspaceDTO(rec)
+			if err != nil {
+				return err
+			}
+			out.Items = append(out.Items, dto)
 		}
 		out.HasMore = page.HasMore
 		return nil
 	})
-	return out, err
+	if err != nil {
+		return listResponse[workspaceDTO]{}, err
+	}
+	return out, nil
 }
 
 // getWorkspace returns one workspace by ref.
@@ -158,7 +165,7 @@ func (m *Module) getWorkspace(ctx context.Context, tenant model.TenantID, ref st
 	if err != nil {
 		return workspaceDTO{}, err
 	}
-	return toWorkspaceDTO(rec), nil
+	return toWorkspaceDTO(rec)
 }
 
 // deleteWorkspace removes a workspace registration. It NEVER touches host files (only
@@ -199,6 +206,10 @@ func (m *Module) resolveWorkspace(ctx context.Context, tenant model.TenantID, re
 	if rec.String(colWsState) == wsDisabled {
 		return nil, conflictErr("workspace is disabled")
 	}
+	subpaths, err := decodeSubpaths(rec)
+	if err != nil {
+		return nil, err
+	}
 	root := rec.String(colWsRootPath)
 	rootReal, err := filepath.EvalSymlinks(root)
 	if err != nil {
@@ -220,7 +231,7 @@ func (m *Module) resolveWorkspace(ctx context.Context, tenant model.TenantID, re
 		containerTgt:  tgt,
 		dlpMode:       rec.String(colWsDLPMode),
 		maxReadBytes:  workspaceMaxRead(rec),
-		allowSubpaths: decodeSubpaths(rec),
+		allowSubpaths: subpaths,
 	}, nil
 }
 
@@ -562,19 +573,36 @@ func validateWorkspace(p *CreateWorkspaceParams) error {
 	if p.MaxReadBytes < 0 {
 		return badRequest("max_read_bytes must be non-negative")
 	}
-	for i, s := range p.AllowSubpaths {
+	var err error
+	p.AllowSubpaths, err = normalizeWorkspaceSubpaths(p.AllowSubpaths)
+	return err
+}
+
+// normalizeWorkspaceSubpaths applies only to registration input. Stored entries
+// already carry authority and must never be trimmed or omitted during a read.
+func normalizeWorkspaceSubpaths(subpaths []string) ([]string, error) {
+	clean := subpaths[:0]
+	for _, s := range subpaths {
 		s = strings.TrimSpace(s)
-		if strings.IndexByte(s, 0) >= 0 || filepath.IsAbs(s) {
-			return badRequest("allow_subpaths entries must be relative, NUL-free")
+		if err := validateWorkspaceSubpath(s); err != nil {
+			return nil, err
 		}
-		// Reject an escaping subpath at registration (a `..` that climbs to/above the
-		// root would otherwise widen the allowlist to the whole root — a footgun, not
-		// an escape, but the config must be unambiguous).
-		c := filepath.Clean(filepath.FromSlash(s))
-		if c == ".." || strings.HasPrefix(c, ".."+string(filepath.Separator)) {
-			return badRequest("allow_subpaths entries must stay within the workspace (no ..)")
+		if s != "" {
+			clean = append(clean, s)
 		}
-		p.AllowSubpaths[i] = s
+	}
+	return clean, nil
+}
+
+// validateWorkspaceSubpath checks meaning without rewriting the path. An exact
+// empty string is a supported legacy root entry, not a missing policy element.
+func validateWorkspaceSubpath(s string) error {
+	if strings.IndexByte(s, 0) >= 0 || filepath.IsAbs(s) {
+		return badRequest("allow_subpaths entries must be relative, NUL-free")
+	}
+	c := filepath.Clean(filepath.FromSlash(s))
+	if c == ".." || strings.HasPrefix(c, ".."+string(filepath.Separator)) {
+		return badRequest("allow_subpaths entries must stay within the workspace (no ..)")
 	}
 	return nil
 }
@@ -674,15 +702,38 @@ func encodeSubpaths(subs []string) (string, error) {
 	return string(b), nil
 }
 
-// decodeSubpaths reads the JSON allowlist column ([] when NULL/empty).
-func decodeSubpaths(rec model.Record) []string {
-	raw := rec.String(colWsAllowSubpaths)
+// decodeSubpaths preserves SQL NULL, empty text, JSON null and [] as unrestricted.
+// Any other unreadable policy is unavailable, never an unrestricted workspace.
+func decodeSubpaths(rec model.Record) ([]string, error) {
+	if rec.IsNull(colWsAllowSubpaths) {
+		return nil, nil
+	}
+	unavailable := func() error {
+		return &runErr{http.StatusFailedDependency, "workspace allow_subpaths policy is unavailable"}
+	}
+	raw, ok := rec[colWsAllowSubpaths].(string)
+	if !ok {
+		return nil, unavailable()
+	}
 	if strings.TrimSpace(raw) == "" {
-		return nil
+		return nil, nil
 	}
-	var out []string
-	if err := json.Unmarshal([]byte(raw), &out); err != nil {
-		return nil
+	// A null array member is not a path. Decoding directly into []string would
+	// silently turn it into "", which is the root under the subpath policy.
+	var values []*string
+	if err := json.Unmarshal([]byte(raw), &values); err != nil {
+		return nil, unavailable()
 	}
-	return out
+	paths := make([]string, 0, len(values))
+	for _, value := range values {
+		if value == nil || strings.TrimSpace(*value) != *value {
+			return nil, unavailable()
+		}
+		if err := validateWorkspaceSubpath(*value); err != nil {
+			return nil, unavailable()
+		}
+		// Preserve stored authority byte-for-byte, including legacy empty entries.
+		paths = append(paths, *value)
+	}
+	return paths, nil
 }
