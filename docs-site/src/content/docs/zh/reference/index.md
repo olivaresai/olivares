@@ -25,6 +25,7 @@ description: "面向信息的参考：REST API、事件总线、模块目录、C
 | **[事件总线](/zh/reference/events/)** | 内部事件总线：事件信封、第一方事件类型，以及连接器提升其上的观测 payload。 | 一份从 Go SDK 手工推导的 **AsyncAPI 3.0** 契约。 |
 | **[控制台界面](/zh/reference/console/)** | 控制台发布的每条路由、其所需的 RBAC 权限，以及其产品内帮助链接打开的参考页。 | 控制台路由清查，钉住到已构建的路由器。 |
 | **[模块目录](/zh/reference/modules/overview/)** | 30 个产品模块——每个是什么、其状态，以及它在核心 API 之外暴露哪些路由（如有）。 | 产品能力目录与类型化的模块接口。 |
+| **[模型网关契约](/reference/model-gateway-contract/)** | CreateMessage、流式传输、取消与用量的驱动 × 协议 × 传输矩阵。诚实的单元格标签。 | `connectors/modelprovider/gateway` 及其一致性套件。 |
 | **[CLI](/zh/reference/cli/)** | `olivares` 二进制及其子命令——`serve`、`collector`、`audit`、`license`、`openapi`、`version`——及其 flag。 | 已编译的命令定义。 |
 | **[配置](/zh/reference/configuration/)** | 环境变量与运行时选项：数据目录、source 配置、授权引擎与台账签名。 | 引擎的配置加载器。 |
 
