@@ -111,6 +111,13 @@ func (m *Module) APIRoutes(reg api.RouteRegistrar) {
 	reg.Handle("DELETE", "/budgets/{id}", permBudgetWrite, m.handleDeleteBudget)
 	reg.Handle("GET", "/budgets/{id}/status", permBudgetRead, m.handleBudgetStatus)
 	reg.Handle("GET", "/alerts", permBudgetRead, m.handleListAlerts)
+
+	// Public admission (reserve before effect) and reservation reconciliation.
+	reg.Handle("POST", "/admission/reserve", permBudgetWrite, m.handleAdmissionReserve)
+	reg.Handle("POST", "/admission/commit", permBudgetWrite, m.handleAdmissionCommit)
+	reg.Handle("POST", "/admission/release", permBudgetWrite, m.handleAdmissionRelease)
+	reg.Handle("GET", "/admission/reconciliation", permBudgetRead, m.handleAdmissionReconciliation)
+	reg.Handle("POST", "/admission/reconcile", permBudgetWrite, m.handleAdmissionReconcile)
 }
 
 // --- spend analytics ---------------------------------------------------------

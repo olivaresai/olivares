@@ -914,6 +914,23 @@ var consoleMachineFacing = map[string]string{
 	"POST /v1/m/governance/approvals/{}/consume": "el canje lo hace el puente (approvalbridge.go:554), no un operador",
 	"POST /v1/m/governance/breakglass/consume":   "lo canjea el puente (approvalbridge.go:514); la consola concede, no consume",
 
+	// ── ADMISIÓN DE GASTO: las tres primitivas del libro de reservas y el TRABAJO de
+	// conciliación. Medidas una a una siguiendo a sus llamantes, no por namespace — la
+	// LECTURA de la conciliación NO está aquí a propósito: la consola la llama
+	// (`web/src/features/finops/api.ts`, `admissionReconciliation`) y debe llamarla,
+	// que es lo que separa este bloque de una supresión del prefijo `/admission/`.
+	//
+	// Reserve/Commit/Release son los tres tiempos de UN efecto facturable, y quien los
+	// encadena es el motor: `budgetgate.go` (fire de orquestación, apertura de voz, juez
+	// de evals, ruta de modelo), `inferenceproxy.go` (reserva antes de reenviar y salda
+	// en Finalize) y `mcpgateway.go` (creación de tarea). Una persona no puede sostener
+	// ese ciclo: un handle reservado desde una pantalla y nunca commiteado ni liberado
+	// es exactamente la deriva que la conciliación reporta.
+	"POST /v1/m/finops/admission/reserve":   "primer tiempo del efecto facturable: la encadena el motor (budgetgate.go, inferenceproxy.go, mcpgateway.go) o un conector, y quien reserva debe saldar",
+	"POST /v1/m/finops/admission/commit":    "salda una reserva con el coste medido: la llama quien la reservó, con su handle, no un operador",
+	"POST /v1/m/finops/admission/release":   "devuelve una retención sin usar: la llama quien la reservó cuando el efecto no ocurrió",
+	"POST /v1/m/finops/admission/reconcile": "el TRABAJO de conciliación: barre retenciones vencidas y emite el hallazgo de deriva (permiso de escritura); lo corre un planificador, y el operador LEE por GET /admission/reconciliation",
+
 	"/v1/auth/federation/": "arranque y retorno de federación: son NAVEGACIONES del navegador, no XHR",
 	"/v1/auth/token":       "endpoints de token OAuth: máquina a máquina",
 }

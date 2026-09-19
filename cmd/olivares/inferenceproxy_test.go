@@ -66,6 +66,9 @@ type fakeProxyBudget struct {
 	spendErr error
 	actor    string
 	groups   []string
+	// keys records every idempotency key the gate minted, in order, so a test can
+	// ask whether two calls presented themselves as one.
+	keys []string
 }
 
 func (f *fakeProxyBudget) CheckBudget(context.Context, model.TenantID, finops.SpendDims) (finops.BudgetCheck, error) {
@@ -81,6 +84,30 @@ func (f *fakeProxyBudget) CheckSpendLimit(_ context.Context, _ model.TenantID, a
 	}
 	return f.spend, f.spendErr
 }
+
+func (f *fakeProxyBudget) Reserve(_ context.Context, _ model.TenantID, req finops.AdmissionRequest) (finops.Reservation, error) {
+	f.calls++
+	f.keys = append(f.keys, req.IdempotencyKey)
+	if req.ActorRef != "" {
+		f.actor = req.ActorRef
+	}
+	if len(req.Groups) > 0 {
+		f.groups = append([]string(nil), req.Groups...)
+	}
+	if f.spendErr != nil {
+		return finops.Reservation{
+			Allowed: false, Action: "block", Reason: finops.ReasonStoreUnreachable,
+			EstimateMicroUSD: req.EstimateMicroUSD,
+		}, nil
+	}
+	if !f.spend.Allowed && f.spend.SpendLimitID != "" {
+		return finops.Reservation{Allowed: false, Action: "block", SpendLimit: true}, nil
+	}
+	return fakeAdmissionReserve(f.bc, f.err, req)
+}
+
+func (f *fakeProxyBudget) Commit(context.Context, model.TenantID, string, int64) error { return nil }
+func (f *fakeProxyBudget) Release(context.Context, model.TenantID, string) error       { return nil }
 
 type fakeProxyKill struct {
 	st  governance.StopState
@@ -766,13 +793,25 @@ func TestProxyAuthorizeBudgetBlockAndThrottle(t *testing.T) {
 	}
 }
 
-func TestProxyAuthorizeBudgetReadErrorFailsOPEN(t *testing.T) {
+// TestProxyAuthorizeBudgetReadErrorFailsCLOSED replaces a case that required the
+// opposite. The gate moved from CheckBudget (fail-open) to admission Reserve,
+// whose default posture is deny: a store that cannot be read is not permission.
+// The old case asserted fail-open and went red on the branch that made the
+// change, which is what a stale test looks like when the behaviour, not the
+// test, is what was meant to move.
+func TestProxyAuthorizeBudgetReadErrorFailsCLOSED(t *testing.T) {
 	a, mg, bg, kg, pol := allowAll()
 	bg.err = errBootInferenceProxy("finops read failed")
 	d := newTestDecider(a, mg, bg, kg, pol)
 	dec := d.Authorize(context.Background(), userReq("hi", false), "bearer")
-	if !dec.Allow {
-		t.Fatalf("a budget READ ERROR must FAIL OPEN (allow); got deny status=%d", dec.Status)
+	if dec.Allow {
+		t.Fatal("a budget READ ERROR must FAIL CLOSED (deny)")
+	}
+	if dec.Status != http.StatusServiceUnavailable || dec.ErrorType != "api_error" || dec.Reason != finops.ReasonStoreUnreachable {
+		t.Fatalf("unreadable store deny = %+v, want 503 api_error %q", dec, finops.ReasonStoreUnreachable)
+	}
+	if dec.Headers["x-should-retry"] != "false" {
+		t.Fatalf("x-should-retry = %q, want false", dec.Headers["x-should-retry"])
 	}
 }
 
@@ -796,11 +835,16 @@ func TestProxyAuthorizeSpendLimitDenyAndFailOpen(t *testing.T) {
 			t.Fatalf("under-cap request denied: %+v", dec)
 		}
 	})
-	t.Run("read error fails open", func(t *testing.T) {
+	// The spend-limit read error now travels through the same admission Reserve as
+	// the budget one, so it takes the same deny-closed posture. Before this, the
+	// fake's Reserve never consulted spendErr at all and the case passed without
+	// reaching the gate it names.
+	t.Run("read error fails closed", func(t *testing.T) {
 		a, mg, bg, kg, pol := allowAll()
 		bg.spendErr = errors.New("spend store unavailable")
-		if dec := newTestDecider(a, mg, bg, kg, pol).Authorize(context.Background(), userReq("hi", false), "bearer"); !dec.Allow {
-			t.Fatalf("spend-limit read error must fail open: %+v", dec)
+		dec := newTestDecider(a, mg, bg, kg, pol).Authorize(context.Background(), userReq("hi", false), "bearer")
+		if dec.Allow || dec.Status != http.StatusServiceUnavailable || dec.Reason != finops.ReasonStoreUnreachable {
+			t.Fatalf("spend-limit read error must fail closed: %+v", dec)
 		}
 	})
 }

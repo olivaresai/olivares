@@ -550,6 +550,25 @@ func (m *Module) reserve(ctx context.Context, tenant model.TenantID, targets []r
 		return BudgetReservation{Allowed: true}, nil
 	}
 	handle := model.NewID()
+	// A RESERVATION OF ZERO HOLDS NOTHING, so it inserts nothing and issues no
+	// handle. The ceiling sums the amounts of live rows, and a zero row adds zero
+	// to it: it withheld no headroom from any concurrent caller and there was
+	// nothing for a settlement to return. All it ever did was accumulate — the
+	// in-process gates that ask a YES/NO question have no cost to settle with, so
+	// every one of their calls left an active row that only the TTL would retire,
+	// and the reconciliation read then reported that as drift the engine had
+	// produced itself.
+	//
+	// The EVALUATION is untouched: every enforcing target is still read under the
+	// writer lock, a cap already over its limit still refuses, and a caller that
+	// does carry an estimate still takes a real hold with the same seq proof. What
+	// goes away is a row that proved nothing and a handle that promised a
+	// settlement nobody could make.
+	holds := estimate > 0
+	issuedHandle := ""
+	if holds {
+		issuedHandle = handle.String()
+	}
 	expires := now.Add(reservationTTL)
 	var lastErr error
 	// guardErr records a frontier refusal established inside the attempt, so the
@@ -578,7 +597,7 @@ func (m *Module) reserve(ctx context.Context, tenant model.TenantID, targets []r
 		// It is reset with result at the top of the attempt, never carried across one.
 		decided := false
 		err := m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
-			result = BudgetReservation{Allowed: true, Handle: handle.String(), EstimateMicroUSD: estimate}
+			result = BudgetReservation{Allowed: true, Handle: issuedHandle, EstimateMicroUSD: estimate}
 			decided = false
 			guardErr = nil
 			confirmedInactive = false
@@ -742,6 +761,11 @@ func (m *Module) reserve(ctx context.Context, tenant model.TenantID, targets []r
 					// back at the end. Skip the insert: a spurious seq conflict on a
 					// doomed target must not retry a decided denial into the fail-open
 					// admit under contention (adversarial review finding).
+					continue
+				}
+				if !holds {
+					// Nothing to hold. The target was read and judged exactly as it
+					// would have been for an amount; there is simply no row to write.
 					continue
 				}
 				rec := model.Record{

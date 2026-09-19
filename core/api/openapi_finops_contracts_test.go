@@ -74,6 +74,22 @@ func TestFinopsRequestBodyContracts(t *testing.T) {
 			fields:   []string{"period", "period_start"},
 			required: []string{"period", "period_start"},
 		},
+		{
+			method: http.MethodPost, pattern: "/admission/reserve",
+			fields:   []string{"actor_ref", "dims", "estimate_micro_usd", "groups", "idempotency_key", "scope", "unreachable"},
+			required: []string{"idempotency_key", "scope"},
+		},
+		{
+			// No required list on purpose: Commit and Release treat an absent or empty
+			// handle as a no-op, so claiming one would publish a rejection the handler
+			// does not perform.
+			method: http.MethodPost, pattern: "/admission/commit",
+			fields: []string{"actual_micro_usd", "handle", "spend_handle"},
+		},
+		{
+			method: http.MethodPost, pattern: "/admission/release",
+			fields: []string{"handle", "spend_handle"},
+		},
 	}
 
 	if got, want := len(finopsOpenAPIContracts), len(tests); got != want {
@@ -173,19 +189,23 @@ func TestFinopsRequestBodyRegistryIsScopedAndFresh(t *testing.T) {
 func TestFinopsBodylessMutationsStayBodyless(t *testing.T) {
 	t.Parallel()
 
-	for _, pattern := range []string{
-		"/budgets/{id}",
-		"/cost-centers/{id}",
-		"/cost-centers/{id}/mappings/{mid}",
-		"/model-rates/{id}",
+	for _, bodyless := range []struct{ method, pattern string }{
+		{http.MethodDelete, "/budgets/{id}"},
+		{http.MethodDelete, "/cost-centers/{id}"},
+		{http.MethodDelete, "/cost-centers/{id}/mappings/{mid}"},
+		{http.MethodDelete, "/model-rates/{id}"},
+		// The reconciliation job takes its subject from the authenticated tenant;
+		// handleAdmissionReconcile never reads r.Body.
+		{http.MethodPost, "/admission/reconcile"},
 	} {
-		route := moduleRoute{ns: "finops", method: http.MethodDelete, pattern: pattern}
+		method, pattern := bodyless.method, bodyless.pattern
+		route := moduleRoute{ns: "finops", method: method, pattern: pattern}
 		decl, ok := finopsRequestBodyDeclarationFor(route)
 		if !ok || decl.kind != finopsBodyless {
-			t.Errorf("DELETE %s declaration = (%#v, %t), want bodyless", pattern, decl, ok)
+			t.Errorf("%s %s declaration = (%#v, %t), want bodyless", method, pattern, decl, ok)
 		}
 		if body, found := finopsRequestBody(route); found || body != nil {
-			t.Errorf("DELETE %s unexpectedly declares requestBody %#v", pattern, body)
+			t.Errorf("%s %s unexpectedly declares requestBody %#v", method, pattern, body)
 		}
 	}
 }

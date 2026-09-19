@@ -24,7 +24,7 @@ import (
 // tables on this tree:
 //
 //	modules/models/api.go:82-197              67 routes  GET 32 POST 15 PUT 11 DELETE 9
-//	modules/finops/api.go:52-113              42 routes  GET 27 POST  8 PUT  3 DELETE 4
+//	modules/finops/api.go:52-121              47 routes  GET 28 POST 12 PUT  3 DELETE 4
 //	modules/inferenceproxy/…:APIRoutes         7 routes  GET  3 POST  1 PUT  2 DELETE 1
 //
 // The table below is the CLI's answer to that census. The constants are checked
@@ -40,7 +40,7 @@ import (
 // Only comparing the two sets against the engine's route tables sees it.
 const (
 	modelsRouteCount         = 67
-	finopsRouteCount         = 42
+	finopsRouteCount         = 47
 	inferenceProxyRouteCount = 7
 	modelstackRouteCount     = modelsRouteCount + finopsRouteCount + inferenceProxyRouteCount
 )
@@ -206,6 +206,12 @@ func modelstackRoutes() []modelstackRoute {
 		get(f, fb+"/recommendations", "finops", "recommendations"),
 		get(f, fb+"/analytics/team-summary", "finops", "team-summary"),
 		get(f, fb+"/comparison", "finops", "comparison"),
+		// --- finops: admission (5) ---
+		post(f, fb+"/admission/reserve", "finops", "admission", "reserve", "--data", "{}"),
+		post(f, fb+"/admission/commit", "finops", "admission", "commit", "--data", "{}"),
+		post(f, fb+"/admission/release", "finops", "admission", "release", "--data", "{}"),
+		get(f, fb+"/admission/reconciliation", "finops", "admission", "reconciliation"),
+		post(f, fb+"/admission/reconcile", "finops", "admission", "reconcile"),
 
 		// --- inference proxy (6) ---
 		get(p, pb+"/config", "inference-proxy", "config", "get"),
@@ -277,7 +283,7 @@ func newModelstackStub(t *testing.T, rec *modelstackStub) *httptest.Server {
 
 // TestEveryCensusedRouteHasACommandThatReachesIt is the PERMIT half of the
 // contrafactual, done on the wire rather than on the exit code: for each of the
-// 116 routes the census measured, one CLI invocation produces EXACTLY that
+// 121 routes the census measured, one CLI invocation produces EXACTLY that
 // method and path, exactly once.
 //
 // "Exactly once" is part of the claim. A command that made a second, unasked-for
@@ -345,7 +351,7 @@ func TestModelstackTableMatchesTheMeasuredCensus(t *testing.T) {
 		counts
 	}{
 		{"models", counts{get: 32, post: 15, put: 11, del: 9}},
-		{"finops", counts{get: 27, post: 8, put: 3, del: 4}},
+		{"finops", counts{get: 28, post: 12, put: 3, del: 4}},
 		{"inferenceproxy", counts{get: 3, post: 1, put: 2, del: 1}},
 	} {
 		got, ok := byModule[want.module]

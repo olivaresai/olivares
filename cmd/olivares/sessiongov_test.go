@@ -41,6 +41,13 @@ func (f fakeBudget) CheckSpendLimit(context.Context, model.TenantID, string, []s
 	return finops.SpendLimitCheck{Allowed: true}, nil
 }
 
+func (f fakeBudget) Reserve(_ context.Context, _ model.TenantID, req finops.AdmissionRequest) (finops.Reservation, error) {
+	return fakeAdmissionReserve(f.chk, f.err, req)
+}
+
+func (f fakeBudget) Commit(context.Context, model.TenantID, string, int64) error { return nil }
+func (f fakeBudget) Release(context.Context, model.TenantID, string) error       { return nil }
+
 type fakeSessionContextPolicy struct {
 	pol   knowledge.EffectivePolicy
 	err   error

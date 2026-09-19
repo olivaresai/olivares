@@ -73,6 +73,10 @@
       "throttle": "Throttle",
       "block": "Block"
     },
+    "admission": {
+      "holds": "Reserved and unsettled holds: {{n}}",
+      "drift": "the ledger has drifted from what its callers settled"
+    },
     "dialog": {
       "title": "New budget",
       "name": "Name",

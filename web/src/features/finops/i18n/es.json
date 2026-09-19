@@ -75,6 +75,10 @@
       "throttle": "Limitar",
       "block": "Bloquear"
     },
+    "admission": {
+      "holds": "Retenciones reservadas y sin liquidar: {{n}}",
+      "drift": "el libro se ha desviado de lo que liquidaron sus llamantes"
+    },
     "dialog": {
       "title": "Nuevo presupuesto",
       "name": "Nombre",
