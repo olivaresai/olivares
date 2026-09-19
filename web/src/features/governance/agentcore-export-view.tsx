@@ -420,10 +420,24 @@ export function AgentCoreExportView() {
       )}
 
       {!reviewed && !planMutation.isPending && !planError && (
+        /* The action is the same mutation the control row runs, with a name of its
+           own: a first attempt reused `Compute plan` and made the accessible name
+           ambiguous in 17 existing tests, which is a real cost and not a style
+           point. Disabled exactly when that control is. */
         <EmptyState
           icon={<ClipboardList />}
           title={t('agentcoreExport.emptyTitle')}
           description={t('agentcoreExport.emptyBody')}
+          action={
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => planMutation.mutate(mode)}
+              disabled={planMutation.isPending}
+            >
+              {t('agentcoreExport.emptyAction')}
+            </Button>
+          }
         />
       )}
 

@@ -24,7 +24,7 @@
 // returns them — the same index, the same ranking and the same authorization projection the
 // ⌘K palette renders — each entry carrying its `Area › Section` context. The earlier build
 // kept the canonical area order and only hid non-matches, so a weak description hit in an
-// early area sat above an exact label hit in a later one; the review measured it with
+// early area sat above an exact label hit in a later one; it was measured with
 // "admin" (Provider profiles before Administration). Without a query the canonical grouped
 // order returns untouched, and the fold preference is neither read nor written by a query.
 //
@@ -99,6 +99,8 @@ import { personalLink } from '@/features/navigation/personal-navigation-store'
 import { isAreaOpen, usePreferencesStore } from '@/stores/preferences'
 import { BrandMark, Wordmark } from './brand'
 import { PersonalNavigation } from './personal-navigation'
+import { TenantSwitcher } from './tenant-switcher'
+import { WorkspaceSwitcher } from './workspace-switcher'
 
 // The folding helper stays importable from here for its existing callers and tests.
 export { fold }
@@ -525,12 +527,36 @@ function SidebarBody({
     >
       <div
         className={cn(
-          'flex h-12 shrink-0 items-center border-b border-border',
+          'flex h-[var(--console-header-height)] shrink-0 items-center border-b border-border',
           collapsed ? 'justify-center px-0' : 'px-3',
         )}
       >
         {collapsed ? <BrandMark className="text-foreground" /> : <Wordmark />}
       </div>
+
+      {/* THE SCOPE, AND IT IS THE RAIL'S CAPTION AND NOT THE PAGE'S.
+          Organisation and workspace used to live in the topbar, in a SECOND 40 px row
+          below `lg` — 40 px of every phone viewport, and half of the 52 % of chrome the
+          measurement put there. They belong here on first principles too: the
+          scope is what the NAVIGATION operates on, so it reads as a caption under the
+          wordmark rather than as a page control.
+
+          Nothing was cut. Below `lg` this rail is a drawer, so the switchers travel
+          with the navigation they scope, and the drawer trigger is the first control in
+          the header.
+
+          The icon rail has no room for a 14 rem label — the same reason the filter
+          field is not rendered there — and both switchers return `null` when there is
+          nothing to choose, so a single-membership deployment spends no pixels here. */}
+      {!collapsed && (
+        <div
+          data-slot="rail-scope"
+          className="flex shrink-0 flex-col gap-0.5 border-b border-border p-1.5"
+        >
+          <TenantSwitcher className="w-full max-w-none justify-start" />
+          <WorkspaceSwitcher className="w-full max-w-none justify-start" />
+        </div>
+      )}
 
       {/* The icon rail has no room for a field, and hiding matches behind a tooltip
           would be worse than not offering search at all. */}

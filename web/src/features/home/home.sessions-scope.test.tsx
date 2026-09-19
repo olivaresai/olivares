@@ -46,6 +46,8 @@ import './i18n'
 
 vi.mock('@tanstack/react-router', () => ({
   useRouterState: () => '',
+  // Home mounts `WorkComposer`, which navigates to the started run.
+  useNavigate: () => () => {},
   Link: ({ children, to }: { children: ReactNode; to: string }) => (
     <a href={to}>{children}</a>
   ),

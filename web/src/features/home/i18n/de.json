@@ -1,7 +1,6 @@
 {
   "title": "Übersicht",
-  "description": "Ihr KI-Bestand auf einen Blick — Inventar, Aktivität, Risiko, Compliance, Ausgaben und Zustand.",
-  "asOfNote": "Live-Aggregate über die letzten 30 Tage, über alle Module, die Ihre Rolle öffnen kann. Jede Kachel verlinkt auf ihr Modul; öffnen Sie den Management-Bericht für die vollständige Zusammenfassung und das PDF.",
+  "description": "Ihr KI-Bestand auf einen Blick — 30-Tage-Aggregate über die Module, die Ihre Rolle öffnen kann.",
   "openReport": "Management-Bericht",
   "range": "letzte 30 Tage",
   "next": {
@@ -27,7 +26,8 @@
     "emptyDescription": "Hier erscheint jeder Lauf einer verbundenen Engine, mit dem, was er getan hat, wie lange er gedauert hat und was er gekostet hat.",
     "unavailableTitle": "Letzte Arbeit konnte nicht geladen werden",
     "unavailableDescription": "Der Sitzungs-Lesevorgang hat nicht geantwortet. Die Kennzahlen oben sind davon nicht betroffen.",
-    "open": "Sitzung öffnen: {{what}}"
+    "open": "Sitzung öffnen: {{what}}",
+    "untitled": "Unbenannte Sitzung"
   },
   "tiles": {
     "inventory": {
@@ -52,7 +52,8 @@
     "spend": {
       "label": "Ausgaben",
       "caption": "{{range}}",
-      "projected": "{{amount}} prognostiziert bei aktueller Laufrate"
+      "projected": "{{amount}} prognostiziert bei aktueller Laufrate",
+      "projectedOver": "{{amount}} prognostiziert bei aktueller Laufrate — über den bisherigen Ausgaben"
     },
     "health": {
       "label": "Zustand & SLA",

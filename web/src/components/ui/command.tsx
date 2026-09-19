@@ -119,7 +119,19 @@ export function CommandItem({
   return (
     <CommandPrimitive.Item
       className={cn(
-        'relative flex h-9 cursor-default select-none items-center gap-2 rounded-md px-2 text-body outline-none',
+        // ⛔ A MINIMUM, NOT A FIXED HEIGHT. It was `h-9`, which is right for a
+        //    one-line row and clips a two-line one — and the palette's rows carry two
+        //    lines, because the name owning line one is what stopped it truncating to
+        //    eight characters at 390 px. 36 px floor for a one-line row.
+        //
+        // ⛔ AND THE VERTICAL PADDING IS `py-0.5`, WHICH IS A MEASURED NUMBER AND NOT A
+        //    TASTE. With `py-1` a two-line row measured 48 px in the browser at both
+        //    1440 and 390 — 22 px of body line box, 18 px of caption line box and 8 px
+        //    of padding — against a 44 px budget for a palette row. The budget is not
+        //    decoration: a row taller than the budget is one fewer result above the
+        //    fold on every keystroke, and the palette is the console's fastest path.
+        //    4 px of padding and a 16 px caption line box put the two-line row at 42.
+        'relative flex min-h-9 cursor-default select-none items-center gap-2 rounded-md px-2 py-0.5 text-body outline-none',
         'border-l-2 border-transparent transition-colors duration-100 ease-out',
         'data-[selected=true]:border-accent-text data-[selected=true]:bg-accent-soft',
         'data-[selected=true]:text-accent-soft-foreground',
@@ -190,8 +202,13 @@ export function CommandDialog({
         <Dialog.Content
           onCloseAutoFocus={onCloseAutoFocus}
           className={cn(
-            'fixed left-1/2 top-[15%] z-50 w-full max-w-xl -translate-x-1/2',
-            'overflow-hidden rounded-xl border border-border-strong bg-elevated p-0 shadow-xl',
+            // FULL WIDTH ON A PHONE, A PANEL ON A DESKTOP. Below `sm` the
+            // palette is the viewport: square corners, because a rounded panel flush
+            // against both edges shows four notches of the page behind it, and higher
+            // up the screen, because every 40 px of offset is one fewer result above
+            // the fold on an 844 px phone.
+            'fixed left-1/2 top-[6%] z-50 w-full max-w-xl -translate-x-1/2 sm:top-[15%]',
+            'overflow-hidden rounded-none border border-border-strong bg-elevated p-0 shadow-xl sm:rounded-xl',
             'transition-all duration-150 ease-out',
             'data-[state=closed]:opacity-0 data-[state=closed]:scale-[0.98]',
             'data-[state=open]:opacity-100 data-[state=open]:scale-100',

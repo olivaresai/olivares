@@ -52,6 +52,7 @@ import {
   type OnboardResult,
   type RosterMemberDTO,
 } from './api'
+import { XScroll } from '@/components/data/scroll-edges'
 import { StaticTable } from '@/components/data/static-table'
 
 const ROLES = ['viewer', 'editor', 'admin', 'owner'] as const
@@ -189,27 +190,31 @@ export function PeopleTab() {
           />
         ) : (
           <div className="overflow-hidden rounded-lg border border-border">
-            <StaticTable>
-              <thead>
-                <tr>
-                  <th>{t('console:members.user')}</th>
-                  <th>{t('console:people.role')}</th>
-                  <th>{t('console:members.groups')}</th>
-                  <th>{t('console:members.status')}</th>
-                  <th className="text-right">{t('console:members.action')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {roster.map((member) => (
-                  <RosterMemberRow
-                    key={member.user_id}
-                    member={member}
-                    canManage={canManageMembers}
-                    onToggle={setMemberToggle}
-                  />
-                ))}
-              </tbody>
-            </StaticTable>
+            <XScroll>
+              <StaticTable>
+                <thead>
+                  <tr>
+                    <th>{t('console:members.user')}</th>
+                    <th>{t('console:people.role')}</th>
+                    <th>{t('console:members.groups')}</th>
+                    <th>{t('console:members.status')}</th>
+                    <th className="text-right">
+                      {t('console:members.action')}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {roster.map((member) => (
+                    <RosterMemberRow
+                      key={member.user_id}
+                      member={member}
+                      canManage={canManageMembers}
+                      onToggle={setMemberToggle}
+                    />
+                  ))}
+                </tbody>
+              </StaticTable>
+            </XScroll>
           </div>
         )}
       </section>
@@ -239,49 +244,66 @@ export function PeopleTab() {
         ) : invites.isError ? (
           <ErrorState retry={() => void invites.refetch()} />
         ) : items.length === 0 ? (
+          /* ⛔ THE SENTENCE SAID "Invite someone to add the first one" AND OFFERED NO
+             WAY TO. The control exists, at the top of a page with the whole user
+             table between it and this panel, so from here it is an instruction
+             about somewhere else. The action opens the same dialog, under the same
+             right, and its name says which invitation it makes — two controls with
+             one accessible name is how the last attempt at this broke 17 tests. */
           <EmptyState
             description={t('console:people.noInvitesHint')}
             title={t('console:people.noInvites')}
+            action={
+              canOnboard ? (
+                <Button size="sm" onClick={() => setOnboardOpen(true)}>
+                  {t('console:people.inviteFirst')}
+                </Button>
+              ) : null
+            }
           />
         ) : (
           <div className="overflow-hidden rounded-lg border border-border">
-            <StaticTable>
-              <thead>
-                <tr>
-                  <th>{t('console:people.email')}</th>
-                  <th>{t('console:people.role')}</th>
-                  <th>{t('console:people.expires')}</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((inv) => (
-                  <tr key={inv.id}>
-                    <td className="font-medium text-foreground">{inv.email}</td>
-                    <td>
-                      <Badge variant="neutral">{inv.role}</Badge>
-                    </td>
-                    <td className="text-muted-foreground">
-                      {new Date(inv.expires_at).toLocaleDateString(
-                        currentLanguage(),
-                      )}
-                    </td>
-                    <td className="text-right">
-                      {canOnboard && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setRevoke(inv)}
-                        >
-                          <Trash2 />
-                          {t('console:people.revoke')}
-                        </Button>
-                      )}
-                    </td>
+            <XScroll>
+              <StaticTable>
+                <thead>
+                  <tr>
+                    <th>{t('console:people.email')}</th>
+                    <th>{t('console:people.role')}</th>
+                    <th>{t('console:people.expires')}</th>
+                    <th />
                   </tr>
-                ))}
-              </tbody>
-            </StaticTable>
+                </thead>
+                <tbody>
+                  {items.map((inv) => (
+                    <tr key={inv.id}>
+                      <td className="font-medium text-foreground">
+                        {inv.email}
+                      </td>
+                      <td>
+                        <Badge variant="neutral">{inv.role}</Badge>
+                      </td>
+                      <td className="text-muted-foreground">
+                        {new Date(inv.expires_at).toLocaleDateString(
+                          currentLanguage(),
+                        )}
+                      </td>
+                      <td className="text-right">
+                        {canOnboard && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setRevoke(inv)}
+                          >
+                            <Trash2 />
+                            {t('console:people.revoke')}
+                          </Button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </StaticTable>
+            </XScroll>
           </div>
         )}
       </section>
@@ -313,48 +335,50 @@ export function PeopleTab() {
             <ErrorState retry={() => void superadmins.refetch()} />
           ) : (
             <div className="overflow-hidden rounded-lg border border-border">
-              <StaticTable>
-                <thead>
-                  <tr>
-                    <th>{t('console:people.email')}</th>
-                    <th>{t('console:superadmins.statusHeader')}</th>
-                    <th />
-                  </tr>
-                </thead>
-                <tbody>
-                  {supers.map((u) => {
-                    const active = u.status === 'active'
-                    return (
-                      <tr key={u.id}>
-                        <td className="font-medium text-foreground">
-                          {u.email}
-                        </td>
-                        <td>
-                          <Badge variant={active ? 'success' : 'neutral'}>
-                            {active
-                              ? t('console:superadmins.active')
-                              : t('console:superadmins.inactive')}
-                          </Badge>
-                        </td>
-                        <td className="text-right">
-                          {canManageSupers && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => setToggle(u)}
-                            >
-                              {active ? <ShieldOff /> : <ShieldCheck />}
+              <XScroll>
+                <StaticTable>
+                  <thead>
+                    <tr>
+                      <th>{t('console:people.email')}</th>
+                      <th>{t('console:superadmins.statusHeader')}</th>
+                      <th />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {supers.map((u) => {
+                      const active = u.status === 'active'
+                      return (
+                        <tr key={u.id}>
+                          <td className="font-medium text-foreground">
+                            {u.email}
+                          </td>
+                          <td>
+                            <Badge variant={active ? 'success' : 'neutral'}>
                               {active
-                                ? t('console:superadmins.disable')
-                                : t('console:superadmins.enable')}
-                            </Button>
-                          )}
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </StaticTable>
+                                ? t('console:superadmins.active')
+                                : t('console:superadmins.inactive')}
+                            </Badge>
+                          </td>
+                          <td className="text-right">
+                            {canManageSupers && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setToggle(u)}
+                              >
+                                {active ? <ShieldOff /> : <ShieldCheck />}
+                                {active
+                                  ? t('console:superadmins.disable')
+                                  : t('console:superadmins.enable')}
+                              </Button>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </StaticTable>
+              </XScroll>
             </div>
           )}
         </section>
@@ -458,19 +482,30 @@ function RosterMemberRow({
       ? member.display_name
       : undefined
   return (
-    <tr className="align-top">
+    <tr>
       <td>
-        <div className="flex flex-col gap-1">
-          <span className="font-medium text-foreground">{member.email}</span>
+        {/* ONE LINE, name › detail › meta. The member cell stacked the address over
+            the display name over an SSO badge, three rows of one line each, and the
+            row measured 61 px against the 36 px table budget while every other
+            column held one word. The address is the element that never gives way;
+            the display name truncates before it and keeps its full value on
+            `title`; the badge is meta and comes last. */}
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="min-w-0 flex-1 truncate font-medium text-foreground">
+            {member.email}
+          </span>
           {displayName ? (
-            <span className="text-caption text-muted-foreground">
+            <span
+              className="min-w-0 shrink truncate text-caption text-muted-foreground"
+              title={displayName}
+            >
               {displayName}
             </span>
           ) : null}
           {member.sso_only ? (
-            <span>
-              <Badge variant="info">{t('console:members.ssoOnly')}</Badge>
-            </span>
+            <Badge variant="info" className="shrink-0">
+              {t('console:members.ssoOnly')}
+            </Badge>
           ) : null}
         </div>
       </td>

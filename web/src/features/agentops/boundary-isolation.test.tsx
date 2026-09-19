@@ -285,8 +285,13 @@ describe('C3 — profiles list under a moved boundary (same tenant, same permiss
       const { qc, rerender } = wrap(() => <ProfilesPanel />)
       const row = (
         await screen.findByText('Profile owned by principal A')
-      ).closest('[role="row"]') as HTMLElement
-      await user.click(within(row).getByRole('button', { name: 'Details' }))
+      ).closest('tr') as HTMLElement
+      await user.click(
+        within(row).getByRole('button', { name: /row actions/i }),
+      )
+      await user.click(
+        await screen.findByRole('menuitem', { name: /^details$/i }),
+      )
       await screen.findByRole('dialog')
       await waitFor(() =>
         expect(api.getProfile).toHaveBeenCalledWith('ppf_A', expect.anything()),
@@ -352,8 +357,13 @@ describe('C3 — profiles list under a moved boundary (same tenant, same permiss
       const { qc, rerender } = wrap(() => <ProfilesPanel />)
       const row = (
         await screen.findByText('Profile owned by principal A')
-      ).closest('[role="row"]') as HTMLElement
-      await user.click(within(row).getByRole('button', { name: 'Details' }))
+      ).closest('tr') as HTMLElement
+      await user.click(
+        within(row).getByRole('button', { name: /row actions/i }),
+      )
+      await user.click(
+        await screen.findByRole('menuitem', { name: /^details$/i }),
+      )
       await waitFor(() => expect(api.getProfile).toHaveBeenCalledOnce())
       api.listProfiles.mockResolvedValue({
         items: [ownedBy('B')],

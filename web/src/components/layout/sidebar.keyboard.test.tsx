@@ -48,7 +48,18 @@ vi.mock('@tanstack/react-router', () => ({
   },
 }))
 
-vi.mock('@/lib/auth/context', () => ({ useAuth: () => ({ can: () => true }) }))
+// `grants: []` / `isSuperadmin: false`: the rail's scope block renders
+// nothing without a membership to choose, which keeps these keyboard tests about the
+// navigation rows they are named for.
+vi.mock('@/lib/auth/context', () => ({
+  useAuth: () => ({
+    can: () => true,
+    grants: [],
+    isSuperadmin: false,
+    activeTenant: null,
+    setActiveTenant: () => {},
+  }),
+}))
 
 /** A personal partition that exists, so the pin is offered and its writes are observable. */
 const favorites = vi.hoisted(() => ({ ids: [] as string[] }))

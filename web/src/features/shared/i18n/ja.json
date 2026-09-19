@@ -35,5 +35,14 @@
     "savedViewRejected_other": "「{{name}}」に保存された値 {{count}} 件は使用できませんでした（{{keys}}）。ビューは既定値に戻りました。",
     "thisSavedView": "この保存済みビュー",
     "dismiss": "閉じる"
+  },
+  "workspaceRequired": {
+    "use": "{{name}} を使う",
+    "choose": "ワークスペースを選択"
+  },
+  "names": {
+    "untitledSession": "無題のセッション",
+    "unknownUser": "不明なユーザー",
+    "unknownWorkspace": "不明なワークスペース"
   }
 }

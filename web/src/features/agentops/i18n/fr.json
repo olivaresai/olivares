@@ -154,8 +154,10 @@
   "live": {
     "inputPlaceholder": "Envoyer une ligne NDJSON sur stdin…",
     "inputAria": "Ligne d’entrée de session",
-    "textPlaceholder": "Envoyer un message à la session…",
-    "textAria": "Message de la session",
+    "textPlaceholder": "Envoyer une phrase…",
+    "textAria": "Tour de session",
+    "advanced": "Avancé · ligne brute",
+    "advancedHint": "Envoyer une ligne NDJSON sur stdin. Le champ de phrase est la valeur par défaut.",
     "send": "Envoyer",
     "noOutput": "Aucune sortie pour l’instant.",
     "waiting": "En attente de sortie…",
@@ -330,6 +332,8 @@
     "title": "Profils de fournisseur",
     "subtitle": "L’identité durable d’une instance de fournisseur configurée sur un environnement d’exécution : quel pilote la sert et sous quel répertoire de configuration s’exécute une session lancée. Un profil enregistre des répertoires qui existent déjà — il n’installe rien et ne se connecte à rien.",
     "register": "Enregistrer un profil",
+    "nextAction": "Enregistrer un profil",
+    "rowMenu": "Actions de ligne pour {{name}}",
     "search": "Rechercher des profils…",
     "allStates": "Tous les états",
     "cols": {

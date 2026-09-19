@@ -170,14 +170,18 @@
       "any": "Archived and not",
       "false": "Not archived only",
       "true": "Archived only"
-    }
+    },
+    "clear": "Clear filters"
   },
   "items": {
     "title": "Work items",
     "subtitle": "Filters narrow the whole store, not just the page you are looking at.",
     "empty": {
       "title": "No work items match",
-      "body": "Nothing in the store matches these filters. This is a real, complete answer — the engine read the store and found none."
+      "body": "Nothing in the store matches these filters. This is a real, complete answer — the engine read the store and found none.",
+      "allTitle": "No work items yet",
+      "allBody": "Work items appear here as sessions, agents and operators record them. This is a real, complete answer: the engine read the store and found none.",
+      "start": "Start a session"
     }
   },
   "lease": {

@@ -1,7 +1,6 @@
 {
   "title": "概览",
-  "description": "一览您的 AI 资产域——清单、活动、风险、合规、支出与健康状况。",
-  "asOfNote": "以下为最近 30 天的实时聚合数据，涵盖您的角色可打开的各模块。每个磁贴均链接至对应模块；打开高管报告可查看完整汇总与 PDF。",
+  "description": "一览您的 AI 资产域——您的角色可打开的各模块的 30 天聚合数据。",
   "openReport": "高管报告",
   "range": "最近 30 天",
   "next": {
@@ -27,7 +26,8 @@
     "emptyDescription": "已接入引擎的每次运行都会出现在这里：做了什么、用了多久、花了多少。",
     "unavailableTitle": "无法加载近期工作",
     "unavailableDescription": "会话读取没有响应。上方的数字不受影响。",
-    "open": "打开会话：{{what}}"
+    "open": "打开会话：{{what}}",
+    "untitled": "未命名会话"
   },
   "tiles": {
     "inventory": {
@@ -52,7 +52,8 @@
     "spend": {
       "label": "支出",
       "caption": "{{range}}",
-      "projected": "按当前运行速率预计 {{amount}}"
+      "projected": "按当前运行速率预计 {{amount}}",
+      "projectedOver": "按当前运行速率预计 {{amount}} — 高于迄今支出"
     },
     "health": {
       "label": "健康状况与 SLA",

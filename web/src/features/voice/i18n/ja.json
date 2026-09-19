@@ -129,7 +129,7 @@
     "columns": {
       "when": "日時",
       "outcome": "結果",
-      "session": "セッション参照",
+      "session": "セッション",
       "agent": "エージェント",
       "actor": "実行者",
       "reason": "エンジンの理由"

@@ -403,7 +403,7 @@ describe('the check is at the transport, so the client’s own awaits are covere
   })
 })
 
-/* ── 3. component → API → client, on the surface the review measured ─────────── */
+/* ── 3. component → API → client, on the surface that was measured ──────────── */
 
 function admit(
   operation: string,
@@ -417,7 +417,7 @@ function admit(
   })
 }
 
-describe('ChannelAdministration — the collection the review measured', () => {
+describe('ChannelAdministration — the collection that was measured', () => {
   const page = (over: { continuation?: string; id?: string } = {}) => ({
     items: [
       adminItemOf({

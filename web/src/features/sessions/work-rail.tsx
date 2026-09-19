@@ -44,7 +44,7 @@ import { KEYBINDINGS } from '@/lib/keybindings/table'
 import { cn } from '@/lib/utils'
 import { CcStateBadge } from './cc-state-badge'
 import { RunStateBadge } from '@/features/agentops/run-state-badge'
-import { primaryRun, sessionLabel, type UnifiedSession } from './provenance'
+import { primaryRun, sessionNaming, type UnifiedSession } from './provenance'
 import { addressOf } from './session-address'
 import { groupSessions, railOrder, WORK_GROUPS } from './session-groups'
 
@@ -88,6 +88,26 @@ function RailRow({
   // is a real state, and saying so beats printing its reference twice.
   const line = session.live ? workLine(session.live).text : null
   const seconds = session.live?.duration_seconds ?? 0
+  // ⛔ THE ROW IS CALLED WHAT IT IS DOING, AND IT USED TO BE CALLED BY ITS REFERENCE.
+  //    `sessionLabel`'s second rung is `s.sessionRef`, so a rail of six discovered
+  //    sessions read `sess-coder-7a3f`, `sess-batch-1` … — six machine ids where the
+  //    operator has to choose one. `sessionNaming` is the front door's ladder; when it
+  //    has no sentence the row says so and keeps the distinguishing tail beside it.
+  const naming = sessionNaming(session, t('untitled'))
+  // Name, tail and WHOLE reference on one hover, the way the front door's rows do it:
+  // a truncated name stays readable and the identifier stays reachable from the row
+  // that no longer paints it. Duplicates are dropped — an untitled row whose tail IS
+  // its reference would otherwise say it twice.
+  const nameTitle = [naming.name, naming.shortId, naming.reference]
+    .filter((part, i, all) => part && all.indexOf(part) === i)
+    .join(' · ')
+  // The hover text: the elapsed time and the observed clause, i.e. exactly the two facts
+  // the row used to spend two extra lines on. `undefined` and not an empty string when
+  // there is neither — a tooltip that says nothing is worse than no tooltip.
+  const rowTitle =
+    [seconds > 0 ? humanDurationSeconds(seconds) : null, line]
+      .filter(Boolean)
+      .join(' · ') || undefined
 
   return (
     <div
@@ -98,59 +118,75 @@ function RailRow({
       data-testid="rail-row"
       data-address={address}
       onClick={() => onOpen(session)}
+      /* ⛔ ONE LINE, 36 px, AND IT WAS 92 (measured on the seeded estate at
+         1440 and at 390 — the same 92 px at both, six rows of it). The row stacked a
+         name, then a state badge with an elapsed time and a relative time, then the
+         observed clause: three lines and 20 px of padding for one session, in a 256 px
+         rail whose whole job is to let an operator FIND the session they want among
+         the ones that are running.
+
+         WHAT MOVED, because nothing is dropped: the elapsed duration and the observed
+         clause are in this row's `title` — one hover — and both are painted in full,
+         permanently, by the narrative pane this row opens, which is two panes to the
+         right of it. The TABLE tab keeps them as columns. What stays on the line is
+         what an operator picks a row BY: its state, its name, and how long ago it last
+         did anything. */
+      title={rowTitle}
       className={cn(
-        'group relative flex cursor-pointer flex-col gap-1 border-l-2 px-3 py-2.5 outline-none transition-colors',
+        'group relative flex min-h-9 cursor-pointer items-center gap-1.5 border-l-2 px-3 py-1.5 outline-none transition-colors',
         selected
           ? 'border-l-accent bg-accent-soft'
           : 'border-l-transparent hover:bg-muted',
         'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
       )}
     >
-      <div className="flex min-w-0 items-center gap-1.5">
-        {pinned ? (
-          <>
-            {/* An `aria-label` on a bare <svg> is not reliably announced — the icon is
-                hidden and the WORD is what joins the row's accessible name, which for a
-                `role="option"` is composed from its contents. */}
-            <Pin
-              className="size-3 shrink-0 text-accent-text"
-              aria-hidden="true"
-            />
-            <span className="sr-only">{t('rail.pinnedMark')}</span>{' '}
-          </>
-        ) : null}
-        <span className="min-w-0 flex-1 truncate text-body font-medium text-foreground">
-          {sessionLabel(session)}
-        </span>
-      </div>
-
-      <div className="flex min-w-0 items-center gap-1.5">
-        {session.live ? (
-          <CcStateBadge state={session.live.cc_state} className="shrink-0" />
-        ) : run ? (
-          <RunStateBadge state={run.state} />
-        ) : null}{' '}
-        {/* ELAPSED, and only when the engine sent a duration. A zero printed as
-            "0s" would read as "it did nothing", which is a different claim. */}
-        {seconds > 0 ? (
-          <span className="shrink-0 text-caption text-muted-foreground tabular-nums">
-            {humanDurationSeconds(seconds)}
-          </span>
-        ) : null}{' '}
-        {session.lastActivityMs > 0 ? (
-          <RelTimeLabel
-            ts={new Date(session.lastActivityMs).toISOString()}
-            className="ml-auto shrink-0 text-caption text-muted-foreground"
+      {pinned ? (
+        <>
+          {/* An `aria-label` on a bare <svg> is not reliably announced — the icon is
+              hidden and the WORD is what joins the row's accessible name, which for a
+              `role="option"` is composed from its contents. */}
+          {/* ⛔ THE ACCENT IS FOR SELECTION, THE PRIMARY ACTION AND LINKS — and this
+              glyph is none of the three. A pin is a state the operator put the row IN,
+              so it is painted in the muted register every other state mark on this line
+              uses; the ACCENT on this row means "this is the session on screen", and
+              two meanings for one colour in a 256 px rail is a rail that cannot be read
+              at a glance. This was the half of the icon-accent defect that survived a
+              round: the census that replaced the rule could not see it, because the
+              mark renders only for a pinned row and no fixture pinned one. */}
+          <Pin
+            className="size-3 shrink-0 text-muted-foreground"
+            aria-hidden="true"
           />
-        ) : null}
-      </div>
-
-      <p
-        className="truncate text-caption text-muted-foreground"
-        title={line ?? undefined}
+          <span className="sr-only">{t('rail.pinnedMark')}</span>{' '}
+        </>
+      ) : null}
+      {session.live ? (
+        <CcStateBadge
+          state={session.live.cc_state}
+          className="min-w-0 truncate"
+        />
+      ) : run ? (
+        <RunStateBadge state={run.state} className="min-w-0 truncate" />
+      ) : null}{' '}
+      <span
+        data-testid="rail-row-name"
+        title={nameTitle}
+        className="min-w-0 flex-1 truncate text-body font-medium text-foreground"
       >
-        {line ?? t('rail.noObservation')}
-      </p>
+        {naming.name}
+        {naming.shortId ? (
+          <span className="font-mono text-caption text-muted-foreground">
+            {' '}
+            {naming.shortId}
+          </span>
+        ) : null}
+      </span>{' '}
+      {session.lastActivityMs > 0 ? (
+        <RelTimeLabel
+          ts={new Date(session.lastActivityMs).toISOString()}
+          className="min-w-0 truncate text-caption text-muted-foreground"
+        />
+      ) : null}
     </div>
   )
 }
@@ -256,6 +292,8 @@ export function WorkRail({
     <div
       role="listbox"
       aria-label={t('rail.label')}
+      // A listbox with no option yet is only a valid tree while it says it is busy.
+      aria-busy={loading ? true : undefined}
       data-testid="work-rail"
       onKeyDown={onKeyDown}
       className="flex flex-col"

@@ -358,8 +358,11 @@ function StopsSection({ canAdmin }: { canAdmin: boolean }) {
         getRowId={(r) => r.id}
         label={t('stops.label')}
         empty={
+          // A kill switch never pulled is the good state: one line, no panel,
+          // and nothing to press. Pulling it is the control above, and it is not
+          // this surface's "next action".
           <EmptyState
-            icon={<OctagonAlert />}
+            quiet
             title={t('stops.empty')}
             description={t('stops.emptyHint')}
           />

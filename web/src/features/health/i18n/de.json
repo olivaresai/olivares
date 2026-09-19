@@ -67,7 +67,8 @@
     "searchPlaceholder": "Subjekt suchen…",
     "empty": {
       "title": "Noch keine Subjekte überwacht",
-      "description": "Sobald für einen Agent oder MCP-Server eine Fehlerfreiheitsprüfung deklariert ist, erscheint dessen Lebendigkeit hier."
+      "description": "Sobald für einen Agent oder MCP-Server eine Fehlerfreiheitsprüfung deklariert ist, erscheint dessen Lebendigkeit hier.",
+      "declare": "Prüfung deklarieren"
     }
   },
   "sla": {

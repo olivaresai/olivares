@@ -2,12 +2,14 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { useInfiniteQuery } from '@tanstack/react-query'
+import { Link } from '@tanstack/react-router'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { DataTable, type TableColumn } from '@/components/data/data-table'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
-import { RelTimeLabel } from '@/features/shared'
+import { NamedRef, RelTimeLabel, useSessionNames } from '@/features/shared'
 import { useAuth } from '@/lib/auth/context'
 import { formatInt } from '@/lib/format'
 import { cn } from '@/lib/utils'
@@ -39,7 +41,10 @@ export function CatalogTable({
   onSelect: (entry: CatalogEntry, launcher?: HTMLElement) => void
 }) {
   const { t } = useTranslation('inventory')
+  const { t: tShared } = useTranslation('shared')
   const { activeTenant } = useAuth()
+  // What a session WAS DOING, from the live page the front door already reads.
+  const sessionNames = useSessionNames()
 
   const query = useInfiniteQuery({
     queryKey: inventoryKeys.entities(activeTenant, { kind, status }),
@@ -65,22 +70,41 @@ export function CatalogTable({
         id: 'name',
         accessorKey: 'name',
         header: t('cols.name'),
+        // ⛔ A SESSION IS NOT ITS REFERENCE. Every other entity here carries a name a
+        //    person chose — `agent-claude-coder-7`, `appdb.public.orders`. A session
+        //    materialises from the ingest stream with no name at all, so this column
+        //    painted `sess-coder-7a3f`: the raw identifier the census measured on this
+        //    route. What a session HAS is what it was doing, which the live page
+        //    reports and the front door already tells as a sentence.
+        //
+        //    A session the live page does not carry, or a reader without
+        //    `sessions:live:read`, gets the honest "Untitled session" with the
+        //    reference beside it — never a reference dressed as a name.
         cell: ({ row }) => {
           const e = row.original
           const Icon = ENTITY_ICON[e.kind] ?? Box
+          const reference = e.ref || e.name || ''
+          const session =
+            e.kind === 'session' ? sessionNames.nameOf(reference) : null
+          const label = e.kind === 'session' ? session : e.name || e.ref
+          const shown = label || (e.kind === 'session' ? '' : t('unnamed'))
+          const title = [e.name, e.ref, e.entity_id]
+            .filter((part) => part && part !== shown)
+            .join(' · ')
           return (
-            <div className="flex items-center gap-2">
+            <div className="flex min-w-0 items-center gap-2">
               <Icon className="size-4 shrink-0 text-muted-foreground" />
-              <div className="min-w-0">
-                <div className="truncate font-medium text-foreground">
-                  {e.name || e.ref || e.entity_id.slice(0, 8)}
-                </div>
-                {e.ref && e.ref !== e.name && (
-                  <div className="truncate font-mono text-caption text-muted-foreground">
-                    {e.ref}
-                  </div>
-                )}
-              </div>
+              <NamedRef
+                className="font-medium text-foreground"
+                name={label}
+                reference={reference}
+                title={title || reference || undefined}
+                fallback={
+                  e.kind === 'session'
+                    ? tShared('names.untitledSession')
+                    : t('unnamed')
+                }
+              />
             </div>
           )
         },
@@ -106,20 +130,24 @@ export function CatalogTable({
         accessorFn: (e) => e.signal_sources.join(','),
         header: t('cols.signals'),
         enableSorting: false,
-        cell: ({ row }) => (
-          <div className="flex flex-wrap gap-1">
-            {row.original.signal_sources.slice(0, 3).map((s) => (
-              <Badge key={s} variant="neutral" className="font-mono">
-                {s}
-              </Badge>
-            ))}
-            {row.original.signal_sources.length > 3 && (
-              <Badge variant="outline">
-                +{row.original.signal_sources.length - 3}
-              </Badge>
-            )}
-          </div>
-        ),
+        cell: ({ row }) => {
+          const sources = row.original.signal_sources
+          if (sources.length === 0) {
+            return <span className="text-muted-foreground">—</span>
+          }
+          return (
+            <div className="flex items-center gap-1" title={sources.join(', ')}>
+              {sources.slice(0, 2).map((s) => (
+                <Badge key={s} variant="neutral" className="font-mono">
+                  {s}
+                </Badge>
+              ))}
+              {sources.length > 2 && (
+                <Badge variant="outline">+{sources.length - 2}</Badge>
+              )}
+            </div>
+          )
+        },
       },
       {
         id: 'hosts',
@@ -153,7 +181,7 @@ export function CatalogTable({
         ),
       },
     ],
-    [t],
+    [t, tShared, sessionNames],
   )
 
   return (
@@ -175,6 +203,13 @@ export function CatalogTable({
         <EmptyState
           title={t('empty.catalog.title')}
           description={t('empty.catalog.description')}
+          action={
+            <Button asChild size="sm">
+              <Link to={'/capabilities' as never}>
+                {t('empty.catalog.action')}
+              </Link>
+            </Button>
+          }
         />
       }
     />

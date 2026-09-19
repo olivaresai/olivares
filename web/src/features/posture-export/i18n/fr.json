@@ -47,6 +47,7 @@
     "colTime": "Heure",
     "colFilters": "Filtres",
     "colCounts": "Décomptes",
-    "counts": "{{inventory}} inventaire · {{findings}} constats · {{drift}} dérive"
+    "counts": "{{inventory}} inventaire · {{findings}} constats · {{drift}} dérive",
+    "emptyAction": "Exporter la posture maintenant"
   }
 }

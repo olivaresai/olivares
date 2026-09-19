@@ -20,6 +20,8 @@
 // it off the stream-json init frame).
 
 import type { RunDTO, RunState, Transport } from '@/features/agentops/types'
+import { sessionNameLadder } from '@/features/home/work-line'
+import { refTail } from '@/features/shared/entity-names'
 import type { Attribution, LiveDTO } from './types'
 import type { SessionTarget } from './session-target'
 
@@ -59,19 +61,19 @@ export type CapabilityId =
 
 /** One session, however it reached us. */
 export interface UnifiedSession {
-  /** Stable row identity. `live:<live_ref>` for a profile-scoped live row (B2 —
-   * two homes may announce one id, so the row's own id is the key); `sess:<ref>`
+  /** Stable row identity. `live:<live_ref>` for a profile-scoped live row (two
+   * homes may announce one id, so the row's own id is the key); `sess:<ref>`
    * for a LEGACY row or a legacy run's session; else `run:<ref>` — so two runs on
    * ONE session are one row. */
   key: string
   /** The observed session reference, when the plane knows one. */
   sessionRef?: string
-  /** B2: the exact live row this session IS (absent for a run-only row whose managed
+  /** The exact live row this session IS (absent for a run-only row whose managed
    * row has not been proven yet). */
   liveRef?: string
-  /** B2: which channel the live row was folded from (absent without a row). */
+  /** Which channel the live row was folded from (absent without a row). */
   attribution?: Attribution
-  /** B2: the provider profile the row, or the run, is attributed to. */
+  /** The provider profile the row, or the run, is attributed to. */
   profileRef?: string
   /** Every run that drives this session, newest first. Length > 1 is a real state
    * (a resume, or a second launch against the same Claude session), so this is a
@@ -284,7 +286,7 @@ function activityOf(live: LiveDTO | undefined, runs: RunDTO[]): number {
  * and would have folded a Claude run onto a Codex session that happened to share it.
  */
 export function runMatchesObserved(run: RunDTO, live: LiveDTO): boolean {
-  // B2: a PROFILED run is joined to its session by the row the plane PROVED — the
+  // A PROFILED run is joined to its session by the row the plane PROVED — the
   // managed row whose id the run carries — and by nothing else. A legacy run never
   // joins a profile-scoped row: two homes may announce the very id it captured.
   if (run.provider_profile_ref || isScopedRow(live)) {
@@ -361,7 +363,7 @@ export function mergeSessions(
 
   for (const run of runs) {
     const sid = run.claude_session_id
-    // B2: a profiled run's only join is the managed row the plane proved for it
+    // A profiled run's only join is the managed row the plane proved for it
     // (`run.live_ref`). A legacy run joins the LEGACY row of its bare id, as before.
     const profiled = !!run.provider_profile_ref
     const key = profiled
@@ -419,15 +421,113 @@ export function mergeSessions(
   return out
 }
 
-/** A row's display label: the run's operator-given name when there is one (that is
- * what the operator typed), else the session reference, else the run reference. */
-export function sessionLabel(s: UnifiedSession): string {
-  // The PRIMARY run's name first, not merely the first named one. Seen on screen
-  // (2026-08-10, demo estate): a session driven by a relayed run AND a bridged one was
-  // titled by the relayed one while the row reported "Full control" — a reach that
-  // came from the other run. The row now names the run whose reach it is reporting.
-  const named = primaryRun(s.runs)?.name || s.runs.find((r) => r.name)?.name
-  return named || s.sessionRef || s.runs[0]?.run_ref || s.key
+/**
+ * WHAT THE ROW IS CALLED, FOR A CALLER THAT MUST NOT PAINT "untitled" — the one ladder's
+ * answer, or `null` when no rung of it was reachable.
+ *
+ * ⛔ ITS SECOND RUNG USED TO BE `s.sessionRef`, and a test pinned that as correct. So
+ *    every caller painted `sess-found` for a session nobody had named — the console's
+ *    one rule about identifiers ("the id is never the row name") with a green assertion
+ *    on the other side of it. The reference is not lost by this: it is what
+ *    `sessionSearchKey` searches, what `sessionReference` answers for a `title=`, and
+ *    what the inspector's identifiers block prints in full.
+ *
+ * A caller that must paint SOMETHING asks `sessionNaming`, which supplies the word and
+ * the distinguishing tail together. This is the wrapper, not a second ladder.
+ */
+export function sessionLabel(s: UnifiedSession): string | null {
+  const { text, from } = sessionNameLadder(operatorName(s), s.live, '')
+  return from === 'untitled' ? null : text
+}
+
+/**
+ * WHAT A ROW IS CALLED, AND WHAT IT CAN STILL BE IDENTIFIED BY.
+ *
+ * ⛔ THE LADDER IS THE FRONT DOOR'S, CALLED AND NOT COPIED. `workLine` is what the home
+ *    screen's recent rows read, and it degrades in a stated order — summary, then goal,
+ *    then the action and the resource a connector reported — with every rung a fact the
+ *    engine sent. An operator-given run name outranks all of them: that is what the
+ *    person who launched the session typed. Two ladders for one sentence drift the first
+ *    time a field is added, and then one screen says a session did something the other
+ *    does not.
+ *
+ * ⛔ AND THE LAST RUNG IS NOT THE REFERENCE. `workLine`'s own rule — "the id is never the
+ *    row name" — is why: a rail of six rows reading `sess-batch-1 … sess-batch-4` tells
+ *    an operator nothing they can choose between. When there is no sentence the row says
+ *    so, and carries `shortId` beside it: the distinguishing TAIL of the reference (never
+ *    the `sess-` type prefix, and a uuid cut at its LAST group — the first one is the v7
+ *    minting clock and is shared by every row launched in the same millisecond), which is
+ *    enough to tell two rows apart and to match one against a log line. The WHOLE reference stays on
+ *    `title=` and in the inspector's identifiers block, where an identifier is the thing
+ *    being operated on.
+ */
+export function sessionReference(s: UnifiedSession): string {
+  return s.sessionRef || s.liveRef || s.runs[0]?.run_ref || s.key
+}
+
+/**
+ * The distinguishing TAIL of that reference — never the `sess-` type prefix, and a uuid
+ * cut at its LAST group. Enough to tell two rows apart and to match one against a log
+ * line; the whole value stays on `title=` and in the identifiers block.
+ *
+ * ⛔ IT USED TO CUT AT THE FIRST GROUP, AND THAT GROUP IS A CLOCK. These ids are uuid v7:
+ *    the first 48 bits are the minting timestamp, so two sessions launched in the same
+ *    millisecond printed the SAME "distinguishing" short id — measured on two distinct
+ *    seeded sessions, `a = 01a0b6bb | b = 01a0b6bb` — on the rail, on the card and in the
+ *    narrative heading, which are the three places a reader chooses between rows. The
+ *    last group is the random one. `refTail` is the rule, written for exactly this and
+ *    called rather than copied: it also drops the type prefix, so `shortSessionId`'s
+ *    `sess-` cut is no longer a second step.
+ */
+export function sessionShortId(s: UnifiedSession): string {
+  return refTail(sessionReference(s))
+}
+
+/** The name the operator typed at launch, or `null` — never anything derived. */
+export function operatorName(s: UnifiedSession): string | null {
+  return (
+    primaryRun(s.runs)?.name?.trim() ||
+    s.runs.find((r) => r.name?.trim())?.name?.trim() ||
+    null
+  )
+}
+
+/**
+ * WHAT A ONE-LINE ROW PAINTS: the ladder's word, the distinguishing tail when the word
+ * is the caller's "untitled", and the whole reference for a `title=`.
+ *
+ * The ladder itself is `sessionNameLadder`'s and is CALLED, not repeated: this function
+ * only decides what a row with no name of its own carries beside the word.
+ */
+export function sessionNaming(
+  s: UnifiedSession,
+  untitled: string,
+): { name: string; shortId: string | null; reference: string } {
+  const { text, from } = sessionNameLadder(operatorName(s), s.live, untitled)
+  return {
+    name: text,
+    shortId: from === 'untitled' ? sessionShortId(s) : null,
+    reference: sessionReference(s),
+  }
+}
+
+/**
+ * What a TABLE CELL paints: a name, never a raw session reference. The reference stays
+ * on `title=` and in the inspector's identifiers block.
+ *
+ * ⛔ IT STOPS ONE RUNG ABOVE `sessionNaming`, AND THAT IS THE DIFFERENCE BETWEEN A TABLE
+ *    AND A RAIL, not a second opinion about the ladder. A table row carries its own
+ *    columns for state, origin, cost and what the session is doing, so its NAME cell
+ *    answers "which session is this" and the current action would repeat a column three
+ *    centimetres to the right. A rail row is ONE line with no columns: the clause is the
+ *    only thing on it an operator can choose by, which is why `sessionNaming` takes the
+ *    action rung and this does not. Both refuse the reference as a name.
+ */
+export function sessionTitle(s: UnifiedSession, untitled: string): string {
+  const { text, from } = sessionNameLadder(operatorName(s), s.live, untitled)
+  // The ceiling is a POLICY on the rung that answered, not a second walk of the ladder:
+  // that is the whole difference between one ladder and two.
+  return from === 'action' ? untitled : text
 }
 
 /** Everything a row can be searched by: its label, its session reference and every
@@ -436,7 +536,7 @@ export function sessionLabel(s: UnifiedSession): string {
  * used to show that ref as the row title, so searching it has to keep working. */
 export function sessionSearchKey(s: UnifiedSession): string {
   return [
-    sessionLabel(s),
+    sessionLabel(s) ?? '',
     s.sessionRef ?? '',
     s.liveRef ?? '',
     s.profileRef ?? '',

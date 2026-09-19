@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Check, ChevronsUpDown, Layers } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -20,7 +21,7 @@ import { useWorkspaceStore } from '@/stores/workspace'
 /** El máximo que el repositorio genérico acepta (`maxLimit`, sqlstore/generic.go:29). */
 const WORKSPACE_PAGE = 1000
 
-export function WorkspaceSwitcher() {
+export function WorkspaceSwitcher({ className }: { className?: string } = {}) {
   const { t } = useTranslation(['nav', 'common'])
   const { activeTenant } = useAuth()
   const { activeWorkspace, setActiveWorkspace } = useWorkspaceStore()
@@ -66,11 +67,13 @@ export function WorkspaceSwitcher() {
         <Button
           variant="ghost"
           size="base"
-          className="min-w-24 max-w-[14rem] shrink gap-1.5"
+          className={cn('min-w-24 max-w-[14rem] shrink gap-1.5', className)}
           title={label}
         >
           <Layers className="size-4 text-muted-foreground" />
-          <span className="truncate">{label}</span>
+          <span className="min-w-0 flex-1 truncate text-left" title={label}>
+            {label}
+          </span>
           <ChevronsUpDown className="size-3.5 shrink-0 text-muted-foreground" />
         </Button>
       </DropdownMenuTrigger>
@@ -84,8 +87,13 @@ export function WorkspaceSwitcher() {
         ) : null}
         <DropdownMenuItem onSelect={() => setActiveWorkspace(null)}>
           <span className="flex min-w-0 flex-col">
-            <span className="truncate">{t('nav:workspace.all')}</span>
-            <span className="truncate font-mono text-caption text-muted-foreground">
+            <span className="truncate" title={t('nav:workspace.all')}>
+              {t('nav:workspace.all')}
+            </span>
+            <span
+              className="truncate font-mono text-caption text-muted-foreground"
+              title={t('nav:workspace.allHint')}
+            >
               {t('nav:workspace.allHint')}
             </span>
           </span>
@@ -102,8 +110,17 @@ export function WorkspaceSwitcher() {
               onSelect={() => setActiveWorkspace(w.id, w.name)}
             >
               <span className="flex min-w-0 flex-col">
-                <span className="truncate">{w.name}</span>
-                <span className="truncate font-mono text-caption text-muted-foreground">
+                <span className="truncate" title={w.name}>
+                  {w.name}
+                </span>
+                <span
+                  className="truncate font-mono text-caption text-muted-foreground"
+                  title={
+                    w.is_default
+                      ? `${w.slug} · ${t('nav:workspace.default')}`
+                      : w.slug
+                  }
+                >
                   {w.slug}
                   {w.is_default ? ` · ${t('nav:workspace.default')}` : ''}
                 </span>

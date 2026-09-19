@@ -538,7 +538,24 @@ function DLPSection() {
         ) : rulesQ.isError ? (
           <ErrorState retry={() => void rulesQ.refetch()} />
         ) : (rulesQ.data?.items.length ?? 0) === 0 ? (
-          <EmptyState title={t('dlp.empty')} description={t('dlp.emptyHint')} />
+          <EmptyState
+            title={t('dlp.empty')}
+            description={t('dlp.emptyHint')}
+            // "Add a rule to allow or deny a classification on egress" — the same
+            // button the card header carries, on the same right.
+            action={
+              canEdit ? (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => setCreating(true)}
+                >
+                  <Plus />
+                  {t('dlp.add')}
+                </Button>
+              ) : null
+            }
+          />
         ) : (
           <div className="overflow-x-auto">
             <StaticTable>

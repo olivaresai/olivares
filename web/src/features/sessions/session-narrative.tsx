@@ -43,10 +43,19 @@ import { RunStateBadge } from '@/features/agentops/run-state-badge'
 import { workLine } from '@/features/home/work-line'
 import { LiveDot } from '@/features/shared'
 import { formatDuration, formatMicroUsd } from '@/lib/format'
+import { cn } from '@/lib/utils'
 import { AttributionChip } from './attribution-chip'
 import { CcStateBadge } from './cc-state-badge'
-import { isScopedRow, primaryRun, sessionLabel } from './provenance'
+import type { ConversationItem } from './conversation-frames'
+import {
+  isScopedRow,
+  operatorName,
+  primaryRun,
+  sessionReference,
+  sessionShortId,
+} from './provenance'
 import { addressOf, type EvidenceBlock } from './session-address'
+import { SessionConversation } from './session-conversation'
 import { SessionEvidence } from './session-evidence'
 import type { SessionResolution } from './use-session-resolution'
 import { workFacts } from './work-facts'
@@ -60,6 +69,8 @@ export function SessionNarrative({
   evidence,
   onExpandEvidence,
   emptyAction,
+  inspectedId,
+  onInspect,
 }: {
   resolution: SessionResolution
   pinned: boolean
@@ -70,6 +81,8 @@ export function SessionNarrative({
   onExpandEvidence: (block: EvidenceBlock) => void
   /** Offered when no session is open at all, already gated by the caller. */
   emptyAction?: React.ReactNode
+  inspectedId?: string | null
+  onInspect?: (item: ConversationItem) => void
 }) {
   const { t, i18n } = useTranslation('sessions')
   const lang = i18n.language
@@ -111,13 +124,30 @@ export function SessionNarrative({
       })
     : []
   const address = addressOf(session)
+  // ⛔ THE HEADING ANSWERS *WHICH* SESSION, AND THE LINE BELOW ANSWERS *WHAT IT DID*.
+  //    They must not be the same sentence: the pane already tells the clause, so a
+  //    heading that also degraded to it would print one fact twice. And it must not be
+  //    the raw reference either, which is what `sessionLabel` painted here in the
+  //    monospaced face. So: the name its operator typed, else the distinguishing tail
+  //    of the reference — whose whole value is on `title` and in the identifiers block.
+  const named = operatorName(session)
+  const shortId = sessionShortId(session)
+  const reference = sessionReference(session)
 
   return (
     <div className="flex flex-col gap-4" data-testid="session-narrative">
       <div className="flex flex-col gap-2">
         <div className="flex items-start gap-2">
-          <h2 className="min-w-0 flex-1 truncate font-mono text-title text-foreground">
-            {sessionLabel(session)}
+          <h2
+            className={cn(
+              'min-w-0 flex-1 truncate text-title text-foreground',
+              !named && 'font-mono',
+            )}
+            title={[named, shortId, reference]
+              .filter((part, i, all) => part && all.indexOf(part) === i)
+              .join(' · ')}
+          >
+            {named ?? shortId}
           </h2>
           {/* THE MENU PATH, equal to the `p` key the rail listens for — and it lives
               HERE because a focusable control inside a `role="option"` row is
@@ -130,9 +160,7 @@ export function SessionNarrative({
                 <Button
                   variant="ghost"
                   size="icon"
-                  aria-label={t('narrative.menu', {
-                    name: sessionLabel(session),
-                  })}
+                  aria-label={t('narrative.menu', { name: named ?? shortId })}
                   data-testid="narrative-menu"
                 >
                   <MoreHorizontal />
@@ -174,12 +202,17 @@ export function SessionNarrative({
           absence of work, and an absence of telemetry is not a failure. */}
       {live ? (
         <div className="flex flex-col gap-1.5">
-          <p className="text-body text-foreground">{line?.text}</p>
-          {line?.from === 'ref' ? (
+          {/* ⛔ AND THE CLAUSE IS NOT THE REFERENCE EITHER. This line printed `line.id` —
+              the session reference — whenever the ladder reported `untitled`, which is
+              the one rung `workLine` says is not a description of anything. The pane
+              says what it knows instead; the heading above already carries the tail. */}
+          {line && line.from !== 'untitled' ? (
+            <p className="text-body text-foreground">{line.text}</p>
+          ) : (
             <p className="text-caption text-muted-foreground">
               {t('narrative.noObjective')}
             </p>
-          ) : null}
+          )}
           {facts.length > 0 ? (
             <p
               className="text-caption text-muted-foreground"
@@ -207,6 +240,17 @@ export function SessionNarrative({
           expanded={evidence}
           onExpand={onExpandEvidence}
         />
+      ) : null}
+
+      {run && run.transport !== 'remote-control' ? (
+        <div className="min-h-40 flex-1 border-t border-border pt-3">
+          <SessionConversation
+            run={run}
+            selectedId={inspectedId}
+            onInspect={onInspect}
+            workspaceRef={run.workspace_ref}
+          />
+        </div>
       ) : null}
     </div>
   )

@@ -22,7 +22,6 @@
 import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
 import { EmptyState } from '@/components/ui/empty-state'
 import { PageHeader } from '@/components/ui/page-header'
 import { useViewAccess } from './authorization'
@@ -46,30 +45,32 @@ interface DirectoryEntry {
   description: string
 }
 
-function EntryCard({ entry }: { entry: DirectoryEntry }) {
+function EntryRow({ entry }: { entry: DirectoryEntry }) {
   const Icon = entry.icon
   return (
     <li className="min-w-0">
-      <Card className="flex h-full items-start gap-3 p-4">
-        <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md bg-accent-soft text-accent-soft-foreground [&_svg]:size-4">
-          <Icon aria-hidden="true" />
-        </div>
-        <div className="min-w-0">
-          <h3 className="text-heading">
-            <Link
-              to={entry.path as never}
-              className="rounded-sm text-foreground outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
-            >
-              {entry.label}
-            </Link>
-          </h3>
-          {entry.description ? (
-            <p className="mt-1 text-body text-muted-foreground">
-              {entry.description}
-            </p>
-          ) : null}
-        </div>
-      </Card>
+      <div className="flex min-h-10 items-center gap-3 border-b border-border px-1 hover:bg-surface focus-within:bg-surface">
+        <Icon
+          aria-hidden="true"
+          className="size-4 shrink-0 text-muted-foreground"
+        />
+        <h3 className="shrink-0 text-body font-medium">
+          <Link
+            to={entry.path as never}
+            className="rounded-sm text-foreground outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          >
+            {entry.label}
+          </Link>
+        </h3>
+        {entry.description ? (
+          <p
+            className="min-w-0 truncate text-caption text-muted-foreground"
+            title={entry.description}
+          >
+            {entry.description}
+          </p>
+        ) : null}
+      </div>
     </li>
   )
 }
@@ -118,7 +119,7 @@ export function AreaDirectoryView({ areaId }: { areaId: AreaId }) {
   const AreaIcon = area.icon
   return (
     <div
-      className="flex flex-col gap-6"
+      className="flex flex-col gap-4"
       data-slot="area-directory"
       data-area={areaId}
     >
@@ -155,9 +156,9 @@ export function AreaDirectoryView({ areaId }: { areaId: AreaId }) {
               >
                 {sectionLabel(t, areaId, s.sectionId)}
               </h2>
-              <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              <ul className="flex flex-col">
                 {s.entries.map((entry) => (
-                  <EntryCard key={entry.id} entry={entry} />
+                  <EntryRow key={entry.id} entry={entry} />
                 ))}
               </ul>
             </section>

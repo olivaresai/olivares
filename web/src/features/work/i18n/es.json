@@ -170,14 +170,18 @@
       "any": "Archivadas y no archivadas",
       "false": "Solo no archivadas",
       "true": "Solo archivadas"
-    }
+    },
+    "clear": "Quitar los filtros"
   },
   "items": {
     "title": "Unidades de trabajo",
     "subtitle": "Los filtros estrechan el almacén entero, no solo la página que estás viendo.",
     "empty": {
       "title": "Ninguna unidad coincide",
-      "body": "Nada en el almacén coincide con estos filtros. Es una respuesta real y completa: el motor leyó el almacén y no encontró ninguna."
+      "body": "Nada en el almacén coincide con estos filtros. Es una respuesta real y completa: el motor leyó el almacén y no encontró ninguna.",
+      "allTitle": "Aún no hay unidades de trabajo",
+      "allBody": "Las unidades de trabajo aparecen aquí conforme las registran las sesiones, los agentes y los operadores. Es una respuesta real y completa: el motor leyó el almacén y no encontró ninguna.",
+      "start": "Iniciar una sesión"
     }
   },
   "lease": {

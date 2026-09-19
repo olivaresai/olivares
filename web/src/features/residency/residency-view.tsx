@@ -42,6 +42,7 @@ import { AAL, RequireAssurance } from '@/features/identity/assurance'
 import { useAuth } from '@/lib/auth/context'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
 import { residencyApi, residencyKeys, type OrgDTO } from './api'
+import { XScroll } from '@/components/data/scroll-edges'
 import { StaticTable } from '@/components/data/static-table'
 
 const CLEAR_PIN_VALUE = '__clear_residency_pin__'
@@ -129,8 +130,12 @@ export function ResidencyView() {
               title={t('orgs.empty')}
             />
           ) : (
-            <div className="overflow-x-auto">
-              <StaticTable>
+            /* One line per row, and the overflow it can create announces itself.
+               The org cell stacked the name over the slug, which put the row at
+               57 px against the 36 px table budget: the name is the row, the slug
+               is its detail, and a detail does not deserve a second line. */
+            <XScroll contentKey={orgs.length}>
+              <StaticTable oneLine>
                 <thead>
                   <tr className="tracking-wider">
                     <th>{t('orgs.colOrg')}</th>
@@ -144,12 +149,17 @@ export function ResidencyView() {
                   {orgs.map((o) => (
                     <tr key={o.tenant_id}>
                       <td>
-                        <div className="font-medium text-foreground">
-                          {o.name}
-                        </div>
-                        <div className="font-mono text-caption text-muted-foreground">
-                          {o.slug}
-                        </div>
+                        <span className="flex min-w-0 items-baseline gap-2">
+                          <span className="truncate font-medium text-foreground">
+                            {o.name}
+                          </span>
+                          <span
+                            className="min-w-0 truncate font-mono text-caption text-muted-foreground"
+                            title={o.slug}
+                          >
+                            {o.slug}
+                          </span>
+                        </span>
                       </td>
                       <td>
                         {o.data_region ? (
@@ -174,7 +184,7 @@ export function ResidencyView() {
                   ))}
                 </tbody>
               </StaticTable>
-            </div>
+            </XScroll>
           )}
         </CardContent>
       </Card>

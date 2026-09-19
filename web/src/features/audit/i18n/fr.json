@@ -4,6 +4,7 @@
   "subtitleSystem": "La chaîne du locataire système contenant les opérations administratives inter-locataires (lecture seule).",
   "searchLoaded": "Filtrer uniquement les lignes chargées (côté client)…",
   "filters": {
+    "open": "Filtres",
     "title": "Filtres du registre côté serveur",
     "q": "Rechercher dans le registre",
     "qPlaceholder": "Action, acteur, type de cible ou ID",
@@ -62,6 +63,7 @@
   },
   "export": {
     "action": "Exporter",
+    "options": "Options d’export",
     "formatLabel": "Format d’export",
     "fromSeq": "Seq de début",
     "toSeq": "Seq de fin",

@@ -5,7 +5,7 @@
 /**
  * What the caller clicked. Any one identifies the session; the card resolves the
  * rest from the engine rather than from whatever list happened to be loaded.
- *  - `liveRef`    a live row by its own opaque id (B2) — the ONLY unambiguous name
+ *  - `liveRef`    a live row by its own opaque id — the ONLY unambiguous name
  *                 of a profile-scoped row, and valid for a legacy row too.
  *  - `sessionRef` the LEGACY row of a bare provider session id.
  *  - `runRef`     a run; a profiled run resolves its managed row by `live_ref`, a

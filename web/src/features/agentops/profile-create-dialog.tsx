@@ -32,7 +32,7 @@ const DRIVER_SUGGESTIONS = ['claude', 'codex', 'grok']
 
 /**
  * ProfileCreateDialog — registers a provider profile for homes that ALREADY EXIST on
- * this node's execution environment (B1). What leaves the browser is a driver key,
+ * this node's execution environment. What leaves the browser is a driver key,
  * two paths and a label: the server canonicalises and validates the paths on the
  * node that owns them (absolute, symlinks resolved, existing, a directory), never
  * creates a missing home, installs nothing and logs nothing in. No environment_ref

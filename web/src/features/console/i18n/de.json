@@ -123,7 +123,8 @@
     "revoke": "Widerrufen",
     "revokeTitle": "Einladung widerrufen",
     "revokeBody": "Der Einladungslink für {{email}} funktioniert ab sofort nicht mehr.",
-    "revoked": "Einladung widerrufen."
+    "revoked": "Einladung widerrufen.",
+    "inviteFirst": "Ersten Benutzer einladen"
   },
   "members": {
     "title": "Aktive Mitglieder",
@@ -482,6 +483,7 @@
     "title": "Agenten",
     "caption": "Registrieren und pflegen Sie die einzelnen Agenten, die von diesem Mandanten gesteuert werden.",
     "create": "Neuer Agent",
+    "nextAction": "Einen Agenten bereitstellen",
     "createTitle": "Neuer Agent",
     "editTitle": "Agent bearbeiten",
     "formCaption": "Definieren Sie Agentenidentität, Laufzeittyp, Arbeitsbereich-Geltungsbereich und optionale JSON-Attribute.",
@@ -502,6 +504,9 @@
     "jsonHint": "Optionales JSON-Objekt.",
     "jsonObjectError": "Labels und Metadaten müssen gültige JSON-Objekte sein.",
     "notSet": "Nicht gesetzt",
+    "id": "ID",
+    "rowMenu": "Zeilenaktionen für {{name}}",
+    "workspaceUnknown": "Unbekannter Workspace",
     "none": "Noch keine Agenten.",
     "noneHint": "Erstellen Sie einen Agenten, um Zugriff, Richtlinien und Audit-Datensätze auf eine einzelne Laufzeit einzugrenzen.",
     "edit": "Bearbeiten",

@@ -4,7 +4,9 @@
     "hint": "此工作区预览有上限。请使用“查看全部”检查更广的清单。"
   },
   "title": "工作区概览",
-  "selectPrompt": "从顶部栏的切换器中选择一个工作区以查看其仪表板。",
+  "selectTitle": "未选择工作区",
+  "selectPrompt": "在导航栏中选择一个工作区以打开此概览，或前往租户范围的清单。",
+  "viewInventory": "打开清单",
   "agents": "代理",
   "sessions": "会话",
   "resources": "资源",
@@ -16,10 +18,11 @@
   "slug": "标识",
   "name": "名称",
   "noAgents": "此工作区中还没有代理。",
+  "noAgentsHint": "在此工作区中被发现后，代理会显示在这里。",
   "noGroups": "此工作区中还没有代理组。",
+  "noGroupsHint": "为此工作区定义后，代理组会显示在这里。",
   "viewAll": "查看全部",
   "defaultBadge": "默认",
-  "workspaceInfo": "工作区信息",
   "created": "创建时间",
   "lastUpdated": "最近更新"
 }

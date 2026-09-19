@@ -302,6 +302,7 @@
     "noTenant": "aucune",
     "noWorkspace": "Aucun espace de travail",
     "noEnvironment": "Non déclaré",
+    "thisNode": "Ce nœud",
     "hint": "Ce sous quoi la prochaine session s’exécutera."
   },
   "launcher": {
@@ -318,6 +319,18 @@
     "startFailed": "La session n’a pas pu être démarrée.",
     "noTenant": "Sélectionnez une organisation avant de démarrer une session.",
     "noProfileRead": "Une session s’exécute sous un profil de fournisseur, et votre rôle n’inclut pas la permission de les lire.",
-    "readFailed": "Les profils de fournisseur n’ont pas pu être lus : impossible de démarrer une session d’ici."
+    "readFailed": "Les profils de fournisseur n’ont pas pu être lus : impossible de démarrer une session d’ici.",
+    "send": "Envoyer",
+    "turnPlaceholder": "Envoyer une phrase…",
+    "turnAria": "Tour de session",
+    "attachedRunning": "En cours",
+    "attachedWaiting": "En attente de vous",
+    "attachedSettled": "Terminée",
+    "advanced": "Avancé",
+    "advancedHint": "Envoyer une ligne NDJSON sur stdin. Le champ de phrase est la valeur par défaut.",
+    "wirePlaceholder": "Envoyer une ligne NDJSON sur stdin…",
+    "wireAria": "Ligne d’entrée de session",
+    "turnFailed": "La session n’a pas pu accepter ce tour.",
+    "sendBackgroundHint": "Ctrl+Entrée envoie et laisse le brouillon prêt pour la phrase suivante."
   }
 }

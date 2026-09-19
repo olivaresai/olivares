@@ -23,10 +23,13 @@
 // navigated to could ever be observed. Measured: deleting the URL write from setTab
 // (console-view.tsx) left the ENTIRE web suite — 164 files, 1644 tests — green. The seam was
 // documented, shipped, and pinned by nothing.
-import { act, render, screen } from '@testing-library/react'
+import { act, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useEffect as reactUseEffect, useState as reactUseState } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { PageActionsProvider } from '@/components/ui/page-actions'
+import { clippingAncestors } from '@/test/clipping'
+import { stubViewportWidth } from '@/test/viewport'
 import './i18n'
 
 const navigate = vi.fn()
@@ -69,9 +72,23 @@ function setSearchStr(next: string) {
 vi.mock('./people-tab', () => ({
   PeopleTab: () => <div>PeopleTab mounted</div>,
 }))
-vi.mock('./agents-tab', () => ({
-  AgentsTab: () => <div>AgentsTab mounted</div>,
-}))
+// The agents stub DECLARES A VERB, which the others do not: the real tab fills the
+// header's primary slot through `PagePrimaryAction` (agents-tab.tsx), and that verb is
+// the one a phone reaches through the disclosure. A stub with no control leaves the
+// control row empty, the disclosure unrendered, and the phone case untestable here.
+vi.mock('./agents-tab', async () => {
+  const { PagePrimaryAction } = await import('@/components/ui/page-actions')
+  return {
+    AgentsTab: () => (
+      <>
+        <div>AgentsTab mounted</div>
+        <PagePrimaryAction>
+          <button type="button">New agent</button>
+        </PagePrimaryAction>
+      </>
+    ),
+  }
+})
 vi.mock('./sso-tab', () => ({ SSOTab: () => <div>SSOTab mounted</div> }))
 vi.mock('./scopes-tab', () => ({
   ScopesTab: () => <div>ScopesTab mounted</div>,
@@ -132,6 +149,53 @@ describe('ConsoleView — ?tab= deep link', () => {
     // surface, not a blank console.
     renderAt('?tab=not-a-tab')
     expect(screen.getByText('PeopleTab mounted')).toBeInTheDocument()
+  })
+
+  it('puts the tab strip on the same line as the title', () => {
+    // Header 48 + one 36 px title+tabs row + thead ≈ first tbody ≤ 136.
+    // A gap-6 stack of title then tabs then content is what measured y=272.
+    renderAt('?tab=agents')
+    const chrome = screen
+      .getByRole('tablist')
+      .closest('[data-slot="work-chrome"]')
+    expect(chrome).toBeTruthy()
+    expect(chrome).toContainElement(screen.getByRole('heading', { level: 1 }))
+  })
+
+  /**
+   * ⛔ THE PANEL IS PAINTED AND UNTOUCHABLE WHEN THE ROW CLIPS IT. The chrome row was
+   *    `h-9 … overflow-hidden` and the disclosure opens its panel `absolute top-full`
+   *    INSIDE it: measured at 390×844, the panel's box ran y 98→136 inside a row that
+   *    ended at 100, `elementFromPoint` at its centre answered a `th`, and New agent —
+   *    the verb this screen exists for — could not be pressed. `aria-expanded` was true
+   *    and the panel carried no `hidden` class, which is all the round-3 oracle asked.
+   *
+   *    The provider is what a phone really has: `AppLayout` mounts it, and without it the
+   *    tab's verb renders inside the tab instead of in the header. The walk is over
+   *    CLASSES because jsdom loads no stylesheet (`@/test/clipping`); the computed
+   *    overflow and the hit test are measured by `code-r4/probe/panel.mjs`.
+   */
+  it('phone: nothing between the open panel and the page clips it', async () => {
+    const user = userEvent.setup()
+    stubViewportWidth(390)
+    window.history.replaceState({}, '', '/console?tab=agents')
+    render(
+      <PageActionsProvider>
+        <ConsoleView />
+      </PageActionsProvider>,
+    )
+    const toggle = await screen.findByTestId('page-actions-toggle')
+    await user.click(toggle)
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    const panel = document.querySelector(
+      '[data-slot="page-actions"]',
+    ) as HTMLElement
+    // Joined, so a failure NAMES the element that cut the panel on its one line.
+    expect(clippingAncestors(panel).join(' | ')).toBe('')
+    expect(
+      within(panel).getByRole('button', { name: 'New agent' }),
+    ).toBeInTheDocument()
+    stubViewportWidth(1440)
   })
 
   it.each([

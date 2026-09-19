@@ -98,7 +98,7 @@ export interface RunDTO {
   /** A privileged launch (drove the HITL + mandatory recording floor). */
   critical: boolean
 
-  // Provider-profile facts (B1/B2), persisted at launch. References only — the
+  // Provider-profile facts, persisted at launch. References only — the
   // homes live on the profile's authorized configuration read, never here. All
   // absent for a legacy run, which is never assigned a profile after the fact.
   provider_profile_ref?: string
@@ -249,7 +249,7 @@ export interface CreateRunRequest {
    * opens this console. The restrictions themselves are never sent from here: only the
    * template id is, which is why a client cannot post itself an empty allowlist. */
   template_id?: string
-  /** The provider profile to launch under (B2). Only the REFERENCE leaves the
+  /** The provider profile to launch under. Only the REFERENCE leaves the
    * browser: the server resolves and validates the profile's homes, persists the
    * snapshot on the run before the spawn and refuses a disabled, retired, foreign or
    * non-operable profile. Absent ⇒ the legacy launch under the runner's own home. */

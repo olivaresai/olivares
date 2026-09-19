@@ -368,9 +368,24 @@ export function PostureExportView() {
             .
           </CaveatNotice>
           {history.length === 0 ? (
+            /* "Generate one to start" named an action this panel did not carry:
+               the export button is in the filters card above, and from here the
+               sentence is an instruction about somewhere else. Same mutation, same
+               disabled rule, and a name of its own so the two controls are never one
+               ambiguous target. */
             <EmptyState
               description={t('history.emptyHint')}
               title={t('history.empty')}
+              action={
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => mut.mutate()}
+                  disabled={mut.isPending}
+                >
+                  {t('history.emptyAction')}
+                </Button>
+              }
             />
           ) : (
             <div className="overflow-x-auto">

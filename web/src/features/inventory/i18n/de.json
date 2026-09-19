@@ -1,5 +1,6 @@
 {
   "title": "Inventar",
+  "unnamed": "Unbenannt",
   "subtitle": "Jeder Agent, jede Sitzung, jeder MCP, jedes Modell und jede Identität, die in Ihrem Bestand erkannt wurden.",
   "refresh": "Aktualisieren",
   "scope": {
@@ -118,7 +119,8 @@
   "empty": {
     "catalog": {
       "title": "Noch keine Bestandsentitäten erkannt",
-      "description": "Entitäten erscheinen, sobald Konnektorbeobachtungen Agenten, Sitzungen, Identitäten, MCP-Fähigkeiten, Modelle, Anbieter oder Ressourcen melden."
+      "description": "Entitäten erscheinen, sobald Konnektorbeobachtungen Agenten, Sitzungen, Identitäten, MCP-Fähigkeiten, Modelle, Anbieter oder Ressourcen melden.",
+      "action": "Fähigkeiten öffnen"
     }
   }
 }

@@ -47,6 +47,7 @@
     "colTime": "Время",
     "colFilters": "Фильтры",
     "colCounts": "Счётчики",
-    "counts": "{{inventory}} инвентарь · {{findings}} находки · {{drift}} дрейф"
+    "counts": "{{inventory}} инвентарь · {{findings}} находки · {{drift}} дрейф",
+    "emptyAction": "Экспортировать состояние сейчас"
   }
 }

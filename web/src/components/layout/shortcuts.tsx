@@ -23,7 +23,7 @@ import {
 import { COMMAND_GROUP, KEY_GROUPS, KEYBINDINGS } from '@/lib/keybindings/table'
 import { useCommandStore } from '@/stores/command'
 import { usePreferencesStore } from '@/stores/preferences'
-import { LAUNCHER_INPUT_ID } from './shell-launcher-id'
+import { COMPOSER_INPUT_ID } from './work-composer-id'
 
 /** How long a leader sequence stays armed after pressing `g`. */
 const SEQUENCE_TIMEOUT_MS = 1200
@@ -132,14 +132,26 @@ export function GlobalShortcuts() {
         return
       }
       if (chordCommand === 'launcher.focus') {
-        // `/` focuses the launcher. The element is found by id rather than by a ref
-        // through three components: this module must not import the launcher, whose
+        // `/` focuses the composer. The element is found by id rather than by a ref
+        // through three components: this module must not import the composer, whose
         // queries would then load in every chunk that only wanted to move focus.
-        const field = document.getElementById(LAUNCHER_INPUT_ID)
-        if (!(field instanceof HTMLElement)) return
+        //
+        // ⛔ AND WHERE NO COMPOSER IS MOUNTED, THE KEY STILL REACHES ONE. The composer
+        //    used to be in the shell, so the field was on every route and a missing
+        //    element could only mean "this principal may not start runs". It is now
+        //    mounted by the two screens where starting work IS the work, so
+        //    a missing element usually means "you are somewhere else" — and the honest
+        //    answer to `/` there is to go where the work is, not to swallow the key.
+        //    `/sessions` is the destination because it mounts the composer beside the
+        //    list the run will join; nothing is auto-typed and nothing is auto-started.
+        const field = document.getElementById(COMPOSER_INPUT_ID)
         e.preventDefault()
         armedUntil.current = 0
-        field.focus()
+        if (field instanceof HTMLElement) {
+          field.focus()
+        } else {
+          void navigate({ to: '/sessions' as never } as never)
+        }
         return
       }
 

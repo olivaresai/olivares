@@ -12,7 +12,7 @@ import {
 import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
-import { EmptyState } from '@/components/ui/empty-state'
+import { WorkspaceRequiredState } from '@/features/shared'
 import { ForbiddenState } from '@/components/ui/error-state'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { IntelPage, SectionCard } from '@/features/_intel'
@@ -338,7 +338,7 @@ function Inner({
       description={t(`doors.${door}.description`)}
     >
       {!scope.workspace ? (
-        <EmptyState
+        <WorkspaceRequiredState
           icon={<MessagesSquare />}
           title={t('workspace.requiredTitle')}
           description={t('workspace.requiredBody')}

@@ -29,6 +29,7 @@ import {
   StatGrid,
   VerdictBadge,
 } from '@/features/_intel'
+import { NamesUnreadNotice, useSessionNames } from '@/features/shared'
 import { formatDateTime, formatInt, humanize } from '@/lib/format'
 import type {
   Anomaly,
@@ -132,6 +133,8 @@ export function FindingsTable({
   onTriage?: (finding: Finding) => void
 }) {
   const { t, i18n } = useTranslation('security')
+  // What a session subject was doing, from the live page the front door already reads.
+  const sessionNames = useSessionNames()
   const columns = useMemo<TableColumn<Finding>[]>(() => {
     const base: TableColumn<Finding>[] = [
       {
@@ -188,12 +191,21 @@ export function FindingsTable({
         // `truncate` sólo produce elipsis cuando algo limita la anchura. Esto la
         // limita, y con eso la maquinaria que ya existía empieza a funcionar.
         size: 420,
+        // ⛔ Y UNA LÍNEA, NO DOS. Medido a 1440 sobre el motor sembrado: la fila de
+        // hallazgos salía a 49 px contra el presupuesto de 36, y las otras cinco
+        // columnas llevaban una palabra cada una — el desbordamiento entero era este
+        // par de `<p>` apilados. La jerarquía del listón es nombre › detalle › meta
+        // EN LA MISMA LÍNEA: el título es el elemento que no cede (`flex-1 min-w-0`)
+        // y el sujeto y la fecha se recortan antes que él.
         cell: ({ row }) => (
-          <div className="min-w-0 max-w-[420px]">
-            <p className="truncate text-body text-foreground">
+          <div className="flex min-w-0 max-w-[420px] items-baseline gap-2">
+            <p
+              className="min-w-0 flex-1 truncate text-body text-foreground"
+              title={row.original.title}
+            >
               {row.original.title}
             </p>
-            <p className="truncate text-caption text-muted-foreground">
+            <p className="min-w-0 shrink truncate text-caption text-muted-foreground">
               {/*the subject KIND is painted, not dumped. A connector may report
                   a posture about something the raw identifier does not explain: the
                   local connector emits `local.residency` per model held in memory
@@ -203,12 +215,22 @@ export function FindingsTable({
                   never heard of degrades to what it always showed — never to blank.
                   The raw kind stays reachable in the title, because it is what the
                   subject_kind filter takes. */}
+              {/* ⛔ AND A SESSION SUBJECT IS NAMED, NOT REFERENCED. The census counted
+                  `sess-coder-7a3f` here twice: a finding about a session named the
+                  session by the only string the ingest stream gave it. The live page
+                  says what that session was doing, and that is what an operator
+                  triaging a finding is actually looking for. Anything the live page
+                  does not carry — and any reader without `sessions:live:read` — keeps
+                  the reference exactly as the connector reported it, which is also
+                  what the `subject_ref` filter takes. */}
               <span
                 className="font-mono"
                 title={`${row.original.subject_kind}: ${row.original.subject_ref}`}
               >
                 {subjectKindLabel(row.original.subject_kind, t)}:{' '}
-                {row.original.subject_ref}
+                {(row.original.subject_kind === 'session'
+                  ? sessionNames.nameOf(row.original.subject_ref)
+                  : null) ?? row.original.subject_ref}
               </span>
               {' · '}
               {formatDateTime(row.original.occurred_at, i18n.language)}
@@ -260,22 +282,48 @@ export function FindingsTable({
       })
     }
     return base
-  }, [t, i18n.language, canTriage, onTriage])
+  }, [t, i18n.language, canTriage, onTriage, sessionNames])
+
+  /**
+   * WHEN THE NAMES COULD NOT BE READ, THE TABLE SAYS SO — the one consumer of
+   * `NameLookup.ready`, and until this it had none.
+   *
+   * ⛔ A ROW'S OWN FALLBACK CANNOT SAY IT. A session subject that resolves to nothing
+   *    paints its reference, and that reference looks identical whether the directory
+   *    read was refused, failed, or simply answered a page this session is older than.
+   *    The per-row fallback is honest about the VALUE and silent about the CAUSE; a
+   *    reader seeing four `sess-…` rows has no way to tell "these four are old" from
+   *    "I am not allowed to see any name on this screen".
+   *
+   * ⛔ AND IT IS SAID ONLY WHERE IT CHANGES SOMETHING. The notice is withheld unless the
+   *    table actually holds a session subject: on a table of guardrail findings no name
+   *    was wanted, so a line regretting the ones that could not be read would be the
+   *    console apologising for a read it did not need.
+   */
+  const namesUnread =
+    !sessionNames.ready && findings.some((f) => f.subject_kind === 'session')
 
   return (
-    <DataTable<Finding>
-      columns={columns}
-      data={findings}
-      getRowId={(r) => r.id}
-      searchable
-      searchPlaceholder={t('findings.search')}
-      empty={
-        <EmptyState
-          title={t('empty.findings.title')}
-          description={t('empty.findings.description')}
-        />
-      }
-    />
+    <div className="flex flex-col gap-2">
+      <DataTable<Finding>
+        columns={columns}
+        data={findings}
+        getRowId={(r) => r.id}
+        searchable
+        searchPlaceholder={t('findings.search')}
+        empty={
+          <EmptyState
+            title={t('empty.findings.title')}
+            description={t('empty.findings.description')}
+          />
+        }
+      />
+      {namesUnread && (
+        <NamesUnreadNotice testId="findings-names-unread">
+          {t('findings.namesUnread')}
+        </NamesUnreadNotice>
+      )}
+    </div>
   )
 }
 
@@ -475,6 +523,7 @@ export function EnforcementTable({
 
 export function AnomalyCard({ anomaly }: { anomaly: Anomaly }) {
   const { t, i18n } = useTranslation('security')
+  const sessionNames = useSessionNames()
   // `approximate` confidence = unreconciled drift — never titled a firm violation.
   const approximate = anomaly.confidence === 'approximate'
   return (
@@ -498,8 +547,17 @@ export function AnomalyCard({ anomaly }: { anomaly: Anomaly }) {
               : anomaly.title}
           </p>
           <p className="text-caption text-muted-foreground">
-            <span className="font-mono">
-              {anomaly.subject_kind}: {anomaly.subject_ref}
+            {/* The same rule the findings table follows: a session subject is named by
+                what it was doing, and anything the live page does not carry keeps the
+                reference the connector reported. */}
+            <span
+              className="font-mono"
+              title={`${anomaly.subject_kind}: ${anomaly.subject_ref}`}
+            >
+              {anomaly.subject_kind}:{' '}
+              {(anomaly.subject_kind === 'session'
+                ? sessionNames.nameOf(anomaly.subject_ref)
+                : null) ?? anomaly.subject_ref}
             </span>
             {' · '}
             {formatDateTime(anomaly.occurred_at, i18n.language)}

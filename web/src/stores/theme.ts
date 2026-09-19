@@ -15,6 +15,25 @@ export type ResolvedTheme = 'light' | 'dark'
 
 const STORAGE_KEY = 'olivares.theme'
 
+/**
+ * THE DEFAULT IS DARK, AND IT USED TO BE `system`.
+ *
+ * ⛔ THIS IS A PRODUCT DECISION, NOT A PREFERENCE. Named a dark, quiet surface as
+ *    the standard the console is measured against; all 23 of those reference captures
+ *    are dark, and none is light. `system` handed the product's own skin to whatever the
+ *    operator's OS happened to be set to, so the first thing half the people who opened
+ *    the console saw was NOT the product as designed.
+ *
+ * ⛔ AND NOTHING IS TAKEN AWAY. `light` and `system` remain explicit choices, the theme
+ *    toggle offers all three, and every token pair stays AA+ in both themes: the light
+ *    theme has parity and is not a courtesy. What changed is which one an operator gets
+ *    before they have said anything.
+ *
+ * ⛔ THE BOOTSTRAP IN `index.html` MUST AGREE WITH THIS FUNCTION BYTE FOR BYTE. It runs
+ *    before any bundle, and a disagreement is not a subtle bug — it is a visible flash
+ *    of the wrong theme on every cold load. `resolveDark` below is the mirror; the
+ *    bootstrap's condition is the same three clauses in the same order.
+ */
 function readStored(): Theme {
   try {
     const v = localStorage.getItem(STORAGE_KEY)
@@ -22,7 +41,7 @@ function readStored(): Theme {
   } catch {
     /* localStorage may be unavailable (private mode) */
   }
-  return 'system'
+  return 'dark'
 }
 
 function systemPrefersDark(): boolean {
@@ -30,6 +49,17 @@ function systemPrefersDark(): boolean {
     typeof window !== 'undefined' &&
     !!window.matchMedia?.('(prefers-color-scheme: dark)').matches
   )
+}
+
+/**
+ * The persisted choice, exposed for the one test that pins the DEFAULT.
+ *
+ * The store reads `readStored()` once at module load, so by the time a test can clear
+ * `localStorage` the initial value is already fixed and unreadable. This is the same
+ * function under a name that says it is a seam, not a second implementation.
+ */
+export function readStoredThemeForTest(): Theme {
+  return readStored()
 }
 
 /** resolveDark mirrors the index.html bootstrap exactly. */

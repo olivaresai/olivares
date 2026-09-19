@@ -35,26 +35,44 @@ import { cn } from '@/lib/utils'
  *    that offers three equal buttons has not decided what the operator should do next,
  *    which is the same defect as offering none.
  */
-export interface EmptyStateProps extends Omit<
-  HTMLAttributes<HTMLDivElement>,
-  'title'
-> {
-  /** A lucide icon element, e.g. <Inbox />. Sized down to 20px in a muted chip. */
-  icon?: ReactNode
+
+interface EmptyStateBase extends Omit<HTMLAttributes<HTMLDivElement>, 'title'> {
   title: ReactNode
   /**
    * ONE sentence: what this surface will show, and — when there is nothing to
    * click — why there is nothing here yet. Required; see the note above.
    */
   description: NonNullable<ReactNode>
-  /** The single primary CTA (typically a <Button>), placed below the description. */
-  action?: ReactNode
-  /**
-   * An optional quieter alternative beside the primary one — "Learn more", "Clear
-   * the filter", "Open the docs". Never a second way to do the same thing.
-   */
-  secondaryAction?: ReactNode
 }
+
+/**
+ * ⛔ AND THE OTHER HALF OF THE RULE: SOME SURFACES ARE EMPTY BECAUSE NOTHING IS WRONG.
+ *
+ *    "One sentence and the next action" is written for a surface that is empty because
+ *    work has not been done yet. An approvals queue with nothing in it, a policy with
+ *    no drift, a kill switch never pulled, an identity plane with no leavers — those
+ *    are the good state, and manufacturing a button for them invents work the operator
+ *    does not owe. Measured on the seeded estate: four of the ten empty states with no
+ *    action are exactly this, and the rest of the bar still applies to them — one
+ *    sentence, no grey panel with a large icon.
+ *
+ *    `quiet` is that state, and the type is what keeps it honest: a quiet state CANNOT
+ *    carry an action. It is a compile error, not a review comment.
+ */
+type QuietProps =
+  | { quiet: true; action?: never; secondaryAction?: never; icon?: never }
+  | {
+      quiet?: false
+      /** A lucide icon element, e.g. <Inbox />. Sized down to 20px in a muted chip. */
+      icon?: ReactNode
+      /** The single primary CTA (typically a <Button>), below the description. */
+      action?: ReactNode
+      /** An optional quieter alternative beside it — "Learn more", "Clear the
+       *  filter". Never a second way to do the same thing. */
+      secondaryAction?: ReactNode
+    }
+
+export type EmptyStateProps = EmptyStateBase & QuietProps
 
 export function EmptyState({
   icon,
@@ -62,9 +80,29 @@ export function EmptyState({
   description,
   action,
   secondaryAction,
+  quiet,
   className,
   ...props
 }: EmptyStateProps) {
+  if (quiet) {
+    return (
+      <div
+        data-slot="empty-state"
+        data-quiet="true"
+        role="status"
+        className={cn(
+          // ONE LINE, left where the rows would have started, at the weight of a
+          // caption: the reader's eye passes over it instead of stopping at a panel.
+          'flex items-baseline gap-2 px-3 py-4 text-body',
+          className,
+        )}
+        {...props}
+      >
+        <span className="text-foreground">{title}</span>
+        <span className="min-w-0 text-muted-foreground">{description}</span>
+      </div>
+    )
+  }
   return (
     <div
       // ⛔ `data-slot`, la convención del repo (`field`, `select-trigger`), porque `role="status"`

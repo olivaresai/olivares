@@ -19,6 +19,7 @@ import {
   finopsSummaryFixture,
   finopsTrendFixture,
   healthIncidentsFixture,
+  healthStatusFixture,
   securityFindingsFixture,
 } from '@/features/executive/fixtures'
 import { EstateTile } from './components'
@@ -30,6 +31,8 @@ import './i18n'
 vi.mock('@tanstack/react-router', () => ({
   //useUrlState follows the location, so the mock has to answer it.
   useRouterState: () => '',
+  // Home mounts `WorkComposer`, which navigates to the started run.
+  useNavigate: () => () => {},
   Link: ({ children, to }: { children: ReactNode; to: string }) => (
     <a href={to}>{children}</a>
   ),
@@ -76,6 +79,91 @@ describe('EstateTile (the three honest states)', () => {
     expect(screen.queryByRole('link')).toBeNull()
     // The figure is NOT shown while loading — no half-rendered number.
     expect(screen.queryByText('$1.2k')).toBeNull()
+  })
+
+  /**
+   * THE TONE IS THE SIGNAL, AND IT HAS TO REACH THE DOM.
+   *
+   * ⛔ WHY THIS REPLACED A CASE THAT PASSED. The case here used to supply its OWN
+   *    `<span className="text-warning">` as the caption and then assert that the span it
+   *    had just written carried `text-warning` — so it held whether or not `tone` did
+   *    anything, and it held while `tone` was destructured away and reached no element
+   *    at all. No caller writes a pre-toned caption: the four in `home-view.tsx` pass a
+   *    translated STRING and the tone beside it.
+   *
+   * ⛔ AND IT IS THE STATE WORD, NEVER THE NUMERAL. The work-first pass took colour off
+   *    the figures on purpose — a grid of tinted numerals is a grid with no emphasis —
+   *    and the bar's §4 keeps ok/warn/fail on the semantic tokens while reserving the
+   *    orange accent for selection, the primary action and links. The caption line is
+   *    where a tile says what STATE it is in, so that is where the token goes.
+   */
+  it.each([
+    ['warning', 'text-warning'],
+    ['danger', 'text-danger'],
+    ['success', 'text-success'],
+  ] as const)(
+    'tone %s tints the state word and never the numeral',
+    (tone, token) => {
+      renderIntel(
+        <EstateTile
+          to="/sessions"
+          icon={<span />}
+          label="Live sessions"
+          value="1"
+          caption="2 of 3 healthy"
+          tone={tone}
+          state="ready"
+        />,
+      )
+      const value = screen.getByTestId('estate-kpi-value')
+      expect(value).toHaveTextContent('1')
+      expect(value.className).toMatch(/text-foreground/)
+      expect(value.className).not.toMatch(
+        /text-warning|text-danger|text-success|text-accent/,
+      )
+      const state = screen.getByTestId('estate-tile-state')
+      expect(state).toHaveTextContent('2 of 3 healthy')
+      expect(state).toHaveClass(token)
+    },
+  )
+
+  it('no tone: the state word keeps the caption\u2019s own muted register', () => {
+    renderIntel(
+      <EstateTile
+        to="/sessions"
+        icon={<span />}
+        label="Live sessions"
+        value="1"
+        caption="3 of 3 healthy"
+        state="ready"
+      />,
+    )
+    // The CONTROL for the three above: without a tone nothing is tinted, so the token
+    // they assert is the tone's doing and not a class the tile always writes.
+    expect(screen.getByTestId('estate-tile-state').className).not.toMatch(
+      /text-warning|text-danger|text-success|text-accent/,
+    )
+  })
+
+  it('a tone does not tint a figure that is not there (unavailable)', () => {
+    renderIntel(
+      <EstateTile
+        to="/health"
+        icon={<span />}
+        label="Health"
+        value="2/3"
+        caption="1 down"
+        tone="danger"
+        state="unavailable"
+      />,
+    )
+    // Same rule as the floor marker (`partial`): a tone qualifies a figure, and with no
+    // figure on screen there is nothing to qualify — the retry hint is the whole
+    // message, and a red one would claim the estate is down when what is down is the read.
+    expect(screen.queryByTestId('estate-tile-state')).toBeNull()
+    expect(screen.getByText(/Couldn't load/i).className).not.toMatch(
+      /text-danger/,
+    )
   })
 
   it('unavailable: an em-dash + retry hint, never a fabricated 0, still links out', () => {
@@ -142,6 +230,14 @@ describe('HomeView (RBAC gating + honest states)', () => {
     expect(screen.queryByRole('link')).toBeNull()
   })
 
+  it('does not add a 16 px stack gap above the work', () => {
+    authState.can = () => false
+    const { container } = renderIntel(<HomeView />)
+    const page = container.querySelector('.gap-0')
+    expect(page).not.toBeNull()
+    expect(page!.className).not.toMatch(/\bgap-4\b/)
+  })
+
   it('renders a source error as unavailable, never a fabricated 0', async () => {
     authState.can = (p) => p === 'health:status:read'
     vi.spyOn(healthApi, 'status').mockRejectedValue(
@@ -153,5 +249,94 @@ describe('HomeView (RBAC gating + honest states)', () => {
 
     expect(await screen.findByText(/Couldn't load/i)).toBeInTheDocument()
     expect(screen.getByText('—')).toBeInTheDocument()
+  })
+
+  /**
+   * THE TWO SIGNALS THE FRONT DOOR LOST, MEASURED THROUGH THE SCREEN THAT LOST THEM.
+   *
+   * The tile cases above prove `tone` reaches an element; these two prove the four
+   * callers still compute the right one and that it survives the trip. They are the
+   * inputs a review named: a run-rate projected over the period's own spend, and a
+   * subject that is DOWN while nothing has breached and no incident is open — the state
+   * in which `2/3 healthy` used to read exactly like `3/3 healthy`.
+   */
+  /**
+   * ⛔ AND THE WORDS ARE THE ASSERTION, BECAUSE THE COLOUR WAS THE WHOLE SIGNAL.
+   *    `toHaveClass('text-warning')` is what this case used to say, and it is true of a
+   *    tile whose sentence is identical in both states: the same estate under and over
+   *    its run-rate printed "$9.0k projected at run-rate" either way, differing only by
+   *    amber. A reader on a monochrome display, a colour-blind reader and a screen
+   *    reader all got one tile for two states (WCAG 2.1 AA 1.4.1). The pair below is
+   *    therefore read as TEXT, and the token is asserted beside it — the colour is still
+   *    right, it is just no longer the only thing that is.
+   */
+  async function spendCaption(projected: number, spent: number) {
+    authState.can = (p) => p === 'finops:spend:read'
+    vi.spyOn(finopsApi, 'summary').mockResolvedValue(finopsSummaryFixture)
+    vi.spyOn(finopsApi, 'trend').mockResolvedValue(finopsTrendFixture)
+    vi.spyOn(finopsApi, 'forecast').mockResolvedValue({
+      ...finopsForecastFixture,
+      spend_micro_usd: spent,
+      trend_projected_micro_usd: projected,
+    })
+    renderIntel(<HomeView />)
+    await screen.findByText('Spend')
+    return await screen.findByTestId('estate-tile-state')
+  }
+
+  it('over its run-rate: the spend tile says so in WORDS, not only in amber', async () => {
+    const state = await spendCaption(9_000_000, 1_000_000)
+    await waitFor(() => expect(state).toHaveClass('text-warning'))
+    expect(state).toHaveTextContent(/projected at run-rate/i)
+    expect(state).toHaveTextContent(/above spend so far/i)
+  })
+
+  it('under its run-rate: the same tile says the plain sentence and no more', async () => {
+    // The CONTROL for the case above: without it "says so in words" would hold for a
+    // caption that says the same thing in both states.
+    const state = await spendCaption(1_000_000, 9_000_000)
+    expect(state).toHaveTextContent(/projected at run-rate/i)
+    expect(state).not.toHaveTextContent(/above spend so far/i)
+    expect(state.className).not.toMatch(/text-warning/)
+  })
+
+  it('a subject is down with no breach and no incident: the health tile is not silent', async () => {
+    authState.can = (p) => p === 'health:status:read'
+    const down = {
+      ...healthStatusFixture.items[0],
+      id: 'h-down',
+      state: 'down' as const,
+      sla_breach_open: false,
+    }
+    vi.spyOn(healthApi, 'status').mockResolvedValue({
+      items: [healthStatusFixture.items[0], down],
+      has_more: false,
+    })
+    vi.spyOn(healthApi, 'incidents').mockResolvedValue({
+      items: [],
+      has_more: false,
+    })
+
+    renderIntel(<HomeView />)
+    await screen.findByText('Health & SLA')
+    await waitFor(() =>
+      expect(screen.getByTestId('estate-tile-state')).toHaveClass(
+        'text-danger',
+      ),
+    )
+    // The figure itself is the count, and it is NOT the thing that carries the colour.
+    expect(screen.getByTestId('estate-kpi-value')).toHaveTextContent(
+      '1/2 healthy',
+    )
+    expect(screen.getByTestId('estate-kpi-value').className).not.toMatch(
+      /text-danger/,
+    )
+    // ⛔ AND THE WORDS ALREADY CARRY IT HERE, which is why this tile needed no new key:
+    //    a down subject changes the FIGURE (`1/2 healthy`, never `2/2`), so the danger
+    //    tone is a second statement of a fact the sentence already makes. Asserted, not
+    //    assumed — it is the property the spend tile was missing.
+    expect(screen.getByTestId('estate-kpi-value')).not.toHaveTextContent(
+      '2/2 healthy',
+    )
   })
 })

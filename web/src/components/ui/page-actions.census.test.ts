@@ -41,10 +41,7 @@ const NO_VERB: ReadonlyArray<{ dir: string; why: string }> = [
     dir: 'features/adoption',
     why: 'a read-only adoption report over a date range',
   },
-  {
-    dir: 'features/agentops',
-    why: 'a provider administration read; every write is per row',
-  },
+
   {
     dir: 'features/api-playground',
     why: 'the verb IS the request the operator composes in the form',
@@ -72,10 +69,6 @@ const NO_VERB: ReadonlyArray<{ dir: string; why: string }> = [
   {
     dir: 'features/compliance',
     why: 'seven regimes in one screen; a page verb could not say which',
-  },
-  {
-    dir: 'features/console',
-    why: 'eleven tabs of administration; every write is scoped to a row',
   },
   { dir: 'features/evals', why: 'an evaluation is launched from a suite row' },
   {

@@ -302,6 +302,7 @@
     "noTenant": "none",
     "noWorkspace": "No workspace",
     "noEnvironment": "Not declared",
+    "thisNode": "This node",
     "hint": "What the next session will run under."
   },
   "launcher": {
@@ -318,6 +319,18 @@
     "startFailed": "The session could not be started.",
     "noTenant": "Select an organization before starting a session.",
     "noProfileRead": "A session runs as a provider profile, and your role does not include permission to read them.",
-    "readFailed": "The provider profiles could not be read, so a session cannot be started from here."
+    "readFailed": "The provider profiles could not be read, so a session cannot be started from here.",
+    "send": "Send",
+    "turnPlaceholder": "Send a sentence…",
+    "turnAria": "Session turn",
+    "attachedRunning": "Running",
+    "attachedWaiting": "Waiting for you",
+    "attachedSettled": "Settled",
+    "advanced": "Advanced",
+    "advancedHint": "Send one NDJSON line to stdin. The sentence field is the default.",
+    "wirePlaceholder": "Send an NDJSON line to stdin…",
+    "wireAria": "Session input line",
+    "turnFailed": "The session could not accept this turn.",
+    "sendBackgroundHint": "Ctrl+Enter sends and keeps the draft ready for the next sentence."
   }
 }

@@ -36,6 +36,16 @@ const authState = vi.hoisted(() => ({
 }))
 vi.mock('@/lib/auth/context', () => ({ useAuth: () => authState }))
 
+// The switcher's own workspace read, which is what names a workspace-scoped policy.
+const directory = vi.hoisted(() => ({
+  listWorkspaces: vi.fn(),
+  listMembers: vi.fn(),
+}))
+vi.mock('@/features/console/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/features/console/api')>()
+  return { ...actual, consoleApi: { ...actual.consoleApi, ...directory } }
+})
+
 const api = vi.hoisted(() => ({
   listRoutinePolicies: vi.fn(),
   routinePosture: vi.fn(),
@@ -161,6 +171,11 @@ beforeEach(() => {
     has_more: false,
   })
   api.routinePosture.mockResolvedValue(posture([]))
+  directory.listWorkspaces.mockResolvedValue({
+    items: [{ id: 'ws-eng', name: 'Engineering', slug: 'engineering' }],
+    has_more: false,
+  })
+  directory.listMembers.mockResolvedValue({ items: [], has_more: false })
 })
 
 describe('routineListState', () => {
@@ -580,5 +595,35 @@ describe('RoutinePoliciesView round-2 contrast fixes', () => {
     expect(api.routinePosture).not.toHaveBeenCalledWith(
       expect.objectContaining({ user_ref: 'user:alice' }),
     )
+  })
+})
+
+/**
+ * A SCOPE IS A PLACE, AND A PLACE HAS A NAME.
+ *
+ * The column printed `Workspace · 01a0b580-4d1f-7c87-…` — the raw identifier the
+ * census measured on this route. The workspace list is the switcher's own read, so the
+ * name costs nothing; a reference no directory covers keeps the value it was given.
+ */
+describe('RoutinePoliciesView — the scope a policy names', () => {
+  it('names the workspace and keeps the reference reachable', async () => {
+    api.listRoutinePolicies.mockResolvedValue({
+      items: [listedCron],
+      has_more: false,
+    })
+    api.routinePosture.mockResolvedValue(posture([listedCron]))
+    wrap(<RoutinePoliciesView />)
+    expect(await screen.findByText('Engineering')).toBeInTheDocument()
+    expect(
+      screen.getByText('Engineering').closest('[title]')?.getAttribute('title'),
+    ).toBe('engineering')
+  })
+
+  it('keeps the reference when no directory covers the scope', async () => {
+    const odd = { ...listedCron, scope_kind: 'agent', scope_ref: 'agt-7' }
+    api.listRoutinePolicies.mockResolvedValue({ items: [odd], has_more: false })
+    api.routinePosture.mockResolvedValue(posture([odd]))
+    wrap(<RoutinePoliciesView />)
+    expect(await screen.findByText('agt-7')).toBeInTheDocument()
   })
 })

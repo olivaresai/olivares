@@ -11,6 +11,9 @@ import {
   primaryRun,
   runMatchesObserved,
   sessionLabel,
+  sessionNaming,
+  sessionShortId,
+  sessionTitle,
   sessionSearchKey,
   sessionTarget,
   type Grants,
@@ -436,18 +439,79 @@ describe('sessionLabel / sessionSearchKey', () => {
     expect(sessionLabel(rows[0]!)).toBe('nightly-indexer')
   })
 
-  it('falls back to the session reference, then the run reference', () => {
-    expect(sessionLabel(mergeSessions([live('sess-found')], [])[0]!)).toBe(
-      'sess-found',
-    )
-    expect(sessionLabel(mergeSessions([], [run('run-rc')])[0]!)).toBe('run-rc')
+  /**
+   * ⛔ THIS CASE USED TO ASSERT THE OPPOSITE, AND THE ASSERTION WAS THE DEFECT.
+   *
+   * It read `expect(sessionLabel(…)).toBe('sess-found')` and `…toBe('run-rc')` — it
+   * pinned the raw reference as the correct answer, so the one rule the console has
+   * about identifiers ("the id is never the row name", work-line.ts) had a test on the
+   * other side of it. Any surface calling `sessionLabel` therefore painted `sess-found`
+   * WITH A GREEN SUITE, which is how the session card came to title itself with a
+   * machine id in monospace.
+   *
+   * `sessionLabel` is now the wrapper for a caller that must not paint "untitled": it
+   * answers the ladder's name, or `null` when no rung of the ladder was reachable. A
+   * caller that must paint something asks `sessionNaming`, which supplies the word AND
+   * the distinguishing tail. Nothing loses the reference: `sessionSearchKey` still
+   * carries every one of them, which the case below measures.
+   */
+  it('answers null rather than a reference when nothing named the session', () => {
+    expect(sessionLabel(mergeSessions([live('sess-found')], [])[0]!)).toBeNull()
+    expect(sessionLabel(mergeSessions([], [run('run-rc')])[0]!)).toBeNull()
+  })
+
+  it('takes every rung of the ONE ladder, action included', () => {
+    const acting = mergeSessions(
+      [live('sess-x', { current_action: 'create_issue' })],
+      [],
+    )[0]!
+    expect(sessionLabel(acting)).toBe('create_issue')
+    const goal = mergeSessions([live('sess-y', { goal: 'ship it' })], [])[0]!
+    expect(sessionLabel(goal)).toBe('ship it')
+  })
+
+  it('a session nobody named is still findable by every reference it has', () => {
+    const key = sessionSearchKey(mergeSessions([live('sess-found')], [])[0]!)
+    expect(key).toContain('sess-found')
+  })
+
+  it('paints a name for the table, never the session reference', () => {
+    expect(
+      sessionTitle(
+        mergeSessions(
+          [live('sess-found', { current_action: 'reading appdb' })],
+          [],
+        )[0]!,
+        'Untitled session',
+      ),
+    ).toBe('Untitled session')
+    expect(
+      sessionTitle(
+        mergeSessions([live('sess-found')], [])[0]!,
+        'Untitled session',
+      ),
+    ).toBe('Untitled session')
+    expect(
+      sessionTitle(
+        mergeSessions(
+          [live('sess-ours')],
+          [
+            run('run-1', {
+              claude_session_id: 'sess-ours',
+              name: 'nightly-indexer',
+            }),
+          ],
+        )[0]!,
+        'Untitled session',
+      ),
+    ).toBe('nightly-indexer')
   })
 })
 
-// B2 — two homes of one provider may announce ONE session id. A profile-scoped
+// Two homes of one provider may announce ONE session id. A profile-scoped
 // row is keyed by its own live_ref; a profiled run joins only the managed row the
 // plane proved for it; a legacy run never joins a scoped row, and the reverse.
-describe('B2 — profile-scoped rows and profiled runs', () => {
+describe('profile-scoped rows and profiled runs', () => {
   const managedA = live('sess-dup', {
     live_ref: 'lr-a',
     attribution: 'managed',
@@ -574,5 +638,88 @@ describe('B2 — profile-scoped rows and profiled runs', () => {
     const s = mergeSessions([managedA], [runA])[0]!
     expect(sessionSearchKey(s)).toContain('lr-a')
     expect(sessionSearchKey(s)).toContain('ppf_a')
+  })
+})
+
+describe('sessionNaming — what a ONE-LINE row is called', () => {
+  // The rail has no columns, so the clause is the only thing on the line an operator
+  // can choose by: it takes one rung the table's cell does not — the action and
+  // resource a connector reported — and its last rung is never the reference.
+  it('prefers the name its operator typed at launch', () => {
+    const rows = mergeSessions(
+      [live('sess-a', { summary: 'Filed PR #7723' })],
+      [run('run-1', { claude_session_id: 'sess-a', name: 'nightly-indexer' })],
+    )
+    expect(sessionNaming(rows[0]!, 'Untitled session')).toEqual({
+      name: 'nightly-indexer',
+      shortId: null,
+      reference: 'sess-a',
+    })
+  })
+
+  it('degrades down the front door\u2019s ladder, action rung included', () => {
+    const summary = mergeSessions(
+      [live('sess-s', { summary: 'Filed PR #7723' })],
+      [],
+    )[0]!
+    expect(sessionNaming(summary, 'Untitled session').name).toBe(
+      'Filed PR #7723',
+    )
+    const goal = mergeSessions(
+      [live('sess-g', { goal: 'ship the release' })],
+      [],
+    )[0]!
+    expect(sessionNaming(goal, 'Untitled session').name).toBe(
+      'ship the release',
+    )
+    const acting = mergeSessions(
+      [
+        live('sess-c', {
+          current_action: 'create_issue',
+          current_resource: 'github',
+        }),
+      ],
+      [],
+    )[0]!
+    expect(sessionNaming(acting, 'Untitled session').name).toBe(
+      'create_issue \u00b7 github',
+    )
+  })
+
+  it('says untitled and keeps the distinguishing tail, never the reference', () => {
+    const bare = mergeSessions([live('sess-coder-7a3f')], [])[0]!
+    const naming = sessionNaming(bare, 'Untitled session')
+    expect(naming.name).toBe('Untitled session')
+    expect(naming.shortId).toBe('coder-7a3f')
+    expect(naming.reference).toBe('sess-coder-7a3f')
+    expect(sessionShortId(bare)).toBe('coder-7a3f')
+  })
+
+  /**
+   * ⛔ THE FIRST GROUP OF A uuid v7 IS THE MINTING CLOCK, so cutting there gives every row
+   *    launched in the same millisecond the same "distinguishing" short id. This case
+   *    used to assert `01a0b6bb` for ONE reference and passed, because one row can never
+   *    collide with itself. Two rows can: the pair below shares its first 64 bits —
+   *    timestamp, version and variant — and differs only where uuid v7 puts its random
+   *    tail, which is exactly the estate this console runs on.
+   */
+  it('two sessions minted in the same millisecond do not share a short id', () => {
+    const [a, b] = mergeSessions(
+      [
+        live('01a0b6bb-3b69-71a6-9c03-4ee43fcc157e'),
+        live('01a0b6bb-3b69-71a6-9c03-8b2f0d94a771'),
+      ],
+      [],
+    )
+    expect(sessionShortId(a!)).not.toBe(sessionShortId(b!))
+    expect(sessionShortId(a!)).toBe('\u20264ee43fcc157e')
+    expect(sessionShortId(b!)).toBe('\u20268b2f0d94a771')
+  })
+
+  it('a reference that is not a uuid is left as it is, minus its type prefix', () => {
+    // The other half of the rule: cutting `sess-coder-7a3f` would destroy the only part
+    // a reader could have searched for.
+    const bare = mergeSessions([live('sess-coder-7a3f')], [])[0]!
+    expect(sessionShortId(bare)).toBe('coder-7a3f')
   })
 })

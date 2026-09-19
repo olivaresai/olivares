@@ -4,7 +4,9 @@
     "hint": "Diese Workspace-Vorschau ist begrenzt. Über Alle anzeigen lässt sich das breitere Inventar prüfen."
   },
   "title": "Arbeitsbereich-Übersicht",
-  "selectPrompt": "Wählen Sie einen Arbeitsbereich aus dem Umschalter in der oberen Leiste, um dessen Dashboard anzuzeigen.",
+  "selectTitle": "Kein Arbeitsbereich ausgewählt",
+  "selectPrompt": "Wählen Sie einen Arbeitsbereich in der Navigationsleiste, um diese Übersicht zu öffnen, oder gehen Sie zum Inventar der Organisation.",
+  "viewInventory": "Inventar öffnen",
   "agents": "Agenten",
   "sessions": "Sitzungen",
   "resources": "Ressourcen",
@@ -16,10 +18,11 @@
   "slug": "Slug",
   "name": "Name",
   "noAgents": "Noch keine Agenten in diesem Arbeitsbereich.",
+  "noAgentsHint": "Agenten erscheinen hier, sobald sie in diesem Arbeitsbereich entdeckt werden.",
   "noGroups": "Noch keine Agentengruppen in diesem Arbeitsbereich.",
+  "noGroupsHint": "Agentengruppen erscheinen hier, sobald sie für diesen Arbeitsbereich definiert sind.",
   "viewAll": "Alle anzeigen",
   "defaultBadge": "Standard",
-  "workspaceInfo": "Arbeitsbereich-Info",
   "created": "Erstellt",
   "lastUpdated": "Zuletzt aktualisiert"
 }

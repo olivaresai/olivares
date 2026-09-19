@@ -123,7 +123,8 @@
     "revoke": "吊销",
     "revokeTitle": "吊销邀请",
     "revokeBody": "{{email}} 的邀请链接将立即失效。",
-    "revoked": "邀请已吊销。"
+    "revoked": "邀请已吊销。",
+    "inviteFirst": "邀请第一位用户"
   },
   "members": {
     "title": "活动成员",
@@ -482,6 +483,7 @@
     "title": "智能体",
     "caption": "注册并维护由此租户治理的单个智能体。",
     "create": "新建智能体",
+    "nextAction": "部署智能体",
     "createTitle": "新建智能体",
     "editTitle": "编辑智能体",
     "formCaption": "定义智能体身份、运行时类型、工作区范围以及可选的 JSON 属性。",
@@ -502,6 +504,9 @@
     "jsonHint": "可选 JSON 对象。",
     "jsonObjectError": "标签和元数据必须是有效的 JSON 对象。",
     "notSet": "未设置",
+    "id": "ID",
+    "rowMenu": "{{name}} 的行操作",
+    "workspaceUnknown": "未知工作区",
     "none": "尚无智能体。",
     "noneHint": "创建智能体后，可将访问、策略和审计记录限定到单个运行时。",
     "edit": "编辑",

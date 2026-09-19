@@ -23,9 +23,24 @@ const toast = vi.hoisted(() => ({
 }))
 vi.mock('@/components/ui/toaster', () => ({ toast, Toaster: () => null }))
 
+const auth = vi.hoisted(() => ({ denied: new Set<string>() }))
 vi.mock('@/lib/auth/context', () => ({
-  useAuth: () => ({ activeTenant: 't1', can: () => true }),
+  useAuth: () => ({
+    activeTenant: 't1',
+    can: (permission: string) => !auth.denied.has(permission),
+  }),
 }))
+
+// WHO THE RECORDED SUBJECT IS. The list names a principal as `user:<uuid>`; the name
+// comes from the roster the people tab reads, under the same right.
+const directory = vi.hoisted(() => ({ listMembers: vi.fn() }))
+vi.mock('@/features/console/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/features/console/api')>()
+  return {
+    ...actual,
+    consoleApi: { ...actual.consoleApi, ...directory },
+  }
+})
 
 const navigate = vi.hoisted(() => vi.fn())
 vi.mock('@tanstack/react-router', () => ({
@@ -149,6 +164,12 @@ beforeEach(() => {
   toast.warning.mockReset()
   toast.info.mockReset()
   navigate.mockReset()
+  auth.denied = new Set()
+  directory.listMembers.mockReset()
+  directory.listMembers.mockResolvedValue({
+    items: [{ user_id: 'u-1', display_name: 'Alice Ng', email: 'a@n.test' }],
+    has_more: false,
+  })
   // Defaults so background queries never reject.
   api.notice.mockResolvedValue(quietNotice)
   api.listSessions.mockResolvedValue({ items: [], has_more: false })
@@ -176,8 +197,8 @@ describe('RecordingsView — recording session list', () => {
     })
     wrap(<RecordingsView />)
 
-    expect(await screen.findByText('user:alice')).toBeInTheDocument()
-    const sealedRow = screen.getByText('user:alice').closest('tr')!
+    expect(await screen.findByText('Alice Ng')).toBeInTheDocument()
+    const sealedRow = screen.getByText('Alice Ng').closest('tr')!
     expect(within(sealedRow).getByText('Sealed')).toBeInTheDocument()
     expect(within(sealedRow).getByText('idle')).toBeInTheDocument()
     expect(within(sealedRow).queryByText('GAP')).toBeNull()
@@ -230,7 +251,7 @@ describe('RecordingsView — recording session list', () => {
         }),
       ),
     )
-    expect(await screen.findByText('user:alice')).toBeInTheDocument()
+    expect(await screen.findByText('Alice Ng')).toBeInTheDocument()
 
     const readsAfterSubject = api.listSessions.mock.calls.length
     await user.click(screen.getByLabelText('Search field'))
@@ -277,7 +298,7 @@ describe('RecordingsView — recording session list', () => {
     wrap(<RecordingsView />)
 
     await waitFor(() => {
-      const populated = screen.queryByText('user:alice')
+      const populated = screen.queryByText('Alice Ng')
       if (populated === null) throw new Error(SEARCH_RESPONSES_CONTRACT)
       expect(populated).toBeInTheDocument()
     })
@@ -699,5 +720,52 @@ describe('RecordingsView accepts legitimate bounds', () => {
     expect(await screen.findByTestId('url-state-notice')).toHaveTextContent(
       /opened_after/,
     )
+  })
+})
+
+/**
+ * THE SUBJECT COLUMN NAMES A PERSON.
+ *
+ * It used to stack `user:01a0b580-…` over the same uuid again: two lines, one fact,
+ * nobody's name, and 45 px of row against a 36 px budget — the tallest row measured in
+ * the console. The name comes from the roster the people tab reads; what the reader
+ * cannot be given is never invented.
+ */
+describe('RecordingsView — who the subject is', () => {
+  it('paints the person and keeps the full reference reachable', async () => {
+    api.listSessions.mockResolvedValue({
+      items: [sealedSession],
+      has_more: false,
+    })
+    wrap(<RecordingsView />)
+    const name = await screen.findByText('Alice Ng')
+    expect(name.closest('[title]')?.getAttribute('title')).toBe('user:alice')
+    // The identifier is not repeated on the line once there is a name for it.
+    expect(screen.queryByText('user:alice')).toBeNull()
+  })
+
+  it('says so, instead of a bare reference, when the roster may not be read', async () => {
+    auth.denied = new Set(['user:read'])
+    api.listSessions.mockResolvedValue({
+      items: [sealedSession],
+      has_more: false,
+    })
+    wrap(<RecordingsView />)
+    expect(await screen.findByText('Unknown user')).toBeInTheDocument()
+    expect(directory.listMembers).not.toHaveBeenCalled()
+    // No cell opens with the identifier, and the whole of it is still on `title`.
+    const cell = screen.getByText('Unknown user').closest('td')!
+    expect(cell.textContent?.startsWith('Unknown user')).toBe(true)
+    expect(
+      screen.getByText('Unknown user').closest('[title]')?.getAttribute('title'),
+    ).toBe('user:alice')
+  })
+
+  it('leaves a subject that is not a person exactly as the engine sent it', async () => {
+    // `token:ci` IS the name of the thing being recorded: there is no person behind it
+    // and no directory that could name it. A fallback sentence here would be worse.
+    api.listSessions.mockResolvedValue({ items: [gapSession], has_more: false })
+    wrap(<RecordingsView />)
+    expect(await screen.findByText('token:ci')).toBeInTheDocument()
   })
 })

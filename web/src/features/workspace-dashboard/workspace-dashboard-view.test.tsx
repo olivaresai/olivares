@@ -90,10 +90,19 @@ describe('WorkspaceDashboardView', () => {
    */
   it('asks the engine nothing until a workspace is chosen', async () => {
     show()
-    expect(await screen.findByText(/select/i)).toBeInTheDocument()
+    expect(
+      await screen.findByText(/Select a workspace in the navigation rail/i),
+    ).toBeInTheDocument()
     expect(summaryMock).not.toHaveBeenCalled()
     expect(agentsMock).not.toHaveBeenCalled()
     expect(groupsMock).not.toHaveBeenCalled()
+  })
+
+  it('offers a next action when no workspace is selected', async () => {
+    show()
+    expect(
+      await screen.findByRole('link', { name: 'Open inventory' }),
+    ).toHaveAttribute('href', '/inventory')
   })
 
   it('reads the three sources once a workspace is chosen', async () => {

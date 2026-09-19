@@ -23,7 +23,7 @@ import type { LiveDTO, TimelineDTO } from './types'
 export interface LiveListParams {
   cc_state?: string
   workspace_id?: string
-  /** B2: exact STORE filters — the rows of one profile and/or one external id (the
+  /** Exact STORE filters — the rows of one profile and/or one external id (the
    * way a card finds the observation rows that share a managed run's profile and
    * id without joining them to the run). */
   provider_profile_ref?: string
@@ -72,7 +72,7 @@ export const sessionsApi = {
    * by its `live_ref`. */
   liveOne: (ref: string) =>
     http.get<LiveDTO>(`/v1/m/sessions/live/${encodeURIComponent(ref)}`),
-  /** ONE row by its opaque `live_ref`, whichever channel it was observed through (B2). */
+  /** ONE row by its opaque `live_ref`, whichever channel it was observed through. */
   liveById: (liveRef: string) =>
     http.get<LiveDTO>(
       `/v1/m/sessions/live/by-id/${encodeURIComponent(liveRef)}`,
@@ -84,7 +84,7 @@ export const sessionsApi = {
       `/v1/m/sessions/live/${encodeURIComponent(ref)}/timeline`,
       { query: { ...params, limit: params?.limit ?? 50 } },
     ),
-  /** The timeline of exactly ONE row by its `live_ref` (B2), keyset-paginated. */
+  /** The timeline of exactly ONE row by its `live_ref`, keyset-paginated. */
   timelineById: (liveRef: string, params?: TimelineParams) =>
     http.get<ListResponse<TimelineDTO>>(
       `/v1/m/sessions/live/by-id/${encodeURIComponent(liveRef)}/timeline`,

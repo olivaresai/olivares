@@ -85,6 +85,7 @@
     "empty": "无匹配项。",
     "navigation": "导航",
     "actions": "操作",
+    "startSession": "启动会话",
     "results": "结果",
     "searchResults": "数据中的结果",
     "searchTruncated": "还有更多匹配项 — 请细化搜索。",
@@ -145,7 +146,8 @@
     "primarySidebar": "主侧栏",
     "mainNavigation": "主导航",
     "graphControls": "图形控件",
-    "graphMinimap": "图形小地图"
+    "graphMinimap": "图形小地图",
+    "pageActions": "页面操作"
   },
   "privileged": {
     "auditedNotice": "此操作已记录到防篡改审计账本中。",

@@ -4,7 +4,9 @@
     "hint": "Cet aperçu du workspace est plafonné. Utilisez Tout afficher pour parcourir un inventaire plus large."
   },
   "title": "Vue de l'espace de travail",
-  "selectPrompt": "Sélectionnez un espace de travail depuis le sélecteur dans la barre supérieure pour afficher son tableau de bord.",
+  "selectTitle": "Aucun espace de travail sélectionné",
+  "selectPrompt": "Sélectionnez un espace de travail dans le rail de navigation pour ouvrir cet aperçu, ou allez à l'inventaire du locataire.",
+  "viewInventory": "Ouvrir l'inventaire",
   "agents": "Agents",
   "sessions": "Sessions",
   "resources": "Ressources",
@@ -16,10 +18,11 @@
   "slug": "Slug",
   "name": "Nom",
   "noAgents": "Aucun agent dans cet espace de travail pour le moment.",
+  "noAgentsHint": "Les agents apparaissent ici lorsqu'ils sont découverts dans cet espace de travail.",
   "noGroups": "Aucun groupe d'agents dans cet espace de travail pour le moment.",
+  "noGroupsHint": "Les groupes d'agents apparaissent ici une fois définis pour cet espace de travail.",
   "viewAll": "Voir tout",
   "defaultBadge": "Par défaut",
-  "workspaceInfo": "Informations de l'espace de travail",
   "created": "Créé",
   "lastUpdated": "Dernière mise à jour"
 }

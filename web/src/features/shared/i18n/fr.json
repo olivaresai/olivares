@@ -39,5 +39,14 @@
     "savedViewRejected_other": "{{count}} valeurs enregistrées dans « {{name}} » n’ont pas pu être utilisées ({{keys}}) ; la vue est revenue à ses valeurs par défaut.",
     "thisSavedView": "cette vue enregistrée",
     "dismiss": "Fermer"
+  },
+  "workspaceRequired": {
+    "use": "Utiliser {{name}}",
+    "choose": "Choisissez un espace de travail"
+  },
+  "names": {
+    "untitledSession": "Session sans titre",
+    "unknownUser": "Utilisateur inconnu",
+    "unknownWorkspace": "Espace de travail inconnu"
   }
 }

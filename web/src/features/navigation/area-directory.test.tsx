@@ -113,7 +113,7 @@ describe('AreaDirectoryView', () => {
 
   // ⛔ THE REVIEW'S F3 CONTROL: every listed entry carries its one-sentence task description,
   // in every area, for a principal who may open everything. Presence and non-emptiness only;
-  // whether a sentence is TRUE is the review's reading, not this assertion's.
+  // whether a sentence is TRUE is a reader's judgement, not this assertion's.
   it('gives every listed entry of every area a task description', () => {
     for (const area of NAV_AREAS) {
       const { unmount } = renderIntel(<AreaDirectoryView areaId={area.id} />)

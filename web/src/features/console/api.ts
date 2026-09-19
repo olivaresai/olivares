@@ -327,7 +327,7 @@ export interface SourceRosterEntry {
   config?: Record<string, string>
   status: string
   source_mode?: SourceMode
-  /** The row's PERSISTENT id (B1): survives a rename, differs after delete-and-
+  /** The row's PERSISTENT id: survives a rename, differs after delete-and-
    * recreate. What a source→profile binding names as `source_id` — never `name`.
    * Optional so an older engine reads as "no id", not as a lie. */
   id?: string

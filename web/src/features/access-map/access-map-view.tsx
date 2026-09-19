@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
 import { StepUpRequiredState } from '@/components/layout/step-up-state'
 import { ErrorState, ForbiddenState } from '@/components/ui/error-state'
+import { CaveatNotice } from '@/features/_intel'
 import { PageHeader } from '@/components/ui/page-header'
 import { Spinner } from '@/components/ui/spinner'
 import { RecordingNotice } from '@/features/recordings/recording-notice'
@@ -294,14 +295,19 @@ export function AccessMapView() {
       <PageHeader
         icon={Network}
         title={t('title')}
-        description={
-          <span className="space-y-1">
-            <span className="block max-w-2xl">{t('subtitle')}</span>
-            <span className="flex items-center gap-1.5 text-caption">
-              <ShieldCheck className="size-3.5 shrink-0 text-confidence-attributed" />
-              {t('auditedNote')}
-            </span>
-          </span>
+        /* ⛔ THE TITLE LINE IS ONE LINE, AND THIS DESCRIPTION WAS TWO. `PageHeader`
+           renders the description as a single truncated line beside the heading; a
+           node with two block children stacks inside it regardless, and the title
+           block measured 45 px against the 40 px budget on this route and on the
+           only other one that did the same. The subtitle is the description; the
+           audited note is a notice, which is the slot the header already has for
+           exactly this kind of honesty marker. */
+        description={t('subtitle')}
+        notices={
+          <CaveatNotice tone="info">
+            <ShieldCheck className="size-3.5 shrink-0 text-confidence-attributed" />
+            {t('auditedNote')}
+          </CaveatNotice>
         }
         actions={
           <Button

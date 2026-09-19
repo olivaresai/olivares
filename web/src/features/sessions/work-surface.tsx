@@ -24,12 +24,31 @@
 // ⛔ AND THE SWITCHER IS NOT A TAB STRIP. At `xl` all three panes are visible, so there
 //    is nothing to switch and the control is not rendered: a tablist that claims three
 //    tabs while all three panels are on screen describes a screen that does not exist.
-import { useEffect } from 'react'
+//
+// ⛔ THE PANES TAKE THE HEIGHT THEY HAVE, AND THEY USED TO TAKE 60 dvh.
+//    `xl:h-[60dvh] xl:min-h-[26rem]` was not an arbitrary number: it was the only way
+//    to make a workbench look deliberate INSIDE a page that scrolls, which is what the
+//    shell used to impose on all 77 routes. The shell now declares two frames and this
+//    route picks the workbench, so the panes are `flex-1 min-h-0` and divide the
+//    viewport they were given. On a 900 px screen that is about 700 px of rail instead
+//    of 540, and on a 1200 px screen it is 1000 instead of 720 — the difference between
+//    a surface that fills the screen and one that leaves a third of it grey.
+//
+// ⛔ AND THE COMPOSER IS DOCKED AT THE BOTTOM OF THE NARRATIVE PANE. It is the same
+//    component the shell used to dock to the bottom of the VIEWPORT, on every route
+//    including the 60 that cannot start a session. Here it belongs to the pane it sits
+//    in: the narrative is where work is read, and the composer is how the next one
+//    starts. `frame="docked"` is a top hairline rather than a card, because a rounded
+//    panel floating at the foot of a pane reads as a separate thing rather than as that
+//    pane's own input.
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { WorkComposer } from '@/components/layout/work-composer'
 import { isTypingTarget, resolveBinding } from '@/lib/keybindings/model'
 import { KEYBINDINGS } from '@/lib/keybindings/table'
 import { cn } from '@/lib/utils'
-import type { UnifiedSession } from './provenance'
+import type { ConversationItem } from './conversation-frames'
+import { primaryRun, type UnifiedSession } from './provenance'
 import {
   WORK_PANES,
   type EvidenceBlock,
@@ -37,6 +56,7 @@ import {
   type WorkPane,
 } from './session-address'
 import { SessionContextPane } from './session-context-pane'
+import { groupOf } from './session-groups'
 import { SessionNarrative } from './session-narrative'
 import type { SessionResolution } from './use-session-resolution'
 import { WorkRail } from './work-rail'
@@ -75,6 +95,8 @@ export function WorkSurface({
 }: WorkSurfaceProps) {
   const { t } = useTranslation('sessions')
   const selected = address.address
+  const run = primaryRun(resolution.session.runs)
+  const [inspected, setInspected] = useState<ConversationItem | null>(null)
 
   /**
    * MOVING BETWEEN PANES FROM THE KEYBOARD. The two chords are table rows under
@@ -102,11 +124,14 @@ export function WorkSurface({
   }, [address.pane, onPane])
 
   return (
-    <div className="flex flex-col gap-3" data-testid="work-surface">
+    <div
+      className="flex min-h-0 min-w-0 flex-1 flex-col gap-2"
+      data-testid="work-surface"
+    >
       {/* Below `xl` only one pane fits, and which one is in the address bar — so a
           link shared from a laptop opens on the pane its author was reading. */}
       <div
-        className="flex gap-1 xl:hidden"
+        className="flex shrink-0 gap-1 xl:hidden"
         role="group"
         aria-label={t('surface.paneSwitcher')}
       >
@@ -131,17 +156,16 @@ export function WorkSurface({
         ))}
       </div>
 
-      <div className="grid gap-3 xl:grid-cols-[minmax(0,17rem)_minmax(0,1fr)_minmax(0,19rem)]">
-        {/* A FIXED PANE HEIGHT AT `xl`, AND IT IS A DECISION. Each pane scrolls on its
-            own so reading the trace does not move the rail, and the surface keeps the
-            shape of a workbench rather than growing a page-long column per pane. The
-            height is viewport-relative with a floor, so a short laptop screen still
-            shows a usable rail instead of three slivers. */}
+      {/* THE THREE REGIONS: rail · work · inspector, at the widths the shell's own
+          tokens name. Each pane scrolls on its own so reading the trace does not move
+          the rail. `min-h-0` on the grid AND on each pane, or a pane refuses to shrink
+          below its content and the whole surface grows a second scrollbar instead. */}
+      <div className="grid min-h-0 flex-1 gap-2 xl:grid-cols-[minmax(0,var(--console-rail-width))_minmax(0,1fr)_minmax(0,var(--console-inspector-width))]">
         <section
           id={paneId('rail')}
           aria-label={t('surface.pane.rail')}
           className={cn(
-            'overflow-y-auto rounded-lg border border-border bg-surface xl:h-[60dvh] xl:min-h-[26rem]',
+            'min-h-0 overflow-y-auto rounded-lg border border-border bg-surface',
             address.pane !== 'rail' && 'hidden xl:block',
           )}
         >
@@ -156,22 +180,35 @@ export function WorkSurface({
           />
         </section>
 
+        {/* THE WORK PANE: the narrative scrolls and the composer is docked under it.
+            The composer is `shrink-0` inside this column and the narrative is
+            `flex-1 min-h-0`, so the composer RESERVES its height — the narrative's last
+            line is never behind it, which is the whole difference between a docked
+            input and the bar that used to float at the bottom of the viewport. */}
         <section
           id={paneId('narrative')}
           aria-label={t('surface.pane.narrative')}
           className={cn(
-            'overflow-y-auto rounded-lg border border-border bg-surface p-4 xl:h-[60dvh] xl:min-h-[26rem]',
-            address.pane !== 'narrative' && 'hidden xl:block',
+            'flex min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-surface',
+            address.pane !== 'narrative' && 'hidden xl:flex',
           )}
         >
-          <SessionNarrative
-            resolution={resolution}
-            pinned={!!selected && pinned.has(selected)}
-            onTogglePin={onTogglePin}
-            onOpenDetail={onOpenDetail}
-            evidence={address.evidence}
-            onExpandEvidence={onEvidence}
-            emptyAction={emptyAction}
+          <div className="min-h-0 flex-1 overflow-y-auto p-4">
+            <SessionNarrative
+              resolution={resolution}
+              pinned={!!selected && pinned.has(selected)}
+              onTogglePin={onTogglePin}
+              onOpenDetail={onOpenDetail}
+              evidence={address.evidence}
+              onExpandEvidence={onEvidence}
+              emptyAction={emptyAction}
+              inspectedId={inspected?.id ?? null}
+              onInspect={setInspected}
+            />
+          </div>
+          <WorkComposer
+            frame="docked"
+            attached={run ? { run, group: groupOf(resolution.session) } : null}
           />
         </section>
 
@@ -179,11 +216,11 @@ export function WorkSurface({
           id={paneId('context')}
           aria-label={t('surface.pane.context')}
           className={cn(
-            'overflow-y-auto rounded-lg border border-border bg-surface p-4 xl:h-[60dvh] xl:min-h-[26rem]',
+            'min-h-0 overflow-y-auto rounded-lg border border-border bg-surface p-4',
             address.pane !== 'context' && 'hidden xl:block',
           )}
         >
-          <SessionContextPane resolution={resolution} />
+          <SessionContextPane resolution={resolution} inspected={inspected} />
         </section>
       </div>
     </div>

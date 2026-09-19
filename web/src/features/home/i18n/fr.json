@@ -1,7 +1,6 @@
 {
   "title": "Vue d’ensemble",
-  "description": "Votre parc d’IA en un coup d’œil — inventaire, activité, risque, conformité, dépense et état.",
-  "asOfNote": "Agrégats en temps réel sur les 30 derniers jours, sur les modules que votre rôle peut ouvrir. Chaque tuile renvoie à son module ; ouvrez le rapport exécutif pour la synthèse complète et le PDF.",
+  "description": "Votre parc d’IA en un coup d’œil — agrégats sur 30 jours pour les modules que votre rôle peut ouvrir.",
   "openReport": "Rapport exécutif",
   "range": "30 derniers jours",
   "next": {
@@ -27,7 +26,8 @@
     "emptyDescription": "Chaque exécution d’un moteur connecté apparaît ici, avec ce qu’elle a fait, sa durée et son coût.",
     "unavailableTitle": "Impossible de charger le travail récent",
     "unavailableDescription": "La lecture des sessions n’a pas répondu. Les chiffres ci-dessus ne sont pas affectés.",
-    "open": "Ouvrir la session : {{what}}"
+    "open": "Ouvrir la session : {{what}}",
+    "untitled": "Session sans titre"
   },
   "tiles": {
     "inventory": {
@@ -52,7 +52,8 @@
     "spend": {
       "label": "Dépense",
       "caption": "{{range}}",
-      "projected": "{{amount}} projetés au rythme actuel"
+      "projected": "{{amount}} projetés au rythme actuel",
+      "projectedOver": "{{amount}} projetés au rythme actuel — au-dessus de la dépense actuelle"
     },
     "health": {
       "label": "État et SLA",

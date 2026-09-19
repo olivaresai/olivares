@@ -110,7 +110,7 @@ describe('GlobalShortcuts — the declared table', () => {
   it('focuses the launcher on `/`, and never while the operator is typing', () => {
     renderIntel(<GlobalShortcuts />)
     const field = document.createElement('input')
-    field.id = 'shell-launcher-input'
+    field.id = 'work-composer-input'
     document.body.appendChild(field)
 
     fireEvent.keyDown(window, { key: '/' })
@@ -171,7 +171,7 @@ describe('the palette focus contract, from the launcher', () => {
     renderIntel(<GlobalShortcuts />)
 
     const field = document.createElement('input')
-    field.id = 'shell-launcher-input'
+    field.id = 'work-composer-input'
     document.body.appendChild(field)
     field.focus()
 

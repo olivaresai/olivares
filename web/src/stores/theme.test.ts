@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { beforeEach, describe, expect, it } from 'vitest'
-import { resolveDark, useThemeStore } from './theme'
+import { readStoredThemeForTest, resolveDark, useThemeStore } from './theme'
 
 beforeEach(() => {
   localStorage.clear()
@@ -33,5 +33,20 @@ describe('theme store', () => {
     expect(resolveDark('light')).toBe(false)
     // 'system' depends on matchMedia, stubbed to no-match in tests → light.
     expect(resolveDark('system')).toBe(false)
+  })
+
+  it('defaults to dark when nothing is stored, and NOT to the OS preference', () => {
+    // Dark is the product's own skin, not a preference inherited from the
+    // operating system. `matchMedia` is stubbed to no-match here, so under the old
+    // `system` default this would resolve LIGHT — which is the regression this pins.
+    localStorage.clear()
+    expect(readStoredThemeForTest()).toBe('dark')
+    expect(resolveDark(readStoredThemeForTest())).toBe(true)
+  })
+
+  it('an explicit light choice still wins, so parity is not a courtesy', () => {
+    localStorage.setItem('olivares.theme', 'light')
+    expect(readStoredThemeForTest()).toBe('light')
+    expect(resolveDark('light')).toBe(false)
   })
 })

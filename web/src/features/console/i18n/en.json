@@ -123,7 +123,8 @@
     "revoke": "Revoke",
     "revokeTitle": "Revoke invitation",
     "revokeBody": "The invitation link for {{email}} will stop working immediately.",
-    "revoked": "Invitation revoked."
+    "revoked": "Invitation revoked.",
+    "inviteFirst": "Invite the first user"
   },
   "members": {
     "title": "Active members",
@@ -482,6 +483,7 @@
     "title": "Agents",
     "caption": "Register and maintain the individual agents governed by this tenant.",
     "create": "New agent",
+    "nextAction": "Deploy an agent",
     "createTitle": "New agent",
     "editTitle": "Edit agent",
     "formCaption": "Define the agent identity, runtime kind, workspace scope and optional JSON attributes.",
@@ -502,6 +504,9 @@
     "jsonHint": "Optional JSON object.",
     "jsonObjectError": "Labels and metadata must be valid JSON objects.",
     "notSet": "Not set",
+    "id": "ID",
+    "rowMenu": "Row actions for {{name}}",
+    "workspaceUnknown": "Unknown workspace",
     "none": "No agents yet.",
     "noneHint": "Create an agent to scope access, policy and audit records to an individual runtime.",
     "edit": "Edit",

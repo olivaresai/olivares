@@ -67,7 +67,8 @@
     "searchPlaceholder": "Search subject…",
     "empty": {
       "title": "No subjects monitored yet",
-      "description": "Once a health check is declared for an agent or MCP server, its liveness appears here."
+      "description": "Once a health check is declared for an agent or MCP server, its liveness appears here.",
+      "declare": "Declare a check"
     }
   },
   "checks": {

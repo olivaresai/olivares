@@ -6,7 +6,7 @@
 //
 // What these cases are for is the distinction the product's own rule makes (§5): nothing here, a read that failed, and a permission boundary are three different
 // screens. A pane is the cheapest place to collapse them into one, so each is driven.
-import { screen, within } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderIntel } from '@/test/intel'
@@ -34,6 +34,18 @@ vi.mock('./api', async (importOriginal) => ({
   sessionsApi: api,
 }))
 
+const ops = vi.hoisted(() => ({
+  listWorkspaces: vi.fn(),
+  listProfiles: vi.fn(),
+}))
+vi.mock('@/features/agentops/api', async (importOriginal) => {
+  const real = await importOriginal<typeof import('@/features/agentops/api')>()
+  return {
+    ...real,
+    agentOpsApi: { ...(real.agentOpsApi as object), ...ops },
+  }
+})
+
 function live(over: Partial<LiveDTO> = {}): LiveDTO {
   return {
     session_ref: 'sess-a',
@@ -51,7 +63,7 @@ function live(over: Partial<LiveDTO> = {}): LiveDTO {
     provider: 'claude',
     provider_profile_ref: 'ppf_team',
     // MANAGED, so the run the plane launched joins this exact row — which is the
-    // shape the join actually produces for a launched session (B2).
+    // shape the join actually produces for a launched session.
     run_ref: 'run-1',
     environment_ref: 'env-prod',
     posture: 'enforced',
@@ -115,6 +127,8 @@ beforeEach(() => {
   auth.can = () => true
   api.timelineById.mockResolvedValue(page([]))
   api.timeline.mockResolvedValue(page([]))
+  ops.listWorkspaces.mockResolvedValue({ items: [], has_more: false })
+  ops.listProfiles.mockResolvedValue({ items: [], has_more: false })
 })
 
 function renderNarrative(over: Partial<SessionResolution> = {}, props = {}) {
@@ -305,19 +319,136 @@ describe('SessionEvidence — inside the narrative', () => {
 })
 
 describe('SessionContextPane — the scope this session ran under', () => {
-  it('names the five scope values it was given', async () => {
+  it('puts names on the scope line and identifiers in the identifiers block', async () => {
+    ops.listWorkspaces.mockResolvedValue({
+      items: [
+        {
+          workspace_ref: 'ws-main',
+          name: 'main',
+          root_path: '/work',
+          mount_mode: 'ro',
+          max_read_bytes: 0,
+          dlp_mode: 'off',
+          state: 'active',
+        },
+      ],
+      has_more: false,
+    })
+    ops.listProfiles.mockResolvedValue({
+      items: [
+        {
+          profile_ref: 'ppf_team',
+          driver: 'claude',
+          environment_ref: 'env-prod',
+          display_name: 'Team Claude',
+          state: 'active',
+          local_environment: true,
+          operable: true,
+        },
+      ],
+      has_more: false,
+    })
     renderIntel(
       <SessionContextPane resolution={resolution({ runs: [run()] })} />,
     )
     const pane = await screen.findByTestId('session-context')
-    expect(within(pane).getByText('tnt-demo')).toBeInTheDocument()
-    expect(within(pane).getByText('ws-main')).toBeInTheDocument()
-    expect(within(pane).getByText('env-prod')).toBeInTheDocument()
-    expect(within(pane).getByText('ppf_team')).toBeInTheDocument()
+    const scope = within(pane).getByTestId('context-scope')
+    const identifiers = within(pane).getByTestId('context-identifiers')
+
+    await waitFor(() =>
+      expect(within(scope).getByText('main')).toBeInTheDocument(),
+    )
+    expect(within(scope).getByText('tnt-demo')).toBeInTheDocument()
+    expect(within(scope).getByText('This node')).toBeInTheDocument()
+    expect(within(scope).queryByText('ws-main')).toBeNull()
+    expect(within(scope).queryByText('env-prod')).toBeNull()
+    expect(within(scope).queryByText('No workspace')).toBeNull()
+
+    expect(within(identifiers).getByText('tnt-demo')).toBeInTheDocument()
+    expect(within(identifiers).getByText('ws-main')).toBeInTheDocument()
+    expect(within(identifiers).getByText('env-prod')).toBeInTheDocument()
+    expect(within(identifiers).queryByText('main')).toBeNull()
+    expect(within(identifiers).queryByText('This node')).toBeNull()
+
+    await waitFor(() =>
+      expect(within(scope).getByText('Team Claude')).toBeInTheDocument(),
+    )
+    expect(within(scope).queryByText('ppf_team')).toBeNull()
+    // ⛔ THE BLOCK PAINTS THE DISTINGUISHING TAIL AND CARRIES THE WHOLE VALUE. These
+    //    references are uuid v7 in a real estate, whose first group is the minting
+    //    timestamp and therefore IDENTICAL on every row of one session's inspector —
+    //    so the tail is what tells them apart. The whole value is on `title`, in the
+    //    accessible name, and on the clipboard: the chip still copies it entire.
+    expect(within(identifiers).getByText('team')).toBeInTheDocument()
+    expect(
+      within(identifiers).getByTitle('ppf_team').textContent,
+    ).not.toContain('ppf_')
     // TWICE, and both are true: the driver the profile fixes, and the engine the
     // connector declared. They are different facts that happen to agree here, and the
     // pane prints each from its own field rather than one from the other.
     expect(within(pane).getAllByText('claude')).toHaveLength(2)
+  })
+
+  // ⛔ NO `ppf_…` IN THE BLOCK WHOSE CAPTION SAYS THESE ARE NOT REFERENCES. The scope
+  //    block answers "what did this session run under" in names; the identifiers block
+  //    below it is the one meant for copying. The profile row was the last leaf still
+  //    painting a raw reference in the first block, one row under the organization the
+  //    same review had already named. The assertion is a SHAPE, not the fixture's own
+  //    value: a row that started printing some other `ppf_…` would be caught too.
+  it.each([
+    ['the profile plane cannot be read at all', 'denied'],
+    ['the read of the profile plane failed', 'failed'],
+    ['the profile has no display name', 'unnamed'],
+  ])(
+    'shows no raw provider-profile id on the scope block when %s',
+    async (_case, mode) => {
+      if (mode === 'denied')
+        auth.can = (p: string) => p !== 'sessions:profile:read'
+      if (mode === 'failed')
+        ops.listProfiles.mockRejectedValue(new Error('boom'))
+      if (mode === 'unnamed')
+        ops.listProfiles.mockResolvedValue({
+          items: [
+            {
+              profile_ref: 'ppf_team',
+              driver: 'claude',
+              environment_ref: 'env-prod',
+              display_name: '   ',
+              state: 'active',
+              local_environment: true,
+              operable: true,
+            },
+          ],
+          has_more: false,
+        })
+      renderIntel(
+        <SessionContextPane resolution={resolution({ runs: [run()] })} />,
+      )
+      const pane = await screen.findByTestId('session-context')
+      const scope = within(pane).getByTestId('context-scope')
+      const identifiers = within(pane).getByTestId('context-identifiers')
+      await waitFor(() =>
+        expect(within(scope).queryAllByText(/^ppf_/)).toHaveLength(0),
+      )
+      // And the reference is not LOST: it is where an operator copies one from, whole,
+      // under its label and on the chip's own `title`.
+      expect(within(identifiers).getByTitle('ppf_team')).toBeInTheDocument()
+      expect(within(identifiers).getByText('team')).toBeInTheDocument()
+    },
+  )
+
+  it('says No workspace on the scope line when the API does not name one', async () => {
+    renderIntel(
+      <SessionContextPane resolution={resolution({ runs: [run()] })} />,
+    )
+    const pane = await screen.findByTestId('session-context')
+    const scope = within(pane).getByTestId('context-scope')
+    const identifiers = within(pane).getByTestId('context-identifiers')
+    expect(within(scope).getByText('No workspace')).toBeInTheDocument()
+    expect(within(scope).getByText('This node')).toBeInTheDocument()
+    expect(within(scope).queryByText('ws-main')).toBeNull()
+    expect(within(identifiers).getByText('ws-main')).toBeInTheDocument()
+    expect(within(identifiers).getByText('env-prod')).toBeInTheDocument()
   })
 
   it('says NOT DECLARED and NONE rather than filling a gap from the topbar', async () => {
@@ -376,5 +507,68 @@ describe('SessionContextPane — the scope this session ran under', () => {
       <SessionContextPane resolution={resolution({ target: null })} />,
     )
     expect(await screen.findByText('No session selected')).toBeInTheDocument()
+  })
+})
+
+/**
+ * NAMES, NEVER RAW IDENTIFIERS — the bar's line, walked over the rendered panes the
+ * same way the browser instrument walks them: every LEAF element with a box, matched
+ * against the id shapes (a uuid, a typed `ppf_`/`osn_`/`xenv_` reference, a `sess-`
+ * reference). Measured on the seeded estate at 1440×900, the two session screens
+ * painted FIFTEEN: six rail rows, the narrative's clause, and eight chips.
+ */
+const ID_SHAPE =
+  /\b([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}|(ppf|osn|xenv|sess|run|wsp)_[0-9a-z]{6,}|sess-[a-z0-9-]{6,})/i
+
+function paintedIds(root: HTMLElement): string[] {
+  const out: string[] = []
+  for (const el of root.querySelectorAll('*')) {
+    if (el.children.length > 0) continue
+    const text = (el.textContent ?? '').trim()
+    if (ID_SHAPE.test(text)) out.push(text)
+  }
+  return out
+}
+
+describe('the session panes paint names, never raw identifiers', () => {
+  it('heads the narrative with the tail of the reference, not the reference', async () => {
+    renderIntel(
+      <SessionNarrative
+        resolution={resolution({
+          live: live({ session_ref: 'sess-coder-7a3f', summary: undefined }),
+          runs: [],
+        })}
+        pinned={false}
+        onTogglePin={vi.fn()}
+        onOpenDetail={vi.fn()}
+        evidence="checks"
+        onExpandEvidence={vi.fn()}
+      />,
+    )
+    const pane = await screen.findByTestId('session-narrative')
+    expect(paintedIds(pane)).toEqual([])
+    const heading = within(pane).getByRole('heading', { level: 2 })
+    expect(heading).toHaveTextContent('coder-7a3f')
+    expect(heading.getAttribute('title')).toContain('sess-coder-7a3f')
+  })
+
+  it('leaves no full reference painted in the identifiers block', async () => {
+    renderIntel(
+      <SessionContextPane resolution={resolution({ runs: [run()] })} />,
+    )
+    const pane = await screen.findByTestId('session-context')
+    await waitFor(() =>
+      expect(
+        within(pane).getByTestId('context-identifiers'),
+      ).toBeInTheDocument(),
+    )
+    expect(paintedIds(pane)).toEqual([])
+    // And every one of them is still reachable, whole, from the chip that copies it.
+    for (const reference of ['ppf_team', 'ws-main', 'env-prod', 'tnt-demo']) {
+      expect(
+        within(pane).getAllByTitle(reference).length,
+        reference,
+      ).toBeGreaterThan(0)
+    }
   })
 })

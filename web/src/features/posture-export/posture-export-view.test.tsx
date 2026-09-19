@@ -304,3 +304,24 @@ describe('PostureExportView free-text filters', () => {
     expect(screen.getByLabelText(/kind/i)).toHaveAttribute('maxlength', '128')
   })
 })
+
+/**
+ * "GENERATE ONE TO START" NAMED AN ACTION THE PANEL DID NOT CARRY.
+ *
+ * The export button is in the filters card above; from the history panel the sentence
+ * is an instruction about somewhere else. The census counted this among the ten empty
+ * states with no action.
+ */
+describe('PostureExportView — the empty history', () => {
+  it('carries the export, and names it apart from the control above', async () => {
+    const user = userEvent.setup()
+    wrap(<PostureExportView />)
+    const fromEmpty = screen.getByRole('button', {
+      name: 'Export the posture now',
+    })
+    // Two controls, one mutation, two names: a query for either finds exactly one.
+    expect(screen.getAllByRole('button', { name: /export posture/i })).toHaveLength(1)
+    await user.click(fromEmpty)
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled())
+  })
+})

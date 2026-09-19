@@ -79,7 +79,7 @@ export interface LiveDTO {
    * the truth where "enforced" by default would not. */
   posture?: 'enforced' | 'observed' | (string & {})
 
-  // B2 — the row's identity beyond its external id. Two homes of one provider can
+  // The row's identity beyond its external id. Two homes of one provider can
   // announce the SAME session id for two different sessions, so `session_ref` is no
   // longer a key: `live_ref` is the row's own opaque id, and every new reader
   // (detail, timeline, SSE, the runs lookup) navigates by it. References and labels

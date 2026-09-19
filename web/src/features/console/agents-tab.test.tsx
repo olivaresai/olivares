@@ -44,6 +44,7 @@ vi.mock('./api', async (importOriginal) => {
 
 import { AgentsTab } from './agents-tab'
 import { consoleKeys } from './api'
+import { HIDDEN_ON_PHONE } from '@/lib/hooks/use-is-phone'
 
 const emptyList = { items: [], has_more: false }
 const workspace = {
@@ -144,7 +145,10 @@ describe('AgentsTab', () => {
     wrap(<AgentsTab />)
 
     const row = (await screen.findByText('Build bot')).closest('tr')!
-    await user.click(within(row).getByRole('button', { name: /deactivate/i }))
+    await user.click(within(row).getByRole('button', { name: /row actions/i }))
+    await user.click(
+      await screen.findByRole('menuitem', { name: /deactivate/i }),
+    )
     const dialog = await screen.findByRole('dialog')
     await user.click(
       within(dialog).getByRole('button', { name: /deactivate/i }),
@@ -262,5 +266,135 @@ describe('AgentsTab — la lista de workspaces declara su recorte', () => {
     await screen.findByText(/no agents yet/i)
 
     expect(screen.queryByText(/there are more/i)).not.toBeInTheDocument()
+  })
+})
+
+describe('AgentsTab — one-line rows', () => {
+  // Name + uuid stacked in the cell is what measured 61 px (181 at 390). The
+  // name is the cell; the id lives on title= and in the editor. Secondary
+  // columns hide at 390; edit/deactivate/delete sit in one overflow menu.
+  it('paints the name on one line and keeps the id on title=', async () => {
+    api.listAgents.mockResolvedValue({ items: [agent], has_more: false })
+    wrap(<AgentsTab />)
+    const name = await screen.findByText('Build bot')
+    const cell = name.closest('td')
+    expect(cell).toHaveAttribute('title', agent.id)
+    expect(cell?.querySelector('.flex.flex-col')).toBeNull()
+    expect(within(name.closest('tr')!).queryByText(agent.id)).toBeNull()
+  })
+
+  it('hides secondary columns at 390 and keeps one overflow action', async () => {
+    api.listAgents.mockResolvedValue({ items: [agent], has_more: false })
+    wrap(<AgentsTab />)
+    const row = (await screen.findByText('Build bot')).closest('tr')!
+    expect(
+      within(row).getByRole('button', { name: /row actions/i }),
+    ).toBeInTheDocument()
+    expect(within(row).queryByRole('button', { name: /^edit$/i })).toBeNull()
+    // The shell's own breakpoint, not a second one spelled here: a table that hid at
+    // 390 while the header collapsed at 639 disagreed with it across a 249 px band.
+    expect(
+      screen.getByRole('columnheader', { name: /^kind$/i }).className,
+    ).toContain(HIDDEN_ON_PHONE)
+  })
+
+  it('shows the id in the editor, not under the name', async () => {
+    api.listAgents.mockResolvedValue({ items: [agent], has_more: false })
+    const user = userEvent.setup()
+    wrap(<AgentsTab />)
+    const row = (await screen.findByText('Build bot')).closest('tr')!
+    await user.click(within(row).getByRole('button', { name: /row actions/i }))
+    await user.click(await screen.findByRole('menuitem', { name: /^edit$/i }))
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByDisplayValue(agent.id)).toBeInTheDocument()
+  })
+})
+
+describe('AgentsTab — no dead half, and no stretched row either', () => {
+  // Three rows in a 1440×900 frame left 10 empty 200×200 cells (48% fill), so the
+  // table was given the remaining height — and a table hands its height to its ROWS:
+  // the three then measured 235 px each against a 36 px budget. The REGION takes the
+  // height now and the foot absorbs it. Zero rows keep the existing empty state.
+  it('gives the region the height and leaves the table element without one', async () => {
+    api.listAgents.mockResolvedValue({ items: [agent], has_more: false })
+    wrap(<AgentsTab />)
+    await screen.findByText('Build bot')
+    const table = screen.getByRole('table')
+    expect(table.className).not.toMatch(/min-h-/)
+    expect(table.closest('[data-slot="table-region"]')!.className).toMatch(
+      /min-h-\[calc\(100svh-8rem\)\]/,
+    )
+    // The surplus goes to the row group, so no body row carries a height of its own.
+    expect(table.querySelector('tfoot')!.className).toMatch(/\bh-full\b/)
+    for (const row of table.querySelectorAll('tbody tr')) {
+      expect(row.className).not.toMatch(/h-\[|min-h-/)
+    }
+    const next = screen.getByRole('button', { name: /deploy an agent/i })
+    expect(next.closest('tfoot')).toBeTruthy()
+  })
+
+  /** The same contract as the profiles table's quiet line: it acts, so it is a button,
+   *  and nothing in the surface points at a fragment that names no element. */
+  it('opens the deploy flow from the keyboard, with no fragment that names nothing', async () => {
+    const user = userEvent.setup()
+    api.listAgents.mockResolvedValue({ items: [agent], has_more: false })
+    const { container } = wrap(<AgentsTab />)
+    await screen.findByText('Build bot')
+
+    const dangling = [...container.querySelectorAll('a[href^="#"]')]
+      .map((a) => a.getAttribute('href')!.slice(1))
+      .filter((id) => id !== '' && !document.getElementById(id))
+    expect(dangling).toEqual([])
+
+    const next = screen.getByRole('button', { name: /deploy an agent/i })
+    next.focus()
+    expect(next).toHaveFocus()
+    await user.keyboard('{Enter}')
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+  })
+
+  it('keeps the empty state and no next-action line when there are zero rows', async () => {
+    wrap(<AgentsTab />)
+    expect(await screen.findByText(/no agents yet/i)).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: /deploy an agent/i }),
+    ).toBeNull()
+  })
+})
+
+describe('AgentsTab — first work row', () => {
+  // The visual bar: header 48 + title ≤ 40 + one 48 px control line = 136.
+  // A section heading between the tab strip and the table is a second chrome
+  // band; it is what put the first table row at y=272. The heading goes away
+  // (the tab already names the surface). A capture pins the pixel; THIS guarantees
+  // the DOM behind it: no heading element between the tab strip and the table, on
+  // a screen whose table has rows.
+  it('does not paint a section heading above the table', async () => {
+    api.listAgents.mockResolvedValue({ items: [agent], has_more: false })
+    wrap(<AgentsTab />)
+    await screen.findByText('Build bot')
+    expect(screen.queryByRole('heading', { name: /^agents$/i })).toBeNull()
+  })
+
+  /**
+   * ⛔ ZERO ROWS IS THE ONE COUNT WHERE A DEAD HALF IS CERTAIN, and it was the one count
+   *    the region never reached. Every other count goes through `FillingTable`, whose
+   *    region takes the viewport and whose foot absorbs the surplus; an EMPTY page went
+   *    round it: measured in Chromium at 1440×900, a centred panel **220 px** tall with
+   *    no region around it at all, against the **772 px** region the same screen gives
+   *    its rows. The region here is the SAME piece the table uses — a second height
+   *    written beside it would drift the first time one was corrected.
+   */
+  it('zero rows: the empty state fills the same region the table would have', async () => {
+    api.listAgents.mockResolvedValue({ items: [], has_more: false })
+    wrap(<AgentsTab />)
+    const empty = await screen.findByText(/no agents/i)
+    const region = empty.closest('[data-slot="table-region"]')
+    expect(region, 'the empty page is inside the region piece').not.toBeNull()
+    expect(region!.className).toMatch(/min-h-\[calc\(100svh-8rem\)\]/)
+    expect(
+      empty.closest('[data-slot="empty-state"]')!.className,
+      'and it takes the height rather than sitting at the top of it',
+    ).toMatch(/\bflex-1\b/)
   })
 })

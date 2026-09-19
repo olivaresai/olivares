@@ -166,7 +166,7 @@ const SessionsWorkspaceView = lazy(() =>
     default: m.SessionsWorkspaceView,
   })),
 )
-// B1 provider-profile plane: its OWN room with two doors, same pattern as above.
+// The provider-profile plane: its OWN room with two doors, same pattern as above.
 // `/provider-profiles` (sessions:profile:read) and `/provider-bindings`
 // (sessions:profile-binding:read) mount one view; the entrance names the tab that
 // opens first. They exist because the plane's read tiers are independent of runs
@@ -1425,7 +1425,7 @@ export const FEATURE_VIEWS: FeatureView[] = [
     element: lazyView(SessionsWorkspaceView, { entrance: 'operate' as const }),
   },
   {
-    // B1: the provider-profile plane's own door, gated on ITS read tier. The plane is
+    // The provider-profile plane's own door, gated on ITS read tier. The plane is
     // also a tab inside `/agentops` and `/sessions`, but those routes require run:read
     // or live:read, so a principal holding only sessions:profile:read could reach no
     // screen for a permission the engine declares. Same view as the next entry, opened
@@ -1442,7 +1442,7 @@ export const FEATURE_VIEWS: FeatureView[] = [
     element: lazyView(ProviderAdminView, { entrance: 'profiles' as const }),
   },
   {
-    // B1: the source-binding door, gated on the binding plane's OWN read tier, which is
+    // The source-binding door, gated on the binding plane's OWN read tier, which is
     // independent of the profile tiers. Opens on the tenant-wide bindings table; bind
     // and revoke gate on sessions:profile-binding:write/admin inside, and binding also
     // needs the deployment-wide source authority the engine decides on the roster read.

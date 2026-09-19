@@ -386,6 +386,11 @@ is_generated_content() {
 # this debt is owed — and the gate fails until someone deletes this entry.
 INTERNAL_DEBT='scripts/gen-dodo-product-art.mjs'
 
+# The hub-internal evidence tree, named ONCE. The classifier below and the exporter's
+# top-level blocklist must not drift into two spellings of the same root: two spellings is
+# how one of them goes stale and a tree starts shipping, or stops being classified.
+INTERNAL_EVIDENCE_TREE='assessments'
+
 # Expected identifier for a path. Echoes the id, or "" outside any licensed
 # module (reported as an orphan).
 expected_id() {
@@ -438,6 +443,16 @@ expected_id() {
     # there ever ships, and the identifier RECORDS that rather than granting anything. Measured
     # before writing: 2/2 files carry LicenseRef-Olivares-Internal.
     .claude/*)                         echo "LicenseRef-Olivares-Internal" ;;
+    # Added 2026-09-18, by the same method and for the same reason as `.claude/*` above: an
+    # acceptance probe — the script that MEASURES an oracle — became the first source file
+    # tracked under the internal evidence tree, and without a rule the gate called it an
+    # orphan, which means it could not check it AT ALL. That tree is INTERNAL: it is a
+    # whole entry in the exporter's top-level blocklist, so nothing under it ever ships
+    # and the identifier RECORDS that rather than granting anything. Measured before
+    # writing: 2/2 source files under it carry LicenseRef-Olivares-Internal. The reason
+    # it is worth tracking at all: a probe that lives only in a worktree dies with it,
+    # and the next round cannot re-measure.
+    "$INTERNAL_EVIDENCE_TREE"/*)       echo "LicenseRef-Olivares-Internal" ;;
     commercial/*)                      echo "LicenseRef-Olivares-Commercial" ;;
     cloud/*)                           echo "LicenseRef-Olivares-Commercial" ;;
     *)                                 echo "" ;;

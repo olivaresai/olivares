@@ -15,7 +15,7 @@
  *    exclusion**, and this file asserts the exclusion itself: row text, origin chips,
  *    derived counts, the action column and the open card — never the banner alone.
  *
- * It is the review's disposable fixture made permanent, with the expectations root
+ * It is that disposable fixture made permanent, with the expectations root
  * adjudication corrected: on a principal or credential change BOTH halves become old
  * (an old cached run is not a positive control for a new principal), and a count over a
  * half nobody read is reported as not read rather than as zero.
@@ -38,7 +38,14 @@ import {
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fakeRouter } from '@/test/fake-router'
-import type { RunDTO } from '@/features/agentops/types'
+import {
+  createSessionRowLocator,
+  liveAddress,
+  runAddress,
+  sessAddress,
+  type SessionRowLocator,
+} from '@/test/session-row-locator'
+import type { ProviderProfileDTO, RunDTO } from '@/features/agentops/types'
 import { ApiError } from '@/lib/api/errors'
 import { createQueryClient } from '@/lib/api/query'
 import { useSessionStore } from '@/stores/session'
@@ -50,6 +57,7 @@ const harness = vi.hoisted(() => {
   return {
     live: vi.fn(),
     listRuns: vi.fn(),
+    listProfiles: vi.fn(),
     perms,
     auth: {
       activeTenant: 'tenant-a' as string | null,
@@ -158,6 +166,25 @@ vi.mock('./session-card', () => ({
     ) : null,
 }))
 
+/**
+ * WHAT THE CARD IS SHOWING, AS TEXT.
+ *
+ * ⛔ THIS HELPER CHANGED MEANING, AND SO DID THE ASSERTIONS THAT USE IT. Until
+ *    2026-09-18 the work surface arrived with NOTHING selected, so
+ *    `queryByTestId('spr-card')` being absent meant "the target the operator chose was
+ *    dropped", and that is what several cases below asserted. The surface now opens on
+ *    the top row of the rail's own order when the URL names none, so after a refusal
+ *    the card is present again — showing a DIFFERENT, currently admitted session.
+ *
+ * ⇒ The invariant those cases guard is untouched and is now stated directly: the card
+ *   the operator had open does not come back. Each of them captures the text while it
+ *   IS open and asserts the later text is not that one. Nothing is weakened — the old
+ *   form could be satisfied by an empty screen, and this one cannot.
+ */
+function openCardText(): string {
+  return screen.queryByTestId('spr-card')?.textContent ?? ''
+}
+
 // `importOriginal` keeps the REAL key factories: the boundary partition under test is
 // built by them, and a hand-written copy would only prove the view agrees with itself.
 vi.mock('./api', async (importOriginal) => ({
@@ -165,9 +192,17 @@ vi.mock('./api', async (importOriginal) => ({
   sessionsApi: { live: harness.live },
 }))
 
+// ⛔ THE THIRD READ IS ANSWERED, NOT LEFT UNDEFINED. `8e8aafd19f` added
+//    `agentOpsApi.listProfiles` to this view so the Instance column can paint a profile
+//    NAME. A seam that is simply absent makes "the query never ran" and "the query ran
+//    and threw" the same green, and the profile half of the authority question — what a
+//    row shows when the profile read is refused — could not be posed at all.
 vi.mock('@/features/agentops/api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/features/agentops/api')>()),
-  agentOpsApi: { listRuns: harness.listRuns },
+  agentOpsApi: {
+    listRuns: harness.listRuns,
+    listProfiles: harness.listProfiles,
+  },
 }))
 
 import { SessionsWorkspaceView } from './sessions-workspace-view'
@@ -320,30 +355,62 @@ function renderView(qc = makeClient()) {
   return { qc, again, ...result }
 }
 
-/** The number a summary tile is showing (`—` when it reports "not read"). */
-function tile(label: string): HTMLElement | undefined {
-  // ⚠ The locator names the tile's SHAPE — a muted caption with a figure beside it — and
-  //   no longer its font-size class. It matched `text-xs` until the console moved onto
-  //   the type ladder, and then found nothing: a test coupled to a utility class fails on
-  //   a rename that changes no behaviour, and says "count is undefined" while doing it.
-  const el = screen.getAllByText(label).find((node) => {
-    const cls = typeof node.className === 'string' ? node.className : ''
-    if (!cls.includes('text-muted-foreground')) return false
-    return !!node.parentElement?.querySelector('.tabular-nums')
-  })
-  return (el?.parentElement?.querySelector('.tabular-nums') ?? undefined) as
-    HTMLElement | undefined
+/**
+ * The figure the summary reports for one count (`—` when it reports "not read").
+ *
+ * ⛔ THE TILES ARE GONE AND THE FOUR FACTS ARE NOT. Until the candidate folded the
+ *    counts onto the title line, each count was a `.tabular-nums` figure beside a muted
+ *    caption, and this helper found it by that SHAPE. The surface now paints one
+ *    sentence inside `sessions-summary` —
+ *    `2 Sessions · 1 Launched · 0 Discovered · 0 Needs attention` — with the same `—`
+ *    for a half nobody read. The READER moved; not one assertion below changed its
+ *    claim, which is the point: these cases are about which counts the view is entitled
+ *    to state, not about the element that states them.
+ *
+ * ⚠ Undefined means the summary does not report that count AT ALL, which is a different
+ *   failure from reporting the wrong one — and the label is matched on a whole segment
+ *   so a count cannot be read out of the scope note that shares the line.
+ */
+function summaryText(): string {
+  return screen.queryByTestId('sessions-summary')?.textContent ?? ''
 }
 
 function tileValue(label: string): string | undefined {
-  return tile(label)?.textContent ?? undefined
+  for (const segment of summaryText().split('·')) {
+    const trimmed = segment.trim()
+    if (trimmed.endsWith(` ${label}`))
+      return trimmed.slice(0, -label.length).trim()
+  }
+  return undefined
 }
 
-async function rowFor(label: string, setupName: string) {
-  const cell = await screen.findByText(label)
-  const tr = cell.closest('tr')
-  expect(tr, setupName).toBeTruthy()
-  return tr as HTMLElement
+/**
+ * ⛔ A ROW IS FOUND BY ITS ADDRESS, NEVER BY ITS TEXT — and that is the whole repair.
+ *
+ *    `8e8aafd19f` made the session cell paint a NAME. These fixtures carry no run name,
+ *    no summary and no goal on their observed rows, so every one of them paints the
+ *    SAME `Untitled session`: `findByText('spr-live-only')` finds nothing (the 36 reds)
+ *    and — far worse — `queryByText('spr-live-only') → null`, which most of this file
+ *    used to mean *"the row left"*, became true for every possible view.
+ *
+ *    `rows` locates by `data-address`, the address the view paints on the row
+ *    (`sess:`/`live:`/`run:` + the reference), and REFUSES a "the row left" assertion
+ *    unless this same locator saw that row painted earlier in the same case. Every
+ *    absence also names something true at that instant, so an unmounted or empty screen
+ *    can never stand in for an exclusion.
+ */
+let rows: SessionRowLocator
+
+/** The addresses of the three standing fixtures, derived the way the address contract
+ *  spells them rather than by importing the view's own key function. */
+const LIVE_ONLY_AT = sessAddress('spr-live-only')
+const RUN_ONLY_AT = runAddress('spr-run-only')
+const JOINED_AT = sessAddress('spr-joined')
+/** The frame's payload, which must never become a row. */
+const FRAME_ONLY_AT = sessAddress('spr-frame-only')
+
+async function rowFor(address: string, setupName: string) {
+  return rows.find(address, setupName)
 }
 
 function refreshButton() {
@@ -408,6 +475,7 @@ function listRunReads() {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  rows = createSessionRowLocator()
   fakeRouter.reset('/sessions')
   harness.stream.onSnapshot = undefined
   harness.stream.enabled = false
@@ -418,6 +486,7 @@ beforeEach(() => {
   grant(...BOTH_READ_AND_RUN_WRITE)
   harness.live.mockResolvedValue(LIVE_OK)
   harness.listRuns.mockResolvedValue(RUNS_OK)
+  harness.listProfiles.mockResolvedValue({ items: [], has_more: false })
   useWorkspaceStore.setState({
     activeWorkspace: null,
     activeWorkspaceName: null,
@@ -429,13 +498,24 @@ describe('SessionsWorkspaceView — both halves admitted (controls)', () => {
     const user = userEvent.setup()
     renderView()
     const liveRow = await rowFor(
-      'spr-live-only',
+      LIVE_ONLY_AT,
       'spr-auth/healthy/setup-live-row',
     )
-    const runRow = await rowFor(
-      'spr-run-name',
-      'spr-auth/healthy/setup-run-row',
-    )
+    const runRow = await rowFor(RUN_ONLY_AT, 'spr-auth/healthy/setup-run-row')
+    // THE INSTRUMENT'S OWN CONTROL, and it belongs in the healthy case: the table
+    // paints exactly these two addresses and no others, so every `gone()` elsewhere in
+    // this file is measured against a locator that is known to see what is there.
+    expect
+      .soft(rows.painted().sort(), 'spr-auth/healthy/locator-sees-both-rows')
+      .toEqual([LIVE_ONLY_AT, RUN_ONLY_AT].sort())
+    // The observed row's CURRENT ACTION is painted text. Several cases below assert an
+    // action string is gone; this is the sighting that makes those mean something.
+    expect
+      .soft(
+        within(liveRow).getByText('spr-live-action'),
+        'spr-auth/healthy/live-action-is-painted-text',
+      )
+      .toBeInTheDocument()
     expect
       .soft(
         within(liveRow).getByText('Discovered'),
@@ -483,8 +563,8 @@ describe('SessionsWorkspaceView — both halves admitted (controls)', () => {
 
   it('CONTROL: each read is pinned to the tenant its cache key names, and is cancellable', async () => {
     renderView()
-    await rowFor('spr-live-only', 'spr-auth/scope/setup-live-row')
-    await rowFor('spr-run-name', 'spr-auth/scope/setup-run-row')
+    await rowFor(LIVE_ONLY_AT, 'spr-auth/scope/setup-live-row')
+    await rowFor(RUN_ONLY_AT, 'spr-auth/scope/setup-run-row')
     expect
       .soft(scopeOf(harness.live, 0)?.tenant, 'spr-auth/scope/live-tenant')
       .toBe('tenant-a')
@@ -505,10 +585,16 @@ describe('SessionsWorkspaceView — one half refused, the other still admitted',
     const user = userEvent.setup()
     renderView()
     const liveRow = await rowFor(
-      'spr-live-only',
+      LIVE_ONLY_AT,
       'spr-auth/live-403/setup-live-row',
     )
-    await rowFor('spr-run-name', 'spr-auth/live-403/setup-run-row')
+    await rowFor(RUN_ONLY_AT, 'spr-auth/live-403/setup-run-row')
+    // POSITIVE CONTROL for the action assertion further down: the refused half's
+    // current action IS painted while the half is admitted.
+    expect(
+      within(liveRow).getByText('spr-live-action'),
+      'spr-auth/live-403/setup-live-action-painted',
+    ).toBeInTheDocument()
     await streamOpen('spr-auth/live-403/setup-stream-open')
     await sendHint()
     // A frame is a hint, not a row: the count is still what the admitted GET returned.
@@ -524,6 +610,7 @@ describe('SessionsWorkspaceView — one half refused, the other still admitted',
       await screen.findByTestId('spr-card'),
       'spr-auth/live-403/setup-card-open',
     ).toHaveTextContent('sess:spr-live-only')
+    const refusedCard = openCardText()
 
     harness.live.mockRejectedValue(FORBIDDEN)
     await user.click(refreshButton())
@@ -536,16 +623,22 @@ describe('SessionsWorkspaceView — one half refused, the other still admitted',
 
     expect
       .soft(
-        screen.queryByText('spr-live-only'),
+        rows.gone(LIVE_ONLY_AT, 'spr-auth/live-403/refused-live-row-excluded', {
+          alsoPainted: RUN_ONLY_AT,
+        }),
         'spr-auth/live-403/refused-live-row-excluded',
       )
-      .not.toBeInTheDocument()
+      .toBeNull()
     expect
       .soft(
-        screen.queryByText('spr-frame-only'),
+        rows.neverPainted(
+          FRAME_ONLY_AT,
+          'spr-auth/live-403/frame-session-never-painted',
+          { alsoPainted: RUN_ONLY_AT },
+        ),
         'spr-auth/live-403/frame-session-never-painted',
       )
-      .not.toBeInTheDocument()
+      .toBeNull()
     expect
       .soft(
         harness.stream.enabled,
@@ -559,11 +652,11 @@ describe('SessionsWorkspaceView — one half refused, the other still admitted',
       )
       .not.toBeInTheDocument()
     expect
-      .soft(
-        screen.queryByTestId('spr-card'),
-        'spr-auth/live-403/refused-row-target-closed',
-      )
-      .not.toBeInTheDocument()
+      .soft(openCardText(), 'spr-auth/live-403/refused-row-target-closed')
+      .not.toBe(refusedCard)
+    expect
+      .soft(openCardText(), 'spr-auth/live-403/refused-row-not-named')
+      .not.toContain('spr-live-only')
     expect
       .soft(tileValue('Sessions'), 'spr-auth/live-403/total-count-healthy-only')
       .toBe('1')
@@ -579,7 +672,7 @@ describe('SessionsWorkspaceView — one half refused, the other still admitted',
 
     // …and the half that was never refused is untouched, down to its row action.
     const runRow = await rowFor(
-      'spr-run-name',
+      RUN_ONLY_AT,
       'spr-auth/live-403/healthy-run-row-kept',
     )
     expect
@@ -623,8 +716,17 @@ describe('SessionsWorkspaceView — one half refused, the other still admitted',
   it('success then run step-up: refused run leaves, live stays, and origin counts say NOT READ', async () => {
     const user = userEvent.setup()
     renderView()
-    await rowFor('spr-live-only', 'spr-auth/run-stepup/setup-live-row')
-    await rowFor('spr-run-name', 'spr-auth/run-stepup/setup-run-row')
+    await rowFor(LIVE_ONLY_AT, 'spr-auth/run-stepup/setup-live-row')
+    const runRowBefore = await rowFor(
+      RUN_ONLY_AT,
+      'spr-auth/run-stepup/setup-run-row',
+    )
+    // POSITIVE CONTROL: the run row's NAME is the text it paints while admitted, which
+    // is what makes its later absence a fact about the view.
+    expect(
+      within(runRowBefore).getByText('spr-run-name'),
+      'spr-auth/run-stepup/setup-run-name-painted',
+    ).toBeInTheDocument()
 
     harness.listRuns.mockRejectedValue(STEP_UP)
     await user.click(refreshButton())
@@ -637,12 +739,20 @@ describe('SessionsWorkspaceView — one half refused, the other still admitted',
 
     expect
       .soft(
-        screen.queryByText('spr-run-name'),
+        rows.gone(RUN_ONLY_AT, 'spr-auth/run-stepup/refused-run-row-excluded', {
+          alsoPainted: LIVE_ONLY_AT,
+        }),
         'spr-auth/run-stepup/refused-run-row-excluded',
+      )
+      .toBeNull()
+    expect
+      .soft(
+        screen.queryByText('spr-run-name'),
+        'spr-auth/run-stepup/refused-run-name-not-painted-anywhere',
       )
       .not.toBeInTheDocument()
     const liveRow = await rowFor(
-      'spr-live-only',
+      LIVE_ONLY_AT,
       'spr-auth/run-stepup/healthy-live-row-kept',
     )
     expect
@@ -672,12 +782,18 @@ describe('SessionsWorkspaceView — one half refused, the other still admitted',
         'spr-auth/run-stepup/discovered-count-not-read',
       )
       .toBe('—')
+    // ⛔ THE DASH STILL EXPLAINS ITSELF, AND THE READER MOVED WITH IT. The explanation
+    //    used to be a `title=` on the tile's figure; the counts are plain text on the
+    //    title line now and text carries no tooltip. What says why is the partial notice
+    //    above the table — the same sentence, painted permanently instead of on hover —
+    //    so the pairing is asserted HERE, at the same moment as the dash, rather than
+    //    left to the setup that waited for it.
     expect
       .soft(
-        tile('Launched')?.getAttribute('title'),
+        screen.getByText(/launched half could not be read/i),
         'spr-auth/run-stepup/launched-count-explains-itself',
       )
-      .toMatch(/could not be checked/i)
+      .toBeInTheDocument()
     // The healthy half's own count remains.
     expect
       .soft(
@@ -703,8 +819,8 @@ describe('SessionsWorkspaceView — one half refused, the other still admitted',
   it('CONTROL: a live 5xx is not a refusal — its last answer stays and the run half is not revoked', async () => {
     const user = userEvent.setup()
     renderView()
-    await rowFor('spr-run-name', 'spr-auth/live-5xx/setup-run-row')
-    await rowFor('spr-live-only', 'spr-auth/live-5xx/setup-live-row')
+    await rowFor(RUN_ONLY_AT, 'spr-auth/live-5xx/setup-run-row')
+    await rowFor(LIVE_ONLY_AT, 'spr-auth/live-5xx/setup-live-row')
 
     harness.live.mockRejectedValue(LIVE_5XX)
     await user.click(refreshButton())
@@ -719,10 +835,10 @@ describe('SessionsWorkspaceView — one half refused, the other still admitted',
     // half here would be the same error in the other direction.
     expect
       .soft(
-        screen.queryByText('spr-live-only'),
+        rows.query(LIVE_ONLY_AT),
         'spr-auth/live-5xx/broken-half-keeps-its-last-answer',
       )
-      .toBeInTheDocument()
+      .not.toBeNull()
     expect
       .soft(
         screen.queryByText(/Observed sessions are not shown/i),
@@ -730,7 +846,7 @@ describe('SessionsWorkspaceView — one half refused, the other still admitted',
       )
       .not.toBeInTheDocument()
     const runRow = await rowFor(
-      'spr-run-name',
+      RUN_ONLY_AT,
       'spr-auth/live-5xx/run-row-not-revoked',
     )
     expect
@@ -766,7 +882,9 @@ describe('SessionsWorkspaceView — one half refused, the other still admitted',
   it('CONTROL: both halves out still replaces the grid, and names the refusal it got', async () => {
     const user = userEvent.setup()
     renderView()
-    await rowFor('spr-live-only', 'spr-auth/dual/setup-live-row')
+    await rowFor(LIVE_ONLY_AT, 'spr-auth/dual/setup-live-row')
+    // Sighted too, so the claim that its row leaves is a claim this case can make.
+    await rowFor(RUN_ONLY_AT, 'spr-auth/dual/setup-run-row')
     harness.live.mockRejectedValue(FORBIDDEN)
     harness.listRuns.mockRejectedValue(FORBIDDEN)
     await user.click(refreshButton())
@@ -777,12 +895,26 @@ describe('SessionsWorkspaceView — one half refused, the other still admitted',
         'spr-auth/dual/grid-replaced-by-a-state',
       ).toBeInTheDocument()
     })
+    // The grid paints NOTHING here, and that is the control: the case has no sibling
+    // half to name because both were refused, so the assertion is paired with the
+    // state that replaced them (`Not authorized`, asserted above) and with an empty
+    // row census rather than with an unmounted screen.
     expect
-      .soft(screen.queryByText('spr-live-only'), 'spr-auth/dual/no-rows-left')
-      .not.toBeInTheDocument()
+      .soft(
+        rows.gone(LIVE_ONLY_AT, 'spr-auth/dual/no-rows-left', {
+          andNoRowAtAll: true,
+        }),
+        'spr-auth/dual/no-rows-left',
+      )
+      .toBeNull()
     expect
-      .soft(screen.queryByText('spr-run-name'), 'spr-auth/dual/no-run-row-left')
-      .not.toBeInTheDocument()
+      .soft(
+        rows.gone(RUN_ONLY_AT, 'spr-auth/dual/no-run-row-left', {
+          andNoRowAtAll: true,
+        }),
+        'spr-auth/dual/no-run-row-left',
+      )
+      .toBeNull()
   })
 })
 
@@ -790,8 +922,8 @@ describe('SessionsWorkspaceView — a read bit that leaves, and comes back', () 
   it('live:read lost: prior rows and overrides leave; run half and run:write stay', async () => {
     const user = userEvent.setup()
     const { again } = renderView()
-    await rowFor('spr-live-only', 'spr-auth/live-bit/setup-live-row')
-    await rowFor('spr-run-name', 'spr-auth/live-bit/setup-run-row')
+    await rowFor(LIVE_ONLY_AT, 'spr-auth/live-bit/setup-live-row')
+    await rowFor(RUN_ONLY_AT, 'spr-auth/live-bit/setup-run-row')
     await streamOpen('spr-auth/live-bit/setup-stream-open')
     await sendHint()
 
@@ -806,26 +938,29 @@ describe('SessionsWorkspaceView — a read bit that leaves, and comes back', () 
     })
     expect
       .soft(
-        screen.queryByText('spr-live-only'),
+        rows.gone(LIVE_ONLY_AT, 'spr-auth/live-bit/prior-live-row-excluded', {
+          alsoPainted: RUN_ONLY_AT,
+        }),
         'spr-auth/live-bit/prior-live-row-excluded',
       )
-      .not.toBeInTheDocument()
+      .toBeNull()
     expect
       .soft(
-        screen.queryByText('spr-frame-only'),
+        rows.neverPainted(
+          FRAME_ONLY_AT,
+          'spr-auth/live-bit/frame-session-never-painted',
+          { alsoPainted: RUN_ONLY_AT },
+        ),
         'spr-auth/live-bit/frame-session-never-painted',
       )
-      .not.toBeInTheDocument()
+      .toBeNull()
     expect
       .soft(
         harness.stream.enabled,
         'spr-auth/live-bit/stream-retired-with-the-read-bit',
       )
       .toBe(false)
-    const runRow = await rowFor(
-      'spr-run-name',
-      'spr-auth/live-bit/run-row-kept',
-    )
+    const runRow = await rowFor(RUN_ONLY_AT, 'spr-auth/live-bit/run-row-kept')
     expect
       .soft(
         within(runRow).getByText('Launched'),
@@ -855,7 +990,10 @@ describe('SessionsWorkspaceView — a read bit that leaves, and comes back', () 
 
   it('live:read regained: the list ASKS again — the old page is not resurrected from cache', async () => {
     const { again } = renderView()
-    await rowFor('spr-live-only', 'spr-auth/live-readmit/setup-live-row')
+    await rowFor(LIVE_ONLY_AT, 'spr-auth/live-readmit/setup-live-row')
+    // The run half is sighted so it can serve as the live control while the observed
+    // half is out — and so the exclusion below is one this case is allowed to claim.
+    await rowFor(RUN_ONLY_AT, 'spr-auth/live-readmit/setup-run-row')
     expect(
       harness.live,
       'spr-auth/live-readmit/setup-one-read',
@@ -865,9 +1003,13 @@ describe('SessionsWorkspaceView — a read bit that leaves, and comes back', () 
     again()
     await waitFor(() => {
       expect(
-        screen.queryByText('spr-live-only'),
+        rows.gone(
+          LIVE_ONLY_AT,
+          'spr-auth/live-readmit/setup-excluded-while-unpermitted',
+          { alsoPainted: RUN_ONLY_AT },
+        ),
         'spr-auth/live-readmit/setup-excluded-while-unpermitted',
-      ).not.toBeInTheDocument()
+      ).toBeNull()
     })
 
     // What the engine would answer NOW is not what it answered then.
@@ -879,7 +1021,7 @@ describe('SessionsWorkspaceView — a read bit that leaves, and comes back', () 
     again()
 
     await rowFor(
-      'spr-live-readmitted',
+      sessAddress('spr-live-readmitted'),
       'spr-auth/live-readmit/current-answer-painted',
     )
     expect
@@ -887,17 +1029,21 @@ describe('SessionsWorkspaceView — a read bit that leaves, and comes back', () 
       .toHaveBeenCalledTimes(2)
     expect
       .soft(
-        screen.queryByText('spr-live-only'),
+        rows.gone(
+          LIVE_ONLY_AT,
+          'spr-auth/live-readmit/old-page-not-resurrected',
+          { alsoPainted: sessAddress('spr-live-readmitted') },
+        ),
         'spr-auth/live-readmit/old-page-not-resurrected',
       )
-      .not.toBeInTheDocument()
+      .toBeNull()
   })
 
   it('run:read lost and regained: prior runs leave, live stays unbranded, write is not inferred lost', async () => {
     const user = userEvent.setup()
     const { again } = renderView()
-    await rowFor('spr-live-only', 'spr-auth/run-bit/setup-live-row')
-    await rowFor('spr-run-name', 'spr-auth/run-bit/setup-run-row')
+    await rowFor(LIVE_ONLY_AT, 'spr-auth/run-bit/setup-live-row')
+    await rowFor(RUN_ONLY_AT, 'spr-auth/run-bit/setup-run-row')
 
     grant('sessions:live:read', 'sessions:run:write')
     again()
@@ -910,14 +1056,13 @@ describe('SessionsWorkspaceView — a read bit that leaves, and comes back', () 
     })
     expect
       .soft(
-        screen.queryByText('spr-run-name'),
+        rows.gone(RUN_ONLY_AT, 'spr-auth/run-bit/prior-run-row-excluded', {
+          alsoPainted: LIVE_ONLY_AT,
+        }),
         'spr-auth/run-bit/prior-run-row-excluded',
       )
-      .not.toBeInTheDocument()
-    const liveRow = await rowFor(
-      'spr-live-only',
-      'spr-auth/run-bit/live-row-kept',
-    )
+      .toBeNull()
+    const liveRow = await rowFor(LIVE_ONLY_AT, 'spr-auth/run-bit/live-row-kept')
     expect
       .soft(
         within(liveRow).queryByText('Launched'),
@@ -952,14 +1097,19 @@ describe('SessionsWorkspaceView — a read bit that leaves, and comes back', () 
     })
     grant(...BOTH_READ_AND_RUN_WRITE)
     again()
-    await rowFor('spr-run-2', 'spr-auth/run-bit/current-answer-painted')
+    await rowFor(
+      runAddress('spr-run-readmitted'),
+      'spr-auth/run-bit/current-answer-painted',
+    )
     expect.soft(listRunReads(), 'spr-auth/run-bit/asked-again').toHaveLength(2)
     expect
       .soft(
-        screen.queryByText('spr-run-name'),
+        rows.gone(RUN_ONLY_AT, 'spr-auth/run-bit/old-page-not-resurrected', {
+          alsoPainted: runAddress('spr-run-readmitted'),
+        }),
         'spr-auth/run-bit/old-page-not-resurrected',
       )
-      .not.toBeInTheDocument()
+      .toBeNull()
   })
 })
 
@@ -973,13 +1123,29 @@ describe('SessionsWorkspaceView — a JOINED row loses exactly the half that lef
     const user = userEvent.setup()
     renderView()
     const before = await rowFor(
-      'spr-joined-run',
+      JOINED_AT,
       'spr-auth/joined-run-out/setup-joined-row',
     )
     expect
       .soft(
         within(before).getByText('Launched'),
         'spr-auth/joined-run-out/setup-launched',
+      )
+      .toBeInTheDocument()
+    // POSITIVE CONTROLS for the three text absences below: while both halves are
+    // admitted the row paints the RUN's name as its label, the observed action and the
+    // observed token figure. Each is sighted here, in this case, before it is claimed
+    // to have left.
+    expect
+      .soft(
+        within(before).getByText('spr-joined-run'),
+        'spr-auth/joined-run-out/setup-run-name-is-the-label',
+      )
+      .toBeInTheDocument()
+    expect
+      .soft(
+        within(before).getByText('spr-joined-action'),
+        'spr-auth/joined-run-out/setup-observed-action-painted',
       )
       .toBeInTheDocument()
 
@@ -992,16 +1158,18 @@ describe('SessionsWorkspaceView — a JOINED row loses exactly the half that lef
       ).toBeInTheDocument()
     })
 
+    // The ROW stays — it is the run HALF that leaves it — so the assertion here is
+    // about the name the run half contributed, and the row itself is the control.
+    const row = await rowFor(
+      JOINED_AT,
+      'spr-auth/joined-run-out/observed-half-kept',
+    )
     expect
       .soft(
         screen.queryByText('spr-joined-run'),
         'spr-auth/joined-run-out/run-name-excluded',
       )
       .not.toBeInTheDocument()
-    const row = await rowFor(
-      'spr-joined',
-      'spr-auth/joined-run-out/observed-half-kept',
-    )
     expect
       .soft(
         within(row).queryByText('Launched'),
@@ -1047,7 +1215,20 @@ describe('SessionsWorkspaceView — a JOINED row loses exactly the half that lef
   it('live 403: the joined row keeps its run half and loses the observed telemetry', async () => {
     const user = userEvent.setup()
     renderView()
-    await rowFor('spr-joined-run', 'spr-auth/joined-live-out/setup-joined-row')
+    const joinedBefore = await rowFor(
+      JOINED_AT,
+      'spr-auth/joined-live-out/setup-joined-row',
+    )
+    // POSITIVE CONTROLS, in this case: the observed half's action and its token figure
+    // ARE painted on the row while the half is admitted.
+    expect(
+      within(joinedBefore).getByText('spr-joined-action'),
+      'spr-auth/joined-live-out/setup-observed-action-painted',
+    ).toBeInTheDocument()
+    expect(
+      within(joinedBefore).getByText(/4,321/),
+      'spr-auth/joined-live-out/setup-observed-telemetry-painted',
+    ).toBeInTheDocument()
 
     harness.live.mockRejectedValue(FORBIDDEN)
     await user.click(refreshButton())
@@ -1059,7 +1240,7 @@ describe('SessionsWorkspaceView — a JOINED row loses exactly the half that lef
     })
 
     const row = await rowFor(
-      'spr-joined-run',
+      JOINED_AT,
       'spr-auth/joined-live-out/run-half-kept',
     )
     expect
@@ -1112,10 +1293,10 @@ describe('SessionsWorkspaceView — the boundary moves under the same tenant', (
     const user = userEvent.setup()
     const { again } = renderView()
     const liveRow = await rowFor(
-      'spr-live-only',
+      LIVE_ONLY_AT,
       'spr-auth/principal/setup-live-row',
     )
-    await rowFor('spr-run-name', 'spr-auth/principal/setup-run-row')
+    await rowFor(RUN_ONLY_AT, 'spr-auth/principal/setup-run-row')
     await user.click(liveRow)
     expect(
       await screen.findByTestId('spr-card'),
@@ -1137,18 +1318,25 @@ describe('SessionsWorkspaceView — the boundary moves under the same tenant', (
     again()
 
     // Synchronously, before any new answer can have arrived.
+    // Both halves became old at once, so there is no sibling row to name: the control
+    // is that the grid is mounted and paints NOTHING, which is a different screen from
+    // an unmounted one.
     expect
       .soft(
-        screen.queryByText('spr-live-only'),
+        rows.gone(LIVE_ONLY_AT, 'spr-auth/principal/prior-live-row-excluded', {
+          andNoRowAtAll: true,
+        }),
         'spr-auth/principal/prior-live-row-excluded',
       )
-      .not.toBeInTheDocument()
+      .toBeNull()
     expect
       .soft(
-        screen.queryByText('spr-run-name'),
+        rows.gone(RUN_ONLY_AT, 'spr-auth/principal/prior-run-row-excluded', {
+          andNoRowAtAll: true,
+        }),
         'spr-auth/principal/prior-run-row-excluded',
       )
-      .not.toBeInTheDocument()
+      .toBeNull()
     expect
       .soft(
         screen.queryByTestId('spr-card'),
@@ -1156,8 +1344,14 @@ describe('SessionsWorkspaceView — the boundary moves under the same tenant', (
       )
       .not.toBeInTheDocument()
 
-    await rowFor('spr-live-user-b', 'spr-auth/principal/new-live-answer')
-    await rowFor('spr-run-user-b', 'spr-auth/principal/new-run-answer')
+    await rowFor(
+      sessAddress('spr-live-user-b'),
+      'spr-auth/principal/new-live-answer',
+    )
+    await rowFor(
+      runAddress('spr-run-b-ref'),
+      'spr-auth/principal/new-run-answer',
+    )
     expect
       .soft(harness.live, 'spr-auth/principal/live-asked-again')
       .toHaveBeenCalledTimes(2)
@@ -1168,8 +1362,8 @@ describe('SessionsWorkspaceView — the boundary moves under the same tenant', (
 
   it('credential change: the same principal under a new credential asks again too', async () => {
     const { again } = renderView()
-    await rowFor('spr-live-only', 'spr-auth/credential/setup-live-row')
-    await rowFor('spr-run-name', 'spr-auth/credential/setup-run-row')
+    await rowFor(LIVE_ONLY_AT, 'spr-auth/credential/setup-live-row')
+    await rowFor(RUN_ONLY_AT, 'spr-auth/credential/setup-run-row')
 
     harness.live.mockResolvedValue({
       items: [{ ...LIVE_ONLY, session_ref: 'spr-live-renewed' }],
@@ -1192,18 +1386,28 @@ describe('SessionsWorkspaceView — the boundary moves under the same tenant', (
 
     expect
       .soft(
-        screen.queryByText('spr-live-only'),
+        rows.gone(LIVE_ONLY_AT, 'spr-auth/credential/prior-live-row-excluded', {
+          andNoRowAtAll: true,
+        }),
         'spr-auth/credential/prior-live-row-excluded',
       )
-      .not.toBeInTheDocument()
+      .toBeNull()
     expect
       .soft(
-        screen.queryByText('spr-run-name'),
+        rows.gone(RUN_ONLY_AT, 'spr-auth/credential/prior-run-row-excluded', {
+          andNoRowAtAll: true,
+        }),
         'spr-auth/credential/prior-run-row-excluded',
       )
-      .not.toBeInTheDocument()
-    await rowFor('spr-live-renewed', 'spr-auth/credential/new-live-answer')
-    await rowFor('spr-run-new', 'spr-auth/credential/new-run-answer')
+      .toBeNull()
+    await rowFor(
+      sessAddress('spr-live-renewed'),
+      'spr-auth/credential/new-live-answer',
+    )
+    await rowFor(
+      runAddress('spr-run-renewed'),
+      'spr-auth/credential/new-run-answer',
+    )
   })
 
   /**
@@ -1219,8 +1423,8 @@ describe('SessionsWorkspaceView — the boundary moves under the same tenant', (
   it('R3/1 workspace selector: the global inventory and its open card survive it untouched', async () => {
     const user = userEvent.setup()
     const { again } = renderView()
-    const liveRow = await rowFor('spr-live-only', 'R3/1/setup-live-row')
-    await rowFor('spr-run-name', 'R3/1/setup-run-row')
+    const liveRow = await rowFor(LIVE_ONLY_AT, 'R3/1/setup-live-row')
+    await rowFor(RUN_ONLY_AT, 'R3/1/setup-run-row')
     await user.click(liveRow)
     expect(
       screen.getByTestId('spr-card'),
@@ -1246,11 +1450,11 @@ describe('SessionsWorkspaceView — the boundary moves under the same tenant', (
     again()
 
     expect
-      .soft(screen.queryByText('spr-live-only'), 'R3/1/global-row-preserved')
-      .toBeInTheDocument()
+      .soft(rows.query(LIVE_ONLY_AT), 'R3/1/global-row-preserved')
+      .not.toBeNull()
     expect
-      .soft(screen.queryByText('spr-run-name'), 'R3/1/run-half-preserved')
-      .toBeInTheDocument()
+      .soft(rows.query(RUN_ONLY_AT), 'R3/1/run-half-preserved')
+      .not.toBeNull()
     expect
       .soft(screen.queryByTestId('spr-card'), 'R3/1/valid-card-not-closed')
       .toBeInTheDocument()
@@ -1272,11 +1476,8 @@ describe('SessionsWorkspaceView — the boundary moves under the same tenant', (
     })
     again()
     expect
-      .soft(
-        screen.queryByText('spr-live-only'),
-        'R3/1/null-selection-equally-global',
-      )
-      .toBeInTheDocument()
+      .soft(rows.query(LIVE_ONLY_AT), 'R3/1/null-selection-equally-global')
+      .not.toBeNull()
     expect
       .soft(
         harness.live.mock.calls.length,
@@ -1308,7 +1509,16 @@ describe('SessionsWorkspaceView — an answer that arrives after its context is 
       })
     })
     const { again } = renderView()
-    await rowFor('spr-live-only', 'spr-auth/inflight-tenant/setup-live-row')
+    const liveRow = await rowFor(
+      LIVE_ONLY_AT,
+      'spr-auth/inflight-tenant/setup-live-row',
+    )
+    // POSITIVE CONTROL for the stale-action absence below: an admitted answer's
+    // `current_action` IS painted in this table, so a stale one would have been too.
+    expect(
+      within(liveRow).getByText('spr-live-action'),
+      'spr-auth/inflight-tenant/setup-action-is-painted',
+    ).toBeInTheDocument()
     await user.click(refreshButton())
     await waitFor(() => {
       expect(
@@ -1347,14 +1557,23 @@ describe('SessionsWorkspaceView — an answer that arrives after its context is 
         'spr-auth/inflight-tenant/stale-action-excluded',
       )
       .not.toBeInTheDocument()
+    // The weakest control of the three, and it is the only one available HERE on
+    // purpose: the assertion is made in the instant after the stale answer resolved,
+    // when the new tenant's two reads are still outstanding, so no sibling row can be
+    // named. It still rules out an unmounted screen, and the sighting requirement still
+    // rules out a locator that never saw the row.
     expect
       .soft(
-        screen.queryByText('spr-live-only'),
+        rows.gone(
+          LIVE_ONLY_AT,
+          'spr-auth/inflight-tenant/old-tenant-row-excluded',
+          { andTheGridIsMounted: true },
+        ),
         'spr-auth/inflight-tenant/old-tenant-row-excluded',
       )
-      .not.toBeInTheDocument()
+      .toBeNull()
     await rowFor(
-      'spr-live-tenant-b',
+      sessAddress('spr-live-tenant-b'),
       'spr-auth/inflight-tenant/new-tenant-answer',
     )
     expect
@@ -1379,7 +1598,14 @@ describe('SessionsWorkspaceView — an answer that arrives after its context is 
       })
     })
     const { again } = renderView()
-    await rowFor('spr-live-only', 'spr-auth/inflight-principal/setup-live-row')
+    const liveRow = await rowFor(
+      LIVE_ONLY_AT,
+      'spr-auth/inflight-principal/setup-live-row',
+    )
+    expect(
+      within(liveRow).getByText('spr-live-action'),
+      'spr-auth/inflight-principal/setup-action-is-painted',
+    ).toBeInTheDocument()
     await user.click(refreshButton())
     await waitFor(() => {
       expect(
@@ -1411,14 +1637,20 @@ describe('SessionsWorkspaceView — an answer that arrives after its context is 
         'spr-auth/inflight-principal/stale-action-excluded',
       )
       .not.toBeInTheDocument()
+    // Same instant, same reason as the tenant case above: the replacement reads are
+    // still out, so the mounted grid is the only live control there is.
     expect
       .soft(
-        screen.queryByText('spr-live-only'),
+        rows.gone(
+          LIVE_ONLY_AT,
+          'spr-auth/inflight-principal/prior-live-row-excluded',
+          { andTheGridIsMounted: true },
+        ),
         'spr-auth/inflight-principal/prior-live-row-excluded',
       )
-      .not.toBeInTheDocument()
+      .toBeNull()
     await rowFor(
-      'spr-live-user-b',
+      sessAddress('spr-live-user-b'),
       'spr-auth/inflight-principal/new-principal-answer',
     )
   })
@@ -1437,20 +1669,33 @@ describe('SessionsWorkspaceView — a refusal outlives the error that reported i
     async (half) => {
       const user = userEvent.setup()
       const { qc } = renderView()
-      const oldLabel = half === 'live' ? 'spr-live-only' : 'spr-run-name'
-      const healthyLabel = half === 'live' ? 'spr-run-name' : 'spr-live-only'
+      const oldAt = half === 'live' ? LIVE_ONLY_AT : RUN_ONLY_AT
+      const healthyAt = half === 'live' ? RUN_ONLY_AT : LIVE_ONLY_AT
       const failing = half === 'live' ? harness.live : harness.listRuns
       const qroot = half === 'live' ? 'sessions' : 'agentops'
-      const errorOf = () =>
-        qc.getQueryCache().findAll({ queryKey: [qroot] })[0]?.state.error
+      // ⛔ THE LIST'S OWN QUERY, NAMED. `findAll({queryKey:[root]})[0]` was the first
+      //    entry under a root that now holds several: the view added a `profiles` read
+      //    under `agentops` (`8e8aafd19f`) and the open session's resolution holds
+      //    `live/one` and `live/by-id` under `sessions`. Grading whichever landed first
+      //    measures a read these cases are not about — and it did: R1 runs read the
+      //    disabled profiles entry and saw a null error where the refusal was.
+      //    Both list keys are `[root, tenant, 'b', epoch, <leaf>, params]`.
+      const leaf = half === 'live' ? 'live' : 'runs'
+      const listQuery = () =>
+        qc
+          .getQueryCache()
+          .findAll({ queryKey: [qroot] })
+          .find((q) => q.queryKey[2] === 'b' && q.queryKey[4] === leaf)
+      const errorOf = () => listQuery()?.state.error
 
-      await rowFor(oldLabel, 'R1/setup-old-half')
-      await rowFor(healthyLabel, 'R1/setup-healthy-half')
-      await user.click(await rowFor(oldLabel, 'R1/setup-selected-row'))
+      await rowFor(oldAt, 'R1/setup-old-half')
+      await rowFor(healthyAt, 'R1/setup-healthy-half')
+      await user.click(await rowFor(oldAt, 'R1/setup-selected-row'))
       expect(
         screen.getByTestId('spr-card'),
         'R1/setup-card-open',
       ).toBeInTheDocument()
+      const retiredCard = openCardText()
 
       // CONTROL, and it must survive the correction: an ordinary 500 with no refusal
       // behind it withdraws nothing. The half keeps its last answer and its card.
@@ -1458,21 +1703,15 @@ describe('SessionsWorkspaceView — a refusal outlives the error that reported i
       await user.click(refreshButton())
       await waitFor(() => expect(errorOf()).toBe(LIVE_5XX))
       expect
-        .soft(
-          screen.queryByText(oldLabel),
-          'R1/ordinary-500-keeps-its-last-answer',
-        )
-        .toBeInTheDocument()
+        .soft(rows.query(oldAt), 'R1/ordinary-500-keeps-its-last-answer')
+        .not.toBeNull()
       expect
         .soft(
           screen.queryByTestId('spr-card'),
           'R1/ordinary-500-keeps-the-open-card',
         )
         .toBeInTheDocument()
-      expect(
-        screen.getByText(healthyLabel),
-        'R1/ordinary-500-healthy-half',
-      ).toBeInTheDocument()
+      rows.get(healthyAt, 'R1/ordinary-500-healthy-half')
 
       // The refusal itself: admission ends here, and so does the selection made under it.
       const denial = half === 'live' ? FORBIDDEN : STEP_UP
@@ -1480,16 +1719,16 @@ describe('SessionsWorkspaceView — a refusal outlives the error that reported i
       await user.click(refreshButton())
       await waitFor(() => expect(errorOf()).toBe(denial))
       await waitFor(() =>
-        expect(screen.queryByText(oldLabel)).not.toBeInTheDocument(),
+        expect(
+          rows.gone(oldAt, 'R1/refusal-excludes-the-refused-row', {
+            alsoPainted: healthyAt,
+          }),
+        ).toBeNull(),
       )
-      expect(
-        screen.queryByTestId('spr-card'),
-        'R1/refusal-retires-the-card',
-      ).not.toBeInTheDocument()
-      expect(
-        screen.getByText(healthyLabel),
-        'R1/refusal-spares-the-healthy-half',
-      ).toBeInTheDocument()
+      expect(openCardText(), 'R1/refusal-retires-the-card').not.toBe(
+        retiredCard,
+      )
+      rows.get(healthyAt, 'R1/refusal-spares-the-healthy-half')
 
       // No success follows the refusal — only another outage, which answers nothing.
       failing.mockRejectedValue(LIVE_5XX)
@@ -1499,23 +1738,19 @@ describe('SessionsWorkspaceView — a refusal outlives the error that reported i
 
       expect
         .soft(
-          screen.queryByText(oldLabel),
+          rows.gone(oldAt, 'R1/refused-row-does-not-return-on-outage', {
+            alsoPainted: healthyAt,
+          }),
           'R1/refused-row-does-not-return-on-outage',
         )
-        .not.toBeInTheDocument()
+        .toBeNull()
       expect
-        .soft(
-          screen.queryByTestId('spr-card'),
-          'R1/refused-selection-does-not-return-on-outage',
-        )
-        .not.toBeInTheDocument()
+        .soft(openCardText(), 'R1/refused-selection-does-not-return-on-outage')
+        .not.toBe(retiredCard)
       expect
         .soft(tileValue('Sessions'), 'R1/only-healthy-half-counted')
         .toBe('1')
-      expect(
-        screen.getByText(healthyLabel),
-        'R1/healthy-half-still-usable',
-      ).toBeInTheDocument()
+      rows.get(healthyAt, 'R1/healthy-half-still-usable')
       expect(
         screen.getByRole('button', { name: /new session/i }),
         'R1/run-write-still-offered',
@@ -1542,18 +1777,20 @@ describe('SessionsWorkspaceView — a refusal outlives the error that reported i
             }
       failing.mockResolvedValue(readmitted)
       await user.click(refreshButton())
-      const freshLabel =
-        half === 'live' ? 'spr-live-readmitted' : 'spr-run-readmitted'
+      const freshAt =
+        half === 'live'
+          ? sessAddress('spr-live-readmitted')
+          : runAddress('spr-run-re')
       const freshRow = await rowFor(
-        freshLabel,
+        freshAt,
         'R1/successful-read-lifts-the-refusal',
       )
       expect
         .soft(
-          screen.queryByTestId('spr-card'),
+          openCardText(),
           'R1/re-admission-does-not-reopen-the-retired-card',
         )
-        .not.toBeInTheDocument()
+        .not.toBe(retiredCard)
       // …and a NEW explicit selection of a currently admitted row still works.
       await user.click(freshRow)
       expect(
@@ -1571,47 +1808,60 @@ describe('SessionsWorkspaceView — a retired selection is retired for good', ()
       const user = userEvent.setup()
       const { qc, again } = renderView()
       const next = deferred<{ items: never[]; has_more: boolean }>()
-      const oldLabel = half === 'live' ? 'spr-live-only' : 'spr-run-name'
-      const healthyLabel = half === 'live' ? 'spr-run-name' : 'spr-live-only'
+      const oldAt = half === 'live' ? LIVE_ONLY_AT : RUN_ONLY_AT
+      const healthyAt = half === 'live' ? RUN_ONLY_AT : LIVE_ONLY_AT
       const failing = half === 'live' ? harness.live : harness.listRuns
 
-      const row = await rowFor(oldLabel, 'R2/setup-selected-row')
-      await rowFor(healthyLabel, 'R2/setup-healthy-row')
+      const row = await rowFor(oldAt, 'R2/setup-selected-row')
+      await rowFor(healthyAt, 'R2/setup-healthy-row')
       await user.click(row)
       expect(
         screen.getByTestId('spr-card'),
         'R2/setup-card-open',
       ).toBeInTheDocument()
+      const retiredCard = openCardText()
 
       grant(
         half === 'live' ? 'sessions:run:read' : 'sessions:live:read',
         'sessions:run:write',
       )
       again()
+      expect(openCardText(), 'R2/bit-loss-closes-the-card').not.toBe(
+        retiredCard,
+      )
       expect(
-        screen.queryByTestId('spr-card'),
-        'R2/bit-loss-closes-the-card',
-      ).not.toBeInTheDocument()
-      expect(
-        screen.queryByText(oldLabel),
+        rows.gone(oldAt, 'R2/bit-loss-excludes-the-row', {
+          alsoPainted: healthyAt,
+        }),
         'R2/bit-loss-excludes-the-row',
-      ).not.toBeInTheDocument()
-      expect(
-        screen.getByText(healthyLabel),
-        'R2/bit-loss-spares-the-other-half',
-      ).toBeInTheDocument()
+      ).toBeNull()
+      rows.get(healthyAt, 'R2/bit-loss-spares-the-other-half')
 
       // The bit comes back and the read is deliberately still in flight.
+      //
+      // ⚠ THE SYNCHRONISATION POINT, NOT AN ECONOMY CLAIM: this waits for the
+      //   re-admitted half to be ASKED again, so the assertion below is made while its
+      //   answer is genuinely outstanding.
+      //
+      // ⛔ AND THE COUNT IS TWO FOR BOTH HALVES AGAIN, WHICH IS THE LATCH SPEAKING. It
+      //   was `half === 'live' ? 2 : 3` for one day: the work-first pass made the
+      //   surface open on a
+      //   session, so the run half was read a second time by `useSessionResolution` for
+      //   that default. The default now waits until BOTH halves have answered — a
+      //   browser walk showed it otherwise resolving on the first half to land and then
+      //   tearing down the stream it had just opened — and in this case the re-admitted
+      //   half is deliberately left in flight, so there is no settled list, no default
+      //   and no second read. Two is the number of reads the LIST itself makes.
       failing.mockImplementation(() => next.promise)
       grant(...BOTH_READ_AND_RUN_WRITE)
       again()
       await waitFor(() => expect(failing).toHaveBeenCalledTimes(2))
       expect
         .soft(
-          screen.queryByTestId('spr-card'),
+          openCardText(),
           'R2/restored-bit-awaits-current-answer-no-old-target',
         )
-        .not.toBeInTheDocument()
+        .not.toBe(retiredCard)
 
       // A new valid answer says the old row is not there. It cannot authorize opening
       // that old row-backed target either.
@@ -1620,23 +1870,20 @@ describe('SessionsWorkspaceView — a retired selection is retired for good', ()
         await next.promise
       })
       await waitFor(() => expect(qc.isFetching()).toBe(0))
-      await rowFor(healthyLabel, 'R2/healthy-after-empty-current-answer')
+      await rowFor(healthyAt, 'R2/healthy-after-empty-current-answer')
       expect
-        .soft(
-          screen.queryByTestId('spr-card'),
-          'R2/fresh-empty-does-not-reopen-retired-target',
-        )
-        .not.toBeInTheDocument()
+        .soft(openCardText(), 'R2/fresh-empty-does-not-reopen-retired-target')
+        .not.toBe(retiredCard)
       expect(
-        screen.queryByText(oldLabel),
+        rows.gone(oldAt, 'R2/old-row-absent-after-empty-answer', {
+          alsoPainted: healthyAt,
+        }),
         'R2/old-row-absent-after-empty-answer',
-      ).not.toBeInTheDocument()
+      ).toBeNull()
 
       // CONTROL: the half is genuinely usable again — the retirement is of the INTENT,
       // not of the ability to choose. A row that is currently there still opens.
-      await user.click(
-        await rowFor(healthyLabel, 'R2/fresh-selection-target-row'),
-      )
+      await user.click(await rowFor(healthyAt, 'R2/fresh-selection-target-row'))
       expect(
         await screen.findByTestId('spr-card'),
         'R2/fresh-selection-after-re-admission',
@@ -1658,10 +1905,10 @@ describe('SessionsWorkspaceView — leaving a context and coming back to it', ()
     async (half) => {
       const user = userEvent.setup()
       const { qc, again } = renderView()
-      const oldLabel = half === 'live' ? 'spr-live-only' : 'spr-run-name'
+      const oldAt = half === 'live' ? LIVE_ONLY_AT : RUN_ONLY_AT
       const failing = half === 'live' ? harness.live : harness.listRuns
 
-      const row = await rowFor(oldLabel, 'R2/aba/setup-row')
+      const row = await rowFor(oldAt, 'R2/aba/setup-row')
       await user.click(row)
       expect(
         screen.getByTestId('spr-card'),
@@ -1684,7 +1931,7 @@ describe('SessionsWorkspaceView — leaving a context and coming back to it', ()
         screen.queryByTestId('spr-card'),
         'R2/aba/B-does-not-see-As-card',
       ).not.toBeInTheDocument()
-      await rowFor('spr-live-b', 'R2/aba/B-has-its-own-answer')
+      await rowFor(sessAddress('spr-live-b'), 'R2/aba/B-has-its-own-answer')
 
       // → back to A, with A's replacement reads deliberately still in flight.
       const pendingLive = deferred<{ items: never[]; has_more: boolean }>()
@@ -1719,9 +1966,16 @@ describe('SessionsWorkspaceView — leaving a context and coming back to it', ()
           'R2/return-to-A-empty-cannot-reopen-intent',
         )
         .not.toBeInTheDocument()
+      // Both halves answered with NO rows, so the grid is mounted and empty: the
+      // control names that, rather than a sibling there is none of.
       expect
-        .soft(screen.queryByText(oldLabel), 'R2/aba/old-row-absent-on-return')
-        .not.toBeInTheDocument()
+        .soft(
+          rows.gone(oldAt, 'R2/aba/old-row-absent-on-return', {
+            andNoRowAtAll: true,
+          }),
+          'R2/aba/old-row-absent-on-return',
+        )
+        .toBeNull()
 
       // CONTROL: A is genuinely usable again — a current row still opens on a click.
       const fresh =
@@ -1742,11 +1996,11 @@ describe('SessionsWorkspaceView — leaving a context and coming back to it', ()
             }
       failing.mockResolvedValue(fresh)
       await user.click(refreshButton())
-      const freshLabel =
-        half === 'live' ? 'spr-live-fresh-a' : 'spr-run-fresh-a'
-      await user.click(
-        await rowFor(freshLabel, 'R2/aba/fresh-row-after-return'),
-      )
+      const freshAt =
+        half === 'live'
+          ? sessAddress('spr-live-fresh-a')
+          : runAddress('spr-run-fresh')
+      await user.click(await rowFor(freshAt, 'R2/aba/fresh-row-after-return'))
       expect(
         await screen.findByTestId('spr-card'),
         'R2/aba/fresh-click-after-return-works',
@@ -1757,24 +2011,33 @@ describe('SessionsWorkspaceView — leaving a context and coming back to it', ()
   it('a new mount cannot bootstrap itself from the page an earlier reader was refused', async () => {
     const user = userEvent.setup()
     const { qc, unmount } = renderView()
-    await rowFor('spr-live-only', 'R1/remount/setup-row')
+    await rowFor(LIVE_ONLY_AT, 'R1/remount/setup-row')
+    // Sighted so the run half can act as the live control through the whole case.
+    await rowFor(RUN_ONLY_AT, 'R1/remount/setup-run-row')
 
     harness.live.mockRejectedValue(FORBIDDEN)
     await user.click(refreshButton())
     await waitFor(() =>
-      expect(screen.queryByText('spr-live-only')).not.toBeInTheDocument(),
+      expect(
+        rows.gone(LIVE_ONLY_AT, 'R1/remount/refusal-excludes-the-row', {
+          alsoPainted: RUN_ONLY_AT,
+        }),
+      ).toBeNull(),
     )
     // …then an ordinary outage replaces the refusal as the query's ONLY error. The
     // cache still holds the pre-refusal page.
     harness.live.mockRejectedValue(LIVE_5XX)
     await user.click(refreshButton())
-    await waitFor(() =>
-      expect(
-        qc.getQueryCache().findAll({ queryKey: ['sessions'] })[0]?.state.error,
-      ).toBe(LIVE_5XX),
-    )
+    // The LIST's entry, named rather than taken by position: the open session's
+    // resolution keeps its own entries under the same `sessions` root.
+    const liveList = () =>
+      qc
+        .getQueryCache()
+        .findAll({ queryKey: ['sessions'] })
+        .find((q) => q.queryKey[2] === 'b' && q.queryKey[4] === 'live')
+    await waitFor(() => expect(liveList()?.state.error).toBe(LIVE_5XX))
     expect(
-      qc.getQueryCache().findAll({ queryKey: ['sessions'] })[0]?.state.data,
+      liveList()?.state.data,
       'R1/remount/cache-still-holds-the-pre-refusal-page',
     ).toBeDefined()
 
@@ -1794,17 +2057,18 @@ describe('SessionsWorkspaceView — leaving a context and coming back to it', ()
     await waitFor(() => expect(harness.live).toHaveBeenCalled())
     expect
       .soft(
-        screen.queryByText('spr-live-only'),
+        rows.gone(
+          LIVE_ONLY_AT,
+          'R1/remount/inherited-failed-cache-is-not-admitted',
+          { alsoPainted: RUN_ONLY_AT },
+        ),
         'R1/remount/inherited-failed-cache-is-not-admitted',
       )
-      .not.toBeInTheDocument()
+      .toBeNull()
     // The healthy run half is untouched by the other half's history.
     expect
-      .soft(
-        screen.queryByText('spr-run-name'),
-        'R1/remount/healthy-half-unaffected',
-      )
-      .toBeInTheDocument()
+      .soft(rows.query(RUN_ONLY_AT), 'R1/remount/healthy-half-unaffected')
+      .not.toBeNull()
 
     // Its own accepted answer is what admits it — and only what that answer contains.
     await act(async () => {
@@ -1814,20 +2078,31 @@ describe('SessionsWorkspaceView — leaving a context and coming back to it', ()
       })
       await pending.promise
     })
-    await rowFor('spr-live-new-owner', 'R1/remount/own-accepted-answer-paints')
+    await rowFor(
+      sessAddress('spr-live-new-owner'),
+      'R1/remount/own-accepted-answer-paints',
+    )
     expect
       .soft(
-        screen.queryByText('spr-live-only'),
+        rows.gone(LIVE_ONLY_AT, 'R1/remount/pre-refusal-page-never-returns', {
+          alsoPainted: sessAddress('spr-live-new-owner'),
+        }),
         'R1/remount/pre-refusal-page-never-returns',
       )
-      .not.toBeInTheDocument()
+      .toBeNull()
   })
 })
 
 describe('SessionsWorkspaceView — a stream frame is a hint, never a row', () => {
   it('R3/3 the frame triggers exactly one current read and never paints its payload', async () => {
     renderView()
-    await rowFor('spr-live-only', 'R3/3/setup-row')
+    const liveRow = await rowFor(LIVE_ONLY_AT, 'R3/3/setup-row')
+    // POSITIVE CONTROL for the two absences below: an admitted answer's session DOES
+    // get a row and its action IS painted, so a frame's payload would have shown.
+    expect(
+      within(liveRow).getByText('spr-live-action'),
+      'R3/3/setup-an-admitted-action-is-painted',
+    ).toBeInTheDocument()
     await streamOpen('R3/3/setup-stream-open')
     const before = harness.live.mock.calls.length
 
@@ -1839,10 +2114,12 @@ describe('SessionsWorkspaceView — a stream frame is a hint, never a row', () =
     )
     expect
       .soft(
-        screen.queryByText('spr-frame-only'),
+        rows.neverPainted(FRAME_ONLY_AT, 'R3/3/sentinel-row-never-painted', {
+          alsoPainted: LIVE_ONLY_AT,
+        }),
         'R3/3/sentinel-row-never-painted',
       )
-      .not.toBeInTheDocument()
+      .toBeNull()
     expect
       .soft(
         screen.queryByText('spr-frame-action'),
@@ -1860,7 +2137,10 @@ describe('SessionsWorkspaceView — a stream frame is a hint, never a row', () =
       has_more: false,
     })
     await sendHint()
-    await rowFor('spr-live-newly-active', 'R3/3/answer-paints-the-new-row')
+    await rowFor(
+      sessAddress('spr-live-newly-active'),
+      'R3/3/answer-paints-the-new-row',
+    )
     expect
       .soft(tileValue('Sessions'), 'R3/3/count-follows-the-answer')
       .toBe('3')
@@ -1868,7 +2148,7 @@ describe('SessionsWorkspaceView — a stream frame is a hint, never a row', () =
 
   it('R3/5 a burst produces one read in flight and one trailing read, not a read per frame', async () => {
     renderView()
-    await rowFor('spr-live-only', 'R3/5/setup-row')
+    await rowFor(LIVE_ONLY_AT, 'R3/5/setup-row')
     await streamOpen('R3/5/setup-stream-open')
     const before = harness.live.mock.calls.length
 
@@ -1908,7 +2188,7 @@ describe('SessionsWorkspaceView — a stream frame is a hint, never a row', () =
 
   it('R3/5 a same-context rerender does not re-subscribe; a real departure does', async () => {
     const { again } = renderView()
-    await rowFor('spr-live-only', 'R3/5b/setup-row')
+    await rowFor(LIVE_ONLY_AT, 'R3/5b/setup-row')
     await streamOpen('R3/5b/setup-stream-open')
     const asked = harness.stream.asked.length
     again()
@@ -1930,7 +2210,8 @@ describe('SessionsWorkspaceView — a stream frame is a hint, never a row', () =
   it('R3/4 the subscription never opens over a half that has no admitted answer', async () => {
     const user = userEvent.setup()
     renderView()
-    await rowFor('spr-live-only', 'R3/4/setup-row')
+    await rowFor(LIVE_ONLY_AT, 'R3/4/setup-row')
+    await rowFor(RUN_ONLY_AT, 'R3/4/setup-run-row')
     await streamOpen('R3/4/setup-stream-open')
 
     harness.live.mockRejectedValue(FORBIDDEN)
@@ -1951,18 +2232,25 @@ describe('SessionsWorkspaceView — a stream frame is a hint, never a row', () =
       )
       .toBe(reads)
     expect
-      .soft(screen.queryByText('spr-live-only'), 'R3/4/hint-cannot-re-admit')
-      .not.toBeInTheDocument()
+      .soft(
+        rows.gone(LIVE_ONLY_AT, 'R3/4/hint-cannot-re-admit', {
+          alsoPainted: RUN_ONLY_AT,
+        }),
+        'R3/4/hint-cannot-re-admit',
+      )
+      .toBeNull()
     expect
       .soft(
-        screen.queryByText('spr-frame-only'),
+        rows.neverPainted(FRAME_ONLY_AT, 'R3/4/hint-payload-never-painted', {
+          alsoPainted: RUN_ONLY_AT,
+        }),
         'R3/4/hint-payload-never-painted',
       )
-      .not.toBeInTheDocument()
+      .toBeNull()
     // The independent healthy half and its write affordance are untouched throughout.
     expect
-      .soft(screen.queryByText('spr-run-name'), 'R3/4/healthy-half-kept')
-      .toBeInTheDocument()
+      .soft(rows.query(RUN_ONLY_AT), 'R3/4/healthy-half-kept')
+      .not.toBeNull()
     expect(
       screen.getByRole('button', { name: /new session/i }),
       'R3/4/run-write-kept',
@@ -1973,7 +2261,8 @@ describe('SessionsWorkspaceView — a stream frame is a hint, never a row', () =
     const user = userEvent.setup()
     harness.live.mockResolvedValue({ items: [LIVE_ONLY], has_more: true })
     renderView()
-    await rowFor('spr-live-only', 'R3/6/setup-row')
+    await rowFor(LIVE_ONLY_AT, 'R3/6/setup-row')
+    await rowFor(RUN_ONLY_AT, 'R3/6/setup-run-row')
     expect(
       screen.getByTestId('sessions-scope-note').textContent,
       'R3/6/scope-note-present',
@@ -1997,12 +2286,13 @@ describe('SessionsWorkspaceView — a stream frame is a hint, never a row', () =
     await user.click(screen.getByLabelText('All sources'))
     await user.click(await screen.findByRole('option', { name: 'Launched' }))
     await waitFor(() =>
-      expect(screen.queryByText('spr-live-only')).not.toBeInTheDocument(),
+      expect(
+        rows.gone(LIVE_ONLY_AT, 'R3/6/facet-narrows-away-the-observed-row', {
+          alsoPainted: RUN_ONLY_AT,
+        }),
+      ).toBeNull(),
     )
-    expect(
-      screen.getByText('spr-run-name'),
-      'R3/6/facet-still-filters',
-    ).toBeInTheDocument()
+    rows.get(RUN_ONLY_AT, 'R3/6/facet-still-filters')
   })
 })
 
@@ -2051,7 +2341,8 @@ describe('SessionsWorkspaceView — the queue ends with the admission that autho
   it('R3/7 a hint queued during a read that is REFUSED starts no further read', async () => {
     const user = userEvent.setup()
     renderView()
-    await rowFor('spr-live-only', 'R3/7a/setup-row')
+    await rowFor(LIVE_ONLY_AT, 'R3/7a/setup-row')
+    await rowFor(RUN_ONLY_AT, 'R3/7a/setup-run-row')
     await streamOpen('R3/7a/setup-stream-open')
     const { pendiente, enVuelo } = await conTrabajoEnCola('R3/7a')
 
@@ -2073,13 +2364,15 @@ describe('SessionsWorkspaceView — the queue ends with the admission that autho
     ).toBe(enVuelo)
     expect
       .soft(
-        screen.queryByText('spr-live-only'),
+        rows.gone(LIVE_ONLY_AT, 'R3/7a/pre-refusal-rows-excluded', {
+          alsoPainted: RUN_ONLY_AT,
+        }),
         'R3/7a/pre-refusal-rows-excluded',
       )
-      .not.toBeInTheDocument()
+      .toBeNull()
     expect
-      .soft(screen.queryByText('spr-run-name'), 'R3/7a/healthy-half-kept')
-      .toBeInTheDocument()
+      .soft(rows.query(RUN_ONLY_AT), 'R3/7a/healthy-half-kept')
+      .not.toBeNull()
     // A frame that arrives after the refusal finds no queue and no admitted read.
     await sendHint()
     await quiesce()
@@ -2095,7 +2388,10 @@ describe('SessionsWorkspaceView — the queue ends with the admission that autho
       has_more: false,
     })
     await user.click(refreshButton())
-    await rowFor('spr-after-recovery', 'R3/7a/manual-recovery-paints')
+    await rowFor(
+      sessAddress('spr-after-recovery'),
+      'R3/7a/manual-recovery-paints',
+    )
     await streamOpen('R3/7a/recovered-stream-open')
     const traRecuperar = harness.live.mock.calls.length
     await sendHint()
@@ -2113,7 +2409,7 @@ describe('SessionsWorkspaceView — the queue ends with the admission that autho
 
   it('R3/7 CONTROL an ordinary outage is not a withdrawal: the queued hint still runs its one read', async () => {
     renderView()
-    await rowFor('spr-live-only', 'R3/7b/setup-row')
+    await rowFor(LIVE_ONLY_AT, 'R3/7b/setup-row')
     await streamOpen('R3/7b/setup-stream-open')
     const { pendiente, enVuelo } = await conTrabajoEnCola('R3/7b')
 
@@ -2134,7 +2430,7 @@ describe('SessionsWorkspaceView — the queue ends with the admission that autho
         'R3/7b/outage-still-buys-the-trailing-read',
       ).toBe(enVuelo + 1),
     )
-    await rowFor('spr-after-outage', 'R3/7b/trailing-read-paints')
+    await rowFor(sessAddress('spr-after-outage'), 'R3/7b/trailing-read-paints')
     await quiesce()
     expect(
       harness.live.mock.calls.length,
@@ -2145,7 +2441,7 @@ describe('SessionsWorkspaceView — the queue ends with the admission that autho
 
   it('R3/7 the view unmounts with work queued: nothing is asked for a screen that is gone', async () => {
     const { unmount } = renderView()
-    await rowFor('spr-live-only', 'R3/7c/setup-row')
+    await rowFor(LIVE_ONLY_AT, 'R3/7c/setup-row')
     await streamOpen('R3/7c/setup-stream-open')
     const { pendiente, enVuelo } = await conTrabajoEnCola('R3/7c')
 
@@ -2165,7 +2461,7 @@ describe('SessionsWorkspaceView — the queue ends with the admission that autho
 
   it('R3/7 CONTROL the boundary moves with work queued: the old queue serves no new principal', async () => {
     const { again } = renderView()
-    await rowFor('spr-live-only', 'R3/7d/setup-row')
+    await rowFor(LIVE_ONLY_AT, 'R3/7d/setup-row')
     await streamOpen('R3/7d/setup-stream-open')
     const { pendiente } = await conTrabajoEnCola('R3/7d')
 
@@ -2177,7 +2473,10 @@ describe('SessionsWorkspaceView — the queue ends with the admission that autho
     )
     harness.auth.principal = { user_id: 'user-b' }
     again()
-    await rowFor('spr-new-principal', 'R3/7d/new-episode-asks-for-itself')
+    await rowFor(
+      sessAddress('spr-new-principal'),
+      'R3/7d/new-episode-asks-for-itself',
+    )
     const traCambio = harness.live.mock.calls.length
 
     await act(async () => {
@@ -2193,7 +2492,8 @@ describe('SessionsWorkspaceView — the queue ends with the admission that autho
 
   it('R3/7 CONTROL the live read bit leaves with work queued, and comes back to an EMPTY queue', async () => {
     const { again } = renderView()
-    await rowFor('spr-live-only', 'R3/7e/setup-row')
+    await rowFor(LIVE_ONLY_AT, 'R3/7e/setup-row')
+    await rowFor(RUN_ONLY_AT, 'R3/7e/setup-run-row')
     await streamOpen('R3/7e/setup-stream-open')
     const { pendiente } = await conTrabajoEnCola('R3/7e')
 
@@ -2201,9 +2501,11 @@ describe('SessionsWorkspaceView — the queue ends with the admission that autho
     again()
     await waitFor(() =>
       expect(
-        screen.queryByText('spr-live-only'),
+        rows.gone(LIVE_ONLY_AT, 'R3/7e/read-bit-gone-excludes-the-half', {
+          alsoPainted: RUN_ONLY_AT,
+        }),
         'R3/7e/read-bit-gone-excludes-the-half',
-      ).not.toBeInTheDocument(),
+      ).toBeNull(),
     )
 
     harness.live.mockImplementation(() =>
@@ -2214,7 +2516,10 @@ describe('SessionsWorkspaceView — the queue ends with the admission that autho
     )
     grant(...BOTH_READ_AND_RUN_WRITE)
     again()
-    await rowFor('spr-after-restore', 'R3/7e/restored-bit-asks-again')
+    await rowFor(
+      sessAddress('spr-after-restore'),
+      'R3/7e/restored-bit-asks-again',
+    )
     const traRestaurar = harness.live.mock.calls.length
 
     await act(async () => {
@@ -2231,7 +2536,7 @@ describe('SessionsWorkspaceView — the queue ends with the admission that autho
   it('R3/7 a read already in flight is JOINED, not cancelled, by a hint', async () => {
     const user = userEvent.setup()
     renderView()
-    await rowFor('spr-live-only', 'R3/7f/setup-row')
+    await rowFor(LIVE_ONLY_AT, 'R3/7f/setup-row')
     await streamOpen('R3/7f/setup-stream-open')
     const antes = harness.live.mock.calls.length
 
@@ -2268,11 +2573,460 @@ describe('SessionsWorkspaceView — the queue ends with the admission that autho
       })
       await manual.promise
     })
-    await rowFor('spr-manual-answer', 'R3/7f/the-joined-answer-paints')
+    await rowFor(
+      sessAddress('spr-manual-answer'),
+      'R3/7f/the-joined-answer-paints',
+    )
     await quiesce()
     expect(
       harness.live.mock.calls.length,
       'R3/7f/joining-buys-no-extra-read',
     ).toBe(antes + 1)
+  })
+})
+
+/**
+ * THE THIRD READ ON THIS SCREEN, AND ITS OWN AUTHORITY.
+ *
+ * `8e8aafd19f` added `agentOpsApi.listProfiles` so the Instance column can paint the
+ * profile's NAME instead of its `ppf_` reference. That is a read like the other two:
+ * it can be granted, it can be refused, it can fail — and the answer to "what does the
+ * row show then" has to be a fallback the plane can prove, never a name nobody
+ * returned.
+ *
+ * ⛔ THE ROW IS NOT THE PROFILE'S TO WITHDRAW. A refused profile read says nothing
+ *    about whether the session may be shown: the observed half answered, so the row,
+ *    its action, its telemetry and its click target all stay. The only thing that
+ *    changes is which of the three names the Instance cell can honestly paint.
+ */
+const PROFILED_LIVE: LiveDTO = {
+  ...LIVE_ONLY,
+  session_ref: 'spr-profiled-sid',
+  live_ref: 'spr-lr-profiled',
+  // A scoped row: `liveRowKey` addresses it by its own id, not by the external one.
+  attribution: 'managed',
+  provider_profile_ref: 'ppf_spr',
+  /** The driver the LIVE row itself declares — the fallback the view may use. */
+  provider: 'spr-driver-from-the-row',
+  current_action: 'spr-profiled-action',
+}
+const PROFILED_AT = liveAddress('spr-lr-profiled')
+
+const PROFILE: ProviderProfileDTO = {
+  profile_ref: 'ppf_spr',
+  driver: 'spr-driver-from-the-profile',
+  environment_ref: 'env-spr',
+  display_name: 'spr-profile-display-name',
+  state: 'active',
+  local_environment: true,
+  operable: true,
+}
+/** A profile the row is NOT attributed to. Its name must never reach this row. */
+const OTHER_PROFILE: ProviderProfileDTO = {
+  ...PROFILE,
+  profile_ref: 'ppf_other',
+  display_name: 'spr-other-profile-name',
+}
+
+const PROFILE_READ = 'sessions:profile:read'
+
+/** The Instance cell of the profiled row: what the column is entitled to paint. */
+function instanceCell(row: HTMLElement): HTMLElement {
+  const el = row.querySelector<HTMLElement>(`[title="${PROFILE.profile_ref}"]`)
+  return el as HTMLElement
+}
+
+describe('SessionsWorkspaceView — the PROFILE name is a read like any other', () => {
+  beforeEach(() => {
+    harness.live.mockResolvedValue({
+      items: [PROFILED_LIVE],
+      has_more: false,
+    })
+    harness.listRuns.mockResolvedValue({ items: [], has_more: false })
+  })
+
+  it('CONTROL granted: the answer names the profile, and the raw ppf_ reference is not painted', async () => {
+    grant(...BOTH_READ_AND_RUN_WRITE, PROFILE_READ)
+    harness.listProfiles.mockResolvedValue({
+      items: [PROFILE, OTHER_PROFILE],
+      has_more: false,
+    })
+    renderView()
+    const row = await rowFor(PROFILED_AT, 'spr-auth/profile-ok/setup-row')
+
+    await waitFor(() =>
+      expect(
+        instanceCell(row)?.textContent,
+        'spr-auth/profile-ok/name-from-the-answer',
+      ).toBe(PROFILE.display_name),
+    )
+    // The whole point of the change this file had to catch up with: the reference is
+    // carried, not read out.
+    expect
+      .soft(
+        screen.queryByText(PROFILE.profile_ref),
+        'spr-auth/profile-ok/raw-reference-not-painted',
+      )
+      .not.toBeInTheDocument()
+    expect
+      .soft(
+        instanceCell(row)?.getAttribute('title'),
+        'spr-auth/profile-ok/reference-is-on-the-title',
+      )
+      .toBe(PROFILE.profile_ref)
+    expect
+      .soft(
+        screen.queryByText(OTHER_PROFILE.display_name as string),
+        'spr-auth/profile-ok/a-stranger-profile-is-not-borrowed',
+      )
+      .not.toBeInTheDocument()
+    // ⚠ CALLED, not called ONCE. Two components on this screen ask for the same
+    //   profile page under the same key — the list's Instance column and the open
+    //   session's context pane — and the observed count is 2. Which of them asks, and
+    //   how often, is not what this case is about; pinning a number here would grade a
+    //   read these cases do not own and would break on a mount order nothing promises.
+    expect
+      .soft(harness.listProfiles, 'spr-auth/profile-ok/the-read-was-made')
+      .toHaveBeenCalled()
+  })
+
+  it.each([
+    ['refused', FORBIDDEN],
+    ['step-up', STEP_UP],
+    ['failed', LIVE_5XX],
+  ] as const)(
+    'profiles %s: the row keeps everything and the cell falls back — it does not invent a name',
+    async (_how, failure) => {
+      grant(...BOTH_READ_AND_RUN_WRITE, PROFILE_READ)
+      harness.listProfiles.mockRejectedValue(failure)
+      renderView()
+      const row = await rowFor(PROFILED_AT, 'spr-auth/profile-out/setup-row')
+      await waitFor(() => expect(harness.listProfiles).toHaveBeenCalled())
+
+      // THE FALLBACK IS A FACT THE ROW ITSELF CARRIES: the driver the live row
+      // declares. Not the display name (nobody answered), not the reference (the
+      // console stopped painting those), not a blank cell.
+      await waitFor(() =>
+        expect(
+          instanceCell(row)?.textContent,
+          'spr-auth/profile-out/falls-back-to-the-rows-own-driver',
+        ).toBe(PROFILED_LIVE.provider),
+      )
+      expect
+        .soft(
+          screen.queryByText(PROFILE.display_name as string),
+          'spr-auth/profile-out/no-name-from-an-unread-half',
+        )
+        .not.toBeInTheDocument()
+      expect
+        .soft(
+          screen.queryByText(PROFILE.profile_ref),
+          'spr-auth/profile-out/still-no-raw-reference',
+        )
+        .not.toBeInTheDocument()
+
+      // …and the session half is untouched: a profile read that failed is not a
+      // refusal of the session. The row, its action and its target all stay.
+      expect
+        .soft(
+          within(row).getByText('spr-profiled-action'),
+          'spr-auth/profile-out/observed-half-untouched',
+        )
+        .toBeInTheDocument()
+      expect
+        .soft(tileValue('Sessions'), 'spr-auth/profile-out/count-untouched')
+        .toBe('1')
+      expect
+        .soft(
+          screen.queryByText(/could not be read/i),
+          'spr-auth/profile-out/not-reported-as-a-half-that-could-not-be-read',
+        )
+        .not.toBeInTheDocument()
+    },
+  )
+
+  it('no sessions:profile:read: the read is never issued, and the same fallback is painted', async () => {
+    // This is the state every other case in this file runs in, stated once here so the
+    // rest of the file is measuring a screen whose profile half is known, not assumed.
+    grant(...BOTH_READ_AND_RUN_WRITE)
+    harness.listProfiles.mockResolvedValue({
+      items: [PROFILE],
+      has_more: false,
+    })
+    renderView()
+    const row = await rowFor(PROFILED_AT, 'spr-auth/profile-unpermitted/row')
+    await quiesce()
+    expect(
+      harness.listProfiles,
+      'spr-auth/profile-unpermitted/no-read-issued',
+    ).not.toHaveBeenCalled()
+    expect(
+      instanceCell(row)?.textContent,
+      'spr-auth/profile-unpermitted/same-fallback',
+    ).toBe(PROFILED_LIVE.provider)
+    // CONTROL in the other direction, in this case: the name IS available and the only
+    // reason it is not painted is the missing read bit.
+    expect(
+      PROFILE.display_name,
+      'spr-auth/profile-unpermitted/the-name-existed-all-along',
+    ).toBe('spr-profile-display-name')
+  })
+
+  it('granted but the answer does not name THIS profile: the cell still falls back', async () => {
+    grant(...BOTH_READ_AND_RUN_WRITE, PROFILE_READ)
+    harness.listProfiles.mockResolvedValue({
+      items: [OTHER_PROFILE],
+      has_more: false,
+    })
+    renderView()
+    const row = await rowFor(PROFILED_AT, 'spr-auth/profile-absent/row')
+    await waitFor(() => expect(harness.listProfiles).toHaveBeenCalled())
+    await quiesce()
+    expect(
+      instanceCell(row)?.textContent,
+      'spr-auth/profile-absent/falls-back-rather-than-borrowing',
+    ).toBe(PROFILED_LIVE.provider)
+    expect(
+      screen.queryByText(OTHER_PROFILE.display_name as string),
+      'spr-auth/profile-absent/the-other-name-is-not-painted-here',
+    ).not.toBeInTheDocument()
+  })
+})
+
+/**
+ * THE RUNG THE CASES ABOVE CANNOT REACH: a row that declares NO driver.
+ *
+ * ⛔ WHY IT NEEDED A SECOND FIXTURE. Every case in the block above uses `PROFILED_LIVE`,
+ *    whose live half carries `provider: 'spr-driver-from-the-row'`, so a refusal, a
+ *    failure and an absent profile all stop on the SECOND rung and the third is never
+ *    executed. That third rung used to be the field LABEL — "Provider profile" — so the
+ *    cases named "it does not invent a name" were green over a cell that invents one.
+ *
+ * ⛔ AND `provider` IS OPTIONAL BY DECLARATION (`types.ts:94`), not by accident: a
+ *    discovered row whose source never reported a driver is a real row of the estate.
+ */
+const DRIVERLESS_LIVE: LiveDTO = {
+  ...PROFILED_LIVE,
+  session_ref: 'spr-driverless-sid',
+  live_ref: 'spr-lr-driverless',
+  provider: undefined,
+  current_action: 'spr-driverless-action',
+}
+const DRIVERLESS_AT = liveAddress('spr-lr-driverless')
+
+/** The label the cell used to borrow. It is the name of the FIELD, and it is still a
+ *  correct label elsewhere — the context pane titles the profile row with it — which is
+ *  precisely why a cell painting it reads as a value nobody can tell apart from one. */
+const FIELD_LABEL = 'Provider profile'
+
+describe('SessionsWorkspaceView — with no driver on the row, the cell paints no name at all', () => {
+  beforeEach(() => {
+    harness.live.mockResolvedValue({
+      items: [DRIVERLESS_LIVE],
+      has_more: false,
+    })
+    harness.listRuns.mockResolvedValue({ items: [], has_more: false })
+  })
+
+  it.each([
+    [
+      'refused',
+      () => {
+        grant(...BOTH_READ_AND_RUN_WRITE, PROFILE_READ)
+        harness.listProfiles.mockRejectedValue(FORBIDDEN)
+      },
+    ],
+    [
+      'failed',
+      () => {
+        grant(...BOTH_READ_AND_RUN_WRITE, PROFILE_READ)
+        harness.listProfiles.mockRejectedValue(LIVE_5XX)
+      },
+    ],
+    [
+      'out of the page',
+      () => {
+        grant(...BOTH_READ_AND_RUN_WRITE, PROFILE_READ)
+        harness.listProfiles.mockResolvedValue({
+          items: [OTHER_PROFILE],
+          has_more: true,
+        })
+      },
+    ],
+  ] as const)(
+    'profiles %s and the row declares no driver: the quiet dash, the reference on title, never the field label',
+    async (_how, arrange) => {
+      arrange()
+      renderView()
+      const row = await rowFor(DRIVERLESS_AT, 'spr-auth/driverless/setup-row')
+      await waitFor(() => expect(harness.listProfiles).toHaveBeenCalled())
+      await quiesce()
+
+      const cell = instanceCell(row)
+      expect(cell, 'spr-auth/driverless/the-cell-is-there').not.toBeNull()
+      // ⛔ THE DASH IS WHAT IS SEEN; "not known" IS WHAT IS READ OUT. A glyph alone has
+      //    no meaning in the accessibility tree, and the only text this cell used to
+      //    carry was the `ppf_…` reference on `title` — which names the profile without
+      //    saying that its NAME is the thing missing (WCAG 2.1 AA 4.1.2).
+      expect(
+        cell?.querySelector('[aria-hidden="true"]')?.textContent,
+        'spr-auth/driverless/says-nothing-rather-than-a-label',
+      ).toBe('—')
+      expect(
+        within(cell).getByText('Provider profile name not known'),
+        'spr-auth/driverless/the-dash-has-words',
+      ).toBeInTheDocument()
+      // NOTHING IS LOST: the reference is still reachable from the cell that refuses to
+      // read it out, which is the same contract the granted case pins.
+      expect
+        .soft(
+          cell?.getAttribute('title'),
+          'spr-auth/driverless/reference-still-on-the-title',
+        )
+        .toBe(PROFILE.profile_ref)
+      // The label is not painted ANYWHERE on this screen — not in this cell and not
+      // borrowed into another one.
+      expect
+        .soft(
+          screen.queryByText(FIELD_LABEL),
+          'spr-auth/driverless/the-field-label-is-not-a-value',
+        )
+        .not.toBeInTheDocument()
+      // …and the session half is untouched, exactly as in the driver-bearing cases.
+      expect
+        .soft(
+          within(row).getByText('spr-driverless-action'),
+          'spr-auth/driverless/observed-half-untouched',
+        )
+        .toBeInTheDocument()
+    },
+  )
+
+  /**
+   * WHICH OF THE FOUR IT WAS — the half the cell cannot say.
+   *
+   * ⛔ A ROW'S FALLBACK IS HONEST ABOUT THE VALUE AND SILENT ABOUT THE CAUSE. Refused,
+   *    refused by the engine, failed and "older than the page the engine returned" all
+   *    reach the same dash, and a reader seeing it has no way to tell "I am not allowed
+   *    to see any profile name on this screen" from "this one profile is not in the
+   *    page". Only the surface holds that fact, so only the surface can say it — once,
+   *    in the shape the findings table already uses.
+   *
+   * ⛔ AND THE FOURTH CAUSE IS SILENT ON PURPOSE: there the read ANSWERED. A line saying
+   *    the names could not be read would be false about a read that succeeded.
+   */
+  it('profiles refused by the GRANT: the screen says so once, and names the grant', async () => {
+    grant(...BOTH_READ_AND_RUN_WRITE)
+    renderView()
+    await rowFor(DRIVERLESS_AT, 'spr-auth/driverless/refused-row')
+    await quiesce()
+    const notice = await screen.findByTestId('sessions-profile-names-refused')
+    expect(
+      notice.textContent,
+      'spr-auth/driverless/notice-names-the-grant',
+    ).toContain('sessions:profile:read')
+    expect(
+      screen.queryByTestId('sessions-profile-names-failed'),
+      'spr-auth/driverless/one-cause-one-line',
+    ).toBeNull()
+    // The read that was never permitted was never made, which is what "refused" means
+    // here: the query is disabled rather than attempted and caught.
+    expect(
+      harness.listProfiles,
+      'spr-auth/driverless/an-ungranted-read-is-not-attempted',
+    ).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['refused by the engine', FORBIDDEN],
+    ['step-up', STEP_UP],
+    ['failed', LIVE_5XX],
+  ] as const)(
+    'profiles %s with the grant held: the screen says the read did not answer',
+    async (_how, failure) => {
+      // A 403 and a 5xx are one line on purpose, and it is the line this screen already
+      // uses for its other halves (`partial.runLookupFailed`): with the grant HELD, what
+      // the reader can act on is that the answer did not arrive. The grant-absent case
+      // above is the one that names a permission, because there is one to name.
+      grant(...BOTH_READ_AND_RUN_WRITE, PROFILE_READ)
+      harness.listProfiles.mockRejectedValue(failure)
+      renderView()
+      await rowFor(DRIVERLESS_AT, 'spr-auth/driverless/failed-row')
+      await waitFor(() => expect(harness.listProfiles).toHaveBeenCalled())
+      expect(
+        await screen.findByTestId('sessions-profile-names-failed'),
+        'spr-auth/driverless/failed-notice',
+      ).toBeInTheDocument()
+      expect(
+        screen.queryByTestId('sessions-profile-names-refused'),
+        'spr-auth/driverless/one-cause-one-line',
+      ).toBeNull()
+    },
+  )
+
+  it('profile out of the page: no notice at all, because the read ANSWERED', async () => {
+    grant(...BOTH_READ_AND_RUN_WRITE, PROFILE_READ)
+    harness.listProfiles.mockResolvedValue({
+      items: [OTHER_PROFILE],
+      has_more: true,
+    })
+    renderView()
+    const row = await rowFor(
+      DRIVERLESS_AT,
+      'spr-auth/driverless/out-of-page-row',
+    )
+    await waitFor(() => expect(harness.listProfiles).toHaveBeenCalled())
+    await quiesce()
+    // The dash is there — this is the same cell as the cases above — and the screen
+    // still does not claim a read failed.
+    expect(
+      within(instanceCell(row)).getByText('Provider profile name not known'),
+      'spr-auth/driverless/out-of-page-still-dashes',
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByTestId('sessions-profile-names-refused'),
+      'spr-auth/driverless/no-refusal-was-claimed',
+    ).toBeNull()
+    expect(
+      screen.queryByTestId('sessions-profile-names-failed'),
+      'spr-auth/driverless/no-failure-was-claimed',
+    ).toBeNull()
+  })
+
+  it('NEGATIVE CONTROL: a refused read whose rows all name themselves says nothing', async () => {
+    // Withheld where it changes nothing: every row falls back to the driver it declares,
+    // so a line regretting the directory read would be the console apologising for a
+    // read it did not need. Without this control, "says so once" would also hold for a
+    // notice that is always on.
+    grant(...BOTH_READ_AND_RUN_WRITE)
+    harness.live.mockResolvedValue({
+      items: [{ ...DRIVERLESS_LIVE, provider: 'spr-driver-present' }],
+      has_more: false,
+    })
+    renderView()
+    await rowFor(DRIVERLESS_AT, 'spr-auth/driverless/named-row')
+    await quiesce()
+    expect(
+      screen.queryByTestId('sessions-profile-names-refused'),
+      'spr-auth/driverless/nothing-to-regret',
+    ).toBeNull()
+  })
+
+  it('POSITIVE CONTROL: the same row with a driver still paints it, so the dash above is the absence and not a broken cell', async () => {
+    grant(...BOTH_READ_AND_RUN_WRITE, PROFILE_READ)
+    harness.live.mockResolvedValue({
+      items: [{ ...DRIVERLESS_LIVE, provider: 'spr-driver-present' }],
+      has_more: false,
+    })
+    harness.listProfiles.mockRejectedValue(FORBIDDEN)
+    renderView()
+    const row = await rowFor(DRIVERLESS_AT, 'spr-auth/driverless/control-row')
+    await waitFor(() => expect(harness.listProfiles).toHaveBeenCalled())
+    await waitFor(() =>
+      expect(
+        instanceCell(row)?.textContent,
+        'spr-auth/driverless/control-paints-the-declared-driver',
+      ).toBe('spr-driver-present'),
+    )
   })
 })

@@ -85,6 +85,7 @@
     "empty": "Aucune correspondance.",
     "navigation": "Navigation",
     "actions": "Actions",
+    "startSession": "Démarrer une session",
     "results": "Résultats",
     "searchResults": "Résultats dans vos données",
     "searchTruncated": "Il existe d’autres correspondances — affinez la recherche.",
@@ -145,7 +146,8 @@
     "primarySidebar": "Principale",
     "mainNavigation": "Navigation principale",
     "graphControls": "Contrôles du graphe",
-    "graphMinimap": "Mini-carte du graphe"
+    "graphMinimap": "Mini-carte du graphe",
+    "pageActions": "Actions de la page"
   },
   "privileged": {
     "auditedNotice": "Cette action est consignée dans le registre d’audit inviolable.",

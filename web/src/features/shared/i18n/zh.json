@@ -35,5 +35,14 @@
     "savedViewRejected_other": "“{{name}}”中保存的 {{count}} 个值无法使用（{{keys}}），视图已回退到默认值。",
     "thisSavedView": "这个保存的视图",
     "dismiss": "关闭"
+  },
+  "workspaceRequired": {
+    "use": "使用 {{name}}",
+    "choose": "选择工作区"
+  },
+  "names": {
+    "untitledSession": "未命名会话",
+    "unknownUser": "未知用户",
+    "unknownWorkspace": "未知工作区"
   }
 }

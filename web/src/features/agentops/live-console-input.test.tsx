@@ -115,11 +115,12 @@ const asKeystrokes = (text: string) =>
 
 async function send(text: string) {
   const user = userEvent.setup()
-  await user.type(screen.getByRole('textbox'), asKeystrokes(text))
+  const box = screen.getByRole('textbox', { name: 'Session turn' })
+  await user.type(box, asKeystrokes(text))
   // The typed value must be what we meant before anything is asserted about the body:
   // an escaping mistake here would silently test a different string than the one named.
-  expect(screen.getByRole('textbox')).toHaveValue(text)
-  await user.click(screen.getByRole('button', { name: /send/i }))
+  expect(box).toHaveValue(text)
+  await user.click(screen.getAllByRole('button', { name: /^send$/i })[0])
   return user
 }
 
@@ -137,7 +138,10 @@ describe('LiveConsole interrupt contract', () => {
   it('interrupts the turn without stopping the run or losing an unsent draft', async () => {
     wrap(codexRun)
     const user = userEvent.setup()
-    await user.type(screen.getByRole('textbox'), 'next turn draft')
+    await user.type(
+      screen.getByRole('textbox', { name: 'Session turn' }),
+      'next turn draft',
+    )
     await user.click(screen.getByRole('button', { name: 'Interrupt turn' }))
     await waitFor(() =>
       expect(toast.success).toHaveBeenCalledWith(
@@ -148,9 +152,11 @@ describe('LiveConsole interrupt contract', () => {
       path: '/v1/m/sessions/runs/run_1/interrupt',
       body: undefined,
     })
-    expect(screen.getByRole('textbox')).toHaveValue('next turn draft')
-    expect(screen.getByRole('textbox')).toBeEnabled()
-    await user.click(screen.getByRole('button', { name: 'Send' }))
+    expect(screen.getByRole('textbox', { name: 'Session turn' })).toHaveValue(
+      'next turn draft',
+    )
+    expect(screen.getByRole('textbox', { name: 'Session turn' })).toBeEnabled()
+    await user.click(screen.getAllByRole('button', { name: 'Send' })[0])
     await waitFor(() =>
       expect(http.post).toHaveBeenLastCalledWith(
         '/v1/m/sessions/runs/run_1/input',
@@ -224,7 +230,10 @@ describe('LiveConsole interrupt contract', () => {
       ),
     )
     wrap({ ...codexRun, work_item_id: 'work-a', work_lease_fence: 7 })
-    await userEvent.type(screen.getByRole('textbox'), 'unsent draft')
+    await userEvent.type(
+      screen.getByRole('textbox', { name: 'Session turn' }),
+      'unsent draft',
+    )
     await userEvent.click(
       screen.getByRole('button', { name: 'Interrupt turn' }),
     )
@@ -236,7 +245,9 @@ describe('LiveConsole interrupt contract', () => {
     expect(http.post).toHaveBeenCalledTimes(1)
     expect(toast.success).not.toHaveBeenCalled()
     expect(toast.error).not.toHaveBeenCalled()
-    expect(screen.getByRole('textbox')).toHaveValue('unsent draft')
+    expect(screen.getByRole('textbox', { name: 'Session turn' })).toHaveValue(
+      'unsent draft',
+    )
   })
 
   it.each([undefined, 0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1])(
@@ -331,21 +342,31 @@ describe('LiveConsole send contract', () => {
     expect(body).not.toHaveProperty('message')
   })
 
-  it('sends a Claude stream-json run exactly {line}, and never a text', async () => {
+  it('sends a Claude stream-json run as a wrapped user frame, never asking the operator for NDJSON', async () => {
     wrap(claudeRun)
-    await send('{"type":"user"}')
+    await send('hello')
     await waitFor(() => expect(http.post).toHaveBeenCalled())
     const { path, body } = posted()
     expect(path).toBe('/v1/m/sessions/runs/run_1/input')
-    expect(body).toEqual({ line: '{"type":"user"}' })
+    expect(body).toEqual({
+      line: JSON.stringify({
+        type: 'user',
+        message: { role: 'user', content: 'hello' },
+      }),
+    })
     expect(body).not.toHaveProperty('text')
   })
 
-  it('keeps a legacy run with no profile on the raw line contract', async () => {
+  it('wraps a legacy run with no profile as a sentence too', async () => {
     wrap(legacyRun)
     await send('raw')
     await waitFor(() => expect(http.post).toHaveBeenCalled())
-    expect(posted().body).toEqual({ line: 'raw' })
+    expect(posted().body).toEqual({
+      line: JSON.stringify({
+        type: 'user',
+        message: { role: 'user', content: 'raw' },
+      }),
+    })
   })
 
   it('does not decide from the text: NDJSON-looking input to a Codex run is still {text}', async () => {
@@ -357,27 +378,36 @@ describe('LiveConsole send contract', () => {
     expect(posted().body).toEqual({ text: '{"type":"user"}' })
   })
 
-  it('labels the Codex control as a message and never asks for NDJSON', async () => {
+  it('labels every driver as a sentence and never asks for NDJSON on the default field', async () => {
     wrap(codexRun)
-    const box = screen.getByRole('textbox')
-    expect(box).toHaveAttribute('placeholder', 'Send a message to the session…')
-    expect(box).toHaveAccessibleName('Session message')
+    const box = screen.getByRole('textbox', { name: 'Session turn' })
+    expect(box).toHaveAttribute('placeholder', 'Send a sentence…')
     expect(box.getAttribute('placeholder')).not.toMatch(/NDJSON/i)
-    expect(screen.queryByText(/NDJSON/i)).toBeNull()
   })
 
-  it('keeps the NDJSON wording exactly where a raw line is what is accepted', async () => {
+  it('labels a Claude run as a sentence too', async () => {
     wrap(claudeRun)
-    const box = screen.getByRole('textbox')
-    expect(box).toHaveAttribute('placeholder', 'Send an NDJSON line to stdin…')
-    expect(box).toHaveAccessibleName('Session input line')
+    const box = screen.getByRole('textbox', { name: 'Session turn' })
+    expect(box).toHaveAttribute('placeholder', 'Send a sentence…')
+    expect(box.getAttribute('placeholder')).not.toMatch(/NDJSON/i)
+  })
+
+  it('keeps the NDJSON wording only under the advanced disclosure', async () => {
+    wrap(claudeRun)
+    expect(screen.getByText(/Advanced/i)).toBeInTheDocument()
+    const wire = screen.getByRole('textbox', { name: 'Session input line' })
+    expect(wire).toHaveAttribute('placeholder', 'Send an NDJSON line to stdin…')
   })
 
   it('clears the box only after the accepted response, and retains it on a refusal', async () => {
     // Accepted: the box is emptied.
     const { unmount } = wrap(codexRun)
     await send('accepted turn')
-    await waitFor(() => expect(screen.getByRole('textbox')).toHaveValue(''))
+    await waitFor(() =>
+      expect(screen.getByRole('textbox', { name: 'Session turn' })).toHaveValue(
+        '',
+      ),
+    )
     unmount()
 
     // Refused: the engine's 400 must not cost the operator their text.
@@ -392,6 +422,90 @@ describe('LiveConsole send contract', () => {
     wrap(codexRun)
     await send('refused turn')
     await waitFor(() => expect(http.post).toHaveBeenCalled())
-    expect(screen.getByRole('textbox')).toHaveValue('refused turn')
+    expect(screen.getByRole('textbox', { name: 'Session turn' })).toHaveValue(
+      'refused turn',
+    )
+  })
+})
+
+// THE TURN IS A CONTROL, AND A WORK-BOUND RUN HAS ONE CONTROL PLANE.
+//
+// The console read the lease fence for INTERRUPT and for nothing else, so a work-bound
+// session could be attached, read and typed into, and every turn came back 409
+// "work-bound session requires fenced runtime control" (`runtime_work.go`
+// refuseLegacyControlUnderWork, reached from the unfenced /input) — while
+// `agent session input --text 'x' --work-lease-fence N` succeeded on that same run.
+// These cases assert the BODY, the same way the send-contract ones above do: the
+// defect was a missing sibling key on the wire, not a helper anyone could have
+// inspected in isolation.
+describe('LiveConsole send contract under a work lease', () => {
+  const FENCE = 7
+  const bound = (run: RunDTO): RunDTO => ({
+    ...run,
+    work_item_id: 'work-a',
+    work_lease_fence: FENCE,
+    work_owner_epoch: 2,
+    work_dispatch_key: 'dispatch-a',
+  })
+
+  it('carries the observed fence on a {text} turn, exactly as the CLI does', async () => {
+    wrap(bound(codexRun))
+    await send('review the remaining tests')
+    await waitFor(() => expect(http.post).toHaveBeenCalled())
+    const { path, body } = posted()
+    expect(path).toBe('/v1/m/sessions/runs/run_1/input')
+    expect(body).toEqual({
+      text: 'review the remaining tests',
+      work_lease_fence: FENCE,
+    })
+  })
+
+  it('carries the observed fence on a {line} turn too', async () => {
+    wrap(bound(claudeRun))
+    await send('continue')
+    await waitFor(() => expect(http.post).toHaveBeenCalled())
+    expect(posted().body).toEqual({
+      line: JSON.stringify({
+        type: 'user',
+        message: { role: 'user', content: 'continue' },
+      }),
+      work_lease_fence: FENCE,
+    })
+  })
+
+  it('carries the fence on the advanced wire line, which is a control as well', async () => {
+    const user = userEvent.setup()
+    wrap(bound(claudeRun))
+    const wire = screen.getByRole('textbox', { name: 'Session input line' })
+    await user.type(wire, asKeystrokes('{"type":"user"}'))
+    // Both forms label their button "Send": the wire one is the second, under the
+    // advanced disclosure, exactly as the placeholder case above addresses it.
+    await user.click(screen.getAllByRole('button', { name: /^send$/i })[1])
+    await waitFor(() => expect(http.post).toHaveBeenCalled())
+    expect(posted().body).toEqual({
+      line: '{"type":"user"}',
+      work_lease_fence: FENCE,
+    })
+  })
+
+  // ⛔ AND THE KEY IS OMITTED, NOT SENT EMPTY, ON A RUN THAT HAS NO LEASE. The engine
+  //    answers 400 to a non-positive `work_lease_fence`, so a fence field that always
+  //    travelled would break every ordinary run — the mirror of the missing-fence defect.
+  it('omits the key entirely on a run with no work stamp', async () => {
+    wrap(codexRun)
+    await send('hello')
+    await waitFor(() => expect(http.post).toHaveBeenCalled())
+    expect(posted().body).not.toHaveProperty('work_lease_fence')
+  })
+
+  // A stamped run whose fence did not arrive as a positive integer has nothing to
+  // present. It is left to the 409 of the unfenced plane — which says the session
+  // cannot be controlled from here, and is true — rather than to a 400 that would
+  // blame the request.
+  it('presents no fence it does not have, and never invents one', async () => {
+    wrap({ ...codexRun, work_item_id: 'work-a', work_owner_epoch: 2 })
+    await send('hello')
+    await waitFor(() => expect(http.post).toHaveBeenCalled())
+    expect(posted().body).toEqual({ text: 'hello' })
   })
 })

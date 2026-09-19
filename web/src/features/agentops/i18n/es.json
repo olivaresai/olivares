@@ -154,8 +154,10 @@
   "live": {
     "inputPlaceholder": "Envía una línea NDJSON a stdin…",
     "inputAria": "Línea de entrada de la sesión",
-    "textPlaceholder": "Envía un mensaje a la sesión…",
-    "textAria": "Mensaje de la sesión",
+    "textPlaceholder": "Envía una frase…",
+    "textAria": "Turno de la sesión",
+    "advanced": "Avanzado · línea en bruto",
+    "advancedHint": "Envía una línea NDJSON a stdin. El campo de frase es el valor por defecto.",
     "send": "Enviar",
     "noOutput": "Aún no hay salida.",
     "waiting": "Esperando salida…",
@@ -330,6 +332,8 @@
     "title": "Perfiles de proveedor",
     "subtitle": "La identidad duradera de una instancia de proveedor configurada en un entorno de ejecución: qué driver la sirve y bajo qué directorio de configuración corre una sesión lanzada. Un perfil registra directorios que ya existen: no instala nada ni inicia sesión en nada.",
     "register": "Registrar perfil",
+    "nextAction": "Registrar un perfil",
+    "rowMenu": "Acciones de fila para {{name}}",
     "search": "Buscar perfiles…",
     "allStates": "Todos los estados",
     "cols": {

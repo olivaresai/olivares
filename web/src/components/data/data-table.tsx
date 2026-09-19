@@ -31,6 +31,8 @@ import {
 } from 'react'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
+import { ScrollEdgeHints } from './scroll-edges'
+import { useScrollEdges } from '@/lib/hooks/use-scroll-edges'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { EmptyState } from '@/components/ui/empty-state'
@@ -357,10 +359,21 @@ export function DataTable<TData extends RowData>({
   })
 
   const rowH = DENSITY_ROW[density].className
+  // The header strip is one row tall INCLUDING the rule under it — see DENSITY_ROW.
+  const headH = DENSITY_ROW[density].headClassName
   const estRowPx = DENSITY_ROW[density].px
   const rows = table.getRowModel().rows
   const colCount = table.getAllLeafColumns().length
   const headerRowCount = table.getHeaderGroups().length
+
+  // A TABLE THAT DOES NOT FIT SAYS SO. The hint itself, and the reason it
+  // is a measured fade rather than a CSS scroll shadow, live in `scroll-edges.tsx` —
+  // `StaticTable`'s callers need the same thing and a second copy would drift.
+  const scrollEdges = useScrollEdges(scrollRef, [
+    rows.length,
+    colCount,
+    density,
+  ])
 
   // Resolve one status block outside the table, preserving loading/error precedence.
   const statusNode: ReactElement | null = isLoading ? null : error ? (
@@ -680,8 +693,11 @@ export function DataTable<TData extends RowData>({
       aria-rowindex={dataRowIndex + 2}
       aria-selected={selectable ? controlledSelectedIds.has(row.id) : undefined}
       className={cn(
-        'border-b border-border transition-colors last:border-0 hover:bg-muted',
+        'border-b border-l-2 border-l-transparent border-border transition-colors last:border-b-0 hover:bg-surface',
         clickable && 'cursor-pointer',
+        ((selectable && controlledSelectedIds.has(row.id)) ||
+          (nav && active?.r === dataRowIndex)) &&
+          'border-l-accent bg-surface',
       )}
       onClick={
         onRowClick
@@ -699,10 +715,35 @@ export function DataTable<TData extends RowData>({
             aria-colindex={c + 1}
             tabIndex={nav ? (isActive ? 0 : -1) : undefined}
             className={cn(
-              'px-3 align-middle outline-none',
+              // ⛔ ONE LINE PER CELL, AND IT IS THE TABLE'S RULE, NOT EACH TABLE'S
+              //    Measured on the seeded estate before this change:
+              //    `/platforms` 185 px a row, `/audit` 51, `/inventory` 49 at 1440 and
+              //    93 at 390, `/finops` and `/identity` 36 at 1440 and 53 at 390 — none
+              //    of them from a cell that ASKED for two lines. They are `Sin cabecera
+              //    de espacio` and `Bedrock Converse` wrapping inside a column too
+              //    narrow for them, which is the same defect on nine screens and the
+              //    reason the two are one defect and not two.
+              //
+              //    A wrapped cell does not fail quietly: it sets the height of EVERY row
+              //    in its table, so one long value costs the operator half the list. A
+              //    nowrap cell makes the TABLE wider instead, which the scroller below
+              //    already handles and which the hint now makes visible.
+              //
+              //    A cell that genuinely wants two lines opts out in its own `cell`
+              //    renderer (`whitespace-normal`), which is where that decision is
+              //    legible. The default is the common case.
+              'px-3 align-middle whitespace-nowrap outline-none',
               rowH,
+              // A CELL THAT HOLDS A CONTROL SPENDS NO PADDING ON IT — the same rule
+              // `StaticTable` carries, for the same measurement. The row is 36 px and
+              // `py-1` leaves 28 px of content box; a `size="sm"` button is 28 px of box
+              // plus the half-leading of its line, and an icon button is 32. Emptying the
+              // cell that held the button brought `/security` 37 → 36 and `/backups`
+              // 40.5 → 36 with the text cells untouched, which is what says the padding
+              // is the part with no work to do.
+              'has-[button]:py-0 has-[a]:py-0 has-[input]:py-0 has-[select]:py-0',
               isActive &&
-                'bg-muted ring-2 ring-ring -outline-offset-2 ring-inset',
+                'bg-surface ring-2 ring-ring ring-offset-2 ring-offset-background',
             )}
           >
             {flexRender(cell.column.columnDef.cell, cell.getContext())}
@@ -743,14 +784,16 @@ export function DataTable<TData extends RowData>({
         </div>
       )}
 
-      <div className="overflow-hidden rounded-lg border border-border bg-surface">
+      <div className="relative overflow-hidden rounded-lg border border-border bg-surface">
+        <ScrollEdgeHints edges={scrollEdges} />
         <div
           ref={scrollRef}
           className={cn(
             enableVirtual ? 'overflow-auto' : 'overflow-x-auto',
             // WCAG 2.4.11 Focus Not Obscured: reserve the sticky-header height so a
             // focused cell scrolled to the top is not hidden under it (CSS C43). The
-            // header is one row tall, so the padding follows the density.
+            // header is one row tall (rule included, so one pixel less), so the padding
+            // follows the density and reserves a little more than the strip needs.
             sticky && (density === 'compact' ? 'scroll-pt-8' : 'scroll-pt-10'),
           )}
           style={
@@ -819,8 +862,12 @@ export function DataTable<TData extends RowData>({
                                 : undefined
                         }
                         className={cn(
-                          'bg-muted px-3 text-left align-middle text-caption font-medium tracking-wide text-muted-foreground uppercase',
-                          rowH,
+                          // One line here too, for the same reason and one more: a
+                          // header that wraps makes the header row taller than the
+                          // density it declares, and `scroll-pt-*` reserves the density,
+                          // so a focused cell scrolled to the top went under it.
+                          'bg-muted px-3 text-left align-middle text-caption font-medium tracking-wide whitespace-nowrap text-muted-foreground uppercase',
+                          headH,
                           sticky && 'sticky top-0 z-10',
                         )}
                         style={{

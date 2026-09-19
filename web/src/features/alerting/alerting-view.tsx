@@ -394,6 +394,20 @@ function RoutesTab({
           <EmptyState
             title={t('routes.empty')}
             description={t('routes.emptyHint')}
+            // "Add a route to send matching findings to a destination" — the same
+            // button the page offers above the table, on the same right.
+            action={
+              canWrite ? (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => setCreating(true)}
+                >
+                  <Plus />
+                  {t('routes.add')}
+                </Button>
+              ) : null
+            }
           />
         }
         getRowId={(route) => route.id ?? route.name}

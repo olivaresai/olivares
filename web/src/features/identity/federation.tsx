@@ -398,7 +398,9 @@ function ScimSection() {
           >
             {(entries) =>
               entries.items.length === 0 ? (
+                // No leaver processed is the good state of an identity plane.
                 <EmptyState
+                  quiet
                   title={t('scim.noLeaver')}
                   description={t('scim.noLeaverHint')}
                 />

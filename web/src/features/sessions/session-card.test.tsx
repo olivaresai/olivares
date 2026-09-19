@@ -205,6 +205,40 @@ describe('SessionCard — provenance comes from the engine', () => {
     expect(screen.getAllByText('nightly-indexer').length).toBeGreaterThan(0)
   })
 
+  /**
+   * THE CARD IS THE FOURTH CALLER OF THE ONE LADDER, and it was the last surface still
+   * painting a raw reference as a name: `sessionLabel`'s second rung was `sessionRef`,
+   * so a discovered session with no run, no summary, no goal and no reported action
+   * titled its own detail sheet `sess-found`, in monospace, while the table two panes
+   * left called the same row "Untitled session". The reference is not lost — it is in
+   * the identifiers this sheet exists to show, and on the title's own hover.
+   */
+  it('titles itself with a NAME, never with the session reference', async () => {
+    vi.mocked(agentOpsApi.listRuns).mockResolvedValue({
+      items: [],
+      has_more: false,
+    })
+    vi.mocked(sessionsApi.liveOne).mockResolvedValue({
+      ...live,
+      session_ref: 'sess-found',
+      live_ref: 'lr-found',
+    })
+    renderCard({ sessionRef: 'sess-found' })
+    const title = await screen.findByTestId('session-card-title')
+    expect(title).toHaveTextContent('Untitled session')
+    expect(title.textContent).not.toMatch(/^sess-found/)
+    // The distinguishing tail stays beside the word, so two untitled sheets are still
+    // told apart, and the WHOLE reference is on the hover.
+    expect(title).toHaveTextContent('found')
+    expect(title.getAttribute('title')).toContain('sess-found')
+  })
+
+  it('titles itself with the run name when the operator typed one', async () => {
+    renderCard({ sessionRef: 'sess-ours' })
+    const title = await screen.findByTestId('session-card-title')
+    expect(title).toHaveTextContent('nightly-indexer')
+  })
+
   it('states DISCOVERED when the engine links no run — and says why', async () => {
     vi.mocked(agentOpsApi.listRuns).mockResolvedValue({
       items: [],
@@ -452,7 +486,7 @@ describe('SessionCard — control is what can be done, not what fits', () => {
   })
 })
 
-// B2 — a row is named by its live_ref. Two homes may announce one provider session
+// A row is named by its live_ref. Two homes may announce one provider session
 // id, so the card resolves a scoped row by its own id, asks the engine for the run
 // it PROVED owns that row, and never falls back to the bare id.
 const managedLive: LiveDTO = {
@@ -489,7 +523,7 @@ const profiledRun: RunDTO = {
   live_ref: 'lr-managed-a',
 }
 
-describe('SessionCard — B2: a scoped row is named by its live_ref', () => {
+describe('SessionCard — a scoped row is named by its live_ref', () => {
   beforeEach(() => {
     vi.mocked(sessionsApi.live).mockResolvedValue({
       items: [],

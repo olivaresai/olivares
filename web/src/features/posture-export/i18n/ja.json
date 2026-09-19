@@ -47,6 +47,7 @@
     "colTime": "時刻",
     "colFilters": "フィルター",
     "colCounts": "件数",
-    "counts": "インベントリ {{inventory}} · 検出結果 {{findings}} · ドリフト {{drift}}"
+    "counts": "インベントリ {{inventory}} · 検出結果 {{findings}} · ドリフト {{drift}}",
+    "emptyAction": "今すぐ姿勢をエクスポート"
   }
 }

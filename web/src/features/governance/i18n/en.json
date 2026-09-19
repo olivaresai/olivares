@@ -655,7 +655,8 @@
     "notWiredBody": "No AgentCore exporter is configured for this tenant, so the engine declines the request. An operator enables it on the host by pointing this variable at the export configuration file:",
     "notWiredCredentials": "That file belongs to the operator and holds AWS write credentials. The console never shows, requests or edits it.",
     "deniedTitle": "The engine refused this export",
-    "pageTitle": "AgentCore export"
+    "pageTitle": "AgentCore export",
+    "emptyAction": "Compute the first plan"
   },
   "registerAgent": {
     "action": "Register agent",

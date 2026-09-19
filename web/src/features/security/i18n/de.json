@@ -13,6 +13,7 @@
     "description": "Befunde aus Schutzleitplanken, Anomalien und Forensik. Der Nachweis ist ein Fingerabdruck — es gibt keine Nutzdaten zum Aufklappen.",
     "empty": "Keine Befunde",
     "emptyHint": "Befunde erscheinen, sobald Schutzleitplanken, Anomalieerkennung und Forensik Nachweise aufzeichnen.",
+    "namesUnread": "Einige Sitzungsnamen konnten nicht gelesen werden, daher zeigen diese Zeilen ihre Referenz.",
     "export": {
       "action": "SARIF exportieren",
       "busy": "Export läuft…",

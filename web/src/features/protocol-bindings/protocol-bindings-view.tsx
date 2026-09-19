@@ -8,6 +8,7 @@ import { Cable, Inbox, Plus, RefreshCcw } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
+import { WorkspaceRequiredState } from '@/features/shared'
 import {
   Select,
   SelectContent,
@@ -179,7 +180,7 @@ export function ProtocolBindingsView() {
       }
     >
       {!activeWorkspace ? (
-        <EmptyState
+        <WorkspaceRequiredState
           icon={<Cable />}
           title={t('workspace.requiredTitle')}
           description={t('workspace.requiredBody')}

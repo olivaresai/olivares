@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Link } from '@tanstack/react-router'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { ClipboardList, Inbox } from 'lucide-react'
@@ -22,6 +23,7 @@ import {
   type HandoffOfferTarget,
   type HandoffWorkItemView,
 } from '@/features/communications'
+import { useCoalescedRefresh } from './coalesce'
 import { useOwnerLabel } from './owner-label'
 import { useAuth } from '@/lib/auth/context'
 import {
@@ -67,31 +69,21 @@ const STATUSES: WorkStatus[] = [
  * convenience default — it is the engine's behaviour when the key is absent. */
 type ArchivedFilter = 'any' | 'false' | 'true'
 
-/** How long the stream must stay quiet before one burst of events becomes one read. */
-const WORK_REFRESH_QUIET_MS = 150
-/** The longest a stream that never goes quiet may keep the list from refreshing. */
-const WORK_REFRESH_CEILING_MS = 1000
-
-/** The two timers of a coalesced refresh: the quiet window and its ceiling. */
-type PendingRefresh = { quiet: number | null; ceiling: number | null }
-
-function clearPendingRefresh(timers: PendingRefresh) {
-  if (timers.quiet !== null) window.clearTimeout(timers.quiet)
-  if (timers.ceiling !== null) window.clearTimeout(timers.ceiling)
-  timers.quiet = null
-  timers.ceiling = null
-}
-
 export function WorkView() {
   const etiquetaDuenno = useOwnerLabel()
   const { t } = useTranslation('work')
   const { activeTenant, can } = useAuth()
+  // Quién puede EMPEZAR trabajo: lanzar una sesión es lo que hace que aparezcan
+  // unidades aquí, y es el permiso que el compositor del turno ya comprueba.
+  const canStartWork = can('sessions:run:write')
   const qc = useQueryClient()
 
   const [status, setStatus] = useState<string>('')
   const [priority, setPriority] = useState<string>('')
   const [archived, setArchived] = useState<ArchivedFilter>('any')
   const [openItem, setOpenItem] = useState<string | null>(null)
+  /** Whether the reader narrowed the list themselves — the three controls above it. */
+  const hayFiltro = status !== '' || priority !== '' || archived !== 'any'
   const [streamUnavailable, setStreamUnavailable] = useState<string | null>(
     null,
   )
@@ -140,42 +132,31 @@ export function WorkView() {
   // invalidates the whole work key — the list, the open item with its lease and events,
   // the decisions — and the stream's own cursor handles resume (stream.ts).
   //
-  // ⛔ ONE BURST IS ONE READ. The list query carries an abort signal, and
-  //    `invalidateQueries` cancels a fetch still in flight before it starts the next one,
-  //    so invalidating on every frame turned a burst of N events into N-1 aborted reads
-  //    and one that answered: about sixty aborted reads per visit to /work, measured.
-  //    The key stays as wide as it is — the open item and the decisions must refresh too,
-  //    and dropping the signal would only turn aborted reads into discarded ones. What
-  //    changes is WHEN: the invalidation fires on the trailing edge of a quiet window, so
-  //    the read sees the state AFTER the burst and never one from its middle, and a
-  //    stream that never goes quiet still refreshes at the ceiling.
+  // ⛔ ONE BURST IS A BOUNDED NUMBER OF READS, AND IT USED TO BE ONE PER EVENT. The list
+  //    query carries an abort signal, and `invalidateQueries` cancels a fetch still in
+  //    flight before it starts the next one, so invalidating on every frame turned a
+  //    burst of N events into N-1 aborted reads and one that answered: about sixty
+  //    aborted reads on a single visit to /work. The key stays as wide as it is — the
+  //    open item and the decisions must refresh too, and dropping the signal would only
+  //    turn aborted reads into discarded ones. What changes is WHEN: the throttle in
+  //    `coalesce.ts` is LEADING-plus-trailing, so the first event of a quiet period
+  //    refreshes at once — the reason the stream is subscribed at all — and everything
+  //    arriving inside the window collapses into one more refresh at its end, which
+  //    reads the state AFTER the burst. A stream that never goes quiet costs two reads
+  //    per window instead of one per event.
   //
   // ⛔ `activeTenant` VA EN LAS DEPENDENCIAS. Sin él la retrollamada se queda con el inquilino
   // del primer render: tras cambiar de inquilino, cada evento del flujo invalidaría la clave del
   // ANTERIOR y la lista que el operador está mirando no se refrescaría nunca. Lo señaló
   // `react-hooks/exhaustive-deps` en el mismo cambio que metió la variable.
-  const pending = useRef<{ quiet: number | null; ceiling: number | null }>({
-    quiet: null,
-    ceiling: null,
-  })
   const refresh = useCallback(() => {
-    clearPendingRefresh(pending.current)
     void qc.invalidateQueries({ queryKey: workKeys.all(activeTenant) })
   }, [qc, activeTenant])
-  const onEvent = useCallback(() => {
-    const timers = pending.current
-    if (timers.quiet !== null) window.clearTimeout(timers.quiet)
-    timers.quiet = window.setTimeout(refresh, WORK_REFRESH_QUIET_MS)
-    if (timers.ceiling === null)
-      timers.ceiling = window.setTimeout(refresh, WORK_REFRESH_CEILING_MS)
-  }, [refresh])
-  // A refresh still pending when the view unmounts, or when the tenant changes under it,
-  // is dropped: the key it would invalidate is no longer the one on screen, and the new
-  // tenant's list is a new key that reads fresh on its own.
-  useEffect(() => {
-    const timers = pending.current
-    return () => clearPendingRefresh(timers)
-  }, [refresh])
+  // A window still open when the view unmounts, or when the tenant changes under it, is
+  // abandoned instead of flushed: the key it would invalidate is no longer the one on
+  // screen, and the new tenant's list is a new key that reads fresh on its own. The hook
+  // keys that on the identity of `refresh`, which carries exactly that tenant.
+  const onEvent = useCoalescedRefresh(refresh)
   const { status: streamStatus } = useWorkStream({
     enabled: can('sessions:work:read'),
     onEvent,
@@ -336,10 +317,46 @@ export function WorkView() {
             <WorkSection query={query}>
               {(page) =>
                 page.items.length === 0 ? (
+                  /* ⛔ «NADA COINCIDE CON ESTOS FILTROS» ES FALSO CUANDO NO HAY
+                     FILTROS. Medido a 1440 sobre el motor sembrado: la ruta abre sin
+                     filtro alguno y afirmaba que la lista vacía era el resultado de
+                     uno. Son dos estados distintos y sólo uno tiene siguiente acción:
+                     con filtro puesto, quitarlo; sin filtro, no hay nada que pulsar y
+                     la frase dice de dónde vendrán las unidades. */
                   <EmptyState
                     icon={<Inbox />}
-                    title={t('items.empty.title')}
-                    description={t('items.empty.body')}
+                    title={t(
+                      hayFiltro ? 'items.empty.title' : 'items.empty.allTitle',
+                    )}
+                    description={t(
+                      hayFiltro ? 'items.empty.body' : 'items.empty.allBody',
+                    )}
+                    /* Con filtro, la siguiente acción es quitarlo. SIN filtro, la
+                       siguiente acción es EMPEZAR trabajo: las unidades aparecen aquí
+                       según las registran las sesiones, así que la puerta es donde se
+                       lanza una — y sólo se ofrece a quien puede lanzarla, que no se
+                       encuentre con un 403 al otro lado. */
+                    action={
+                      hayFiltro ? (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => {
+                            setStatus('')
+                            setPriority('')
+                            setArchived('any')
+                          }}
+                        >
+                          {t('filters.clear')}
+                        </Button>
+                      ) : canStartWork ? (
+                        <Button variant="primary" size="sm" asChild>
+                          <Link to={'/sessions' as never}>
+                            {t('items.empty.start')}
+                          </Link>
+                        </Button>
+                      ) : null
+                    }
                   />
                 ) : (
                   <>

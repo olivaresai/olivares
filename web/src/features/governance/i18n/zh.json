@@ -652,7 +652,8 @@
     "notWiredBody": "未为此租户配置 AgentCore 导出器，因此引擎拒绝该请求。运维人员在主机上将此变量指向导出配置文件即可启用：",
     "notWiredCredentials": "该文件属于运维人员，其中含有 AWS 写入凭据。控制台绝不会显示、索取或编辑它。",
     "deniedTitle": "引擎拒绝了此次导出",
-    "pageTitle": "AgentCore 导出"
+    "pageTitle": "AgentCore 导出",
+    "emptyAction": "计算首个方案"
   },
   "registerAgent": {
     "action": "注册代理",

@@ -12,6 +12,7 @@ import { Link } from '@tanstack/react-router'
 import { CalendarClock, Bell, Siren, Zap } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
+import { XScroll } from '@/components/data/scroll-edges'
 import { Badge } from '@/components/ui/badge'
 import { StepUpRequiredState } from '@/components/layout/step-up-state'
 import { Button } from '@/components/ui/button'
@@ -215,8 +216,15 @@ export function AutomationsView() {
                   {t('triggers.empty')}
                 </p>
               ) : (
-                <div className="overflow-x-auto">
-                  <StaticTable>
+                /* ONE LINE PER ROW, and the overflow it creates announces itself.
+                   The trigger rows measured 61 px against the 36 px table budget,
+                   and the whole overrun was this table's last column: an event
+                   description wrapping to three lines while the other three columns
+                   held one word each. The description truncates and keeps its full
+                   text on `title`; `XScroll` replaces the bare scroller so a column
+                   pushed past the right edge is not read as the last column. */
+                <XScroll contentKey={eventTypes.data?.event_types.length}>
+                  <StaticTable oneLine>
                     <thead>
                       <tr>
                         <th>{t('triggers.typeColumn')}</th>
@@ -227,7 +235,7 @@ export function AutomationsView() {
                     </thead>
                     <tbody>
                       {eventTypes.data?.event_types.map((et) => (
-                        <tr key={et.type} className="align-top">
+                        <tr key={et.type}>
                           <td className="whitespace-nowrap">
                             <code className="font-mono text-caption">
                               {et.type}
@@ -259,13 +267,18 @@ export function AutomationsView() {
                             </code>
                           </td>
                           <td className="text-muted-foreground">
-                            {et.description}
+                            <span
+                              className="block max-w-[52ch] truncate"
+                              title={et.description}
+                            >
+                              {et.description}
+                            </span>
                           </td>
                         </tr>
                       ))}
                     </tbody>
                   </StaticTable>
-                </div>
+                </XScroll>
               )}
             </CardContent>
           </Card>

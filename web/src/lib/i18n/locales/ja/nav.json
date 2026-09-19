@@ -302,6 +302,7 @@
     "noTenant": "なし",
     "noWorkspace": "ワークスペースなし",
     "noEnvironment": "未申告",
+    "thisNode": "このノード",
     "hint": "次のセッションが実行される条件です。"
   },
   "launcher": {
@@ -318,6 +319,18 @@
     "startFailed": "セッションを開始できませんでした。",
     "noTenant": "セッションを開始する前に組織を選択してください。",
     "noProfileRead": "セッションはプロバイダープロファイルとして実行されますが、あなたのロールにはそれらを読む権限がありません。",
-    "readFailed": "プロバイダープロファイルを読み取れなかったため、ここからセッションを開始できません。"
+    "readFailed": "プロバイダープロファイルを読み取れなかったため、ここからセッションを開始できません。",
+    "send": "送信",
+    "turnPlaceholder": "文を送信…",
+    "turnAria": "セッションのターン",
+    "attachedRunning": "実行中",
+    "attachedWaiting": "あなたの応答待ち",
+    "attachedSettled": "終了",
+    "advanced": "詳細",
+    "advancedHint": "NDJSON 行を stdin に送ります。既定は文の欄です。",
+    "wirePlaceholder": "NDJSON 行を stdin に送信…",
+    "wireAria": "セッション入力行",
+    "turnFailed": "セッションはこのターンを受け付けられませんでした。",
+    "sendBackgroundHint": "Ctrl+Enter で送信し、次の文の下書きを残します。"
   }
 }

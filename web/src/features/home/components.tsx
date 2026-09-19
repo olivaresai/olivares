@@ -38,6 +38,24 @@ export interface EstateTileProps {
   value?: ReactNode
   caption?: ReactNode
   trend?: ReactNode
+  /**
+   * WHAT STATE THE FIGURE IS IN — painted on the CAPTION, never on the numeral.
+   *
+   * ⛔ IT REACHES THE DOM, AND FOR ONE ROUND IT DID NOT. The work-first pass took colour
+   *    off the figures (a grid of tinted numerals is a grid with no emphasis) by
+   *    dropping `tone` out of the destructuring — which also dropped the signal, not
+   *    just its position: four callers went on computing `warning`/`danger` and a Spend
+   *    tile whose run-rate was over budget looked exactly like one under it.
+   *
+   * ⛔ THE CAPTION IS THE STATE WORD. It is the line where a tile says what it IS rather
+   *    than how much, so it is the line the ok/warn/fail tokens belong on. The accent
+   *    is not one of them: the bar reserves orange for selection, the primary action
+   *    and links, so a tile never uses it to mean "bad".
+   *
+   * ⛔ AND IT QUALIFIES A FIGURE, so like `partial` it is rendered ONLY in `ready`: with
+   *    the figure replaced by an em-dash there is nothing to qualify, and a red retry
+   *    hint would say the estate is down when what is down is the read.
+   */
   tone?: MetricStatProps['tone']
   state: TileState
   /** WHAT THE FIGURE COVERS — a scope disclosure (e.g. "tenant-wide, not filtered by
@@ -82,6 +100,15 @@ function CaptionLines({
   )
 }
 
+/** The semantic token each state word is painted in. `default` adds nothing, so the
+ *  caption keeps the muted register `MetricStat` already gives it. */
+const STATE_TONE: Record<NonNullable<EstateTileProps['tone']>, string> = {
+  default: '',
+  success: 'text-success',
+  warning: 'text-warning',
+  danger: 'text-danger',
+}
+
 export function EstateTile({
   to,
   icon,
@@ -89,10 +116,10 @@ export function EstateTile({
   value,
   caption,
   trend,
-  tone,
   state,
   scope,
   partial,
+  tone = 'default',
 }: EstateTileProps) {
   const { t } = useTranslation('home')
 
@@ -154,20 +181,28 @@ export function EstateTile({
       <MetricStat
         icon={icon}
         label={label}
-        value={value}
+        value={
+          <span data-testid="estate-kpi-value" className="text-foreground">
+            {value}
+          </span>
+        }
         caption={
-          partialLines || scope ? (
-            <CaptionLines
-              caption={caption}
-              partial={partialLines}
-              scope={scope}
-            />
-          ) : (
-            caption
-          )
+          // The state word is always the same element, whatever the tone: a reader —
+          // and a test — finds it in one place, and `default` simply adds no token.
+          <CaptionLines
+            caption={
+              <span
+                data-testid="estate-tile-state"
+                className={STATE_TONE[tone]}
+              >
+                {caption}
+              </span>
+            }
+            partial={partialLines}
+            scope={scope}
+          />
         }
         trend={trend}
-        tone={tone}
       />
     </CoverageLinkTile>
   )

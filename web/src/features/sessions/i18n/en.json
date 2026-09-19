@@ -3,6 +3,7 @@
   "subtitle": "Live agent operation — what each session is doing right now, its tokens, cost and cadence, updated over a live stream.",
   "refresh": "Refresh",
   "search": "Search session, agent, action…",
+  "untitled": "Untitled session",
   "allStates": "All states",
   "summary": {
     "active": "Active",
@@ -25,7 +26,8 @@
     "lastSeen": "Last seen",
     "provenance": "Origin",
     "control": "Control",
-    "instance": "Instance"
+    "instance": "Instance",
+    "instanceUnknown": "Provider profile name not known"
   },
   "state": {
     "active": "Active",
@@ -103,7 +105,9 @@
     "noRunRead": "Launched sessions are not shown: your role does not include sessions:run:read. A session below reading as discovered may still have been launched by Olivares — this list could not check.",
     "truncated": "This is the most recent page, not the whole estate. Origin here is joined over what is loaded, so a session whose run has scrolled off can read as discovered; open a session to have the engine answer for it.",
     "runLookupFailed": "The launched half could not be read: the run lookup failed. Rows below show what the observed half returned; origin is reported as not read rather than guessed.",
-    "liveLookupFailed": "The observed half could not be read: the live lookup failed. Rows below are the launched ones; the telemetry columns are empty because nothing could be read, not because there is none."
+    "liveLookupFailed": "The observed half could not be read: the live lookup failed. Rows below are the launched ones; the telemetry columns are empty because nothing could be read, not because there is none.",
+    "noProfileRead": "Provider profile names are not shown: your role does not include sessions:profile:read. The Instance column carries each row's profile reference instead.",
+    "profileLookupFailed": "Provider profile names could not be read: the profile lookup failed. The Instance column carries each row's profile reference instead."
   },
   "card": {
     "tabs": {
@@ -256,7 +260,7 @@
     "noneTitle": "Select a session",
     "noneDescription": "Choose a session in the rail to read what it did, with its evidence beside it.",
     "openDetail": "Full controls",
-    "noObjective": "The engine reported no objective for this session, so its reference is shown instead.",
+    "noObjective": "The engine reported no objective for this session.",
     "notReadTitle": "This session could not be read",
     "menu": "Actions for {{name}}"
   },
@@ -311,6 +315,32 @@
     "notDeclared": "Not declared",
     "copy": "Copy",
     "copied": "Copied",
-    "copyRef": "Copy {{value}}"
+    "copyRef": "Copy {{value}}",
+    "identifiersTitle": "Identifiers",
+    "identifiersHint": "References to copy. They are not the names on the scope line.",
+    "wireTitle": "Wire",
+    "wireHint": "The raw frame for the selected line. The conversation is the default view.",
+    "wireEmpty": "Select a line in the conversation to see its raw frame.",
+    "thisNode": "This node",
+    "noWorkspace": "No workspace",
+    "cwdWarning": "This session has no workspace. The driver reported its working directory as {{cwd}}."
+  },
+  "conversation": {
+    "log": "Conversation",
+    "waiting": "Waiting for the session…",
+    "empty": "No turns yet. Send a sentence below.",
+    "ended": "The session I/O stream ended.",
+    "lag": "{{count}} frame(s) dropped — output below resumes after the gap.",
+    "operator": "You",
+    "assistant": "Assistant",
+    "tool": "Tool",
+    "system": "System",
+    "result": "Result",
+    "unknown": "Unrecognised frame",
+    "inspect": "Show in inspector",
+    "args": "Arguments",
+    "toolResult": "Result",
+    "tokens": "{{input}} in · {{output}} out",
+    "cwdWarning": "This session has no workspace. The driver reported its working directory as {{cwd}}."
   }
 }

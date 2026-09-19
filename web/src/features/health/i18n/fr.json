@@ -67,7 +67,8 @@
     "searchPlaceholder": "Rechercher un sujet…",
     "empty": {
       "title": "Aucun sujet surveillé pour l’instant",
-      "description": "Dès qu’un contrôle de santé est déclaré pour un agent ou un serveur MCP, sa disponibilité apparaît ici."
+      "description": "Dès qu’un contrôle de santé est déclaré pour un agent ou un serveur MCP, sa disponibilité apparaît ici.",
+      "declare": "Déclarer un contrôle"
     }
   },
   "sla": {

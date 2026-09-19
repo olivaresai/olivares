@@ -129,7 +129,7 @@
     "columns": {
       "when": "时间",
       "outcome": "结果",
-      "session": "会话引用",
+      "session": "会话",
       "agent": "代理",
       "actor": "操作者",
       "reason": "引擎给出的原因"

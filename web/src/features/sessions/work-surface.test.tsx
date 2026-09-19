@@ -12,6 +12,7 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderIntel } from '@/test/intel'
 import { mergeSessions } from './provenance'
+import type { RunDTO } from '@/features/agentops/types'
 import type { LiveDTO } from './types'
 import type { SessionResolution } from './use-session-resolution'
 import { WorkSurface } from './work-surface'
@@ -46,6 +47,27 @@ function live(over: Partial<LiveDTO> = {}): LiveDTO {
     duration_seconds: 10,
     ...over,
   }
+}
+
+/**
+ * A run the plane started and proved a managed row for. The composer can be this
+ * session's input because there is a `run_ref` to post a turn to and a work-lease
+ * fence to read off it; an observed row with no run has neither.
+ */
+const RUN: RunDTO = {
+  run_ref: 'run-a',
+  name: 'nightly',
+  transport: 'stream-json',
+  permission_mode: 'default',
+  isolation: 'native',
+  state: 'running',
+  last_event_seq: 0,
+  pep_provisioned: true,
+  record_io: true,
+  critical: false,
+  provider_driver: 'claude',
+  provider_profile_ref: 'ppf_team',
+  live_ref: 'lr-a',
 }
 
 const sessions = mergeSessions(
@@ -111,7 +133,10 @@ describe('WorkSurface', () => {
     await screen.findByTestId('session-context')
     expect(pane('context')?.className).not.toContain('hidden')
     expect(pane('rail')?.className).toContain('hidden xl:block')
-    expect(pane('narrative')?.className).toContain('hidden xl:block')
+    // The narrative pane restores to `flex`, not `block`: it is a column holding the
+    // scrolling trace above the docked composer. Same rule — hidden by a
+    // class, never unmounted — and it must restore to the display its layout needs.
+    expect(pane('narrative')?.className).toContain('hidden xl:flex')
   })
 
   it('reports the chosen pane instead of holding it, so the URL can own it', async () => {
@@ -140,5 +165,39 @@ describe('WorkSurface', () => {
     const rail = await screen.findByTestId('work-rail')
     const selected = rail.querySelector('[aria-selected="true"]')
     expect(selected).toHaveAttribute('data-address', 'live:lr-a')
+  })
+
+  it('attaches the composer to the open session as RUNNING', async () => {
+    // ⛔ ATTACHED MEANS THERE IS A RUN TO SPEAK TO, not merely that a session is open,
+    //    and that is why this case carries its own fixture. The attached composer
+    //    posts a turn to `run_ref` with the work-lease fence read off that run: with
+    //    no run there is no fence, no route and nothing to send, so attaching would
+    //    paint a Send button with nothing behind it. The shared fixture is an OBSERVED
+    //    row, which by `runMatchesObserved` no run can ever join; an open session the
+    //    console started is a MANAGED row with its run, and that is what this renders.
+    const managed = live({ attribution: 'managed' })
+    const merged = mergeSessions([managed], [RUN])
+    renderSurface({
+      resolution: {
+        ...resolution,
+        session: merged[0],
+        live: managed,
+        runs: [RUN],
+      },
+    })
+    const box = await screen.findByTestId('work-composer')
+    expect(box).toHaveAttribute('data-attached', 'true')
+    expect(screen.getByTestId('composer-session-state')).toHaveTextContent(
+      /Running/i,
+    )
+  })
+
+  it('does not attach the composer when nothing is open', async () => {
+    renderSurface({
+      address: { address: '', pane: 'rail', evidence: 'checks' },
+      resolution: { ...resolution, target: null, live: undefined },
+    })
+    const box = await screen.findByTestId('work-composer')
+    expect(box).not.toHaveAttribute('data-attached')
   })
 })

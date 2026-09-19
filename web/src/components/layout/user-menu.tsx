@@ -56,8 +56,13 @@ export function UserMenu() {
             {principal?.actor}
           </p>
           <div className="mt-1 flex flex-wrap gap-1">
+            {/* ⛔ `warning`, NOT `accent`. The chip says which authority this session
+                is acting with, which is a STATE — the semantic axis — and the accent
+                is reserved for selection, the primary action and links. It keeps a
+                colour of its own because the difference between operating as a
+                superadmin and as anything else is worth seeing without reading. */}
             {isSuperadmin ? (
-              <Badge variant="accent">{t('auth:roles.superadmin')}</Badge>
+              <Badge variant="warning">{t('auth:roles.superadmin')}</Badge>
             ) : activeRole ? (
               <Badge variant="neutral">
                 {t(`auth:roles.${activeRole}`, { defaultValue: activeRole })}

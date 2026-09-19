@@ -47,6 +47,7 @@ import {
   SectionCard,
   SelfAuditNotice,
 } from '@/features/_intel'
+import { useSessionNames } from '@/features/shared'
 import { formatDateTime } from '@/lib/format'
 import { CaseActions, CaseLinksPanel, NewCaseButton } from './case-ops'
 import { securityApi, securityKeys } from './api'
@@ -816,6 +817,7 @@ function CaseRow({
   onOpen: () => void
 }) {
   const { t, i18n } = useTranslation('security')
+  const sessionNames = useSessionNames()
   const ref = useRef<HTMLButtonElement>(null)
   useEffect(() => {
     if (restoreFocus) ref.current?.focus()
@@ -832,8 +834,16 @@ function CaseRow({
           {forensicCase.title}
         </span>
         <span className="truncate text-caption text-muted-foreground">
-          <span className="font-mono">
-            {forensicCase.subject_kind}: {forensicCase.subject_ref}
+          {/* The same rule the findings table follows: a session subject is named by
+              what it was doing; anything else keeps its reference. */}
+          <span
+            className="font-mono"
+            title={`${forensicCase.subject_kind}: ${forensicCase.subject_ref}`}
+          >
+            {forensicCase.subject_kind}:{' '}
+            {(forensicCase.subject_kind === 'session'
+              ? sessionNames.nameOf(forensicCase.subject_ref)
+              : null) ?? forensicCase.subject_ref}
           </span>
           {' · '}
           {formatDateTime(forensicCase.opened_at, i18n.language)}

@@ -167,6 +167,33 @@ describe('CatalogView — entries list', () => {
     await screen.findByText('GitHub MCP')
     expect(screen.queryByRole('button', { name: /new entry/i })).toBeNull()
   })
+
+  /**
+   * THE EMPTY LIST CARRIES THE ACTION ITS OWN SENTENCE DESCRIBES. "Create a draft
+   * entry, submit it for review…" is the description, and there was nothing to press:
+   * the button sat at the top of the tab, away from where a reader looks after being
+   * told the surface is empty.
+   */
+  it('offers to create the first entry where it says the catalog is empty', async () => {
+    api.listEntries.mockResolvedValue({ items: [], has_more: false })
+    wrap(<CatalogView />)
+    const vacio = (
+      await screen.findByText('No catalog entries created yet')
+    ).closest('[data-slot="empty-state"]') as HTMLElement
+    expect(
+      within(vacio).getByRole('button', { name: /new entry/i }),
+    ).toBeInTheDocument()
+  })
+
+  it('offers that door to nobody who cannot write entries', async () => {
+    authState.can = (p) => p !== 'catalog:entry:write'
+    api.listEntries.mockResolvedValue({ items: [], has_more: false })
+    wrap(<CatalogView />)
+    const vacio = (
+      await screen.findByText('No catalog entries created yet')
+    ).closest('[data-slot="empty-state"]') as HTMLElement
+    expect(within(vacio).queryByRole('button')).toBeNull()
+  })
 })
 
 // --- (b)/(c) verification posture is honest; signing shown honestly ----------

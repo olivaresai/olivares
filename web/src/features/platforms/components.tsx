@@ -31,6 +31,7 @@ import type {
   Surface,
 } from './types'
 import { StaticTable } from '@/components/data/static-table'
+import { XScroll } from '@/components/data/scroll-edges'
 
 // --- honesty badge -----------------------------------------------------------
 
@@ -82,17 +83,25 @@ export function SurfaceMatrix({ surfaces }: { surfaces: Surface[] }) {
         accessorKey: 'display_name',
         header: t('surfaces.columns.surface'),
         cell: ({ row }) => (
-          <div className="flex min-w-0 flex-col gap-0.5">
-            <span className="flex items-center gap-2 text-body font-medium text-foreground">
+          /* THE IDENTIFYING COLUMN, ON ONE LINE. The gateway sat UNDER the
+             surface name, so the column that tells the rows apart was the one spending
+             two lines on every row of the table. Side by side reads the same and costs
+             half the height; the name is the part that never gives way, and the gateway
+             truncates after it. */
+          <span className="flex min-w-0 items-center gap-2">
+            <span className="shrink-0 text-body font-medium text-foreground">
               {row.original.display_name}
-              {row.original.deprecated ? (
-                <Badge variant="danger">{t('surfaces.deprecatedBadge')}</Badge>
-              ) : null}
             </span>
-            <span className="font-mono text-caption text-muted-foreground">
+            {row.original.deprecated ? (
+              <Badge variant="danger">{t('surfaces.deprecatedBadge')}</Badge>
+            ) : null}
+            <span
+              className="min-w-0 truncate font-mono text-caption text-muted-foreground"
+              title={row.original.gateway}
+            >
               {row.original.gateway}
             </span>
-          </div>
+          </span>
         ),
       },
       {
@@ -113,7 +122,15 @@ export function SurfaceMatrix({ surfaces }: { surfaces: Surface[] }) {
         accessorKey: 'base_url_pattern',
         header: t('surfaces.columns.baseUrl'),
         cell: ({ row }) => (
-          <span className="font-mono text-caption break-all text-muted-foreground">
+          /* ⛔ ONE LINE, NOT TEN. `break-all` in an 80 px column turned
+             `https://bedrock-runtime.{region}.amazonaws.com` into ten stacked fragments
+             of four characters — the widest thing on the screen, unreadable, and it set
+             the height of every row in the table. A URL is one token: it truncates and
+             carries its full value on `title`, which is what a reader copies it from. */
+          <span
+            className="block truncate font-mono text-caption text-muted-foreground"
+            title={row.original.base_url_pattern}
+          >
             {row.original.base_url_pattern}
           </span>
         ),
@@ -249,8 +266,8 @@ export function ApiSupportMatrix({ surfaces }: { surfaces: Surface[] }) {
     mcp_connector: 'surfaces.columns.mcp',
   }
   return (
-    <div className="overflow-x-auto rounded-lg border border-border bg-surface">
-      <StaticTable aria-label={t('surfaces.apiSupportTitle')}>
+    <XScroll className="rounded-lg border border-border bg-surface">
+      <StaticTable oneLine aria-label={t('surfaces.apiSupportTitle')}>
         <thead>
           <tr>
             <th scope="col" className="sticky left-0 z-10">
@@ -294,7 +311,7 @@ export function ApiSupportMatrix({ surfaces }: { surfaces: Surface[] }) {
           ))}
         </tbody>
       </StaticTable>
-    </div>
+    </XScroll>
   )
 }
 

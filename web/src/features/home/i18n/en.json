@@ -1,7 +1,6 @@
 {
   "title": "Overview",
-  "description": "Your AI estate at a glance — inventory, activity, risk, compliance, spend and health.",
-  "asOfNote": "Live aggregates over the last 30 days, across the modules your role can open. Each tile links to its module; open the executive report for the full rollup and PDF.",
+  "description": "Your AI estate at a glance — 30-day aggregates across the modules your role can open.",
   "openReport": "Executive report",
   "range": "last 30 days",
   "next": {
@@ -27,7 +26,8 @@
     "emptyDescription": "Every run a connected engine performs appears here, with what it did, how long it took and what it cost.",
     "unavailableTitle": "Couldn’t load recent work",
     "unavailableDescription": "The sessions read did not answer. The estate figures above are unaffected.",
-    "open": "Open the session: {{what}}"
+    "open": "Open the session: {{what}}",
+    "untitled": "Untitled session"
   },
   "tiles": {
     "inventory": {
@@ -52,7 +52,8 @@
     "spend": {
       "label": "Spend",
       "caption": "{{range}}",
-      "projected": "{{amount}} projected at run-rate"
+      "projected": "{{amount}} projected at run-rate",
+      "projectedOver": "{{amount}} projected at run-rate — above spend so far"
     },
     "health": {
       "label": "Health & SLA",

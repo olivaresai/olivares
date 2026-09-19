@@ -24,9 +24,7 @@ import {
 import { useCommandStore } from '@/stores/command'
 import { NotificationBell } from './notification-bell'
 import { ThemeToggle } from './theme-toggle'
-import { TenantSwitcher } from './tenant-switcher'
 import { UserMenu } from './user-menu'
-import { WorkspaceSwitcher } from './workspace-switcher'
 
 /**
  * Where the help icon sends the operator.
@@ -70,7 +68,36 @@ export function currentViewId(pathname: string): string | null {
 }
 
 /**
- * LAYOUT CONTRACT, measured on the rendered console (console-ui-current-baseline,
+ * LAYOUT CONTRACT — ONE 48 px ROW, AT EVERY WIDTH.
+ *
+ * ⛔ THE SECOND ROW IS GONE, AND SO IS THE ONE DEFECT IT CAUSED. Below `lg` this bar
+ *    carried a second 40 px row holding the organisation and workspace switchers. It
+ *    existed for a good reason — the one the retired paragraph below still states, and
+ *    it is still true — and it cost 40 px of every phone viewport. The measurement
+ *    measured the consequence: on a 390×844 phone the chrome above any content
+ *    was 52 % of the viewport (topbar 48 + context row 45 + launcher 125 CSS px).
+ *
+ *    **The switchers moved to the RAIL, under the wordmark** (`sidebar.tsx`), which is
+ *    where the scope belongs on first principles: it is what the NAVIGATION operates
+ *    on, so it is the rail's caption and not the page's. Nothing was cut — below `lg`
+ *    the rail is a drawer, so the switchers travel with the navigation they scope, and
+ *    the drawer trigger is the FIRST control in this bar.
+ *
+ *    The trade, stated so nobody has to rediscover it: below `lg` the active
+ *    organisation is one drawer-open away instead of on screen. At 390 px this bar has
+ *    no room for a 14 rem label, and the alternative is the row this removes.
+ *
+ * ⇒ The bar is `h-[var(--console-header-height)]` and `flex-nowrap` at every width, so
+ *   its height is a TOKEN and not an emergent property of what happens to be in it.
+ *
+ * ⛔ AND THE PURPOSE BANNER IS NOT HERE AND NEVER WAS — it is the route's, and §3.1.2
+ *   of the design is what removes it. This note only exists because the two were
+ *   measured together as "the top 190 px".
+ *
+ * HISTORY, retained because the reasons are still the reasons — the second row's, and
+ * the breadcrumb's, which is unchanged:
+ *
+ * Measured on the rendered console (console-ui-current-baseline,
  * 2026-09-06, `captures/demo/console-light-en-d1024.png` and `*-m390.png`):
  *
  * - The bar was a single `h-12` flex row and the breadcrumb list wrapped. At 1024 px
@@ -138,7 +165,7 @@ export function Topbar({
   return (
     <header
       data-slot="topbar"
-      className="flex shrink-0 flex-wrap items-center gap-x-1 gap-y-0 border-b border-border bg-surface px-3 sm:gap-x-2 lg:flex-nowrap print:hidden"
+      className="flex h-[var(--console-header-height)] min-h-[var(--console-header-height)] shrink-0 flex-nowrap items-center gap-x-1 border-b border-border bg-surface px-3 sm:gap-x-2 print:hidden"
     >
       <Button
         ref={menuButtonRef}
@@ -151,7 +178,9 @@ export function Topbar({
         <Menu />
       </Button>
 
-      <Breadcrumb className="flex min-h-12 min-w-24 flex-1 items-center">
+      {/* The trail no longer SETS the bar's height (it used to, with `min-h-12`): the
+          height is the token on the header and this is a full-height flex child of it. */}
+      <Breadcrumb className="flex h-full min-w-24 flex-1 items-center">
         <BreadcrumbList>
           {parents.map((crumb, i) => (
             <Fragment key={`${crumb.to ?? ''}:${i}`}>
@@ -224,18 +253,6 @@ export function Topbar({
       ) : null}
 
       <NotificationBell />
-
-      {/* Row two below `lg` (`order-last basis-full`); dissolved into the single row
-          at `lg` (`contents`), where its two children sit here, between the bell
-          and the theme toggle. The negative horizontal margin lets its top hairline
-          span the full bar width. */}
-      <div
-        data-slot="topbar-context"
-        className="-mx-3 order-last flex h-10 min-w-0 basis-full items-center gap-x-2 border-t border-border px-3 lg:contents"
-      >
-        <TenantSwitcher />
-        <WorkspaceSwitcher />
-      </div>
 
       <ThemeToggle />
       <UserMenu />

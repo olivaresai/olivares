@@ -338,6 +338,22 @@ export default function CatalogView() {
               <EmptyState
                 title={t('empty.entry.title')}
                 description={t('empty.entry.description')}
+                // The description opens with "Create a draft entry"; this is that
+                // sentence made clickable, on the same right the tab's own button
+                // asks for, so a reader who cannot write is shown no door that
+                // answers 403.
+                action={
+                  canWriteEntry ? (
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      onClick={() => setEditorOpen(true)}
+                    >
+                      <Plus />
+                      {t('entries.newEntry')}
+                    </Button>
+                  ) : null
+                }
               />
             }
           />

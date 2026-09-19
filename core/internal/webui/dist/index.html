@@ -35,9 +35,9 @@
     <meta name="twitter:image" content="/og-image.png" />
     <title>Olivares AI — Ground truth for enterprise AI</title>
     <!--
-      No-FOUC theme bootstrap. Applies the persisted theme (or the OS preference)
-      to <html> BEFORE first paint, so the operator never sees a light flash on a
-      dark setup. Under the CSP Level 3 policy (script-src 'nonce-…' 'strict-dynamic',
+      No-FOUC theme bootstrap. Applies the persisted theme (DARK when nothing is
+      stored, since C1) to <html> BEFORE first paint, so the operator never sees a
+      light flash on a dark setup. Under the CSP Level 3 policy (script-src 'nonce-…' 'strict-dynamic',
       see cmd/olivares/webui.go), this inline script is authorized by the same
       per-response nonce the server injects into the __CSP_NONCE__ placeholder.
     -->
@@ -48,9 +48,13 @@
           var prefersDark = window.matchMedia(
             '(prefers-color-scheme: dark)',
           ).matches
+          /* Dark unless the operator said otherwise (C1 3.9). MUST stay identical to
+             readStored + resolveDark in src/stores/theme.ts: this runs before any
+             bundle, so a disagreement is a visible flash of the wrong theme. */
           var dark =
             stored === 'dark' ||
-            ((stored === 'system' || !stored) && prefersDark)
+            !stored ||
+            (stored === 'system' && prefersDark)
           var root = document.documentElement
           root.classList.toggle('dark', dark)
           root.style.colorScheme = dark ? 'dark' : 'light'
@@ -60,31 +64,28 @@
       })()
     </script>
     <meta property="csp-nonce" nonce="__CSP_NONCE__">
-    <script type="module" crossorigin src="/assets/index-BlWh1yAD.js" nonce="__CSP_NONCE__"></script>
+    <script type="module" crossorigin src="/assets/index-CdU3auiE.js" nonce="__CSP_NONCE__"></script>
     <link rel="modulepreload" crossorigin href="/assets/client-CoDRGDp-.js" nonce="__CSP_NONCE__">
-    <link rel="modulepreload" crossorigin href="/assets/page-header-WSnhzqDH.js" nonce="__CSP_NONCE__">
-    <link rel="modulepreload" crossorigin href="/assets/empty-state-Ddl4SRUf.js" nonce="__CSP_NONCE__">
-    <link rel="modulepreload" crossorigin href="/assets/useStore-HuOIbVzd.js" nonce="__CSP_NONCE__">
+    <link rel="modulepreload" crossorigin href="/assets/page-header-BGPi1nPZ.js" nonce="__CSP_NONCE__">
+    <link rel="modulepreload" crossorigin href="/assets/empty-state-CD6a6VTc.js" nonce="__CSP_NONCE__">
+    <link rel="modulepreload" crossorigin href="/assets/useStore-DLBHiLcF.js" nonce="__CSP_NONCE__">
     <link rel="modulepreload" crossorigin href="/assets/useRouter-CcjhS9kZ.js" nonce="__CSP_NONCE__">
-    <link rel="modulepreload" crossorigin href="/assets/card-CjFN-q4U.js" nonce="__CSP_NONCE__">
-    <link rel="modulepreload" crossorigin href="/assets/triangle-alert-DW1I_83N.js" nonce="__CSP_NONCE__">
-    <link rel="modulepreload" crossorigin href="/assets/useMutation-CE8Uo4rs.js" nonce="__CSP_NONCE__">
-    <link rel="modulepreload" crossorigin href="/assets/badge-C3M2V0aL.js" nonce="__CSP_NONCE__">
-    <link rel="modulepreload" crossorigin href="/assets/dist-DFTu-vp7.js" nonce="__CSP_NONCE__">
-    <link rel="modulepreload" crossorigin href="/assets/dist-CvcpKWgq.js" nonce="__CSP_NONCE__">
-    <link rel="modulepreload" crossorigin href="/assets/tooltip-Dm6LP276.js" nonce="__CSP_NONCE__">
-    <link rel="modulepreload" crossorigin href="/assets/toaster-DVspcfNq.js" nonce="__CSP_NONCE__">
-    <link rel="modulepreload" crossorigin href="/assets/es2015-2HAIzuqN.js" nonce="__CSP_NONCE__">
-    <link rel="modulepreload" crossorigin href="/assets/dist-CjYg_jmo.js" nonce="__CSP_NONCE__">
-    <link rel="modulepreload" crossorigin href="/assets/check-BwbtB8VM.js" nonce="__CSP_NONCE__">
+    <link rel="modulepreload" crossorigin href="/assets/shield-check-BHzXgcDz.js" nonce="__CSP_NONCE__">
+    <link rel="modulepreload" crossorigin href="/assets/triangle-alert-C9-iv49T.js" nonce="__CSP_NONCE__">
+    <link rel="modulepreload" crossorigin href="/assets/useMutation-DtI41sJK.js" nonce="__CSP_NONCE__">
+    <link rel="modulepreload" crossorigin href="/assets/badge-CkXMDB2G.js" nonce="__CSP_NONCE__">
+    <link rel="modulepreload" crossorigin href="/assets/dist-BK-pzR7B.js" nonce="__CSP_NONCE__">
+    <link rel="modulepreload" crossorigin href="/assets/tooltip-CX2bqW7t.js" nonce="__CSP_NONCE__">
+    <link rel="modulepreload" crossorigin href="/assets/toaster-DqwDNxaS.js" nonce="__CSP_NONCE__">
+    <link rel="modulepreload" crossorigin href="/assets/es2015-BTElo2yG.js" nonce="__CSP_NONCE__">
+    <link rel="modulepreload" crossorigin href="/assets/dist-DAnKof-A.js" nonce="__CSP_NONCE__">
+    <link rel="modulepreload" crossorigin href="/assets/step-up-state-BM2YCSHc.js" nonce="__CSP_NONCE__">
     <link rel="modulepreload" crossorigin href="/assets/eye-C5_lVWNr.js" nonce="__CSP_NONCE__">
     <link rel="modulepreload" crossorigin href="/assets/info-DwFwEGLC.js" nonce="__CSP_NONCE__">
     <link rel="modulepreload" crossorigin href="/assets/link-2-CcKpJcsy.js" nonce="__CSP_NONCE__">
     <link rel="modulepreload" crossorigin href="/assets/shield-alert-DPiWuFlm.js" nonce="__CSP_NONCE__">
-    <link rel="modulepreload" crossorigin href="/assets/context-Btqbc5j6.js" nonce="__CSP_NONCE__">
-    <link rel="modulepreload" crossorigin href="/assets/format-D40Jo5VE.js" nonce="__CSP_NONCE__">
-    <link rel="modulepreload" crossorigin href="/assets/step-up-state-Cdp5N2DV.js" nonce="__CSP_NONCE__">
-    <link rel="modulepreload" crossorigin href="/assets/_intel-CbaqAcnD.js" nonce="__CSP_NONCE__">
+    <link rel="modulepreload" crossorigin href="/assets/context-COqsIFpC.js" nonce="__CSP_NONCE__">
+    <link rel="modulepreload" crossorigin href="/assets/_intel-DU7tAppR.js" nonce="__CSP_NONCE__">
     <link rel="modulepreload" crossorigin href="/assets/bell-CC6q-D4e.js" nonce="__CSP_NONCE__">
     <link rel="modulepreload" crossorigin href="/assets/activity-asoKOlAe.js" nonce="__CSP_NONCE__">
     <link rel="modulepreload" crossorigin href="/assets/audio-lines-DNQdIP7D.js" nonce="__CSP_NONCE__">
@@ -108,19 +109,18 @@
     <link rel="modulepreload" crossorigin href="/assets/dollar-sign-75sHUQwU.js" nonce="__CSP_NONCE__">
     <link rel="modulepreload" crossorigin href="/assets/file-chart-column-increasing-Cvg26bNT.js" nonce="__CSP_NONCE__">
     <link rel="modulepreload" crossorigin href="/assets/file-check-corner-DLv4el8L.js" nonce="__CSP_NONCE__">
-    <link rel="modulepreload" crossorigin href="/assets/fingerprint-pattern-uOEHNlYD.js" nonce="__CSP_NONCE__">
+    <link rel="modulepreload" crossorigin href="/assets/id-card-C7h2Tgwh.js" nonce="__CSP_NONCE__">
     <link rel="modulepreload" crossorigin href="/assets/flask-conical-PWI3c91d.js" nonce="__CSP_NONCE__">
     <link rel="modulepreload" crossorigin href="/assets/gauge-DgfHBB1E.js" nonce="__CSP_NONCE__">
     <link rel="modulepreload" crossorigin href="/assets/globe-06g9-J3b.js" nonce="__CSP_NONCE__">
-    <link rel="modulepreload" crossorigin href="/assets/workspace-BnDZNjIM.js" nonce="__CSP_NONCE__">
-    <link rel="modulepreload" crossorigin href="/assets/channel-admin-continuity-DricYGps.js" nonce="__CSP_NONCE__">
+    <link rel="modulepreload" crossorigin href="/assets/workspace-DlfGqXF2.js" nonce="__CSP_NONCE__">
+    <link rel="modulepreload" crossorigin href="/assets/channel-admin-continuity-KLNOsoQW.js" nonce="__CSP_NONCE__">
     <link rel="modulepreload" crossorigin href="/assets/shield-DwLf5lv6.js" nonce="__CSP_NONCE__">
-    <link rel="modulepreload" crossorigin href="/assets/id-card-uKmSClA4.js" nonce="__CSP_NONCE__">
     <link rel="modulepreload" crossorigin href="/assets/inbox-Dhu3Jv96.js" nonce="__CSP_NONCE__">
     <link rel="modulepreload" crossorigin href="/assets/key-round-BG7vxIdq.js" nonce="__CSP_NONCE__">
     <link rel="modulepreload" crossorigin href="/assets/layers-Dt33tCzK.js" nonce="__CSP_NONCE__">
     <link rel="modulepreload" crossorigin href="/assets/layout-template-Pp0aXYeC.js" nonce="__CSP_NONCE__">
-    <link rel="modulepreload" crossorigin href="/assets/spinner-DdFPvKDr.js" nonce="__CSP_NONCE__">
+    <link rel="modulepreload" crossorigin href="/assets/spinner-Dlmntj9y.js" nonce="__CSP_NONCE__">
     <link rel="modulepreload" crossorigin href="/assets/logs-bb9zn5BJ.js" nonce="__CSP_NONCE__">
     <link rel="modulepreload" crossorigin href="/assets/network-pD9EPKWC.js" nonce="__CSP_NONCE__">
     <link rel="modulepreload" crossorigin href="/assets/octagon-alert-BfjXNqfs.js" nonce="__CSP_NONCE__">
@@ -137,19 +137,19 @@
     <link rel="modulepreload" crossorigin href="/assets/swords-CtYa0Bs3.js" nonce="__CSP_NONCE__">
     <link rel="modulepreload" crossorigin href="/assets/waypoints-BOkkhHQd.js" nonce="__CSP_NONCE__">
     <link rel="modulepreload" crossorigin href="/assets/zap-BGsvfmZG.js" nonce="__CSP_NONCE__">
-    <link rel="modulepreload" crossorigin href="/assets/registry-CWjngsou.js" nonce="__CSP_NONCE__">
+    <link rel="modulepreload" crossorigin href="/assets/registry-DfzL7gxl.js" nonce="__CSP_NONCE__">
     <link rel="modulepreload" crossorigin href="/assets/chevron-down-W1LEfUYq.js" nonce="__CSP_NONCE__">
+    <link rel="modulepreload" crossorigin href="/assets/dist-DKhOhU88.js" nonce="__CSP_NONCE__">
+    <link rel="modulepreload" crossorigin href="/assets/label-BATKq-Zs.js" nonce="__CSP_NONCE__">
+    <link rel="modulepreload" crossorigin href="/assets/field-BdERzPCm.js" nonce="__CSP_NONCE__">
+    <link rel="modulepreload" crossorigin href="/assets/select-pJMBs9HQ.js" nonce="__CSP_NONCE__">
     <link rel="modulepreload" crossorigin href="/assets/search-DWuS6ACT.js" nonce="__CSP_NONCE__">
     <link rel="modulepreload" crossorigin href="/assets/x-nLPU7PU0.js" nonce="__CSP_NONCE__">
-    <link rel="modulepreload" crossorigin href="/assets/dialog-CcLDIb9f.js" nonce="__CSP_NONCE__">
-    <link rel="modulepreload" crossorigin href="/assets/chevron-up-591JbChk.js" nonce="__CSP_NONCE__">
-    <link rel="modulepreload" crossorigin href="/assets/dist-Bzkt8i4N.js" nonce="__CSP_NONCE__">
-    <link rel="modulepreload" crossorigin href="/assets/label-DrCZa5yJ.js" nonce="__CSP_NONCE__">
-    <link rel="modulepreload" crossorigin href="/assets/field-CYVISLgw.js" nonce="__CSP_NONCE__">
-    <link rel="modulepreload" crossorigin href="/assets/select-me97F396.js" nonce="__CSP_NONCE__">
-    <link rel="modulepreload" crossorigin href="/assets/dist-CZQmcsS1.js" nonce="__CSP_NONCE__">
+    <link rel="modulepreload" crossorigin href="/assets/dialog-irhUOHyB.js" nonce="__CSP_NONCE__">
+    <link rel="modulepreload" crossorigin href="/assets/dist-CbbGUXVj.js" nonce="__CSP_NONCE__">
     <link rel="modulepreload" crossorigin href="/assets/api-DzC4kOFs.js" nonce="__CSP_NONCE__">
-    <link rel="stylesheet" crossorigin href="/assets/index-BDOyFLox.css" nonce="__CSP_NONCE__">
+    <link rel="modulepreload" crossorigin href="/assets/api-B9vB-j_C.js" nonce="__CSP_NONCE__">
+    <link rel="stylesheet" crossorigin href="/assets/index-BHpAyAhh.css" nonce="__CSP_NONCE__">
   </head>
   <body>
     <div id="root"></div>

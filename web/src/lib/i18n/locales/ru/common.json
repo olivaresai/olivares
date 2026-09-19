@@ -85,6 +85,7 @@
     "empty": "Совпадений нет.",
     "navigation": "Навигация",
     "actions": "Действия",
+    "startSession": "Начать сессию",
     "results": "Результаты",
     "searchResults": "Результаты в ваших данных",
     "searchTruncated": "Есть ещё совпадения — уточните запрос.",
@@ -145,7 +146,8 @@
     "primarySidebar": "Основная",
     "mainNavigation": "Главная навигация",
     "graphControls": "Управление графом",
-    "graphMinimap": "Мини-карта графа"
+    "graphMinimap": "Мини-карта графа",
+    "pageActions": "Действия страницы"
   },
   "privileged": {
     "auditedNotice": "Это действие фиксируется в реестре аудита с защитой от подделки.",

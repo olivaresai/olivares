@@ -548,3 +548,33 @@ describe('AgentArtifactsView — el aviso de recorte y el vacio no conviven', ()
     ).toBeVisible()
   })
 })
+
+/**
+ * EL ESTADO VACIO LLEVA SU SIGUIENTE ACCION. Su descripcion declara una consecuencia
+ * —«un artefacto no registrado no esta representado en el BOM»— y no habia nada que
+ * pulsar: el boton vivia en la cabecera de la seccion. Va con el MISMO derecho que esa
+ * cabecera, asi que a quien solo lee no se le ofrece una puerta que responde 403.
+ */
+describe('AgentArtifactsView — el vacio ofrece registrar el primero', () => {
+  const vacio = () =>
+    screen
+      .getByText('No artifacts registered')
+      .closest('[data-slot="empty-state"]') as HTMLElement
+
+  it('ofrece el registro donde se lee que no hay ninguno', async () => {
+    api.artifacts.mockResolvedValue({ items: [], has_more: false })
+    wrap(<AgentArtifactsView />)
+    await screen.findByText('No artifacts registered')
+    expect(
+      within(vacio()).getByRole('button', { name: /register artifact/i }),
+    ).toBeInTheDocument()
+  })
+
+  it('no ofrece esa puerta a quien no puede escribir en el registro', async () => {
+    authState.can = (permission) => permission !== 'models:registry:write'
+    api.artifacts.mockResolvedValue({ items: [], has_more: false })
+    wrap(<AgentArtifactsView />)
+    await screen.findByText('No artifacts registered')
+    expect(within(vacio()).queryByRole('button')).toBeNull()
+  })
+})

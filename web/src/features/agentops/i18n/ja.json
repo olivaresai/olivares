@@ -152,8 +152,10 @@
   "live": {
     "inputPlaceholder": "NDJSON 行を stdin に送信…",
     "inputAria": "セッション入力行",
-    "textPlaceholder": "セッションにメッセージを送信…",
-    "textAria": "セッションのメッセージ",
+    "textPlaceholder": "文を送信…",
+    "textAria": "セッションのターン",
+    "advanced": "上級 · 生の行",
+    "advancedHint": "NDJSON 行を stdin に送ります。既定は文の欄です。",
     "send": "送信",
     "noOutput": "まだ出力はありません。",
     "waiting": "出力を待機中…",
@@ -328,6 +330,8 @@
     "title": "プロバイダープロファイル",
     "subtitle": "1 つの実行環境上に構成された 1 つのプロバイダーインスタンスの永続的な識別情報です。どのドライバーが提供し、起動されたセッションがどの設定ホームで実行されるかを表します。プロファイルは既存のホームを登録するだけで、何もインストールせず、どこにもログインしません。",
     "register": "プロファイルを登録",
+    "nextAction": "プロファイルを登録",
+    "rowMenu": "{{name}} の行操作",
     "search": "プロファイルを検索…",
     "allStates": "すべての状態",
     "cols": {

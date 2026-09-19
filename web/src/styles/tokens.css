@@ -235,6 +235,11 @@
   --text-overline--letter-spacing: 0.08em;
   --text-overline--font-weight: 600;
 
-  /* Layout — the shell content width, named rather than bracketed */
+  /* Layout — the shell geometry, named rather than bracketed */
   --container-page: 90rem;
+  --console-header-height: 3rem;
+  --console-rail-width: 16rem;
+  --console-inspector-width: 20rem;
+  --console-row-height: 2.25rem;
+  --console-list-row-height: 2.5rem;
 }

@@ -428,8 +428,11 @@ function TeamRow({
         >
           {formatMicroUsd(team.cost_micro_usd, { compact: true, locale: lang })}
         </td>
-        {/* Sparkline */}
-        <td role="gridcell" aria-colindex={7}>
+        {/* Sparkline — a drawn box, not a line of type, so the cell spends no padding
+            on it. The trend is 32 px and the row budget is 36; with the table's
+            ordinary 8 px the row measured 40.5 in the browser, and with `data-cell` it
+            measures 36 without shrinking the trend. */}
+        <td data-cell="box" role="gridcell" aria-colindex={7}>
           {team.trend.length > 0 && (
             <CostSparkline data={team.trend} height={32} />
           )}

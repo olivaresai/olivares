@@ -2,17 +2,24 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// ONE BURST OF WORK EVENTS IS ONE READ OF THE LIST.
+// ONE BURST OF WORK EVENTS IS TWO READS OF THE LIST, AND NEVER SIXTY.
 //
 // The list query carries an abort signal, and `invalidateQueries` cancels the fetch in
 // flight before it starts the next one. Invalidating on every stream frame therefore
-// turned a burst of N events into N-1 aborted reads and one that answered — measured at
-// about sixty aborted reads per visit to /work. What is pinned here is the mechanism
-// that closes it: the burst is coalesced, the read happens once, after the last event,
-// and no read is thrown away.
+// turned a burst of N events into N-1 aborted reads and one that answered — about sixty
+// aborted reads on a single visit to /work. What is pinned here is the mechanism that
+// closes it, end to end through the view: the burst is coalesced by `useCoalescedRefresh`,
+// whose throttle is LEADING-plus-trailing, so the first event is answered at once and the
+// rest cost one more read between them. No read is thrown away.
+//
+// The count is 2-per-burst and not 1 BECAUSE the leading edge is a guarantee of its own:
+// a quiet estate, where a single event is the whole burst, refreshes immediately rather
+// than after a window it should never have been made to wait. That edge is pinned
+// deterministically in `coalesce.test.ts`; here it is pinned by the clock, below.
 import { act, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderIntel } from '@/test/intel'
+import { WORK_REFRESH_WINDOW_MS } from './coalesce'
 
 const api = vi.hoisted(() => ({
   listWorkItems: vi.fn(),
@@ -103,8 +110,8 @@ beforeEach(() => {
   )
 })
 
-describe('WorkView — the stream refreshes the list once per burst', () => {
-  it('reads the list once after a burst of sixty events, aborting nothing', async () => {
+describe('WorkView — the stream refreshes the list twice per burst, not once per event', () => {
+  it('reads the list twice after a burst of sixty events, aborting nothing', async () => {
     renderIntel(<WorkView />)
     await screen.findByRole('button', { name: /burst work item/i })
     expect(api.listWorkItems).toHaveBeenCalledTimes(1)
@@ -120,19 +127,29 @@ describe('WorkView — the stream refreshes the list once per burst', () => {
         })
     })
 
-    // The burst does refresh the list: the trailing event triggers the read.
+    // THE LEADING EDGE, pinned by the clock: the list is re-read well before the window
+    // could close. A pure trailing debounce would still be at one call here.
+    await waitFor(
+      () =>
+        expect(
+          api.listWorkItems.mock.calls.length,
+          'the first event of the burst refreshes at once',
+        ).toBeGreaterThanOrEqual(2),
+      { timeout: WORK_REFRESH_WINDOW_MS / 2 },
+    )
+    // …and the other fifty-nine cost exactly one more read, on the trailing edge.
     await waitFor(() =>
       expect(
         api.listWorkItems.mock.calls.length,
-        'the burst must refresh the list',
-      ).toBeGreaterThanOrEqual(2),
+        'the burst must refresh the list after it ends',
+      ).toBe(3),
     )
-    // …and then nothing else happens: one burst, one read.
-    await new Promise((r) => setTimeout(r, 400))
+    // …and then nothing else happens: one burst, two reads.
+    await new Promise((r) => setTimeout(r, WORK_REFRESH_WINDOW_MS * 2))
     expect(
       api.listWorkItems.mock.calls.length,
-      `sixty events must cost one read, not one per event (N=${N})`,
-    ).toBe(2)
+      `sixty events must cost two reads, not one per event (N=${N})`,
+    ).toBe(3)
     expect(
       signals.filter((s) => s?.aborted).length,
       'no list read is started only to be aborted by the next event',

@@ -172,6 +172,20 @@ export default function DeployView() {
               <EmptyState
                 title={t('empty.deploy.title')}
                 description={t('empty.deploy.description')}
+                // "Declare a deployment to record desired state" — the same button
+                // the tab offers above the table, on the same right.
+                action={
+                  canWrite ? (
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      onClick={() => setEditorOpen(true)}
+                    >
+                      <Plus />
+                      {t('definitions.declare')}
+                    </Button>
+                  ) : null
+                }
               />
             }
           />

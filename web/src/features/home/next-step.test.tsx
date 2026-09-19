@@ -94,4 +94,21 @@ describe('NextStep', () => {
     expect(screen.getByText('Add a provider')).toBeInTheDocument()
     expectNoRawI18nKeys(container)
   })
+
+  it('every truncated line carries the full text on title=', () => {
+    const { container } = renderIntel(<NextStep />)
+    const truncated = [...container.querySelectorAll('.truncate')]
+    expect(truncated.length).toBeGreaterThan(0)
+    for (const el of truncated) {
+      expect(
+        el.getAttribute('title'),
+        `truncated without title=: ${el.textContent}`,
+      ).toBeTruthy()
+    }
+    const agent = screen
+      .getByTestId('home-next-step-agent')
+      .querySelector('.truncate')
+    expect(agent?.getAttribute('title')).toMatch(/Deploy an agent/)
+    expect(agent?.getAttribute('title')).toMatch(/Roll an agent out/)
+  })
 })
