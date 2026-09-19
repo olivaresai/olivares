@@ -33,4 +33,8 @@
 //
 // The package imports only the standard library and the Apache-2.0 sdk/model
 // vocabulary — never the AGPL engine (enforced by scripts/check-boundary.sh).
+//
+// Invoking a model through a uniform CreateMessage / stream / cancel / usage
+// seam is connectors/modelprovider/gateway. Catalog and CostSample stay
+// here; the gateway subpackage does not replace them.
 package modelprovider

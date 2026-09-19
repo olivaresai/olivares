@@ -30,6 +30,7 @@ overall contract.
 | **[Event bus](/reference/events/)** | The internal event bus: the event envelope, the first-party event types, and the observation payloads connectors lift onto it. | An **AsyncAPI 3.0** contract, hand-derived from the Go SDK. |
 | **[Console screens](/reference/console/)** | Every route the console publishes, with the RBAC permission it requires and the reference page its in-product help link opens. | The console's route census, pinned against the built router. |
 | **[Modules catalog](/reference/modules/overview/)** | The 30 product modules — what each is, its status, and which routes (if any) it exposes outside the core API. | The product capability catalog and the typed module interfaces. |
+| **[Model gateway contract](/reference/model-gateway-contract/)** | Driver × protocol × transport matrix for CreateMessage, streaming, cancellation and usage. Honest cell labels. | `connectors/modelprovider/gateway` and its conformance suite. |
 | **[CLI](/reference/cli/)** | The `olivares` binary and its subcommands — `serve`, `collector`, `audit`, `license`, `openapi`, `version` — and their flags. | The compiled command definitions. |
 | **[Configuration](/reference/configuration/)** | Environment variables and runtime options: the data directory, source wiring, the authorization engine, and ledger signing. | The engine's configuration loaders. |
 

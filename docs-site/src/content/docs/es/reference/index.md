@@ -30,6 +30,7 @@ contrato general.
 | **[Bus de eventos](/es/reference/events/)** | El bus de eventos interno: el envelope del evento, los tipos de evento de primera parte, y los payloads de observación que los conectores elevan a él. | Un contrato **AsyncAPI 3.0**, derivado a mano del SDK de Go. |
 | **[Pantallas de la consola](/es/reference/console/)** | Cada ruta que publica la consola, con el permiso RBAC que exige y la página de referencia que abre su enlace de ayuda dentro del producto. | El censo de rutas de la consola, fijado contra el router compilado. |
 | **[Catálogo de módulos](/es/reference/modules/overview/)** | Los 30 módulos del producto — qué es cada uno, su estado, y qué rutas (si las hay) expone fuera de la API core. | El catálogo de capacidades del producto y las interfaces de módulo tipadas. |
+| **[Contrato de la pasarela de modelos](/reference/model-gateway-contract/)** | Matriz driver × protocolo × transporte para CreateMessage, streaming, cancelación y uso. Etiquetas de celda honestas. | `connectors/modelprovider/gateway` y su suite de conformidad. |
 | **[CLI](/es/reference/cli/)** | El binario `olivares` y sus subcomandos — `serve`, `collector`, `audit`, `license`, `openapi`, `version` — y sus flags. | Las definiciones de comando compiladas. |
 | **[Configuración](/es/reference/configuration/)** | Variables de entorno y opciones de runtime: el directorio de datos, el cableado de fuentes, el motor de autorización y la firma del ledger. | Los cargadores de configuración del motor. |
 

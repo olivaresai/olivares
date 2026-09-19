@@ -26,6 +26,7 @@ description: "情報指向のリファレンス: REST API、イベントバス�
 | **[イベントバス](/ja/reference/events/)** | 内部イベントバス: イベントエンベロープ、ファーストパーティのイベント型、そしてコネクタがそこに持ち上げる観測ペイロード。 | **AsyncAPI 3.0** 契約。Go SDK から手作業で導出。 |
 | **[コンソール画面](/ja/reference/console/)** | コンソールが公開するすべてのルート、そのルートが要求する RBAC permission、製品内ヘルプリンクが開くリファレンスページ。 | ビルド済み router に固定されたコンソールの route census。 |
 | **[モジュールカタログ](/ja/reference/modules/overview/)** | 30 の製品モジュール —— それぞれが何であるか、そのステータス、そして（もしあれば）コア API の外にどのルートを公開するか。 | 製品の能力カタログと型付きモジュールインターフェース。 |
+| **[モデルゲートウェイ契約](/reference/model-gateway-contract/)** | CreateMessage、ストリーミング、キャンセル、使用量のドライバー × プロトコル × トランスポートのマトリクス。正直なセルラベル。 | `connectors/modelprovider/gateway` とその適合性スイート。 |
 | **[CLI](/ja/reference/cli/)** | `olivares` バイナリとそのサブコマンド —— `serve`、`collector`、`audit`、`license`、`openapi`、`version` —— とそれらのフラグ。 | コンパイルされたコマンド定義。 |
 | **[設定](/ja/reference/configuration/)** | 環境変数とランタイムオプション: データディレクトリ、ソース配線、認可エンジン、台帳署名。 | エンジンの設定ローダー。 |
 
