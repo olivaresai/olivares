@@ -559,7 +559,10 @@ func newResolvedIdentity(p auth.Principal, tenant model.TenantID, pol inferencep
 	if p.Kind == "" || tenant.IsZero() {
 		return resolvedIdentity{}, false
 	}
-	sessionRef := p.AgentIdentity
+	// A raw API token carries no authenticated NHI binding: explicitly unbindable so
+	// agent-scoped governance cannot silently fall through to a broader tenant/global
+	// policy (the modelaccessgate F-01 formula, kept in lockstep by credentialAgent).
+	sessionRef, unbindableAgent := credentialAgent(p)
 	subjectID := p.UserID.String()
 	if p.Kind == auth.KindToken {
 		subjectID = p.CredID.String()
@@ -567,15 +570,24 @@ func newResolvedIdentity(p auth.Principal, tenant model.TenantID, pol inferencep
 	return resolvedIdentity{
 		principal: p, tenant: tenant, pol: pol,
 		actor: p.Actor(), actorKind: p.ActorKind(),
-		sessionRef: sessionRef,
-		// A raw API token carries no authenticated NHI binding: explicitly unbindable so
-		// agent-scoped governance cannot silently fall through to a broader tenant/global
-		// policy (the modelaccessgate F-01 formula, kept in lockstep).
-		unbindableAgent: p.Kind == auth.KindToken && sessionRef == "",
+		sessionRef:      sessionRef,
+		unbindableAgent: unbindableAgent,
 		subjectKind:     string(p.Kind),
 		subjectID:       subjectID,
 		ok:              true,
 	}, true
+}
+
+// credentialAgent is the agent an authenticated credential proves, and whether the credential
+// is an API token that proves none. Only Principal.AgentIdentity — set server-side by the
+// authenticator from the credential's own agent binding — names an agent; a caller-declared
+// reference (a body field, a request header) never does. A token without that binding is
+// unbindable: agent-scoped governance cannot tell which agent it is, so it must deny rather
+// than fall through to a broader policy. A human session is not an agent and is never
+// unbindable here. Both firewalls take the proven agent from here; the hooks PEP classifies
+// unbindability more strictly (resolveHookAgent), because every hook request is an agent's.
+func credentialAgent(p auth.Principal) (agentRef string, unbindable bool) {
+	return p.AgentIdentity, p.Kind == auth.KindToken && p.AgentIdentity == ""
 }
 
 // resolveBearerIdentity is the BEARER adapter for the runGates seam: firm identity from the

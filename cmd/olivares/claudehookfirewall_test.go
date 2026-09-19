@@ -86,7 +86,7 @@ func TestHookFirewall_AllowsWhenCleanAndPermitted(t *testing.T) {
 func TestHookFirewall_NilInspectorIsInert(t *testing.T) {
 	// The default AGPL build path: a nil inspector is a clean pass — the firewall changes nothing.
 	d := &claudeHookDecider{}
-	dec := d.runHookFirewall(context.Background(), model.TenantID("t_x"), "actor", claude.HookDecisionInput{
+	dec := d.runHookFirewall(context.Background(), model.TenantID("t_x"), "actor", hookAgent{}, claude.HookDecisionInput{
 		Tool: "Bash", Event: "PreToolUse",
 	})
 	if !dec.Forward {
