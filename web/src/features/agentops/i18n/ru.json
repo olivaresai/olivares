@@ -142,6 +142,8 @@
     "effort": "Уровень усилий",
     "model": "Модель",
     "workspace": "Рабочая область",
+    "workspaceDirectory": "Рабочий каталог",
+    "workspaceDirectoryOwn": "собственный каталог этой сессии",
     "created": "Создано",
     "started": "Запущено",
     "lastActivity": "Последняя активность",

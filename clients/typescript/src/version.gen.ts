@@ -3,6 +3,6 @@
 /** The control-plane API contract major this client is generated against. */
 export const API_VERSION = "v1";
 /** SHA-256 binding the OpenAPI snapshots (stable + beta) the operation layer was generated from. */
-export const SPEC_HASH = "e6a336e16f9f4afd020e87b93bef0bac01d3736d43fbd93ff67cf52f8510536a";
+export const SPEC_HASH = "355fc51fbd8db2423b4137e563c46a72614aaab637b5bb054091e2f4d49e5d5b";
 /** The public versioning/deprecation/sunset policy governing this surface. */
 export const STABILITY_POLICY = "https://olivares.ai/docs";

@@ -39,6 +39,7 @@
       "identity": "Gestionar identidad",
       "nhiLifecycleRotate": "Rotar una credencial de identidad no humana",
       "nhiLifecycleFinalize": "Finalizar la baja de una identidad no humana",
+      "providers": "Registrar o retirar una credencial de proveedor",
       "generic": "Esta acción",
       "console": "Gestionar conectores"
     },

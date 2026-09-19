@@ -90,6 +90,7 @@
     "postureExport": "态势导出",
     "automations": "自动化",
     "agentcoreExport": "AgentCore 导出",
+    "providers": "提供方",
     "providerProfiles": "提供商配置文件",
     "providerBindings": "来源绑定"
   },
@@ -155,6 +156,7 @@
     "reporting": "生成并下载治理报告",
     "postureExport": "导出真实态势供控制塔使用",
     "automations": "三条自动化轨道及其触发器目录",
+    "providers": "注册会话启动时使用的 API 密钥与端点；可测试、更换和吊销",
     "providerProfiles": "登记并管理会话启动所依据的提供商主目录，并按需读取其配置",
     "providerBindings": "将已配置的来源以本节点应用的修订版专用于提供商配置文件",
     "routinePolicies": "Claude Code 例程的执行间隔下限、并发上限、审批要求、cron 允许列表和被阻止的环境",

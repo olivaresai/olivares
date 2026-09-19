@@ -139,6 +139,8 @@
     "effort": "推理强度",
     "model": "模型",
     "workspace": "工作区",
+    "workspaceDirectory": "工作目录",
+    "workspaceDirectoryOwn": "本会话自己的目录",
     "created": "创建时间",
     "started": "启动时间",
     "lastActivity": "最近活动",

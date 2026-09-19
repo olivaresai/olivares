@@ -461,6 +461,12 @@ func (m *Module) APIRoutes(reg api.RouteRegistrar) {
 	reg.Handle("POST", "/pdp/publish", permPolicyAdmin, m.handlePdpPublish)
 	reg.Handle("POST", "/pdp/rollback", permPolicyAdmin, m.handlePdpRollback)
 
+	// Historical reconstruction from the access-evidence ledger. Read
+	// tier: it re-evaluates retained artifacts and never changes enforcement.
+	// It is not a live PDP dry-run and does not consult the active revision.
+	reg.Handle("POST", "/decisions/replay", permPolicyRead, m.handleReplayDecision)
+	reg.Handle("GET", "/decisions/{id}/reconstruct", permPolicyRead, m.handleReconstructDecision)
+
 	// Subsystem D — human-in-the-loop approvals + the immutable decision trail.
 	reg.Handle("GET", "/approvals", permApprovalRead, m.handleListApprovals)
 	reg.Handle("POST", "/approvals", permApprovalWrite, m.handleCreateApproval)

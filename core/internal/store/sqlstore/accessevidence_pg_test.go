@@ -169,6 +169,12 @@ func TestAccessEvidencePostgresSplitOwnerRoundTrip(t *testing.T) {
 	}
 }
 
+func TestDecisionReconstructionStampPostgres(t *testing.T) {
+	st, _ := openAccessEvidencePG(t)
+	tenant := provisionTenant(t, st, "stamp-pg-"+uniqueSuffix())
+	assertDecisionReconstructionStamp(t, st, tenant)
+}
+
 // TestAccessEvidencePostgresRollbackLeavesNothing repeats the transactional
 // guarantee on the engine that actually has MVCC: an aborted transaction leaves
 // neither the record nor its ledger event.

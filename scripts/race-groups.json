@@ -84,8 +84,7 @@
             "Trusted",
             "Verify",
             "View",
-            "Workspace"
-          ]
+            "Workspace", "DecisionReconstruction", "LegacyDecision"]
         },
         {
           "name": "b",
@@ -421,8 +420,7 @@
             "Valid",
             "Whoami",
             "Wif",
-            "Workspace"
-          ]
+            "Workspace", "MondayAllow", "Reconstruct"]
         }
       ]
     },

@@ -224,7 +224,7 @@ func newPostureExportCmd(flags *authClientFlags) *cobra.Command {
 	cmd.Flags().StringVar(&category, "category", "", "match a finding kind or subject kind")
 	cmd.Flags().StringVar(&kind, "kind", "", "narrow the inventory half to one entity kind")
 	observeArtifactFlag(cmd, &out)
-	cmd.Flags().Lookup("out").Usage = "write the document verbatim here; `-` means stdout (default: render a summary)"
+	cmd.Flags().Lookup("out").Usage = "write the document verbatim here; '-' means stdout (default: render a summary)"
 	cmd.Flags().BoolVar(&strict, "strict", true,
 		"exit 7 (degraded) when the engine truncated any half of the export; --strict=false exits 0 instead")
 	return cmd

@@ -378,7 +378,7 @@ func auditVerifyCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&strict, "strict", false, "exit non-zero if any integrity check fails (chain/checkpoints/event_sigs); for on-call cron/CI. The default exits 0 and reports status only in the JSON")
 	cmd.Flags().StringArrayVar(&pubB64s, "pubkey", nil, "checkpoint public key pin, repeatable (key rotation): raw base64 Ed25519, or \"<alg>:<base64 DER SPKI>\" for an off-box key (default: the engine's own keys — advisory only; pin OFF-BOX keys for an attacker-resistant check, docs/SECURITY-HARDENING.md §5)")
 	cmd.Flags().StringVar(&pubAlg, "pubkey-alg", "", "algorithm of a SINGLE bare --pubkey (compat form): ed25519 (raw, default) | ecdsa-p256-sha256 | ecdsa-p384-sha384 | rsa-pkcs1-sha256 | rsa-pss-sha256 (DER SubjectPublicKeyInfo); with multiple --pubkey use the \"<alg>:<base64>\" form")
-	cmd.Flags().StringArrayVar(&eventPubB64s, "event-pubkey", nil, "per-event Ed25519 public key pin, repeatable (raw base64), optionally epoch-FENCED as \"<base64>@<last_seq>\" (retired generation, valid only up to that sequence) or \"<base64>@<lo>:<hi>\" (explicit window); a bare key is the current key. Pins REPLACE the advisory defaults — pin EVERY generation with its boundary (`keys status` lists prior_public_keys; the boundary is the audit.key.rotation marker's prior_last_seq). Without a boundary a retired key is trusted for every sequence")
+	cmd.Flags().StringArrayVar(&eventPubB64s, "event-pubkey", nil, "per-event Ed25519 public key pin, repeatable (raw base64), optionally epoch-FENCED as \"<base64>@<last_seq>\" (retired generation, valid only up to that sequence) or \"<base64>@<lo>:<hi>\" (explicit window); a bare key is the current key. Pins REPLACE the advisory defaults — pin EVERY generation with its boundary ('keys status' lists prior_public_keys; the boundary is the audit.key.rotation marker's prior_last_seq). Without a boundary a retired key is trusted for every sequence")
 	_ = cmd.RegisterFlagCompletionFunc("pubkey-alg", func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
 		return []string{"ed25519", "ecdsa-p256-sha256", "ecdsa-p384-sha384", "rsa-pkcs1-sha256", "rsa-pss-sha256"}, cobra.ShellCompDirectiveNoFileComp
 	})
@@ -739,7 +739,7 @@ func auditArchiveVerifyCmd() *cobra.Command {
 	cmd.Flags().StringVar(&dir, "dir", "", "archive directory to verify (the export's --out)")
 	cmd.Flags().BoolVar(&strict, "strict", false, "exit non-zero if the archive fails to verify; for on-call cron/CI. The default exits 0 and reports status only in the JSON")
 	cmd.Flags().StringArrayVar(&pubSpecs, "pubkey", nil, "checkpoint public key pin, repeatable: raw base64 Ed25519, or \"<alg>:<base64 DER SPKI>\" for an off-box key. Pins REPLACE the archive's advisory keys.json (docs/SECURITY-HARDENING.md §5)")
-	cmd.Flags().StringVar(&pubAlg, "pubkey-alg", "", "algorithm of a SINGLE bare --pubkey (compat form, as in `audit verify`)")
+	cmd.Flags().StringVar(&pubAlg, "pubkey-alg", "", "algorithm of a SINGLE bare --pubkey (compat form, as in 'audit verify')")
 	_ = cmd.RegisterFlagCompletionFunc("pubkey-alg", func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
 		return []string{"ed25519", "ecdsa-p256-sha256", "ecdsa-p384-sha384", "rsa-pkcs1-sha256", "rsa-pss-sha256"}, cobra.ShellCompDirectiveNoFileComp
 	})

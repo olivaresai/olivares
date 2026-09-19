@@ -8,7 +8,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log/slog"
 	"path/filepath"
 	"time"
 
@@ -37,9 +36,12 @@ func newQuickstartCmd() *cobra.Command {
 		Long: "quickstart runs the engine with the secure defaults (TLS on, no default\n" +
 			"credentials, a single-use setup token) and points you at the embedded console to\n" +
 			"create your first administrator with that token. The console accepts connections\n" +
-			"from the network: pass --listen 127.0.0.1:8443 to restrict it to this machine. It\n" +
-			"is the fastest safe way in; for production options (systemd, Compose, Kubernetes,\n" +
-			"air-gapped) see INSTALL.md.",
+			"from the network: pass --listen 127.0.0.1:8443 to restrict it to this machine.\n" +
+			"After that token it names the rest of the first hour: enroll a passkey, connect\n" +
+			"one coding agent, and run olivares doctor. It is the fastest safe way in; for\n" +
+			"production options (systemd, Compose, Kubernetes, air-gapped) see INSTALL.md. The\n" +
+			"three first-hour shapes (local, team, hybrid) are in the docs-site First hour\n" +
+			"guide.",
 		Example: `  # Start with defaults (every interface, self-signed TLS, SQLite)
   olivares quickstart
 
@@ -56,12 +58,11 @@ func newQuickstartCmd() *cobra.Command {
 			// exists once the engine is up — so a header goes first instead, and
 			// says what the log about to appear is (E5).
 			quickstartHeader(cmd.OutOrStdout(), opts.dataDir, quiet)
-			if quiet {
-				// Not a filter on what the engine checks — only on what this
-				// first run prints. `serve`, the production path, is unchanged.
-				slog.SetDefault(slog.New(slog.NewTextHandler(cmd.ErrOrStderr(),
-					&slog.HandlerOptions{Level: slog.LevelError})))
-			}
+			// Not a filter on what the engine checks — only on what this first run
+			// prints, and only its LEVEL. runEngine installs the one handler
+			// (enginelog.go); this line used to install a DIFFERENT one, which is how
+			// --quiet came to change the format of every line as well as its level.
+			opts.quiet = quiet
 			opts.publicURLSet = cmd.Flags().Changed("public-url")
 			announce := func(ctx context.Context, out io.Writer, eng *engine, addr consoleAddress) error {
 				return announceQuickstart(ctx, out, eng, addr)
@@ -75,7 +76,7 @@ func newQuickstartCmd() *cobra.Command {
 	cmd.Flags().StringVar(&opts.dataDir, "data-dir", "", "data directory (default $OLIVARES_DATA_DIR, an existing ./olivares-data, else $XDG_DATA_HOME/olivares or ~/.local/share/olivares)")
 	cmd.Flags().BoolVar(&quiet, "quiet", false,
 		"print only the guided panel, holding the engine's startup checks back to errors "+
-			"(they are still evaluated, and `olivares status` reports the same posture)")
+			"(they are still evaluated, and 'olivares status' reports the same posture)")
 	cmd.AddCommand(newQuickstartGovernedRAGCmd())
 	return cmd
 }
@@ -135,7 +136,8 @@ func announceQuickstart(ctx context.Context, out io.Writer, eng *engine, addr co
 	if has {
 		fmt.Fprintf(out, "\nOlivares AI is starting.\n"+
 			"  Open the console and sign in:  %s\n"+
-			"  (HTTPS with a self-signed certificate — your browser will warn once.)\n\n%s", baseURL, adviceBlock(addr.Advice))
+			"  (HTTPS with a self-signed certificate — your browser will warn once.)\n\n%s%s",
+			baseURL, adviceBlock(addr.Advice), firstHourReturningNextSteps)
 		return nil
 	}
 	token, created, err := eng.setupTok.Ensure()
@@ -161,8 +163,9 @@ func announceQuickstart(ctx context.Context, out io.Writer, eng *engine, addr co
 			"boot. Removing it is safe while no administrator exists — the token gates only\n"+
 			"first-boot setup.\n"+
 			"%s"+
+			"%s"+
 			"=========================================\n\n",
-			baseURL, filepath.Join(eng.dataDir, "setup.token"), adviceBlock(addr.Advice))
+			baseURL, filepath.Join(eng.dataDir, "setup.token"), adviceBlock(addr.Advice), firstHourPendingNextSteps)
 		return nil
 	}
 	fmt.Fprintf(out, "\n=== WELCOME TO OLIVARES AI ===\n"+
@@ -173,11 +176,77 @@ func announceQuickstart(ctx context.Context, out io.Writer, eng *engine, addr co
 		"      warn once; that is expected for a local install.)\n"+
 		"  2. Complete setup with this one-time token (shown once, single-use):\n\n"+
 		"         %s\n\n"+
+		// The CLI route goes DIRECTLY under the token it consumes: it is the
+		// second half of step 2, and the address advice below is about step 1.
+		// Printed after the advice, its "Or" pointed back across an unrelated
+		// paragraph about passkeys.
+		"%s"+
+		"%s"+
 		"%s"+
 		"Press Ctrl-C to stop. For production install paths, see INSTALL.md.\n"+
-		"==============================\n\n", baseURL, token, adviceBlock(addr.Advice))
+		"==============================\n\n", baseURL, token,
+		cliSetupRoute(baseURL, eng.dataDir), adviceBlock(addr.Advice), firstHourWelcomeNextSteps)
 	return nil
 }
+
+// cliSetupRoute is step 2 WITHOUT a browser.
+//
+// MEASURED 2026-09-18 walking the first hour: every panel and every page sent the
+// operator to the console to create the first administrator, and `olivares auth
+// bootstrap` — which does exactly that, against the running engine, in 0.41 s —
+// was named by nothing the product prints. An operator on a headless host, or one
+// already in the terminal that just printed the token, had no way to learn the
+// command exists.
+//
+// The flags are the ones this engine actually requires, not a shortened form: the
+// certificate is self-signed on a first boot, so --ca-cert is not optional.
+//
+// The token is read from STDIN, and that is not a stylistic choice. An earlier
+// version of this function pointed --setup-token-file at
+// <data-dir>/setup.token, which is where the engine keeps the token's SHA-256 —
+// the plaintext is stored NOWHERE by design (core/secure/setup.go), which is the
+// same reason first-boot says it cannot be shown again. Running the printed
+// command verbatim against a live engine answered HTTP 403, so the product would
+// have printed a command that cannot work. Measured 2026-09-18; the stdin form
+// completes in 277 ms.
+//
+// Stdin also keeps the token out of the process table, which --setup-token would
+// not.
+func cliSetupRoute(baseURL, dataDir string) string {
+	return "     Or, without a browser, from this terminal — paste the token above:\n\n" +
+		"         olivares auth bootstrap --server " + baseURL + " \\\n" +
+		"           --ca-cert " + filepath.Join(dataDir, "tls.crt") + " \\\n" +
+		"           --setup-token-file - \\\n" +
+		"           --email you@example.com --password-file <file> --save-context\n\n"
+}
+
+// firstHourWelcomeNextSteps is the rest of the first hour, printed after the
+// setup token. Measured 2026-09-17: the welcome panel stopped at step 2 and the
+// operator had no product-owned next action (docs named passkey enrollment,
+// agent connect and evidence; the binary did not). These lines are the product
+// telling the operator what to do next. They must stay in the binary, not only
+// in the First hour guide.
+const firstHourWelcomeNextSteps = "  After setup, the product names the rest of the first hour:\n" +
+	"  3. Sign in. Enroll a passkey on Identity → Privileged login before you add\n" +
+	"     connectors or sources (AAL3). Open the console at the localhost URL, not\n" +
+	"     the IP, so the passkey ceremony can complete.\n" +
+	"  4. Connect one coding agent. Detect it on this host with:\n" +
+	"         olivares agent tool detect\n" +
+	"     Register it in the inventory (POST /v1/agents). Wire the Claude Code hook\n" +
+	"     with `olivares agent managed-settings` and OLIVARES_HOOK_PEP_CONFIG. The\n" +
+	"     First hour guide has local, team and hybrid shapes.\n" +
+	"  5. Confirm this host with `olivares doctor`. It names the next first-hour\n" +
+	"     step when a coding agent or the hook PEP is not yet wired.\n\n"
+
+// firstHourReturningNextSteps is for a data directory that already has an
+// administrator. The welcome token is gone; the operator still needs the next
+// first-hour action.
+const firstHourReturningNextSteps = "  Next: run `olivares doctor`. It names the next first-hour step when a coding\n" +
+	"  agent or the hook PEP is not yet wired. See the First hour guide.\n\n"
+
+// firstHourPendingNextSteps is for a restart before setup completed. The token
+// cannot be shown again; the rest of the first hour still applies after setup.
+const firstHourPendingNextSteps = "  After you complete setup, run `olivares doctor` for the next first-hour step.\n"
 
 // adviceBlock renders the address paragraphs as their own block, or nothing at
 // all. A panel with nothing to say about its address prints exactly what it

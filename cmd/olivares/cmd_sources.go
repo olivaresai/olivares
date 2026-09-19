@@ -9,11 +9,11 @@ import (
 	"io"
 	"sort"
 	"strings"
-	"text/tabwriter"
 
 	"github.com/spf13/cobra"
 
 	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
+	"github.com/olivaresai/olivares/cmd/olivares/internal/termrender"
 	"github.com/olivaresai/olivares/core/auth"
 )
 
@@ -94,13 +94,19 @@ func sourcesListCmd() *cobra.Command {
 					_, err := fmt.Fprintln(out, "no sources in the roster")
 					return err
 				}
-				tw := tabwriter.NewWriter(out, 0, 2, 2, ' ', 0)
-				fmt.Fprintln(tw, "NAME\tKIND\tTENANT\tMODE\tPOLL\tENABLED")
+				tbl := termrender.Table{Header: []string{"name", "kind", "tenant", "mode", "poll", "enabled"}}
 				for _, it := range items {
-					fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%ds\t%t\n",
-						it.Name, it.Kind, it.Tenant, it.Mode, it.PollSeconds, it.Enabled)
+					tbl.Rows = append(tbl.Rows, []string{
+						it.Name,
+						it.Kind,
+						it.Tenant,
+						it.Mode,
+						countCell(it.PollSeconds),
+						flagCell(it.Enabled),
+					})
 				}
-				return tw.Flush()
+				renderTo(out).Table(tbl)
+				return nil
 			}, items)
 		},
 	}
@@ -187,16 +193,14 @@ func sourcesGetCmd() *cobra.Command {
 				Enabled: def.Enabled, Config: cfg,
 			}
 			return renderOut(cmd, func(out io.Writer) error {
-				tw := tabwriter.NewWriter(out, 0, 2, 2, ' ', 0)
-				fmt.Fprintf(tw, "NAME\t%s\n", item.Name)
-				fmt.Fprintf(tw, "KIND\t%s\n", item.Kind)
-				fmt.Fprintf(tw, "TENANT\t%s\n", item.Tenant)
-				fmt.Fprintf(tw, "MODE\t%s\n", item.Mode)
-				fmt.Fprintf(tw, "POLL\t%ds\n", item.PollSeconds)
-				fmt.Fprintf(tw, "ENABLED\t%t\n", item.Enabled)
-				if err := tw.Flush(); err != nil {
-					return err
-				}
+				renderTo(out).Fields([]termrender.Field{
+					{Key: "name", Value: item.Name},
+					{Key: "kind", Value: item.Kind},
+					{Key: "tenant", Value: item.Tenant},
+					{Key: "mode", Value: item.Mode},
+					{Key: "poll", Value: countCell(item.PollSeconds) + "s"},
+					{Key: "enabled", Value: flagCell(item.Enabled)},
+				})
 				if len(item.Config) == 0 {
 					_, err := fmt.Fprintln(out, "\nno config keys")
 					return err
@@ -204,7 +208,6 @@ func sourcesGetCmd() *cobra.Command {
 				if _, err := fmt.Fprintln(out, "\nCONFIG"); err != nil {
 					return err
 				}
-				tc := tabwriter.NewWriter(out, 0, 2, 2, ' ', 0)
 				// Sorted so two runs of the same row print the same bytes: a Go map
 				// iterates at random, and an operator diffing two `get` outputs would
 				// otherwise see churn that is not a change.
@@ -213,10 +216,12 @@ func sourcesGetCmd() *cobra.Command {
 					keys = append(keys, k)
 				}
 				sort.Strings(keys)
+				block := make([]termrender.Field, 0, len(keys))
 				for _, k := range keys {
-					fmt.Fprintf(tc, "%s\t%s\n", k, item.Config[k])
+					block = append(block, termrender.Field{Key: k, Value: item.Config[k]})
 				}
-				return tc.Flush()
+				renderTo(out).Fields(block)
+				return nil
 			}, item)
 		},
 	}

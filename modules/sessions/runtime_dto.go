@@ -27,6 +27,13 @@ type runDTO struct {
 	Effort          string `json:"effort,omitempty"`
 	ModelRef        string `json:"model_ref,omitempty"`
 	WorkspaceRef    string `json:"workspace_ref,omitempty"`
+	// WorkspacePath is the HOST directory this session's child was started in: the
+	// registered workspace's canonical root, or the directory of its own this plane
+	// created under the data directory. It is shown by NAME because the walk of
+	// 2026-09-18 could only answer "where is this session working" by reading the
+	// child's own init frame — and the answer then was the engine's own directory.
+	// Empty on a run that predates the column, which reads as "not recorded".
+	WorkspacePath   string `json:"workspace_path,omitempty"`
 	TemplateID      string `json:"template_id,omitempty"`
 	TemplateVersion int64  `json:"template_version,omitempty"`
 	MaxDurationSecs int64  `json:"max_duration_secs,omitempty"`
@@ -82,6 +89,22 @@ type runDTO struct {
 	// first: a home path and an injected value are not proof of an account.
 	ProviderAuthSource string `json:"provider_auth_source,omitempty"`
 	ProviderAuthState  string `json:"provider_auth_state,omitempty"`
+	// What the governed turns of this session have cost, credited from the
+	// provider's own result frames (runtime_usage.go). POINTERS, because the
+	// difference between "the driver reported no usage" and "the turn was free" is
+	// the whole point: an absent field is UNKNOWN and a zero would be a claim. A
+	// session that has taken no turn yet carries none of them.
+	//
+	// InputTokens is the TOTAL input volume (uncached + cache-write + cache-read).
+	// UsageModelRef is the model the provider reported using, which is not the
+	// same fact as `model_ref` above — that one is what the launch ASKED for, and
+	// on the golden path it was empty while the child answered on an explicit
+	// model.
+	InputTokens   *int64 `json:"input_tokens,omitempty"`
+	OutputTokens  *int64 `json:"output_tokens,omitempty"`
+	CostMicroUSD  *int64 `json:"cost_micro_usd,omitempty"`
+	UsageModelRef string `json:"usage_model_ref,omitempty"`
+
 	// LiveRef (B2) is the opaque id of the plane's managed live row for this run,
 	// present only once the bridge proved the run owns its provider id. A console
 	// navigates from a profiled run to its session by THIS, never by the bare
@@ -99,6 +122,7 @@ func (m *Module) toRunDTO(rec model.Record) runDTO {
 		Effort:                 rec.String(colEffort),
 		ModelRef:               rec.String(colRunModelRef),
 		WorkspaceRef:           rec.String(colWorkspaceRef),
+		WorkspacePath:          rec.String(colRunWorkspacePath),
 		TemplateID:             rec.String(colTemplateID),
 		TemplateVersion:        rec.Int(colTemplateVersion),
 		MaxDurationSecs:        rec.Int(colTemplateCeiling),
@@ -130,6 +154,10 @@ func (m *Module) toRunDTO(rec model.Record) runDTO {
 		ProviderAuthSource:     rec.String(colRunProviderAuthSource),
 		ProviderAuthState:      rec.String(colRunProviderAuthState),
 		LiveRef:                rec.String(colRunLiveRef),
+		InputTokens:            intPtr(rec, colRunInputTokens),
+		OutputTokens:           intPtr(rec, colRunOutputTokens),
+		CostMicroUSD:           intPtr(rec, colRunCostMicroUSD),
+		UsageModelRef:          rec.String(colRunUsageModelRef),
 	}
 }
 

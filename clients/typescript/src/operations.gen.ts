@@ -3635,6 +3635,24 @@ export class Client extends ClientCore {
   }
 
   /**
+   * POST /v1/m/governance/decisions/replay — Reconstructs a past authorization from the access-evidence ledger, never from the live policy.
+   *
+   * Stability: beta.
+   */
+  postV1MGovernanceDecisionsReplay(body: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.doJsonRequired("POST", "/v1/m/governance/decisions/replay", "/v1/m/governance/decisions/replay", body, opts);
+  }
+
+  /**
+   * GET /v1/m/governance/decisions/{id}/reconstruct — Reconstructs one stored authorization decision from the access-evidence ledger, never from the live policy.
+   *
+   * Stability: beta.
+   */
+  getV1MGovernanceDecisionsByIdReconstruct(id: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/m/governance/decisions/{id}/reconstruct", `/v1/m/governance/decisions/${encodeURIComponent(id)}/reconstruct`, undefined, opts);
+  }
+
+  /**
    * GET /v1/m/governance/emerging-identity-standards — Surfaces the design-toward registry read-only, with an explicit disclaimer that it is tracked, not implemented (IDN-12).
    *
    * Stability: beta.

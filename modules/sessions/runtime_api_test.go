@@ -15,7 +15,7 @@ import (
 // than the lifecycle logic (which the white-box tests cover).
 func TestRuntimeAPI_HTTP(t *testing.T) {
 	fr := &fakeRunner{initSID: "sess-h"}
-	m := New(WithRunner(fr), WithCredentialSource(staticCred()))
+	m := New(WithSessionWorkspaceRoot(t.TempDir()), WithRunner(fr), WithCredentialSource(staticCred()))
 	h := newHarness(t, m)
 	admin := h.adminLogin()
 	tenantA := h.createOrg(admin, "acme")

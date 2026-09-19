@@ -10,9 +10,10 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
-	"text/tabwriter"
 
 	"github.com/spf13/cobra"
+
+	"github.com/olivaresai/olivares/cmd/olivares/internal/termrender"
 )
 
 // `olivares governance pdp` — WHICH POLICY IS ACTUALLY DECIDING REQUESTS RIGHT NOW.
@@ -112,26 +113,27 @@ func pdpVersionsCmd(flags *authClientFlags) *cobra.Command {
 					_, err := fmt.Fprintln(out, "no policy revision has been stored on either surface")
 					return err
 				}
-				tw := tabwriter.NewWriter(out, 0, 2, 2, ' ', 0)
-				if _, err := fmt.Fprintln(tw, "SURFACE\tREV\tACTIVE\tVALIDATED\tAUTHOR\tCREATED"); err != nil {
-					return err
+				t := termrender.Table{
+					Header: []string{"surface", "rev", "active", "validated", "author", "created"},
+					Empty:  "no policy revision on this surface",
 				}
 				for _, rv := range list.Items {
-					active := "no"
+					active, activeRole := "no", termrender.RoleNone
 					if rv.Active {
-						active = "YES"
+						active, activeRole = "YES", termrender.RoleOK
 					}
-					validated := "no"
+					validated, validatedRole := "no", termrender.RoleWarn
 					if rv.Validated {
-						validated = "yes"
+						validated, validatedRole = "yes", termrender.RoleOK
 					}
-					if _, err := fmt.Fprintf(tw, "%s\t%d\t%s\t%s\t%s\t%s\n",
-						observeCell(rv.Surface), rv.Revision, active, validated,
-						observeCell(rv.Author), observeCell(rv.CreatedAt)); err != nil {
-						return err
-					}
+					t.Rows = append(t.Rows, []string{
+						observeCell(rv.Surface), strconv.FormatInt(rv.Revision, 10), active, validated,
+						observeCell(rv.Author), observeCell(rv.CreatedAt),
+					})
+					t.Roles = append(t.Roles, []termrender.Role{0, 0, activeRole, validatedRole})
 				}
-				return tw.Flush()
+				renderTo(out).Table(t)
+				return nil
 			}, observeJSON(res.raw))
 		},
 	}
@@ -296,10 +298,9 @@ func pdpActiveCmd(flags *authClientFlags) *cobra.Command {
 						return err
 					}
 				}
-				tw := tabwriter.NewWriter(out, 0, 2, 2, ' ', 0)
-				if _, err := fmt.Fprintln(tw, "\nSURFACE\tPRESENT\tREV\tAUTHOR\tCREATED\tSHA256"); err != nil {
-					return err
-				}
+				r := renderTo(out)
+				r.Blank()
+				t := termrender.Table{Header: []string{"surface", "present", "rev", "author", "created", "sha256"}}
 				// All three are printed even when absent — the module keeps them in the struct on
 				// purpose so a client can render "none" honestly instead of silently omitting a
 				// surface the reader would then assume was not asked about.
@@ -307,19 +308,20 @@ func pdpActiveCmd(flags *authClientFlags) *cobra.Command {
 					name string
 					v    cliPdpSurface
 				}{{"authored", a.Authored}, {"managed", a.Managed}, {"adopted", a.Adopted}} {
-					present := "no"
+					present, role := "no", termrender.RoleMuted
 					rev := "—"
 					if s.v.Present {
-						present = "yes"
+						present, role = "yes", termrender.RoleOK
 						rev = strconv.FormatInt(s.v.Revision, 10)
 					}
-					if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n",
+					t.Rows = append(t.Rows, []string{
 						s.name, present, rev, observeCell(s.v.Author),
-						observeCell(s.v.CreatedAt), observeCell(s.v.SHA256)); err != nil {
-						return err
-					}
+						observeCell(s.v.CreatedAt), observeCell(s.v.SHA256),
+					})
+					t.Roles = append(t.Roles, []termrender.Role{0, role})
 				}
-				return tw.Flush()
+				r.Table(t)
+				return nil
 			}, observeJSON(res.raw))
 		},
 	}
@@ -405,21 +407,22 @@ func pdpTestsCmd(flags *authClientFlags) *cobra.Command {
 				if len(st.Results) == 0 {
 					return nil
 				}
-				tw := tabwriter.NewWriter(out, 0, 2, 2, ' ', 0)
-				if _, err := fmt.Fprintln(tw, "\nTEST\tRESULT\tDETAIL"); err != nil {
-					return err
+				rend := renderTo(out)
+				rend.Blank()
+				t := termrender.Table{
+					Header: []string{"test", "result", "detail"},
+					Empty:  "the artifact carries no test result",
 				}
 				for _, r := range st.Results {
-					verdict := "FAIL"
+					verdict, role := "FAIL", termrender.RoleFail
 					if r.Passed {
-						verdict = "pass"
+						verdict, role = "pass", termrender.RoleOK
 					}
-					if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\n",
-						observeCell(r.Name), verdict, observeCell(r.Detail)); err != nil {
-						return err
-					}
+					t.Rows = append(t.Rows, []string{observeCell(r.Name), verdict, observeCell(r.Detail)})
+					t.Roles = append(t.Roles, []termrender.Role{0, role})
 				}
-				return tw.Flush()
+				rend.Table(t)
+				return nil
 			}, observeJSON(res.raw))
 		},
 	}

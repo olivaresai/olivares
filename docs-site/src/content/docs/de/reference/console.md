@@ -62,7 +62,7 @@ Beobachtbarkeit & Nachweise, dann System & Einstellungen.
 
 <!-- BEGIN GENERATED olivares-console-routes — regenerate with `bash scripts/check-guide-docs.sh --write`; do not edit by hand -->
 
-Die Konsole veröffentlicht **75 Routen**. Jede steht mit der erforderlichen
+Die Konsole veröffentlicht **76 Routen**. Jede steht mit der erforderlichen
 Berechtigung und der vom Hilfe-Link geöffneten Referenzseite in den Tabellen unten.
 
 ### Betreiben
@@ -83,6 +83,7 @@ Berechtigung und der vom Hilfe-Link geöffneten Referenzseite in den Tabellen un
 | Observability | `/observability` | Ingestion-Zustand nach Standard und Trace-Drilldown | `health:status:read` | [reference/modules/observability](/de/reference/modules/observability/) |
 | Quellenbindungen | `/provider-bindings` | Konfigurierte Quellen in der von diesem Knoten angewendeten Revision Anbieterprofilen fest zuordnen | `sessions:profile-binding:read` | [reference/modules/ii-sessions](/de/reference/modules/ii-sessions/) |
 | Anbieterprofile | `/provider-profiles` | Die Anbieter-Home-Verzeichnisse registrieren und verwalten, unter denen Sessions starten, und ihre Konfiguration bei Bedarf auslesen | `sessions:profile:read` | [reference/modules/ii-sessions](/de/reference/modules/ii-sessions/) |
+| Anbieter | `/providers` | Die API-Schlüssel und Endpunkte registrieren, mit denen Sessions starten; sie testen, wechseln und widerrufen | `sessions:provider:read` | [how-to/add-a-provider](/de/how-to/add-a-provider/) |
 | Sandbox | `/sandbox` | Isolierte Agententests und Replay | `sandbox:run:read` | [reference/modules/xvii-sandbox](/de/reference/modules/xvii-sandbox/) |
 | Sessions | `/sessions` | Live-Agentenbetrieb und Timelines | `sessions:live:read` | [reference/modules/ii-sessions](/de/reference/modules/ii-sessions/) |
 | Tenants | `/tenants` | Dienst eines Tenants entziehen oder wiederherstellen | `system:admin` | [how-to/troubleshooting](/de/how-to/troubleshooting/) |
