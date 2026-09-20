@@ -29,6 +29,13 @@
 #   4. THE CEILINGS THE WORKFLOW DECLARES ARE THE ONES THE SPEC DECLARES, and the Go
 #      timeout stays under the step ceiling. Go's timeout fires with a goroutine dump and
 #      the package name; the step ceiling only cancels. Inverting them costs the diagnosis.
+#   5. EVERY TEST OF A PACKAGE SPLIT BY NAME BELONGS TO EXACTLY ONE GROUP. This is (1) one
+#      level down and the failure is worse, because `go test -run` over an expression that
+#      matches nothing EXITS 0: an orphaned test is not merely unreported, the shard that
+#      should have run it publishes a SUCCESS. Hence: a remainder group per partitioned
+#      package, no test in two groups, no group that selects nothing, no package split by
+#      name and ALSO sent whole to a shard by a pattern, and a `-run` expression the kernel
+#      will still carry as one argument.
 #
 # Three answers: 0 CLEAN · 1 FINDING · 2 COULD NOT LOOK.
 set -uo pipefail
@@ -219,7 +226,8 @@ PART="$(SHARDS="$SHARDS" SPEC="$SPEC" READER="$READER" UNI="$UNI" python3 - <<'P
 import os, re, subprocess, sys
 
 spec = os.environ["SPEC"]
-pairs, optional = [], set()
+reader = os.environ["READER"]
+pairs, optional, groups = [], set(), []
 with open(spec, encoding="utf-8") as fh:
     for raw in fh:
         f = raw.split("#", 1)[0].split()
@@ -227,6 +235,10 @@ with open(spec, encoding="utf-8") as fh:
             pairs.append((f[1], f[2]))
         elif len(f) == 2 and f[0] == "optional":
             optional.add(f[1])
+        elif len(f) >= 5 and f[0] == "group":
+            groups.append({"shard": f[1], "pkg": f[2], "name": f[3], "fams": f[4:]})
+
+split = {g["pkg"] for g in groups}
 
 def match(pat, pkg):
     if pat.endswith("/..."):
@@ -251,6 +263,10 @@ for name, pat in pairs:
 
 owner, orphans, ties = {}, [], []
 for pkg in pkgs:
+    # Split by test name: its groups own it, one shard each. It is not an orphan and it is
+    # not claimed by a pattern — section (5) below is what proves it is covered.
+    if pkg in split:
+        continue
     best, bw = set(), -1
     for name, pat in pairs:
         if not match(pat, pkg):
@@ -301,20 +317,121 @@ for s in shards:
     out = subprocess.run(["bash", os.environ["READER"], "legs", s],
                          capture_output=True, text=True)
     legs[s] = [l for l in out.stdout.split("\n") if l.strip()]
+group_shards = {g["shard"] for g in groups}
 for s in shards:
-    if counts.get(s, 0) == 0 and not legs[s]:
-        print("FINDING shard %s owns no package and declares no leg: it is a job that starts a "
-              "database, runs nothing and reports success." % s)
+    if counts.get(s, 0) == 0 and not legs[s] and s not in group_shards:
+        print("FINDING shard %s owns no package, declares no name group and declares no leg: it "
+              "is a job that starts a database, runs nothing and reports success." % s)
+
+
+# (5) THE NAME GROUPS ─────────────────────────────────────────────────────────────────
+# The universe of a partitioned package comes through the SAME reader the runner uses, so
+# the gate cannot certify a set the run will not see.
+group_report = []
+for pkg in sorted(split):
+    if pkg not in pkgs:
+        print("FINDING a group names the package %s, which this tree does not have with tests: "
+              "its shards would run a package that is not here, and the tests the file says "
+              "are covered are covered by nothing." % pkg)
+        continue
+
+    # A pattern that names this package EXACTLY was written to send it whole to one shard.
+    # Beside a name split it is not a second opinion, it is the same tests a second time.
+    for name, pat in pairs:
+        base = pat[:-4] if pat.endswith("/...") else pat
+        if base == pkg:
+            print("FINDING the package %s is split into name groups and the pattern %s of shard "
+                  "%s sends it whole to that shard: every test of it would run twice, once by "
+                  "name and once by package, and the shard the file says bounds the suite is "
+                  "not the one that does." % (pkg, pat, name))
+
+    mine = [g for g in groups if g["pkg"] == pkg]
+    rest = [g for g in mine if g["fams"] == ["*"]]
+    if len(rest) > 1:
+        print("FINDING the package %s declares two remainder groups (%s): every test no other "
+              "group names would run twice, in two shards, and the file would read as if each "
+              "of them ran it once." % (pkg, " and ".join(sorted(g["name"] for g in rest))))
+    if not rest:
+        print("FINDING the package %s is split into name groups and none of them is the "
+              "remainder `*`: a test added tomorrow would match no group and would never run, "
+              "and every shard would stay green while it did not." % pkg)
+
+    out = subprocess.run(["bash", reader, "tests", pkg], capture_output=True, text=True)
+    if out.returncode != 0:
+        print("CANNOT the reader could not enumerate the tests of %s: %s"
+              % (pkg, out.stderr.strip().splitlines()[-1] if out.stderr.strip() else "no reason given"))
+        sys.exit(0)
+    tests = sorted({l.strip() for l in out.stdout.splitlines() if l.strip()})
+    if not tests:
+        print("FINDING the package %s is split into name groups and has no top-level test: "
+              "every group's -run would match nothing, and `go test` answers 0 to that." % pkg)
+        continue
+
+    hits, sizes = {}, {}
+    for g in mine:
+        if g["fams"] == ["*"]:
+            continue
+        own = [t for t in tests if any(t.startswith("Test" + fam) for fam in g["fams"])]
+        sizes[g["name"]] = len(own)
+        if not own:
+            print("FINDING the group %s of %s names no test in this tree: its families are "
+                  "stale, its `-run` would match nothing, `go test` would exit 0 and the shard "
+                  "would report a success having run no test." % (g["name"], pkg))
+        for t in own:
+            hits.setdefault(t, []).append(g["name"])
+
+    dobles = sorted(t for t, v in hits.items() if len(v) > 1)
+    if dobles:
+        print("FINDING %d test(s) of %s are named by TWO name groups (a family is a prefix of "
+              "another group's family): they would run twice, in two shards, and the group that "
+              "bounds its shard is not the one the file says." % (len(dobles), pkg))
+        for t in dobles[:20]:
+            print("DETAIL %s -> %s" % (t, " and ".join(hits[t])))
+
+    huerfanos = sorted(t for t in tests if t not in hits)
+    if rest:
+        sizes[rest[0]["name"]] = len(huerfanos)
+    elif huerfanos:
+        print("FINDING %d test(s) of %s belong to NO name group. Nothing would run them, no "
+              "shard would notice, and `go test -run` answers 0 to an expression that selects "
+              "nothing — so the silence would arrive as a green check." % (len(huerfanos), pkg))
+        for t in huerfanos[:20]:
+            print("DETAIL %s" % t)
+
+    # The expression itself, built by the reader — the same call the runner makes — because a
+    # limit checked here and applied there is a limit that does not hold.
+    for g in mine:
+        ex = subprocess.run(["bash", reader, "run-expr", pkg, g["name"]],
+                            capture_output=True, text=True)
+        if ex.returncode == 2:
+            print("CANNOT the reader could not build the -run expression of group %s of %s: %s"
+                  % (g["name"], pkg, ex.stderr.strip()))
+            sys.exit(0)
+        if ex.returncode != 0:
+            for line in ex.stderr.strip().splitlines():
+                print("FINDING " + line.replace("pr-suite-shards: FAIL — ", ""))
+
+    group_report.append("%s: %s" % (pkg, " ".join(
+        "%s->%s(%d)" % (g["name"], g["shard"], sizes.get(g["name"], 0)) for g in mine)))
+
+for line in group_report:
+    print("GROUPS " + line)
 
 print("REPARTO " + " ".join("%s=%d" % (s, counts.get(s, 0)) for s in shards))
 print("TOTAL %d" % len(pkgs))
 PY
 )" || cannot "the partition reader failed to run"
 
+# The partition reader can also refuse to look — a package it cannot enumerate is not a
+# partition it can certify — and COULD NOT LOOK is never CLEAN.
+PARTCANNOT="$(printf '%s\n' "$PART" | sed -n 's/^CANNOT //p')"
+[ -z "$PARTCANNOT" ] || cannot "$(printf '%s' "$PARTCANNOT" | head -1)"
+
 NOTICES="$(printf '%s\n' "$PART" | sed -n 's/^NOTICE //p')"
 FINDINGS="$(printf '%s\n' "$PART" | sed -n 's/^FINDING //p')"
 DETAILS="$(printf '%s\n' "$PART" | sed -n 's/^DETAIL //p')"
 REPARTO="$(printf '%s\n' "$PART" | sed -n 's/^REPARTO //p')"
+GROUPSPLIT="$(printf '%s\n' "$PART" | sed -n 's/^GROUPS //p')"
 TOTAL="$(printf '%s\n' "$PART" | sed -n 's/^TOTAL //p')"
 
 if [ -n "$FINDINGS" ]; then
@@ -329,6 +446,11 @@ say "check-pr-suite-shards: CLEAN — ${TOTAL} package(s) with tests, each in ex
 say "  universe: ${SOURCE}"
 say "  split: ${REPARTO}"
 say "  matrix of ${WF_JOB} = ${WF_MATRIX}; ceilings go ${GOTO}m < step ${STEPC}m < job ${JOBC}m."
+if [ -n "$GROUPSPLIT" ]; then
+  while IFS= read -r line; do
+    [ -n "$line" ] && say "  name groups — $line"
+  done <<< "$GROUPSPLIT"
+fi
 if [ -n "$NOTICES" ]; then
   while IFS= read -r line; do [ -n "$line" ] && say "check-pr-suite-shards: notice — $line"; done <<< "$NOTICES"
 fi

@@ -9,18 +9,29 @@
 # and the 60-minute step ceiling cut them, twice. Raising the ceiling makes the suite
 # PASS; it does not make the answer ARRIVE, and every contribution waits for the answer.
 #
-# WHAT THE MEASUREMENT SAYS, because the split follows from it and not from taste. The
-# suite walks the workspace one module at a time, so three modules ran one after another
-# and their wall clocks simply added up: cmd/olivares 24.4 min, core 25.6 min, modules
-# 25.1 min — 75.1 of the 77.1. Inside a module the packages DO run in parallel, and the
-# measurement says how much: modules spent 2990.5 s of test time in 1506.7 s of wall
-# clock, so TWO packages at a time, not four. That number is what the split is sized
-# against, and it is the number to re-measure when the runner changes.
+# WHY IT WAS SPLIT AGAIN, measured 2026-09-20 on the public repository. The package split
+# below reached its floor and then went through it. `cmd/olivares` hit `panic: test timed
+# out after 45m0s` at 2700.093 s on the shard of a change that adds one test file to
+# `core/api`; `core/internal/store/sqlstore` hit the same clock at 2700.024 s on the shard
+# of a change that adds one test to `core/auth`. Between those two the same shards passed
+# twice. A required check whose verdict depends on the runner's variance and not on the
+# change is not a verdict, and the previous entry of this file said where the floor was:
+# "one package takes 1461.7 s on its own. No package-level split goes under it."
 #
-# THE FLOOR OF THIS MECHANISM, said plainly: one package, core/internal/store/sqlstore,
-# takes 1461.7 s — 24.4 min — on its own. No package-level split goes under it. Going
-# under it needs the test-family split that scripts/race-groups.json already does for the
-# -race sweep of this same package; that is the next step, not this one.
+# WHAT THE MEASUREMENT SAYS ABOUT THE TWO PACKAGES, because the split follows from it. The
+# same tree measured `cmd/olivares` at 1418, 1698, 1705 and 2526 s on 2026-09-19 and at
+# 2567 s on 2026-09-20, against 1355.8 s when it ran inside the unsharded sweep: the spread
+# is 78 % of the smallest, and the timeout is what happens when the spread stacks. Two
+# causes are on the record and neither is a guess. The memory ceiling this repository
+# shipped for the runner deaths (a derived GOMEMLIMIT in scripts/with-pg-env.sh) buys the
+# 8693 MiB peak down to 4538 MiB and pays for it in throughput: 2852 tests started by
+# t+1318 s with it against 3115 without. And the package grew — the race partition of the
+# same package was calibrated at 2145 top-level tests and now enumerates 2429.
+#
+# THE FLOOR OF A PACKAGE SPLIT, and how this one goes under it: the tests of ONE package go
+# to DIFFERENT shards by NAME. That is what scripts/race-groups.json already does for the
+# -race sweep of this same root package, and the record below is the same idea in this
+# file's grammar.
 #
 # THE PARTITION IS DECLARED, NOT COMPUTED. A hash of the package name balances nothing
 # when one package is 22 % of the clock, and it cannot be read: a person who adds a
@@ -33,6 +44,16 @@
 #   shard <name>                 declares a shard. THE ORDER IS THE MATRIX ORDER.
 #   pkg   <shard> <pattern>      an import-path pattern that shard owns.
 #                                `<path>/...` is the subtree; anything else is exact.
+#   group <shard> <package> <name> <family>…
+#                                a NAME GROUP: the top-level tests of ONE package whose
+#                                name begins with Test<family>, run by that shard and by
+#                                no other. The single family `*` is the REMAINDER — every
+#                                top-level test, fuzz target and example of the package
+#                                that no other group of it names. The remainder is
+#                                COMPUTED from the source at run time, so a test added
+#                                tomorrow is already in the partition; without it a new
+#                                name would match no group, and `go test -run` over an
+#                                expression that selects nothing EXITS 0.
 #   leg   <shard> <task>         a Taskfile leg that shard runs after its packages.
 #   optional <pattern>           this pattern MAY match nothing, because the module it
 #                                names is not published in every tree. Everywhere else a
@@ -44,48 +65,104 @@
 # ASSIGNMENT RULE: THE LONGEST MATCHING PATTERN WINS — the same rule as
 # scripts/race-groups.json, and for the same reason: it lets a broad pattern and a
 # surgical one live side by side without either listing the other's packages.
-# `core/...` and `core/internal/...` both match core/internal/store/sqlstore; the second
-# is longer, so shard `a` owns it. Two patterns of the SAME length matching one package
-# is not a tie to break quietly — it is a package in two shards, and it is a finding.
+# `core/...` and `core/internal/...` both match the four remaining core/internal packages;
+# the second is longer, so shard `store-a` owns them. Two patterns of the SAME length
+# matching one package is not a tie to break quietly — it is a package in two shards, and
+# it is a finding. A package with `group` records is outside this rule entirely: its
+# groups own it, one shard each, and a pattern that ALSO names it exactly is a finding,
+# because every test of it would then run twice.
+#
+# WHY THE FAMILIES ARE FIRST LETTERS AND NOT SUBJECTS. The race partition names about 500
+# families by hand because it needs eight balanced turns; this needs four and three, and
+# the first letter of the name after `Test` is the coarsest predicate that balances them
+# to within 7 %. It has one property a hand-written family list does not: it needs NO
+# MAINTENANCE when a test is added, because every name begins with some letter — a
+# contributor can tell where a new test lands by reading its first letter, and the letters
+# nobody named are exactly the remainder. The counts below are from the source of this
+# tree (2429 top-level tests and 2 fuzz targets in cmd/olivares; 1270 in sqlstore).
 
-shard a
-shard b
-shard c
-shard d
+shard root-a
+shard root-b
+shard root-c
+shard root-rest
+shard store-a
+shard store-b
+shard store-rest
+shard sessions
+shard modules
 
-# --- a — the longest package, and nothing that makes it wait.
-# core/internal/store/sqlstore is 1461.7 s of the suite's 6516.7 s and it spends that time
-# SERIALISED on Postgres, so it sets this shard's wall clock on its own. What joins it is
-# chosen for costing nothing to BUILD as well as nothing to run: the operator is not here
-# because its Kubernetes dependencies take 58 s to compile for 1.2 s of tests, and on this
-# shard 58 s of compilation is 58 s of the critical path.
-pkg a github.com/olivaresai/olivares/core/internal/...
-# The store's SQL suite alone: 20–24 min on the hosted runner beside nothing, and it exceeded a 35-minute
-# per-package timeout inside shard a (run 35312925387, 2026-09-18). It runs as its own shard (longest pattern
-# wins), so no shard carries it beside other long packages.
-pkg d github.com/olivaresai/olivares/core/internal/store/sqlstore/...
-pkg a github.com/olivaresai/olivares/clients/...
-pkg a github.com/olivaresai/olivares/sdk/...
-pkg a github.com/olivaresai/olivares/terraform-provider-olivares/...
+# --- the four shards of the root package ------------------------------------------------
+# THE ARITHMETIC. 2700 s is the sizing basis: it is the only number that BOUNDS the package
+# from below, because the run that produced it did not finish. Four groups put no group over
+# 27.0 % of it — 730 s, 12.2 min — which is the number to compare against the rule this file
+# uses for a group: nothing predicted above 20 min on a hosted runner. Three groups would
+# have been 900 s, and 900 s is only 25 % under 20 min on a package whose last five complete
+# measurements disagree by 78 %; that is the margin this partition exists because we lost.
+#
+#   a  TestA… TestB… TestC…                   657 of 2431 = 27.0 %  → 730 s
+#   b  TestD… through TestK…                   639          = 26.3 %  → 710 s
+#   c  TestL… through TestR…                   645          = 26.5 %  → 716 s
+#   rest  everything else — TestS… to TestZ…,  490          = 20.2 %  → 545 s
+#         the two fuzz targets, and every name
+#         no letter above claims
+#
+# The remainder is the SMALLEST group on purpose: it is the one that grows without anybody
+# deciding, so it starts with the most room. `-run` selects fuzz targets and examples as
+# well as tests, so they are in the universe and the remainder carries them; a partition
+# written as if only `Test*` existed would have dropped both fuzz targets without a word.
+group root-a    github.com/olivaresai/olivares/cmd/olivares a    A B C
+group root-b    github.com/olivaresai/olivares/cmd/olivares b    D E F G H I J K
+group root-c    github.com/olivaresai/olivares/cmd/olivares c    L M N O P Q R
+group root-rest github.com/olivaresai/olivares/cmd/olivares rest *
 
-# --- b — the second longest package, the third, and the connectors.
-# cmd/olivares is 1355.8 s and it is wall-clock bound: it polls and converges, so more
-# cores do not shorten it. modules/sessions (995.1 s) joins it because two packages that
-# each wait more than they compute overlap almost perfectly at two lanes, and because
-# leaving it in `c` made `c` the slowest shard of the three — 2990.5 s of modules over two
-# lanes is 1495 s, which is worse than the package this whole split is bounded by. The 178
-# connector packages cost 25.4 s of test time between them and fill what is left.
-pkg b github.com/olivaresai/olivares/cmd/...
-pkg b github.com/olivaresai/olivares/connectors/...
-pkg b github.com/olivaresai/olivares/modules/sessions/...
+# The eight sibling packages of cmd/olivares and the 178 connector packages ride with the
+# first group: 25.4 s of test time between the connectors, chosen for costing nothing to
+# BUILD as well as nothing to run.
+pkg root-a github.com/olivaresai/olivares/cmd/...
+pkg root-a github.com/olivaresai/olivares/connectors/...
 
-# --- c — the rest of core, the rest of the modules, the operator, and the private legs.
-# No package here reaches 440 s (governance, 431.8 s), so this shard is bounded by its own
-# parallelism — 2670 s over two lanes — and not by any one member.
-pkg c github.com/olivaresai/olivares/core/...
-pkg c github.com/olivaresai/olivares/modules/...
-pkg c github.com/olivaresai/olivares/operator/...
-pkg c github.com/olivaresai/olivares-cloud-cp/...
+# The rest of core, the operator and the control plane ride with the remainder group, which
+# is the smallest of the four: 674.6 s of test time, 337 s at the two lanes the sweep
+# measured. No package here reaches 440 s (governance, 431.8 s).
+pkg root-rest github.com/olivaresai/olivares/core/...
+pkg root-rest github.com/olivaresai/olivares/operator/...
+pkg root-rest github.com/olivaresai/olivares-cloud-cp/...
+
+# --- the three shards of the store package ------------------------------------------------
+# Same arithmetic on the same basis: 2700 s, the floor left by the 45-minute timeout of
+# 2026-09-20. Its complete measurements are older and smaller (1461.7 s, then 1231.2 s on
+# 2026-09-18) and sizing against those would rebuild the margin that just failed.
+#
+#   a     TestA… through TestD…               434 of 1270 = 34.2 %  → 923 s
+#   b     TestE… TestF… TestG… TestH… TestI…  433         = 34.1 %  → 921 s
+#         and TestP…
+#   rest  everything else                     403         = 31.7 %  → 857 s
+#
+# `b` is not a letter RANGE and that is the arithmetic showing: TestP… alone is 224 of the
+# 1270, the largest letter of the package, so it travels with the small ones instead of
+# with its neighbours. The groups go to DIFFERENT shards for a reason that is not balance:
+# this package serialises on Postgres, and each shard has its own pair of database services.
+# Two groups of it in one shard would queue on one database and buy nothing.
+group store-a    github.com/olivaresai/olivares/core/internal/store/sqlstore a    A B C D
+group store-b    github.com/olivaresai/olivares/core/internal/store/sqlstore b    E F G H I P
+group store-rest github.com/olivaresai/olivares/core/internal/store/sqlstore rest *
+
+# The four remaining core/internal packages, the clients, the SDK and the provider ride with
+# the first group. `core/internal/...` is longer than `core/...`, so these four land here and
+# not with the rest of core.
+pkg store-a github.com/olivaresai/olivares/core/internal/...
+pkg store-a github.com/olivaresai/olivares/clients/...
+pkg store-a github.com/olivaresai/olivares/sdk/...
+pkg store-a github.com/olivaresai/olivares/terraform-provider-olivares/...
+
+# --- the two shards of the modules ---------------------------------------------------------
+# modules/sessions is 995.1 s and it gets a shard to itself, which is also the answer to a
+# memory measurement and not only to a clock: it is the second test binary (386 MiB) that
+# used to run BESIDE the root package's, and the host peak of that shard reached 13.26 of
+# 15.61 GiB — 84.9 %, against a 75 % criterion. The two never share a machine again.
+pkg sessions github.com/olivaresai/olivares/modules/sessions/...
+# The other 32 modules: 1995.4 s of test time, 998 s at two lanes.
+pkg modules github.com/olivaresai/olivares/modules/...
 
 # The control plane is not published, so its packages are absent from the exported tree
 # and from the public repository. The pattern stays declared — the suite DOES run them
@@ -96,22 +173,50 @@ optional github.com/olivaresai/olivares-cloud-cp/...
 # The three legs of `task test:functional` that run outside the workspace sweep. They are
 # scripts/private-leg.sh legs: where cloud/ and commercial/ exist they run, and in the
 # published tree they answer NOT APPLICABLE and exit 0. They are named here so that
-# "the union of the shards is the whole suite" is a claim about the whole suite.
-leg c test:cloud:norace
-leg c test:commerce
-leg c test:commerce-core:norace
+# "the union of the shards is the whole suite" is a claim about the whole suite. They ride
+# with the shard that owns the control plane's packages.
+leg root-rest test:cloud:norace
+leg root-rest test:commerce
+leg root-rest test:commerce-core:norace
 
 # --- the clocks -------------------------------------------------------------------
-# go-timeout 35m: the longest package measured 24.4 min, so this leaves 43 % of headroom
-# and still fires long before the step ceiling, which is the order that keeps the
-# diagnosis readable — Go panics with its goroutine dump and its package name, the step
-# ceiling only cancels.
-# step 45 / job 55: the slowest shard is predicted between 24.8 and 26.5 min. It is a
-# RANGE and not a number on purpose — the two complete runs of the same tree, an hour
-# apart, disagree by up to 16 % on the very package that bounds it (sqlstore 1461.7 s then
-# 1231.2 s). 45 min leaves at least 70 % of headroom over the top of that range, which is
-# what a ceiling is for. Re-measure it once the shards have run: a ceiling that was never
-# measured is a guess that nothing corrects.
-go-timeout-minutes 45
-step-ceiling-minutes 55
-job-ceiling-minutes 65
+# THE PREDICTED WALL CLOCK, shard by shard, from the numbers above. A shard runs its whole
+# packages in one `go test` and each of its groups in another, one after the other, because
+# `-run` is an option of the COMMAND and not of a package.
+#
+#   root-a      730 + 30     760 s   12.7 min
+#   root-b      710          710 s   11.8 min
+#   root-c      716          716 s   11.9 min
+#   root-rest   545 + 337    882 s   14.7 min
+#   store-a     923 + 35     958 s   16.0 min
+#   store-b     921          921 s   15.4 min
+#   store-rest  857          857 s   14.3 min
+#   sessions    995          995 s   16.6 min
+#   modules     998          998 s   16.6 min
+#
+# go-timeout 30m: this clock is PER TEST BINARY, so what it has to cover is the longest
+# single invocation and not the slowest shard — modules/sessions at 995 s, then the store's
+# first group at 923 s. 30 min leaves 81 % of headroom over 16.6 min, and it is LOWER than
+# the 45 it replaces on purpose: 45 was the number a package reached twice in one day, and a
+# timeout that only fires after three quarters of an hour is a diagnosis that arrives after
+# the contribution has already waited for it. Go panics with its goroutine dump, the package
+# name and now the group's `-run`; the step ceiling only cancels.
+#
+# step 35m: the slowest step is a shard's wall clock plus the build. The build is measured:
+# the shard that ran cmd/olivares on 2026-09-20 took 2726 s of step with 2567 s inside that
+# one package, so 159 s built 189 packages and ran the other 188. 995 + 180 = 1175 s, 19.6
+# min, and 35 leaves 79 % of headroom over it while staying above the Go timeout.
+#
+# job 45m: the step plus checkout, setup-go, the pinned go-task install and the two Postgres
+# services — the same 10 minutes this file has always left between the two ceilings.
+#
+# THESE ARE PREDICTIONS AND THEY REST ON ONE ASSUMPTION: that a group's seconds are its share
+# of the package's tests. The counts are exact and the package totals are measured, but no
+# per-test duration has ever been measured on a runner, so the share is a proxy. The first
+# two hosted runs are what turns it into a measurement — read the seconds `go test` prints
+# per group, and if any group is more than 30 % off its prediction, move letters between the
+# groups of that package and nothing else. Re-measure it once the shards have run: a ceiling
+# that was never measured is a guess that nothing corrects.
+go-timeout-minutes 30
+step-ceiling-minutes 35
+job-ceiling-minutes 45

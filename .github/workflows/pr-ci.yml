@@ -263,23 +263,32 @@ jobs:
           compression-level: 0
           if-no-files-found: error
 
-  # ⛔ THE SUITE IS SPLIT BY A DECLARED PACKAGE LIST, AND THAT IS THE WHOLE CHANGE.
-  # Measured on the hosted 4-vCPU runner over two runs of the same tree: 264 packages
-  # green and the step ceiling cut the suite at 60 minutes, both times. Two packages
-  # carry most of the clock — core/internal/store/sqlstore at 1457 s and cmd/olivares
-  # at 1358 s — and they ran one after the other, because the suite walks the workspace
-  # one module at a time. Raising the ceiling makes the suite PASS; it does not make the
-  # answer ARRIVE, and every contribution waits for the answer.
+  # ⛔ THE SUITE IS SPLIT BY A DECLARED LIST, AND THAT IS THE WHOLE CHANGE. Measured on
+  # the hosted 4-vCPU runner over two runs of the same tree: 264 packages green and the
+  # step ceiling cut the suite at 60 minutes, both times. Splitting it by PACKAGE fixed
+  # that and then reached its own floor, which is one package: on 2026-09-20 cmd/olivares
+  # hit `panic: test timed out after 45m0s` at 2700.093 s, and core/internal/store/sqlstore
+  # hit the same clock at 2700.024 s — each on a change that does not touch it, and with
+  # the same shards passing on the changes either side. Raising the ceiling makes the
+  # suite PASS; it does not make the answer ARRIVE, and every contribution waits for it.
+  #
+  # So those two packages are now split by TEST NAME: a `group` record in the same file
+  # sends the tests whose name begins with a declared letter to one shard, and a closing
+  # REMAINDER group takes every name no other group claims, so that a test added tomorrow
+  # is in the partition the day it is written. `go test -run` over an expression that
+  # selects nothing EXITS 0, which is why the remainder is computed from the source rather
+  # than written by hand, and why the gate below counts tests and not only packages.
   #
   # The partition lives in ci/pr-suite-shards.txt, in one file, readable by a person:
-  # which shard owns which packages, and why each one is where it is. It is NOT a hash
-  # of the package name — a hash balances nothing when one package is 27 % of the clock,
-  # and it cannot be read either: whoever adds a package cannot tell where it landed.
+  # which shard owns which packages and which test names, and why each one is where it is.
+  # It is NOT a hash — a hash balances nothing when one package is 27 % of the clock, and
+  # it cannot be read either: whoever adds a test cannot tell where it landed.
   #
   # scripts/check-pr-suite-shards.sh proves the union of the shards is exactly the set
-  # of test-bearing packages, that no package is in two, and that this matrix is the
-  # shard list of that file. A package that belongs to no shard would otherwise be
-  # SILENT: every shard green, the required check green, and nothing testing it.
+  # of test-bearing packages, that no package is in two, that every test of a partitioned
+  # package is in exactly one group, and that this matrix is the shard list of that file.
+  # A package or a test that belongs to no shard would otherwise be SILENT: every shard
+  # green, the required check green, and nothing testing it.
   pr-test-shard:
     if: github.repository == 'olivaresai/olivares' || vars.OLIVARES_RELEASE_PROFILE == 'preprod'
     strategy:
@@ -288,15 +297,17 @@ jobs:
       # rest of the suite — which is the report the author needs most at that moment.
       fail-fast: false
       matrix:
-        shard: [a, b, c, d]
+        shard: [root-a, root-b, root-c, root-rest, store-a, store-b, store-rest, sessions, modules]
     runs-on: ubuntu-latest
     # The ceilings are the ones ci/pr-suite-shards.txt declares, and the gate above pins
-    # that they are the same numbers. The slowest shard is predicted between 24.8 and
-    # 26.5 minutes — a RANGE, because the two complete runs of the same tree an hour apart
-    # disagree by up to 16 % on the very package that bounds it. 45 minutes for the step
-    # leaves at least 70 % of headroom over the top of that range and 55 for the job stays
-    # above it. They are a prediction until a run measures them; the file says so.
-    timeout-minutes: 65
+    # that they are the same numbers. The slowest shard is now predicted at 16.6 minutes and
+    # no group above 12.7; the file shows the arithmetic shard by shard. The Go timeout drops
+    # from 45 to 30 because it is PER TEST BINARY and the longest one predicted is 995 s: 45
+    # was the number two packages reached twice in one day, and a timeout that fires after
+    # three quarters of an hour is a diagnosis that arrives after the contribution has
+    # already waited for it. They are a prediction until a run measures them; the file says
+    # what the first two runs have to show for them to stand.
+    timeout-minutes: 45
     # `task test:functional` is fail-closed on the Postgres posture (scripts/pg-test-env.sh):
     # without the DSN pair it refuses rather than skipping. The first real run of this job on
     # the public repository (PR #31, 2026-09-17) died exactly there, because the job had no
@@ -377,7 +388,7 @@ jobs:
           PGPASSWORD: postgres
         run: bash scripts/ci-postgres-service.sh provision
       - name: one shard of the Go suite, without the race detector
-        timeout-minutes: 55
+        timeout-minutes: 35
         env:
           OLIVARES_TEST_SHARD: ${{ matrix.shard }}
         # Record sampled host resources after normal exit or TERM when the shell can run
