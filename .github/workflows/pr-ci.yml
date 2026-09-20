@@ -109,6 +109,24 @@ jobs:
       - name: licence headers and the AGPL boundary
         run: task lint:spdx lint:boundary
 
+      # ⛔ THE SHARD GATE RUNS HERE, AND UNTIL NOW IT RAN NOWHERE A PULL REQUEST COULD MEET
+      # IT. It was a leg of the local pre-push hook only, so a fork, a web edit or any push
+      # that did not go through that hook landed with the partition unchecked: a package in
+      # no shard, a test in no group or a matrix out of step with the file would have arrived
+      # with every required check green. That is the exact failure the gate was written for,
+      # and it was not armed on the side that decides.
+      #
+      # THIS JOB, AND NOT A NEW ONE. Both legs need the Go toolchain for `go list` — and only
+      # for `go list`, which reads package metadata and compiles nothing. This job already
+      # sets up Go above, for `lint:boundary`, whose own check refuses to run without it, and
+      # it already builds Go code in the SDK step below. So the two legs cost this job their
+      # own seconds and no new setup. Measured locally, with the module metadata already
+      # cached: 3.8 s for the gate over the 12 workspace modules and 13.4 s for its 40-case
+      # battery, of which the battery's one real-tree case is most of the walk. The hosted
+      # figure is to be read off the first two runs of this job, not assumed from these.
+      - name: the shard partition is the whole suite, and every test is in exactly one group
+        run: task lint:pr-suite-shards lint:pr-suite-shards:selftest
+
       # Capture the existing generator's outputs on the hosted runner.
       - name: record the generation inputs
         env:
@@ -300,9 +318,11 @@ jobs:
         shard: [root-a, root-b, root-c, root-rest, store-a, store-b, store-rest, sessions, modules]
     runs-on: ubuntu-latest
     # The ceilings are the ones ci/pr-suite-shards.txt declares, and the gate above pins
-    # that they are the same numbers. The slowest shard is now predicted at 16.6 minutes and
-    # no group above 12.7; the file shows the arithmetic shard by shard. The Go timeout drops
-    # from 45 to 30 because it is PER TEST BINARY and the longest one predicted is 995 s: 45
+    # that they are the same numbers. The slowest shard is now predicted at 16.6 minutes
+    # (`modules`, 998 s) and the largest single group at 12.2 (`root-a`'s, 730 s); the file
+    # shows the arithmetic shard by shard and marks the two figures in it that are
+    # estimates. The Go timeout drops from 45 to 30 because it is PER TEST BINARY and the
+    # longest single invocation predicted is 995 s: 45
     # was the number two packages reached twice in one day, and a timeout that fires after
     # three quarters of an hour is a diagnosis that arrives after the contribution has
     # already waited for it. They are a prediction until a run measures them; the file says
@@ -412,10 +432,11 @@ jobs:
           task test:functional:shard
 
   # ⛔ THE ONE NAME THE BRANCH PROTECTION ASKS FOR, AND IT MUST BE ABLE TO SAY NO.
-  # A matrix job does not report under its job id: it reports `pr-test-shard (a)`,
-  # `pr-test-shard (b)`, one context per value, and the set changes whenever the shard
-  # list changes. A required context that names a job id nothing publishes waits for a
-  # status that never arrives, which is how the public profile was unsatisfiable before
+  # A matrix job does not report under its job id: it reports `pr-test-shard (root-a)`,
+  # `pr-test-shard (store-b)`, one context per value, and the set changes whenever the shard
+  # list changes — as it did with this partition, which replaced four one-letter names.
+  # A required context that names a job id nothing publishes waits for a status that never
+  # arrives, which is how the public profile was unsatisfiable before
   # 2026-08-27. So the required name stays `pr-test` and this job is what carries it.
   #
   # `always()` is not decoration. Without it, a failed shard SKIPS this job — and a

@@ -175,6 +175,14 @@ optional github.com/olivaresai/olivares-cloud-cp/...
 # published tree they answer NOT APPLICABLE and exit 0. They are named here so that
 # "the union of the shards is the whole suite" is a claim about the whole suite. They ride
 # with the shard that owns the control plane's packages.
+#
+# ⛔ THEY ARE NOT IN root-rest's PREDICTION BELOW, AND IN ONE OF THE TWO ARMS THAT MATTERS.
+# In the published tree they answer NOT APPLICABLE and cost seconds. In the preprod arm, where
+# cloud/ and commercial/ exist, they RUN and nobody has measured them — and the step ceiling
+# they run under drops from 55 to 35 with this change. So root-rest's 882 s is the prediction
+# for the published arm only. The first preprod run of this head has to be read step by step
+# for these three, and if they do not fit under 35 min beside the group, they move to a shard
+# of their own. Until that number exists this is the one shard whose budget is incomplete.
 leg root-rest test:cloud:norace
 leg root-rest test:commerce
 leg root-rest test:commerce-core:norace
@@ -184,31 +192,62 @@ leg root-rest test:commerce-core:norace
 # packages in one `go test` and each of its groups in another, one after the other, because
 # `-run` is an option of the COMMAND and not of a package.
 #
-#   root-a      730 + 30     760 s   12.7 min
-#   root-b      710          710 s   11.8 min
-#   root-c      716          716 s   11.9 min
-#   root-rest   545 + 337    882 s   14.7 min
-#   store-a     923 + 35     958 s   16.0 min
-#   store-b     921          921 s   15.4 min
-#   store-rest  857          857 s   14.3 min
-#   sessions    995          995 s   16.6 min
-#   modules     998          998 s   16.6 min
+#   root-a      730 + 30*    760 s   12.7 min
+#   root-b      710           710 s   11.8 min
+#   root-c      716           716 s   11.9 min
+#   root-rest   545 + 337     882 s   14.7 min   (+ three legs, unmeasured in preprod)
+#   store-a     923 + 35*     958 s   16.0 min
+#   store-b     921           921 s   15.4 min
+#   store-rest  857           857 s   14.3 min
+#   sessions    995           995 s   16.6 min
+#   modules     998           998 s   16.6 min   ← the slowest shard
+#
+# * ESTIMATE, not a measurement, and the only two numbers in this table that are. The 30 s is
+# the 178 connector packages (25.4 s of test time, measured) plus the eight sibling packages
+# of the root, which were never timed on their own; the 35 s is the four remaining
+# core/internal packages, the clients, the SDK and the provider, which were never timed
+# either. Both are small enough that the shard they are in is decided by its group, and both
+# are read off the first two hosted runs — `go test` prints a line per package.
+#
+# The largest GROUP is root-a's at 730 s, 12.2 min. The 12.7 min beside it is the SHARD, which
+# is the group plus its packages; the two are not the same number and the 20-minute rule this
+# partition was sized against is about the group.
 #
 # go-timeout 30m: this clock is PER TEST BINARY, so what it has to cover is the longest
 # single invocation and not the slowest shard — modules/sessions at 995 s, then the store's
-# first group at 923 s. 30 min leaves 81 % of headroom over 16.6 min, and it is LOWER than
+# first group at 923 s. (The slowest SHARD is `modules` at 998 s, but no single binary in it
+# reaches 440 s.) 30 min leaves 81 % of headroom over 16.6 min, and it is LOWER than
 # the 45 it replaces on purpose: 45 was the number a package reached twice in one day, and a
 # timeout that only fires after three quarters of an hour is a diagnosis that arrives after
 # the contribution has already waited for it. Go panics with its goroutine dump, the package
 # name and now the group's `-run`; the step ceiling only cancels.
 #
-# step 35m: the slowest step is a shard's wall clock plus the build. The build is measured:
-# the shard that ran cmd/olivares on 2026-09-20 took 2726 s of step with 2567 s inside that
-# one package, so 159 s built 189 packages and ran the other 188. 995 + 180 = 1175 s, 19.6
-# min, and 35 leaves 79 % of headroom over it while staying above the Go timeout.
+# step 35m: the slowest step is a shard's wall clock plus the build, so it is `modules` at
+# 998 s. The build allowance is 180 s and it is TRANSFERRED, not measured here: the shard that
+# ran cmd/olivares on 2026-09-20 took 2726 s of step with 2567 s inside that one package, so
+# 159 s built 189 packages and ran the other 188 — a different module set from any shard
+# below, which is why 180 rounds it up rather than reusing it as if it were the same work.
+# 998 + 180 = 1178 s, 19.6 min, and 35 leaves 78 % of headroom over it while staying above the
+# Go timeout. The first two runs replace the transferred figure with each shard's own.
 #
 # job 45m: the step plus checkout, setup-go, the pinned go-task install and the two Postgres
 # services — the same 10 minutes this file has always left between the two ceilings.
+#
+# WHAT NINE JOBS COST INSTEAD OF FOUR, because somebody pays for those minutes and the file
+# has to say so. Five more jobs, each paying that per-job overhead once, and two of the nine
+# build a test binary that used to be built once: the ESTIMATE is +18 to +25 runner-minutes
+# per pull request. It is an estimate and it is marked as one — the only step timing this
+# tree has is the 159 s above — and the job/step budget makes +50 the worst it could be. What
+# it buys is the answer arriving in about 20 minutes instead of 45 or never, on a check every
+# contribution waits for. The first two hosted runs turn the estimate into a number: add up
+# the nine jobs' durations and compare with the four the tag shipped.
+#
+# THE MATRIX IS NOT DERIVED FROM THIS FILE, IT IS COMPARED WITH IT. The reader has a `matrix`
+# subcommand and no workflow calls it: deriving the list would need a setup job, and a job
+# costs a runner on every pull request. What makes the two agree is
+# scripts/check-pr-suite-shards.sh, which compares them INCLUDING ORDER and refuses on any
+# difference — so adding a shard means editing this file and the workflow, and forgetting
+# either one is a red and not a drift.
 #
 # THESE ARE PREDICTIONS AND THEY REST ON ONE ASSUMPTION: that a group's seconds are its share
 # of the package's tests. The counts are exact and the package totals are measured, but no

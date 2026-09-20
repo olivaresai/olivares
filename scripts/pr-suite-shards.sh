@@ -57,6 +57,9 @@ SPEC_TESTS="${OLIVARES_PR_SUITE_TESTS:-}"
 # partition problem; over it, `exec` fails with a message about the argument list and never
 # about the tests.
 RUN_EXPR_LIMIT=100000
+# Where `go list` writes its diagnosis, so that the refusal can carry it. One file for the
+# whole run, removed by the EXIT trap below.
+GOLIST_ERR=""
 fail()   { printf 'pr-suite-shards: FAIL — %s\n' "$*" >&2; exit 1; }
 cannot() { printf 'pr-suite-shards: COULD NOT LOOK — %s\n' "$*" >&2; exit 2; }
 
@@ -74,13 +77,23 @@ universe() {
   fi
   [ -f go.work ] || cannot "go.work is not at $ROOT and no package file was given"
   command -v go >/dev/null 2>&1 || cannot "no Go toolchain: the packages cannot be enumerated"
-  local m
+  local m mods raw
+  mods="$(go work edit -json | sed -n 's/.*"DiskPath": "\(.*\)".*/\1/p')" ||
+    cannot "go work edit could not say which modules this workspace has"
+  [ -n "$mods" ] || cannot "go.work names no module: there is no universe to enumerate"
+  raw="$(mktemp "${TMPDIR:-/tmp}/pr-suite-walk.XXXXXX")" ||
+    cannot "cannot create a scratch file for the module walk"
+  # ⛔ THE WALK IS NOT THE LEFT SIDE OF A PIPELINE. It used to be, and a `cannot` inside it
+  # exited only the subshell: the module that failed and every module after it vanished, the
+  # PARTIAL universe reached the caller, and a partition of what could be read certified
+  # itself as a partition of the suite.
   while IFS= read -r m; do
     [ -n "$m" ] || continue
-    ( cd "$m" && go list -f '{{if or .TestGoFiles .XTestGoFiles}}{{.ImportPath}}{{end}}' ./... ) ||
-      cannot "go list failed in $m"
-  done < <(go work edit -json | sed -n 's/.*"DiskPath": "\(.*\)".*/\1/p') |
-    grep -v '^[[:space:]]*$' | LC_ALL=C sort -u
+    ( cd "$m" && go list -f '{{if or .TestGoFiles .XTestGoFiles}}{{.ImportPath}}{{end}}' ./... ) >> "$raw" ||
+      { rm -f "$raw"; cannot "go list failed in $m: the universe cannot be finished, so none of it can be certified"; }
+  done <<< "$mods"
+  grep -v '^[[:space:]]*$' "$raw" | LC_ALL=C sort -u
+  rm -f "$raw"
 }
 
 universe_source() {
@@ -96,35 +109,116 @@ universe_source() {
 # SOURCE and never from `go test -list`, which LINKS the test binary — minutes for the two
 # packages this exists for. `go list` applies the same build constraints as `go test`, so a
 # file behind a build tag is out of the universe here exactly as it is out of the run, and it
-# compiles nothing. TestMain is not a test but the binary's entry point: `-run` never selects
-# it and it always runs, so counting it would inflate every group by one. `Test` followed by
-# a LOWER-CASE letter is not a test for Go either (TestifyHelper is a helper), and a group
-# that counted it would report a test that never runs.
+# compiles nothing.
 #
-# A package with no test file answers an EMPTY universe rather than an error: whether that is
-# a finding belongs to the gate, which can say WHY it was looking, and not to the reader.
+# ⛔ THE NAME IS READ TO ITS END, NEVER TO THE END OF A CHARACTER CLASS. `[A-Za-z0-9_]*`
+# stops at the first rune it does not cover, so `func TestUeberSync` with a non-ASCII letter
+# collapsed to the bare name `Test`: one name invented, one real test dropped, and the gate
+# certifying the loss because it shares this enumerator. Worse, WHICH runes a class covers
+# depends on the locale and on the `grep` the machine has — the same package enumerated one
+# way on a laptop and another on a runner. The parse below has neither property, and a `func
+# Test…` line it cannot read whole is a refusal with its file and its line, not a guess.
+#
+# TestMain is not a test but the binary's entry point: `-run` never selects it and it always
+# runs, so counting it would inflate every group by one. Go's own rule for the rest is that
+# the rune after Test, Fuzz or Example is not a lower-case letter, so TestifyHelper is a
+# helper and not a test.
+#
+# An EMPTY answer is a fact about the package — it has no test — and the caller decides
+# whether that is a finding. An INABILITY is never that answer: every way this function can
+# fail to look ends in COULD NOT LOOK with the reason.
+# ⛔ GO'S OWN LAST LINE, APPENDED TO THE REFUSAL. "no space left on device" and "is not in
+# std" are two different things to do next, and discarding go's stderr made them the same
+# sentence. Nothing here can decide which one it is; the message must carry it instead.
+golist_reason() {
+  local last
+  { [ -n "$GOLIST_ERR" ] && [ -s "$GOLIST_ERR" ]; } || return 0
+  # The last line, with its leading indentation removed: go indents the continuation of a
+  # multi-line diagnosis, and a tab in the middle of a refusal reads as a broken message.
+  last="$(tail -1 "$GOLIST_ERR" | sed 's/^[[:space:]]*//')"
+  [ -n "$last" ] || return 0
+  printf ' — go said: %s' "$last"
+}
+
 package_tests() {
-  local pkg="$1" dir files
+  local pkg="$1" dir files out cannots bads
   if [ -n "$SPEC_TESTS" ]; then
     [ -r "$SPEC_TESTS" ] || cannot "OLIVARES_PR_SUITE_TESTS=$SPEC_TESTS is not readable"
-    awk -v p="$pkg" '$1 == p { print $2 }' "$SPEC_TESTS" |
-      grep -vx 'TestMain' | LC_ALL=C sort -u
-    return
+    awk -v p="$pkg" '$1 == p && $2 != "TestMain" { print $2 }' "$SPEC_TESTS" | LC_ALL=C sort -u
+    return 0
   fi
   command -v go >/dev/null 2>&1 ||
     cannot "no Go toolchain: the tests of $pkg cannot be enumerated"
-  dir="$(go list -f '{{.Dir}}' "$pkg" 2>/dev/null)" || return 0
-  [ -n "$dir" ] && [ -d "$dir" ] || return 0
+  if [ -z "$GOLIST_ERR" ]; then
+    GOLIST_ERR="$(mktemp "${TMPDIR:-/tmp}/pr-suite-golist.XXXXXX")" ||
+      cannot "cannot create a scratch file for go list's diagnosis"
+  fi
+  dir="$(go list -f '{{.Dir}}' "$pkg" 2>"$GOLIST_ERR")" ||
+    cannot "go list could not locate $pkg: a group names a package this tree cannot resolve$(golist_reason)"
+  { [ -n "$dir" ] && [ -d "$dir" ]; } ||
+    cannot "go list could not locate $pkg: it named no directory that exists"
   files="$(go list -f '{{range .TestGoFiles}}{{.}}
 {{end}}{{range .XTestGoFiles}}{{.}}
-{{end}}' "$pkg" 2>/dev/null | grep -v '^[[:space:]]*$')" ||
-    cannot "go list could not read the test files of $pkg"
+{{end}}' "$pkg" 2>"$GOLIST_ERR")" ||
+    cannot "go list could not read the test files of $pkg$(golist_reason)"
+  files="$(printf '%s\n' "$files" | grep -v '^[[:space:]]*$')" || files=""
   [ -n "$files" ] || return 0
-  ( cd "$dir" && printf '%s\n' "$files" | tr '\n' '\0' |
-      xargs -0 grep -hoE '^func (Test|Fuzz|Example)[A-Za-z0-9_]*' ) |
-    sed 's/^func //' |
-    grep -E '^(Test|Fuzz|Example)([A-Z0-9_][A-Za-z0-9_]*)?$' |
-    grep -vx 'TestMain' | LC_ALL=C sort -u
+
+  out="$(PKG_DIR="$dir" PKG_FILES="$files" python3 - <<'PY'
+import os, re, sys
+
+directory = os.environ["PKG_DIR"]
+files = [f for f in os.environ["PKG_FILES"].split("\n") if f.strip()]
+
+# A declaration this reader will account for: `func`, space or tab, the whole name, then the
+# parameter list. The name runs to the first character that cannot be part of one, and the
+# class is written as an exclusion so that no alphabet is left out of it.
+HEAD = re.compile(r"^func[ \t]+(Test|Fuzz|Example)")
+DECL = re.compile(r"^func[ \t]+([^\s(\[{]+)[ \t]*\(")
+
+names, bad = set(), []
+for name in files:
+    try:
+        with open(os.path.join(directory, name), encoding="utf-8") as fh:
+            lines = fh.readlines()
+    except (OSError, UnicodeDecodeError) as exc:
+        print("CANNOT %s cannot be read as UTF-8 Go source: %s" % (name, exc))
+        continue
+    for n, line in enumerate(lines, 1):
+        head = HEAD.match(line)
+        if not head:
+            continue
+        decl = DECL.match(line)
+        if not decl:
+            bad.append("%s:%d: %s" % (name, n, line.rstrip()))
+            continue
+        ident = decl.group(1)
+        rest = ident[len(head.group(1)):]
+        if rest and rest[0].islower():
+            continue          # TestifyHelper is a helper; Go does not run it either
+        if ident == "TestMain":
+            continue          # the binary's entry point, which -run never selects
+        names.add(ident)
+
+for b in bad:
+    print("BAD " + b)
+for nm in sorted(names):
+    print("NAME " + nm)
+PY
+  )" || cannot "the test enumerator failed to run over $pkg"
+
+  cannots="$(printf '%s\n' "$out" | sed -n 's/^CANNOT //p')"
+  [ -z "$cannots" ] || cannot "$(printf '%s\n' "$cannots" | head -1)"
+  bads="$(printf '%s\n' "$out" | sed -n 's/^BAD //p')"
+  if [ -n "$bads" ]; then
+    printf 'pr-suite-shards: FAIL — %s declares a test this reader will not guess at:\n' "$pkg" >&2
+    printf '%s\n' "$bads" | sed 's/^/  · /' >&2
+    printf '%s\n' "  A name read to the end of a character class is a name no test has, and a" \
+                  "  declaration this reader skips is a test no shard runs. Write it as" \
+                  "  \`func TestName(t *testing.T)\` so the partition can account for it." >&2
+    exit 1
+  fi
+  printf '%s\n' "$out" | sed -n 's/^NAME //p'
 }
 
 tests_source() {
@@ -364,7 +458,11 @@ named_of() {
 }
 
 UNIVERSE_FILE=""
-cleanup() { [ -n "$UNIVERSE_FILE" ] && rm -f "$UNIVERSE_FILE"; }
+cleanup() {
+  [ -n "$UNIVERSE_FILE" ] && rm -f "$UNIVERSE_FILE"
+  [ -n "$GOLIST_ERR" ] && rm -f "$GOLIST_ERR"
+  return 0
+}
 trap cleanup EXIT
 
 need_universe() {
@@ -383,7 +481,12 @@ case "${1:-}" in
 
   matrix)
     # The shard names as a JSON array, for a caller that builds a matrix from this file
-    # instead of typing the names a second time.
+    # instead of typing the names a second time. NO WORKFLOW CALLS IT TODAY, and that is a
+    # decision rather than an omission: deriving the matrix needs a setup job, a job costs a
+    # runner on every pull request, and the property it would buy is already pinned —
+    # check-pr-suite-shards.sh compares the workflow's matrix with this list INCLUDING ORDER
+    # and refuses on any difference. This subcommand is a convenience for a person reading
+    # the partition; the gate is the guarantee.
     shard_names | python3 -c 'import json,sys;print(json.dumps([l.strip() for l in sys.stdin if l.strip()]))'
     ;;
 
@@ -413,12 +516,19 @@ case "${1:-}" in
     P="${2:-}"; G="${3:-}"
     { [ -n "$P" ] && [ -n "$G" ]; } || cannot "usage: $0 run-expr <package> <group>"
     RE="$(run_expression "$P" "$G")" || exit $?
-    # An EMPTY remainder is legitimate — every test of the package is named by some other
-    # group — and it prints nothing, so the caller can tell it apart from an expression. What
-    # is never legitimate is printing `^()$`, which matches nothing and exits 0.
+    # A remainder every one of whose names some other group already claims resolves to
+    # NOTHING, and this prints nothing rather than `^()$` — an expression that matches no test
+    # and that `go test` answers 0 to. Printing nothing is how a caller tells the two apart,
+    # and no caller treats it as an ordinary case: the runner refuses the shard on it and the
+    # gate reports it as a finding, because a group that selects nothing is a job that reports
+    # success having run none of its tests. Exit 0 here says "there is no expression", not
+    # "there is nothing wrong".
     [ -n "$RE" ] || exit 0
-    [ "${#RE}" -le "$RUN_EXPR_LIMIT" ] ||
-      fail "the -run expression of group ${G} of ${P} is ${#RE} bytes, over the ${RUN_EXPR_LIMIT}-byte limit this reader declares (the kernel refuses a single argument over MAX_ARG_STRLEN, 131072 bytes): the shard would die on exec with a message about the argument list and never about the tests. Split the remainder by naming more families."
+    # Bytes, not characters: the kernel's limit is on bytes and a name outside ASCII costs
+    # more than one, so ${#RE} would under-count exactly the expressions that are at risk.
+    RE_BYTES="$(printf '%s' "$RE" | wc -c)"
+    [ "$RE_BYTES" -le "$RUN_EXPR_LIMIT" ] ||
+      fail "the -run expression of group ${G} of ${P} is ${RE_BYTES} bytes, over the ${RUN_EXPR_LIMIT}-byte limit this reader declares (the kernel refuses a single argument over MAX_ARG_STRLEN, 131072 bytes): the shard would die on exec with a message about the argument list and never about the tests. Split the remainder by naming more families."
     printf '%s\n' "$RE"
     ;;
 
@@ -446,39 +556,67 @@ case "${1:-}" in
     PKGS="$(assign "$S" "$UNIVERSE_FILE" | cut -f2)" || exit 1
     TO="$(printf '%s\n' "$RECORDS" | sed -n 's/^NUM go-timeout-minutes //p')"
     mapfile -t LEGS < <(printf '%s\n' "$RECORDS" | sed -n "s/^LEG $S //p")
-    mapfile -t GROUPS < <(shard_groups "$S")
+    # ⛔ NOT `GROUPS`. That name is a special variable of the shell — the caller's Unix group
+    # ids — and bash IGNORES an assignment to it, so `mapfile -t GROUPS` left the group ids in
+    # place and every shard ran its name groups over numbers instead of over its groups.
+    mapfile -t SHARD_GROUP_LIST < <(shard_groups "$S")
+    rc=0
     echo "pr-suite-shards: shard ${S} — universe from $(universe_source)"
-    [ "${#GROUPS[@]}" -eq 0 ] ||
-      echo "pr-suite-shards: shard ${S} — ${#GROUPS[@]} name group(s), tests from $(tests_source)"
+    [ "${#SHARD_GROUP_LIST[@]}" -eq 0 ] ||
+      echo "pr-suite-shards: shard ${S} — ${#SHARD_GROUP_LIST[@]} name group(s), tests from $(tests_source)"
     if [ -z "$PKGS" ]; then
       # A shard with no packages is not a fast shard: it is a job that starts a database
       # to run nothing and reports success. It is only acceptable when the shard has legs
       # or name groups to run instead, and even then it says so out loud.
-      { [ "${#LEGS[@]}" -gt 0 ] || [ "${#GROUPS[@]}" -gt 0 ]; } ||
+      { [ "${#LEGS[@]}" -gt 0 ] || [ "${#SHARD_GROUP_LIST[@]}" -gt 0 ]; } ||
         fail "shard ${S} owns no package in this tree and declares no group and no leg: it would exit 0 having run nothing"
       echo "pr-suite-shards: shard ${S} owns no whole package in THIS tree"
     else
       mapfile -t PKG_ARGS <<< "$PKGS"
       echo "pr-suite-shards: shard ${S} — ${#PKG_ARGS[@]} package(s), go test -timeout ${TO}m"
-      bash scripts/with-pg-env.sh go test -count=1 -timeout "${TO}m" "${PKG_ARGS[@]}" || exit 1
+      # ⛔ A RED HERE DOES NOT CANCEL THE REST OF THE SHARD. It used to `exit 1`, so one red
+      # package took the shard's name groups and legs with it and they published nothing —
+      # the very shape `fail-fast: false` exists to avoid one level up, where a red shard
+      # must not cancel its siblings. The author of the change needs the whole shard's
+      # report at that moment, not the first thing that broke.
+      bash scripts/with-pg-env.sh go test -count=1 -timeout "${TO}m" "${PKG_ARGS[@]}" || rc=1
     fi
-    rc=0
     # ⛔ ONE `go test` PER GROUP, AFTER the whole packages and never beside them. `-run` is an
     # option of the COMMAND and not of a package, so a group cannot share an invocation with
     # packages that must run entire. The cost is that the two do not overlap; the return is
     # that the test binary this split exists for no longer runs beside another one, which is
     # the arithmetic the 84.9 % memory peak of the single shard came from.
-    for entry in "${GROUPS[@]}"; do
+    for entry in "${SHARD_GROUP_LIST[@]}"; do
       [ -n "$entry" ] || continue
       GPKG="${entry%% *}"; GNAME="${entry##* }"
-      RE="$("$0" run-expr "$GPKG" "$GNAME")" || exit 1
-      if [ -z "$RE" ]; then
-        # The remainder of a package every one of whose tests some other group names. It is
-        # not an error, and it is not silent either: an empty -run would select EVERY test.
-        echo "pr-suite-shards: shard ${S} — group ${GNAME} of ${GPKG} has no test left to run"
-        continue
+      RE="$("$0" run-expr "$GPKG" "$GNAME")" || exit $?
+      # ⛔ COUNT WHAT IT SELECTS, BEFORE RUNNING IT. `go test -run` over an expression that
+      # matches no test prints ok and EXITS 0, so a group whose families went stale in a
+      # rename — or a remainder with nothing left in it — would report a success having run
+      # none of its tests, and the required check would be green over a suite that did not
+      # run. Counting first is what the race partition does for the same reason, and it is
+      # the only check that still stands when the gate was never run at all.
+      GTESTS="$("$0" tests "$GPKG")" || exit $?
+      # `wc` cannot fail the way `grep -c` can, and this number only goes in the message.
+      GTOTAL="$(printf '%s\n' "$GTESTS" | sed '/^[[:space:]]*$/d' | wc -l)"
+      GSEL=0
+      if [ -n "$RE" ]; then
+        # ⛔ `grep -c` SAYS TWO DIFFERENT THINGS WITH A NON-ZERO STATUS. 1 is a count of zero;
+        # 2 or more is that it could not look at all. `|| true` read the second as the first,
+        # so an inability arrived as "this group selects no test" — a red naming a partition
+        # defect that is not there, on a partition that is correct. The count that decides
+        # whether this shard runs anything has to be a count, or it is a refusal.
+        GREP_RC=0
+        GSEL="$(printf '%s\n' "$GTESTS" | grep -cE "$RE")" || GREP_RC=$?
+        case "$GREP_RC" in
+          0|1) [ -n "$GSEL" ] || GSEL=0 ;;
+          *)   cannot "grep exited ${GREP_RC} counting what group ${GNAME} of ${GPKG} selects: the count that decides whether this shard runs anything could not be made, so nothing about it can be certified" ;;
+        esac
       fi
-      echo "pr-suite-shards: shard ${S} — group ${GNAME} of ${GPKG}, go test -timeout ${TO}m -run (${#RE} bytes)"
+      [ "$GSEL" -gt 0 ] ||
+        fail "shard ${S}: group ${GNAME} of ${GPKG} selects no test of the ${GTOTAL} this tree has for that package. \`go test -run\` over an expression that matches nothing exits 0, so this shard would report success having run none of them."
+      RE_BYTES="$(printf '%s' "$RE" | wc -c)"
+      echo "pr-suite-shards: shard ${S} — group ${GNAME} of ${GPKG}: ${GSEL} of ${GTOTAL} test(s), go test -timeout ${TO}m -run (${RE_BYTES} bytes)"
       bash scripts/with-pg-env.sh go test -count=1 -timeout "${TO}m" -run "$RE" "$GPKG" || rc=1
     done
     for leg in "${LEGS[@]}"; do
