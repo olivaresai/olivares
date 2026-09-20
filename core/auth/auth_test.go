@@ -464,6 +464,104 @@ func TestLoginThrottleDoesNotLockOtherAccountsBehindASharedPeer(t *testing.T) {
 	}
 }
 
+// TestLoginThrottleStillRefusesAnAddressThatSpraysManyAccounts holds the other
+// half of the shared-peer rule. Sparing an account that has not failed must not
+// spare the sprayer: once an address has tripped, an account that has ALREADY
+// failed inside the window gets no further guess from it, so walking a list of
+// accounts costs one guess per account per window instead of one per second.
+//
+// The last leg is the property this must not trade away — an account with a clean
+// record still logs in from that same tripped address.
+func TestLoginThrottleStillRefusesAnAddressThatSpraysManyAccounts(t *testing.T) {
+	ctx := context.Background()
+	a := auth.NewAuthenticator(testStore(t), nil)
+	admin := mustSuperadmin(t, ctx, a)
+
+	const sharedPeer = "203.0.113.9"
+	const (
+		first  = "first@example.test"
+		second = "second@example.test"
+		clean  = "clean@example.test"
+	)
+	for _, acct := range []string{first, second, clean} {
+		if _, err := a.CreateUser(ctx, admin, auth.NewUser{Email: acct, DisplayName: "Member", Password: "member-password-1"}); err != nil {
+			t.Fatalf("create %s: %v", acct, err)
+		}
+	}
+
+	// Five failures trip the address.
+	for i := 0; i < 5; i++ {
+		if _, _, err := a.Login(ctx, first, "wrong", sharedPeer); !errors.Is(err, auth.ErrInvalidCredentials) {
+			t.Fatalf("failed attempt %d against the first account: err = %v, want ErrInvalidCredentials", i, err)
+		}
+	}
+
+	// The spray moves to a second account. Its FIRST guess is admitted, because
+	// nothing yet says this account is part of the attack.
+	if _, _, err := a.Login(ctx, second, "wrong", sharedPeer); !errors.Is(err, auth.ErrInvalidCredentials) {
+		t.Fatalf("first guess against the second account: err = %v, want ErrInvalidCredentials", err)
+	}
+	// Its second must be refused: the account has now failed from a tripped address.
+	if _, _, err := a.Login(ctx, second, "wrong-again", sharedPeer); !errors.Is(err, auth.ErrLockedOut) {
+		t.Fatalf("a tripped address kept guessing at an account that had already failed: err = %v, want ErrLockedOut", err)
+	}
+
+	// And the defense is still narrow: an account with a clean record logs in.
+	if _, _, err := a.Login(ctx, clean, "member-password-1", sharedPeer); err != nil {
+		t.Fatalf("an account that never failed was refused from the tripped address: err = %v, want a session", err)
+	}
+}
+
+// TestASuccessfulLoginDoesNotUnTripASprayedAddress holds the refusal against the
+// deployment's own traffic. Behind a shared ingress every user arrives from the
+// same address, so if an ordinary successful login cleared that address's state,
+// the busier the deployment the less the refusal a spray earned would mean — a
+// control that evaporates exactly where it is needed. A success is evidence about
+// the ACCOUNT that logged in; it is no evidence at all about an address shared
+// with strangers, so it clears the account key and leaves the address to age out
+// on its own window.
+func TestASuccessfulLoginDoesNotUnTripASprayedAddress(t *testing.T) {
+	ctx := context.Background()
+	a := auth.NewAuthenticator(testStore(t), nil)
+	admin := mustSuperadmin(t, ctx, a)
+
+	const sharedPeer = "203.0.113.20"
+	const (
+		first     = "first@example.test"
+		second    = "second@example.test"
+		bystander = "bystander@example.test"
+	)
+	for _, acct := range []string{first, second, bystander} {
+		if _, err := a.CreateUser(ctx, admin, auth.NewUser{Email: acct, DisplayName: "Member", Password: "member-password-1"}); err != nil {
+			t.Fatalf("create %s: %v", acct, err)
+		}
+	}
+
+	// Five failures trip the address; one more marks the second account as part of
+	// the spray, and its next guess is refused.
+	for i := 0; i < 5; i++ {
+		if _, _, err := a.Login(ctx, first, "wrong", sharedPeer); !errors.Is(err, auth.ErrInvalidCredentials) {
+			t.Fatalf("failed attempt %d against the first account: err = %v, want ErrInvalidCredentials", i, err)
+		}
+	}
+	if _, _, err := a.Login(ctx, second, "wrong", sharedPeer); !errors.Is(err, auth.ErrInvalidCredentials) {
+		t.Fatalf("first guess against the second account: err = %v, want ErrInvalidCredentials", err)
+	}
+	if _, _, err := a.Login(ctx, second, "wrong-again", sharedPeer); !errors.Is(err, auth.ErrLockedOut) {
+		t.Fatalf("the address was not refusing the spray, so the rest of this test proves nothing: err = %v", err)
+	}
+
+	// An ordinary user logs in from behind the same ingress, correctly.
+	if _, _, err := a.Login(ctx, bystander, "member-password-1", sharedPeer); err != nil {
+		t.Fatalf("a bystander behind the shared address could not log in: %v", err)
+	}
+
+	// The spray is still refused.
+	if _, _, err := a.Login(ctx, second, "wrong-once-more", sharedPeer); !errors.Is(err, auth.ErrLockedOut) {
+		t.Fatalf("a bystander's successful login un-tripped the sprayed address: err = %v, want ErrLockedOut", err)
+	}
+}
+
 func TestRoleCeiling(t *testing.T) {
 	ctx := context.Background()
 	st := testStore(t)

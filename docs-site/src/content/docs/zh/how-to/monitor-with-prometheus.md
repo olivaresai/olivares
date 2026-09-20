@@ -30,7 +30,7 @@ description: >-
 | `olivares_eventbus_publish_blocked_total` | 背压事件（总线会阻塞；它不会丢弃） |
 | `olivares_eventbus_bridge_*` | 启用分布式总线时的 NATS 桥接健康状况——`_connected`、`_pending_messages`、`_dropped_total`（跨节点投递为至多一次；丢弃会被计数，绝不静默） |
 | `olivares_audit_checkpoint_age_seconds` | 篡改检测证据的新鲜度——当其超过检查点间隔的 2 倍时告警 |
-| `olivares_auth_login_attempts_total{outcome}` | 登录成功 / 失败 / 锁定 |
+| `olivares_auth_login_attempts_total{outcome}` | 登录成功 / 失败 / 锁定 / 中断 |
 | `olivares_http_ratelimit_decisions_total{decision}` | 限流压力 |
 | `olivares_grpc_requests_total` / `olivares_grpc_request_duration_seconds` | collector→core 的摄取平面 |
 

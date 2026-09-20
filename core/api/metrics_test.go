@@ -52,12 +52,14 @@ func TestObservabilityEndpoints(t *testing.T) {
 		"# TYPE olivares_ingest_duration_seconds histogram",
 		"olivares_ingest_rejected_total",
 		// SLIs: gRPC family declared (counts at first RPC) and the login
-		// counter pre-created at zero for all three outcomes.
+		// counter pre-created at zero for every outcome, so an abuse query reads a
+		// baseline instead of "no data" until the first failure or disconnect.
 		"# TYPE olivares_grpc_requests_total counter",
 		"# TYPE olivares_grpc_request_duration_seconds histogram",
 		`olivares_auth_login_attempts_total{outcome="success"} 0`,
 		`olivares_auth_login_attempts_total{outcome="failed"} 0`,
 		`olivares_auth_login_attempts_total{outcome="locked_out"} 0`,
+		`olivares_auth_login_attempts_total{outcome="abandoned"} 0`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("/metrics missing %q\n--- body ---\n%s", want, body)

@@ -34,7 +34,7 @@ las que soportan el peso:
 | `olivares_eventbus_publish_blocked_total` | eventos de backpressure (el bus bloquea; no descarta) |
 | `olivares_eventbus_bridge_*` | salud del puente NATS cuando el bus distribuido está activo — `_connected`, `_pending_messages`, `_dropped_total` (la entrega entre nodos es at-most-once; los descartes se cuentan, nunca son silenciosos) |
 | `olivares_audit_checkpoint_age_seconds` | frescura de la evidencia de manipulación — alerta cuando supera 2× el intervalo de checkpoint |
-| `olivares_auth_login_attempts_total{outcome}` | login con éxito / fallo / bloqueo |
+| `olivares_auth_login_attempts_total{outcome}` | login con éxito / fallo / bloqueo / abandono |
 | `olivares_http_ratelimit_decisions_total{decision}` | presión de rate-limit |
 | `olivares_grpc_requests_total` / `olivares_grpc_request_duration_seconds` | el plano de ingesta colector→core |
 

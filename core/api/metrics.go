@@ -68,8 +68,8 @@ func (s *Server) initMetrics(reg *metrics.Registry) {
 	// an abuse query sees a zero baseline, not "no data" until the first failure.
 	// Scope: the password login endpoint; SSO logins mint sessions elsewhere.
 	s.mLogin = reg.CounterVec("olivares_auth_login_attempts_total",
-		"Password login attempts by outcome (success, failed = bad credentials, locked_out = throttle lockout). Store/setup errors are not attempts and are not counted.", "outcome")
-	for _, o := range []string{loginOutcomeSuccess, loginOutcomeFailed, loginOutcomeLockedOut} {
+		"Password login attempts by outcome (success, failed = bad credentials, locked_out = throttle refusal, abandoned = the caller went away before the credential was read). Store/setup errors are not attempts and are not counted.", "outcome")
+	for _, o := range []string{loginOutcomeSuccess, loginOutcomeFailed, loginOutcomeLockedOut, loginOutcomeAbandoned} {
 		s.mLogin.Add(0, o)
 	}
 

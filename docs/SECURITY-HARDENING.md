@@ -159,19 +159,50 @@ The unauthenticated endpoints are `/v1/auth/login`, `/v1/setup`, `/v1/server-inf
 callbacks and the operational probes. What the engine does, what it deliberately does NOT do, and
 what that delegates to the deployment edge:
 
-- **Login lockout (built in):** dual-key, per-account AND per-IP — 5 consecutive failures lock the
-  key for 15 minutes (`core/auth/authenticator.go:56,64`; `core/auth/throttle.go`). Failures are
-  audited (`auth.login.failed`, with the peer IP in Meta) and counted
-  (`olivares_auth_login_attempts_total{outcome}` — `success|failed|locked_out`, see
+- **Login throttle (built in):** dual-key, per-account AND per-client-address — 5 consecutive
+  failures in 15 minutes arm a key (`core/auth/throttle.go`; asked once per attempt from
+  `core/auth/authenticator.go:474`). **The two keys do not answer the same way**, because an
+  account is one person's and an address is shared:
+  - the **ACCOUNT** key REFUSES — 15 minutes of lockout, and a failure that lands while the key is
+    still warm re-arms it rather than buying a fresh five;
+  - the **ADDRESS** key refuses a spray rather than a deployment: once it has tripped, an account
+    that has already failed from that address — or that has an attempt in flight — gets nothing
+    more from it, while an account with a clean record is charged one second
+    (`core/auth/throttle.go`) and then read normally. Five anonymous failures cost a sprayer its
+    rate; they can never lock out the deployment.
+  - a **SUCCESS clears the account key only**. A correct password is evidence about the account
+    that gave it and none about an address shared with everyone behind the same ingress, so the
+    deployment's own traffic cannot un-trip a refusal a spray earned; the address ages out on its
+    own window. A key quiet for a whole window is forgotten, and the next five failures are needed
+    again — that has always been the rate.
+
+  **The residual, stated plainly.** While an address is tripped, ONE failed attempt against an
+  account from that address refuses that account FROM THAT ADDRESS for the rest of the window —
+  whoever made it. Behind a shared ingress that is the victim's only address, so a user who
+  mistypes once during a sustained trip waits the window out, because the corrective attempt is the
+  one refused; and an attacker behind the same ingress can refuse named accounts at one request
+  each, once the five that trip the address are spent. This is NARROWER than the behavior it
+  replaces — five failures from anyone used to refuse EVERY account behind the ingress for fifteen
+  minutes — but it is not free. Two consequences worth knowing: an instant refusal, against the
+  one-second hold a clean account pays, tells an observer at a tripped address whether an account
+  is warm (activity, not existence: an invented address behaves exactly like a clean one); and the
+  cure is a PER-CLIENT address, which needs the operator to declare the proxy networks the engine
+  may believe. That is not in this release.
+
+  Failures are audited (`auth.login.failed`, with the peer IP in Meta) and counted
+  (`olivares_auth_login_attempts_total{outcome}` — `success|failed|locked_out|abandoned`, the last
+  for an attempt the caller drops while the throttle is holding it; see
   [`docs/17-PRODUCTION-READINESS-SLO.md`](17-PRODUCTION-READINESS-SLO.md) §5).
-- **The IP leg uses `RemoteAddr`, never `X-Forwarded-For` — by design.** XFF is attacker-writable;
-  honoring it unauthenticated would let a brute-forcer rotate fake IPs to dodge the lockout, or
-  lock out a victim by spoofing their address (`core/api/handlers_auth.go:151-163`). The honest
-  consequence: **behind a reverse proxy/LB the `ip:` key collapses to the proxy's address** — one
-  attacker can trip the shared IP lock for everyone behind that proxy, and the per-IP leg stops
-  distinguishing sources. The per-ACCOUNT leg keeps working regardless. There is deliberately no
-  trusted-proxy XFF knob in v1; if one is ever added it must be opt-in with an explicit
-  trusted-CIDR list.
+- **The address key uses `RemoteAddr`, never `X-Forwarded-For` — by design.** XFF is
+  attacker-writable; honoring it unauthenticated would let a brute-forcer rotate fake addresses to
+  dodge the throttle, or aim it at a victim by spoofing theirs (`core/api/handlers_auth.go:386`).
+  The honest consequence: **behind a reverse proxy/LB the `ip:` key collapses to the proxy's
+  address** — it stops distinguishing sources, and one attacker's failures reach every user behind
+  that proxy. That is exactly why the address key charges rather than refuses a clean account. The
+  per-ACCOUNT key keeps working regardless. There is deliberately no trusted-proxy XFF knob in the
+  product; if one is ever added it must be opt-in with an explicit trusted-CIDR list, and the
+  address key must stay separate from the login-surface IP allow-list, which is right to trust only
+  the transport peer.
 - **Setup (`/v1/setup`):** guarded by the one-time 256-bit token alone (constant-time compare,
   single-use, consumed on success — `core/secure/setup.go`). There is **no throttle** on token
   attempts: entropy is the control (an online brute force of 2^256 is not a credible threat), and

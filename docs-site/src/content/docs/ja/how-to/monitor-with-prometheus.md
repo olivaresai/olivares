@@ -33,7 +33,7 @@ description: >-
 | `olivares_eventbus_publish_blocked_total` | バックプレッシャーイベント（バスはブロックする。ドロップはしない） |
 | `olivares_eventbus_bridge_*` | 分散バスが有効なときの NATS ブリッジの健全性 — `_connected`、`_pending_messages`、`_dropped_total`（ノード間配信は at-most-once。ドロップはカウントされ、決して黙殺されない） |
 | `olivares_audit_checkpoint_age_seconds` | 改ざん検知の鮮度 — チェックポイント間隔の 2 倍を超えたらアラート |
-| `olivares_auth_login_attempts_total{outcome}` | ログインの成功 / 失敗 / ロックアウト |
+| `olivares_auth_login_attempts_total{outcome}` | ログインの成功 / 失敗 / ロックアウト / 中断 |
 | `olivares_http_ratelimit_decisions_total{decision}` | レートリミットの圧力 |
 | `olivares_grpc_requests_total` / `olivares_grpc_request_duration_seconds` | コレクター→コアのインジェストプレーン |
 

@@ -33,7 +33,7 @@ the load-bearing ones:
 | `olivares_eventbus_publish_blocked_total` | backpressure events (the bus blocks; it does not drop) |
 | `olivares_eventbus_bridge_*` | NATS bridge health when the distributed bus is on — `_connected`, `_pending_messages`, `_dropped_total` (cross-node delivery is at-most-once; drops are counted, never silent) |
 | `olivares_audit_checkpoint_age_seconds` | tamper-evidence freshness — alert when it exceeds 2× the checkpoint interval |
-| `olivares_auth_login_attempts_total{outcome}` | login success / failure / lockout |
+| `olivares_auth_login_attempts_total{outcome}` | login success / failure / lockout / abandoned |
 | `olivares_http_ratelimit_decisions_total{decision}` | rate-limit pressure |
 | `olivares_grpc_requests_total` / `olivares_grpc_request_duration_seconds` | the collector→core ingest plane |
 

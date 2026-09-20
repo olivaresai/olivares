@@ -34,7 +34,7 @@ die tragenden:
 | `olivares_eventbus_publish_blocked_total` | Backpressure-Ereignisse (der Bus blockiert; er verwirft nicht) |
 | `olivares_eventbus_bridge_*` | NATS-Bridge-Gesundheit, wenn der verteilte Bus aktiv ist — `_connected`, `_pending_messages`, `_dropped_total` (Cross-Node-Zustellung ist at-most-once; Drops werden gezählt, niemals verschwiegen) |
 | `olivares_audit_checkpoint_age_seconds` | Aktualität des Manipulationsnachweises — alarmieren, wenn sie das 2-fache des Checkpoint-Intervalls überschreitet |
-| `olivares_auth_login_attempts_total{outcome}` | Login-Erfolg / -Fehlschlag / -Sperre |
+| `olivares_auth_login_attempts_total{outcome}` | Login-Erfolg / -Fehlschlag / -Sperre / -Abbruch |
 | `olivares_http_ratelimit_decisions_total{decision}` | Rate-Limit-Druck |
 | `olivares_grpc_requests_total` / `olivares_grpc_request_duration_seconds` | die Collector→Core-Ingest-Plane |
 

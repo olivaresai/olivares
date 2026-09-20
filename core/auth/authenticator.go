@@ -98,7 +98,9 @@ type Authenticator struct {
 }
 
 // NewAuthenticator builds an Authenticator over st. clock may be nil (system
-// clock). Login is throttled to 5 failures per 15 minutes per account and per IP.
+// clock). Login is throttled at 5 failures per 15 minutes on two keys, the
+// ACCOUNT and the CLIENT ADDRESS; what each of them then refuses, and what it
+// only makes expensive, is the throttle's decision (throttle.go).
 func NewAuthenticator(st store.Store, clock model.Clock) *Authenticator {
 	if clock == nil {
 		clock = model.SystemClock{}
@@ -461,24 +463,53 @@ func loadGroupClosure(ctx context.Context, as store.AuthScope, cache map[model.I
 }
 
 // Login validates an email/password and, on success, mints a server-side session
-// and returns its token (shown once). It is throttled per account and per IP, and
-// runs an argon2id verification even for an unknown email so timing cannot reveal
-// which accounts exist. Failed attempts and lockouts are recorded to the audit
-// ledger.
+// and returns its token (shown once). It is throttled per account and per client
+// address, and runs an argon2id verification even for an unknown email so timing
+// cannot reveal which accounts exist. Failed attempts and lockouts are recorded to
+// the audit ledger. ip is the transport peer, which is the only address this
+// engine observed for itself.
+//
+// A caller that abandons the request while the throttle is holding the attempt
+// gets the context's error back, so the attempt can be reported rather than lost.
 func (a *Authenticator) Login(ctx context.Context, emailRaw, password, ip string) (string, model.AuthSession, error) {
 	email := normalizeEmail(emailRaw)
-	emKey, ipKey := "email:"+email, "ip:"+ip
-	if a.locked(emKey) || a.locked(ipKey) {
+	accountKey, addressKey := "email:"+email, "ip:"+ip
+
+	// One question, asked once: the throttle reads both keys together, says what
+	// this attempt is worth, and records the admission in the same locked step
+	// (throttle.go). Nothing about the account of record is known yet, and nothing
+	// here needs it.
+	verdict, wait := a.throttle.decide(accountKey, addressKey)
+	if verdict == loginRefuse {
 		return "", model.AuthSession{}, ErrLockedOut
 	}
+	// And one outcome, reported exactly once however this attempt ends. Abandoned is
+	// the honest default for every return that reaches no VERDICT on the password:
+	// the early ones below, where the credential was never read, and equally a
+	// require-SSO refusal or a session that could not be minted AFTER a password
+	// that matched. None of them accuses the account or absolves it. The defer
+	// releases the admission even if the path below panics.
+	outcome := loginAbandoned
+	defer func() { a.throttle.record(accountKey, addressKey, verdict, outcome) }()
 
 	// network allow-list. Refuse a peer outside the configured CIDR list
 	// BEFORE any credential work (cheap, deny-closed, no account oracle: an IP block
 	// reveals nothing about which accounts exist). A nil login policy (the open build /
-	// a test embedder) is a no-op, so this is byte-identical to today there.
+	// a test embedder) is a no-op, so this is byte-identical to today there. It runs
+	// before the delay so a peer that may not log in at all never waits for one.
 	attempt, err := a.beginLogin(ctx, ip)
 	if err != nil {
 		return "", model.AuthSession{}, err
+	}
+
+	// A tripped address makes an unproven attempt expensive instead of impossible.
+	// Charged before the store read and the hash, so the attacker pays it and the
+	// engine does not, and charged whatever account the attempt names, so it tells
+	// a caller nothing about which accounts exist.
+	if verdict == loginDelay {
+		if err := a.throttle.waitOut(ctx, wait); err != nil {
+			return "", model.AuthSession{}, err
+		}
 	}
 
 	// Phase 1 — read the user in a READ-only transaction. The argon2id verify must
@@ -522,8 +553,7 @@ func (a *Authenticator) Login(ctx context.Context, emailRaw, password, ip string
 		}); aerr != nil {
 			a.log.Error("auth: recording failed login", "err", aerr)
 		}
-		a.throttle.fail(emKey)
-		a.throttle.fail(ipKey)
+		outcome = loginFailed
 		return "", model.AuthSession{}, ErrInvalidCredentials
 	}
 
@@ -531,8 +561,7 @@ func (a *Authenticator) Login(ctx context.Context, emailRaw, password, ip string
 	if err != nil {
 		return "", model.AuthSession{}, err
 	}
-	a.throttle.reset(emKey)
-	a.throttle.reset(ipKey)
+	outcome = loginSucceeded
 	return token, sess, nil
 }
 
@@ -689,12 +718,6 @@ func (a *Authenticator) RevokeSession(ctx context.Context, actor Principal, sess
 		})
 		return err
 	})
-}
-
-// locked reports whether key is currently locked out.
-func (a *Authenticator) locked(key string) bool {
-	ok, _ := a.throttle.allowed(key)
-	return !ok
 }
 
 // appendLoginFail records a failed-login event and returns nil so the enclosing

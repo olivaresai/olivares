@@ -214,8 +214,11 @@ astreinte quand `olivares_eventbus_bridge_connected == 0`.
 ### Les connexions échouent avec « locked out »
 
 `olivares_auth_login_attempts_total{outcome="locked_out"}` en hausse signifie que la limitation
-par compte/par IP s'est enclenchée après des échecs répétés. Elle se libère d'elle-même ;
-enquêtez sur la source des échecs plutôt que de relever les limites.
+a refusé une tentative : un compte verrouillé par ses propres échecs répétés, ou un compte
+qu'une adresse client suivie d'une série d'échecs essayait déjà. Un compte au dossier vierge
+n'est jamais verrouillé par les échecs d'autrui depuis la même adresse — il attend une
+seconde à la place. Les deux se libèrent d'eux-mêmes ; enquêtez sur la source des échecs
+plutôt que de relever les limites.
 
 ## Preuves
 

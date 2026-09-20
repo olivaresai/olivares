@@ -212,8 +212,11 @@ y haz page cuando `olivares_eventbus_bridge_connected == 0`.
 ### Los inicios de sesión fallan con "locked out"
 
 Que `olivares_auth_login_attempts_total{outcome="locked_out"}` suba significa que el
-throttle por cuenta/por IP se activó tras fallos repetidos. Se limpia
-solo; investiga el origen de los fallos en lugar de subir los límites.
+throttle rechazó un intento: una cuenta bloqueada por sus propios fallos repetidos, o
+una que ya estaba probando una dirección de cliente con una racha de fallos detrás. Una
+cuenta con historial limpio nunca queda bloqueada por los fallos de otros desde la misma
+dirección: espera un segundo en su lugar. Ambos se limpian solos; investiga el origen de
+los fallos en lugar de subir los límites.
 
 ## Evidencia
 
