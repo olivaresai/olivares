@@ -33,7 +33,7 @@ month, release-of-month; the current release is `v26.9.1`).
 
 ## [Unreleased]
 
-## [26.9.1] - 2026-09-18
+## [26.9.1] - 2026-09-21
 
 ### Added
 
@@ -64,6 +64,21 @@ month, release-of-month; the current release is `v26.9.1`).
   replayed after Tuesday's revoke. The same reconstruction is available over the API and from
   the console's governance client. The how-to says what a reconstruction proves and what it
   cannot prove.
+
+- **The first hour, from the command line.** `olivares provider add | test | rotate | bind | rm`
+  registers a model-provider credential and proves it before anything depends on it: a test
+  carries its outcome in the exit code, and the screen that follows names the command that
+  fixes what it just reported — a refused credential is offered `rotate`, never `bind`.
+  `olivares agent profile update | rm` and two declared policy fields (the tools a profile may
+  use and its permission mode, deny-closed when undeclared), `olivares agent deploy`, and
+  `olivares agent tool install` with download progress complete the path from an empty
+  installation to a governed session. The console gains a providers screen, and the guided
+  first hour is documented in seven languages. A session's usage and cost are folded into
+  the session record and, where a cost sink is wired, into the spend ledger.
+
+- `OLIVARES_PDF_RENDER_TIMEOUT` declares the time budget of a PDF render as a duration. The
+  default stays 30 s; a value that is not a positive duration is refused by name before a
+  render starts.
 
 - **The official Codex and Grok command-line clients install beside Claude Code.**
   `olivares agent tool install` and the `codex` / `grok` command families install, verify and
@@ -99,6 +114,34 @@ month, release-of-month; the current release is `v26.9.1`).
   Configuration* in `olivares --help`.
 
 ### Changed
+
+- **One renderer for the terminal.** Panels, tables, refusals and next steps of the CLI now
+  go through one plain-first, width-aware renderer: the first-hour commands, the governance
+  family and a number of other families. The same fact reads the same across them, and output
+  that was formatted by hand in 26.9.0 may have changed shape; the plain form is the
+  contract, and color only adds to it. Some families are not on the renderer yet and keep
+  their 26.9.0 tables and panels, among them `compliance`, `notify`, `health`, `identity`,
+  `observability` and `adoption`.
+
+- **A session that names no workspace gets a directory of its own.** It starts in an empty,
+  private directory (mode 0700) created for that run and recorded on the run, instead of the
+  engine's own tree; it is refused only when no such directory can be derived. Releasing the
+  session removes that directory — unless a workspace has been registered at or under it
+  since, in which case the files are kept. This sets where a session starts and what it finds
+  there; it is not confinement, which remains the isolation posture and the profile's tools.
+
+- **`olivares doctor` judges the installation that exists.** It classifies the install shape
+  and reports it (`install_shape` in `-o json`, `service` or `local`): on a `local`
+  installation — `quickstart` or `serve` over a data directory — the checks that only a
+  service installation can pass report `not_applicable` instead of failing, and each remedy
+  names something that applies to that installation; a service installation is held to every
+  check it was held to before. A build stamped with its own source commit is recognized as a
+  source build; a release, an unknown label or a mismatched hash is still held to the release
+  anchors.
+
+- **Dark is the console's default theme.** An operator who has not chosen a theme now gets
+  the dark one instead of the operating system's setting. Light and system remain explicit
+  choices in the same toggle, and the light theme keeps full parity.
 
 - **The console is a server: `serve` and `quickstart` bind every interface by default.**
   `--listen` now defaults to `:8443` and `--grpc-listen` to `:8444` — `0.0.0.0` and, where
@@ -148,6 +191,31 @@ month, release-of-month; the current release is `v26.9.1`).
   self-test answers *not applicable* where the tree carries no `design/` instead of red.
 
 ### Fixed
+
+- Accepting an invitation now passes the same login policy as every other way of obtaining a
+  session. The invited user's first session is minted through the single door that applies the
+  network policy of the login attempt and the password policy, inside the transaction that
+  activates the invitation; before, acceptance issued a session without consulting either, so
+  an address the policy refuses at the login form could enter through an invitation link.
+
+- A hook request's agent is the one its credential proves; a header never selects a policy.
+  Agent-scoped policy follows the proven agent; a request whose credential proves no agent is
+  treated as unbindable wherever an agent-scoped policy could apply, with or without the
+  header, and a declared agent can only add a denial. A hook that authenticates with a login
+  session is therefore refused, deny-closed, in a tenant that has an agent-scoped hook
+  firewall policy; without such a policy its verdicts are unchanged.
+
+- The engine writes one log format. Started without `--quiet` it used the language's default
+  handler, and with `--quiet` a structured text handler, so the shape of every line depended
+  on a flag; every start now writes logfmt lines with the timestamp in UTC. The same change
+  makes `OLIVARES_LOG_LEVEL` govern what the engine emits, as its reference says; before, it
+  governed only the in-memory capture, so a deployment that sets it will see its log volume
+  follow the level after upgrading.
+
+- `--help` no longer shows a value placeholder that a flag does not accept. A quoted command
+  name inside a usage string was rendered as the flag's argument: 17 flags were affected, four
+  of them booleans shown as if they took a value. The CLI reference is regenerated in all
+  seven languages.
 
 - The installer (`scripts/install.sh`, served at `https://olivares.ai/olivares/install.sh`)
   and the HTTPS bootstrap no longer stop with `cosign is required` on a host without
