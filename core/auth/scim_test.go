@@ -63,10 +63,22 @@ func TestSCIMProvisionJoinsTenant(t *testing.T) {
 	if u.Email != "joiner@acme.com" {
 		t.Errorf("email = %q, want normalized", u.Email)
 	}
-	// Idempotent: a second provision (full resource) updates, does not duplicate,
-	// stays a member.
-	if _, created2, err := a.SCIMProvisionUser(ctx, super, tenant, auth.SCIMUserInput{UserName: "joiner@acme.com", ExternalID: "idp-9", DisplayName: "Joiner", Active: true}); err != nil || created2 {
+	// Idempotent and write-free: a second provision of an account that is already a
+	// member returns the stored one as it stands, and does not duplicate it. The
+	// attributes below all differ from the ones the account was created with, so a
+	// create that wrote the row it found would be caught here.
+	again, created2, err := a.SCIMProvisionUser(ctx, super, tenant, auth.SCIMUserInput{
+		UserName: "joiner@acme.com", ExternalID: "idp-rewritten", DisplayName: "Rewritten", Active: false,
+	})
+	if err != nil || created2 {
 		t.Errorf("re-provision = (%v, created=%v), want (nil, false)", err, created2)
+	}
+	if again.ID != u.ID {
+		t.Errorf("re-provision returned account %s, want the stored %s (no duplicate)", again.ID, u.ID)
+	}
+	if again.DisplayName != "Joiner" || again.ExternalID != "idp-9" || again.Status != model.StatusActive {
+		t.Errorf("re-provision returned (displayName=%q, externalId=%q, status=%q), want (%q, %q, %q) — the stored account, unwritten",
+			again.DisplayName, again.ExternalID, again.Status, "Joiner", "idp-9", model.StatusActive)
 	}
 	if _, found, err := a.SCIMFindMember(ctx, tenant, "external_id", "idp-9"); err != nil || !found {
 		t.Errorf("find by externalId = (found=%v, %v)", found, err)
