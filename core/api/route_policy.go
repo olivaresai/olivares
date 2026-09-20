@@ -287,6 +287,37 @@ type RowAuthorizationPort interface {
 		res auth.ResourceAttrs, reqs []RouteActionRequirement) (AuthorizedActionSet, error)
 }
 
+// RouteActionAuthorizationPort answers ONE question: may this principal take this one action on
+// this one resource — and when the answer is no, whether that is a DENIAL or an UNDECIDED.
+//
+// ⛔ IT IS A SEPARATE INTERFACE AND NOT A METHOD ON RowAuthorizationPort, and the separation buys
+// two different things. Adding it there would change the method set of a port that is already
+// wired, so every implementer — test doubles included — would stop compiling for a capability
+// most of them do not want. And it would seat a GATE's question inside the type whose other
+// method is deliberately an OFFER list: the two shapes answer an undecided action differently ON
+// PURPOSE (see DecideActions below), and a reader who finds them side by side under one name will
+// eventually make one behave like the other.
+//
+// ⛔ WHAT IT MUST NEVER BE WIDENED TO, written here because the pressure to widen a port arrives
+// as a convenience. It returns a witness and never a row. It must not expose the authorizer
+// itself, evidence authorization, any policy store, any authorization epoch or compare-and-set,
+// any repository or store scope — and it must not mint a principal: a caller has to already hold
+// one the engine authenticated. It reaches nothing a caller could not already name, because it is
+// AuthorizeRoute with its answer preserved: the same algebra and the same credential ceiling that
+// decide on the governed door decide here.
+//
+// ⛔ AND THE THREE ANSWERS DO NOT COLLAPSE INTO ONE. A denial, an undecided and an absent
+// authorizer stay apart under errors.Is, because only ONE of them means "do not try again" and
+// the other two mean "nobody looked" — one because the evidence would not hold up, one because
+// there was nothing to ask. Folding either of those into the denial reports a verdict that
+// nothing ever reached, and the caller that would have succeeded on a retry gives up instead.
+type RouteActionAuthorizationPort interface {
+	// AuthorizeAction decides ONE action over ONE resource, returning the witness of that
+	// decision or the error that says which of the other two answers this is.
+	AuthorizeAction(ctx context.Context, p auth.Principal, tenant model.TenantID,
+		res auth.ResourceAttrs, req RouteActionRequirement) (auth.RouteAuthorizationWitness, error)
+}
+
 // ⛔ RouteSecurityContext ESTUVO AQUI Y SE HA RETIRADO, que es la unica respuesta honesta a un
 // tipo con dos ocurrencias en todo el arbol: su comentario y su declaracion. Nadie lo construia,
 // nadie lo leia, ningun test lo tocaba — y su primera frase decia, en presente, que era "lo que
@@ -449,6 +480,37 @@ func (a authorizerRows) DecideActions(ctx context.Context, p auth.Principal, ten
 		out.Witnesses = append(out.Witnesses, w)
 	}
 	return out, nil
+}
+
+// AuthorizeAction makes the already-wired row port answer the GATE's question, and it asks exactly
+// what the governed door asks: the auth.Request built here is field for field the one the door
+// builds for a governed route, carrying the ACTION's own route metadata rather than the metadata
+// of whatever route is being served.
+//
+// ⛔ THE ANSWER IS RETURNED UNTOUCHED, AND THAT IS THE WHOLE METHOD. Wrapping the error with
+// anything that does not carry %w, or folding every non-nil error into a denial, turns "nothing
+// evaluated this" into "the policy said no": a retryable outage leaves as a final refusal, and the
+// caller that would have succeeded on the second attempt gives up on the first.
+//
+// ⛔ AND IT DOES NOT RE-DERIVE THE DECISION. One place decides. Asking it twice, or asking a
+// cheaper question and calling the answer the same, is how two authorization paths drift until the
+// one fewer people read is the one that admits.
+func (a authorizerRows) AuthorizeAction(ctx context.Context, p auth.Principal, tenant model.TenantID,
+	res auth.ResourceAttrs, req RouteActionRequirement) (auth.RouteAuthorizationWitness, error) {
+	if a.az == nil {
+		// Stated here rather than inherited from the authorizer's own nil check, so this port's
+		// three answers are readable in this method: a port that was never installed answers "I
+		// could not look", which is the third answer and not a refusal.
+		return auth.RouteAuthorizationWitness{}, fmt.Errorf(
+			"api: no authorizer is installed for action decisions: %w", auth.ErrAuthorizerUnavailable)
+	}
+	return a.az.AuthorizeRoute(ctx, auth.Request{
+		Principal:  p,
+		Permission: req.Permission,
+		Tenant:     tenant,
+		Resource:   res,
+		Route:      req.Metadata.RouteMetadata,
+	})
 }
 
 // CheckRowSet verifies what a caller must never assume before zipping decisions against
