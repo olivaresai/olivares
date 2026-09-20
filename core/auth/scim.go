@@ -63,10 +63,17 @@ type SCIMUserInput struct {
 	AgentDelegation string
 }
 
+// SCIMUserNameKey is the stored address a SCIM userName names. A caller that
+// looks for an existing resource before provisioning must read the address the
+// way the write reads it, or the two disagree about which account a request
+// names and the check passes over the very account the write then finds.
+// SCIMProvisionUser applies exactly this function to its input.
+func SCIMUserNameKey(userName string) string { return normalizeEmail(userName) }
+
 // SCIMProvisionUser is the joiner path: it creates a global user for
 // userName(email), sets its directory attributes, and grants it a membership in
-// tenant. It returns the stored user and whether it was newly created (so the
-// handler can answer 201 vs 200).
+// tenant. It returns the stored user and whether THIS call created it: the route
+// answers 201 with a Location for an account it made, and 200 for one it found.
 //
 // A create NEVER writes an account it did not create. An address already held by
 // a member of the bound tenant is idempotent — this connection owns that resource
@@ -86,7 +93,7 @@ func (a *Authenticator) SCIMProvisionUser(ctx context.Context, actor Principal, 
 	if tenant.IsZero() || tenant.IsSystem() {
 		return model.User{}, false, ErrInvalidToken
 	}
-	email := normalizeEmail(in.UserName)
+	email := SCIMUserNameKey(in.UserName)
 	if email == "" {
 		return model.User{}, false, ErrInvalidScimUser
 	}

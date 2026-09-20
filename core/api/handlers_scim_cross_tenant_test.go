@@ -43,7 +43,7 @@ func (h *harness) mintSession(userID model.ID) string {
 // SCIM connection is built on: the connection is bound to ONE tenant and manages
 // accounts as members of that tenant. A create whose userName belongs to an
 // account outside that tenant must not read as absent, must not write that
-// account and must not enrol it — otherwise one tenant's provisioning credential
+// account and must not enroll it — otherwise one tenant's provisioning credential
 // is a lever over every account in the deployment.
 //
 // Both administrative shapes are covered, because they fail differently and both
@@ -107,7 +107,7 @@ func TestSCIMCreateUserCannotAdoptAnAccountOutsideTheBoundTenant(t *testing.T) {
 			}
 			const ownAddress = "newcomer@acme.example"
 			if first := h.scim("POST", base+"/Users", claimingTok, `{"userName":"`+ownAddress+`","active":true}`); first.code != http.StatusCreated {
-				t.Fatalf("create of an unused address = %d %s, want 201 (unchanged behaviour)", first.code, first.raw)
+				t.Fatalf("create of an unused address = %d %s, want 201 (unchanged behavior)", first.code, first.raw)
 			}
 			dup := h.scim("POST", base+"/Users", claimingTok, `{"userName":"`+ownAddress+`","active":true}`)
 			if dup.code != claim.code || dup.body["scimType"] != claim.body["scimType"] || dup.body["detail"] != claim.body["detail"] {

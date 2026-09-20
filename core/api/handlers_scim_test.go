@@ -347,6 +347,53 @@ func TestSCIMDiscoveryDeclaresEnterpriseExtension(t *testing.T) {
 	}
 }
 
+// TestSCIMCreateUserReadsTheUserNameTheWayTheWriteDoes pins that the duplicate
+// check a create runs and the write it then performs name the same address. A
+// SCIM body may carry the userName only in emails[], which the codec passes
+// through untrimmed, so a padded value named a member of this tenant while the
+// check looked for a different string: the create answered 201 Created, with a
+// Location, for an account it had not created and did not touch.
+func TestSCIMCreateUserReadsTheUserNameTheWayTheWriteDoes(t *testing.T) {
+	h := newHarness(t)
+	adminTok := h.adminLogin()
+	tenant := h.createOrg(adminTok, "acme")
+	super, err := h.authr.Authenticate(context.Background(), adminTok)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tok := h.scimToken(super, tenant)
+	const base = "/v1/scim/v2"
+	const address = "alice@acme.example"
+
+	if made := h.scim("POST", base+"/Users", tok, `{"userName":"`+address+`","active":true}`); made.code != http.StatusCreated {
+		t.Fatalf("create = %d %s", made.code, made.raw)
+	}
+
+	// The same address, padded and carried in emails[] — the field the codec does
+	// not trim — against the plain duplicate, which is the answer it must match.
+	padded := h.scim("POST", base+"/Users", tok,
+		`{"emails":[{"value":"  Alice@Acme.example  ","type":"work","primary":true}],"active":true}`)
+	plain := h.scim("POST", base+"/Users", tok, `{"userName":"`+address+`","active":true}`)
+	if padded.code == http.StatusCreated {
+		t.Errorf("padded duplicate = 201 %s, want no 201: the route reported Created for an account it did not create", padded.raw)
+	}
+	if padded.code != plain.code || padded.body["scimType"] != plain.body["scimType"] || padded.body["detail"] != plain.body["detail"] {
+		t.Errorf("padded duplicate answered %d/%v/%v and the plain one %d/%v/%v; surrounding space must not change which address a create names",
+			padded.code, padded.body["scimType"], padded.body["detail"], plain.code, plain.body["scimType"], plain.body["detail"])
+	}
+	if padded.code != http.StatusConflict || padded.body["scimType"] != scim.TypeUniqueness {
+		t.Errorf("padded duplicate = %d scimType=%v, want 409 uniqueness", padded.code, padded.body["scimType"])
+	}
+	if loc := padded.hdr.Get("Location"); loc != "" {
+		t.Errorf("padded duplicate carried Location %q, want none: nothing was created", loc)
+	}
+	// And the roster still holds one account for the address, not two.
+	listed := h.scim("GET", base+"/Users?filter="+url.QueryEscape(`userName eq "`+address+`"`), tok, "")
+	if total(listed) != 1 {
+		t.Errorf("roster holds %v accounts for the address, want 1", listed.body["totalResults"])
+	}
+}
+
 func total(r scimResp) int {
 	if v, ok := r.body["totalResults"].(float64); ok {
 		return int(v)

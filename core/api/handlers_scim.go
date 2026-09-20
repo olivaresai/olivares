@@ -149,7 +149,10 @@ func (s *Server) scimListUsers(w http.ResponseWriter, r *http.Request) {
 			if attr == "externalid" {
 				col = "external_id"
 			} else {
-				lookup = strings.ToLower(strings.TrimSpace(val))
+				// The same reading of an address the create and the write use, so a
+				// filter, a duplicate check and a provision never disagree about
+				// which account a userName names.
+				lookup = auth.SCIMUserNameKey(val)
 			}
 			u, found, err := s.authr.SCIMFindMember(r.Context(), tenant, col, lookup)
 			if err != nil {
@@ -209,15 +212,18 @@ func (s *Server) scimCreateUser(w http.ResponseWriter, r *http.Request) {
 	// This is the quick answer, not the boundary. SCIMProvisionUser refuses a taken
 	// address itself — including one held by an account outside this tenant, which
 	// this lookup deliberately cannot see — and refuses it with the same 409, so
-	// the two are one answer to the caller.
-	if _, found, err := s.authr.SCIMFindMember(r.Context(), tenant, "email", strings.ToLower(in.UserName)); err != nil {
+	// the two are one answer to the caller. The key comes from the same function
+	// the write uses: a body that carries the userName in emails[] reaches here
+	// untrimmed, and a check that read it differently would pass over the account
+	// the write then finds.
+	if _, found, err := s.authr.SCIMFindMember(r.Context(), tenant, "email", auth.SCIMUserNameKey(in.UserName)); err != nil {
 		s.scimInternal(w, r, err)
 		return
 	} else if found {
 		writeSCIMError(w, scim.NewError(http.StatusConflict, scim.TypeUniqueness, "a user with this userName already exists"))
 		return
 	}
-	u, _, err := s.authr.SCIMProvisionUser(r.Context(), p, tenant, scimInput(in))
+	u, created, err := s.authr.SCIMProvisionUser(r.Context(), p, tenant, scimInput(in))
 	if err != nil {
 		if errors.Is(err, store.ErrConflict) {
 			writeSCIMError(w, scim.NewError(http.StatusConflict, scim.TypeUniqueness, "a user with this userName already exists"))
@@ -231,8 +237,16 @@ func (s *Server) scimCreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	usersURL := scimUsersURL(r)
-	w.Header().Set("Location", usersURL+"/"+u.ID.String())
-	writeSCIM(w, http.StatusCreated, scim.EncodeUser(u, usersURL))
+	// 201 and a Location describe a resource this request made. If the membership
+	// appeared between the check above and the write, the verb returns the stored
+	// account untouched, and saying Created of it would be a claim about work that
+	// did not happen.
+	status := http.StatusOK
+	if created {
+		w.Header().Set("Location", usersURL+"/"+u.ID.String())
+		status = http.StatusCreated
+	}
+	writeSCIM(w, status, scim.EncodeUser(u, usersURL))
 }
 
 func (s *Server) scimGetUser(w http.ResponseWriter, r *http.Request) {
