@@ -11,13 +11,16 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"syscall"
 	"testing"
 	"time"
+	"unicode"
 
 	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
 	"github.com/olivaresai/olivares/cmd/olivares/internal/localinstall"
+	"github.com/olivaresai/olivares/cmd/olivares/internal/termrender"
 	"github.com/olivaresai/olivares/core/dr"
 )
 
@@ -740,22 +743,288 @@ func TestUpgradedCustomEstateSurvivesDoctorPlanPreservePurge(t *testing.T) {
 	}
 }
 
-// planRow reports whether the uninstall plan has ONE line carrying all three cells,
-// in order. A row split across two lines, or a verdict that moved to another path,
-// fails it — which is what the callers are actually asking about.
-func planRow(out, action, role, path string) bool {
-	for _, line := range strings.Split(out, "\n") {
-		rest := line
-		ok := true
-		for _, cell := range []string{action, role, path} {
-			i := strings.Index(rest, cell)
-			if i < 0 {
-				ok = false
+// TestUninstallPlanRowReadsWholeCellsInTheirColumns is the regression for the
+// predicate the uninstall plan assertions in this package rest on.
+//
+// It exists because a predicate that splits a row on a run of spaces reads the
+// wrong column twice over, and both shapes are ones this planner prints. An
+// EMPTY cell contributes only padding, so `remove` + no role + PATH
+// `system-user` collapses to `remove        system-user` and answers a request
+// for the identity row that was never planned. And a workspace path may hold
+// two consecutive spaces — localinstall's cleanAbsolutePath admits them — so
+// `/mnt/project  beta` splits, satisfying a request for the different path
+// `/mnt/project` while failing a request for its own.
+//
+// Every fixture is rendered by termrender rather than typed out, and each case
+// names something the fixture must have printed, so none of them is vacuous.
+func TestUninstallPlanRowReadsWholeCellsInTheirColumns(t *testing.T) {
+	// The environment is answered rather than read: resolveWidth consults COLUMNS,
+	// and a value inherited from the runner would decide between the table and its
+	// record fallback rather than this test.
+	render := func(rows ...[]string) string {
+		var out strings.Builder
+		termrender.New(&out, termrender.Options{
+			LookupEnv: func(string) (string, bool) { return "", false },
+		}).Table(termrender.Table{
+			Header: []string{"action", "role", "path", "note"},
+			Rows:   rows,
+		})
+		return out.String()
+	}
+	estate := render(
+		[]string{"stop-disable", "service", "systemd:olivares", ""},
+		[]string{"keep", "workspace", "/mnt/workspaces", ""},
+		[]string{"remove", "system-user", "olivares", ""})
+	// Two paths outside ASCII, each with an ASCII identity row BENEATH it. Visible
+	// columns and byte offsets part company at the first multibyte rune, so a row
+	// read at byte offsets is cut inside the encoding, fails the rebuild — and
+	// takes every row after it with it. The spellings are escaped rather than typed
+	// so the difference between them is in the source.
+	accented := render(
+		[]string{"keep", "workspace", "/mnt/caf\u00e9", ""}, // precomposed: 9 columns, 10 bytes
+		[]string{"remove", "system-user", "olivares", ""})
+	combining := render(
+		[]string{"keep", "workspace", "/mnt/cafe\u0301", ""}, // decomposed: 9 columns, 11 bytes
+		[]string{"remove", "system-user", "olivares", ""})
+
+	for _, tc := range []struct {
+		name    string
+		out     string
+		want    []string
+		printed string
+		match   bool
+	}{
+		{"the kept workspace, action role and path", estate,
+			[]string{"keep", "workspace", "/mnt/workspaces"}, "", true},
+		{"the kept workspace, action and role", estate,
+			[]string{"keep", "workspace"}, "", true},
+		{"an empty role does not let the path answer for it",
+			render([]string{"remove", "", "system-user", ""}),
+			[]string{"remove", "system-user"}, "system-user", false},
+		{"a path holding two spaces matches itself",
+			render([]string{"keep", "workspace", "/mnt/project  beta", ""}),
+			[]string{"keep", "workspace", "/mnt/project  beta"}, "/mnt/project  beta", true},
+		{"a path holding two spaces is not its own prefix",
+			render([]string{"keep", "workspace", "/mnt/project  beta", ""}),
+			[]string{"keep", "workspace", "/mnt/project"}, "/mnt/project  beta", false},
+		{"a longer action that begins with the one asked for",
+			render([]string{"remove-tree", "system-user", "olivares", ""}),
+			[]string{"remove", "system-user"}, "remove-tree", false},
+		{"the workspace kept under a different path", estate,
+			[]string{"keep", "workspace", "/mnt/other"}, "/mnt/workspaces", false},
+		{"a verdict this plan did not reach", estate,
+			[]string{"remove", "workspace"}, "workspace", false},
+		{"a path outside ASCII matches its whole value", accented,
+			[]string{"keep", "workspace", "/mnt/caf\u00e9"}, "/mnt/caf\u00e9", true},
+		{"a path outside ASCII is not its truncation", accented,
+			[]string{"keep", "workspace", "/mnt/caf"}, "/mnt/caf\u00e9", false},
+		{"the ASCII row beneath a multibyte one is still read", accented,
+			[]string{"remove", "system-user"}, "/mnt/caf\u00e9", true},
+		{"a combining accent matches its whole value", combining,
+			[]string{"keep", "workspace", "/mnt/cafe\u0301"}, "/mnt/cafe\u0301", true},
+		// Two spellings of the same glyphs are two different paths, because they are
+		// two different paths in the manifest this table printed.
+		{"a combining accent is not the precomposed spelling", combining,
+			[]string{"keep", "workspace", "/mnt/caf\u00e9"}, "/mnt/cafe\u0301", false},
+		{"the ASCII row beneath a combining one is still read", combining,
+			[]string{"remove", "system-user"}, "/mnt/cafe\u0301", true},
+		{"the header is not a row", estate, []string{"action", "role"}, "ACTION", false},
+		{"nothing asked for", estate, nil, "workspace", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.printed != "" && !strings.Contains(tc.out, tc.printed) {
+				t.Fatalf("the fixture never printed %q, so this case proves nothing:\n%s", tc.printed, tc.out)
+			}
+			if got := planRow(tc.out, tc.want...); got != tc.match {
+				t.Errorf("planRow(%q) = %v, want %v, in:\n%s", tc.want, got, tc.match, tc.out)
+			}
+		})
+	}
+}
+
+// planColumns are the headings the uninstall plan prints, in order. The helpers
+// below anchor on them, because they are what fixes the column positions of
+// every row beneath.
+var planColumns = []string{"ACTION", "ROLE", "PATH", "NOTE"}
+
+// planRuneWidth is the renderer's own width model for the plain output these
+// helpers read: visibleWidth counts a combining Mn/Me mark as zero columns and
+// every other rune as one (termrender.go:203-228). Ranging over a string gives
+// the same decoding, an invalid byte included, which that function also counts
+// as one.
+//
+// Colour is off on this path — a Builder and a pipe are not terminals — so the
+// escape-sequence half of that contract cannot arise. If one ever did, the
+// columns would shift, the row would fail the rebuild below and be refused
+// rather than misread.
+func planRuneWidth(r rune) int {
+	if unicode.Is(unicode.Mn, r) || unicode.Is(unicode.Me, r) {
+		return 0
+	}
+	return 1
+}
+
+// planWidth is planRuneWidth over a whole cell.
+func planWidth(s string) int {
+	n := 0
+	for _, r := range s {
+		n += planRuneWidth(r)
+	}
+	return n
+}
+
+// planHeader returns the VISIBLE column each heading begins at, or nil if this
+// line is not the plan's header.
+//
+// Visible, not byte: Table measures and pads in columns, so a row holding one
+// multibyte cell puts every later column at a byte offset the ASCII header
+// cannot give. The headings hold no spaces, so a plain scan finds them.
+func planHeader(line string) []int {
+	var names []string
+	var starts []int
+	col, at, atCol := 0, -1, 0
+	for i, r := range line {
+		if r == ' ' {
+			if at >= 0 {
+				names = append(names, line[at:i])
+				starts = append(starts, atCol)
+				at = -1
+			}
+		} else if at < 0 {
+			at, atCol = i, col
+		}
+		col += planRuneWidth(r)
+	}
+	if at >= 0 {
+		names = append(names, line[at:])
+		starts = append(starts, atCol)
+	}
+	if !slices.Equal(names, planColumns) {
+		return nil
+	}
+	return starts
+}
+
+// planVisibleSlice returns the bytes of line covering visible columns [from,to),
+// whole runes only, with the padding removed. A negative to means "to the end".
+//
+// A zero-width mark stays with the rune it modifies: the slice only moves on at
+// a rune that occupies a column of its own.
+func planVisibleSlice(line string, from, to int) string {
+	col, start, end := 0, -1, len(line)
+	for i, r := range line {
+		w := planRuneWidth(r)
+		if w > 0 {
+			if to >= 0 && col >= to {
+				end = i
 				break
 			}
-			rest = rest[i+len(cell):]
+			if start < 0 && col >= from {
+				start = i
+			}
 		}
-		if ok {
+		col += w
+	}
+	if start < 0 {
+		return "" // the line was right-trimmed: this column is past its end
+	}
+	return strings.TrimRight(line[start:end], " ")
+}
+
+// planRowCells reads one line at the columns the header fixed.
+func planRowCells(line string, starts []int) []string {
+	cells := make([]string, len(starts))
+	for c := range starts {
+		to := -1
+		if c+1 < len(starts) {
+			// The next column begins two spaces after this one ends.
+			to = starts[c+1] - 2
+		}
+		cells[c] = planVisibleSlice(line, starts[c], to)
+	}
+	return cells
+}
+
+// planRowLine rebuilds what those cells would print at those columns. A line
+// that does not come back is not a row of this table and is not read as one,
+// which matters here because this output is a whole CLI run and not just the
+// table.
+func planRowLine(cells []string, starts []int) string {
+	var line strings.Builder
+	col := 0
+	for c, cell := range cells {
+		if pad := starts[c] - col; pad > 0 {
+			line.WriteString(strings.Repeat(" ", pad))
+			col += pad
+		} else if c > 0 && pad < 0 {
+			return "" // a cell wider than its column: not this table's row
+		}
+		line.WriteString(cell)
+		col += planWidth(cell)
+	}
+	return strings.TrimRight(line.String(), " ")
+}
+
+// planRows reads the printed plan back into rows, cell by cell.
+//
+// The columns come from the HEADER, and they have to: a run of spaces inside a
+// row is NOT a column boundary. An empty cell contributes only padding, which
+// merges with the separator and shifts every later cell one column left, and a
+// path may hold two consecutive spaces — localinstall's cleanAbsolutePath admits them and the renderer
+// prints them verbatim. Either shape makes a whitespace split read the wrong
+// column.
+//
+// The record fallback a narrow terminal triggers prints one field per line and
+// no header, so it yields no rows and every request is refused.
+func planRows(out string) [][]string {
+	lines := strings.Split(out, "\n")
+	for i, line := range lines {
+		starts := planHeader(line)
+		if starts == nil {
+			continue
+		}
+		var rows [][]string
+		for _, row := range lines[i+1:] {
+			if strings.TrimSpace(row) == "" {
+				break
+			}
+			cells := planRowCells(row, starts)
+			if planRowLine(cells, starts) != strings.TrimRight(row, " ") {
+				break
+			}
+			rows = append(rows, cells)
+		}
+		return rows
+	}
+	return nil
+}
+
+// planRow reports whether the plan printed ONE row whose leading cells are
+// exactly the ones given: the action, then the role, then the path or identity
+// when the caller asks for one. Only the padding Table adds is ignored, so a
+// longer action or role that merely begins with the request, a value found in
+// another column, the cells swapped and a row broken into a record block are all
+// refused. Column widths move with the fixture and do not matter.
+//
+// Cells are compared as BYTES. Two spellings of the same accented path are two
+// different paths here, because they are two different paths in the manifest
+// this table printed; nothing is normalised on the way through.
+//
+// Asking for nothing is false: an empty question has no answer, and true would
+// make a typo look like a pass.
+//
+// THE ONE DISTINCTION THIS CANNOT MAKE is the presentation's and not the
+// predicate's: a cell whose content ENDS in spaces prints exactly like the same
+// content without them, because the padding is spaces too. A path of "/srv/x  "
+// is accepted for a request of "/srv/x". Interior spaces ARE distinguished. A
+// test that has to see a trailing space reads BuildPlan's Items, which carry the
+// path unrendered, instead of this table.
+func planRow(out string, cells ...string) bool {
+	if len(cells) == 0 {
+		return false
+	}
+	for _, row := range planRows(out) {
+		if len(row) >= len(cells) && slices.Equal(row[:len(cells)], cells) {
 			return true
 		}
 	}

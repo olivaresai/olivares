@@ -177,7 +177,7 @@ cp "$FIXTURE/${url##*/}" "$dest"
 			}
 			if out, err := runCLI(t, "uninstall", "--plan", "--data-dir", data); err != nil {
 				t.Fatalf("the CLI rejected the manifest the upgrade produced: %v\n%s", err, out)
-			} else if !planRow(out, "keep", "workspace", "") || !strings.Contains(out, "dropin") {
+			} else if !planRow(out, "keep", "workspace") || !strings.Contains(out, "dropin") {
 				t.Errorf("the plan after the upgrade does not disclose the carried records:\n%s", out)
 			}
 		})

@@ -121,6 +121,7 @@ var topLevelNextCommands = map[string]string{
 	"notify":          "olivares notify destinations",
 	"observability":   "olivares observability ingestion-health",
 	"orchestration":   "olivares orchestration graph",
+	"policy":          "olivares policy replay --decision-id <decision-id>",
 	"posture":         "olivares posture export",
 	"provider":        "olivares provider ls",
 	"readyz":          "olivares doctor",

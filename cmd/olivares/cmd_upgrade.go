@@ -550,10 +550,15 @@ func runUpgrade(cmd *cobra.Command, o *upgradeOptions) error {
 	return renderOut(cmd, func(w io.Writer) error {
 		fmt.Fprintf(w, "\ninstalled: %s is now %s\n", target, newVer)
 		fmt.Fprintf(w, "rollback: the previous binary is backed up at %s (restore it to revert)\n", backup)
+		// These two lines are a pinned contract, not a presentation choice: VER-06
+		// lot L4 compares this pane whole because two mutants deleted the pair and
+		// walked through a `Contains` witness. The conversion onto the renderer
+		// (327260316a) refolded the sentence into three lines and dropped the dash,
+		// which is a word change the renderer's own design allows for six error
+		// constructors and for nothing else. The seam stays; the bytes go back.
 		r := renderTo(w)
-		r.Next("restart the service to run the new binary")
-		r.Line("      for zero downtime use a drain + handover (single node) or a rolling restart")
-		r.Line("      (HA); see docs/UPGRADE-AND-ROLLBACK.md.")
+		r.Next("restart the service to run the new binary — for zero downtime use a drain +")
+		r.Line("      handover (single node) or a rolling restart (HA); see docs/UPGRADE-AND-ROLLBACK.md.")
 		if o.enterprise {
 			_, werr := fmt.Fprintln(w, "      then `olivares enterprise enable <preset>` to activate the add-ons.")
 			return werr

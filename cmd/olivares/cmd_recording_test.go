@@ -74,8 +74,9 @@ func TestRecordingVerifyExitsZeroOnAnIntactChain(t *testing.T) {
 	if err != nil {
 		t.Fatalf("an intact chain must exit 0, got %v (code %d)", err, exitcode.From(err))
 	}
-	if !strings.Contains(out, "ok") {
-		t.Errorf("the verdict must be printed, got:\n%s", out)
+	if got, named := lot3Field(out, "ok"); !named || got != "true" {
+		t.Errorf("the verdict must be printed as the engine sent it: OK = %q (named=%v), want \"true\", got:\n%s",
+			got, named, out)
 	}
 }
 
@@ -193,7 +194,15 @@ func TestRecordingReplayNamesATruncatedLedgerOnStderr(t *testing.T) {
 	if !strings.Contains(errOut, "TRUNCATED") {
 		t.Errorf("stderr must say the ledger window is incomplete, got:\n%s", errOut)
 	}
-	if strings.Contains(out, "TRUNCATED") {
+	// The FIELD belongs on stdout — it is the engine's own ledger_truncated, and a
+	// reviewer reading the data pane has to see it — while the SENTENCE above is
+	// the operator warning and belongs on stderr. Asserting the word TRUNCATED was
+	// absent from stdout asserted both at once, and stopped being able to tell them
+	// apart the day the renderer upper-cased LEDGER_TRUNCATED.
+	if got, named := lot3Field(out, "ledger_truncated"); !named || got != "true" {
+		t.Errorf("stdout must still carry the truncation FIELD: %q (named=%v), got:\n%s", got, named, out)
+	}
+	if strings.Contains(out, "not the whole audit trail") {
 		t.Errorf("the warning leaked into stdout:\n%s", out)
 	}
 }

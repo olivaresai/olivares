@@ -167,7 +167,11 @@ func bindAnnounceClient(timeout time.Duration) (*http.Client, *http.Transport) {
 // runBindAnnounce runs runEngine to completion. While it is in flight a probe asks
 // the main HTTP address for /healthz; the first real response marks the run as
 // answered, runs onServing (if any) and then cancels the run so it drains through the
-// unchanged DS1 path. A run that never serves returns on its own.
+// unchanged DS1 path. onServing is the last window the test owns the live listeners:
+// waitAndShutdown's Shutdown closes the listener and drops sockets Serve has not yet
+// Accepted, so a connection queued during the announcement must be read here, not
+// after runEngine returns. The probe's 200 is a different connection. A run that
+// never serves returns on its own.
 func runBindAnnounce(t *testing.T, opts serveOptions, out io.Writer, announce func(*bindAnnounceRun) func(context.Context, io.Writer, *engine, consoleAddress) error, onServing func(base string)) bindAnnounceResult {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
@@ -355,15 +359,20 @@ func TestServeBindAnnounceListenersBoundBeforeAnnouncement(t *testing.T) {
 	out := &bindAnnounceBuffer{}
 
 	var (
-		held         net.Conn
 		httpBound    bool
 		grpcBound    bool
 		earlyReply   bool
 		earlyReadErr error
 	)
+	// Ownership: announce sends the queued client conn; onServing receives it while
+	// Serve is still running. A post-return read races waitAndShutdown closing the
+	// listener (hosted red: empty-line EOF after the probe's 200 canceled the run).
+	queued := make(chan net.Conn, 1)
 	t.Cleanup(func() {
-		if held != nil {
-			_ = held.Close()
+		select {
+		case c := <-queued:
+			_ = c.Close()
+		default:
 		}
 	})
 	announce := func(run *bindAnnounceRun) func(context.Context, io.Writer, *engine, consoleAddress) error {
@@ -376,17 +385,31 @@ func TestServeBindAnnounceListenersBoundBeforeAnnouncement(t *testing.T) {
 			c, err := net.DialTimeout("tcp", opts.listen, 2*time.Second)
 			if err == nil {
 				httpBound = true
-				held = c
 				_, _ = io.WriteString(c, "GET /healthz HTTP/1.1\r\nHost: bind-announce\r\nConnection: close\r\n\r\n")
 				_ = c.SetReadDeadline(time.Now().Add(bindAnnounceProbeWait))
 				n, rerr := c.Read(make([]byte, 1))
 				earlyReply, earlyReadErr = n > 0, rerr
 				_ = c.SetReadDeadline(time.Time{})
+				queued <- c
 			}
 			return announceSetup(ctx, w, eng, addr, true)
 		}
 	}
-	res := runBindAnnounce(t, opts, out, announce, nil)
+	var (
+		queuedLine string
+		queuedErr  error
+		queuedRead bool
+	)
+	res := runBindAnnounce(t, opts, out, announce, func(string) {
+		select {
+		case c := <-queued:
+			defer func() { _ = c.Close() }()
+			_ = c.SetReadDeadline(time.Now().Add(10 * time.Second))
+			queuedLine, queuedErr = readBindAnnounceStatusLine(c)
+			queuedRead = true
+		default:
+		}
+	})
 
 	if !httpBound {
 		t.Error("the main HTTP address refused a connection inside the announcement: it was not bound before announcing")
@@ -410,12 +433,11 @@ func TestServeBindAnnounceListenersBoundBeforeAnnouncement(t *testing.T) {
 	if !strings.Contains(out.String(), "FIRST-BOOT SETUP") || !bindAnnounceTokenExists(t, dataDir) {
 		t.Error("the successful run did not print the first-boot banner or persist its token hash")
 	}
-	if held != nil {
-		_ = held.SetReadDeadline(time.Now().Add(10 * time.Second))
-		line, err := readBindAnnounceStatusLine(held)
-		if err != nil || !strings.HasPrefix(line, "HTTP/1.1 ") {
-			t.Errorf("the connection queued during the announcement was not answered after launch: line=%q err=%v", line, err)
-		}
+	if httpBound && !queuedRead {
+		t.Error("the connection queued during the announcement was not handed to the post-launch reader before fixture cancel")
+	}
+	if queuedRead && (queuedErr != nil || !strings.HasPrefix(queuedLine, "HTTP/1.1 ")) {
+		t.Errorf("the connection queued during the announcement was not answered after launch: line=%q err=%v", queuedLine, queuedErr)
 	}
 	requireBindAnnounceRebindable(t, "successful run", opts.listen, opts.grpcListen)
 }
