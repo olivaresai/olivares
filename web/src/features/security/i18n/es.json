@@ -1,6 +1,6 @@
 {
   "title": "Seguridad y forense",
-  "description": "Hallazgos de guardrail, la postura de enforcement, la cola de anomalías y el forense de incidentes con evidencia a prueba de manipulación. El plano es detective por defecto: registra, no bloquea por su cuenta salvo que el enforcement esté habilitado y gobernado.",
+  "description": "Hallazgos de guardrail, la postura de enforcement, la cola de anomalías y el forense de incidentes con evidencias cuya manipulación puede detectarse. El plano es detective por defecto: registra, no bloquea por su cuenta salvo que el enforcement esté habilitado y gobernado.",
   "tabs": {
     "safety": "Postura de seguridad",
     "findings": "Hallazgos",

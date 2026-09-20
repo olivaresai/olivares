@@ -43,6 +43,7 @@ import { LiveDot, RelTimeLabel, useLiveStream } from '@/features/shared'
 import { ApiError } from '@/lib/api/errors'
 import { useAuth } from '@/lib/auth/context'
 import { formatInt, formatMicroUsd, formatTokens } from '@/lib/format'
+import { useIsPhone } from '@/lib/hooks/use-is-phone'
 import { useValidatedUrlState } from '@/lib/hooks/use-url-state'
 import { NamesUnreadNotice, UrlStateNotice } from '@/features/shared'
 import { cn } from '@/lib/utils'
@@ -398,6 +399,10 @@ function Inner({
   const canRunRead = can('sessions:run:read')
   const canRunWrite = can('sessions:run:write')
   const canProfileRead = can('sessions:profile:read')
+
+  // The three column widths below are declared only where the region can hold them;
+  // the shell's own breakpoint decides, so the table and the chrome collapse together.
+  const phone = useIsPhone()
 
   const [tab, setTab] = useState('sessions')
   const [state, setState] = useState<string>(ALL)
@@ -1037,6 +1042,22 @@ function Inner({
     () => [
       {
         id: 'session',
+        /* ⛔ THE WIDTH IS DECLARED BECAUSE THE TABLE IS FIXED. Under `table-fixed` a
+           column that claims nothing is handed an equal share of the table, so the
+           name — the fact an operator reads the row by — was given exactly what a
+           two-badge state cell gets. Three columns claim their own: this one the
+           widest, because it carries the label and, on `title`, the reference. The
+           other seven share what is left, which is the behaviour the fixed layout
+           was chosen for. (150 is TanStack's default and means "unset", so it is
+           not a value any column here declares.)
+
+           ⛔ AND A CLAIM ONLY FITS WHERE THERE IS ROOM. 320 + 140 + 128 is more than a
+           390 px screen has to give, and a fixed table whose claims exceed its region
+           leaves the other seven columns nothing and grows past the region into its
+           horizontal scroll. Below the shell's breakpoint the three claim nothing and
+           the ten share the region, which is what this table did before any width was
+           declared. What either layout looks like is a browser measurement. */
+        size: phone ? undefined : 320,
         // Searched by label AND by every reference: naming a row after the run an
         // operator typed must not make it unfindable by the session id the ledger,
         // the API and any saved deep link use.
@@ -1145,6 +1166,9 @@ function Inner({
       },
       {
         id: 'state',
+        // Two badges on one line, and they never wrap: the width is what the pair
+        // needs, not a share of the table — above the breakpoint, where it fits.
+        size: phone ? undefined : 140,
         accessorFn: (s) => s.live?.cc_state ?? primaryRun(s.runs)?.state ?? '',
         header: t('cols.state'),
         cell: ({ row }) => {
@@ -1241,19 +1265,28 @@ function Inner({
       },
       {
         id: 'lastSeen',
+        // The phrase is a relative time, and 8 rem is what it takes in the longest
+        // of the seven languages. It used to be written as a `max-width` on the
+        // cell, which fixed layout never consults — the column's own size is the
+        // declaration that reaches the layout, above the breakpoint.
+        size: phone ? undefined : 128,
         accessorFn: (s) => s.lastActivityMs,
         header: t('cols.lastSeen'),
+        meta: { className: 'min-w-0' },
         cell: ({ row }) =>
           row.original.lastActivityMs > 0 ? (
             <RelTimeLabel
+              className="block truncate"
               ts={new Date(row.original.lastActivityMs).toISOString()}
             />
           ) : (
-            <span className="text-muted-foreground">—</span>
+            <span className="truncate text-muted-foreground" title="—">
+              —
+            </span>
           ),
       },
     ],
-    [t, lang, originUnknown, profileNameByRef],
+    [t, lang, originUnknown, phone, profileNameByRef],
   )
 
   /**
@@ -1692,6 +1725,8 @@ function Inner({
             </div>
 
             <DataTable
+              className="min-w-0"
+              tableClassName="table-fixed"
               columns={columns}
               data={rows}
               isLoading={liveQuery.isLoading || runsQuery.isLoading}

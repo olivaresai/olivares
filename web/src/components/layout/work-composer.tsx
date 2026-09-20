@@ -45,7 +45,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { IdCard, Layers, Plus, Send } from 'lucide-react'
-import { useState, type KeyboardEvent } from 'react'
+import {
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type ReactNode,
+} from 'react'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
 import { Button } from '@/components/ui/button'
@@ -61,6 +66,7 @@ import {
 import { toast } from '@/components/ui/toaster'
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
 import { useAuthBoundary } from '@/features/agentops/auth-boundary'
+import '@/features/agentops/i18n'
 import { launchFailureMessage } from '@/features/agentops/launch-readiness'
 import { sessionTurnBody } from '@/features/agentops/session-turn'
 import type { CreateRunRequest, RunDTO } from '@/features/agentops/types'
@@ -80,6 +86,53 @@ const NO_WORKSPACE = '__none__'
 /** The page the two pickers ask for. Both planes cap far above this. */
 const PAGE = 200
 
+/**
+ * THE COMPOSER'S ADVANCED DISCLOSURE — a native `<details>/<summary>`, so open
+ * and closed are already in the accessibility tree. Escape closes it and returns
+ * focus to the summary; Space and Enter keep the browser's own toggle.
+ *
+ * ⛔ AND ONE ESCAPE CLOSES ONE LAYER. The two pickers are children of this
+ *    disclosure, and a picker's list is a portal — which keeps it in this React
+ *    tree, so its keydown arrives here too. The layer that already answered the
+ *    key marks the event handled; without asking, this handler closed the panel
+ *    under a list the operator had just dismissed, and one press undid two
+ *    gestures. Whatever spoke for the key first keeps it.
+ */
+function AdvancedDisclosure({
+  children,
+  label,
+}: {
+  children: ReactNode
+  label: string
+}) {
+  const detailsRef = useRef<HTMLDetailsElement>(null)
+  const summaryRef = useRef<HTMLElement>(null)
+
+  function onKeyDown(event: KeyboardEvent<HTMLDetailsElement>) {
+    if (event.key !== 'Escape') return
+    if (event.defaultPrevented) return
+    const details = detailsRef.current
+    if (!details?.open) return
+    event.preventDefault()
+    event.stopPropagation()
+    details.open = false
+    summaryRef.current?.focus()
+  }
+
+  return (
+    <details ref={detailsRef} className="shrink-0" onKeyDown={onKeyDown}>
+      <summary
+        ref={summaryRef}
+        data-testid="composer-advanced"
+        className="cursor-pointer list-none text-caption text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden"
+      >
+        {label}
+      </summary>
+      {children}
+    </details>
+  )
+}
+
 /** One of the three facts the scope line states, in the order it states them. */
 type ScopePart = { label: string; value: string; identifier: boolean }
 
@@ -94,6 +147,26 @@ type ScopeInput = {
   workspaceId?: string | null
   /** Full environment reference, for `title=` only. */
   environmentId?: string | null
+}
+
+/** The profiles table's words for a local vs foreign environment. The
+ * identifier is the fallback only when no profile is in hand to name it. */
+function environmentFace(
+  t: TFunction,
+  profile: { local_environment: boolean; environment_ref: string } | undefined,
+  fallbackRef?: string | null,
+): Pick<ScopeInput, 'environment' | 'environmentId'> {
+  const environmentId = profile?.environment_ref || fallbackRef || null
+  if (profile?.local_environment) {
+    return { environment: t('nav:scope.thisNode'), environmentId }
+  }
+  if (profile) {
+    return {
+      environment: t('agentops:profiles.environment.foreign'),
+      environmentId,
+    }
+  }
+  return { environment: fallbackRef || null, environmentId }
 }
 
 /**
@@ -447,15 +520,11 @@ export function WorkComposer({
     const attachedScope = {
       workspace: attachedWorkspace?.name || attached.run.workspace_ref || null,
       workspaceId: attached.run.workspace_ref || null,
-      environment: attachedProfile?.local_environment
-        ? t('nav:scope.thisNode')
-        : attachedProfile?.environment_ref ||
-          attached.run.provider_environment_ref ||
-          null,
-      environmentId:
-        attachedProfile?.environment_ref ||
-        attached.run.provider_environment_ref ||
-        null,
+      ...environmentFace(
+        t,
+        attachedProfile,
+        attached.run.provider_environment_ref || null,
+      ),
     }
     // ⛔ THE REFUSAL IS THE CONTROLS, NOT THE FACTS — and it used to be both. This
     //    return sat ABOVE the attached branch, so a principal with `sessions:live:read`
@@ -515,13 +584,7 @@ export function WorkComposer({
               the pane — and the pane is `overflow-hidden`, so the hint and the scope
               line were cut off mid-word. Spanning the box it cannot leave the pane,
               whatever it contains. */}
-          <details className="shrink-0">
-            <summary
-              data-testid="composer-advanced"
-              className="cursor-pointer list-none text-caption text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden"
-            >
-              {t('nav:launcher.advanced')}
-            </summary>
+          <AdvancedDisclosure label={t('nav:launcher.advanced')}>
             <div className="absolute inset-x-0 bottom-full z-20 mb-1 flex flex-col gap-2 rounded-md border border-border bg-elevated p-2 shadow-lg">
               <p className="text-caption text-muted-foreground">
                 {t('nav:launcher.advancedHint')}
@@ -554,7 +617,7 @@ export function WorkComposer({
                   left for it. One gesture, and it is the same line home shows. */}
               <ScopeLine {...attachedScope} />
             </div>
-          </details>
+          </AdvancedDisclosure>
           <Button
             type="button"
             variant="primary"
@@ -596,11 +659,9 @@ export function WorkComposer({
     // The environment is the PROFILE's, because that is what the launch will run in.
     // With no profile chosen there is none to report, and the line says so rather than
     // borrowing a value from somewhere else on screen. A local environment is this
-    // node, not its opaque reference.
-    environment: profile?.local_environment
-      ? t('nav:scope.thisNode')
-      : profile?.environment_ref || null,
-    environmentId: profile?.environment_ref || null,
+    // node; a known foreign one is the profiles table's word, not its opaque
+    // reference. The identifier stays on title=.
+    ...environmentFace(t, profile),
   }
 
   const pickers = (
@@ -656,13 +717,7 @@ export function WorkComposer({
    *    verb. Nothing is removed: it is one gesture away, and the scope is on the box.
    */
   const advanced = (
-    <details className="shrink-0">
-      <summary
-        data-testid="composer-advanced"
-        className="cursor-pointer list-none text-caption text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden"
-      >
-        {t('nav:launcher.advanced')}
-      </summary>
+    <AdvancedDisclosure label={t('nav:launcher.advanced')}>
       <div
         className={cn(
           'absolute inset-x-0 z-20 flex flex-col gap-2 rounded-md border border-border bg-elevated p-2 shadow-lg',
@@ -672,7 +727,7 @@ export function WorkComposer({
         <div className="flex flex-col gap-2">{pickers}</div>
         {scope}
       </div>
-    </details>
+    </AdvancedDisclosure>
   )
 
   return (

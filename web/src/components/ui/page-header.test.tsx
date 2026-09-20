@@ -225,6 +225,32 @@ describe('PageHeader', () => {
     expect(titleGroup.querySelector('h1')!.className).toContain('shrink-0')
   })
 
+  it('the controls give way before the screen name does', () => {
+    const { container } = render(
+      <PageHeader
+        title="Audit ledger"
+        description="The tamper-evident evidence chain."
+        actions={<Button>Filters</Button>}
+        primaryAction={<Button>Export</Button>}
+      />,
+    )
+    const h1 = screen.getByRole('heading', {
+      level: 1,
+      name: 'Audit ledger',
+    })
+    expect(h1.className.split(/\s+/)).toEqual(
+      expect.arrayContaining(['shrink-0', 'whitespace-nowrap']),
+    )
+    expect(h1.className.split(/\s+/)).not.toContain('truncate')
+    const titleGroup = h1.parentElement as HTMLElement
+    expect(titleGroup.className.split(/\s+/)).not.toContain('overflow-hidden')
+    expect(titleGroup.className.split(/\s+/)).not.toContain('min-w-0')
+    const actions = container.querySelector('[data-slot="page-actions"]')!
+      .parentElement as HTMLElement
+    expect(actions.className.split(/\s+/)).toContain('min-w-0')
+    expect(actions.className.split(/\s+/)).not.toContain('shrink-0')
+  })
+
   it('does not render the deprecated icon chip', () => {
     // 33 views still pass `icon`. It compiles and it paints nothing: 36 px of every
     // route's viewport for a third copy of a glyph the rail and the breadcrumb carry.
@@ -293,6 +319,10 @@ describe('PageHeader — below sm the controls collapse, and nothing leaves', ()
       '[data-slot="page-actions"]',
     ) as HTMLElement
     expect(panel.className.split(/\s+/)).toContain('flex-row')
+    // The row wraps and never scrolls: at 1024 px a seven-control screen put three actions
+    // behind a scrollbar when this said `overflow-x-auto` (measured 2026-09-19).
+    expect(panel.className.split(/\s+/)).toContain('flex-wrap')
+    expect(panel.className.split(/\s+/)).not.toContain('overflow-x-auto')
     expect(panel.className.split(/\s+/)).not.toContain('hidden')
   })
 
@@ -319,7 +349,11 @@ describe('PageHeader — below sm the controls collapse, and nothing leaves', ()
     )
     const row = titleRow(container)
     const titleGroup = row.children[0] as HTMLElement
-    expect(titleGroup.className.split(/\s+/)).toContain('overflow-hidden')
+    // The name is not clipped here; the description still truncates on its own.
+    expect(titleGroup.className.split(/\s+/)).not.toContain('overflow-hidden')
+    expect(titleGroup.querySelector('p')!.className.split(/\s+/)).toContain(
+      'truncate',
+    )
     await user.click(screen.getByTestId('page-actions-toggle'))
     const panel = container.querySelector(
       '[data-slot="page-actions"]',
@@ -373,7 +407,7 @@ describe('PageHeader on a row shared with a tab strip', () => {
     )
   })
 
-  it('the shared row never lets the header fall below its name and its actions', () => {
+  it('the shared row never lets the header fall below its name', () => {
     const classes = WORK_CHROME_ROW.split(/\s+/)
     expect(classes).toContain('grid')
     expect(classes).toContain(

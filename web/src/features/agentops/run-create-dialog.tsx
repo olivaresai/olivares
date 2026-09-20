@@ -287,312 +287,331 @@ export function RunCreateDialog({
       open={open}
       onOpenChange={(o) => (create.isPending ? undefined : onOpenChange(o))}
     >
-      <DialogContent className="max-w-lg">
+      {/* ONE SCROLL OWNER, AND IT IS THIS DIALOG'S. DialogContent is fixed and
+          centred with no height bound (components/ui/dialog.tsx), so a fully
+          expanded New session form grew past the viewport with no scrolling
+          ancestor and the footer sat below the fold — unreachable by pointer,
+          which is how the keyboard path came to be the only way to submit. The
+          bound lives here rather than on the shared primitive: 99 files consume
+          DialogContent, and a height rule applied to all of them is a redesign,
+          not this repair. Header and footer stay pinned so Cancel, Close and
+          Request launch are always on screen; only the field region scrolls. */}
+      <DialogContent className="flex max-h-[calc(100dvh-2rem)] max-w-lg flex-col">
         <DialogHeader>
           <DialogTitle>{t('create.title')}</DialogTitle>
           <DialogDescription>{t('create.description')}</DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={onSubmit} className="flex flex-col gap-3">
-          <Field label={t('create.name')}>
-            <Input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder={t('create.namePlaceholder')}
-            />
-          </Field>
-
-          <div className="grid grid-cols-2 gap-3">
-            <Field label={t('create.transport')}>
-              <Select
-                value={transport}
-                onValueChange={(v) => setTransport(v as Transport)}
-              >
-                <SelectTrigger aria-label={t('create.transport')}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="stream-json">
-                    {t('transport.stream-json')}
-                  </SelectItem>
-                  <SelectItem value="remote-control">
-                    {t('transport.remote-control')}
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </Field>
-
-            <Field label={t('create.permissionMode')}>
-              <Select
-                value={permissionMode}
-                onValueChange={(v) => setPermissionMode(v as PermissionMode)}
-              >
-                <SelectTrigger aria-label={t('create.permissionMode')}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {PERMISSION_MODES.map((m) => (
-                    <SelectItem key={m} value={m}>
-                      {t(`permissionMode.${m}`)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <Field label={t('create.effort')}>
-              <Select value={effort} onValueChange={setEffort}>
-                <SelectTrigger aria-label={t('create.effort')}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={DEFAULT_EFFORT}>
-                    {t('create.effortDefault')}
-                  </SelectItem>
-                  {EFFORT_LEVELS.map((e) => (
-                    <SelectItem key={e} value={e}>
-                      {t(`effort.${e}`)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
-
-            <Field label={t('create.model')}>
+        <form
+          onSubmit={onSubmit}
+          className="flex min-h-0 flex-1 flex-col gap-3"
+        >
+          {/* min-h-0 lets this shrink inside the flex column; the negative margin
+              with matching padding keeps focus rings from clipping at the edge. */}
+          <div className="-mx-1 flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-1">
+            <Field label={t('create.name')}>
               <Input
-                value={model}
-                onChange={(e) => setModel(e.target.value)}
-                placeholder={t('create.modelPlaceholder')}
-                mono
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder={t('create.namePlaceholder')}
               />
             </Field>
-          </div>
 
-          <Field label={t('create.workspace')}>
-            <Select value={workspaceRef} onValueChange={setWorkspaceRef}>
-              <SelectTrigger aria-label={t('create.workspace')}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={NONE}>
-                  {t('create.workspaceNone')}
-                </SelectItem>
-                {workspaces.map((w) => (
-                  <SelectItem key={w.workspace_ref} value={w.workspace_ref}>
-                    {w.name || w.workspace_ref} (
-                    {t(`workspaces.mount.${w.mount_mode}`, {
-                      defaultValue: w.mount_mode,
-                    })}
-                    )
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
-
-          {canReadProfiles && (
-            <Field
-              label={t('create.profile')}
-              description={t('create.profileHint')}
-            >
-              <Select value={profileRef} onValueChange={setProfileRef}>
-                <SelectTrigger aria-label={t('create.profile')}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={NONE} disabled>
-                    {t('create.profileNone')}
-                  </SelectItem>
-                  {profiles.map((p) => (
-                    <SelectItem key={p.profile_ref} value={p.profile_ref}>
-                      {p.display_name || p.profile_ref} · {p.driver}
-                      {!p.operable && ` — ${t('create.profileNotOperable')}`}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
-          )}
-          {(!canReadProfiles || profilesQuery.isError) && (
-            <p className="text-caption text-warning">
-              {t('create.profilesNotRead')}
-            </p>
-          )}
-          {selectedProfile && (
-            <p className="font-mono text-caption text-muted-foreground">
-              {selectedProfile.profile_ref} · {selectedProfile.environment_ref}
-            </p>
-          )}
-
-          {canReadTemplates && (
-            <div className="flex flex-col gap-2">
-              <ListTruncationBadge
-                query={tplQuery}
-                label={t('listTruncation.label', {
-                  n: tplQuery.data?.items?.length,
-                })}
-                hint={t('listTruncation.hint')}
-                className="px-0 pt-0"
-              />
-              <Field
-                label={t('create.template')}
-                description={t('create.templateHint')}
-              >
-                <Select value={templateId} onValueChange={setTemplateId}>
-                  <SelectTrigger aria-label={t('create.template')}>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label={t('create.transport')}>
+                <Select
+                  value={transport}
+                  onValueChange={(v) => setTransport(v as Transport)}
+                >
+                  <SelectTrigger aria-label={t('create.transport')}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={NONE}>
-                      {t('create.templateNone')}
+                    <SelectItem value="stream-json">
+                      {t('transport.stream-json')}
                     </SelectItem>
-                    {templates.map((tpl) => (
-                      <SelectItem key={tpl.id} value={tpl.id}>
-                        {tpl.name}
+                    <SelectItem value="remote-control">
+                      {t('transport.remote-control')}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+
+              <Field label={t('create.permissionMode')}>
+                <Select
+                  value={permissionMode}
+                  onValueChange={(v) => setPermissionMode(v as PermissionMode)}
+                >
+                  <SelectTrigger aria-label={t('create.permissionMode')}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PERMISSION_MODES.map((m) => (
+                      <SelectItem key={m} value={m}>
+                        {t(`permissionMode.${m}`)}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </Field>
             </div>
-          )}
 
-          {/* The engine's own verdict on this template, before the launch. A template
+            <div className="grid grid-cols-2 gap-3">
+              <Field label={t('create.effort')}>
+                <Select value={effort} onValueChange={setEffort}>
+                  <SelectTrigger aria-label={t('create.effort')}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={DEFAULT_EFFORT}>
+                      {t('create.effortDefault')}
+                    </SelectItem>
+                    {EFFORT_LEVELS.map((e) => (
+                      <SelectItem key={e} value={e}>
+                        {t(`effort.${e}`)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+
+              <Field label={t('create.model')}>
+                <Input
+                  value={model}
+                  onChange={(e) => setModel(e.target.value)}
+                  placeholder={t('create.modelPlaceholder')}
+                  mono
+                />
+              </Field>
+            </div>
+
+            <Field label={t('create.workspace')}>
+              <Select value={workspaceRef} onValueChange={setWorkspaceRef}>
+                <SelectTrigger aria-label={t('create.workspace')}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE}>
+                    {t('create.workspaceNone')}
+                  </SelectItem>
+                  {workspaces.map((w) => (
+                    <SelectItem key={w.workspace_ref} value={w.workspace_ref}>
+                      {w.name || w.workspace_ref} (
+                      {t(`workspaces.mount.${w.mount_mode}`, {
+                        defaultValue: w.mount_mode,
+                      })}
+                      )
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+
+            {canReadProfiles && (
+              <Field
+                label={t('create.profile')}
+                description={t('create.profileHint')}
+              >
+                <Select value={profileRef} onValueChange={setProfileRef}>
+                  <SelectTrigger aria-label={t('create.profile')}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NONE} disabled>
+                      {t('create.profileNone')}
+                    </SelectItem>
+                    {profiles.map((p) => (
+                      <SelectItem key={p.profile_ref} value={p.profile_ref}>
+                        {p.display_name || p.profile_ref} · {p.driver}
+                        {!p.operable && ` — ${t('create.profileNotOperable')}`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+            )}
+            {(!canReadProfiles || profilesQuery.isError) && (
+              <p className="text-caption text-warning">
+                {t('create.profilesNotRead')}
+              </p>
+            )}
+            {selectedProfile && (
+              <p className="font-mono text-caption text-muted-foreground">
+                {selectedProfile.profile_ref} ·{' '}
+                {selectedProfile.environment_ref}
+              </p>
+            )}
+
+            {canReadTemplates && (
+              <div className="flex flex-col gap-2">
+                <ListTruncationBadge
+                  query={tplQuery}
+                  label={t('listTruncation.label', {
+                    n: tplQuery.data?.items?.length,
+                  })}
+                  hint={t('listTruncation.hint')}
+                  className="px-0 pt-0"
+                />
+                <Field
+                  label={t('create.template')}
+                  description={t('create.templateHint')}
+                >
+                  <Select value={templateId} onValueChange={setTemplateId}>
+                    <SelectTrigger aria-label={t('create.template')}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={NONE}>
+                        {t('create.templateNone')}
+                      </SelectItem>
+                      {templates.map((tpl) => (
+                        <SelectItem key={tpl.id} value={tpl.id}>
+                          {tpl.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+              </div>
+            )}
+
+            {/* The engine's own verdict on this template, before the launch. A template
               that declares something the launch cannot keep REFUSES the launch — so it
               is shown here rather than as a surprise 422 after pressing Launch. */}
-          {previewData && !previewData.applied && (
-            <div className="flex items-start gap-2 rounded-md border border-danger-line bg-danger-soft px-2.5 py-2 text-caption text-danger">
-              <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
-              <div className="min-w-0">
-                <p>{t('create.templateUnenforceable')}</p>
-                <ul className="mt-1 list-disc space-y-0.5 pl-4">
-                  {(previewData.unenforceable ?? []).map((reason) => (
-                    <li key={reason} className="break-words">
-                      {reason}
-                    </li>
-                  ))}
-                </ul>
+            {previewData && !previewData.applied && (
+              <div className="flex items-start gap-2 rounded-md border border-danger-line bg-danger-soft px-2.5 py-2 text-caption text-danger">
+                <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+                <div className="min-w-0">
+                  <p>{t('create.templateUnenforceable')}</p>
+                  <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                    {(previewData.unenforceable ?? []).map((reason) => (
+                      <li key={reason} className="break-words">
+                        {reason}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               </div>
-            </div>
-          )}
-          {previewData?.applied && previewData.conflicts.length > 0 && (
-            <div className="flex items-start gap-2 rounded-md border border-warning-line bg-warning-soft px-2.5 py-2 text-caption text-warning">
-              <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
-              <div className="min-w-0">
-                <p>
-                  {t('create.templateOverrides', {
-                    count: previewData.conflicts.length,
-                  })}
-                </p>
-                <ul className="mt-1 list-disc space-y-0.5 pl-4">
-                  {previewData.conflicts.map((c) => (
-                    <li key={c.field} className="break-words">
-                      <span className="font-mono">{c.field}</span>:{' '}
-                      {String(c.old_value)} →{' '}
-                      <span className="font-medium">{String(c.new_value)}</span>
-                    </li>
-                  ))}
-                </ul>
+            )}
+            {previewData?.applied && previewData.conflicts.length > 0 && (
+              <div className="flex items-start gap-2 rounded-md border border-warning-line bg-warning-soft px-2.5 py-2 text-caption text-warning">
+                <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+                <div className="min-w-0">
+                  <p>
+                    {t('create.templateOverrides', {
+                      count: previewData.conflicts.length,
+                    })}
+                  </p>
+                  <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                    {previewData.conflicts.map((c) => (
+                      <li key={c.field} className="break-words">
+                        <span className="font-mono">{c.field}</span>:{' '}
+                        {String(c.old_value)} →{' '}
+                        <span className="font-medium">
+                          {String(c.new_value)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          <Field
-            label={t('create.envAllow')}
-            description={t('create.envAllowHint')}
-          >
-            <Input
-              value={envAllow}
-              onChange={(e) => setEnvAllow(e.target.value)}
-              placeholder={t('create.envAllowPlaceholder')}
-              mono
-            />
-          </Field>
-
-          {profileRef !== NONE && !previewReady && (
-            <p className="text-caption text-muted-foreground">
-              {t('readiness.waitingPreview')}
-            </p>
-          )}
-          {profileRef !== NONE && previewReady && (
-            <LaunchReadinessPanel
-              query={readinessQuery}
-              profileRef={profileRef}
-              transport={effectiveTransport}
-              isolation={DEFAULT_READINESS_ISOLATION}
-              compact
-            />
-          )}
-          {requestPermission === 'uncertain' && currentReadiness && (
-            <p className="text-caption text-muted-foreground">
-              {t('readiness.requestHintUnknown')}
-            </p>
-          )}
-          {requestPermission === 'permit' && currentReadiness && (
-            <p className="text-caption text-muted-foreground">
-              {t('readiness.requestHintReady')}
-            </p>
-          )}
-          {requestPermission === 'block' && currentReadiness && (
-            <p className="text-caption text-warning">
-              {t('readiness.requestBlocked')}
-            </p>
-          )}
-          {!canRunWrite && (
-            <p className="text-caption text-muted-foreground">
-              {t('readiness.noWrite')}
-            </p>
-          )}
-
-          {profileEnvConflict && (
-            <div className="flex items-start gap-2 rounded-md border border-danger-line bg-danger-soft px-2.5 py-2 text-caption text-danger">
-              <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
-              <span>{t('create.profileEnvConflict')}</span>
-            </div>
-          )}
-
-          <p className="text-caption text-muted-foreground">
-            {t('create.isolationNativeOnly')}
-          </p>
-
-          {(isCriticalMode || isClassifiedRw) && (
-            <div className="flex items-start gap-2 rounded-md border border-warning-line bg-warning-soft px-2.5 py-2 text-caption text-warning">
-              <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
-              <span>
-                {isCriticalMode
-                  ? t('create.criticalWarning')
-                  : t('create.classifiedWarning')}
-              </span>
-            </div>
-          )}
-
-          {create.isError && (
-            <div
-              className="flex items-start gap-2 rounded-md border border-danger-line bg-danger-soft px-2.5 py-2 text-caption text-danger"
-              role="alert"
+            <Field
+              label={t('create.envAllow')}
+              description={t('create.envAllowHint')}
             >
-              <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
-              <div className="min-w-0">
-                <p>{t('readiness.failedInline')}</p>
-                <p className="mt-0.5 break-words">
-                  {launchFailureMessage(create.error, t('create.title'))}
-                </p>
-                {isProfileChangedError(create.error) && (
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    className="mt-2"
-                    onClick={() => void readinessQuery.refetch()}
-                  >
-                    {t('readiness.reread')}
-                  </Button>
-                )}
+              <Input
+                value={envAllow}
+                onChange={(e) => setEnvAllow(e.target.value)}
+                placeholder={t('create.envAllowPlaceholder')}
+                mono
+              />
+            </Field>
+
+            {profileRef !== NONE && !previewReady && (
+              <p className="text-caption text-muted-foreground">
+                {t('readiness.waitingPreview')}
+              </p>
+            )}
+            {profileRef !== NONE && previewReady && (
+              <LaunchReadinessPanel
+                query={readinessQuery}
+                profileRef={profileRef}
+                transport={effectiveTransport}
+                isolation={DEFAULT_READINESS_ISOLATION}
+                compact
+              />
+            )}
+            {requestPermission === 'uncertain' && currentReadiness && (
+              <p className="text-caption text-muted-foreground">
+                {t('readiness.requestHintUnknown')}
+              </p>
+            )}
+            {requestPermission === 'permit' && currentReadiness && (
+              <p className="text-caption text-muted-foreground">
+                {t('readiness.requestHintReady')}
+              </p>
+            )}
+            {requestPermission === 'block' && currentReadiness && (
+              <p className="text-caption text-warning">
+                {t('readiness.requestBlocked')}
+              </p>
+            )}
+            {!canRunWrite && (
+              <p className="text-caption text-muted-foreground">
+                {t('readiness.noWrite')}
+              </p>
+            )}
+
+            {profileEnvConflict && (
+              <div className="flex items-start gap-2 rounded-md border border-danger-line bg-danger-soft px-2.5 py-2 text-caption text-danger">
+                <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+                <span>{t('create.profileEnvConflict')}</span>
               </div>
-            </div>
-          )}
+            )}
+
+            <p className="text-caption text-muted-foreground">
+              {t('create.isolationNativeOnly')}
+            </p>
+
+            {(isCriticalMode || isClassifiedRw) && (
+              <div className="flex items-start gap-2 rounded-md border border-warning-line bg-warning-soft px-2.5 py-2 text-caption text-warning">
+                <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+                <span>
+                  {isCriticalMode
+                    ? t('create.criticalWarning')
+                    : t('create.classifiedWarning')}
+                </span>
+              </div>
+            )}
+
+            {create.isError && (
+              <div
+                className="flex items-start gap-2 rounded-md border border-danger-line bg-danger-soft px-2.5 py-2 text-caption text-danger"
+                role="alert"
+              >
+                <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+                <div className="min-w-0">
+                  <p>{t('readiness.failedInline')}</p>
+                  <p className="mt-0.5 break-words">
+                    {launchFailureMessage(create.error, t('create.title'))}
+                  </p>
+                  {isProfileChangedError(create.error) && (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      className="mt-2"
+                      onClick={() => void readinessQuery.refetch()}
+                    >
+                      {t('readiness.reread')}
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
 
           <DialogFooter>
             <Button

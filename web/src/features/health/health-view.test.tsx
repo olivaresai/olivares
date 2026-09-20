@@ -216,6 +216,31 @@ describe('HealthView — status dashboard', () => {
     expect(await screen.findByText('prod orchestrator')).toBeInTheDocument()
   })
 
+  it('does not name a subject by its raw identifier', async () => {
+    vi.mocked(healthApi.status).mockResolvedValue({
+      items: [
+        {
+          id: 'st-raw',
+          subject_kind: 'agent',
+          subject_ref: 'agent-raw-id',
+          state: 'healthy',
+          desired_status: 'active',
+          expected_interval_seconds: 300,
+          grace_factor: 2,
+          sla_target_ppm: 0,
+          sla_breach_open: false,
+          last_latency_ms: -1,
+        },
+      ],
+      has_more: false,
+    })
+    renderView()
+    expect(await screen.findByText('Unnamed')).toBeInTheDocument()
+    const row = screen.getByText('Unnamed').closest('tr')!
+    expect(within(row).getByText('agent-raw-id')).toBeInTheDocument()
+    expect(screen.getByText('Unnamed').className).not.toMatch(/font-mono/)
+  })
+
   it('colors a down subject with the danger state badge', async () => {
     renderView()
     const downRow = (await screen.findByText('prod orchestrator')).closest(

@@ -237,8 +237,8 @@ receptor OTLP descarta contenido.
 
 <img class="light:sl-hidden" src="/console/observability-counters-dark.png" alt="Salud de ingesta basada en estándares y desglose de trazas correlacionadas con el libro mayor. Las cifras son de todo el motor (globales del proceso), no por inquilino; los estándares se fijan a las versiones y madureces que declaran los organismos correspondientes.">
 <img class="dark:sl-hidden" src="/console/observability-counters-light.png" alt="Salud de ingesta basada en estándares y desglose de trazas correlacionadas con el libro mayor. Las cifras son de todo el motor (globales del proceso), no por inquilino; los estándares se fijan a las versiones y madureces que declaran los organismos correspondientes.">
-<img class="light:sl-hidden" src="/console/security-dark.png" alt="Hallazgos de guardrail, la postura de enforcement, la cola de anomalías y el forense de incidentes con evidencia a prueba de manipulación. El plano es detective por defecto: registra, no bloquea por su cuenta salvo que el enforcement esté habilitado y gobernado.">
-<img class="dark:sl-hidden" src="/console/security-light.png" alt="Hallazgos de guardrail, la postura de enforcement, la cola de anomalías y el forense de incidentes con evidencia a prueba de manipulación. El plano es detective por defecto: registra, no bloquea por su cuenta salvo que el enforcement esté habilitado y gobernado.">
+<img class="light:sl-hidden" src="/console/security-dark.png" alt="Hallazgos de guardrail, la postura de enforcement, la cola de anomalías y el forense de incidentes con evidencias cuya manipulación puede detectarse. El plano es detective por defecto: registra, no bloquea por su cuenta salvo que el enforcement esté habilitado y gobernado.">
+<img class="dark:sl-hidden" src="/console/security-light.png" alt="Hallazgos de guardrail, la postura de enforcement, la cola de anomalías y el forense de incidentes con evidencias cuya manipulación puede detectarse. El plano es detective por defecto: registra, no bloquea por su cuenta salvo que el enforcement esté habilitado y gobernado.">
 
 ## Uso profesional
 

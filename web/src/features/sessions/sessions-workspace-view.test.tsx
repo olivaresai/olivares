@@ -213,6 +213,70 @@ describe('SessionsWorkspaceView — one destination, both origins', () => {
     ).toBeInTheDocument()
   })
 
+  // The fit itself is a browser measurement — jsdom lays nothing out. What this case
+  // holds is the declaration that produces it: a fixed table, a last column that may
+  // reach zero, and a cell whose content gives way at its end with the whole of it
+  // still reachable on `title`.
+  it('the last column declares the way it gives: fixed table, min-w-0, truncate with a title', async () => {
+    renderView()
+    const ours = await rowFor('nightly-indexer')
+    const table = ours.closest('table') as HTMLElement
+    expect(table.className.split(/\s+/)).toContain('table-fixed')
+    const lastHead = screen.getByRole('columnheader', { name: /^last seen$/i })
+    expect(lastHead.className.split(/\s+/)).toContain('min-w-0')
+    const lastCell = ours.querySelector('td:last-child') as HTMLElement
+    expect(lastCell.className.split(/\s+/)).toContain('min-w-0')
+    const clipped = lastCell.querySelector('.truncate')
+    expect(clipped).not.toBeNull()
+    expect(clipped).toHaveAttribute('title')
+  })
+
+  // ⛔ FIXED LAYOUT DIVIDES WHAT NOBODY CLAIMS — AND CLAIMS ONLY FIT WHERE THERE IS
+  //    ROOM. The table is `table-fixed` so the last column can give way, and under that
+  //    algorithm a column with no declared width shares the table equally with the other
+  //    nine: the session name, the widest fact on the row, was given the width of a
+  //    two-badge state cell. Three columns claim their own — but the three claims add up
+  //    to more than a phone's whole region, where they would leave the other seven
+  //    nothing and push the table into its horizontal scroll, so below the shell's
+  //    breakpoint no column claims anything and the ten share the region again.
+  //    jsdom lays nothing out: this holds the declaration at both widths and no more.
+  it('the three columns declare their own width from the desktop breakpoint up', async () => {
+    stubViewportWidth(1440)
+    renderView()
+    await rowFor('nightly-indexer')
+    const head = (name: RegExp) =>
+      screen.getByRole('columnheader', { name }) as HTMLElement
+    const session = head(/^session$/i)
+    const state = head(/^state$/i)
+    const lastSeen = head(/^last seen$/i)
+    for (const column of [session, state, lastSeen]) {
+      expect(column.style.width).not.toBe('')
+    }
+    // Three declarations, not one repeated: the name column is the widest of them.
+    expect(parseInt(session.style.width, 10)).toBeGreaterThan(
+      parseInt(state.style.width, 10),
+    )
+    expect(parseInt(session.style.width, 10)).toBeGreaterThan(
+      parseInt(lastSeen.style.width, 10),
+    )
+    // A column with no width of its own keeps the shared one.
+    expect(head(/^cost$/i).style.width).toBe('')
+    // And the cap that fixed layout never applied is gone from header and cell.
+    expect(lastSeen.className).not.toContain('max-w-')
+    expect(document.querySelectorAll('[class*="max-w-[8rem]"]')).toHaveLength(0)
+  })
+
+  it('at phone width no column claims a width, so the ten share the region', async () => {
+    stubViewportWidth(390)
+    renderView()
+    await rowFor('nightly-indexer')
+    for (const name of [/^session$/i, /^state$/i, /^last seen$/i, /^cost$/i]) {
+      expect(
+        (screen.getByRole('columnheader', { name }) as HTMLElement).style.width,
+      ).toBe('')
+    }
+  })
+
   it('shows the control level per row, from the plane and not from the caller', async () => {
     renderView()
     const ours = await rowFor('nightly-indexer')

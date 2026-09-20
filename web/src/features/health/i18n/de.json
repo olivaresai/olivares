@@ -51,6 +51,7 @@
     "allKinds": "Alle Arten"
   },
   "status": {
+    "unnamed": "Unbenannt",
     "title": "Überwachte Subjekte",
     "slaBreach": "SLA-Verletzung",
     "slaBreachHint": "Für dieses Subjekt liegt eine offene SLA-Verletzung vor.",

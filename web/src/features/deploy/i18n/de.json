@@ -322,7 +322,8 @@
   "empty": {
     "deploy": {
       "title": "Noch keine Bereitstellungen deklariert",
-      "description": "Deklarieren Sie eine Bereitstellung, um den Soll-Zustand zu erfassen; der Abgleich erfordert zusätzlich einen vom Betreiber konfigurierten Laufzeit-Executor, ohne den Plan und Anwenden 503 zurückgeben."
+      "description": "Diese Ansicht listet Bereitstellungsdefinitionen — den hier erfassten Soll-Zustand, keine gestartete Sitzung. Deklarieren Sie eine Bereitstellung, um den Soll-Zustand zu erfassen; der Abgleich erfordert zusätzlich einen vom Betreiber konfigurierten Laufzeit-Executor, ohne den Plan und Anwenden 503 zurückgeben.",
+      "sessions": "Sitzungen betreiben"
     },
     "operations": {
       "title": "Noch keine Bereitstellungsoperationen",

@@ -290,6 +290,26 @@ describe('SessionCard — provenance comes from the engine', () => {
     expect(screen.getByText('resumed')).toBeInTheDocument()
   })
 
+  it('does not name a run by its raw reference', async () => {
+    vi.mocked(agentOpsApi.listRuns).mockResolvedValue({
+      items: [run, { ...run, run_ref: 'run-anon', name: '' }],
+      has_more: false,
+    })
+    renderCard({ sessionRef: 'sess-ours' })
+    expect(
+      await screen.findByText(/2 runs drive this session/i),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Untitled session')).toBeInTheDocument()
+    const unnamed = screen.getByText('Untitled session').closest('button')
+    expect(unnamed).not.toBeNull()
+    expect(unnamed).toHaveTextContent('run-anon')
+    expect(
+      within(unnamed as HTMLElement)
+        .getByText('Untitled session')
+        .className,
+    ).not.toMatch(/font-mono/)
+  })
+
   it('resolves the observed half from a run when opened from the operate side', async () => {
     renderCard({ runRef: 'run-1' })
     await waitFor(() =>

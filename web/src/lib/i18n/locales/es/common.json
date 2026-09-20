@@ -150,7 +150,7 @@
     "pageActions": "Acciones de la página"
   },
   "privileged": {
-    "auditedNotice": "Esta acción queda registrada en el registro de auditoría a prueba de manipulaciones.",
+    "auditedNotice": "Esta acción queda registrada en el registro de auditoría que permite detectar manipulaciones.",
     "confirm": "Confirmar",
     "typeToConfirm": "Escribe {{phrase}} para confirmar",
     "typeToConfirmAria": "Frase de confirmación",

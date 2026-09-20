@@ -36,21 +36,24 @@ test('Claude Code portal: setup → login → navigate → create form → works
   await page.locator('#password').fill(PASSWORD)
   await page.getByRole('button', { name: /^sign in$/i }).click()
 
-  // The portal is registered in the sidebar as "Claude Code". `exact` is load-bearing:
-  // the sidebar now also carries "Claude Code governance" and "Claude Code Adoption",
-  // so a substring match resolves to three links and Playwright's strict mode fails
-  // the test on a nav that is perfectly correct.
-  const navLink = page.getByRole('link', { name: 'Claude Code', exact: true })
+  // THE ENTRY IS INSIDE A NAV AREA, AND SIGN-IN LANDS ON THE ROOT. The sidebar
+  // renders a closed area's panel hidden, and the root belongs to no area, so this
+  // link is not painted yet and waiting for it here waits forever. The portal is
+  // reached by its own address first; that makes its area the active one, which is
+  // what paints the entry the operator actually uses — so the entry is still
+  // asserted, and still clicked.
+  await page.goto('/agentops')
+
+  // The portal is registered in the sidebar as "Operate sessions". `exact` is
+  // load-bearing: neighbouring entries still mention Claude Code, so a substring
+  // match would resolve to more than one link.
+  const navLink = page.getByRole('link', { name: 'Operate sessions', exact: true })
   await expect(navLink).toBeVisible()
   await navLink.click()
 
   // The portal renders its heading and the honest empty state (a fresh estate has no
-  // sessions at all yet) — no SSH, no fabricated rows.
-  //
-  // this door now opens the UNIFIED sessions room, so the empty state speaks for
-  // both origins — the sessions Olivares discovers through its connectors AND the ones
-  // launched from here. The heading stays "Claude Code" because the nav entry does: an
-  // operator who clicks a link expects to land on a page that answers to its name.
+  // sessions at all yet) — no SSH, no fabricated rows. The heading is the operate
+  // room's own title; the nav entry that opens it is the broader "Operate sessions".
   await expect(
     page.getByRole('heading', { name: 'Claude Code' }),
   ).toBeVisible()

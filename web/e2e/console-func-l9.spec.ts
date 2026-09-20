@@ -120,8 +120,12 @@ async function loginDemo(page: Page): Promise<string> {
   const response = await loginRead
   expect(response.status()).toBe(200)
   const body = (await response.json()) as { token: string }
+  // WHAT A FRESH SIGN-IN PAINTS. The console lands on the root, which belongs to no
+  // navigation area, and the sidebar hides a closed area's panel — so the entries on
+  // screen are the areas and the overview above them, not a leaf like Inventory. The
+  // name is exact because neighbouring entries contain it.
   await expect(
-    page.getByRole('link', { name: 'Inventory', exact: true }),
+    page.getByRole('link', { name: 'Overview', exact: true }),
   ).toBeVisible({ timeout: 20_000 })
   return body.token
 }

@@ -5,6 +5,7 @@
   },
   "title": "Claude Code",
   "subtitle": "Claude-Code-Sitzungen erstellen, sich verbinden und steuern — ohne SSH. Jeder Start wird überwacht; jede Sitzung ist beobachtbar.",
+  "untitled": "Unbenannte Sitzung",
   "refresh": "Aktualisieren",
   "search": "Sitzungen suchen…",
   "tabs": {

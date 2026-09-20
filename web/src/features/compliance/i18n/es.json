@@ -82,7 +82,7 @@
   },
   "evidence": {
     "title": "Evidencia de auditoría",
-    "description": "Paquetes de evidencia sellados con verificación de integridad a prueba de manipulación y un anclaje al ledger. Un paquete es estado de control más prueba de integridad, nunca un certificado.",
+    "description": "Paquetes de evidencia sellados con verificación de integridad que permite detectar manipulaciones y un anclaje al ledger. Un paquete es estado de control más prueba de integridad, nunca un certificado.",
     "generate": "Generar paquete de evidencia",
     "empty": "Aún no hay paquetes de evidencia sellados.",
     "emptyHint": "Sella un paquete para anclar el estado de control actual al ledger de auditoría.",

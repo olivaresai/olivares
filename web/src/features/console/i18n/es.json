@@ -817,7 +817,7 @@
       "searchSubject": "¿Quién puede acceder a…",
       "searchResource": "¿A qué puede acceder alguien…",
       "export": "Exportar revisión de acceso",
-      "exportHint": "Genera un paquete de evidencias sellado para un recurso — registrado en el registro de auditoría a prueba de manipulaciones.",
+      "exportHint": "Genera un paquete de evidencias sellado para un recurso — registrado en el registro de auditoría que permite detectar manipulaciones.",
       "resourceType": "Tipo de recurso",
       "resourceId": "Id de recurso",
       "resourceIdHint": "El id del recurso, agente o sesión.",

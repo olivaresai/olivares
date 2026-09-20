@@ -29,6 +29,25 @@ const authState = vi.hoisted(() => ({
 }))
 vi.mock('@/lib/auth/context', () => ({ useAuth: () => authState }))
 
+vi.mock('@tanstack/react-router', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@tanstack/react-router')>()
+  return {
+    ...actual,
+    Link: ({
+      children,
+      to,
+      ...rest
+    }: {
+      children: ReactNode
+      to: string
+    } & Record<string, unknown>) => (
+      <a href={to} {...rest}>
+        {children}
+      </a>
+    ),
+  }
+})
+
 const api = vi.hoisted(() => ({
   listDefinitions: vi.fn(),
   getDefinition: vi.fn(),
@@ -179,6 +198,29 @@ describe('DeployView — definitions list', () => {
       screen.queryByRole('button', { name: /declare deployment/i }),
     ).toBeNull()
     expect(screen.queryByRole('tab', { name: /^wirings$/i })).toBeNull()
+  })
+
+  it('empty state says what the screen lists, keeps Declare as its action and links to launched sessions', async () => {
+    api.listDefinitions.mockResolvedValue({ items: [], has_more: false })
+    wrap(<DeployView />)
+    const title = await screen.findByText('No deployments declared yet')
+    const empty = title.closest('[data-slot="empty-state"]')
+    expect(empty).not.toBeNull()
+    expect(empty).toHaveTextContent(/deployment definitions/i)
+    const link = within(empty as HTMLElement).getByRole('link', {
+      name: 'Operate sessions',
+    })
+    expect(link).toHaveAttribute('href', '/agentops')
+    // The screen's own verb stays the PRIMARY action of its empty state; the way out to
+    // the sessions is the quieter one. And the sentence that says what reconciling needs
+    // is still there: an empty screen must not promise more than the product does.
+    expect(
+      within(empty as HTMLElement).getByRole('button', {
+        name: /declare deployment/i,
+      }),
+    ).toBeInTheDocument()
+    expect(empty).toHaveTextContent(/runtime executor/i)
+    expect(empty).toHaveTextContent(/503/)
   })
 })
 

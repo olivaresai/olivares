@@ -10,9 +10,19 @@ import { renderIntel } from '@/test/intel'
 
 const auth = vi.hoisted(() => ({
   activeTenant: 'tnt-demo' as string | null,
+  isSuperadmin: false,
   can: (_: string): boolean => true,
 }))
 vi.mock('@/lib/auth/context', () => ({ useAuth: () => auth }))
+
+const listOrgs = vi.hoisted(() => vi.fn())
+vi.mock('@/lib/api/endpoints', async (importOriginal) => {
+  const real = await importOriginal<typeof import('@/lib/api/endpoints')>()
+  return {
+    ...real,
+    systemApi: { ...real.systemApi, listOrgs },
+  }
+})
 
 const navigateMock = vi.hoisted(() => vi.fn())
 vi.mock('@tanstack/react-router', () => ({
@@ -77,7 +87,9 @@ beforeEach(() => {
   vi.clearAllMocks()
   stubPhone(false)
   auth.activeTenant = 'tnt-demo'
+  auth.isSuperadmin = false
   auth.can = () => true
+  listOrgs.mockResolvedValue({ items: [], has_more: false })
   api.listProfiles.mockResolvedValue({ items: [PROFILE], has_more: false })
   api.listWorkspaces.mockResolvedValue({ items: [WORKSPACE], has_more: false })
   api.createRun.mockResolvedValue({ run_ref: 'run-77' })
@@ -238,6 +250,64 @@ describe('WorkComposer — starting', () => {
 })
 
 describe('ScopeLine — the scope of the next action', () => {
+  // The line names the organization the way the switcher does, from the same
+  // source, so the scope of the next action and the organization on screen can
+  // never be two different words for one tenant.
+  it('names a known organization with the name the switcher uses, not its id', async () => {
+    const tenant = '01a0b95a-ee26-724d-9db8-1f5423e25db3'
+    auth.activeTenant = tenant
+    auth.isSuperadmin = true
+    listOrgs.mockResolvedValue({
+      items: [
+        {
+          id: 'org-1',
+          tenant_id: tenant,
+          name: 'Golden Path',
+          slug: 'golden-path',
+          status: 'active',
+          created_at: '2026-01-01T00:00:00Z',
+        },
+      ],
+      has_more: false,
+    })
+    renderIntel(<WorkComposer />)
+    const line = await screen.findByTestId('work-scope-line')
+    await waitFor(() => expect(line).toHaveTextContent('Golden Path'))
+    expect(line.textContent).not.toMatch(/01a0b95a/)
+  })
+
+  it('falls back to a short identifier when the organization name is not known', async () => {
+    const tenant = '01a0b95a-ee26-724d-9db8-1f5423e25db3'
+    auth.activeTenant = tenant
+    auth.isSuperadmin = true
+    listOrgs.mockResolvedValue({ items: [], has_more: false })
+    renderIntel(<WorkComposer />)
+    const line = await screen.findByTestId('work-scope-line')
+    await waitFor(() => expect(line).toHaveTextContent('01a0b95a…'))
+    expect(line.textContent).not.toContain(tenant)
+  })
+
+  it('does not paint a raw environment reference when the profile is not this node', async () => {
+    api.listProfiles.mockResolvedValue({
+      items: [
+        {
+          ...PROFILE,
+          local_environment: false,
+          environment_ref: 'xenv_01a0b95a-ec91-7014-875a-5732',
+        },
+      ],
+      has_more: false,
+    })
+    const user = await open()
+    await pickProfile(user)
+    const line = screen.getByTestId('work-scope-line')
+    await waitFor(() => expect(line).toHaveTextContent('another environment'))
+    expect(line).not.toHaveTextContent('xenv_01a0b95a-ec91-7014-875a-5732')
+    expect(line.getAttribute('title')).toContain(
+      'xenv_01a0b95a-ec91-7014-875a-5732',
+    )
+  })
+
   it('names the organization, and says plainly when there is no workspace yet', async () => {
     renderIntel(<WorkComposer />)
     const line = await screen.findByTestId('work-scope-line')
@@ -358,6 +428,50 @@ describe('WorkComposer — 64 px in both states', () => {
     expect(
       screen.getByTestId('composer-session-state').getAttribute('title'),
     ).toMatch(/Running/)
+  })
+
+  it('Advanced is a native details/summary; Escape closes it and returns focus to the summary', async () => {
+    const user = userEvent.setup()
+    renderIntel(<WorkComposer attached={{ run: RUNNING, group: 'active' }} />)
+    const summary = await screen.findByTestId('composer-advanced')
+    expect(summary.tagName).toBe('SUMMARY')
+    const disclosure = summary.closest('details')
+    expect(disclosure).not.toBeNull()
+    // Native details already expose open/closed to assistive technology; the
+    // summary must not carry a second, custom expanded state.
+    expect(summary).not.toHaveAttribute('aria-expanded')
+    await user.click(summary)
+    expect(disclosure).toHaveAttribute('open')
+    expect(screen.getByTestId('composer-wire-input')).toBeVisible()
+    await user.keyboard('{Escape}')
+    expect(disclosure).not.toHaveAttribute('open')
+    expect(summary).toHaveFocus()
+  })
+
+  // ONE ESCAPE, ONE LAYER. At phone width the two pickers live INSIDE this disclosure,
+  // and a picker is a portalled listbox that answers Escape itself. The disclosure sees
+  // the same key — the portal keeps the React tree — so an operator who opened the
+  // profile list and changed their mind lost the list AND the panel around it in one
+  // press, and had to reopen the panel to try again. The console's own rule for a
+  // stack is the opposite: close the list, then the thing under it.
+  it('an Escape spoken for by an open picker leaves the disclosure open', async () => {
+    stubPhone(true)
+    const user = await open()
+    const summary = screen.getByTestId('composer-advanced')
+    await user.click(summary)
+    const disclosure = summary.closest('details')
+    expect(disclosure).toHaveAttribute('open')
+
+    await user.click(screen.getByTestId('launcher-profile'))
+    await screen.findByRole('option', { name: /Team account/ })
+    await user.keyboard('{Escape}')
+
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('option', { name: /Team account/ }),
+      ).not.toBeInTheDocument(),
+    )
+    expect(disclosure).toHaveAttribute('open')
   })
 })
 

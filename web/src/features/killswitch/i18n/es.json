@@ -104,7 +104,7 @@
   "evidence": {
     "download": "Descargar paquete de evidencias",
     "done": "Paquete de evidencias descargado",
-    "doneBody": "Paquete de incidente a prueba de manipulación {{file}} — cronología, prueba del doble control, hallazgos y plan de rollback.",
+    "doneBody": "Paquete de incidente {{file}} cuya manipulación puede detectarse — cronología, prueba del doble control, hallazgos y plan de rollback.",
     "truncated": "Paquete de evidencia descargado, pero viene ACOTADO",
     "truncatedBody": "{{file}} está guardado, y el motor acotó su cronología o sus hallazgos. No es el incidente entero: lee las banderas de truncado en la cabecera del fichero antes de concluir nada con él."
   },

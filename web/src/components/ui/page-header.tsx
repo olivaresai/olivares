@@ -180,12 +180,13 @@ export function plainText(node: ReactNode): string | undefined {
  * The 36 px row a tabbed screen shares between its header and its tab strip.
  *
  * WHO GIVES WAY, IN ORDER: the description first (it asks for no width of its own), then
- * the tab strip (it scrolls under its own buttons), and never the screen's name or its
- * actions — the header's track cannot go below them (`min-content`, and the name does not
- * wrap, so that floor is the whole name). The strip's track is `auto`: it takes its natural
- * width when the row has it, and when its tabs are wider than the row can give it scrolls
- * under its own buttons — a screen with many tabs needs that affordance at any width.
- * `relative`: the row is what a phone's panel of collapsed controls hangs from.
+ * the tab strip (it scrolls under its own buttons), then the header's controls (they
+ * shrink and may scroll), and never the screen's name — `min-content` is the whole name
+ * because the name does not wrap and the controls no longer set that floor. The strip's
+ * track is `auto`: it takes its natural width when the row has it, and when its tabs are
+ * wider than the row can give it scrolls under its own buttons — a screen with many tabs
+ * needs that affordance at any width. `relative`: the row is what a phone's panel of
+ * collapsed controls hangs from.
  */
 export const WORK_CHROME_ROW =
   'relative grid h-9 min-w-0 grid-cols-[minmax(min-content,1fr)_minmax(0,auto)] items-center gap-3'
@@ -223,23 +224,18 @@ export function PageHeader({
           Stacking is the obvious answer to "it does not fit" and it is the wrong one
           here: a phone has less vertical room than a desktop, not more. */}
       <Tag className="flex items-center justify-between gap-2 sm:gap-4">
-        {/* THE TITLE LINE. `min-w-0` on the row AND on the description, or the
-            description's own text sets a floor and pushes the controls off the right
-            edge instead of truncating — the failure mode measured on five
-            other screens. The heading is `shrink-0`: a screen's NAME is never the
-            thing that gives way.
+        {/* THE TITLE LINE. The heading is `shrink-0` and the group is `min-w-min`: a
+            screen's NAME is never the thing that gives way. The description still
+            truncates (`w-0 flex-1`), so its own text cannot set a floor. The clip that
+            used to live on this group cut the name when the controls refused to shrink.
 
-            ⛔ AND THE CLIP IS HERE, ON THE TITLE, NOT ON THE ROW THAT HOLDS THE PANEL.
-               Four screens wrapped this header in a 36 px `overflow-hidden` row, and the
-               phone disclosure opens a panel `absolute top-full` INSIDE it: measured at
-               390×844 over these sources, the panel's box ran y 94→168 inside a row that
-               ended at y 96, `elementFromPoint` at its centre answered `th`/`td`/the
-               document, and a click aimed at Launch, Refresh, Register or Export landed
-               on the table underneath. Four screens out of four, with `aria-expanded` and
-               the `hidden` class both correct — which is why nothing in jsdom saw it.
-               A title that overruns still has to be cut, so the cut happens on the block
-               that overruns: the heading and its one truncating line. */}
-        <div className="flex min-w-0 flex-1 items-baseline gap-2 overflow-hidden">
+            ⛔ AND THE CLIP IS NOT ON THIS GROUP, because a phone disclosure opens a
+               panel `absolute top-full` beside it. Four screens wrapped this header in a
+               36 px `overflow-hidden` row, and a click aimed at Launch, Refresh,
+               Register or Export landed on the table underneath. A sentence that
+               overruns is still cut — on the description, which is the line that
+               truncates. */}
+        <div className="flex min-w-min flex-1 items-baseline gap-2">
           {/* `whitespace-nowrap`: the name's smallest width is the WHOLE name. Left to
               wrap, its smallest width is its longest word, the shared row's floor was set
               from that, and a two-word name was painted cut after its first word. */}
@@ -271,7 +267,7 @@ export function PageHeader({
         </div>
         <div
           className={cn(
-            'flex shrink-0 items-center gap-2',
+            'flex min-w-0 items-center justify-end gap-2',
             actionsPanelAnchor === 'header' && 'relative',
           )}
         >
@@ -320,7 +316,15 @@ export function PageHeader({
                     'rounded-md border border-border bg-elevated p-1 shadow-lg',
                     !overflowOpen && 'hidden',
                   )
-                : 'flex-row',
+                : // Desktop: the row WRAPS when the screen's controls outgrow the header's
+                  // width, and never scrolls. Measured 2026-09-19 on the built console at
+                  // 1024 px: `/audit` carries seven controls that need 844 px in a 607 px row,
+                  // and `overflow-x-auto` put `Verification key`, `Export options` and `Export`
+                  // behind a 10 px scrollbar — three actions the operator could not see. With
+                  // `flex-wrap` they take a second line on that one route at that one width;
+                  // at 1280 px and above no route changes. (The phone panel above keeps its
+                  // own `overflow-x-auto`: that one is a 455 px panel on a 390 px screen.)
+                  'min-w-0 flex-row flex-wrap',
             )}
           >
             {actions}

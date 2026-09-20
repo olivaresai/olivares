@@ -126,7 +126,7 @@ requieren y la página de referencia que abre su enlace de ayuda dentro del prod
 | Permisos | `/permissions` | Identidad, roles y aprobaciones | `governance:identity:read` | [reference/modules/vi-governance](/es/reference/modules/vi-governance/) |
 | Límites de uso | `/rate-limits` | Inventario de límites de Anthropic (solo lectura) | `models:ratelimits:read` | [reference/modules/x-models](/es/reference/modules/x-models/) |
 | Residencia de datos | `/residency` | Fija cada organización a una región, o déjala sin fijar | `system:admin` | [reference/modules/xiii-compliance](/es/reference/modules/xiii-compliance/) |
-| Políticas de rutinas | `/routine-policies` | Mínimos de cadencia, topes de concurrencia, requisitos de aprobación y allowlists cron para rutinas de Claude Code. | `governance:routine:read` | [reference/modules/vi-governance](/es/reference/modules/vi-governance/) |
+| Políticas de rutinas | `/routine-policies` | Intervalos mínimos entre ejecuciones, topes de concurrencia, requisitos de aprobación y allowlists cron para rutinas de Claude Code. | `governance:routine:read` | [reference/modules/vi-governance](/es/reference/modules/vi-governance/) |
 
 ### Demostrar
 

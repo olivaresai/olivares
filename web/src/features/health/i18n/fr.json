@@ -51,6 +51,7 @@
     "allKinds": "Tous les types"
   },
   "status": {
+    "unnamed": "Sans nom",
     "title": "Sujets surveillés",
     "slaBreach": "Manquement au SLA",
     "slaBreachHint": "Un manquement au SLA est ouvert pour ce sujet.",

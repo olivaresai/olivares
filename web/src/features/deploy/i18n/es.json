@@ -322,7 +322,8 @@
   "empty": {
     "deploy": {
       "title": "Aún no se han declarado despliegues",
-      "description": "Declara un despliegue para registrar el estado deseado; reconciliarlo exige un ejecutor de runtime configurado por el operador y, sin él, Plan y Aplicar devuelven 503."
+      "description": "Esta pantalla lista definiciones de despliegue: el estado deseado registrado aquí, no una sesión lanzada. Declara un despliegue para registrar el estado deseado; reconciliarlo exige un ejecutor de runtime configurado por el operador y, sin él, Plan y Aplicar devuelven 503.",
+      "sessions": "Operar sesiones"
     },
     "operations": {
       "title": "Aún no se han registrado operaciones de despliegue",

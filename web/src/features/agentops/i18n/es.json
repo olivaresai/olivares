@@ -5,6 +5,7 @@
   },
   "title": "Claude Code",
   "subtitle": "Crea, adjunta y gobierna sesiones de Claude Code — sin SSH. Cada arranque se controla; cada sesión es observable.",
+  "untitled": "Sesión sin título",
   "refresh": "Actualizar",
   "search": "Buscar sesiones…",
   "tabs": {

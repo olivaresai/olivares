@@ -221,8 +221,8 @@ evento, el operador encuentra:
 
 <img class="light:sl-hidden" src="/console/sessions-dark.png" alt="Operación de agentes en vivo: qué hace cada sesión ahora mismo, sus tokens, coste y cadencia, actualizado por un flujo en directo.">
 <img class="dark:sl-hidden" src="/console/sessions-light.png" alt="Operación de agentes en vivo: qué hace cada sesión ahora mismo, sus tokens, coste y cadencia, actualizado por un flujo en directo.">
-<img class="light:sl-hidden" src="/console/security-dark.png" alt="Hallazgos de guardrail, la postura de enforcement, la cola de anomalías y el forense de incidentes con evidencia a prueba de manipulación. El plano es detective por defecto: registra, no bloquea por su cuenta salvo que el enforcement esté habilitado y gobernado.">
-<img class="dark:sl-hidden" src="/console/security-light.png" alt="Hallazgos de guardrail, la postura de enforcement, la cola de anomalías y el forense de incidentes con evidencia a prueba de manipulación. El plano es detective por defecto: registra, no bloquea por su cuenta salvo que el enforcement esté habilitado y gobernado.">
+<img class="light:sl-hidden" src="/console/security-dark.png" alt="Hallazgos de guardrail, la postura de enforcement, la cola de anomalías y el forense de incidentes con evidencias cuya manipulación puede detectarse. El plano es detective por defecto: registra, no bloquea por su cuenta salvo que el enforcement esté habilitado y gobernado.">
+<img class="dark:sl-hidden" src="/console/security-light.png" alt="Hallazgos de guardrail, la postura de enforcement, la cola de anomalías y el forense de incidentes con evidencias cuya manipulación puede detectarse. El plano es detective por defecto: registra, no bloquea por su cuenta salvo que el enforcement esté habilitado y gobernado.">
 
 ## Uso profesional
 

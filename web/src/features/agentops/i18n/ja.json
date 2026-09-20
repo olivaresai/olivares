@@ -5,6 +5,7 @@
   },
   "title": "Claude Code",
   "subtitle": "Claude Code セッションを作成・アタッチ・ガバナンスします（SSH 不要）。すべての起動は統制され、すべてのセッションは可観測です。",
+  "untitled": "無題のセッション",
   "refresh": "更新",
   "search": "セッションを検索…",
   "tabs": {

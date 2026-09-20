@@ -51,6 +51,7 @@
     "allKinds": "All kinds"
   },
   "status": {
+    "unnamed": "Unnamed",
     "title": "Monitored subjects",
     "slaBreach": "SLA breach",
     "slaBreachHint": "An SLA breach is open for this subject.",

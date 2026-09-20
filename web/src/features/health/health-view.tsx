@@ -30,6 +30,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { Spinner } from '@/components/ui/spinner'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { sessionNameLadder } from '@/features/home/work-line'
 import {
   humanDurationSeconds,
   LiveDot,
@@ -399,12 +400,14 @@ function StatusTab({
         header: t('status.cols.subject'),
         cell: ({ row }) => {
           const s = row.original
+          const naming = sessionNameLadder(s.name, null, t('status.unnamed'))
           return (
             <div className="min-w-0">
               <div className="truncate font-medium text-foreground">
-                {s.name || s.subject_ref}
+                {naming.text}
               </div>
-              {s.name && s.name !== s.subject_ref && (
+              {(naming.from === 'untitled' ||
+                (s.name && s.name !== s.subject_ref)) && (
                 <div
                   className="truncate font-mono text-caption text-muted-foreground"
                   title={s.subject_ref}

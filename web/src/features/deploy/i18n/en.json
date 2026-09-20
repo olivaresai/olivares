@@ -322,7 +322,8 @@
   "empty": {
     "deploy": {
       "title": "No deployments declared yet",
-      "description": "Declare a deployment to record desired state. Reconciling it also needs a runtime executor configured by the operator; without one, Plan and Apply answer 503."
+      "description": "This screen lists deployment definitions — desired state recorded here, not a launched session. Declare a deployment to record desired state. Reconciling it also needs a runtime executor configured by the operator; without one, Plan and Apply answer 503.",
+      "sessions": "Operate sessions"
     },
     "operations": {
       "title": "No deployment operations recorded yet",
