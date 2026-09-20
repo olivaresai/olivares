@@ -5,6 +5,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strings"
@@ -361,6 +362,20 @@ func statusFor(err error) (int, string) {
 		// applied here is capability-absent (501) vs operation-refused (503), and
 		// under it an unmakeable authoritative read is the former.
 		return http.StatusNotImplemented, "cross_tenant_admin_pool_not_configured"
+	case errors.Is(err, context.Canceled):
+		// The CALLER hung up before the handler could answer — most visibly while the
+		// login throttle was holding an attempt. That is not a server fault: a 5xx here
+		// would log an error, page an operator and count a client's disconnect against
+		// the engine's own availability. 408 says what happened and stays in the client
+		// band.
+		//
+		// context.DeadlineExceeded deliberately does NOT share this arm. It is what
+		// every context.WithTimeout budget in this tree produces, this mapper is shared
+		// by REST, gRPC and module errors, and 4xx are outside the availability SLI and
+		// the 5xx alert (docs/17-PRODUCTION-READINESS-SLO.md §1) — so a server budget
+		// that expired would silently leave the error budget. It keeps the 500 it has
+		// always had, through the default below.
+		return http.StatusRequestTimeout, "request_abandoned"
 	case errors.Is(err, store.ErrNoTenant), errors.Is(err, store.ErrReadOnly),
 		errors.Is(err, store.ErrAppendOnly), errors.Is(err, store.ErrTenantViolation):
 		// These are internal invariant violations, never a client's fault.

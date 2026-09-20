@@ -139,7 +139,7 @@ olivares_eventbus_queue_depth / olivares_eventbus_queue_capacity > 0.9
 
 ### 登录失败并提示 "locked out"
 
-`olivares_auth_login_attempts_total{outcome="locked_out"}` 上升意味着在反复失败后，按账号/按 IP 的限流生效了。它会自行清除；应调查失败的来源，而不是提高限额。
+`olivares_auth_login_attempts_total{outcome="locked_out"}` 上升意味着限流拒绝了一次尝试：要么是账号因自身反复失败而被锁定，要么是该账号已被一个连续失败的客户端地址逐个试探。记录干净的账号绝不会因同一地址上他人的失败而被锁定——它只会等待一秒。两者都会自行清除；应调查失败的来源，而不是提高限额。
 
 ## 证据
 

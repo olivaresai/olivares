@@ -34,7 +34,7 @@ description: >-
 | `olivares_eventbus_publish_blocked_total` | события противодавления (шина блокирует; она не отбрасывает) |
 | `olivares_eventbus_bridge_*` | здоровье моста NATS, когда включена распределённая шина — `_connected`, `_pending_messages`, `_dropped_total` (межузловая доставка — at-most-once; отбрасывания подсчитываются, никогда не молча) |
 | `olivares_audit_checkpoint_age_seconds` | свежесть свидетельства о неизменности (tamper-evidence) — алерт, когда превышает 2× интервала контрольной точки |
-| `olivares_auth_login_attempts_total{outcome}` | успех / отказ / блокировка входа |
+| `olivares_auth_login_attempts_total{outcome}` | успех / отказ / блокировка / прерывание входа |
 | `olivares_http_ratelimit_decisions_total{decision}` | давление ограничения скорости |
 | `olivares_grpc_requests_total` / `olivares_grpc_request_duration_seconds` | плоскость приёма коллектор→ядро |
 

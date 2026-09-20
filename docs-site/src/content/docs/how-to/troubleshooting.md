@@ -213,8 +213,11 @@ and page when `olivares_eventbus_bridge_connected == 0`.
 ### Logins fail with "locked out"
 
 `olivares_auth_login_attempts_total{outcome="locked_out"}` rising means the
-per-account/per-IP throttle engaged after repeated failures. It clears
-itself; investigate the source of the failures rather than raising limits.
+throttle refused an attempt: an account locked out by its own repeated failures,
+or one that a client address with a run of failures behind it was already guessing
+at. An account with a clean record is never locked out by other people's failures
+from the same address — it waits a second instead. Both clear themselves;
+investigate the source of the failures rather than raising limits.
 
 ## Evidence
 

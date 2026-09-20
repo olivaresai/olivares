@@ -33,7 +33,7 @@ les plus déterminantes :
 | `olivares_eventbus_publish_blocked_total` | événements de backpressure (le bus bloque ; il ne perd rien) |
 | `olivares_eventbus_bridge_*` | santé du pont NATS quand le bus distribué est activé — `_connected`, `_pending_messages`, `_dropped_total` (la livraison inter-nœuds est at-most-once ; les pertes sont comptées, jamais silencieuses) |
 | `olivares_audit_checkpoint_age_seconds` | fraîcheur de la preuve d'altération — alertez quand elle dépasse 2× l'intervalle de checkpoint |
-| `olivares_auth_login_attempts_total{outcome}` | succès / échec / verrouillage de connexion |
+| `olivares_auth_login_attempts_total{outcome}` | succès / échec / verrouillage / abandon de connexion |
 | `olivares_http_ratelimit_decisions_total{decision}` | pression du rate-limit |
 | `olivares_grpc_requests_total` / `olivares_grpc_request_duration_seconds` | le plan d'ingestion collector→core |
 

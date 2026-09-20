@@ -25,6 +25,14 @@ const (
 	loginOutcomeSuccess   = "success"
 	loginOutcomeFailed    = "failed"
 	loginOutcomeLockedOut = "locked_out"
+	// loginOutcomeAbandoned is an attempt that ended before the credential could be
+	// read, because the CALLER went away or its own deadline passed: most visibly a
+	// client that disconnected while the login throttle was holding the attempt, and
+	// equally a context that expired during the account read or the session mint. It
+	// is an attempt and it has an outcome, so it is counted — a counter that quietly
+	// stopped recording the attempts a throttle is holding would read as calm exactly
+	// when it is not.
+	loginOutcomeAbandoned = "abandoned"
 )
 
 // firstOrgDefaultName and firstOrgDefaultSlug name the organization first-boot
@@ -250,6 +258,8 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		s.mLogin.Inc(loginOutcomeLockedOut)
 	case errors.Is(err, auth.ErrInvalidCredentials):
 		s.mLogin.Inc(loginOutcomeFailed)
+	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
+		s.mLogin.Inc(loginOutcomeAbandoned)
 	}
 	if err != nil {
 		s.writeError(w, r, err)
@@ -365,9 +375,19 @@ func (s *Server) handleWhoami(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
-// clientIP returns the peer IP for throttling. It uses the real transport peer
-// (RemoteAddr), not a spoofable X-Forwarded-For header; honoring XFF behind a
-// trusted reverse proxy is a deployment concern.
+// clientIP returns the real transport peer of r (RemoteAddr) — the one address
+// this engine observed for itself, never a spoofable X-Forwarded-For. It is what
+// the login-surface network allow-list, the failed-login audit, the address
+// recorded on a session and the login throttle all key on.
+//
+// Behind a reverse proxy that address is the proxy's, the same for every user,
+// which is why the ACCOUNT key is the only one that locks an account out. The
+// address key refuses too, but only a spray: once it has tripped it turns away an
+// account that has already failed from that address, or that has an attempt in
+// flight, and merely delays an account with a clean record
+// (core/auth/throttle.go). Reading a forwarded address instead needs a declared
+// set of trusted proxy networks and the operator key that configures it; that is
+// its own change.
 func clientIP(r *http.Request) string {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {

@@ -216,9 +216,12 @@ schlagen Sie Alarm, wenn `olivares_eventbus_bridge_connected == 0`.
 ### Anmeldungen schlagen mit „locked out“ fehl
 
 Ein steigender `olivares_auth_login_attempts_total{outcome="locked_out"}` bedeutet, dass
-die Drosselung pro Konto/pro IP nach wiederholten Fehlschlägen gegriffen hat. Sie löst
-sich von selbst auf; untersuchen Sie die Ursache der Fehlschläge, statt die Limits
-anzuheben.
+die Drosselung einen Versuch abgelehnt hat: ein Konto, das durch seine eigenen
+wiederholten Fehlschläge gesperrt ist, oder eines, das eine Client-Adresse mit einer Serie
+von Fehlschlägen bereits durchprobiert hat. Ein Konto mit sauberer Historie wird nie durch
+die Fehlschläge anderer von derselben Adresse gesperrt — es wartet stattdessen eine Sekunde.
+Beides löst sich von selbst auf; untersuchen Sie die Ursache der Fehlschläge, statt die
+Limits anzuheben.
 
 ## Nachweis
 

@@ -23,8 +23,10 @@ import (
 //
 // Scope is the AUTHENTICATED surface — the OPS-5 noisy-neighbor / per-tenant-quota
 // threat. Anonymous requests (login, setup, server-info, SSO callbacks) are NOT
-// metered here: the unauthenticated edge is guarded by the per-account/per-IP login
-// lockout (core/auth/throttle.go) and the deployment's ingress/WAF. An IP-keyed
+// metered here: the unauthenticated edge is guarded by the per-account/per-address
+// login throttle — an account is locked out by its own five failures, and a tripped
+// address refuses every account it has already been guessing at (core/auth/throttle.go)
+// — and by the deployment's ingress/WAF. An IP-keyed
 // anon bucket would collapse to a SINGLE bucket behind a reverse proxy (RemoteAddr
 // is the proxy's), turning the fairness control into a self-inflicted global DoS of
 // login/setup — strictly worse than delegating that edge to the controls built for
