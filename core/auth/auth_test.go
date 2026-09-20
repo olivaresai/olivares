@@ -414,6 +414,56 @@ func TestLoginWrongPasswordAndLockout(t *testing.T) {
 	}
 }
 
+// TestLoginThrottleDoesNotLockOtherAccountsBehindASharedPeer pins the property a
+// shared transport peer makes load-bearing: the login throttle may refuse the
+// ACCOUNT that failed, never an account that has not.
+//
+// Behind an ingress, a reverse proxy or a NAT gateway — the topology the shipped
+// chart tells an operator to deploy — every user's transport peer is the same
+// address. A throttle that denies on that address alone turns five anonymous
+// failures into a deployment-wide outage of the login surface, the break-glass
+// administrator included, and there is no password-reset door to fall back to.
+//
+// The control beside it is what keeps the fix honest: the account that actually
+// failed is still locked out, so the brute-force defense is degraded for innocent
+// accounts, not removed.
+func TestLoginThrottleDoesNotLockOtherAccountsBehindASharedPeer(t *testing.T) {
+	ctx := context.Background()
+	a := auth.NewAuthenticator(testStore(t), nil)
+	admin := mustSuperadmin(t, ctx, a)
+
+	// One address for every user: the ingress in front of the engine.
+	const sharedPeer = "203.0.113.7"
+	const (
+		attacked = "attacked@example.test"
+		innocent = "innocent@example.test"
+	)
+	if _, err := a.CreateUser(ctx, admin, auth.NewUser{Email: attacked, DisplayName: "Attacked", Password: "attacked-password-1"}); err != nil {
+		t.Fatalf("create the attacked account: %v", err)
+	}
+	if _, err := a.CreateUser(ctx, admin, auth.NewUser{Email: innocent, DisplayName: "Innocent", Password: "innocent-password-1"}); err != nil {
+		t.Fatalf("create the second account: %v", err)
+	}
+
+	// An unauthenticated attacker sprays one account until it is locked.
+	for i := 0; i < 5; i++ {
+		if _, _, err := a.Login(ctx, attacked, "wrong", sharedPeer); !errors.Is(err, auth.ErrInvalidCredentials) {
+			t.Fatalf("failed attempt %d against the attacked account: err = %v, want ErrInvalidCredentials", i, err)
+		}
+	}
+
+	// The second account has never failed. Its correct password must still be READ
+	// and accepted, even though it arrives through the same peer.
+	if _, _, err := a.Login(ctx, innocent, "innocent-password-1", sharedPeer); err != nil {
+		t.Fatalf("an account that never failed was refused from the shared peer: err = %v, want a session", err)
+	}
+
+	// Control: the account that did fail is still throttled on its own key.
+	if _, _, err := a.Login(ctx, attacked, "attacked-password-1", sharedPeer); !errors.Is(err, auth.ErrLockedOut) {
+		t.Fatalf("the attacked account after its own five failures: err = %v, want ErrLockedOut", err)
+	}
+}
+
 func TestRoleCeiling(t *testing.T) {
 	ctx := context.Background()
 	st := testStore(t)
