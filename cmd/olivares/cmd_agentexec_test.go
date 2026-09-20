@@ -89,6 +89,31 @@ func lot3WriteTempJSON(t *testing.T, content string) string {
 	return path
 }
 
+// lot3Field reads ONE ROW of a rendered key/value block: the value this command
+// printed under key, and whether the block named that key at all.
+//
+// These commands print through termrender.Fields, which UPPER-CASES the key and
+// pads it to the widest key in the block (termrender.go:303-321) — a key is a
+// short label, and the renderer's design says so. So a test that searched the
+// whole output for the lowercase key was asserting the casing of a presentation
+// package, and one that searched for the VALUE alone would pass on a value
+// printed under some other key entirely. The pair on one row is the claim.
+//
+// The cut is at the first run of two spaces, which is the column separator the
+// block is built from: everything before it is the padded key, everything after
+// it is the value.
+func lot3Field(out, key string) (string, bool) {
+	want := strings.ToUpper(strings.TrimSpace(key))
+	for _, line := range strings.Split(out, "\n") {
+		k, v, ok := strings.Cut(line, "  ")
+		if !ok || strings.TrimSpace(k) != want {
+			continue
+		}
+		return strings.TrimSpace(v), true
+	}
+	return "", false
+}
+
 // lot3ReadVerbs is one read verb per family. Refusal rules must hold for ALL EIGHT,
 // not for whichever one happened to be tested.
 var lot3ReadVerbs = map[string][]string{

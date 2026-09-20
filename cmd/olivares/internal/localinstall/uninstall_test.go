@@ -12,8 +12,12 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
+	"unicode"
+
+	"github.com/olivaresai/olivares/cmd/olivares/internal/termrender"
 )
 
 // runlevels stages an OpenRC runlevel tree the way rc-update leaves it: the
@@ -354,7 +358,7 @@ func TestOfflineRootOpenRCEstateRunsNoServiceCommand(t *testing.T) {
 			if err := Execute(m, Options{Operation: op, Root: root, Run: run, Out: &out}); err != nil {
 				t.Fatalf("%s: %v\n%s", op, err, out.String())
 			}
-			if !strings.Contains(out.String(), "stop-disable service       openrc:olivares") {
+			if !planRow(out.String(), "stop-disable", "service", "openrc:olivares") {
 				t.Fatalf("the live estate's service line is not disclosed:\n%s", out.String())
 			}
 			unitKept, binaryKept := exists(t, root, m.Unit()), exists(t, root, "/usr/local/bin/olivares")
@@ -413,4 +417,334 @@ func TestStopFailureLeavesSoftwareAndWritesNoWitness(t *testing.T) {
 	if calls != 2 {
 		t.Fatalf("service manager called %d times, want once per operation", calls)
 	}
+}
+
+// TestPlanRowReadsWholeCellsInTheirColumns is the regression for the predicate
+// the plan assertions in this package are written on.
+//
+// It exists because a predicate that searches ordered SUBSTRINGS anywhere in a
+// line accepts `remove-tree  system-user  olivares` for a request of `remove` +
+// `system-user`. `remove-tree` is a different real action of this planner and an
+// identity is only ever `remove`d, so an oracle that accepts it reports a wrong
+// uninstall as the right one. A role read out of the PATH column passes the same
+// way, and both are rows this planner can print.
+//
+// Every fixture is rendered by termrender rather than typed out, so what is under
+// test is the predicate against the real grammar and not against a hand-spaced
+// imitation of it. Each negative also names something the fixture must have
+// PRINTED, so a case cannot pass because nothing was rendered at all.
+func TestPlanRowReadsWholeCellsInTheirColumns(t *testing.T) {
+	// The environment is answered rather than read: resolveWidth consults COLUMNS,
+	// and a value inherited from the runner would decide between the table and its
+	// record fallback instead of the width asked for here.
+	render := func(width int, rows ...[]string) string {
+		var out strings.Builder
+		termrender.New(&out, termrender.Options{
+			Width:     width,
+			LookupEnv: func(string) (string, bool) { return "", false },
+		}).Table(termrender.Table{
+			Header: []string{"action", "role", "path", "note"},
+			Rows:   rows,
+		})
+		return out.String()
+	}
+	live := render(0,
+		[]string{"stop-disable", "service", "systemd:olivares", ""},
+		[]string{"remove", "binary", "/usr/local/bin/olivares", ""},
+		[]string{"record", "witness", "/etc/olivares/olivares-uninstall-witness-c3fd72b3f230ccd2.json", ""},
+		[]string{"remove", "system-user", "olivares", ""},
+		[]string{"remove", "system-group", "olivares", ""})
+	// The same verdicts on an estate that needs no stop-disable: every column is
+	// narrower, and the predicate must not notice.
+	narrow := render(0,
+		[]string{"keep", "config", "/etc/olivares/olivares.env", ""},
+		[]string{"remove", "system-user", "olivares", ""})
+	// Two paths outside ASCII, each with an ASCII identity row BENEATH it. Visible
+	// columns and byte offsets part company at the first multibyte rune, so a row
+	// read at byte offsets is cut inside the encoding, fails the rebuild — and
+	// takes every row after it with it, leaving the identity assertion below
+	// unanswered. The spellings are escaped rather than typed so the difference
+	// between them is in the source and not in an editor's normalisation.
+	accented := render(0,
+		[]string{"keep", "workspace", "/mnt/caf\u00e9", ""}, // precomposed: 9 columns, 10 bytes
+		[]string{"remove", "system-user", "olivares", ""})
+	combining := render(0,
+		[]string{"keep", "workspace", "/mnt/cafe\u0301", ""}, // decomposed: 9 columns, 11 bytes
+		[]string{"remove", "system-user", "olivares", ""})
+
+	for _, tc := range []struct {
+		name    string
+		out     string
+		want    []string
+		printed string // what the fixture must have rendered, so no case is vacuous
+		match   bool
+	}{
+		{"the service row, action role and identity", live,
+			[]string{"stop-disable", "service", "systemd:olivares"}, "", true},
+		{"an identity row, action and role", live,
+			[]string{"remove", "system-user"}, "", true},
+		{"the same verdict in a narrower table", narrow,
+			[]string{"remove", "system-user"}, "", true},
+		{"a longer action that begins with the one asked for",
+			render(0, []string{"remove-tree", "system-user", "olivares", ""}),
+			[]string{"remove", "system-user"}, "remove-tree", false},
+		{"a longer role that begins with the one asked for",
+			render(0, []string{"remove", "system-user-shadow", "olivares", ""}),
+			[]string{"remove", "system-user"}, "system-user-shadow", false},
+		{"the role named in the path and not in the role column",
+			render(0, []string{"remove", "data", "/tmp/system-user", ""}),
+			[]string{"remove", "system-user"}, "/tmp/system-user", false},
+		{"the role named in the note and not in the role column",
+			render(0, []string{"remove", "data", "/srv/olivares", "left by the remove system-user pass"}),
+			[]string{"remove", "system-user"}, "remove system-user pass", false},
+		{"a different identity behind the same prefix",
+			render(0, []string{"stop-disable", "service", "openrc:olivares-other", ""}),
+			[]string{"stop-disable", "service", "openrc:olivares"}, "openrc:olivares-other", false},
+		{"the action and the role swapped",
+			render(0, []string{"service", "stop-disable", "openrc:olivares", ""}),
+			[]string{"stop-disable", "service"}, "stop-disable", false},
+		{"the row broken into a record block by a narrow terminal",
+			render(40, []string{"stop-disable", "service", "systemd:olivares", ""}),
+			[]string{"stop-disable", "service"}, "ACTION  stop-disable", false},
+		{"a verdict this plan did not reach", live,
+			[]string{"keep", "witness"}, "record", false},
+		{"the header is not a row", live,
+			[]string{"action", "role"}, "ACTION", false},
+		{"nothing asked for", live, nil, "record", false},
+		{"a path holding one space is still one cell",
+			render(0, []string{"keep", "data", "/srv/olivares data", ""}),
+			[]string{"keep", "data", "/srv/olivares data"}, "", true},
+		// An empty cell prints as padding, so a whitespace split slides every later
+		// cell one column left and the PATH answers for the ROLE.
+		{"an empty role does not let the path answer for it",
+			render(0, []string{"remove", "", "system-user", ""}),
+			[]string{"remove", "system-user"}, "system-user", false},
+		// cleanAbsolutePath admits consecutive spaces in a workspace path and Table
+		// prints them verbatim, so the complete path has to match and its prefix
+		// must not.
+		{"a path holding two spaces matches itself",
+			render(0, []string{"keep", "workspace", "/mnt/project  beta", ""}),
+			[]string{"keep", "workspace", "/mnt/project  beta"}, "/mnt/project  beta", true},
+		{"a path holding two spaces is not its own prefix",
+			render(0, []string{"keep", "workspace", "/mnt/project  beta", ""}),
+			[]string{"keep", "workspace", "/mnt/project"}, "/mnt/project  beta", false},
+		{"a path outside ASCII matches its whole value", accented,
+			[]string{"keep", "workspace", "/mnt/caf\u00e9"}, "/mnt/caf\u00e9", true},
+		{"a path outside ASCII is not its truncation", accented,
+			[]string{"keep", "workspace", "/mnt/caf"}, "/mnt/caf\u00e9", false},
+		{"the ASCII row beneath a multibyte one is still read", accented,
+			[]string{"remove", "system-user"}, "/mnt/caf\u00e9", true},
+		{"a combining accent matches its whole value", combining,
+			[]string{"keep", "workspace", "/mnt/cafe\u0301"}, "/mnt/cafe\u0301", true},
+		// Two spellings of the same glyphs are two different paths, because they are
+		// two different paths in the manifest this table printed.
+		{"a combining accent is not the precomposed spelling", combining,
+			[]string{"keep", "workspace", "/mnt/caf\u00e9"}, "/mnt/cafe\u0301", false},
+		{"the ASCII row beneath a combining one is still read", combining,
+			[]string{"remove", "system-user"}, "/mnt/cafe\u0301", true},
+		// THE LIMIT, pinned where it can be read: the padding is spaces, so a cell
+		// ending in one prints exactly like the same cell without it. The path below
+		// really is "/mnt/project  " and this table cannot say so. A test that has to
+		// see that reads BuildPlan's Items. If the renderer ever quotes its cells,
+		// this case goes red and the limit can be lifted.
+		{"a trailing space is not in the printed form at all",
+			render(0, []string{"keep", "workspace", "/mnt/project  ", ""}),
+			[]string{"keep", "workspace", "/mnt/project"}, "workspace", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.printed != "" && !strings.Contains(tc.out, tc.printed) {
+				t.Fatalf("the fixture never printed %q, so this case proves nothing:\n%s", tc.printed, tc.out)
+			}
+			if got := planRow(tc.out, tc.want...); got != tc.match {
+				t.Errorf("planRow(%q) = %v, want %v, in:\n%s", tc.want, got, tc.match, tc.out)
+			}
+		})
+	}
+}
+
+// planColumns are the headings the uninstall plan prints, in order. The helpers
+// below anchor on them, because they are what fixes the column positions of
+// every row beneath.
+var planColumns = []string{"ACTION", "ROLE", "PATH", "NOTE"}
+
+// planRuneWidth is the renderer's own width model for the plain output these
+// helpers read: visibleWidth counts a combining Mn/Me mark as zero columns and
+// every other rune as one (termrender.go:203-228). Ranging over a string gives
+// the same decoding, an invalid byte included, which that function also counts
+// as one.
+//
+// Colour is off on this path — a Builder and a pipe are not terminals — so the
+// escape-sequence half of that contract cannot arise. If one ever did, the
+// columns would shift, the row would fail the rebuild below and be refused
+// rather than misread.
+func planRuneWidth(r rune) int {
+	if unicode.Is(unicode.Mn, r) || unicode.Is(unicode.Me, r) {
+		return 0
+	}
+	return 1
+}
+
+// planWidth is planRuneWidth over a whole cell.
+func planWidth(s string) int {
+	n := 0
+	for _, r := range s {
+		n += planRuneWidth(r)
+	}
+	return n
+}
+
+// planHeader returns the VISIBLE column each heading begins at, or nil if this
+// line is not the plan's header.
+//
+// Visible, not byte: Table measures and pads in columns, so a row holding one
+// multibyte cell puts every later column at a byte offset the ASCII header
+// cannot give. The headings hold no spaces, so a plain scan finds them.
+func planHeader(line string) []int {
+	var names []string
+	var starts []int
+	col, at, atCol := 0, -1, 0
+	for i, r := range line {
+		if r == ' ' {
+			if at >= 0 {
+				names = append(names, line[at:i])
+				starts = append(starts, atCol)
+				at = -1
+			}
+		} else if at < 0 {
+			at, atCol = i, col
+		}
+		col += planRuneWidth(r)
+	}
+	if at >= 0 {
+		names = append(names, line[at:])
+		starts = append(starts, atCol)
+	}
+	if !slices.Equal(names, planColumns) {
+		return nil
+	}
+	return starts
+}
+
+// planVisibleSlice returns the bytes of line covering visible columns [from,to),
+// whole runes only, with the padding removed. A negative to means "to the end".
+//
+// A zero-width mark stays with the rune it modifies: the slice only moves on at
+// a rune that occupies a column of its own.
+func planVisibleSlice(line string, from, to int) string {
+	col, start, end := 0, -1, len(line)
+	for i, r := range line {
+		w := planRuneWidth(r)
+		if w > 0 {
+			if to >= 0 && col >= to {
+				end = i
+				break
+			}
+			if start < 0 && col >= from {
+				start = i
+			}
+		}
+		col += w
+	}
+	if start < 0 {
+		return "" // the line was right-trimmed: this column is past its end
+	}
+	return strings.TrimRight(line[start:end], " ")
+}
+
+// planRowCells reads one line at the columns the header fixed.
+func planRowCells(line string, starts []int) []string {
+	cells := make([]string, len(starts))
+	for c := range starts {
+		to := -1
+		if c+1 < len(starts) {
+			// The next column begins two spaces after this one ends.
+			to = starts[c+1] - 2
+		}
+		cells[c] = planVisibleSlice(line, starts[c], to)
+	}
+	return cells
+}
+
+// planRowLine rebuilds what those cells would print at those columns. A line
+// that does not come back is not a row of this table and is not read as one.
+func planRowLine(cells []string, starts []int) string {
+	var line strings.Builder
+	col := 0
+	for c, cell := range cells {
+		if pad := starts[c] - col; pad > 0 {
+			line.WriteString(strings.Repeat(" ", pad))
+			col += pad
+		} else if c > 0 && pad < 0 {
+			return "" // a cell wider than its column: not this table's row
+		}
+		line.WriteString(cell)
+		col += planWidth(cell)
+	}
+	return strings.TrimRight(line.String(), " ")
+}
+
+// planRows reads the printed plan back into rows, cell by cell.
+//
+// The columns come from the HEADER, and they have to: a run of spaces inside a
+// row is NOT a column boundary. An empty cell contributes only padding, which
+// merges with the separator and shifts every later cell one column left, and a
+// path may hold two consecutive spaces — cleanAbsolutePath admits them and Table
+// prints them verbatim. Either shape makes a whitespace split read the wrong
+// column.
+//
+// The record fallback a narrow terminal triggers prints one field per line and
+// no header, so it yields no rows and every request is refused.
+func planRows(out string) [][]string {
+	lines := strings.Split(out, "\n")
+	for i, line := range lines {
+		starts := planHeader(line)
+		if starts == nil {
+			continue
+		}
+		var rows [][]string
+		for _, row := range lines[i+1:] {
+			if strings.TrimSpace(row) == "" {
+				break
+			}
+			cells := planRowCells(row, starts)
+			if planRowLine(cells, starts) != strings.TrimRight(row, " ") {
+				break
+			}
+			rows = append(rows, cells)
+		}
+		return rows
+	}
+	return nil
+}
+
+// planRow reports whether the plan printed ONE row whose leading cells are
+// exactly the ones given: the action, then the role, then the path or identity
+// when the caller asks for one. Only the padding Table adds is ignored, so a
+// longer action or role that merely begins with the request, a value found in
+// another column, the cells swapped and a row broken into a record block are all
+// refused. Column widths move with the fixture and do not matter.
+//
+// Cells are compared as BYTES. Two spellings of the same accented path are two
+// different paths here, because they are two different paths in the manifest
+// this table printed; nothing is normalised on the way through.
+//
+// Asking for nothing is false: an empty question has no answer, and true would
+// make a typo look like a pass.
+//
+// THE ONE DISTINCTION THIS CANNOT MAKE is the presentation's and not the
+// predicate's: a cell whose content ENDS in spaces prints exactly like the same
+// content without them, because the padding is spaces too. A path of "/srv/x  "
+// is accepted for a request of "/srv/x". Interior spaces ARE distinguished. A
+// test that has to see a trailing space reads BuildPlan's Items, which carry the
+// path unrendered, instead of this table.
+func planRow(out string, cells ...string) bool {
+	if len(cells) == 0 {
+		return false
+	}
+	for _, row := range planRows(out) {
+		if len(row) >= len(cells) && slices.Equal(row[:len(cells)], cells) {
+			return true
+		}
+	}
+	return false
 }

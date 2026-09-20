@@ -449,7 +449,7 @@ func TestCustomLayoutPreserveThenPlanThenPurgeOnOneRoot(t *testing.T) {
 	if err := Execute(m, Options{Operation: Preserve, Root: root, Out: &out}); err != nil {
 		t.Fatalf("preserve: %v\n%s", err, out.String())
 	}
-	if !strings.Contains(out.String(), "record       witness") {
+	if !planRow(out.String(), "record", "witness") {
 		t.Fatalf("preserve plan did not disclose the witness:\n%s", out.String())
 	}
 	if exists(t, root, "/etc/systemd/system/olivares.service") {
@@ -463,7 +463,7 @@ func TestCustomLayoutPreserveThenPlanThenPurgeOnOneRoot(t *testing.T) {
 	if err := Execute(m, Options{Operation: Plan, Root: root, Out: &out}); err != nil {
 		t.Fatalf("plan after preserve: %v", err)
 	}
-	if !strings.Contains(out.String(), "keep         witness") || !strings.Contains(out.String(), "/mnt/workspaces") {
+	if !planRow(out.String(), "keep", "witness") || !strings.Contains(out.String(), "/mnt/workspaces") {
 		t.Fatalf("plan after preserve is incomplete:\n%s", out.String())
 	}
 	// A second preserve is a no-op that keeps the estate and the witness.
@@ -820,9 +820,11 @@ func TestSystemPurgePlanKeepsTheIdentitiesALiveInstallationUses(t *testing.T) {
 	if err := Execute(m, Options{Operation: Purge, Root: own, Out: &out}); err != nil {
 		t.Fatalf("purge of the live estate: %v\n%s", err, out.String())
 	}
-	for _, want := range []string{"stop-disable service", "remove       system-user", "remove       system-group"} {
-		if !strings.Contains(out.String(), want) {
-			t.Fatalf("the live estate's own purge lost %q:\n%s", want, out.String())
+	for _, want := range [][]string{
+		{"stop-disable", "service"}, {"remove", "system-user"}, {"remove", "system-group"},
+	} {
+		if !planRow(out.String(), want...) {
+			t.Fatalf("the live estate's own purge lost %q:\n%s", strings.Join(want, " "), out.String())
 		}
 	}
 

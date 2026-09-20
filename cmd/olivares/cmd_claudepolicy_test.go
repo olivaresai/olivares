@@ -279,8 +279,10 @@ func TestClaudePolicyDryRunRefusesThroughTheEnginesStatusNotAVerdict(t *testing.
 	if okErr != nil {
 		t.Fatalf("a valid dry-run must exit 0, got %v (code %d)", okErr, exitcode.From(okErr))
 	}
-	if !strings.Contains(okOut, "notes") {
-		t.Errorf("the engine's notes must reach the operator, got:\n%s", okOut)
+	if got, named := lot3Field(okOut, "notes"); !named ||
+		!strings.Contains(got, "precedence resolved, effect not diffed") {
+		t.Errorf("the engine's notes must reach the operator, not just their heading: "+
+			"NOTES = %q (named=%v), got:\n%s", got, named, okOut)
 	}
 }
 

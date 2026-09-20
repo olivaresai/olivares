@@ -64,8 +64,9 @@ func TestVoiceOpenCarriesTheWholeRequestAndReportsThePolicyVerdict(t *testing.T)
 			t.Errorf("the open request is missing %s: %s", want, body)
 		}
 	}
-	if !strings.Contains(out, "policy_verdict") || !strings.Contains(out, "allow") {
-		t.Errorf("the policy verdict must be reported, got:\n%s", out)
+	if got, named := lot3Field(out, "policy_verdict"); !named || got != "allow" {
+		t.Errorf("the policy verdict must be reported: POLICY_VERDICT = %q (named=%v), want \"allow\", got:\n%s",
+			got, named, out)
 	}
 }
 
