@@ -32,6 +32,11 @@ cd "$ROOT" || { echo "test-check-pr-suite-shards: cannot enter $ROOT" >&2; exit 
 GATE="$ROOT/scripts/check-pr-suite-shards.sh"
 [ -x "$GATE" ] || { echo "test-check-pr-suite-shards: $GATE is not executable" >&2; exit 2; }
 
+# Resolved BEFORE any stub directory goes on the PATH, because the case that breaks `grep`
+# still needs the real one for every other call it makes.
+REAL_GREP="$(command -v grep)" ||
+  { echo "test-check-pr-suite-shards: no grep on PATH" >&2; exit 2; }
+
 T="$(mktemp -d "${TMPDIR:-/tmp}/pr-suite-battery.XXXXXX")" ||
   { echo "test-check-pr-suite-shards: cannot create a scratch directory" >&2; exit 2; }
 trap 'rm -rf "$T"' EXIT
@@ -154,6 +159,298 @@ check() {
     FAIL=$((FAIL + 1)); return
   fi
   printf '  ✓ %s (rc %s)\n' "$name" "$got"
+  PASS=$((PASS + 1))
+}
+
+
+# ── the runner, not the gate ──────────────────────────────────────────────────────────
+# Four of the cases below run scripts/pr-suite-shards.sh itself, because the last line of
+# defense against a shard that selects nothing is in the RUNNER: the gate can be skipped, a
+# fork can carry a spec the gate never read, and `go list` can answer differently on the
+# machine that runs the suite than on the one that reviewed it. `go` and `task` are replaced
+# by stubs that record the call and fail, so a runner that reaches them cannot pass by
+# exiting 1 for some other reason: the case checks the REASON and the marker, not the number.
+#
+# A case that WANTS the toolchain reached says so with STUB_TASK_EXIT, and checks the log with
+# check_runner_log instead of the marker. Every stub is rewritten on each call, so no case
+# inherits another's PATH.
+stub_tools() {
+  mkdir -p "$T/stub"
+  # A case can ask for a `grep` that cannot look, to prove the runner tells that apart from a
+  # count of zero. It is removed on every call, so no case inherits another's PATH.
+  rm -f "$T/stub/grep"
+  if [ -n "${STUB_GREP_EXIT:-}" ]; then
+    # The single quotes are the point: `$1` and `$@` are written into the stub.
+    # shellcheck disable=SC2016
+    {
+      printf '#!/usr/bin/env bash\n'
+      printf '# Only the counting call is broken; every other call is the real grep.\n'
+      printf 'if [ "$1" = "-cE" ]; then echo "grep: fixture: cannot look" >&2; exit %s; fi\n' \
+        "$STUB_GREP_EXIT"
+      printf 'exec %s "$@"\n' "$REAL_GREP"
+    } > "$T/stub/grep"
+    chmod +x "$T/stub/grep"
+  fi
+  local tool code
+  for tool in go task; do
+    code=9
+    [ "$tool" = task ] && code="${STUB_TASK_EXIT:-9}"
+    {
+      printf '#!/usr/bin/env bash\n'
+      printf 'printf "%%s\\\\n" "%s $*" >> %s\n' "$tool" "$T/stub-was-called.txt"
+      printf 'exit %s\n' "$code"
+    } > "$T/stub/$tool"
+    chmod +x "$T/stub/$tool"
+  done
+  : > "$T/stub-was-called.txt"
+}
+
+# OLIVARES_PR_SUITE_RUNNER names the script these cases drive, and it has a name of its own
+# rather than sharing the gate's OLIVARES_PR_SUITE_READER, which case 37 sets and unsets for
+# its own purpose. Defaulting to the tree's copy keeps every case honest; overriding it is
+# what makes a mutation of the runner testable WITHOUT editing the runner in the worktree —
+# which is how the case below was shown to fail when the line it pins is put back.
+run_runner() {
+  stub_tools
+  PATH="$T/stub:$PATH" \
+  OLIVARES_PR_SUITE_SHARDS="$T/spec.txt" \
+  OLIVARES_PR_SUITE_PACKAGES="$T/pkgs.txt" \
+  OLIVARES_PR_SUITE_TESTS="$T/tests.txt" \
+  bash "${OLIVARES_PR_SUITE_RUNNER:-$ROOT/scripts/pr-suite-shards.sh}" run "$1" \
+    > "$T/out.txt" 2> "$T/err.txt"
+  echo "$?"
+}
+
+# check_runner <name> <shard> <expected rc> <text that must appear>
+check_runner() {
+  local name="$1" shard="$2" want="$3" needle="$4" got
+  got="$(run_runner "$shard")"
+  if [ "$got" != "$want" ]; then
+    printf '  ✗ %s — expected rc %s, got %s\n' "$name" "$want" "$got" >&2
+    sed 's/^/      /' "$T/err.txt" | head -6 >&2
+    FAIL=$((FAIL + 1)); return
+  fi
+  if ! grep -qF -- "$needle" "$T/out.txt" "$T/err.txt"; then
+    printf '  ✗ %s — rc %s is right but the reason is not said: no %q in the output\n' \
+      "$name" "$want" "$needle" >&2
+    sed 's/^/      /' "$T/err.txt" | head -6 >&2
+    FAIL=$((FAIL + 1)); return
+  fi
+  if [ -s "$T/stub-was-called.txt" ]; then
+    printf '  ✗ %s — the runner reached the toolchain before refusing: %s\n' \
+      "$name" "$(head -1 "$T/stub-was-called.txt")" >&2
+    FAIL=$((FAIL + 1)); return
+  fi
+  printf '  ✓ %s (rc %s, nothing was run)\n' "$name" "$got"
+  PASS=$((PASS + 1))
+}
+
+# check_runner_log <name> <shard> <expected rc> <text that must appear>…
+# The opposite question to check_runner's: not "did it refuse before running anything" but
+# "did it run everything it owes and still report the red". One assertion per line of the log
+# that has to be there, because the defect this catches is a MISSING line and not a wrong one.
+check_runner_log() {
+  local name="$1" shard="$2" want="$3"
+  shift 3
+  local got needle
+  got="$(run_runner "$shard")"
+  if [ "$got" != "$want" ]; then
+    printf '  ✗ %s — expected rc %s, got %s\n' "$name" "$want" "$got" >&2
+    sed 's/^/      /' "$T/out.txt" "$T/err.txt" | head -8 >&2
+    FAIL=$((FAIL + 1)); return
+  fi
+  for needle in "$@"; do
+    if grep -qF -- "$needle" "$T/out.txt" "$T/err.txt"; then
+      continue
+    fi
+    printf '  ✗ %s — rc %s is right but the log does not carry %q\n' "$name" "$want" "$needle" >&2
+    sed 's/^/      /' "$T/out.txt" | head -8 >&2
+    FAIL=$((FAIL + 1)); return
+  done
+  printf '  ✓ %s (rc %s, %d log line(s) confirmed)\n' "$name" "$got" "$#"
+  PASS=$((PASS + 1))
+}
+
+# A root whose scripts/with-pg-env.sh answers instead of running Go: RED for the whole-package
+# invocation and GREEN for the one that carries a -run. The runner resolves that wrapper
+# relative to OLIVARES_ROOT, so the fixture replaces it without touching the tree's own copy
+# and without a compiler anywhere near the case.
+fake_pg_env_root() {
+  local root="$T/fakeroot"
+  rm -rf "$root"; mkdir -p "$root/scripts"
+  # The single quotes are the point: `$@` and `$a` are written into the stub, not expanded.
+  # shellcheck disable=SC2016
+  {
+    printf '#!/usr/bin/env bash\n'
+    printf 'for a in "$@"; do\n'
+    printf '  if [ "$a" = "-run" ]; then echo "ok  the name group ran"; exit 0; fi\n'
+    printf 'done\n'
+    printf 'echo "FAIL example.test/tree/cmd/helper"\n'
+    printf 'exit 1\n'
+  } > "$root/scripts/with-pg-env.sh"
+  chmod +x "$root/scripts/with-pg-env.sh"
+}
+
+# The gate with the REAL test enumerator — no OLIVARES_PR_SUITE_TESTS — so that the `go list`
+# path itself is under test. GOPROXY=off because the fixture package paths are not resolvable
+# anywhere: without it `go list` would try to fetch the module it cannot find, and a battery
+# that reaches the network is a battery that fails on a machine that has none.
+run_gate_real_enum() {
+  GOPROXY=off GOFLAGS='' \
+  OLIVARES_PR_SUITE_SHARDS="$T/spec.txt" \
+  OLIVARES_PR_SUITE_PACKAGES="$T/pkgs.txt" \
+  OLIVARES_PR_CI_WF="$T/wf.yml" \
+  OLIVARES_TASKFILE="$T/Taskfile.yml" \
+  bash "$GATE" > "$T/out.txt" 2> "$T/err.txt"
+  echo "$?"
+}
+
+check_real_enum() {
+  local name="$1" want="$2" needle="${3:-}" got
+  got="$(run_gate_real_enum)"
+  if [ "$got" != "$want" ]; then
+    printf '  ✗ %s — expected rc %s, got %s\n' "$name" "$want" "$got" >&2
+    sed 's/^/      /' "$T/err.txt" | head -6 >&2
+    FAIL=$((FAIL + 1)); return
+  fi
+  if [ -n "$needle" ] && ! grep -qF -- "$needle" "$T/out.txt" "$T/err.txt"; then
+    printf '  ✗ %s — rc %s is right but the reason is not said: no %q in the output\n' \
+      "$name" "$want" "$needle" >&2
+    sed 's/^/      /' "$T/err.txt" | head -6 >&2
+    FAIL=$((FAIL + 1)); return
+  fi
+  printf '  ✓ %s (rc %s)\n' "$name" "$got"
+  PASS=$((PASS + 1))
+}
+
+# A miniature Go WORKSPACE on disk: three modules, the middle one with a package that does
+# not parse. It exists for one question only — what the gate does when it cannot finish
+# reading the universe — and it is the cheapest tree that can ask it. No module imports
+# anything outside the standard library, so nothing is fetched.
+work_fixture() {
+  local root="$T/work" m
+  rm -rf "$root"; mkdir -p "$root"
+  {
+    printf 'go 1.26.6\n\n'
+    printf 'use (\n\t./mod-a\n\t./mod-broken\n\t./mod-c\n)\n'
+  } > "$root/go.work"
+  for m in mod-a mod-c; do
+    mkdir -p "$root/$m"
+    printf 'module example.test/%s\n\ngo 1.26.6\n' "$m" > "$root/$m/go.mod"
+    printf 'package %s\n' "${m//-/}" > "$root/$m/pkg.go"
+    printf 'package %s\n\nimport "testing"\n\nfunc TestThing(t *testing.T) { _ = t }\n' \
+      "${m//-/}" > "$root/$m/pkg_test.go"
+  done
+  mkdir -p "$root/mod-broken"
+  printf 'module example.test/mod-broken\n\ngo 1.26.6\n' > "$root/mod-broken/go.mod"
+  # Valid go.work, valid go.mod, unparsable Go: `go work edit -json` still lists the module,
+  # and `go list ./...` inside it fails. That is the shape the walk has to survive.
+  printf 'package\n' > "$root/mod-broken/broken.go"
+}
+
+# A package on disk whose test file carries a name the old enumerator could not read whole.
+# `Ü` is not a lower-case letter, so Go's own rule accepts TestÜberSync as a test.
+enum_fixture() {
+  local dir="$T/enum"
+  rm -rf "$dir"; mkdir -p "$dir"
+  printf 'module example.test/enum\n\ngo 1.26.6\n' > "$dir/go.mod"
+  printf 'package enum\n' > "$dir/enum.go"
+  {
+    printf 'package enum\n\nimport "testing"\n\n'
+    printf 'func TestAsciiOne(t *testing.T) { _ = t }\n'
+    printf 'func Test\xc3\x9cberSync(t *testing.T) { _ = t }\n'
+  } > "$dir/enum_test.go"
+}
+
+# The same, with a `func Test…` line whose name the reader must refuse rather than guess: a
+# type parameter list is not a test signature, and a reader that silently took `TestGeneric`
+# would report a test `go test` will never run.
+enum_bad_fixture() {
+  local dir="$T/enumbad"
+  rm -rf "$dir"; mkdir -p "$dir"
+  printf 'module example.test/enumbad\n\ngo 1.26.6\n' > "$dir/go.mod"
+  printf 'package enumbad\n' > "$dir/enumbad.go"
+  {
+    printf 'package enumbad\n\nimport "testing"\n\n'
+    printf 'func TestPlain(t *testing.T) { _ = t }\n'
+    printf 'func TestGeneric[T any](t *testing.T) { _ = t }\n'
+  } > "$dir/enumbad_test.go"
+}
+
+
+# The gate with NO package override at all, so that the walk over the go.work modules is the
+# thing under test. OLIVARES_ROOT and OLIVARES_PR_SUITE_READER come from the caller.
+run_gate_no_pkg_override() {
+  GOPROXY=off GOFLAGS='' \
+  OLIVARES_PR_SUITE_SHARDS="$T/spec.txt" \
+  OLIVARES_PR_CI_WF="$T/wf.yml" \
+  OLIVARES_TASKFILE="$T/Taskfile.yml" \
+  bash "$GATE" > "$T/out.txt" 2> "$T/err.txt"
+  echo "$?"
+}
+
+check_no_pkg_override() {
+  local name="$1" want="$2" needle="${3:-}" got
+  got="$(run_gate_no_pkg_override)"
+  if [ "$got" != "$want" ]; then
+    printf '  ✗ %s — expected rc %s, got %s\n' "$name" "$want" "$got" >&2
+    sed 's/^/      /' "$T/err.txt" | head -6 >&2
+    FAIL=$((FAIL + 1)); return
+  fi
+  if [ -n "$needle" ] && ! grep -qF -- "$needle" "$T/out.txt" "$T/err.txt"; then
+    printf '  ✗ %s — rc %s is right but the reason is not said: no %q in the output\n' \
+      "$name" "$want" "$needle" >&2
+    sed 's/^/      /' "$T/err.txt" | head -6 >&2
+    FAIL=$((FAIL + 1)); return
+  fi
+  printf '  ✓ %s (rc %s)\n' "$name" "$got"
+  PASS=$((PASS + 1))
+}
+
+# The enumerator on its own, against a package on disk. `tests` is the subcommand the gate
+# and the runner both go through, so what it prints is what both of them will believe.
+#
+# ⛔ LC_ALL=C, AND THAT IS THE POINT. Which names a character class matches depends on the
+# locale and on which `grep` the machine has: the same file enumerated one way here and
+# another on a runner would mean the gate certifies a partition the suite does not run. The
+# battery pins the answer under the C locale, which is what a hosted runner has.
+# check_tests <name> <root> <package> <the names, in order, space separated>
+check_tests() {
+  local name="$1" root="$2" pkg="$3" want="$4" got rc=0
+  LC_ALL=C GOPROXY=off GOFLAGS='' OLIVARES_ROOT="$root" OLIVARES_PR_SUITE_SHARDS="$T/spec.txt" \
+    bash "$ROOT/scripts/pr-suite-shards.sh" tests "$pkg" > "$T/out.txt" 2> "$T/err.txt" || rc=$?
+  got="$(tr '\n' ' ' < "$T/out.txt")"
+  got="${got% }"
+  if [ "$rc" != 0 ]; then
+    printf '  ✗ %s — the reader refused (rc %s)\n' "$name" "$rc" >&2
+    sed 's/^/      /' "$T/err.txt" | head -4 >&2
+    FAIL=$((FAIL + 1)); return
+  fi
+  if [ "$got" != "$want" ]; then
+    printf '  ✗ %s — enumerated %q, expected %q\n' "$name" "$got" "$want" >&2
+    FAIL=$((FAIL + 1)); return
+  fi
+  printf '  ✓ %s (%s)\n' "$name" "$got"
+  PASS=$((PASS + 1))
+}
+
+# check_tests_refused <name> <root> <package> <text that must name file and line>
+check_tests_refused() {
+  local name="$1" root="$2" pkg="$3" needle="$4" rc=0
+  rc=0
+  LC_ALL=C GOPROXY=off GOFLAGS='' OLIVARES_ROOT="$root" OLIVARES_PR_SUITE_SHARDS="$T/spec.txt" \
+    bash "$ROOT/scripts/pr-suite-shards.sh" tests "$pkg" > "$T/out.txt" 2> "$T/err.txt" || rc=$?
+  if [ "$rc" != 1 ]; then
+    printf '  ✗ %s — expected rc 1, got %s\n' "$name" "$rc" >&2
+    sed 's/^/      /' "$T/out.txt" "$T/err.txt" | head -6 >&2
+    FAIL=$((FAIL + 1)); return
+  fi
+  if ! grep -qF -- "$needle" "$T/err.txt"; then
+    printf '  ✗ %s — rc 1 is right but it does not name where: no %q\n' "$name" "$needle" >&2
+    sed 's/^/      /' "$T/err.txt" | head -4 >&2
+    FAIL=$((FAIL + 1)); return
+  fi
+  printf '  ✓ %s (rc 1, named)\n' "$name"
   PASS=$((PASS + 1))
 }
 
@@ -326,13 +623,115 @@ group_fixture
 } >> "$T/spec.txt"
 check "case 31 — a partitioned package with no remainder group" 1 "none of them is the remainder"
 
+# NOTHING SELECTED IS NOT NOTHING WRONG ───────────────────────────────────────────────
+# `go test -run` over an expression that matches no test prints ok and exits 0. Everything
+# from here down is about the two places that can happen — the gate, which can refuse the
+# spec, and the runner, which is the only thing left when the gate was never run.
+group_fixture
+# core/api split into two families that between them name both its tests: the remainder is
+# then EMPTY, and an empty remainder is not an idle group — it is a `go test` that would
+# select nothing, or be skipped, and either way report success.
+{
+  printf 'example.test/tree/core/api TestOne\n'
+  printf 'example.test/tree/core/api TestTwo\n'
+} >> "$T/tests.txt"
+{
+  printf 'group a example.test/tree/core/api one One\n'
+  printf 'group b example.test/tree/core/api two Two\n'
+  printf 'group t1 example.test/tree/core/api rest *\n'
+} >> "$T/spec.txt"
+check "case 32 — a remainder that selects nothing" 1 "selects no test"
+
+group_fixture
+# Shard t1 owns no whole package, so nothing can fail ahead of the group and the case is
+# about the group alone.
+sed -i 's|^group t1 example.test/tree/cmd/tool rest \*$|group t1 example.test/tree/cmd/tool zeta Zeta|' "$T/spec.txt"
+check_runner "case 33 — the runner refuses a named group that selects nothing" t1 1 "selects no test"
+
+group_fixture
+{
+  printf 'example.test/tree/core/api TestOne\n'
+} >> "$T/tests.txt"
+{
+  printf 'shard t2\n'
+  printf 'group a example.test/tree/core/api one One\n'
+  printf 'group t2 example.test/tree/core/api rest *\n'
+} >> "$T/spec.txt"
+check_runner "case 34 — the runner refuses a remainder that selects nothing" t2 1 "selects no test"
+
+# AN INABILITY IS NEVER AN EMPTY UNIVERSE ─────────────────────────────────────────────
+group_fixture
+rm -f "$T/tests.txt"
+check_real_enum "case 35 — go list cannot place a split package: COULD NOT LOOK" 2 "could not locate"
+
+group_fixture
+# The file exists and is readable and simply says nothing about this package. That is a
+# package with no test, which has a prepared finding of its own — not an inability.
+printf 'example.test/tree/core/api TestOne\n' > "$T/tests.txt"
+check "case 36 — a split package with no test reaches its own finding" 1 "has no top-level test"
+
+group_fixture
+{
+  printf '#!/usr/bin/env bash\n'
+  printf 'echo "pr-suite-shards: COULD NOT LOOK — the fixture reader cannot look" >&2\n'
+  printf 'exit 2\n'
+} > "$T/reader-cannot.sh"
+chmod +x "$T/reader-cannot.sh"
+export OLIVARES_PR_SUITE_READER="$T/reader-cannot.sh"
+check "case 37 — a reader that COULD NOT LOOK is not a finding" 2 "COULD NOT LOOK"
+unset OLIVARES_PR_SUITE_READER
+
+# THE WALK CANNOT BE CUT SHORT IN SILENCE ─────────────────────────────────────────────
+reset_fixture
+work_fixture
+# No package override here: the point is the walk itself. The middle module of three fails,
+# and the two facts that must survive it are the exit code and the module's name.
+export OLIVARES_ROOT="$T/work"
+export OLIVARES_PR_SUITE_READER="$ROOT/scripts/pr-suite-shards.sh"
+check_no_pkg_override "case 38 — one module of the workspace cannot be listed" 2 "mod-broken"
+unset OLIVARES_ROOT OLIVARES_PR_SUITE_READER
+
+# A NAME IS ENUMERATED WHOLE OR IT IS REFUSED ─────────────────────────────────────────
+reset_fixture
+enum_fixture
+check_tests "case 39 — a name outside ASCII is enumerated whole" "$T/enum" example.test/enum \
+  "TestAsciiOne TestÜberSync"
+
+reset_fixture
+enum_bad_fixture
+check_tests_refused "case 40 — a func Test line the reader cannot read whole" "$T/enumbad" \
+  example.test/enumbad "enumbad_test.go:6"
+
+# A RED PACKAGE DOES NOT HIDE THE REST OF ITS SHARD ───────────────────────────────────
+group_fixture
+# Shard a is the only shape in which the question can be asked: two whole packages, one name
+# group, and — with this line — a leg. The wrapper the runner goes through is replaced, so the
+# package run is red and the group's is green without a compiler being involved at all. The
+# leg's `task` is told to succeed, so the shard's rc 1 can only have come from the package.
+printf 'leg a test:example-leg\n' >> "$T/spec.txt"
+fake_pg_env_root
+export OLIVARES_ROOT="$T/fakeroot" STUB_TASK_EXIT=0
+check_runner_log "case 41 — a red package does not hide its group or its leg" a 1 \
+  "FAIL example.test/tree/cmd/helper" \
+  "group alpha of example.test/tree/cmd/tool: 2 of 5 test(s)" \
+  "leg test:example-leg"
+unset OLIVARES_ROOT STUB_TASK_EXIT
+
+echo
+group_fixture
+# Shard t1 owns no whole package, so the only thing that can happen in it is the count — and
+# the count is made with a `grep` that answers 2. Two is not a count of zero.
+export STUB_GREP_EXIT=2
+check_runner "case 42 — a count that could not be made is not a count of zero" t1 2 "grep exited 2"
+unset STUB_GREP_EXIT
+
 echo
 printf 'test-check-pr-suite-shards: %d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ] || exit 1
 # A battery that ran nothing exits 0 for free. It has to say how many it ran, and refuse
 # if the number is not the one it was written with.
-[ "$PASS" -eq 31 ] || {
-  echo "test-check-pr-suite-shards: only $PASS of 31 cases ran — the battery was edited without its count" >&2
+[ "$PASS" -eq 42 ] || {
+  echo "test-check-pr-suite-shards: only $PASS of 42 cases ran — the battery was edited without its count" >&2
   exit 1
 }
 exit 0

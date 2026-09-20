@@ -4448,8 +4448,10 @@ tasks:
       declares are the ones the spec declares, with the Go timeout under the step ceiling so
       Go names the package that hung instead of the step being cancelled mute; and every
       top-level test, fuzz target and example of a package split by `group` records is in
-      exactly one group, with one remainder group per package and a -run expression the
-      kernel still carries as a single argument. That last one is the same silence one level
+      exactly one group, with exactly one remainder group per package, NO group and no
+      remainder selecting nothing — an empty selection is a `go test` that exits 0 having run
+      none of them — no pattern naming a split package, and a -run expression the kernel
+      still carries as a single argument. That last one is the same silence one level
       down and it is WORSE: `go test -run` over an expression that selects nothing exits 0,
       so an orphaned test arrives as a green check. Three answers: CLEAN, FAIL,
       COULD NOT LOOK.
@@ -4458,7 +4460,7 @@ tasks:
 
   lint:pr-suite-shards:selftest:
     desc: >-
-      PR suite shards — battery of 30 cases: the three mutants the package split exists to
+      PR suite shards — battery of 42 cases: the three mutants the package split exists to
       catch (a package in two shards, a package in no shard, a pattern naming packages that
       do not exist), the matrix out of step with the spec in both directions, a Go timeout at
       or above the step ceiling, a leg that is not a task, an empty shard, a spec line the
@@ -4467,10 +4469,21 @@ tasks:
       test named by two groups, a package split by name and also sent whole to a shard, a
       matrix missing the new shard, a group whose families match nothing, two remainder
       groups, a group naming an undeclared shard or an absent package, and a remainder
-      expression longer than one argument of the kernel will carry. And the non-firing
+      expression longer than one argument of the kernel will carry. Then the paths that end
+      at 0 over a suite that did not run: a group or a remainder that selects nothing, in the
+      gate AND in the runner, which the battery drives with `go` and `task` replaced by stubs
+      so that a runner reaching the toolchain cannot pass by failing for another reason; a
+      `go list` that cannot place a split package, which is COULD NOT LOOK and not a package
+      without tests; a reader's COULD NOT LOOK surviving as one; a workspace whose middle
+      module cannot be listed, where the answer is 2 and the module's name; and a test name
+      read to its end, with a declaration the reader cannot read whole refused by file and
+      line. And a shard whose whole-package run is red, whose name group is green and whose leg
+      runs: the shard reports the red and the log carries all three, because a failure that
+      cancels the rest of its shard publishes no verdict for the rest. And a count that could
+      not be made: a `grep` that exits 2 is COULD NOT LOOK, never a selection of zero. And the non-firing
       directions, without which a gate that refused everything would look perfect: the real
-      tree stays clean, the fixture stays clean with and without a name split, and an
-      optional pattern that matches nothing is a notice instead of a finding.
+      tree stays clean, the fixture stays clean with and without a name split, and an optional
+      pattern that matches nothing is a notice instead of a finding.
     cmds:
       - bash scripts/test-check-pr-suite-shards.sh
 

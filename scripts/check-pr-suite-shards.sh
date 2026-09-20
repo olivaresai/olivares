@@ -60,7 +60,8 @@ command -v python3 >/dev/null 2>&1 || cannot "python3 is not on PATH"
 # ── the universe, through the ONE reader ─────────────────────────────────────────────
 # Never a second enumeration: two enumerations of the same set is how a difference hides.
 UNI="$(mktemp "${TMPDIR:-/tmp}/pr-suite-check.XXXXXX")" || cannot "cannot create a scratch file"
-trap 'rm -f "$UNI"' EXIT
+RAW="$(mktemp "${TMPDIR:-/tmp}/pr-suite-walk.XXXXXX")" || cannot "cannot create a scratch file"
+trap 'rm -f "$UNI" "$RAW"' EXIT
 
 if [ -n "${OLIVARES_PR_SUITE_PACKAGES:-}" ]; then
   [ -r "$OLIVARES_PR_SUITE_PACKAGES" ] ||
@@ -70,18 +71,38 @@ if [ -n "${OLIVARES_PR_SUITE_PACKAGES:-}" ]; then
 else
   [ -f go.work ] || cannot "go.work is not at $ROOT and no package file was given"
   command -v go >/dev/null 2>&1 || cannot "no Go toolchain: the packages cannot be enumerated"
+  MODS="$(go work edit -json | sed -n 's/.*"DiskPath": "\(.*\)".*/\1/p')" ||
+    cannot "go work edit could not say which modules this workspace has"
+  [ -n "$MODS" ] || cannot "go.work names no module: there is no universe to certify"
+  # ⛔ THE WALK IS NOT THE LEFT SIDE OF A PIPELINE, and it was. `cannot` exits 2, but from
+  # inside the left side of a pipeline that exit reaches only the subshell: the module that
+  # failed and every module after it disappeared from the universe, the partial list landed
+  # in $UNI, `[ -s "$UNI" ]` was satisfied because it was not empty, and this gate certified
+  # that a partition covers a suite it could not finish reading. A partition of what could be
+  # read is not a partition of the suite.
+  : > "$RAW"
   while IFS= read -r m; do
     [ -n "$m" ] || continue
-    ( cd "$m" && go list -f '{{if or .TestGoFiles .XTestGoFiles}}{{.ImportPath}}{{end}}' ./... ) ||
-      cannot "go list failed in $m"
-  done < <(go work edit -json | sed -n 's/.*"DiskPath": "\(.*\)".*/\1/p') |
-    grep -v '^[[:space:]]*$' | LC_ALL=C sort -u > "$UNI"
+    ( cd "$m" && go list -f '{{if or .TestGoFiles .XTestGoFiles}}{{.ImportPath}}{{end}}' ./... ) >> "$RAW" ||
+      cannot "go list failed in $m: the universe cannot be finished, so none of it can be certified"
+  done <<< "$MODS"
+  grep -v '^[[:space:]]*$' "$RAW" | LC_ALL=C sort -u > "$UNI"
   SOURCE="go list over the go.work modules"
 fi
 [ -s "$UNI" ] || cannot "the package universe came back empty — a partition of nothing certifies nothing"
 
 # ── the spec, through the ONE reader ─────────────────────────────────────────────────
-SHARDS="$(bash "$READER" shards)" || { finding "$SPEC cannot be read as a partition (the reader refused; its reasons are above)"; exit 1; }
+# The reader answers on the same three-valued contract this gate does, so its 2 has to stay
+# a 2: an inability reported as a defect sends somebody to look for a defect that is not
+# there, and — worse — it is a red that a retry can turn green without anything being fixed.
+READER_RC=0
+SHARDS="$(bash "$READER" shards)" || READER_RC=$?
+if [ "$READER_RC" -eq 2 ]; then
+  cannot "the reader could not read $SPEC as a partition (its reason is above)"
+elif [ "$READER_RC" -ne 0 ]; then
+  finding "$SPEC cannot be read as a partition (the reader refused; its reasons are above)"
+  exit 1
+fi
 [ -n "$SHARDS" ] || cannot "the reader produced no shard names"
 
 # ── the workflow: the matrix and the two ceilings ─────────────────────────────────────
@@ -316,6 +337,12 @@ legs = {}
 for s in shards:
     out = subprocess.run(["bash", os.environ["READER"], "legs", s],
                          capture_output=True, text=True)
+    if out.returncode != 0:
+        # The same contract as everywhere else: a reader that could not answer is not a
+        # shard without legs, and reading it as one would clear an empty shard as a full one.
+        print("CANNOT the reader could not list the legs of shard %s: %s"
+              % (s, out.stderr.strip().splitlines()[-1] if out.stderr.strip() else "no reason given"))
+        sys.exit(0)
     legs[s] = [l for l in out.stdout.split("\n") if l.strip()]
 group_shards = {g["shard"] for g in groups}
 for s in shards:
@@ -341,9 +368,11 @@ for pkg in sorted(split):
         base = pat[:-4] if pat.endswith("/...") else pat
         if base == pkg:
             print("FINDING the package %s is split into name groups and the pattern %s of shard "
-                  "%s sends it whole to that shard: every test of it would run twice, once by "
-                  "name and once by package, and the shard the file says bounds the suite is "
-                  "not the one that does." % (pkg, pat, name))
+                  "%s sends it whole to that shard. That record is INERT — both readers take a "
+                  "package with groups out of the pattern assignment, so it owns nothing and "
+                  "runs nothing — and an inert record is why shard %s looks fuller than it is: "
+                  "it claims a package no longer assigned by any pattern. Delete it or stop "
+                  "splitting the package." % (pkg, pat, name, name))
 
     mine = [g for g in groups if g["pkg"] == pkg]
     rest = [g for g in mine if g["fams"] == ["*"]]
@@ -391,6 +420,14 @@ for pkg in sorted(split):
     huerfanos = sorted(t for t in tests if t not in hits)
     if rest:
         sizes[rest[0]["name"]] = len(huerfanos)
+        # An empty remainder is not an idle group. Its `-run` selects nothing, and `go test`
+        # answers 0 to that, so the shard that carries it reports a success having run none
+        # of the package's tests. Name more letters, or stop declaring the group.
+        if not huerfanos:
+            print("FINDING the remainder group %s of %s selects no test: the other groups "
+                  "already name all %d of them, so its `-run` would match nothing and the "
+                  "shard that carries it would report success having run none."
+                  % (rest[0]["name"], pkg, len(tests)))
     elif huerfanos:
         print("FINDING %d test(s) of %s belong to NO name group. Nothing would run them, no "
               "shard would notice, and `go test -run` answers 0 to an expression that selects "
