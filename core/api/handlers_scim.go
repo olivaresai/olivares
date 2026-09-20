@@ -206,6 +206,10 @@ func (s *Server) scimCreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// POST creates: a userName already a member of this tenant is a 409 uniqueness.
+	// This is the quick answer, not the boundary. SCIMProvisionUser refuses a taken
+	// address itself — including one held by an account outside this tenant, which
+	// this lookup deliberately cannot see — and refuses it with the same 409, so
+	// the two are one answer to the caller.
 	if _, found, err := s.authr.SCIMFindMember(r.Context(), tenant, "email", strings.ToLower(in.UserName)); err != nil {
 		s.scimInternal(w, r, err)
 		return
