@@ -61,7 +61,13 @@ test('first-boot setup → login → shell, in light and dark', async ({
   await expect(
     page.getByRole('img', { name: 'Olivares AI' }).first(),
   ).toBeVisible()
-  await expect(page.getByRole('link', { name: 'Inventory' })).toBeVisible()
+  // WHAT A FRESH SIGN-IN PAINTS. The console lands on the root, which belongs to no
+  // navigation area, and the sidebar hides a closed area's panel — so the entries on
+  // screen are the areas and the overview above them, not a leaf like Inventory. The
+  // name is exact because neighbouring entries contain it.
+  await expect(
+    page.getByRole('link', { name: 'Overview', exact: true }),
+  ).toBeVisible()
   await page.screenshot({ path: 'playwright-report/shell-light.png' })
 
   // Toggle to dark and confirm the theme applies to <html>.

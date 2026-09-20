@@ -192,6 +192,80 @@ describe('ChecksTab CRUD', () => {
     await waitFor(() => expect(api.deleteCheck).toHaveBeenCalledWith('check-1'))
   })
 
+  // THE LADDER'S LAST RUNG IS A WORD, NOT AN IDENTITY. Two unnamed checks both read
+  // "Unnamed", so a confirmation carrying only the ladder asks the operator to approve
+  // an irreversible delete of a target it cannot distinguish. This opens the dialog for
+  // the SECOND of two unnamed rows and holds the dialog itself to three things: the
+  // ladder is still primary, the selected subject reference is present, the other row's
+  // reference is absent. A list-row assertion cannot cover any of them. The final
+  // expectation pins the deletion id, so a mock that would accept the wrong check fails.
+  it('distinguishes the selected target in the confirmation when two checks are unnamed', async () => {
+    const alpha: StatusDTO = {
+      ...check,
+      id: 'check-alpha',
+      name: undefined,
+      subject_ref: 'agent-alpha',
+    }
+    const beta: StatusDTO = {
+      ...check,
+      id: 'check-beta',
+      name: undefined,
+      subject_ref: 'agent-beta',
+    }
+    api.checks.mockResolvedValue({ items: [alpha, beta], has_more: false })
+    const user = userEvent.setup()
+    wrap(<ChecksTab tenant="tenant-1" />)
+
+    const betaRow = (await screen.findByText('agent-beta')).closest('tr')
+    expect(betaRow).not.toBeNull()
+    await user.click(
+      within(betaRow as HTMLElement).getByRole('button', {
+        name: /^Delete health check/,
+      }),
+    )
+
+    const dialog = screen.getByRole('dialog')
+    expect(dialog).toHaveTextContent('Unnamed')
+    expect(dialog).toHaveTextContent('agent-beta')
+    expect(dialog).not.toHaveTextContent('agent-alpha')
+
+    await user.click(within(dialog).getByRole('button', { name: 'Delete' }))
+    await waitFor(() =>
+      expect(api.deleteCheck).toHaveBeenCalledWith('check-beta'),
+    )
+  })
+
+  // A LABELLED FIELD WITH NOTHING IN IT IS A FACT THE DIALOG DOES NOT HAVE. The
+  // confirmation carries the subject reference beside the ladder's word so two unnamed
+  // checks can be told apart; a subject that carries no reference either has nothing to
+  // put there, and printing the label over an empty value tells the operator a field
+  // exists and is blank rather than that there is nothing to show.
+  it('omits the reference block from the confirmation when there is no reference', async () => {
+    const bare: StatusDTO = {
+      ...check,
+      id: 'check-bare',
+      name: undefined,
+      subject_ref: '',
+    }
+    api.checks.mockResolvedValue({ items: [bare], has_more: false })
+    const user = userEvent.setup()
+    wrap(<ChecksTab tenant="tenant-1" />)
+
+    await user.click(
+      await screen.findByRole('button', {
+        name: 'Delete health check for Unnamed',
+      }),
+    )
+    const dialog = screen.getByRole('dialog')
+    expect(dialog).toHaveTextContent('Unnamed')
+    expect(within(dialog).queryByText('Subject reference')).toBeNull()
+
+    await user.click(within(dialog).getByRole('button', { name: 'Delete' }))
+    await waitFor(() =>
+      expect(api.deleteCheck).toHaveBeenCalledWith('check-bare'),
+    )
+  })
+
   it('renders a duplicate conflict inline in the create dialog', async () => {
     api.checks.mockResolvedValue({ items: [], has_more: false })
     api.createCheck.mockRejectedValue(new ApiError(409, 'conflict', 'conflict'))
@@ -253,6 +327,77 @@ describe('ChecksTab RBAC actions', () => {
         name: 'Delete health check for Agent one',
       }),
     ).toBeInTheDocument()
+  })
+
+  // A ROW'S OWN CONTROLS MUST SAY WHICH SUBJECT THEY ACT ON. The ladder's last rung is
+  // the word "Unnamed", so on a list of unnamed checks every row offered the same five
+  // accessible names and a screen reader heard one "Delete health check for Unnamed"
+  // per row. The two rows here differ only in their reference and their intent, which
+  // is what makes all five names — edit, pause, resume, retire, delete — observable at
+  // once: the first row is active, the second is paused.
+  it('names every per-row control by the subject reference when two checks are unnamed', async () => {
+    const alpha: StatusDTO = {
+      ...check,
+      id: 'check-alpha',
+      name: undefined,
+      subject_ref: 'agent-alpha',
+      desired_status: 'active',
+    }
+    const beta: StatusDTO = {
+      ...check,
+      id: 'check-beta',
+      name: undefined,
+      subject_ref: 'agent-beta',
+      desired_status: 'paused',
+    }
+    api.checks.mockResolvedValue({ items: [alpha, beta], has_more: false })
+    wrap(<ChecksTab tenant="tenant-1" />)
+
+    await screen.findByText('agent-alpha')
+    for (const name of [
+      'Edit health check for agent-alpha',
+      'Pause health check for agent-alpha',
+      'Retire health check for agent-alpha',
+      'Delete health check for agent-alpha',
+      'Edit health check for agent-beta',
+      'Resume health check for agent-beta',
+      'Retire health check for agent-beta',
+      'Delete health check for agent-beta',
+    ]) {
+      expect(screen.getByRole('button', { name })).toBeInTheDocument()
+    }
+    expect(screen.queryAllByRole('button', { name: /Unnamed/ })).toHaveLength(0)
+  })
+
+  // THE NAME IS A NAME, AND THE REFERENCE APPEARS ONCE. The ladder never answers with
+  // the reference, so an unnamed subject must read as the word and carry the reference
+  // under it; and a subject whose name IS its reference must not carry it twice —
+  // which is the condition the status table of the same feature already used.
+  it('paints the reference under the name only when it is not the name', async () => {
+    const named: StatusDTO = {
+      ...check,
+      id: 'check-same',
+      name: 'agent-same',
+      subject_ref: 'agent-same',
+    }
+    const unnamed: StatusDTO = {
+      ...check,
+      id: 'check-none',
+      name: undefined,
+      subject_ref: 'agent-none',
+    }
+    api.checks.mockResolvedValue({ items: [named, unnamed], has_more: false })
+    wrap(<ChecksTab tenant="tenant-1" />)
+
+    const unnamedRow = (await screen.findByText('agent-none')).closest('tr')
+    expect(unnamedRow).not.toBeNull()
+    const face = (unnamedRow as HTMLElement).querySelector('.font-medium')
+    expect(face?.textContent).toBe('Unnamed')
+    expect(
+      within(unnamedRow as HTMLElement).getByText('agent-none'),
+    ).toBeInTheDocument()
+
+    expect(screen.getAllByText('agent-same')).toHaveLength(1)
   })
 
   it('renders the read-only table with no actions when both verbs are denied', async () => {

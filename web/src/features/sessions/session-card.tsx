@@ -40,7 +40,9 @@ import { LiveConsole } from '@/features/agentops/live-console'
 import { EventsPanel, RunInfo } from '@/features/agentops/run-detail'
 import { RunStateBadge } from '@/features/agentops/run-state-badge'
 import type { RunDTO } from '@/features/agentops/types'
+import { sessionNameLadder } from '@/features/home/work-line'
 import { LiveDot, RelTimeLabel, humanDurationSeconds } from '@/features/shared'
+import { NamedRef } from '@/features/shared/named-ref'
 import { ApiError } from '@/lib/api/errors'
 import { useAuth } from '@/lib/auth/context'
 import { formatInt, formatMicroUsd, formatTokens } from '@/lib/format'
@@ -458,6 +460,7 @@ function ProvenanceBlock({
           {session.runs.map((r) => {
             const active = r.run_ref === activeRun
             const many = session.runs.length > 1
+            const naming = sessionNameLadder(r.name, null, t('untitled'))
             return (
               <li key={r.run_ref}>
                 <button
@@ -471,9 +474,12 @@ function ProvenanceBlock({
                     many && active && 'bg-muted',
                   )}
                 >
-                  <span className="font-mono text-foreground">
-                    {r.name || r.run_ref}
-                  </span>
+                  <NamedRef
+                    className="text-foreground"
+                    name={naming.from === 'untitled' ? null : naming.text}
+                    reference={r.run_ref}
+                    fallback={naming.text}
+                  />
                   <RunStateBadge state={r.state} />
                   <span className="text-muted-foreground">
                     {t(`card.transport.${r.transport}`, {

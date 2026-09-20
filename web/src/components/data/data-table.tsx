@@ -219,6 +219,8 @@ export interface DataTableProps<TData extends RowData> {
   /** Max height (px or CSS length) of the scroll region WHEN virtualizing. */
   maxBodyHeight?: number | string
   className?: string
+  /** Extra classes on the `<table>` (layout, not chrome). */
+  tableClassName?: string
 }
 
 const PAGE_JUMP = 10
@@ -272,6 +274,7 @@ export function DataTable<TData extends RowData>({
   virtualizeThreshold = 100,
   maxBodyHeight = 600,
   className,
+  tableClassName,
 }: DataTableProps<TData>) {
   const { t } = useTranslation('common')
   const density = usePreferencesStore((s) => s.density)
@@ -744,6 +747,11 @@ export function DataTable<TData extends RowData>({
               'has-[button]:py-0 has-[a]:py-0 has-[input]:py-0 has-[select]:py-0',
               isActive &&
                 'bg-surface ring-2 ring-ring ring-offset-2 ring-offset-background',
+              (
+                cell.column.columnDef.meta as
+                  | { className?: string }
+                  | undefined
+              )?.className,
             )}
           >
             {flexRender(cell.column.columnDef.cell, cell.getContext())}
@@ -818,7 +826,10 @@ export function DataTable<TData extends RowData>({
                 : ''}
           </div>
           <table
-            className="w-full border-collapse text-body outline-none"
+            className={cn(
+              'w-full border-collapse text-body outline-none',
+              tableClassName,
+            )}
             role={nav ? 'grid' : undefined}
             aria-label={nav ? (label ?? t('table.label')) : undefined}
             aria-busy={isLoading || undefined}
@@ -869,6 +880,11 @@ export function DataTable<TData extends RowData>({
                           'bg-muted px-3 text-left align-middle text-caption font-medium tracking-wide whitespace-nowrap text-muted-foreground uppercase',
                           headH,
                           sticky && 'sticky top-0 z-10',
+                          (
+                            header.column.columnDef.meta as
+                              | { className?: string }
+                              | undefined
+                          )?.className,
                         )}
                         style={{
                           width:

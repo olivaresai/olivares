@@ -296,8 +296,8 @@ publique en esa pantalla.
 <img class="dark:sl-hidden" src="/console/health-light.png" alt="Liveness, fiabilidad y dependencias de tu infraestructura — derivado de la actividad observada y del barrido de inactividad, nunca sondeando la infraestructura.">
 <img class="light:sl-hidden" src="/console/finops-dark.png" alt="Coste de tokens en todo el estate — tendencias, imputación, conciliación, presupuestos y previsión. Las cifras son tal cual las reporta el ledger de FinOps.">
 <img class="dark:sl-hidden" src="/console/finops-light.png" alt="Coste de tokens en todo el estate — tendencias, imputación, conciliación, presupuestos y previsión. Las cifras son tal cual las reporta el ledger de FinOps.">
-<img class="light:sl-hidden" src="/console/security-dark.png" alt="Hallazgos de guardrail, la postura de enforcement, la cola de anomalías y el forense de incidentes con evidencia a prueba de manipulación. El plano es detective por defecto: registra, no bloquea por su cuenta salvo que el enforcement esté habilitado y gobernado.">
-<img class="dark:sl-hidden" src="/console/security-light.png" alt="Hallazgos de guardrail, la postura de enforcement, la cola de anomalías y el forense de incidentes con evidencia a prueba de manipulación. El plano es detective por defecto: registra, no bloquea por su cuenta salvo que el enforcement esté habilitado y gobernado.">
+<img class="light:sl-hidden" src="/console/security-dark.png" alt="Hallazgos de guardrail, la postura de enforcement, la cola de anomalías y el forense de incidentes con evidencias cuya manipulación puede detectarse. El plano es detective por defecto: registra, no bloquea por su cuenta salvo que el enforcement esté habilitado y gobernado.">
+<img class="dark:sl-hidden" src="/console/security-light.png" alt="Hallazgos de guardrail, la postura de enforcement, la cola de anomalías y el forense de incidentes con evidencias cuya manipulación puede detectarse. El plano es detective por defecto: registra, no bloquea por su cuenta salvo que el enforcement esté habilitado y gobernado.">
 
 ## Uso profesional
 

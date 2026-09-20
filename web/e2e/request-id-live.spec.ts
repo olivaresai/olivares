@@ -11,18 +11,17 @@
 import { test, expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
-const BASE = process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:8489'
 const EMAIL = process.env.DEMO_EMAIL ?? 'demo@olivares.local'
 const PASSWORD = process.env.DEMO_PASSWORD ?? 'olivares-demo-estate'
 const RID = 'rid-e2e-0123456789'
 
 async function entra(page: Page) {
-  await page.goto(`${BASE}/login`)
+  await page.goto('/login')
   await page.locator('#email').fill(EMAIL)
   await page.locator('#password').fill(PASSWORD)
   await page.getByRole('button', { name: /^sign in$/i }).click()
   await expect(
-    page.getByRole('link', { name: 'Inventory', exact: true }),
+    page.getByRole('link', { name: 'Overview', exact: true }),
   ).toBeVisible({ timeout: 20_000 })
 }
 
@@ -37,7 +36,7 @@ test('un 500 CON X-Request-ID enseña el id en pantalla', async ({ page }) => {
       body: JSON.stringify({ error: 'boom' }),
     })
   })
-  await page.goto(`${BASE}/catalog`, { waitUntil: 'networkidle' })
+  await page.goto('/catalog', { waitUntil: 'networkidle' })
   expect(servido, 'la consola no llegó a pedir /catalog/entries').toBe(true)
   await expect(page.getByText(RID, { exact: false }).first()).toBeVisible({
     timeout: 15000,
@@ -57,7 +56,7 @@ test('CONTROL NEGATIVO: un 500 SIN la cabecera no inventa ningún id', async ({
       body: JSON.stringify({ error: 'boom' }),
     })
   })
-  await page.goto(`${BASE}/catalog`, { waitUntil: 'networkidle' })
+  await page.goto('/catalog', { waitUntil: 'networkidle' })
   expect(servido, 'la consola no llegó a pedir /catalog/entries').toBe(true)
   // El error TIENE que estar pintado: si no, este control pasaría en vacío.
   await expect(page.getByText(/error|failed|falló/i).first()).toBeVisible({

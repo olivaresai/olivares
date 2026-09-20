@@ -51,6 +51,7 @@
     "allKinds": "すべての種別"
   },
   "status": {
+    "unnamed": "無名",
     "title": "監視対象サブジェクト",
     "slaBreach": "SLA違反",
     "slaBreachHint": "このサブジェクトについてSLA違反がオープン状態です。",

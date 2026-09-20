@@ -322,7 +322,8 @@
   "empty": {
     "deploy": {
       "title": "Aucun déploiement déclaré",
-      "description": "Déclarez un déploiement pour enregistrer l’état désiré ; la réconciliation exige aussi un exécuteur d’exécution configuré par l’opérateur, sinon Planifier et Appliquer renvoient 503."
+      "description": "Cet écran liste les définitions de déploiement — l’état désiré enregistré ici, pas une session lancée. Déclarez un déploiement pour enregistrer l’état désiré ; la réconciliation exige aussi un exécuteur d’exécution configuré par l’opérateur, sinon Planifier et Appliquer renvoient 503.",
+      "sessions": "Opérer les sessions"
     },
     "operations": {
       "title": "Aucune opération de déploiement enregistrée",

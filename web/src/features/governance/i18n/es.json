@@ -471,7 +471,7 @@
   },
   "routines": {
     "title": "Políticas de rutinas",
-    "subtitle": "Suelos de cadencia, topes de concurrencia, requisitos de aprobación, listas de cron permitidas y entornos bloqueados para las rutinas de Claude Code. Las políticas solapadas se componen quedando siempre la más restrictiva.",
+    "subtitle": "Intervalos mínimos entre ejecuciones, topes de concurrencia, requisitos de aprobación, listas de cron permitidas y entornos bloqueados para las rutinas de Claude Code. Las políticas solapadas se componen quedando siempre la más restrictiva.",
     "search": "Buscar políticas de rutinas…",
     "newPolicy": "Nueva política",
     "enforcementCaption": "Estos controles se aplican al declarar una rutina y de nuevo en cada disparo. Una política deshabilitada se guarda, pero no aporta nada a la composición.",
@@ -486,7 +486,7 @@
       "name": "Política",
       "scope": "Ámbito",
       "enabled": "Estado",
-      "floor": "Suelo de cadencia",
+      "floor": "Intervalo mínimo entre ejecuciones",
       "cap": "Tope de activas",
       "approval": "Aprobación",
       "cron": "Lista de cron permitidos",
@@ -519,7 +519,7 @@
       "noUser": "Sin usuario propietario",
       "resolve": "Resolver",
       "indeterminate": "Esta resolución es indeterminada en el eje {{axis}}. Aquí la aplicación deniega por defecto: es un rechazo, no una ausencia de controles.",
-      "floor": "Suelo de cadencia",
+      "floor": "Intervalo mínimo entre ejecuciones",
       "approval": "Aprobación",
       "cron": "Lista de cron permitidos",
       "envs": "Entornos bloqueados",
@@ -554,7 +554,7 @@
       "scopeRefRequired": "Una política de espacio de trabajo o de usuario necesita su referencia.",
       "tenantScopeRef": "Una política de ámbito tenant no debe llevar referencia.",
       "enabled": "Política habilitada",
-      "floorToggle": "Aplicar un suelo de cadencia",
+      "floorToggle": "Exigir un intervalo mínimo entre ejecuciones",
       "floor": "Intervalo mínimo (segundos)",
       "floorHint": "Entre {{min}} y {{max}} segundos.",
       "noFloorHint": "Sin suelo: la rutina puede dispararse con cualquier frecuencia que esta política permita.",
@@ -602,7 +602,7 @@
     },
     "routinePolicies": {
       "title": "Aún no se han redactado políticas de rutinas",
-      "description": "Crea una política de rutinas para definir suelos de cadencia, topes de concurrencia, requisitos de aprobación, listas de cron permitidos o entornos bloqueados."
+      "description": "Crea una política de rutinas para definir intervalos mínimos entre ejecuciones, topes de concurrencia, requisitos de aprobación, listas de cron permitidos o entornos bloqueados."
     }
   },
   "agentcoreExport": {

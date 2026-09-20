@@ -35,7 +35,13 @@ test('first hour: the onboarding wizard verifies infrastructure against the live
   await page.locator('#email').fill('admin@example.com')
   await page.locator('#password').fill(PASSWORD)
   await page.getByRole('button', { name: /^sign in$/i }).click()
-  await expect(page.getByRole('link', { name: 'Inventory' })).toBeVisible()
+  // WHAT A FRESH SIGN-IN PAINTS. The console lands on the root, which belongs to no
+  // navigation area, and the sidebar hides a closed area's panel — so the entries on
+  // screen are the areas and the overview above them, not a leaf like Inventory. The
+  // name is exact because neighbouring entries contain it.
+  await expect(
+    page.getByRole('link', { name: 'Overview', exact: true }),
+  ).toBeVisible()
 
   // The actionable onboarding wizard.
   await page.goto('/onboarding')

@@ -352,8 +352,16 @@ export function AuditView() {
     <div className="flex h-full min-h-0 flex-col">
       {/* Title + the one filter line share 36 px so the first ledger row can
           sit at y ≤ 136. The filter card, evidence card and self-audit strip
-          stacked above the table are what measured 569. */}
-      <div data-slot="work-chrome" className="flex h-9 min-w-0 items-center">
+          stacked above the table are what measured 569.
+          `min-h-9`, not `h-9`: the budget is a floor, not a ceiling. Measured
+          2026-09-19 at 1024 px on the built console: the header's seven controls
+          wrap to a second row (64 px), and a fixed 36 px row centred that header
+          so the second row was painted UNDER the table's sticky header — four
+          controls (Verify chain, Verification key, Export options, Export) took
+          no pointer, though they still took keyboard focus. With a floor the row
+          stays 36 px wherever the controls fit on one line (1280 px and up) and
+          grows only where they wrap, pushing the table down instead of over. */}
+      <div data-slot="work-chrome" className="flex min-h-9 min-w-0 items-center">
         <PageHeader
           className="min-w-0 w-full"
           icon={FileCheck2}

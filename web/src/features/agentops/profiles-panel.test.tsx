@@ -686,6 +686,21 @@ describe('ProfilesPanel — one-line rows', () => {
   // Name + ppf_… stacked in the cell is what measured 53 px (and 181 at 390).
   // The name is the cell; the id lives on title= and in the sheet. Secondary
   // columns hide at 390; Details sits in one overflow menu.
+  it('the name cell is a button; Tab reaches it and Enter opens the profile', async () => {
+    wrap()
+    const row = (await screen.findByText('Home A')).closest('tr')!
+    const name = within(row).getByRole('button', { name: /^Home A$/ })
+    expect(name.tagName).toBe('BUTTON')
+    const user = userEvent.setup()
+    name.focus()
+    expect(name).toHaveFocus()
+    await user.tab()
+    await user.tab({ shift: true })
+    expect(name).toHaveFocus()
+    await user.keyboard('{Enter}')
+    expect(await screen.findByRole('dialog')).toBeVisible()
+  })
+
   it('paints the name on one line and keeps the id on title=', async () => {
     wrap()
     const name = await screen.findByText('Home A')

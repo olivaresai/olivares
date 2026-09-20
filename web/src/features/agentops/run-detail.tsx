@@ -25,9 +25,11 @@ import {
 import { Spinner } from '@/components/ui/spinner'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { toast } from '@/components/ui/toaster'
+import { sessionNameLadder } from '@/features/home/work-line'
 import { RelTimeLabel } from '@/features/shared'
-import { useAuth } from '@/lib/auth/context'
+import { NamedRef } from '@/features/shared/named-ref'
 import { ApiError } from '@/lib/api/errors'
+import { useAuth } from '@/lib/auth/context'
 import { cn } from '@/lib/utils'
 import { agentOpsApi, agentOpsKeys } from './api'
 import { GovernancePanel } from './governance-panel'
@@ -62,6 +64,9 @@ export function RunDetailSheet({
     refetchInterval: 5_000,
   })
   const run = runQuery.data
+  const runNaming = run
+    ? sessionNameLadder(run.name, null, t('untitled'))
+    : null
 
   return (
     <Sheet
@@ -71,14 +76,19 @@ export function RunDetailSheet({
       }}
     >
       <SheetContent className="flex w-full flex-col gap-4 overflow-y-auto sm:max-w-3xl">
-        {run ? (
+        {run && runNaming ? (
           <>
             <SheetHeader>
               <SheetTitle className="flex items-center gap-2">
                 <Terminal className="size-4 text-accent-text" />
-                <span className="truncate font-mono text-heading">
-                  {run.name || run.run_ref}
-                </span>
+                <NamedRef
+                  className="min-w-0 text-heading"
+                  name={
+                    runNaming.from === 'untitled' ? null : runNaming.text
+                  }
+                  reference={run.run_ref}
+                  fallback={runNaming.text}
+                />
               </SheetTitle>
               <SheetDescription className="flex flex-wrap items-center gap-2">
                 <RunStateBadge state={run.state} />

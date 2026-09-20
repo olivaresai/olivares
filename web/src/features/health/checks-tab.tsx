@@ -44,6 +44,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { sessionNameLadder } from '@/features/home/work-line'
 import { RelTimeLabel, ppmToPercent } from '@/features/shared'
 import { ApiError } from '@/lib/api/errors'
 import { useAuth } from '@/lib/auth/context'
@@ -59,6 +60,26 @@ import type {
 const CHECK_LIMIT = 1000
 
 type LifecycleStatus = 'active' | 'paused' | 'retired'
+
+/**
+ * THE SUBJECT A CONTROL ACTS ON, IN ONE PHRASE.
+ *
+ * The name ladder ends on a word — "Unnamed" — because a reference is never a row's
+ * name (`features/home/work-line.ts`). That word reads well in a column beside the
+ * reference, and says nothing at all inside a control's accessible name: a list of
+ * unnamed checks offered one identical "Delete health check for Unnamed" per row, and
+ * the delete is irreversible. So wherever a control has to identify its target and the
+ * ladder answers `untitled`, the phrase is the subject reference — the same fact the
+ * row paints under the name, and the one that tells two unnamed subjects apart.
+ *
+ * A subject with neither a name nor a reference keeps the ladder's word: there is
+ * nothing truer to say, and an empty accessible name would be worse than a vague one.
+ */
+function subjectLabel(check: StatusDTO, untitled: string): string {
+  const naming = sessionNameLadder(check.name, null, untitled)
+  if (naming.from !== 'untitled') return naming.text
+  return check.subject_ref.trim() || naming.text
+}
 
 export function ChecksTab({ tenant }: { tenant: string | null }) {
   const { t } = useTranslation(['health', 'common', 'errors'])
@@ -129,21 +150,34 @@ export function ChecksTab({ tenant }: { tenant: string | null }) {
         id: 'subject',
         accessorKey: 'subject_ref',
         header: t('health:checks.cols.subject'),
-        cell: ({ row }) => (
-          <div className="min-w-0">
-            <div className="truncate font-medium text-foreground">
-              {row.original.name || row.original.subject_ref}
-            </div>
-            {row.original.name ? (
-              <div
-                className="truncate font-mono text-caption text-muted-foreground"
-                title={row.original.subject_ref}
-              >
-                {row.original.subject_ref}
+        cell: ({ row }) => {
+          const s = row.original
+          const naming = sessionNameLadder(
+            s.name,
+            null,
+            t('health:status.unnamed'),
+          )
+          return (
+            <div className="min-w-0">
+              <div className="truncate font-medium text-foreground">
+                {naming.text}
               </div>
-            ) : null}
-          </div>
-        ),
+              {/* ONE CONDITION FOR BOTH TABLES. The status table hides this line when
+                  the name IS the reference — saying the same thing twice reads as two
+                  facts — and the checks table showed it anyway, so one subject looked
+                  different on two screens of the same feature. */}
+              {(naming.from === 'untitled' ||
+                (s.name && s.name !== s.subject_ref)) && (
+                <div
+                  className="truncate font-mono text-caption text-muted-foreground"
+                  title={s.subject_ref}
+                >
+                  {s.subject_ref}
+                </div>
+              )}
+            </div>
+          )
+        },
       },
       {
         accessorKey: 'subject_kind',
@@ -218,7 +252,10 @@ export function ChecksTab({ tenant }: { tenant: string | null }) {
                           variant="ghost"
                           size="icon-sm"
                           aria-label={t('health:checks.actions.editAria', {
-                            subject: check.name || check.subject_ref,
+                            subject: subjectLabel(
+                              check,
+                              t('health:status.unnamed'),
+                            ),
                           })}
                           title={t('health:checks.actions.edit')}
                           onClick={() => setEditing(check)}
@@ -271,7 +308,10 @@ export function ChecksTab({ tenant }: { tenant: string | null }) {
                         variant="destructive"
                         size="icon-sm"
                         aria-label={t('health:checks.actions.deleteAria', {
-                          subject: check.name || check.subject_ref,
+                          subject: subjectLabel(
+                            check,
+                            t('health:status.unnamed'),
+                          ),
                         })}
                         title={t('health:checks.actions.delete')}
                         onClick={() => setDeleting(check)}
@@ -380,13 +420,42 @@ export function ChecksTab({ tenant }: { tenant: string | null }) {
         }}
         title={t('health:checks.delete.title')}
         description={t('health:checks.delete.description', {
-          subject: deleting?.name || deleting?.subject_ref || '',
+          subject: deleting
+            ? sessionNameLadder(
+                deleting.name,
+                null,
+                t('health:status.unnamed'),
+              ).text
+            : '',
         })}
         confirmLabel={t('health:checks.actions.delete')}
         tone="danger"
         pending={deleteMutation.isPending}
         onConfirm={() => deleting && deleteMutation.mutate(deleting.id)}
-      />
+      >
+        {/* THE NAME LADDER ALONE CANNOT NAME THE TARGET HERE. Its last rung is the
+            word "Unnamed" (work-line.ts: the reference is never the row name), so two
+            unnamed checks with different subjects produce the SAME confirmation
+            sentence — and this is the irreversible admin delete. The row already
+            carries the reference under the name; the dialog now carries it too, as
+            secondary information, so the operator confirms against the subject the
+            engine will actually delete. Primary stays the ladder. */}
+        {/* And only where there IS a reference: a labelled field over an empty value
+            says a fact exists and is blank, which is not the same as having none. */}
+        {deleting?.subject_ref.trim() ? (
+          <div className="flex flex-col gap-0.5">
+            <span className="text-caption">
+              {t('health:checks.form.subjectRef')}
+            </span>
+            <span
+              className="truncate font-mono text-body text-foreground"
+              title={deleting.subject_ref}
+            >
+              {deleting.subject_ref}
+            </span>
+          </div>
+        ) : null}
+      </ConfirmDialog>
     </div>
   )
 }
@@ -403,7 +472,7 @@ function LifecycleButton({
   onChange: (status: LifecycleStatus) => void
 }) {
   const { t } = useTranslation('health')
-  const subject = check.name || check.subject_ref
+  const subject = subjectLabel(check, t('status.unnamed'))
   const action =
     status === 'active' ? 'resume' : status === 'paused' ? 'pause' : 'retire'
   return (

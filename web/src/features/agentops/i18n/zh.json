@@ -5,6 +5,7 @@
   },
   "title": "Claude Code",
   "subtitle": "创建、接入并治理 Claude Code 会话——无需 SSH。每次启动都受管控，每个会话都可观测。",
+  "untitled": "未命名会话",
   "refresh": "刷新",
   "search": "搜索会话……",
   "tabs": {

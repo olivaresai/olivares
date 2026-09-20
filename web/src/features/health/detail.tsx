@@ -14,8 +14,9 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
-import { RelTimeLabel } from '@/features/shared'
-import { humanDurationSeconds, ppmToPercent } from '@/features/shared'
+import { sessionNameLadder } from '@/features/home/work-line'
+import { humanDurationSeconds, ppmToPercent, RelTimeLabel } from '@/features/shared'
+import { NamedRef } from '@/features/shared/named-ref'
 import { formatLatency } from '@/lib/format'
 import { HealthStateBadge } from './health-state-badge'
 import type { StatusDTO } from './types'
@@ -50,9 +51,21 @@ export function HealthDetailSheet({
             <SheetHeader>
               <SheetTitle className="flex items-center gap-2">
                 <HeartPulse className="size-4 text-accent-text" />
-                <span className="truncate">
-                  {status.name || status.subject_ref}
-                </span>
+                {(() => {
+                  const naming = sessionNameLadder(
+                    status.name,
+                    null,
+                    t('status.unnamed'),
+                  )
+                  return (
+                    <NamedRef
+                      className="min-w-0"
+                      name={naming.from === 'untitled' ? null : naming.text}
+                      reference={status.subject_ref}
+                      fallback={naming.text}
+                    />
+                  )
+                })()}
               </SheetTitle>
               <SheetDescription className="flex flex-wrap items-center gap-2">
                 <Badge variant="outline">

@@ -29,7 +29,7 @@
     "failed": "Integridad fallida",
     "unavailable": "Firma no disponible",
     "pending": "Aún no atestado",
-    "tamperEvident": "A prueba de manipulación",
+    "tamperEvident": "Manipulación detectable",
     "chainOk": "Cadena hash consistente",
     "chainBroken": "Cadena rota en seq {{seq}}",
     "reverifyHint": "Cada evento lleva seq · hash · prev_hash para re-verificar el enlace sin conexión.",

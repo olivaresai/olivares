@@ -232,6 +232,34 @@ afterEach(() => {
 describe('AuditView — first work row', () => {
   afterEach(() => stubViewportWidth(1440))
 
+  // WHAT THIS CASE CAN SEE, AND WHAT IT CANNOT. jsdom performs no layout, so no test
+  // here can tell whether the name fits: what it holds is the CONTRACT the name
+  // declares — the whole string, a heading that refuses to shrink or wrap, and no
+  // ancestor that would clip it. Whether the header row then fits at 1920, 1180 and
+  // 390 px is a browser measurement, and the browser sweep is where it belongs. The
+  // two widths below are the two code paths — desktop and phone; 1180 ran the same
+  // path as 1440 and proved it twice.
+  it('the screen name declares that it will not shrink, wrap or be clipped', async () => {
+    api.list.mockResolvedValue({ items: [], has_more: false })
+    for (const width of [1440, 390] as const) {
+      stubViewportWidth(width)
+      const { unmount } = wrap(<AuditView />)
+      const h1 = await screen.findByRole('heading', {
+        level: 1,
+        name: 'Audit ledger',
+      })
+      expect(h1.textContent).toBe('Audit ledger')
+      expect(h1.className.split(/\s+/)).toEqual(
+        expect.arrayContaining(['shrink-0', 'whitespace-nowrap']),
+      )
+      expect(h1.className.split(/\s+/)).not.toContain('truncate')
+      expect(
+        (h1.parentElement as HTMLElement).className.split(/\s+/),
+      ).not.toContain('overflow-hidden')
+      unmount()
+    }
+  })
+
   // The filter card + evidence card + self-audit strip sat above the ledger
   // and put the first tbody row at y=569. Advanced fields open in a popover
   // so they do not push the table down. The browser pins the pixel.

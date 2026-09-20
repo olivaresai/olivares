@@ -301,7 +301,7 @@ test('live tab surfaces, Settings, and five parent compositions reach engine eff
     await page.locator('#password').fill(PASSWORD)
     await page.getByRole('button', { name: /^sign in$/i }).click()
     await expect(
-      page.getByRole('link', { name: 'Inventory', exact: true }),
+      page.getByRole('link', { name: 'Overview', exact: true }),
     ).toBeVisible()
   })
 

@@ -1,6 +1,6 @@
 {
   "title": "Registro de auditoría",
-  "subtitle": "La cadena de evidencia a prueba de manipulación. Verifícala y expórtala a tu WORM/SIEM.",
+  "subtitle": "La cadena de evidencias que permite detectar manipulaciones. Verifícala y expórtala a tu WORM/SIEM.",
   "subtitleSystem": "La cadena del tenant de sistema con las operaciones administrativas entre tenants (solo lectura).",
   "searchLoaded": "Filtrar solo las filas cargadas (en el cliente)…",
   "filters": {
@@ -104,6 +104,6 @@
   },
   "empty": {
     "title": "Aún no hay evidencia",
-    "description": "El registro está vacío para este ámbito. Las operaciones gobernadas añaden eventos a prueba de manipulación a medida que ocurren."
+    "description": "El registro está vacío para este ámbito. Las operaciones gobernadas añaden eventos cuya manipulación puede detectarse a medida que ocurren."
   }
 }

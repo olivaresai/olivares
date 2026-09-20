@@ -15,9 +15,10 @@ import {
 } from '@/components/ui/select'
 import { EmptyState } from '@/components/ui/empty-state'
 import { ErrorState, ForbiddenState } from '@/components/ui/error-state'
-import { Spinner } from '@/components/ui/spinner'
-import { RelTimeLabel } from '@/features/shared'
 import { StepUpRequiredState } from '@/components/layout/step-up-state'
+import { Spinner } from '@/components/ui/spinner'
+import { sessionNameLadder } from '@/features/home/work-line'
+import { RelTimeLabel } from '@/features/shared'
 import { ApiError } from '@/lib/api/errors'
 import { formatLatency } from '@/lib/format'
 import { cn } from '@/lib/utils'
@@ -230,9 +231,23 @@ export function SubjectPicker({
               key={`${s.subject_kind}::${s.subject_ref}`}
               value={`${s.subject_kind}::${s.subject_ref}`}
             >
-              <span className="font-mono text-caption">
-                {s.name || s.subject_ref}
-              </span>
+              {(() => {
+                const naming = sessionNameLadder(
+                  s.name,
+                  null,
+                  t('status.unnamed'),
+                )
+                return (
+                  <span className="text-caption">
+                    {naming.text}
+                    {naming.from === 'untitled' ? (
+                      <span className="ml-1 font-mono text-muted-foreground">
+                        {s.subject_ref}
+                      </span>
+                    ) : null}
+                  </span>
+                )
+              })()}
             </SelectItem>
           ))}
         </SelectContent>

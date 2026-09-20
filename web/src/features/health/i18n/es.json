@@ -51,6 +51,7 @@
     "allKinds": "Todos los tipos"
   },
   "status": {
+    "unnamed": "Sin nombre",
     "title": "Sujetos monitorizados",
     "slaBreach": "Incumplimiento SLA",
     "slaBreachHint": "Hay un incumplimiento de SLA abierto para este sujeto.",

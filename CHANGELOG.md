@@ -233,6 +233,42 @@ month, release-of-month; the current release is `v26.9.1`).
   exists. On a minimal image the missing tool read as "refusing to replace existing
   service file" on the second `--start` invocation.
 
+- The controls of a screen header wrap onto a second line when they do not fit on one, and the
+  title row that carries them grows to hold that second line instead of keeping a fixed height.
+
+- The controls of a header give way before the screen's name: the block that holds the title no
+  longer clips it, and the name keeps its whole text while the controls shrink around it.
+
+- A run, a health subject and a reliability timeline take their name from the same ladder as the
+  rest of the console — the name someone typed, then the session's own line, and only then a
+  fallback word — so a reference is no longer painted as the name of a thing that has none, and
+  stays beside the name instead.
+
+- The fallback words for an untitled session and an unnamed subject read in all seven languages.
+
+- Escape closes the composer's Advanced panel and returns focus to the summary that opens it; with
+  a picker open inside the panel, Escape closes the picker and leaves the panel open.
+
+- The composer's scope line names an environment that is not this node with the word the provider
+  profiles table uses, instead of its raw reference, which stays on the tooltip.
+
+- A provider-profile row opens from a real button on its name, so Tab reaches the name and Enter
+  opens the row.
+
+- The sessions table gives the session, state and last-seen columns a width of their own on a
+  desktop-width screen, and its last column gives way at its end with its full text on the tooltip.
+
+- The New session dialog bounds its own height to the viewport and makes its field region the one
+  part of it that scrolls; what that produces on a screen is measured separately.
+
+- The empty Deployment screen says what it lists — deployment definitions, desired state recorded
+  there, not a launched session — and offers the way to the sessions screen beside its own Declare
+  verb.
+
+- The Spanish console and documentation describe evidence as making alteration detectable rather
+  than claiming tamper-proof storage, and state a routine's cadence as a minimum interval rather
+  than an ambiguous label.
+
 ### Security
 
 - The Backstage connector resolves `adm-zip` 0.6.1

@@ -5,6 +5,7 @@
   },
   "title": "Claude Code",
   "subtitle": "Create, attach to and govern Claude Code sessions — no SSH. Every launch is policed; every session is observable.",
+  "untitled": "Untitled session",
   "refresh": "Refresh",
   "search": "Search sessions…",
   "tabs": {

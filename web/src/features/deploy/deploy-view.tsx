@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { Link } from '@tanstack/react-router'
 import { Plus, RefreshCw, Rocket } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -172,8 +173,11 @@ export default function DeployView() {
               <EmptyState
                 title={t('empty.deploy.title')}
                 description={t('empty.deploy.description')}
-                // "Declare a deployment to record desired state" — the same button
-                // the tab offers above the table, on the same right.
+                // The screen's own verb is the primary action — the same button the tab
+                // offers above the table, on the same right. The way to a LAUNCHED
+                // session is the quieter one: this screen lists definitions, and
+                // someone who launched a session from a profile is looking for it
+                // somewhere else.
                 action={
                   canWrite ? (
                     <Button
@@ -184,7 +188,14 @@ export default function DeployView() {
                       <Plus />
                       {t('definitions.declare')}
                     </Button>
-                  ) : null
+                  ) : undefined
+                }
+                secondaryAction={
+                  <Button asChild variant="link" size="sm">
+                    <Link to={'/agentops' as never}>
+                      {t('empty.deploy.sessions')}
+                    </Link>
+                  </Button>
                 }
               />
             }

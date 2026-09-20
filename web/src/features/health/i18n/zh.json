@@ -51,6 +51,7 @@
     "allKinds": "全部类型"
   },
   "status": {
+    "unnamed": "未命名",
     "title": "受监控的对象",
     "slaBreach": "SLA 违约",
     "slaBreachHint": "该对象存在一项未关闭的 SLA 违约。",

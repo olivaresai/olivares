@@ -13,6 +13,7 @@ import {
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { FillingTable, TableRegion } from '@/components/data/filling-table'
+import { RowOpenButton } from '@/components/data/row-open-button'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -461,12 +462,14 @@ function ProfilesTable({
               onClick={() => onOpen(profile)}
             >
               <td title={profile.profile_ref}>
-                <NamedRef
-                  className="font-medium text-foreground"
-                  name={profile.display_name}
-                  reference={profile.profile_ref}
-                  fallback={label}
-                />
+                <RowOpenButton onOpen={() => onOpen(profile)}>
+                  <NamedRef
+                    className="font-medium text-foreground"
+                    name={profile.display_name}
+                    reference={profile.profile_ref}
+                    fallback={label}
+                  />
+                </RowOpenButton>
               </td>
               <td
                 className={`font-mono text-caption text-muted-foreground ${HIDDEN_ON_PHONE}`}
