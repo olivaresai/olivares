@@ -16,10 +16,12 @@ import (
 // service-provider handler drives. A SCIM connection is bound to ONE tenant (its
 // admin token's tenant); it manages global Users AS MEMBERS of that tenant. So a
 // SCIM "user" is the (global User, this-tenant membership) pairing:
-//   - joiner: find-or-create the global User by userName(email) and grant it a
+//   - joiner: create the global User for userName(email) and grant it a
 //     membership in the bound tenant (least privilege: viewer by default; an
 //     operator elevates roles out of band or via the SCIM group→role mapping,
-//     scim_groups.go).
+//     scim_groups.go). A create never writes an account that already exists: one
+//     that is already a member of the bound tenant comes back as it stands, one
+//     that is not is a uniqueness conflict.
 //   - mover: update directory attributes; active=false offboards.
 //   - leaver: remove the membership in the bound tenant and revoke the user's
 //     tenant-bound tokens; if the user is left in NO tenant, deactivate the
@@ -61,11 +63,25 @@ type SCIMUserInput struct {
 	AgentDelegation string
 }
 
-// SCIMProvisionUser find-or-creates a global user by userName(email), sets its
-// directory attributes, and ensures it has a membership in tenant. It returns the
-// stored user and whether it was newly created (so the handler can answer 201 vs
-// 200). A userName already taken by a DIFFERENT account surfaces as ErrConflict
-// (the handler maps it to SCIM 409 uniqueness).
+// SCIMProvisionUser is the joiner path: it creates a global user for
+// userName(email), sets its directory attributes, and grants it a membership in
+// tenant. It returns the stored user and whether it was newly created (so the
+// handler can answer 201 vs 200).
+//
+// A create NEVER writes an account it did not create. An address already held by
+// a member of the bound tenant is idempotent — this connection owns that resource
+// already, so it comes back as it stands, and PUT/PATCH is how its attributes
+// move. An address held by an account that is NOT a member of the bound tenant is
+// ErrConflict (the handler maps it to SCIM 409 uniqueness): the address is taken,
+// and this connection has no authority over the account holding it.
+//
+// The two answers are deliberately the same one. A create that succeeded — or
+// that failed differently — for an address held elsewhere in the deployment would
+// tell one tenant's connection which addresses exist in all the others, and would
+// let it write that account's directory attributes and its lifecycle status,
+// which is a disable in every tenant the account belongs to. Joining an existing
+// account to a tenant is a separate, explicit and audited operation; a create
+// never performs it.
 func (a *Authenticator) SCIMProvisionUser(ctx context.Context, actor Principal, tenant model.TenantID, in SCIMUserInput) (model.User, bool, error) {
 	if tenant.IsZero() || tenant.IsSystem() {
 		return model.User{}, false, ErrInvalidToken
@@ -81,37 +97,37 @@ func (a *Authenticator) SCIMProvisionUser(ctx context.Context, actor Principal, 
 		if err != nil {
 			return err
 		}
-		var u model.User
 		if len(existing) > 0 {
-			u = existing[0]
-			applyDirectoryAttrs(&u, in)
-			if u, err = as.Users().Update(ctx, u); err != nil {
+			// The address is taken. Whether this connection may have the resource
+			// is decided by the membership boundary every other SCIM verb stands
+			// behind (SCIMGetMember), and nothing is written on either side of it.
+			u := existing[0]
+			if _, ok, err := membershipOf(ctx, as, u.ID, tenant); err != nil {
 				return err
+			} else if !ok {
+				return store.ErrConflict
 			}
-		} else {
-			u = model.User{Email: email, PasswordHash: ""} // SSO/SCIM-provisioned: no local password
-			applyDirectoryAttrs(&u, in)
-			u, err = as.Users().Create(ctx, u)
-			if err != nil {
-				return err
-			}
-			created = true
-			if err := auditAct(ctx, as, actor, "scim.user.create", "core.user", u.ID); err != nil {
-				return err
-			}
+			out = u
+			return nil
 		}
-		// Ensure the membership in the bound tenant (idempotent).
-		if _, ok, err := membershipOf(ctx, as, u.ID, tenant); err != nil {
+		u := model.User{Email: email, PasswordHash: ""} // SSO/SCIM-provisioned: no local password
+		applyDirectoryAttrs(&u, in)
+		if u, err = as.Users().Create(ctx, u); err != nil {
 			return err
-		} else if !ok {
-			if _, err := as.Memberships().Create(ctx, model.Membership{
-				UserID: u.ID, TargetTenantID: tenant, Role: SCIMDefaultRole,
-			}); err != nil {
-				return err
-			}
-			if err := auditAct(ctx, as, actor, "scim.user.join", "core.membership", u.ID); err != nil {
-				return err
-			}
+		}
+		created = true
+		if err := auditAct(ctx, as, actor, "scim.user.create", "core.user", u.ID); err != nil {
+			return err
+		}
+		// The account is new, so it holds no membership yet: grant the one this
+		// connection provisions it into.
+		if _, err := as.Memberships().Create(ctx, model.Membership{
+			UserID: u.ID, TargetTenantID: tenant, Role: SCIMDefaultRole,
+		}); err != nil {
+			return err
+		}
+		if err := auditAct(ctx, as, actor, "scim.user.join", "core.membership", u.ID); err != nil {
+			return err
 		}
 		out = u
 		return nil
@@ -388,8 +404,8 @@ func membershipOf(ctx context.Context, as store.AuthScope, userID model.ID, tena
 // applyDirectoryAttrs copies the SCIM mover attributes a create/replace carries —
 // display name, externalId, the active→status mapping and the enterprise-extension
 // fields (employeeNumber, department, manager) — from in onto u. It does NOT touch
-// email/userName: the match key is owned by the provision (find-or-create by email)
-// and update (conditional rename) paths, which differ on create vs replace. PATCH
+// email/userName: the match key is owned by the provision (create by email) and
+// update (conditional rename) paths, which differ on create vs replace. PATCH
 // reaches here too, having pre-merged the current state into in (handlers_scim.go),
 // so an attribute the PATCH did not mention keeps its current value rather than
 // being cleared.
