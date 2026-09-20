@@ -4440,26 +4440,37 @@ tasks:
       package that belongs to no shard is reported by nothing, every shard is green, the
       required check is green, and the package has simply stopped being tested. `go test`
       cannot catch it either — a shard runs the packages it was given and has no opinion
-      about the ones it was not. Pins four things: every test-bearing package of the
+      about the ones it was not. Pins five things: every test-bearing package of the
       workspace is in exactly one shard (none in two, none in none); every declared pattern
       matches something, except the ones the spec marks optional because the module they
       name is not published everywhere, and those are PRINTED; the matrix of pr-ci.yml is
-      the shard list of ci/pr-suite-shards.txt, in order; and the ceilings the workflow
+      the shard list of ci/pr-suite-shards.txt, in order; the ceilings the workflow
       declares are the ones the spec declares, with the Go timeout under the step ceiling so
-      Go names the package that hung instead of the step being cancelled mute. Three
-      answers: CLEAN, FAIL, COULD NOT LOOK.
+      Go names the package that hung instead of the step being cancelled mute; and every
+      top-level test, fuzz target and example of a package split by `group` records is in
+      exactly one group, with one remainder group per package and a -run expression the
+      kernel still carries as a single argument. That last one is the same silence one level
+      down and it is WORSE: `go test -run` over an expression that selects nothing exits 0,
+      so an orphaned test arrives as a green check. Three answers: CLEAN, FAIL,
+      COULD NOT LOOK.
     cmds:
       - bash scripts/check-pr-suite-shards.sh
 
   lint:pr-suite-shards:selftest:
     desc: >-
-      PR suite shards — battery: the three mutants the split exists to catch (a package in
-      two shards, a package in no shard, a pattern naming packages that do not exist), the
-      matrix out of step with the spec in both directions, a Go timeout at or above the step
-      ceiling, a leg that is not a task, an empty shard, a spec line the reader cannot
-      classify, an empty universe and an absent spec (COULD NOT LOOK, not clean), and the
-      two non-firing directions — the real tree stays clean, and an optional pattern that
-      matches nothing is a notice instead of a finding.
+      PR suite shards — battery of 30 cases: the three mutants the package split exists to
+      catch (a package in two shards, a package in no shard, a pattern naming packages that
+      do not exist), the matrix out of step with the spec in both directions, a Go timeout at
+      or above the step ceiling, a leg that is not a task, an empty shard, a spec line the
+      reader cannot classify, an empty universe and an absent spec (COULD NOT LOOK, not
+      clean); then the name groups — a test of a partitioned package that no group names, a
+      test named by two groups, a package split by name and also sent whole to a shard, a
+      matrix missing the new shard, a group whose families match nothing, two remainder
+      groups, a group naming an undeclared shard or an absent package, and a remainder
+      expression longer than one argument of the kernel will carry. And the non-firing
+      directions, without which a gate that refused everything would look perfect: the real
+      tree stays clean, the fixture stays clean with and without a name split, and an
+      optional pattern that matches nothing is a notice instead of a finding.
     cmds:
       - bash scripts/test-check-pr-suite-shards.sh
 

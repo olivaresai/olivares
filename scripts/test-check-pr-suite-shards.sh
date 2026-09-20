@@ -16,6 +16,14 @@
 # proves the gate parses ITS OWN dialect. Case 1 runs the gate against this repository with
 # no override at all and requires CLEAN: it is the only case that can notice the spec and
 # the workflow drifting apart in the tree that ships.
+#
+# ⛔ THE NAME GROUPS (cases 21-30) NEED A SECOND SYNTHETIC UNIVERSE. A `group` record splits
+# ONE package across shards by test NAME, so the mutants are "a test in no group" and "a test
+# in two groups" — the same two defects as the package partition, one level down, and with a
+# worse failure: `go test -run` over an expression that matches nothing EXITS 0. A shard would
+# report success having run no test at all. OLIVARES_PR_SUITE_TESTS gives the gate its test
+# universe from a file, exactly as OLIVARES_PR_SUITE_PACKAGES gives it its packages, so the
+# battery describes the tree it needs without writing a single Go file.
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -36,11 +44,26 @@ PASS=0; FAIL=0
 # this universe, and one leg.
 base_pkgs() {
   cat > "$T/pkgs.txt" <<'EOF'
+example.test/tree/cmd/helper
 example.test/tree/cmd/tool
 example.test/tree/core/api
 example.test/tree/core/internal/store
 example.test/tree/modules/one
 example.test/tree/modules/two
+EOF
+}
+
+# The test universe: `<import path> <top-level function>`, one per line. Only the packages a
+# `group` record names are ever read from it, so the cases that partition nothing ignore it.
+# FuzzDelta is here on purpose: `-run` selects fuzz targets and examples too, and a partition
+# written as if only `Test*` existed would drop them without a word.
+base_tests() {
+  cat > "$T/tests.txt" <<'EOF'
+example.test/tree/cmd/tool TestAlpha
+example.test/tree/cmd/tool TestAlphaSecond
+example.test/tree/cmd/tool TestBeta
+example.test/tree/cmd/tool TestGamma
+example.test/tree/cmd/tool FuzzDelta
 EOF
 }
 
@@ -91,11 +114,25 @@ tasks:
 EOF
 }
 
-reset_fixture() { base_pkgs; base_spec; base_wf; base_taskfile; }
+reset_fixture() { base_pkgs; base_spec; base_wf; base_taskfile; base_tests; }
+
+# The same fixture with cmd/tool split by test NAME across two shards: one named group and
+# one remainder. `pkg a example.test/tree/cmd/...` stays declared and stays honest — it still
+# owns cmd/helper — which is the shape the real tree has once the root package is partitioned.
+group_fixture() {
+  reset_fixture
+  {
+    printf 'shard t1\n'
+    printf 'group a example.test/tree/cmd/tool alpha A\n'
+    printf 'group t1 example.test/tree/cmd/tool rest *\n'
+  } >> "$T/spec.txt"
+  sed -i 's|shard: \[a, b\]|shard: [a, b, t1]|' "$T/wf.yml"
+}
 
 run_gate() {
   OLIVARES_PR_SUITE_SHARDS="$T/spec.txt" \
   OLIVARES_PR_SUITE_PACKAGES="$T/pkgs.txt" \
+  OLIVARES_PR_SUITE_TESTS="$T/tests.txt" \
   OLIVARES_PR_CI_WF="$T/wf.yml" \
   OLIVARES_TASKFILE="$T/Taskfile.yml" \
   bash "$GATE" > "$T/out.txt" 2> "$T/err.txt"
@@ -213,13 +250,89 @@ reset_fixture
 rm -f "$T/wf.yml"
 check "case 20 — an absent workflow is COULD NOT LOOK" 2 "missing"
 
+# THE NAME GROUPS ─────────────────────────────────────────────────────────────────────
+# One package, its tests split across shards by name. Everything above proves the gate can
+# see a package that belongs to no shard; these prove it can see a TEST that belongs to no
+# group — the same silence one level down, and the one `go test` answers 0 to.
+group_fixture
+check "case 21 — a package split by test name is CLEAN (no-fire control)" 0 "CLEAN"
+
+group_fixture
+# `beta B` instead of the remainder: TestGamma and FuzzDelta are then named by nothing, and
+# no group claims what is left. This is the mutant the remainder exists for.
+sed -i 's|^group t1 example.test/tree/cmd/tool rest \*$|group t1 example.test/tree/cmd/tool beta B|' "$T/spec.txt"
+check "case 22 — a test of a partitioned package that NO group names" 1 "belong to NO name group"
+
+group_fixture
+# `Alpha` is a longer prefix of the same names `A` already takes: both groups select them.
+printf 'group t1 example.test/tree/cmd/tool alpha-again Alpha\n' >> "$T/spec.txt"
+check "case 23 — a test named by TWO groups" 1 "are named by TWO name groups"
+
+group_fixture
+# The package is split by name AND sent whole to a shard: every test of it runs twice, and
+# the shard that the file says bounds the suite is not the one that does.
+printf 'pkg b example.test/tree/cmd/tool\n' >> "$T/spec.txt"
+check "case 24 — a group for a package a pkg record also sends whole" 1 "sends it whole"
+
+group_fixture
+sed -i 's|shard: \[a, b, t1\]|shard: [a, b]|' "$T/wf.yml"
+check "case 25 — the matrix does not list the new group shard" 1 "disagree"
+
+group_fixture
+# Stale families are worse here than a stale pattern: `-run` matches nothing, `go test`
+# prints ok and exits 0, and the shard publishes a success having run no test.
+sed -i 's|^group a example.test/tree/cmd/tool alpha A$|group a example.test/tree/cmd/tool alpha Zeta|' "$T/spec.txt"
+check "case 26 — a named group whose families match no test" 1 "names no test in this tree"
+
+group_fixture
+printf 'group b example.test/tree/cmd/tool rest-again *\n' >> "$T/spec.txt"
+check "case 27 — two remainder groups for one package" 1 "two remainder groups"
+
+group_fixture
+sed -i 's|^group t1 example.test/tree/cmd/tool rest \*$|group zz example.test/tree/cmd/tool rest *|' "$T/spec.txt"
+sed -i 's|shard: \[a, b, t1\]|shard: [a, b]|' "$T/wf.yml"
+sed -i '/^shard t1$/d' "$T/spec.txt"
+check "case 28 — a group naming a shard that is never declared" 1 "which is never declared"
+
+group_fixture
+sed -i 's|^group a example.test/tree/cmd/tool alpha A$|group a example.test/tree/cmd/absent alpha A|' "$T/spec.txt"
+check "case 29 — a group naming a package this tree does not have" 1 "this tree does not have"
+
+group_fixture
+# The remainder is EXACT NAMES, so it is the one expression that can outgrow what the kernel
+# will carry in a single argument. A gate that lets it through buys an exec failure on the
+# runner whose message is about the argument list and never about the tests.
+python3 - "$T/tests.txt" <<'PYGEN'
+import sys
+with open(sys.argv[1], "a", encoding="utf-8") as fh:
+    for i in range(2500):
+        fh.write("example.test/tree/cmd/tool TestBeyondWhatOneArgumentOfTheKernelWillCarry%04d\n" % i)
+PYGEN
+check "case 30 — a -run expression over the argument limit" 1 "MAX_ARG_STRLEN"
+
+group_fixture
+# ⛔ THE REMAINDER IS MANDATORY EVEN WHEN NOTHING IS ORPHANED TODAY, and this is the only case
+# that says so. core/api is split by two families that between them name every test it has, so
+# there is no orphan to report and case 22's finding stays quiet: what is left is a package
+# whose NEXT test would match nothing. Without this case the rule could be deleted and the
+# battery would stay green — measured, by removing it.
+{
+  printf 'example.test/tree/core/api TestOne\n'
+  printf 'example.test/tree/core/api TestTwo\n'
+} >> "$T/tests.txt"
+{
+  printf 'group a example.test/tree/core/api one One\n'
+  printf 'group b example.test/tree/core/api two Two\n'
+} >> "$T/spec.txt"
+check "case 31 — a partitioned package with no remainder group" 1 "none of them is the remainder"
+
 echo
 printf 'test-check-pr-suite-shards: %d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ] || exit 1
 # A battery that ran nothing exits 0 for free. It has to say how many it ran, and refuse
 # if the number is not the one it was written with.
-[ "$PASS" -eq 20 ] || {
-  echo "test-check-pr-suite-shards: only $PASS of 20 cases ran — the battery was edited without its count" >&2
+[ "$PASS" -eq 31 ] || {
+  echo "test-check-pr-suite-shards: only $PASS of 31 cases ran — the battery was edited without its count" >&2
   exit 1
 }
 exit 0
