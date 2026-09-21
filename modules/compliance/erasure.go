@@ -161,16 +161,26 @@ type erasureEventDTO struct {
 }
 
 type erasureReceiptDTO struct {
-	ErasureID    string           `json:"erasure_id"`
-	SubjectKind  string           `json:"subject_kind"`
-	SubjectToken string           `json:"subject_token"`
-	Targets      []targetOutcome  `json:"targets"`
-	Account      string           `json:"account_outcome"`
-	Provider     string           `json:"provider_outcome"`
-	KeyShredded  bool             `json:"key_shredded"`
-	VerifyOK     bool             `json:"verify_ok"`
-	VerifyN      int64            `json:"verify_checked"`
-	VerifyWhy    string           `json:"verify_reason,omitempty"`
+	ErasureID    string          `json:"erasure_id"`
+	SubjectKind  string          `json:"subject_kind"`
+	SubjectToken string          `json:"subject_token"`
+	Targets      []targetOutcome `json:"targets"`
+	Account      string          `json:"account_outcome"`
+	Provider     string          `json:"provider_outcome"`
+	KeyShredded  bool            `json:"key_shredded"`
+	VerifyOK     bool            `json:"verify_ok"`
+	VerifyN      int64           `json:"verify_checked"`
+	VerifyWhy    string          `json:"verify_reason,omitempty"`
+	// What the ONE residual scan opened, beside what the request's data-class scope
+	// required. Absent on a receipt sealed before these fields existed, and absent —
+	// never defaulted — on a scan that opened nothing: the receipt then carries the
+	// unestablished declaration on VerifyWhy instead.
+	ResidualScanDepth      string   `json:"residual_scan_depth,omitempty"`
+	ResidualScanOpened     []string `json:"residual_scan_opened,omitempty"`
+	ResidualScanApplicable []string `json:"residual_scan_applicable,omitempty"`
+	// DataClasses is the scope the two sets above are read against. It only makes
+	// readable what manifest_hash already commits to.
+	DataClasses  []string         `json:"data_classes,omitempty"`
 	Retained     []retainedRecord `json:"retained"`
 	CaseRef      string           `json:"case_ref"`
 	ApprovalRef  string           `json:"approval_ref,omitempty"`
@@ -535,12 +545,18 @@ func receiptDTO(rec model.Record) erasureReceiptDTO {
 		VerifyOK:     rec.Bool(colRCVerifyOK),
 		VerifyN:      rec.Int(colRCVerifyN),
 		VerifyWhy:    rec.String(colRCVerifyWhy),
-		CaseRef:      rec.String(colCaseRef),
-		ApprovalRef:  rec.String(colApprovalRef),
-		LedgerSeq:    rec.Int(colLedgerSeq),
-		LedgerHash:   rec.String(colLedgerHash),
-		ManifestHash: rec.String(colManifestHash),
-		OccurredAt:   rec.String(model.ColCreatedAt),
+		// A pre-change row has NULL here, which reads back as the empty string and
+		// an absent field — not as a depth of "".
+		ResidualScanDepth:      rec.String(colRCScanDepth),
+		ResidualScanOpened:     decodeStrings(rec.String(colRCScanOpened)),
+		ResidualScanApplicable: decodeStrings(rec.String(colRCScanApplicable)),
+		DataClasses:            decodeStrings(rec.String(colRCClasses)),
+		CaseRef:                rec.String(colCaseRef),
+		ApprovalRef:            rec.String(colApprovalRef),
+		LedgerSeq:              rec.Int(colLedgerSeq),
+		LedgerHash:             rec.String(colLedgerHash),
+		ManifestHash:           rec.String(colManifestHash),
+		OccurredAt:             rec.String(model.ColCreatedAt),
 		providerFloor: providerFloor{
 			ProviderFloorDays:   int(rec.Int(colRCFloorDays)),
 			ProviderFloorKnown:  rec.Bool(colRCFloorKnown),
@@ -1247,8 +1263,11 @@ func (m *Module) executeErasure(ctx context.Context, mc api.ModuleContext, id mo
 	}
 
 	// 4) Residual scan (read-only, pre-shred): any surviving identifier occurrence
-	// fails the receipt's verification honestly.
-	residues, err := m.residualScan(ctx, mc.Tenant, key, classes)
+	// fails the receipt's verification honestly. This scan is also the ONLY thing
+	// that speaks about depth and coverage on the receipt — it reports the method it
+	// used, the targets the request's scope required and the targets it could open,
+	// and the seal below publishes that report unchanged.
+	scan, err := m.residualScan(ctx, mc.Tenant, key, classes)
 	if err != nil {
 		m.debugf("compliance: erasure residual scan failed", "erasure", id.String(), "err", err)
 		m.markErasure(ctx, mc, id, erasureStatusFailed, erasureEventFailed,
@@ -1302,9 +1321,12 @@ func (m *Module) executeErasure(ctx context.Context, mc api.ModuleContext, id mo
 		// the coordinator's verdict must come from EXECUTED checks, so the
 		// module hands it evidence probes bound to THIS transaction — the only
 		// scope that can observe the shred before the receipt seals it. KeyGone
-		// re-probes the row shredSubjectKey just deleted; ResidualScan re-runs
-		// the registry scan post-shred (the pre-shred scan above cannot see
-		// rows that survived the shred transaction itself).
+		// re-probes the row shredSubjectKey just deleted; ResidualScanReport
+		// re-runs the registry-scoped scan post-shred (the pre-shred scan above
+		// cannot see rows that survived the shred transaction itself). What the
+		// coordinator does with that report is its own verdict about its own
+		// re-scan; the receipt's depth field is written from step 4 and from
+		// nowhere else.
 		probes := CryptoShredProbes{
 			KeyGone: func(pctx context.Context) (bool, error) {
 				_, err := getSubjectKey(pctx, sc, key.ID)
@@ -1316,7 +1338,7 @@ func (m *Module) executeErasure(ctx context.Context, mc api.ModuleContext, id mo
 				}
 				return false, nil
 			},
-			ResidualScan: func(pctx context.Context) ([]string, int, error) {
+			ResidualScanReport: func(pctx context.Context) (CryptoShredResidualScanReport, error) {
 				return residualScanIn(pctx, sc, key.Kind, key.identifiers(), classes)
 			},
 		}
@@ -1328,20 +1350,31 @@ func (m *Module) executeErasure(ctx context.Context, mc api.ModuleContext, id mo
 		if verr != nil {
 			return verr
 		}
-		verifyOK := verify.OK && verify.Checked > 0 && len(residues) == 0
+		// The scan's own declaration, assembled ONCE (residualScanDeclaration) and
+		// used for both halves of the rule it states: the sentence on verify_reason,
+		// and the verdict. "verify_ok only if the scan declared nothing" is exactly
+		// "only if it opened at least one target AND opened every target the
+		// request's own data-class scope required" — written this way so the two can
+		// never drift into disagreeing about the same receipt.
+		scanDeclaration := residualScanDeclaration(scan)
+		verifyOK := verify.OK && verify.Checked > 0 && len(scan.Residues) == 0 && scanDeclaration == ""
 		verifyWhy := verify.Reason
 		if verify.Checked == 0 && verifyWhy == "" {
 			verifyWhy = "no-events"
 		}
-		if len(residues) > 0 {
-			verifyWhy = strings.TrimSpace(verifyWhy + " residual identifiers at: " + strings.Join(residues, ", "))
+		if len(scan.Residues) > 0 {
+			verifyWhy = strings.TrimSpace(verifyWhy + " residual identifiers at: " + strings.Join(scan.Residues, ", "))
+		}
+		if scanDeclaration != "" {
+			verifyWhy = strings.TrimSpace(verifyWhy + " " + scanDeclaration)
 		}
 		if coordWired && !coordVerify.Complete {
 			verifyOK = false
 			verifyWhy = strings.TrimSpace(verifyWhy + " enterprise RTBF coordinator incomplete: " + coordinatorVerificationSummary(coordVerify))
 		}
 		if len(coordWarnings) > 0 {
-			verifyWhy = strings.TrimSpace(verifyWhy + " enterprise RTBF coordinator warnings: " + strings.Join(dedupeStrings(coordWarnings), "; "))
+			verifyWhy = strings.TrimSpace(verifyWhy + " enterprise RTBF coordinator warnings: " +
+				strings.Join(reservedScanMarkerFreeAll(coordWarnings), "; "))
 		}
 		gaps := !accountAttemptedOrNA(key.Kind, accountOutcome) || !providerOutcome.Wired || !verifyOK
 		status := erasureStatusCompleted
@@ -1357,7 +1390,7 @@ func (m *Module) executeErasure(ctx context.Context, mc api.ModuleContext, id mo
 		if ok {
 			seq, hash = head.Seq, hex.EncodeToString(head.Hash)
 		}
-		manifest := erasureManifest(id.String(), key.Kind, outcomes, accountOutcome, providerOutcome, verifyOK, classes)
+		manifest := erasureManifest(id.String(), key.Kind, outcomes, scan, accountOutcome, providerOutcome, verifyOK, classes)
 		repo, err := sc.Ext(erasureReceiptKind)
 		if err != nil {
 			return err
@@ -1376,12 +1409,19 @@ func (m *Module) executeErasure(ctx context.Context, mc api.ModuleContext, id mo
 			colRCVerifyOK:   verifyOK,
 			colRCVerifyN:    verify.Checked,
 			colRCVerifyWhy:  nullableText(verifyWhy),
-			colRCRetained:   encodeJSON(retainedReconciliation),
-			colCaseRef:      reqRec.String(colCaseRef),
-			colApprovalRef:  dec.ApprovalRef,
-			colLedgerSeq:    seq,
-			colLedgerHash:   nullableText(hash),
-			colManifestHash: hashHex(manifest),
+			// What the residual scan opened, beside what the scope required. All
+			// four are nullable: a receipt sealed before these columns existed keeps
+			// NULL in them and is never rewritten.
+			colRCScanDepth:      nullableText(string(scan.Depth)),
+			colRCScanOpened:     encodeJSON(scan.Opened),
+			colRCScanApplicable: encodeJSON(scan.Applicable),
+			colRCClasses:        encodeJSON(classes),
+			colRCRetained:       encodeJSON(retainedReconciliation),
+			colCaseRef:          reqRec.String(colCaseRef),
+			colApprovalRef:      dec.ApprovalRef,
+			colLedgerSeq:        seq,
+			colLedgerHash:       nullableText(hash),
+			colManifestHash:     hashHex(manifest),
 		})
 		if err != nil {
 			return err
@@ -1503,11 +1543,23 @@ func anyModelIOClass(classes []string) bool {
 
 // erasureManifest is the canonical, order-stable summary the receipt's
 // manifest_hash commits to (the sealRetentionRun pattern).
-func erasureManifest(id, subjectKind string, outcomes []targetOutcome, acc AccountEraseOutcome, prov ProviderEraseOutcome, verifyOK bool, classes []string) string {
-	parts := []string{"erasure-receipt|v1", id, subjectKind, strings.Join(classes, ",")}
+//
+// v2 adds the residual scan's report, beside the per-target erase outcomes that were
+// already here: the method, then the LABELS it opened, then the labels the request's
+// scope required, then the residues. Labels and not a count, because a count cannot
+// be checked against anything — a third party re-reading the receipt can tell a full
+// sweep from a scan that opened two of four only if the hash commits to which two.
+//
+// Only a receipt being SEALED is hashed here. Nothing recomputes a stored manifest:
+// this function has exactly one caller, inside the shred transaction, so a receipt
+// sealed under v1 keeps its v1 hash and stays verifiable on its own terms.
+func erasureManifest(id, subjectKind string, outcomes []targetOutcome, scan CryptoShredResidualScanReport, acc AccountEraseOutcome, prov ProviderEraseOutcome, verifyOK bool, classes []string) string {
+	parts := []string{"erasure-receipt|v2", id, subjectKind, strings.Join(classes, ",")}
 	for _, o := range outcomes {
 		parts = append(parts, o.Target+":"+o.Mode+":"+itoa(o.Examined)+":"+itoa(o.Erased)+":"+itoa(o.Scrubbed)+":"+o.Status)
 	}
+	parts = append(parts, "scan:"+string(scan.Depth)+":"+strings.Join(scan.Opened, ",")+
+		":"+strings.Join(scan.Applicable, ",")+":"+strings.Join(scan.Residues, ","))
 	parts = append(parts, accountSummary(acc), providerSummary(prov))
 	if verifyOK {
 		parts = append(parts, "verify:ok")
@@ -1515,6 +1567,92 @@ func erasureManifest(id, subjectKind string, outcomes []targetOutcome, acc Accou
 		parts = append(parts, "verify:failed")
 	}
 	return strings.Join(parts, "|")
+}
+
+// The machine-matchable substrings a consumer matches on. They are DISJOINT by
+// construction, and the two below are mutually exclusive by the condition each
+// states, so a receipt can never carry both.
+const (
+	markerResidualScanDepth    = "residual-scan-depth=unestablished"
+	markerResidualScanCoverage = "residual-scan-coverage=partial"
+)
+
+// residualScanNotOpened lists, in catalog order, the targets the request's own
+// data-class scope required and the scan could not open.
+func residualScanNotOpened(scan CryptoShredResidualScanReport) []string {
+	opened := make(map[string]struct{}, len(scan.Opened))
+	for _, label := range scan.Opened {
+		opened[label] = struct{}{}
+	}
+	var missing []string
+	for _, label := range scan.Applicable {
+		if _, ok := opened[label]; !ok {
+			missing = append(missing, label)
+		}
+	}
+	return missing
+}
+
+// residualScanDeclaration is the ONE sentence the scan's own report requires on the
+// receipt, or "" when it requires none. It is the single place either sentence is
+// written, and the single place the condition for writing one is evaluated — the
+// verdict reads this function's answer rather than re-deriving it, so "a stated
+// depth" and "a denial of one" cannot both end up on the same receipt.
+//
+// Nothing was opened ⇒ the depth is unestablished; something was opened but less
+// than the scope required ⇒ the coverage is partial. The two conditions exclude each
+// other, so at most one sentence exists.
+func residualScanDeclaration(scan CryptoShredResidualScanReport) string {
+	if len(scan.Opened) == 0 {
+		return markerResidualScanDepth + ": the residual scan opened no target for this subject kind " +
+			"and data-class scope, so no surviving identifier could have been observed"
+	}
+	missing := residualScanNotOpened(scan)
+	if len(missing) == 0 {
+		return ""
+	}
+	return markerResidualScanCoverage + ": the residual scan opened " + itoa(int64(len(scan.Opened))) +
+		" of the " + itoa(int64(len(scan.Applicable))) + " targets this request's data-class scope required" +
+		"; not opened: " + strings.Join(missing, ", ")
+}
+
+// coordinatorTextWithheld is the ONE fixed sentence that stands in for a
+// coordinator-supplied string carrying a marker the residual scan reserves.
+const coordinatorTextWithheld = "a coordinator string was withheld because it carried a marker " +
+	"reserved for the residual scan's own declarations"
+
+// reservedScanMarkerFree returns s, unless s carries one of the two markers the
+// residual scan reserves for itself — then it returns the withholding sentence instead.
+//
+// WHY A COORDINATOR MAY NOT SAY THESE TWO MARKERS. They are an IFF over
+// verify_reason: each is there exactly when the scan's own report says so, and a reader
+// matches on them. Every other string on that field comes from a coordinator, which is
+// out-of-tree code this module cannot review. One that wrote a reserved marker into its
+// own prose would seal a receipt stating a depth AND denying one — the defect the
+// single-speaker rule removes, restated by an embedder. The replacement is whole and
+// fixed on purpose: a marker is not escaped or edited out of a sentence, because a
+// half-quoted claim is worse than a named absence.
+//
+// NOTHING IS LOST SILENTLY. The sentence takes the withheld string's place in the same
+// list, so an unverified item still reports itself and still forces Complete=false with
+// the verdict it carries. The coordinator's OWN marker for its post-shred re-scan is a
+// different claim and is deliberately not reserved: it passes through untouched.
+func reservedScanMarkerFree(s string) string {
+	if strings.Contains(s, markerResidualScanDepth) || strings.Contains(s, markerResidualScanCoverage) {
+		return coordinatorTextWithheld
+	}
+	return s
+}
+
+// reservedScanMarkerFreeAll applies reservedScanMarkerFree to a coordinator-supplied
+// list and dedupes it, so several withheld strings say it once. It replaces the plain
+// dedupeStrings at every place coordinator text enters verify_reason.
+func reservedScanMarkerFreeAll(in []string) []string {
+	out := make([]string, 0, len(in))
+	for _, s := range in {
+		out = append(out, reservedScanMarkerFree(s))
+	}
+	return dedupeStrings(out)
 }
 
 func erasureTargetLabels(outcomes []targetOutcome) []string {
@@ -1533,17 +1671,24 @@ func coordinatorVerificationSummary(v CryptoShredVerification) string {
 		"key_destroyed=" + boolText(v.KeyDestroyed),
 		"worm_notified=" + boolText(v.WORMNotified),
 	}
-	if v.ResidualScan.ScanDepth != "" {
-		parts = append(parts, "scan_depth="+v.ResidualScan.ScanDepth)
-	}
+	// A coordinator's own ScanDepth is deliberately NOT printed (contract v3): depth
+	// is stated once, by the pre-shred scan, in the receipt's typed field. Printing a
+	// coordinator's value here would put a second depth on the same receipt — the
+	// defect this change exists to remove, and one an out-of-tree coordinator written
+	// to the older contract would otherwise reintroduce for free.
+	//
+	// What the coordinator could not verify still travels through Unverified below, and
+	// so does the policy it applied — both through reservedScanMarkerFree, which is the
+	// same rule stated the other way round: prose from a coordinator may say anything
+	// EXCEPT the two markers this receipt reserves for the scan's own declarations.
 	if v.ResidualScan.ResiduesFound > 0 {
 		parts = append(parts, "residues_found="+itoa(int64(v.ResidualScan.ResiduesFound)))
 	}
 	if len(v.Unverified) > 0 {
-		parts = append(parts, "unverified=["+strings.Join(dedupeStrings(v.Unverified), "; ")+"]")
+		parts = append(parts, "unverified=["+strings.Join(reservedScanMarkerFreeAll(v.Unverified), "; ")+"]")
 	}
 	if v.PolicyApplied != "" {
-		parts = append(parts, "policy="+v.PolicyApplied)
+		parts = append(parts, "policy="+reservedScanMarkerFree(v.PolicyApplied))
 	}
 	return strings.Join(parts, ", ")
 }

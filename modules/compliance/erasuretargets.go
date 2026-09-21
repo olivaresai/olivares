@@ -7,6 +7,7 @@ package compliance
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/olivaresai/olivares/core/model"
@@ -709,30 +710,57 @@ func (m *Module) runErasureTargets(ctx context.Context, tenant model.TenantID, a
 	return outcomes, nil
 }
 
+// The three targets this scan walks that are NOT rows of the erasure-target
+// registry: the knowledge document itself, the roster identity's external-id
+// convergence anchor and the canonical cost ledger. They carry a structural label
+// each, exactly like a registry target, so the receipt's two label sets name every
+// place the scan looked and not only the ones the catalog happens to list.
+const (
+	scanTargetKnowledgeDocument = "knowledge.document"
+	scanTargetCoreIdentities    = "core.identities"
+	scanTargetCoreCostRecords   = "core.cost_records"
+)
+
 // residualScan re-runs every applicable match AFTER the erasure and reports any
 // surviving identifier occurrence — the workflow's "verify" step. It is read-only,
 // SCOPED to the same data classes the execution was (out-of-scope rows are
 // deliberate retention, not residues), and honest: a non-empty result fails the
 // receipt's verification.
-func (m *Module) residualScan(ctx context.Context, tenant model.TenantID, key subjectKey, classes []string) ([]string, error) {
-	var residues []string
+//
+// It is also the ONLY thing that speaks about depth and coverage on the receipt. An
+// error here seals no receipt at all, so it returns the zero report with it: a scan
+// that failed states nothing, rather than publishing however far it happened to get.
+func (m *Module) residualScan(ctx context.Context, tenant model.TenantID, key subjectKey, classes []string) (CryptoShredResidualScanReport, error) {
+	var report CryptoShredResidualScanReport
 	err := m.data.View(ctx, tenant, func(sc store.Scope) error {
 		var verr error
-		residues, _, verr = residualScanIn(ctx, sc, key.Kind, key.identifiers(), classes)
+		report, verr = residualScanIn(ctx, sc, key.Kind, key.identifiers(), classes)
 		return verr
 	})
 	if err != nil {
-		return nil, err
+		return CryptoShredResidualScanReport{}, err
 	}
-	return residues, nil
+	return report, nil
 }
 
 // residualScanIn is residualScan bound to an EXISTING scope, so the shred
-// transaction can re-scan post-shred through the enterprise coordinator's
-// evidence probe (CryptoShredProbes.ResidualScan) without opening a nested view.
-// It also counts the targets actually examined — the coordinator reports that
-// number instead of inventing one.
-func residualScanIn(ctx context.Context, sc store.Scope, subjectKind string, refs []string, classes []string) ([]string, int, error) {
+// transaction can re-scan post-shred through the enterprise coordinator's evidence
+// probe (CryptoShredProbes.ResidualScanReport) without opening a nested view.
+//
+// IT REPORTS WHAT IT OPENED. Applicable is every target the subject kind AND the
+// request's data-class scope required; Opened is the subset this deployment could
+// actually open — a target whose owning module is not registered here is applicable
+// and NOT opened, which is a place the scan could not look and must say so. The two
+// sets are built in the same pass over the same catalog, in catalog order, so Opened
+// is a subset of Applicable by construction. The depth is stated only if at least
+// one target was opened: a scan that opened nothing reached no depth.
+//
+// EVERY LABEL IS STRUCTURAL. The three places a label is appended below take it from
+// erasureTarget.Label (a fixed string in this file's in-code catalog) or from one of
+// the three scanTarget* constants above. No row value, subject identifier, alias,
+// column value or tenant id reaches a label — which matters because these labels are
+// sealed onto a certificate that outlives the subject's key.
+func residualScanIn(ctx context.Context, sc store.Scope, subjectKind string, refs []string, classes []string) (CryptoShredResidualScanReport, error) {
 	inScope := func(class string) bool {
 		if class == "" {
 			return true
@@ -744,28 +772,41 @@ func residualScanIn(ctx context.Context, sc store.Scope, subjectKind string, ref
 		}
 		return false
 	}
+	// fail discards the partial report on purpose: a scan that could not finish has
+	// nothing to publish, and the caller seals no receipt at all. The label in the
+	// message is the structural target name, so an operator log says WHERE without
+	// saying whose.
+	fail := func(label string, err error) (CryptoShredResidualScanReport, error) {
+		return CryptoShredResidualScanReport{}, fmt.Errorf("residual scan at %s: %w", label, err)
+	}
+	var report CryptoShredResidualScanReport
 	var residues []string
-	scanned := 0
 	for _, t := range erasureTargetRegistry {
 		cols, ok := t.SubjectColumns[subjectKind]
 		if !ok || !inScope(t.DataClass) {
 			continue
 		}
+		// The request's scope required this target, whether or not this deployment
+		// can open it.
+		report.Applicable = append(report.Applicable, t.Label)
 		repo, err := sc.Ext(t.Kind)
 		if err != nil {
 			if errors.Is(err, store.ErrUnknownEntity) {
+				// The owning module is not registered here. Applicable and NOT
+				// opened: a place the scan could not look, which the receipt
+				// declares rather than counting as examined-and-clean.
 				continue
 			}
-			return nil, scanned, err
+			return fail(t.Label, err)
 		}
-		scanned++
+		report.Opened = append(report.Opened, t.Label)
 		for _, col := range cols {
 			for _, ref := range refs {
 				recs, _, err := repo.List(ctx, model.Query{
 					Filters: []model.Filter{eq(col, ref)}, Limit: 1,
 				})
 				if err != nil {
-					return nil, scanned, err
+					return fail(t.Label, err)
 				}
 				if len(recs) > 0 {
 					residues = append(residues, t.Label+"."+col)
@@ -774,30 +815,33 @@ func residualScanIn(ctx context.Context, sc store.Scope, subjectKind string, ref
 		}
 	}
 	if subjectKind == erasureSubjectDocument && inScope(classKnowledgeContent) {
-		docs, err := sc.Ext(model.Kind("knowledge.document"))
+		report.Applicable = append(report.Applicable, scanTargetKnowledgeDocument)
+		docs, err := sc.Ext(model.Kind(scanTargetKnowledgeDocument))
 		if err == nil {
-			scanned++
+			report.Opened = append(report.Opened, scanTargetKnowledgeDocument)
 			for _, ref := range refs {
 				if _, gerr := docs.Get(ctx, model.ID(ref)); gerr == nil {
-					residues = append(residues, "knowledge.document")
+					residues = append(residues, scanTargetKnowledgeDocument)
 				} else if !errors.Is(gerr, store.ErrNotFound) {
-					return nil, scanned, gerr
+					return fail(scanTargetKnowledgeDocument, gerr)
 				}
 			}
 		} else if !errors.Is(err, store.ErrUnknownEntity) {
-			return nil, scanned, err
+			return fail(scanTargetKnowledgeDocument, err)
 		}
 	}
 	if subjectKind == erasureSubjectIdentity {
 		// The scrub renames the external_id anchor itself, so ANY row still
-		// matching the original ref is a residue.
-		scanned++
+		// matching the original ref is a residue. The roster is a core store, so
+		// this target is applicable and opened in every deployment.
+		report.Applicable = append(report.Applicable, scanTargetCoreIdentities)
+		report.Opened = append(report.Opened, scanTargetCoreIdentities)
 		for _, ref := range refs {
 			ids, _, err := sc.Identities().List(ctx, model.Query{
 				Filters: []model.Filter{eq("external_id", ref)}, Limit: 1,
 			})
 			if err != nil {
-				return nil, scanned, err
+				return fail(scanTargetCoreIdentities, err)
 			}
 			if len(ids) > 0 {
 				residues = append(residues, "core.identities.external_id")
@@ -807,8 +851,11 @@ func residualScanIn(ctx context.Context, sc store.Scope, subjectKind string, ref
 	if subjectKind == erasureSubjectUser && inScope(classCostSample) {
 		// The canonical cost ledger has no filterable actor column: page it
 		// within the same bound the erasure pass used. An unfinished scan is
-		// reported as such — honest non-verification, never a silent pass.
-		scanned++
+		// reported as such — honest non-verification, never a silent pass. The
+		// ledger is a core store, so this target is applicable and opened in
+		// every deployment.
+		report.Applicable = append(report.Applicable, scanTargetCoreCostRecords)
+		report.Opened = append(report.Opened, scanTargetCoreCostRecords)
 		iterations, cursor := 0, ""
 		for {
 			if iterations >= maxEraseIterations {
@@ -818,7 +865,7 @@ func residualScanIn(ctx context.Context, sc store.Scope, subjectKind string, ref
 			iterations++
 			recs, page, err := sc.Costs().List(ctx, model.Query{Limit: maxEraseBatch, Cursor: cursor})
 			if err != nil {
-				return nil, scanned, err
+				return fail(scanTargetCoreCostRecords, err)
 			}
 			hit := false
 			for _, cr := range recs {
@@ -839,7 +886,13 @@ func residualScanIn(ctx context.Context, sc store.Scope, subjectKind string, ref
 			}
 		}
 	}
-	return dedupeStrings(residues), scanned, nil
+	report.Residues = dedupeStrings(residues)
+	// The depth is a statement about a scan that opened something. Nothing defaults
+	// it: an empty Depth and an empty Opened are the same fact, written once.
+	if len(report.Opened) > 0 {
+		report.Depth = ResidualScanDepthRegistryScoped
+	}
+	return report, nil
 }
 
 // dedupeStrings returns the distinct entries of a list, order-preserving.

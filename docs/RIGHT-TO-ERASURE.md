@@ -64,6 +64,53 @@ roster metadata + owner/sponsor refs of the NHI overlay.
 manual ceremony) or it has memberships in OTHER tenants (one tenant's DSR cannot erase a shared
 principal — coordinate a DSR per tenant or operate from system).
 
+## 3bis. What the receipt says the verification examined
+
+The residual scan runs after the erase pass and before the crypto-shred, and it is the only
+thing on the receipt that speaks about how the verification looked and over how much. Four
+fields carry it:
+
+| field | what it means |
+|---|---|
+| `residual_scan_depth` | the METHOD the scan used, never a coverage claim. `registry-scoped` = the in-code erasure-target catalog restricted to the subject kind AND to this request's `data_classes`, matched by exact equality on the mapped identifier columns in the live store, plus the document row, the roster identity anchor and the cost ledger. **Absent** when the scan opened nothing: no depth was reached, so none is stated. |
+| `residual_scan_applicable` | the targets this scan's METHOD covers for the request's data-class scope, as structural labels — the catalog named above restricted to the subject kind and that scope, which is not every store the erasure touched. A subject kind whose erasure CASCADES destroys stores this scan does not re-open (a document takes its chunks and its current labels with it), so a clean result here is a clean result over the targets named here. |
+| `residual_scan_opened` | the targets the scan could actually open here. Always a subset of `applicable`; a target whose owning module is not registered in this deployment is applicable and NOT opened. |
+| `data_classes` | the scope the two sets above are read against — narrowing a request shrinks BOTH, so a narrowed erasure can never look like a broader one. |
+
+All four are covered by `manifest_hash`, by LABEL and not by a count: a third party re-reading
+the receipt can tell a full sweep from a scan that opened two of four. Receipts sealed before
+these fields existed carry them empty and keep the hash they were sealed under — nothing
+recomputes a stored manifest.
+
+**A declaration, and what it costs.** When the scan has something to say about itself it says it
+once, in `verify_reason`, on a substring a consumer can match:
+
+- `residual-scan-depth=unestablished` — the scan opened NO target for this subject kind and
+  data-class scope, so no surviving identifier could have been observed. This is reachable
+  today: a request may name classes that no target of its subject kind carries.
+- `residual-scan-coverage=partial` — the scan opened fewer targets than the scope required, and
+  the sentence names the ones it could not open.
+
+The two conditions exclude each other, so a receipt never carries both, and a receipt that
+states a depth never also denies one. **Either declaration makes `verify_ok` false and closes
+the erasure `completed_with_gaps`** (CLI exit 7). That is deliberate: `verify_ok` is the only
+machine-readable verification signal the receipt has, and an erasure whose verification could
+not look where the request said to look is not a verified erasure. The erasure itself still
+ran, and the per-target outcomes above say exactly what it did.
+
+A third substring, `residual-rescan=unverified`, is a DIFFERENT claim: it belongs to the
+optional coordinator's post-shred re-scan (§7), not to this scan, and it can appear beside a
+stated depth without contradicting it.
+
+**Where a marker is matched: on `verify_reason`, and nowhere else.** The two substrings above are
+reserved for that FIELD, and a receipt carries one there exactly when the scan's own report says
+so — which is why a string an optional coordinator supplies is withheld from that field when it
+contains either. No other part of the receipt is a marker channel, and two in particular are not:
+`account_outcome` and `provider_outcome` carry the account and provider erasers' OWN detail
+verbatim, through the public seams that supply them, and are neither filtered nor reserved. So a
+consumer matches the FIELD, never the receipt as a document: text that reads like a declaration
+anywhere else in it is not one.
+
 ## 4. Why the ledger is not touched (and keeps verifying)
 
 The ledger references people ONLY by pseudonyms (`user:<id>`) and hashes; direct PII never
@@ -140,5 +187,9 @@ What it changes, honestly:
   destroyed key row is re-probed and the residual scan re-runs inside the shred transaction.
   Anything it cannot verify appears in the receipt as an explicit `unverified: [...]` reason and
   the erasure closes with `gaps`, never a rounded-up "complete".
+- **It says nothing about depth.** A coordinator reports on its own post-shred re-scan and
+  never writes the receipt's `residual_scan_*` fields; a depth it sets is not published. Those
+  fields come from the pre-shred scan of §3bis in every build, so the same input seals the same
+  depth and the same two label sets with or without a coordinator wired.
 - **Deny-closed**: a missing/invalid config file blocks shreds entirely (a deny-all coordinator);
   an unset env keeps the community behavior byte-identical.

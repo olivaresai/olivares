@@ -295,13 +295,70 @@ type CryptoShredReadiness struct {
 	PolicyApplied string               `json:"policy_applied,omitempty"`
 }
 
-// CryptoShredResidualScan is the enterprise-depth residual scan summary.
+// CryptoShredResidualScan is the coordinator's summary of the POST-SHRED re-scan it
+// executed. It is the coordinator speaking about its OWN work, never about the
+// module's pre-shred scan.
+//
+// ScanDepth is DEPRECATED in contract v3 and is no longer read anywhere in this
+// module: depth is stated once, by the pre-shred scan, in the receipt's typed
+// residual_scan_depth field (CryptoShredResidualScanReport.Depth). A coordinator
+// that still sets it is not contradicted — the value is simply never published, so
+// it cannot put a second depth beside the field a supervisory authority reads. A
+// coordinator that could not re-scan reports that in
+// CryptoShredVerification.Unverified, on its own marker, like any other claim it
+// could not verify.
 type CryptoShredResidualScan struct {
+	// Contract v3 deprecates this field (see above). It is still READ — the reflect
+	// adapter copies it off every wired verdict, which is what lets a coordinator
+	// built against the previous contract still compile and still deserialize whole —
+	// but nothing CONSUMES it and nothing publishes it: no receipt field, no summary
+	// line and no hash reflects a value set here.
 	ScanDepth      string   `json:"scan_depth,omitempty"`
 	TargetsScanned int      `json:"targets_scanned,omitempty"`
 	ResiduesFound  int      `json:"residues_found,omitempty"`
 	Residues       []string `json:"residues,omitempty"`
 	Clean          bool     `json:"clean"`
+}
+
+// ---- what ONE residual scan reports about itself (contract v3) -------------------
+
+// ResidualScanDepth names the METHOD a residual scan used to look for surviving
+// identifiers. The vocabulary is closed and lives entirely in this file, and the
+// ZERO VALUE means "not stated": a scan that opened no target states no depth rather
+// than defaulting to one it never reached. Nothing in this module invents a value for
+// it, and no consumer may read an empty one as a reached depth.
+type ResidualScanDepth string
+
+// ResidualScanDepthRegistryScoped names the METHOD, never a coverage claim: the
+// erasure-target registry (erasuretargets.go) restricted to the subject kind AND to
+// the request's data-class scope, matched by exact equality on the mapped identifier
+// columns in the live store — plus the three targets outside that registry the same
+// scan walks: the knowledge document row, the roster identity's external-id anchor
+// and the canonical cost ledger. What the method reached in THIS run is Opened; what
+// the request's own scope required is Applicable. The two are published side by side
+// precisely because the method's name cannot answer "over how much".
+const ResidualScanDepthRegistryScoped ResidualScanDepth = "registry-scoped"
+
+// CryptoShredResidualScanReport is one residual scan's account of itself: how it
+// looked, where the request's own scope said to look, where it could actually look,
+// and what survived. Opened is always a subset of Applicable — they are built in one
+// pass over the same catalog — so a narrowed erasure shrinks BOTH and can never
+// manufacture a false clean.
+//
+// The labels in Applicable and Opened are STRUCTURAL: they are the catalog's own
+// target names, fixed in code, never derived from a row, a subject identifier or a
+// tenant. They ride a certificate that outlives the subject's key.
+type CryptoShredResidualScanReport struct {
+	// Depth is empty exactly when Opened is empty.
+	Depth ResidualScanDepth `json:"depth,omitempty"`
+	// Applicable are the target labels the request's data-class scope required, in
+	// catalog order.
+	Applicable []string `json:"applicable,omitempty"`
+	// Opened are the target labels this run could actually open, in catalog order.
+	// A label in Applicable and not in Opened is a place the scan could not look.
+	Opened []string `json:"opened,omitempty"`
+	// Residues are the surviving occurrences found, as structural labels.
+	Residues []string `json:"residues,omitempty"`
 }
 
 // CryptoShredVerification is the post-shred verdict returned by the optional
@@ -333,21 +390,49 @@ type CryptoShredProbes struct {
 	// KeyGone re-probes the subject key row: true = the row no longer loads (the
 	// DEK is destroyed and every token sealed under it is unintelligible).
 	KeyGone func(ctx context.Context) (bool, error)
-	// ResidualScan re-runs the module's registry scan for the subject's
-	// identifiers and reports every surviving occurrence (structural labels,
-	// never PII) plus the number of targets actually examined.
-	ResidualScan func(ctx context.Context) (residues []string, targetsScanned int, err error)
+	// ResidualScanReport re-runs the module's registry-scoped scan for the
+	// subject's identifiers and returns that scan's own report: the method it
+	// used, the targets the request's scope required, the targets it could open
+	// and every surviving occurrence (structural labels, never PII).
+	//
+	// It REPLACES the v2 field ResidualScan, which returned a residue list and a
+	// COUNT of targets — a number that cannot say which stores it stands for, and
+	// therefore cannot distinguish a full sweep from a scan that opened two of
+	// four. The field was renamed rather than retyped so that an out-of-tree
+	// coordinator reading the probes by name finds an ABSENCE, which this
+	// contract already defines below, instead of calling a function whose results
+	// it would mis-read.
+	ResidualScanReport func(ctx context.Context) (CryptoShredResidualScanReport, error)
 }
 
 // CryptoShredCoordinator is the typed form of the enterprise RTBF-depth seam. The
 // public module also accepts a reflect-adapted coordinator so an overlay build can
 // consume one without importing it (rtbf_depth.go).
 //
-// CONTRACT (v2): ValidateShredReadiness takes the tenant so the coordinator
-// can consult the live legal-hold plane through its injected ports;
+// CONTRACT (v3): ValidateShredReadiness takes the tenant so the coordinator can
+// consult the live legal-hold plane through its injected ports;
 // VerifyShredCompleteness takes CryptoShredProbes so every field of the verdict
 // comes from an executed check. Implementations MUST be deny-closed: whatever
 // cannot be verified is reported in Unverified with Complete=false, never assumed.
+//
+// WHAT v3 CHANGED, so an embedder can detect it. The residual-scan probe is now
+// CryptoShredProbes.ResidualScanReport and returns a CryptoShredResidualScanReport
+// instead of (residues, count, error). A coordinator says NOTHING about scan depth:
+// CryptoShredResidualScan.ScanDepth is deprecated and is never published, because
+// the module's own pre-shred scan is the single speaker about depth and coverage. A
+// coordinator whose post-shred re-scan failed reports that in Unverified, on its own
+// marker, exactly like any other claim it could not verify.
+//
+// TWO SUBSTRINGS ARE RESERVED, and this is the one rule a v3 implementation can break
+// by accident. Prose a coordinator supplies — every Unverified entry, every readiness
+// Warning, PolicyApplied — is published on the receipt's verify_reason beside the
+// scan's own declarations, and a reader matches those declarations by substring. So
+// "residual-scan-depth=unestablished" and "residual-scan-coverage=partial" belong to
+// the scan alone: a receipt carries one exactly when the scan's report says so. A
+// coordinator string containing either is NOT published as written — it is replaced,
+// whole, by one fixed sentence recording that a string was withheld and why. Nothing
+// is lost silently and the verdict is unchanged, but the claim is not the
+// coordinator's to make, so it does not travel. Say it in your own words instead.
 type CryptoShredCoordinator interface {
 	ValidateShredReadiness(ctx context.Context, tenant, subjectKind, subjectRef string) (CryptoShredReadiness, error)
 	NotifyWORMSinks(ctx context.Context, keyID string, shredAt time.Time) error
