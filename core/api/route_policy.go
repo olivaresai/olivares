@@ -287,14 +287,27 @@ type RowAuthorizationPort interface {
 		res auth.ResourceAttrs, reqs []RouteActionRequirement) (AuthorizedActionSet, error)
 }
 
-// ErrRouteActionRequirementInvalid is the answer to a requirement the engine would refuse to
-// MOUNT, and it is deliberately none of the decision answers.
+// ErrRouteActionRequirementInvalid is the answer to a requirement this gate will not put a question
+// to, and it is deliberately none of the decision answers.
 //
-// ⛔ "THIS DECLARATION IS IMPOSSIBLE" IS NOT "THE POLICY DENIED" AND NOT "I COULD NOT DECIDE".
-// Nothing was evaluated: the caller handed the gate a route declaration the registrar panics on at
-// boot, and the honest answer names the caller's own bug. Folded into a denial it would refuse
-// somebody no policy refused; folded into the undecided it would tell them to retry a request that
-// can never succeed.
+// ⛔ THREE THINGS TRIGGER IT, AND THEY DO NOT ALL HAVE THE SAME COUNTERPART AT BOOT — which is
+// worth stating, because "the engine would refuse to mount this" is true of two of them and not of
+// the third:
+//
+//  1. The metadata is impossible: a role the engine does not know, an assurance level it does not
+//     define. The registrar refuses a route declaring it by PANICKING as it mounts.
+//  2. The requirement names a Cedar action the caller's module did not declare. The engine refuses
+//     a route declaring it by returning an error that stops the server from starting — an error,
+//     not a panic.
+//  3. The gate is bound to no module and the requirement names an action at all. Nothing at boot
+//     corresponds to this one, because at boot the namespace is never in doubt: the registrar
+//     carries it. The remedy is the caller's and it is one line — bind the gate with ForModule and
+//     ask again — and it applies even to an action the caller's module DID declare.
+//
+// ⛔ AND IN NONE OF THE THREE WAS ANYTHING EVALUATED, which is why this is not a decision answer.
+// The honest answer names the caller's own bug. Folded into a denial it would refuse somebody no
+// policy refused; folded into the undecided it would tell them to retry a request that can never
+// succeed — except in case 3, where a retry is right and only after binding.
 //
 // ⛔ AND IT EXISTS BECAUSE THE TYPO REMOVES A RESTRICTION INSTEAD OF ADDING ONE. An unknown role
 // ranks 0 and a floor denies only a caller ranking BELOW it, so a mistyped floor admits every
@@ -319,18 +332,26 @@ var ErrRouteActionRequirementInvalid = errors.New(
 // as a convenience. It returns a witness and never a row. It must not expose the authorizer
 // itself, evidence authorization, any policy store, any authorization epoch or compare-and-set,
 // any repository or store scope — and it must not mint a principal: a caller has to already hold
-// one the engine authenticated. It reaches nothing a caller could not already name, because it is
-// AuthorizeRoute with its answer preserved: the same algebra and the same credential ceiling that
-// decide on the governed door decide here.
+// one the engine authenticated. It adds no AUTHORITY: it is AuthorizeRoute with its answer
+// preserved, so the same algebra and the same credential ceiling that decide on the governed door
+// decide here, and no principal reaches an entity that the same question would not reach there.
+//
+// ⚠ WHAT IT DOES NOT ESTABLISH IS WHETHER THE CALLER WAS ENTITLED TO ASK THIS QUESTION. The door
+// settles that before a route mounts; this gate settles part of it, on trust, and the two limits
+// below say which part and what a consumer does about each. So the reach this port adds is bounded
+// by the PRINCIPAL's authority and not by the CALLING MODULE's entitlement — a distinction this
+// paragraph used to elide, and the whole subject of those two limits.
 //
 // ⛔ A GATE MUST BE BOUND TO THE MODULE THAT ASKS THROUGH IT BEFORE IT CAN NAME AN ACTION, because
-// "the engine would mount this route" has TWO halves. One asks whether the declaration is POSSIBLE
-// — a role the engine knows, an assurance level it defines — and is a pure function of the
-// metadata, so this gate runs it on every call. The other asks WHOSE action this is: a module may
-// only name Cedar actions it declares itself, and the engine refuses to START a server whose
-// governed route breaks that rule. The second half needs to know who is asking, and it is not
-// cosmetic — the action chooses which policy statements match, and it is sealed into the witness's
-// question digest, so a foreign one attributes an effect to a decision about somebody else's verb.
+// "the engine would mount this route" is THREE checks, and this gate can run two of them. One asks
+// whether the declaration is POSSIBLE — a role the engine knows, an assurance level it defines —
+// and is a pure function of the metadata, so this gate runs it on every call. The second asks WHOSE
+// action this is: a module may only name Cedar actions it declares itself, and the engine refuses
+// to START a server whose governed route breaks that rule. It needs to know who is asking, and it
+// is not cosmetic — the action chooses which policy statements match, and it is sealed into the
+// witness's question digest, so a foreign one attributes an effect to a decision about somebody
+// else's verb. The THIRD is the permission check, and this gate cannot run it at all; it is the
+// second of the two limits below.
 //
 // ⛔ SO AN UNBOUND GATE REFUSES A REQUIREMENT THAT NAMES AN ACTION rather than deciding one it
 // cannot attribute, and the value the engine wires is unbound. Bind it with ForModule, an optional
@@ -343,10 +364,29 @@ var ErrRouteActionRequirementInvalid = errors.New(
 //		port = binder.ForModule(myNamespace)
 //	}
 //
-// A requirement that names NO action needs no binding: the door skips its own action check for a
-// route that declares none, so this gate skips it too, and the evaluated action then derives from
-// the PERMISSION — whose namespace the caller already carries in its own string, leaving nothing to
-// attribute.
+// ⚠ AND TWO THINGS THIS GATE CANNOT ESTABLISH, SAID HERE RATHER THAN LEFT TO BE DISCOVERED.
+//
+// The NAMESPACE is the caller's own assertion. At the door it is the engine's: the registrar carries
+// the namespace the module registered under, and a duplicate is refused before anything mounts.
+// Here it arrives as an argument, so what this gate catches is MISNAMING — a module asking about an
+// action nobody gave it — and NOT a caller presenting another module's namespace. That is not a
+// check this gate can make: a cure would have to live where the engine is composed, handing each
+// module a gate already bound to its registered namespace, and that wiring is outside this file.
+//
+// WHAT TO DO: bind only with the namespace your own module registered under, and do not hand the
+// UNBOUND value to code that could bind it to a different one — binding is the whole of the
+// attribution, so whoever can call ForModule chooses whose actions you may ask about.
+//
+// The PERMISSION half of the mount check is not run here at all. The engine also refuses to mount a
+// module whose route requires a permission that module never declared — and a permission's
+// namespace is deliberately NOT required to equal the module's, because route-only modules reuse
+// another's on purpose, so nothing in a permission string says who may ask with it. A requirement
+// that names NO action therefore still decides, unattributed: with no action, the evaluated action
+// IS the permission, and it reaches the policy engine and the witness's question digest as it
+// stands.
+//
+// WHAT TO DO: pass only permissions your own module declared. Nothing here will tell you that you
+// did not, and the witness will name the permission you passed as the action that was evaluated.
 //
 // ⛔ EVERY ANSWER HAS A NAME, AND NO TWO OF THEM MATCH EACH OTHER. This is the whole set a caller
 // can receive, with the row of the client contract each belongs to. Read them with errors.Is, in
@@ -368,9 +408,11 @@ var ErrRouteActionRequirementInvalid = errors.New(
 //     verdict either, and rendering it as a plain 403 would tell an operator that policy refused
 //     something no policy evaluated.
 //   - ErrRouteActionRequirementInvalid — the REQUEST is malformed: the declaration is impossible,
-//     or it names an action this caller may not name. No row of the client contract, because the
-//     engine refuses such a route at boot and it never reaches a client: it is the caller's own
-//     bug, and it must never be answered 403 or 404.
+//     or it names an action the caller's module did not declare, or it names one at all through a
+//     gate bound to no module — and that last one's remedy is to bind with ForModule and ask
+//     again. No row of the client contract: the first two are what the engine refuses to start
+//     with, the third has no counterpart at boot, and none of the three ever reaches a client. It
+//     is the caller's own bug, and it must never be answered 403 or 404.
 //
 // Two of these are DECISIONS the engine reached (denied, scoped grant required), one is a
 // precondition of authentication (step-up), two are refusals to decide (undecided, no authorizer),
@@ -533,11 +575,38 @@ func NewRowAuthorizationPort(az *auth.Authorizer) RowAuthorizationPort { return 
 // an unbound gate does. That is the deny-closed direction, and it is the same direction the
 // engine's own check takes for a module that never registered anything.
 //
-// The gate it returns follows the governed door and not the complete-read sibling, exactly as this
-// one does: the two differ only in DecideRows, which this port does not have.
+// ⚠ THE NAMESPACE IS TAKEN ON TRUST, because this method cannot do otherwise: it is an argument
+// and not something the engine handed over. So binding catches a module asking about an action
+// nobody gave it, and does NOT catch a caller presenting another module's namespace. WHAT TO DO:
+// pass the namespace your own module registered under and no other, and keep the UNBOUND value out
+// of the hands of code that could bind it elsewhere. The port's own documentation carries the rest
+// of this limit, and the cure would belong to whatever composes the engine.
+//
+// ⛔ AND WHAT IT RETURNS CARRIES THE GATE AND NOTHING ELSE, which is the reason for the extra type.
+// The value this method is promoted onto is a ROW port whose own DecideRows refuses a human read
+// without complete authority; handing that value back would give a caller who asked for something
+// NARROWER a row port with the override shed, one assertion away — and the consequence of using it
+// is a page served, not an error raised. "They differ only in DecideRows" is true of the interface
+// and would have been false of the value.
 func (a authorizerRows) ForModule(namespace string) RouteActionAuthorizationPort {
 	a.ns = namespace
-	return a
+	return boundRouteActionGate{rows: a}
+}
+
+// boundRouteActionGate is a gate bound to one module's namespace, and nothing else.
+//
+// ⛔ IT HOLDS THE ROW VALUE IN A NAMED FIELD RATHER THAN EMBEDDING IT, and that is the whole type.
+// Embedding PROMOTES, so DecideRows and DecideActions would come with it and this value would
+// answer the row port again — the exact widening binding exists to avoid. A field forwards one
+// method and no more, and a method added to the row value tomorrow cannot arrive here by accident.
+type boundRouteActionGate struct{ rows authorizerRows }
+
+// AuthorizeAction decides one action over one resource for the module this gate is bound to. It is
+// the only question this value answers.
+func (g boundRouteActionGate) AuthorizeAction(ctx context.Context, p auth.Principal,
+	tenant model.TenantID, res auth.ResourceAttrs, req RouteActionRequirement,
+) (auth.RouteAuthorizationWitness, error) {
+	return g.rows.AuthorizeAction(ctx, p, tenant, res, req)
 }
 
 func (a authorizerRows) DecideRows(ctx context.Context, p auth.Principal, tenant model.TenantID,
@@ -613,13 +682,15 @@ func (a authorizerRows) DecideActions(ctx context.Context, p auth.Principal, ten
 // builds for a governed route, carrying the ACTION's own route metadata rather than the metadata
 // of whatever route is being served.
 //
-// ⛔ TWO GATES BEFORE IT, AND THE DECISION'S ANSWER UNTOUCHED AFTER. They are the two halves of the
-// engine's own refusal to mount a route, run in the engine's own order — whose action is this,
-// then is this declaration possible — and both are the caller's bug rather than a decision. Past
-// them, whatever AuthorizeRoute answered is what comes back. Wrapping that answer with anything
-// that does not carry %w, or folding every non-nil error into a denial, turns "nothing evaluated
-// this" into "the policy said no": a retryable outage leaves as a final refusal, and the caller
-// that would have succeeded on the second attempt gives up on the first.
+// ⛔ TWO GATES BEFORE IT, AND THE DECISION'S ANSWER UNTOUCHED AFTER. They are two of the THREE
+// checks the engine makes before it will mount a route, run in the engine's own order — whose
+// action is this, then is this declaration possible — and both are the caller's bug rather than a
+// decision. The third, whether the caller's module declared the PERMISSION, cannot be run here and
+// is stated as a limit on the port. Past these two, whatever AuthorizeRoute answered comes back.
+// Wrapping that answer with anything that does not carry %w, or folding every non-nil error into a
+// denial, turns "nothing evaluated this" into "the policy said no": a retryable outage leaves as a
+// final refusal, and the caller that would have succeeded on the second attempt gives up on the
+// first.
 //
 // ⛔ AND IT DOES NOT RE-DERIVE THE DECISION. One place decides. Asking it twice, or asking a
 // cheaper question and calling the answer the same, is how two authorization paths drift until the
@@ -638,9 +709,12 @@ func (a authorizerRows) AuthorizeAction(ctx context.Context, p auth.Principal, t
 	// the witness's question digest — so a foreign one attributes an effect to a decision taken
 	// about somebody else's verb, on a route the engine would refuse to start with.
 	//
-	// An EMPTY action is left alone, exactly as the door leaves a route that declares none: the
-	// evaluated action then derives from the permission, whose namespace the caller already carries
-	// in its own string, so there is nothing further to attribute.
+	// An EMPTY action is left alone, because the door skips ITS action check for a route that
+	// declares none — but that is not parity, and the port's documentation says so in terms. The
+	// door also refuses to mount a module whose route requires a permission that module never
+	// declared, and this gate is handed a permission with no declaration to compare it against.
+	// With no action named the permission IS the evaluated action, so it reaches the policy engine
+	// and the witness's question digest unattributed.
 	if action := req.Metadata.CedarAction; action != "" {
 		if a.ns == "" {
 			return auth.RouteAuthorizationWitness{}, fmt.Errorf(
@@ -656,11 +730,14 @@ func (a authorizerRows) AuthorizeAction(ctx context.Context, p auth.Principal, t
 				ErrRouteActionRequirementInvalid, action, a.ns)
 		}
 	}
-	// ⛔ AND IS THE DECLARATION POSSIBLE AT ALL, which is the door's other half:
-	// the registrar validates a route's metadata at MOUNT and refuses to start on one it will not
+	// ⛔ AND IS THE DECLARATION POSSIBLE AT ALL, which is another of the door's checks: the
+	// registrar validates a route's metadata at MOUNT and refuses to start on one it will not
 	// serve, long before any request exists. A gate handed a LITERAL has no boot to do that at, so
-	// it does it here — and it does it FIRST, so a declaration the engine would not mount never
-	// reaches the authorizer and cannot be decided by accident.
+	// it does it here — SECOND, after the attribution above, which is the order the engine itself
+	// uses. Neither ordering changes an answer: both refusals carry the same sentinel, and either
+	// way an impossible declaration is refused BEFORE the authorizer and cannot be decided by
+	// accident. What still reaches the authorizer is a permission the engine would not mount for
+	// this module, because that is the check no gate here can run — the second limit on the port.
 	//
 	// ⛔ BECAUSE WHAT THIS CATCHES IS AN ALLOW, NOT A DENIAL. A role floor the engine does not know
 	// ranks 0, and a floor denies only a caller ranking BELOW it, so one mistyped character admits
