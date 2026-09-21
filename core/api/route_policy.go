@@ -287,6 +287,23 @@ type RowAuthorizationPort interface {
 		res auth.ResourceAttrs, reqs []RouteActionRequirement) (AuthorizedActionSet, error)
 }
 
+// ErrRouteActionRequirementInvalid is the answer to a requirement the engine would refuse to
+// MOUNT, and it is deliberately none of the decision answers.
+//
+// ⛔ "THIS DECLARATION IS IMPOSSIBLE" IS NOT "THE POLICY DENIED" AND NOT "I COULD NOT DECIDE".
+// Nothing was evaluated: the caller handed the gate a route declaration the registrar panics on at
+// boot, and the honest answer names the caller's own bug. Folded into a denial it would refuse
+// somebody no policy refused; folded into the undecided it would tell them to retry a request that
+// can never succeed.
+//
+// ⛔ AND IT EXISTS BECAUSE THE TYPO REMOVES A RESTRICTION INSTEAD OF ADDING ONE. An unknown role
+// ranks 0 and a floor denies only a caller ranking BELOW it, so a mistyped floor admits every
+// caller that has any role at all — an ALLOW wearing the shape of a tightening. That is not a
+// failure a caller can be asked to notice, because it looks exactly like working correctly.
+var ErrRouteActionRequirementInvalid = errors.New(
+	"api: the action's route metadata is not one the engine would mount; nothing was evaluated, " +
+		"so this is neither a denial nor an undecided decision")
+
 // RouteActionAuthorizationPort answers ONE question: may this principal take this one action on
 // this one resource — and when the answer is no, whether that is a DENIAL or an UNDECIDED.
 //
@@ -306,14 +323,90 @@ type RowAuthorizationPort interface {
 // AuthorizeRoute with its answer preserved: the same algebra and the same credential ceiling that
 // decide on the governed door decide here.
 //
-// ⛔ AND THE THREE ANSWERS DO NOT COLLAPSE INTO ONE. A denial, an undecided and an absent
-// authorizer stay apart under errors.Is, because only ONE of them means "do not try again" and
-// the other two mean "nobody looked" — one because the evidence would not hold up, one because
-// there was nothing to ask. Folding either of those into the denial reports a verdict that
-// nothing ever reached, and the caller that would have succeeded on a retry gives up instead.
+// ⛔ A GATE MUST BE BOUND TO THE MODULE THAT ASKS THROUGH IT BEFORE IT CAN NAME AN ACTION, because
+// "the engine would mount this route" has TWO halves. One asks whether the declaration is POSSIBLE
+// — a role the engine knows, an assurance level it defines — and is a pure function of the
+// metadata, so this gate runs it on every call. The other asks WHOSE action this is: a module may
+// only name Cedar actions it declares itself, and the engine refuses to START a server whose
+// governed route breaks that rule. The second half needs to know who is asking, and it is not
+// cosmetic — the action chooses which policy statements match, and it is sealed into the witness's
+// question digest, so a foreign one attributes an effect to a decision about somebody else's verb.
+//
+// ⛔ SO AN UNBOUND GATE REFUSES A REQUIREMENT THAT NAMES AN ACTION rather than deciding one it
+// cannot attribute, and the value the engine wires is unbound. Bind it with ForModule, an optional
+// capability on the concrete type that a caller discovers by a checked assertion — exactly as the
+// governed registration door is discovered — so this interface stays at ONE method:
+//
+//	if binder, ok := port.(interface {
+//		ForModule(namespace string) RouteActionAuthorizationPort
+//	}); ok {
+//		port = binder.ForModule(myNamespace)
+//	}
+//
+// A requirement that names NO action needs no binding: the door skips its own action check for a
+// route that declares none, so this gate skips it too, and the evaluated action then derives from
+// the PERMISSION — whose namespace the caller already carries in its own string, leaving nothing to
+// attribute.
+//
+// ⛔ EVERY ANSWER HAS A NAME, AND NO TWO OF THEM MATCH EACH OTHER. This is the whole set a caller
+// can receive, with the row of the client contract each belongs to. Read them with errors.Is, in
+// any order — every sentinel matches itself and no other — and give each one its own arm: a map
+// with fewer arms than the engine has answers falls through to its default, and a default that
+// retries serves a refusal as an outage, which is the inverse of the confusion this port cures.
+//
+//   - nil, with a witness — the decision PERMITTED. 2xx. This is the only answer that is not an
+//     error, and the witness is what ties the effect to the decision that allowed it.
+//   - auth.ErrStepUpRequired — assurance is missing, not permission. 403 step_up_required; the
+//     remedy is to repeat the ceremony and retry, which no other answer shares.
+//   - auth.ErrRouteDenied — the policy DENIED. 403 carrying the denial THE ROUTE chose, or 404
+//     not_found when that route conceals (see the obligation below). Do not retry.
+//   - auth.ErrScopedGrantRequired — denied, and breadth of role is not the remedy: a scoped grant
+//     is. The same 403 row as a denial, with a different thing to tell the caller.
+//   - auth.ErrRouteUndecided — the decision COULD NOT BE ESTABLISHED. 503
+//     route_decision_unavailable with Retry-After: 5; retry, because nobody said no.
+//   - auth.ErrAuthorizerUnavailable — there was nothing to ask. The same 503 row: it is not a
+//     verdict either, and rendering it as a plain 403 would tell an operator that policy refused
+//     something no policy evaluated.
+//   - ErrRouteActionRequirementInvalid — the REQUEST is malformed: the declaration is impossible,
+//     or it names an action this caller may not name. No row of the client contract, because the
+//     engine refuses such a route at boot and it never reaches a client: it is the caller's own
+//     bug, and it must never be answered 403 or 404.
+//
+// Two of these are DECISIONS the engine reached (denied, scoped grant required), one is a
+// precondition of authentication (step-up), two are refusals to decide (undecided, no authorizer),
+// and the last is a refusal to ask at all.
+//
+// ⛔ CONCEALMENT IS THE CALLER'S OBLIGATION, AND IT IS ONE SENTENCE: when the requirement you
+// passed carried ConcealDeniedAsNotFound, a denial — EITHER ErrRouteDenied OR
+// ErrScopedGrantRequired, because the answer set has two of them — MUST be served as the denial
+// that route chose, 404 not_found, and never as the typed error's own status, because a 403 where
+// the route answers 404 confirms the row exists, which is the single thing concealment prevents.
+//
+// ⚠ BOTH, BECAUSE ONE ARM PER SENTINEL IS WHAT THIS DOCUMENT ASKS FOR. A consumer told about
+// concealment under the ordinary denial alone conceals that one as 404 and answers the scoped-grant
+// one 403 — same route, same row, and the arm nobody mentioned is the one that confirms it exists.
+// The governed door makes no such distinction: both land in the arm that writes the route's own
+// denial.
+//
+// The port cannot do it for you, and must not: its answer is identical with and without that
+// field, which is pinned by a case, because an answer that varied with it would itself be the
+// existence oracle — provoke the variation and you have separated "no such row" from "not yours".
+// The field you need is the one you supplied, so nothing is withheld and nothing is missing.
+//
+// ⚠ NOTHING IN THIS REPOSITORY CALLS IT YET, said here rather than left to be discovered: it is
+// the seam a module outside this tree needs in order to gate one act on one row, and its consumer
+// arrives with that module — until then this package's own cases are the only thing measuring it,
+// which is why they enumerate the whole answer set instead of the happy path.
+//
+// ⚠ AND IT MIRRORS THE GOVERNED DOOR, NOT THE COMPLETE-READ PATH. The value the engine wires as
+// the row port overrides DecideRows to demand complete authority of a human reader; this gate
+// deliberately does not follow that sibling, because the question it answers is the DOOR's — one
+// action, one row, one witness — and a gate that quietly took a different path from the door it
+// claims to mirror would be a second authorization flow, which is how two flows drift until the
+// one fewer people read is the one that admits.
 type RouteActionAuthorizationPort interface {
 	// AuthorizeAction decides ONE action over ONE resource, returning the witness of that
-	// decision or the error that says which of the other two answers this is.
+	// decision or the error that names which of the other answers this is.
 	AuthorizeAction(ctx context.Context, p auth.Principal, tenant model.TenantID,
 		res auth.ResourceAttrs, req RouteActionRequirement) (auth.RouteAuthorizationWitness, error)
 }
@@ -407,12 +500,45 @@ var ErrRowQuestionMismatch = errors.New(
 var ErrRowWitnessUnverified = errors.New("api: a row's authorization witness does not verify for that row; the page is denied rather than zipped")
 
 // authorizerRows implements RowAuthorizationPort over the core Authorizer.
-type authorizerRows struct{ az *auth.Authorizer }
+//
+// ⛔ ns IS THE MODULE THAT ASKS THROUGH THE ACTION GATE, AND IT IS EMPTY IN THE VALUE THE ENGINE
+// WIRES. That value is built once for the whole engine and knows no module, so it cannot answer
+// "may this caller name this action" — a question the engine answers per module and refuses a boot
+// over. An empty ns is therefore UNATTRIBUTABLE, and the gate refuses a named action instead of
+// deciding one it cannot attribute. See ForModule.
+type authorizerRows struct {
+	az *auth.Authorizer
+	ns string
+}
 
 // NewRowAuthorizationPort wires the row port to an Authorizer. A nil authorizer produces
 // a port that denies every row and says so, rather than one that allows them: a route
 // whose row port was never installed must not serve rows.
+// The value it returns is bound to no module, so the action gate reached from it by assertion
+// refuses a requirement that names a Cedar action until ForModule binds it.
 func NewRowAuthorizationPort(az *auth.Authorizer) RowAuthorizationPort { return authorizerRows{az: az} }
+
+// ForModule returns this gate bound to the namespace of the module that will ask through it, so it
+// can run the half of the mount check that asks WHOSE action a requirement names.
+//
+// ⛔ IT IS ON THE CONCRETE TYPE AND NOT ON THE PORT, which is this repository's idiom for an
+// optional capability — the governed registration door is discovered the same way. Adding it to the
+// interface would turn a one-method contract a third party can implement today (a test double, a
+// recording wrapper) into a two-method one it cannot. A caller that finds it absent must NOT fall
+// back to the unbound gate for a named action: the unbound gate is precisely the one that cannot
+// answer the question.
+//
+// ⛔ AND AN EMPTY NAMESPACE BINDS NOTHING, deliberately rather than by omission. No module registers
+// under one, so it declares no action, and a gate bound to it refuses every named action exactly as
+// an unbound gate does. That is the deny-closed direction, and it is the same direction the
+// engine's own check takes for a module that never registered anything.
+//
+// The gate it returns follows the governed door and not the complete-read sibling, exactly as this
+// one does: the two differ only in DecideRows, which this port does not have.
+func (a authorizerRows) ForModule(namespace string) RouteActionAuthorizationPort {
+	a.ns = namespace
+	return a
+}
 
 func (a authorizerRows) DecideRows(ctx context.Context, p auth.Principal, tenant model.TenantID,
 	perm auth.Permission, meta RouteMetadata, rows []auth.ResourceAttrs) (AuthorizedRowSet, error) {
@@ -487,20 +613,74 @@ func (a authorizerRows) DecideActions(ctx context.Context, p auth.Principal, ten
 // builds for a governed route, carrying the ACTION's own route metadata rather than the metadata
 // of whatever route is being served.
 //
-// ⛔ THE ANSWER IS RETURNED UNTOUCHED, AND THAT IS THE WHOLE METHOD. Wrapping the error with
-// anything that does not carry %w, or folding every non-nil error into a denial, turns "nothing
-// evaluated this" into "the policy said no": a retryable outage leaves as a final refusal, and the
-// caller that would have succeeded on the second attempt gives up on the first.
+// ⛔ TWO GATES BEFORE IT, AND THE DECISION'S ANSWER UNTOUCHED AFTER. They are the two halves of the
+// engine's own refusal to mount a route, run in the engine's own order — whose action is this,
+// then is this declaration possible — and both are the caller's bug rather than a decision. Past
+// them, whatever AuthorizeRoute answered is what comes back. Wrapping that answer with anything
+// that does not carry %w, or folding every non-nil error into a denial, turns "nothing evaluated
+// this" into "the policy said no": a retryable outage leaves as a final refusal, and the caller
+// that would have succeeded on the second attempt gives up on the first.
 //
 // ⛔ AND IT DOES NOT RE-DERIVE THE DECISION. One place decides. Asking it twice, or asking a
 // cheaper question and calling the answer the same, is how two authorization paths drift until the
 // one fewer people read is the one that admits.
 func (a authorizerRows) AuthorizeAction(ctx context.Context, p auth.Principal, tenant model.TenantID,
 	res auth.ResourceAttrs, req RouteActionRequirement) (auth.RouteAuthorizationWitness, error) {
+	// ⛔ WHOSE ACTION IS THIS — the half of the mount check that is NOT a function of the metadata,
+	// and the half this gate used to skip. A module may only name Cedar actions it declares itself,
+	// and the engine refuses to START a server whose governed route names another module's; the
+	// rule is per module and not a global set, because a flat "does anybody declare this" would let
+	// a route name a foreign action while its owner happens to be loaded and stop working the day
+	// it is not — the hidden dependency the engine's check exists to turn into a boot failure.
+	//
+	// ⛔ AND IT IS NOT COSMETIC: THE ACTION CHOOSES WHOSE POLICY STATEMENTS ANSWER. It travels into
+	// the request, the engine matches statements written about THAT action, and it is sealed into
+	// the witness's question digest — so a foreign one attributes an effect to a decision taken
+	// about somebody else's verb, on a route the engine would refuse to start with.
+	//
+	// An EMPTY action is left alone, exactly as the door leaves a route that declares none: the
+	// evaluated action then derives from the permission, whose namespace the caller already carries
+	// in its own string, so there is nothing further to attribute.
+	if action := req.Metadata.CedarAction; action != "" {
+		if a.ns == "" {
+			return auth.RouteAuthorizationWitness{}, fmt.Errorf(
+				"%w: the requirement names Cedar action %q and this gate is bound to no module, so "+
+					"nothing can establish that its caller may name it; bind the gate with "+
+					"ForModule before asking about a named action",
+				ErrRouteActionRequirementInvalid, action)
+		}
+		if !auth.ModuleDeclaresAction(a.ns, auth.CedarAction(action)) {
+			return auth.RouteAuthorizationWitness{}, fmt.Errorf(
+				"%w: the requirement names Cedar action %q, which module %q does not declare; a "+
+					"module may only name actions it declares itself",
+				ErrRouteActionRequirementInvalid, action, a.ns)
+		}
+	}
+	// ⛔ AND IS THE DECLARATION POSSIBLE AT ALL, which is the door's other half:
+	// the registrar validates a route's metadata at MOUNT and refuses to start on one it will not
+	// serve, long before any request exists. A gate handed a LITERAL has no boot to do that at, so
+	// it does it here — and it does it FIRST, so a declaration the engine would not mount never
+	// reaches the authorizer and cannot be decided by accident.
+	//
+	// ⛔ BECAUSE WHAT THIS CATCHES IS AN ALLOW, NOT A DENIAL. A role floor the engine does not know
+	// ranks 0, and a floor denies only a caller ranking BELOW it, so one mistyped character admits
+	// every caller that has any role: the typo REMOVES the restriction it was written to add, and
+	// the gate hands back a minted witness. An assurance floor outside the levels the engine
+	// defines is the same family — no ceremony can produce it, so it denies everyone below and
+	// admits everyone above.
+	//
+	// ⛔ AND ITS ANSWER IS NOT A DECISION ANSWER. errors.Is must not match a denial or an
+	// undecided here: nothing was evaluated, and the two sentinels that mean "the engine looked"
+	// would both be a lie. The validation error travels inside it so the caller is told WHICH
+	// field of its own declaration is impossible.
+	if err := req.Metadata.Validate(); err != nil {
+		return auth.RouteAuthorizationWitness{}, fmt.Errorf(
+			"%w: %w", ErrRouteActionRequirementInvalid, err)
+	}
 	if a.az == nil {
 		// Stated here rather than inherited from the authorizer's own nil check, so this port's
-		// three answers are readable in this method: a port that was never installed answers "I
-		// could not look", which is the third answer and not a refusal.
+		// refusals are readable in this method: a port that was never installed answers "I could
+		// not look", which is a refusal to decide and never a refusal of the caller.
 		return auth.RouteAuthorizationWitness{}, fmt.Errorf(
 			"api: no authorizer is installed for action decisions: %w", auth.ErrAuthorizerUnavailable)
 	}
