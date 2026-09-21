@@ -33,6 +33,38 @@ month, release-of-month; the current release is `v26.9.1`).
 
 ## [Unreleased]
 
+### Changed
+
+- **A right-to-erasure receipt now states what its verification examined.** The residual scan
+  that runs after the erase pass and before the crypto-shred reports the method it used and
+  the targets it opened against the targets this request's data-class scope required; the
+  sealed receipt carries them as `residual_scan_depth`, `residual_scan_opened`,
+  `residual_scan_applicable` and `data_classes`, and `manifest_hash` commits to the labels
+  (manifest v2). When the scan opened nothing, or less than the scope required, the receipt
+  says so once in `verify_reason` on a matchable substring (`residual-scan-depth=unestablished`
+  / `residual-scan-coverage=partial`) and the erasure closes `completed_with_gaps` with
+  `verify_ok: false` — an erasure whose verification could not look where the request said to
+  look is not a verified erasure. Receipts sealed earlier keep empty fields and the manifest
+  hash they were sealed under; nothing recomputes a stored manifest. **Extension seam
+  (contract v3):** `CryptoShredProbes.ResidualScan` is now `ResidualScanReport` and returns a
+  `CryptoShredResidualScanReport` (see *Deprecated* below for the field that goes with it), and the
+  two markers above are RESERVED — a coordinator-supplied string carrying either, whether an
+  `Unverified` entry, a readiness warning or a policy label, is replaced on `verify_reason` by one
+  fixed sentence recording that a string was withheld, so a third party cannot state the scan's own
+  claims in the scan's own words. A coordinator built against the previous contract *and honoring
+  it* fails closed — a declared gap, or a refusal naming the seam. One that swallows a failed type
+  assertion and reports itself complete still seals a verified receipt, exactly as it did before
+  this change: what makes that verdict honest is the contract, and a seam cannot enforce it.
+
+### Deprecated
+
+- **`CryptoShredResidualScan.ScanDepth` (extension seam, contract v3).** The field is still READ:
+  the adapter copies it off every wired verdict, which is what lets a coordinator built against the
+  previous contract still compile and still deserialize whole. What changed is that nothing CONSUMES
+  it and nothing publishes it — no receipt field, no summary line and no hash reflects a value set
+  there. Depth is stated once, by the pre-shred scan, in the receipt's `residual_scan_depth`. A
+  coordinator that still sets it is not contradicted; it is simply not repeated.
+
 ## [26.9.1] - 2026-09-21
 
 ### Added

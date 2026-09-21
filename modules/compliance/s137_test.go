@@ -71,10 +71,11 @@ type stubCryptoShredCoordinator struct {
 	readinessCalls int
 	notifyCalls    int
 	verifyCalls    int
-	// v2 contract evidence: what the module actually handed the coordinator.
+	// Contract evidence: what the module actually handed the coordinator.
 	tenantSeen    string
 	probeKeyGone  bool
 	probeScanned  int
+	probeOpened   []string
 	probeResidues []string
 	probeErr      error
 }
@@ -104,9 +105,10 @@ func (s *stubCryptoShredCoordinator) VerifyShredCompleteness(ctx context.Context
 		gone, err := probes.KeyGone(ctx)
 		s.probeKeyGone, s.probeErr = gone, err
 	}
-	if probes.ResidualScan != nil {
-		residues, scanned, err := probes.ResidualScan(ctx)
-		s.probeResidues, s.probeScanned = residues, scanned
+	if probes.ResidualScanReport != nil {
+		report, err := probes.ResidualScanReport(ctx)
+		s.probeResidues, s.probeOpened = report.Residues, report.Opened
+		s.probeScanned = len(report.Opened)
 		if err != nil && s.probeErr == nil {
 			s.probeErr = err
 		}
@@ -195,15 +197,15 @@ func (s *reflectCryptoShredCoordinator) VerifyShredCompleteness(ctx context.Cont
 		}
 	}
 	scan := reflectResidualScanResult{ScanDepth: "deep"}
-	if probes.ResidualScan != nil {
-		residues, scanned, err := probes.ResidualScan(ctx)
+	if probes.ResidualScanReport != nil {
+		report, err := probes.ResidualScanReport(ctx)
 		if err != nil {
 			return nil, err
 		}
-		scan.TargetsScanned = scanned
-		scan.ResiduesFound = len(residues)
-		scan.Residues = residues
-		scan.Clean = len(residues) == 0
+		scan.TargetsScanned = len(report.Opened)
+		scan.ResiduesFound = len(report.Residues)
+		scan.Residues = report.Residues
+		scan.Clean = len(report.Residues) == 0
 	}
 	return &reflectShredVerification{
 		Complete:      keyGone && scan.Clean,
@@ -744,8 +746,9 @@ func TestErasureEnterpriseCoordinatorReflectAdapterCompletes(t *testing.T) {
 // contract from the module's side: the execute path hands the coordinator (a)
 // the tenant on the readiness check and (b) evidence probes bound to the SHRED
 // TRANSACTION — the KeyGone probe observes the just-destroyed key row and the
-// ResidualScan probe re-runs the real registry scan (clean, with a real target
-// count) — so an enterprise coordinator can verify instead of assume.
+// ResidualScanReport probe re-runs the real registry-scoped scan and reports
+// what it opened (clean, with the real target labels) — so an enterprise
+// coordinator can verify instead of assume.
 func TestErasureCoordinatorReceivesWorkingEvidenceProbes(t *testing.T) {
 	gate := &stubApprovalGate{}
 	gate.set(GateStatusApproved, "apr-probes", "alice", "bob")
@@ -780,10 +783,13 @@ func TestErasureCoordinatorReceivesWorkingEvidenceProbes(t *testing.T) {
 		t.Fatal("KeyGone probe did not observe the destroyed subject key inside the shred transaction")
 	}
 	if coord.probeScanned == 0 {
-		t.Fatalf("ResidualScan probe scanned 0 targets; want the real registry count")
+		t.Fatalf("ResidualScanReport probe opened 0 targets; want the real registry set")
+	}
+	if len(coord.probeOpened) != coord.probeScanned {
+		t.Fatalf("the probe reported %d targets as a count and %v as labels", coord.probeScanned, coord.probeOpened)
 	}
 	if len(coord.probeResidues) != 0 {
-		t.Fatalf("ResidualScan probe found unexpected residues after a full erasure: %v", coord.probeResidues)
+		t.Fatalf("ResidualScanReport probe found unexpected residues after a full erasure: %v", coord.probeResidues)
 	}
 }
 

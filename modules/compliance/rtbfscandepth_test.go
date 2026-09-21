@@ -736,6 +736,103 @@ func TestACoordinatorDepthNeverReachesTheReceipt(t *testing.T) {
 	}
 }
 
+// TestCoordinatorTextCannotCarryTheScanMarkers is what makes "disjoint by construction"
+// a construction. The two scan markers are an IFF over verify_reason — the marker is
+// there exactly when the scan's own report says so — and every other string the receipt
+// puts on that field comes from a coordinator this repository does not own. A third
+// party that writes one of the two reserved markers into its own prose therefore seals a
+// receipt that states a depth AND denies one, which is the defect ONE SPEAKER removes,
+// restated by an embedder.
+//
+// The rule is that no coordinator-supplied string reaches verify_reason carrying one of
+// the two: it is replaced, whole, by one fixed sentence that says a string was withheld
+// and why. Nothing is lost silently — an unverified item still reports itself and still
+// flips the verdict — and every innocent string beside it survives untouched.
+func TestCoordinatorTextCannotCarryTheScanMarkers(t *testing.T) {
+	const wantWithheld = "a coordinator string was withheld because it carried a marker " +
+		"reserved for the residual scan's own declarations"
+	const saidByTheWrongSpeaker = ": a coordinator saying what only the scan may say"
+
+	cases := []struct {
+		name string
+		// coord is the fake at the seam; each case moves the reserved marker into a
+		// DIFFERENT coordinator-supplied channel that reaches verify_reason.
+		coord *stubCryptoShredCoordinator
+		// keep is an innocent coordinator string that must survive the withholding.
+		keep       string
+		wantOK     bool
+		wantStatus string
+	}{
+		{
+			name: "an unverified entry",
+			coord: &stubCryptoShredCoordinator{verify: CryptoShredVerification{
+				Complete: false, KeyDestroyed: true, WORMNotified: true,
+				Unverified:    []string{wantDepthMarker + saidByTheWrongSpeaker},
+				PolicyApplied: "third-party",
+			}},
+			keep:       "policy=third-party",
+			wantOK:     false,
+			wantStatus: erasureStatusGaps,
+		},
+		{
+			name: "a readiness warning",
+			coord: &stubCryptoShredCoordinator{readiness: CryptoShredReadiness{
+				Ready: true,
+				Warnings: []string{
+					wantCoverageMarker + saidByTheWrongSpeaker,
+					"replica lag 4m",
+				},
+			}},
+			keep:       "replica lag 4m",
+			wantOK:     true,
+			wantStatus: erasureStatusCompleted,
+		},
+		{
+			name: "a policy label",
+			coord: &stubCryptoShredCoordinator{verify: CryptoShredVerification{
+				Complete: false, KeyDestroyed: true, WORMNotified: true,
+				Unverified:    []string{"worm notification unrecorded for key (test)"},
+				PolicyApplied: wantCoverageMarker + "/aliased",
+			}},
+			keep:       "worm notification unrecorded for key (test)",
+			wantOK:     false,
+			wantStatus: erasureStatusGaps,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newHarness(t, WithApprovalGate(approvedGate("apr-resv")), WithProviderEraser(wiredProvider()),
+				WithCryptoShredCoordinator(tc.coord))
+			tenant, owner := openTenant(t, h, "scanreserved")
+			seedSubjectRows(h, tenant, "agent-reserved")
+
+			r, status := runErasure(t, h, owner, tenant, "agent", "agent-reserved", "DSR-RESV", nil)
+			if r.code != http.StatusOK {
+				t.Fatalf("execute = %d %s", r.code, r.raw)
+			}
+			why := jsonText(r.body["verify_reason"])
+			if strings.Contains(why, wantDepthMarker) || strings.Contains(why, wantCoverageMarker) {
+				t.Fatalf("coordinator text put one of the scan's own markers on the receipt: %q", why)
+			}
+			if !strings.Contains(why, wantWithheld) {
+				t.Fatalf("a withheld coordinator string was dropped without saying so: %q", why)
+			}
+			if !strings.Contains(why, tc.keep) {
+				t.Fatalf("withholding one string took another with it: want %q inside %q", tc.keep, why)
+			}
+			// The scan's own statement is untouched, so the receipt states a depth and
+			// denies none: exactly one of the two, which is the invariant this guards.
+			if got := jsonText(r.body["residual_scan_depth"]); got != wantDepth {
+				t.Fatalf("residual_scan_depth = %q, want %q (the scan's own, unaffected)", got, wantDepth)
+			}
+			if r.body["verify_ok"] != tc.wantOK || status != tc.wantStatus {
+				t.Fatalf("verdict = %v / %q, want %v / %q: %s", r.body["verify_ok"], status, tc.wantOK, tc.wantStatus, r.raw)
+			}
+		})
+	}
+}
+
 // ---- the manifest ----------------------------------------------------------------------
 
 // manifestCandidate rebuilds the canonical manifest string from the receipt the engine
