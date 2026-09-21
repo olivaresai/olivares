@@ -155,6 +155,11 @@ func TestJSONOutputIsUnchangedAgainstABaseBinary(t *testing.T) {
 }
 
 // asExitError keeps the errors import out of the file for one type assertion.
+//
+// It is declared HERE and only here. This file carries no build constraint, so it is
+// compiled into every configuration of this package's tests, the e2e-tagged ones included;
+// the e2e bootstrap test uses this declaration rather than a second one, which under
+// -tags e2e was a redeclaration and stopped that whole test binary from building.
 func asExitError(err error, into **exec.ExitError) bool {
 	ee, ok := err.(*exec.ExitError)
 	if ok {
