@@ -9,7 +9,9 @@ import type { RunDTO } from './types'
 vi.mock('@/lib/auth/context', () => ({
   useAuth: () => ({ activeTenant: 't1', can: () => true }),
 }))
-vi.mock('@/components/ui/toaster', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+vi.mock('@/components/ui/toaster', () => ({
+  toast: { success: vi.fn(), error: vi.fn() },
+}))
 vi.mock('./live-console', () => ({ LiveConsole: () => <div>live</div> }))
 vi.mock('./governance-panel', () => ({ GovernancePanel: () => <div>gov</div> }))
 
