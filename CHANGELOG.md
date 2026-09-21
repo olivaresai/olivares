@@ -78,6 +78,19 @@ month, release-of-month; the current release is `v26.9.1`).
   there. Depth is stated once, by the pre-shred scan, in the receipt's `residual_scan_depth`. A
   coordinator that still sets it is not contradicted; it is simply not repeated.
 
+### Security
+
+- Federated sign-in through a tenant's identity provider is bound to that tenant. It
+  returns a session only for a member of the tenant whose address lies in an email domain
+  that provider claims, and it provisions a new account only in such a domain, with a
+  viewer membership in that tenant alone. Wherever a tenant's identity provider can be
+  selected at sign-in, activating one now requires at least one claimed email domain.
+  After the upgrade, a tenant's identity provider that is already active with no claimed
+  email domain signs nobody in until an administrator claims a domain for it; each refused
+  sign-in is recorded as a blocked login. The deployment-wide identity provider, and so
+  every single-tenant deployment, is unchanged.
+
+
 ## [26.9.1] - 2026-09-21
 
 ### Added

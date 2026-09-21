@@ -169,7 +169,7 @@ func TestFederationCap_EntitledCapabilityStillLiftsTheCap(t *testing.T) {
 	if _, err := svc.PutConfig(ctx, actor, auth.GlobalFederationScope, oidcInput("https://idp.example", true)); err != nil {
 		t.Fatalf("first: %v", err)
 	}
-	if _, err := svc.PutConfig(ctx, actor, model.NewTenantID(), oidcInput("https://other-idp.example", true)); err != nil {
+	if _, err := svc.PutConfig(ctx, actor, model.NewTenantID(), oidcDomains("https://other-idp.example", true, "other.example")); err != nil {
 		t.Fatalf("an entitled capability must still lift the single-IdP cap: %v", err)
 	}
 }
@@ -209,7 +209,7 @@ func TestFederationCap_LiftedByMultiIDP(t *testing.T) {
 		t.Fatalf("global active: %v", err)
 	}
 	// With the multi-IdP capability wired the cap is lifted: a 2nd active IdP is OK.
-	if _, err := svc.PutConfig(ctx, actor, model.NewTenantID(), oidcInput("https://idp-x.example", true)); err != nil {
+	if _, err := svc.PutConfig(ctx, actor, model.NewTenantID(), oidcDomains("https://idp-x.example", true, "x.example")); err != nil {
 		t.Fatalf("second active IdP under enterprise must be allowed: %v", err)
 	}
 }
@@ -222,8 +222,8 @@ func TestFederationResolve_MultiIDP_PerTenant(t *testing.T) {
 	tenantA, tenantB := model.NewTenantID(), model.NewTenantID()
 
 	mustPut(t, svc, auth.GlobalFederationScope, oidcInput("global", true))
-	mustPut(t, svc, tenantA, oidcInput("idp-a", true))
-	mustPut(t, svc, tenantB, oidcInput("idp-b", true))
+	mustPut(t, svc, tenantA, oidcDomains("idp-a", true, "a.example"))
+	mustPut(t, svc, tenantB, oidcDomains("idp-b", true, "b.example"))
 
 	wantIssuer := func(tenant model.TenantID, want string) {
 		t.Helper()

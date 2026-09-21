@@ -67,6 +67,9 @@ func TestSSOGroupReconciliation_FlipsDecision(t *testing.T) {
 	a := auth.NewAuthenticator(st, nil).WithGroupMapper(fakeGroupMapper{})
 	super := mustSuperadmin(t, ctx, a)
 	tenant := provisionTenant(t, st, "acme")
+	// The tenant's provider, which claims the member's domain: a sign-in completed under
+	// a tenant's scope is bound to what that tenant's provider claims.
+	seedConfig(t, st, tenant, "default", "https://idp.acme.test", "acme.com")
 
 	// A member with a base viewer membership (the per-tenant gate requires a direct
 	// membership before a group can confer anything).
@@ -116,6 +119,7 @@ func TestSSOGroupReconciliation_NoMapperIsNoOp(t *testing.T) {
 	a := auth.NewAuthenticator(st, nil) // no group mapper — the base build
 	super := mustSuperadmin(t, ctx, a)
 	tenant := provisionTenant(t, st, "acme")
+	seedConfig(t, st, tenant, "default", "https://idp.acme.test", "acme.com")
 	mustMember(t, ctx, a, super, tenant, "eng@acme.com", auth.RoleViewer)
 	g, err := a.SCIMCreateGroup(ctx, super, tenant, auth.SCIMGroupInput{DisplayName: "Engineering", ExternalID: "grp-eng"})
 	if err != nil {
@@ -148,6 +152,7 @@ func TestSSOScimAuthoritative_RefusesJITAndReconcile(t *testing.T) {
 	super := mustSuperadmin(t, ctx, a)
 	tenant := provisionTenant(t, st, "acme")
 	putGlobalSSOConfig(t, st, model.FederationConfig{SCIMAuthoritative: true})
+	seedConfig(t, st, tenant, "default", "https://idp.acme.test", "acme.com")
 
 	// A brand-new identity (no local user) is REFUSED, not provisioned.
 	if _, _, err := a.CompleteSSO(ctx, auth.FederatedIdentity{

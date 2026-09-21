@@ -12,7 +12,9 @@ import (
 
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/core/residency"
 	"github.com/olivaresai/olivares/core/store"
+	"github.com/olivaresai/olivares/core/suspension"
 )
 
 // The scope of a federated sign-in. A tenant's identity provider vouches for the
@@ -46,6 +48,44 @@ func newScopeFixture(t *testing.T) *scopeFixture {
 		st: st, a: a, super: super,
 		tA: provisionTenant(t, st, "tenant-a"), tB: provisionTenant(t, st, "tenant-b"),
 	}
+}
+
+// newGuardedScopeFixture is a scopeFixture whose authenticator runs over the store the
+// way the engine composes it: the residency guard (when reg names a home region) inside
+// the suspension guard. System and Auth pass through both guards, as in production;
+// tenant reads and writes do not. Setup writes go to the unguarded store.
+func newGuardedScopeFixture(t *testing.T, reg *residency.Registry) *scopeFixture {
+	t.Helper()
+	ctx := context.Background()
+	st := testStore(t)
+	var served store.Store = st
+	if reg.Enforces() {
+		served = residency.Guard(served, reg, nil)
+	}
+	served = suspension.Guard(served, nil)
+	a := auth.NewAuthenticator(served, nil)
+	super := mustSuperadmin(t, ctx, a)
+	return &scopeFixture{
+		st: st, a: a, super: super,
+		tA: provisionTenant(t, st, "tenant-a"), tB: provisionTenant(t, st, "tenant-b"),
+	}
+}
+
+// createOrgAs provisions an organization carrying the given status and residency pin.
+// The store records the status it is handed, which is how an organization that is
+// neither active nor suspended comes to exist.
+func createOrgAs(t *testing.T, st store.Store, slug string, status model.LifecycleStatus, region string) model.TenantID {
+	t.Helper()
+	ctx := context.Background()
+	var tenant model.TenantID
+	if err := st.System(ctx, func(sys store.SystemScope) error {
+		o, err := sys.CreateOrg(ctx, model.Org{Name: slug, Slug: slug, Status: status, DataRegion: region})
+		tenant = o.TenantID
+		return err
+	}); err != nil {
+		t.Fatalf("create org %s: %v", slug, err)
+	}
+	return tenant
 }
 
 // account reads the account holding email; ok=false when there is none.
@@ -228,7 +268,8 @@ func TestCompleteSSORefusesAMemberOfTwoTenantsOutsideTheProvidersClaim(t *testin
 }
 
 // Just-in-time provisioning under a tenant's provider lands the new account in that
-// tenant, and only there; an address the provider does not claim provisions nothing.
+// tenant, and only there; an address the provider does not claim, or a tenant that is
+// not an organization, provisions nothing and gets the answer every refusal gets.
 func TestCompleteSSOProvisionsIntoTheProvidersTenantOnly(t *testing.T) {
 	t.Run("an address in the claimed domain", func(t *testing.T) {
 		f := newScopeFixture(t)
@@ -255,6 +296,116 @@ func TestCompleteSSOProvisionsIntoTheProvidersTenantOnly(t *testing.T) {
 
 		f.refused(t, auth.FederatedIdentity{Issuer: "https://idp.a.test", Subject: "new-2", Email: "new@elsewhere.test"}, f.tA, "new@elsewhere.test")
 	})
+	t.Run("a tenant that is not an organization", func(t *testing.T) {
+		f := newScopeFixture(t)
+		unprovisioned := model.NewTenantID()
+		seedConfig(t, f.st, unprovisioned, "default", "https://idp.n.test", "n.test")
+
+		f.refused(t, auth.FederatedIdentity{Issuer: "https://idp.n.test", Subject: "new-3", Email: "new@n.test"}, unprovisioned, "new@n.test")
+	})
+}
+
+// Only a tenant that is not an organization is refused before the binding. A tenant
+// withdrawn from service, or pinned to another region, is still an organization, and a
+// first sign-in through its provider goes on as it did before that check existed:
+// authentication passes through the service guards by design, so that such a tenant's
+// users can be told why they are refused elsewhere. A tenant that is not an organization
+// gets the answer every refusal gets, with its record, on a region-scoped instance too.
+func TestCompleteSSORefusesOnlyATenantThatIsNotAnOrganization(t *testing.T) {
+	regional, err := residency.NewRegistry("eu", []string{"us"})
+	if err != nil {
+		t.Fatalf("residency registry: %v", err)
+	}
+	for _, tc := range []struct {
+		name   string
+		reg    *residency.Registry
+		status model.LifecycleStatus
+		region string
+	}{
+		{"a suspended organization", nil, model.StatusSuspended, ""},
+		{"an organization not in service", nil, model.LifecycleStatus("error"), ""},
+		{"an organization pinned to another region", regional, model.StatusActive, "us"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newGuardedScopeFixture(t, tc.reg)
+			tenant := createOrgAs(t, f.st, "guarded", tc.status, tc.region)
+			seedConfig(t, f.st, tenant, "default", "https://idp.g.test", "g.test")
+
+			tok, sess, err := f.a.CompleteSSO(context.Background(), auth.FederatedIdentity{
+				Issuer: "https://idp.g.test", Subject: "g-1", Email: "new@g.test",
+			}, scopeIP, tenant, false)
+			if err != nil || tok == "" {
+				t.Fatalf("first sign-in under %s = %v (token issued %t), want the session it got before the organization check", tc.name, err, tok != "")
+			}
+			u, ok := f.account(t, "new@g.test")
+			if !ok || u.ID != sess.UserID {
+				t.Fatalf("session user %s, account %+v: want the provisioned account", sess.UserID, u)
+			}
+			if ms := f.memberships(t, u.ID); len(ms) != 1 || ms[0].TargetTenantID != tenant || ms[0].Role != auth.RoleViewer {
+				t.Fatalf("provisioned account memberships = %+v, want exactly one viewer membership in the provider's tenant", ms)
+			}
+		})
+	}
+	t.Run("a tenant that is not an organization, on a region-scoped instance", func(t *testing.T) {
+		f := newGuardedScopeFixture(t, regional)
+		unprovisioned := model.NewTenantID()
+		seedConfig(t, f.st, unprovisioned, "default", "https://idp.n.test", "n.test")
+
+		f.refused(t, auth.FederatedIdentity{Issuer: "https://idp.n.test", Subject: "n-1", Email: "new@n.test"}, unprovisioned, "new@n.test")
+	})
+}
+
+// A sign-in is bound to the provider selected for it, which vouches only for the domains
+// it claims itself. A tenant's provider still active with no claimed domain vouches for
+// nobody, not even for an address a sibling provider of the same tenant claims; the
+// deployment-wide provider with no claim stays unconstrained.
+func TestSelectedProviderVouchesOnlyForItsOwnClaims(t *testing.T) {
+	ctx := context.Background()
+	svc, st := u8Svc(t)
+	tenant := model.NewTenantID()
+	mustPutIdP(t, svc, tenant, "legacy", oidcInput("idp-legacy", false))
+	activateAsStored(t, st, tenant, "legacy")
+	mustPutIdP(t, svc, tenant, "corp", oidcDomains("idp-corp", true, "acme.com"))
+
+	for _, tc := range []struct {
+		alias, email string
+		want         bool
+	}{
+		{"legacy", "alice@acme.com", false},        // a sibling's domain
+		{"legacy", "bob@elsewhere.example", false}, // nobody's domain
+		{"corp", "alice@acme.com", true},           // its own domain
+		{"corp", "bob@elsewhere.example", false},   // outside its claim
+	} {
+		_, selected := svc.ResolveByAlias(ctx, tenant, tc.alias)
+		if selected.Scope != tenant || selected.Alias != tc.alias {
+			t.Fatalf("resolving %q gave scope %s alias %q, want %s %q", tc.alias, selected.Scope, selected.Alias, tenant, tc.alias)
+		}
+		if got := selected.AllowsEmail(tc.email); got != tc.want {
+			t.Fatalf("provider %q vouches for %s: %t, want %t", tc.alias, tc.email, got, tc.want)
+		}
+	}
+	if !(auth.ResolvedIdP{Scope: auth.GlobalFederationScope}).AllowsEmail("x@anywhere.example") {
+		t.Fatal("the deployment-wide provider with no claimed domain must stay unconstrained")
+	}
+}
+
+// The callback's refusal of an address outside the selected provider's claims leaves
+// the blocked-login record the binding writes: anonymous, naming the scope and the peer,
+// never the address.
+func TestRecordSSOOutsideScopeLeavesTheBindingsBlockedLogin(t *testing.T) {
+	ctx := context.Background()
+	f := newScopeFixture(t)
+	seq := auditHead(t, ctx, f.st)
+
+	f.a.RecordSSOOutsideScope(ctx, scopeIP, f.tA)
+
+	blocked := f.blockedSince(t, seq, "sso_outside_provider_scope")
+	if len(blocked) != 1 {
+		t.Fatalf("the callback's refusal left %d blocked-login records, want 1", len(blocked))
+	}
+	if e := blocked[0]; e.Actor != "anonymous" || len(e.Meta) != 3 || e.Meta["ip"] != scopeIP || e.Meta["scope"] != f.tA.String() {
+		t.Fatalf("the callback's refusal recorded actor %q meta %v, want anonymous with ip, reason and scope only", e.Actor, e.Meta)
+	}
 }
 
 // Activating a tenant's provider requires a claimed domain wherever a tenant's
