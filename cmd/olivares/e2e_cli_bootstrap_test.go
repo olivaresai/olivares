@@ -90,14 +90,6 @@ func (r cliRunner) mustRun(t *testing.T, what, stdin string, args ...string) str
 	return out
 }
 
-func asExitError(err error, target **exec.ExitError) bool {
-	ee, ok := err.(*exec.ExitError)
-	if ok {
-		*target = ee
-	}
-	return ok
-}
-
 func TestE2ECLIBootstrapReachesOperationalWithoutABrowser(t *testing.T) {
 	dir := t.TempDir()
 	bin := filepath.Join(dir, "olivares")
