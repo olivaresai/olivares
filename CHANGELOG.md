@@ -45,7 +45,11 @@ month, release-of-month; the current release is `v26.9.1`).
   as unavailable rather than as absent. A run launched under no provider profile is
   presented with those three fields empty rather than refused; the two provider home paths
   and the authorized authentication source are not presented at all.
-
+- `OLIVARES_SESSIONS_AGENT_LINK_LISTEN` is a recognized configuration key: the listen address,
+  as `host:port`, of the agent link, the mutual-TLS endpoint an edition built on this tree
+  serves for its node agents. Empty, the default, means no listener. A startup that sets it no
+  longer logs it as ignored, and `olivares config validate` and `config effective --strict`
+  accept it. The Community build does not read it.
 ### Changed
 
 - **A right-to-erasure receipt now states what its verification examined.** The residual scan
@@ -77,6 +81,7 @@ month, release-of-month; the current release is `v26.9.1`).
   it and nothing publishes it — no receipt field, no summary line and no hash reflects a value set
   there. Depth is stated once, by the pre-shred scan, in the receipt's `residual_scan_depth`. A
   coordinator that still sets it is not contradicted; it is simply not repeated.
+
 
 ## [26.9.1] - 2026-09-21
 

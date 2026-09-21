@@ -266,6 +266,7 @@ OLIVARES_SECRETREF_VAULT_TOKEN	no		Token used against HashiCorp Vault.
 OLIVARES_SECRET_STORE_KEY	no		Key that encrypts operator secrets held in the store.
 OLIVARES_SERVERTOOL_EGRESS_CONFIG	no		Path to the JSON grants file of the egress gate for provider server tools (web search, web fetch, code execution) in the inline proxy. Read only by builds compiled with the `enterprise` and `addon_airs` tags. Unset keeps those tools observe-only; a file that cannot be read or parsed denies every recognized egress server tool until the file is fixed and the engine is restarted.
 OLIVARES_SERVER_URL	no		Base URL of the control plane the CLI talks to, when `--server` is not given.
+OLIVARES_SESSIONS_AGENT_LINK_LISTEN	no		Listen address of the agent link, as `host:port`: the mutual-TLS endpoint an edition built on this tree serves for its node agents. Read at startup; empty, the default, means no listener. The Community build does not read it.
 OLIVARES_SESSIONS_MANAGED_STOP_ADMISSION_TIMEOUT	no	10s	Maximum time to admit a managed Stop request, as a positive Go duration with units. Read at startup; invalid or nonpositive values prevent startup. This does not bound process teardown.
 OLIVARES_SESSION_BUDGET_AVAILABILITY	no		Whether session budget enforcement is required, and what happens when the budget service cannot answer.
 OLIVARES_SESSION_CONTEXT_AVAILABILITY	no		Whether session context governance is required, and what happens when the context service cannot answer.
