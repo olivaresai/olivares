@@ -33,6 +33,19 @@ month, release-of-month; the current release is `v26.9.1`).
 
 ## [Unreleased]
 
+### Added
+
+- **A run can say what it was launched at, to a reader that holds no run.** A new read port,
+  beside the existing session-identity and run-launch readers, presents one run's provider
+  profile, the driver that profile names and the execution environment it was resolved
+  against — so a presentation consumer can name a launch target without receiving the
+  runtime that owns the run. It refuses exactly as its sibling does: absent,
+  foreign-workspace and lineage-unset runs are one answer, because telling them apart is an
+  existence probe, while a visible run whose row cannot establish that authority is reported
+  as unavailable rather than as absent. A run launched under no provider profile is
+  presented with those three fields empty rather than refused; the two provider home paths
+  and the authorized authentication source are not presented at all.
+
 ### Changed
 
 - **A right-to-erasure receipt now states what its verification examined.** The residual scan
