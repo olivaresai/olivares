@@ -865,9 +865,12 @@ func TestAuthorizeActionRefusesAnActionItsCallerCannotName(t *testing.T) {
 	// catches MISNAMING — a module asking for an action nobody gave it — and NOT a caller that
 	// presents somebody else's namespace, which is a different failure with the same shape.
 	//
-	// ⚠ IT IS A PIN OF A LIMIT, NOT A CURE, and it is written so the limit cannot be believed
-	// closed: the day the composition root hands each module a gate already bound to its registered
-	// namespace, this case goes red and that is the signal it exists to give.
+	// ⚠ IT IS A PIN OF A LIMIT, NOT A CURE, AND WHAT WOULD REALLY TURN IT RED IS WORTH STATING,
+	// because the obvious answer is wrong. This case builds its own port and binds it ITSELF, so a
+	// composition root that handed every module a gate already bound to its registered namespace
+	// would leave this case GREEN — it never asks that root for anything. It goes red only when
+	// ForModule stops trusting the namespace it is given. A cure that lands where the engine is
+	// composed therefore needs its own tripwire there, and this case is not it.
 	t.Run("pin: the gate cannot check a namespace it was merely told", func(t *testing.T) {
 		resource := f.resource()
 		// A namespace this caller has no right to, and that namespace's own declared action.
