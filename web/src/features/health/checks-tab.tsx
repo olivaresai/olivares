@@ -421,11 +421,8 @@ export function ChecksTab({ tenant }: { tenant: string | null }) {
         title={t('health:checks.delete.title')}
         description={t('health:checks.delete.description', {
           subject: deleting
-            ? sessionNameLadder(
-                deleting.name,
-                null,
-                t('health:status.unnamed'),
-              ).text
+            ? sessionNameLadder(deleting.name, null, t('health:status.unnamed'))
+                .text
             : '',
         })}
         confirmLabel={t('health:checks.actions.delete')}

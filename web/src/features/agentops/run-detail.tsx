@@ -83,9 +83,7 @@ export function RunDetailSheet({
                 <Terminal className="size-4 text-accent-text" />
                 <NamedRef
                   className="min-w-0 text-heading"
-                  name={
-                    runNaming.from === 'untitled' ? null : runNaming.text
-                  }
+                  name={runNaming.from === 'untitled' ? null : runNaming.text}
                   reference={run.run_ref}
                   fallback={runNaming.text}
                 />
