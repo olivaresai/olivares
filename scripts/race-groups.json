@@ -1262,7 +1262,8 @@
         "Wired",
         "Write"
       ]
-    }
+    },
+    {"name": "appliance", "measured": "not yet measured on the hosted runner: standard-library-only packages of the appliance module, expected well under a minute", "patterns": ["github.com/olivaresai/olivares/appliance/..."]}
   ],
   "max_shard_share": 0.3,
   "root_single_step_ceiling_minutes": 152,
