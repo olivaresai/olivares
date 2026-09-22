@@ -371,12 +371,60 @@ func toolBetaHeader(t any) string {
 	return ""
 }
 
+// mcpToolsetType is the wire "type" of an MCP toolset entry in tools[] — the CURRENT
+// shape mcp.go models as MCPToolset (the deprecated inline tool_configuration is not
+// modeled). A caller may hand-build the entry as a map[string]any, matched on this value.
+const mcpToolsetType = "mcp_toolset"
+
+// declaresMCP reports whether the request DECLARES the Messages-API MCP connector
+// (CLA-09, mcp.go): a non-empty mcp_servers[], or an mcp_toolset entry in tools[] as the
+// typed MCPToolset, a non-nil *MCPToolset, or a hand-built map. It classifies the
+// declaration AS THE CALLER SUPPLIED IT and never re-invokes a caller's json.Marshaler —
+// the stronger serialize-then-classify guarantee belongs to a governed capture, not to
+// header assembly. A nil pointer entry declares no server: it adds no header and does not
+// panic here. Rejecting a malformed declaration is validation, which this path does not
+// widen — it only decides which header the declared shape needs.
+func (req MessageRequest) declaresMCP() bool {
+	if len(req.MCPServers) > 0 {
+		return true
+	}
+	for _, t := range req.Tools {
+		switch v := t.(type) {
+		case MCPToolset:
+			return true
+		case *MCPToolset:
+			if v != nil {
+				return true
+			}
+		case map[string]any:
+			if ty, _ := v["type"].(string); ty == mcpToolsetType {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// mcpBatchBetas returns the anthropic-beta values a batch submission requires: the UNION
+// of its entries' MCP declarations, so an mcp_toolset or an mcp_servers[] in ANY entry —
+// not only the first — carries the header for the whole envelope, exactly once. Only the
+// MCP family travels with a batch: this connector previously sent no request betas on
+// batch paths. Widening other families requires a separate compatibility decision.
+func mcpBatchBetas(requests []BatchRequest) []string {
+	for _, r := range requests {
+		if r.Params.declaresMCP() {
+			return []string{MCPBetaHeader}
+		}
+	}
+	return nil
+}
+
 // BetaHeaders returns the set of anthropic-beta header values this request requires,
 // de-duplicated and in a stable order. It inspects the request itself so a caller
 // cannot forget a header: a mid-conversation system message (D3), a task_budget (D4),
-// a compaction edit (D5), or an advisor tool (D1) each add their header. Structured
-// outputs (D6) are GA and add none. CreateMessage joins these into one comma-separated
-// anthropic-beta header.
+// a compaction edit (D5), an advisor tool (D1), or a declared MCP destination (CLA-09)
+// each add their header. Structured outputs (D6) are GA and add none. CreateMessage
+// joins these into one comma-separated anthropic-beta header.
 func (req MessageRequest) BetaHeaders() []string {
 	seen := map[string]bool{}
 	var out []string
@@ -400,6 +448,16 @@ func (req MessageRequest) BetaHeaders() []string {
 	}
 	for _, t := range req.Tools {
 		add(toolBetaHeader(t))
+	}
+	// CLA-09: the official beta endpoint schemas read on 2026-09-21 declare MCP
+	// and MCPBetaHeader on Messages, count_tokens and batch-create:
+	// https://platform.claude.com/docs/en/api/http/beta/messages/create
+	// https://platform.claude.com/docs/en/api/http/beta/messages/count_tokens
+	// https://platform.claude.com/docs/en/api/http/beta/messages/batches/create
+	// This is schema evidence, not a live endpoint qualification. The deprecated
+	// beta is never attached to this toolset shape. Requests without MCP add no MCP beta.
+	if req.declaresMCP() {
+		add(MCPBetaHeader)
 	}
 	// a fallbacks chain and a credit retry each carry their own beta. They are
 	// mutually exclusive on a request (validateFallbacks), and the server-side header

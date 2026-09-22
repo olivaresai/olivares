@@ -18,6 +18,7 @@ package claudeapi
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 )
 
@@ -52,8 +53,9 @@ type countTokensBody struct {
 // same thinking normalization CreateMessage will (so the count mirrors what gets sent on
 // a model that rejects the legacy budget). The current-turn thinking content counts;
 // previous-turn thinking does not (Anthropic accounting). It forwards only the beta
-// headers the prompt shape requires (a mid-conversation system message, an advisor
-// tool) — the runtime betas (fallbacks, task budgets) do not apply here.
+// headers the prompt shape requires (a mid-conversation system message, an advisor tool,
+// a declared MCP destination) — the runtime betas (fallbacks, task budgets) do not apply
+// here.
 func (inf *Inference) CountTokens(ctx context.Context, req MessageRequest) (TokenCount, error) {
 	if inf.client == nil {
 		return TokenCount{}, ErrNotConfigured
@@ -75,10 +77,29 @@ func (inf *Inference) CountTokens(ctx context.Context, req MessageRequest) (Toke
 		MCPServers: req.MCPServers,
 	}
 	// Only the prompt-shaping betas matter to count_tokens; derive them from a request
-	// carrying just the messages + tools (so fallbacks/task-budget/compaction headers,
-	// which the count body never sends, are never attached).
-	betas := MessageRequest{Messages: req.Messages, Tools: req.Tools}.BetaHeaders()
+	// carrying just the messages + tools + MCP servers (so fallbacks/task-budget/
+	// compaction headers, which the count body never sends, are never attached). The
+	// MCP servers belong in this projection because the count body DOES forward
+	// mcp_servers (above). BetaHeaders cites the dated endpoint-schema evidence.
+	betas := MessageRequest{Messages: req.Messages, Tools: req.Tools, MCPServers: req.MCPServers}.BetaHeaders()
 	var tc TokenCount
+	if req.mcp != nil {
+		// A bound request is serialized ONCE here, its MCP projection and beta verified against
+		// the accepted binding, and exactly those bytes sent. A mismatch is a typed
+		// MCPEgressError before any HTTP request, never a transport error a sizing caller
+		// could fail open on.
+		buf, err := json.Marshal(body)
+		if err != nil {
+			return TokenCount{}, mcpRefusal(MCPDenyBindingChanged)
+		}
+		if err := req.mcp.verify(buf, betas); err != nil {
+			return TokenCount{}, err
+		}
+		if err := inf.client.PostJSON(ctx, countTokensPath, json.RawMessage(buf), &tc, betaHeaderMap(betas)); err != nil {
+			return TokenCount{}, err
+		}
+		return tc, nil
+	}
 	if err := inf.client.PostJSON(ctx, countTokensPath, body, &tc, betaHeaderMap(betas)); err != nil {
 		return TokenCount{}, err
 	}

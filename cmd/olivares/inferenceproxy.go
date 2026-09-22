@@ -299,6 +299,10 @@ type proxySession struct {
 	// carried so the sizing phase (5g) can apply MaxContextTokens without a second
 	// decision-plane read (the two-phase chain).
 	ctxPol knowledge.EffectivePolicy
+	// mcp is the request's MCP egress snapshot when an egress gate is installed (5b): the
+	// accepted binding of its MCP declaration or absence, checked after the later gates,
+	// before every count_tokens and before the freeze. nil without an egress gate.
+	mcp *claudeapi.MCPEgressSnapshot
 }
 
 // Authorize runs the PRE-forward governed gate chain for one /v1/messages call, then the
@@ -315,9 +319,16 @@ func (d *inferenceProxyDecider) Authorize(ctx context.Context, req claudeapi.Mes
 	// the proxy will send upstream, serialized ONCE. The EffectiveRequestDigest is over these
 	// bytes, so the authorized decision and the ledger anchor commit to precisely what runs —
 	// no post-governance preflight/re-marshal can diverge (the forward uses Prepared, never a
-	// re-marshal of gov).
+	// re-marshal of gov). With an MCP snapshot, the session's accepted binding must still be
+	// the one gov carries, and MarshalPrepared verifies the frozen bytes against it.
+	if res, ok := checkMCPBinding(sess, gov); !ok {
+		return res.decision
+	}
 	prepared, ferr := claudeapi.MarshalPrepared(gov)
 	if ferr != nil {
+		if code, isMCP := mcpRefusalCode(ferr); isMCP {
+			return mcpGateDeny(code).decision
+		}
 		d.log.Error("inference-proxy: could not serialize the governed request; denying (deny-closed)", "err", ferr)
 		return denyProxy(http.StatusInternalServerError, "api_error", "could not serialize the governed request (deny-closed)")
 	}
@@ -410,11 +421,25 @@ func (d *inferenceProxyDecider) AuthorizeBatch(ctx context.Context, requests []c
 	}
 	// Keep the first entry's resolved session for the single batch-level ledger anchor.
 	batchSess := sessions[0]
+	// Each entry must still carry ITS OWN accepted MCP binding (never entry 0's).
+	for i := range governed {
+		if res, ok := checkMCPBinding(sessions[i], governed[i].Params); !ok {
+			return claudeapi.ProxyBatchDecision{
+				Allow: false, Status: res.decision.Status, ErrorType: res.decision.ErrorType,
+				Reason: batchEntryDenyReason(i, requests[i].CustomID, res.decision.Reason),
+			}
+		}
+	}
 	// FREEZE the governed submission envelope into the opaque forward artifact (F3):
 	// {"requests":[...]} serialized ONCE from the governed, normalized entries, so the octets
 	// submitted upstream are exactly what was governed and the digest committed to (the forward
-	// uses Prepared, never a re-serialize of the entries).
+	// uses Prepared, never a re-serialize of the entries). MarshalPreparedBatch verifies each
+	// bound entry's exact params bytes against that entry's binding.
 	prepared, ferr := claudeapi.MarshalPreparedBatch(governed)
+	if code, isMCP := mcpRefusalCode(ferr); isMCP {
+		res := mcpGateDeny(code)
+		return claudeapi.ProxyBatchDecision{Allow: false, Status: res.decision.Status, ErrorType: res.decision.ErrorType, Reason: res.decision.Reason}
+	}
 	if ferr != nil {
 		d.log.Error("inference-proxy: could not serialize the governed batch; denying (deny-closed)", "err", ferr)
 		return claudeapi.ProxyBatchDecision{Allow: false, Status: http.StatusInternalServerError, ErrorType: "api_error", Reason: "could not serialize the governed batch (deny-closed)"}
@@ -457,7 +482,10 @@ func (d *inferenceProxyDecider) FinalizeBatch(ctx context.Context, sessAny any, 
 // gateCode is the stable, per-gate deny identifier. It is PEP-neutral semantics — the
 // PDP handlers surface it as sdk.DecisionVerdict.ReasonCode ("stable, per-gate,
 // interoperable") without string-matching the human-readable Reason prose. One constant per
-// deny site; renaming one is a wire-visible change once ships.
+// deny site; renaming one is a wire-visible change once ships. The five MCP egress codes
+// are not repeated here: their single definition is claudeapi.MCPDenialCode, and mcpDenials
+// in servertoolegressgate.go maps each one (code = public reason = gate code) — a census or
+// rename review of this block must include that table.
 type gateCode string
 
 const (
@@ -863,30 +891,22 @@ func (d *inferenceProxyDecider) runLocalGates(ctx context.Context, req claudeapi
 	}
 
 	// 5b. Server-tool egress (commercial add-on P0 #1, OPT-IN), deny-closed. Governs Claude's
-	//     internet-reaching server tools (web_search/web_fetch/code_execution) declared in
-	//     req.Tools: denies an ungranted or unvalidatable tool and validates+clamps
-	//     allowed_domains/blocked_domains/max_uses against the tenant's egress grant, rewriting
-	//     the forwarded request. It is a SECURITY gate, so it runs here — after the other
-	//     deny-closed gates (it cannot bypass them) and BEFORE the fail-open budget gate. nil
-	//     ⇒ the default AGPL build: observe-only, unchanged. ActorRef is the (empty) proxy
-	//     sessionRef — agent-scoped grants need the NHI binding; tenant/global grants
-	//     govern raw-token traffic today.
+	//     internet-reaching server tools (web_search/web_fetch/code_execution) and declared
+	//     remote MCP servers in req.Tools/req.MCPServers: denies an ungranted or unvalidatable
+	//     tool or MCP origin and validates+clamps allowed_domains/blocked_domains/max_uses
+	//     against the tenant's egress grant, rewriting the forwarded request. It is a SECURITY
+	//     gate, so it runs here — after the other deny-closed gates (it cannot bypass them)
+	//     and BEFORE the fail-open budget gate. nil ⇒ the default AGPL build: observe-only,
+	//     unchanged, no MCP capture. With a gate, governEgress captures the MCP declaration (or
+	//     its absence) once and returns the governed request with its accepted binding; the
+	//     snapshot rides on the session for the checks after the later gates.
+	var mcpSnap *claudeapi.MCPEgressSnapshot
 	if d.egress != nil {
-		egDec := d.egress.GovernEgress(ctx, claudeapi.ServerToolEgressInput{
-			Tenant: tenant.String(), ActorRef: sessionRef, UnbindableAgent: unbindableAgent, Tools: req.Tools,
-		})
-		d.publishEgressFindings(ctx, tenant, req.Model, egDec.Findings)
-		if !egDec.Forward {
-			d.openEgressApproval(ctx, tenant, actor, egDec.ApprovalIntent)
-			status := egDec.Status
-			if status == 0 {
-				status = http.StatusForbidden
-			}
-			return chainDeny(gateCodeServerToolEgress, sdk.FailurePolicyDeny, status, firstNonEmpty(egDec.ErrorType, "permission_error"), firstNonEmpty(egDec.Reason, "server-tool egress denied by policy"))
+		gov, snap, deny, ok := d.governEgress(ctx, req, tenant, actor, sessionRef, unbindableAgent)
+		if !ok {
+			return nil, claudeapi.MessageRequest{}, deny, false
 		}
-		if egDec.Rewritten {
-			req.Tools = egDec.GovernedTools
-		}
+		req, mcpSnap = gov, snap
 	}
 
 	// 5c. Content firewall (commercial add-on P1, OPT-IN), deny-closed. Deep inline inspection
@@ -921,10 +941,11 @@ func (d *inferenceProxyDecider) runLocalGates(ctx context.Context, req claudeapi
 	//     declarations (computer_20241022 / computer_20250124) in req.Tools: the gate checks
 	//     the tenant's computer-use policy and may deny the request. It is a SECURITY gate,
 	//     so it runs here — after the content firewall and BEFORE the budget gate. nil ⇒ the
-	//     default AGPL build: computer-use tools pass through ungoverned.
+	//     default AGPL build: computer-use tools pass through ungoverned. It receives the
+	//     MCPGateTools view: every MCP slot is a fresh marker, never the request's own value.
 	if d.computerUse != nil && claudeapi.HasComputerUseTool(req.Tools) {
 		cuDec := d.computerUse.GovernComputerUse(ctx, claudeapi.ComputerUseInput{
-			Tenant: tenant.String(), ActorRef: sessionRef, Tools: req.Tools,
+			Tenant: tenant.String(), ActorRef: sessionRef, Tools: claudeapi.MCPGateTools(req.Tools),
 		})
 		d.publishComputerUseFindings(ctx, tenant, req.Model, cuDec.Findings)
 		if !cuDec.Forward {
@@ -978,7 +999,12 @@ func (d *inferenceProxyDecider) runLocalGates(ctx context.Context, req claudeapi
 	// message) does the recording reservation. req is the GOVERNED, normalized request.
 	sess := &proxySession{
 		tenant: tenant, actor: actor, actorKind: id.actorKind, sessionRef: sessionRef, unbindableAgent: unbindableAgent,
-		modelRef: req.Model, pin: pin, pol: pol, inputDigest: inboundDigest[:], ctxPol: ctxPol,
+		modelRef: req.Model, pin: pin, pol: pol, inputDigest: inboundDigest[:], ctxPol: ctxPol, mcp: mcpSnap,
+	}
+	// The later gates (firewall, computer-use, ceilings) must not have changed the accepted
+	// MCP declaration or absence, nor dropped its binding (mcp_binding_changed, 500).
+	if res, ok := checkMCPBinding(sess, req); !ok {
+		return nil, claudeapi.MessageRequest{}, res, false
 	}
 	return sess, req, gateResult{}, true
 }
@@ -1008,7 +1034,17 @@ func (d *inferenceProxyDecider) runSizingAndBudget(ctx context.Context, req clau
 	//     block — it is a capability pre-flight, not a security gate. MaxContextTokens
 	//     consumes the ctxPol resolved in phase one (no second plane read).
 	if pol.GateContextWindow {
-		if tc, cerr := d.inf.CountTokens(ctx, req); cerr == nil {
+		// The count body carries the MCP declaration, so it is provider egress too: the same
+		// accepted binding is required before it, and a typed MCP refusal from CountTokens is a
+		// deny — it must never fall into the non-blocking sizing-failure branch below.
+		if res, ok := checkMCPBinding(sess, req); !ok {
+			return res, false
+		}
+		tc, cerr := d.inf.CountTokens(ctx, req)
+		if code, isMCP := mcpRefusalCode(cerr); isMCP {
+			return mcpGateDeny(code), false
+		}
+		if cerr == nil {
 			verdict := claudeapi.CheckContextWindowForSurface(d.surface, req.Model, tc.InputTokens)
 			if verdict.Exceeds {
 				return gateDeny(gateCodeContextWindow, sdk.FailurePolicyDeny, http.StatusBadRequest, "invalid_request_error", "request context exceeds this surface's window for the model"), false

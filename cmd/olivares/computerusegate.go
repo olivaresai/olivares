@@ -73,14 +73,17 @@ func (d *inferenceProxyDecider) publishComputerUseFindings(ctx context.Context, 
 	}
 }
 
-// openComputerUseApproval opens a governed approval for denied computer-use access.
+// openComputerUseApproval opens a request-only approval NOTIFICATION for denied computer-use
+// access. The synchronous proxy call stays denied whatever the approval's state, so this
+// must not consult or consume break-glass nor record an authorization (O-1): notify, never
+// gateOnce.
 func (d *inferenceProxyDecider) openComputerUseApproval(ctx context.Context, tenant model.TenantID, actor string, intent *claudeapi.ComputerUseApprovalIntent) {
 	if d.approvals == nil || intent == nil {
 		return
 	}
 	requestedBy := firstNonEmpty(actor, model.ActorSystem)
-	if _, _, _, err := d.approvals.gateOnce(ctx, tenant, intent.Action, "anthropic.computer_use", intent.Subject, intent.PlanHash, intent.Reason, requestedBy); err != nil && d.log != nil {
-		d.log.Warn("inference-proxy: computer-use approval intent could not be opened (deny stands)", "err", err)
+	if err := d.approvals.notify(ctx, tenant, intent.Action, "anthropic.computer_use", intent.Subject, intent.PlanHash, intent.Reason, requestedBy); err != nil && d.log != nil {
+		d.log.Warn("inference-proxy: computer-use approval notification could not be opened (deny stands)", "err", err)
 	}
 }
 

@@ -22,6 +22,7 @@ package claudeapi
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"strings"
@@ -54,14 +55,15 @@ const (
 // (method, path and Accept discriminate blocking, streaming and batch), the exact
 // transmitted body, and the transport values that must survive the beta correction.
 type mcpWireCall struct {
-	method  string
-	path    string
-	url     string
-	accept  string
-	beta    string
-	apiKey  string
-	version string
-	body    []byte
+	method    string
+	path      string
+	url       string
+	accept    string
+	beta      string
+	betaLines []string
+	apiKey    string
+	version   string
+	body      []byte
 }
 
 // mcpWireDoer records every request the real InferenceClient builds and answers it with
@@ -74,13 +76,14 @@ type mcpWireDoer struct {
 
 func (d *mcpWireDoer) Do(req *http.Request) (*http.Response, error) {
 	call := mcpWireCall{
-		method:  req.Method,
-		path:    req.URL.Path,
-		url:     req.URL.String(),
-		accept:  req.Header.Get("Accept"),
-		beta:    req.Header.Get(betaHeaderKey),
-		apiKey:  req.Header.Get("x-api-key"),
-		version: req.Header.Get("anthropic-version"),
+		method:    req.Method,
+		path:      req.URL.Path,
+		url:       req.URL.String(),
+		accept:    req.Header.Get("Accept"),
+		beta:      req.Header.Get(betaHeaderKey),
+		betaLines: append([]string(nil), req.Header.Values(betaHeaderKey)...),
+		apiKey:    req.Header.Get("x-api-key"),
+		version:   req.Header.Get("anthropic-version"),
 	}
 	if req.Body != nil {
 		call.body, _ = io.ReadAll(req.Body)
@@ -250,6 +253,9 @@ func assertBetaAbsent(t *testing.T, call mcpWireCall, unwanted string) {
 // it does not touch the URL, the key or the API version.
 func assertTransportUnchanged(t *testing.T, call mcpWireCall) {
 	t.Helper()
+	if len(call.betaLines) > 1 {
+		t.Errorf("multiple anthropic-beta header lines: %q", call.betaLines)
+	}
 	if call.method != http.MethodPost {
 		t.Errorf("method = %q, want POST", call.method)
 	}
@@ -278,9 +284,31 @@ func assertServerValuesForwarded(t *testing.T, body []byte) {
 // assertToolConfigForwarded requires the declared per-tool configuration to survive.
 func assertToolConfigForwarded(t *testing.T, body []byte) {
 	t.Helper()
-	if !bytes.Contains(body, []byte(mcpTestToolName)) {
-		t.Errorf("declared MCP tool configuration %q missing from the transmitted body: %s", mcpTestToolName, body)
+	type config struct {
+		Enabled *bool `json:"enabled"`
 	}
+	var prompt struct {
+		Tools []struct {
+			Type    string            `json:"type"`
+			Server  string            `json:"mcp_server_name"`
+			Default *config           `json:"default_config"`
+			Configs map[string]config `json:"configs"`
+		} `json:"tools"`
+	}
+	if err := json.Unmarshal(body, &prompt); err != nil {
+		t.Fatalf("decode transmitted prompt: %v", err)
+	}
+	for _, tool := range prompt.Tools {
+		if tool.Type == "mcp_toolset" {
+			selected, ok := tool.Configs[mcpTestToolName]
+			if tool.Server != mcpTestServerName || tool.Default == nil || tool.Default.Enabled == nil ||
+				*tool.Default.Enabled || !ok || selected.Enabled == nil || !*selected.Enabled {
+				t.Errorf("MCP tool configuration changed: %+v", tool)
+			}
+			return
+		}
+	}
+	t.Fatal("transmitted prompt has no MCP toolset")
 }
 
 // assertPromptForwarded requires the prompt itself to be unchanged by the correction.
@@ -354,6 +382,9 @@ func TestMCPBetaTransportStreamMessage(t *testing.T) {
 			if tc.wantServers {
 				assertServerValuesForwarded(t, call.body)
 			}
+			if tc.wantConfig {
+				assertToolConfigForwarded(t, call.body)
+			}
 		})
 	}
 }
@@ -396,6 +427,9 @@ func TestMCPBetaTransportCountTokens(t *testing.T) {
 			assertBetaAbsent(t, call, BetaTaskBudgets)
 			assertBetaAbsent(t, call, BetaServerSideFallback)
 			assertPromptForwarded(t, call.body)
+			if len(tc.tools) > 0 {
+				assertToolConfigForwarded(t, call.body)
+			}
 			if tc.wantServers {
 				assertServerValuesForwarded(t, call.body)
 			}
@@ -444,6 +478,7 @@ func TestMCPBetaTransportPreparedMessage(t *testing.T) {
 		t.Fatalf("forwarded bytes != frozen bytes\n got:  %s\n want: %s", call.body, prep.Body())
 	}
 	assertServerValuesForwarded(t, call.body)
+	assertToolConfigForwarded(t, call.body)
 	if bytes.Contains(call.body, []byte("attacker.example.com")) {
 		t.Errorf("a post-freeze alias mutation reached the wire: %s", call.body)
 	}
@@ -455,7 +490,8 @@ func TestMCPBetaTransportPreparedStream(t *testing.T) {
 	doer := &mcpWireDoer{}
 	req := mcpPrompt()
 	req.Stream = true
-	req.Tools, req.MCPServers = []any{mcpTypedToolset()}, mcpTypedServers()
+	toolset, servers := mcpMapToolset(), mcpMapServers()
+	req.Tools, req.MCPServers = []any{toolset}, servers
 	norm, err := NormalizeMessageRequest(req, "")
 	if err != nil {
 		t.Fatalf("normalize: %v", err)
@@ -464,6 +500,8 @@ func TestMCPBetaTransportPreparedStream(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal prepared: %v", err)
 	}
+	toolset["type"] = "custom_tool"
+	servers[0].(map[string]any)["url"] = "https://attacker.example.com"
 	if !prep.Stream() {
 		t.Fatal("the prepared artifact must carry the stream flag")
 	}
@@ -475,6 +513,8 @@ func TestMCPBetaTransportPreparedStream(t *testing.T) {
 		t.Fatalf("Accept = %q, want the streaming submitter", call.accept)
 	}
 	assertMCPBetaOnce(t, call, messagesPath)
+	assertServerValuesForwarded(t, call.body)
+	assertToolConfigForwarded(t, call.body)
 	if !bytes.Equal(call.body, prep.Body()) {
 		t.Fatalf("streamed bytes != frozen bytes\n got:  %s\n want: %s", call.body, prep.Body())
 	}
@@ -564,7 +604,26 @@ func TestMCPBetaTransportPreparedBatch(t *testing.T) {
 		if _, _, err := newMCPInference(doer).ForwardPreparedBatch(context.Background(), prep); err != nil {
 			t.Fatalf("ForwardPreparedBatch: %v", err)
 		}
-		assertMCPBetaOnce(t, doer.only(t), batchesPath)
+		call := doer.only(t)
+		assertMCPBetaOnce(t, call, batchesPath)
+		if !bytes.Equal(call.body, prep.Body()) {
+			t.Fatal("repeated-entry batch changed after freezing")
+		}
+		var envelope struct {
+			Requests []struct {
+				Params json.RawMessage `json:"params"`
+			} `json:"requests"`
+		}
+		if err := json.Unmarshal(call.body, &envelope); err != nil {
+			t.Fatal(err)
+		}
+		if len(envelope.Requests) != 3 {
+			t.Fatalf("entries = %d, want 3", len(envelope.Requests))
+		}
+		for _, entry := range envelope.Requests {
+			assertServerValuesForwarded(t, entry.Params)
+			assertToolConfigForwarded(t, entry.Params)
+		}
 	})
 
 	t.Run("no mcp entry sends no mcp beta", func(t *testing.T) {
@@ -594,7 +653,9 @@ func TestMCPBetaTransportCreateBatch(t *testing.T) {
 		second := mcpPrompt()
 		second.Model = "" // the entry model default must still be applied
 		second.Tools, second.MCPServers = []any{mcpMapToolset()}, mcpTypedServers()
-		batch, err := newMCPInference(doer).CreateBatch(context.Background(), []BatchRequest{
+		const fallbackModel = "fixture-default-model"
+		inf := NewInference(InferenceConfig{APIKey: mcpTestAPIKey, DefaultModel: fallbackModel, Doer: doer})
+		batch, err := inf.CreateBatch(context.Background(), []BatchRequest{
 			{CustomID: "c0", Params: mcpPrompt()},
 			{CustomID: "c1", Params: second},
 		})
@@ -607,8 +668,15 @@ func TestMCPBetaTransportCreateBatch(t *testing.T) {
 		call := doer.only(t)
 		assertMCPBetaOnce(t, call, batchesPath)
 		assertServerValuesForwarded(t, call.body)
-		if !bytes.Contains(call.body, []byte(`"model":"`+mcpTestModel+`"`)) {
-			t.Errorf("the per-entry model default was lost: %s", call.body)
+		var envelope struct {
+			Requests []BatchRequest `json:"requests"`
+		}
+		if err := json.Unmarshal(call.body, &envelope); err != nil {
+			t.Fatalf("decode transmitted batch: %v", err)
+		}
+		if len(envelope.Requests) != 2 || envelope.Requests[0].Params.Model != mcpTestModel ||
+			envelope.Requests[1].Params.Model != fallbackModel {
+			t.Fatalf("per-entry model defaults changed: %s", call.body)
 		}
 	})
 
@@ -750,4 +818,145 @@ func TestMCPBetaTransportNilToolsetPointerIsInert(t *testing.T) {
 		}
 		assertMCPBetaOnce(t, doer.only(t), messagesPath)
 	})
+}
+
+// Every batch submitter carries only the MCP family, including declarations made by
+// a toolset alone. The entry's unrelated task-budget beta must stay off batch transport.
+func TestMCPBetaTransportBatchFamilyIsExact(t *testing.T) {
+	for name, submit := range map[string]func(*Inference, []BatchRequest) error{
+		"prepared": func(inf *Inference, entries []BatchRequest) error {
+			prep, err := MarshalPreparedBatch(entries)
+			if err != nil {
+				return err
+			}
+			// Flip the caller's map after freezing in BOTH directions.
+			tool := entries[1].Params.Tools[0].(map[string]any)
+			if tool["type"] == "mcp_toolset" {
+				tool["type"] = "custom_tool"
+			} else {
+				tool["type"] = "mcp_toolset"
+			}
+			_, _, err = inf.ForwardPreparedBatch(context.Background(), prep)
+			return err
+		},
+		"direct": func(inf *Inference, entries []BatchRequest) error {
+			_, err := inf.CreateBatch(context.Background(), entries)
+			return err
+		},
+		"raw": func(inf *Inference, entries []BatchRequest) error {
+			_, _, err := inf.CreateBatchRaw(context.Background(), entries)
+			return err
+		},
+	} {
+		for _, withMCP := range []bool{false, true} {
+			suffix := "/without-mcp"
+			if withMCP {
+				suffix = "/toolset-only"
+			}
+			t.Run(name+suffix, func(t *testing.T) {
+				doer := &mcpWireDoer{json: mcpOKBatch}
+				second := mcpPrompt()
+				tool := map[string]any{"name": "fixture-local-tool", "input_schema": map[string]any{"type": "object"}}
+				if withMCP {
+					tool = mcpMapToolset()
+				}
+				second.Tools = []any{tool}
+				second.OutputConfig = &OutputConfig{TaskBudget: TokenTaskBudget(50000)}
+				entries := []BatchRequest{{CustomID: "c0", Params: mcpPrompt()}, {CustomID: "c1", Params: second}}
+				if err := submit(newMCPInference(doer), entries); err != nil {
+					t.Fatal(err)
+				}
+				call := doer.only(t)
+				want := ""
+				if withMCP {
+					want = MCPBetaHeader
+					assertMCPBetaOnce(t, call, batchesPath)
+				} else {
+					assertNoMCPBeta(t, call, batchesPath)
+				}
+				if call.beta != want {
+					t.Fatalf("batch beta = %q, want exactly %q", call.beta, want)
+				}
+				if withMCP {
+					var envelope struct {
+						Requests []struct {
+							Params json.RawMessage `json:"params"`
+						} `json:"requests"`
+					}
+					if err := json.Unmarshal(call.body, &envelope); err != nil {
+						t.Fatal(err)
+					}
+					if len(envelope.Requests) != 2 {
+						t.Fatalf("entries = %d, want 2", len(envelope.Requests))
+					}
+					assertToolConfigForwarded(t, envelope.Requests[1].Params)
+				}
+			})
+		}
+	}
+}
+
+// A tools-only map can remove or introduce an MCP declaration after the freeze.
+// Blocking and streaming artifacts must retain the header of their original bytes.
+func TestMCPBetaTransportPreparedToolsetAliasesCannotChangeHeaders(t *testing.T) {
+	for _, stream := range []bool{false, true} {
+		for _, withMCP := range []bool{false, true} {
+			name := "blocking"
+			if stream {
+				name = "stream"
+			}
+			if withMCP {
+				name += "/toolset-only"
+			} else {
+				name += "/without-mcp"
+			}
+			t.Run(name, func(t *testing.T) {
+				doer := &mcpWireDoer{}
+				req := mcpPrompt()
+				req.Stream = stream
+				req.OutputConfig = &OutputConfig{TaskBudget: TokenTaskBudget(50000)}
+				tool := map[string]any{"name": "fixture-local-tool", "input_schema": map[string]any{"type": "object"}}
+				if withMCP {
+					tool = mcpMapToolset()
+				}
+				req.Tools = []any{tool}
+				norm, err := NormalizeMessageRequest(req, "")
+				if err != nil {
+					t.Fatal(err)
+				}
+				prep, err := MarshalPrepared(norm)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if withMCP {
+					tool["type"] = "custom_tool"
+				} else {
+					tool["type"] = "mcp_toolset"
+				}
+				inf := newMCPInference(doer)
+				if stream {
+					_, err = inf.ForwardPreparedStream(context.Background(), prep, func(StreamEvent) error { return nil })
+				} else {
+					_, err = inf.ForwardPrepared(context.Background(), prep)
+				}
+				if err != nil {
+					t.Fatal(err)
+				}
+				call := doer.only(t)
+				if stream && call.accept != "text/event-stream" {
+					t.Fatalf("stream Accept = %q", call.accept)
+				}
+				if withMCP {
+					assertMCPBetaOnce(t, call, messagesPath)
+					assertToolConfigForwarded(t, call.body)
+				} else {
+					assertNoMCPBeta(t, call, messagesPath)
+				}
+				assertBetaPresent(t, call, BetaTaskBudgets)
+				if !bytes.Equal(call.body, prep.Body()) {
+					t.Fatal("caller mutation changed prepared wire bytes")
+				}
+			})
+		}
+	}
 }
