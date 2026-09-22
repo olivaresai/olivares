@@ -30,6 +30,7 @@ import (
 
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/auth"
+	"github.com/olivaresai/olivares/core/engine/enginetest"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 )
@@ -828,6 +829,155 @@ func TestProviderAccount_AdoptedHomeIsSharedIsolationNeverDedicated(t *testing.T
 				if strings.Contains(raw, profiles[0].ConfigHome) || strings.Contains(raw, profiles[0].UserHome) {
 					t.Fatalf("an account read carries the absolute home path: %s", raw)
 				}
+			}
+		})
+	}
+}
+
+// Adopt names a profile ONCE. A second adopt of an account is refused with 409
+// "already an account", with or without a name, and nothing a reader sees moves:
+// not the name, not a second generated name, not a byte of the account.
+func TestProviderAccount_AdoptOfANamedProfileIs409AlreadyAnAccount(t *testing.T) {
+	rows := []struct {
+		label string
+		name  string // what the second adopt asks for; "" asks for a generated name
+	}{
+		{label: "without a name", name: ""},
+		{label: "with a free name", name: "x"},
+		{label: "with its own name", name: "claude-b"},
+	}
+	for _, be := range profileBackends(t) {
+		be := be
+		t.Run(be.name, func(t *testing.T) {
+			m, st := openProfileModule(t, be, nil)
+			tenant := ensureTenant(t, st, "named-"+be.name)
+			a := newAcctAPI(m, st, tenant)
+			p := acctProfiles(t, m, tenant, "claude", 1)[0]
+			if r := a.adopt(p.Ref, "claude-b"); r.code != http.StatusOK || r.body["name"] != "claude-b" {
+				t.Fatalf("first adopt = %d %s, want 200 named claude-b", r.code, r.raw)
+			}
+			before := a.call(http.MethodGet, "/provider-accounts/"+p.Ref, nil)
+			if before.code != http.StatusOK {
+				t.Fatalf("get after the first adopt = %d %s", before.code, before.raw)
+			}
+			for _, row := range rows {
+				t.Run(row.label, func(t *testing.T) {
+					r := a.adopt(p.Ref, row.name)
+					if r.code != http.StatusConflict || !strings.Contains(r.raw, "already an account") {
+						t.Fatalf("second adopt = %d %s, want 409 already an account", r.code, r.raw)
+					}
+					if got := acctRow(t, m, tenant, p.Ref).String("account_name"); got != "claude-b" {
+						t.Fatalf("the stored name is %q after a refused adopt, want claude-b", got)
+					}
+					if after := a.call(http.MethodGet, "/provider-accounts/"+p.Ref, nil); after.raw != before.raw {
+						t.Fatalf("a refused adopt changed the account:\nbefore %s\nafter  %s", before.raw, after.raw)
+					}
+					if got := acctNames(a.list("").items()); !reflect.DeepEqual(got, []string{"claude-b"}) {
+						t.Fatalf("accounts after a refused adopt = %v, want [claude-b]", got)
+					}
+				})
+			}
+		})
+	}
+}
+
+// acctConfinedBackend is one engine for the confined-reader case, built the way
+// the module's confinement fixture is (stream_confinement_test.go).
+type acctConfinedBackend struct {
+	name   string
+	config func(*testing.T) store.Config
+}
+
+func acctConfinedBackends(t *testing.T) []acctConfinedBackend {
+	t.Helper()
+	out := []acctConfinedBackend{{"sqlite", func(*testing.T) store.Config {
+		return store.Config{Engine: store.EngineSQLite, DSN: ":memory:"}
+	}}}
+	if enginetest.PostgresAvailable(t) {
+		out = append(out, acctConfinedBackend{"postgres", func(t *testing.T) store.Config {
+			pg := enginetest.IsolatedPostgres(t)
+			return store.Config{Engine: store.EnginePostgres, DSN: pg.App, AdminDSN: pg.Admin}
+		}})
+	} else {
+		t.Logf("%s unset: Postgres NOT exercised (SQLite-only this run)", enginetest.EnvSuperuserDSN)
+	}
+	return out
+}
+
+// An account belongs to its tenant and an execution environment, never to a
+// workspace: the profile row declares no workspace lineage. A member confined to
+// one workspace therefore reads NO account — the list and a get answer 403
+// "workspace confined" before any row is read, the same for a reference that
+// exists and one that does not — and cannot adopt one either, while a
+// tenant-wide reader of the same tenant reads the account. Real memberships,
+// real route door, real scoped grants.
+func TestProviderAccount_WorkspaceConfinedReaderIsRefusedNeverShown(t *testing.T) {
+	for _, be := range acctConfinedBackends(t) {
+		be := be
+		t.Run(be.name, func(t *testing.T) {
+			ctx := context.Background()
+			f := newStreamConfinementFixture(t, be.config(t))
+			f.m.UseExecutionEnvironmentRef(testEnvRef)
+			admin := f.adminLogin()
+			tenant := f.createOrg(admin, "accounts-confined")
+			var workspace model.ID
+			if err := f.st.Mutate(ctx, tenant, func(sc store.Scope) error {
+				ws, err := sc.Workspaces().Create(ctx, model.Workspace{Name: "Confined", Slug: "confined", Status: model.StatusActive})
+				workspace = ws.ID
+				return err
+			}); err != nil {
+				t.Fatal(err)
+			}
+			confined := f.member(t, admin, tenant, "confined@accounts.test", workspace)
+			principal, err := f.authr.Authenticate(ctx, confined)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if ws, ok := principal.ConfinedWorkspaceIn(tenant); !ok || ws != workspace || principal.Superadmin {
+				t.Fatalf("the member is not workspace-confined: workspace=%s confined=%t superadmin=%t", ws, ok, principal.Superadmin)
+			}
+			wide := f.viewerToken(admin, tenant, "wide@accounts.test")
+			profiles := acctProfiles(t, f.m, tenant, "claude", 2)
+
+			base := "/v1/m/sessions/provider-accounts"
+			if r := f.doJSON("POST", base+"/"+profiles[0].Ref+"/adopt", admin, map[string]any{"name": "claude-1"}, tenantHdr(tenant)); r.code != http.StatusOK {
+				t.Fatalf("admin adopt = %d %s, want 200", r.code, r.raw)
+			}
+			// The positive control: a tenant-wide reader reads the account, so the
+			// refusals below are the confinement and not an absence.
+			if r := f.do("GET", base+"/"+profiles[0].Ref, wide, tenantHdr(tenant)); r.code != http.StatusOK || r.body["name"] != "claude-1" {
+				t.Fatalf("tenant-wide get = %d %s, want 200 named claude-1", r.code, r.raw)
+			}
+
+			reads := []struct{ label, path string }{
+				{"get of an account", base + "/" + profiles[0].Ref},
+				{"get of an unknown reference", base + "/" + newProfileRef()},
+				{"list", base},
+			}
+			for _, row := range reads {
+				r := f.do("GET", row.path, confined, tenantHdr(tenant))
+				if r.code != http.StatusForbidden || !strings.Contains(r.raw, "workspace confined") {
+					t.Fatalf("confined %s = %d %s, want 403 workspace confined", row.label, r.code, r.raw)
+				}
+				if strings.Contains(r.raw, "claude-1") || strings.Contains(r.raw, profiles[0].Ref) {
+					t.Fatalf("confined %s disclosed the account: %s", row.label, r.raw)
+				}
+			}
+			// A malformed reference is answered 404 before the data handle, for the
+			// confined reader as for the tenant-wide one: the answer depends only on the
+			// reference's spelling, so it discloses nothing.
+			for _, who := range []struct{ label, token string }{{"confined", confined}, {"tenant-wide", wide}} {
+				r := f.do("GET", base+"/not-a-profile-reference", who.token, tenantHdr(tenant))
+				if r.code != http.StatusNotFound || strings.Contains(r.raw, "claude-1") || strings.Contains(r.raw, profiles[0].Ref) {
+					t.Fatalf("%s get of a malformed reference = %d %s, want 404 disclosing nothing", who.label, r.code, r.raw)
+				}
+			}
+			r := f.doJSON("POST", base+"/"+profiles[1].Ref+"/adopt", confined, map[string]any{"name": "claude-2"}, tenantHdr(tenant))
+			if r.code != http.StatusForbidden {
+				t.Fatalf("confined adopt = %d %s, want 403", r.code, r.raw)
+			}
+			if got := acctRow(t, f.m, tenant, profiles[1].Ref); !got.IsNull("account_name") {
+				t.Fatalf("a confined adopt named the profile %q", got.String("account_name"))
 			}
 		})
 	}

@@ -89657,6 +89657,340 @@
         "x-stability": "beta"
       }
     },
+    "/v1/m/sessions/provider-accounts": {
+      "get": {
+        "description": "Lists the tenant's named provider accounts, optionally narrowed by environment, driver and state; a profile nobody has named is never listed.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Lists the tenant's named provider accounts, optionally narrowed by environment, driver and state; a profile nobody has named is never listed.",
+        "x-required-permission": "sessions:account:read",
+        "x-stability": "beta"
+      }
+    },
+    "/v1/m/sessions/provider-accounts/{ref}": {
+      "get": {
+        "description": "Returns one provider account by its reference, without its paths; a profile nobody has named is not an account and answers not found.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Path parameter ref.",
+            "in": "path",
+            "name": "ref",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Returns one provider account by its reference, without its paths; a profile nobody has named is not an account and answers not found.",
+        "x-required-permission": "sessions:account:read",
+        "x-stability": "beta"
+      }
+    },
+    "/v1/m/sessions/provider-accounts/{ref}/adopt": {
+      "post": {
+        "description": "Names an existing provider profile as an account, under the given name or a generated one; the database decides whether the name is free, and the home is recorded as shared isolation.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Path parameter ref.",
+            "in": "path",
+            "name": "ref",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "name": {
+                    "anyOf": [
+                      {
+                        "description": "The account's name: lowercase ASCII, a letter first, then letters, digits or '-', at most 32 characters. It is unique in the profile's execution environment across every driver, archived accounts included, and a taken name is refused rather than replaced by another. Empty or null asks the server to generate one: the bare driver name first, then -b, -c and so on.",
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Names an existing provider profile as an account, under the given name or a generated one; the database decides whether the name is free, and the home is recorded as shared isolation.",
+        "x-olivares-request-body-disposition": "schema-published",
+        "x-required-permission": "sessions:account:write",
+        "x-stability": "beta"
+      }
+    },
     "/v1/m/sessions/provider-profiles": {
       "get": {
         "description": "Lists the tenant's provider profiles as references and labels, never paths.",

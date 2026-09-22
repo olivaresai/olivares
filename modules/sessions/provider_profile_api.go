@@ -40,7 +40,9 @@ func providerProfilePermissions() []auth.Permission {
 	}
 	// The provider-RECORD tiers travel with the profile tiers because they are
 	// declared as one plane, and a role that can administer profiles is not thereby
-	// allowed to register credentials — the tiers stay independent.
+	// allowed to register credentials — the tiers stay independent. The ACCOUNT
+	// tiers travel here for the same reason and stay independent in the same way.
+	out = append(out, providerAccountPermissions()...)
 	return append(out, providerRecordPermissions()...)
 }
 
@@ -65,6 +67,7 @@ func (m *Module) providerProfileRoutes(reg api.RouteRegistrar) {
 	reg.Handle("GET", "/provider-source-bindings/{ref}", permProfileBindingRead, m.handleGetBinding)
 	reg.Handle("POST", "/provider-source-bindings/{ref}/revoke", permProfileBindingAdmin, m.handleRevokeBinding)
 	m.providerRecordRoutes(reg)
+	m.providerAccountRoutes(reg)
 }
 
 // providerProfileDTO is the NORMAL view of a profile: references and labels.

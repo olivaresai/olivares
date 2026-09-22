@@ -62,6 +62,7 @@ func newProviderCmd() *cobra.Command {
 	cmd.AddCommand(
 		newProviderAddCmd(), newProviderListCmd(), newProviderGetCmd(),
 		newProviderTestCmd(), newProviderRotateCmd(), newProviderBindCmd(), newProviderRemoveCmd(),
+		newProviderAccountCmd(),
 	)
 	return cmd
 }

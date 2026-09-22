@@ -51,6 +51,17 @@ month, release-of-month).
   serves for its node agents. Empty, the default, means no listener. A startup that sets it no
   longer logs it as ignored, and `olivares config validate` and `config effective --strict`
   accept it. The Community build does not read it.
+- **Provider accounts: a provider profile can now carry a name.** An account is the profile it
+  names, so it keeps the same reference, the same homes and the same launch. Its name is unique in
+  its execution environment across every driver, and an archived account keeps its name.
+  `olivares provider account ls` and `get` list and read the named accounts only. `olivares
+  provider account adopt <profile-ref> [--name <name>]` is the only way an existing profile
+  becomes one. Without `--name` the server generates a name: `claude` first, then `claude-b`,
+  `claude-c` and so on. A name that another account already holds is refused with exit 5; it is
+  never swapped for a different one. An adopted home is recorded as shared isolation. Every
+  existing profile stays unnamed after upgrade, and its launch digest does not change. The API
+  lives at `/v1/m/sessions/provider-accounts`, under `sessions:account:read` and
+  `sessions:account:write`.
 ### Changed
 
 - **A right-to-erasure receipt now states what its verification examined.** The residual scan
