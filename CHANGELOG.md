@@ -8,7 +8,7 @@ month, release-of-month).
 
 > **Status: beta.** The development candidate is **v26.9.1**. Its section below records the
 > proposed contents and cut date; it does not establish a published release or available artifacts.
-> The latest published release is [v26.9.0](https://github.com/olivaresai/olivares/releases/tag/v26.9.0).
+> The latest published release is the newest entry on the [releases page](https://github.com/olivaresai/olivares/releases).
 > Release notes and artifacts become authoritative when the corresponding release is published.
 > Every earlier release keeps its own dated section, unchanged.
 > APIs, schemas and the module surface MAY still change before a
