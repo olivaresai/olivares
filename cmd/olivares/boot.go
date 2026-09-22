@@ -253,9 +253,12 @@ func loadLogCaptureLevel(getenv func(string) string, log *slog.Logger) *slog.Lev
 
 // bootConfig holds the engine boot parameters from flags/env.
 type bootConfig struct {
-	DataDir string
-	Engine  string
-	DSN     string
+	// LoginTrustedProxies is already resolved by the serve family. A nil value
+	// resolves the environment for direct boot callers; a zero set trusts none.
+	LoginTrustedProxies *auth.TrustedLoginProxies
+	DataDir             string
+	Engine              string
+	DSN                 string
 	// AdminDSN (Postgres only) is the dedicated BYPASSRLS role used for
 	// cross-tenant System reads; empty means those reads are RLS-limited.
 	AdminDSN string
@@ -672,6 +675,10 @@ type nhiEnforcer interface {
 // into the authorizer, and builds the API server with every module's routes mounted.
 // It does not start any listener.
 func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
+	loginProxies, err := (loginProxyOptions{resolved: cfg.LoginTrustedProxies}).resolve(osGetenv)
+	if err != nil {
+		return nil, err
+	}
 	log := cfg.Logger
 	if log == nil {
 		log = slog.Default()
@@ -1295,6 +1302,7 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 		set.inventory.UseSweepScopeSource(inventorySweepScopeSource{st: st, reg: residencyReg})
 	}
 	authr := auth.NewAuthenticator(st, nil)
+	authr.SetTrustedLoginProxies(*loginProxies)
 	var communicationStoreWitness *communicationGuardStoreWitness
 	var communicationComposition *communicationComposition
 	if set.sessions != nil {

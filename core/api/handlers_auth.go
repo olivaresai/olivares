@@ -250,7 +250,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		s.badRequest(w, r, "invalid JSON body")
 		return
 	}
-	token, sess, err := s.authr.Login(r.Context(), in.Email, in.Password, clientIP(r))
+	token, sess, err := s.authr.LoginFrom(r.Context(), in.Email, in.Password, clientIP(r), r.Header.Values("X-Forwarded-For"))
 	switch {
 	case err == nil:
 		s.mLogin.Inc(loginOutcomeSuccess)
@@ -378,16 +378,9 @@ func (s *Server) handleWhoami(w http.ResponseWriter, r *http.Request) {
 // clientIP returns the real transport peer of r (RemoteAddr) — the one address
 // this engine observed for itself, never a spoofable X-Forwarded-For. It is what
 // the login-surface network allow-list, the failed-login audit, the address
-// recorded on a session and the login throttle all key on.
-//
-// Behind a reverse proxy that address is the proxy's, the same for every user,
-// which is why the ACCOUNT key is the only one that locks an account out. The
-// address key refuses too, but only a spray: once it has tripped it turns away an
-// account that has already failed from that address, or that has an attempt in
-// flight, and merely delays an account with a clean record
-// (core/auth/throttle.go). Reading a forwarded address instead needs a declared
-// set of trusted proxy networks and the operator key that configures it; that is
-// its own change.
+// recorded on a session all key on. The login throttle can separately select a
+// forwarded address from explicitly configured trusted proxy networks; that
+// selection does not change this peer identity.
 func clientIP(r *http.Request) string {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {

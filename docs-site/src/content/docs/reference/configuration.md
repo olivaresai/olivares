@@ -18,6 +18,7 @@ The engine is configured by flags and by environment variables, not by a sprawli
 | Flag | Default | Purpose |
 | --- | --- | --- |
 | `--listen` | `:8443` | HTTP listen address (REST API + embedded web UI). |
+| `--login-trusted-proxies` | `$OLIVARES_LOGIN_TRUSTED_PROXIES`, else empty | Proxy CIDRs trusted for the password-login throttle only. An explicit empty flag clears the environment; network policy, session and audit retain the transport peer. |
 | `--grpc-listen` | `:8444` | gRPC listen address (control-plane / collector ingest API). |
 | `--data-dir` | `$OLIVARES_DATA_DIR`, an existing `./olivares-data`, else `$XDG_DATA_HOME/olivares` or `~/.local/share/olivares` | Data directory: audit signing key, TLS material, and (for SQLite) the store file. |
 | `--engine` | `sqlite` | Store engine: `sqlite` or `postgres`. |
@@ -258,6 +259,7 @@ The table below is generated from the product's own sources: 292 variables and 1
 | `OLIVARES_LICENSE_PUBKEY` | No | — | Public key the engine verifies the license signature against. |
 | `OLIVARES_LIVEINGEST_INSPECT_OBSERVED_REFS` | No | — | Set to `1` to make live ingest inspect observed references, which costs more per event. |
 | `OLIVARES_LOGIN_ENFORCEMENT` | No | — | Break-glass switch, not a file path, for login enforcement (require-SSO and the login IP allow-list). Read by every build when the engine starts; a change takes effect after a restart. `off`, `0`, `false`, `no` or `disabled`, in any letter case and ignoring surrounding whitespace, selects the operator break-glass; unset or any other value leaves enforcement to the posture stored through the console. A build that links the enforcement component then stops enforcing that posture regardless of what is stored, and logs a warning. A build that does not link it records the same deliberate selection: the engine skips the startup refusal it would otherwise make when this deployment has enforcement history and a posture configured, and appends a durable operator-recovery event when the node is promoted. |
+| `OLIVARES_LOGIN_TRUSTED_PROXIES` | No | — | Comma-separated IPv4/IPv6 proxy CIDRs trusted to supply X-Forwarded-For for the password-login throttle address only. Empty trusts none. The --login-trusted-proxies flag takes precedence, including an explicit empty value. Invalid CIDRs or empty list entries refuse startup. Read once at startup; policy, session and audit keep the transport peer. See docs/SECURITY-HARDENING.md for the 8192-byte and 64-entry request bounds. |
 | `OLIVARES_LOG_LEVEL` | No | — | Minimum log level the engine emits: `debug`, `info`, `warn` or `error`. |
 | `OLIVARES_MCP_TASK_KILLSWITCH_SWEEP` | No | — | How often a running MCP task is re-checked against the kill switch, as a Go duration. |
 | `OLIVARES_METRICS_ALLOWED_CIDRS` | No | — | Comma-separated CIDR ranges allowed to scrape the metrics endpoint. |

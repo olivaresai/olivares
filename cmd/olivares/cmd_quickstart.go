@@ -64,6 +64,7 @@ func newQuickstartCmd() *cobra.Command {
 			// --quiet came to change the format of every line as well as its level.
 			opts.quiet = quiet
 			opts.publicURLSet = cmd.Flags().Changed("public-url")
+			opts.loginProxies.set = cmd.Flags().Changed("login-trusted-proxies")
 			announce := func(ctx context.Context, out io.Writer, eng *engine, addr consoleAddress) error {
 				return announceQuickstart(ctx, out, eng, addr)
 			}
@@ -72,6 +73,7 @@ func newQuickstartCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&opts.listen, "listen", defaultHTTPListen, "HTTP (REST + web console) listen address. The default "+defaultHTTPListen+" is EVERY interface (0.0.0.0 and, where the kernel has IPv6, ::); bind 127.0.0.1:8443 to restrict it to this host")
 	cmd.Flags().StringVar(&opts.publicURL, "public-url", "", publicURLFlagHelp)
+	cmd.Flags().StringVar(&opts.loginProxies.value, "login-trusted-proxies", "", loginTrustedProxiesFlagHelp)
 	cmd.Flags().StringVar(&opts.grpcListen, "grpc-listen", defaultGRPCListen, "gRPC listen address. The default "+defaultGRPCListen+" is EVERY interface, like --listen; bind 127.0.0.1:8444 to restrict it")
 	cmd.Flags().StringVar(&opts.dataDir, "data-dir", "", "data directory (default $OLIVARES_DATA_DIR, an existing ./olivares-data, else $XDG_DATA_HOME/olivares or ~/.local/share/olivares)")
 	cmd.Flags().BoolVar(&quiet, "quiet", false,
