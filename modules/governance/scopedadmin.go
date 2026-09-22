@@ -16,6 +16,7 @@ import (
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
+	"github.com/olivaresai/olivares/modules/governance/policytext"
 )
 
 // scoped administration + custom roles + delegation with per-scope ceilings.
@@ -574,7 +575,7 @@ func projectManagedCedar(grants []scopedGrant, roles map[string]customRole, grou
 	sorted := append([]scopedGrant(nil), grants...)
 	sort.Slice(sorted, func(i, j int) bool { return scopedGrantKeyOf(sorted[i]) < scopedGrantKeyOf(sorted[j]) })
 
-	var b strings.Builder
+	var rules []policytext.Rule
 	// subject expr → the UNION of delegation actions its admin-capable grants allow, plus a
 	// stable emission order (first appearance in the sorted grant list).
 	delegators := map[string]map[string]bool{}
@@ -588,7 +589,7 @@ func projectManagedCedar(grants []scopedGrant, roles map[string]customRole, grou
 		if len(perms) == 0 {
 			continue
 		}
-		writePermit(&b, subj, sortedPerms(perms), cedarScopeWhen(g.Scope))
+		rules = append(rules, policytext.Rule{Subject: subj, Actions: sortedPerms(perms), When: cedarScopeWhen(g.Scope)})
 		// The tenant-wide delegation capability (reach the rbac API to sub-delegate) is
 		// emitted for a USER or a GROUP subject (U7): an admin-capable grant to a
 		// directory group IS a delegation DIRECTED at that group's members — the IdP-group
@@ -648,10 +649,10 @@ func projectManagedCedar(grants []scopedGrant, roles map[string]customRole, grou
 			}
 		}
 		if len(acts) > 0 {
-			writePermit(&b, subj, acts, "")
+			rules = append(rules, policytext.Rule{Subject: subj, Actions: acts})
 		}
 	}
-	return b.String()
+	return policytext.Render(rules)
 }
 
 // delegationActions returns the actions the tenant-wide delegation permit may carry for
@@ -704,17 +705,17 @@ func cedarSubjectExpr(g scopedGrant) string {
 		if g.SubjectRef == "" {
 			return ""
 		}
-		return "User::" + cedarStr(g.SubjectRef)
+		return policytext.SubjectUser(g.SubjectRef)
 	case subjectRole:
 		if !auth.IsRole(g.SubjectRef) {
 			return ""
 		}
-		return "Role::" + cedarStr(g.SubjectRef)
+		return policytext.SubjectRole(g.SubjectRef)
 	case subjectGroup:
 		if g.SubjectRef == "" {
 			return ""
 		}
-		return "Group::" + cedarStr(g.SubjectRef)
+		return policytext.SubjectGroup(g.SubjectRef)
 	default:
 		return ""
 	}
@@ -726,36 +727,7 @@ func cedarSubjectExpr(g scopedGrant) string {
 // folder ancestors from its materialized Path (grants.go resourceTreeParents), so the permit
 // covers the whole subtree below the anchor (downward inheritance).
 func cedarScopeWhen(s scopeSpec) string {
-	switch s.Tree {
-	case scopeWorkspace:
-		return "when { resource in Workspace::" + cedarStr(s.Ref) + " }"
-	case scopeAgentGroup:
-		return "when { resource in AgentGroup::" + cedarStr(s.Ref) + " }"
-	case scopeFolder:
-		return "when { resource in Resource::" + cedarStr(s.Ref) + " }"
-	default:
-		return ""
-	}
-}
-
-// writePermit appends one `permit(principal in <subj>, action in [..], resource) [when{}];`.
-func writePermit(b *strings.Builder, subj string, perms []string, when string) {
-	b.WriteString("permit(principal in ")
-	b.WriteString(subj)
-	b.WriteString(", action in [")
-	for i, p := range perms {
-		if i > 0 {
-			b.WriteString(", ")
-		}
-		b.WriteString("Action::")
-		b.WriteString(cedarStr(p))
-	}
-	b.WriteString("], resource)")
-	if when != "" {
-		b.WriteString(" ")
-		b.WriteString(when)
-	}
-	b.WriteString(";\n")
+	return policytext.ScopeWhen(s.Tree, s.Ref)
 }
 
 // sortedPerms returns a permission set as a sorted slice (deterministic projection).
@@ -766,13 +738,6 @@ func sortedPerms(set map[string]bool) []string {
 	}
 	sort.Strings(out)
 	return out
-}
-
-// cedarStr renders s as a Cedar double-quoted string literal, escaping backslash and
-// quote so an operator-chosen slug/name can never break out of the literal.
-func cedarStr(s string) string {
-	r := strings.NewReplacer(`\`, `\\`, `"`, `\"`)
-	return `"` + r.Replace(s) + `"`
 }
 
 // --- projection persistence + live reload -------------------------------------------

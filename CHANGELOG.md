@@ -4,12 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [CalVer](https://calver.org/) — `vYY.M.PATCH` (two-digit year,
-month, release-of-month; the current release is `v26.9.1`).
+month, release-of-month).
 
-> **Status: beta.** The current release is **v26.9.1** — its dated section below lists what it
-> ships and where, and the [GitHub release](https://github.com/olivaresai/olivares/releases/tag/v26.9.1)
-> carries the artifacts. Every earlier release keeps its own dated section, unchanged.
-> The section heading carries the cut date; this masthead does not restate it.
+> **Status: beta.** The development candidate is **v26.9.1**. Its section below records the
+> proposed contents and cut date; it does not establish a published release or available artifacts.
+> The latest published release is [v26.9.0](https://github.com/olivaresai/olivares/releases/tag/v26.9.0).
+> Release notes and artifacts become authoritative when the corresponding release is published.
+> Every earlier release keeps its own dated section, unchanged.
 > APIs, schemas and the module surface MAY still change before a
 > stability commitment. Because CalVer does not encode breaking changes in the version number,
 > every breaking change is called out explicitly under **Changed**/**Removed** here. No
@@ -77,6 +78,11 @@ month, release-of-month; the current release is `v26.9.1`).
   it and nothing publishes it — no receipt field, no summary line and no hash reflects a value set
   there. Depth is stated once, by the pre-shred scan, in the receipt's `residual_scan_depth`. A
   coordinator that still sets it is not contradicted; it is simply not repeated.
+
+### Fixed
+
+- Reporting now passes its tenant-scoped data handle to external data consumers, restoring
+  late-bound enterprise report sources while preserving existing providers.
 
 ### Security
 
