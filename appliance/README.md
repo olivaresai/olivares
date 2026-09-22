@@ -39,7 +39,7 @@ names. Values are strings except objects and the two arrays shown in the example
 | `schema_version` | `appliance-answers/v1` only. |
 | `source` | One of `file`, `nocloud`, `guestinfo`, `systemd-credential`, `local-assistant`; asserted provenance, not discovery. |
 | `host.owner` | `cloud-init` only. A local OS management adapter is not implemented. |
-| `host.hostname` | ASCII DNS name, 1–253 bytes; labels 1–63 letters/digits/hyphens, no leading/trailing hyphen or trailing dot; localhost is refused. Lowercased in the plan. |
+| `host.hostname` | Complete static kernel hostname, 1–64 ASCII bytes with DNS-shaped labels of 1–63 letters/digits/hyphens. No leading/trailing hyphen, trailing dot, localhost or wholly numeric final label; IP addresses and all-digit names are refused. Lowercased in the plan. |
 | `host.network.mode` | `dhcp` only; fixed addresses, gateways and DNS settings are not supported in this version. |
 | `host.time.timezone` | `UTC` only. |
 | `host.time.servers` | Array of 1–8 unique DNS names or unicast IP addresses; no loopback, link-local, multicast, zone identifiers or localhost. Names are lowercased and IPs normalized. |
@@ -51,8 +51,12 @@ names. Values are strings except objects and the two arrays shown in the example
 
 The checked-in [example](answers/testdata/cloud-init.json) uses a synthetic public
 SSH key for validation; supply your own public key for installation planning.
-The hostname identifies the instance; the console origin may be a separate DNS
-name or proxy. Neither is resolved or compared to live machine settings.
+The hostname is the complete static kernel value expected after cloud-init,
+including any dotted labels. It is not cloud-init's separate FQDN metadata: the
+tool neither takes the first label nor truncates a longer name. A future adapter
+must compare the complete observed hostname to this normalized value. The console
+origin may be a separate DNS name or proxy. Neither is resolved or compared to live
+machine settings by this tool.
 
 Only public settings are accepted. Passwords, tokens, private keys and literal
 DSNs have no field in this schema. PostgreSQL and protected secret references need
@@ -79,8 +83,8 @@ their own implementation and verification.
 
 Canonical JSON has a fixed object order and terminal newline. Object key order in
 the input does not affect output. Time-server and SSH-key arrays are sets and are
-sorted after duplicate checks. DNS names are lowercased; HTTPS port 443 and the
-optional trailing slash are omitted. Output preserves the asserted source label.
+sorted to detect and reject duplicates. DNS names are lowercased; HTTPS port 443
+and the optional trailing slash are omitted. Output preserves the asserted source label.
 
 Go callers use `answers.Build(io.Reader)` followed by `Plan.JSON()`. The module is
 in `go.work`, so workspace build/test/vet sweeps include it. Run its bounded tests

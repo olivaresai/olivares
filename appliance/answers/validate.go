@@ -27,8 +27,8 @@ func validate(d *document) error {
 	if d.Host.Owner != "cloud-init" {
 		return invalid("$.host.owner", "only cloud-init ownership is supported; local host adapter is unimplemented")
 	}
-	if !dnsName(d.Host.Hostname) || localhost(d.Host.Hostname) {
-		return invalid("$.host.hostname", "expected a DNS hostname of at most 253 ASCII bytes")
+	if !kernelHostname(d.Host.Hostname) {
+		return invalid("$.host.hostname", "expected a DNS-shaped kernel hostname of at most 64 ASCII bytes with a nonnumeric final label")
 	}
 	d.Host.Hostname = strings.ToLower(d.Host.Hostname)
 	if d.Host.Network.Mode != "dhcp" {
@@ -47,7 +47,7 @@ func validate(d *document) error {
 		}
 		d.Host.Time.Servers[i] = normal
 	}
-	if duplicate(d.Host.Time.Servers) {
+	if sortAndHasDuplicate(d.Host.Time.Servers) {
 		return invalid("$.host.time.servers", "duplicate time server")
 	}
 	if len(d.Host.SSHAuthorizedKeys) < 1 {
@@ -58,7 +58,7 @@ func validate(d *document) error {
 			return invalid("$.host.ssh_authorized_keys["+strconv.Itoa(i)+"]", "expected an ssh-ed25519 public key without options or comment")
 		}
 	}
-	if duplicate(d.Host.SSHAuthorizedKeys) {
+	if sortAndHasDuplicate(d.Host.SSHAuthorizedKeys) {
 		return invalid("$.host.ssh_authorized_keys", "duplicate SSH public key")
 	}
 	// Vocabulary follows cmd/olivares/cmd_config.go. Supporting postgres-prod also
@@ -86,7 +86,7 @@ func validate(d *document) error {
 
 // Set-valued prerequisites have no ordering significance. Sorting after normalization
 // makes the plan stable; duplicate refusal avoids hiding contradictory repeated inputs.
-func duplicate(values []string) bool {
+func sortAndHasDuplicate(values []string) bool {
 	sort.Strings(values)
 	for i := 1; i < len(values); i++ {
 		if values[i] == values[i-1] {
@@ -99,6 +99,16 @@ func duplicate(values []string) bool {
 func localhost(name string) bool {
 	name = strings.ToLower(name)
 	return name == "localhost" || strings.HasSuffix(name, ".localhost")
+}
+
+// The complete static kernel hostname is a narrower contract than a DNS endpoint.
+// No FQDN preference, first-label extraction or truncation is inferred here.
+func kernelHostname(name string) bool {
+	if len(name) > 64 || !dnsName(name) || localhost(name) {
+		return false
+	}
+	lastLabel := name[strings.LastIndexByte(name, '.')+1:]
+	return strings.Trim(lastLabel, "0123456789") != ""
 }
 
 func dnsName(name string) bool {
@@ -122,8 +132,13 @@ func dnsName(name string) bool {
 
 func endpointHost(value string) (string, bool) {
 	if address, err := netip.ParseAddr(value); err == nil {
+		// Unmap discards the zone of an IPv4-mapped address. Refuse the original
+		// scoped input before any normalization can erase that restriction.
+		if address.Zone() != "" {
+			return "", false
+		}
 		address = address.Unmap()
-		return address.String(), address.Zone() == "" && address.IsGlobalUnicast() && !address.IsLoopback()
+		return address.String(), address.IsGlobalUnicast() && !address.IsLoopback()
 	}
 	if !dnsName(value) || localhost(value) {
 		return "", false
