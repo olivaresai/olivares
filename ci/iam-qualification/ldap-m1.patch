@@ -1,0 +1,11 @@
+--- a/connectors/ldap/ldap.go
++++ b/connectors/ldap/ldap.go
+@@ -429,7 +429,7 @@
+ 		return nil, fmt.Errorf("ldap: dial %s: %w", s.url, err)
+ 	}
+ 	if endpoint.Scheme == "ldap" && s.startTLS {
+-		if err := conn.StartTLS(&tls.Config{ServerName: endpoint.Hostname(), InsecureSkipVerify: s.skipVerify, MinVersion: tls.VersionTLS12}); err != nil { // #nosec G402 -- skipVerify is an explicit, documented operator opt-in; default verifies
++		if err := conn.StartTLS(&tls.Config{InsecureSkipVerify: s.skipVerify, MinVersion: tls.VersionTLS12}); err != nil { // #nosec G402 -- skipVerify is an explicit, documented operator opt-in; default verifies
+ 			_ = conn.Close()
+ 			return nil, fmt.Errorf("ldap: starttls: %w", err)
+ 		}

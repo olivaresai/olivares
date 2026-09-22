@@ -258,6 +258,96 @@ jobs:
           OLIVARES_TEST_SHARD: ${{ matrix.shard }}
         run: task test:functional:shard
 
+  # FIXED IDENTITY-SECURITY CASES, AND ONLY THE ONES A REGISTRY NAMES. Per registered family
+  # (today only `ldap`) the runner executes a declared clean selection, a race selection, and
+  # every production mutant three times: before, mutated and restored.
+  # ci/iam-qualification/<family>.json declares each test leaf, allowed skip, mutant patch,
+  # expected failing assertion, pinned input digest and phase ceiling before anything runs.
+  # The runner takes no package, command, patch or ref from a caller, and an unregistered
+  # family is neither run nor reported as qualified.
+  #
+  # The LDAP phase ceilings total 64 minutes. The 335-minute step keeps the runner's fixed
+  # per-family bound (330 minutes of phases plus setup) inside the 360-minute job. These are
+  # ceilings, not measured durations.
+  pr-iam-qualification:
+    if: github.repository == 'olivaresai/olivares' || vars.OLIVARES_RELEASE_PROFILE == 'preprod'
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        family: [ldap]
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16@sha256:a36250871de0833b8757561c72f2477ef1ddd1101afa4e617fb552e0de514c6b
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+          --memory=1g
+      postgres_other:
+        image: pgvector/pgvector:pg16@sha256:a36250871de0833b8757561c72f2477ef1ddd1101afa4e617fb552e0de514c6b
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+          --memory=1g
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 3
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        timeout-minutes: 10
+        with:
+          go-version-file: go.work
+          cache: true
+          cache-dependency-path: go.work.sum
+      - name: executable temporary directory
+        timeout-minutes: 1
+        run: |
+          mkdir -p "$RUNNER_TEMP/exec"
+          echo "TMPDIR=$RUNNER_TEMP/exec" >> "$GITHUB_ENV"
+          echo "GOTMPDIR=$RUNNER_TEMP/exec" >> "$GITHUB_ENV"
+      - name: resolve owned PostgreSQL services
+        timeout-minutes: 1
+        env:
+          PGPORT_HOST: ${{ job.services.postgres.ports['5432'] }}
+          PGPORT_OTHER: ${{ job.services.postgres_other.ports['5432'] }}
+        run: bash scripts/ci-postgres-service.sh resolve
+      - name: provision isolated PostgreSQL roles
+        timeout-minutes: 5
+        env:
+          PGPASSWORD: postgres
+        run: bash scripts/ci-postgres-service.sh provision
+      - name: clean, race, fixed mutants and restored controls
+        timeout-minutes: 335
+        env:
+          IAM_FAMILY: ${{ matrix.family }}
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: python3 -B scripts/ci-iam-qualification.py "$IAM_FAMILY"
+      - name: preserve partial or complete qualification evidence
+        if: always()
+        timeout-minutes: 4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: iam-${{ matrix.family }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/iam-qualification-${{ matrix.family }}/
+          if-no-files-found: error
+          retention-days: 14
+
   # ⛔ THE ONE NAME THE BRANCH PROTECTION ASKS FOR, AND IT MUST BE ABLE TO SAY NO.
   # A matrix job does not report under its job id: it reports `pr-test-shard (a)`,
   # `pr-test-shard (b)`, one context per value, and the set changes whenever the shard
@@ -273,16 +363,30 @@ jobs:
   # that — it stops the siblings from being cancelled and folds their verdicts in all the
   # same.
   pr-test:
-    needs: [pr-test-shard]
+    needs: [pr-test-shard, pr-iam-qualification]
     if: always() && (github.repository == 'olivaresai/olivares' || vars.OLIVARES_RELEASE_PROFILE == 'preprod')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: every shard of the functional suite must have succeeded
+      - name: every shard of the functional suite and every registered IAM family must have succeeded
         timeout-minutes: 4
         env:
           RESULT: ${{ needs.pr-test-shard.result }}
+          IAM_RESULT: ${{ needs.pr-iam-qualification.result }}
         run: |
+          echo "pr-iam-qualification result: $IAM_RESULT"
+          # The same rule as the shards below: only `success` passes. Only the `ldap` family is
+          # registered, so this verdict says nothing about any other identity family.
+          case "$IAM_RESULT" in
+            success)
+              echo "the registered IAM qualification family (ldap) passed." ;;
+            "")
+              echo "::error::pr-iam-qualification reported NO result at all — the job id does not exist in this workflow, so no fixed identity case ran."
+              exit 1 ;;
+            *)
+              echo "::error::pr-iam-qualification did not succeed ($IAM_RESULT). A skipped or cancelled qualification carries no verdict; open the job and its iam-ldap artifact."
+              exit 1 ;;
+          esac
           echo "pr-test-shard result: $RESULT"
           # AN EMPTY RESULT IS THE `missing` CASE AND IT IS RED. The expression expands to
           # the empty string when the job id does not exist — a rename, a deletion, a bad

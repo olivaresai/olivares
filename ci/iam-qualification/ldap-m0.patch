@@ -1,0 +1,12 @@
+--- a/connectors/ldap/ldap.go
++++ b/connectors/ldap/ldap.go
+@@ -410,9 +410,6 @@
+ 			return nil, invalid()
+ 		}
+ 	}
+-	if s.bindDN != "" && endpoint.Scheme == "ldap" && !s.startTLS {
+-		return nil, fmt.Errorf("ldap: credentialed bind requires ldaps:// or start_tls=true")
+-	}
+ 	return endpoint, nil
+ }
+ 

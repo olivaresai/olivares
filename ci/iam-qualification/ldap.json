@@ -1,0 +1,308 @@
+{
+  "engines": [],
+  "packages": [
+    "connectors/ldap"
+  ],
+  "commands": {
+    "baseline": {
+      "argv": [
+        "go",
+        "test",
+        "-json",
+        "-count=1",
+        "-timeout=12m",
+        "./connectors/ldap",
+        "-run",
+        "^(TestDialError|TestErrorsNeverContainCredential|TestGatherConvergesWithSnapshotRoster|TestGatherEmitsPrivilegedGrants|TestGatherHonorsContextCancel|TestGatherNeverRequestsPasswordAttributes|TestGatherOfflineEmitsNothingAndNeverDials|TestGatherReturnsEmitError|TestLDAPWireCertificateTransport|TestLDAPWireChild|TestNeverRequestsPasswordAttributes|TestOfflineNoURL|TestOpenRequiresBaseDNWhenURLSet|TestParseSID|TestPrivilegedDNsAreDistinguishedNamesNotDNS|TestPrivilegedGroupDNsConfigKeyIsAdvertisedAndRead|TestSnapshotBindsAndCloses|TestSnapshotBuildsGraph|TestTransportAnonymousAndOfflineRemainUsable|TestTransportExplicitSkipVerifyStillUsesTLS|TestTransportLDAPSDoesNotRestartTLS|TestTransportRejectsInvalidEndpoints|TestTransportRejectsUnsafeBindBeforeDial|TestTransportStartTLSFailureClosesBeforeBind|TestTransportStartTLSOrdersVerifiedBind|TestWellKnownAdminSID)$"
+      ],
+      "wall_seconds": 900,
+      "package": "github.com/olivaresai/olivares/connectors/ldap",
+      "expected_tests": [
+        "TestDialError",
+        "TestErrorsNeverContainCredential",
+        "TestGatherConvergesWithSnapshotRoster",
+        "TestGatherEmitsPrivilegedGrants",
+        "TestGatherHonorsContextCancel",
+        "TestGatherNeverRequestsPasswordAttributes",
+        "TestGatherOfflineEmitsNothingAndNeverDials",
+        "TestGatherReturnsEmitError",
+        "TestLDAPWireCertificateTransport",
+        "TestLDAPWireCertificateTransport/ldaps_untrusted",
+        "TestLDAPWireCertificateTransport/ldaps_valid",
+        "TestLDAPWireCertificateTransport/ldaps_wrong_host",
+        "TestLDAPWireCertificateTransport/starttls_untrusted",
+        "TestLDAPWireCertificateTransport/starttls_valid",
+        "TestLDAPWireCertificateTransport/starttls_wrong_host",
+        "TestLDAPWireChild",
+        "TestNeverRequestsPasswordAttributes",
+        "TestOfflineNoURL",
+        "TestOpenRequiresBaseDNWhenURLSet",
+        "TestParseSID",
+        "TestPrivilegedDNsAreDistinguishedNamesNotDNS",
+        "TestPrivilegedGroupDNsConfigKeyIsAdvertisedAndRead",
+        "TestSnapshotBindsAndCloses",
+        "TestSnapshotBuildsGraph",
+        "TestTransportAnonymousAndOfflineRemainUsable",
+        "TestTransportAnonymousAndOfflineRemainUsable/anonymous/gather",
+        "TestTransportAnonymousAndOfflineRemainUsable/anonymous/snapshot",
+        "TestTransportAnonymousAndOfflineRemainUsable/offline",
+        "TestTransportExplicitSkipVerifyStillUsesTLS",
+        "TestTransportLDAPSDoesNotRestartTLS",
+        "TestTransportLDAPSDoesNotRestartTLS/false/gather",
+        "TestTransportLDAPSDoesNotRestartTLS/false/snapshot",
+        "TestTransportLDAPSDoesNotRestartTLS/true/gather",
+        "TestTransportLDAPSDoesNotRestartTLS/true/snapshot",
+        "TestTransportRejectsInvalidEndpoints",
+        "TestTransportRejectsInvalidEndpoints/cldap://directory.invalid",
+        "TestTransportRejectsInvalidEndpoints/directory.invalid",
+        "TestTransportRejectsInvalidEndpoints/http://directory.invalid",
+        "TestTransportRejectsInvalidEndpoints/ldap:///dc=corp",
+        "TestTransportRejectsInvalidEndpoints/ldap://2001:db8::1",
+        "TestTransportRejectsInvalidEndpoints/ldap://[2001:db8::1",
+        "TestTransportRejectsInvalidEndpoints/ldap://[not-an-ip]:389",
+        "TestTransportRejectsInvalidEndpoints/ldap://url-user@directory.invalid",
+        "TestTransportRejectsInvalidEndpoints/ldap:directory.invalid",
+        "TestTransportRejectsInvalidEndpoints/ldapi:///tmp/ldap.socket",
+        "TestTransportRejectsInvalidEndpoints/ldaps://",
+        "TestTransportRejectsInvalidEndpoints/ldaps://%zz",
+        "TestTransportRejectsInvalidEndpoints/ldaps://:636",
+        "TestTransportRejectsInvalidEndpoints/ldaps://directory.invalid:",
+        "TestTransportRejectsInvalidEndpoints/ldaps://directory.invalid:0",
+        "TestTransportRejectsInvalidEndpoints/ldaps://directory.invalid:65536",
+        "TestTransportRejectsInvalidEndpoints/ldaps://directory.invalid:bad",
+        "TestTransportRejectsInvalidEndpoints/ldaps://url-user:url-password@directory.invalid",
+        "TestTransportRejectsUnsafeBindBeforeDial",
+        "TestTransportRejectsUnsafeBindBeforeDial/skip_verify_false",
+        "TestTransportRejectsUnsafeBindBeforeDial/skip_verify_true",
+        "TestTransportStartTLSFailureClosesBeforeBind",
+        "TestTransportStartTLSFailureClosesBeforeBind/gather",
+        "TestTransportStartTLSFailureClosesBeforeBind/snapshot",
+        "TestTransportStartTLSOrdersVerifiedBind",
+        "TestTransportStartTLSOrdersVerifiedBind/2001:db8::1/gather",
+        "TestTransportStartTLSOrdersVerifiedBind/2001:db8::1/snapshot",
+        "TestTransportStartTLSOrdersVerifiedBind/directory.invalid/gather",
+        "TestTransportStartTLSOrdersVerifiedBind/directory.invalid/gather#01",
+        "TestTransportStartTLSOrdersVerifiedBind/directory.invalid/snapshot",
+        "TestTransportStartTLSOrdersVerifiedBind/directory.invalid/snapshot#01",
+        "TestWellKnownAdminSID"
+      ],
+      "allowed_skips": [
+        "TestLDAPWireChild"
+      ]
+    },
+    "race": {
+      "argv": [
+        "go",
+        "test",
+        "-json",
+        "-count=1",
+        "-timeout=5m",
+        "-race",
+        "./connectors/ldap",
+        "-run",
+        "^(TestLDAPWireCertificateTransport|TestTransportAnonymousAndOfflineRemainUsable|TestTransportExplicitSkipVerifyStillUsesTLS|TestTransportLDAPSDoesNotRestartTLS|TestTransportRejectsInvalidEndpoints|TestTransportRejectsUnsafeBindBeforeDial|TestTransportStartTLSFailureClosesBeforeBind|TestTransportStartTLSOrdersVerifiedBind)$"
+      ],
+      "wall_seconds": 420,
+      "package": "github.com/olivaresai/olivares/connectors/ldap",
+      "expected_tests": [
+        "TestLDAPWireCertificateTransport",
+        "TestLDAPWireCertificateTransport/ldaps_untrusted",
+        "TestLDAPWireCertificateTransport/ldaps_valid",
+        "TestLDAPWireCertificateTransport/ldaps_wrong_host",
+        "TestLDAPWireCertificateTransport/starttls_untrusted",
+        "TestLDAPWireCertificateTransport/starttls_valid",
+        "TestLDAPWireCertificateTransport/starttls_wrong_host",
+        "TestTransportAnonymousAndOfflineRemainUsable",
+        "TestTransportAnonymousAndOfflineRemainUsable/anonymous/gather",
+        "TestTransportAnonymousAndOfflineRemainUsable/anonymous/snapshot",
+        "TestTransportAnonymousAndOfflineRemainUsable/offline",
+        "TestTransportExplicitSkipVerifyStillUsesTLS",
+        "TestTransportLDAPSDoesNotRestartTLS",
+        "TestTransportLDAPSDoesNotRestartTLS/false/gather",
+        "TestTransportLDAPSDoesNotRestartTLS/false/snapshot",
+        "TestTransportLDAPSDoesNotRestartTLS/true/gather",
+        "TestTransportLDAPSDoesNotRestartTLS/true/snapshot",
+        "TestTransportRejectsInvalidEndpoints",
+        "TestTransportRejectsInvalidEndpoints/cldap://directory.invalid",
+        "TestTransportRejectsInvalidEndpoints/directory.invalid",
+        "TestTransportRejectsInvalidEndpoints/http://directory.invalid",
+        "TestTransportRejectsInvalidEndpoints/ldap:///dc=corp",
+        "TestTransportRejectsInvalidEndpoints/ldap://2001:db8::1",
+        "TestTransportRejectsInvalidEndpoints/ldap://[2001:db8::1",
+        "TestTransportRejectsInvalidEndpoints/ldap://[not-an-ip]:389",
+        "TestTransportRejectsInvalidEndpoints/ldap://url-user@directory.invalid",
+        "TestTransportRejectsInvalidEndpoints/ldap:directory.invalid",
+        "TestTransportRejectsInvalidEndpoints/ldapi:///tmp/ldap.socket",
+        "TestTransportRejectsInvalidEndpoints/ldaps://",
+        "TestTransportRejectsInvalidEndpoints/ldaps://%zz",
+        "TestTransportRejectsInvalidEndpoints/ldaps://:636",
+        "TestTransportRejectsInvalidEndpoints/ldaps://directory.invalid:",
+        "TestTransportRejectsInvalidEndpoints/ldaps://directory.invalid:0",
+        "TestTransportRejectsInvalidEndpoints/ldaps://directory.invalid:65536",
+        "TestTransportRejectsInvalidEndpoints/ldaps://directory.invalid:bad",
+        "TestTransportRejectsInvalidEndpoints/ldaps://url-user:url-password@directory.invalid",
+        "TestTransportRejectsUnsafeBindBeforeDial",
+        "TestTransportRejectsUnsafeBindBeforeDial/skip_verify_false",
+        "TestTransportRejectsUnsafeBindBeforeDial/skip_verify_true",
+        "TestTransportStartTLSFailureClosesBeforeBind",
+        "TestTransportStartTLSFailureClosesBeforeBind/gather",
+        "TestTransportStartTLSFailureClosesBeforeBind/snapshot",
+        "TestTransportStartTLSOrdersVerifiedBind",
+        "TestTransportStartTLSOrdersVerifiedBind/2001:db8::1/gather",
+        "TestTransportStartTLSOrdersVerifiedBind/2001:db8::1/snapshot",
+        "TestTransportStartTLSOrdersVerifiedBind/directory.invalid/gather",
+        "TestTransportStartTLSOrdersVerifiedBind/directory.invalid/gather#01",
+        "TestTransportStartTLSOrdersVerifiedBind/directory.invalid/snapshot",
+        "TestTransportStartTLSOrdersVerifiedBind/directory.invalid/snapshot#01"
+      ],
+      "allowed_skips": []
+    },
+    "m0": {
+      "argv": [
+        "go",
+        "test",
+        "-json",
+        "-count=1",
+        "-timeout=5m",
+        "./connectors/ldap",
+        "-run",
+        "^(TestTransportRejectsUnsafeBindBeforeDial|TestTransportLDAPSDoesNotRestartTLS|TestTransportAnonymousAndOfflineRemainUsable)$"
+      ],
+      "wall_seconds": 420,
+      "package": "github.com/olivaresai/olivares/connectors/ldap",
+      "expected_tests": [
+        "TestTransportAnonymousAndOfflineRemainUsable",
+        "TestTransportAnonymousAndOfflineRemainUsable/anonymous/gather",
+        "TestTransportAnonymousAndOfflineRemainUsable/anonymous/snapshot",
+        "TestTransportAnonymousAndOfflineRemainUsable/offline",
+        "TestTransportLDAPSDoesNotRestartTLS",
+        "TestTransportLDAPSDoesNotRestartTLS/false/gather",
+        "TestTransportLDAPSDoesNotRestartTLS/false/snapshot",
+        "TestTransportLDAPSDoesNotRestartTLS/true/gather",
+        "TestTransportLDAPSDoesNotRestartTLS/true/snapshot",
+        "TestTransportRejectsUnsafeBindBeforeDial",
+        "TestTransportRejectsUnsafeBindBeforeDial/skip_verify_false",
+        "TestTransportRejectsUnsafeBindBeforeDial/skip_verify_true"
+      ],
+      "allowed_skips": []
+    },
+    "m1": {
+      "argv": [
+        "go",
+        "test",
+        "-json",
+        "-count=1",
+        "-timeout=5m",
+        "./connectors/ldap",
+        "-run",
+        "^(TestLDAPWireCertificateTransport|TestTransportStartTLSOrdersVerifiedBind|TestTransportLDAPSDoesNotRestartTLS)$/^(starttls_valid|directory\\.invalid|2001:db8::1|false|true)$"
+      ],
+      "wall_seconds": 420,
+      "package": "github.com/olivaresai/olivares/connectors/ldap",
+      "expected_tests": [
+        "TestLDAPWireCertificateTransport",
+        "TestLDAPWireCertificateTransport/starttls_valid",
+        "TestTransportLDAPSDoesNotRestartTLS",
+        "TestTransportLDAPSDoesNotRestartTLS/false/gather",
+        "TestTransportLDAPSDoesNotRestartTLS/false/snapshot",
+        "TestTransportLDAPSDoesNotRestartTLS/true/gather",
+        "TestTransportLDAPSDoesNotRestartTLS/true/snapshot",
+        "TestTransportStartTLSOrdersVerifiedBind",
+        "TestTransportStartTLSOrdersVerifiedBind/2001:db8::1/gather",
+        "TestTransportStartTLSOrdersVerifiedBind/2001:db8::1/snapshot",
+        "TestTransportStartTLSOrdersVerifiedBind/directory.invalid/gather",
+        "TestTransportStartTLSOrdersVerifiedBind/directory.invalid/gather#01",
+        "TestTransportStartTLSOrdersVerifiedBind/directory.invalid/snapshot",
+        "TestTransportStartTLSOrdersVerifiedBind/directory.invalid/snapshot#01"
+      ],
+      "allowed_skips": []
+    }
+  },
+  "production": [
+    "connectors/ldap/ldap.go"
+  ],
+  "mutants": [
+    {
+      "id": "m0",
+      "patch": "ci/iam-qualification/ldap-m0.patch",
+      "sha256": "c42c5adc841467a51c14e6a5b2e0bf8873f69f029a7be9c7e66ef4cf66eda433",
+      "red": {
+        "TestTransportRejectsUnsafeBindBeforeDial/skip_verify_false": [
+          "unsafe bind reached the connection seam:"
+        ],
+        "TestTransportRejectsUnsafeBindBeforeDial/skip_verify_true": [
+          "unsafe bind reached the connection seam:"
+        ]
+      }
+    },
+    {
+      "id": "m1",
+      "patch": "ci/iam-qualification/ldap-m1.patch",
+      "sha256": "66188f74b5cc8dca09bc6c8a0d1456c69258fe7bcea5728dc19f1d70ac148ad5",
+      "red": {
+        "TestTransportStartTLSOrdersVerifiedBind/directory.invalid/snapshot": [
+          "verified StartTLS requires hostname="
+        ],
+        "TestTransportStartTLSOrdersVerifiedBind/directory.invalid/gather": [
+          "verified StartTLS requires hostname="
+        ],
+        "TestTransportStartTLSOrdersVerifiedBind/2001:db8::1/snapshot": [
+          "verified StartTLS requires hostname="
+        ],
+        "TestTransportStartTLSOrdersVerifiedBind/2001:db8::1/gather": [
+          "verified StartTLS requires hostname="
+        ],
+        "TestTransportStartTLSOrdersVerifiedBind/directory.invalid/snapshot#01": [
+          "verified StartTLS requires hostname="
+        ],
+        "TestTransportStartTLSOrdersVerifiedBind/directory.invalid/gather#01": [
+          "verified StartTLS requires hostname="
+        ],
+        "TestLDAPWireCertificateTransport/starttls_valid": [
+          "wire protocol did not reach the required outcome:",
+          "events=[accepted starttls]",
+          "tls: either ServerName or InsecureSkipVerify must be specified in the tls.Config"
+        ]
+      }
+    }
+  ],
+  "inputs": {
+    "connectors/ldap/ldap.go": "ff4449e66ea1e9c2e2e25fbcb2b5fa913bf9b01084733eed183fd10a7e9b9385",
+    "connectors/ldap/ldap_test.go": "d20759a2c8f7520addf875f49e526baed646a594e0b8c86ae390dc81513af79c",
+    "connectors/ldap/naming_guard_test.go": "a8ea5e086756368a7aca1a7540905ba85d789aaa731933a06e4c51956abc2e9a",
+    "connectors/ldap/transport_test.go": "7f5e8ca56aac4ba0b775ea9e45db07ecc9b6c976c8024d099dc8910e98259b20",
+    "connectors/ldap/wire_linux_test.go": "bf9ff163e6b570cffbcbc46ebf2ab7687af4a2e52310285db6245bb9184a3834"
+  },
+  "schema": "olivares.public-iam-qualification/v2",
+  "family": "ldap",
+  "maximum_phase_seconds": 3840,
+  "test_owners": {
+    "github.com/olivaresai/olivares/connectors/ldap::TestDialError": "connectors/ldap/ldap_test.go",
+    "github.com/olivaresai/olivares/connectors/ldap::TestErrorsNeverContainCredential": "connectors/ldap/ldap_test.go",
+    "github.com/olivaresai/olivares/connectors/ldap::TestGatherConvergesWithSnapshotRoster": "connectors/ldap/ldap_test.go",
+    "github.com/olivaresai/olivares/connectors/ldap::TestGatherEmitsPrivilegedGrants": "connectors/ldap/ldap_test.go",
+    "github.com/olivaresai/olivares/connectors/ldap::TestGatherHonorsContextCancel": "connectors/ldap/ldap_test.go",
+    "github.com/olivaresai/olivares/connectors/ldap::TestGatherNeverRequestsPasswordAttributes": "connectors/ldap/ldap_test.go",
+    "github.com/olivaresai/olivares/connectors/ldap::TestGatherOfflineEmitsNothingAndNeverDials": "connectors/ldap/ldap_test.go",
+    "github.com/olivaresai/olivares/connectors/ldap::TestGatherReturnsEmitError": "connectors/ldap/ldap_test.go",
+    "github.com/olivaresai/olivares/connectors/ldap::TestLDAPWireCertificateTransport": "connectors/ldap/wire_linux_test.go",
+    "github.com/olivaresai/olivares/connectors/ldap::TestLDAPWireChild": "connectors/ldap/wire_linux_test.go",
+    "github.com/olivaresai/olivares/connectors/ldap::TestNeverRequestsPasswordAttributes": "connectors/ldap/ldap_test.go",
+    "github.com/olivaresai/olivares/connectors/ldap::TestOfflineNoURL": "connectors/ldap/ldap_test.go",
+    "github.com/olivaresai/olivares/connectors/ldap::TestOpenRequiresBaseDNWhenURLSet": "connectors/ldap/ldap_test.go",
+    "github.com/olivaresai/olivares/connectors/ldap::TestParseSID": "connectors/ldap/ldap_test.go",
+    "github.com/olivaresai/olivares/connectors/ldap::TestPrivilegedDNsAreDistinguishedNamesNotDNS": "connectors/ldap/naming_guard_test.go",
+    "github.com/olivaresai/olivares/connectors/ldap::TestPrivilegedGroupDNsConfigKeyIsAdvertisedAndRead": "connectors/ldap/naming_guard_test.go",
+    "github.com/olivaresai/olivares/connectors/ldap::TestSnapshotBindsAndCloses": "connectors/ldap/ldap_test.go",
+    "github.com/olivaresai/olivares/connectors/ldap::TestSnapshotBuildsGraph": "connectors/ldap/ldap_test.go",
+    "github.com/olivaresai/olivares/connectors/ldap::TestTransportAnonymousAndOfflineRemainUsable": "connectors/ldap/transport_test.go",
+    "github.com/olivaresai/olivares/connectors/ldap::TestTransportExplicitSkipVerifyStillUsesTLS": "connectors/ldap/transport_test.go",
+    "github.com/olivaresai/olivares/connectors/ldap::TestTransportLDAPSDoesNotRestartTLS": "connectors/ldap/transport_test.go",
+    "github.com/olivaresai/olivares/connectors/ldap::TestTransportRejectsInvalidEndpoints": "connectors/ldap/transport_test.go",
+    "github.com/olivaresai/olivares/connectors/ldap::TestTransportRejectsUnsafeBindBeforeDial": "connectors/ldap/transport_test.go",
+    "github.com/olivaresai/olivares/connectors/ldap::TestTransportStartTLSFailureClosesBeforeBind": "connectors/ldap/transport_test.go",
+    "github.com/olivaresai/olivares/connectors/ldap::TestTransportStartTLSOrdersVerifiedBind": "connectors/ldap/transport_test.go",
+    "github.com/olivaresai/olivares/connectors/ldap::TestWellKnownAdminSID": "connectors/ldap/ldap_test.go"
+  },
+  "oracle_owners": {}
+}
