@@ -272,8 +272,12 @@ func (m *Module) handleExportEvidence(w http.ResponseWriter, r *http.Request, mc
 				rendered = filterResultsBySelection(results, profile.SelectedIDs)
 			}
 			oscalDoc = oscalDocument(dto, rendered, fwName, profile)
-			if m.attachPOAM(oscalDoc, dto, rendered, fwName, profile) {
+			outcome := m.attachPOAM(oscalDoc, dto, rendered, fwName, profile)
+			if outcome.attached {
 				meta["oscal_poam"] = true
+			} else if outcome.omissionReason != "" {
+				meta["oscal_poam"] = false
+				meta["oscal_poam_omission_reason"] = outcome.omissionReason
 			}
 		}
 		return auditEvent(r.Context(), sc, mc, "compliance.evidence.export", packageKind, id, meta)
