@@ -710,13 +710,12 @@ func (m *Module) runErasureTargets(ctx context.Context, tenant model.TenantID, a
 	return outcomes, nil
 }
 
-// The three targets this scan walks that are NOT rows of the erasure-target
-// registry: the knowledge document itself, the roster identity's external-id
-// convergence anchor and the canonical cost ledger. They carry a structural label
-// each, exactly like a registry target, so the receipt's two label sets name every
-// place the scan looked and not only the ones the catalog happens to list.
+// Targets outside the erasure-target registry carry structural labels too, so
+// the receipt names every store the scan examined, including document cascades.
 const (
 	scanTargetKnowledgeDocument = "knowledge.document"
+	scanTargetKnowledgeChunk    = "knowledge.chunk"
+	scanTargetKnowledgeLabel    = "knowledge.sensitivity_label"
 	scanTargetCoreIdentities    = "core.identities"
 	scanTargetCoreCostRecords   = "core.cost_records"
 )
@@ -755,9 +754,9 @@ func (m *Module) residualScan(ctx context.Context, tenant model.TenantID, key su
 // is a subset of Applicable by construction. The depth is stated only if at least
 // one target was opened: a scan that opened nothing reached no depth.
 //
-// EVERY LABEL IS STRUCTURAL. The three places a label is appended below take it from
+// EVERY LABEL IS STRUCTURAL. Each label appended below comes from
 // erasureTarget.Label (a fixed string in this file's in-code catalog) or from one of
-// the three scanTarget* constants above. No row value, subject identifier, alias,
+// the scanTarget* constants above. No row value, subject identifier, alias,
 // column value or tenant id reaches a label — which matters because these labels are
 // sealed onto a certificate that outlives the subject's key.
 func residualScanIn(ctx context.Context, sc store.Scope, subjectKind string, refs []string, classes []string) (CryptoShredResidualScanReport, error) {
@@ -828,6 +827,36 @@ func residualScanIn(ctx context.Context, sc store.Scope, subjectKind string, ref
 			}
 		} else if !errors.Is(err, store.ErrUnknownEntity) {
 			return fail(scanTargetKnowledgeDocument, err)
+		}
+		// Cascade rows can survive without their parent. Inspect each store
+		// independently, including when the document store is unavailable.
+		for _, target := range []struct {
+			label, column string
+			filters       []model.Filter
+		}{
+			{scanTargetKnowledgeChunk, "doc_ref", nil},
+			{scanTargetKnowledgeLabel, colSubjectRef, []model.Filter{eq(colSubjectKind, erasureSubjectDocument)}},
+		} {
+			report.Applicable = append(report.Applicable, target.label)
+			repo, err := sc.Ext(model.Kind(target.label))
+			if err != nil {
+				if errors.Is(err, store.ErrUnknownEntity) {
+					continue
+				}
+				return fail(target.label, err)
+			}
+			report.Opened = append(report.Opened, target.label)
+			for _, ref := range refs {
+				filters := append([]model.Filter{eq(target.column, ref)}, target.filters...)
+				// Filter before limiting: one matching row proves a residue.
+				recs, _, err := repo.List(ctx, model.Query{Filters: filters, Limit: 1})
+				if err != nil {
+					return fail(target.label, err)
+				}
+				if len(recs) > 0 {
+					residues = append(residues, target.label+"."+target.column)
+				}
+			}
 		}
 	}
 	if subjectKind == erasureSubjectIdentity {

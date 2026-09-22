@@ -72,10 +72,19 @@ fields carry it:
 
 | field | what it means |
 |---|---|
-| `residual_scan_depth` | the METHOD the scan used, never a coverage claim. `registry-scoped` = the in-code erasure-target catalog restricted to the subject kind AND to this request's `data_classes`, matched by exact equality on the mapped identifier columns in the live store, plus the document row, the roster identity anchor and the cost ledger. **Absent** when the scan opened nothing: no depth was reached, so none is stated. |
-| `residual_scan_applicable` | the targets this scan's METHOD covers for the request's data-class scope, as structural labels — the catalog named above restricted to the subject kind and that scope, which is not every store the erasure touched. A subject kind whose erasure CASCADES destroys stores this scan does not re-open (a document takes its chunks and its current labels with it), so a clean result here is a clean result over the targets named here. |
+| `residual_scan_depth` | the METHOD the scan used, never a coverage claim. `registry-scoped` = the in-code erasure-target catalog restricted to the subject kind AND to this request's `data_classes`, matched by exact equality on the mapped identifier columns in the live store, plus the document cascade stores, the roster identity anchor and the cost ledger. **Absent** when the scan opened nothing: no depth was reached, so none is stated. |
+| `residual_scan_applicable` | the targets this scan's METHOD covers for the request's data-class scope, as structural labels — the catalog named above restricted to the subject kind and that scope. A clean result applies to the targets named here; it does not establish coverage of other stores or external systems. |
 | `residual_scan_opened` | the targets the scan could actually open here. Always a subset of `applicable`; a target whose owning module is not registered in this deployment is applicable and NOT opened. |
 | `data_classes` | the scope the two sets above are read against — narrowing a request shrinks BOTH, so a narrowed erasure can never look like a broader one. |
+
+For a `document` subject within `knowledge.content`, the scan independently opens
+`knowledge.document`, `knowledge.chunk`, and `knowledge.sensitivity_label`, even when the
+document row is already absent. It matches chunks by `doc_ref` and current labels by both
+`subject_kind=document` and `subject_ref`, using the subject reference and aliases within
+the same tenant. An orphan chunk or document label makes `verify_ok` false without copying
+its content into the receipt. An unavailable store remains applicable but not opened; a
+store read failure seals no receipt and preserves the retry path. These checks cover the
+live cascade stores, including embeddings stored in chunk rows, not external vector indexes.
 
 All four are covered by `manifest_hash`, by LABEL and not by a count: a third party re-reading
 the receipt can tell a full sweep from a scan that opened two of four. Receipts sealed before

@@ -332,9 +332,10 @@ type ResidualScanDepth string
 // ResidualScanDepthRegistryScoped names the METHOD, never a coverage claim: the
 // erasure-target registry (erasuretargets.go) restricted to the subject kind AND to
 // the request's data-class scope, matched by exact equality on the mapped identifier
-// columns in the live store — plus the three targets outside that registry the same
-// scan walks: the knowledge document row, the roster identity's external-id anchor
-// and the canonical cost ledger. What the method reached in THIS run is Opened; what
+// columns in the live store — plus the targets outside that registry the same
+// scan walks: knowledge document, chunk and sensitivity-label rows, the roster
+// identity's external-id anchor and the canonical cost ledger. What the method
+// reached in THIS run is Opened; what
 // the request's own scope required is Applicable. The two are published side by side
 // precisely because the method's name cannot answer "over how much".
 const ResidualScanDepthRegistryScoped ResidualScanDepth = "registry-scoped"
