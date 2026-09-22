@@ -202,7 +202,7 @@ func TestStandingPrincipalReconstructionHappensInsideTheEpochBracketedView(t *te
 		if before, e = evidence.ReadDirectoryEpochFact(f.ctx, f.tenant); e != nil {
 			return e
 		}
-		if got, gotFound, e = f.a.PrincipalForUser(f.ctx, ref, AAL3); e != nil {
+		if got, gotFound, e = principalForUserInScope(f.ctx, as, ref, AAL3); e != nil {
 			return e
 		}
 		after, e = evidence.ReadDirectoryEpochFact(f.ctx, f.tenant)
