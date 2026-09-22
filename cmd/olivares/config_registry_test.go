@@ -500,3 +500,31 @@ func isRegisteredPrefixStem(key string) bool {
 	}
 	return false
 }
+
+// agentLinkListenKey is the listen address of the agent link, the mutual-TLS endpoint an
+// edition built on this tree serves for its node agents; empty means no listener. No source
+// of this package reads it, so the drift guard above cannot see it: unregistered, a boot that
+// sets it logs the key as ignored, and `config validate` and `config effective --strict`
+// refuse the deployment. Registering the NAME claims nothing more. The key has three places
+// that move together — the registry, the catalog row the configuration reference is
+// generated from, and the row that reference publishes — so this pins all three.
+const agentLinkListenKey = "OLIVARES_SESSIONS_AGENT_LINK_LISTEN"
+
+func TestConfigContractCarriesAgentLinkListenKey(t *testing.T) {
+	if mode := configEnvKeyMode(agentLinkListenKey); mode != configKeyExact {
+		t.Errorf("%s mode = %v, want exact — boot would log it as ignored and `config validate` would reject it",
+			agentLinkListenKey, mode)
+	}
+	for _, place := range []struct{ path, row string }{
+		{"../../scripts/config-env-catalog.tsv", "\n" + agentLinkListenKey + "\t"},
+		{"../../docs-site/src/content/docs/reference/configuration.md", "\n| `" + agentLinkListenKey + "` |"},
+	} {
+		body, err := os.ReadFile(place.path)
+		if err != nil {
+			t.Fatalf("read %s: %v", place.path, err)
+		}
+		if !strings.Contains(string(body), place.row) {
+			t.Errorf("%s has no row for %s", place.path, agentLinkListenKey)
+		}
+	}
+}
