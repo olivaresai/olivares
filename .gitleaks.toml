@@ -825,3 +825,11 @@ regexes = [
   paths = ['''^commercial/license-worker/src/connect/canonical-vectors\.json$''']
   regexTarget = "match"
   regexes = ['''^Olivares-Connect-New-Key-Proof": "oQ4kdmdnB_Gi2fhgBHh58xEB1ApsBu-OT2nKiMyzv-0SRCxj-2UEMRVNYWdAeX6Sa1U6uO62J5btnULWNdexCg"$''']
+
+[[allowlists]]
+  description = "the decoded-argument walker exposes a JSON object key on its own channel, not a credential"
+  targetRules = ["generic-api-key"]
+  condition = "AND"
+  regexTarget = "match"
+  paths = ['''^connectors/claude-api/contentscan\.go$''']
+  regexes = ['''^key, "arguments/key"$''']
