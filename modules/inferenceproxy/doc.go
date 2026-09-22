@@ -27,6 +27,14 @@
 // policy the decider consults — keeping the governance decision out of the
 // Apache connector (the open-core boundary, LICENSING.md; scripts/check-boundary.sh).
 //
+// Declared remote MCP servers (C8 E2-3): when the optional server-tool egress gate is
+// installed, the composition root admits a request that declares mcp_servers[] only when every
+// declared server's exact HTTPS origin (host and effective port) is granted, and forwards
+// exactly the admitted declaration. That admission does not cover DNS resolution, provider
+// redirects, the remote server's tool inventory, tool arguments or later remote execution,
+// and traffic that does not transit the proxy is not governed. This module stores no MCP
+// grant; the contract is docs/contracts-tool-egress.md §8.
+//
 // Minimal data (docs/SECURITY-HARDENING.md): no row this module persists — config, DLP rule, audit —
 // ever carries a prompt, response, secret or matched PII value. The DLP rule names a
 // class and an action; the config names toggles. The request/response bytes the proxy

@@ -16,6 +16,14 @@
 // supported (no MCP resources/prompts); the feature is NOT eligible for Zero Data
 // Retention; and it is available on the Claude API, Claude Platform on AWS and
 // Microsoft Foundry — NOT on Amazon Bedrock or Google Vertex.
+//
+// The PERMITTED edges below are informational: they do not grant invocation permission.
+// Runtime egress to a declared MCP server is governed at the inline proxy (mcp_egress.go):
+// with an egress gate installed, a request is admitted only when every declared server's
+// exact HTTPS origin (host and effective port) is granted, and the forwarded body is
+// verified to carry exactly the admitted declaration. That admission does not cover DNS
+// resolution, provider redirects, the remote server's tool inventory, tool arguments, or
+// later remote execution, and it applies only to traffic that transits the proxy.
 package claudeapi
 
 import (
