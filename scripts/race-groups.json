@@ -748,6 +748,7 @@
         "Lane",
         "List",
         "LoginCapability",
+        "LoginTrustedProxies",
         "MCPAdd",
         "MCPTenant",
         "Mode",
