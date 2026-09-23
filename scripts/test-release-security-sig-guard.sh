@@ -613,8 +613,11 @@ command grep -q 'BY NAME' <<<"$out"
 check "the refusal says the .sig counted for its NAME only" "the two refusals differ" $?
 
 # --- C · manifest without signature: RED -------------------------------------------------
+# The sentence the custody script prints for this half-state, held ONCE: case D refuses the same
+# string, so the two reds are told apart by what the guard actually prints and cannot drift apart.
+MISSING_SIG='no security-manifest.json.sig on the draft at all'
 run_block $'stable-manifest.json\nstable-manifest.json.sig\nsecurity-manifest.json'
-[ "$rc" -ne 0 ] && command grep -q 'no security-manifest.json.sig on the draft at all' <<<"$out"
+[ "$rc" -ne 0 ] && command grep -q "$MISSING_SIG" <<<"$out"
 check "security manifest with NO signature -> red, and says so" "the half-state" $?
 
 # --- D · THE ESCAPE · gh cannot read the inventory: RED ----------------------------------
@@ -629,7 +632,11 @@ check "gh FAILS to read the inventory -> red, never a silent skip" "could-not-lo
 # was down" sends the custodian to extend the ceremony over an outage.
 command grep -q 'could not read the draft' <<<"$out"
 check "the failure says it could not LOOK, not that there was nothing" "diagnosis, not silence" $?
-[ "$rc" -ne 0 ] && ! command grep -q 'carries security-manifest.json with NO' <<<"$out"
+# ON THE GUARD'S OWN WORDS. This probe refused "carries security-manifest.json with NO", a sentence
+# the custody script no longer prints, so it held whatever the read failure said: a read-failure
+# branch that ALSO printed case C's sentence passed the whole battery. It now refuses exactly the
+# phrase case C finds, and C's check is what proves that phrase is still printed at all.
+[ "$rc" -ne 0 ] && ! command grep -q "$MISSING_SIG" <<<"$out"
 check "a read failure is NOT reported as a missing signature" "the two reds stay apart" $?
 
 # --- E · a different gh failure code is still a failure ----------------------------------
