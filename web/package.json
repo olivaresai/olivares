@@ -100,7 +100,7 @@
     "eslint-plugin-react-refresh": "^0.5.7",
     "globals": "^17.12.0",
     "graphology-types": "0.24.8",
-    "jsdom": "^30.1.0",
+    "jsdom": "^30.1.1",
     "openapi-typescript": "^7.13.0",
     "prettier": "^3.9.8",
     "style-dictionary": "5.5.3",
