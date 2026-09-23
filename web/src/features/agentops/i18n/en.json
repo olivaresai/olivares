@@ -524,8 +524,10 @@
     "view": {
       "profilesTitle": "Provider profiles",
       "bindingsTitle": "Source bindings",
+      "accountsTitle": "Provider accounts",
       "tabProfiles": "Profiles",
       "tabBindings": "Bindings",
+      "tabAccounts": "Accounts",
       "openProfiles": "Open the provider profiles page",
       "openBindings": "Open the source bindings page",
       "crossHint": "Profiles and bindings also have their own pages, each entered with its own read permission."
@@ -542,6 +544,102 @@
       "loadMoreProfiles": "Load more profiles",
       "loadedProfiles": "Loaded {{n}} active profiles; there are more.",
       "loadingProfiles": "Loading profiles…"
+    }
+  },
+  "accounts": {
+    "subtitle": "Named provider accounts in this tenant. Adopting names an existing provider profile once; its home stays where it is.",
+    "adopt": "Adopt a profile",
+    "cols": {
+      "name": "Account",
+      "driver": "Driver",
+      "environment": "Execution environment",
+      "state": "State",
+      "isolation": "Isolation",
+      "created": "Created"
+    },
+    "empty": {
+      "title": "No provider accounts",
+      "adoptHint": "Use “{{control}}” to name an existing provider profile as an account.",
+      "noWrite": "Adopting a provider profile as an account needs sessions:account:write, which your role does not include."
+    },
+    "more": "Shown so far: {{shown}}. More accounts exist; load more to see them.",
+    "moreFailed": "The next page of accounts could not be read. The accounts shown are not the complete list.",
+    "isolation": {
+      "shared": "Shared",
+      "dedicated": "Dedicated",
+      "sharedMeaning": "Shared: this home runs under the server's own system user. It is not a dedicated, isolated home.",
+      "dedicatedMeaning": "Dedicated: the server records this home as reserved for this account."
+    },
+    "home": {
+      "adopted": "Adopted (an existing home)",
+      "managed": "Managed by the server"
+    },
+    "authSource": {
+      "provider_account_home": "Saved sign-in in the account's home",
+      "managed_injection": "Managed credential",
+      "none": "None authorized"
+    },
+    "details": {
+      "name": "Name",
+      "ref": "Reference",
+      "driver": "Driver",
+      "environment": "Execution environment",
+      "state": "State",
+      "home": "Home",
+      "isolation": "Isolation",
+      "osUser": "System user",
+      "authSource": "Authentication source",
+      "providerRecord": "Provider",
+      "identity": "Signed-in identity",
+      "release": "Release",
+      "pendingRelease": "Pending release",
+      "created": "Created",
+      "updated": "Updated",
+      "loading": "Reading the account…",
+      "notFound": "This account was not found. It may not exist, or it is not visible to you."
+    },
+    "identity": {
+      "notChecked": "Not checked: nothing has asked the provider who is signed in.",
+      "reported": "{{identity}} (reported by {{source}})",
+      "empty": "Nothing reported (source: {{source}})"
+    },
+    "adoptDialog": {
+      "title": "Adopt a provider profile",
+      "description": "Name an existing provider profile as an account. Its home stays where it is and is recorded as shared, not dedicated. Nothing is installed and nobody is signed in.",
+      "profile": "Profile",
+      "profilePlaceholder": "Choose a profile",
+      "profileOption": "{{name}} ({{ref}})",
+      "knownAccount": "{{label}} — already an account",
+      "manual": "Enter a reference…",
+      "loadMoreProfiles": "Load more profiles",
+      "profilesPartial": "Only the loaded profiles are listed. Load more, or enter a reference.",
+      "profilesFailed": "Profiles could not be listed. Enter a reference instead.",
+      "profilesLoading": "Loading profiles…",
+      "reference": "Profile reference",
+      "referenceHint": "The reference of an existing provider profile in this tenant; it starts with ppf_.",
+      "referenceHintNoList": "Your role cannot list provider profiles. Enter the reference of an existing one; it starts with ppf_.",
+      "name": "Account name (optional)",
+      "nameHint": "Lowercase letters, digits and hyphens, starting with a letter, up to 32 characters. Leave it empty and the server generates one, such as claude or claude-b.",
+      "submit": "Adopt",
+      "submitting": "Adopting…",
+      "pendingStatus": "Adopting {{ref}}. Waiting for the server's answer.",
+      "success": "Adopted as {{name}}",
+      "failedTitle": "The profile was not adopted",
+      "forbidden": "Your role cannot adopt accounts in this tenant. Nothing was changed."
+    },
+    "adoption": {
+      "pending": "Adopting {{ref}}. The server has not answered yet.",
+      "adopted": "{{ref}} was adopted as {{name}}.",
+      "refused": "{{ref}} was not adopted:",
+      "forbidden": "{{ref}} was not adopted: your role cannot adopt accounts in this tenant. Nothing was changed.",
+      "unknown": "The outcome of adopting {{ref}} is not known here.",
+      "checking": "Checking whether {{ref}} is an account now…",
+      "isAccount": "At this read, {{ref}} is the account {{name}}.",
+      "notAccount": "At this read, {{ref}} is not an account.",
+      "checkFailed": "The check could not be completed.",
+      "checkAgain": "Check again",
+      "open": "Open account",
+      "dismiss": "Dismiss"
     }
   },
   "readiness": {

@@ -1,0 +1,626 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+# Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+#
+# provider-accounts-qualification — a one-branch qualification vehicle for the provider-account
+# console. It runs ONLY on a pull request whose head is the branch
+# `ci/provider-accounts-console-qualification-vehicle` of this repository, and that branch holds
+# exactly one commit on top of the product head it qualifies: this file and the two mutant
+# patches under ci/qualification/. Every job runs on the PRODUCT head (the vehicle commit's
+# parent), so each result names the source it qualifies.
+#
+#   baseline         the browser journey and the custody test both pass;
+#   m1-intent        with the M1 mutant, the journey fails at an assertion that requires the
+#                    unresolved adoption of profile D while the engine refuses the account read;
+#   custody-removal  with the custody mutant, the custody test fails inside retiredAdoptionGone;
+#   captures         the capture harness publishes the provider-accounts captures, with hashes.
+#
+# A MUTANT PROVES SOMETHING ONLY WHEN IT FAILS AT ITS NAMED ASSERTION. Each mutant job reads the
+# machine-readable report (Playwright JSON, vitest JSON) and fails the vehicle when the mutant
+# survives, or when it fails anywhere else: install, build, setup, harness or another assertion.
+# Both mutant jobs need a green baseline, so a red that the baseline shares is never counted.
+#
+# Runner class, action pins and step guards follow pr-web-journey in pr-ci.yml. Budgets are the
+# measured journey job (4 min 40 s, journey step 3 min 36 s) under the same guards; the capture
+# step's 30 minutes are ASSUMED until its first run.
+
+name: provider-accounts-qualification
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: provider-accounts-qualification-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  # The vehicle's own identity: HEAD is the pull request's head, it has one parent, and it
+  # changes only the vehicle's three files. Its parent is the product head every job runs on.
+  identify:
+    if: github.repository == 'olivaresai/olivares' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'ci/provider-accounts-console-qualification-vehicle'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      product_head: ${{ steps.head.outputs.product_head }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 2
+      - name: identify the product head under the vehicle commit
+        id: head
+        timeout-minutes: 1
+        env:
+          VEHICLE_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          [ "$(git rev-parse HEAD)" = "$VEHICLE_HEAD" ] || { echo "::error::HEAD is not the pull request's head"; exit 2; }
+          parents="$(git rev-list --parents -n 1 HEAD | wc -w)"
+          [ "$parents" -eq 2 ] || { echo "::error::the vehicle commit must have exactly one parent"; exit 2; }
+          expected=".github/workflows/provider-accounts-qualification.yml
+          ci/qualification/custody-removal-skipped.patch
+          ci/qualification/m1-intent-dropped-on-refused-read.patch"
+          changed="$(git diff --name-only HEAD^ HEAD | sort)"
+          if [ "$changed" != "$(printf '%s\n' $expected | sort)" ]; then
+            echo "::error::the vehicle commit changes more than its own three files:"
+            printf '%s\n' "$changed"
+            exit 2
+          fi
+          product="$(git rev-parse HEAD^)"
+          echo "product_head=$product" >>"$GITHUB_OUTPUT"
+          {
+            echo "### Provider accounts qualification vehicle"
+            echo "Vehicle head \`$VEHICLE_HEAD\`; product head qualified by every job: \`$product\`."
+          } >>"$GITHUB_STEP_SUMMARY"
+
+  baseline:
+    needs: identify
+    if: github.repository == 'olivaresai/olivares' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'ci/provider-accounts-console-qualification-vehicle'
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    env:
+      PRODUCT_HEAD: ${{ needs.identify.outputs.product_head }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ needs.identify.outputs.product_head }}
+      - name: confirm the product head
+        timeout-minutes: 1
+        run: |
+          set -euo pipefail
+          [ "$(git rev-parse HEAD)" = "$PRODUCT_HEAD" ] || { echo "::error::checkout is not the product head"; exit 2; }
+          EVIDENCE="$RUNNER_TEMP/qualification"
+          echo "EVIDENCE=$EVIDENCE" >>"$GITHUB_ENV"
+          mkdir -p "$EVIDENCE"
+      # NODE FIRST: pnpm/action-setup installs pnpm THROUGH npm, so it needs a node on PATH.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+        with:
+          dest: ${{ runner.temp }}/setup-pnpm
+          standalone: true
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.work
+          cache: true
+          cache-dependency-path: go.work.sum
+      - name: install the console dependencies (frozen; a failure fails the job)
+        timeout-minutes: 8
+        run: pnpm --dir web install --frozen-lockfile
+      - name: install the chromium playwright driver (web/, pinned by the project)
+        timeout-minutes: 5
+        run: pnpm --dir web exec playwright install chromium
+      - name: run the provider-account journey on a virgin engine
+        timeout-minutes: 25
+        env:
+          E2E_SPECS: e2e/provider-accounts-journey.spec.ts
+          E2E_REPORT_DIR: ${{ runner.temp }}/qualification/journey-report
+        run: |
+          set +e
+          bash scripts/web-e2e.sh
+          echo "$?" >"$EVIDENCE/journey.rc"
+      - name: run the custody test
+        timeout-minutes: 5
+        run: |
+          set +e
+          pnpm --dir web exec vitest run src/features/agentops/provider-accounts-custody.test.tsx \
+            --reporter=default --reporter=json --outputFile.json="$EVIDENCE/custody-vitest.json"
+          echo "$?" >"$EVIDENCE/custody.rc"
+      - name: baseline verdict (both pass, from their reports)
+        timeout-minutes: 1
+        run: |
+          python3 - "$EVIDENCE" <<'PY'
+          import json, os, sys
+          ev = sys.argv[1]
+          problems, lines = [], []
+          def rc(name):
+              try:
+                  return int(open(os.path.join(ev, name)).read().strip())
+              except (OSError, ValueError):
+                  return None
+          jrc, crc = rc("journey.rc"), rc("custody.rc")
+          try:
+              stats = json.load(open(os.path.join(ev, "journey-report", "provider-accounts-journey.json")))["stats"]
+          except (OSError, ValueError, KeyError) as e:
+              stats = None
+              problems.append(f"journey report unreadable: {e}")
+          if jrc != 0:
+              problems.append(f"journey harness exit {jrc}, want 0")
+          if stats and not (stats["expected"] == 1 and stats["unexpected"] == 0 and stats["flaky"] == 0 and stats["skipped"] == 0):
+              problems.append(f"journey stats {stats}, want exactly one expected pass")
+          try:
+              v = json.load(open(os.path.join(ev, "custody-vitest.json")))
+              files = v["testResults"]
+              ok = (len(files) == 1 and files[0]["name"].endswith("provider-accounts-custody.test.tsx")
+                    and v["numTotalTests"] == 4 and v["numPassedTests"] == 4 and v["numFailedTests"] == 0 and v["success"])
+              if not ok:
+                  problems.append(f"custody test: {v['numPassedTests']}/{v['numTotalTests']} passed, success={v['success']}, want 4/4")
+              lines.append(f"custody test: {v['numPassedTests']}/{v['numTotalTests']} passed (exit {crc})")
+          except (OSError, ValueError, KeyError, IndexError) as e:
+              problems.append(f"custody vitest report unreadable: {e}")
+          lines.insert(0, f"journey: exit {jrc}, stats {stats}")
+          verdict = {"job": "baseline", "product_head": os.environ["PRODUCT_HEAD"], "passed": not problems,
+                     "problems": problems, "evidence": lines}
+          json.dump(verdict, open(os.path.join(ev, "verdict.json"), "w"), indent=2)
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as s:
+              s.write("### baseline: " + ("PASSED" if not problems else "FAILED") + "\n")
+              for l in lines + [f"PROBLEM: {p}" for p in problems]:
+                  s.write(f"- {l}\n")
+          sys.exit(0 if not problems else 1)
+          PY
+      - name: retain the baseline evidence
+        if: always()
+        timeout-minutes: 3
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: provider-accounts-qualification-baseline-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/qualification/
+            web/test-results/
+          retention-days: 7
+          if-no-files-found: error
+      - name: stop any engine this job left running
+        if: always()
+        timeout-minutes: 1
+        run: |
+          set -uo pipefail
+          left=0
+          for exe in /proc/[0-9]*/exe; do
+            pid="${exe#/proc/}"
+            pid="${pid%/exe}"
+            [ "$(readlink "$exe" 2>/dev/null)" = "$GITHUB_WORKSPACE/bin/olivares" ] || continue
+            left=$((left + 1))
+            echo "::warning::engine pid $pid outlived the harness; stopping it"
+            kill "$pid" 2>/dev/null || true
+          done
+          echo "engines left by the harness: $left"
+          [ "$left" -eq 0 ] || { echo "::error::the harness left $left engine(s) running"; exit 1; }
+
+  # M1: the unresolved-adoption notice drops its intent when its reconciliation read is refused.
+  # Named failure: in the step for profile D, an assertion that requires that notice while the
+  # read is refused or right after it is restored. Which of the three fires first depends only on
+  # how fast the refused read answers (the notice is gone from that moment), so all three are
+  # named; any other failure point, or a pass, fails the vehicle.
+  m1-intent:
+    needs: [identify, baseline]
+    if: github.repository == 'olivaresai/olivares' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'ci/provider-accounts-console-qualification-vehicle'
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    env:
+      PRODUCT_HEAD: ${{ needs.identify.outputs.product_head }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 2
+      - name: move to the product head and apply the M1 mutant
+        timeout-minutes: 1
+        run: |
+          set -euo pipefail
+          EVIDENCE="$RUNNER_TEMP/qualification"
+          echo "EVIDENCE=$EVIDENCE" >>"$GITHUB_ENV"
+          mkdir -p "$EVIDENCE"
+          cp ci/qualification/m1-intent-dropped-on-refused-read.patch "$EVIDENCE/mutant.patch"
+          git checkout --quiet --detach "$PRODUCT_HEAD"
+          [ "$(git rev-parse HEAD)" = "$PRODUCT_HEAD" ] || { echo "::error::checkout is not the product head"; exit 2; }
+          git apply --check "$EVIDENCE/mutant.patch"
+          git apply "$EVIDENCE/mutant.patch"
+          git diff --stat | tee "$EVIDENCE/mutant.diffstat"
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+        with:
+          dest: ${{ runner.temp }}/setup-pnpm
+          standalone: true
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.work
+          cache: true
+          cache-dependency-path: go.work.sum
+      - name: install the console dependencies (frozen; a failure fails the job)
+        timeout-minutes: 8
+        run: pnpm --dir web install --frozen-lockfile
+      - name: install the chromium playwright driver (web/, pinned by the project)
+        timeout-minutes: 5
+        run: pnpm --dir web exec playwright install chromium
+      - name: run the journey against the mutant console
+        timeout-minutes: 25
+        env:
+          E2E_SPECS: e2e/provider-accounts-journey.spec.ts
+          E2E_REPORT_DIR: ${{ runner.temp }}/qualification/journey-report
+        run: |
+          set +e
+          bash scripts/web-e2e.sh
+          echo "$?" >"$EVIDENCE/journey.rc"
+      - name: M1 verdict (the journey fails at its named assertion, from the Playwright report)
+        timeout-minutes: 1
+        run: |
+          python3 - "$EVIDENCE" web/e2e/provider-accounts-journey.spec.ts <<'PY'
+          import glob, json, os, re, sys
+          ev, spec_path = sys.argv[1], sys.argv[2]
+          ANSI = re.compile(r"\x1b\[[0-9;]*m")
+          problems, lines = [], []
+          named = {
+              "notice-after-drop": re.compile(r"Locator: .*The outcome of adopting [^']+ is not known here\."),
+              "check-refused": re.compile(r"Locator: .*The check could not be completed\."),
+              "held-after-restore": re.compile(r"the adoption is still held after the read is restored"),
+          }
+          src = open(spec_path, encoding="utf-8").read().splitlines()
+          def step_line(prefix):
+              for i, l in enumerate(src, 1):
+                  if f"await test.step('{prefix}" in l:
+                      return i
+              return None
+          d_start, c_start = step_line("adopt profile D;"), step_line("adopt profile C;")
+          if not d_start or not c_start or c_start <= d_start:
+              problems.append("could not place the step for profile D in the spec")
+          try:
+              jrc = int(open(os.path.join(ev, "journey.rc")).read().strip())
+          except (OSError, ValueError):
+              jrc = None
+          if jrc != 1:
+              problems.append(f"journey harness exit {jrc}, want 1 (a test failure); 0 means the mutant survived, 2 means nothing was judged")
+          try:
+              report = json.load(open(os.path.join(ev, "journey-report", "provider-accounts-journey.json")))
+          except (OSError, ValueError) as e:
+              report = None
+              problems.append(f"no Playwright report: the run failed before the journey (install, build or setup): {e}")
+          if report:
+              tests = []
+              def walk(s):
+                  for sp in s.get("specs", []):
+                      tests.extend(sp.get("tests", []))
+                  for c in s.get("suites", []):
+                      walk(c)
+              for s in report.get("suites", []):
+                  walk(s)
+              if len(tests) != 1 or len(tests[0].get("results", [])) != 1:
+                  problems.append(f"want one test with one result, got {len(tests)} test(s)")
+              else:
+                  r = tests[0]["results"][0]
+                  steps = r.get("steps") or []
+                  failed = [s["title"] for s in steps if s.get("error")]
+                  lines.append(f"result status {r['status']}, steps run {len(steps)}, failed step(s) {failed}")
+                  if r["status"] != "failed":
+                      problems.append(f"result status {r['status']}, want failed (a timeout or a pass is not the named failure)")
+                  if not steps or not steps[-1]["title"].startswith("adopt profile D;") or failed != [steps[-1]["title"]]:
+                      problems.append("the failure is not in the step for profile D, or an earlier step failed")
+                  errs = r.get("errors") or []
+                  if not errs:
+                      problems.append("the failed result carries no error")
+                  else:
+                      msg = ANSI.sub("", errs[0].get("message", ""))
+                      loc = errs[0].get("location") or {}
+                      # The labelled assertion's message also shows the notice's locator: its own
+                      # label decides first.
+                      if named["held-after-restore"].search(msg):
+                          hit = ["held-after-restore"]
+                      else:
+                          hit = [k for k in ("notice-after-drop", "check-refused") if named[k].search(msg)]
+                      lines.append(f"first error at {os.path.basename(loc.get('file', '?'))}:{loc.get('line')}: {msg.splitlines()[0] if msg else ''}")
+                      if len(hit) != 1 or "toBeVisible" not in msg:
+                          problems.append(f"the first error is not one of the named notice assertions: {msg[:300]!r}")
+                      else:
+                          lines.append(f"named assertion: {hit[0]}")
+                      line = loc.get("line")
+                      if not (loc.get("file", "").endswith("e2e/provider-accounts-journey.spec.ts") and d_start and c_start and isinstance(line, int) and d_start <= line < c_start):
+                          problems.append(f"the first error's location {loc} is outside the step for profile D (lines {d_start}-{c_start - 1 if c_start else '?'})")
+                      elif isinstance(line, int):
+                          lines.append(f"source line {line}: {src[line - 1].strip()}")
+          for f in glob.glob("web/test-results/*/effect-receipt.json"):
+              lines.append(f"effect receipt read_refusal_statuses: {json.load(open(f)).get('read_refusal_statuses')}")
+          verdict = {"job": "m1-intent", "product_head": os.environ["PRODUCT_HEAD"], "named_assertions": list(named),
+                     "failed_as_named": not problems, "problems": problems, "evidence": lines}
+          json.dump(verdict, open(os.path.join(ev, "verdict.json"), "w"), indent=2)
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as s:
+              s.write("### m1-intent: " + ("FAILED AS NAMED (mutant killed)" if not problems else "NOT AS NAMED") + "\n")
+              for l in lines + [f"PROBLEM: {p}" for p in problems]:
+                  s.write(f"- {l}\n")
+          sys.exit(0 if not problems else 1)
+          PY
+      - name: retain the M1 evidence
+        if: always()
+        timeout-minutes: 3
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: provider-accounts-qualification-m1-intent-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/qualification/
+            web/test-results/
+          retention-days: 7
+          if-no-files-found: error
+      - name: stop any engine this job left running
+        if: always()
+        timeout-minutes: 1
+        run: |
+          set -uo pipefail
+          left=0
+          for exe in /proc/[0-9]*/exe; do
+            pid="${exe#/proc/}"
+            pid="${pid%/exe}"
+            [ "$(readlink "$exe" 2>/dev/null)" = "$GITHUB_WORKSPACE/bin/olivares" ] || continue
+            left=$((left + 1))
+            echo "::warning::engine pid $pid outlived the harness; stopping it"
+            kill "$pid" 2>/dev/null || true
+          done
+          echo "engines left by the harness: $left"
+          [ "$left" -eq 0 ] || { echo "::error::the harness left $left engine(s) running"; exit 1; }
+
+  # Custody removal: the shell's boundary custody no longer removes a retired boundary's
+  # mutations. Named failure: the three retired-boundary tests fail inside retiredAdoptionGone
+  # (their first test-file stack frame lies in that helper), and the same-boundary test passes.
+  custody-removal:
+    needs: [identify, baseline]
+    if: github.repository == 'olivaresai/olivares' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'ci/provider-accounts-console-qualification-vehicle'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      PRODUCT_HEAD: ${{ needs.identify.outputs.product_head }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 2
+      - name: move to the product head and apply the custody mutant
+        timeout-minutes: 1
+        run: |
+          set -euo pipefail
+          EVIDENCE="$RUNNER_TEMP/qualification"
+          echo "EVIDENCE=$EVIDENCE" >>"$GITHUB_ENV"
+          mkdir -p "$EVIDENCE"
+          cp ci/qualification/custody-removal-skipped.patch "$EVIDENCE/mutant.patch"
+          git checkout --quiet --detach "$PRODUCT_HEAD"
+          [ "$(git rev-parse HEAD)" = "$PRODUCT_HEAD" ] || { echo "::error::checkout is not the product head"; exit 2; }
+          git apply --check "$EVIDENCE/mutant.patch"
+          git apply "$EVIDENCE/mutant.patch"
+          git diff --stat | tee "$EVIDENCE/mutant.diffstat"
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+        with:
+          dest: ${{ runner.temp }}/setup-pnpm
+          standalone: true
+      - name: install the console dependencies (frozen; a failure fails the job)
+        timeout-minutes: 8
+        run: pnpm --dir web install --frozen-lockfile
+      - name: run the custody test against the mutant custody
+        timeout-minutes: 5
+        run: |
+          set +e
+          pnpm --dir web exec vitest run src/features/agentops/provider-accounts-custody.test.tsx \
+            --reporter=default --reporter=json --outputFile.json="$EVIDENCE/custody-vitest.json"
+          echo "$?" >"$EVIDENCE/custody.rc"
+      - name: custody-removal verdict (the test fails at retiredAdoptionGone, from the vitest report)
+        timeout-minutes: 1
+        run: |
+          python3 - "$EVIDENCE" web/src/features/agentops/provider-accounts-custody.test.tsx <<'PY'
+          import json, os, re, sys
+          ev, test_path = sys.argv[1], sys.argv[2]
+          ANSI = re.compile(r"\x1b\[[0-9;]*m")
+          FRAME = re.compile(r"provider-accounts-custody\.test\.tsx:(\d+):\d+")
+          problems, lines = [], []
+          src = open(test_path, encoding="utf-8").read().splitlines()
+          start = next((i for i, l in enumerate(src, 1) if l.startswith("async function retiredAdoptionGone(")), None)
+          end = next((i for i, l in enumerate(src, 1) if start and i > start and l == "}"), None)
+          if not start or not end:
+              problems.append("could not place retiredAdoptionGone in the test file")
+          retired = ("terminal 401", "credential rotation", "tenant switch")
+          try:
+              crc = int(open(os.path.join(ev, "custody.rc")).read().strip())
+          except (OSError, ValueError):
+              crc = None
+          try:
+              v = json.load(open(os.path.join(ev, "custody-vitest.json")))
+          except (OSError, ValueError) as e:
+              v = None
+              problems.append(f"no vitest report: the run failed before the tests (install or setup): {e}")
+          if v:
+              files = v.get("testResults", [])
+              if len(files) != 1 or not files[0]["name"].endswith("provider-accounts-custody.test.tsx"):
+                  problems.append(f"want exactly the custody test file, got {[f['name'] for f in files]}")
+              elif files[0].get("message"):
+                  problems.append(f"the file itself failed (import, transform or setup): {files[0]['message'][:300]!r}")
+              else:
+                  results = files[0]["assertionResults"]
+                  failed = [a for a in results if a["status"] == "failed"]
+                  passed = [a for a in results if a["status"] == "passed"]
+                  lines.append(f"vitest exit {crc}: {len(passed)} passed, {len(failed)} failed of {len(results)}")
+                  if len(results) != 4 or len(failed) != 3 or len(passed) != 1:
+                      problems.append("want 3 failed (the retired-boundary tests) and 1 passed (the same-boundary test)")
+                  if passed and "read leaves and returns" not in passed[0]["title"]:
+                      problems.append(f"the passing test is not the same-boundary test: {passed[0]['title']!r}")
+                  for marker in retired:
+                      hits = [a for a in failed if marker in a["title"]]
+                      if len(hits) != 1:
+                          problems.append(f"no single failed test for the {marker!r} move")
+                          continue
+                      msg = ANSI.sub("", (hits[0]["failureMessages"] or [""])[0])
+                      frame = FRAME.search(msg)
+                      line = int(frame.group(1)) if frame else None
+                      lines.append(f"{marker}: {msg.splitlines()[0] if msg else '(no message)'} at test line {line}")
+                      if "expected true to be false" not in msg:
+                          problems.append(f"{marker}: not the cache-content assertion: {msg[:200]!r}")
+                      if not (line and start and end and start < line < end):
+                          problems.append(f"{marker}: first test-file frame line {line} is outside retiredAdoptionGone (lines {start}-{end})")
+                      elif line:
+                          lines.append(f"  source line {line}: {src[line - 1].strip()}")
+          verdict = {"job": "custody-removal", "product_head": os.environ["PRODUCT_HEAD"],
+                     "named_assertion": "retiredAdoptionGone", "failed_as_named": not problems,
+                     "problems": problems, "evidence": lines}
+          json.dump(verdict, open(os.path.join(ev, "verdict.json"), "w"), indent=2)
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as s:
+              s.write("### custody-removal: " + ("FAILED AS NAMED (mutant killed)" if not problems else "NOT AS NAMED") + "\n")
+              for l in lines + [f"PROBLEM: {p}" for p in problems]:
+                  s.write(f"- {l}\n")
+          sys.exit(0 if not problems else 1)
+          PY
+      - name: retain the custody-removal evidence
+        if: always()
+        timeout-minutes: 3
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: provider-accounts-qualification-custody-removal-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/qualification/
+          retention-days: 7
+          if-no-files-found: error
+
+  # The repository's capture harness, selected to the provider-accounts view (its extra
+  # arguments reach Playwright), with PUBLICAR=1 so it publishes under its own conditions: a
+  # green run on a clean tree, with its manifest. The manifest it writes records THIS run's
+  # views only; it does not merge the committed one.
+  captures:
+    needs: identify
+    if: github.repository == 'olivaresai/olivares' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'ci/provider-accounts-console-qualification-vehicle'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      PRODUCT_HEAD: ${{ needs.identify.outputs.product_head }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ needs.identify.outputs.product_head }}
+      - name: confirm the product head
+        timeout-minutes: 1
+        run: |
+          set -euo pipefail
+          [ "$(git rev-parse HEAD)" = "$PRODUCT_HEAD" ] || { echo "::error::checkout is not the product head"; exit 2; }
+          [ -z "$(git status --porcelain)" ] || { echo "::error::the checkout is not clean"; exit 2; }
+          EVIDENCE="$RUNNER_TEMP/qualification"
+          echo "EVIDENCE=$EVIDENCE" >>"$GITHUB_ENV"
+          mkdir -p "$EVIDENCE/published"
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+        with:
+          dest: ${{ runner.temp }}/setup-pnpm
+          standalone: true
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.work
+          cache: true
+          cache-dependency-path: go.work.sum
+      - name: install go-task (pinned)
+        timeout-minutes: 3
+        run: |
+          export GOBIN="$RUNNER_TEMP/gopath/bin"
+          echo "GOBIN=$GOBIN" >> "$GITHUB_ENV"
+          echo "$GOBIN" >> "$GITHUB_PATH"
+          export PATH="$GOBIN:$PATH"
+          go install github.com/go-task/task/v3/cmd/task@v3.51.1
+          command -v task || { echo "::error::go install reported OK and task is not on PATH"; exit 1; }
+      - name: install the console dependencies (frozen; a failure fails the job)
+        timeout-minutes: 8
+        run: pnpm --dir web install --frozen-lockfile
+      - name: install the chromium playwright driver (web/, pinned by the project)
+        timeout-minutes: 5
+        run: pnpm --dir web exec playwright install chromium
+      - name: screenshot coverage before the captures (evidence; the ceiling is unchanged)
+        timeout-minutes: 2
+        run: |
+          set +e
+          task lint:screenshot-coverage 2>&1 | tee "$EVIDENCE/screenshot-coverage.before.txt"
+          echo "${PIPESTATUS[0]}" >"$EVIDENCE/screenshot-coverage.before.rc"
+      - name: capture and publish the provider-accounts view
+        timeout-minutes: 30
+        env:
+          PUBLICAR: '1'
+        run: |
+          set +e
+          bash scripts/docs-captures.sh --grep 'capture provider-accounts$'
+          echo "$?" >"$EVIDENCE/captures.rc"
+      - name: screenshot coverage after the captures (evidence; the ceiling is unchanged)
+        if: always()
+        timeout-minutes: 2
+        run: |
+          set +e
+          task lint:screenshot-coverage 2>&1 | tee "$EVIDENCE/screenshot-coverage.after.txt"
+          echo "${PIPESTATUS[0]}" >"$EVIDENCE/screenshot-coverage.after.rc"
+      - name: captures verdict (both captures published, hashed with the manifest changes)
+        if: always()
+        timeout-minutes: 1
+        run: |
+          set -uo pipefail
+          problems=0
+          rc="$(cat "$EVIDENCE/captures.rc" 2>/dev/null || echo missing)"
+          [ "$rc" = 0 ] || { echo "::error::the capture harness exited $rc"; problems=1; }
+          for theme in dark light; do
+            f="docs-site/public/console/provider-accounts-$theme.png"
+            if [ -s "$f" ]; then cp "$f" "$EVIDENCE/published/"; else echo "::error::missing $f"; problems=1; fi
+          done
+          cp docs-site/public/console/manifest.json "$EVIDENCE/published/manifest.json" 2>/dev/null || { echo "::error::no published manifest"; problems=1; }
+          git status --porcelain -- docs-site/public/console >"$EVIDENCE/published/changes.txt"
+          git diff -- docs-site/public/console/manifest.json >"$EVIDENCE/published/manifest.diff"
+          (cd "$EVIDENCE/published" && sha256sum -- *.png manifest.json manifest.diff changes.txt >SHA256SUMS 2>/dev/null)
+          {
+            echo "### captures: $([ "$problems" = 0 ] && echo PUBLISHED || echo FAILED)"
+            echo "Product head \`$PRODUCT_HEAD\`; harness exit $rc."
+            echo "Screenshot coverage exit before $(cat "$EVIDENCE/screenshot-coverage.before.rc" 2>/dev/null || echo '?'), after $(cat "$EVIDENCE/screenshot-coverage.after.rc" 2>/dev/null || echo '?') (ceiling unchanged)."
+            echo "The published manifest.json records this run's views only; import the captures, not the manifest as a whole."
+            echo '```'
+            cat "$EVIDENCE/published/changes.txt"
+            cat "$EVIDENCE/published/SHA256SUMS" 2>/dev/null
+            echo '```'
+          } >>"$GITHUB_STEP_SUMMARY"
+          exit "$problems"
+      - name: retain the captures and their hashes
+        if: always()
+        timeout-minutes: 3
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: provider-accounts-qualification-captures-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/qualification/
+          retention-days: 7
+          if-no-files-found: error
+      - name: stop any engine this job left running
+        if: always()
+        timeout-minutes: 1
+        run: |
+          set -uo pipefail
+          left=0
+          for exe in /proc/[0-9]*/exe; do
+            pid="${exe#/proc/}"
+            pid="${pid%/exe}"
+            [ "$(readlink "$exe" 2>/dev/null)" = "$GITHUB_WORKSPACE/bin/olivares" ] || continue
+            left=$((left + 1))
+            echo "::warning::engine pid $pid outlived the harness; stopping it"
+            kill "$pid" 2>/dev/null || true
+          done
+          echo "engines left by the harness: $left"
+          [ "$left" -eq 0 ] || { echo "::error::the harness left $left engine(s) running"; exit 1; }

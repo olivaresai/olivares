@@ -11,7 +11,7 @@ from typing import TypedDict, cast
 from urllib.parse import quote
 
 API_VERSION = "v1"
-SPEC_HASH = "b18a87a70003b7429595eb2f4d8a89947645a1288141ccc501fe5d8995b764eb"
+SPEC_HASH = "65dc23160c71e25be35abe29de787446e2074aea024dcd37fbf86ac153d9da66"
 STABILITY_POLICY = "https://olivares.ai/docs"
 
 class _AuthCapabilityQuestionRequired(TypedDict):
@@ -5478,6 +5478,27 @@ class OperationsMixin:
         Stability: beta.
         """
         return self._do("POST", "/v1/m/sessions/protocol-bindings/{id}/reconcile", "/v1/m/sessions/protocol-bindings/" + quote(str(id), safe="") + "/reconcile", body=body, query=query, tenant=tenant)
+
+    def get_v1_m_sessions_provider_accounts(self, *, tenant=None, **query):
+        """GET /v1/m/sessions/provider-accounts — Lists the tenant's named provider accounts, optionally narrowed by environment, driver and state; a profile nobody has named is never listed.
+
+        Stability: beta.
+        """
+        return self._do("GET", "/v1/m/sessions/provider-accounts", "/v1/m/sessions/provider-accounts", query=query, tenant=tenant)
+
+    def get_v1_m_sessions_provider_accounts_by_ref(self, ref, *, tenant=None, **query):
+        """GET /v1/m/sessions/provider-accounts/{ref} — Returns one provider account by its reference, without its paths; a profile nobody has named is not an account and answers not found.
+
+        Stability: beta.
+        """
+        return self._do("GET", "/v1/m/sessions/provider-accounts/{ref}", "/v1/m/sessions/provider-accounts/" + quote(str(ref), safe=""), query=query, tenant=tenant)
+
+    def post_v1_m_sessions_provider_accounts_by_ref_adopt(self, ref, body, *, tenant=None, **query):
+        """POST /v1/m/sessions/provider-accounts/{ref}/adopt — Names an existing provider profile as an account, under the given name or a generated one; the database decides whether the name is free, and the home is recorded as shared isolation.
+
+        Stability: beta.
+        """
+        return self._do_json_required("POST", "/v1/m/sessions/provider-accounts/{ref}/adopt", "/v1/m/sessions/provider-accounts/" + quote(str(ref), safe="") + "/adopt", body=body, query=query, tenant=tenant)
 
     def get_v1_m_sessions_provider_profiles(self, *, tenant=None, **query):
         """GET /v1/m/sessions/provider-profiles — Lists the tenant's provider profiles as references and labels, never paths.

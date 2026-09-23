@@ -523,8 +523,10 @@
     "view": {
       "profilesTitle": "プロバイダープロファイル",
       "bindingsTitle": "ソースバインディング",
+      "accountsTitle": "プロバイダーアカウント",
       "tabProfiles": "プロファイル",
       "tabBindings": "バインディング",
+      "tabAccounts": "アカウント",
       "openProfiles": "プロバイダープロファイルのページを開く",
       "openBindings": "ソースバインディングのページを開く",
       "crossHint": "プロファイルとバインディングにはそれぞれ専用ページもあり、それぞれ固有の読み取り権限で入ります。"
@@ -541,6 +543,102 @@
       "loadMoreProfiles": "さらにプロファイルを読み込む",
       "loadedProfiles": "{{n}} 件の有効なプロファイルを読み込みました。さらにあります。",
       "loadingProfiles": "プロファイルを読み込み中…"
+    }
+  },
+  "accounts": {
+    "subtitle": "このテナントの名前付きプロバイダーアカウントです。採用すると既存のプロバイダープロファイルに一度だけ名前が付き、そのホームはその場所のまま残ります。",
+    "adopt": "プロファイルを採用",
+    "cols": {
+      "name": "アカウント",
+      "driver": "ドライバー",
+      "environment": "実行環境",
+      "state": "状態",
+      "isolation": "分離",
+      "created": "作成日時"
+    },
+    "empty": {
+      "title": "プロバイダーアカウントはありません",
+      "adoptHint": "「{{control}}」を使って、既存のプロバイダープロファイルにアカウント名を付けてください。",
+      "noWrite": "プロバイダープロファイルをアカウントとして採用するには sessions:account:write が必要ですが、ロールに含まれていません。"
+    },
+    "more": "これまでに表示: {{shown}}。ほかにもアカウントがあります。さらに読み込んで表示してください。",
+    "moreFailed": "次のページのアカウントを読み取れませんでした。表示中のアカウントは完全な一覧ではありません。",
+    "isolation": {
+      "shared": "共有",
+      "dedicated": "専用",
+      "sharedMeaning": "共有: このホームはサーバー自身のシステムユーザーで実行されます。専用の分離されたホームではありません。",
+      "dedicatedMeaning": "専用: サーバーはこのホームをこのアカウント専用として記録しています。"
+    },
+    "home": {
+      "adopted": "採用済み (既存のホーム)",
+      "managed": "サーバー管理"
+    },
+    "authSource": {
+      "provider_account_home": "アカウントのホームに保存されたサインイン",
+      "managed_injection": "管理された資格情報",
+      "none": "承認されたものなし"
+    },
+    "details": {
+      "name": "名前",
+      "ref": "参照",
+      "driver": "ドライバー",
+      "environment": "実行環境",
+      "state": "状態",
+      "home": "ホーム",
+      "isolation": "分離",
+      "osUser": "システムユーザー",
+      "authSource": "認証ソース",
+      "providerRecord": "プロバイダー",
+      "identity": "サインイン中の ID",
+      "release": "リリース",
+      "pendingRelease": "保留中のリリース",
+      "created": "作成日時",
+      "updated": "更新日時",
+      "loading": "アカウントを読み取り中…",
+      "notFound": "このアカウントは見つかりませんでした。存在しないか、表示権限がありません。"
+    },
+    "identity": {
+      "notChecked": "未確認: サインインしているユーザーをプロバイダーに問い合わせていません。",
+      "reported": "{{identity}} ({{source}} による報告)",
+      "empty": "報告なし (ソース: {{source}})"
+    },
+    "adoptDialog": {
+      "title": "プロバイダープロファイルを採用",
+      "description": "既存のプロバイダープロファイルにアカウント名を付けます。ホームはその場所のまま残り、専用ではなく共有として記録されます。何もインストールされず、誰もサインインしません。",
+      "profile": "プロファイル",
+      "profilePlaceholder": "プロファイルを選択",
+      "profileOption": "{{name}} ({{ref}})",
+      "knownAccount": "{{label}} — すでにアカウントです",
+      "manual": "参照を入力…",
+      "loadMoreProfiles": "さらにプロファイルを読み込む",
+      "profilesPartial": "読み込み済みのプロファイルのみ表示しています。さらに読み込むか、参照を入力してください。",
+      "profilesFailed": "プロファイルを一覧できませんでした。代わりに参照を入力してください。",
+      "profilesLoading": "プロファイルを読み込み中…",
+      "reference": "プロファイル参照",
+      "referenceHint": "このテナントにある既存のプロバイダープロファイルの参照です。ppf_ で始まります。",
+      "referenceHintNoList": "ロールでプロバイダープロファイルを一覧できません。既存のプロファイルの参照を入力してください。ppf_ で始まります。",
+      "name": "アカウント名 (任意)",
+      "nameHint": "小文字、数字、ハイフンで、先頭は英字、32 文字以内です。空欄にするとサーバーが claude や claude-b のような名前を生成します。",
+      "submit": "採用",
+      "submitting": "採用中…",
+      "pendingStatus": "{{ref}} を採用しています。サーバーの応答を待っています。",
+      "success": "{{name}} として採用しました",
+      "failedTitle": "プロファイルは採用されませんでした",
+      "forbidden": "このテナントでアカウントを採用する権限がロールにありません。何も変更されていません。"
+    },
+    "adoption": {
+      "pending": "{{ref}} を採用しています。サーバーはまだ応答していません。",
+      "adopted": "{{ref}} は {{name}} として採用されました。",
+      "refused": "{{ref}} は採用されませんでした:",
+      "forbidden": "{{ref}} は採用されませんでした: このテナントでアカウントを採用する権限がロールにありません。何も変更されていません。",
+      "unknown": "{{ref}} の採用結果はここでは分かりません。",
+      "checking": "{{ref}} が現在アカウントかどうかを確認しています…",
+      "isAccount": "この読み取りでは、{{ref}} はアカウント {{name}} です。",
+      "notAccount": "この読み取りでは、{{ref}} はアカウントではありません。",
+      "checkFailed": "確認を完了できませんでした。",
+      "checkAgain": "再確認",
+      "open": "アカウントを開く",
+      "dismiss": "閉じる"
     }
   },
   "readiness": {

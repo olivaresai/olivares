@@ -525,8 +525,10 @@
     "view": {
       "profilesTitle": "Perfiles de proveedor",
       "bindingsTitle": "Vínculos de fuentes",
+      "accountsTitle": "Cuentas de proveedor",
       "tabProfiles": "Perfiles",
       "tabBindings": "Vínculos",
+      "tabAccounts": "Cuentas",
       "openProfiles": "Abrir la página de perfiles de proveedor",
       "openBindings": "Abrir la página de vínculos de fuentes",
       "crossHint": "Perfiles y vínculos tienen además su propia página, cada una con su propio permiso de lectura."
@@ -543,6 +545,102 @@
       "loadMoreProfiles": "Cargar más perfiles",
       "loadedProfiles": "Cargados {{n}} perfiles activos; hay más.",
       "loadingProfiles": "Cargando perfiles…"
+    }
+  },
+  "accounts": {
+    "subtitle": "Cuentas de proveedor con nombre en este tenant. Adoptar da nombre una sola vez a un perfil de proveedor existente; su directorio sigue donde está.",
+    "adopt": "Adoptar un perfil",
+    "cols": {
+      "name": "Cuenta",
+      "driver": "Driver",
+      "environment": "Entorno de ejecución",
+      "state": "Estado",
+      "isolation": "Aislamiento",
+      "created": "Creada"
+    },
+    "empty": {
+      "title": "No hay cuentas de proveedor",
+      "adoptHint": "Usa «{{control}}» para dar nombre de cuenta a un perfil de proveedor existente.",
+      "noWrite": "Adoptar un perfil de proveedor como cuenta requiere sessions:account:write, que tu rol no incluye."
+    },
+    "more": "Mostradas hasta ahora: {{shown}}. Hay más cuentas; carga más para verlas.",
+    "moreFailed": "No se pudo leer la siguiente página de cuentas. Las cuentas mostradas no son la lista completa.",
+    "isolation": {
+      "shared": "Compartido",
+      "dedicated": "Dedicado",
+      "sharedMeaning": "Compartido: este directorio se ejecuta con el usuario de sistema del propio servidor. No es un directorio dedicado ni aislado.",
+      "dedicatedMeaning": "Dedicado: el servidor registra este directorio como reservado para esta cuenta."
+    },
+    "home": {
+      "adopted": "Adoptado (un directorio existente)",
+      "managed": "Gestionado por el servidor"
+    },
+    "authSource": {
+      "provider_account_home": "Inicio de sesión guardado en el directorio de la cuenta",
+      "managed_injection": "Credencial gestionada",
+      "none": "Ninguna autorizada"
+    },
+    "details": {
+      "name": "Nombre",
+      "ref": "Referencia",
+      "driver": "Driver",
+      "environment": "Entorno de ejecución",
+      "state": "Estado",
+      "home": "Directorio",
+      "isolation": "Aislamiento",
+      "osUser": "Usuario del sistema",
+      "authSource": "Origen de autenticación",
+      "providerRecord": "Proveedor",
+      "identity": "Identidad con sesión iniciada",
+      "release": "Versión",
+      "pendingRelease": "Versión pendiente",
+      "created": "Creada",
+      "updated": "Actualizada",
+      "loading": "Leyendo la cuenta…",
+      "notFound": "No se encontró esta cuenta. Puede que no exista o que no sea visible para ti."
+    },
+    "identity": {
+      "notChecked": "Sin comprobar: nadie ha preguntado al proveedor quién tiene la sesión iniciada.",
+      "reported": "{{identity}} (informado por {{source}})",
+      "empty": "No se informó nada (origen: {{source}})"
+    },
+    "adoptDialog": {
+      "title": "Adoptar un perfil de proveedor",
+      "description": "Da nombre de cuenta a un perfil de proveedor existente. Su directorio sigue donde está y se registra como compartido, no dedicado. No se instala nada ni se inicia sesión.",
+      "profile": "Perfil",
+      "profilePlaceholder": "Elige un perfil",
+      "profileOption": "{{name}} ({{ref}})",
+      "knownAccount": "{{label}} — ya es una cuenta",
+      "manual": "Introducir una referencia…",
+      "loadMoreProfiles": "Cargar más perfiles",
+      "profilesPartial": "Solo se listan los perfiles cargados. Carga más o introduce una referencia.",
+      "profilesFailed": "No se pudieron listar los perfiles. Introduce una referencia.",
+      "profilesLoading": "Cargando perfiles…",
+      "reference": "Referencia del perfil",
+      "referenceHint": "La referencia de un perfil de proveedor existente en este tenant; empieza por ppf_.",
+      "referenceHintNoList": "Tu rol no puede listar perfiles de proveedor. Introduce la referencia de uno existente; empieza por ppf_.",
+      "name": "Nombre de la cuenta (opcional)",
+      "nameHint": "Minúsculas, dígitos y guiones, empezando por una letra, hasta 32 caracteres. Déjalo vacío y el servidor genera uno, como claude o claude-b.",
+      "submit": "Adoptar",
+      "submitting": "Adoptando…",
+      "pendingStatus": "Adoptando {{ref}}. Esperando la respuesta del servidor.",
+      "success": "Adoptado como {{name}}",
+      "failedTitle": "El perfil no se adoptó",
+      "forbidden": "Tu rol no puede adoptar cuentas en este tenant. No se cambió nada."
+    },
+    "adoption": {
+      "pending": "Adoptando {{ref}}. El servidor aún no ha respondido.",
+      "adopted": "{{ref}} se adoptó como {{name}}.",
+      "refused": "{{ref}} no se adoptó:",
+      "forbidden": "{{ref}} no se adoptó: tu rol no puede adoptar cuentas en este tenant. No se cambió nada.",
+      "unknown": "El resultado de adoptar {{ref}} no se conoce aquí.",
+      "checking": "Comprobando si {{ref}} es ahora una cuenta…",
+      "isAccount": "En esta lectura, {{ref}} es la cuenta {{name}}.",
+      "notAccount": "En esta lectura, {{ref}} no es una cuenta.",
+      "checkFailed": "No se pudo completar la comprobación.",
+      "checkAgain": "Comprobar de nuevo",
+      "open": "Abrir cuenta",
+      "dismiss": "Descartar"
     }
   },
   "readiness": {

@@ -525,8 +525,10 @@
     "view": {
       "profilesTitle": "Profils de fournisseur",
       "bindingsTitle": "Liaisons de sources",
+      "accountsTitle": "Comptes de fournisseur",
       "tabProfiles": "Profils",
       "tabBindings": "Liaisons",
+      "tabAccounts": "Comptes",
       "openProfiles": "Ouvrir la page des profils de fournisseur",
       "openBindings": "Ouvrir la page des liaisons de sources",
       "crossHint": "Les profils et les liaisons ont aussi chacun leur page, ouverte avec leur propre permission de lecture."
@@ -543,6 +545,102 @@
       "loadMoreProfiles": "Charger plus de profils",
       "loadedProfiles": "{{n}} profils actifs chargés ; il y en a d’autres.",
       "loadingProfiles": "Chargement des profils…"
+    }
+  },
+  "accounts": {
+    "subtitle": "Les comptes de fournisseur nommés de ce locataire. Adopter nomme une seule fois un profil de fournisseur existant ; son répertoire reste où il est.",
+    "adopt": "Adopter un profil",
+    "cols": {
+      "name": "Compte",
+      "driver": "Pilote",
+      "environment": "Environnement d’exécution",
+      "state": "État",
+      "isolation": "Isolation",
+      "created": "Créé"
+    },
+    "empty": {
+      "title": "Aucun compte de fournisseur",
+      "adoptHint": "Utilisez « {{control}} » pour nommer un profil de fournisseur existant comme compte.",
+      "noWrite": "Adopter un profil de fournisseur comme compte nécessite sessions:account:write, que votre rôle n’inclut pas."
+    },
+    "more": "Affichés jusqu’ici : {{shown}}. D’autres comptes existent ; chargez-en plus pour les voir.",
+    "moreFailed": "La page suivante de comptes n’a pas pu être lue. Les comptes affichés ne sont pas la liste complète.",
+    "isolation": {
+      "shared": "Partagé",
+      "dedicated": "Dédié",
+      "sharedMeaning": "Partagé : ce répertoire s’exécute sous l’utilisateur système du serveur lui-même. Ce n’est pas un répertoire dédié et isolé.",
+      "dedicatedMeaning": "Dédié : le serveur enregistre ce répertoire comme réservé à ce compte."
+    },
+    "home": {
+      "adopted": "Adopté (un répertoire existant)",
+      "managed": "Géré par le serveur"
+    },
+    "authSource": {
+      "provider_account_home": "Connexion enregistrée dans le répertoire du compte",
+      "managed_injection": "Identifiant géré",
+      "none": "Aucune autorisée"
+    },
+    "details": {
+      "name": "Nom",
+      "ref": "Référence",
+      "driver": "Pilote",
+      "environment": "Environnement d’exécution",
+      "state": "État",
+      "home": "Répertoire",
+      "isolation": "Isolation",
+      "osUser": "Utilisateur système",
+      "authSource": "Source d’authentification",
+      "providerRecord": "Fournisseur",
+      "identity": "Identité connectée",
+      "release": "Version",
+      "pendingRelease": "Version en attente",
+      "created": "Créé",
+      "updated": "Mis à jour",
+      "loading": "Lecture du compte…",
+      "notFound": "Ce compte est introuvable. Il n’existe peut-être pas, ou il ne vous est pas visible."
+    },
+    "identity": {
+      "notChecked": "Non vérifié : personne n’a demandé au fournisseur qui est connecté.",
+      "reported": "{{identity}} (signalé par {{source}})",
+      "empty": "Rien de signalé (source : {{source}})"
+    },
+    "adoptDialog": {
+      "title": "Adopter un profil de fournisseur",
+      "description": "Nommez un profil de fournisseur existant comme compte. Son répertoire reste où il est et est enregistré comme partagé, non dédié. Rien n’est installé et personne n’est connecté.",
+      "profile": "Profil",
+      "profilePlaceholder": "Choisir un profil",
+      "profileOption": "{{name}} ({{ref}})",
+      "knownAccount": "{{label}} — déjà un compte",
+      "manual": "Saisir une référence…",
+      "loadMoreProfiles": "Charger plus de profils",
+      "profilesPartial": "Seuls les profils chargés sont listés. Chargez-en plus ou saisissez une référence.",
+      "profilesFailed": "Les profils n’ont pas pu être listés. Saisissez plutôt une référence.",
+      "profilesLoading": "Chargement des profils…",
+      "reference": "Référence du profil",
+      "referenceHint": "La référence d’un profil de fournisseur existant dans ce locataire ; elle commence par ppf_.",
+      "referenceHintNoList": "Votre rôle ne peut pas lister les profils de fournisseur. Saisissez la référence d’un profil existant ; elle commence par ppf_.",
+      "name": "Nom du compte (facultatif)",
+      "nameHint": "Minuscules, chiffres et tirets, commençant par une lettre, 32 caractères au plus. Laissez vide et le serveur en génère un, comme claude ou claude-b.",
+      "submit": "Adopter",
+      "submitting": "Adoption…",
+      "pendingStatus": "Adoption de {{ref}}. En attente de la réponse du serveur.",
+      "success": "Adopté sous le nom {{name}}",
+      "failedTitle": "Le profil n’a pas été adopté",
+      "forbidden": "Votre rôle ne peut pas adopter de comptes dans ce locataire. Rien n’a été modifié."
+    },
+    "adoption": {
+      "pending": "Adoption de {{ref}}. Le serveur n’a pas encore répondu.",
+      "adopted": "{{ref}} a été adopté sous le nom {{name}}.",
+      "refused": "{{ref}} n’a pas été adopté :",
+      "forbidden": "{{ref}} n’a pas été adopté : votre rôle ne peut pas adopter de comptes dans ce locataire. Rien n’a été modifié.",
+      "unknown": "Le résultat de l’adoption de {{ref}} n’est pas connu ici.",
+      "checking": "Vérification que {{ref}} est maintenant un compte…",
+      "isAccount": "À cette lecture, {{ref}} est le compte {{name}}.",
+      "notAccount": "À cette lecture, {{ref}} n’est pas un compte.",
+      "checkFailed": "La vérification n’a pas pu aboutir.",
+      "checkAgain": "Vérifier à nouveau",
+      "open": "Ouvrir le compte",
+      "dismiss": "Ignorer"
     }
   },
   "readiness": {

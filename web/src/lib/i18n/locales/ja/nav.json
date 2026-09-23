@@ -92,7 +92,8 @@
     "agentcoreExport": "AgentCore エクスポート",
     "providers": "プロバイダー",
     "providerProfiles": "プロバイダープロファイル",
-    "providerBindings": "ソースバインディング"
+    "providerBindings": "ソースバインディング",
+    "providerAccounts": "プロバイダーアカウント"
   },
   "workspace": {
     "switch": "ワークスペースを切り替え",
@@ -159,6 +160,7 @@
     "providers": "セッションが起動するときに使う API キーとエンドポイントを登録し、テスト・交換・失効を行います",
     "providerProfiles": "セッションの起動元となるプロバイダーのホームを登録・管理し、必要に応じてその設定を読み取る",
     "providerBindings": "構成済みソースを、このノードが適用したリビジョンでプロバイダープロファイルに専用化する",
+    "providerAccounts": "名前付きのプロバイダーアカウントを一覧し、既存のプロバイダープロファイルをアカウントとして採用する",
     "routinePolicies": "Claude Code ルーチンのための実行間隔の下限、同時実行の上限、承認要件、cron 許可リスト、ブロックされた環境",
     "agentcoreExport": "このテナントのガバナンスルールを Cedar ポリシーとして AWS AgentCore へ投影する計画・確認・適用。計画では何も書き込みません",
     "workspace-templates": "ワークスペースセッション向けの、フック・設定・コネクター・ポリシーの再利用可能なスナップショット",

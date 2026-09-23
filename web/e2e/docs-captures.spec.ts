@@ -1061,6 +1061,14 @@ const VIEWS: {
     settle: 1000,
     heading: /^Source bindings$/,
   },
+  // The third door of the same room: the named provider accounts, under the account
+  // read tier. On a clean install this capture is the empty list.
+  {
+    id: 'provider-accounts',
+    path: '/provider-accounts',
+    settle: 1000,
+    heading: /^Provider accounts$/,
+  },
   {
     id: 'agent-artifacts',
     path: '/agent-artifacts',

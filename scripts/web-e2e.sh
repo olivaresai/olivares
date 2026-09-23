@@ -24,6 +24,17 @@
 #   Extra args are forwarded to the SHARED run only — passing a filter that selects a
 #   first-boot spec is handled by matching it there too, so `scripts/web-e2e.sh
 #   e2e/smoke.spec.ts` still does the right thing.
+#
+#   E2E_SPECS="e2e/<a>.spec.ts ..." runs ONLY those specs (a first-boot one still gets its
+#   own virgin engine), after a STRICT frozen install, with Playwright's JSON report gated by
+#   scripts/lib/e2e-selection.sh: a missing or empty report, or any skip, answers 2 (could not
+#   look); a failure or a retried pass answers 1. A report left by an earlier run is removed
+#   before each run, so it can never be read as this run's answer. E2E_SPECS that is SET but
+#   selects nothing (empty or blank) answers 2 before anything is built; only an UNSET
+#   E2E_SPECS takes the default run. That is the qualification form a CI job uses.
+#   E2E_REPORT_DIR places the JSON reports (default web/playwright-report/e2e-json).
+#   Every run exports E2E_WORK_DIR, the harness-owned work directory its cleanup removes,
+#   for spec fixtures that must exist on the engine's host.
 # Requires: go, pnpm, and Playwright's chromium (`pnpm --dir web exec playwright install chromium`).
 set -euo pipefail
 
@@ -68,6 +79,8 @@ _olivares_git_env="$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" && pwd)/lib/g
 # `git checkout --theirs`, which takes the WHOLE file and silently dropped this line and its
 # call below. #625 had already fixed this script; the merge un-fixed it.
 . "$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" && pwd)/lib/build-bin.sh"
+# shellcheck source=lib/e2e-selection.sh
+. "$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" && pwd)/lib/e2e-selection.sh"
 
 PIDFILE="$WORK/engine.pids"
 : >"$PIDFILE"
@@ -125,8 +138,26 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# THE SELECTION IS READ BEFORE ANYTHING IS BUILT: a selection that names nothing runnable
+# answers 2 at once instead of after ten minutes of builds. A SET but empty E2E_SPECS is such
+# a selection, not a request for the default run: only an unset one means "every spec".
+SELECTED=()
+GATES=()
+if [ -n "${E2E_SPECS+set}" ]; then
+  sel="$(e2e_selection_parse "$ROOT/web" "$E2E_SPECS")" || exit $?
+  while IFS= read -r s; do SELECTED+=("$s"); done <<<"$sel"
+  REPORT_DIR="${E2E_REPORT_DIR:-$ROOT/web/playwright-report/e2e-json}"
+  mkdir -p "$REPORT_DIR"
+fi
+export E2E_WORK_DIR="$WORK"
+
 echo "==> Building web bundle + olivares binary"
-pnpm --dir "$ROOT/web" install --frozen-lockfile >/dev/null 2>&1 || true
+if [ "${#SELECTED[@]}" -gt 0 ]; then
+  # A qualification never runs on dependencies that failed to install.
+  pnpm --dir "$ROOT/web" install --frozen-lockfile
+else
+  pnpm --dir "$ROOT/web" install --frozen-lockfile >/dev/null 2>&1 || true
+fi
 pnpm --dir "$ROOT/web" run build
 build_olivares_bin "$BIN"
 
@@ -207,6 +238,20 @@ while IFS= read -r spec; do
 done < <(cd "$ROOT/web" && ls e2e/*.spec.ts | sort)
 echo "==> ${#OTROS_RUNNERS[@]} spec(s) excluida(s) por tener runner propio: ${OTROS_RUNNERS[*]}"
 
+if [ "${#SELECTED[@]}" -gt 0 ]; then
+  keep_fb=()
+  keep_sh=()
+  for s in "${FIRSTBOOT[@]}"; do e2e_selected "$s" "${SELECTED[@]}" && keep_fb+=("$s"); done
+  for s in "${SHARED[@]}"; do e2e_selected "$s" "${SELECTED[@]}" && keep_sh+=("$s"); done
+  FIRSTBOOT=("${keep_fb[@]}")
+  SHARED=("${keep_sh[@]}")
+  if [ "$((${#FIRSTBOOT[@]} + ${#SHARED[@]}))" -ne "${#SELECTED[@]}" ]; then
+    echo "web-e2e: COULD NOT LOOK: the selection (${SELECTED[*]}) names a spec another runner owns" >&2
+    exit 2
+  fi
+  echo "==> selection: ${SELECTED[*]}"
+fi
+
 echo "==> ${#FIRSTBOOT[@]} first-boot spec(s), each on its own virgin engine; ${#SHARED[@]} shared"
 cd "$ROOT/web"
 rc=0
@@ -215,16 +260,35 @@ next_port="$PORT"
 for spec in "${FIRSTBOOT[@]}"; do
   echo "==> [$spec] booting a virgin engine on 127.0.0.1:$next_port"
   token="$(boot_engine "$next_port" "$WORK/$(basename "$spec" .spec.ts)")"
-  PLAYWRIGHT_BASE_URL="http://127.0.0.1:$next_port" PLAYWRIGHT_SETUP_TOKEN="$token" \
-    pnpm exec playwright test "$spec" || rc=1
+  if [ "${#SELECTED[@]}" -gt 0 ]; then
+    grc=0
+    PLAYWRIGHT_BASE_URL="http://127.0.0.1:$next_port" PLAYWRIGHT_SETUP_TOKEN="$token" \
+      e2e_gated_run "$REPORT_DIR/$(basename "$spec" .spec.ts).json" "$spec" \
+      pnpm exec playwright test "$spec" --reporter=list,json || grc=$?
+    GATES+=("$grc")
+  else
+    PLAYWRIGHT_BASE_URL="http://127.0.0.1:$next_port" PLAYWRIGHT_SETUP_TOKEN="$token" \
+      pnpm exec playwright test "$spec" || rc=1
+  fi
   next_port="$((next_port + 2))"
 done
 
 if [ "${#SHARED[@]}" -gt 0 ]; then
   echo "==> [shared] booting the engine for the remaining specs on 127.0.0.1:$next_port"
   token="$(boot_engine "$next_port" "$WORK/shared")"
-  PLAYWRIGHT_BASE_URL="http://127.0.0.1:$next_port" PLAYWRIGHT_SETUP_TOKEN="$token" \
-    pnpm exec playwright test "${SHARED[@]}" "$@" || rc=1
+  if [ "${#SELECTED[@]}" -gt 0 ]; then
+    grc=0
+    PLAYWRIGHT_BASE_URL="http://127.0.0.1:$next_port" PLAYWRIGHT_SETUP_TOKEN="$token" \
+      e2e_gated_run "$REPORT_DIR/shared.json" shared \
+      pnpm exec playwright test "${SHARED[@]}" "$@" --reporter=list,json || grc=$?
+    GATES+=("$grc")
+  else
+    PLAYWRIGHT_BASE_URL="http://127.0.0.1:$next_port" PLAYWRIGHT_SETUP_TOKEN="$token" \
+      pnpm exec playwright test "${SHARED[@]}" "$@" || rc=1
+  fi
 fi
 
+if [ "${#SELECTED[@]}" -gt 0 ]; then
+  rc="$(e2e_worst "$rc" "${GATES[@]}")"
+fi
 exit "$rc"

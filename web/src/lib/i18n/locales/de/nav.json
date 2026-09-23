@@ -92,7 +92,8 @@
     "agentcoreExport": "AgentCore-Export",
     "providers": "Anbieter",
     "providerProfiles": "Anbieterprofile",
-    "providerBindings": "Quellenbindungen"
+    "providerBindings": "Quellenbindungen",
+    "providerAccounts": "Anbieterkonten"
   },
   "workspace": {
     "switch": "Arbeitsbereich wechseln",
@@ -159,6 +160,7 @@
     "providers": "Registrieren Sie die API-Schlüssel und Endpunkte, mit denen Sitzungen starten; testen, wechseln und widerrufen Sie sie",
     "providerProfiles": "Anbieterverzeichnisse registrieren und verwalten, unter denen Sitzungen starten, und ihre Konfiguration auf Anfrage lesen",
     "providerBindings": "Konfigurierte Quellen in der von diesem Knoten angewendeten Revision Anbieterprofilen widmen",
+    "providerAccounts": "Benannte Anbieterkonten auflisten und ein vorhandenes Anbieterprofil als Konto übernehmen",
     "routinePolicies": "Kadenzuntergrenzen, Parallelitätsobergrenzen, Genehmigungspflichten, Cron-Freigabelisten und gesperrte Umgebungen für Claude-Code-Routinen",
     "agentcoreExport": "Die Projektion der Governance-Regeln dieses Mandanten auf AWS AgentCore als Cedar-Richtlinien planen, prüfen und anwenden; das Planen schreibt nichts",
     "workspace-templates": "Wiederverwendbare Schnappschüsse von Hooks, Einstellungen, Konnektoren und Richtlinien für Arbeitsbereichssitzungen",
