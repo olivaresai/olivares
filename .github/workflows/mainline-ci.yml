@@ -258,6 +258,13 @@ jobs:
   # The journal set below must stay a SUBSET of paths no gated job consumes; design/ at
   # large is NOT listed on purpose (lint-commerce reads an internal design note (not shipped)).
   classify:
+    # ROUTE, with the guard pr-ci.yml and installer-matrix.yml already use. A push to main
+    # starts this workflow in every repository that carries it; classify is selected only in
+    # the public repository, or where the preprod release profile is set. Anywhere else it is
+    # skipped, on a push and on a dispatch alike, and every job that needs it is skipped with
+    # it, race-hot included, because its always() still reads classify's verdict. The secrets
+    # job does not need classify and keeps running on every push.
+    if: github.repository == 'olivaresai/olivares' || vars.OLIVARES_RELEASE_PROFILE == 'preprod'
     # CI_RUNNER_LIGHT FIRST (2026-08-01). This job gates every other one through
     # `needs`, so a run cannot start while it queues — and measured today, it was
     # queueing: the three Hetzner runners busy=true, 19 jobs waiting, and srv17
