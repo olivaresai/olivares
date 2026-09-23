@@ -4,10 +4,12 @@
 #
 # provider-accounts-qualification — a one-branch qualification vehicle for the provider-account
 # console. It runs ONLY on a pull request whose head is the branch
-# `ci/provider-accounts-console-qualification-vehicle` of this repository, and that branch holds
-# exactly one commit on top of the product head it qualifies: this file and the two mutant
-# patches under ci/qualification/. Every job runs on the PRODUCT head (the vehicle commit's
-# parent), so each result names the source it qualifies.
+# `ci/provider-accounts-console-qualification-vehicle` of this repository. That branch carries
+# pull request #116's product plus three vehicle files: this workflow and the two mutant patches
+# under ci/qualification/. The identify job pins #116's head and requires the vehicle's tree to
+# equal #116's merge tree (refs/pull/116/merge) plus exactly those three files. Every other job
+# runs on that merge commit, the tree #116's own pull-request CI qualifies, so each result
+# names exactly the product it qualifies.
 #
 #   baseline         the browser journey and the custody test both pass;
 #   m1-intent        with the M1 mutant, the journey fails at an assertion that requires the
@@ -42,44 +44,65 @@ defaults:
     shell: bash
 
 jobs:
-  # The vehicle's own identity: HEAD is the pull request's head, it has one parent, and it
-  # changes only the vehicle's three files. Its parent is the product head every job runs on.
+  # The vehicle's own identity. The branch may reach this repository as one squashed commit
+  # over main that also carries #116's whole delta, so the product cannot be named by ancestry.
+  # It is named by TREE: #116's merge commit, whose second parent must be the pinned #116 head,
+  # must differ from the vehicle head by exactly the vehicle's three files. Anything else (a
+  # product change in the vehicle, a moved #116 head, a missing merge ref) refuses with exit 2.
   identify:
     if: github.repository == 'olivaresai/olivares' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'ci/provider-accounts-console-qualification-vehicle'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
-      product_head: ${{ steps.head.outputs.product_head }}
+      product_ref: ${{ steps.product.outputs.product_ref }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           ref: ${{ github.event.pull_request.head.sha }}
-          fetch-depth: 2
-      - name: identify the product head under the vehicle commit
-        id: head
-        timeout-minutes: 1
+      - name: identify the product merge tree the vehicle carries
+        id: product
+        timeout-minutes: 3
         env:
           VEHICLE_HEAD: ${{ github.event.pull_request.head.sha }}
+          # The product under qualification: pull request #116 at this public head commit.
+          QUALIFIED_PR: '116'
+          QUALIFIED_HEAD: c58dada6627d5123696280845c01d12636467c15
         run: |
           set -euo pipefail
           [ "$(git rev-parse HEAD)" = "$VEHICLE_HEAD" ] || { echo "::error::HEAD is not the pull request's head"; exit 2; }
-          parents="$(git rev-list --parents -n 1 HEAD | wc -w)"
-          [ "$parents" -eq 2 ] || { echo "::error::the vehicle commit must have exactly one parent"; exit 2; }
-          expected=".github/workflows/provider-accounts-qualification.yml
-          ci/qualification/custody-removal-skipped.patch
-          ci/qualification/m1-intent-dropped-on-refused-read.patch"
-          changed="$(git diff --name-only HEAD^ HEAD | sort)"
-          if [ "$changed" != "$(printf '%s\n' $expected | sort)" ]; then
-            echo "::error::the vehicle commit changes more than its own three files:"
-            printf '%s\n' "$changed"
+          if ! git fetch --no-tags --depth=2 origin \
+            "+refs/pull/$QUALIFIED_PR/merge:refs/qualification/merge" \
+            "+refs/pull/$QUALIFIED_PR/head:refs/qualification/head"; then
+            echo "::error::refs/pull/$QUALIFIED_PR/merge or its head could not be fetched from this repository"
             exit 2
           fi
-          product="$(git rev-parse HEAD^)"
-          echo "product_head=$product" >>"$GITHUB_OUTPUT"
+          merge="$(git rev-parse --verify 'refs/qualification/merge^{commit}')"
+          head="$(git rev-parse --verify 'refs/qualification/head^{commit}')"
+          if [ "$head" != "$QUALIFIED_HEAD" ]; then
+            echo "::error::#$QUALIFIED_PR's head is $head, not the pinned $QUALIFIED_HEAD"
+            exit 2
+          fi
+          second="$(git rev-parse --verify --quiet "$merge^2")" || true
+          if [ "$second" != "$QUALIFIED_HEAD" ]; then
+            echo "::error::refs/pull/$QUALIFIED_PR/merge $merge does not merge the pinned head (second parent: ${second:-none})"
+            exit 2
+          fi
+          expected="$(printf '%s\n' .github/workflows/provider-accounts-qualification.yml \
+            ci/qualification/custody-removal-skipped.patch \
+            ci/qualification/m1-intent-dropped-on-refused-read.patch | sort)"
+          changed="$(git diff --name-only "$merge" HEAD | sort)"
+          if [ "$changed" != "$expected" ]; then
+            echo "::error::the vehicle's tree differs from #$QUALIFIED_PR's merge tree by more than its three files"
+            comm -13 <(printf '%s\n' "$expected") <(printf '%s\n' "$changed") | sed 's/^/  extra: /'
+            comm -23 <(printf '%s\n' "$expected") <(printf '%s\n' "$changed") | sed 's/^/  missing: /'
+            exit 2
+          fi
+          echo "product_ref=$merge" >>"$GITHUB_OUTPUT"
           {
             echo "### Provider accounts qualification vehicle"
-            echo "Vehicle head \`$VEHICLE_HEAD\`; product head qualified by every job: \`$product\`."
+            echo "Vehicle head \`$VEHICLE_HEAD\`. Every job qualifies #$QUALIFIED_PR's merge tree \`$merge\`:"
+            echo "head \`$QUALIFIED_HEAD\` merged into \`$(git rev-parse "$merge^1")\`."
           } >>"$GITHUB_STEP_SUMMARY"
 
   baseline:
@@ -88,17 +111,17 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 50
     env:
-      PRODUCT_HEAD: ${{ needs.identify.outputs.product_head }}
+      PRODUCT_REF: ${{ needs.identify.outputs.product_ref }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ needs.identify.outputs.product_head }}
-      - name: confirm the product head
+          ref: ${{ needs.identify.outputs.product_ref }}
+      - name: confirm the product merge tree
         timeout-minutes: 1
         run: |
           set -euo pipefail
-          [ "$(git rev-parse HEAD)" = "$PRODUCT_HEAD" ] || { echo "::error::checkout is not the product head"; exit 2; }
+          [ "$(git rev-parse HEAD)" = "$PRODUCT_REF" ] || { echo "::error::checkout is not the product merge commit"; exit 2; }
           EVIDENCE="$RUNNER_TEMP/qualification"
           echo "EVIDENCE=$EVIDENCE" >>"$GITHUB_ENV"
           mkdir -p "$EVIDENCE"
@@ -170,7 +193,7 @@ jobs:
           except (OSError, ValueError, KeyError, IndexError) as e:
               problems.append(f"custody vitest report unreadable: {e}")
           lines.insert(0, f"journey: exit {jrc}, stats {stats}")
-          verdict = {"job": "baseline", "product_head": os.environ["PRODUCT_HEAD"], "passed": not problems,
+          verdict = {"job": "baseline", "product_ref": os.environ["PRODUCT_REF"], "passed": not problems,
                      "problems": problems, "evidence": lines}
           json.dump(verdict, open(os.path.join(ev, "verdict.json"), "w"), indent=2)
           with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as s:
@@ -218,23 +241,25 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 50
     env:
-      PRODUCT_HEAD: ${{ needs.identify.outputs.product_head }}
+      PRODUCT_REF: ${{ needs.identify.outputs.product_ref }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ github.event.pull_request.head.sha }}
-          fetch-depth: 2
-      - name: move to the product head and apply the M1 mutant
-        timeout-minutes: 1
+          ref: ${{ needs.identify.outputs.product_ref }}
+      - name: apply the M1 mutant to the product merge tree
+        timeout-minutes: 2
+        env:
+          VEHICLE_HEAD: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
           EVIDENCE="$RUNNER_TEMP/qualification"
           echo "EVIDENCE=$EVIDENCE" >>"$GITHUB_ENV"
           mkdir -p "$EVIDENCE"
-          cp ci/qualification/m1-intent-dropped-on-refused-read.patch "$EVIDENCE/mutant.patch"
-          git checkout --quiet --detach "$PRODUCT_HEAD"
-          [ "$(git rev-parse HEAD)" = "$PRODUCT_HEAD" ] || { echo "::error::checkout is not the product head"; exit 2; }
+          [ "$(git rev-parse HEAD)" = "$PRODUCT_REF" ] || { echo "::error::checkout is not the product merge commit"; exit 2; }
+          # The patch comes from the vehicle head; the tree it is applied to is the product's.
+          git fetch --no-tags --depth=1 origin "$VEHICLE_HEAD" || { echo "::error::the vehicle head could not be fetched"; exit 2; }
+          git show "$VEHICLE_HEAD:ci/qualification/m1-intent-dropped-on-refused-read.patch" >"$EVIDENCE/mutant.patch"
           git apply --check "$EVIDENCE/mutant.patch"
           git apply "$EVIDENCE/mutant.patch"
           git diff --stat | tee "$EVIDENCE/mutant.diffstat"
@@ -342,7 +367,7 @@ jobs:
                           lines.append(f"source line {line}: {src[line - 1].strip()}")
           for f in glob.glob("web/test-results/*/effect-receipt.json"):
               lines.append(f"effect receipt read_refusal_statuses: {json.load(open(f)).get('read_refusal_statuses')}")
-          verdict = {"job": "m1-intent", "product_head": os.environ["PRODUCT_HEAD"], "named_assertions": list(named),
+          verdict = {"job": "m1-intent", "product_ref": os.environ["PRODUCT_REF"], "named_assertions": list(named),
                      "failed_as_named": not problems, "problems": problems, "evidence": lines}
           json.dump(verdict, open(os.path.join(ev, "verdict.json"), "w"), indent=2)
           with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as s:
@@ -388,23 +413,25 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
-      PRODUCT_HEAD: ${{ needs.identify.outputs.product_head }}
+      PRODUCT_REF: ${{ needs.identify.outputs.product_ref }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ github.event.pull_request.head.sha }}
-          fetch-depth: 2
-      - name: move to the product head and apply the custody mutant
-        timeout-minutes: 1
+          ref: ${{ needs.identify.outputs.product_ref }}
+      - name: apply the custody mutant to the product merge tree
+        timeout-minutes: 2
+        env:
+          VEHICLE_HEAD: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
           EVIDENCE="$RUNNER_TEMP/qualification"
           echo "EVIDENCE=$EVIDENCE" >>"$GITHUB_ENV"
           mkdir -p "$EVIDENCE"
-          cp ci/qualification/custody-removal-skipped.patch "$EVIDENCE/mutant.patch"
-          git checkout --quiet --detach "$PRODUCT_HEAD"
-          [ "$(git rev-parse HEAD)" = "$PRODUCT_HEAD" ] || { echo "::error::checkout is not the product head"; exit 2; }
+          [ "$(git rev-parse HEAD)" = "$PRODUCT_REF" ] || { echo "::error::checkout is not the product merge commit"; exit 2; }
+          # The patch comes from the vehicle head; the tree it is applied to is the product's.
+          git fetch --no-tags --depth=1 origin "$VEHICLE_HEAD" || { echo "::error::the vehicle head could not be fetched"; exit 2; }
+          git show "$VEHICLE_HEAD:ci/qualification/custody-removal-skipped.patch" >"$EVIDENCE/mutant.patch"
           git apply --check "$EVIDENCE/mutant.patch"
           git apply "$EVIDENCE/mutant.patch"
           git diff --stat | tee "$EVIDENCE/mutant.diffstat"
@@ -479,7 +506,7 @@ jobs:
                           problems.append(f"{marker}: first test-file frame line {line} is outside retiredAdoptionGone (lines {start}-{end})")
                       elif line:
                           lines.append(f"  source line {line}: {src[line - 1].strip()}")
-          verdict = {"job": "custody-removal", "product_head": os.environ["PRODUCT_HEAD"],
+          verdict = {"job": "custody-removal", "product_ref": os.environ["PRODUCT_REF"],
                      "named_assertion": "retiredAdoptionGone", "failed_as_named": not problems,
                      "problems": problems, "evidence": lines}
           json.dump(verdict, open(os.path.join(ev, "verdict.json"), "w"), indent=2)
@@ -509,17 +536,17 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
-      PRODUCT_HEAD: ${{ needs.identify.outputs.product_head }}
+      PRODUCT_REF: ${{ needs.identify.outputs.product_ref }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ needs.identify.outputs.product_head }}
-      - name: confirm the product head
+          ref: ${{ needs.identify.outputs.product_ref }}
+      - name: confirm the product merge tree
         timeout-minutes: 1
         run: |
           set -euo pipefail
-          [ "$(git rev-parse HEAD)" = "$PRODUCT_HEAD" ] || { echo "::error::checkout is not the product head"; exit 2; }
+          [ "$(git rev-parse HEAD)" = "$PRODUCT_REF" ] || { echo "::error::checkout is not the product merge commit"; exit 2; }
           [ -z "$(git status --porcelain)" ] || { echo "::error::the checkout is not clean"; exit 2; }
           EVIDENCE="$RUNNER_TEMP/qualification"
           echo "EVIDENCE=$EVIDENCE" >>"$GITHUB_ENV"
@@ -590,7 +617,7 @@ jobs:
           (cd "$EVIDENCE/published" && sha256sum -- *.png manifest.json manifest.diff changes.txt >SHA256SUMS 2>/dev/null)
           {
             echo "### captures: $([ "$problems" = 0 ] && echo PUBLISHED || echo FAILED)"
-            echo "Product head \`$PRODUCT_HEAD\`; harness exit $rc."
+            echo "Product merge tree \`$PRODUCT_REF\`; harness exit $rc."
             echo "Screenshot coverage exit before $(cat "$EVIDENCE/screenshot-coverage.before.rc" 2>/dev/null || echo '?'), after $(cat "$EVIDENCE/screenshot-coverage.after.rc" 2>/dev/null || echo '?') (ceiling unchanged)."
             echo "The published manifest.json records this run's views only; import the captures, not the manifest as a whole."
             echo '```'
