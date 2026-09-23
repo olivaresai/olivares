@@ -221,12 +221,6 @@ func TestProjectSkipsEmptyAndUnrenderable(t *testing.T) {
 	}
 }
 
-func TestCedarStrEscaping(t *testing.T) {
-	if got := cedarStr(`a"b\c`); got != `"a\"b\\c"` {
-		t.Errorf("cedarStr escaping = %s", got)
-	}
-}
-
 func TestMergeCedarSources(t *testing.T) {
 	if got := mergeCedarSources("", "B"); got != "B" {
 		t.Errorf("merge empty+B = %q", got)

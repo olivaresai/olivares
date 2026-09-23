@@ -361,7 +361,10 @@ export function AuditView() {
           no pointer, though they still took keyboard focus. With a floor the row
           stays 36 px wherever the controls fit on one line (1280 px and up) and
           grows only where they wrap, pushing the table down instead of over. */}
-      <div data-slot="work-chrome" className="flex min-h-9 min-w-0 items-center">
+      <div
+        data-slot="work-chrome"
+        className="flex min-h-9 min-w-0 items-center"
+      >
         <PageHeader
           className="min-w-0 w-full"
           icon={FileCheck2}

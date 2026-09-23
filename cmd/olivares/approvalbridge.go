@@ -361,6 +361,99 @@ func (b *approvalBridge) gateOnce(ctx context.Context, tenant model.TenantID, ac
 	return ref, status, boundHash, nil
 }
 
+// errNotificationUnavailable reports that an approval notification could not be opened or
+// deduplicated. The caller's original deny stands; nothing is authorized either way.
+var errNotificationUnavailable = errors.New("approval-bridge: approval notification unavailable")
+
+// notify opens a REQUEST-ONLY approval notification for a call that was already denied and
+// that nothing will resume: a human can see it and act on the underlying policy. It returns
+// no status because no status authorizes anything — it never consults or consumes
+// break-glass (unlike gateOnce) and never reuses an approval as a grant. It shares the exact
+// subject/plan identity, the per-identity lock, the memo and the durable lookup of the
+// actuation paths, with its own dedup policy (notificationCovered): a pending notification,
+// or an approved/rejected/canceled one decided inside the positive configured window,
+// suppresses a duplicate; anything else opens a fresh one. A lookup error opens nothing and
+// reports errNotificationUnavailable; the caller's deny stands either way. An unconfigured
+// tenant is a no-op, warned once.
+func (b *approvalBridge) notify(ctx context.Context, tenant model.TenantID, action, subjectKind, subjectRef, planHash, reason, requestedBy string) error {
+	cred, ok := b.cred(tenant)
+	if !ok {
+		b.warnUnconfigured(tenant)
+		return nil
+	}
+	encoded := encodeSubjectRef(subjectRef, planHash)
+	key := idemKey(cred.tenant, action, subjectKind, encoded)
+	unlock := b.locks.lock(key)
+	defer unlock()
+
+	if memoRef := b.memoGet(key); memoRef != "" {
+		v, err := b.readApproval(ctx, cred, memoRef)
+		if err != nil {
+			return fmt.Errorf("%w: %v", errNotificationUnavailable, err)
+		}
+		if b.notificationCovered(cred, v) {
+			return nil
+		}
+		b.memoDel(key)
+	}
+	found, err := b.findNotification(ctx, cred, action, subjectKind, encoded)
+	if err != nil {
+		return fmt.Errorf("%w: %v", errNotificationUnavailable, err)
+	}
+	if found != "" {
+		b.memoSet(key, found)
+		return nil
+	}
+	ref, status, err := b.createApproval(ctx, cred, action, subjectKind, encoded,
+		composeReason(action, subjectKind, subjectRef, planHash, requestedBy, reason))
+	if err != nil {
+		return err
+	}
+	b.memoSet(key, ref)
+	b.log.Info("approval-bridge: opened approval notification (request-only; authorizes nothing)",
+		"tenant", cred.tenantStr, "action", action, "subject_kind", subjectKind,
+		"approval_ref", ref, "plan_bound", planHash != "", "status", status)
+	return nil
+}
+
+// notificationCovered is the notification dedup policy: pending always; approved, rejected
+// or canceled only when decided inside the positive configured window (withinGrant fails
+// closed on a missing or unparseable time and on a non-positive window).
+func (b *approvalBridge) notificationCovered(cred serviceCred, v approvalView) bool {
+	switch v.status {
+	case nbPending:
+		return true
+	case nbApproved, nbRejected, nbCanceled:
+		return b.withinGrant(v.decidedAt, cred.expiresIn)
+	default:
+		return false
+	}
+}
+
+// findNotification is the durable half of the notification dedup policy: a pending row, or
+// a decided row inside the positive window. With no positive window no decided row is
+// scanned (a zero scan window would mean "any age").
+func (b *approvalBridge) findNotification(ctx context.Context, cred serviceCred, action, subjectKind, encodedSubjectRef string) (string, error) {
+	statuses := []string{nbPending}
+	if cred.expiresIn > 0 {
+		statuses = append(statuses, nbApproved, nbRejected, nbCanceled)
+	}
+	for _, st := range statuses {
+		window := int64(0)
+		if st != nbPending {
+			window = cred.expiresIn
+		}
+		ref, found, _, err := b.scanForApproval(ctx, cred, action, subjectKind, encodedSubjectRef, st, window)
+		if err != nil {
+			return "", err
+		}
+		if found {
+			return ref, nil
+		}
+	}
+	return "", nil
+}
+
 // status reports the effective decision for a previously-opened approval, plus the plan
 // hash it was BOUND to (read from storage, never echoed from the caller) so the module
 // can enforce anti-TOCTOU. An unconfigured tenant or a denyGate-style reference denies.

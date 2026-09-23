@@ -56,6 +56,7 @@ type quickstartGovernedRAGOptions struct {
 	// needs its own or the parent's is simply not there.
 	publicURL    string
 	publicURLSet bool
+	loginProxies loginProxyOptions
 	// publicAddr is publicURL after ONE resolution, performed before any directory
 	// or file is created. Everything downstream reads this and never the
 	// environment.
@@ -119,12 +120,14 @@ func newQuickstartGovernedRAGCmd() *cobra.Command {
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			opts.publicURLSet = cmd.Flags().Changed("public-url")
+			opts.loginProxies.set = cmd.Flags().Changed("login-trusted-proxies")
 			return runQuickstartGovernedRAG(cmd.Context(), cmd.OutOrStdout(), opts)
 		},
 	}
 	f := cmd.Flags()
 	f.StringVar(&opts.listen, "listen", opts.listen, "HTTP (REST + web console) listen address when --start is used")
 	f.StringVar(&opts.publicURL, "public-url", "", publicURLFlagHelp)
+	f.StringVar(&opts.loginProxies.value, "login-trusted-proxies", "", loginTrustedProxiesFlagHelp)
 	f.StringVar(&opts.grpcListen, "grpc-listen", opts.grpcListen, "gRPC listen address when --start is used")
 	f.StringVar(&opts.dataDir, "data-dir", "", "data directory (default $OLIVARES_DATA_DIR, an existing ./olivares-data, else $XDG_DATA_HOME/olivares or ~/.local/share/olivares)")
 	f.StringVar(&opts.outDir, "out-dir", "", "directory for generated governed-RAG config (default <data-dir>/quickstart/governed-rag)")
@@ -159,6 +162,11 @@ func runQuickstartGovernedRAG(ctx context.Context, out io.Writer, opts quickstar
 	if err := opts.validate(); err != nil {
 		return err
 	}
+	loginProxies, err := opts.loginProxies.resolve(osGetenv)
+	if err != nil {
+		return err
+	}
+	opts.loginProxies.resolved = loginProxies
 	// RESOLVE THE DECLARED ADDRESS BEFORE ANYTHING IS WRITTEN, and resolve it
 	// ONCE. This command used to read the setting twice: once here through
 	// runEngine, and once inside the bootstrap-script generator, which DISCARDED
@@ -221,6 +229,7 @@ func governedRAGServeOptions(opts quickstartGovernedRAGOptions) serveOptions {
 		engine: "sqlite", checkpointInterval: time.Hour,
 		publicAddr: opts.publicAddr, publicAddrResolved: true,
 		publicAddrSource: opts.publicAddrSource,
+		loginProxies:     opts.loginProxies,
 	}
 }
 

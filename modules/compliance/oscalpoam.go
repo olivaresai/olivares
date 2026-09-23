@@ -4,6 +4,12 @@
 
 package compliance
 
+import (
+	"errors"
+
+	"github.com/olivaresai/olivares/core/license"
+)
+
 // This file is the OPEN-CORE half of OSCAL reinforcement: the seam that lets a
 // commercial add-on emit a FedRAMP-adjacent OSCAL plan-of-action-and-milestones (POA&M)
 // alongside the evidence export's three open models (component-definition +
@@ -24,9 +30,9 @@ package compliance
 type POAMBuilder interface {
 	// BuildPOAM renders the POA&M model as a JSON object to attach to the OSCAL bundle, from
 	// the package's NOT-satisfied controls. It returns (nil, nil) when there is nothing to
-	// plan (every control satisfied) so the export simply omits the model; it returns an error
-	// only on a genuine rendering failure (the caller logs it and omits the POA&M — a POA&M is
-	// never allowed to fail the evidence export).
+	// plan (every control satisfied) so the export simply omits the model. An entitlement or
+	// rendering error is disclosed as a fixed omission reason, without the error's contents;
+	// it never fails the open evidence export.
 	BuildPOAM(in POAMInput) (map[string]any, error)
 }
 
@@ -98,22 +104,37 @@ func poamInputFrom(dto evidencePackageDTO, results []controlResultDTO, fwName st
 	}
 }
 
-// attachPOAM renders the POA&M (when a builder is wired) and attaches it to the OSCAL bundle
-// under "plan-of-action-and-milestones". It is fail-safe: a builder error or a nil model
-// leaves the bundle's three models untouched — a POA&M never fails or alters the evidence
-// export. Returns true when a model was attached (for the self-audit meta).
-func (m *Module) attachPOAM(doc map[string]any, dto evidencePackageDTO, results []controlResultDTO, fwName string, ref *ProfileRef) bool {
+type poamAttachmentOutcome struct {
+	attached       bool
+	omissionReason string
+}
+
+// attachPOAM preserves the open models and sealed manifest. A builder error adds a safe
+// omission notice to the export disclaimer and returns its fixed reason for the audit.
+// An absent builder or nil model leaves the export unchanged.
+func (m *Module) attachPOAM(doc map[string]any, dto evidencePackageDTO, results []controlResultDTO, fwName string, ref *ProfileRef) poamAttachmentOutcome {
 	if m.poamBuilder == nil {
-		return false
+		return poamAttachmentOutcome{}
 	}
 	poam, err := m.poamBuilder.BuildPOAM(poamInputFrom(dto, results, fwName, ref))
 	if err != nil {
-		m.debugf("compliance: OSCAL POA&M render failed; omitting the POA&M model", "err", err)
-		return false
+		reason := "render_failed"
+		notice := " POA&M section omitted: rendering failed (render_failed)."
+		if errors.Is(err, license.ErrAddonRequiresLicense) {
+			reason = "addon_requires_license"
+			notice = " POA&M section omitted: the required add-on license is unavailable (addon_requires_license)."
+		}
+		disclaimer, _ := doc["disclaimer"].(string)
+		doc["disclaimer"] = disclaimer + notice
+		if m.log != nil {
+			m.log.Warn("compliance: OSCAL POA&M omitted",
+				"package_id", dto.ID, "framework", dto.Framework, "reason", reason)
+		}
+		return poamAttachmentOutcome{omissionReason: reason}
 	}
 	if poam == nil {
-		return false
+		return poamAttachmentOutcome{}
 	}
 	doc["plan-of-action-and-milestones"] = poam
-	return true
+	return poamAttachmentOutcome{attached: true}
 }

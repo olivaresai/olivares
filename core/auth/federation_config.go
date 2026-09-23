@@ -230,7 +230,8 @@ type ResolvedIdP struct {
 	Scope model.TenantID
 	Alias string
 	// ClaimedDomains lets the callback enforce that the IdP only vouches for identities in
-	// the domains it claimed (empty ⇒ unconstrained, e.g. the global/default IdP).
+	// the domains it claimed (empty ⇒ a tenant's IdP vouches for nobody; the global IdP is
+	// unconstrained; see AllowsEmail).
 	ClaimedDomains []string
 	// SCIMAuthoritative is the RESOLVED IdP's D4 flag, so CompleteSSO reads SCIM authority
 	// from the config that actually authenticated the user — not a scope-LIMIT-1 lookup that
@@ -238,20 +239,24 @@ type ResolvedIdP struct {
 	SCIMAuthoritative bool
 }
 
-// AllowsEmail is the U5 domain boundary: an IdP that claims domains may only vouch for
-// identities whose email is in those domains, so a (mis)configured or compromised IdP cannot
-// assert an out-of-domain address to seize another account via the email-fallback path. An
-// IdP with NO claimed domains (the global/default) is unconstrained, preserving single-IdP
-// behavior. The comparison is on the normalized domain, matching how domains are stored.
+// AllowsEmail is the U5 domain boundary at the callback, applied to the IdP SELECTED
+// for this sign-in: an IdP that claims domains may only vouch for identities whose email is
+// in those domains, so a (mis)configured or compromised IdP cannot assert an out-of-domain
+// address to seize another account via the email-fallback path. A tenant's IdP with NO
+// claimed domain vouches for nobody — not even for a domain a sibling IdP of the same
+// tenant claims — so one still active from before activation required a claim signs
+// nobody in. The global/default IdP with no claimed domain is unconstrained, preserving
+// single-IdP behavior. Because a claimed domain belongs to one IdP only, the claimant
+// CompleteSSO finds for an address allowed here is this same IdP. The comparison is on the
+// normalized domain, matching how domains are stored.
 func (r ResolvedIdP) AllowsEmail(email string) bool {
 	if len(r.ClaimedDomains) == 0 {
-		return true
+		return !isTenantScope(r.Scope)
 	}
-	at := strings.LastIndexByte(email, '@')
-	if at < 0 || at == len(email)-1 {
+	dom := emailDomain(email)
+	if dom == "" {
 		return false // no domain to match against a constrained IdP
 	}
-	dom := model.NormalizeFederationDomain(email[at+1:])
 	for _, d := range r.ClaimedDomains {
 		if d == dom {
 			return true
@@ -700,9 +705,9 @@ func (s *FederationService) PutConfigIdP(ctx context.Context, actor Principal, s
 			}
 		}
 
-		// Activation caps (+ U4/U5) — only when ACTIVATING. Re-saving the SAME IdP
-		// (by row ID), deactivating, and staging any number of INACTIVE IdPs are always
-		// allowed.
+		// Activation caps (+ U4/U5) — only when ACTIVATING. Deactivating and staging
+		// any number of INACTIVE IdPs are always allowed; re-saving the SAME IdP (by row ID) is
+		// exempt from the caps, not from Rule 3.
 		if next.Status == model.StatusActive {
 			for _, c := range others {
 				if c.ID == next.ID || c.Status != model.StatusActive || c.Protocol == "" {
@@ -732,6 +737,15 @@ func (s *FederationService) PutConfigIdP(ctx context.Context, actor Principal, s
 				if c.TargetTenantID == scope && len(c.ClaimedDomains) == 0 && len(next.ClaimedDomains) == 0 {
 					return ErrScopeActiveIdPExists
 				}
+			}
+			// Rule 3: a tenant's IdP vouches only for the domains it claims — CompleteSSO binds
+			// every sign-in under a tenant's scope to them — so an active one with no claim
+			// would sign nobody in. Wherever a tenant's IdP can be selected at all (the MultiIDP
+			// capability) activating one without a claimed domain is refused. It is checked
+			// after the rules above so that their refusals keep their own names. The open build
+			// never selects a tenant's IdP, so its activation is unchanged.
+			if s.multiIDP != nil && isTenantScope(scope) && len(next.ClaimedDomains) == 0 {
+				return fmt.Errorf("%w: a tenant's SSO IdP must claim at least one email domain to be active", ErrBadFederationConfig)
 			}
 		}
 		var (

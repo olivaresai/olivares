@@ -52,6 +52,10 @@ func newSSOCompletionFixture(t *testing.T, st store.Store) *ssoCompletionFixture
 		t.Fatalf("map group role: %v", err)
 	}
 	configureGlobalLoginPosture(t, st)
+	// The tenant's own provider claims the member's domain: completion under a tenant's
+	// scope is bound to what that tenant's provider claims. Written to the store after
+	// the global posture, as a multi-provider deployment holds it.
+	seedConfig(t, st, tenant, "default", ssoCompletionIssuer, "acme.com")
 	return &ssoCompletionFixture{st: st, a: a, fed: federationOn(st), tenant: tenant, userID: userID, groupID: g.Group.ID}
 }
 

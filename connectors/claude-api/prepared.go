@@ -32,37 +32,62 @@ type PreparedRequest struct {
 }
 
 // PreparedBatch is a frozen /v1/messages/batches submission: the exact envelope body to
-// forward. Build it with MarshalPreparedBatch.
+// forward, and the anthropic-beta set that envelope requires. Build it with
+// MarshalPreparedBatch. beta is PRIVATE and frozen with the body, so a later mutation of
+// the caller's entries can neither add nor remove the header the submission travels with.
 type PreparedBatch struct {
 	body []byte
+	beta []string
 }
 
 // MarshalPrepared serializes the governed request ONCE and freezes it. req MUST already be the
 // effective request (NormalizeMessageRequest applied and any post-govern rewrites validated by
 // ValidateForwardable) — this function does NOT normalize or validate; it only captures bytes.
 // The returned artifact owns a private copy of the body, so a later mutation of req cannot
-// change what is forwarded or digested.
+// change what is forwarded or digested. When req carries an accepted MCP binding, the MCP
+// projection of THESE bytes and the beta set frozen with them must match it, or the result is
+// an MCPEgressError (mcp_binding_changed) and nothing is frozen.
 func MarshalPrepared(req MessageRequest) (PreparedRequest, error) {
 	buf, err := json.Marshal(req)
 	if err != nil {
+		if req.mcp != nil {
+			return PreparedRequest{}, mcpRefusal(MCPDenyBindingChanged)
+		}
 		return PreparedRequest{}, err
+	}
+	beta := req.BetaHeaders()
+	if req.mcp != nil {
+		if err := req.mcp.verify(buf, beta); err != nil {
+			return PreparedRequest{}, err
+		}
 	}
 	frozen := make([]byte, len(buf))
 	copy(frozen, buf)
-	return PreparedRequest{body: frozen, stream: req.Stream, beta: req.BetaHeaders()}, nil
+	return PreparedRequest{body: frozen, stream: req.Stream, beta: beta}, nil
 }
 
 // MarshalPreparedBatch serializes the governed batch submission ONCE and freezes the exact
-// envelope bytes ({"requests":[...]}) the forward will send. requests MUST already be the
-// governed, normalized entries.
+// envelope bytes ({"requests":[...]}) the forward will send, together with the beta header
+// set those bytes require — the union of the entries' MCP declarations (mcpBatchBetas), so
+// an entry that declares MCP anywhere in the submission carries the header. requests MUST
+// already be the governed, normalized entries. Each entry that carries an accepted MCP
+// binding is verified against the exact requests[i].params bytes of THIS envelope, in index
+// order and against its own binding; any mismatch refuses the whole envelope.
 func MarshalPreparedBatch(requests []BatchRequest) (PreparedBatch, error) {
 	buf, err := json.Marshal(map[string]any{"requests": requests})
 	if err != nil {
+		if batchBound(requests) {
+			return PreparedBatch{}, mcpRefusal(MCPDenyBindingChanged)
+		}
+		return PreparedBatch{}, err
+	}
+	beta := mcpBatchBetas(requests)
+	if err := verifyBatchBindings(buf, requests, beta); err != nil {
 		return PreparedBatch{}, err
 	}
 	frozen := make([]byte, len(buf))
 	copy(frozen, buf)
-	return PreparedBatch{body: frozen}, nil
+	return PreparedBatch{body: frozen, beta: beta}, nil
 }
 
 // Body returns a COPY of the frozen wire bytes (never the internal slice — the artifact stays
@@ -134,7 +159,9 @@ func (inf *Inference) ForwardPreparedStream(ctx context.Context, p PreparedReque
 // ForwardPreparedBatch submits a frozen batch envelope VERBATIM and returns both the decoded
 // Batch (audit metadata) and the RAW upstream bytes (relayed verbatim), exactly like
 // CreateBatchRaw — but with NO per-entry model-defaulting or re-marshal, so the forwarded
-// bytes are the frozen, governed envelope.
+// bytes are the frozen, governed envelope. The beta header set is read from the artifact,
+// not re-derived from the caller's entries, so the frozen body and its headers travel
+// together.
 func (inf *Inference) ForwardPreparedBatch(ctx context.Context, p PreparedBatch) (Batch, []byte, error) {
 	if inf.client == nil {
 		return Batch{}, nil, ErrNotConfigured
@@ -142,7 +169,7 @@ func (inf *Inference) ForwardPreparedBatch(ctx context.Context, p PreparedBatch)
 	if p.IsZero() {
 		return Batch{}, nil, ErrNotConfigured
 	}
-	raw, err := inf.client.PostJSONRaw(ctx, batchesPath, json.RawMessage(p.body), nil)
+	raw, err := inf.client.PostJSONRaw(ctx, batchesPath, json.RawMessage(p.body), betaHeaderMap(p.beta))
 	if err != nil {
 		return Batch{}, nil, err
 	}

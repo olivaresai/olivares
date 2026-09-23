@@ -87,13 +87,14 @@ func TestFederationU5_DomainGlobalUniqueness(t *testing.T) {
 
 // TestFederationU5_RelaxedPerScopeRule proves U5 relaxes U4's one-active-per-scope: a
 // scope may run several ACTIVE IdPs when each is disambiguated by a domain, but a second
-// active DOMAINLESS IdP (two fallbacks) is still refused.
+// active DOMAINLESS IdP (two fallbacks) is still refused. A tenant's IdP now needs a claimed
+// domain to be activated, so the domainless fallback is one stored before that rule.
 func TestFederationU5_RelaxedPerScopeRule(t *testing.T) {
-	svc := u4Svc(t, fedTestMultiIDP{})
+	svc, st := u8Svc(t)
 	ctx, actor := context.Background(), fedTestActor()
 	tenant := model.NewTenantID()
 
-	mustPutIdP(t, svc, tenant, "default", oidcInput("idp-default", true))         // domainless fallback
+	seedConfig(t, st, tenant, "default", "idp-default")                           // domainless fallback, as stored
 	mustPutIdP(t, svc, tenant, "corp", oidcDomains("idp-corp", true, "corp.com")) // domain-bearing, active OK
 	mustPutIdP(t, svc, tenant, "eu", oidcDomains("idp-eu", true, "corp.eu"))      // another domain-bearing active OK
 	if _, err := svc.PutConfigIdP(ctx, actor, tenant, "backup", oidcInput("idp-backup", true)); !errors.Is(err, auth.ErrScopeActiveIdPExists) {
@@ -127,8 +128,8 @@ func TestFederationU5_DomainValidation(t *testing.T) {
 func TestFederationU5_ResolveSurfacesScimAuthoritative(t *testing.T) {
 	svc := u4Svc(t, fedTestMultiIDP{})
 	tenant := model.NewTenantID()
-	// The scope's "default" is NOT SCIM-authoritative; the domain-bearing "corp" IS.
-	mustPutIdP(t, svc, tenant, "default", oidcInput("idp-default", true))
+	// The scope's "default" is NOT SCIM-authoritative; the "corp" IdP IS.
+	mustPutIdP(t, svc, tenant, "default", oidcDomains("idp-default", true, "default.example"))
 	corp := oidcDomains("idp-corp", true, "corp.com")
 	corp.SCIMAuthoritative = true
 	mustPutIdP(t, svc, tenant, "corp", corp)
