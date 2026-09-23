@@ -269,6 +269,24 @@ jobs:
           # ever been seen passing has never been seen working.
           bash scripts/test-pg-majors-evaluate.sh
           python3 scripts/pg-majors-evaluate.py
+      - name: retain PostgreSQL matrix test streams and receipts
+        # Keep this run's evidence once provisioning has started; earlier steps produce none.
+        # Missing individual files stay visible in the artifact inventory;
+        # the action errors when all are absent. Five minutes is unmeasured.
+        if: ${{ always() && steps.pg-verify-provision.outcome != 'skipped' }}
+        timeout-minutes: 5
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: pg-majors-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            gotest-15.json
+            gotest-16.json
+            gotest-17.json
+            gotest-18.json
+            pg-majors-receipts.txt
+            pg-majors-exits.txt
+          if-no-files-found: error
+          retention-days: 14
       - name: failure telemetry (scheduled runs have no PR to report to)
         if: failure() && github.event_name == 'schedule'
         env:
