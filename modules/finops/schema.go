@@ -69,20 +69,26 @@ const (
 	// seq under a UNIQUE index — concurrent reservers collide on the seq and one
 	// retries, so the reserve→check→insert is serialized WITHOUT a process lock.
 	budgetReservationKind model.Kind = "finops.budget_reservation"
+	// admissionIdempotencyKind is the admission row: one per (tenant, idempotency
+	// key). From the claim until the money of a request is settled, the row names the
+	// hold identity every ledger row of that money carries. It is not a second money
+	// ledger: the reservation rows remain the authority for headroom.
+	admissionIdempotencyKind model.Kind = "finops.admission_idempotency"
 )
 
 const (
-	costSampleTable          = "finops_cost_sample"
-	budgetAlertTable         = "finops_budget_alert"
-	spendLimitAuditTable     = "finops_spend_limit_audit"
-	seatCountTable           = "finops_seat_count"
-	outcomeTable             = "finops_outcome"
-	costCenterTable          = "finops_cost_center"
-	costCenterMappingTable   = "finops_cost_center_mapping"
-	modelRateTable           = "finops_model_rate"
-	chargebackStatementTable = "finops_chargeback_statement"
-	statementLineTable       = "finops_statement_line"
-	budgetReservationTable   = "finops_budget_reservation"
+	costSampleTable           = "finops_cost_sample"
+	budgetAlertTable          = "finops_budget_alert"
+	spendLimitAuditTable      = "finops_spend_limit_audit"
+	seatCountTable            = "finops_seat_count"
+	outcomeTable              = "finops_outcome"
+	costCenterTable           = "finops_cost_center"
+	costCenterMappingTable    = "finops_cost_center_mapping"
+	modelRateTable            = "finops_model_rate"
+	chargebackStatementTable  = "finops_chargeback_statement"
+	statementLineTable        = "finops_statement_line"
+	budgetReservationTable    = "finops_budget_reservation"
+	admissionIdempotencyTable = "finops_admission_idempotency"
 )
 
 // Provenance values stored in colProvenance (mirroring sdk/model.CostProvenance).
@@ -297,6 +303,29 @@ const (
 	colResvHandle      = "handle" // groups the rows of one Reserve* call
 	colResvExpiresAt   = "expires_at"
 	colResvSettledAt   = "settled_at" // when it left the active state
+)
+
+// finops.admission_idempotency columns. One row per (tenant, key). The first eight
+// are the row as an earlier build wrote it and keep their meaning; owed_handles is
+// the one column this build adds.
+const (
+	colAdmKey         = "idempotency_key"
+	colAdmPayloadHash = "payload_hash"
+	colAdmHandle      = "handle"
+	colAdmSpendHandle = "spend_handle"
+	colAdmScope       = "scope"
+	colAdmEstimate    = "estimate_micro_usd"
+	colAdmState       = "state"
+	// colAdmStateAt is when the row entered the state it is in, by the MODULE's
+	// clock: it bounds a replay and a claim, and the store's updated_at is the
+	// store's own observation, never the injected application clock. Nullable: a row
+	// written before the column existed has none, and is undated.
+	colAdmStateAt = "state_at"
+	// colAdmOwedHandles lists the hold identities of superseded generations whose
+	// money this row still owes back: NULL, or a JSON array of one to sixteen
+	// distinct identities. Nullable, so the reconciler adds it to a populated table
+	// in place and every existing row reads as owing nothing.
+	colAdmOwedHandles = "owed_handles"
 )
 
 // reservation lifecycle states.
@@ -577,6 +606,32 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 	// nullable linkage columns only mean something once the parent they point at
 	// exists as a declared entity.
 	if err := registerAttemptSchema(reg); err != nil {
+		return err
+	}
+
+	// The admission row. A database without the table gets it whole
+	// (applyModuleTables); one that has the earlier eight columns gets owed_handles
+	// added in place (reconcileColumns). Additive and nullable only: no column is
+	// altered or dropped, and no index is added to an existing table.
+	if err := reg.Register(model.EntityDescriptor{
+		Kind:  admissionIdempotencyKind,
+		Table: admissionIdempotencyTable,
+		Fields: []model.FieldSpec{
+			{Name: colAdmKey, Kind: model.KindText, Indexed: true},
+			{Name: colAdmPayloadHash, Kind: model.KindText},
+			{Name: colAdmHandle, Kind: model.KindText, Indexed: true},
+			{Name: colAdmSpendHandle, Kind: model.KindText, Nullable: true},
+			{Name: colAdmScope, Kind: model.KindText},
+			{Name: colAdmEstimate, Kind: model.KindInt},
+			{Name: colAdmState, Kind: model.KindText, Indexed: true},
+			{Name: colAdmStateAt, Kind: model.KindText, Nullable: true},
+		},
+		Indexes: []model.IndexSpec{{
+			Name:    "finops_admission_idempotency_key_uniq",
+			Columns: []string{model.ColTenantID, colAdmKey},
+			Unique:  true,
+		}},
+	}); err != nil {
 		return err
 	}
 
