@@ -550,14 +550,11 @@ func directoryActivationTestAssumedRoleDSN(
 	if !plainRoleIdent(role) {
 		t.Fatalf("unsafe assumed-role fixture target %q", role)
 	}
-	u, err := url.Parse(loginDSN)
+	dsn, err := directoryTestDSNWithParam(loginDSN, "options", "-c role="+role)
 	if err != nil {
 		t.Fatalf("parse assumed-role fixture DSN: %v", err)
 	}
-	query := u.Query()
-	query.Set("options", "-c role="+role)
-	u.RawQuery = query.Encode()
-	return u.String()
+	return dsn
 }
 
 func directoryActivationTestDSNForDatabase(

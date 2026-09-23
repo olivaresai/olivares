@@ -73,6 +73,38 @@ month, release-of-month).
   it* fails closed — a declared gap, or a refusal naming the seam. One that swallows a failed type
   assertion and reports itself complete still seals a verified receipt, exactly as it did before
   this change: what makes that verdict honest is the contract, and a seam cannot enforce it.
+- **PostgreSQL connection strings are read the way libpq reads them.** The PostgreSQL driver is
+  now pgx v5.11.0, and it reads both connection-string forms as libpq does. Check any configured
+  string that relies on the old reading:
+  - `postgres://` and `postgresql://` URIs decode only percent-encoded bytes. In a query value,
+    write a space as `%20` and an `=` as `%3D`; a `+` is a literal plus sign, not a space, and an
+    unencoded space or `=` inside a value is refused. `?options=-c+role=app` must be written
+    `?options=-c%20role%3Dapp`. A malformed percent-encoding such as `%zz`, and `%00`, are
+    refused. The user name and password end at the first `@` that comes before any `/`, so write
+    an `@` in either as `%40`. Write an `@` in a query value as `%40` as well: with no `/` before
+    it, as in `postgres://db?application_name=me@corp`, it ends a user name and the host becomes
+    `corp`. A repeated query parameter takes its last value; the previous driver took the first.
+  - Keyword/value strings (`host=… dbname=…`): a backslash escapes the character after it and
+    is dropped, so write a literal backslash as `\\`. `sslrootcert=C:\certs\ca.pem` now reads
+    `C:certsca.pem` and must be written `sslrootcert=C:\\certs\\ca.pem`. Whitespace inside a
+    keyword is refused: `application_name=my app host=db` was read as `application_name=my` plus
+    a parameter named `app host`, so `host=db` was lost, and it now fails to parse. Quote the
+    value instead: `application_name='my app' host=db`.
+  - The driver's v5.11.0 release notes list the remaining edge cases, among them multiple hosts,
+    IPv6 addresses without brackets, and empty host or port values.
+
+  Olivares passes these configured connection strings to the driver as written: the
+  `--dsn`, `--owner-dsn`, `--admin-dsn` and `--superuser-dsn` values, the content of their
+  `file:` or `env:` references (a file loses only its final line ending), and the `dsn` of a
+  PostgreSQL content source, so each of them follows the rules above. `OLIVARES_VECTOR_DSN`, when
+  `OLIVARES_VECTOR_BACKEND` is `pgvector`, follows them too after surrounding whitespace is
+  trimmed. If the driver refuses it, Olivares logs a warning and keeps the in-process vector
+  index, so look for that warning after upgrading. A PostgreSQL content source configured with
+  separate host, port, database, user, password and SSL mode fields gets a keyword/value string
+  that Olivares escapes itself. Review those fields too: Olivares does not quote tabs, line breaks
+  or other whitespace besides a space, so such a value was already cut short and the new driver
+  may refuse the whole string. NUL bytes are refused. Comma-separated host or port fields follow
+  the driver's multiple-host and empty-value rules above.
 
 ### Deprecated
 
