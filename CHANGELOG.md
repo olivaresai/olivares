@@ -51,6 +51,16 @@ month, release-of-month).
   serves for its node agents. Empty, the default, means no listener. A startup that sets it no
   longer logs it as ignored, and `olivares config validate` and `config effective --strict`
   accept it. The Community build does not read it.
+- **Each provider driver now says which launch choices its tool actually receives.** The Claude
+  Code, Codex, Grok and OpenCode drivers declare whether a session launch hands the model, the
+  effort and the permission mode to the tool they start, and where the models offered for them
+  come from; the sessions module reads that declaration per driver. Claude Code receives all
+  three. Codex, Grok and OpenCode receive the model and the effort but not the permission mode,
+  which is Claude Code's own setting. The models of every driver can be discovered by testing
+  the provider credential a profile is bound to, and no driver lists models itself. A driver
+  that declares nothing reads as unknown rather than as a guess, and a conformance test holds
+  each declaration to what the launch actually sends. No launch changes, and no API or console
+  surface presents the declaration yet.
 ### Changed
 
 - **A right-to-erasure receipt now states what its verification examined.** The residual scan

@@ -157,6 +157,21 @@ func (codexDriver) TransportProfile() DriverTransportProfile {
 	}
 }
 
+// LaunchTerms declares what a Codex launch hands its child. The model travels on
+// thread/start (and thread/resume) and the effort on every turn/start. The
+// permission mode is Claude Code's own enum and reaches no Codex frame: the
+// approval policy and the sandbox this driver sends are its own controls, and
+// neither is derived from it (CodexPolicy). The models can be discovered by
+// probing the credential a profile binds; the driver lists none.
+func (codexDriver) LaunchTerms() DriverLaunchTerms {
+	return DriverLaunchTerms{
+		Model:          TermCarried,
+		Effort:         TermCarried,
+		PermissionMode: TermNotCarried,
+		ModelDiscovery: ModelDiscoveryBoundCredentialProbe,
+	}
+}
+
 // LaunchArgs is the ONLY operate form: an owned stdio app-server. The daemon,
 // proxy and remote forms are not options this driver can produce.
 //
