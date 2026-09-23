@@ -83,6 +83,20 @@ failed_names=()
 # this output (an internal design note (not shipped)). Indent the word and every
 # mutant here is reported MISATRIBUIDO — a battery that reddens correctly while the harness
 # reads it as never reddening the case it named.
+#
+# A FAIL CARRIES ITS EVIDENCE. A case that reddens with nothing but its name cannot tell "the
+# phrase was not in the output" from "the probe could not see a phrase that was there", and that
+# is the first question every red here raises. So a FAIL also prints what the most recent
+# run_block left: its rc, its output as the cases read it (stdout and stderr interleaved, the one
+# stream run_block captures) and the gh stub's argv record. Indented, for the column-0 rule above.
+last_run_evidence() {
+	[ "${n:-0}" -gt 0 ] || return 0
+	printf '      last run #%s: rc=%s, output:\n' "$n" "${rc-}"
+	sed 's/^/      | /' <<<"${out-}"
+	printf '      last run #%s: gh stub argv:\n' "$n"
+	[ -f "${log-}" ] && sed 's/^/      | /' "$log"
+	return 0
+}
 check() {
 	if [ "$3" -eq 0 ]; then
 		pass=$((pass + 1))
@@ -91,6 +105,7 @@ check() {
 		fail=$((fail + 1))
 		failed_names+=("$1")
 		printf 'FAIL  %-58s %s\n' "$1" "$2"
+		last_run_evidence
 	fi
 }
 
@@ -545,6 +560,32 @@ argv_record() {
 		END { if (found && !printed) print rec }
 	' "$log"
 }
+
+# --- the battery's own text probes: no `grep -q` behind a pipe ----------------------------
+# An assertion shaped `printf '%s' "$out" | command grep -q PHRASE` can call a phrase MISSING
+# that is there. bash's builtin printf writes a pipe one line per write(2); `grep -q` exits at its
+# first match, and a write still pending after that takes SIGPIPE, so under this file's
+# `pipefail` the pipeline returns 141 on a match. Measured on case B's own output (591 bytes,
+# seven lines, `BY NAME` on the third): PIPESTATUS `141 0` in 4 of 5,000 runs with both processes
+# on one CPU, and 5 of 24,000 on a loaded 16-CPU host. Negated, the same shape fails OPEN: J2's
+# `! … | grep -qE` passed a payload with a grep planted near its top in 23 of 5,000 runs.
+# test-release-workspace-e2e.sh closed the same class in its own assertions.
+#
+# WITNESS FOR THE HARNESS, not for the workflow, counted the way that battery counts it: putting
+# any assertion back behind a `grep -q` pipe must redden here deterministically, instead of
+# waiting for the scheduler to make the race fire. A continued pipeline is joined to its next
+# line so formatting cannot hide the old shape.
+_oracle_pipes="$(awk '
+	/^[[:space:]]*#/ { next }
+	{
+		line = carry $0
+		if (line ~ /\|[[:space:]]*(command[[:space:]]+)?grep[[:space:]]+-[[:alpha:]]*q/) n++
+		if ($0 ~ /\|[[:space:]]*$/) carry = $0 " "; else carry = ""
+	}
+	END { print n + 0 }
+' "$ROOT/scripts/test-release-security-sig-guard.sh")"
+[ "$_oracle_pipes" -eq 0 ]
+check "the battery has no timing-sensitive grep-q oracle" "zero boolean pipes, found ${_oracle_pipes}" $?
 
 # --- A · no security manifest on the draft: the ordinary release, GREEN ------------------
 run_block $'olivares_26.8.0_linux_amd64.tar.gz\nchecksums.txt\nstable-manifest.json\nstable-manifest.json.sig'
