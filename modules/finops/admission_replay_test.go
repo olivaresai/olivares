@@ -202,7 +202,11 @@ func wantEvaluate(t *testing.T, what string, outcome replayOutcome, got holdID, 
 // TestReplayIgnoresHoldFreeRow: an admission that holds nothing has nothing to hand
 // back, so its row never answers — every repeat of its key is evaluated afresh, which
 // is how new spend and a new budget reach a stable key. Neither does a released or
-// pending row. The control, a row whose hold withholds, does answer.
+// pending row. A row that names a hold under which a complete read finds no ledger row
+// holds nothing either, in its handle slot or, for a spend-only row, in its spend slot.
+// The controls answer: a row whose hold withholds, and a pair one of whose holds has no
+// ledger row while the other withholds — a slot with no rows neither justifies a replay
+// nor stops one.
 func TestReplayIgnoresHoldFreeRow(t *testing.T) {
 	forEachAdmissionEngine(t, runReplayIgnoresHoldFreeRow)
 }
@@ -217,6 +221,11 @@ func runReplayIgnoresHoldFreeRow(t *testing.T, cfg store.Config) {
 	f.admission(t, "pending", admStatePending, intent, "", t0)
 	f.admission(t, "control", admStateReserved, held, "", t0)
 	f.hold(t, held, t0)
+	empty, spendEmpty, pairLive, pairEmpty := newHoldID(), newHoldID(), newHoldID(), newHoldID()
+	f.admission(t, "names-a-hold-without-rows", admStateReserved, empty, "", t0)
+	f.admission(t, "spend-only-without-rows", admStateReserved, "", spendEmpty, t0)
+	f.admission(t, "pair-with-an-empty-half", admStateReserved, pairLive, pairEmpty, t0)
+	f.hold(t, pairLive, t0)
 	f.clk.advance(time.Second)
 
 	o, h, err := f.replay(t, "session_launch/run-42", "hash-session_launch/run-42", nil)
@@ -227,6 +236,12 @@ func runReplayIgnoresHoldFreeRow(t *testing.T, cfg store.Config) {
 	wantEvaluate(t, "a claim in flight", o, h, err)
 	o, h, err = f.replay(t, "control", "hash-control", nil)
 	wantReplay(t, "control: a withholding hold", o, h, held, err)
+	o, h, err = f.replay(t, "names-a-hold-without-rows", "hash-names-a-hold-without-rows", nil)
+	wantEvaluate(t, "a hold with no ledger row", o, h, err)
+	o, h, err = f.replay(t, "spend-only-without-rows", "hash-spend-only-without-rows", nil)
+	wantEvaluate(t, "a spend-only row whose hold has no ledger row", o, h, err)
+	o, h, err = f.replay(t, "pair-with-an-empty-half", "hash-pair-with-an-empty-half", nil)
+	wantReplay(t, "control: a pair whose other hold withholds", o, h, pairLive, err)
 
 	ctx := context.Background()
 	if err := f.st.View(ctx, f.tenant, func(sc store.Scope) error {
@@ -350,8 +365,9 @@ func runUndatedRowIsOutsideWindow(t *testing.T, cfg store.Config) {
 // TestUnreadableHoldIsAnError: whether a reserved row's hold withholds is read from its
 // ledger rows, and a read that did not complete is not "no longer withholding" — that
 // answer would move a live, received hold to owed. It is an error, which the caller
-// answers deny-closed, and its outcome is unknown, never "evaluate". The control is the
-// same row read completely.
+// answers deny-closed, and its outcome is unknown, never "evaluate" — also for a hold
+// that has no ledger row, which only a complete read may show. The control is the same
+// row read completely.
 func TestUnreadableHoldIsAnError(t *testing.T) {
 	forEachAdmissionEngine(t, runUnreadableHoldIsAnError)
 }
@@ -361,6 +377,7 @@ func runUnreadableHoldIsAnError(t *testing.T, cfg store.Config) {
 	h := newHoldID()
 	f.admission(t, "model_gateway/held", admStateReserved, h, "", baseTime)
 	f.hold(t, h, baseTime)
+	f.admission(t, "model_gateway/no-rows", admStateReserved, newHoldID(), "", baseTime)
 	f.clk.advance(time.Minute)
 
 	incomplete := func(sc store.Scope) store.Scope { return ledgerFaultScope{Scope: sc, incomplete: true} }
@@ -378,6 +395,17 @@ func runUnreadableHoldIsAnError(t *testing.T, cfg store.Config) {
 	}
 	o, got, err = f.replay(t, "model_gateway/held", "hash-model_gateway/held", nil)
 	wantReplay(t, "control: the same hold, read completely", o, got, h, err)
+
+	// A hold with no ledger row is evaluated only when a complete read says so: the same
+	// read incomplete, or failed, is an error with an unknown outcome.
+	o, got, err = f.replay(t, "model_gateway/no-rows", "hash-model_gateway/no-rows", incomplete)
+	if !errors.Is(err, errReservationScanIncomplete) || o != replayUnknown || !got.isZero() {
+		t.Errorf("an incomplete read of a hold with no rows answered outcome=%v hold=%q err=%v; want the scan error", o, got, err)
+	}
+	o, got, err = f.replay(t, "model_gateway/no-rows", "hash-model_gateway/no-rows", failing)
+	if !errors.Is(err, errLedgerUnreadable) || o != replayUnknown || !got.isZero() {
+		t.Errorf("a failed read of a hold with no rows answered outcome=%v hold=%q err=%v; want the read error", o, got, err)
+	}
 }
 
 // TestReplayReturnsRecentCommit pins everything a recent commit's replay reads. A
@@ -430,4 +458,96 @@ func runReplayReturnsRecentCommit(t *testing.T, cfg store.Config) {
 	if err != nil || o != replayConflict {
 		t.Errorf("another payload after the window: outcome=%v err=%v; want a conflict", o, err)
 	}
+}
+
+// holdUntil writes one active ledger row of component ("b" or "s") under h, created at
+// created and expiring at expires.
+func (f *replayFixture) holdUntil(t *testing.T, h holdID, component string, created, expires time.Time) {
+	t.Helper()
+	f.seq++
+	seedReservation(t, f.st, f.tenant, ledgerRow(f.policy, component, h, f.seq, 2*oneUSD, created, expires, resvStateActive))
+}
+
+// holdsBack reads the row of key and asks whether it holds its key back at the clock's
+// instant, in one read transaction; wrap, when set, replaces the scope it is asked through.
+func (f *replayFixture) holdsBack(t *testing.T, key string, wrap func(store.Scope) store.Scope) (bool, error) {
+	t.Helper()
+	ctx := context.Background()
+	var (
+		back  bool
+		asked error
+	)
+	if err := f.st.View(ctx, f.tenant, func(sc store.Scope) error {
+		row, found, err := rowOfKey(ctx, sc, key)
+		if err != nil || !found {
+			t.Fatalf("the row of %q: found=%v err=%v", key, found, err)
+		}
+		if wrap != nil {
+			sc = wrap(sc)
+		}
+		back, asked = pairHoldsBack(ctx, sc, row, f.m.clock.Now())
+		return nil
+	}); err != nil {
+		t.Fatalf("view: %v", err)
+	}
+	return back, asked
+}
+
+// TestLegacyPairHoldsBack: a pair an earlier build published holds its key back — no
+// takeover, no release, no new hold — while the row is dated inside the replay window and
+// a complete read finds a row that withholds under either of its holds, whichever lapsed
+// first. It stops holding back once both holds have lapsed, and at the end of the window
+// even if a row were still withholding. An undated row and a row with one slot never hold
+// back. A read that does not complete is an error.
+func TestLegacyPairHoldsBack(t *testing.T) {
+	forEachAdmissionEngine(t, runLegacyPairHoldsBack)
+}
+
+func runLegacyPairHoldsBack(t *testing.T, cfg store.Config) {
+	f := newReplayFixture(t, cfg)
+	tp := baseTime
+	created := tp.Add(-time.Second)
+	early, late := tp.Add(100*time.Second), tp.Add(290*time.Second)
+	pair := func(key string, budgetEnd, seatEnd, stateAt time.Time) {
+		h1, h2 := newHoldID(), newHoldID()
+		f.admission(t, key, admStateReserved, h1, h2, stateAt)
+		f.holdUntil(t, h1, "b", created, budgetEnd)
+		f.holdUntil(t, h2, "s", created, seatEnd)
+	}
+	pair("order-1", early, late, tp)
+	pair("order-2", late, early, tp)
+	pair("undated", early, late, time.Time{})
+	pair("past-the-window", tp.Add(admissionReplayWindow+time.Minute), early, tp)
+	one, spend := newHoldID(), newHoldID()
+	f.admission(t, "one-slot", admStateReserved, one, "", tp)
+	f.holdUntil(t, one, "b", created, late)
+	f.admission(t, "spend-only", admStateReserved, "", spend, tp)
+	f.holdUntil(t, spend, "s", created, late)
+
+	want := func(what, key string, wrap func(store.Scope) store.Scope, back bool) {
+		t.Helper()
+		got, err := f.holdsBack(t, key, wrap)
+		if err != nil || got != back {
+			t.Errorf("%s: holds back=%v err=%v; want %v", what, got, err, back)
+		}
+	}
+
+	f.clk.advance(150 * time.Second)
+	want("the budget hold lapsed first, the seat hold withholds", "order-1", nil, true)
+	want("the seat hold lapsed first, the budget hold withholds", "order-2", nil, true)
+	want("an undated pair", "undated", nil, false)
+	want("a row with one hold", "one-slot", nil, false)
+	want("a spend-only row", "spend-only", nil, false)
+	incomplete := func(sc store.Scope) store.Scope { return ledgerFaultScope{Scope: sc, incomplete: true} }
+	if back, err := f.holdsBack(t, "order-1", incomplete); !errors.Is(err, errReservationScanIncomplete) || back {
+		t.Errorf("an incomplete read of the pair: holds back=%v err=%v; want the scan error", back, err)
+	}
+
+	f.clk.advance(141 * time.Second)
+	want("both holds lapsed, order 1", "order-1", nil, false)
+	want("both holds lapsed, order 2", "order-2", nil, false)
+	want("a hold still withholding just inside the window", "past-the-window", nil, true)
+
+	f.clk.t = tp.Add(admissionReplayWindow)
+	want("the instant the window closes", "past-the-window", nil, false)
 }

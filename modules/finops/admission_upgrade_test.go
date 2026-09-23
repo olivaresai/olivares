@@ -233,17 +233,17 @@ func runUpgradeFromMain(t *testing.T, cfg store.Config) {
 	}
 }
 
-// TestUpgradeFromR7KeepsColumns upgrades a populated database whose admission rows were
-// written by an earlier build, in every state that build left rows in, and finds every
-// row exactly as it was: the eight old columns and the base columns are byte-identical,
-// owed_handles exists and is NULL, the ledger is untouched — and every legacy claim is
-// still a claim, whatever its age: nothing here can know that the writer that staged it
-// has stopped.
-func TestUpgradeFromR7KeepsColumns(t *testing.T) {
-	forEachUpgradeEngine(t, runUpgradeFromR7KeepsColumns)
+// TestUpgradeFromEarlierAdmissionKeepsColumns upgrades a populated database whose
+// admission rows were written by an earlier build, in every state that build left rows
+// in, and finds every row exactly as it was: the eight old columns and the base columns
+// are byte-identical, owed_handles exists and is NULL, the ledger is untouched — and
+// every legacy claim is still a claim, whatever its age: nothing here can know that the
+// writer that staged it has stopped.
+func TestUpgradeFromEarlierAdmissionKeepsColumns(t *testing.T) {
+	forEachUpgradeEngine(t, runUpgradeFromEarlierAdmissionKeepsColumns)
 }
 
-func runUpgradeFromR7KeepsColumns(t *testing.T, cfg store.Config) {
+func runUpgradeFromEarlierAdmissionKeepsColumns(t *testing.T, cfg store.Config) {
 	ctx := context.Background()
 	m := New()
 	m.host = &fakeHost{}

@@ -357,3 +357,150 @@ func runRowLookupsReadBothLegacySlots(t *testing.T, cfg store.Config) {
 		t.Errorf("the other tenant reads %d of this tenant's rows under h1", len(rows))
 	}
 }
+
+// twoRowsPerKeyScope serves the admission rows through a repository whose every lookup
+// by key returns each matching row twice: the second row for one key that the unique
+// index keeps out of the store.
+type twoRowsPerKeyScope struct{ store.Scope }
+
+func (s twoRowsPerKeyScope) Ext(kind model.Kind) (store.GenericRepo, error) {
+	repo, err := s.Scope.Ext(kind)
+	if err != nil || kind != admissionIdempotencyKind {
+		return repo, err
+	}
+	return twoRowsPerKeyRepo{GenericRepo: repo}, nil
+}
+
+type twoRowsPerKeyRepo struct{ store.GenericRepo }
+
+func (r twoRowsPerKeyRepo) List(ctx context.Context, q model.Query) ([]model.Record, model.Page, error) {
+	recs, page, err := r.GenericRepo.List(ctx, q)
+	if err != nil || len(q.Filters) != 1 || q.Filters[0].Column != colAdmKey {
+		return recs, page, err
+	}
+	return append(recs, recs...), page, nil
+}
+
+// TestRowLookupsRefuseCorruptRows pins both forms of a row no writer stores: a slot whose
+// text is not a hold identity — in the handle slot or the spend slot — and more than one
+// row where one may exist, for a hold or for a key. Neither is read as "no hold", and no
+// lookup resolves an ambiguous hold or key by picking one of its rows: every lookup that
+// would have to decode such a row, or choose among such rows, returns
+// errAdmissionRowCorrupt, and the error never carries the stored value. Reading leaves
+// the stored values exactly as they were, and a valid row beside the corrupt ones is
+// found as before.
+func TestRowLookupsRefuseCorruptRows(t *testing.T) {
+	forEachAdmissionEngine(t, runRowLookupsRefuseCorruptRows)
+}
+
+func runRowLookupsRefuseCorruptRows(t *testing.T, cfg store.Config) {
+	_, st, tenant, _ := openFinCfg(t, cfg)
+	ctx := context.Background()
+	now := baseTime
+	budget := model.NewID()
+	spelled, seat, shared, sharedSeat, valid := newHoldID(), newHoldID(), newHoldID(), newHoldID(), newHoldID()
+	handleOK := newHoldID()
+	const garbled = "not-a-hold"
+
+	// A handle slot holding a spelling the general parser accepts and no writer stores.
+	bad := admissionRecord("corrupt-spelling", admStateReserved, "", seat, now)
+	bad[colAdmHandle] = strings.ToUpper(spelled.String())
+	corrupt := seedAdmission(t, st, tenant, bad)
+	// A spend slot holding text that is no identity at all, beside a valid handle.
+	badSpend := admissionRecord("corrupt-spend", admStateReserved, handleOK, "", now)
+	badSpend[colAdmSpendHandle] = garbled
+	seedAdmission(t, st, tenant, badSpend)
+	// One hold named by two rows, once in the handle slot and once in the spend slot.
+	seedAdmission(t, st, tenant, admissionRecord("dup-a", admStateReserved, shared, "", now))
+	seedAdmission(t, st, tenant, admissionRecord("dup-b", admStateReserved, shared, "", now))
+	seedAdmission(t, st, tenant, admissionRecord("dup-seat-a", admStateReserved, "", sharedSeat, now))
+	seedAdmission(t, st, tenant, admissionRecord("dup-seat-b", admStateCommitted, "", sharedSeat, now))
+	// A valid row beside them, with its money.
+	seedAdmission(t, st, tenant, admissionRecord("valid", admStateReserved, valid, "", now))
+	seedReservation(t, st, tenant, ledgerRow(budget, "b", valid, 1, 2*oneUSD, now, now.Add(reservationTTL), resvStateActive))
+
+	read := func(t *testing.T, lookup func(sc store.Scope) (admissionRow, bool, error)) (admissionRow, bool, error) {
+		t.Helper()
+		var (
+			row   admissionRow
+			found bool
+			asked error
+		)
+		if err := st.View(ctx, tenant, func(sc store.Scope) error {
+			row, found, asked = lookup(sc)
+			return nil
+		}); err != nil {
+			t.Fatalf("view: %v", err)
+		}
+		return row, found, asked
+	}
+	ofKey := func(key string) func(sc store.Scope) (admissionRow, bool, error) {
+		return func(sc store.Scope) (admissionRow, bool, error) { return rowOfKey(ctx, sc, key) }
+	}
+	naming := func(h holdID) func(sc store.Scope) (admissionRow, bool, error) {
+		return func(sc store.Scope) (admissionRow, bool, error) { return rowNamingHold(ctx, sc, h) }
+	}
+
+	twoPerKey := func(lookup func(sc store.Scope) (admissionRow, bool, error)) func(sc store.Scope) (admissionRow, bool, error) {
+		return func(sc store.Scope) (admissionRow, bool, error) { return lookup(twoRowsPerKeyScope{Scope: sc}) }
+	}
+
+	for _, tc := range []struct {
+		name   string
+		lookup func(sc store.Scope) (admissionRow, bool, error)
+	}{
+		{"the row of a key whose handle slot is not an identity", ofKey("corrupt-spelling")},
+		{"the valid hold in that row's spend slot", naming(seat)},
+		{"the row of a key whose spend slot is not an identity", ofKey("corrupt-spend")},
+		{"the valid hold in that row's handle slot", naming(handleOK)},
+		{"a hold two rows name in their handle slot", naming(shared)},
+		{"a hold two rows name in their spend slot", naming(sharedSeat)},
+		{"a key two rows are returned for", twoPerKey(ofKey("valid"))},
+	} {
+		row, found, err := read(t, tc.lookup)
+		if !errors.Is(err, errAdmissionRowCorrupt) || found || row.key != "" {
+			t.Errorf("%s: found=%v key=%q err=%v; want errAdmissionRowCorrupt and no row", tc.name, found, row.key, err)
+		}
+		if err != nil && (strings.Contains(err.Error(), strings.ToUpper(spelled.String())) || strings.Contains(err.Error(), garbled)) {
+			t.Errorf("%s: the error carries a stored value: %v", tc.name, err)
+		}
+	}
+
+	// A row that is itself well formed is still read by its key: the ambiguity belongs
+	// to the hold, not to either row.
+	if row, found, err := read(t, ofKey("dup-a")); err != nil || !found || row.handle != shared {
+		t.Errorf("the row of dup-a: found=%v handle=%q err=%v", found, row.handle, err)
+	}
+	// The valid row is found by its key and by its hold, and its money is readable.
+	if row, found, err := read(t, ofKey("valid")); err != nil || !found || row.handle != valid {
+		t.Errorf("the valid row by its key: found=%v handle=%q err=%v", found, row.handle, err)
+	}
+	if row, found, err := read(t, naming(valid)); err != nil || !found || row.key != "valid" {
+		t.Errorf("the valid row by its hold: found=%v key=%q err=%v", found, row.key, err)
+	}
+	if err := st.View(ctx, tenant, func(sc store.Scope) error {
+		rows, err := rowsUnderHold(ctx, sc, valid)
+		if err == nil && len(rows) != 1 {
+			t.Errorf("rows under the valid hold: %d, want 1", len(rows))
+		}
+		return err
+	}); err != nil {
+		t.Fatalf("rows under the valid hold: %v", err)
+	}
+
+	// The stored values are exactly as they were written: the lookups decoded nothing
+	// into the row and wrote nothing back.
+	for _, r := range extRows(t, st, tenant, admissionIdempotencyKind) {
+		if r.String(model.ColID) != corrupt.String(model.ColID) {
+			continue
+		}
+		if r.String(colAdmHandle) != strings.ToUpper(spelled.String()) || r.Int(model.ColVersion) != corrupt.Int(model.ColVersion) {
+			t.Errorf("the corrupt row changed: handle=%q version=%d", r.String(colAdmHandle), r.Int(model.ColVersion))
+		}
+	}
+	for _, r := range extRows(t, st, tenant, admissionIdempotencyKind) {
+		if r.String(colAdmKey) == "corrupt-spend" && r.String(colAdmSpendHandle) != garbled {
+			t.Errorf("the corrupt spend slot changed: %q", r.String(colAdmSpendHandle))
+		}
+	}
+}

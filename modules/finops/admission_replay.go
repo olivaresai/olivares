@@ -118,10 +118,13 @@ func withinReplayWindow(row admissionRow, now model.Timestamp) bool {
 // question the replay of a reserved row asks, because what it hands back IS the hold.
 //
 // No hold is not a live hold, so a row that holds nothing is re-evaluated on every call
-// and never frozen under its key. Both slots are read: a slot whose rows exist and none
-// of which withholds makes the row not live, and the row is live only if some row
-// withholds. A slot whose rows cannot be read completely is an ERROR, not "not live":
-// that answer would re-evaluate the key and move a live, received hold to owed.
+// and never frozen under its key. Every slot the row names is read completely; a slot
+// whose rows exist and none of which withholds makes the row not live; and the row is
+// live only if some row withholds. A slot whose complete read finds no row withholds
+// nothing: it neither makes the row live nor stops the other slot from doing so, and a
+// row whose only hold has no row is evaluated in full. A slot whose rows cannot be read
+// completely is an ERROR, not "not live": that answer would re-evaluate the key and move
+// a live, received hold to owed.
 func handlesLive(ctx context.Context, sc store.Scope, handle, spend holdID, now model.Timestamp) (bool, error) {
 	live := false
 	for _, h := range []holdID{handle, spend} {
@@ -141,6 +144,12 @@ func handlesLive(ctx context.Context, sc store.Scope, handle, spend holdID, now 
 		live = true
 	}
 	return live, nil
+}
+
+// pairHoldsBack reports whether row is a pair an earlier build published that holds its
+// key back at now. Not implemented yet: no pair holds back.
+func pairHoldsBack(ctx context.Context, sc store.Scope, row admissionRow, now model.Timestamp) (bool, error) {
+	return false, nil
 }
 
 // anyWithholding reports whether one of rows keeps money from other callers at now:
