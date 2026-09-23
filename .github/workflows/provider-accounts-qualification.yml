@@ -6,25 +6,28 @@
 # console. It runs ONLY on a pull request whose head is the branch
 # `ci/provider-accounts-console-qualification-vehicle` of this repository. That branch carries
 # pull request #116's product plus three vehicle files: this workflow and the two mutant patches
-# under ci/qualification/. The identify job pins #116's head and requires the vehicle's tree to
-# equal #116's merge tree (refs/pull/116/merge) plus exactly those three files. Every other job
-# runs on that merge commit, the tree #116's own pull-request CI qualifies, so each result
-# names exactly the product it qualifies.
+# under ci/qualification/. The identify job pins #116's head and requires #116's merge tree
+# (refs/pull/116/merge) to equal this pull request's own merge tree, computed on the same main,
+# minus exactly those three files. Every other job runs on #116's merge commit, the tree #116's
+# own pull-request CI qualifies, so each result names exactly the product it qualifies.
 #
 #   baseline         the browser journey and the custody test both pass;
 #   m1-intent        with the M1 mutant, the journey fails at an assertion that requires the
 #                    unresolved adoption of profile D while the engine refuses the account read;
 #   custody-removal  with the custody mutant, the custody test fails inside retiredAdoptionGone;
-#   captures         the capture harness publishes the provider-accounts captures, with hashes.
+#   captures         only after those three verdicts, the capture harness runs once, unfiltered,
+#                    and publishes the complete capture set with its manifest and hashes.
 #
 # A MUTANT PROVES SOMETHING ONLY WHEN IT FAILS AT ITS NAMED ASSERTION. Each mutant job reads the
 # machine-readable report (Playwright JSON, vitest JSON) and fails the vehicle when the mutant
 # survives, or when it fails anywhere else: install, build, setup, harness or another assertion.
 # Both mutant jobs need a green baseline, so a red that the baseline shares is never counted.
+# Each of the three verdict steps sets its job's `verdict` output only when it holds, and the
+# captures job requires all three.
 #
 # Runner class, action pins and step guards follow pr-web-journey in pr-ci.yml. Budgets are the
-# measured journey job (4 min 40 s, journey step 3 min 36 s) under the same guards; the capture
-# step's 30 minutes are ASSUMED until its first run.
+# measured journey job (4 min 40 s, journey step 3 min 36 s) under the same guards. The capture
+# step's budget is derived at that step.
 
 name: provider-accounts-qualification
 
@@ -46,9 +49,14 @@ defaults:
 jobs:
   # The vehicle's own identity. The branch may reach this repository as one squashed commit
   # over main that also carries #116's whole delta, so the product cannot be named by ancestry.
-  # It is named by TREE: #116's merge commit, whose second parent must be the pinned #116 head,
-  # must differ from the vehicle head by exactly the vehicle's three files. Anything else (a
-  # product change in the vehicle, a moved #116 head, a missing merge ref) refuses with exit 2.
+  # Main may also move after the branch was cut, so the vehicle head's own tree lacks main's
+  # newer files while #116's merge tree has them. The product is therefore named by comparing
+  # two MERGE trees on one main:
+  #   · #116's merge commit, whose second parent must be the pinned #116 head;
+  #   · this pull request's merge commit, whose second parent must be this run's head.
+  # Both must have the same first parent, and they must differ by exactly the vehicle's three
+  # files. Anything else (a product change in the vehicle, a moved #116 head, a missing merge
+  # ref, merge refs computed on different mains) refuses with exit 2 and names what differs.
   identify:
     if: github.repository == 'olivaresai/olivares' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'ci/provider-accounts-console-qualification-vehicle'
     runs-on: ubuntu-latest
@@ -65,20 +73,23 @@ jobs:
         timeout-minutes: 3
         env:
           VEHICLE_HEAD: ${{ github.event.pull_request.head.sha }}
+          VEHICLE_PR: ${{ github.event.pull_request.number }}
           # The product under qualification: pull request #116 at this public head commit.
           QUALIFIED_PR: '116'
-          QUALIFIED_HEAD: c58dada6627d5123696280845c01d12636467c15
+          QUALIFIED_HEAD: 44aaab2e57d7aee66a52624f6c10a8bf1ed40ed6
         run: |
           set -euo pipefail
           [ "$(git rev-parse HEAD)" = "$VEHICLE_HEAD" ] || { echo "::error::HEAD is not the pull request's head"; exit 2; }
           if ! git fetch --no-tags --depth=2 origin \
             "+refs/pull/$QUALIFIED_PR/merge:refs/qualification/merge" \
-            "+refs/pull/$QUALIFIED_PR/head:refs/qualification/head"; then
-            echo "::error::refs/pull/$QUALIFIED_PR/merge or its head could not be fetched from this repository"
+            "+refs/pull/$QUALIFIED_PR/head:refs/qualification/head" \
+            "+refs/pull/$VEHICLE_PR/merge:refs/qualification/vehicle-merge"; then
+            echo "::error::refs/pull/$QUALIFIED_PR/merge, its head or refs/pull/$VEHICLE_PR/merge could not be fetched from this repository"
             exit 2
           fi
           merge="$(git rev-parse --verify 'refs/qualification/merge^{commit}')"
           head="$(git rev-parse --verify 'refs/qualification/head^{commit}')"
+          vmerge="$(git rev-parse --verify 'refs/qualification/vehicle-merge^{commit}')"
           if [ "$head" != "$QUALIFIED_HEAD" ]; then
             echo "::error::#$QUALIFIED_PR's head is $head, not the pinned $QUALIFIED_HEAD"
             exit 2
@@ -88,12 +99,24 @@ jobs:
             echo "::error::refs/pull/$QUALIFIED_PR/merge $merge does not merge the pinned head (second parent: ${second:-none})"
             exit 2
           fi
+          vsecond="$(git rev-parse --verify --quiet "$vmerge^2")" || true
+          if [ "$vsecond" != "$VEHICLE_HEAD" ]; then
+            echo "::error::refs/pull/$VEHICLE_PR/merge $vmerge does not merge this run's head $VEHICLE_HEAD (second parent: ${vsecond:-none})"
+            exit 2
+          fi
+          # One main under both merges: otherwise main's own delta would count as a difference.
+          main="$(git rev-parse --verify --quiet "$merge^1")" || true
+          vmain="$(git rev-parse --verify --quiet "$vmerge^1")" || true
+          if [ -z "$main" ] || [ "$main" != "$vmain" ]; then
+            echo "::error::the merge refs are not computed on the same main: #$QUALIFIED_PR merges into ${main:-none}, #$VEHICLE_PR into ${vmain:-none}"
+            exit 2
+          fi
           expected="$(printf '%s\n' .github/workflows/provider-accounts-qualification.yml \
             ci/qualification/custody-removal-skipped.patch \
             ci/qualification/m1-intent-dropped-on-refused-read.patch | sort)"
-          changed="$(git diff --name-only "$merge" HEAD | sort)"
+          changed="$(git diff --name-only "$merge" "$vmerge" | sort)"
           if [ "$changed" != "$expected" ]; then
-            echo "::error::the vehicle's tree differs from #$QUALIFIED_PR's merge tree by more than its three files"
+            echo "::error::this pull request's merge tree differs from #$QUALIFIED_PR's merge tree by more than the vehicle's three files"
             comm -13 <(printf '%s\n' "$expected") <(printf '%s\n' "$changed") | sed 's/^/  extra: /'
             comm -23 <(printf '%s\n' "$expected") <(printf '%s\n' "$changed") | sed 's/^/  missing: /'
             exit 2
@@ -101,8 +124,8 @@ jobs:
           echo "product_ref=$merge" >>"$GITHUB_OUTPUT"
           {
             echo "### Provider accounts qualification vehicle"
-            echo "Vehicle head \`$VEHICLE_HEAD\`. Every job qualifies #$QUALIFIED_PR's merge tree \`$merge\`:"
-            echo "head \`$QUALIFIED_HEAD\` merged into \`$(git rev-parse "$merge^1")\`."
+            echo "Vehicle head \`$VEHICLE_HEAD\`, merged as \`$vmerge\`. Every job qualifies #$QUALIFIED_PR's merge tree \`$merge\`:"
+            echo "head \`$QUALIFIED_HEAD\` merged into main \`$main\`, the main under both merges."
           } >>"$GITHUB_STEP_SUMMARY"
 
   baseline:
@@ -110,6 +133,8 @@ jobs:
     if: github.repository == 'olivaresai/olivares' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'ci/provider-accounts-console-qualification-vehicle'
     runs-on: ubuntu-latest
     timeout-minutes: 50
+    outputs:
+      verdict: ${{ steps.verdict.outputs.verdict }}
     env:
       PRODUCT_REF: ${{ needs.identify.outputs.product_ref }}
     steps:
@@ -161,6 +186,7 @@ jobs:
             --reporter=default --reporter=json --outputFile.json="$EVIDENCE/custody-vitest.json"
           echo "$?" >"$EVIDENCE/custody.rc"
       - name: baseline verdict (both pass, from their reports)
+        id: verdict
         timeout-minutes: 1
         run: |
           python3 - "$EVIDENCE" <<'PY'
@@ -200,6 +226,9 @@ jobs:
               s.write("### baseline: " + ("PASSED" if not problems else "FAILED") + "\n")
               for l in lines + [f"PROBLEM: {p}" for p in problems]:
                   s.write(f"- {l}\n")
+          if not problems:
+              with open(os.environ["GITHUB_OUTPUT"], "a") as out:
+                  out.write("verdict=passed\n")
           sys.exit(0 if not problems else 1)
           PY
       - name: retain the baseline evidence
@@ -240,6 +269,8 @@ jobs:
     if: github.repository == 'olivaresai/olivares' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'ci/provider-accounts-console-qualification-vehicle'
     runs-on: ubuntu-latest
     timeout-minutes: 50
+    outputs:
+      verdict: ${{ steps.verdict.outputs.verdict }}
     env:
       PRODUCT_REF: ${{ needs.identify.outputs.product_ref }}
     steps:
@@ -291,6 +322,7 @@ jobs:
           bash scripts/web-e2e.sh
           echo "$?" >"$EVIDENCE/journey.rc"
       - name: M1 verdict (the journey fails at its named assertion, from the Playwright report)
+        id: verdict
         timeout-minutes: 1
         run: |
           python3 - "$EVIDENCE" web/e2e/provider-accounts-journey.spec.ts <<'PY'
@@ -374,6 +406,9 @@ jobs:
               s.write("### m1-intent: " + ("FAILED AS NAMED (mutant killed)" if not problems else "NOT AS NAMED") + "\n")
               for l in lines + [f"PROBLEM: {p}" for p in problems]:
                   s.write(f"- {l}\n")
+          if not problems:
+              with open(os.environ["GITHUB_OUTPUT"], "a") as out:
+                  out.write("verdict=killed\n")
           sys.exit(0 if not problems else 1)
           PY
       - name: retain the M1 evidence
@@ -412,6 +447,8 @@ jobs:
     if: github.repository == 'olivaresai/olivares' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'ci/provider-accounts-console-qualification-vehicle'
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    outputs:
+      verdict: ${{ steps.verdict.outputs.verdict }}
     env:
       PRODUCT_REF: ${{ needs.identify.outputs.product_ref }}
     steps:
@@ -453,6 +490,7 @@ jobs:
             --reporter=default --reporter=json --outputFile.json="$EVIDENCE/custody-vitest.json"
           echo "$?" >"$EVIDENCE/custody.rc"
       - name: custody-removal verdict (the test fails at retiredAdoptionGone, from the vitest report)
+        id: verdict
         timeout-minutes: 1
         run: |
           python3 - "$EVIDENCE" web/src/features/agentops/provider-accounts-custody.test.tsx <<'PY'
@@ -514,6 +552,9 @@ jobs:
               s.write("### custody-removal: " + ("FAILED AS NAMED (mutant killed)" if not problems else "NOT AS NAMED") + "\n")
               for l in lines + [f"PROBLEM: {p}" for p in problems]:
                   s.write(f"- {l}\n")
+          if not problems:
+              with open(os.environ["GITHUB_OUTPUT"], "a") as out:
+                  out.write("verdict=killed\n")
           sys.exit(0 if not problems else 1)
           PY
       - name: retain the custody-removal evidence
@@ -526,15 +567,19 @@ jobs:
           retention-days: 7
           if-no-files-found: error
 
-  # The repository's capture harness, selected to the provider-accounts view (its extra
-  # arguments reach Playwright), with PUBLICAR=1 so it publishes under its own conditions: a
-  # green run on a clean tree, with its manifest. The manifest it writes records THIS run's
-  # views only; it does not merge the committed one.
+  # THE ONE UNFILTERED CAPTURE, and only after the three verdicts above: the baseline passed, and
+  # both mutants were killed at their named assertions, on this same product merge commit. The
+  # repository's capture harness runs as it is, with no selection. PUBLICAR=1 publishes under the
+  # harness's own conditions (a green run on a clean tree, with its manifest) into
+  # docs-site/public/console/, and the manifest records this run's takes only. The verdict
+  # requires the published directory to be exactly what this run emitted, byte for byte with
+  # that manifest. The artifact carries the complete set with its input, head and output hashes,
+  # and the unchanged screenshot-coverage result on the complete set.
   captures:
-    needs: identify
-    if: github.repository == 'olivaresai/olivares' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'ci/provider-accounts-console-qualification-vehicle'
+    needs: [identify, baseline, m1-intent, custody-removal]
+    if: github.repository == 'olivaresai/olivares' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'ci/provider-accounts-console-qualification-vehicle' && needs.baseline.outputs.verdict == 'passed' && needs.m1-intent.outputs.verdict == 'killed' && needs.custody-removal.outputs.verdict == 'killed'
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
     env:
       PRODUCT_REF: ${{ needs.identify.outputs.product_ref }}
     steps:
@@ -542,15 +587,29 @@ jobs:
         with:
           persist-credentials: false
           ref: ${{ needs.identify.outputs.product_ref }}
-      - name: confirm the product merge tree
+      - name: confirm the product merge tree and hash the committed capture set (input)
         timeout-minutes: 1
+        env:
+          VEHICLE_HEAD: ${{ github.event.pull_request.head.sha }}
+          GATES: baseline=${{ needs.baseline.outputs.verdict }} m1-intent=${{ needs.m1-intent.outputs.verdict }} custody-removal=${{ needs.custody-removal.outputs.verdict }}
         run: |
           set -euo pipefail
           [ "$(git rev-parse HEAD)" = "$PRODUCT_REF" ] || { echo "::error::checkout is not the product merge commit"; exit 2; }
           [ -z "$(git status --porcelain)" ] || { echo "::error::the checkout is not clean"; exit 2; }
           EVIDENCE="$RUNNER_TEMP/qualification"
           echo "EVIDENCE=$EVIDENCE" >>"$GITHUB_ENV"
-          mkdir -p "$EVIDENCE/published"
+          mkdir -p "$EVIDENCE"
+          # The shallow checkout still holds the merge commit's own header: main, then #116's head.
+          parents="$(git cat-file -p HEAD | sed -n '/^$/q; s/^parent //p' | tr '\n' ' ')"
+          {
+            echo "product_ref $PRODUCT_REF"
+            echo "product_tree $(git rev-parse 'HEAD^{tree}')"
+            echo "product_parents $parents"
+            echo "vehicle_head $VEHICLE_HEAD"
+            echo "qualified_by $GATES"
+          } >"$EVIDENCE/head.txt"
+          (cd docs-site/public/console && for f in *; do if [ -f "$f" ]; then sha256sum -- "$f"; fi; done) >"$EVIDENCE/input.sha256"
+          echo "committed capture set: $(wc -l <"$EVIDENCE/input.sha256") file(s)"
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .node-version
@@ -584,14 +643,21 @@ jobs:
           set +e
           task lint:screenshot-coverage 2>&1 | tee "$EVIDENCE/screenshot-coverage.before.txt"
           echo "${PIPESTATUS[0]}" >"$EVIDENCE/screenshot-coverage.before.rc"
-      - name: capture and publish the provider-accounts view
-        timeout-minutes: 30
+      # THE BUDGET, in whole minutes. The single-view run's job took 4 min 30 s in all; less its
+      # setup and install steps (about 1 min 30 s), the harness's fixed cost is about 3 min: the
+      # web bundle, the connectors and the binary, two engine boots, seeding, the manifest and the
+      # publication. The unfiltered run adds 101 more capture tests (84 views plus 18
+      # single-theme takes, 102 in all), in series on one worker. Each test is bounded by
+      # Playwright's 30 s test timeout, so 3 + 102 × 0.5 = 54, rounded up to 55. A healthy capture
+      # uses a fraction of its bound, which leaves room for the CI retry of a failing one.
+      - name: capture and publish every view (the repository harness, unfiltered)
+        timeout-minutes: 55
         env:
           PUBLICAR: '1'
         run: |
           set +e
-          bash scripts/docs-captures.sh --grep 'capture provider-accounts$'
-          echo "$?" >"$EVIDENCE/captures.rc"
+          bash scripts/docs-captures.sh 2>&1 | tee "$EVIDENCE/captures.log"
+          echo "${PIPESTATUS[0]}" >"$EVIDENCE/captures.rc"
       - name: screenshot coverage after the captures (evidence; the ceiling is unchanged)
         if: always()
         timeout-minutes: 2
@@ -599,36 +665,122 @@ jobs:
           set +e
           task lint:screenshot-coverage 2>&1 | tee "$EVIDENCE/screenshot-coverage.after.txt"
           echo "${PIPESTATUS[0]}" >"$EVIDENCE/screenshot-coverage.after.rc"
-      - name: captures verdict (both captures published, hashed with the manifest changes)
+      - name: captures verdict (the complete published set is this run's output, byte for byte)
         if: always()
-        timeout-minutes: 1
+        timeout-minutes: 2
         run: |
-          set -uo pipefail
-          problems=0
-          rc="$(cat "$EVIDENCE/captures.rc" 2>/dev/null || echo missing)"
-          [ "$rc" = 0 ] || { echo "::error::the capture harness exited $rc"; problems=1; }
-          for theme in dark light; do
-            f="docs-site/public/console/provider-accounts-$theme.png"
-            if [ -s "$f" ]; then cp "$f" "$EVIDENCE/published/"; else echo "::error::missing $f"; problems=1; fi
-          done
-          cp docs-site/public/console/manifest.json "$EVIDENCE/published/manifest.json" 2>/dev/null || { echo "::error::no published manifest"; problems=1; }
-          git status --porcelain -- docs-site/public/console >"$EVIDENCE/published/changes.txt"
-          git diff -- docs-site/public/console/manifest.json >"$EVIDENCE/published/manifest.diff"
-          (cd "$EVIDENCE/published" && sha256sum -- *.png manifest.json manifest.diff changes.txt >SHA256SUMS 2>/dev/null)
-          {
-            echo "### captures: $([ "$problems" = 0 ] && echo PUBLISHED || echo FAILED)"
-            echo "Product merge tree \`$PRODUCT_REF\`; harness exit $rc."
-            echo "Screenshot coverage exit before $(cat "$EVIDENCE/screenshot-coverage.before.rc" 2>/dev/null || echo '?'), after $(cat "$EVIDENCE/screenshot-coverage.after.rc" 2>/dev/null || echo '?') (ceiling unchanged)."
-            echo "The published manifest.json records this run's views only; import the captures, not the manifest as a whole."
-            echo '```'
-            cat "$EVIDENCE/published/changes.txt"
-            cat "$EVIDENCE/published/SHA256SUMS" 2>/dev/null
-            echo '```'
-          } >>"$GITHUB_STEP_SUMMARY"
-          exit "$problems"
-      - name: retain the captures and their hashes
+          python3 - "$EVIDENCE" <<'PY'
+          import hashlib, json, os, shutil, subprocess, sys
+          ev = sys.argv[1]
+          dest, emitted_dir = "docs-site/public/console", "web/playwright-report/docs"
+          product = os.environ["PRODUCT_REF"]
+          problems, lines = [], []
+          def sha(path):
+              h = hashlib.sha256()
+              with open(path, "rb") as fh:
+                  for block in iter(lambda: fh.read(1 << 20), b""):
+                      h.update(block)
+              return h.hexdigest()
+          def listing(d):
+              if not os.path.isdir(d):
+                  return {}
+              return {n: sha(os.path.join(d, n)) for n in sorted(os.listdir(d))
+                      if os.path.isfile(os.path.join(d, n)) and not n.endswith(".evidence.json")}
+          def write(name, table):
+              with open(os.path.join(ev, name), "w") as fh:
+                  fh.writelines(f"{h}  {n}\n" for n, h in table.items())
+          def text(name, default="missing"):
+              try:
+                  return open(os.path.join(ev, name)).read().strip()
+              except OSError:
+                  return default
+          rc = text("captures.rc")
+          if rc != "0":
+              problems.append(f"the capture harness exited {rc}, want 0 (a green run that published)")
+          inputs = dict(reversed(l.split("  ", 1)) for l in text("input.sha256", "").splitlines())
+          emitted = listing(emitted_dir)
+          output = listing(dest)
+          write("emitted.sha256", emitted)
+          write("output.sha256", output)
+          pngs = {n: h for n, h in emitted.items() if n.endswith(".png")}
+          if "manifest.json" not in emitted:
+              problems.append("this run emitted no manifest.json")
+          try:
+              man = json.load(open(os.path.join(dest, "manifest.json"), encoding="utf8"))
+          except (OSError, ValueError) as e:
+              man = None
+              problems.append(f"no readable published manifest: {e}")
+          if man is not None:
+              takes = man.get("take") or []
+              described = {f"{t.get('id')}-{t.get('theme')}.png": t.get("sha256") for t in takes}
+              lines.append(f"manifest: commit {man.get('commit')}, tree_dirty {man.get('tree_dirty')}, views "
+                           f"{man.get('views')}, captures {man.get('captures')}, unpaired {man.get('unpaired')}")
+              if man.get("commit") != product:
+                  problems.append(f"the manifest names commit {man.get('commit')}, not the product merge {product}")
+              if man.get("tree_dirty") is not False:
+                  problems.append(f"the manifest's tree_dirty is {man.get('tree_dirty')}, want false")
+              if man.get("unpaired"):
+                  problems.append(f"takes without their light/dark pair: {man.get('unpaired')}")
+              if "partial_retakes" in man:
+                  problems.append("the manifest carries partial_retakes, so it is not one run's manifest")
+              if not man.get("captures") == len(takes) == len(described) == len(pngs):
+                  problems.append(f"counts disagree: manifest captures {man.get('captures')}, takes {len(takes)}, "
+                                  f"distinct {len(described)}, emitted PNGs {len(pngs)}")
+              if man.get("views") != len({t.get("id") for t in takes}):
+                  problems.append(f"the manifest's views {man.get('views')} is not the number of views its takes name")
+              for label, names in (
+                  ("takes without an emitted PNG", sorted(set(described) - set(pngs))),
+                  ("emitted PNGs the manifest does not describe", sorted(set(pngs) - set(described))),
+                  ("PNGs whose bytes differ from their manifest hash",
+                   sorted(n for n in set(described) & set(pngs) if described[n] != pngs[n])),
+              ):
+                  if names:
+                      problems.append(f"{label}: {', '.join(names[:10])}{' …' if len(names) > 10 else ''}")
+          unpublished = sorted(n for n, h in emitted.items() if output.get(n) != h)
+          if unpublished:
+              problems.append(f"emitted files not published byte for byte: {', '.join(unpublished[:10])}")
+          # A committed file this run did not emit would stay published without a manifest entry:
+          # that mixed set is hand-merged provenance, not one run's output.
+          stale = sorted(n for n in output if n not in emitted)
+          with open(os.path.join(ev, "not-emitted.txt"), "w") as fh:
+              fh.writelines(f"{n}\n" for n in stale)
+          if stale:
+              problems.append(f"{len(stale)} published file(s) this run did not emit, so its manifest does not "
+                              f"describe them: {', '.join(stale[:10])}{' …' if len(stale) > 10 else ''}")
+          new = sum(1 for n in output if n not in inputs)
+          same = sum(1 for n in output if inputs.get(n) == output[n])
+          lines.append(f"published set: {len(output)} file(s), {len(inputs)} committed before: {new} new, "
+                       f"{len(output) - new - same} changed, {same} byte-identical")
+          cov = text("screenshot-coverage.after.rc")
+          lines.append(f"screenshot coverage, ceiling unchanged: before {text('screenshot-coverage.before.rc')}, after {cov}")
+          if cov != "0":
+              problems.append(f"screenshot coverage on the complete set exited {cov}, want 0")
+          published = os.path.join(ev, "published")
+          os.makedirs(published, exist_ok=True)
+          for n in output:
+              shutil.copy2(os.path.join(dest, n), os.path.join(published, n))
+          copied = listing(published)
+          if copied != output:
+              problems.append("the artifact's copy of the published set differs from docs-site/public/console")
+          write(os.path.join("published", "SHA256SUMS"), copied)
+          def git(*a):
+              return subprocess.run(["git", *a], capture_output=True, text=True).stdout
+          open(os.path.join(ev, "changes.txt"), "w").write(git("status", "--porcelain", "--", dest))
+          open(os.path.join(ev, "manifest.diff"), "w").write(git("diff", "--", f"{dest}/manifest.json"))
+          verdict = {"job": "captures", "product_ref": product, "published": not problems, "problems": problems,
+                     "evidence": lines, "counts": {"committed": len(inputs), "emitted": len(emitted),
+                                                   "published": len(output), "not_emitted": len(stale)}}
+          json.dump(verdict, open(os.path.join(ev, "verdict.json"), "w"), indent=2)
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as s:
+              s.write("### captures: " + ("PUBLISHED, COMPLETE SET" if not problems else "NOT PUBLISHED AS REQUIRED") + "\n")
+              for l in lines + [f"PROBLEM: {p}" for p in problems]:
+                  s.write(f"- {l}\n")
+              s.write("```\n" + text("head.txt") + "\n```\n")
+          sys.exit(0 if not problems else 1)
+          PY
+      - name: retain the complete capture set and its hashes
         if: always()
-        timeout-minutes: 3
+        timeout-minutes: 5
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: provider-accounts-qualification-captures-${{ github.run_id }}-${{ github.run_attempt }}

@@ -1,1 +1,0 @@
-import{cn as e,yn as t}from"./index-COE7yvf_.js";function n(n){return t(e,n)}export{n as t};

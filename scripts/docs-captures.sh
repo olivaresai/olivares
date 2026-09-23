@@ -700,6 +700,10 @@ man = {
                        " the reason rather than a fabricated inventory",
         "console": "AAL3 step-up required to issue an invitation, so the pending-invitations"
                    " panel stays empty; a password-token seeder must not mint accounts",
+        "provider-accounts": "the fixture's empty initial state: no provider account is enrolled (the"
+                             " seeder registers a profile and never adopts it); the populated, adopt"
+                             " and read-refusal evidence is the seeded journey's captures and effect"
+                             " receipt (web/e2e/provider-accounts-journey.spec.ts)",
     },
     # ⛔ AUSENCIA DECLARADA, que NO es lo mismo que vacia. `empty_by_control` de arriba habla de
     #    vistas que SE FOTOGRAFIAN y salen sin filas; esta habla de una ruta que NO se fotografia.
