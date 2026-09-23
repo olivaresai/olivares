@@ -268,6 +268,61 @@ type ProviderDriverLaunchEnv interface {
 	LaunchEnv(DriverLaunch) []EnvVar
 }
 
+// DriverLaunchTerms is what a driver says about the choices an operator makes for
+// a launch: whether its launch hands each one to the child it starts, and where
+// the models offered for it come from. Like DriverTransportProfile it describes a
+// contract that already exists — a console labels a choice with it and decides
+// nothing from it — and a conformance test holds every declaration in this
+// package to what a launch actually hands the child.
+type DriverLaunchTerms struct {
+	// Model, Effort and PermissionMode say whether the launch hands that choice
+	// to the child, on its argv or on a frame of the driver's own protocol.
+	Model, Effort, PermissionMode TermSupport
+	// ModelDiscovery names where the models offered for this driver come from:
+	// ModelDiscoveryNone or ModelDiscoveryBoundCredentialProbe.
+	ModelDiscovery string
+}
+
+// TermSupport is whether a driver's launch hands one choice to its child.
+type TermSupport string
+
+const (
+	// TermCarried means the launch hands the choice to the child.
+	TermCarried TermSupport = "carried"
+	// TermNotCarried means nothing the launch hands the child carries the choice:
+	// the child never receives it. That is the ONE meaning a reader may rely on,
+	// and it is not a promise that a launch asking for the choice starts. Before
+	// the spawn the drivers differ: a Codex or Grok run records the choice and
+	// starts without it, while an OpenCode launch that asks for any permission
+	// mode but the default is refused (refuseOpenCodeUnsupportedControls).
+	TermNotCarried TermSupport = "not_carried"
+)
+
+const (
+	// ModelDiscoveryNone means nothing lists the models offered for a driver.
+	ModelDiscoveryNone = "none"
+	// ModelDiscoveryBoundCredentialProbe means the models can be listed by
+	// probing the provider credential a profile binds (ProviderProbe): a
+	// credential record of a kind this driver reads can be bound to its
+	// profiles. It is not a listing already obtained, and a profile that binds
+	// no record, such as an account-home profile, has nothing to probe. No
+	// driver lists models itself.
+	ModelDiscoveryBoundCredentialProbe = "bound_credential_probe"
+)
+
+// ProviderDriverLaunchTerms is the OPTIONAL half of a driver that declares its
+// launch terms. It is optional for the same reason ProviderDriverTransport is:
+// adding a required method would force every driver — including ones outside
+// this repository — to change in order for a READ to work.
+//
+// ⛔ A DRIVER THAT DOES NOT IMPLEMENT IT IS `unknown`, NOT A GUESS. Nothing
+// infers "this driver takes a model" from a driver key, a type name or a
+// resemblance to another driver; LaunchTermsFor answers false and the reader
+// says it does not know.
+type ProviderDriverLaunchTerms interface {
+	LaunchTerms() DriverLaunchTerms
+}
+
 // ---------------------------------------------------------------------------
 // Registry.
 // ---------------------------------------------------------------------------
@@ -297,6 +352,69 @@ func (rt *runtimeState) registerDriver(d ProviderDriver) error {
 func (m *Module) driverFor(key string) (ProviderDriver, bool) {
 	d, ok := m.rt.drivers[key]
 	return d, ok
+}
+
+// LaunchTermsFor reports the launch terms and the model discovery of one driver.
+// It resolves them from the REAL seam of the driver that would run, as the
+// transport read does: the historical Claude path by name, from the declaration
+// beside its argv, and a registered driver through its optional half.
+//
+// It answers false for a driver that is not registered on this node or that
+// publishes no declaration, and a reader shows that as unknown. A declaration
+// is published inside the closed vocabulary only (normalizeLaunchTerms).
+func (m *Module) LaunchTermsFor(driver string) (DriverLaunchTerms, bool) {
+	if driver == providerDriverClaude {
+		return claudeLaunchTerms(), true
+	}
+	d, ok := m.driverFor(driver)
+	if !ok {
+		return DriverLaunchTerms{}, false
+	}
+	declared, ok := d.(ProviderDriverLaunchTerms)
+	if !ok {
+		return DriverLaunchTerms{}, false
+	}
+	return normalizeLaunchTerms(declared.LaunchTerms()), true
+}
+
+// normalizeLaunchTerms keeps the published vocabulary closed even if a driver
+// outside this package answers with something else, as normalizeTransportProfile
+// does for the transport. Only the exact TermCarried reads as carried and only
+// the exact ModelDiscoveryBoundCredentialProbe as a probe: any other answer
+// vouches for nothing, so it reads as the safe one — the child does not receive
+// the choice, and nothing lists the models.
+func normalizeLaunchTerms(t DriverLaunchTerms) DriverLaunchTerms {
+	discovery := ModelDiscoveryNone
+	if t.ModelDiscovery == ModelDiscoveryBoundCredentialProbe {
+		discovery = ModelDiscoveryBoundCredentialProbe
+	}
+	return DriverLaunchTerms{
+		Model:          termSupportOf(t.Model == TermCarried),
+		Effort:         termSupportOf(t.Effort == TermCarried),
+		PermissionMode: termSupportOf(t.PermissionMode == TermCarried),
+		ModelDiscovery: discovery,
+	}
+}
+
+// claudeLaunchTerms is the declaration of the historical Claude path, which is
+// not a registered driver. Which terms its argv carries is declared once, in
+// cliruntime beside that argv; its models can be discovered like every driver's.
+func claudeLaunchTerms() DriverLaunchTerms {
+	argv := cliruntime.ClaudeLaunchTerms()
+	return DriverLaunchTerms{
+		Model:          termSupportOf(argv.Model),
+		Effort:         termSupportOf(argv.Effort),
+		PermissionMode: termSupportOf(argv.PermissionMode),
+		ModelDiscovery: ModelDiscoveryBoundCredentialProbe,
+	}
+}
+
+// termSupportOf turns a yes or no about one choice into a TermSupport.
+func termSupportOf(carried bool) TermSupport {
+	if carried {
+		return TermCarried
+	}
+	return TermNotCarried
 }
 
 // driverProgram is the executable a driver is spawned as: the operator's explicit
