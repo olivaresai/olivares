@@ -33,6 +33,7 @@ import (
 // `quickstart` build one and hand it to runEngine, so the secure boot/serve path
 // lives in exactly one place.
 type serveOptions struct {
+	loginProxies         loginProxyOptions
 	listen, grpcListen   string
 	dataDir, engine, dsn string
 	adminDSN, ownerDSN   string
@@ -101,6 +102,7 @@ func newServeCmd() *cobra.Command {
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			opts.publicURLSet = cmd.Flags().Changed("public-url")
+			opts.loginProxies.set = cmd.Flags().Changed("login-trusted-proxies")
 			announce := func(ctx context.Context, out io.Writer, eng *engine, addr consoleAddress) error {
 				if opts.seedDemo {
 					if err := announceDemo(ctx, out, eng); err != nil {
@@ -118,6 +120,7 @@ func newServeCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&opts.listen, "listen", defaultHTTPListen, "HTTP (REST + web) listen address. The default "+defaultHTTPListen+" is EVERY interface (0.0.0.0 and, where the kernel has IPv6, ::) — this is a server. Bind 127.0.0.1:8443 to restrict it to this host")
 	cmd.Flags().StringVar(&opts.publicURL, "public-url", "", publicURLFlagHelp)
+	cmd.Flags().StringVar(&opts.loginProxies.value, "login-trusted-proxies", "", loginTrustedProxiesFlagHelp)
 	cmd.Flags().StringVar(&opts.grpcListen, "grpc-listen", defaultGRPCListen, "gRPC listen address. The default "+defaultGRPCListen+" is EVERY interface, like --listen; bind 127.0.0.1:8444 to restrict it")
 	cmd.Flags().StringVar(&opts.dataDir, "data-dir", "", "data directory (default $OLIVARES_DATA_DIR, an existing ./olivares-data, else $XDG_DATA_HOME/olivares or ~/.local/share/olivares)")
 	cmd.Flags().StringVar(&opts.engine, "engine", "sqlite", "store engine: sqlite or postgres")
@@ -155,8 +158,12 @@ func runEngine(ctx context.Context, out io.Writer, opts serveOptions, announce f
 	// through here, so `serve` and `quickstart` cannot disagree about the shape of a
 	// log line — they did until 2026-09-18, and --quiet was what changed it.
 	log := installEngineLogger(os.Stderr, osGetenv, opts.quiet)
+	loginProxies, err := opts.loginProxies.resolve(osGetenv)
+	if err != nil {
+		return err
+	}
 
-	// The declared browser address is resolved and validated FIRST — before the
+	// The declared browser address is resolved and validated before the
 	// demo guard, before the bind guard, and above all before boot() creates a
 	// data directory or mints a key. A refused value is a configuration error the
 	// operator fixes in a file, and making them clean up a half-created
@@ -218,10 +225,11 @@ func runEngine(ctx context.Context, out io.Writer, opts serveOptions, announce f
 		Version: version, Logger: log, DemoSeed: opts.seedDemo,
 		AllowPrivilegedDBRole: opts.allowPrivilegedDBRole,
 		Region:                opts.region, KnownRegions: opts.knownRegions,
-		ServeMode:        true, // long-lived server: OK to run the background update-check
-		TLSCertNotAfter:  tlsCertNotAfter,
-		PublicAddr:       publicAddr,
-		PublicAddrSource: publicSource,
+		ServeMode:           true, // long-lived server: OK to run the background update-check
+		TLSCertNotAfter:     tlsCertNotAfter,
+		PublicAddr:          publicAddr,
+		PublicAddrSource:    publicSource,
+		LoginTrustedProxies: loginProxies,
 	})
 	if err != nil {
 		return err

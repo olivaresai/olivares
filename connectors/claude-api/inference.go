@@ -216,6 +216,12 @@ type MessageRequest struct {
 	// drop the fallbacks param (the fallback-credit page), so the two fields are
 	// mutually exclusive — CreateMessage enforces it.
 	FallbackCreditToken string `json:"fallback_credit_token,omitempty"`
+
+	// mcp is the accepted MCP binding an egress admission attached (MCPEgressSnapshot in
+	// mcp_egress.go), for a declaration or for its absence. It is never serialized; a copy
+	// of the request keeps it and a rebuilt request loses it. MarshalPrepared, CountTokens
+	// and MarshalPreparedBatch verify the bytes they produce against it.
+	mcp *mcpBinding
 }
 
 // CacheCreation is the per-TTL cache-write breakdown the usage reports.
@@ -361,7 +367,8 @@ func (inf *Inference) CreateMessage(ctx context.Context, req MessageRequest) (Me
 		return MessageResponse{}, err
 	}
 	// Assemble the union of anthropic-beta headers the request's 2026 primitives require
-	// (D1/D3/D4/D5); a request with none sends no beta header, exactly as before.
+	// (D1/D3/D4/D5) plus the MCP-connector beta of a declared destination (CLA-09); a
+	// request with none sends no beta header, exactly as before.
 	var resp MessageResponse
 	if err := inf.client.PostJSON(ctx, messagesPath, req, &resp, betaHeaderMap(req.BetaHeaders())); err != nil {
 		return MessageResponse{}, err
@@ -565,7 +572,10 @@ type Batch struct {
 }
 
 // CreateBatch submits a batch (50% price, results within 24h). It defaults each
-// entry's model from DefaultModel.
+// entry's model from DefaultModel. It sends the MCP beta when any entry declares an MCP
+// destination (mcpBatchBetas). The dated official schema reading cited by BetaHeaders
+// places MCP in requests[].params; the header applies to the whole submission. A batch
+// with no MCP sends no beta header, preserving this connector's prior behavior.
 func (inf *Inference) CreateBatch(ctx context.Context, requests []BatchRequest) (Batch, error) {
 	if inf.client == nil {
 		return Batch{}, ErrNotConfigured
@@ -577,7 +587,7 @@ func (inf *Inference) CreateBatch(ctx context.Context, requests []BatchRequest) 
 	}
 	body := map[string]any{"requests": requests}
 	var b Batch
-	if err := inf.client.PostJSON(ctx, batchesPath, body, &b, nil); err != nil {
+	if err := inf.client.PostJSON(ctx, batchesPath, body, &b, betaHeaderMap(mcpBatchBetas(requests))); err != nil {
 		return Batch{}, err
 	}
 	return b, nil
@@ -586,9 +596,9 @@ func (inf *Inference) CreateBatch(ctx context.Context, requests []BatchRequest) 
 // CreateBatchRaw submits a batch and returns BOTH the decoded Batch (governance/audit
 // metadata) and the RAW upstream response bytes, so the inline PEP can relay the upstream
 // response VERBATIM — preserving fields this connector does not model (request_counts,
-// expires_at, cancel_initiated_at). It defaults each entry's model from DefaultModel exactly
-// like CreateBatch. The decode is best-effort: the relay always uses raw, the Batch is only
-// for the audit record.
+// expires_at, cancel_initiated_at). It defaults each entry's model from DefaultModel and
+// sends the MCP beta of the whole submission exactly like CreateBatch. The decode is
+// best-effort: the relay always uses raw, the Batch is only for the audit record.
 func (inf *Inference) CreateBatchRaw(ctx context.Context, requests []BatchRequest) (Batch, []byte, error) {
 	if inf.client == nil {
 		return Batch{}, nil, ErrNotConfigured
@@ -599,7 +609,7 @@ func (inf *Inference) CreateBatchRaw(ctx context.Context, requests []BatchReques
 		}
 	}
 	body := map[string]any{"requests": requests}
-	raw, err := inf.client.PostJSONRaw(ctx, batchesPath, body, nil)
+	raw, err := inf.client.PostJSONRaw(ctx, batchesPath, body, betaHeaderMap(mcpBatchBetas(requests)))
 	if err != nil {
 		return Batch{}, nil, err
 	}

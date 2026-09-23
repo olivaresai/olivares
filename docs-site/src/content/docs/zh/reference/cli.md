@@ -146,7 +146,7 @@ push 时比较。command 名称、help description、flag、exit code 与 output
 
 ## Complete command reference
 
-This section is generated from the command tree of the community (AGPL) build of the `olivares` binary at this commit. It covers 837 command nodes — the root command and 836 subcommands, of which 183 are groups that carry subcommands and 9 are hidden diagnostics — together with the 2884 flags they declare. It is regenerated from the binary rather than kept by hand, so a command or flag added without a documentation change fails the push gate.
+This section is generated from the command tree of the community (AGPL) build of the `olivares` binary at this commit. It covers 837 command nodes — the root command and 836 subcommands, of which 183 are groups that carry subcommands and 9 are hidden diagnostics — together with the 2887 flags they declare. It is regenerated from the binary rather than kept by hand, so a command or flag added without a documentation change fails the push gate.
 
 Nothing here is a stability promise: see [Stability](#stability) below for what may still change.
 
@@ -10057,6 +10057,7 @@ olivares quickstart
 | `--data-dir` | `string` | — | data directory (default $OLIVARES_DATA_DIR, an existing ./olivares-data, else $XDG_DATA_HOME/olivares or ~/.local/share/olivares) |
 | `--grpc-listen` | `string` | `:8444` | gRPC listen address. The default :8444 is EVERY interface, like --listen; bind 127.0.0.1:8444 to restrict it |
 | `--listen` | `string` | `:8443` | HTTP (REST + web console) listen address. The default :8443 is EVERY interface (0.0.0.0 and, where the kernel has IPv6, ::); bind 127.0.0.1:8443 to restrict it to this host |
+| `--login-trusted-proxies` | `string` | — | comma-separated proxy CIDRs trusted for the password-login throttle's X-Forwarded-For address only (default $OLIVARES_LOGIN_TRUSTED_PROXIES; empty trusts none). An explicit empty flag clears the environment setting; policy, session and audit keep the transport peer |
 | `--public-url` | `string` | — | the address a browser reaches this console at, as scheme://host[:port] (e.g. https://olivares.example.com). It is what the startup panel prints and what the WebAuthn relying party is derived from, and it is independent of --listen: declare it when the engine sits behind a reverse proxy, binds a wildcard, or is reached by a name that is not the bind. Defaults to $OLIVARES_PUBLIC_URL; passing the flag wins over the environment, and passing it EMPTY clears it. Start-time only: a change takes a restart |
 | `--quiet` | `bool` | `false` | print only the guided panel, holding the engine's startup checks back to errors (they are still evaluated, and 'olivares status' reports the same posture) |
 
@@ -10085,6 +10086,7 @@ olivares quickstart governed-rag
 | `--identity-ref` | `string` | `agent:claude-code-governed` | NHI identity external_id to bind to the agent |
 | `--kb-name` | `string` | `governed-data` | knowledge base name to create in the bootstrap script |
 | `--listen` | `string` | `:8443` | HTTP (REST + web console) listen address when --start is used |
+| `--login-trusted-proxies` | `string` | — | comma-separated proxy CIDRs trusted for the password-login throttle's X-Forwarded-For address only (default $OLIVARES_LOGIN_TRUSTED_PROXIES; empty trusts none). An explicit empty flag clears the environment setting; policy, session and audit keep the transport peer |
 | `--mcp-authorization-server` | `string` | — | authorization server metadata URL (default --mcp-issuer) |
 | `--mcp-issuer` | `string` | — | trusted OAuth issuer for MCP access tokens |
 | `--mcp-jwks-file` | `string` | — | inline JWKS JSON file for the MCP issuer |
@@ -11272,6 +11274,7 @@ olivares serve
 | `--known-regions` | `stringSlice` | `[]` | comma-separated region codes valid across the whole deployment (e.g. eu,us); a tenant pin must be one of these. The home --region is always included. Only meaningful with --region set |
 | `--license` | `string` | — | path to a commercial license file (informational only) |
 | `--listen` | `string` | `:8443` | HTTP (REST + web) listen address. The default :8443 is EVERY interface (0.0.0.0 and, where the kernel has IPv6, ::) — this is a server. Bind 127.0.0.1:8443 to restrict it to this host |
+| `--login-trusted-proxies` | `string` | — | comma-separated proxy CIDRs trusted for the password-login throttle's X-Forwarded-For address only (default $OLIVARES_LOGIN_TRUSTED_PROXIES; empty trusts none). An explicit empty flag clears the environment setting; policy, session and audit keep the transport peer |
 | `--owner-dsn` | `string` | — | Postgres only: DSN of the owner role that owns the schema and runs DDL/migrations. Set it to a SEPARATE NOSUPERUSER NOBYPASSRLS role to make --dsn a least-privilege non-owner app role with only DML grants (provision both with 'olivares db init'). Empty = the --dsn role owns the schema (single-role). Accepts a file:/env: reference like --dsn |
 | `--public-url` | `string` | — | the address a browser reaches this console at, as scheme://host[:port] (e.g. https://olivares.example.com). It is what the startup panel prints and what the WebAuthn relying party is derived from, and it is independent of --listen: declare it when the engine sits behind a reverse proxy, binds a wildcard, or is reached by a name that is not the bind. Defaults to $OLIVARES_PUBLIC_URL; passing the flag wins over the environment, and passing it EMPTY clears it. Start-time only: a change takes a restart |
 | `--region` | `string` | — | data-residency HOME region of THIS instance (e.g. eu, us). When set, the instance is region-scoped: it serves only tenants pinned to this region and denies cross-region access fail-closed. Empty = single-region mode, no residency enforcement |

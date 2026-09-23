@@ -65,9 +65,14 @@ func (m *Module) verifyCryptoShredCompleteness(ctx context.Context, keyID string
 		return v, true, err
 	}
 	// The reflect adapter passes the probes struct by value; an implementation
-	// that cannot accept it (a pre shape) fails the assignability check in
-	// callReflect and the erasure fails closed — it never runs an unverifiable
-	// coordinator silently.
+	// that cannot accept it (an older shape) fails the assignability check in
+	// callReflect and the erasure fails closed, with an error naming the method it
+	// refused at — it never runs an unverifiable coordinator silently. An
+	// implementation that takes the struct as `any` and reads a field by name finds
+	// the v2 residual-scan probe ABSENT under contract v3 (it is
+	// ResidualScanReport now), which the contract already defines: a missing probe
+	// is an Unverified entry and a Complete=false verdict, so the receipt seals a
+	// declared gap rather than a silent pass.
 	out, err := callReflect(m.shredCoordinator, "VerifyShredCompleteness",
 		[]reflect.Value{reflect.ValueOf(ctx), reflect.ValueOf(keyID), reflect.ValueOf(targets), reflect.ValueOf(probes)})
 	if err != nil {
@@ -82,7 +87,9 @@ func (m *Module) verifyCryptoShredCompleteness(ctx context.Context, keyID string
 // CryptoShredProbesFor returns evidence probes bound to the module's LIVE store
 // (each probe opens its own read view) for a POST-HOC re-verification of a past
 // shred: KeyGone re-checks that no live subject-key row exists for (subjectKind,
-// any of refs); ResidualScan re-runs the registry scan for those identifiers.
+// any of refs); ResidualScanReport re-runs the registry-scoped scan for those
+// identifiers and returns that scan's own report — the method it used, the targets
+// the scope required, the targets it could open and any residues.
 // Empty classes default to every class applicable to the subject kind (the same
 // affectedClasses default the erasure create path uses) — a re-verification
 // scans EVERYTHING unless the caller narrows it to the erasure's actual scope.
@@ -115,18 +122,17 @@ func (m *Module) CryptoShredProbesFor(tenant model.TenantID, subjectKind string,
 			}
 			return gone, nil
 		},
-		ResidualScan: func(ctx context.Context) ([]string, int, error) {
-			var residues []string
-			var scanned int
+		ResidualScanReport: func(ctx context.Context) (CryptoShredResidualScanReport, error) {
+			var report CryptoShredResidualScanReport
 			err := m.data.View(ctx, tenant, func(sc store.Scope) error {
 				var verr error
-				residues, scanned, verr = residualScanIn(ctx, sc, subjectKind, refs, classes)
+				report, verr = residualScanIn(ctx, sc, subjectKind, refs, classes)
 				return verr
 			})
 			if err != nil {
-				return nil, 0, err
+				return CryptoShredResidualScanReport{}, err
 			}
-			return residues, scanned, nil
+			return report, nil
 		},
 	}
 }
@@ -196,6 +202,10 @@ func verificationFromValue(v reflect.Value) CryptoShredVerification {
 	}
 }
 
+// residualScanFromValue reads a coordinator's summary of its OWN post-shred
+// re-scan. ScanDepth is still read so an existing coordinator keeps working, but the
+// module never publishes it (contract v3): depth is stated once, by the pre-shred
+// scan, in the receipt's typed field.
 func residualScanFromValue(v reflect.Value) CryptoShredResidualScan {
 	v = deref(v)
 	if !v.IsValid() {

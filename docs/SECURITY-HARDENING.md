@@ -186,23 +186,37 @@ what that delegates to the deployment edge:
   minutes — but it is not free. Two consequences worth knowing: an instant refusal, against the
   one-second hold a clean account pays, tells an observer at a tripped address whether an account
   is warm (activity, not existence: an invented address behaves exactly like a clean one); and the
-  cure is a PER-CLIENT address, which needs the operator to declare the proxy networks the engine
-  may believe. That is not in this release.
+  mitigation is a PER-CLIENT address, which needs the operator to declare the proxy networks the
+  engine may believe. Configure the opt-in below; clients that share a public NAT address still
+  share a bucket. Account throttling and ingress controls remain necessary.
 
   Failures are audited (`auth.login.failed`, with the peer IP in Meta) and counted
   (`olivares_auth_login_attempts_total{outcome}` — `success|failed|locked_out|abandoned`, the last
   for an attempt the caller drops while the throttle is holding it; see
   [`docs/17-PRODUCTION-READINESS-SLO.md`](17-PRODUCTION-READINESS-SLO.md) §5).
-- **The address key uses `RemoteAddr`, never `X-Forwarded-For` — by design.** XFF is
-  attacker-writable; honoring it unauthenticated would let a brute-forcer rotate fake addresses to
-  dodge the throttle, or aim it at a victim by spoofing theirs (`core/api/handlers_auth.go:386`).
-  The honest consequence: **behind a reverse proxy/LB the `ip:` key collapses to the proxy's
-  address** — it stops distinguishing sources, and one attacker's failures reach every user behind
-  that proxy. That is exactly why the address key charges rather than refuses a clean account. The
-  per-ACCOUNT key keeps working regardless. There is deliberately no trusted-proxy XFF knob in the
-  product; if one is ever added it must be opt-in with an explicit trusted-CIDR list, and the
-  address key must stay separate from the login-surface IP allow-list, which is right to trust only
-  the transport peer.
+- **The login address key uses the transport peer unless trusted proxies are declared.** Set
+  `OLIVARES_LOGIN_TRUSTED_PROXIES=10.0.0.0/8,2001:db8:2::/64`, or pass
+  `--login-trusted-proxies` to `serve`, `quickstart` or `quickstart governed-rag`. Declare only
+  networks whose proxies you control and configure those proxies to append the observed client
+  address, or replace untrusted incoming headers. Trusting arbitrary client networks lets clients
+  forge throttle buckets. Unset or empty configuration trusts none; an explicit empty flag clears
+  the environment. Invalid CIDRs or empty list entries refuse startup before data is written.
+  Configuration takes effect at startup and is not read during a request.
+
+  Only a peer inside those CIDRs permits use of `X-Forwarded-For`. All header lines are combined
+  in received order. The engine reads right to left, skips trusted proxy hops and selects the
+  nearest non-trusted IP in canonical form. Values to its left cannot override it. IPv4/IPv6
+  literals, bracketed IPv6 and valid IP-and-port forms are accepted; hostnames, zone identifiers
+  and malformed brackets or ports are not. Processing is limited to **8192 combined bytes and
+  64 entries**, including comma separators inserted between repeated header lines. The limits
+  are inclusive. Missing headers, an untrusted or unparseable peer, a malformed or empty required
+  suffix hop, an all-trusted chain, or either limit exceeded retain the original peer bucket.
+  `Forwarded` and `X-Real-IP` do not supply an alternative address.
+
+  **Only the password-login throttle address key changes.** The login-surface IP allow-list,
+  failed-login ledger, session provenance and ordinary access logs retain the transport peer.
+  Account admission, in-flight protection, delay and outcome handling remain the same. Without
+  trusted proxy configuration, users behind an ingress still share its address bucket.
 - **Setup (`/v1/setup`):** guarded by the one-time 256-bit token alone (constant-time compare,
   single-use, consumed on success — `core/secure/setup.go`). There is **no throttle** on token
   attempts: entropy is the control (an online brute force of 2^256 is not a credible threat), and

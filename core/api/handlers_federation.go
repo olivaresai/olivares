@@ -280,9 +280,11 @@ func (s *Server) handleSSOCallback(w http.ResponseWriter, r *http.Request) {
 	}
 	// U5 domain boundary: an IdP that claims domains may only vouch for identities
 	// whose email is in those domains, so it cannot assert an out-of-domain address to
-	// seize another account via the email-fallback path. The global/default IdP (no claimed
-	// domains) is unconstrained.
+	// seize another account via the email-fallback path. A tenant's IdP with no claimed
+	// domain vouches for nobody; the global/default IdP (no claimed domains) is
+	// unconstrained. The refusal is recorded like every refusal of the binding.
 	if !resolved.AllowsEmail(identity.Email) {
+		s.authr.RecordSSOOutsideScope(r.Context(), clientIP(r), resolved.Scope)
 		s.writeError(w, r, auth.ErrUnauthenticated)
 		return
 	}

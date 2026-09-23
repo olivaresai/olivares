@@ -4,12 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [CalVer](https://calver.org/) — `vYY.M.PATCH` (two-digit year,
-month, release-of-month; the current release is `v26.9.1`).
+month, release-of-month).
 
-> **Status: beta.** The current release is **v26.9.1** — its dated section below lists what it
-> ships and where, and the [GitHub release](https://github.com/olivaresai/olivares/releases/tag/v26.9.1)
-> carries the artifacts. Every earlier release keeps its own dated section, unchanged.
-> The section heading carries the cut date; this masthead does not restate it.
+> **Status: beta.** The development candidate is **v26.9.1**. Its section below records the
+> proposed contents and cut date; it does not establish a published release or available artifacts.
+> The latest published release is the newest entry on the [releases page](https://github.com/olivaresai/olivares/releases).
+> Release notes and artifacts become authoritative when the corresponding release is published.
+> Every earlier release keeps its own dated section, unchanged.
 > APIs, schemas and the module surface MAY still change before a
 > stability commitment. Because CalVer does not encode breaking changes in the version number,
 > every breaking change is called out explicitly under **Changed**/**Removed** here. No
@@ -32,6 +33,73 @@ month, release-of-month; the current release is `v26.9.1`).
   changelog never discloses a vulnerability ahead of its coordinated fix.
 
 ## [Unreleased]
+
+### Added
+
+- **A run can say what it was launched at, to a reader that holds no run.** A new read port,
+  beside the existing session-identity and run-launch readers, presents one run's provider
+  profile, the driver that profile names and the execution environment it was resolved
+  against — so a presentation consumer can name a launch target without receiving the
+  runtime that owns the run. It refuses exactly as its sibling does: absent,
+  foreign-workspace and lineage-unset runs are one answer, because telling them apart is an
+  existence probe, while a visible run whose row cannot establish that authority is reported
+  as unavailable rather than as absent. A run launched under no provider profile is
+  presented with those three fields empty rather than refused; the two provider home paths
+  and the authorized authentication source are not presented at all.
+- `OLIVARES_SESSIONS_AGENT_LINK_LISTEN` is a recognized configuration key: the listen address,
+  as `host:port`, of the agent link, the mutual-TLS endpoint an edition built on this tree
+  serves for its node agents. Empty, the default, means no listener. A startup that sets it no
+  longer logs it as ignored, and `olivares config validate` and `config effective --strict`
+  accept it. The Community build does not read it.
+### Changed
+
+- **A right-to-erasure receipt now states what its verification examined.** The residual scan
+  that runs after the erase pass and before the crypto-shred reports the method it used and
+  the targets it opened against the targets this request's data-class scope required; the
+  sealed receipt carries them as `residual_scan_depth`, `residual_scan_opened`,
+  `residual_scan_applicable` and `data_classes`, and `manifest_hash` commits to the labels
+  (manifest v2). When the scan opened nothing, or less than the scope required, the receipt
+  says so once in `verify_reason` on a matchable substring (`residual-scan-depth=unestablished`
+  / `residual-scan-coverage=partial`) and the erasure closes `completed_with_gaps` with
+  `verify_ok: false` — an erasure whose verification could not look where the request said to
+  look is not a verified erasure. Receipts sealed earlier keep empty fields and the manifest
+  hash they were sealed under; nothing recomputes a stored manifest. **Extension seam
+  (contract v3):** `CryptoShredProbes.ResidualScan` is now `ResidualScanReport` and returns a
+  `CryptoShredResidualScanReport` (see *Deprecated* below for the field that goes with it), and the
+  two markers above are RESERVED — a coordinator-supplied string carrying either, whether an
+  `Unverified` entry, a readiness warning or a policy label, is replaced on `verify_reason` by one
+  fixed sentence recording that a string was withheld, so a third party cannot state the scan's own
+  claims in the scan's own words. A coordinator built against the previous contract *and honoring
+  it* fails closed — a declared gap, or a refusal naming the seam. One that swallows a failed type
+  assertion and reports itself complete still seals a verified receipt, exactly as it did before
+  this change: what makes that verdict honest is the contract, and a seam cannot enforce it.
+
+### Deprecated
+
+- **`CryptoShredResidualScan.ScanDepth` (extension seam, contract v3).** The field is still READ:
+  the adapter copies it off every wired verdict, which is what lets a coordinator built against the
+  previous contract still compile and still deserialize whole. What changed is that nothing CONSUMES
+  it and nothing publishes it — no receipt field, no summary line and no hash reflects a value set
+  there. Depth is stated once, by the pre-shred scan, in the receipt's `residual_scan_depth`. A
+  coordinator that still sets it is not contradicted; it is simply not repeated.
+
+### Fixed
+
+- Reporting now passes its tenant-scoped data handle to external data consumers, restoring
+  late-bound enterprise report sources while preserving existing providers.
+
+### Security
+
+- Federated sign-in through a tenant's identity provider is bound to that tenant. It
+  returns a session only for a member of the tenant whose address lies in an email domain
+  that provider claims, and it provisions a new account only in such a domain, with a
+  viewer membership in that tenant alone. Wherever a tenant's identity provider can be
+  selected at sign-in, activating one now requires at least one claimed email domain.
+  After the upgrade, a tenant's identity provider that is already active with no claimed
+  email domain signs nobody in until an administrator claims a domain for it; each refused
+  sign-in is recorded as a blocked login. The deployment-wide identity provider, and so
+  every single-tenant deployment, is unchanged.
+
 
 ## [26.9.1] - 2026-09-21
 

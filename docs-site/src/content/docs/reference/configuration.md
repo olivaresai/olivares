@@ -18,6 +18,7 @@ The engine is configured by flags and by environment variables, not by a sprawli
 | Flag | Default | Purpose |
 | --- | --- | --- |
 | `--listen` | `:8443` | HTTP listen address (REST API + embedded web UI). |
+| `--login-trusted-proxies` | `$OLIVARES_LOGIN_TRUSTED_PROXIES`, else empty | Proxy CIDRs trusted for the password-login throttle only. An explicit empty flag clears the environment; network policy, session and audit retain the transport peer. |
 | `--grpc-listen` | `:8444` | gRPC listen address (control-plane / collector ingest API). |
 | `--data-dir` | `$OLIVARES_DATA_DIR`, an existing `./olivares-data`, else `$XDG_DATA_HOME/olivares` or `~/.local/share/olivares` | Data directory: audit signing key, TLS material, and (for SQLite) the store file. |
 | `--engine` | `sqlite` | Store engine: `sqlite` or `postgres`. |
@@ -91,7 +92,7 @@ For the deny-by-default model, the privileged nature of viewing the access graph
 
 ### Complete variable reference
 
-The table below is generated from the product's own sources: 291 variables and 17 runtime-constructed families, covering the engine, the CLI, the Kubernetes operator, the Terraform provider and the connectors. It is regenerated and checked against those sources on every change, so it does not fall behind the binary.
+The table below is generated from the product's own sources: 293 variables and 17 runtime-constructed families, covering the engine, the CLI, the Kubernetes operator, the Terraform provider and the connectors. It is regenerated and checked against those sources on every change, so it does not fall behind the binary.
 
 **Required** means the feature that reads the variable does not start without it; most variables are optional and the engine runs with none of them set.
 
@@ -258,6 +259,7 @@ The table below is generated from the product's own sources: 291 variables and 1
 | `OLIVARES_LICENSE_PUBKEY` | No | — | Public key the engine verifies the license signature against. |
 | `OLIVARES_LIVEINGEST_INSPECT_OBSERVED_REFS` | No | — | Set to `1` to make live ingest inspect observed references, which costs more per event. |
 | `OLIVARES_LOGIN_ENFORCEMENT` | No | — | Break-glass switch, not a file path, for login enforcement (require-SSO and the login IP allow-list). Read by every build when the engine starts; a change takes effect after a restart. `off`, `0`, `false`, `no` or `disabled`, in any letter case and ignoring surrounding whitespace, selects the operator break-glass; unset or any other value leaves enforcement to the posture stored through the console. A build that links the enforcement component then stops enforcing that posture regardless of what is stored, and logs a warning. A build that does not link it records the same deliberate selection: the engine skips the startup refusal it would otherwise make when this deployment has enforcement history and a posture configured, and appends a durable operator-recovery event when the node is promoted. |
+| `OLIVARES_LOGIN_TRUSTED_PROXIES` | No | — | Comma-separated IPv4/IPv6 proxy CIDRs trusted to supply X-Forwarded-For for the password-login throttle address only. Empty trusts none. The --login-trusted-proxies flag takes precedence, including an explicit empty value. Invalid CIDRs or empty list entries refuse startup. Read once at startup; policy, session and audit keep the transport peer. See docs/SECURITY-HARDENING.md for the 8192-byte and 64-entry request bounds. |
 | `OLIVARES_LOG_LEVEL` | No | — | Minimum log level the engine emits: `debug`, `info`, `warn` or `error`. |
 | `OLIVARES_MCP_TASK_KILLSWITCH_SWEEP` | No | — | How often a running MCP task is re-checked against the kill switch, as a Go duration. |
 | `OLIVARES_METRICS_ALLOWED_CIDRS` | No | — | Comma-separated CIDR ranges allowed to scrape the metrics endpoint. |
@@ -340,6 +342,7 @@ The table below is generated from the product's own sources: 291 variables and 1
 | `OLIVARES_SECRET_STORE_KEY` | No | — | Key that encrypts operator secrets held in the store. |
 | `OLIVARES_SERVERTOOL_EGRESS_CONFIG` | No | — | Path to the JSON grants file of the egress gate for provider server tools (web search, web fetch, code execution) in the inline proxy. Read only by builds compiled with the `enterprise` and `addon_airs` tags. Unset keeps those tools observe-only; a file that cannot be read or parsed denies every recognized egress server tool until the file is fixed and the engine is restarted. |
 | `OLIVARES_SERVER_URL` | No | — | Base URL of the control plane the CLI talks to, when `--server` is not given. |
+| `OLIVARES_SESSIONS_AGENT_LINK_LISTEN` | No | — | Listen address of the agent link, as `host:port`: the mutual-TLS endpoint an edition built on this tree serves for its node agents. Read at startup; empty, the default, means no listener. The Community build does not read it. |
 | `OLIVARES_SESSIONS_MANAGED_STOP_ADMISSION_TIMEOUT` | No | `10s` | Maximum time to admit a managed Stop request, as a positive Go duration with units. Read at startup; invalid or nonpositive values prevent startup. This does not bound process teardown. |
 | `OLIVARES_SESSION_BUDGET_AVAILABILITY` | No | — | Whether session budget enforcement is required, and what happens when the budget service cannot answer. |
 | `OLIVARES_SESSION_CONTEXT_AVAILABILITY` | No | — | Whether session context governance is required, and what happens when the context service cannot answer. |

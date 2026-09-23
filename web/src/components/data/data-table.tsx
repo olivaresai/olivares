@@ -747,11 +747,8 @@ export function DataTable<TData extends RowData>({
               'has-[button]:py-0 has-[a]:py-0 has-[input]:py-0 has-[select]:py-0',
               isActive &&
                 'bg-surface ring-2 ring-ring ring-offset-2 ring-offset-background',
-              (
-                cell.column.columnDef.meta as
-                  | { className?: string }
-                  | undefined
-              )?.className,
+              (cell.column.columnDef.meta as { className?: string } | undefined)
+                ?.className,
             )}
           >
             {flexRender(cell.column.columnDef.cell, cell.getContext())}
@@ -882,8 +879,7 @@ export function DataTable<TData extends RowData>({
                           sticky && 'sticky top-0 z-10',
                           (
                             header.column.columnDef.meta as
-                              | { className?: string }
-                              | undefined
+                              { className?: string } | undefined
                           )?.className,
                         )}
                         style={{

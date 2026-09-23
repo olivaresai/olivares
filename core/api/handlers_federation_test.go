@@ -208,7 +208,6 @@ func (fakeMultiIDP) SelectActive(in auth.SelectionInput, active []model.Federati
 // login even though the flow carried a tenant hint whose IdP could authenticate.
 func TestSSOCallback_MultiIDP_NoGlobalIdP(t *testing.T) {
 	ctx := context.Background()
-	tenantX := model.NewTenantID()
 
 	var svc *auth.FederationService
 	h := newHarnessOpts(t, func(o *api.Options) {
@@ -216,13 +215,17 @@ func TestSSOCallback_MultiIDP_NoGlobalIdP(t *testing.T) {
 		svc = auth.NewFederationService(o.Store, fakeSealer{}, fakeBuilder, auth.NoFederation{}, fakeMultiIDP{})
 		o.FederationService = svc
 	})
-	h.adminLogin()
+	admin := h.adminLogin()
+	// tenantX is a real organization: a first sign-in through its provider provisions
+	// the account's membership in it.
+	tenantX := h.createOrg(admin, "tenant-x")
 
 	// Store ONLY a per-tenant IdP for tenantX — deliberately NO global config.
 	actor := auth.Principal{Kind: auth.KindUser, Superadmin: true, UserID: model.NewID(), CredID: model.NewID()}
 	if _, err := svc.PutConfig(ctx, actor, tenantX, auth.FederationConfigInput{
 		Protocol: auth.ProtocolOIDC, Enabled: true,
 		OIDCIssuer: "https://idp-x.example", OIDCClientID: "client-x", OIDCClientSecret: "secret-x",
+		ClaimedDomains: []string{"acme.com"},
 	}); err != nil {
 		t.Fatalf("store per-tenant config: %v", err)
 	}
