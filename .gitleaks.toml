@@ -825,3 +825,21 @@ regexes = [
   paths = ['''^commercial/license-worker/src/connect/canonical-vectors\.json$''']
   regexTarget = "match"
   regexes = ['''^Olivares-Connect-New-Key-Proof": "oQ4kdmdnB_Gi2fhgBHh58xEB1ApsBu-OT2nKiMyzv-0SRCxj-2UEMRVNYWdAeX6Sa1U6uO62J5btnULWNdexCg"$''']
+
+# ── The workspace qualification pin of workspace_api.go, and ONLY that pin ───────────────────
+#
+# `ci/iam-qualification/<family>.json` pins every input to the SHA-256 of its public bytes. The
+# workspace registry keys one pin by `modules/sessions/workspace_api.go`, and `generic-api-key`
+# reads the `api` in that FILE NAME as a key word and the digest beside it as the secret
+# (measured 2026-09-23: the scanner reported workspace.json:247, one finding). A digest of a
+# public source file publishes nothing. Exact form, bound to the registry path and to this one
+# value: a re-pin of that file reappears as a finding and is adjudicated again; an `api_key`
+# with the same value in the same file, the same line under another path, and any other value
+# under that key are still reported (controlled on decoys before landing).
+[[allowlists]]
+  description = "the workspace qualification pin of workspace_api.go is the SHA-256 of a public file"
+  targetRules = ["generic-api-key"]
+  condition = "AND"
+  regexTarget = "line"
+  paths = ['''^ci/iam-qualification/workspace\.json$''']
+  regexes = ['''^\s*"modules/sessions/workspace_api\.go": "1fcd9aac4b9a52fb542e64f7d57f8c994139528502660fec345ac49ebaf9d0bf",?\s*$''']

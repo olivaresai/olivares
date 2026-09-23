@@ -1,0 +1,294 @@
+{
+  "engines": [
+    "sqlite"
+  ],
+  "packages": [
+    "modules/sessions"
+  ],
+  "commands": {
+    "baseline": {
+      "argv": [
+        "go",
+        "test",
+        "-json",
+        "-count=1",
+        "-timeout=25m",
+        "./modules/sessions",
+        "-run",
+        "^(TestWorkspace_CorruptPolicyBlocksFileEffects|TestWorkspace_PolicyEmptyFormsRemainUsable|TestWorkspace_StoredPolicyPreservesLegacyRootEntries|TestWorkspace_StoredPolicyUsesRegistrationPathRules|TestWorkspace_CorruptPolicyBlocksResume|TestWorkspace_CorruptPolicyPrecedesRootInspection|TestWorkspace_CorruptPolicyRegistryHTTP|TestWorkspace_PolicyRecordTypes|TestWorkspace_FileLifecycle|TestWorkspace_TraversalRejectedViaAPI|TestWorkspace_ReadOnlyBlocksWrite|TestWorkspace_DeleteRootRejected|TestWorkspace_ReadSizeLimitTruncates|TestWorkspace_DLPLabelAndDeny|TestWorkspace_DenyModeFailsClosedWithoutClassifier|TestWorkspace_LaunchResolution|TestWorkspace_MutationAudited|TestWorkspace_DeregisterDoesNotTouchFiles|TestWorkspace_AllowSubpathConfines)$"
+      ],
+      "wall_seconds": 1800,
+      "package": "github.com/olivaresai/olivares/modules/sessions",
+      "expected_tests": [
+        "TestWorkspace_AllowSubpathConfines",
+        "TestWorkspace_CorruptPolicyBlocksFileEffects",
+        "TestWorkspace_CorruptPolicyBlocksFileEffects/absolute_entry",
+        "TestWorkspace_CorruptPolicyBlocksFileEffects/boolean",
+        "TestWorkspace_CorruptPolicyBlocksFileEffects/escaping_entry",
+        "TestWorkspace_CorruptPolicyBlocksFileEffects/malformed",
+        "TestWorkspace_CorruptPolicyBlocksFileEffects/mixed_canonical_padded",
+        "TestWorkspace_CorruptPolicyBlocksFileEffects/mixed_legacy_empty_whitespace",
+        "TestWorkspace_CorruptPolicyBlocksFileEffects/nul_entry",
+        "TestWorkspace_CorruptPolicyBlocksFileEffects/null_entry",
+        "TestWorkspace_CorruptPolicyBlocksFileEffects/number",
+        "TestWorkspace_CorruptPolicyBlocksFileEffects/number_entry",
+        "TestWorkspace_CorruptPolicyBlocksFileEffects/object",
+        "TestWorkspace_CorruptPolicyBlocksFileEffects/object_entry",
+        "TestWorkspace_CorruptPolicyBlocksFileEffects/padded_subtree",
+        "TestWorkspace_CorruptPolicyBlocksFileEffects/string",
+        "TestWorkspace_CorruptPolicyBlocksFileEffects/whitespace_only_entry",
+        "TestWorkspace_CorruptPolicyBlocksResume",
+        "TestWorkspace_CorruptPolicyPrecedesRootInspection",
+        "TestWorkspace_CorruptPolicyRegistryHTTP",
+        "TestWorkspace_DLPLabelAndDeny",
+        "TestWorkspace_DeleteRootRejected",
+        "TestWorkspace_DenyModeFailsClosedWithoutClassifier",
+        "TestWorkspace_DeregisterDoesNotTouchFiles",
+        "TestWorkspace_FileLifecycle",
+        "TestWorkspace_LaunchResolution",
+        "TestWorkspace_MutationAudited",
+        "TestWorkspace_PolicyEmptyFormsRemainUsable",
+        "TestWorkspace_PolicyEmptyFormsRemainUsable/empty_array",
+        "TestWorkspace_PolicyEmptyFormsRemainUsable/empty_text",
+        "TestWorkspace_PolicyEmptyFormsRemainUsable/json_null",
+        "TestWorkspace_PolicyEmptyFormsRemainUsable/sql_null",
+        "TestWorkspace_PolicyEmptyFormsRemainUsable/whitespace",
+        "TestWorkspace_PolicyRecordTypes",
+        "TestWorkspace_ReadOnlyBlocksWrite",
+        "TestWorkspace_ReadSizeLimitTruncates",
+        "TestWorkspace_StoredPolicyPreservesLegacyRootEntries",
+        "TestWorkspace_StoredPolicyPreservesLegacyRootEntries/mixed_empty_subtree",
+        "TestWorkspace_StoredPolicyPreservesLegacyRootEntries/sole_empty",
+        "TestWorkspace_StoredPolicyUsesRegistrationPathRules",
+        "TestWorkspace_TraversalRejectedViaAPI"
+      ],
+      "allowed_skips": []
+    },
+    "race": {
+      "argv": [
+        "go",
+        "test",
+        "-json",
+        "-count=1",
+        "-timeout=25m",
+        "-race",
+        "./modules/sessions",
+        "-run",
+        "^(TestWorkspace_CorruptPolicyBlocksFileEffects|TestWorkspace_PolicyEmptyFormsRemainUsable|TestWorkspace_StoredPolicyPreservesLegacyRootEntries|TestWorkspace_StoredPolicyUsesRegistrationPathRules|TestWorkspace_CorruptPolicyBlocksResume|TestWorkspace_CorruptPolicyPrecedesRootInspection|TestWorkspace_CorruptPolicyRegistryHTTP|TestWorkspace_PolicyRecordTypes)$"
+      ],
+      "wall_seconds": 1800,
+      "package": "github.com/olivaresai/olivares/modules/sessions",
+      "expected_tests": [
+        "TestWorkspace_CorruptPolicyBlocksFileEffects",
+        "TestWorkspace_CorruptPolicyBlocksFileEffects/absolute_entry",
+        "TestWorkspace_CorruptPolicyBlocksFileEffects/boolean",
+        "TestWorkspace_CorruptPolicyBlocksFileEffects/escaping_entry",
+        "TestWorkspace_CorruptPolicyBlocksFileEffects/malformed",
+        "TestWorkspace_CorruptPolicyBlocksFileEffects/mixed_canonical_padded",
+        "TestWorkspace_CorruptPolicyBlocksFileEffects/mixed_legacy_empty_whitespace",
+        "TestWorkspace_CorruptPolicyBlocksFileEffects/nul_entry",
+        "TestWorkspace_CorruptPolicyBlocksFileEffects/null_entry",
+        "TestWorkspace_CorruptPolicyBlocksFileEffects/number",
+        "TestWorkspace_CorruptPolicyBlocksFileEffects/number_entry",
+        "TestWorkspace_CorruptPolicyBlocksFileEffects/object",
+        "TestWorkspace_CorruptPolicyBlocksFileEffects/object_entry",
+        "TestWorkspace_CorruptPolicyBlocksFileEffects/padded_subtree",
+        "TestWorkspace_CorruptPolicyBlocksFileEffects/string",
+        "TestWorkspace_CorruptPolicyBlocksFileEffects/whitespace_only_entry",
+        "TestWorkspace_CorruptPolicyBlocksResume",
+        "TestWorkspace_CorruptPolicyPrecedesRootInspection",
+        "TestWorkspace_CorruptPolicyRegistryHTTP",
+        "TestWorkspace_PolicyEmptyFormsRemainUsable",
+        "TestWorkspace_PolicyEmptyFormsRemainUsable/empty_array",
+        "TestWorkspace_PolicyEmptyFormsRemainUsable/empty_text",
+        "TestWorkspace_PolicyEmptyFormsRemainUsable/json_null",
+        "TestWorkspace_PolicyEmptyFormsRemainUsable/sql_null",
+        "TestWorkspace_PolicyEmptyFormsRemainUsable/whitespace",
+        "TestWorkspace_PolicyRecordTypes",
+        "TestWorkspace_StoredPolicyPreservesLegacyRootEntries",
+        "TestWorkspace_StoredPolicyPreservesLegacyRootEntries/mixed_empty_subtree",
+        "TestWorkspace_StoredPolicyPreservesLegacyRootEntries/sole_empty",
+        "TestWorkspace_StoredPolicyUsesRegistrationPathRules"
+      ],
+      "allowed_skips": []
+    },
+    "m0": {
+      "argv": [
+        "go",
+        "test",
+        "-json",
+        "-count=1",
+        "-timeout=25m",
+        "./modules/sessions",
+        "-run",
+        "^(TestWorkspace_CorruptPolicyBlocksFileEffects|TestWorkspace_PolicyEmptyFormsRemainUsable|TestWorkspace_StoredPolicyUsesRegistrationPathRules)$/^(malformed|sql_null|empty_text|whitespace|empty_array|json_null)$"
+      ],
+      "wall_seconds": 1800,
+      "package": "github.com/olivaresai/olivares/modules/sessions",
+      "expected_tests": [
+        "TestWorkspace_CorruptPolicyBlocksFileEffects",
+        "TestWorkspace_CorruptPolicyBlocksFileEffects/malformed",
+        "TestWorkspace_PolicyEmptyFormsRemainUsable",
+        "TestWorkspace_PolicyEmptyFormsRemainUsable/empty_array",
+        "TestWorkspace_PolicyEmptyFormsRemainUsable/empty_text",
+        "TestWorkspace_PolicyEmptyFormsRemainUsable/json_null",
+        "TestWorkspace_PolicyEmptyFormsRemainUsable/sql_null",
+        "TestWorkspace_PolicyEmptyFormsRemainUsable/whitespace",
+        "TestWorkspace_StoredPolicyUsesRegistrationPathRules"
+      ],
+      "allowed_skips": []
+    },
+    "m1": {
+      "argv": [
+        "go",
+        "test",
+        "-json",
+        "-count=1",
+        "-timeout=25m",
+        "./modules/sessions",
+        "-run",
+        "^(TestWorkspace_CorruptPolicyBlocksFileEffects|TestWorkspace_PolicyEmptyFormsRemainUsable|TestWorkspace_StoredPolicyUsesRegistrationPathRules)$/^(whitespace_only_entry|padded_subtree|mixed_canonical_padded|mixed_legacy_empty_whitespace|sql_null|empty_text|whitespace|empty_array|json_null)$"
+      ],
+      "wall_seconds": 1800,
+      "package": "github.com/olivaresai/olivares/modules/sessions",
+      "expected_tests": [
+        "TestWorkspace_CorruptPolicyBlocksFileEffects",
+        "TestWorkspace_CorruptPolicyBlocksFileEffects/mixed_canonical_padded",
+        "TestWorkspace_CorruptPolicyBlocksFileEffects/mixed_legacy_empty_whitespace",
+        "TestWorkspace_CorruptPolicyBlocksFileEffects/padded_subtree",
+        "TestWorkspace_CorruptPolicyBlocksFileEffects/whitespace_only_entry",
+        "TestWorkspace_PolicyEmptyFormsRemainUsable",
+        "TestWorkspace_PolicyEmptyFormsRemainUsable/empty_array",
+        "TestWorkspace_PolicyEmptyFormsRemainUsable/empty_text",
+        "TestWorkspace_PolicyEmptyFormsRemainUsable/json_null",
+        "TestWorkspace_PolicyEmptyFormsRemainUsable/sql_null",
+        "TestWorkspace_PolicyEmptyFormsRemainUsable/whitespace",
+        "TestWorkspace_StoredPolicyUsesRegistrationPathRules"
+      ],
+      "allowed_skips": []
+    },
+    "m2": {
+      "argv": [
+        "go",
+        "test",
+        "-json",
+        "-count=1",
+        "-timeout=25m",
+        "./modules/sessions",
+        "-run",
+        "^(TestWorkspace_CorruptPolicyRegistryHTTP|TestWorkspace_PolicyEmptyFormsRemainUsable|TestWorkspace_StoredPolicyUsesRegistrationPathRules)$"
+      ],
+      "wall_seconds": 1800,
+      "package": "github.com/olivaresai/olivares/modules/sessions",
+      "expected_tests": [
+        "TestWorkspace_CorruptPolicyRegistryHTTP",
+        "TestWorkspace_PolicyEmptyFormsRemainUsable",
+        "TestWorkspace_PolicyEmptyFormsRemainUsable/empty_array",
+        "TestWorkspace_PolicyEmptyFormsRemainUsable/empty_text",
+        "TestWorkspace_PolicyEmptyFormsRemainUsable/json_null",
+        "TestWorkspace_PolicyEmptyFormsRemainUsable/sql_null",
+        "TestWorkspace_PolicyEmptyFormsRemainUsable/whitespace",
+        "TestWorkspace_StoredPolicyUsesRegistrationPathRules"
+      ],
+      "allowed_skips": []
+    }
+  },
+  "production": [
+    "modules/sessions/workspace.go",
+    "modules/sessions/workspace_api.go",
+    "modules/sessions/workspace_dto.go"
+  ],
+  "mutants": [
+    {
+      "id": "m0",
+      "patch": "ci/iam-qualification/workspace-m0.patch",
+      "sha256": "b5b6de2981cb99e2c4dc561dc49655304cb3caa4bbda7e1e54dafabaf4fcdcec",
+      "red": {
+        "TestWorkspace_CorruptPolicyBlocksFileEffects/malformed": [
+          "rejected mutations changed"
+        ]
+      }
+    },
+    {
+      "id": "m1",
+      "patch": "ci/iam-qualification/workspace-m1.patch",
+      "sha256": "0928bcd76b369bea1faab6b87827d46fdae4dbf1cff3b3642d1074feceea1c2b",
+      "red": {
+        "TestWorkspace_CorruptPolicyBlocksFileEffects/whitespace_only_entry": [
+          "rejected mutations changed"
+        ],
+        "TestWorkspace_CorruptPolicyBlocksFileEffects/padded_subtree": [
+          "rejected mutations changed"
+        ],
+        "TestWorkspace_CorruptPolicyBlocksFileEffects/mixed_canonical_padded": [
+          "rejected mutations changed"
+        ],
+        "TestWorkspace_CorruptPolicyBlocksFileEffects/mixed_legacy_empty_whitespace": [
+          "rejected mutations changed"
+        ]
+      }
+    },
+    {
+      "id": "m2",
+      "patch": "ci/iam-qualification/workspace-m2.patch",
+      "sha256": "3a8320855f118d8176f6ea077a662bcf80e0746d5dadce71c83c6ca7efed1293",
+      "red": {
+        "TestWorkspace_CorruptPolicyRegistryHTTP": [
+          "corrupt policy HTTP response:"
+        ]
+      }
+    }
+  ],
+  "inputs": {
+    "modules/sessions/driver_codex_fixture_test.go": "9b21c4537f864d6d568de063231e77bc9fa25bb03a9064d1533c91eaa4587913",
+    "modules/sessions/live_test.go": "eea97a6db2cf732692e596215246739ae3e0431385b217ad21b571415bdacd8f",
+    "modules/sessions/runtime_test.go": "b55e225883e41f6494e3b887e72fc3013f7c8102533cd4c4e169418079b86453",
+    "modules/sessions/workspace.go": "bf42385b71997c3bdea4a89a70be1fd323f36c633c590d35559e2bbed7421993",
+    "modules/sessions/workspace_api.go": "1fcd9aac4b9a52fb542e64f7d57f8c994139528502660fec345ac49ebaf9d0bf",
+    "modules/sessions/workspace_dto.go": "e5cf636333e99309d2b11e5a5735c80ec7c8d36f315adbff9d806d19d039b7d8",
+    "modules/sessions/workspace_policy_decode_test.go": "97614db7c7573d2d2847f392d484b91e5686e1a1f0a5477bb0918ff41833af29",
+    "modules/sessions/workspace_test.go": "dbceb1c9c0be83a6036bfa6450f53434b5d43e2e27e79d0e890e6ef02e8a891a"
+  },
+  "schema": "olivares.public-iam-qualification/v2",
+  "family": "workspace",
+  "maximum_phase_seconds": 19800,
+  "test_owners": {
+    "github.com/olivaresai/olivares/modules/sessions::TestWorkspace_AllowSubpathConfines": "modules/sessions/workspace_test.go",
+    "github.com/olivaresai/olivares/modules/sessions::TestWorkspace_CorruptPolicyBlocksFileEffects": "modules/sessions/workspace_policy_decode_test.go",
+    "github.com/olivaresai/olivares/modules/sessions::TestWorkspace_CorruptPolicyBlocksResume": "modules/sessions/workspace_policy_decode_test.go",
+    "github.com/olivaresai/olivares/modules/sessions::TestWorkspace_CorruptPolicyPrecedesRootInspection": "modules/sessions/workspace_policy_decode_test.go",
+    "github.com/olivaresai/olivares/modules/sessions::TestWorkspace_CorruptPolicyRegistryHTTP": "modules/sessions/workspace_policy_decode_test.go",
+    "github.com/olivaresai/olivares/modules/sessions::TestWorkspace_DLPLabelAndDeny": "modules/sessions/workspace_test.go",
+    "github.com/olivaresai/olivares/modules/sessions::TestWorkspace_DeleteRootRejected": "modules/sessions/workspace_test.go",
+    "github.com/olivaresai/olivares/modules/sessions::TestWorkspace_DenyModeFailsClosedWithoutClassifier": "modules/sessions/workspace_test.go",
+    "github.com/olivaresai/olivares/modules/sessions::TestWorkspace_DeregisterDoesNotTouchFiles": "modules/sessions/workspace_test.go",
+    "github.com/olivaresai/olivares/modules/sessions::TestWorkspace_FileLifecycle": "modules/sessions/workspace_test.go",
+    "github.com/olivaresai/olivares/modules/sessions::TestWorkspace_LaunchResolution": "modules/sessions/workspace_test.go",
+    "github.com/olivaresai/olivares/modules/sessions::TestWorkspace_MutationAudited": "modules/sessions/workspace_test.go",
+    "github.com/olivaresai/olivares/modules/sessions::TestWorkspace_PolicyEmptyFormsRemainUsable": "modules/sessions/workspace_policy_decode_test.go",
+    "github.com/olivaresai/olivares/modules/sessions::TestWorkspace_PolicyRecordTypes": "modules/sessions/workspace_policy_decode_test.go",
+    "github.com/olivaresai/olivares/modules/sessions::TestWorkspace_ReadOnlyBlocksWrite": "modules/sessions/workspace_test.go",
+    "github.com/olivaresai/olivares/modules/sessions::TestWorkspace_ReadSizeLimitTruncates": "modules/sessions/workspace_test.go",
+    "github.com/olivaresai/olivares/modules/sessions::TestWorkspace_StoredPolicyPreservesLegacyRootEntries": "modules/sessions/workspace_policy_decode_test.go",
+    "github.com/olivaresai/olivares/modules/sessions::TestWorkspace_StoredPolicyUsesRegistrationPathRules": "modules/sessions/workspace_policy_decode_test.go",
+    "github.com/olivaresai/olivares/modules/sessions::TestWorkspace_TraversalRejectedViaAPI": "modules/sessions/workspace_test.go"
+  },
+  "oracle_owners": {
+    "modules/sessions/runtime_test.go": [
+      "fakeRunner",
+      "fakeProc",
+      "staticCred",
+      "farFuture",
+      "newRuntimeHarness",
+      "stopModuleAtCleanup",
+      "waitFor"
+    ],
+    "modules/sessions/live_test.go": [
+      "testClock",
+      "baseTime"
+    ],
+    "modules/sessions/driver_codex_fixture_test.go": [
+      "TestMain"
+    ]
+  }
+}

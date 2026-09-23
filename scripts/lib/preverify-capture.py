@@ -79,20 +79,26 @@ def anchor(output, control, release, directory, command):
             os.killpg(os.getpid(), signal.SIGKILL)
 
 
-def capture(destination, directory, command):
+class _Cancellation:
+    def __init__(self):
+        self.interrupted = False
+
+    def stop(self, *_):
+        self.interrupted = True
+
+
+def capture(destination, directory, command, cancellation=None):
+    # An enclosing owner may already have observed TERM/INT. Reuse its monotonic
+    # interrupted/stop pair instead of resetting state when signal ownership moves.
+    if cancellation is None:
+        cancellation = _Cancellation()
     subreaper()  # no producer exists unless this succeeds
     # Ignored SIGCHLD can auto-reap children and release the reserved leader PID.
     # Set this only in the dedicated helper, before either fork.
     signal.signal(signal.SIGCHLD, signal.SIG_DFL)
     started = time.monotonic()
-    interrupted = False
-
-    def stop(*_):
-        nonlocal interrupted
-        interrupted = True
-
-    signal.signal(signal.SIGTERM, stop)
-    signal.signal(signal.SIGINT, stop)
+    signal.signal(signal.SIGTERM, cancellation.stop)
+    signal.signal(signal.SIGINT, cancellation.stop)
     target = open(destination, "wb")  # failure here must not launch a producer
     output_r, output_w = os.pipe()
     control_r, control_w = os.pipe()
@@ -131,7 +137,15 @@ def capture(destination, directory, command):
                         line, pending = pending.split(b"\n", 1)
                         if line == b"ready":
                             ready = True
-                            os.write(release_w, b"g")
+                            # Serialize signal observation with producer admission.
+                            # Signals arriving after this decision are delivered on
+                            # unmask and start withdrawal under the same owner.
+                            mask = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGTERM, signal.SIGINT})
+                            try:
+                                if not cancellation.interrupted and terminating is None:
+                                    os.write(release_w, b"g")
+                            finally:
+                                signal.pthread_sigmask(signal.SIG_SETMASK, mask)
                         elif line == b"idle":
                             idle = True
                         elif line.startswith(b"producer="):
@@ -151,7 +165,7 @@ def capture(destination, directory, command):
                 if terminating is None:
                     if count == LIMIT:
                         reason = "limit"
-                    elif interrupted:
+                    elif cancellation.interrupted:
                         reason = "interrupted"
                     elif now - started >= DEADLINE:
                         reason = "deadline"
@@ -195,6 +209,8 @@ def capture(destination, directory, command):
             except ChildProcessError:
                 reaped = True
                 break
+        if cancellation.interrupted:
+            reason = "interrupted"
         complete = "complete" if eof and reason == "eof" else "unknown"
         custody = cleanup if reaped else "unknown"
         print("producer=%s capture=%s bytes=%d completeness=%s custody=%s" %

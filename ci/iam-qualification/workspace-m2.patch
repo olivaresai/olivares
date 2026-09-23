@@ -1,0 +1,11 @@
+--- a/modules/sessions/workspace_api.go
++++ b/modules/sessions/workspace_api.go
+@@ -74,7 +74,7 @@
+ func (m *Module) handleListWorkspaces(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
+ 	out, err := m.listWorkspaces(r.Context(), mc.Tenant, listQuery(r))
+ 	if err != nil {
+-		writeRunErr(w, err)
++		writeStoreError(w, err)
+ 		return
+ 	}
+ 	writeJSON(w, http.StatusOK, out)

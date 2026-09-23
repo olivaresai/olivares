@@ -1,0 +1,11 @@
+--- a/modules/sessions/workspace.go
++++ b/modules/sessions/workspace.go
+@@ -208,7 +208,7 @@
+ 	}
+ 	subpaths, err := decodeSubpaths(rec)
+ 	if err != nil {
+-		return nil, err
++		subpaths = nil
+ 	}
+ 	root := rec.String(colWsRootPath)
+ 	rootReal, err := filepath.EvalSymlinks(root)

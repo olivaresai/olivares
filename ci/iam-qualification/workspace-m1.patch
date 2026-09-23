@@ -1,0 +1,22 @@
+--- a/modules/sessions/workspace.go
++++ b/modules/sessions/workspace.go
+@@ -726,14 +726,14 @@
+ 	}
+ 	paths := make([]string, 0, len(values))
+ 	for _, value := range values {
+-		if value == nil || strings.TrimSpace(*value) != *value {
++		if value == nil {
+ 			return nil, unavailable()
+ 		}
+-		if err := validateWorkspaceSubpath(*value); err != nil {
+-			return nil, unavailable()
+-		}
+-		// Preserve stored authority byte-for-byte, including legacy empty entries.
+ 		paths = append(paths, *value)
+ 	}
++	paths, err := normalizeWorkspaceSubpaths(paths)
++	if err != nil {
++		return nil, unavailable()
++	}
+ 	return paths, nil
+ }
