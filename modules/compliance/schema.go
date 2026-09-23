@@ -303,6 +303,17 @@ const (
 	colRCVerifyN    = "verify_checked"
 	colRCVerifyWhy  = "verify_reason"
 	colRCRetained   = "retained" // JSON []retainedRecord: what stays + the documented legal basis
+	// What the ONE residual scan opened, beside what the request's own data-class
+	// scope required. All four are NULLABLE and were added after this table existed:
+	// the engine's additive reconciler adds them with ALTER TABLE ADD COLUMN on both
+	// engines, every row already sealed keeps NULL in them, and nothing recomputes a
+	// stored manifest_hash. residual_scan_depth is empty exactly when the scan opened
+	// nothing — the receipt then carries the unestablished declaration on
+	// verify_reason instead of a depth it never reached.
+	colRCScanDepth      = "residual_scan_depth"      // the METHOD, "" ⇔ nothing opened
+	colRCScanOpened     = "residual_scan_opened"     // JSON []string, structural labels
+	colRCScanApplicable = "residual_scan_applicable" // JSON []string, opened ⊆ applicable
+	colRCClasses        = "data_classes"             // JSON []string: the scope the two sets are read against
 )
 
 // compliance_oscal_profile columns — a registered OSCAL profile/catalog/SSP
@@ -794,7 +805,8 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 	// the erasure certificate. APPEND-ONLY: counts, outcomes, the provider-floor
 	// disclosure (§7: deleting our copy does not delete the provider's), the key-shred
 	// fact, the post-erasure LIVE chain verification (the evidence-package integrity
-	// pattern) and the documented retained-records reconciliation. Anchored to the
+	// pattern), what the residual scan opened against what the request's scope
+	// required, and the documented retained-records reconciliation. Anchored to the
 	// ledger head; manifest-hashed for tamper evidence of the body.
 	if err := reg.Register(model.EntityDescriptor{
 		Kind:       erasureReceiptKind,
@@ -814,6 +826,10 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 			{Name: colRCVerifyOK, Kind: model.KindBool},
 			{Name: colRCVerifyN, Kind: model.KindInt},
 			{Name: colRCVerifyWhy, Kind: model.KindText, Nullable: true},
+			{Name: colRCScanDepth, Kind: model.KindText, Nullable: true},
+			{Name: colRCScanOpened, Kind: model.KindJSON, Nullable: true},
+			{Name: colRCScanApplicable, Kind: model.KindJSON, Nullable: true},
+			{Name: colRCClasses, Kind: model.KindJSON, Nullable: true},
 			{Name: colRCRetained, Kind: model.KindJSON},
 			{Name: colCaseRef, Kind: model.KindText, Indexed: true},
 			{Name: colApprovalRef, Kind: model.KindText},

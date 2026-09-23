@@ -11,6 +11,7 @@ import (
 
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/core/store"
 )
 
 // U4 — the first-class IdP entity: a scope may hold SEVERAL IdP configs (keyed by
@@ -55,6 +56,32 @@ func strsEqual(a, b []string) bool {
 	return true
 }
 
+// activateAsStored marks a staged IdP active directly in the store: the state of a tenant's
+// IdP activated before activation required a claimed domain, which a deployment may still
+// hold.
+func activateAsStored(t *testing.T, st store.Store, scope model.TenantID, alias string) {
+	t.Helper()
+	ctx := context.Background()
+	if err := st.AuthMutate(ctx, func(as store.AuthScope) error {
+		rows, _, err := as.FederationConfigs().List(ctx, model.Query{
+			Filters: []model.Filter{{Column: "target_tenant_id", Op: model.OpEq, Value: scope.String()}}, Limit: 100,
+		})
+		if err != nil {
+			return err
+		}
+		for _, c := range rows {
+			if c.Alias == alias {
+				c.Status = model.StatusActive
+				_, err := as.FederationConfigs().Update(ctx, c)
+				return err
+			}
+		}
+		return store.ErrNotFound
+	}); err != nil {
+		t.Fatalf("activate %s/%s as stored: %v", scope, alias, err)
+	}
+}
+
 func u4WantIssuer(t *testing.T, svc *auth.FederationService, tenant model.TenantID, want string) {
 	t.Helper()
 	fed, err := svc.Resolve(context.Background(), tenant)
@@ -73,13 +100,16 @@ func u4WantIssuer(t *testing.T, svc *auth.FederationService, tenant model.Tenant
 // TestFederationU4_PerScopeSingleActiveFlip is the U4 wire-of-behavior at the service
 // layer: several IdPs coexist under one scope but only one is active, activating a second
 // while one is active is refused, and the explicit deactivate-then-activate flip changes
-// which provider Resolve returns (the decision flips).
+// which provider Resolve returns (the decision flips). A tenant's IdP now needs a claimed
+// domain to be activated, so the domainless active default is one stored before that rule
+// (activateAsStored), and the flip activates a backup that claims a domain.
 func TestFederationU4_PerScopeSingleActiveFlip(t *testing.T) {
-	svc := u4Svc(t, fedTestMultiIDP{}) // enterprise: deployment cap lifted, per-scope rule applies
+	svc, st := u8Svc(t) // enterprise: deployment cap lifted, per-scope rule applies
 	ctx, actor := context.Background(), fedTestActor()
 	tenant := model.NewTenantID()
 
-	mustPutIdP(t, svc, tenant, "default", oidcInput("idp-default", true))
+	mustPutIdP(t, svc, tenant, "default", oidcInput("idp-default", false))
+	activateAsStored(t, st, tenant, "default")
 	mustPutIdP(t, svc, tenant, "backup", oidcInput("idp-backup", false)) // staged, inactive
 
 	// Activating the second IdP while the first is active is refused (one active per scope).
@@ -91,7 +121,7 @@ func TestFederationU4_PerScopeSingleActiveFlip(t *testing.T) {
 
 	// The explicit flip: deactivate default, then activate backup.
 	mustPutIdP(t, svc, tenant, "default", oidcInput("idp-default", false))
-	mustPutIdP(t, svc, tenant, "backup", oidcInput("idp-backup", true))
+	mustPutIdP(t, svc, tenant, "backup", oidcDomains("idp-backup", true, "backup.example"))
 	u4WantIssuer(t, svc, tenant, "idp-backup") // the decision flipped
 
 	if got := aliasesOf(t, svc, tenant); !strsEqual(got, []string{"default", "backup"}) {
@@ -134,7 +164,7 @@ func TestFederationU4_AliasCRUDAndHardDelete(t *testing.T) {
 	ctx, actor := context.Background(), fedTestActor()
 	tenant := model.NewTenantID()
 
-	mustPutIdP(t, svc, tenant, "default", oidcInput("idp-default", true))
+	mustPutIdP(t, svc, tenant, "default", oidcDomains("idp-default", true, "default.example"))
 	mustPutIdP(t, svc, tenant, "backup", oidcInput("idp-backup", false))
 	if got := aliasesOf(t, svc, tenant); !strsEqual(got, []string{"default", "backup"}) {
 		t.Fatalf("aliases = %v, want [default backup]", got)

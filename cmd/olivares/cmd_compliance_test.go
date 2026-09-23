@@ -111,6 +111,68 @@ func TestErasureExecuteCompletedExitsOK(t *testing.T) {
 	}
 }
 
+// TestErasureExecutePrintsTheVerifyNote: the operator who RUNS the erasure is the
+// one person who must be told what its verification could not do. The receipt's
+// verify note was reachable only through -o json or a separate `erasure receipt`
+// call, so a declared gap — a residue, a ledger re-verification that did not pass,
+// or a residual scan that opened less than the request's data-class scope required —
+// never reached the person watching the run.
+func TestErasureExecutePrintsTheVerifyNote(t *testing.T) {
+	const note = "residual-scan-coverage=partial: the residual scan opened 2 of the 4 targets " +
+		"this request's data-class scope required; not opened: knowledge.memory_scoped, voice.session"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/v1/m/compliance/erasure/er-1" {
+			_, _ = io.WriteString(w, `{"id":"er-1","status":"completed_with_gaps",
+				"subject_kind":"session","subject_token":"tok","data_classes":[],"case_ref":"DSAR-9",
+				"reason":"","requested_by":"dpo","created_at":"2026-08-05"}`)
+			return
+		}
+		_, _ = io.WriteString(w, `{"erasure_id":"er-1","key_shredded":true,"verify_ok":false,
+			"verify_reason":"`+note+`","residual_scan_depth":"registry-scoped",
+			"residual_scan_opened":["sessions.live","sessions.timeline"],
+			"account_outcome":"not applicable to subject kind session","provider_outcome":"erased",
+			"approval_ref":"ap-1","targets":[],"retained":[],"manifest_hash":"abc","ledger_seq":1,
+			"case_ref":"DSAR-9","subject_kind":"session","subject_token":"tok","occurred_at":"2026-08-05"}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	out, _, err := execRoot(t, complianceTestArgs(srv.URL,
+		"compliance", "erasure", "execute", "er-1", "--yes")...)
+	if got := exitcode.From(err); got != exitcode.Degraded {
+		t.Fatalf("exit code = %d, want %d (degraded)", got, exitcode.Degraded)
+	}
+	// The stable prefix a consumer matches on, and the whole note behind it: a
+	// truncated or reworded note is a different contract.
+	if !strings.Contains(out, "verify note: "+note) {
+		t.Fatalf("the execute form did not print the receipt's verify note, got:\n%s", out)
+	}
+	// Where it belongs: after the legs, before the approval reference.
+	legs := strings.Index(out, "provider leg:")
+	noteAt := strings.Index(out, "verify note:")
+	approval := strings.Index(out, "approval ref:")
+	if legs < 0 || noteAt < 0 || approval < 0 || legs > noteAt || noteAt > approval {
+		t.Fatalf("line order legs=%d note=%d approval=%d, want legs < note < approval:\n%s", legs, noteAt, approval, out)
+	}
+
+	// The JSON form is UNCHANGED: it already carried the field, and it must not
+	// grow the text form's line.
+	jsonOut, _, jerr := execRoot(t, complianceTestArgs(srv.URL,
+		"compliance", "erasure", "execute", "er-1", "--yes", "-o", "json")...)
+	if got := exitcode.From(jerr); got != exitcode.Degraded {
+		t.Fatalf("json exit code = %d, want %d (degraded)", got, exitcode.Degraded)
+	}
+	if strings.Contains(jsonOut, "verify note:") {
+		t.Fatalf("the json form grew a text line:\n%s", jsonOut)
+	}
+	var body map[string]any
+	if uerr := json.Unmarshal([]byte(jsonOut), &body); uerr != nil {
+		t.Fatalf("-o json must emit parseable JSON: %v\ngot:\n%s", uerr, jsonOut)
+	}
+	if body["verify_reason"] != note {
+		t.Fatalf("json verify_reason = %v, want the receipt's own note", body["verify_reason"])
+	}
+}
+
 // TestErasureBlockedByLegalHoldExitsConflict pins the 423 decision AND the
 // requirement that the command names the holds. "Blocked" without "by what" is
 // what sends an operator back to curl.

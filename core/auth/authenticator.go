@@ -41,6 +41,9 @@ type Authenticator struct {
 	throttle   *throttle
 	sessionTTL time.Duration
 	log        *slog.Logger
+	// trustedLoginProxies is installed once before serving and affects only the
+	// throttle's address key. Policy, sessions and audit retain the transport peer.
+	trustedLoginProxies TrustedLoginProxies
 	// exchangeTTLDur and allowedAudiences configure RFC 8693 token exchange
 	// (tokenexchange.go); the zero values mean DefaultExchangeTTL and "accept any
 	// well-formed target".
@@ -472,8 +475,15 @@ func loadGroupClosure(ctx context.Context, as store.AuthScope, cache map[model.I
 // A caller that abandons the request while the throttle is holding the attempt
 // gets the context's error back, so the attempt can be reported rather than lost.
 func (a *Authenticator) Login(ctx context.Context, emailRaw, password, ip string) (string, model.AuthSession, error) {
+	return a.LoginFrom(ctx, emailRaw, password, ip, nil)
+}
+
+// LoginFrom performs Login with all X-Forwarded-For values in received order.
+// A configured trusted peer may supply the throttle address; ip remains the
+// transport peer for network policy, session provenance and audit.
+func (a *Authenticator) LoginFrom(ctx context.Context, emailRaw, password, ip string, forwarded []string) (string, model.AuthSession, error) {
 	email := normalizeEmail(emailRaw)
-	accountKey, addressKey := "email:"+email, "ip:"+ip
+	accountKey, addressKey := "email:"+email, "ip:"+a.trustedLoginProxies.clientAddress(ip, forwarded)
 
 	// One question, asked once: the throttle reads both keys together, says what
 	// this attempt is worth, and records the admission in the same locked step

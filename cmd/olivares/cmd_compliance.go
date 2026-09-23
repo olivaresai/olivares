@@ -1174,6 +1174,23 @@ func renderErasureOutcome(cmd *cobra.Command, res complianceResult, flags *authC
 				}
 			}
 		}
+		// The verify note is WHERE a gap says what it was: a residue, a ledger
+		// re-verification that did not pass, or a residual scan that opened
+		// nothing or less than this request's data-class scope required. It was
+		// reachable only through -o json or a second `erasure receipt` call, so
+		// the operator who ran the erasure was the one person who did not see it.
+		//
+		// Same label WORD as the receipt and shred-state views, with this form's
+		// own ": " separator: those two align columns through a tabwriter, so the
+		// literal "verify note: " exists HERE and nowhere else. What a consumer
+		// matches across the three views is therefore the receipt's own markers
+		// inside the note, never the label — the note travels verbatim so that
+		// stays true.
+		if note, ok := generic["verify_reason"].(string); ok && note != "" {
+			if _, werr := fmt.Fprintf(w, "verify note: %s\n", note); werr != nil {
+				return werr
+			}
+		}
 		if ref, ok := generic["approval_ref"].(string); ok && ref != "" {
 			if _, werr := fmt.Fprintf(w, "approval ref: %s\n", ref); werr != nil {
 				return werr

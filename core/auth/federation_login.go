@@ -6,6 +6,9 @@ package auth
 
 import (
 	"context"
+	"errors"
+	"slices"
+	"strings"
 
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
@@ -45,6 +48,16 @@ func (a *Authenticator) GroupMappingAvailable() bool { return a.groupMapper != n
 // authority makes SSO never JIT-create and never reconcile groups at login. Both are inert
 // for a global/"" tenant and in the open build (no GroupMapper), so the open path is
 // byte-identical to before.
+//
+// When tenant names a business tenant, the sign-in is bound to that tenant's providers
+// (see findOrProvision): the session is minted only for a member of the tenant whose
+// address lies in a domain claimed by the tenant's provider that claims the asserted
+// address, and a new account is provisioned only under that claim, with its membership
+// in the tenant; a tenant that is not an organization admits nobody. The callback has
+// already confined the asserted address to the SELECTED provider's own claims
+// (ResolvedIdP.AllowsEmail), so that claimant is the selected provider. A refusal by the
+// binding answers ErrUnauthenticated, like any refused assertion, and leaves one audit
+// record. The global/"" scope is the deployment's own provider and is not bound.
 func (a *Authenticator) CompleteSSO(ctx context.Context, id FederatedIdentity, ip string, tenant model.TenantID, scimAuthoritative bool) (string, model.AuthSession, error) {
 	// the network allow-list applies to EVERY login, so an SSO completion from
 	// a peer outside the configured CIDRs is refused BEFORE the local user is found or
@@ -58,7 +71,12 @@ func (a *Authenticator) CompleteSSO(ctx context.Context, id FederatedIdentity, i
 	// JIT-creates and never reconciles groups at login. The flag is the RESOLVED IdP's,
 	// so it is the policy of the config that actually authenticated the user.
 	authoritative := scimAuthoritative
-	user, err := a.findOrProvision(ctx, id, !authoritative)
+	user, err := a.findOrProvision(ctx, id, !authoritative, tenant)
+	var outside outsideProviderScope
+	if errors.As(err, &outside) {
+		a.auditSSOOutsideScope(ctx, outside.account, ip, tenant)
+		return "", model.AuthSession{}, ErrUnauthenticated
+	}
 	if err != nil {
 		return "", model.AuthSession{}, err
 	}
@@ -131,7 +149,20 @@ func (a *Authenticator) CompleteSSO(ctx context.Context, id FederatedIdentity, i
 // membership; tenant access is granted separately (SCIM/admin), so a first SSO
 // login authenticates the person without granting estate access by default.
 func (a *Authenticator) FindOrProvisionByEmail(ctx context.Context, id FederatedIdentity) (model.User, error) {
-	return a.findOrProvision(ctx, id, true)
+	return a.findOrProvision(ctx, id, true, "")
+}
+
+// ssoJITRole is the role an account provisioned through a tenant's provider receives in
+// that tenant: the least built-in role, the one SCIM provisions with (SCIMDefaultRole).
+const ssoJITRole = RoleViewer
+
+// outsideProviderScope refuses a federated identity that the tenant's provider has no
+// claim on. account is the correlated account, or zero when the refusal came before any
+// account was looked up. CompleteSSO answers it as ErrUnauthenticated.
+type outsideProviderScope struct{ account model.ID }
+
+func (outsideProviderScope) Error() string {
+	return "auth: federated identity outside the scope of its identity provider"
 }
 
 // findOrProvision correlates a federated identity to a local user and, when allowJIT
@@ -158,14 +189,51 @@ func (a *Authenticator) FindOrProvisionByEmail(ctx context.Context, id Federated
 // guards. external_id is deliberately NOT a correlation key here: it is SCIM's
 // unqualified externalId (RFC 7643), shared-namespace with the raw subject. It is
 // still written on JIT create so SCIM/CAEP can correlate THEIR OWN PATCH/DELETE by it.
-func (a *Authenticator) findOrProvision(ctx context.Context, id FederatedIdentity, allowJIT bool) (model.User, error) {
+//
+// When scope names a business tenant, the sign-in is bound to it before anything is
+// written:
+//   - a tenant that is not an organization has no members and can receive none, so it
+//     is refused first, before any account is looked up;
+//   - then, in this transaction, the tenant's ACTIVE providers that claim the domain of
+//     the asserted address are the only ones entitled to vouch for it; with none, the
+//     identity is refused before any account is looked up, so the answer cannot depend
+//     on whether it exists;
+//   - an existing account, however it was correlated, is admitted only if its own
+//     address lies in a domain those providers claim and it holds a membership in the
+//     tenant. A subject match is not proof on its own: the stored link names an
+//     issuer, not the provider that made it;
+//   - a new account is provisioned with its membership in the tenant (ssoJITRole).
+//
+// A refusal is an outsideProviderScope error and writes nothing.
+func (a *Authenticator) findOrProvision(ctx context.Context, id FederatedIdentity, allowJIT bool, scope model.TenantID) (model.User, error) {
 	email := normalizeEmail(id.Email)
 	if email == "" {
 		return model.User{}, ErrUnauthenticated
 	}
 	qualified := id.QualifiedSubject()
+	bound := isTenantScope(scope)
+	if bound {
+		org, err := a.isOrganization(ctx, scope)
+		if err != nil {
+			return model.User{}, err
+		}
+		if !org {
+			return model.User{}, outsideProviderScope{}
+		}
+	}
 	var out model.User
 	err := a.st.AuthMutate(ctx, func(as store.AuthScope) error {
+		var claimed []string
+		if bound {
+			c, err := scopeClaims(ctx, as, scope, email)
+			if err != nil {
+				return err
+			}
+			if len(c) == 0 {
+				return outsideProviderScope{}
+			}
+			claimed = c
+		}
 		// 1. Issuer-qualified subject: the safe, rename-resilient key.
 		if qualified != "" {
 			bySub, _, err := as.Users().List(ctx, byEq("sso_subject", qualified, 1))
@@ -174,7 +242,7 @@ func (a *Authenticator) findOrProvision(ctx context.Context, id FederatedIdentit
 			}
 			if len(bySub) > 0 {
 				out = bySub[0]
-				return nil
+				return admitToScope(ctx, as, out, scope, claimed)
 			}
 		}
 		// 2. Email fallback — a PURE READ. The subject-binding bootstrap for an
@@ -186,7 +254,7 @@ func (a *Authenticator) findOrProvision(ctx context.Context, id FederatedIdentit
 		}
 		if len(byMail) > 0 {
 			out = byMail[0]
-			return nil
+			return admitToScope(ctx, as, out, scope, claimed)
 		}
 		// D4 — a SCIM-authoritative scope never provisions from a login.
 		if !allowJIT {
@@ -206,13 +274,126 @@ func (a *Authenticator) findOrProvision(ctx context.Context, id FederatedIdentit
 			return err
 		}
 		out = u
-		_, err = as.Audit().Append(ctx, model.AuditDraft{
+		if _, err := as.Audit().Append(ctx, model.AuditDraft{
 			Actor: model.ActorSystem, ActorKind: model.ActorSystem,
 			Action: "sso.user.provision", TargetKind: "core.user", TargetID: u.ID,
+		}); err != nil {
+			return err
+		}
+		if !bound {
+			return nil
+		}
+		// The account is new and its address is claimed by the tenant's provider (checked
+		// above), so it joins that tenant, and only that tenant.
+		m, err := as.Memberships().Create(ctx, model.Membership{UserID: u.ID, TargetTenantID: scope, Role: ssoJITRole})
+		if err != nil {
+			return err
+		}
+		_, err = as.Audit().Append(ctx, model.AuditDraft{
+			Actor: model.ActorSystem, ActorKind: model.ActorSystem,
+			Action: "sso.user.join", TargetKind: "core.membership", TargetID: m.ID,
 		})
 		return err
 	})
 	return out, err
+}
+
+// scopeClaims returns the normalized domains claimed by the active providers of scope
+// that claim the domain of email — the providers entitled to vouch for that address —
+// or nil when none does (or the address has no domain).
+func scopeClaims(ctx context.Context, as store.AuthScope, scope model.TenantID, email string) ([]string, error) {
+	dom := emailDomain(email)
+	if dom == "" {
+		return nil, nil
+	}
+	configs, err := drainList(ctx, as.FederationConfigs().List, byEq("target_tenant_id", scope.String(), 0))
+	if err != nil {
+		return nil, err
+	}
+	var claimed []string
+	for _, c := range configs {
+		if c.Status != model.StatusActive || c.Protocol == "" || !domainClaimed(c, dom) {
+			continue
+		}
+		for _, d := range c.ClaimedDomains {
+			claimed = append(claimed, model.NormalizeFederationDomain(d))
+		}
+	}
+	return claimed, nil
+}
+
+// admitToScope admits an existing account to a sign-in bound to scope: its own address
+// lies in one of the claimed domains and it holds a membership in the tenant. A sign-in
+// under the global/"" scope is not bound, so every account passes.
+func admitToScope(ctx context.Context, as store.AuthScope, u model.User, scope model.TenantID, claimed []string) error {
+	if !isTenantScope(scope) {
+		return nil
+	}
+	if dom := emailDomain(u.Email); dom == "" || !slices.Contains(claimed, dom) {
+		return outsideProviderScope{account: u.ID}
+	}
+	if _, ok, err := membershipOf(ctx, as, u.ID, scope); err != nil {
+		return err
+	} else if !ok {
+		return outsideProviderScope{account: u.ID}
+	}
+	return nil
+}
+
+// emailDomain returns the normalized domain of an address, or "" when it has none.
+func emailDomain(email string) string {
+	at := strings.LastIndexByte(email, '@')
+	if at < 0 || at == len(email)-1 {
+		return ""
+	}
+	return model.NormalizeFederationDomain(email[at+1:])
+}
+
+// isOrganization reports whether tenant is an organization of this deployment: its
+// organization row exists, whatever its status or residency pin. It reads through the
+// System path, which the service guards (suspension, residency) pass through as they
+// pass authentication through: a tenant withdrawn from service or pinned to another
+// region is still an organization, and its sign-in goes on as before this check. Only
+// store.ErrNotFound means "not an organization". It reads in its own transaction, so
+// it runs before the sign-in's auth transaction, never inside it.
+func (a *Authenticator) isOrganization(ctx context.Context, tenant model.TenantID) (bool, error) {
+	err := a.st.System(ctx, func(sys store.SystemScope) error {
+		_, err := sys.GetOrg(ctx, tenant)
+		return err
+	})
+	if errors.Is(err, store.ErrNotFound) {
+		return false, nil
+	}
+	return err == nil, err
+}
+
+// RecordSSOOutsideScope records a federated sign-in that the callback refuses because the
+// asserted address lies outside the domains claimed by the provider selected for it
+// (ResolvedIdP.AllowsEmail): the same blocked-login record the binding in CompleteSSO
+// writes, with no account looked up. The caller answers ErrUnauthenticated.
+func (a *Authenticator) RecordSSOOutsideScope(ctx context.Context, ip string, scope model.TenantID) {
+	a.auditSSOOutsideScope(ctx, "", ip, scope)
+}
+
+// auditSSOOutsideScope records a federated sign-in refused because the identity lies
+// outside the scope of the tenant's provider that vouched for it. The actor is
+// "user:<id>" when an account was correlated, else "anonymous"; the address is never
+// recorded. Best-effort, like auditLoginBlocked: the refusal is already decided.
+func (a *Authenticator) auditSSOOutsideScope(ctx context.Context, account model.ID, ip string, scope model.TenantID) {
+	actor := "anonymous"
+	if !account.IsZero() {
+		actor = "user:" + account.String()
+	}
+	const reason = "sso_outside_provider_scope"
+	if aerr := a.st.AuthMutate(ctx, func(as store.AuthScope) error {
+		_, err := as.Audit().Append(ctx, model.AuditDraft{
+			Actor: actor, ActorKind: model.ActorUser, Action: "auth.login.blocked",
+			Meta: map[string]any{"ip": ip, "reason": reason, "scope": scope.String()},
+		})
+		return err
+	}); aerr != nil {
+		a.log.Error("auth: recording blocked login", "err", aerr, "reason", reason)
+	}
 }
 
 // bindSubjectIfUnset stamps the issuer-qualified subject onto an account that has

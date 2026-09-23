@@ -24,8 +24,10 @@ func TestSessionIssuanceCensus(t *testing.T) {
 		t.Fatal("cannot locate auth sources")
 	}
 	root := filepath.Dir(filepath.Dir(thisFile))
+	// Login delegates to LoginFrom, so the existing password policy controls
+	// exercise the latter's one minting site as well.
 	covered := map[string][]string{
-		"auth/authenticator.go:Login->mintSession":                          {"TestLoginPolicy_NetworkBlocksPasswordLogin", "TestLoginPolicy_RequireSSOBlocksPasswordOnly", "TestLoginPolicy_NilIsNoOp"},
+		"auth/authenticator.go:LoginFrom->mintSession":                      {"TestLoginPolicy_NetworkBlocksPasswordLogin", "TestLoginPolicy_RequireSSOBlocksPasswordOnly", "TestLoginPolicy_NilIsNoOp"},
 		"auth/federation_login.go:CompleteSSO->mintSession":                 {"TestLoginPolicy_NetworkBlocksSSOCompletion", "TestLoginPolicy_RequireSSONeverBlocksSSOCompletion"},
 		"auth/onboarding.go:AcceptInvite->mintSession":                      {"TestInviteLoginPolicyRefusal", "TestInviteLoginPolicyAllowedAndNil", "TestInviteLoginPolicyRevalidatesStoredUser"},
 		"auth/authenticator.go:mintSession->mintSessionTx":                  {"TestInviteLoginPolicyRefusal", "TestLoginPolicy_RequireSSONeverBlocksSSOCompletion"},

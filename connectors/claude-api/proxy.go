@@ -116,7 +116,8 @@ type ProxyBatchDecision struct {
 	Requests []BatchRequest
 	// Prepared is the FROZEN batch envelope the decider authorized (F3): the exact
 	// submission bytes to forward. When set, the forward sends it VERBATIM; a zero value
-	// falls back to re-serializing Requests via CreateBatchRaw (legacy path).
+	// falls back to re-serializing Requests via CreateBatchRaw (legacy path) — unless any
+	// entry carries an accepted MCP binding, which refuses with mcp_binding_changed.
 	Prepared PreparedBatch
 	// Session is opaque per-submission state the connector round-trips to FinalizeBatch.
 	Session any
@@ -168,7 +169,8 @@ type ProxyDecision struct {
 	// to forward, so the octets sent upstream provably equal what the decision was taken over
 	// and the ledger digest committed to. When set (the governed path always sets it on an
 	// allow), the forward sends it VERBATIM with no preflight/re-marshal; a zero value falls
-	// back to marshaling Request (legacy path, e.g. a decider that predates S3).
+	// back to marshaling Request (legacy path, e.g. a decider that predates S3) — unless
+	// Request carries an accepted MCP binding, which refuses with mcp_binding_changed.
 	Prepared PreparedRequest
 	// BufferResponse asks the connector to buffer the full (streamed) response and run
 	// Finalize BEFORE relaying any byte, so a Finalize Block actually withholds the
@@ -316,6 +318,13 @@ func (p *MessagesProxy) serveMessages(w http.ResponseWriter, r *http.Request) {
 		p.writeDecisionError(w, status, dec.ErrorType, firstNonEmpty(dec.Reason, "request denied by Olivares governance policy"), dec.Headers)
 		return
 	}
+	// A governed request that carries an accepted MCP binding (a declaration or its absence)
+	// is forwardable ONLY as the frozen, verified artifact: the legacy fallback would
+	// re-serialize it unverified. Refuse before any response or SSE header is written.
+	if dec.Prepared.IsZero() && dec.Request.mcp != nil {
+		p.refuseUnpreparedBinding(w, r, req.Model, reqBytes)
+		return
+	}
 
 	// Dispatch blocking vs SSE on the FROZEN artifact's stream flag when the decider set one
 	// (F3 — the artifact is the single source of truth for what is forwarded); fall back
@@ -380,6 +389,10 @@ func (p *MessagesProxy) serveBatch(w http.ResponseWriter, r *http.Request) {
 		p.writeDecisionError(w, status, dec.ErrorType, firstNonEmpty(dec.Reason, "batch denied by Olivares governance policy"), dec.Headers)
 		return
 	}
+	if dec.Prepared.IsZero() && batchBound(dec.Requests) {
+		p.refuseUnpreparedBinding(w, r, "", reqBytes)
+		return
+	}
 
 	batch, raw, effSHA, ferr := p.forwardBatch(r.Context(), dec)
 	if ferr != nil {
@@ -401,6 +414,9 @@ func (p *MessagesProxy) serveBatch(w http.ResponseWriter, r *http.Request) {
 // re-serialize of dec.Requests via CreateBatchRaw. Returns the decoded Batch, the raw upstream
 // bytes to relay, and the effective digest (empty on the legacy path).
 func (p *MessagesProxy) forwardBatch(ctx context.Context, dec ProxyBatchDecision) (Batch, []byte, []byte, error) {
+	if dec.Prepared.IsZero() && batchBound(dec.Requests) {
+		return Batch{}, nil, nil, mcpRefusal(MCPDenyBindingChanged)
+	}
 	if !dec.Prepared.IsZero() {
 		d := dec.Prepared.Digest()
 		batch, raw, err := p.inf.ForwardPreparedBatch(ctx, dec.Prepared)
@@ -432,6 +448,15 @@ func (p *MessagesProxy) relayBatchUpstreamError(w http.ResponseWriter, r *http.R
 	p.writeError(w, status, "api_error", "upstream batch call failed")
 }
 
+// refuseUnpreparedBinding answers an allowed decision whose governed request carries an
+// accepted MCP binding but no frozen artifact: a fixed 500 mcp_binding_changed, with no
+// forward. Nothing was sent upstream, so there is no outcome to finalize; the deny is audited.
+func (p *MessagesProxy) refuseUnpreparedBinding(w http.ResponseWriter, r *http.Request, model string, reqBytes int64) {
+	reason := string(MCPDenyBindingChanged)
+	p.audit(r.Context(), ProxyAuditEvent{Decision: "deny", Reason: reason, Model: model, ReqBytes: reqBytes})
+	p.writeError(w, http.StatusInternalServerError, "api_error", reason)
+}
+
 // finalizeBatch runs the decider's post-forward batch steps; a nil decider is a no-op.
 func (p *MessagesProxy) finalizeBatch(ctx context.Context, dec ProxyBatchDecision, out ProxyBatchForwardResult) {
 	if p.decider == nil {
@@ -446,6 +471,9 @@ func (p *MessagesProxy) finalizeBatch(ctx context.Context, dec ProxyBatchDecisio
 // digest (empty on the legacy path). For a stream it drives onEvent; for blocking onEvent is
 // nil.
 func (p *MessagesProxy) forwardMessage(ctx context.Context, dec ProxyDecision, stream bool, onEvent func(StreamEvent) error) (MessageResponse, []byte, error) {
+	if dec.Prepared.IsZero() && dec.Request.mcp != nil {
+		return MessageResponse{}, nil, mcpRefusal(MCPDenyBindingChanged)
+	}
 	if !dec.Prepared.IsZero() {
 		d := dec.Prepared.Digest()
 		if stream {

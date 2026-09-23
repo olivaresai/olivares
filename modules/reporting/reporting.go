@@ -77,6 +77,10 @@ func (m *Module) UseData(d api.ModuleData) {
 	for _, p := range []any{m.scheduler, m.branding, m.customTmpl, m.enterprise} {
 		if b, ok := p.(dataBinder); ok {
 			b.bindData(d)
+			continue
+		}
+		if c, ok := p.(api.DataConsumer); ok {
+			c.UseData(d)
 		}
 	}
 }

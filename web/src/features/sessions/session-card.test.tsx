@@ -304,9 +304,7 @@ describe('SessionCard — provenance comes from the engine', () => {
     expect(unnamed).not.toBeNull()
     expect(unnamed).toHaveTextContent('run-anon')
     expect(
-      within(unnamed as HTMLElement)
-        .getByText('Untitled session')
-        .className,
+      within(unnamed as HTMLElement).getByText('Untitled session').className,
     ).not.toMatch(/font-mono/)
   })
 

@@ -15,7 +15,11 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import { sessionNameLadder } from '@/features/home/work-line'
-import { humanDurationSeconds, ppmToPercent, RelTimeLabel } from '@/features/shared'
+import {
+  humanDurationSeconds,
+  ppmToPercent,
+  RelTimeLabel,
+} from '@/features/shared'
 import { NamedRef } from '@/features/shared/named-ref'
 import { formatLatency } from '@/lib/format'
 import { HealthStateBadge } from './health-state-badge'
