@@ -187,30 +187,127 @@ def registry(root, family, production_mutated=False):
     return data
 
 
-def identity(root):
-    env = os.environ
-    require(env.get("GITHUB_ACTIONS") == "true" and env.get("RUNNER_ENVIRONMENT") == "github-hosted",
-            "hosted-only")
-    require(env.get("GITHUB_EVENT_NAME") == "pull_request" and
-            env.get("GITHUB_REPOSITORY") == "olivaresai/olivares", "public-pr-only")
-    require(not env.get("GOFLAGS"), "caller-goflags")
-    require(Path(env["GITHUB_WORKSPACE"]).resolve() == root, "checkout-path")
-    head = git(root, "rev-parse", "HEAD").decode().strip()
-    require(env.get("GITHUB_SHA") == head and not git(root, "status", "--porcelain").strip(),
-            "checkout-identity")
-    event_bytes = Path(env["GITHUB_EVENT_PATH"]).read_bytes()
-    event = json.loads(event_bytes)
-    pr = event["pull_request"]
-    require(pr["base"]["ref"] == "main" and pr["base"]["repo"]["full_name"] == env["GITHUB_REPOSITORY"] and
-            pr["merge_commit_sha"] == head and re.fullmatch(r"[0-9a-f]{40}", pr["head"]["sha"]),
-            "pr-event-identity")
-    require(env.get("GITHUB_REF") == "refs/pull/%s/merge" % event["number"] and
-            git(root, "rev-parse", "HEAD^2").decode().strip() == pr["head"]["sha"], "pr-parent-identity")
-    require(all(re.fullmatch(r"[0-9]+", env.get(k, "")) for k in ("GITHUB_RUN_ID", "GITHUB_RUN_ATTEMPT")),
-            "run-identity")
-    return {"checkout": head, "event_sha256": digest(event_bytes), "pull_request": event["number"],
-            "pr_head": pr["head"]["sha"], "repository": env["GITHUB_REPOSITORY"],
-            "run_id": env["GITHUB_RUN_ID"], "run_attempt": env["GITHUB_RUN_ATTEMPT"]}
+COMMIT = r"[0-9a-f]{40}"
+
+
+def typed(value, pattern, name, unrecognized):
+    """The value when it is a string of the declared shape; None when absent or not."""
+    if value is None:
+        return None
+    if isinstance(value, str) and re.fullmatch(pattern, value):
+        return value
+    unrecognized.append(name)
+    return None
+
+
+def member(value, *keys):
+    for key in keys:
+        value = value.get(key) if isinstance(value, dict) else None
+    return value
+
+
+def observe_identity(root):
+    """Read the run's identity once, as a closed set of typed public identifiers.
+
+    GITHUB_SHA is the run's merge commit on refs/pull/<number>/merge and
+    pull_request.head.sha the PR head. The payload merge_commit_sha is the
+    asynchronous test-merge candidate, so it is kept as advisory evidence only.
+    The record keeps six typed GITHUB_* values (event name, repository, SHA,
+    ref, run id and attempt), local commit IDs, typed event fields and
+    comparison outcomes. Other environment inputs are reduced to booleans or
+    only locate the event file; no event text or user field is kept.
+    """
+    env, unrecognized = os.environ, []
+    try:
+        event_bytes = Path(env["GITHUB_EVENT_PATH"]).read_bytes()
+        event = json.loads(event_bytes)
+    except (KeyError, OSError, ValueError, RecursionError):
+        # RecursionError: nesting beyond the decoder's depth is a malformed event shape.
+        event_bytes = event = None
+    if not isinstance(event, dict):
+        event = None
+        unrecognized.append("event")
+    number = member(event, "number")
+    if number is not None and not (type(number) is int and 0 < number < 2 ** 31):
+        number = None
+        unrecognized.append("event.number")
+    pr = member(event, "pull_request")
+    mergeable = member(pr, "mergeable")
+    if mergeable is not None and type(mergeable) is not bool:
+        mergeable = None
+        unrecognized.append("event.mergeable")
+    fields = {
+        "number": number,
+        "head_sha": typed(member(pr, "head", "sha"), COMMIT, "event.head_sha", unrecognized),
+        "base_ref": typed(member(pr, "base", "ref"), r"[A-Za-z0-9._/-]{1,255}", "event.base_ref", unrecognized),
+        "base_repository": typed(member(pr, "base", "repo", "full_name"), r"[A-Za-z0-9._-]{1,100}/[A-Za-z0-9._-]{1,100}",
+                                 "event.base_repository", unrecognized),
+        "base_sha": typed(member(pr, "base", "sha"), COMMIT, "event.base_sha", unrecognized),
+        "merge_commit_sha": typed(member(pr, "merge_commit_sha"), COMMIT, "event.merge_commit_sha", unrecognized),
+        "mergeable": mergeable,
+    }
+    checkout = typed(git(root, "rev-parse", "HEAD").decode().strip(), COMMIT, "checkout", unrecognized)
+    parents = git(root, "rev-list", "--parents", "-n", "1", "HEAD").decode().split()[1:]
+    parents = [typed(p, COMMIT, "checkout_parents", unrecognized) for p in parents]
+    observation = {
+        "schema": "olivares.public-iam-identity-observation/v1",
+        "hosted": env.get("GITHUB_ACTIONS") == "true" and env.get("RUNNER_ENVIRONMENT") == "github-hosted",
+        "event_name": typed(env.get("GITHUB_EVENT_NAME"), r"[a-z_]{1,64}", "event_name", unrecognized),
+        "repository": typed(env.get("GITHUB_REPOSITORY"), r"[A-Za-z0-9._-]{1,100}/[A-Za-z0-9._-]{1,100}",
+                            "repository", unrecognized),
+        "goflags_set": bool(env.get("GOFLAGS")),
+        "workspace_is_checkout": "GITHUB_WORKSPACE" in env and Path(env["GITHUB_WORKSPACE"]).resolve() == root,
+        "github_sha": typed(env.get("GITHUB_SHA"), COMMIT, "github_sha", unrecognized),
+        "ref": typed(env.get("GITHUB_REF"), r"refs/pull/[1-9][0-9]{0,9}/merge", "ref", unrecognized),
+        "run_id": typed(env.get("GITHUB_RUN_ID"), r"[0-9]{1,20}", "run_id", unrecognized),
+        "run_attempt": typed(env.get("GITHUB_RUN_ATTEMPT"), r"[0-9]{1,20}", "run_attempt", unrecognized),
+        "checkout": checkout,
+        "checkout_clean": not git(root, "status", "--porcelain").strip(),
+        "checkout_parents": parents,
+        "event_sha256": None if event_bytes is None else digest(event_bytes),
+        "event": fields,
+        "unrecognized": sorted(set(unrecognized)),
+    }
+    two = len(parents) == 2 and None not in parents and parents[0] != parents[1]
+    observation["comparisons"] = {
+        "checkout_is_github_sha": checkout is not None and checkout == observation["github_sha"],
+        "ref_is_event_merge_ref": number is not None and observation["ref"] == "refs/pull/%d/merge" % number,
+        "two_distinct_parents": two,
+        "second_parent_is_pr_head": two and fields["head_sha"] is not None and parents[1] == fields["head_sha"],
+        "base_is_main_of_repository": fields["base_ref"] == "main" and
+                                      fields["base_repository"] is not None and
+                                      fields["base_repository"] == observation["repository"],
+        # Advisory only: neither value is documented as the run's checkout or merge parent.
+        "candidate_is_checkout": (None if fields["merge_commit_sha"] is None
+                                  else fields["merge_commit_sha"] == checkout),
+        "first_parent_is_event_base_sha": (None if fields["base_sha"] is None or not two
+                                           else parents[0] == fields["base_sha"]),
+    }
+    return observation
+
+
+def admit_identity(observation):
+    """Admit only from the recorded observation; each refusal names its own stage."""
+    o, event, compare = observation, observation["event"], observation["comparisons"]
+    require(o["hosted"], "hosted-only")
+    require(o["event_name"] == "pull_request" and o["repository"] == "olivaresai/olivares", "public-pr-only")
+    require(not o["goflags_set"], "caller-goflags")
+    require(o["workspace_is_checkout"], "checkout-path")
+    require(compare["checkout_is_github_sha"], "checkout-identity")
+    require(o["checkout_clean"], "checkout-dirty")
+    require(not any(n == "event" or n.startswith("event.") for n in o["unrecognized"]) and
+            None not in (event["number"], event["head_sha"], event["base_ref"], event["base_repository"]),
+            "pr-event-shape")
+    require(compare["base_is_main_of_repository"], "pr-base-identity")
+    require(compare["ref_is_event_merge_ref"], "pr-merge-ref")
+    # Inferred, fail-closed merge topology: GitHub documents GITHUB_SHA and the PR
+    # head, not the parent order of the merge commit.
+    require(compare["two_distinct_parents"], "pr-merge-topology")
+    require(compare["second_parent_is_pr_head"], "pr-parent-identity")
+    require(o["run_id"] is not None and o["run_attempt"] is not None, "run-identity")
+    return {"checkout": o["checkout"], "event_sha256": o["event_sha256"], "pull_request": event["number"],
+            "pr_head": event["head_sha"], "repository": o["repository"],
+            "run_id": o["run_id"], "run_attempt": o["run_attempt"]}
 
 
 def safe_environment():
@@ -423,7 +520,10 @@ class Qualification:
         self.restored = True
 
     def run(self):
-        identity_record = identity(ROOT)
+        # Retained before admission, so a refusal still shows which comparison failed.
+        observation = observe_identity(ROOT)
+        write_json(self.evidence / "identity-observation.json", observation)
+        identity_record = admit_identity(observation)
         self.data = registry(ROOT, self.family)
         self.source = census(ROOT)
         write_json(self.evidence / "identity.json", identity_record)
@@ -487,7 +587,8 @@ def finalize(evidence, result):
         if path.is_file():
             hashes[path.relative_to(evidence).as_posix()] = digest(path.read_bytes())
     complete = result["outcome"] != 0 or all(p in hashes for p in
-               ("identity.json", "inputs.json", "case.json", "baseline/status.json"))
+               ("identity-observation.json", "identity.json", "inputs.json", "case.json",
+                "baseline/status.json"))
     for phase in result["phases"]:
         complete = complete and all(phase["label"] + "/" + name in hashes for name in
                                     ("streams.jsonl", "go.jsonl", "stderr.txt", "status.json"))

@@ -196,7 +196,18 @@ class Fixture:
         self.git("commit", "-qm", "fixture head")
         pr_head = self.git("rev-parse", "HEAD").strip()
         self.git("checkout", "-q", "main")
-        self.git("merge", "--no-ff", "-qm", "fixture merge", "head")
+        base_sha = self.git("rev-parse", "HEAD").strip()
+        merged = ["head"]
+        if alteration == "three_parents":
+            self.git("checkout", "-qb", "extra")
+            (self.repo / "extra-marker").write_text("extra\n")
+            self.git("add", ".")
+            self.git("commit", "-qm", "fixture extra")
+            self.git("checkout", "-q", "main")
+            merged.append("extra")
+        self.git("merge", "--no-ff", "-qm", "fixture merge", *merged)
+        if alteration == "single_parent":
+            self.git("reset", "-q", "--hard", "head")
         self.head = self.git("rev-parse", "HEAD").strip()
         self.mutated = {}
         originals = {p: (self.repo / p).read_bytes() for p in data["production"]}
@@ -216,14 +227,51 @@ class Fixture:
         fake = FAKE_GO.replace("#!PYTHON", "#!" + sys.executable, 1).replace("CONFIG", repr(str(config)))
         (self.bin / "go").write_text(fake)
         (self.bin / "go").chmod(0o755)
-        payload = {"number": 1, "pull_request": {"merge_commit_sha": self.head,
-            "head": {"sha": pr_head}, "base": {"ref": "main", "repo": {"full_name": "olivaresai/olivares"}}}}
+        # The sender and body decoys must never reach the evidence.
+        payload = {"number": 1, "sender": {"login": "fixture-sender-login"},
+                   "pull_request": {"merge_commit_sha": self.head, "mergeable": True,
+                                    "body": "fixture-private-body", "head": {"sha": pr_head},
+                                    "base": {"ref": "main", "sha": base_sha,
+                                             "repo": {"full_name": "olivaresai/olivares"}}}}
+        pr = payload["pull_request"]
         if alteration == "wrong_pr_head":
-            payload["pull_request"]["head"]["sha"] = "f" * 40
+            pr["head"]["sha"] = "f" * 40
         if alteration == "wrong_base_repo":
-            payload["pull_request"]["base"]["repo"]["full_name"] = "example/fork"
+            pr["base"]["repo"]["full_name"] = "example/fork"
+        if alteration == "wrong_base_ref":
+            pr["base"]["ref"] = "release"
+        if alteration == "malformed_head":
+            pr["head"]["sha"] = "not-a-commit"
+        # A candidate from an earlier or unfinished mergeability job is metadata only.
+        if alteration == "stale_candidate":
+            pr["merge_commit_sha"] = "e" * 40
+        if alteration == "absent_candidate":
+            pr["merge_commit_sha"] = pr["mergeable"] = None
+        if alteration == "missing_candidate":
+            del pr["merge_commit_sha"], pr["mergeable"]
+        if alteration == "missing_pull_request":
+            del payload["pull_request"]
+        if alteration == "malformed_candidate":
+            pr["merge_commit_sha"] = "not-a-commit"
+        # base.sha is recorded only: no read document makes it the merge's first parent.
+        if alteration == "stale_base_sha":
+            pr["base"]["sha"] = "d" * 40
+        if alteration == "absent_base_sha":
+            pr["base"]["sha"] = None
+        if alteration == "missing_base_sha":
+            del pr["base"]["sha"]
+        # Advisory mismatches never stand in for an authoritative binding.
+        if alteration == "stale_advisory_wrong_pr_head":
+            pr["merge_commit_sha"], pr["base"]["sha"], pr["head"]["sha"] = "e" * 40, "d" * 40, "f" * 40
         event = self.base / "event.json"
         event.write_text(json.dumps(payload))
+        if alteration == "unreadable_event":
+            event.unlink()
+        if alteration == "non_object_event":
+            event.write_text("[]")
+        if alteration == "deep_event":
+            # Deep enough that the JSON decoder exceeds the interpreter recursion limit.
+            event.write_text("[" * 200000)
         runner_temp = self.base / "runner"
         runner_temp.mkdir()
         self.env.update(GITHUB_ACTIONS="true", RUNNER_ENVIRONMENT="github-hosted",
@@ -241,6 +289,10 @@ class Fixture:
             self.env.pop("GITHUB_ACTIONS")
         if alteration == "wrong_event":
             self.env["GITHUB_EVENT_NAME"] = "workflow_dispatch"
+        if alteration == "wrong_ref":
+            self.env["GITHUB_REF"] = "refs/pull/2/merge"
+        if alteration == "dirty_tree":
+            (self.repo / "untracked-fixture").write_text("not committed\n")
 
     def git(self, *args):
         result = subprocess.run([str(self.bin / "git"), *args], cwd=self.repo, env=self.env,
@@ -336,18 +388,106 @@ class CommandControls(unittest.TestCase):
                 record = self.run_case(alteration=change)
                 self.assertEqual(record["phases"], [])
 
-    def test_public_input_and_event_binding(self):
+    def test_public_input_binding(self):
         # Each refusal names its own check, so a weaker check cannot pass as another.
         reasons = {"wrong_input_pin": "case-input-drift", "legacy_pin_pairs": "case-input-pin",
                    "provenance_key": "case-schema", "command_provenance_key": "case-schema",
-                   "mutant_provenance_key": "case-schema", "missing_input": "missing-input",
-                   "wrong_event": "public-pr-only", "wrong_pr_head": "pr-parent-identity",
-                   "wrong_base_repo": "pr-event-identity"}
+                   "mutant_provenance_key": "case-schema", "missing_input": "missing-input"}
         for change, reason in reasons.items():
             with self.subTest(change=change):
                 record = self.run_case(alteration=change)
                 self.assertEqual(record["reason"], reason)
                 self.assertEqual(record["phases"], [])
+
+    OBSERVATION_KEYS = {"schema", "hosted", "event_name", "repository", "goflags_set",
+                        "workspace_is_checkout", "github_sha", "ref", "run_id", "run_attempt",
+                        "checkout", "checkout_clean", "checkout_parents", "event_sha256", "event",
+                        "unrecognized", "comparisons"}
+    EVENT_KEYS = {"number", "head_sha", "base_ref", "base_repository", "base_sha",
+                  "merge_commit_sha", "mergeable"}
+
+    def observe(self, alteration=None, expected=2):
+        # The observation is written before admission and must survive any refusal.
+        fixture = Fixture(alteration=alteration)
+        try:
+            result, record = fixture.run()
+            self.assertEqual(result.returncode, expected, result.stdout + result.stderr)
+            self.assertEqual(record["outcome"], expected)
+            self.assertTrue(record["custody_terminal"])
+            path = fixture.evidence / "identity-observation.json"
+            self.assertTrue(path.is_file(), "no identity observation retained")
+            observation = json.loads(path.read_text())
+            self.assertEqual(set(observation), self.OBSERVATION_KEYS)
+            self.assertEqual(set(observation["event"]), self.EVENT_KEYS)
+            for item in fixture.evidence.rglob("*"):
+                if item.is_file():
+                    for decoy in (b"fixture-private-body", b"fixture-sender-login"):
+                        self.assertNotIn(decoy, item.read_bytes(), item.name)
+            return copy.deepcopy(record), observation
+        finally:
+            fixture.close()
+
+    def test_advisory_metadata_never_decides(self):
+        # GITHUB_SHA is the run's merge commit. The payload candidate may be stale or pending and
+        # base.sha is not documented as the first parent: with every authoritative binding held,
+        # any advisory value proceeds; each value is still recorded.
+        cases = {None: ("checkout", True, "first-parent", True),
+                 "stale_candidate": ("e" * 40, False, "first-parent", True),
+                 "absent_candidate": (None, None, "first-parent", True),
+                 "missing_candidate": (None, None, "first-parent", True),
+                 "stale_base_sha": ("checkout", True, "d" * 40, False),
+                 "absent_base_sha": ("checkout", True, None, None),
+                 "missing_base_sha": ("checkout", True, None, None)}
+        for change, (candidate, candidate_match, base, base_match) in cases.items():
+            with self.subTest(change=change):
+                record, observation = self.observe(change, expected=0)
+                self.assertEqual(len(record["phases"]), 8)
+                comparisons = observation["comparisons"]
+                candidate = observation["checkout"] if candidate == "checkout" else candidate
+                base = observation["checkout_parents"][0] if base == "first-parent" else base
+                self.assertEqual(observation["event"]["merge_commit_sha"], candidate)
+                self.assertEqual(observation["event"]["base_sha"], base)
+                self.assertEqual(comparisons["candidate_is_checkout"], candidate_match)
+                self.assertEqual(comparisons["first_parent_is_event_base_sha"], base_match)
+                self.assertEqual(observation["unrecognized"], [])
+                self.assertTrue(all(comparisons[k] for k in comparisons if k not in (
+                    "candidate_is_checkout", "first_parent_is_event_base_sha")))
+
+    def test_identity_refusals_name_their_stage(self):
+        # Each wrong or malformed identity refuses with its own stage, exit 2 and no phase, and
+        # the closed observation names any field it could not type.
+        cases = {"wrong_event": ("public-pr-only", None, []),
+                 "wrong_head": ("checkout-identity", "checkout_is_github_sha", []),
+                 "dirty_tree": ("checkout-dirty", None, []),
+                 "missing_pull_request": ("pr-event-shape", None, []),
+                 "malformed_head": ("pr-event-shape", None, ["event.head_sha"]),
+                 "malformed_candidate": ("pr-event-shape", None, ["event.merge_commit_sha"]),
+                 "unreadable_event": ("pr-event-shape", None, ["event"]),
+                 "non_object_event": ("pr-event-shape", None, ["event"]),
+                 "deep_event": ("pr-event-shape", None, ["event"]),
+                 "wrong_base_ref": ("pr-base-identity", "base_is_main_of_repository", []),
+                 "wrong_base_repo": ("pr-base-identity", "base_is_main_of_repository", []),
+                 "wrong_ref": ("pr-merge-ref", "ref_is_event_merge_ref", []),
+                 "single_parent": ("pr-merge-topology", "two_distinct_parents", []),
+                 "three_parents": ("pr-merge-topology", "two_distinct_parents", []),
+                 "wrong_pr_head": ("pr-parent-identity", "second_parent_is_pr_head", []),
+                 "stale_advisory_wrong_pr_head": ("pr-parent-identity", "second_parent_is_pr_head", [])}
+        for change, (stage, comparison, unrecognized) in cases.items():
+            with self.subTest(change=change):
+                record, observation = self.observe(change)
+                self.assertEqual(record["reason"], stage)
+                self.assertEqual(record["phases"], [])
+                self.assertEqual(observation["unrecognized"], unrecognized)
+                if comparison:
+                    self.assertIs(observation["comparisons"][comparison], False)
+                if "event" in unrecognized:
+                    self.assertTrue(all(value is None for value in observation["event"].values()))
+                if change == "unreadable_event":
+                    self.assertIsNone(observation["event_sha256"])
+                if change == "malformed_head":
+                    self.assertIsNone(observation["event"]["head_sha"])
+                if change == "dirty_tree":
+                    self.assertIs(observation["checkout_clean"], False)
 
     def test_named_wire_leaf_is_required(self):
         # A wire case that is absent or skipped is never credited to the family.
