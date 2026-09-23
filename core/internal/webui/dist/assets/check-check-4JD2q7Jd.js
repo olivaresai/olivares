@@ -1,0 +1,1 @@
+import{f as e}from"./client-B8Z9j2-W.js";var t={name:`check-check`,size:24,node:[[`path`,{d:`M18 6 7 17l-5-5`,key:`116fxf`}],[`path`,{d:`m22 10-7.5 7.5L13 16`,key:`ke71qq`}]]};t.node;var n=e(t);export{n as t};
