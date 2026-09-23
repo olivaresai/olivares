@@ -1,1 +1,0 @@
-import{fn as e,tn as t}from"./index-_YdXS2pE.js";function n(n){return e(t,n)}export{n as t};
