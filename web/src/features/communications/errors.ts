@@ -31,7 +31,13 @@ import { ApiError, NetworkError } from '@/lib/api/errors'
  *  - terminal         409 terminal: the row is in a terminal state; the command cannot apply.
  *  - invalid          400: the body or query was refused as malformed.
  *  - rate_limited     429.
- *  - ambiguous        the transport failed: whether the write happened is UNDETERMINED.
+ *  - ambiguous        whether the write happened is UNDETERMINED. It has TWO producers,
+ *                     and naming only the first one is what made this line stale: the
+ *                     TRANSPORT failed and no answer arrived at all, OR the ENGINE
+ *                     answered 503 `commit_outcome_unknown` — it issued COMMIT and never
+ *                     learned whether the database applied it. The second is a reply, not
+ *                     a lost one, which is exactly why it must not be read as `unavailable`:
+ *                     the act may be durable. Both keep the operator's intent on screen.
  *  - aborted          the console cancelled its own request (boundary moved, permission lost).
  *  - other            anything else, shown with its code.
  */
@@ -122,6 +128,19 @@ export function classifyFailure(err: unknown): Failure {
   // The CODE first: it is the contract. The status only where the code alone would
   // be ambiguous, so a future code sharing a status is not absorbed silently.
   if (err.isStepUpRequired) return { ...base, kind: 'step_up' }
+  // BEFORE the 503 arm, because that arm would otherwise absorb this code: both
+  // answers are 503 and both carry the UNKNOWN verdict, and they mean opposite
+  // things to the operator holding an intent.
+  //
+  // `unavailable` says the engine COULD NOT LOOK — the act did not happen, and
+  // the screen that renders it discards the intent. This code says the engine
+  // ISSUED THE WRITE and never learned whether the database applied it, so the
+  // act may have happened. That is the definition of `ambiguous`, which the
+  // console already has for a transport failure, and it is the kind that keeps
+  // the intent on screen so the operator can verify and then decide.
+  if (base.code === 'commit_outcome_unknown') {
+    return { ...base, kind: 'ambiguous' }
+  }
   if (isUnknownVerdict(err) || err.status === 503) {
     return { ...base, kind: 'unavailable' }
   }

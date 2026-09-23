@@ -9,7 +9,9 @@
 //   - A hand-written core (client.go): endpoint/auth/tenancy wiring for the
 //     opaque bearer tokens (olvs_/olvk_), the single error envelope mapped to
 //     [APIError], cursor pagination ([Client.ListPages]), Retry-After-aware
-//     retries for rate-limited calls, and surfacing of the stability
+//     retries for rate-limited calls — never for
+//     [CodeCommitOutcomeUnknown], whose write may already be durable — and
+//     surfacing of the stability
 //     policy's deprecation signal (RFC 9745 Deprecation / RFC 8594 Sunset
 //     response headers → [DeprecationNotice], once per endpoint).
 //

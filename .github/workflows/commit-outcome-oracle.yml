@@ -1,0 +1,964 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# commit-outcome-oracle — the hosted oracle for the commit outcome proxy and the key-lock
+# routes.
+#
+# WHAT IT MEASURES, in this order, on the exact head that was pushed or dispatched:
+#   oracle     the two commit outcome proxy controls green; the release lock deleted (M1) must
+#              fail the ORDER assertion (delivered ZC, want CZ); restored, green again; the write
+#              deadline deleted (M2) must fail the finite no-deadline assertion with its cleanup
+#              completed; restored, green again.
+#   routes     the six key-lock routes green on PostgreSQL; each route's own transaction lock
+#              deleted in turn (M11-<route>) must fail that route's lock-ownership assertion and
+#              nothing else; restored, green again; then the commit outcome families on both
+#              engines, SQLite and PostgreSQL.
+#   generated  the OpenAPI snapshots, the SDK operation layers and the embedded console,
+#              regenerated with the repository's own tasks. Any difference is red.
+#   verdict    ONE line, printed only when every positive was green and every expected red was
+#              measured as a kill.
+#
+# THE MUTANTS ARE PATCH FILES, APPLIED AT RUN TIME AND REVERTED IN THE SAME JOB. They live in
+# ci/oracles/commit-outcome/. No commit contains a mutated source file.
+# A mutant run that cannot establish its schedule (a build failure, the Go test timeout, a
+# COULD_NOT_LOOK) is an INABILITY, and an inability is never a kill. A mutant that survives is a
+# failed instrument, never a pass.
+#
+# TRIGGERS. Every push to feat/commit-outcome-proxy-measurement, or to a branch named
+# feat/commit-outcome-proxy-measurement-<suffix>, runs the whole workflow once on the pushed
+# head. `workflow_dispatch` runs it on a named head; its candidate_sha must be the head of the
+# dispatched ref, and an empty or malformed value is refused. Every job runs on both events.
+#   gh workflow run commit-outcome-oracle.yml --repo olivaresai/olivares --ref <branch> \
+#     -f candidate_sha=<the 40-hex head of <branch>>
+# The design, commands and expected exits: ci/oracles/commit-outcome/EXPECTED.md.
+# The Java, Python and TypeScript SDK suites are not here. They run in mainline-ci's sdk-tests;
+# a skipped or unavailable sdk-tests run means those suites were not measured.
+#
+# Nothing from another run is consumed: no artifact is downloaded and the Go and pnpm caches are
+# off, so every result below was compiled and measured in this run.
+
+name: commit-outcome-oracle
+
+on:
+  push:
+    branches:
+      - feat/commit-outcome-proxy-measurement
+      - 'feat/commit-outcome-proxy-measurement-*'
+  workflow_dispatch:
+    inputs:
+      candidate_sha:
+        description: The 40-hex commit this run must measure. It must be the head of the dispatched ref.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+# One measurement per COMMIT at a time, so every pushed head keeps its own run: a group per
+# branch would let a newer push replace a pending one, and a replaced run measures nothing. A
+# running measurement is never cancelled: a cancelled run carries no verdict at all.
+concurrency:
+  group: commit-outcome-oracle-${{ github.sha }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  # Empty on a push. On a dispatch, the named head; `candidate` (below) refuses it unless it is
+  # 40 hex digits and the head of the dispatched ref. It is never replaced by the head.
+  DISPATCH_CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+  # Recorded, never used to pick a runner: every job here is on ubuntu-latest. A job without an
+  # `environment:` sees repository and organization variables here, and mainline-ci's sdk-tests
+  # picks its runner from `vars.CI_RUNNER || 'ubuntu-latest'`.
+  CI_RUNNER_VAR: ${{ vars.CI_RUNNER }}
+  CI_RUNNER_LIGHT_VAR: ${{ vars.CI_RUNNER_LIGHT }}
+  ORACLE_DIR: ci/oracles/commit-outcome
+  PROXY_FILE: cmd/olivares/communicationcommitoutcome_proxy_test.go
+  # The shared shell library. Every measuring step evaluates it first. It never turns a raw exit
+  # into a verdict by itself: run_go keeps the stream, stderr and exit; green, family_green and
+  # kill_check judge them; record writes the judgement to the evidence directory and to the
+  # step's `verdict` output, which is all the verdict job reads.
+  ORACLE_LIB: |
+    set -euo pipefail
+    : "${OUT:?OUT must name the evidence directory of this job}"
+    mkdir -p "$OUT"
+
+    fail() { printf '::error::%s\n' "$*"; return 1; }
+
+    record() {
+      printf '%s\t%s\n' "$1" "$2" >> "$OUT/verdicts.tsv"
+      printf 'verdict=%s\n' "$2" >> "$GITHUB_OUTPUT"
+      printf '%s: %s\n' "$1" "$2"
+    }
+
+    # MUTANT MARKER. apply_mutant writes OUT/in-flight (step label, file, "pending") once the
+    # patch's numstat and --check pass and BEFORE `git apply` touches the tree; kill_check
+    # rewrites it as "measured" right after it records its verdict. The next step that calls
+    # pristine or restore reads it. "pending" means the step ended after the marker and before
+    # its verdict: killed at its step ceiling, or exited on an error (a failed apply included).
+    # An INABILITY line is then written for that step label, which is never a kill, and the file
+    # gets its HEAD: blob back. "measured" is restored without a line.
+    # A stop BEFORE the marker left the tree untouched, so there is nothing to recover. On a
+    # workflow cancellation no later step that reads the marker runs (each is !cancelled()-gated):
+    # no INABILITY line is written and the PASS line cannot print. The upload step is always(),
+    # so the evidence directory still carries the marker as the stopped step left it.
+    recover_interrupted() {
+      local name file state
+      [ -f "$OUT/in-flight" ] || return 0
+      IFS=$'\t' read -r name file state < "$OUT/in-flight"
+      if [ "$state" != measured ]; then
+        printf '%s\t%s\n' "$name" "INABILITY the step ended while its mutant was pending (after the marker, before its verdict); restored at the next step entry" >> "$OUT/verdicts.tsv"
+        printf '::error::%s: INABILITY the step ended while its mutant was pending (after the marker, before its verdict); restored at the next step entry\n' "$name"
+      fi
+      git checkout -- "$file"
+      [ "$(git hash-object -- "$file")" = "$(git rev-parse "HEAD:$file")" ] ||
+        fail "$file is not the candidate's blob after the restore"
+      rm -f "$OUT/in-flight"
+    }
+
+    # The tracked tree is exactly the candidate, after recovering any stopped mutant step.
+    pristine() {
+      local dirty
+      recover_interrupted
+      dirty="$(git status --porcelain --untracked-files=no)"
+      [ -z "$dirty" ] || fail "the checkout is not the candidate: $dirty"
+    }
+
+    # run_go LABEL COMMAND...: the command verbatim; raw -json stream, stderr and exit kept.
+    run_go() {
+      local label="$1" rc=0
+      shift
+      printf '%q ' "$@" > "$OUT/$label.command"
+      printf '\n' >> "$OUT/$label.command"
+      "$@" > "$OUT/$label.json" 2> "$OUT/$label.stderr" || rc=$?
+      printf '%s\n' "$rc" > "$OUT/$label.exit"
+      printf 'raw exit %s of %s' "$rc" "$(cat "$OUT/$label.command")"
+      RAW_EXIT="$rc"
+    }
+
+    # run_logged LABEL COMMAND...: a non-test command, its log and raw exit kept.
+    run_logged() {
+      local label="$1" rc=0
+      shift
+      printf '%q ' "$@" > "$OUT/$label.command"
+      printf '\n' >> "$OUT/$label.command"
+      "$@" > "$OUT/$label.log" 2>&1 || rc=$?
+      printf '%s\n' "$rc" > "$OUT/$label.exit"
+      cat "$OUT/$label.log"
+      [ "$rc" -eq 0 ] || fail "$label exited $rc"
+    }
+
+    # One "action<TAB>test" line per test that reached pass, fail or skip.
+    results() {
+      jq -rR 'fromjson? | select(.Test != null and (.Action == "pass" or .Action == "fail" or .Action == "skip")) | "\(.Action)\t\(.Test)"' \
+        "$OUT/$1.json" | LC_ALL=C sort
+    }
+    output_of() {
+      jq -rR --arg t "$2" 'fromjson? | select(.Test == $t and .Action == "output") | .Output' "$OUT/$1.json"
+    }
+    stream_text() {
+      jq -rR 'fromjson? | select(.Action == "output" or .Action == "build-output") | .Output' "$OUT/$1.json"
+      cat "$OUT/$1.stderr"
+    }
+    count_lines() { awk 'NF {c++} END {print c+0}'; }
+
+    # green LABEL TEST...: raw exit 0 and EXACTLY these tests passed; nothing failed, nothing
+    # skipped, nothing extra. SKIP is not PASS. A non-empty GREEN_BLOCKER (a witness the caller
+    # found missing) makes it red as well, so a step records exactly one verdict.
+    green() {
+      local label="$1" want got n
+      shift
+      want="$(printf 'pass\t%s\n' "$@" | LC_ALL=C sort)"
+      got="$(results "$label")"
+      printf '%s\n' "$got" > "$OUT/$label.results"
+      n="$(printf '%s\n' "$got" | count_lines)"
+      if [ "$RAW_EXIT" = 0 ] && [ "$n" -gt 0 ] && [ "$got" = "$want" ] && [ -z "${GREEN_BLOCKER:-}" ]; then
+        record "$label" "GREEN $n"
+        return 0
+      fi
+      printf 'expected raw exit 0 and exactly:\n%s\ngot raw exit %s and:\n%s\n' "$want" "$RAW_EXIT" "$got"
+      [ -z "${GREEN_BLOCKER:-}" ] || printf 'witness lines missing:%s\n' "$GREEN_BLOCKER"
+      record "$label" "RED"
+      fail "$label is not the expected green"
+    }
+
+    # family_green LABEL TEST...: raw exit 0, a nonzero count, every result a pass, and every
+    # named top-level test among the passes.
+    family_green() {
+      local label="$1" got n others name missing=""
+      shift
+      got="$(results "$label")"
+      printf '%s\n' "$got" > "$OUT/$label.results"
+      n="$(printf '%s\n' "$got" | count_lines)"
+      others="$(printf '%s\n' "$got" | awk -F '\t' 'NF && $1 != "pass"' | count_lines)"
+      for name in "$@"; do
+        grep -qxF -- "$(printf 'pass\t%s' "$name")" <<< "$got" || missing="$missing $name"
+      done
+      if [ "$RAW_EXIT" = 0 ] && [ "$n" -gt 0 ] && [ "$others" -eq 0 ] && [ -z "$missing" ]; then
+        record "$label" "GREEN $n"
+        return 0
+      fi
+      printf 'raw exit %s, %s results, %s not passing, missing:%s\n' "$RAW_EXIT" "$n" "$others" "$missing"
+      record "$label" "RED"
+      fail "$label is not the expected green"
+    }
+
+    # A subtest name and every parent of it, one per line: A, A/B, A/B/C.
+    chain() {
+      local IFS=/ part acc=""
+      local -a parts
+      read -r -a parts <<< "$1"
+      for part in "${parts[@]}"; do
+        acc="${acc:+$acc/}$part"
+        printf '%s\n' "$acc"
+      done
+    }
+
+    # kill_expected LEAF PASS...: the results a kill must produce. LEAF and its parents fail,
+    # every PASS test passes.
+    kill_expected() {
+      local leaf="$1"
+      shift
+      chain "$leaf" | awk '{print "fail\t" $0}'
+      if [ "$#" -gt 0 ]; then printf 'pass\t%s\n' "$@"; fi
+    }
+
+    # kill_check LABEL LEAF [--pass TEST]... --text TEXT... [--min-elapsed SECONDS]
+    # --pass names another selected test, which must pass; --text is a text the failing leaf
+    # must print (at least one); --min-elapsed is a limit the leaf must have waited out.
+    #   KILLED     raw exit 1; the failures are exactly LEAF and its parents; every other
+    #              selected test passed; LEAF printed every expected text.
+    #   INABILITY  no test reached a result, the Go timeout fired, or LEAF said COULD_NOT_LOOK
+    #              (including a cleanup that could not stop its worker).
+    #   SURVIVED   LEAF passed.
+    #   OTHER      anything else, such as a red at a different assertion.
+    # Only KILLED returns 0.
+    kill_check() {
+      local label="$1" leaf="$2" min_elapsed="" want got text verdict elapsed marker_name marker_file
+      local -a pass=() texts=()
+      shift 2
+      while [ "$#" -gt 0 ]; do
+        case "$1" in
+          --pass) pass+=("$2") ;;
+          --text) texts+=("$2") ;;
+          --min-elapsed) min_elapsed="$2" ;;
+          *) fail "kill_check: unknown argument $1"; return 1 ;;
+        esac
+        shift 2
+      done
+      [ "${#texts[@]}" -gt 0 ] || { fail "kill_check: a kill must name the text of its assertion"; return 1; }
+      got="$(results "$label")"
+      printf '%s\n' "$got" > "$OUT/$label.results"
+      output_of "$label" "$leaf" > "$OUT/$label.leaf-output"
+      stream_text "$label" > "$OUT/$label.text"
+      want="$(kill_expected "$leaf" "${pass[@]}" | LC_ALL=C sort)"
+      if [ -z "$got" ]; then
+        verdict="INABILITY no test reached a result (build failure or empty selection)"
+      elif grep -qF 'panic: test timed out' "$OUT/$label.text"; then
+        verdict="INABILITY the Go test timeout fired"
+      elif grep -qF 'COULD_NOT_LOOK' "$OUT/$label.leaf-output"; then
+        verdict="INABILITY the leaf reported COULD_NOT_LOOK"
+      elif grep -qxF -- "$(printf 'pass\t%s' "$leaf")" <<< "$got"; then
+        verdict="SURVIVED"
+      else
+        verdict="KILLED"
+        [ "$RAW_EXIT" = 1 ] || verdict="OTHER raw exit $RAW_EXIT"
+        [ "$got" = "$want" ] || verdict="OTHER the failing and passing tests are not exactly the expected ones"
+        for text in "${texts[@]}"; do
+          grep -qF -- "$text" "$OUT/$label.leaf-output" || verdict="OTHER the leaf did not print: $text"
+        done
+        if [ "$verdict" = KILLED ] && [ -n "$min_elapsed" ]; then
+          elapsed="$(jq -rR --arg t "$leaf" 'fromjson? | select(.Test == $t and .Action == "fail") | .Elapsed' "$OUT/$label.json")"
+          awk -v e="$elapsed" -v m="$min_elapsed" 'BEGIN { exit !(e != "" && e + 0 >= m + 0) }' ||
+            verdict="OTHER the leaf failed after ${elapsed}s, before the ${min_elapsed}s limit it must wait out"
+        fi
+      fi
+      printf 'expected:\n%s\ngot (raw exit %s):\n%s\n' "$want" "$RAW_EXIT" "$got"
+      record "$label" "$verdict"
+      if [ -f "$OUT/in-flight" ]; then
+        IFS=$'\t' read -r marker_name marker_file _ < "$OUT/in-flight"
+        printf '%s\t%s\tmeasured\n' "$marker_name" "$marker_file" > "$OUT/in-flight"
+      fi
+      [ "$verdict" = KILLED ] || fail "$label: $verdict"
+    }
+
+    # The step label a mutant is measured under: M11-send.patch -> m11_send, as in verdicts.tsv.
+    mutant_label() {
+      basename "$1" .patch | tr 'ABCDEFGHIJKLMNOPQRSTUVWXYZ-' 'abcdefghijklmnopqrstuvwxyz_'
+    }
+
+    # apply_mutant PATCH FILE DELETED: prove the patch deletes exactly DELETED lines of FILE and
+    # touches nothing else, then apply it and keep the complete applied diff.
+    apply_mutant() {
+      local patch="$1" file="$2" deleted="$3" numstat want
+      pristine
+      [ -f "$patch" ] || fail "the mutant $patch is not in this checkout"
+      numstat="$(git apply --numstat "$patch")"
+      want="$(printf '0\t%s\t%s' "$deleted" "$file")"
+      [ "$numstat" = "$want" ] || fail "$patch is not exactly $deleted deleted lines of $file: $numstat"
+      git apply --check "$patch"
+      printf '%s\t%s\tpending\n' "$(mutant_label "$patch")" "$file" > "$OUT/in-flight"
+      git apply "$patch"
+      git apply -R --check "$patch"
+      cp "$patch" "$OUT/"
+      git diff --no-color -- "$file" > "$OUT/$(basename "$patch" .patch).applied.diff"
+      printf 'applied %s to %s (candidate blob %s)\n' "$patch" "$file" "$(git rev-parse "HEAD:$file")"
+    }
+
+    # restore FILE: git checkout, then prove the file is the candidate's blob again.
+    restore() {
+      recover_interrupted
+      git checkout -- "$1"
+      [ "$(git hash-object -- "$1")" = "$(git rev-parse "HEAD:$1")" ] ||
+        fail "$1 is not the candidate's blob after the restore"
+      pristine
+      printf 'restored %s to the candidate blob %s\n' "$1" "$(git rev-parse "HEAD:$1")"
+    }
+
+    PROXY_POSITIVES=(
+      TestCommitOutcomeProxyReleaseDrainsInWireOrder
+      TestCommitOutcomeProxyReleaseDrainsInWireOrder/ready_for_query_after_release
+      TestCommitOutcomeProxyReleaseDrainsInWireOrder/ready_for_query_before_release
+      TestCommitOutcomeProxyReleaseDrainsInWireOrder/ready_for_query_during_release
+      TestCommitOutcomeProxyReleaseDrainsInWireOrder/subsequent_query_is_usable
+      TestCommitOutcomeProxyNonReadingPeerIsBounded
+      TestCommitOutcomeProxyNonReadingPeerIsBounded/stalled_receiver_is_bounded
+      TestCommitOutcomeProxyNonReadingPeerIsBounded/reading_receiver_is_the_positive
+    )
+
+    # Every loopback control of the proxy: the two above plus arm-once and the shared-key refusal.
+    LOOPBACK_POSITIVES=(
+      "${PROXY_POSITIVES[@]}"
+      TestCommitOutcomeProxyArmIsSingleUse
+      TestCommitOutcomeFenceWitnessRefusesASharedKey
+    )
+
+    ROUTE_TEST=TestCommunicationCommitOutcomeRetryHTTPPostgres
+    ROUTES=(send ack cursor offer response create)
+    ROUTE_LEAVES=(replay_after_commit original_holds_route_fence_and_resend_recovers resend_after_severed_original)
+
+    # The 25 results of the six-route positive: the test, six routes, three schedules each.
+    route_positives() {
+      local route leaf
+      printf '%s\n' "$ROUTE_TEST"
+      for route in "${ROUTES[@]}"; do
+        printf '%s/%s\n' "$ROUTE_TEST" "$route"
+        for leaf in "${ROUTE_LEAVES[@]}"; do printf '%s/%s/%s\n' "$ROUTE_TEST" "$route" "$leaf"; done
+      done
+    }
+
+    # Every route's schedule (b) positive must also have LOGGED both halves of what it measured:
+    # the original owns the route's own lock, and the real resend is blocked by the original.
+    # Prints what is missing, nothing when both halves are there for all six routes.
+    route_witnesses() {
+      local label="$1" route out missing=""
+      for route in "${ROUTES[@]}"; do
+        out="$(output_of "$label" "$ROUTE_TEST/$route/original_holds_route_fence_and_resend_recovers")"
+        grep -qF -- "_FENCE_OWNED|route=$route|" <<< "$out" || missing="$missing $route:owned"
+        grep -qF -- "_RESEND_BLOCKED|route=$route|" <<< "$out" || missing="$missing $route:blocked"
+      done
+      printf '%s' "$missing"
+    }
+
+    # m11_apply and m11_judge, with ROUTE, TARGET, DELETED and FENCE from the step: delete that
+    # route's own transaction lock; the step itself runs only that route's three schedules, so
+    # its Go clock is a literal the repository's inner-clock gate reads; then judge and restore.
+    # This library holds no clock of its own.
+    m11_apply() {
+      apply_mutant "$ORACLE_DIR/M11-$ROUTE.patch" "$TARGET" "$DELETED"
+    }
+    m11_judge() {
+      local label="$1" status=0
+      kill_check "$label" "$ROUTE_TEST/$ROUTE/original_holds_route_fence_and_resend_recovers" \
+        --pass "$ROUTE_TEST/$ROUTE/replay_after_commit" \
+        --pass "$ROUTE_TEST/$ROUTE/resend_after_severed_original" \
+        --text "does not hold the exact advisory tuple for \"$FENCE" \
+        --text "the route's own transaction lock is absent" || status=$?
+      restore "$TARGET"
+      return "$status"
+    }
+
+    # The commit this run measures: the pushed head on a push, the named head on a dispatch.
+    candidate() {
+      case "$GITHUB_EVENT_NAME" in
+        push) printf '%s' "$GITHUB_SHA" ;;
+        workflow_dispatch) printf '%s' "${DISPATCH_CANDIDATE_SHA:-}" ;;
+        *) printf 'unsupported-event-%s' "$GITHUB_EVENT_NAME" ;;
+      esac
+    }
+
+    # identity: the pushed or dispatched head, the checkout and the candidate name one commit,
+    # and the job runs on a GitHub-hosted runner.
+    identity() {
+      local candidate_sha
+      candidate_sha="$(candidate)"
+      [[ "$candidate_sha" =~ ^[0-9a-f]{40}$ ]] || fail "the candidate is not a 40-hex commit: [$candidate_sha]"
+      [ "$candidate_sha" = "$GITHUB_SHA" ] || fail "the head of $GITHUB_REF is $GITHUB_SHA, not the candidate $candidate_sha"
+      [ "$(git rev-parse HEAD)" = "$candidate_sha" ] || fail "the checkout $(git rev-parse HEAD) is not the candidate"
+      [ -z "$(git status --porcelain --untracked-files=all)" ] || fail "the checkout is not clean"
+      [ "${RUNNER_PLACEMENT:-}" = github-hosted ] ||
+        fail "this job runs on a ${RUNNER_PLACEMENT:-unknown} runner; the oracle runs on GitHub-hosted runners only"
+      {
+        printf 'event %s\ncandidate %s\nref %s\nrepository %s\nrun %s attempt %s\n' \
+          "$GITHUB_EVENT_NAME" "$candidate_sha" "$GITHUB_REF" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"
+        printf 'runner %s placement %s %s %s image %s %s\n' "${RUNNER_NAME:-unknown}" "$RUNNER_PLACEMENT" \
+          "$RUNNER_OS" "$RUNNER_ARCH" "${ImageOS:-unknown}" "${ImageVersion:-unknown}"
+        printf 'repository variables CI_RUNNER=%s CI_RUNNER_LIGHT=%s\n' "${CI_RUNNER_VAR:-unset}" "${CI_RUNNER_LIGHT_VAR:-unset}"
+      } > "$OUT/identity.txt"
+      if [ -d "$ORACLE_DIR" ]; then sha256sum "$ORACLE_DIR"/*.patch > "$OUT/mutants.sha256"; fi
+      cat "$OUT/identity.txt"
+    }
+
+jobs:
+  oracle:
+    if: github.repository == 'olivaresai/olivares' && github.event.deleted != true
+    runs-on: ubuntu-latest
+    # Steps sum to 124 minutes; the job ceiling stays above that sum.
+    timeout-minutes: 135
+    outputs:
+      s1: ${{ steps.s1.outputs.verdict }}
+      m1: ${{ steps.m1.outputs.verdict }}
+      s3: ${{ steps.s3.outputs.verdict }}
+      m2: ${{ steps.m2.outputs.verdict }}
+      s5: ${{ steps.s5.outputs.verdict }}
+      loopback: ${{ steps.loopback.outputs.verdict }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: the checkout is the candidate
+        timeout-minutes: 2
+        env:
+          RUNNER_PLACEMENT: ${{ runner.environment }}
+        run: |
+          OUT="$RUNNER_TEMP/commit-outcome/oracle"
+          echo "OUT=$OUT" >> "$GITHUB_ENV"
+          eval "$ORACLE_LIB"
+          identity
+          test -f "$ORACLE_DIR/M1-release-lock.patch" && test -f "$ORACLE_DIR/M2-write-deadline.patch"
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        timeout-minutes: 10
+        with:
+          go-version-file: go.work
+          cache: false
+      - name: record the toolchain
+        id: toolchain
+        timeout-minutes: 2
+        run: |
+          eval "$ORACLE_LIB"
+          { go version; go env GOVERSION GOOS GOARCH; jq --version; } | tee "$OUT/toolchain.txt"
+
+      - name: 1 · the commit outcome proxy positives
+        id: s1
+        timeout-minutes: 25
+        run: |
+          eval "$ORACLE_LIB"
+          pristine
+          run_go s1_positives go test ./cmd/olivares -count=1 \
+            -run '^(TestCommitOutcomeProxyReleaseDrainsInWireOrder|TestCommitOutcomeProxyNonReadingPeerIsBounded)$' -json
+          green s1_positives "${PROXY_POSITIVES[@]}"
+
+      - name: 2 · release lock deleted (M1) — the ORDER assertion must fail with ZC, not CZ
+        id: m1
+        if: ${{ !cancelled() && steps.s1.outcome == 'success' }}
+        timeout-minutes: 15
+        run: |
+          eval "$ORACLE_LIB"
+          apply_mutant "$ORACLE_DIR/M1-release-lock.patch" "$PROXY_FILE" 2
+          run_go m1_release_lock go test ./cmd/olivares -count=1 \
+            -run '^TestCommitOutcomeProxyReleaseDrainsInWireOrder$/^ready_for_query_during_release$' -json
+          kill_check m1_release_lock TestCommitOutcomeProxyReleaseDrainsInWireOrder/ready_for_query_during_release \
+            --text 'delivered "ZC", want CZ: a frame that arrived during the release overtook the buffered completion, so the release and its drain are not one operation'
+
+      - name: 3 · restore the proxy source, the positives again
+        id: s3
+        if: ${{ !cancelled() && steps.s1.outcome == 'success' && steps.m1.outcome != 'skipped' }}
+        timeout-minutes: 15
+        run: |
+          eval "$ORACLE_LIB"
+          restore "$PROXY_FILE"
+          run_go s3_positives go test ./cmd/olivares -count=1 \
+            -run '^(TestCommitOutcomeProxyReleaseDrainsInWireOrder|TestCommitOutcomeProxyNonReadingPeerIsBounded)$' -json
+          green s3_positives "${PROXY_POSITIVES[@]}"
+
+      - name: 4 · write deadline deleted (M2) — the finite no-deadline assertion must fail, cleanup completed
+        id: m2
+        if: ${{ !cancelled() && steps.s3.outcome == 'success' }}
+        timeout-minutes: 15
+        run: |
+          eval "$ORACLE_LIB"
+          apply_mutant "$ORACLE_DIR/M2-write-deadline.patch" "$PROXY_FILE" 3
+          run_go m2_write_deadline go test ./cmd/olivares -count=1 \
+            -run '^TestCommitOutcomeProxyNonReadingPeerIsBounded$/^stalled_receiver_is_bounded$' -json
+          kill_check m2_write_deadline TestCommitOutcomeProxyNonReadingPeerIsBounded/stalled_receiver_is_bounded \
+            --text 'the write did not return within 10s against a connected peer that stopped reading: the held write is not bounded' \
+            --min-elapsed 10
+
+      - name: 5 · restore the proxy source, the positives again
+        id: s5
+        if: ${{ !cancelled() && steps.s3.outcome == 'success' && steps.m2.outcome != 'skipped' }}
+        timeout-minutes: 15
+        run: |
+          eval "$ORACLE_LIB"
+          restore "$PROXY_FILE"
+          run_go s5_positives go test ./cmd/olivares -count=1 \
+            -run '^(TestCommitOutcomeProxyReleaseDrainsInWireOrder|TestCommitOutcomeProxyNonReadingPeerIsBounded)$' -json
+          green s5_positives "${PROXY_POSITIVES[@]}"
+
+      # After the five steps, on the candidate tree whatever they answered: all four loopback
+      # controls by one explicit selector, so arm-once and the shared-key refusal are measured
+      # here by name rather than only inside the pull-request suite.
+      - name: 6 · every loopback control, arm-once and the shared-key refusal included
+        id: loopback
+        if: ${{ !cancelled() && steps.toolchain.outcome == 'success' }}
+        timeout-minutes: 15
+        run: |
+          eval "$ORACLE_LIB"
+          pristine
+          run_go loopback go test ./cmd/olivares -count=1 \
+            -run '^(TestCommitOutcomeProxyReleaseDrainsInWireOrder|TestCommitOutcomeProxyArmIsSingleUse|TestCommitOutcomeProxyNonReadingPeerIsBounded|TestCommitOutcomeFenceWitnessRefusesASharedKey)$' -json
+          green loopback "${LOOPBACK_POSITIVES[@]}"
+
+      - name: retain the raw streams, exits and applied mutants
+        if: always()
+        timeout-minutes: 5
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: commit-outcome-oracle-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/commit-outcome/oracle/
+          retention-days: 7
+          if-no-files-found: error
+
+  routes:
+    if: github.repository == 'olivaresai/olivares' && github.event.deleted != true
+    runs-on: ubuntu-latest
+    # Steps sum to 254 minutes; the job ceiling stays above that sum.
+    timeout-minutes: 270
+    outputs:
+      baseline: ${{ steps.routes_baseline.outputs.verdict }}
+      send: ${{ steps.m11_send.outputs.verdict }}
+      ack: ${{ steps.m11_ack.outputs.verdict }}
+      cursor: ${{ steps.m11_cursor.outputs.verdict }}
+      offer: ${{ steps.m11_offer.outputs.verdict }}
+      response: ${{ steps.m11_response.outputs.verdict }}
+      create: ${{ steps.m11_create.outputs.verdict }}
+      restored: ${{ steps.routes_restored.outputs.verdict }}
+      store_engines: ${{ steps.store_engines.outputs.verdict }}
+      http_engines: ${{ steps.http_engines.outputs.verdict }}
+    # The same PostgreSQL 16 image and resolver as the pull-request suite. One server is enough
+    # here: none of the selected tests needs the second one.
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16@sha256:a36250871de0833b8757561c72f2477ef1ddd1101afa4e617fb552e0de514c6b
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+          --memory=1g
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: the checkout is the candidate
+        timeout-minutes: 2
+        env:
+          RUNNER_PLACEMENT: ${{ runner.environment }}
+        run: |
+          OUT="$RUNNER_TEMP/commit-outcome/routes"
+          echo "OUT=$OUT" >> "$GITHUB_ENV"
+          eval "$ORACLE_LIB"
+          identity
+          for route in "${ROUTES[@]}"; do test -f "$ORACLE_DIR/M11-$route.patch"; done
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        timeout-minutes: 10
+        with:
+          go-version-file: go.work
+          cache: false
+      - name: record the toolchain
+        timeout-minutes: 2
+        run: |
+          eval "$ORACLE_LIB"
+          { go version; go env GOVERSION GOOS GOARCH; jq --version; } | tee "$OUT/toolchain.txt"
+      - name: TMPDIR where an extracted binary can actually run
+        timeout-minutes: 1
+        run: |
+          mkdir -p "$RUNNER_TEMP/exec"
+          echo "TMPDIR=$RUNNER_TEMP/exec" >> "$GITHUB_ENV"
+          echo "GOTMPDIR=$RUNNER_TEMP/exec" >> "$GITHUB_ENV"
+      - name: resolve the ephemeral Postgres port into the test DSNs
+        timeout-minutes: 2
+        env:
+          PGPORT_HOST: ${{ job.services.postgres.ports['5432'] }}
+        run: bash scripts/ci-postgres-service.sh resolve
+      - name: provision postgres roles (least-privilege app role + BYPASSRLS admin)
+        timeout-minutes: 5
+        env:
+          PGPASSWORD: postgres
+        run: bash scripts/ci-postgres-service.sh provision
+      - name: PostgreSQL is required, and the application role is not privileged
+        id: posture
+        timeout-minutes: 2
+        run: |
+          eval "$ORACLE_LIB"
+          # With REQUIRED set, a missing server fails the tests instead of skipping them.
+          [ "${OLIVARES_TEST_POSTGRES_REQUIRED:-}" = 1 ] || fail "OLIVARES_TEST_POSTGRES_REQUIRED is not 1"
+          # The server, its modes and both roles the controls use, recorded for this execution.
+          psql "$OLIVARES_TEST_POSTGRES_SUPERUSER_DSN" -v ON_ERROR_STOP=1 -Atc 'SHOW server_version' | tee "$OUT/postgres-version.txt"
+          psql "$OLIVARES_TEST_POSTGRES_SUPERUSER_DSN" -v ON_ERROR_STOP=1 -AtF ' ' \
+            -c "SELECT name, setting FROM pg_settings WHERE name IN ('server_version', 'ssl', 'default_transaction_isolation', 'max_connections') ORDER BY name" |
+            tee "$OUT/postgres-modes.txt"
+          psql "$OLIVARES_TEST_POSTGRES_SUPERUSER_DSN" -v ON_ERROR_STOP=1 -AtF ' ' \
+            -c "SELECT rolname, rolsuper, rolbypassrls, rolcreaterole, rolcreatedb, rolreplication, rolcanlogin FROM pg_roles WHERE rolname IN ('olivares_app', 'olivares_admin') ORDER BY rolname" |
+            tee "$OUT/roles.txt"
+          # super bypassrls createrole createdb: the application role holds none of them; the
+          # cross-tenant read role holds BYPASSRLS and nothing else.
+          posture="$(awk '$1 == "olivares_app" {print $2, $3, $4, $5}' "$OUT/roles.txt")"
+          admin="$(awk '$1 == "olivares_admin" {print $2, $3, $4, $5}' "$OUT/roles.txt")"
+          [ "$posture" = "f f f f" ] || fail "the application role is privileged: $posture"
+          [ "$admin" = "f t f f" ] || fail "the admin role is not BYPASSRLS-only: $admin"
+
+      - name: the six key-lock routes, positive on PostgreSQL
+        id: routes_baseline
+        timeout-minutes: 35
+        run: |
+          eval "$ORACLE_LIB"
+          pristine
+          run_go routes_baseline go test ./cmd/olivares -count=1 -timeout 20m \
+            -run '^TestCommunicationCommitOutcomeRetryHTTPPostgres$' -json
+          mapfile -t positives < <(route_positives)
+          GREEN_BLOCKER="$(route_witnesses routes_baseline)" green routes_baseline "${positives[@]}"
+
+      # One step per route, each from the candidate tree: apply that route's mutant, run only that
+      # route, restore. A route whose mutant was not killed does not stop the next route's
+      # measurement. Every step starts by restoring any mutant a stopped step left behind, with an
+      # INABILITY line for that step, and then proves the tree is the candidate again.
+      - name: key-lock route send, its own transaction lock deleted (M11-send)
+        id: m11_send
+        if: ${{ !cancelled() && steps.routes_baseline.outcome == 'success' }}
+        timeout-minutes: 15
+        env:
+          ROUTE: send
+          TARGET: modules/sessions/communication_service.go
+          DELETED: '3'
+          FENCE: sessions_communication_command|
+        run: |
+          eval "$ORACLE_LIB"
+          label="m11_$ROUTE"
+          m11_apply
+          run_go "$label" go test ./cmd/olivares -count=1 -timeout 8m -run "^${ROUTE_TEST}\$/^${ROUTE}\$" -json
+          m11_judge "$label"
+      - name: key-lock route ack, its own transaction lock deleted (M11-ack)
+        id: m11_ack
+        if: ${{ !cancelled() && steps.routes_baseline.outcome == 'success' }}
+        timeout-minutes: 15
+        env:
+          ROUTE: ack
+          TARGET: modules/sessions/communication_ack_service.go
+          DELETED: '5'
+          FENCE: 'sessions:communication:ack:idem:'
+        run: |
+          eval "$ORACLE_LIB"
+          label="m11_$ROUTE"
+          m11_apply
+          run_go "$label" go test ./cmd/olivares -count=1 -timeout 8m -run "^${ROUTE_TEST}\$/^${ROUTE}\$" -json
+          m11_judge "$label"
+      - name: key-lock route cursor, its own transaction lock deleted (M11-cursor)
+        id: m11_cursor
+        if: ${{ !cancelled() && steps.routes_baseline.outcome == 'success' }}
+        timeout-minutes: 15
+        env:
+          ROUTE: cursor
+          TARGET: modules/sessions/communication_cursor_service.go
+          DELETED: '3'
+          FENCE: 'sessions:communication:cursor:idem:'
+        run: |
+          eval "$ORACLE_LIB"
+          label="m11_$ROUTE"
+          m11_apply
+          run_go "$label" go test ./cmd/olivares -count=1 -timeout 8m -run "^${ROUTE_TEST}\$/^${ROUTE}\$" -json
+          m11_judge "$label"
+      - name: key-lock route offer, its own transaction lock deleted (M11-offer)
+        id: m11_offer
+        if: ${{ !cancelled() && steps.routes_baseline.outcome == 'success' }}
+        timeout-minutes: 15
+        env:
+          ROUTE: offer
+          TARGET: modules/sessions/communication_handoff_offer_atomic.go
+          DELETED: '5'
+          FENCE: sessions.communication.handoff.idempotency/
+        run: |
+          eval "$ORACLE_LIB"
+          label="m11_$ROUTE"
+          m11_apply
+          run_go "$label" go test ./cmd/olivares -count=1 -timeout 8m -run "^${ROUTE_TEST}\$/^${ROUTE}\$" -json
+          m11_judge "$label"
+      - name: key-lock route response, its own transaction lock deleted (M11-response)
+        id: m11_response
+        if: ${{ !cancelled() && steps.routes_baseline.outcome == 'success' }}
+        timeout-minutes: 15
+        env:
+          ROUTE: response
+          TARGET: modules/sessions/communication_handoff_apply.go
+          DELETED: '3'
+          FENCE: sessions.communication.handoff.idempotency/
+        run: |
+          eval "$ORACLE_LIB"
+          label="m11_$ROUTE"
+          m11_apply
+          run_go "$label" go test ./cmd/olivares -count=1 -timeout 8m -run "^${ROUTE_TEST}\$/^${ROUTE}\$" -json
+          m11_judge "$label"
+      - name: key-lock route create, its own transaction lock deleted (M11-create)
+        id: m11_create
+        if: ${{ !cancelled() && steps.routes_baseline.outcome == 'success' }}
+        timeout-minutes: 15
+        env:
+          ROUTE: create
+          TARGET: modules/sessions/communication_channel_service.go
+          DELETED: '5'
+          FENCE: sessions_channel_create|
+        run: |
+          eval "$ORACLE_LIB"
+          label="m11_$ROUTE"
+          m11_apply
+          run_go "$label" go test ./cmd/olivares -count=1 -timeout 8m -run "^${ROUTE_TEST}\$/^${ROUTE}\$" -json
+          m11_judge "$label"
+
+      - name: the six key-lock routes restored, positive again
+        id: routes_restored
+        if: ${{ !cancelled() && steps.routes_baseline.outcome == 'success' }}
+        timeout-minutes: 30
+        run: |
+          eval "$ORACLE_LIB"
+          pristine
+          run_go routes_restored go test ./cmd/olivares -count=1 -timeout 20m \
+            -run '^TestCommunicationCommitOutcomeRetryHTTPPostgres$' -json
+          mapfile -t positives < <(route_positives)
+          GREEN_BLOCKER="$(route_witnesses routes_restored)" green routes_restored "${positives[@]}"
+
+      # Both engines. These legs do not depend on the mutant steps above: they run whenever the
+      # database posture was established.
+      - name: both engines — the store commit outcome family (SQLite and PostgreSQL)
+        id: store_engines
+        if: ${{ !cancelled() && steps.posture.outcome == 'success' }}
+        timeout-minutes: 30
+        run: |
+          eval "$ORACLE_LIB"
+          pristine
+          run_go store_engines go test ./core/internal/store/sqlstore -count=1 -timeout 15m \
+            -run '^TestCommitOutcome' -json
+          family_green store_engines \
+            TestCommitOutcomeClassification \
+            TestCommitOutcomeDefiniteRollbackSQLite \
+            TestCommitOutcomeDefiniteRollbackPostgres \
+            TestCommitOutcomeServerRejectionPostgres \
+            TestCommitOutcomeExternalCancelPostgres \
+            TestCommitOutcomePositiveExternalCancelPostgres \
+            TestCommitOutcomeStalledObservationIsBoundedPostgres
+      - name: both engines — the communication HTTP families (SQLite and PostgreSQL)
+        id: http_engines
+        if: ${{ !cancelled() && steps.posture.outcome == 'success' }}
+        timeout-minutes: 35
+        run: |
+          eval "$ORACLE_LIB"
+          pristine
+          run_go http_engines go test ./cmd/olivares -count=1 -timeout 25m \
+            -run '^(TestCommunicationCommitOutcomeHTTPPostgres|TestCommunicationCommitOutcomeKeyReuseHTTPPostgres|TestCommunicationChannelHistoryWritesHTTP|TestCommunicationChannelHistoryWritesHTTPPostgres)$' -json
+          family_green http_engines \
+            TestCommunicationCommitOutcomeHTTPPostgres \
+            TestCommunicationCommitOutcomeKeyReuseHTTPPostgres \
+            TestCommunicationChannelHistoryWritesHTTP \
+            TestCommunicationChannelHistoryWritesHTTPPostgres
+
+      - name: retain the raw streams, exits and applied mutants
+        if: always()
+        timeout-minutes: 5
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: commit-outcome-routes-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/commit-outcome/routes/
+          retention-days: 7
+          if-no-files-found: error
+
+  generated:
+    if: github.repository == 'olivaresai/olivares' && github.event.deleted != true
+    runs-on: ubuntu-latest
+    # Steps sum to 112 minutes; the job ceiling stays above that sum.
+    timeout-minutes: 125
+    outputs:
+      drift: ${{ steps.drift.outputs.verdict }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: the checkout is the candidate
+        timeout-minutes: 2
+        env:
+          RUNNER_PLACEMENT: ${{ runner.environment }}
+        run: |
+          OUT="$RUNNER_TEMP/commit-outcome/generated"
+          echo "OUT=$OUT" >> "$GITHUB_ENV"
+          eval "$ORACLE_LIB"
+          identity
+      # NODE FIRST: pnpm/action-setup installs pnpm THROUGH npm, so it needs a node on PATH.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        timeout-minutes: 5
+        with:
+          node-version-file: .node-version
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+        timeout-minutes: 5
+        with:
+          dest: ${{ runner.temp }}/setup-pnpm
+          standalone: true
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        timeout-minutes: 10
+        with:
+          go-version-file: go.work
+          cache: false
+      - name: record the toolchain
+        timeout-minutes: 2
+        run: |
+          eval "$ORACLE_LIB"
+          { go version; node --version; pnpm --version; jq --version; } | tee "$OUT/toolchain.txt"
+      - name: install go-task (pinned)
+        timeout-minutes: 5
+        run: |
+          export GOBIN="$RUNNER_TEMP/gopath/bin"
+          echo "GOBIN=$GOBIN" >> "$GITHUB_ENV"
+          echo "$GOBIN" >> "$GITHUB_PATH"
+          export PATH="$GOBIN:$PATH"
+          go install github.com/go-task/task/v3/cmd/task@v3.51.1
+          command -v task || { echo "::error::go install reported OK and task is not on PATH"; exit 1; }
+      - name: install web deps (frozen lockfile)
+        timeout-minutes: 10
+        run: |
+          eval "$ORACLE_LIB"
+          run_logged web_deps pnpm --dir web install --frozen-lockfile
+      - name: regenerate the OpenAPI snapshots and the typed web client
+        timeout-minutes: 25
+        run: |
+          eval "$ORACLE_LIB"
+          run_logged web_codegen task web:codegen
+      - name: regenerate the SDK operation layers
+        timeout-minutes: 15
+        run: |
+          eval "$ORACLE_LIB"
+          run_logged sdk_generate task sdk:generate
+      - name: rebuild the embedded console
+        timeout-minutes: 20
+        run: |
+          eval "$ORACLE_LIB"
+          run_logged build_web task build:web
+      - name: the regenerated surfaces are the committed ones
+        id: drift
+        if: ${{ !cancelled() }}
+        timeout-minutes: 3
+        run: |
+          eval "$ORACLE_LIB"
+          git status --porcelain --untracked-files=all > "$OUT/porcelain.txt"
+          git diff --stat > "$OUT/diff-stat.txt"
+          git diff --binary > "$OUT/regenerated.patch"
+          git ls-files --others --exclude-standard > "$OUT/untracked.txt"
+          n="$(count_lines < "$OUT/porcelain.txt")"
+          if [ "$n" -eq 0 ]; then
+            record drift NONE
+          else
+            cat "$OUT/porcelain.txt"
+            record drift "DRIFT $n"
+            fail "the regenerated surfaces differ from the committed ones in $n paths; the artifact carries the patch"
+          fi
+      - name: retain the generation logs, exits and any regenerated difference
+        if: always()
+        timeout-minutes: 5
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: commit-outcome-generated-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/commit-outcome/generated/
+          retention-days: 7
+          if-no-files-found: error
+
+  # `always()` so a red or skipped job is NAMED here instead of silently skipping the verdict.
+  verdict:
+    needs: [oracle, routes, generated]
+    if: ${{ always() && github.repository == 'olivaresai/olivares' && github.event.deleted != true }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: one line, and only when every expected red was measured as a kill
+        timeout-minutes: 3
+        env:
+          ORACLE_RESULT: ${{ needs.oracle.result }}
+          ROUTES_RESULT: ${{ needs.routes.result }}
+          GENERATED_RESULT: ${{ needs.generated.result }}
+          S1: ${{ needs.oracle.outputs.s1 }}
+          M1: ${{ needs.oracle.outputs.m1 }}
+          S3: ${{ needs.oracle.outputs.s3 }}
+          M2: ${{ needs.oracle.outputs.m2 }}
+          S5: ${{ needs.oracle.outputs.s5 }}
+          LOOPBACK: ${{ needs.oracle.outputs.loopback }}
+          BASELINE: ${{ needs.routes.outputs.baseline }}
+          SEND: ${{ needs.routes.outputs.send }}
+          ACK: ${{ needs.routes.outputs.ack }}
+          CURSOR: ${{ needs.routes.outputs.cursor }}
+          OFFER: ${{ needs.routes.outputs.offer }}
+          RESPONSE: ${{ needs.routes.outputs.response }}
+          CREATE: ${{ needs.routes.outputs.create }}
+          RESTORED: ${{ needs.routes.outputs.restored }}
+          STORE_ENGINES: ${{ needs.routes.outputs.store_engines }}
+          HTTP_ENGINES: ${{ needs.routes.outputs.http_engines }}
+          DRIFT: ${{ needs.generated.outputs.drift }}
+          RUNNER_PLACEMENT: ${{ runner.environment }}
+        run: |
+          set -euo pipefail
+          bad=""
+          # An empty value is a measurement that never happened, and it is red like any other.
+          expect() { [ "$2" = "$3" ] || bad="$bad"$'\n'"$1 is '$2', expected '$3'"; }
+          expect_green() { [[ "$2" =~ ^GREEN\ [1-9][0-9]*$ ]] || bad="$bad"$'\n'"$1 is '$2', expected a nonzero green"; }
+          case "$GITHUB_EVENT_NAME" in
+            push) candidate="$GITHUB_SHA" ;;
+            workflow_dispatch) candidate="${DISPATCH_CANDIDATE_SHA:-}" ;;
+            *) candidate="" ;;
+          esac
+          if [[ ! "$candidate" =~ ^[0-9a-f]{40}$ ]] || [ "$candidate" != "$GITHUB_SHA" ]; then
+            bad="$bad"$'\n'"the candidate [$candidate] is not the head $GITHUB_SHA of $GITHUB_REF"
+          fi
+          if [ "${RUNNER_PLACEMENT:-}" != github-hosted ]; then
+            bad="$bad"$'\n'"the verdict runs on a ${RUNNER_PLACEMENT:-unknown} runner, not a GitHub-hosted one"
+          fi
+          expect "job oracle" "$ORACLE_RESULT" success
+          expect "job routes" "$ROUTES_RESULT" success
+          expect "job generated" "$GENERATED_RESULT" success
+          expect "1 · proxy positives" "$S1" "GREEN 8"
+          expect "2 · release lock mutant (M1)" "$M1" KILLED
+          expect "3 · restored proxy positives" "$S3" "GREEN 8"
+          expect "4 · write deadline mutant (M2)" "$M2" KILLED
+          expect "5 · restored proxy positives" "$S5" "GREEN 8"
+          expect "6 · every loopback control" "$LOOPBACK" "GREEN 10"
+          expect "six key-lock routes positive" "$BASELINE" "GREEN 25"
+          expect "M11-send" "$SEND" KILLED
+          expect "M11-ack" "$ACK" KILLED
+          expect "M11-cursor" "$CURSOR" KILLED
+          expect "M11-offer" "$OFFER" KILLED
+          expect "M11-response" "$RESPONSE" KILLED
+          expect "M11-create" "$CREATE" KILLED
+          expect "six key-lock routes restored" "$RESTORED" "GREEN 25"
+          expect_green "store family, both engines" "$STORE_ENGINES"
+          expect_green "communication HTTP families, both engines" "$HTTP_ENGINES"
+          expect "regenerated surfaces" "$DRIFT" NONE
+          if [ -n "$bad" ]; then
+            printf '::error::no verdict: %s\n' "$bad"
+            exit 1
+          fi
+          echo "commit-outcome oracle PASS at $candidate ($GITHUB_EVENT_NAME): proxy positives 8/8 three times and all four loopback controls 10/10; release lock (M1) and write deadline (M2) mutants killed; six key-lock route mutants (M11) killed with routes positive 25/25 before and after; store $STORE_ENGINES and HTTP $HTTP_ENGINES on both engines; regenerated surfaces unchanged; repository variables CI_RUNNER=${CI_RUNNER_VAR:-unset} CI_RUNNER_LIGHT=${CI_RUNNER_LIGHT_VAR:-unset}"

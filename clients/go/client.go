@@ -54,7 +54,8 @@ func WithTenant(tenant string) Option { return func(c *Client) { c.tenant = tena
 func WithHTTPClient(hc *http.Client) Option { return func(c *Client) { c.hc = hc } }
 
 // WithMaxRetries caps the automatic retries for retryable statuses (429
-// always, 503 for GET). 0 disables retrying. Default 2.
+// always, 503 for GET, except [CodeCommitOutcomeUnknown], which is never
+// retried). 0 disables retrying. Default 2.
 func WithMaxRetries(n int) Option { return func(c *Client) { c.maxRetries = n } }
 
 // WithDeprecationHandler replaces the default deprecation-signal handler (a
@@ -261,19 +262,38 @@ func (c *Client) doRaw(ctx context.Context, method, route, path string, opts ...
 	return c.execute(ctx, method, route, path, nil, false, "", opts...)
 }
 
+// CodeCommitOutcomeUnknown is the engine's answer when it issued COMMIT and never
+// learned whether the database applied it. The write MAY be durable.
+//
+// It is exported because a caller has to be able to recognize it: this is the one
+// error where "try again" is a decision only the caller can make, and where the
+// right next step is usually to READ the resource under the same authority rather
+// than to re-send.
+const CodeCommitOutcomeUnknown = "commit_outcome_unknown"
+
 // isRetryableStatus is that policy as one predicate: 429 for any method, 503 for GET
 // only. Named rather than inlined as a negated disjunction (staticcheck QF1001)
 // because the METHOD half is what keeps a retry from replaying a non-idempotent
 // write, and that is not a term to leave inside a boolean nobody can read.
-func isRetryableStatus(status int, method string) bool {
+//
+// The CODE half is the same kind of term. An automatic retry of an undetermined
+// commit is not a harmless second attempt: even on a GET it re-runs a governed read
+// that commits its own audit act, so one uncertain write becomes two and the
+// operator sees two acts for one intention. It is vetoed for every method and every
+// status, and every other 503 and 429 keeps the policy it has always had.
+func isRetryableStatus(status int, method, code string) bool {
+	if code == CodeCommitOutcomeUnknown {
+		return false
+	}
 	return status == http.StatusTooManyRequests ||
 		(status == http.StatusServiceUnavailable && method == http.MethodGet)
 }
 
 // execute is the policy-aware retry loop: 429 is always retryable (the
 // limiter rejects before execution and Retry-After is a safe lower bound), 503
-// only for GET (not_leader HA handoff — idempotent reads only). Everything
-// else surfaces immediately.
+// only for GET (not_leader HA handoff — idempotent reads only), and
+// [CodeCommitOutcomeUnknown] never, on any method. Everything else surfaces
+// immediately.
 func (c *Client) execute(ctx context.Context, method, route, path string, body any, wantJSON bool, rawReqContentType string, opts ...RequestOption) ([]byte, error) {
 	var ro requestOptions
 	for _, o := range opts {
@@ -288,7 +308,7 @@ func (c *Client) execute(ctx context.Context, method, route, path string, body a
 		if !errors.As(err, &ae) || attempt >= c.maxRetries {
 			return nil, err
 		}
-		if !isRetryableStatus(ae.Status, method) {
+		if !isRetryableStatus(ae.Status, method, ae.Code) {
 			return nil, err
 		}
 		if retryAfter <= 0 {

@@ -620,4 +620,95 @@ class ClientTest {
             assertThrows(IllegalArgumentException.class, () -> Client.of(bad, ""));
         }
     }
+
+    // --- C32: the commit-outcome retry veto ----------------------------------
+
+    /**
+     * The EXACT production 503 body, byte for byte. The server encodes a map, so
+     * {@code encoding/json} emits the three top-level keys in sorted order and appends a
+     * newline, and the nested error object carries the same code as its message.
+     * Inventing a shorter body would make the control pass against a fixture rather
+     * than against the engine.
+     */
+    private static final String COMMIT_OUTCOME_UNKNOWN_ENVELOPE =
+            "{\"code\":\"commit_outcome_unknown\",\"error\":{\"code\":\"commit_outcome_unknown\","
+            + "\"message\":\"commit_outcome_unknown\"},\"verdict\":\"NO_HE_PODIDO_MIRAR\"}\n";
+
+    /** The same envelope with the code every other 503 carries, for the positive. */
+    private static final String EVIDENCE_UNAVAILABLE_ENVELOPE =
+            "{\"code\":\"evidence_unavailable\",\"error\":{\"code\":\"evidence_unavailable\","
+            + "\"message\":\"evidence_unavailable\"},\"verdict\":\"NO_HE_PODIDO_MIRAR\"}\n";
+
+    private static void unknownCommit(HttpExchange ex, String envelope) throws IOException {
+        // The engine's exact content type, and NO Retry-After: nothing about an
+        // undetermined commit is safe to repeat on a timer.
+        ex.getResponseHeaders().add("Content-Type", "application/json; charset=utf-8");
+        send(ex, 503, envelope);
+    }
+
+    /**
+     * An automatic retry of an undetermined commit is not a harmless second attempt.
+     * Even on a GET it re-runs a governed read that commits its own audit act, so the
+     * client would turn one uncertain write into a second one and the operator would see
+     * two acts for one intention. The veto applies to every method.
+     */
+    @Test
+    void neverRetriesCommitOutcomeUnknown() throws IOException {
+        AtomicInteger calls = new AtomicInteger();
+        HttpServer s = start(ex -> {
+            record(ex);
+            calls.incrementAndGet();
+            unknownCommit(ex, COMMIT_OUTCOME_UNKNOWN_ENVELOPE);
+        });
+        try {
+            Client c = client(s);
+            OlivaresApiException onGet = assertThrows(OlivaresApiException.class,
+                    () -> c.getV1MSessionsChannelsByIdGrants(
+                            "01a084d5-988c-7e46-b396-5cff04bf2793",
+                            new Client.GetV1MSessionsChannelsByIDGrantsInput(
+                                    "01a084d5-988c-7e46-b396-5cff04bf2794",
+                                    null, null, null, null, null)));
+            assertEquals(503, onGet.getStatus());
+            assertEquals("commit_outcome_unknown", onGet.getCode());
+            assertEquals(1, calls.get(),
+                    "retrying an undetermined commit can produce a second durable effect for one intention");
+            assertTrue(slept.isEmpty(), "there is no interval on which this is safe to repeat");
+
+            calls.set(0);
+            OlivaresApiException onPost = assertThrows(OlivaresApiException.class,
+                    () -> client(s).postV1Memberships(Map.of()));
+            assertEquals("commit_outcome_unknown", onPost.getCode());
+            assertEquals(1, calls.get());
+        } finally {
+            s.stop(0);
+        }
+    }
+
+    /**
+     * The preservation positive: the 503-GET retry the SDK has always had for the HA
+     * handoff is untouched for every other code. This is one named exception, not a
+     * retry-policy change.
+     */
+    @Test
+    void stillRetriesOther503OnGet() throws IOException {
+        AtomicInteger calls = new AtomicInteger();
+        HttpServer s = start(ex -> {
+            record(ex);
+            calls.incrementAndGet();
+            unknownCommit(ex, EVIDENCE_UNAVAILABLE_ENVELOPE);
+        });
+        try {
+            Client c = client(s); // default maxRetries = 2
+            OlivaresApiException e = assertThrows(OlivaresApiException.class,
+                    () -> c.getV1MSessionsChannelsByIdGrants(
+                            "01a084d5-988c-7e46-b396-5cff04bf2793",
+                            new Client.GetV1MSessionsChannelsByIDGrantsInput(
+                                    "01a084d5-988c-7e46-b396-5cff04bf2794",
+                                    null, null, null, null, null)));
+            assertEquals("evidence_unavailable", e.getCode());
+            assertEquals(3, calls.get(), "initial plus two retries: the HA handoff retry is not C32's to remove");
+        } finally {
+            s.stop(0);
+        }
+    }
 }
