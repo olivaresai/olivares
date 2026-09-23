@@ -224,6 +224,8 @@ describe('the shell ends a retired boundary’s adoption intent while the room i
     act(() => {
       useSessionStore.getState().clear()
     })
+    // The ended session's principal leaves with it: nothing is left for the next session to show.
+    expect(client?.getQueryData(queryKeys.whoami)).toBeUndefined()
     // Another principal signs in: a new session, and whoami read for it (what login() does).
     api.whoami.mockResolvedValue(principal('u-b'))
     await act(async () => {
