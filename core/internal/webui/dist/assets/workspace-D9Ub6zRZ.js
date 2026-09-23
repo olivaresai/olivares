@@ -1,0 +1,1 @@
+import{b as e,g as t}from"./page-header-1nVmxNus.js";var n=e()(t(e=>({activeWorkspace:null,activeWorkspaceName:null,setActiveWorkspace:(t,n)=>e({activeWorkspace:t,activeWorkspaceName:n??null}),clear:()=>e({activeWorkspace:null,activeWorkspaceName:null})}),{name:`olivares.workspace`}));export{n as t};

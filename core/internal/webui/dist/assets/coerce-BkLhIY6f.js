@@ -1,0 +1,1 @@
+import{fn as e,tn as t}from"./index-lA5gHz9w.js";function n(n){return e(t,n)}export{n as t};
