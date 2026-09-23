@@ -6,10 +6,11 @@
 # console. It runs ONLY on a pull request whose head is the branch
 # `ci/provider-accounts-console-qualification-vehicle` of this repository. That branch carries
 # pull request #116's product plus three vehicle files: this workflow and the two mutant patches
-# under ci/qualification/. The identify job pins #116's head and requires #116's merge tree
-# (refs/pull/116/merge) to equal this pull request's own merge tree, computed on the same main,
-# minus exactly those three files. Every other job runs on #116's merge commit, the tree #116's
-# own pull-request CI qualifies, so each result names exactly the product it qualifies.
+# under ci/qualification/. The identify job pins #116's head and one main, composes #116's merge
+# and this pull request's merge on that pinned main itself, and requires the two merge trees to
+# differ by exactly those three files. Every other job recomposes and runs on that explicit
+# composition, #116's pinned head merged into the pinned main, so each result names exactly the
+# product it qualifies.
 #
 #   baseline         the browser journey and the custody test both pass;
 #   m1-intent        with the M1 mutant, the journey fails at an assertion that requires the
@@ -46,71 +47,86 @@ defaults:
   run:
     shell: bash
 
+env:
+  # The product under qualification: pull request #116 at this public head commit.
+  QUALIFIED_PR: '116'
+  QUALIFIED_HEAD: 44aaab2e57d7aee66a52624f6c10a8bf1ed40ed6
+  # The one main both merges are composed on, pinned explicitly: GitHub computes each pull
+  # request's refs/pull/N/merge lazily, so two of them can sit on different mains.
+  PINNED_MAIN: 20b3d0b1c632e8d4bef7b4ce15f4960293cc6e86
+
 jobs:
   # The vehicle's own identity. The branch may reach this repository as one squashed commit
   # over main that also carries #116's whole delta, so the product cannot be named by ancestry.
   # Main may also move after the branch was cut, so the vehicle head's own tree lacks main's
   # newer files while #116's merge tree has them. The product is therefore named by comparing
-  # two MERGE trees on one main:
-  #   · #116's merge commit, whose second parent must be the pinned #116 head;
-  #   · this pull request's merge commit, whose second parent must be this run's head.
-  # Both must have the same first parent, and they must differ by exactly the vehicle's three
-  # files. Anything else (a product change in the vehicle, a moved #116 head, a missing merge
-  # ref, merge refs computed on different mains) refuses with exit 2 and names what differs.
+  # two MERGE trees on one main, both composed here on the pinned main (a commit of main):
+  #   · #116's merge commit: first parent the pinned main, second parent the pinned #116 head;
+  #   · this pull request's merge commit: first parent the pinned main, second parent this run's head.
+  # They must differ by exactly the vehicle's three files. Anything else (a product change in
+  # the vehicle, a moved #116 head, a pinned main that is not on main, a merge conflict) refuses
+  # with exit 2 and names what differs. The merge commits have a fixed identity and date, so
+  # every later job recomposes the same commit and checks it against this job's outputs.
   identify:
     if: github.repository == 'olivaresai/olivares' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'ci/provider-accounts-console-qualification-vehicle'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
       product_ref: ${{ steps.product.outputs.product_ref }}
+      product_tree: ${{ steps.product.outputs.product_tree }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          filter: blob:none
       - name: identify the product merge tree the vehicle carries
         id: product
         timeout-minutes: 3
         env:
           VEHICLE_HEAD: ${{ github.event.pull_request.head.sha }}
           VEHICLE_PR: ${{ github.event.pull_request.number }}
-          # The product under qualification: pull request #116 at this public head commit.
-          QUALIFIED_PR: '116'
-          QUALIFIED_HEAD: 44aaab2e57d7aee66a52624f6c10a8bf1ed40ed6
         run: |
           set -euo pipefail
           [ "$(git rev-parse HEAD)" = "$VEHICLE_HEAD" ] || { echo "::error::HEAD is not the pull request's head"; exit 2; }
-          if ! git fetch --no-tags --depth=2 origin \
-            "+refs/pull/$QUALIFIED_PR/merge:refs/qualification/merge" \
+          if ! git fetch --no-tags --filter=blob:none origin \
+            "+refs/heads/main:refs/qualification/main" \
             "+refs/pull/$QUALIFIED_PR/head:refs/qualification/head" \
-            "+refs/pull/$VEHICLE_PR/merge:refs/qualification/vehicle-merge"; then
-            echo "::error::refs/pull/$QUALIFIED_PR/merge, its head or refs/pull/$VEHICLE_PR/merge could not be fetched from this repository"
+            "$PINNED_MAIN"; then
+            echo "::error::main, #$QUALIFIED_PR's head or the pinned main $PINNED_MAIN could not be fetched from this repository"
             exit 2
           fi
-          merge="$(git rev-parse --verify 'refs/qualification/merge^{commit}')"
           head="$(git rev-parse --verify 'refs/qualification/head^{commit}')"
-          vmerge="$(git rev-parse --verify 'refs/qualification/vehicle-merge^{commit}')"
           if [ "$head" != "$QUALIFIED_HEAD" ]; then
             echo "::error::#$QUALIFIED_PR's head is $head, not the pinned $QUALIFIED_HEAD"
             exit 2
           fi
-          second="$(git rev-parse --verify --quiet "$merge^2")" || true
-          if [ "$second" != "$QUALIFIED_HEAD" ]; then
-            echo "::error::refs/pull/$QUALIFIED_PR/merge $merge does not merge the pinned head (second parent: ${second:-none})"
+          tip="$(git rev-parse --verify 'refs/qualification/main^{commit}')"
+          if ! git merge-base --is-ancestor "$PINNED_MAIN" "$tip"; then
+            echo "::error::the pinned main $PINNED_MAIN is not a commit of main (main is $tip)"
             exit 2
           fi
-          vsecond="$(git rev-parse --verify --quiet "$vmerge^2")" || true
-          if [ "$vsecond" != "$VEHICLE_HEAD" ]; then
-            echo "::error::refs/pull/$VEHICLE_PR/merge $vmerge does not merge this run's head $VEHICLE_HEAD (second parent: ${vsecond:-none})"
-            exit 2
-          fi
-          # One main under both merges: otherwise main's own delta would count as a difference.
-          main="$(git rev-parse --verify --quiet "$merge^1")" || true
-          vmain="$(git rev-parse --verify --quiet "$vmerge^1")" || true
-          if [ -z "$main" ] || [ "$main" != "$vmain" ]; then
-            echo "::error::the merge refs are not computed on the same main: #$QUALIFIED_PR merges into ${main:-none}, #$VEHICLE_PR into ${vmain:-none}"
-            exit 2
-          fi
+          # compose <second parent> <variable>: the merge of <second parent> into the pinned main.
+          # A conflict refuses. The fixed identity and date make the commit the same in every job.
+          compose() {
+            local tree commit
+            if ! tree="$(git merge-tree --write-tree "$PINNED_MAIN" "$1")"; then
+              echo "::error::$1 does not merge cleanly into the pinned main $PINNED_MAIN"
+              exit 2
+            fi
+            commit="$(GIT_AUTHOR_NAME=provider-accounts-qualification GIT_AUTHOR_EMAIL=qualification@example.invalid \
+              GIT_AUTHOR_DATE=2026-09-23T00:00:00Z GIT_COMMITTER_NAME=provider-accounts-qualification \
+              GIT_COMMITTER_EMAIL=qualification@example.invalid GIT_COMMITTER_DATE=2026-09-23T00:00:00Z \
+              git commit-tree "$tree" -p "$PINNED_MAIN" -p "$1" -m "Merge $1 into $PINNED_MAIN")"
+            if [ "$(git rev-parse "$commit^1")" != "$PINNED_MAIN" ] || [ "$(git rev-parse "$commit^2")" != "$1" ]; then
+              echo "::error::$commit is not the merge of $1 into the pinned main"
+              exit 2
+            fi
+            printf -v "$2" '%s' "$commit"
+          }
+          compose "$QUALIFIED_HEAD" merge
+          compose "$VEHICLE_HEAD" vmerge
           expected="$(printf '%s\n' .github/workflows/provider-accounts-qualification.yml \
             ci/qualification/custody-removal-skipped.patch \
             ci/qualification/m1-intent-dropped-on-refused-read.patch | sort)"
@@ -121,11 +137,13 @@ jobs:
             comm -23 <(printf '%s\n' "$expected") <(printf '%s\n' "$changed") | sed 's/^/  missing: /'
             exit 2
           fi
+          tree="$(git rev-parse "$merge^{tree}")"
           echo "product_ref=$merge" >>"$GITHUB_OUTPUT"
+          echo "product_tree=$tree" >>"$GITHUB_OUTPUT"
           {
             echo "### Provider accounts qualification vehicle"
-            echo "Vehicle head \`$VEHICLE_HEAD\`, merged as \`$vmerge\`. Every job qualifies #$QUALIFIED_PR's merge tree \`$merge\`:"
-            echo "head \`$QUALIFIED_HEAD\` merged into main \`$main\`, the main under both merges."
+            echo "Vehicle head \`$VEHICLE_HEAD\`, composed as \`$vmerge\`. Every job qualifies #$QUALIFIED_PR's merge tree \`$tree\` (commit \`$merge\`):"
+            echo "head \`$QUALIFIED_HEAD\` merged into the pinned main \`$PINNED_MAIN\` (main is now \`$tip\`)."
           } >>"$GITHUB_STEP_SUMMARY"
 
   baseline:
@@ -137,11 +155,34 @@ jobs:
       verdict: ${{ steps.verdict.outputs.verdict }}
     env:
       PRODUCT_REF: ${{ needs.identify.outputs.product_ref }}
+      PRODUCT_TREE: ${{ needs.identify.outputs.product_tree }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ needs.identify.outputs.product_ref }}
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          filter: blob:none
+      - name: recompose the product merge commit on the pinned main
+        timeout-minutes: 3
+        run: |
+          set -euo pipefail
+          if ! git fetch --no-tags --filter=blob:none origin "+refs/pull/$QUALIFIED_PR/head:refs/qualification/head" "$PINNED_MAIN"; then
+            echo "::error::#$QUALIFIED_PR's head or the pinned main $PINNED_MAIN could not be fetched from this repository"
+            exit 2
+          fi
+          [ "$(git rev-parse --verify 'refs/qualification/head^{commit}')" = "$QUALIFIED_HEAD" ] || { echo "::error::#$QUALIFIED_PR's head is no longer the pinned $QUALIFIED_HEAD"; exit 2; }
+          if ! tree="$(git merge-tree --write-tree "$PINNED_MAIN" "$QUALIFIED_HEAD")"; then
+            echo "::error::$QUALIFIED_HEAD does not merge cleanly into the pinned main $PINNED_MAIN"
+            exit 2
+          fi
+          [ "$tree" = "$PRODUCT_TREE" ] || { echo "::error::the recomposed tree $tree is not identify's $PRODUCT_TREE"; exit 2; }
+          merge="$(GIT_AUTHOR_NAME=provider-accounts-qualification GIT_AUTHOR_EMAIL=qualification@example.invalid \
+            GIT_AUTHOR_DATE=2026-09-23T00:00:00Z GIT_COMMITTER_NAME=provider-accounts-qualification \
+            GIT_COMMITTER_EMAIL=qualification@example.invalid GIT_COMMITTER_DATE=2026-09-23T00:00:00Z \
+            git commit-tree "$tree" -p "$PINNED_MAIN" -p "$QUALIFIED_HEAD" -m "Merge $QUALIFIED_HEAD into $PINNED_MAIN")"
+          [ "$merge" = "$PRODUCT_REF" ] || { echo "::error::the recomposed merge commit $merge is not identify's $PRODUCT_REF"; exit 2; }
+          git checkout -q --detach "$PRODUCT_REF"
       - name: confirm the product merge tree
         timeout-minutes: 1
         run: |
@@ -273,11 +314,34 @@ jobs:
       verdict: ${{ steps.verdict.outputs.verdict }}
     env:
       PRODUCT_REF: ${{ needs.identify.outputs.product_ref }}
+      PRODUCT_TREE: ${{ needs.identify.outputs.product_tree }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ needs.identify.outputs.product_ref }}
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          filter: blob:none
+      - name: recompose the product merge commit on the pinned main
+        timeout-minutes: 3
+        run: |
+          set -euo pipefail
+          if ! git fetch --no-tags --filter=blob:none origin "+refs/pull/$QUALIFIED_PR/head:refs/qualification/head" "$PINNED_MAIN"; then
+            echo "::error::#$QUALIFIED_PR's head or the pinned main $PINNED_MAIN could not be fetched from this repository"
+            exit 2
+          fi
+          [ "$(git rev-parse --verify 'refs/qualification/head^{commit}')" = "$QUALIFIED_HEAD" ] || { echo "::error::#$QUALIFIED_PR's head is no longer the pinned $QUALIFIED_HEAD"; exit 2; }
+          if ! tree="$(git merge-tree --write-tree "$PINNED_MAIN" "$QUALIFIED_HEAD")"; then
+            echo "::error::$QUALIFIED_HEAD does not merge cleanly into the pinned main $PINNED_MAIN"
+            exit 2
+          fi
+          [ "$tree" = "$PRODUCT_TREE" ] || { echo "::error::the recomposed tree $tree is not identify's $PRODUCT_TREE"; exit 2; }
+          merge="$(GIT_AUTHOR_NAME=provider-accounts-qualification GIT_AUTHOR_EMAIL=qualification@example.invalid \
+            GIT_AUTHOR_DATE=2026-09-23T00:00:00Z GIT_COMMITTER_NAME=provider-accounts-qualification \
+            GIT_COMMITTER_EMAIL=qualification@example.invalid GIT_COMMITTER_DATE=2026-09-23T00:00:00Z \
+            git commit-tree "$tree" -p "$PINNED_MAIN" -p "$QUALIFIED_HEAD" -m "Merge $QUALIFIED_HEAD into $PINNED_MAIN")"
+          [ "$merge" = "$PRODUCT_REF" ] || { echo "::error::the recomposed merge commit $merge is not identify's $PRODUCT_REF"; exit 2; }
+          git checkout -q --detach "$PRODUCT_REF"
       - name: apply the M1 mutant to the product merge tree
         timeout-minutes: 2
         env:
@@ -451,11 +515,34 @@ jobs:
       verdict: ${{ steps.verdict.outputs.verdict }}
     env:
       PRODUCT_REF: ${{ needs.identify.outputs.product_ref }}
+      PRODUCT_TREE: ${{ needs.identify.outputs.product_tree }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ needs.identify.outputs.product_ref }}
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          filter: blob:none
+      - name: recompose the product merge commit on the pinned main
+        timeout-minutes: 3
+        run: |
+          set -euo pipefail
+          if ! git fetch --no-tags --filter=blob:none origin "+refs/pull/$QUALIFIED_PR/head:refs/qualification/head" "$PINNED_MAIN"; then
+            echo "::error::#$QUALIFIED_PR's head or the pinned main $PINNED_MAIN could not be fetched from this repository"
+            exit 2
+          fi
+          [ "$(git rev-parse --verify 'refs/qualification/head^{commit}')" = "$QUALIFIED_HEAD" ] || { echo "::error::#$QUALIFIED_PR's head is no longer the pinned $QUALIFIED_HEAD"; exit 2; }
+          if ! tree="$(git merge-tree --write-tree "$PINNED_MAIN" "$QUALIFIED_HEAD")"; then
+            echo "::error::$QUALIFIED_HEAD does not merge cleanly into the pinned main $PINNED_MAIN"
+            exit 2
+          fi
+          [ "$tree" = "$PRODUCT_TREE" ] || { echo "::error::the recomposed tree $tree is not identify's $PRODUCT_TREE"; exit 2; }
+          merge="$(GIT_AUTHOR_NAME=provider-accounts-qualification GIT_AUTHOR_EMAIL=qualification@example.invalid \
+            GIT_AUTHOR_DATE=2026-09-23T00:00:00Z GIT_COMMITTER_NAME=provider-accounts-qualification \
+            GIT_COMMITTER_EMAIL=qualification@example.invalid GIT_COMMITTER_DATE=2026-09-23T00:00:00Z \
+            git commit-tree "$tree" -p "$PINNED_MAIN" -p "$QUALIFIED_HEAD" -m "Merge $QUALIFIED_HEAD into $PINNED_MAIN")"
+          [ "$merge" = "$PRODUCT_REF" ] || { echo "::error::the recomposed merge commit $merge is not identify's $PRODUCT_REF"; exit 2; }
+          git checkout -q --detach "$PRODUCT_REF"
       - name: apply the custody mutant to the product merge tree
         timeout-minutes: 2
         env:
@@ -582,11 +669,34 @@ jobs:
     timeout-minutes: 90
     env:
       PRODUCT_REF: ${{ needs.identify.outputs.product_ref }}
+      PRODUCT_TREE: ${{ needs.identify.outputs.product_tree }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ needs.identify.outputs.product_ref }}
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          filter: blob:none
+      - name: recompose the product merge commit on the pinned main
+        timeout-minutes: 3
+        run: |
+          set -euo pipefail
+          if ! git fetch --no-tags --filter=blob:none origin "+refs/pull/$QUALIFIED_PR/head:refs/qualification/head" "$PINNED_MAIN"; then
+            echo "::error::#$QUALIFIED_PR's head or the pinned main $PINNED_MAIN could not be fetched from this repository"
+            exit 2
+          fi
+          [ "$(git rev-parse --verify 'refs/qualification/head^{commit}')" = "$QUALIFIED_HEAD" ] || { echo "::error::#$QUALIFIED_PR's head is no longer the pinned $QUALIFIED_HEAD"; exit 2; }
+          if ! tree="$(git merge-tree --write-tree "$PINNED_MAIN" "$QUALIFIED_HEAD")"; then
+            echo "::error::$QUALIFIED_HEAD does not merge cleanly into the pinned main $PINNED_MAIN"
+            exit 2
+          fi
+          [ "$tree" = "$PRODUCT_TREE" ] || { echo "::error::the recomposed tree $tree is not identify's $PRODUCT_TREE"; exit 2; }
+          merge="$(GIT_AUTHOR_NAME=provider-accounts-qualification GIT_AUTHOR_EMAIL=qualification@example.invalid \
+            GIT_AUTHOR_DATE=2026-09-23T00:00:00Z GIT_COMMITTER_NAME=provider-accounts-qualification \
+            GIT_COMMITTER_EMAIL=qualification@example.invalid GIT_COMMITTER_DATE=2026-09-23T00:00:00Z \
+            git commit-tree "$tree" -p "$PINNED_MAIN" -p "$QUALIFIED_HEAD" -m "Merge $QUALIFIED_HEAD into $PINNED_MAIN")"
+          [ "$merge" = "$PRODUCT_REF" ] || { echo "::error::the recomposed merge commit $merge is not identify's $PRODUCT_REF"; exit 2; }
+          git checkout -q --detach "$PRODUCT_REF"
       - name: confirm the product merge tree and hash the committed capture set (input)
         timeout-minutes: 1
         env:
@@ -599,7 +709,7 @@ jobs:
           EVIDENCE="$RUNNER_TEMP/qualification"
           echo "EVIDENCE=$EVIDENCE" >>"$GITHUB_ENV"
           mkdir -p "$EVIDENCE"
-          # The shallow checkout still holds the merge commit's own header: main, then #116's head.
+          # The recomposed merge commit's own header: the pinned main, then #116's head.
           parents="$(git cat-file -p HEAD | sed -n '/^$/q; s/^parent //p' | tr '\n' ' ')"
           {
             echo "product_ref $PRODUCT_REF"
