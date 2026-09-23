@@ -625,6 +625,9 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 			{Name: colAdmEstimate, Kind: model.KindInt},
 			{Name: colAdmState, Kind: model.KindText, Indexed: true},
 			{Name: colAdmStateAt, Kind: model.KindText, Nullable: true},
+			// Text: the codec in admission_hold.go, not the store, decides what a
+			// valid list is, and an undecodable one is kept byte for byte.
+			{Name: colAdmOwedHandles, Kind: model.KindText, Nullable: true},
 		},
 		Indexes: []model.IndexSpec{{
 			Name:    "finops_admission_idempotency_key_uniq",
