@@ -239,6 +239,44 @@ export interface CreateBindingRequest {
   profile_ref: string
 }
 
+/** One provider account (GET /provider-accounts, /provider-accounts/{ref}): a provider
+ * profile that has been NAMED. An unnamed profile is not an account and is never listed
+ * as one. The reference is the profile's own; there is no second id. No path travels
+ * here — `home_relative` is a location under the server's accounts root, and the console
+ * does not paint it — and no credential ever. */
+export interface ProviderAccountDTO {
+  account_ref: string
+  name: string
+  driver: string
+  environment_ref: string
+  state: 'active' | 'disabled' | 'retired' | (string & {})
+  /** `adopted`: the operator's existing home, left where it is. */
+  home_mode: 'adopted' | 'managed' | (string & {})
+  home_generation: number
+  home_relative: string
+  /** Always stated by the server, never inferred: an adopted home is `shared`. */
+  isolation_level: 'shared' | 'dedicated' | (string & {})
+  os_user?: string
+  release_ref?: string
+  pending_release?: string
+  auth_source: string
+  provider_record_ref?: string
+  /** Who the provider says is signed in, and where that came from. Source `none`
+   * means nothing asked the provider: the identity is empty, not guessed. */
+  identity: string
+  identity_source: 'none' | (string & {})
+  last_login_at?: string
+  created_at: string
+  updated_at: string
+}
+
+/** POST /provider-accounts/{profile_ref}/adopt body. An absent name asks the server to
+ * generate one; a present name is checked exactly as typed. The isolation level is not
+ * a field: an adopted home is shared by what it is. */
+export interface AdoptAccountRequest {
+  name?: string
+}
+
 /** One lifecycle-ledger event (GET /runs/{ref}/events), seq-ordered. The PayloadHash
  * + audit_seq cross-link the transition to the tamper-evident core audit ledger. */
 export interface RunEventDTO {

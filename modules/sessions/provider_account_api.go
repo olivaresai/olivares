@@ -17,9 +17,11 @@ import (
 // The provider-account surface, under /v1/m/sessions/provider-accounts.
 //
 // PERMISSION TIERS. read lists and gets accounts; write adopts an existing profile
-// as an account; admin is reserved for the acts that cannot be undone on an
-// account's home. They are `sessions:account:*` because a module's permission
-// namespace IS its API namespace, exactly as the provider-record tiers are.
+// as an account. They are `sessions:account:*` because a module's permission
+// namespace IS its API namespace, exactly as the provider-record tiers are. No
+// admin tier is declared: a declared permission that no route requires would read
+// as a real permission to every consumer while gating nothing, so the admin tier is
+// declared together with the first route that requires it.
 //
 // WHO DECIDES A READ. The list and the get are collection routes decided by the
 // engine's own route door, which answers a human caller and a service caller
@@ -43,11 +45,10 @@ import (
 const (
 	permAccountRead  auth.Permission = "sessions:account:read"
 	permAccountWrite auth.Permission = "sessions:account:write"
-	permAccountAdmin auth.Permission = "sessions:account:admin"
 )
 
 func providerAccountPermissions() []auth.Permission {
-	return []auth.Permission{permAccountRead, permAccountWrite, permAccountAdmin}
+	return []auth.Permission{permAccountRead, permAccountWrite}
 }
 
 // providerAccountRoutes mounts the provider-account surface under /v1/m/sessions/.

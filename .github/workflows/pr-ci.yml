@@ -534,3 +534,146 @@ jobs:
           if-no-files-found: error
       - name: the console checks, and the embedded bundle matches its sources
         run: task check:web web:check
+
+  # THE PROVIDER-ACCOUNT BROWSER JOURNEY, and the only job here that drives the console in a
+  # browser against a real engine. It runs web/e2e/provider-accounts-journey.spec.ts through
+  # scripts/web-e2e.sh: the embedded bundle is built, the engine binary is compiled, a
+  # virgin engine boots, and the journey seeds through the engine's own interfaces. Mocks
+  # never decide an authority or an effect.
+  #
+  # IT IS CONDITIONAL, AND THE CONDITION IS A STEP, NOT THE GUARD. The job-level `if:` must
+  # stay the repository guard that scripts/check-pr-ci-regime.sh pins, so relevance is decided
+  # from the pull request's own diff. A pull request that touches none of the paths below
+  # ends NOT_SELECTED: the step summary says so, no browser step runs, and no evidence is
+  # uploaded. That is not a qualification. A diff that cannot be read is a red job, never a
+  # quiet skip.
+  #
+  # AND IT CANNOT BE GREEN ON NOTHING. With E2E_SPECS set, web-e2e.sh refuses a selection that
+  # names nothing runnable, installs dependencies strictly, and gates Playwright's own JSON
+  # report. No report, zero tests or any skip answers 2. A failure or a pass that needed a
+  # retry answers 1. The spec itself disables retries: its first-boot token is single-use.
+  #
+  # BUDGETS ARE ASSUMED, NOT MEASURED: no run of this job exists yet. The step guards sum to
+  # 44 minutes under a 50-minute ceiling (lint:ci-timeout-arithmetic). The journey step
+  # allows 25 minutes for a web build (about 3), a Go build (about 5), an engine boot and a
+  # spec of about 4 that includes one 60-second wait for whoami to go stale. Replace these
+  # figures with the first measured run.
+  pr-web-journey:
+    if: github.repository == 'olivaresai/olivares' || vars.OLIVARES_RELEASE_PROFILE == 'preprod'
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      # Depth 2 brings the pull request's merge commit AND its first parent, the base it merges
+      # into, so the relevance below reads the diff without a second, credentialed fetch.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - name: decide whether this pull request touches the journey
+        id: relevance
+        timeout-minutes: 2
+        run: |
+          set -euo pipefail
+          parents="$(git rev-list --parents -n 1 HEAD | wc -w)"
+          if [ "$parents" -ne 3 ]; then
+            echo "::error::HEAD is not the pull request's merge commit: the journey's relevance cannot be decided"
+            exit 2
+          fi
+          BASE="$(git rev-parse HEAD^1)"
+          changed="$(git diff --name-only "$BASE" HEAD)"
+          if [ -z "$changed" ]; then
+            echo "::error::the diff against $BASE is empty or unreadable; refusing to call the journey irrelevant"
+            exit 2
+          fi
+          selected=false
+          why=""
+          # The journey's executed closure: the console bundle the engine embeds (web/src and
+          # its build inputs), the engine it boots (core, every module and connector the boot
+          # command constructs, the SDK, the boot command and the workspace files), the
+          # harness with every library it sources, and this workflow.
+          while IFS= read -r f; do
+            case "$f" in
+              web/src/* | web/public/* | web/index.html | web/vite.config.ts | \
+                web/tsconfig*.json | web/package.json | web/pnpm-lock.yaml | \
+                web/playwright.config.ts | web/e2e/provider-accounts-journey.spec.ts | \
+                .node-version | scripts/web-e2e.sh | scripts/lib/e2e-selection.sh | \
+                scripts/lib/engine-boot.sh | scripts/lib/build-bin.sh | scripts/lib/git-env.sh | \
+                core/* | modules/* | connectors/* | sdk/* | cmd/olivares/* | go.work | \
+                go.work.sum | .github/workflows/pr-ci.yml)
+                selected=true
+                why="$f"
+                break
+                ;;
+            esac
+          done <<<"$changed"
+          echo "selected=$selected" >>"$GITHUB_OUTPUT"
+          {
+            echo "### Provider-account browser journey"
+            if [ "$selected" = true ]; then
+              echo "SELECTED: \`$why\` changed against base \`$BASE\`."
+            else
+              echo "NOT_SELECTED: no changed path belongs to the journey (base \`$BASE\`). This job made no browser qualification."
+            fi
+          } >>"$GITHUB_STEP_SUMMARY"
+      # NODE FIRST: pnpm/action-setup installs pnpm THROUGH npm, so it needs a node on PATH.
+      - if: steps.relevance.outputs.selected == 'true'
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+      - if: steps.relevance.outputs.selected == 'true'
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+        with:
+          dest: ${{ runner.temp }}/setup-pnpm
+          standalone: true
+      - if: steps.relevance.outputs.selected == 'true'
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.work
+          cache: true
+          cache-dependency-path: go.work.sum
+      - name: install the console dependencies (frozen; a failure fails the job)
+        if: steps.relevance.outputs.selected == 'true'
+        timeout-minutes: 8
+        run: pnpm --dir web install --frozen-lockfile
+      - name: install the chromium playwright driver (web/, pinned by the project)
+        if: steps.relevance.outputs.selected == 'true'
+        timeout-minutes: 5
+        run: pnpm --dir web exec playwright install chromium
+      - name: run the provider-account journey on a virgin engine
+        if: steps.relevance.outputs.selected == 'true'
+        timeout-minutes: 25
+        env:
+          E2E_SPECS: e2e/provider-accounts-journey.spec.ts
+          E2E_REPORT_DIR: ${{ runner.temp }}/journey-report
+        run: bash scripts/web-e2e.sh
+      - name: retain the journey evidence (report, captures, effect receipt)
+        if: always() && steps.relevance.outputs.selected == 'true'
+        timeout-minutes: 3
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: provider-accounts-journey-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/journey-report/
+            web/test-results/
+          retention-days: 7
+          if-no-files-found: error
+      # The harness's trap stops the engines it started. This step proves it did: it lists
+      # any process still running this checkout's engine binary, and stops only those. It
+      # identifies each one by its executable, never by a name pattern.
+      - name: stop any engine this job left running
+        if: always() && steps.relevance.outputs.selected == 'true'
+        timeout-minutes: 1
+        run: |
+          set -uo pipefail
+          left=0
+          for exe in /proc/[0-9]*/exe; do
+            pid="${exe#/proc/}"
+            pid="${pid%/exe}"
+            [ "$(readlink "$exe" 2>/dev/null)" = "$GITHUB_WORKSPACE/bin/olivares" ] || continue
+            left=$((left + 1))
+            echo "::warning::engine pid $pid outlived the harness; stopping it"
+            kill "$pid" 2>/dev/null || true
+          done
+          echo "engines left by the harness: $left"
+          # A leak is the harness's defect, even beside a green journey.
+          [ "$left" -eq 0 ] || { echo "::error::the harness left $left engine(s) running"; exit 1; }

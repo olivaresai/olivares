@@ -94,7 +94,7 @@ done
 # skip at once evaporates into green. Every pr-ci job carries the same repository guard, and
 # that guard is what check-pr-ci-regime.sh pins — a rename would otherwise disable the whole
 # regime in silence. Measured 2026-08-01 and fixed the same day.
-DEFAULT_PUBLIC_CONTEXTS="pr-lint,pr-build,pr-test,pr-web"
+DEFAULT_PUBLIC_CONTEXTS="pr-lint,pr-build,pr-test,pr-web,pr-web-journey"
 case "$PROFILE" in
   public)
     REPO="${REPO:-olivaresai/olivares}"

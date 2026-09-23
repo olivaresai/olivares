@@ -523,8 +523,10 @@
     "view": {
       "profilesTitle": "提供商配置文件",
       "bindingsTitle": "来源绑定",
+      "accountsTitle": "提供商账户",
       "tabProfiles": "配置文件",
       "tabBindings": "绑定",
+      "tabAccounts": "账户",
       "openProfiles": "打开提供商配置文件页面",
       "openBindings": "打开来源绑定页面",
       "crossHint": "配置文件和绑定也各有专属页面，分别以各自的读取权限进入。"
@@ -541,6 +543,102 @@
       "loadMoreProfiles": "加载更多配置文件",
       "loadedProfiles": "已加载 {{n}} 个活跃配置文件；还有更多。",
       "loadingProfiles": "正在加载配置文件…"
+    }
+  },
+  "accounts": {
+    "subtitle": "此租户中已命名的提供商账户。采纳会为现有提供商配置文件命名一次；其主目录保持原位。",
+    "adopt": "采纳配置文件",
+    "cols": {
+      "name": "账户",
+      "driver": "驱动",
+      "environment": "执行环境",
+      "state": "状态",
+      "isolation": "隔离",
+      "created": "创建时间"
+    },
+    "empty": {
+      "title": "没有提供商账户",
+      "adoptHint": "使用“{{control}}”将现有提供商配置文件命名为账户。",
+      "noWrite": "将提供商配置文件采纳为账户需要 sessions:account:write，您的角色不包含该权限。"
+    },
+    "more": "目前已显示：{{shown}}。还有更多账户；加载更多即可查看。",
+    "moreFailed": "无法读取下一页账户。所显示的账户不是完整列表。",
+    "isolation": {
+      "shared": "共享",
+      "dedicated": "专用",
+      "sharedMeaning": "共享：此主目录以服务器自身的系统用户运行。它不是专用的隔离主目录。",
+      "dedicatedMeaning": "专用：服务器将此主目录记录为该账户专用。"
+    },
+    "home": {
+      "adopted": "已采纳（现有主目录）",
+      "managed": "由服务器管理"
+    },
+    "authSource": {
+      "provider_account_home": "账户主目录中保存的登录",
+      "managed_injection": "托管凭据",
+      "none": "未授权任何来源"
+    },
+    "details": {
+      "name": "名称",
+      "ref": "引用",
+      "driver": "驱动",
+      "environment": "执行环境",
+      "state": "状态",
+      "home": "主目录",
+      "isolation": "隔离",
+      "osUser": "系统用户",
+      "authSource": "身份验证来源",
+      "providerRecord": "提供商",
+      "identity": "已登录身份",
+      "release": "版本",
+      "pendingRelease": "待定版本",
+      "created": "创建时间",
+      "updated": "更新时间",
+      "loading": "正在读取账户…",
+      "notFound": "未找到此账户。它可能不存在，或对您不可见。"
+    },
+    "identity": {
+      "notChecked": "未检查：尚未向提供商询问谁已登录。",
+      "reported": "{{identity}}（由 {{source}} 报告）",
+      "empty": "未报告任何内容（来源：{{source}}）"
+    },
+    "adoptDialog": {
+      "title": "采纳提供商配置文件",
+      "description": "将现有提供商配置文件命名为账户。其主目录保持原位，并记录为共享而非专用。不会安装任何内容，也不会登录任何人。",
+      "profile": "配置文件",
+      "profilePlaceholder": "选择配置文件",
+      "profileOption": "{{name}}（{{ref}}）",
+      "knownAccount": "{{label}} — 已是账户",
+      "manual": "输入引用…",
+      "loadMoreProfiles": "加载更多配置文件",
+      "profilesPartial": "仅列出已加载的配置文件。请加载更多，或输入引用。",
+      "profilesFailed": "无法列出配置文件。请改为输入引用。",
+      "profilesLoading": "正在加载配置文件…",
+      "reference": "配置文件引用",
+      "referenceHint": "此租户中现有提供商配置文件的引用；以 ppf_ 开头。",
+      "referenceHintNoList": "您的角色无法列出提供商配置文件。请输入现有配置文件的引用；以 ppf_ 开头。",
+      "name": "账户名称（可选）",
+      "nameHint": "小写字母、数字和连字符，以字母开头，最多 32 个字符。留空则由服务器生成，例如 claude 或 claude-b。",
+      "submit": "采纳",
+      "submitting": "正在采纳…",
+      "pendingStatus": "正在采纳 {{ref}}。正在等待服务器响应。",
+      "success": "已采纳为 {{name}}",
+      "failedTitle": "配置文件未被采纳",
+      "forbidden": "您的角色无法在此租户中采纳账户。未做任何更改。"
+    },
+    "adoption": {
+      "pending": "正在采纳 {{ref}}。服务器尚未响应。",
+      "adopted": "{{ref}} 已采纳为 {{name}}。",
+      "refused": "{{ref}} 未被采纳：",
+      "forbidden": "{{ref}} 未被采纳：您的角色无法在此租户中采纳账户。未做任何更改。",
+      "unknown": "此处无法得知采纳 {{ref}} 的结果。",
+      "checking": "正在检查 {{ref}} 现在是否为账户…",
+      "isAccount": "本次读取时，{{ref}} 是账户 {{name}}。",
+      "notAccount": "本次读取时，{{ref}} 不是账户。",
+      "checkFailed": "无法完成检查。",
+      "checkAgain": "再次检查",
+      "open": "打开账户",
+      "dismiss": "关闭"
     }
   },
   "readiness": {

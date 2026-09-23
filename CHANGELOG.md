@@ -62,6 +62,17 @@ month, release-of-month).
   existing profile stays unnamed after upgrade, and its launch digest does not change. The API
   lives at `/v1/m/sessions/provider-accounts`, under `sessions:account:read` and
   `sessions:account:write`.
+- **The console has a Provider accounts page.** `/provider-accounts` lists the tenant's named
+  provider accounts and opens one account's details, for a member who holds only
+  `sessions:account:read`. With `sessions:account:write`, *Adopt a profile* names an existing
+  provider profile as an account, under the name you give or one the server generates.
+  Choosing the profile from a list also needs `sessions:profile:read`; without it, you enter
+  the profile's reference. The page shows each account's isolation as the server records it,
+  reports the signed-in identity as not checked, shows no home path, and says when more
+  accounts exist than it has loaded. Account data leaves the browser's cache as soon as the
+  page closes or the read permission is withdrawn, and a regained permission reads again. When
+  an adoption's answer is lost or unknown, the page checks the profile by reading it and never
+  sends the adoption twice.
 ### Changed
 
 - **A right-to-erasure receipt now states what its verification examined.** The residual scan

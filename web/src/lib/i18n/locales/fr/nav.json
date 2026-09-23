@@ -92,7 +92,8 @@
     "agentcoreExport": "Export AgentCore",
     "providers": "Fournisseurs",
     "providerProfiles": "Profils de fournisseur",
-    "providerBindings": "Liaisons de sources"
+    "providerBindings": "Liaisons de sources",
+    "providerAccounts": "Comptes de fournisseur"
   },
   "workspace": {
     "switch": "Changer d’espace de travail",
@@ -159,6 +160,7 @@
     "providers": "Enregistrez les clés d'API et les points de terminaison avec lesquels les sessions démarrent ; testez-les, changez-les et révoquez-les",
     "providerProfiles": "Enregistrer et administrer les répertoires de fournisseur sous lesquels les sessions se lancent, et lire leur configuration à la demande",
     "providerBindings": "Dédier des sources configurées, à la révision appliquée par ce nœud, à des profils de fournisseur",
+    "providerAccounts": "Lister les comptes de fournisseur nommés et adopter un profil de fournisseur existant comme compte",
     "routinePolicies": "Planchers de cadence, plafonds de concurrence, exigences d’approbation, listes d’autorisation cron et environnements bloqués pour les routines Claude Code",
     "agentcoreExport": "Planifier, relire et appliquer la projection des règles de gouvernance de ce tenant sur AWS AgentCore sous forme de politiques Cedar ; la planification n’écrit rien",
     "workspace-templates": "Instantanés réutilisables de hooks, réglages, connecteurs et politiques pour les sessions d’espace de travail",
