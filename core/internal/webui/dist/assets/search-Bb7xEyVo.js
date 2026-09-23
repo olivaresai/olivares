@@ -1,0 +1,1 @@
+import{f as e}from"./client-B8Z9j2-W.js";var t={name:`search`,size:24,node:[[`path`,{d:`m21 21-4.34-4.34`,key:`14j7rj`}],[`circle`,{cx:`11`,cy:`11`,r:`8`,key:`4ej97u`}]]};t.node;var n=e(t);export{n as t};

@@ -1,0 +1,1 @@
+import{f as e}from"./client-B8Z9j2-W.js";var t={name:`trending-down`,size:24,node:[[`path`,{d:`M16 17h6v-6`,key:`t6n2it`}],[`path`,{d:`m22 17-8.5-8.5-5 5L2 7`,key:`x473p`}]]};t.node;var n=e(t);export{n as t};
