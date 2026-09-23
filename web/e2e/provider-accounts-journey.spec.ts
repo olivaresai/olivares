@@ -48,6 +48,9 @@ import {
   type Route,
 } from '@playwright/test'
 
+// A failure's automatic page snapshot can record typed form values (the setup token, passwords).
+process.env.PLAYWRIGHT_NO_COPY_PROMPT = '1'
+
 const setupToken = process.env.PLAYWRIGHT_SETUP_TOKEN ?? ''
 const workDir = process.env.E2E_WORK_DIR ?? ''
 const ADMIN_EMAIL = 'admin@example.com'
@@ -107,14 +110,28 @@ async function authed<T>(
   )) as Answer<T>
 }
 
+/** The page's own content. Every page locator below is scoped to it, so it never reaches the
+ *  navigation rail, the breadcrumb or the toasts, which repeat page and account names. */
+function content(page: Page) {
+  return page.getByRole('main')
+}
+
+/** The Overview row of the main navigation rail. "Overview" is also the breadcrumb's current
+ *  page (a disabled link in the banner) and, once visited, an entry of the rail's Recent list;
+ *  the row is the one rail link that carries the rail's row marker. */
+function overviewRow(page: Page) {
+  return page
+    .getByRole('navigation', { name: 'Main navigation', exact: true })
+    .getByRole('link', { name: 'Overview', exact: true })
+    .and(page.locator('[data-nav-row]'))
+}
+
 async function signIn(page: Page, email: string, password: string) {
   await page.goto('/login')
   await page.locator('#email').fill(email)
   await page.locator('#password').fill(password)
   await page.getByRole('button', { name: /^sign in$/i }).click()
-  await expect(
-    page.getByRole('link', { name: 'Overview', exact: true }),
-  ).toBeVisible()
+  await expect(overviewRow(page)).toBeVisible()
 }
 
 /** The engine's own account list, read by the administrator. */
@@ -128,23 +145,37 @@ async function engineAccounts(admin: Page) {
 }
 
 async function openAdoptDialog(member: Page) {
-  await member.getByRole('button', { name: 'Adopt a profile' }).click()
+  await content(member)
+    .getByRole('button', { name: 'Adopt a profile', exact: true })
+    .click()
   const dialog = member.getByRole('dialog', {
     name: 'Adopt a provider profile',
+    exact: true,
   })
   await expect(dialog).toBeVisible()
   // The editor also holds profile read, so the picker loads before it is offered.
-  await expect(dialog.getByRole('combobox', { name: 'Profile' })).toBeEnabled()
+  await expect(
+    dialog.getByRole('combobox', { name: 'Profile', exact: true }),
+  ).toBeEnabled()
   return dialog
+}
+
+/** An option of the open picker. Its list renders outside the dialog, in the one listbox. */
+function pickerOption(member: Page, name: string | RegExp) {
+  return member
+    .getByRole('listbox')
+    .getByRole('option', { name, exact: typeof name === 'string' })
 }
 
 async function adoptByReference(member: Page, ref: string, name: string) {
   const dialog = await openAdoptDialog(member)
-  await dialog.getByRole('combobox', { name: 'Profile' }).click()
-  await member.getByRole('option', { name: 'Enter a reference…' }).click()
-  await dialog.getByRole('textbox', { name: 'Profile reference' }).fill(ref)
+  await dialog.getByRole('combobox', { name: 'Profile', exact: true }).click()
+  await pickerOption(member, 'Enter a reference…').click()
   await dialog
-    .getByRole('textbox', { name: 'Account name (optional)' })
+    .getByRole('textbox', { name: 'Profile reference', exact: true })
+    .fill(ref)
+  await dialog
+    .getByRole('textbox', { name: 'Account name (optional)', exact: true })
     .fill(name)
   await dialog.getByRole('button', { name: 'Adopt', exact: true }).click()
   return dialog
@@ -275,25 +306,34 @@ test('provider accounts: adopt, reconcile lost answers by reading, keep an adopt
       await signIn(member, MEMBER_EMAIL, MEMBER_PASSWORD)
       await member.goto('/provider-accounts')
       await expect(
-        member.getByRole('heading', { name: 'Provider accounts' }),
+        content(member).getByRole('heading', {
+          name: 'Provider accounts',
+          exact: true,
+        }),
       ).toBeVisible()
-      await expect(member.getByText('No provider accounts')).toBeVisible()
+      await expect(
+        content(member).getByText('No provider accounts', { exact: true }),
+      ).toBeVisible()
     })
 
     await test.step('adopt profile A from the picker under an explicit name', async () => {
       const dialog = await openAdoptDialog(member)
-      await dialog.getByRole('combobox', { name: 'Profile' }).click()
-      await member
-        .getByRole('option', {
-          name: new RegExp(`Journey profile A \\(${refs[0]}\\)`),
-        })
-        .click()
       await dialog
-        .getByRole('textbox', { name: 'Account name (optional)' })
+        .getByRole('combobox', { name: 'Profile', exact: true })
+        .click()
+      await pickerOption(
+        member,
+        new RegExp(`^Journey profile A \\(${refs[0]}\\)$`),
+      ).click()
+      await dialog
+        .getByRole('textbox', { name: 'Account name (optional)', exact: true })
         .fill('journey-a')
       await dialog.getByRole('button', { name: 'Adopt', exact: true }).click()
+      // The account's detail sheet: a dialog titled with the account name.
       await expect(
-        member.getByRole('heading', { name: /journey-a/ }),
+        member
+          .getByRole('dialog', { name: /journey-a/ })
+          .getByRole('heading', { name: /journey-a/ }),
       ).toBeVisible()
       await capture(member, '1-adopted-detail')
       await member.keyboard.press('Escape')
@@ -314,27 +354,36 @@ test('provider accounts: adopt, reconcile lost answers by reading, keep an adopt
       await member.route(ADOPT, dropAfterCommit)
       await adoptByReference(member, refs[1], 'journey-b')
       await expect(
-        member.getByText(
+        content(member).getByText(
           `The outcome of adopting ${refs[1]} is not known here.`,
+          { exact: true },
         ),
       ).toBeVisible()
       await expect(
-        member.getByText(`At this read, ${refs[1]} is the account journey-b.`),
+        content(member).getByText(
+          `At this read, ${refs[1]} is the account journey-b.`,
+          { exact: true },
+        ),
       ).toBeVisible()
       expect(committed[refs[1]], 'the engine committed the adoption').toEqual([
         200,
       ])
       await member.unroute(ADOPT, dropAfterCommit)
-      await member.getByRole('button', { name: 'Check again' }).click()
+      await content(member)
+        .getByRole('button', { name: 'Check again', exact: true })
+        .click()
       await expect(
-        member.getByText(`At this read, ${refs[1]} is the account journey-b.`),
+        content(member).getByText(
+          `At this read, ${refs[1]} is the account journey-b.`,
+          { exact: true },
+        ),
       ).toBeVisible()
       await capture(member, '2-unknown-reconciled')
       // The transport is restored and the page reloads: the account is listed once, and
       // nothing re-sent the adoption.
       await member.reload()
       await expect(
-        member.getByRole('button', { name: /journey-b/ }),
+        content(member).getByRole('button', { name: /journey-b/ }),
       ).toBeVisible()
       expect(adoptPosts.filter((ref) => ref === refs[1])).toHaveLength(1)
       const named = (await engineAccounts(page)).filter(
@@ -365,7 +414,9 @@ test('provider accounts: adopt, reconcile lost answers by reading, keep an adopt
         .toBe(1)
       expect(committed[ref], 'the engine committed the adoption').toEqual([200])
       await expect(
-        dialog.getByText(`Adopting ${ref}. Waiting for the server's answer.`),
+        dialog.getByText(`Adopting ${ref}. Waiting for the server's answer.`, {
+          exact: true,
+        }),
       ).toBeVisible()
 
       // The administrator withdraws the account read with a tenant deny policy.
@@ -415,7 +466,10 @@ test('provider accounts: adopt, reconcile lost answers by reading, keep an adopt
       )
       release()
       await expect(
-        member.getByText(`The outcome of adopting ${ref} is not known here.`),
+        content(member).getByText(
+          `The outcome of adopting ${ref} is not known here.`,
+          { exact: true },
+        ),
       ).toBeVisible()
       const check = await checkAnswered
       expect(check.status(), 'the engine refuses the reconciliation read').toBe(
@@ -423,9 +477,13 @@ test('provider accounts: adopt, reconcile lost answers by reading, keep an adopt
       )
       readRefusal.member_check_during = check.status()
       await expect(
-        member.getByText('The check could not be completed.'),
+        content(member).getByText('The check could not be completed.', {
+          exact: true,
+        }),
       ).toBeVisible()
-      await expect(member.getByText('Not authorized')).toBeVisible()
+      await expect(
+        content(member).getByText('Not authorized', { exact: true }),
+      ).toBeVisible()
       await member.unroute(ADOPT, holdThenDrop)
       await capture(member, '3-read-refused-intent-held')
 
@@ -447,17 +505,25 @@ test('provider accounts: adopt, reconcile lost answers by reading, keep an adopt
 
       // The same boundary kept the adoption through the refusal, and a GET settles it.
       await expect(
-        member.getByText(`The outcome of adopting ${ref} is not known here.`),
+        content(member).getByText(
+          `The outcome of adopting ${ref} is not known here.`,
+          { exact: true },
+        ),
         'the adoption is still held after the read is restored',
       ).toBeVisible()
-      await member.getByRole('button', { name: 'Check again' }).click()
+      await content(member)
+        .getByRole('button', { name: 'Check again', exact: true })
+        .click()
       await expect(
-        member.getByText(`At this read, ${ref} is the account journey-d.`),
+        content(member).getByText(
+          `At this read, ${ref} is the account journey-d.`,
+          { exact: true },
+        ),
       ).toBeVisible()
       await capture(member, '4-read-restored-reconciled')
       await member.reload()
       await expect(
-        member.getByRole('button', { name: /journey-d/ }),
+        content(member).getByRole('button', { name: /journey-d/ }),
       ).toBeVisible()
       expect(adoptPosts.filter((p) => p === ref)).toHaveLength(1)
       const named = (await engineAccounts(page)).filter(
@@ -489,6 +555,7 @@ test('provider accounts: adopt, reconcile lost answers by reading, keep an adopt
       await expect(
         dialog.getByText(
           `Adopting ${refs[2]}. Waiting for the server's answer.`,
+          { exact: true },
         ),
       ).toBeVisible()
 
@@ -511,18 +578,24 @@ test('provider accounts: adopt, reconcile lost answers by reading, keep an adopt
       )
       await expect(dialog).toBeHidden()
       await expect(
-        member.getByText(
+        content(member).getByText(
           `Adopting ${refs[2]}. The server has not answered yet.`,
+          { exact: true },
         ),
       ).toBeVisible()
       await expect(
-        member.getByRole('button', { name: 'Adopt a profile' }),
+        content(member).getByRole('button', {
+          name: 'Adopt a profile',
+          exact: true,
+        }),
       ).toHaveCount(0)
       await capture(member, '5-parked-after-write-revoked')
 
       release()
       await expect(
-        member.getByText(`${refs[2]} was adopted as journey-c.`),
+        content(member).getByText(`${refs[2]} was adopted as journey-c.`, {
+          exact: true,
+        }),
       ).toBeVisible()
       await member.unroute(ADOPT, holdAfterCommit)
       await capture(member, '6-parked-answer-reported')
