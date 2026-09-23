@@ -37,7 +37,9 @@ const admissionLookupPage = 4
 
 // errAdmissionRowCorrupt says a stored admission row is not one any writer, current or
 // earlier, writes: a slot that is not a hold identity, or two rows where one may exist.
-// It is refused, never read as "no hold".
+// It is an integrity fault. It is refused, never read as "no hold", and an ambiguous hold
+// is never resolved by picking one of its rows; nothing is decoded from such a row or
+// written to it, its stored values stay as they are, and no log carries them.
 var errAdmissionRowCorrupt = errors.New("finops: admission row is corrupt")
 
 // admissionRow is one admission row as read.

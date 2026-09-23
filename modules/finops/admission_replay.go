@@ -146,10 +146,37 @@ func handlesLive(ctx context.Context, sc store.Scope, handle, spend holdID, now 
 	return live, nil
 }
 
-// pairHoldsBack reports whether row is a pair an earlier build published that holds its
-// key back at now. Not implemented yet: no pair holds back.
+// pairHoldsBack reports whether row is a pair an earlier build published — reserved, a
+// hold in each slot — that holds its key back at now: dated inside the replay window,
+// with a row under either slot that withholds. Such a row does not answer a retry while
+// one of its holds has lapsed, and while it holds back nobody takes the key over,
+// releases one of its holds or takes a new hold under the key: either hold may be money
+// a caller received. The key is busy until both holds lapse or are settled.
+//
+// Both slots are read completely before anything is decided, and a slot that cannot be
+// read so is an error. An undated row is outside the window and never holds back.
+//
+// The window bounds the wait. That build created both holds of a pair before it
+// published the row and dated the row at publication, reading one clock, so every row of
+// the pair expires at its creation plus the TTL — no later than the row's date plus the
+// TTL, which the window is never shorter than — unless that clock stepped back between
+// the reads. Inside the window a takeover asks this again in its own transaction, so it
+// never needs that premise.
 func pairHoldsBack(ctx context.Context, sc store.Scope, row admissionRow, now model.Timestamp) (bool, error) {
-	return false, nil
+	if row.state != admStateReserved || row.handle.isZero() || row.spendHandle.isZero() || !withinReplayWindow(row, now) {
+		return false, nil
+	}
+	back := false
+	for _, h := range []holdID{row.handle, row.spendHandle} {
+		rows, err := rowsUnderHold(ctx, sc, h)
+		if err != nil {
+			return false, err
+		}
+		if anyWithholding(rows, now) {
+			back = true
+		}
+	}
+	return back, nil
 }
 
 // anyWithholding reports whether one of rows keeps money from other callers at now:
