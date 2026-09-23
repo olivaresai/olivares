@@ -366,6 +366,30 @@ func (m *Module) ReserveBudget(ctx context.Context, tenant model.TenantID, dims 
 		return BudgetReservation{}, fmt.Errorf("finops: reservation estimate must not be negative")
 	}
 	now := m.clock.Now().Time()
+	targets, truncated, err := m.budgetTargets(ctx, tenant, dims, now)
+	if err != nil {
+		// The census this admission binds, or an identity or group resolution it needs,
+		// could not be read, and the frontier has not been consulted either — this
+		// attempt has confirmed nothing.
+		return frontierRefusal(frontierReasonFor(nil)), storeErr(err)
+	}
+	if truncated {
+		// Explicit deny, never a silent allow and never an error the caller's fail-open
+		// contract would turn into one — exactly what CheckBudget does with the same fact.
+		return BudgetReservation{
+			Allowed: false, Action: "block",
+			Reason: "budget set truncated at scan cap; enforced fail-closed",
+		}, nil
+	}
+	return m.reserve(ctx, tenant, targets, estimateMicroUSD, now)
+}
+
+// budgetTargets reads, before any write transaction, the enforcing budgets that scope
+// dims, and turns each into a reservation target at now. truncated says the budget
+// set could not be read whole, which a caller answers with a refusal. An error is a
+// read that failed and has decided nothing. ReserveBudget and the admission's create
+// build their budget phase here, so the two bind the same budgets.
+func (m *Module) budgetTargets(ctx context.Context, tenant model.TenantID, dims SpendDims, now time.Time) ([]reservationTarget, bool, error) {
 	attr := attributionFromDims(dims)
 
 	// EVERY page, and a truncation is a DENY — the same enumeration CheckBudget does.
@@ -385,17 +409,10 @@ func (m *Module) ReserveBudget(ctx context.Context, tenant model.TenantID, dims 
 		budgets, truncated, lerr = listAllBudgets(ctx, sc)
 		return lerr
 	}); err != nil {
-		// The census this admission binds could not be read, and the frontier has not
-		// been consulted either — this attempt has confirmed nothing.
-		return frontierRefusal(frontierReasonFor(nil)), storeErr(err)
+		return nil, false, err
 	}
 	if truncated {
-		// Explicit deny, never a silent allow and never an error the caller's fail-open
-		// contract would turn into one — exactly what CheckBudget does with the same fact.
-		return BudgetReservation{
-			Allowed: false, Action: "block",
-			Reason: "budget set truncated at scan cap; enforced fail-closed",
-		}, nil
+		return nil, true, nil
 	}
 
 	// Resolve the firm identity once, only when an enforcing identity budget exists
@@ -405,7 +422,7 @@ func (m *Module) ReserveBudget(ctx context.Context, tenant model.TenantID, dims 
 		if err := m.data.View(ctx, tenant, func(sc store.Scope) error {
 			return resolveIdentity(ctx, sc, &attr)
 		}); err != nil {
-			return frontierRefusal(frontierReasonFor(nil)), storeErr(err)
+			return nil, false, err
 		}
 	}
 
@@ -417,7 +434,7 @@ func (m *Module) ReserveBudget(ctx context.Context, tenant model.TenantID, dims 
 		if err := m.data.View(ctx, tenant, func(sc store.Scope) error {
 			return resolveAgentGroups(ctx, sc, &attr)
 		}); err != nil {
-			return frontierRefusal(frontierReasonFor(nil)), storeErr(err)
+			return nil, false, err
 		}
 	}
 	// And the user-group memberships the fan-out aggregates over. The lookup is built
@@ -468,7 +485,7 @@ func (m *Module) ReserveBudget(ctx context.Context, tenant model.TenantID, dims 
 			failClosed: isGroupDimension(spec.Dimension) && spec.FailClosed,
 		})
 	}
-	return m.reserve(ctx, tenant, targets, estimateMicroUSD, now)
+	return targets, false, nil
 }
 
 // ReserveSpendLimit is the per-seat analog of ReserveBudget: it atomically
@@ -494,13 +511,24 @@ func (m *Module) ReserveSpendLimit(ctx context.Context, tenant model.TenantID, a
 		return BudgetReservation{}, fmt.Errorf("finops: reservation estimate must not be negative")
 	}
 	now := m.clock.Now().Time()
+	targets, err := m.spendLimitTargets(ctx, tenant, actorRef, groups, now)
+	if err != nil {
+		return frontierRefusal(frontierReasonFor(nil)), storeErr(err)
+	}
+	return m.reserve(ctx, tenant, targets, estimateMicroUSD, now)
+}
+
+// spendLimitTargets reads, before any write transaction, the spend limits that
+// govern actorRef and turns each period's resolved cap into a target at now, keyed by
+// the actor. An error is a read that failed and has decided nothing.
+func (m *Module) spendLimitTargets(ctx context.Context, tenant model.TenantID, actorRef string, groups []string, now time.Time) ([]reservationTarget, error) {
 	var policies []model.Policy
 	if err := m.data.View(ctx, tenant, func(sc store.Scope) error {
 		var lerr error
 		policies, lerr = listSpendLimitPolicies(ctx, sc)
 		return lerr
 	}); err != nil {
-		return frontierRefusal(frontierReasonFor(nil)), storeErr(err)
+		return nil, err
 	}
 	var targets []reservationTarget
 	for _, period := range []string{"daily", "weekly", "monthly"} {
@@ -521,7 +549,7 @@ func (m *Module) ReserveSpendLimit(ctx context.Context, tenant model.TenantID, a
 			},
 		})
 	}
-	return m.reserve(ctx, tenant, targets, estimateMicroUSD, now)
+	return targets, nil
 }
 
 // reserve runs the atomic multi-target reservation with the optimistic-concurrency
@@ -808,6 +836,70 @@ func (m *Module) reserve(ctx context.Context, tenant model.TenantID, targets []r
 		return frontierRefusal(frontierReasonFor(nil)), storeErr(lastErr)
 	}
 	return BudgetReservation{Allowed: true}, fmt.Errorf("finops: reservation retries exhausted: %w", lastErr)
+}
+
+// errSeqRace is the one failure of a create that is worth repeating as it stands: an
+// insert lost the seq race to a reserver that committed the same seq first. The whole
+// transaction is retried against the committed state, at the same identity.
+var errSeqRace = errors.New("finops: reservation lost the seq race")
+
+// errHoldIdentityRequired refuses a reserve that would insert rows under no hold
+// identity: money that no identity names cannot be found, so it cannot be settled.
+var errHoldIdentityRequired = errors.New("finops: a hold with an amount needs a hold identity")
+
+// reserveOutcome is what one reserveInScope call decided.
+type reserveOutcome struct {
+	// result is the verdict: allowed, with Handle set to the caller's identity when a
+	// row was inserted; allowed with no handle when nothing was held; or the binding
+	// refusal, block outranking throttle.
+	result BudgetReservation
+	// decided says a refusal was established, whatever error arrived after it.
+	decided bool
+	// inserted counts the ledger rows inserted under the caller's identity.
+	inserted int
+}
+
+// reserveInScope evaluates targets and inserts one active ledger row per target under
+// h, inside the CALLER's transaction. Not implemented yet: it judges no target and
+// refuses nothing but an amount with no identity, every row it inserts expires at
+// now, and an insert that fails comes back as the store gave it.
+func reserveInScope(ctx context.Context, sc store.Scope, targets []reservationTarget, estimate int64, now time.Time, h holdID) (reserveOutcome, error) {
+	out := reserveOutcome{result: BudgetReservation{Allowed: true, EstimateMicroUSD: estimate}}
+	if estimate > 0 && len(targets) > 0 && h.isZero() {
+		return out, errHoldIdentityRequired
+	}
+	repo, err := sc.Ext(budgetReservationKind)
+	if err != nil {
+		return out, err
+	}
+	for _, tg := range targets {
+		maxSeq, _, err := maxReservationSeq(ctx, repo, tg.policyID, tg.scopeKey, tg.periodStart)
+		if err != nil {
+			return out, err
+		}
+		rec := model.Record{
+			colResvPolicyRef:   tg.policyID.String(),
+			colResvPolicyKind:  tg.policyKind,
+			colResvDimension:   tg.dimension,
+			colResvScopeKey:    tg.scopeKey,
+			colResvPeriod:      tg.period,
+			colResvPeriodStart: model.NewTimestamp(tg.periodStart).String(),
+			colResvSeq:         maxSeq + 1,
+			colResvAmount:      estimate,
+			colResvActual:      int64(0),
+			colResvState:       resvStateActive,
+			colResvHandle:      h.String(),
+			colResvExpiresAt:   model.NewTimestamp(now).String(),
+		}
+		if _, err := repo.Create(ctx, rec); err != nil {
+			return out, err
+		}
+		out.inserted++
+	}
+	if out.inserted > 0 {
+		out.result.Handle = h.String()
+	}
+	return out, nil
 }
 
 // CommitReservation settles a reservation after the actuation completed: every
