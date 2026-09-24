@@ -258,52 +258,52 @@ MAX_RECORD_AGE_DAYS=45
 # CODE_OF_CONDUCT and honesty-and-limits blob links, Discussions, the v26.8.0 tag page, the raw
 # honesty-and-limits link and the raw install.sh one-liner. Only docs/launch/ files emit them. The
 # gate now refuses such a row inline, so the public tree never reads one as emitted by nothing.
-EMITTED_RECORD="https://alma.olivares.ai 200 2026-08-27
-https://docs.olivares.ai 200 2026-08-23
-https://docs.olivares.ai/cli 404 2026-08-28 docs-site-deploy-lag
-https://docs.olivares.ai/reference/api-stability/ 200 2026-08-28
-https://docs.olivares.ai/reference/configuration/ 200 2026-09-11
-https://github.com/olivaresai/olivares 200 2026-08-18
-https://github.com/olivaresai/olivares.git 200 2026-08-18
-https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/\${tag} 404 2026-09-02 sigstore-certificate-identity-not-a-location
-https://github.com/olivaresai/olivares/blob/main/CONTRIBUTING.md 404 2026-08-18 public-repo-empty-release-blocker
-https://github.com/olivaresai/olivares/blob/main/GOVERNANCE.md 404 2026-08-27 public-repo-empty-release-blocker
-https://github.com/olivaresai/olivares/blob/main/INSTALL.md#operate-claude-code-co-deployment 404 2026-08-18 public-repo-empty-release-blocker
-https://github.com/olivaresai/olivares/blob/main/SECURITY.md 404 2026-08-18 public-repo-empty-release-blocker
-https://github.com/olivaresai/olivares/blob/main/SUPPORT.md 404 2026-08-27 public-repo-empty-release-blocker
-https://github.com/olivaresai/olivares/blob/main/docs/RELEASE-VERIFICATION.md 404 2026-08-18 public-repo-empty-release-blocker
-https://github.com/olivaresai/olivares/blob/main/scripts/smoke-agentops.sh 404 2026-08-18 public-repo-empty-release-blocker
-https://github.com/olivaresai/olivares/releases 200 2026-09-17
-https://github.com/olivaresai/olivares/releases/tag/v26.9.0 200 2026-09-23
-https://github.com/olivaresai/olivares/security/advisories/OLIVARES-DRILL-0001 404 2026-08-18 drill-fixture-not-a-location
-https://github.com/olivaresai/olivares/tree/main/examples/govern-claude-code 200 2026-08-18
-https://licenses.olivares.ai 200 2026-08-18
-https://olivares.ai 200 2026-08-18
-https://olivares.ai/compliance/assessment-plan/ 200 2026-08-29
-https://olivares.ai/compliance/capabilities 200 2026-08-29
-https://olivares.ai/compliance/frameworks/ 200 2026-08-29
-https://olivares.ai/docs 200 2026-08-18
-https://olivares.ai/docs/reference/api-stability 404 2026-08-28 apex-serves-no-docs-depth
-https://olivares.ai/favicon.svg 200 2026-08-18
-https://olivares.ai/ns/oscal 404 2026-08-18 namespace-identifier-not-a-location
-https://olivares.ai/pricing 200 2026-08-26
-https://olivares.ai/product 200 2026-09-17
-https://olivares.ai/solutions 200 2026-09-17
-https://olivares.ai/how-it-works 200 2026-09-17
-https://olivares.ai/architecture 200 2026-09-17
-https://olivares.ai/security 200 2026-09-17
-https://olivares.ai/trust 200 2026-09-17
-https://olivares.ai/compare 200 2026-09-17
-https://olivares.ai/demo 200 2026-09-17
-https://olivares.ai/changelog 200 2026-09-17
-https://olivares.ai/olivares/install.sh 200 2026-09-17
-https://olivares.ai/brand 200 2026-09-17
-https://olivares.ai/press 200 2026-09-17
-https://olivares.ai/status 200 2026-09-17
-https://olivares.ai/roadmap 200 2026-09-17
-https://olivares.ai/updates 404 2026-08-18 release-blocker-no-producer-no-server
-https://packages.olivares.ai 404 2026-09-02 package-repository-awaits-authorized-publish
-https://raw.githubusercontent.com/olivaresai/olivares/main/scripts/install-agentops.sh 404 2026-08-18 public-repo-empty-release-blocker"
+EMITTED_RECORD="https://alma.olivares.ai 200 2026-09-24
+https://docs.olivares.ai 200 2026-09-24
+https://docs.olivares.ai/cli 200 2026-09-24
+https://docs.olivares.ai/reference/api-stability/ 200 2026-09-24
+https://docs.olivares.ai/reference/configuration/ 200 2026-09-24
+https://github.com/olivaresai/olivares 200 2026-09-24
+https://github.com/olivaresai/olivares.git 200 2026-09-24
+https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/\${tag} 404 2026-09-24 sigstore-certificate-identity-not-a-location
+https://github.com/olivaresai/olivares/blob/main/CONTRIBUTING.md 200 2026-09-24
+https://github.com/olivaresai/olivares/blob/main/GOVERNANCE.md 200 2026-09-24
+https://github.com/olivaresai/olivares/blob/main/INSTALL.md#operate-claude-code-co-deployment 200 2026-09-24
+https://github.com/olivaresai/olivares/blob/main/SECURITY.md 200 2026-09-24
+https://github.com/olivaresai/olivares/blob/main/SUPPORT.md 200 2026-09-24
+https://github.com/olivaresai/olivares/blob/main/docs/RELEASE-VERIFICATION.md 200 2026-09-24
+https://github.com/olivaresai/olivares/blob/main/scripts/smoke-agentops.sh 200 2026-09-24
+https://github.com/olivaresai/olivares/releases 200 2026-09-24
+https://github.com/olivaresai/olivares/releases/tag/v26.9.0 200 2026-09-24
+https://github.com/olivaresai/olivares/security/advisories/OLIVARES-DRILL-0001 404 2026-09-24 drill-fixture-not-a-location
+https://github.com/olivaresai/olivares/tree/main/examples/govern-claude-code 200 2026-09-24
+https://licenses.olivares.ai 200 2026-09-24
+https://olivares.ai 200 2026-09-24
+https://olivares.ai/compliance/assessment-plan/ 200 2026-09-24
+https://olivares.ai/compliance/capabilities 200 2026-09-24
+https://olivares.ai/compliance/frameworks/ 200 2026-09-24
+https://olivares.ai/docs 200 2026-09-24
+https://olivares.ai/docs/reference/api-stability 404 2026-09-24 apex-serves-no-docs-depth
+https://olivares.ai/favicon.svg 200 2026-09-24
+https://olivares.ai/ns/oscal 404 2026-09-24 namespace-identifier-not-a-location
+https://olivares.ai/pricing 200 2026-09-24
+https://olivares.ai/product 200 2026-09-24
+https://olivares.ai/solutions 200 2026-09-24
+https://olivares.ai/how-it-works 200 2026-09-24
+https://olivares.ai/architecture 200 2026-09-24
+https://olivares.ai/security 200 2026-09-24
+https://olivares.ai/trust 200 2026-09-24
+https://olivares.ai/compare 200 2026-09-24
+https://olivares.ai/demo 200 2026-09-24
+https://olivares.ai/changelog 200 2026-09-24
+https://olivares.ai/olivares/install.sh 200 2026-09-24
+https://olivares.ai/brand 200 2026-09-24
+https://olivares.ai/press 200 2026-09-24
+https://olivares.ai/status 200 2026-09-24
+https://olivares.ai/roadmap 200 2026-09-24
+https://olivares.ai/updates 404 2026-09-24 release-blocker-no-producer-no-server
+https://packages.olivares.ai 404 2026-09-24 package-repository-awaits-authorized-publish
+https://raw.githubusercontent.com/olivaresai/olivares/main/scripts/install-agentops.sh 200 2026-09-24"
 
 EMU_SELFTEST=0
 [ "${1:-}" = "--selftest" ] && EMU_SELFTEST=1
