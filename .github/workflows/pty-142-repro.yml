@@ -1,0 +1,620 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# pty-142-repro — a bounded reproduction instrument for ONE retained test failure of ONE exact
+# commit, d13bb3d1a1b90e0f682edd0986e8eca11a0e1699. DIAGNOSTIC ONLY: it runs from the branch
+# diag/pty-142-repro, which adds this one file and is never merged. It edits nothing, mocks nothing
+# and weakens no assertion. It checks out that commit and runs one named test on it, with the flags,
+# test clock, PostgreSQL services and environment of the job that went red. The test runs a finite
+# number of times, and every trial is kept.
+#
+# Bound source. This file quotes that commit's assertion line and the blobs of the test and the three
+# runner files it exercises (PINNED_BLOBS). Any other `sha` input is refused before checkout; a later
+# source needs its own bound instrument.
+#
+# Selection (one job, one runner, its own two PostgreSQL services):
+#   ./modules/sessions  TestPTYRunner_ChildSeesTTYAndBridgesNDJSON
+#   named assertion  pty_runner_test.go:184 "exit -1"
+#   origin  pr-ci, job pr-test-shard (sessions), step "one shard of the Go suite, without the race
+#           detector": task test:functional:shard = scripts/pr-suite-shards.sh run
+#           = scripts/with-pg-env.sh go test -count=1 -timeout 30m <the shard's packages>; no -race;
+#           step ceiling 35 min, job ceiling 45 min.
+#   This is ONE named test, not the shard: its package neighbours (the parallel tests of
+#   modules/sessions, an 878 s package run in the original) stay excluded, so no trial claims the full
+#   original execution context. -json is the one added flag: it changes the output format only.
+#
+# Observables, all without changing product or test bytes:
+#   - each trial's raw -json stream, stderr, raw exit, the test's own Elapsed and its own output lines,
+#     including the value the test prints at :184 ("exit <code>"). The runner reports -1 there when the
+#     child did not exit normally (a signal). The signal number itself is not printed by the test and
+#     is NOT observable here.
+#   - with proc_sampler=on (the default), a read-only `ps` sample every 100 ms of the peer script and
+#     the test binary: state, wchan, process group/session, tty, and the pending/blocked/ignored/caught
+#     signal masks. It is an extra process on the runner, a variable of its own. proc_sampler=off
+#     removes it. Nothing privileged is read (no dmesg, no ptrace).
+#
+# Verdict of one trial (rate.tsv, verdicts.tsv). Inability is decided FIRST:
+#   2  INABILITY, excluded from the rate. Any one of: the Go test timeout; a raw exit other than 0 or
+#      1; a data race report; a cluster-state line; a skip; results missing from or extra to the
+#      pinned expected set; another failing test; the :184 assertion with another value; another
+#      assertion line in the test's output. This holds even when the named text is also present.
+#      That observation is kept in named_line_present and never counted.
+#   1  only then, a NAMED-ONLY failure: raw exit 1, the named test failed, nothing else failed, and its
+#      output holds exactly one named line (quoted verbatim into rate.tsv) and no other assertion.
+#   0  the expected test passed with raw exit 0. The test prints no log line, so its pass event is
+#      the only evidence.
+# The rate is n1 / (n0 + n1) over the trials that measured, and every 2 is reported beside it.
+# Passing trials do NOT close the intermittent failure.
+#
+# Ceilings. The test clock stays at the original 30m. The trials step is 33 min (the origin step was
+# 35), and the job is 60 min, above its 57-minute step sum (the origin job was 45). budget_minutes (5-30) bounds
+# the trial loop, and each trial is bounded by the budget that remains.
+name: pty-142-repro
+
+# Triggers. workflow_dispatch carries the trial plan, and its sha must be the bound source. The push
+# trigger is scoped to the one diagnostic branch that carries this file. A push run measures the
+# defaults below, exactly as a dispatch without overrides would.
+on:
+  push:
+    branches:
+      - diag/pty-142-repro
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: The bound source. Only d13bb3d1a1b90e0f682edd0986e8eca11a0e1699 is accepted; any other value is refused before checkout.
+        required: true
+        default: d13bb3d1a1b90e0f682edd0986e8eca11a0e1699
+        type: string
+      trials:
+        description: Trials, an integer 1-20. Every trial is kept.
+        required: true
+        default: '20'
+        type: string
+      budget_minutes:
+        description: Total time budget of the trials, an integer 5-30 minutes.
+        required: true
+        default: '30'
+        type: string
+      proc_sampler:
+        description: Read-only 10 Hz ps sampling of the peer script and the test binary during each trial.
+        required: true
+        default: 'on'
+        type: choice
+        options:
+          - 'on'
+          - 'off'
+
+permissions:
+  contents: read
+
+# One run per dispatch; a running measurement is never cancelled, because a cancelled run carries
+# no verdict at all.
+concurrency:
+  group: pty-142-repro-${{ github.run_id }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  # The one source this instrument is bound to, and the blobs of the files whose lines it quotes.
+  PINNED_SHA: d13bb3d1a1b90e0f682edd0986e8eca11a0e1699
+  PINNED_BLOBS: |-
+    modules/sessions/pty_runner_test.go 54762f35798bff4586359ac313c772c5c9103906
+    modules/sessions/pty_linux.go 9fe29d9c2a9ef66c8496f820400652174f430c45
+    modules/sessions/procrunner_unix.go 66fea89185cd55fb32bd54f7493e669dc8294386
+    modules/sessions/procrunner.go 4d6a21c4bd9e8ed54cb1598e33fd1738030e029a
+  # A push carries no inputs; the dispatch defaults apply then.
+  INPUT_SHA: ${{ inputs.sha || 'd13bb3d1a1b90e0f682edd0986e8eca11a0e1699' }}
+  INPUT_TRIALS: ${{ inputs.trials || '20' }}
+  INPUT_BUDGET_MINUTES: ${{ inputs.budget_minutes || '30' }}
+  INPUT_PROC_SAMPLER: ${{ inputs.proc_sampler || 'on' }}
+  # The shared shell library. Every step that measures or judges evaluates it first. It never turns
+  # a raw exit into a verdict by itself: run_trial keeps the stream, stderr and exit; classify judges
+  # them; trials_loop writes the judgement to rate.tsv and verdicts.tsv.
+  REPRO_LIB: |
+    set -euo pipefail
+    : "${SEL:?SEL must name the selection of this job}"
+    OUT="${OUT:-$RUNNER_TEMP/repro/$SEL}"
+    mkdir -p "$OUT"
+
+    fail() { printf '::error::%s\n' "$*"; return 1; }
+    count_lines() { awk 'NF {c++} END {print c+0}'; }
+    tsv_safe() { printf '%s' "$1" | tr '\t\r\n' '   '; }
+
+    # Inputs are validated deny-closed: an invalid input is an inability, never a run. Every refusal
+    # returns explicitly, because finalize calls this inside an `if`, where set -e is off.
+    validate_inputs() {
+      [ "${INPUT_SHA:-}" = "$PINNED_SHA" ] ||
+        { fail "sha [${INPUT_SHA:-}] is not the bound source $PINNED_SHA; this instrument quotes that source's assertion line and blobs and measures no other commit"; return 1; }
+      { [[ "${INPUT_TRIALS:-}" =~ ^[1-9][0-9]?$ ]] && [ "$INPUT_TRIALS" -le 20 ]; } ||
+        { fail "trials must be an integer 1-20: [${INPUT_TRIALS:-}]"; return 1; }
+      { [[ "${INPUT_BUDGET_MINUTES:-}" =~ ^[1-9][0-9]?$ ]] && [ "$INPUT_BUDGET_MINUTES" -ge 5 ] &&
+        [ "$INPUT_BUDGET_MINUTES" -le 30 ]; } ||
+        { fail "budget_minutes must be an integer 5-30: [${INPUT_BUDGET_MINUTES:-}]"; return 1; }
+      case "${INPUT_PROC_SAMPLER:-}" in on | off) : ;; *) fail "proc_sampler must be on or off: [${INPUT_PROC_SAMPLER:-}]"; return 1 ;; esac
+    }
+
+    # The checkout is the bound source, clean, with every pinned blob, on a GitHub-hosted runner.
+    identity() {
+      local path blob n=0
+      validate_inputs
+      [ "$(git rev-parse HEAD)" = "$PINNED_SHA" ] || fail "the checkout $(git rev-parse HEAD) is not the bound source $PINNED_SHA"
+      [ -z "$(git status --porcelain --untracked-files=all)" ] || fail "the checkout is not clean"
+      while read -r path blob; do
+        [ -n "$path" ] || continue
+        [ "$(git rev-parse "HEAD:$path")" = "$blob" ] || fail "$path is not blob $blob"
+        n=$((n + 1))
+      done <<< "$PINNED_BLOBS"
+      [ "$n" = 4 ] || fail "expected 4 pinned blobs, checked $n"
+      [ "${RUNNER_PLACEMENT:-}" = github-hosted ] ||
+        fail "this job runs on a ${RUNNER_PLACEMENT:-unknown} runner; the instrument runs on GitHub-hosted runners only"
+      {
+        printf 'selection %s\ninput_sha %s\nbound_sha %s\ntree %s\nworkflow_sha %s\n' \
+          "$SEL" "$INPUT_SHA" "$PINNED_SHA" "$(git rev-parse 'HEAD^{tree}')" "${GITHUB_WORKFLOW_SHA:-unknown}"
+        printf 'event %s ref %s repository %s run %s attempt %s\n' \
+          "$GITHUB_EVENT_NAME" "$GITHUB_REF" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"
+        printf 'trials %s budget_minutes %s proc_sampler %s\n' "$INPUT_TRIALS" "$INPUT_BUDGET_MINUTES" "$INPUT_PROC_SAMPLER"
+        printf 'runner %s placement %s %s %s image %s %s\n' "${RUNNER_NAME:-unknown}" "$RUNNER_PLACEMENT" \
+          "$RUNNER_OS" "$RUNNER_ARCH" "${ImageOS:-unknown}" "${ImageVersion:-unknown}"
+        printf 'blob %s\n' "$PINNED_BLOBS"
+      } > "$OUT/identity.txt"
+      cat "$OUT/identity.txt"
+    }
+
+    # run_logged LABEL DIR COMMAND...: a non-test command, its log and raw exit kept.
+    run_logged() {
+      local label="$1" dir="$2" rc=0
+      shift 2
+      { printf 'cd %q && ' "$dir"; printf '%q ' "$@"; printf '\n'; } > "$OUT/$label.command"
+      ( cd "$dir" && "$@" ) > "$OUT/$label.log" 2>&1 || rc=$?
+      printf '%s\n' "$rc" > "$OUT/$label.exit"
+      cat "$OUT/$label.log"
+      [ "$rc" -eq 0 ] || fail "$label exited $rc"
+    }
+
+    # proc_sampler FILE: every 100 ms, one read-only `ps` row per process whose command line names the
+    # peer script or the test binary. Own-user processes only; nothing privileged is read.
+    proc_sampler() {
+      local out="$1" ts
+      printf 'epoch_s\tpid\tppid\tpgid\tsid\ttty\tstat\twchan\tpending\tblocked\tignored\tcaught\tetimes\targs\n' > "$out"
+      while :; do
+        ts="${EPOCHREALTIME/,/.}"
+        { ps -eo pid=,ppid=,pgid=,sid=,tname=,stat=,wchan:32=,pending=,blocked=,ignored=,caught=,etimes=,args= 2>/dev/null || true; } |
+          awk -v ts="$ts" 'BEGIN { OFS = "\t" } /pty-peer[.]sh|sessions[.]test/ && !/ awk / {
+            a = $13; for (i = 14; i <= NF; i++) a = a " " $i
+            print ts, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, a }' >> "$out" || true
+        sleep 0.1
+      done
+    }
+
+    # peer_summary FILE: the distinct states sampled for the peer script, and its last sampled row.
+    peer_summary() {
+      [ -s "$1" ] || { printf 'sampler off'; return 0; }
+      awk -F '\t' 'NR > 1 && $14 ~ /pty-peer[.]sh/ { n++; if (!($7 in st)) { st[$7] = 1; order = order (order ? "," : "") $7 }
+        last = "stat=" $7 " wchan=" $8 " pending=" $9 " blocked=" $10 " ignored=" $11 " caught=" $12 }
+        END { if (n) printf "samples=%d states=%s last:%s", n, order, last; else printf "samples=0" }' "$1"
+    }
+
+    # run_trial BASE DIR SECONDS COMMAND...: the command verbatim, bounded by the remaining budget; raw
+    # -json stream, stderr and exit kept. The clock itself is `bounded`, which only the trials step
+    # defines: its declared maximum is that step's static env TRIAL_CLOCK, and a trial is only ever
+    # given less. coreutils signals its whole process group, so a stopped trial takes its test binary
+    # with it; the sampler runs outside that group and is stopped by its own pid.
+    run_trial() {
+      local base="$1" dir="$2" secs="$3" rc=0 t0 t1 max spid=""
+      shift 3
+      declare -F bounded >/dev/null || fail "run_trial needs the trials step's bounded()"
+      max="${TRIAL_CLOCK:?the trials step declares TRIAL_CLOCK}"; max="${max%s}"
+      [[ "$max" =~ ^[1-9][0-9]*$ ]] || fail "TRIAL_CLOCK must be whole seconds, got [$TRIAL_CLOCK]"
+      [ "$secs" -le "$max" ] || secs="$max"
+      {
+        printf 'cd %q && ' "$dir"; printf '%q ' "$@"; printf '\n'
+        printf '# per-trial clock %ss with a 30 s kill-after (the budget remaining when the trial started; at most %s)\n' "$secs" "$TRIAL_CLOCK"
+      } > "$OUT/$base.command"
+      : > "$OUT/$base.proc.tsv"
+      if [ "$INPUT_PROC_SAMPLER" = on ]; then
+        proc_sampler "$OUT/$base.proc.tsv" &
+        spid=$!
+      fi
+      STARTED="$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)"
+      t0="$(date +%s.%N)"
+      ( cd "$dir" && bounded "$secs" "$@" ) > "$OUT/$base.json" 2> "$OUT/$base.stderr" || rc=$?
+      t1="$(date +%s.%N)"
+      if [ -n "$spid" ]; then
+        kill "$spid" 2>/dev/null || true
+        wait "$spid" 2>/dev/null || true
+      fi
+      printf '%s\n' "$rc" > "$OUT/$base.exit"
+      ELAPSED="$(LC_ALL=C awk -v a="$t0" -v b="$t1" 'BEGIN { printf "%.1f", b - a }')"
+      RAW_EXIT="$rc"
+    }
+
+    # One "action<TAB>test" line per test that reached pass, fail or skip.
+    results() {
+      jq -rR 'fromjson? | select(.Test != null and (.Action == "pass" or .Action == "fail" or .Action == "skip")) | "\(.Action)\t\(.Test)"' \
+        "$OUT/$1.json" | LC_ALL=C sort
+    }
+    # Output is joined byte for byte (jq -j): each event already carries its own newline.
+    output_of() {
+      jq -jR --arg t "$2" 'fromjson? | select(.Test == $t and .Action == "output") | .Output' "$OUT/$1.json"
+    }
+    stream_text() {
+      jq -jR 'fromjson? | select(.Action == "output" or .Action == "build-output") | .Output' "$OUT/$1.json"
+      cat "$OUT/$1.stderr"
+    }
+
+    # expected_names: the pinned expected result set of this selection (EXPECTED_SET), sorted.
+    expected_names() { printf '%s\n' "$EXPECTED_SET" | awk 'NF' | LC_ALL=C sort; }
+
+    # fileline_lines FILE: every "<file>.go:<line>: " line of a test's own output. The named test
+    # prints no log line, so every such line other than the named one is another assertion.
+    fileline_lines() { { grep -E '^[[:space:]]*[A-Za-z0-9_./-]+\.go:[0-9]+: ' "$1" || true; } | sed 's/^[[:space:]]*//'; }
+
+    # classify BASE: sets V (0/1/2), L, FIRST, NAMED_PRESENT (yes|no), LINE184 and TEST_ELAPSED.
+    # INABILITY FIRST. Every obstruction returns 2 even when the named text is also present;
+    # NAMED_PRESENT keeps that observation apart, and a 2 is never counted in the rate. Only then a
+    # NAMED-ONLY failure is 1, and a pass of the expected test is 0.
+    classify() {
+      local base="$1" got want names dups missing extra skips failing other_failing other_lines named_count named_line name
+      got="$(results "$base")"
+      printf '%s\n' "$got" > "$OUT/$base.results"
+      stream_text "$base" > "$OUT/$base.text"
+      output_of "$base" "$TEST" > "$OUT/$base.test-output"
+      want="$(expected_names)"
+      names="$({ awk -F '\t' 'NF == 2 {print $2}' <<< "$got" || true; } | LC_ALL=C sort)"
+      dups="$({ uniq -d <<< "$names" || true; } | paste -sd, -)"
+      missing="$({ LC_ALL=C comm -23 <(printf '%s\n' "$want") <(printf '%s\n' "$names" | uniq) || true; } | awk 'NF' | paste -sd, -)"
+      extra="$({ LC_ALL=C comm -13 <(printf '%s\n' "$want") <(printf '%s\n' "$names" | uniq) || true; } | awk 'NF' | paste -sd, -)"
+      [ -z "$dups" ] || extra="${extra:+$extra,}duplicate:$dups"
+      skips="$({ awk -F '\t' '$1 == "skip" {print $2}' <<< "$got" || true; } | paste -sd, -)"
+      failing="$({ awk -F '\t' '$1 == "fail" {print $2}' <<< "$got" || true; } | LC_ALL=C sort)"
+      other_failing="$({ grep -vxF -e "$TEST" <<< "$failing" || true; } | awk 'NF')"
+      other_lines="$(fileline_lines "$OUT/$base.test-output" | { grep -vE -- "$NAMED_RE" || true; })"
+      named_count="$({ grep -E -- "$NAMED_RE" "$OUT/$base.test-output" || true; } | awk 'NF {c++} END {print c+0}')"
+      named_line="$({ grep -E -- "$NAMED_RE" "$OUT/$base.test-output" || true; } | awk 'NR == 1' | sed 's/^[[:space:]]*//')"
+      NAMED_PRESENT=no
+      if grep -qE -- "$NAMED_RE" "$OUT/$base.text"; then NAMED_PRESENT=yes; fi
+      # What the test prints at :184, whatever the value: the child's exit code as the runner reports it.
+      LINE184="$({ grep -E 'pty_runner_test\.go:184: ' "$OUT/$base.test-output" || true; } | awk 'NR == 1' | sed 's/^[[:space:]]*//')"
+      TEST_ELAPSED="$(jq -rR --arg t "$TEST" 'fromjson? | select(.Test == $t and (.Action == "pass" or .Action == "fail" or .Action == "skip")) | .Elapsed' "$OUT/$base.json" | awk 'NR == 1')"
+      FIRST=""
+      # The actual output of every OTHER failing test, verbatim, in its own receipt.
+      : > "$OUT/$base.other-failures"
+      while IFS= read -r name; do
+        [ -n "$name" ] || continue
+        { printf '=== %s\n' "$name"; output_of "$base" "$name"; } >> "$OUT/$base.other-failures"
+      done <<< "$other_failing"
+      if grep -qF 'panic: test timed out' "$OUT/$base.text"; then
+        V=2; L="INABILITY the Go test timeout fired"
+        FIRST="$({ grep -F 'panic: test timed out' "$OUT/$base.text" || true; } | awk 'NR == 1')"
+      elif [ "$RAW_EXIT" != 0 ] && [ "$RAW_EXIT" != 1 ]; then
+        V=2; L="INABILITY the process ended with raw exit $RAW_EXIT (budget stop, signal or tool failure)"
+      elif grep -qF 'WARNING: DATA RACE' "$OUT/$base.text"; then
+        V=2; L="INABILITY a data race report"
+        FIRST="$({ grep -E 'race detected during execution of test|WARNING: DATA RACE' "$OUT/$base.text" || true; } | awk 'NR == 1' | sed 's/^[[:space:]]*//')"
+      elif grep -qF 'CLUSTER_STATE|' "$OUT/$base.text"; then
+        V=2; L="INABILITY a cluster-state line was reported"
+        FIRST="$({ grep -F 'CLUSTER_STATE|' "$OUT/$base.text" || true; } | awk 'NR == 1')"
+      elif [ -n "$skips" ]; then
+        V=2; L="INABILITY a selected test skipped: $skips"
+        FIRST="$(fileline_lines "$OUT/$base.text" | awk 'NR == 1')"
+      elif [ -n "$missing" ] || [ -n "$extra" ]; then
+        V=2; L="INABILITY the results differ from the pinned expected set (missing: ${missing:-none}; extra: ${extra:-none})"
+        FIRST="$({ grep -E '\[build failed\]|\[setup failed\]|^FAIL|panic:|cannot|error' "$OUT/$base.text" || true; } | awk 'NR == 1')"
+      elif [ -n "$other_failing" ]; then
+        V=2; L="INABILITY another test failed: $(paste -sd, - <<< "$other_failing") (verbatim in $base.other-failures)"
+        FIRST="$(fileline_lines "$OUT/$base.other-failures" | paste -sd '|' -)"
+      elif [ -n "$failing" ] && [ -n "$LINE184" ] && [ "$named_count" = 0 ]; then
+        V=2; L="INABILITY the :184 assertion fired with another value"
+        FIRST="$LINE184"
+      elif [ -n "$failing" ] && [ -n "$other_lines" ]; then
+        V=2; L="INABILITY another assertion line in the test output"
+        FIRST="$(paste -sd '|' - <<< "$other_lines")"
+      elif [ -n "$failing" ]; then
+        if [ "$RAW_EXIT" = 1 ] && [ "$named_count" = 1 ]; then
+          V=1; L="NAMED-ONLY assertion failure"; FIRST="$named_line"
+        else
+          V=2; L="INABILITY the test failed without exactly one named line (named lines $named_count, raw exit $RAW_EXIT)"
+          FIRST="$(fileline_lines "$OUT/$base.test-output" | awk 'END {print}')"
+        fi
+      elif [ "$RAW_EXIT" = 0 ]; then
+        V=0; L="PASS (the expected test passed)"
+      else
+        V=2; L="INABILITY no test failed, yet raw exit $RAW_EXIT"
+      fi
+      return 0
+    }
+
+    # trials_loop DIR COMMAND...: INPUT_TRIALS trials of one command inside one time budget. Every
+    # trial keeps trial-NN.{command,json,stderr,exit,results,text,test-output,other-failures,proc.tsv};
+    # a trial the budget cannot start is recorded as not run, never dropped.
+    trials_loop() {
+      local dir="$1" t base now remaining start budget peer
+      shift
+      [ -n "$(expected_names)" ] || fail "EXPECTED_SET is empty"
+      grep -qxF -- "$TEST" <<< "$(expected_names)" || fail "EXPECTED_SET does not name the test $TEST"
+      expected_names > "$OUT/$SEL.expected-set"
+      start="$(date +%s)"
+      budget=$((INPUT_BUDGET_MINUTES * 60))
+      printf 'trial\tverdict\tlabel\tstarted_utc\ttrial_elapsed_s\ttest_elapsed_s\traw_exit\tnamed_line_present\tline_184\tfirst_failing_line\tpeer_observation\n' > "$OUT/rate.tsv"
+      for t in $(seq 1 "$INPUT_TRIALS"); do
+        base="$(printf 'trial-%02d' "$t")"
+        now="$(date +%s)"
+        remaining=$((start + budget - now))
+        if [ "$remaining" -lt 60 ]; then
+          V=2; L="INABILITY not run: the ${INPUT_BUDGET_MINUTES}-minute budget was spent"
+          FIRST=""; STARTED="-"; ELAPSED="0"; RAW_EXIT="-"; NAMED_PRESENT="-"; LINE184=""; TEST_ELAPSED="-"; peer="-"
+        else
+          run_trial "$base" "$dir" "$remaining" "$@"
+          classify "$base"
+          peer="$(peer_summary "$OUT/$base.proc.tsv")"
+        fi
+        printf '%s\t%s\n' "$base" "$V $L" >> "$OUT/verdicts.tsv"
+        printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$t" "$V" "$(tsv_safe "$L")" "$STARTED" "$ELAPSED" "${TEST_ELAPSED:--}" \
+          "$RAW_EXIT" "$NAMED_PRESENT" "$(tsv_safe "$LINE184")" "$(tsv_safe "$FIRST")" "$(tsv_safe "$peer")" >> "$OUT/rate.tsv"
+        printf 'trial %s: %s %s (named_line_present=%s, test elapsed %ss)\n' "$t" "$V" "$L" "$NAMED_PRESENT" "${TEST_ELAPSED:--}"
+        [ -z "$FIRST" ] || printf '  %s\n' "$FIRST"
+      done
+    }
+
+    # summarize: the rate over the trials that measured, every inability beside it. Sets N2.
+    summarize() {
+      local n0 n1 n2named rows
+      [ -f "$OUT/rate.tsv" ] || fail "no rate.tsv was written"
+      rows="$(awk -F '\t' 'NR > 1' "$OUT/rate.tsv" | count_lines)"
+      n0="$(awk -F '\t' 'NR > 1 && $2 == "0"' "$OUT/rate.tsv" | count_lines)"
+      n1="$(awk -F '\t' 'NR > 1 && $2 == "1"' "$OUT/rate.tsv" | count_lines)"
+      N2="$(awk -F '\t' 'NR > 1 && $2 == "2"' "$OUT/rate.tsv" | count_lines)"
+      n2named="$(awk -F '\t' 'NR > 1 && $2 == "2" && $8 == "yes"' "$OUT/rate.tsv" | count_lines)"
+      {
+        printf 'selection\t%s\n' "$SEL"
+        printf 'bound_sha\t%s\n' "$PINNED_SHA"
+        printf 'trials_requested\t%s\n' "${INPUT_TRIALS:-invalid}"
+        printf 'rows\t%s\n' "$rows"
+        printf 'verdict_0_pass\t%s\n' "$n0"
+        printf 'verdict_1_named_only_failure\t%s\n' "$n1"
+        printf 'verdict_2_inability\t%s\n' "$N2"
+        printf 'inabilities_with_named_text_present\t%s (observed, never counted)\n' "$n2named"
+        printf 'test_elapsed_of_named_failures\t%s\n' "$(awk -F '\t' 'NR > 1 && $2 == "1" {print $6}' "$OUT/rate.tsv" | paste -sd, -)"
+        printf 'test_elapsed_of_passes\t%s\n' "$(awk -F '\t' 'NR > 1 && $2 == "0" {print $6}' "$OUT/rate.tsv" | paste -sd, -)"
+        printf 'rate\t%s/%s trials that measured failed at the named assertion alone (%s inabilities excluded, each listed in rate.tsv)\n' \
+          "$n1" "$((n0 + n1))" "$N2"
+        printf 'note\ta 0 means the named assertion was not reached in that trial; passing trials do not close an intermittent failure\n'
+      } > "$OUT/$SEL.summary"
+      cat "$OUT/$SEL.summary"
+      if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+        { printf '### %s\n\n```\n' "$SEL"; cat "$OUT/$SEL.summary"; printf '```\n'; } >> "$GITHUB_STEP_SUMMARY"
+      fi
+      [ "$rows" = "${INPUT_TRIALS:-x}" ] || N2=$((N2 + 1))
+    }
+
+    # finalize SETUP_OUTCOMES: when no trial could start, every requested trial is written as an
+    # inability that names the setup step that stopped it; then the summary. The job succeeds only when
+    # every trial measured (0 or 1). That describes the instrument, not the product.
+    finalize() {
+      local outcomes="$1" first_bad t rows
+      first_bad="$(tr ' ' '\n' <<< "$outcomes" | awk -F= 'NF == 2 && $2 != "success" {print; exit}')"
+      if [ -f "$OUT/rate.tsv" ] && validate_inputs 2>/dev/null; then
+        # A trials step stopped mid-loop (its ceiling, a runner loss) leaves fewer rows than trials;
+        # each missing trial is written as an inability, never dropped.
+        rows="$(awk -F '\t' 'NR > 1' "$OUT/rate.tsv" | count_lines)"
+        for t in $(seq "$((rows + 1))" "$INPUT_TRIALS"); do
+          printf '%s\t2\tINABILITY not classified: the trials step ended (%s)\t-\t0\t-\t-\t-\t\t\t-\n' "$t" "${first_bad:-unknown}" >> "$OUT/rate.tsv"
+          printf 'trial-%02d\t2 INABILITY not classified: the trials step ended (%s)\n' "$t" "${first_bad:-unknown}" >> "$OUT/verdicts.tsv"
+        done
+      fi
+      if [ ! -f "$OUT/rate.tsv" ]; then
+        printf 'trial\tverdict\tlabel\tstarted_utc\ttrial_elapsed_s\ttest_elapsed_s\traw_exit\tnamed_line_present\tline_184\tfirst_failing_line\tpeer_observation\n' > "$OUT/rate.tsv"
+        if validate_inputs 2>/dev/null; then
+          for t in $(seq 1 "$INPUT_TRIALS"); do
+            printf '%s\t2\tINABILITY not run: setup step %s\t-\t0\t-\t-\t-\t\t\t-\n' "$t" "${first_bad:-unknown}" >> "$OUT/rate.tsv"
+            printf 'trial-%02d\t2 INABILITY not run: setup step %s\n' "$t" "${first_bad:-unknown}" >> "$OUT/verdicts.tsv"
+          done
+        else
+          printf '0\t2\tINABILITY refused inputs (sha not the bound source, or trials/budget_minutes/proc_sampler out of range)\t-\t0\t-\t-\t-\t\t\t-\n' >> "$OUT/rate.tsv"
+          printf '%s\t2 INABILITY refused inputs\n' "$SEL" >> "$OUT/verdicts.tsv"
+        fi
+      fi
+      printf 'setup outcomes: %s\n' "$outcomes" > "$OUT/setup-outcomes.txt"
+      summarize
+      [ "$N2" -eq 0 ] || fail "$SEL: $N2 trial(s) could not measure; the rate above excludes them and rate.tsv names each"
+    }
+
+jobs:
+  pty:
+    if: github.repository == 'olivaresai/olivares'
+    name: TestPTYRunner_ChildSeesTTYAndBridgesNDJSON (modules/sessions, no -race)
+    runs-on: ubuntu-latest
+    # Step ceilings sum to 57 minutes; the job ceiling stays above that sum and at 60 minutes.
+    timeout-minutes: 60
+    # Both clusters exactly as the job that went red declared them (same image digest, bare container
+    # port, the same health options and memory cap).
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16@sha256:a36250871de0833b8757561c72f2477ef1ddd1101afa4e617fb552e0de514c6b
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+          --memory=1g
+      postgres_other:
+        image: pgvector/pgvector:pg16@sha256:a36250871de0833b8757561c72f2477ef1ddd1101afa4e617fb552e0de514c6b
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+          --memory=1g
+    env:
+      SEL: pty_142
+      # The shard helper's selector in the job that went red; only that helper reads it, and this
+      # selection calls go test directly.
+      OLIVARES_TEST_SHARD: sessions
+      # setup-go exported the same value in the job that went red; stated here so it cannot drift.
+      GOTOOLCHAIN: local
+      RUN_PATTERN: '^TestPTYRunner_ChildSeesTTYAndBridgesNDJSON$'
+      TEST: TestPTYRunner_ChildSeesTTYAndBridgesNDJSON
+      # Quoted from the bound source (the sha is pinned, so this line cannot drift).
+      NAMED_RE: 'pty_runner_test\.go:184: exit -1$'
+      # Every result name this selection produces at the bound source: the test has no subtests.
+      EXPECTED_SET: TestPTYRunner_ChildSeesTTYAndBridgesNDJSON
+    steps:
+      - name: the input names the bound source (any other sha is refused before checkout)
+        id: input
+        timeout-minutes: 1
+        run: |
+          eval "$REPRO_LIB"
+          validate_inputs
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 2
+        with:
+          ref: d13bb3d1a1b90e0f682edd0986e8eca11a0e1699
+          persist-credentials: false
+      - name: the checkout is the bound source, clean, with the four pinned blobs
+        id: identity
+        timeout-minutes: 1
+        env:
+          RUNNER_PLACEMENT: ${{ runner.environment }}
+        run: |
+          eval "$REPRO_LIB"
+          identity
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        id: setup-go
+        timeout-minutes: 4
+        with:
+          go-version-file: go.work
+          cache: true
+          cache-dependency-path: go.work.sum
+      - name: GOBIN and a TMPDIR where an extracted binary can actually run (as in the job that went red)
+        id: tmpdir
+        timeout-minutes: 1
+        run: |
+          eval "$REPRO_LIB"
+          # The test writes its peer script under t.TempDir(), which honours TMPDIR, and EXECUTES it. A
+          # hardened /tmp is mounted noexec, and there the exec fails with a permission error that reads
+          # as a test defect. This is the directory the job that went red used; it must execute.
+          dir="$RUNNER_TEMP/exec"
+          mkdir -p "$dir"
+          printf '#!/bin/sh\nexit 7\n' > "$dir/.probe"
+          chmod +x "$dir/.probe"
+          rc=0; "$dir/.probe" || rc=$?
+          rm -f "$dir/.probe"
+          {
+            printf 'tmpdir %s (%s characters) probe rc %s (7 = executes)\n' "$dir" "${#dir}" "$rc"
+            printf 'mount of tmpdir: %s\n' "$(findmnt -no TARGET,FSTYPE,OPTIONS -T "$dir" 2>/dev/null || echo unreadable)"
+            printf 'mount of /tmp:   %s\n' "$(findmnt -no TARGET,FSTYPE,OPTIONS -T /tmp 2>/dev/null || echo unreadable)"
+          } | tee "$OUT/tmpdir.txt"
+          [ "$rc" = 7 ] || fail "$dir does not execute a binary (rc=$rc)"
+          {
+            echo "TMPDIR=$dir"
+            echo "GOTMPDIR=$dir"
+            echo "GOBIN=$RUNNER_TEMP/gopath/bin"
+          } >> "$GITHUB_ENV"
+          echo "$RUNNER_TEMP/gopath/bin" >> "$GITHUB_PATH"
+      - name: resolve the ephemeral Postgres ports into the test DSNs
+        id: pg-port
+        timeout-minutes: 1
+        env:
+          PGPORT_HOST: ${{ job.services.postgres.ports['5432'] }}
+          PGPORT_OTHER: ${{ job.services.postgres_other.ports['5432'] }}
+        run: |
+          set -euo pipefail
+          bash scripts/ci-postgres-service.sh resolve
+      - name: provision postgres roles (least-privilege app role + BYPASSRLS admin)
+        id: pg-roles
+        timeout-minutes: 2
+        env:
+          PGPASSWORD: postgres
+        run: bash scripts/ci-postgres-service.sh provision
+      - name: record the PostgreSQL posture (recorded only; the named test does not use it)
+        id: posture
+        timeout-minutes: 1
+        run: |
+          eval "$REPRO_LIB"
+          {
+            printf 'OLIVARES_TEST_POSTGRES_REQUIRED=%s\n' "${OLIVARES_TEST_POSTGRES_REQUIRED:-unset}"
+            psql "$OLIVARES_TEST_POSTGRES_SUPERUSER_DSN" -X -Atc 'SHOW server_version_num' 2>&1 || echo "COULD NOT LOOK"
+            psql "$OLIVARES_TEST_POSTGRES_SUPERUSER_DSN" -X -AtF ' ' \
+              -c "SELECT rolname, rolsuper, rolbypassrls FROM pg_roles WHERE rolname IN ('olivares_app', 'olivares_admin') ORDER BY rolname" 2>&1 || echo "COULD NOT LOOK"
+          } | tee "$OUT/postgres-posture.txt"
+      - name: record the toolchain
+        id: toolchain
+        timeout-minutes: 1
+        run: |
+          eval "$REPRO_LIB"
+          {
+            go version
+            go env GOVERSION GOOS GOARCH GOTOOLCHAIN GOFLAGS GOTMPDIR CGO_ENABLED
+            printf 'nproc %s\n' "$(nproc)"
+            printf 'TMPDIR %s\n' "${TMPDIR:-unset}"
+            jq --version
+            ps --version
+            timeout --version | head -n1
+          } 2>&1 | tee "$OUT/toolchain.txt"
+      - name: build the test binary once (a build failure is an inability for every trial)
+        id: build
+        timeout-minutes: 7
+        run: |
+          eval "$REPRO_LIB"
+          mkdir -p "$RUNNER_TEMP/build"
+          run_logged build "$GITHUB_WORKSPACE" go test -c -o "$RUNNER_TEMP/build/pty-build.test" ./modules/sessions
+      - name: trials of the named test (every trial kept; judged inline, inability first)
+        id: trials
+        timeout-minutes: 33
+        env:
+          # The largest per-trial clock: the whole budget at its 30-minute maximum. The workflow
+          # timeout gate reads this static value; each trial is given only the budget that remains.
+          TRIAL_CLOCK: 1800s
+        run: |
+          eval "$REPRO_LIB"
+          bounded() { local TRIAL_CLOCK="${1}s"; shift; timeout -k 30s "$TRIAL_CLOCK" "$@"; }
+          # The resource witness the job that went red ran around its test step.
+          WITNESS="$OUT/resource-witness.state"
+          bash scripts/ci-resource-witness.sh start "$WITNESS" >/dev/null
+          trap 'bash scripts/ci-resource-witness.sh report "$WITNESS" > "$OUT/resource-witness.report" 2>&1 || true' EXIT
+          trials_loop "$GITHUB_WORKSPACE" \
+            bash scripts/with-pg-env.sh go test ./modules/sessions -count=1 -timeout 30m -run "$RUN_PATTERN" -json
+      - name: rate and completeness (describes the instrument, not the product)
+        if: always()
+        timeout-minutes: 1
+        env:
+          SETUP_OUTCOMES: >-
+            input=${{ steps.input.outcome }} identity=${{ steps.identity.outcome }}
+            setup-go=${{ steps.setup-go.outcome }} tmpdir=${{ steps.tmpdir.outcome }}
+            pg-port=${{ steps.pg-port.outcome }} pg-roles=${{ steps.pg-roles.outcome }}
+            posture=${{ steps.posture.outcome }} toolchain=${{ steps.toolchain.outcome }}
+            build=${{ steps.build.outcome }} trials=${{ steps.trials.outcome }}
+        run: |
+          eval "$REPRO_LIB"
+          finalize "$SETUP_OUTCOMES"
+      - name: keep both PostgreSQL server logs
+        if: always()
+        timeout-minutes: 1
+        env:
+          PG_PRIMARY_ID: ${{ job.services.postgres.id }}
+          PG_OTHER_ID: ${{ job.services.postgres_other.id }}
+        run: |
+          OUT="$RUNNER_TEMP/repro/$SEL"
+          mkdir -p "$OUT"
+          docker logs --details "$PG_PRIMARY_ID" > "$OUT/postgres-primary.log" 2>&1 || echo "COULD NOT LOOK" >> "$OUT/postgres-primary.log"
+          docker logs --details "$PG_OTHER_ID" > "$OUT/postgres-other.log" 2>&1 || echo "COULD NOT LOOK" >> "$OUT/postgres-other.log"
+      - name: retain every trial's stream, exit, results, samples and the server logs
+        if: always()
+        timeout-minutes: 1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: pty-142-repro-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/repro/pty_142/
+          retention-days: 7
+          if-no-files-found: error
