@@ -187,7 +187,7 @@ process to an agent. See [eBPF/Tetragon](/how-to/connectors/ebpf-tetragon/).
 
 ### live_ref
 
-The server-assigned identity of **one** live session row. v26.9.1 keys
+The server-assigned identity of **one** live session row. v26.9.0 keys
 observation by `(observation scope, external id)` so two provider homes that
 announce the same session id stay two rows. Console and API reads that mean
 “this row” use `live_ref`, not the bare provider id. Bare external-id routes

@@ -173,7 +173,7 @@ session runtime: no inference credential source configured; stream-json launches
 
 （`cmd/olivares/sessionruntime.go`）。设置
 `OLIVARES_SESSION_RUNTIME_WIF` 或 `OLIVARES_SESSION_RUNTIME_TOKEN_FILE`
-中的 **一个**。自 v26.10 起这不再是唯一路径：在控制台注册凭据并把它绑定到配置
+中的 **一个**。自尚未发布的 v26.10 起，这将不再是唯一路径：在控制台注册凭据并把它绑定到配置
 档案。见 [添加提供方并启动代理](/zh/how-to/add-a-provider/) 和
 [运营提供商会话](/how-to/operate-provider-sessions/)。
 

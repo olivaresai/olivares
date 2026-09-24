@@ -1449,8 +1449,8 @@ task lint:client-callers-selftest
 # then invoked by NOTHING for ten days: measured 2026-08-14 by replanting the literal incident,
 # after which this hook ran all fifty fast lints and exited 0. It costs 0.29s.
 task lint:kms-backends
-# One first-release version everywhere (RELEASE-VERSION is the canon; report-only while
-# the owner's choice is UNDECIDED, enforcing the moment it is set).
+# One release version everywhere (RELEASE-VERSION is the canon, the published install
+# baseline; UNDECIDED is refused, never reported as green).
 task lint:release-version
 # Public capability and supply-chain wording must remain normalized and must not
 # resurrect known overclaims. Pure POSIX sh, no network.

@@ -1083,30 +1083,82 @@ func TestChatBestEffortTenantProceedsWithANamedGap(t *testing.T) {
 	}
 }
 
+// cancelAfterDecodeInspector is the executor's own inspector, used as the cancellation
+// boundary. The executor consults it in the response direction only from outputWithheld,
+// which runs after C1 returned a fully read and decoded response and before the deferred
+// outcome record. Canceling the caller there is late by construction, not by a clock.
+type cancelAfterDecodeInspector struct {
+	cancel context.CancelFunc
+	// fired counts response-direction calls; boundaryErr is the error of the context the
+	// executor passed, read right after the cancel; other keeps any direction this test does
+	// not expect.
+	fired       int
+	boundaryErr error
+	other       []string
+}
+
+func (c *cancelAfterDecodeInspector) Inspect(ctx context.Context, in claudeapi.ContentInspectionInput) claudeapi.ContentInspectionDecision {
+	switch in.Direction {
+	case claudeapi.InspectDirectionRequest:
+		return claudeapi.ContentInspectionDecision{Forward: true}
+	case claudeapi.InspectDirectionResponse:
+		c.fired++
+		if c.fired == 1 {
+			c.cancel()
+			c.boundaryErr = ctx.Err()
+		}
+		// Forward without Block: the verdict must not be what withholds the output.
+		return claudeapi.ContentInspectionDecision{Forward: true}
+	default:
+		c.other = append(c.other, in.Direction)
+		return claudeapi.ContentInspectionDecision{}
+	}
+}
+
 // TestChatOutcomeIsRecordedEvenWhenTheCallerCancels: the caller hanging up must not cancel
 // the record of an effect that already happened. The outcome context is derived without
 // cancellation and bounded independently.
 func TestChatOutcomeIsRecordedEvenWhenTheCallerCancels(t *testing.T) {
-	f := newChatFixture(t, chatFixtureOptions{})
 	ctx, cancel := context.WithCancel(context.Background())
-	// The upstream answers, then the caller's context is cancelled while the operation is
-	// still finishing: C1 keeps a fully read and decoded response, and the outcome leg must
-	// still commit.
-	f.handler.delay = 40 * time.Millisecond
-	go func() {
-		time.Sleep(120 * time.Millisecond)
-		cancel()
-	}()
+	defer cancel()
+	// The upstream answers and C1 keeps a fully read and decoded response; only then does the
+	// response inspector cancel the caller's context, and the outcome leg must still commit.
+	// No clock orders the cancel: a run that never reaches that boundary fails below instead
+	// of passing without a cancellation.
+	boundary := &cancelAfterDecodeInspector{cancel: cancel}
+	f := newChatFixture(t, chatFixtureOptions{inspector: boundary})
 	res, err := f.runCtx(ctx)
-	cancel()
+	// ExecuteChat has returned, so its one dispatch is complete; the handler's counter is
+	// still read under the handler's own lock.
+	f.handler.mu.Lock()
+	hits := f.handler.hits
+	f.handler.mu.Unlock()
+	t.Logf("CHAT_CANCEL_SEAM|fired=%d|boundary_ctx_err=%v|caller_ctx_err=%v|gateway_hits=%d|err=%v",
+		boundary.fired, boundary.boundaryErr, ctx.Err(), hits, err)
+	if boundary.fired != 1 || len(boundary.other) != 0 {
+		t.Fatalf("the response inspector fired %d times (unexpected directions %v), want exactly once", boundary.fired, boundary.other)
+	}
+	if !errors.Is(boundary.boundaryErr, context.Canceled) || !errors.Is(ctx.Err(), context.Canceled) {
+		t.Fatalf("context at the boundary = %v, caller = %v; want both cancelled", boundary.boundaryErr, ctx.Err())
+	}
+	if hits != 1 {
+		t.Fatalf("the gateway was reached %d times, want exactly 1", hits)
+	}
 	if err != nil {
 		t.Fatalf("ExecuteChat: %v", err)
 	}
-	if res.DispatchState != models.ChatDispatchAttempted {
-		t.Fatalf("dispatch state = %s", res.DispatchState)
+	if res.DispatchState != models.ChatDispatchAttempted || res.CompletionState != models.ChatCompletionStop {
+		t.Fatalf("states = %s/%s, want attempted/stop", res.DispatchState, res.CompletionState)
+	}
+	if res.Output == nil || *res.Output != "hello from the fixture" {
+		t.Fatalf("output = %v; the decoded response was not kept", res.Output)
 	}
 	if got := len(f.eventsWithAction(chatOutcomeAction)); got != 1 {
 		t.Fatalf("recorded %d outcomes, want exactly 1", got)
+	}
+	record := chatOutcomeRecord(t, f)
+	if record.meta["dispatch_state"] != models.ChatDispatchAttempted || record.meta["completion_state"] != models.ChatCompletionStop {
+		t.Fatalf("recorded states = %v/%v, want attempted/stop", record.meta["dispatch_state"], record.meta["completion_state"])
 	}
 	if res.OutcomeDisposition != models.ChatOutcomeAnchored {
 		t.Fatalf("outcome disposition = %s", res.OutcomeDisposition)

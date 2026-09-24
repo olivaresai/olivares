@@ -152,7 +152,7 @@ docker compose -f deploy/compose/docker-compose.yml \
 `deploy/helm/olivares` 中的 Helm chart 将控制平面（control plane）部署为一个 **核心 StatefulSet**
 （单写入者；其数据目录保存审计签名密钥和 TLS 材料），并且，对于分布式拓扑，还部署一个
 **采集器 DaemonSet（collectors DaemonSet）**，它通过 **gRPC + mTLS** 将观测数据推送给核心。
-引擎 v26.9.1 release 不会将 chart 发布到 OCI registry；独立的 `chart-v*` tag 尚未运行该 workflow。
+引擎 v26.9.0 release 不会将 chart 发布到 OCI registry；独立的 `chart-v*` tag 尚未运行该 workflow。
 请从 checkout 安装经过审查的源 chart，并按 digest 固定已发布的容器镜像。
 
 ```bash

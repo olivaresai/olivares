@@ -20,7 +20,7 @@ metadata:
     helm.sh/chart: olivares-0.2.4
     app.kubernetes.io/name: olivares
     app.kubernetes.io/instance: olivares
-    app.kubernetes.io/version: "26.9.1"
+    app.kubernetes.io/version: "26.9.0"
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/part-of: olivares
 automountServiceAccountToken: false
@@ -34,7 +34,7 @@ metadata:
     helm.sh/chart: olivares-0.2.4
     app.kubernetes.io/name: olivares
     app.kubernetes.io/instance: olivares
-    app.kubernetes.io/version: "26.9.1"
+    app.kubernetes.io/version: "26.9.0"
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/part-of: olivares
     app.kubernetes.io/component: core
@@ -63,7 +63,7 @@ metadata:
     helm.sh/chart: olivares-0.2.4
     app.kubernetes.io/name: olivares
     app.kubernetes.io/instance: olivares
-    app.kubernetes.io/version: "26.9.1"
+    app.kubernetes.io/version: "26.9.0"
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/part-of: olivares
     app.kubernetes.io/component: core
@@ -88,7 +88,7 @@ spec:
         helm.sh/chart: olivares-0.2.4
         app.kubernetes.io/name: olivares
         app.kubernetes.io/instance: olivares
-        app.kubernetes.io/version: "26.9.1"
+        app.kubernetes.io/version: "26.9.0"
         app.kubernetes.io/managed-by: Helm
         app.kubernetes.io/part-of: olivares
         app.kubernetes.io/component: core
@@ -104,7 +104,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: olivares
-          image: docker.io/olivaresai/olivares:26.9.1
+          image: docker.io/olivaresai/olivares:26.9.0
           imagePullPolicy: IfNotPresent
           args:
             - serve
@@ -172,7 +172,7 @@ spec:
           helm.sh/chart: olivares-0.2.4
           app.kubernetes.io/name: olivares
           app.kubernetes.io/instance: olivares
-          app.kubernetes.io/version: "26.9.1"
+          app.kubernetes.io/version: "26.9.0"
           app.kubernetes.io/managed-by: Helm
           app.kubernetes.io/part-of: olivares
           app.kubernetes.io/component: core

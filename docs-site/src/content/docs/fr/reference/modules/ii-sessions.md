@@ -14,7 +14,7 @@ en direct, un état Claude Code dérivé, et une chronologie reconstructible. L�
 opérationnelle en direct** par session au-dessus du même flux d'observations — et ne montre
 que ce que ce flux porte honnêtement.
 
-v26.9.1 **lance** aussi les CLI officielles de fournisseur comme enfants
+v26.9.0 **lance** aussi les CLI officielles de fournisseur comme enfants
 détenus sous un [profil fournisseur](/how-to/operate-provider-sessions/). Ce
 chemin géré est le même module. Il ne remplace pas la surcouche et ne fusionne
 pas deux homes qui annoncent le même id de session fournisseur

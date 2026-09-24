@@ -1850,8 +1850,8 @@ jobs:
       - name: KMS backend count and names match core/secure/kmswrap (every public surface)
         id: lint-kms-backends
         run: task lint:kms-backends
-      # One first-release version everywhere: canon in RELEASE-VERSION; census-only while
-      # UNDECIDED, red on any divergent surface the moment the owner sets it.
+      # One release version everywhere: canon in RELEASE-VERSION (the published install
+      # baseline); UNDECIDED is refused, and any divergent surface is red.
       - name: release version single source (RELEASE-VERSION vs every promising surface)
         id: lint-release-version
         run: task lint:release-version

@@ -30,17 +30,18 @@ Olivares AI は **セルフホストファーストかつエアギャップ対�
 
 ```bash
 scripts/airgap-bundle.sh \
-  --version v26.9.1 \
-  --image docker.io/olivaresai/olivares:26.9.1-amd64 \
+  --version v26.9.0 \
+  --image ghcr.io/olivaresai/olivares:26.9.0-amd64 \
   --chart deploy/helm/olivares \
   --cosign-key cosign.key \
   [--collector-image <ref>] [--out dist/airgap] [--gpg-key <id>]
 ```
 
-イメージは、その公式座標（`docker.io/olivaresai/olivares`）で Docker Hub からプルされます。
-同じコンテンツは `ghcr.io/olivaresai/olivares` にもあり、ダイジェストで同一です。
-そこからミラーリングしたい場合に利用できます。Docker Hub は**匿名**プルにレート制限を課しますが、
-ghcr.io は公開イメージには課さないため、認証していないビルドホストでは有用です。
+アーキテクチャ別タグ（`26.9.0-amd64`）は、リリースがビルドと署名を行う `ghcr.io/olivaresai/olivares`
+で公開されています。Docker Hub（`docker.io/olivaresai/olivares`、公式のプル先）はマルチアーキテクチャと
+堅牢化タグをダイジェストで同一に持ちますが、`26.9.0-amd64` は持ちません
+（`docs/releases/v26.9.0-install-surfaces.json`）。ghcr.io は公開イメージの匿名プルにレート制限を
+課さないため、認証していないビルドホストでも有用です。
 
 :::caution[SBOM/VEX/プロベナンスは生成ではなく供給される]
 バンドラーは、SBOM、OpenVEX、プロベナンスを環境変数（`OLIVARES_SBOM_FILES`、
@@ -98,7 +99,7 @@ cosign verify-blob --key cosign.pub --insecure-ignore-tlog \
 
 ```bash
 scripts/airgap-mirror.sh \
-  --bundle olivares-airgap-v26.9.1.tar.gz \
+  --bundle olivares-airgap-v26.9.0.tar.gz \
   --registry registry.internal:5000 [--insecure]
 ```
 

@@ -14,7 +14,7 @@ I (inventario) materializa el estate durable, el módulo II mantiene una **capa
 operativa en vivo** por sesión sobre el mismo flujo de observaciones — y muestra
 solo lo que ese flujo lleva honestamente.
 
-v26.9.1 también **lanza** CLI oficiales de proveedor como hijos propios bajo un
+v26.9.0 también **lanza** CLI oficiales de proveedor como hijos propios bajo un
 [perfil de proveedor](/how-to/operate-provider-sessions/). Esa vía gestionada
 es el mismo módulo. No sustituye la capa ni fusiona dos homes que anuncian el
 mismo id de sesión del proveedor (`CHANGELOG.md` `[26.9.0]` B1/B2).

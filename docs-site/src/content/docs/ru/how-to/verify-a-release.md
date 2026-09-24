@@ -26,7 +26,7 @@ CycloneDX) и аттестация OpenVEX — все ссылаются **по 
 | `*.vex.sigstore.json` | OpenVEX как подписанная аттестация in-toto |
 | `*.intoto.jsonl` | происхождение SLSA Build L3 |
 | образ контейнера | опубликован в GHCR и Docker Hub, проверяется и закрепляется по digest |
-| исходники Helm-чарта | устанавливать из `deploy/helm/olivares`; публичного OCI-чарта ещё нет |
+| исходники Helm-чарта | устанавливать из `deploy/helm/olivares`; публикация в OCI не подтверждена (`publication-unverified`: из этого репозитория не публиковался) |
 
 ## Путь в одну команду
 
@@ -39,7 +39,7 @@ CycloneDX) и аттестация OpenVEX — все ссылаются **по 
 scripts/verify-release.sh
 
 # Pin the SLSA provenance to a specific source tag.
-scripts/verify-release.sh --source-tag v26.9.1
+scripts/verify-release.sh --source-tag v26.9.0
 
 # Key-based: only for files signed with a private key you control.
 # Releases are signed keyless and do not publish a public key.
