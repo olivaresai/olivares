@@ -220,6 +220,16 @@ tasks:
       - task build:commerce
       - task build:commerce-core
 
+  appliance:build:answers:
+    desc: Build the offline appliance answers validator and planner.
+    cmds:
+      - go build -o bin/appliance-answers ./appliance/cmd/appliance-answers
+
+  appliance:test:answers:
+    desc: Test the appliance answers boundary and its read-only executable.
+    cmds:
+      - go test -race -count=1 -timeout 120s ./appliance/...
+
   build:commerce:
     desc: >-
       Compile the commercial canon lint (its own module, outside go.work).
