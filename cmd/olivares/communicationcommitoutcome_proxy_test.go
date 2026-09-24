@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -177,6 +178,7 @@ func newCommitOutcomeProxy(t *testing.T, appDSN string) (*commitOutcomeProxy, st
 
 	p.wg.Add(1)
 	go p.accept()
+	t.Cleanup(p.checkRelayCustody)
 	t.Cleanup(p.close)
 	return p, redirected.String()
 }
@@ -433,6 +435,8 @@ type commitOutcomeProxySession struct {
 	onRelayFrame         func(byte)
 	onRelayWriteAttempt  func()
 	onRelayWriteComplete func(error)
+	// relay is the evidence a failed write is classified from.
+	relay commitOutcomeRelayState
 }
 
 // bufferedFrames reports how many frames the session is currently withholding.
@@ -558,25 +562,42 @@ func (s *commitOutcomeProxySession) clientToServer() {
 	defer s.closeUpstreamUnlessHeld()
 
 	if err := s.relayStartup(); err != nil {
+		// A CancelRequest or an SSLRequest is refused here by design; the startup
+		// is inspected, so it stays within the bound.
+		s.relayStopped(commitOutcomeRelayFromClient, "startup_not_relayed", nil)
 		return
 	}
+	// buf holds one frame this relay may inspect. A larger frame is streamed
+	// through it, so nothing here is ever allocated at a length a peer declared.
+	buf := make([]byte, 1+commitOutcomeProxyBufferLimit)
 	for {
-		frame, kind, payload, err := commitOutcomeReadTypedFrame(s.client)
-		if err != nil {
+		var header [5]byte
+		kind, body, end := commitOutcomeRelayHeader(s.client, &header)
+		if end != "" {
+			s.relayStopped(commitOutcomeRelayFromClient, end, nil)
 			return
 		}
-		if kind == 'Q' && commitOutcomeIsCommitQuery(payload) {
+		if body+4 > commitOutcomeProxyBufferLimit {
+			// Too large to be the COMMIT this proxy looks for: carried, never
+			// inspected.
+			if end, err := s.streamToServer(header[:], body, buf); end != "" || err != nil {
+				s.relayStopped(commitOutcomeRelayFromClient, end, err)
+				return
+			}
+			continue
+		}
+		frame, end := commitOutcomeRelayWhole(s.client, header[:], body, buf)
+		if end != "" {
+			s.relayStopped(commitOutcomeRelayFromClient, end, nil)
+			return
+		}
+		if kind == 'Q' && commitOutcomeIsCommitQuery(frame[5:]) {
 			if s.handleCommit(frame) {
 				continue
 			}
 		}
-		if err := s.upstream.SetWriteDeadline(time.Now().Add(commitOutcomeProxyWriteLimit)); err != nil {
-			return
-		}
-		if _, err := s.upstream.Write(frame); err != nil {
-			return
-		}
-		if err := s.upstream.SetWriteDeadline(time.Time{}); err != nil {
+		if err := s.writeServer(frame); err != nil {
+			s.relayStopped(commitOutcomeRelayFromClient, "", err)
 			return
 		}
 	}
@@ -685,6 +706,7 @@ func (p *commitOutcomeProxy) emit(event commitOutcomeProxyEvent) {
 
 // serverToClient relays backend messages, recording only the type byte and, for
 // CommandComplete, the tag.
+// A frame above the retention bound is streamed through streamToClient.
 func (s *commitOutcomeProxySession) serverToClient() {
 	defer s.p.wg.Done()
 	// The client side is retained for the same reason, in the other direction:
@@ -693,11 +715,27 @@ func (s *commitOutcomeProxySession) serverToClient() {
 	// HC-1b measures.
 	defer s.closeClientUnlessHeld()
 
+	buf := make([]byte, 1+commitOutcomeProxyBufferLimit)
 	for {
-		frame, kind, payload, err := commitOutcomeReadTypedFrame(s.upstream)
-		if err != nil {
+		var header [5]byte
+		kind, body, end := commitOutcomeRelayHeader(s.upstream, &header)
+		if end != "" {
+			s.relayStopped(commitOutcomeRelayFromServer, end, nil)
 			return
 		}
+		if body+4 > commitOutcomeProxyBufferLimit {
+			if end, err := s.streamToClient(kind, header[:], body, buf); end != "" || err != nil {
+				s.relayStopped(commitOutcomeRelayFromServer, end, err)
+				return
+			}
+			continue
+		}
+		frame, end := commitOutcomeRelayWhole(s.upstream, header[:], body, buf)
+		if end != "" {
+			s.relayStopped(commitOutcomeRelayFromServer, end, nil)
+			return
+		}
+		payload := frame[5:]
 		s.mu.Lock()
 		arrived := s.onRelayFrame
 		s.mu.Unlock()
@@ -732,6 +770,7 @@ func (s *commitOutcomeProxySession) serverToClient() {
 		// writeClient serializes with an in-flight release drain, so a frame that
 		// arrives mid-drain lands AFTER the drained frames rather than inside them.
 		if err := s.writeClient(frame); err != nil {
+			s.relayStopped(commitOutcomeRelayFromServer, "", err)
 			return
 		}
 	}
@@ -820,8 +859,364 @@ func (p *commitOutcomeProxy) publishAnswerFrames(frames [][]byte) {
 	}
 }
 
+// ---- relay framing --------------------------------------------------------
+//
+// The retention bound limits what this proxy INSPECTS or WITHHOLDS: a COMMIT
+// candidate, a held answer, the frames buffered behind it. It is not a limit on
+// what the proxy may CARRY. A server frame larger than the bound is ordinary —
+// a catalog read of a long function body produces one — and refusing it ended
+// the connection mid-exchange, which the driver reported as an unexpected EOF
+// that read like a protocol failure of the server. A frame above the bound is
+// streamed instead: its header, then its body in chunks through the relay's own
+// bounded buffer, never allocated at the length the peer declared.
+
+// The two relay directions, as the custody log names them.
+const (
+	commitOutcomeRelayFromClient = "from_client"
+	commitOutcomeRelayFromServer = "from_server"
+)
+
+// commitOutcomeRelayHeader reads the next typed frame header into header and
+// returns its type byte and body length. The declared length is checked BEFORE
+// anything subtracts from it: a length below 4 cannot even cover itself, and it
+// is named rather than turned into a body length.
+func commitOutcomeRelayHeader(conn net.Conn, header *[5]byte) (kind byte, body int64, end string) {
+	if n, err := io.ReadFull(conn, header[:]); err != nil {
+		return 0, 0, commitOutcomeRelayReadEnd(n > 0, err)
+	}
+	length := int64(binary.BigEndian.Uint32(header[1:]))
+	if length < 4 {
+		return 0, 0, "frame_length_below_4"
+	}
+	return header[0], length - 4, ""
+}
+
+// commitOutcomeRelayWhole reads the body of a frame within the bound into buf
+// and returns the complete frame. The frame aliases buf: every path that keeps
+// a frame copies it, and every write of it finishes before the next read reuses
+// buf.
+func commitOutcomeRelayWhole(conn net.Conn, header []byte, body int64, buf []byte) ([]byte, string) {
+	frame := buf[:5+body]
+	copy(frame, header)
+	if _, err := io.ReadFull(conn, frame[5:]); err != nil {
+		return nil, commitOutcomeRelayReadEnd(true, err)
+	}
+	return frame, ""
+}
+
+// commitOutcomeRelayBody moves body bytes from src to write in chunks no larger
+// than buf. Each chunk read carries the same limit the writes do, so a peer
+// that stops in the middle of a frame cannot pin the relay, or the output lock
+// it may hold, indefinitely. When the frame cannot be carried whole it returns
+// the named read outcome, or the write error, which only relayStopped can
+// classify.
+func commitOutcomeRelayBody(src net.Conn, body int64, buf []byte, write func([]byte) error) (string, error) {
+	for body > 0 {
+		chunk := buf
+		if int64(len(chunk)) > body {
+			chunk = chunk[:body]
+		}
+		if err := src.SetReadDeadline(time.Now().Add(commitOutcomeProxyWriteLimit)); err != nil {
+			return commitOutcomeRelayReadEnd(true, err), nil
+		}
+		if _, err := io.ReadFull(src, chunk); err != nil {
+			return commitOutcomeRelayReadEnd(true, err), nil
+		}
+		if err := write(chunk); err != nil {
+			return "", err
+		}
+		body -= int64(len(chunk))
+	}
+	// The frame is whole; only a socket the proxy already closed refuses this.
+	if err := src.SetReadDeadline(time.Time{}); err != nil {
+		return commitOutcomeRelayReadEnd(false, err), nil
+	}
+	return "", nil
+}
+
+// streamToServer carries one client frame too large to be the COMMIT this proxy
+// inspects: header first, then body chunk by body chunk.
+func (s *commitOutcomeProxySession) streamToServer(header []byte, body int64, buf []byte) (string, error) {
+	if err := s.writeServer(header); err != nil {
+		return "", err
+	}
+	return commitOutcomeRelayBody(s.client, body, buf, s.writeServer)
+}
+
+// streamToClient carries one server frame too large to retain, recording only
+// its type byte. While an answer is held it is refused exactly as
+// bufferIfHolding refuses a frame that would take the held total past the
+// bound: drained from the server and never delivered. Otherwise it goes out
+// header first and then chunk by chunk, all under the output lock and the
+// ordinary write deadline, so no other writer — a release drain included — can
+// land inside it.
+func (s *commitOutcomeProxySession) streamToClient(kind byte, header []byte, body int64, buf []byte) (string, error) {
+	s.mu.Lock()
+	arrived := s.onRelayFrame
+	s.mu.Unlock()
+	if arrived != nil {
+		arrived(kind)
+	}
+	s.p.record("frame=" + string(rune(kind)))
+	if s.withholding() {
+		s.p.record("buffer_limit_reached")
+		return commitOutcomeRelayBody(s.upstream, body, buf, func([]byte) error { return nil })
+	}
+	s.mu.Lock()
+	attempt, complete := s.onRelayWriteAttempt, s.onRelayWriteComplete
+	s.mu.Unlock()
+	if attempt != nil {
+		attempt()
+	}
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	var end string
+	err := s.writeLocked(header)
+	if err == nil {
+		end, err = commitOutcomeRelayBody(s.upstream, body, buf, func(chunk []byte) error {
+			return s.writeLocked(chunk)
+		})
+	}
+	if complete != nil {
+		result := err
+		if result == nil && end != "" {
+			result = errors.New("relay " + end)
+		}
+		complete(result)
+	}
+	return end, err
+}
+
+// withholding reports whether frames are being kept from the client behind a
+// held answer, the state in which bufferIfHolding decides what is retained.
+func (s *commitOutcomeProxySession) withholding() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.holdingAnswer && len(s.buffered) > 0
+}
+
+// writeServer is the relay's bounded path to the server, the counterpart of
+// writeLocked: a server that stopped reading cannot pin the relay past the
+// instrument's limit, and no deadline is left behind. Only the client-to-server
+// relay calls it.
+func (s *commitOutcomeProxySession) writeServer(chunk []byte) error {
+	if err := s.upstream.SetWriteDeadline(time.Now().Add(commitOutcomeProxyWriteLimit)); err != nil {
+		return err
+	}
+	if _, err := s.upstream.Write(chunk); err != nil {
+		return err
+	}
+	return s.upstream.SetWriteDeadline(time.Time{})
+}
+
+// commitOutcomeRelayReadEnd names a failed read from what the read itself
+// returned. net.ErrClosed, and io.ErrClosedPipe on a pipe's read side, mean THIS
+// proxy closed the socket: local teardown, never evidence about the peer. Any
+// failure inside a frame tore it. Between frames, io.EOF is the peer's own
+// orderly close and ECONNRESET its reset, both observed here; anything else is
+// not evidence of either and stays an inability.
+func commitOutcomeRelayReadEnd(inFrame bool, err error) string {
+	switch {
+	case errors.Is(err, net.ErrClosed) || errors.Is(err, io.ErrClosedPipe):
+		return "local_close"
+	case inFrame:
+		return "short_read"
+	case errors.Is(err, io.EOF):
+		return "peer_closed"
+	case errors.Is(err, syscall.ECONNRESET):
+		return "peer_reset"
+	default:
+		return "read_failed"
+	}
+}
+
+// commitOutcomeRelayWriteEnd names a failed write. THE RULE: an errno is never
+// taken as proof of why a peer went away, and a local close is never taken as
+// the peer's. seen is how the destination socket's read side stopped, as the
+// direction reading that same socket observed it (relayStopped, writeEvidence).
+//
+//   - errors.Is(err, net.ErrClosed): this proxy closed the socket — "local_close",
+//     an end of teardown or of sever(), not a peer closure.
+//   - errors.As(err, &netErr) && netErr.Timeout(): a connected peer stopped
+//     reading — "write_deadline", an inability.
+//   - seen == "peer_closed": that socket had returned io.EOF at a frame boundary
+//     on the proxy's own read side — "peer_closed", whatever the write returned.
+//   - errors.Is(err, syscall.EPIPE) || errors.Is(err, syscall.ECONNRESET), with
+//     seen == "peer_reset" (ECONNRESET between frames on that read side): the
+//     peer reset the connection — "peer_closed".
+//   - anything else, EPIPE or ECONNRESET without that observation included:
+//     "short_write", an inability.
+//
+// "peer_closed" says the peer ended its socket, as observed; it does not say
+// why, so it is no evidence that a driver closed on purpose.
+func commitOutcomeRelayWriteEnd(err error, seen string) string {
+	var netErr net.Error
+	reset := errors.Is(err, syscall.EPIPE) || errors.Is(err, syscall.ECONNRESET)
+	switch {
+	case errors.Is(err, net.ErrClosed):
+		return "local_close"
+	case errors.As(err, &netErr) && netErr.Timeout():
+		return "write_deadline"
+	case seen == "peer_closed":
+		return "peer_closed"
+	case reset && seen == "peer_reset":
+		return "peer_closed"
+	default:
+		return "short_write"
+	}
+}
+
+// commitOutcomeRelayState is the evidence one session's two directions share.
+// reads[i] is how socket i's read side stopped — 0 the client socket, read by
+// clientToServer; 1 the server socket, read by serverToClient — written once by
+// that direction as it stops, "" when it stopped on a write; done[i] closes at
+// the same moment. Guarded by the session's mu.
+type commitOutcomeRelayState struct {
+	reads [2]string
+	done  [2]chan struct{}
+}
+
+// commitOutcomeRelaySides returns the socket a direction reads and the socket it
+// writes: 0 is the client socket, 1 the server socket.
+func commitOutcomeRelaySides(direction string) (reads, writes int) {
+	if direction == commitOutcomeRelayFromClient {
+		return 0, 1
+	}
+	return 1, 0
+}
+
+// relayDoneLocked returns the channel that closes when side's read side has
+// stopped. PRECONDITION: s.mu is held.
+func (s *commitOutcomeProxySession) relayDoneLocked(side int) chan struct{} {
+	if s.relay.done[side] == nil {
+		s.relay.done[side] = make(chan struct{})
+	}
+	return s.relay.done[side]
+}
+
+// relayStopped is the one exit of a relay direction. It first publishes how
+// this direction's own read side stopped, which is the evidence the other
+// direction's failed write is classified from, and only then names its own
+// stop: a read outcome as it is, a failed write by commitOutcomeRelayWriteEnd.
+// Publishing before waiting means two directions that both failed a write
+// never wait on each other.
+func (s *commitOutcomeProxySession) relayStopped(direction, readEnd string, writeErr error) {
+	own, dst := commitOutcomeRelaySides(direction)
+	s.mu.Lock()
+	s.relay.reads[own] = readEnd
+	close(s.relayDoneLocked(own))
+	s.mu.Unlock()
+	if writeErr != nil {
+		readEnd = commitOutcomeRelayWriteEnd(writeErr, s.writeEvidence(dst, writeErr))
+	}
+	s.relayEnded(direction, readEnd)
+}
+
+// writeEvidence returns how side's read side stopped, as the direction reading
+// that socket observed it. A write refused with EPIPE or ECONNRESET can come a
+// moment before that direction observes the same peer, so for those two errors
+// only it waits for that read side to stop — never past the instrument's write
+// limit, and never past the proxy's own close — before answering. Every other
+// write error is classified from what was already observed.
+func (s *commitOutcomeProxySession) writeEvidence(side int, err error) string {
+	s.mu.Lock()
+	seen, done := s.relay.reads[side], s.relayDoneLocked(side)
+	s.mu.Unlock()
+	if seen != "" || !(errors.Is(err, syscall.EPIPE) || errors.Is(err, syscall.ECONNRESET)) {
+		return seen
+	}
+	timer := time.NewTimer(commitOutcomeProxyWriteLimit)
+	defer timer.Stop()
+	select {
+	case <-done:
+	case <-timer.C:
+	case <-s.p.ctx.Done():
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.relay.reads[side]
+}
+
+// relayEnded names why one relay direction stopped; the direction then closes
+// as it always has. Only a direction and a reason are recorded, never frame
+// bytes, and past the log's ordinary cap, because the end-of-test custody check
+// reads them. A peer observed ending its socket, the proxy's own close, and a
+// refused startup are ends. Any other reason means a frame could not be carried
+// whole, so the connection loss that follows is this instrument's inability and
+// not a protocol verdict about either peer: the owning test's log says
+// COULD_NOT_LOOK beside the same custody entry, and checkRelayCustody fails that
+// test unless it declared exactly this inability.
+func (s *commitOutcomeProxySession) relayEnded(direction, reason string) {
+	switch reason {
+	case "peer_closed", "peer_reset", "local_close", "startup_not_relayed":
+		s.p.recordRelay("relay_end=" + direction + ":" + reason)
+	default:
+		entry := "relay_error=" + direction + ":" + reason
+		s.p.recordRelay(entry)
+		s.p.t.Logf("COULD_NOT_LOOK: %s: the test proxy could not carry a frame whole and closed the connection", entry)
+	}
+}
+
+// commitOutcomeRelayExpected prefixes a declaration in the custody log.
+const commitOutcomeRelayExpected = "expect_relay_error="
+
+// recordRelay appends a relay end, a relay inability or a declaration to the
+// custody log even past its ordinary cap: checkRelayCustody reads these, so
+// none may be dropped. There are at most two relay entries per connection.
+func (p *commitOutcomeProxy) recordRelay(line string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.log = append(p.log, line)
+}
+
+// expectRelayError declares that this test causes exactly one relay inability
+// named entry, "<direction>:<reason>" as it appears after "relay_error=". It is
+// for controls whose purpose is to cause that inability; declare BEFORE causing
+// it. Each declaration is consumed by one later occurrence of exactly the same
+// entry.
+func (p *commitOutcomeProxy) expectRelayError(entry string) {
+	p.recordRelay(commitOutcomeRelayExpected + entry)
+}
+
+// checkRelayCustody is the end-of-test custody check. newCommitOutcomeProxy
+// registers it immediately BEFORE close, and cleanup runs last-in first-out, so
+// it runs after close() has joined every relay goroutine: nothing can record a
+// relay inability after it has looked. Walking the log in order, each
+// relay_error entry consumes one earlier declaration of exactly the same entry.
+// An undeclared occurrence, an occurrence beyond the declared count, and a
+// declaration nothing consumed each fail the owning test.
+func (p *commitOutcomeProxy) checkRelayCustody() {
+	var declared []string
+	pending := make(map[string]int)
+	for _, line := range p.custodyLog() {
+		if entry, ok := strings.CutPrefix(line, commitOutcomeRelayExpected); ok {
+			declared = append(declared, entry)
+			pending[entry]++
+			continue
+		}
+		entry, ok := strings.CutPrefix(line, "relay_error=")
+		if !ok {
+			continue
+		}
+		if pending[entry] > 0 {
+			pending[entry]--
+			continue
+		}
+		p.t.Errorf("COULD_NOT_LOOK: relay_error=%s was recorded and this test declared no such inability, or declared fewer: the test proxy could not carry a frame whole, so this result is not a verdict about the product",
+			entry)
+	}
+	for _, entry := range declared {
+		if pending[entry] > 0 {
+			pending[entry]--
+			p.t.Errorf("COULD_NOT_LOOK: relay_error=%s was declared and never recorded: the inability this test exists to cause did not occur",
+				entry)
+		}
+	}
+}
+
 // commitOutcomeReadTypedFrame reads one typed protocol message and returns the
-// complete frame, its type byte and its payload.
+// complete frame, its type byte and its payload. The fake server and client
+// use it; the relay itself reads through commitOutcomeRelayHeader.
 func commitOutcomeReadTypedFrame(conn net.Conn) (frame []byte, kind byte, payload []byte, err error) {
 	var header [5]byte
 	if _, err := io.ReadFull(conn, header[:]); err != nil {
