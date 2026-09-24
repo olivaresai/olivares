@@ -365,35 +365,46 @@ echo "==> Seeding work items through the product API"
 python3 "$ROOT/scripts/seed-demo-work.py" \
   "http://127.0.0.1:$PORT" "$TOKEN" "$TENANT" "$WS_ROOT"
 
-# ⛔ LLENAR LA FINCA HASTA UN OBJETIVO, que es distinto de que el payload entre. Medido el
-#    2026-08-30 sobre motor virgen y tras la cadena entera de verificacion: 20 superficies tenian
-#    contenido y solo SEIS llegaban a cuatro filas; nueve tenian exactamente UNA. Una pantalla con
-#    una fila no ensena una tabla: ensena un caso. El objetivo por superficie vive en
-#    `docs/launch/objetivos-sembrado.json`, que el guion LEE, y el guion es idempotente -- una
-#    segunda corrida crea CERO filas, asi que un arnes que corre en cada captura no acumula.
+# ⛔ FILL THE ESTATE TO A TARGET, which is not the same as a payload getting in. Measured on
+#    2026-08-30 on a virgin engine, after the whole verification chain: 20 surfaces had content,
+#    only SIX reached four rows, and nine had exactly ONE. A screen with one row does not show a
+#    table, it shows a case. The seeder is idempotent: a second run creates ZERO rows, so a
+#    harness that runs before every capture does not accumulate.
 #
-# export-closure: absent-by-design docs/launch/objetivos-sembrado.json — es el catalogo de
-# objetivos de sembrado del LANZAMIENTO, y esta curacion retira `docs/launch` ENTERO
-# (the export curation script). Aqui es DATO, no una llamada: en el arbol publicado la ruta
-# simplemente nunca casa, nada la ejecuta y por tanto no hay llamada que guardar. Declararlo
-# `hub-only` seria mentir sobre su clase — `hub-only` exige una guarda de presencia en el sitio
-# de la llamada, y aqui NO hay sitio de llamada.
+# The per-surface targets are the public fixture scripts/fixtures/docs-capture-targets.json,
+# passed explicitly and rooted at this checkout, so the published tree carries what it reads.
 #
-# ⛔ RESTAURADA. La puso `abbad2074` y el merge de lote de mi propio `P-ganchos-capturas-v2-0830`
-#    (`b11464bb8`) la REVIRTIO: mi claim nacio ANTES de esa cura y no la llevaba, asi que resolver
-#    «a favor del claim, que es el que avanza» se llevo por delante seis lineas que el claim no
-#    sabia que existian. Es el mecanismo que r26 midio y re-aplico para `b19541bbf` en ESE MISMO
-#    lote — en el fichero que no re-comprobo. Hoy no es rojo porque `lint:export-closure` no
-#    encuentra referencia viva, pero la proteccion estaba PERDIDA y la siguiente referencia a esta
-#    ruta habria salido como fuga sin nada que la ampare.
-#
-#    No aborta la corrida si falla: sale 1 cuando alguna superficie se queda por debajo, y eso es
-#    informacion para quien mire las capturas, no una razon para no tenerlas.
-echo "==> Filling the estate to the per-surface target"
+# ⛔ PUBLICATION HANGS ON THIS EXIT, AND ONLY 0 LETS THE RUN GO ON. The seeder exits 0 when every
+#    declared surface reaches its target, 1 when one stays below it, and 2 when it could not look
+#    (a missing, unreadable or invalid fixture, no engine, no permission). This call used to
+#    swallow every nonzero exit. On 2026-09-23 a hosted run whose seeder could not find its
+#    targets published a set in which ten captures of five views had gone from populated to empty
+#    (run 35934239598). Captures of an estate that was not seeded do not show the product, so the
+#    run stops here, before any view is captured: nothing is published, and the committed set and
+#    manifest stay as they are. 1 exits 1 (targets unmet); 2, any other exit and a signal exit 2.
+ESTATE_TARGETS="$ROOT/scripts/fixtures/docs-capture-targets.json"
+echo "==> Filling the estate to the per-surface targets in scripts/fixtures/docs-capture-targets.json"
+SEED_RC=0
 python3 "$ROOT/scripts/seed-estate-volume.py" \
-  "http://127.0.0.1:$PORT" "$TOKEN" "$TENANT" || {
-  echo "    (alguna superficie se queda por debajo de su objetivo; el reparto de arriba dice cual)"
-}
+  "http://127.0.0.1:$PORT" "$TOKEN" "$TENANT" --objetivos "$ESTATE_TARGETS" || SEED_RC=$?
+case "$SEED_RC" in
+0) ;;
+1)
+  echo "docs-captures: ⛔ the estate stays below its targets (the seeder's table above names each surface)." >&2
+  echo "   Nothing is captured or published; the committed set and manifest stay as they are." >&2
+  exit 1
+  ;;
+2)
+  echo "docs-captures: ⛔ the estate seeder could not look (exit 2; its last line above says why)." >&2
+  echo "   Nothing is captured or published; the committed set and manifest stay as they are." >&2
+  exit 2
+  ;;
+*)
+  echo "docs-captures: ⛔ the estate seeder ended with an unexpected exit $SEED_RC, read as it could not look." >&2
+  echo "   Nothing is captured or published; the committed set and manifest stay as they are." >&2
+  exit 2
+  ;;
+esac
 
 # ⛔ UN CHECK DECLARADO Y NUNCA REPORTADO SALE «Unknown · — · 0 ms · —», y eso es la mitad de la
 #    tabla en la captura de /health. No es un fallo del producto: «unknown» se INFIERE DEL
@@ -700,6 +711,10 @@ man = {
                        " the reason rather than a fabricated inventory",
         "console": "AAL3 step-up required to issue an invitation, so the pending-invitations"
                    " panel stays empty; a password-token seeder must not mint accounts",
+        "provider-accounts": "the fixture's empty initial state: no provider account is enrolled (the"
+                             " seeder registers a profile and never adopts it); the populated, adopt"
+                             " and read-refusal evidence is the seeded journey's captures and effect"
+                             " receipt (web/e2e/provider-accounts-journey.spec.ts)",
     },
     # ⛔ AUSENCIA DECLARADA, que NO es lo mismo que vacia. `empty_by_control` de arriba habla de
     #    vistas que SE FOTOGRAFIAN y salen sin filas; esta habla de una ruta que NO se fotografia.
@@ -763,8 +778,15 @@ PY
 #   2 · arbol LIMPIO: C10-01 exige identidad byte a byte entre destinos y procedencia reconstruible;
 #       un SHA tomado sobre un arbol sucio NO reproduce las imagenes, y el manifiesto ya lo dice.
 #   3 · el manifiesto viaja con las imagenes: sin el, un PNG publicado no tiene procedencia.
+#   4 · the estate was seeded to its targets (`SEED_RC=0`). The seeding gate already stops the run
+#       on any other exit; the condition is repeated where the copy happens, so that no path
+#       reaches it with an estate that was not seeded.
 if [ "${PUBLICAR:-0}" = "1" ]; then
   SRC="$ROOT/web/playwright-report/docs"
+  if [ "${SEED_RC:-unset}" != 0 ]; then
+    echo "==> ⛔ Not publishing: the estate seeder's exit is ${SEED_RC:-unset}, not 0." >&2
+    exit 2
+  fi
   if [ "$RC" -ne 0 ]; then
     echo "==> ⛔ NO publico: la corrida salio $RC. Una tanda roja tiene tomas sin comprobar." >&2
     exit "$RC"

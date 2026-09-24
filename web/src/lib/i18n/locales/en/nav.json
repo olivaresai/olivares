@@ -92,7 +92,8 @@
     "agentcoreExport": "AgentCore export",
     "providers": "Providers",
     "providerProfiles": "Provider profiles",
-    "providerBindings": "Source bindings"
+    "providerBindings": "Source bindings",
+    "providerAccounts": "Provider accounts"
   },
   "workspace": {
     "switch": "Switch workspace",
@@ -159,6 +160,7 @@
     "providers": "Register the API keys and endpoints sessions launch with; test, rotate and revoke them",
     "providerProfiles": "Register and administer the provider homes sessions launch under, and read their configuration on demand",
     "providerBindings": "Dedicate configured sources, at the revision this node applied, to provider profiles",
+    "providerAccounts": "List named provider accounts and adopt an existing provider profile as an account",
     "routinePolicies": "Cadence floors, concurrency caps, approval requirements, cron allowlists and blocked environments for Claude Code routines",
     "agentcoreExport": "Plan, review and apply the projection of this tenant's governance rules onto AWS AgentCore as Cedar policies; planning writes nothing",
     "workspace-templates": "Reusable snapshots of hooks, settings, connectors and policies for workspace sessions",

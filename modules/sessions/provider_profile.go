@@ -247,6 +247,20 @@ func (m *Module) registerProviderProfileSchema(reg store.ExtensionRegistry) erro
 			// predates the columns therefore reads as undeclared, which is what it is.
 			{Name: colPPSessionTools, Kind: model.KindText, Nullable: true},
 			{Name: colPPSessionPermissionMode, Kind: model.KindText, Nullable: true},
+			// The ACCOUNT columns (provider_account.go). All nullable, and NULL is the
+			// meaning: a row with no account_name is a profile and not an account, so
+			// every existing profile gains them at the next boot and reads as exactly
+			// what it was. Their uniqueness is the expression index of the module
+			// migrations, and none of them reaches ProviderHomeSnapshot, so no launch
+			// digest moves when they are written.
+			{Name: colPPAccountName, Kind: model.KindText, Nullable: true},
+			{Name: colPPHomeMode, Kind: model.KindText, Nullable: true},
+			{Name: colPPHomeGeneration, Kind: model.KindInt, Nullable: true},
+			{Name: colPPOwnerRef, Kind: model.KindText, Nullable: true},
+			{Name: colPPReleaseRef, Kind: model.KindText, Nullable: true},
+			{Name: colPPPendingRelease, Kind: model.KindText, Nullable: true},
+			{Name: colPPIsolationLevel, Kind: model.KindText, Nullable: true},
+			{Name: colPPOSUser, Kind: model.KindText, Nullable: true},
 		},
 		Indexes: []model.IndexSpec{
 			{Name: "sessions_provider_profile_ref_uniq", Columns: []string{model.ColTenantID, colPPRef}, Unique: true},

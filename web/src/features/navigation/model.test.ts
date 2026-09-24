@@ -48,6 +48,7 @@ const RATIFIED: Record<string, [AreaId, string] | 'root'> = {
   providers: ['ai', 'environments'],
   providerProfiles: ['ai', 'environments'],
   providerBindings: ['ai', 'environments'],
+  providerAccounts: ['ai', 'environments'],
   'workspace-templates': ['ai', 'environments'],
   models: ['ai', 'models'],
   modelOps: ['ai', 'models'],

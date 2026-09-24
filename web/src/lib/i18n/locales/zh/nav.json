@@ -92,7 +92,8 @@
     "agentcoreExport": "AgentCore 导出",
     "providers": "提供方",
     "providerProfiles": "提供商配置文件",
-    "providerBindings": "来源绑定"
+    "providerBindings": "来源绑定",
+    "providerAccounts": "提供商账户"
   },
   "workspace": {
     "switch": "切换工作区",
@@ -159,6 +160,7 @@
     "providers": "注册会话启动时使用的 API 密钥与端点；可测试、更换和吊销",
     "providerProfiles": "登记并管理会话启动所依据的提供商主目录，并按需读取其配置",
     "providerBindings": "将已配置的来源以本节点应用的修订版专用于提供商配置文件",
+    "providerAccounts": "列出已命名的提供商账户，并将现有提供商配置文件采纳为账户",
     "routinePolicies": "Claude Code 例程的执行间隔下限、并发上限、审批要求、cron 允许列表和被阻止的环境",
     "agentcoreExport": "规划、审阅并应用将本租户治理规则投射为 AWS AgentCore Cedar 策略；规划不写入任何内容",
     "workspace-templates": "工作区会话可复用的快照：钩子、设置、连接器和策略",

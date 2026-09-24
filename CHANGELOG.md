@@ -51,6 +51,28 @@ month, release-of-month).
   serves for its node agents. Empty, the default, means no listener. A startup that sets it no
   longer logs it as ignored, and `olivares config validate` and `config effective --strict`
   accept it. The Community build does not read it.
+- **Provider accounts: a provider profile can now carry a name.** An account is the profile it
+  names, so it keeps the same reference, the same homes and the same launch. Its name is unique in
+  its execution environment across every driver, and an archived account keeps its name.
+  `olivares provider account ls` and `get` list and read the named accounts only. `olivares
+  provider account adopt <profile-ref> [--name <name>]` is the only way an existing profile
+  becomes one. Without `--name` the server generates a name: `claude` first, then `claude-b`,
+  `claude-c` and so on. A name that another account already holds is refused with exit 5; it is
+  never swapped for a different one. An adopted home is recorded as shared isolation. Every
+  existing profile stays unnamed after upgrade, and its launch digest does not change. The API
+  lives at `/v1/m/sessions/provider-accounts`, under `sessions:account:read` and
+  `sessions:account:write`.
+- **The console has a Provider accounts page.** `/provider-accounts` lists the tenant's named
+  provider accounts and opens one account's details, for a member who holds only
+  `sessions:account:read`. With `sessions:account:write`, *Adopt a profile* names an existing
+  provider profile as an account, under the name you give or one the server generates.
+  Choosing the profile from a list also needs `sessions:profile:read`; without it, you enter
+  the profile's reference. The page shows each account's isolation as the server records it,
+  reports the signed-in identity as not checked, shows no home path, and says when more
+  accounts exist than it has loaded. Account data leaves the browser's cache as soon as the
+  page closes or the read permission is withdrawn, and a regained permission reads again. When
+  an adoption's answer is lost or unknown, the page checks the profile by reading it and never
+  sends the adoption twice.
 ### Changed
 
 - **A right-to-erasure receipt now states what its verification examined.** The residual scan

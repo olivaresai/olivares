@@ -521,7 +521,7 @@ function ProfilesTable({
   )
 }
 
-function ProfileListError({
+export function ProfileListError({
   error,
   onRetry,
 }: {
@@ -578,7 +578,7 @@ function EnvironmentCell({ profile }: { profile: ProviderProfileDTO }) {
   )
 }
 
-function StateBadge({ state }: { state: string }) {
+export function StateBadge({ state }: { state: string }) {
   const { t } = useTranslation('agentops')
   const variant =
     state === 'active' ? 'success' : state === 'retired' ? 'danger' : 'neutral'
