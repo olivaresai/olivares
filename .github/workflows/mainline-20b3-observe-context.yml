@@ -1,0 +1,1220 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# mainline-20b3-observe-context — the accepted context instrument (mainline-20b3-context, sha256
+# 3279bb41…, measured in run 35946931349) plus ONE variable, for two test failures retained from ONE
+# exact commit, 20b3d0b1c632e8d4bef7b4ce15f4960293cc6e86. DIAGNOSTIC ONLY: it runs from the branch
+# diag/mainline-20b3-observe-context, which adds this one file and is never merged. It mocks nothing,
+# weakens no assertion and changes no product byte.
+#
+# THE ONE VARIABLE is the evidence-only observation. After identity proves the pristine tree, one
+# step applies two pinned test-only patches (OBS_PATCH_A / OBS_PATCH_B: sha256 and resulting blobs
+# pinned; any drift is an inability for the arm). Their OUTPUT is failure-only: A reads which ladder
+# attempt holds the extra grant, inside the failure branch before the unchanged t.Fatalf (prefix
+# REPRO_OBS_A); B snapshots the advisory rows once, after the unchanged count, predicate and t.Errorf
+# (prefix REPRO_OBS_B). Patch A's attempt custody (the subject local and one slice append per ladder
+# attempt) runs on EVERY iteration, green ones included. A passing arm is therefore predicted, not
+# measured, to behave as in the context run.
+# Line map of the patched files (message text unchanged): a named :677 -> :681, witness :688 -> :692,
+# observation :680; b named :337 -> :338, witness :318 -> :319, observation :338.
+#
+# The execution context, inherited unchanged: ONCE per arm, the complete original command that went
+# red, with the same source, clocks, flags, race mode, PostgreSQL services, roles and pins. It has no
+# trials loop, no retry and no narrowing:
+#   a  the control-plane functional leg for the cmd/olivares module, with no -run filter:
+#      scripts/with-pg-env.sh scripts/go-work-each.sh go test -count=1 -timeout 45m ./...
+#      (Taskfile test:functional), restricted to that module by the helper's own GO_WORK_EACH_ONLY.
+#      Every package of the module runs, concurrently, as it did. -json is the one added flag (output
+#      format only), so every test result keeps its name. Origin: step 120 min, job 320 min, 45m per
+#      binary.
+#   b  race-core partition 3 of 4, exactly as the shard ran it:
+#      scripts/with-pg-env.sh scripts/core-race-partition.sh go test -race -count=1 -p 1 -timeout 90m
+#      (Taskfile test:race-hot:core) with OLIVARES_CORE_RACE_PARTITION=3 and _PARTITIONS=4. The
+#      sqlstore entry shard therefore uses its own 317-entry -run selector, followed by the 15 other
+#      packages of the partition. The helpers accept no output flag, so the chain runs byte for byte
+#      and its own -v stream is converted to events afterwards. Origin: step 180 min, job 190 min,
+#      90m per binary.
+#   Excluded, stated rather than implied: the jobs' earlier lint and build steps and the other
+#   workspace modules, all of which ran before these tests and never alongside them.
+#
+# ATTRIBUTION (binding). Every test result keeps its own name: the whole stream is kept, and
+# results.tsv lists every test. The arm verdict (target.tsv, verdicts.tsv) speaks ONLY about the
+# named target symptom:
+#   1  the named assertion failed with the target test (a: communicationchannelhistorywrites_http_test.go:681
+#      "a committed grant at budget"; b: drdestinationauthority_pg_test.go:338 "advisory holders/waiters
+#      leaked" in TestDRDestinationHolderLossCannotCommit/after_DDL). An observation line is never
+#      counted as the named line.
+#   0  the target test passed, with its witness line.
+#   2  INABILITY for the target, when the target could not be measured: the process ended outside
+#      exit 0/1; the target package did not build; the Go timeout fired in the target package before
+#      the target completed; the target skipped, or has no result; the target failed at another
+#      assertion; a target observation line off its exact file:line or beside a passing target; an
+#      observation line with no failure to belong to (a passing, skipped or unfinished test, a
+#      failing ancestor, or no test at all). An observation line belongs to the test whose output
+#      carries it: one inside another failing test is that test's evidence (its other_failures.tsv
+#      note and <arm>.observations.tsv) and never changes the target verdict. The target's own lines
+#      are in <arm>.observation.txt and summarised in target.tsv (observation_summary); no
+#      observation line ever decides a 1.
+# ANY OTHER failing test, and any data race report, cluster-state line or timeout elsewhere, is written
+# SEPARATELY to other_failures.tsv (kind, package, test, first and last file:line line). It is its own
+# observation: never attributed to the target, never hidden, and it never turns the verdict into 1. It
+# makes the verdict 2 only when it kept the target from completing. A single run proves nothing
+# about the rate: a 0 does not close an intermittent failure, and a 1 is one observation.
+name: mainline-20b3-observe-context
+
+# Triggers. workflow_dispatch chooses the arms, and its sha must be the bound source. The push trigger is
+# scoped to the one diagnostic branch that carries this file; a push run measures both arms.
+on:
+  push:
+    branches:
+      - diag/mainline-20b3-observe-context
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: The bound source. Only 20b3d0b1c632e8d4bef7b4ce15f4960293cc6e86 is accepted; any other value is refused before checkout.
+        required: true
+        default: 20b3d0b1c632e8d4bef7b4ce15f4960293cc6e86
+        type: string
+      arms:
+        description: Which arms to run, once each.
+        required: true
+        default: both
+        type: choice
+        options:
+          - both
+          - a
+          - b
+
+permissions:
+  contents: read
+
+# One run per dispatch; a running measurement is never cancelled, because a cancelled run carries
+# no verdict at all.
+concurrency:
+  group: mainline-20b3-observe-context-${{ github.run_id }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  PINNED_SHA: 20b3d0b1c632e8d4bef7b4ce15f4960293cc6e86
+  PINNED_FUNCTIONAL_TEST: cmd/olivares/communicationchannelhistorywrites_http_test.go
+  PINNED_FUNCTIONAL_BLOB: 96a9e733ba6567c577715495eac6b0db5942b35e
+  PINNED_DR_TEST: core/internal/store/sqlstore/drdestinationauthority_pg_test.go
+  PINNED_DR_BLOB: add300c0fb089b457c11cf6125ec8ba290d60c03
+  # The evidence-only observation patches (unified diffs against the bound source), base64 so their
+  # bytes cannot drift in YAML; each is pinned by sha256, and together by the blobs they produce.
+  OBS_PATCH_A_SHA256: ac41b0ddf1688b93a2e5dea17814c2ddb09d3e03aac25e6bc3add15a8f4b75ed
+  OBS_PATCH_B_SHA256: a651f826e0f9a7178ce68cb85dac5556df0c592b1c12c254dfbbafba58d42bc9
+  OBS_PATCH_BLOBS: |-
+    cmd/olivares/communicationchannelhistorywrites_http_test.go d43a646f327d4b7ab5c7d98a7e6ea451fdb9a7ae
+    cmd/olivares/communicationchannelhistorywrites_obs_test.go 575e87dd084b6fbf565b4804e07b60ddb8696835
+    core/internal/store/sqlstore/drdestinationauthority_pg_test.go 34d77ece4b7a5b3bb2f5e24982054b5739e8677c
+    core/internal/store/sqlstore/drdestinationauthority_obs_pg_test.go 32afd619805310a6c8b901d3ab9aeee20fff737f
+  OBS_PATCH_A: |-
+    ZGlmZiAtLWdpdCBhL2NtZC9vbGl2YXJlcy9jb21tdW5pY2F0aW9uY2hhbm5lbGhpc3Rvcnl3cml0
+    ZXNfaHR0cF90ZXN0LmdvIGIvY21kL29saXZhcmVzL2NvbW11bmljYXRpb25jaGFubmVsaGlzdG9y
+    eXdyaXRlc19odHRwX3Rlc3QuZ28KaW5kZXggOTZhOWU3My4uZDQzYTY0NiAxMDA2NDQKLS0tIGEv
+    Y21kL29saXZhcmVzL2NvbW11bmljYXRpb25jaGFubmVsaGlzdG9yeXdyaXRlc19odHRwX3Rlc3Qu
+    Z28KKysrIGIvY21kL29saXZhcmVzL2NvbW11bmljYXRpb25jaGFubmVsaGlzdG9yeXdyaXRlc19o
+    dHRwX3Rlc3QuZ28KQEAgLTY1Myw2ICs2NTMsNyBAQCBmdW5jIGV4ZXJjaXNlQ2hhbm5lbEhpc3Rv
+    cnlXcml0ZVJvbGxiYWNrKAogCS8vIGNvbW1pdCBpcyBvbmUgcm93IGFuZCBvbmUgYWN0IGFuZCBh
+    IHJvbGxiYWNrIGlzIG5laXRoZXI7IHRoZXJlIGlzIG5vCiAJLy8gb3V0Y29tZSBpbiBiZXR3ZWVu
+    IGZvciB0aGUgY2Vuc3VzIHRvIHNob3cuCiAJaW50ZXJydXB0ZWQsIGNvbW1pdHRlZCA6PSAwLCAw
+    CisJb2JzU3RhcnQsIG9ic0F0dGVtcHRzIDo9IHRpbWUuTm93KCksIFtdcmVwcm9PYnNBdHRlbXB0
+    KG5pbCkKIAlmb3IgXywgYnVkZ2V0IDo9IHJhbmdlIFtddGltZS5EdXJhdGlvbnsKIAkJMjAwICog
+    dGltZS5NaWNyb3NlY29uZCwgNTAwICogdGltZS5NaWNyb3NlY29uZCwgdGltZS5NaWxsaXNlY29u
+    ZCwKIAkJMiAqIHRpbWUuTWlsbGlzZWNvbmQsIDUgKiB0aW1lLk1pbGxpc2Vjb25kLCAxMCAqIHRp
+    bWUuTWlsbGlzZWNvbmQsCkBAIC02NjIsMTggKzY2MywyMSBAQCBmdW5jIGV4ZXJjaXNlQ2hhbm5l
+    bEhpc3RvcnlXcml0ZVJvbGxiYWNrKAogCQljZW5zdXMgOj0gY2Vuc3VzQ2hhbm5lbEdyYW50SGlz
+    dG9yeSh0LCBlbmcsIHRlbmFudCkKIAkJY3VycmVudCA6PSBlc3RhdGUuc2hlZXRQYWdlKHQsIG93
+    bmVyLnRva2VuLCBjaGFubmVsLCB3c1F1ZXJ5KyImc3RhdGU9YWN0aXZlJmxpbWl0PTEiKQogCQlk
+    ZWFkbGluZSwgc3RvcCA6PSBjb250ZXh0LldpdGhUaW1lb3V0KGNvbnRleHQuQmFja2dyb3VuZCgp
+    LCBidWRnZXQpCisJCXN1YmplY3QgOj0gbW9kZWwuTmV3SUQoKQogCQlhdHRlbXB0IDo9IGNvbW11
+    bmljYXRpb25IVFRQVGVzdFJlcXVlc3RXaXRoQ29udGV4dCh0LCBkZWFkbGluZSwgZW5nLCBodHRw
+    Lk1ldGhvZFBvc3QsCiAJCQkiL3YxL20vc2Vzc2lvbnMvY2hhbm5lbHMvIitjaGFubmVsLlN0cmlu
+    ZygpKyIvZ3JhbnRzIiwgb3duZXIudG9rZW4sIHRlbmFudCwKIAkJCW1hcFtzdHJpbmddYW55ewot
+    CQkJCSJzdWJqZWN0IjogIGNoYW5uZWxBZG1pbmlzdHJhdGlvblN1YmplY3QoInVzZXIiLCBtb2Rl
+    bC5OZXdJRCgpKSwKKwkJCQkic3ViamVjdCI6ICBjaGFubmVsQWRtaW5pc3RyYXRpb25TdWJqZWN0
+    KCJ1c2VyIiwgc3ViamVjdCksCiAJCQkJImNhbl9yZWFkIjogdHJ1ZSwgImNhbl93cml0ZSI6IGZh
+    bHNlLCAiY2FuX2FkbWluIjogZmFsc2UsCiAJCQl9LCBtYXBbc3RyaW5nXXN0cmluZ3siSWYtTWF0
+    Y2giOiBjdXJyZW50LkVUYWd9KQogCQlzdG9wKCkKIAkJYWZ0ZXIgOj0gY2Vuc3VzQ2hhbm5lbEdy
+    YW50SGlzdG9yeSh0LCBlbmcsIHRlbmFudCkKKwkJb2JzQXR0ZW1wdHMgPSBhcHBlbmQob2JzQXR0
+    ZW1wdHMsIHJlcHJvT2JzQXR0ZW1wdHtidWRnZXQ6IGJ1ZGdldCwgc3RhdHVzOiBhdHRlbXB0LnN0
+    YXR1cywgc3ViamVjdDogc3ViamVjdH0pCiAJCXN3aXRjaCBhdHRlbXB0LnN0YXR1cyB7CiAJCWNh
+    c2UgaHR0cC5TdGF0dXNPSzoKIAkJCWNvbW1pdHRlZCsrCiAJCQlpZiBhZnRlci5ncmFudHMgIT0g
+    Y2Vuc3VzLmdyYW50cysxIHx8IGFmdGVyLmF1ZGl0cyAhPSBjZW5zdXMuYXVkaXRzKzEgeworCQkJ
+    CXJlcHJvT2JzZXJ2ZUxhZGRlckZhaWx1cmUodCwgZW5nLCB0ZW5hbnQsIG9ic1N0YXJ0LCBvYnNB
+    dHRlbXB0cykKIAkJCQl0LkZhdGFsZigiYSBjb21taXR0ZWQgZ3JhbnQgYXQgYnVkZ2V0ICVzIG1v
+    dmVkIHRoZSBjZW5zdXMgYnkgJSt2IC0+ICUrdiIsCiAJCQkJCWJ1ZGdldCwgY2Vuc3VzLCBhZnRl
+    cikKIAkJCX0KZGlmZiAtLWdpdCBhL2NtZC9vbGl2YXJlcy9jb21tdW5pY2F0aW9uY2hhbm5lbGhp
+    c3Rvcnl3cml0ZXNfb2JzX3Rlc3QuZ28gYi9jbWQvb2xpdmFyZXMvY29tbXVuaWNhdGlvbmNoYW5u
+    ZWxoaXN0b3J5d3JpdGVzX29ic190ZXN0LmdvCm5ldyBmaWxlIG1vZGUgMTAwNjQ0CmluZGV4IDAw
+    MDAwMDAuLjU3NWU4N2QKLS0tIC9kZXYvbnVsbAorKysgYi9jbWQvb2xpdmFyZXMvY29tbXVuaWNh
+    dGlvbmNoYW5uZWxoaXN0b3J5d3JpdGVzX29ic190ZXN0LmdvCkBAIC0wLDAgKzEsMTU3IEBACisv
+    LyBTUERYLUZpbGVDb3B5cmlnaHRUZXh0OiAyMDI2IE9saXZhcmVzLkFJCisvLyBTUERYLUxpY2Vu
+    c2UtSWRlbnRpZmllcjogQUdQTC0zLjAtb25seQorLy8gQWRkaXRpb25hbCB0ZXJtcyB1bmRlciBB
+    R1BMLTMuMC1vbmx5IHNlY3Rpb24gNyhhKSBkaXNjbGFpbSB3YXJyYW50eSBhbmQgbGltaXQgbGlh
+    YmlsaXR5OiBzZWUgRElTQ0xBSU1FUi5tZCBhdCB0aGUgcmVwb3NpdG9yeSByb290LgorCitwYWNr
+    YWdlIG1haW4KKworaW1wb3J0ICgKKwkiY29udGV4dCIKKwkiZm10IgorCSJzdHJpbmdzIgorCSJ0
+    ZXN0aW5nIgorCSJ0aW1lIgorCisJImdpdGh1Yi5jb20vb2xpdmFyZXNhaS9vbGl2YXJlcy9jb3Jl
+    L21vZGVsIgorCSJnaXRodWIuY29tL29saXZhcmVzYWkvb2xpdmFyZXMvY29yZS9zdG9yZSIKKykK
+    KworLy8gcmVwcm9PYnNBdHRlbXB0IGlzIHRoZSBjdXN0b2R5IG9mIG9uZSByb2xsYmFjay1sYWRk
+    ZXIgYXR0ZW1wdDogaXRzIGJ1ZGdldCwgaXRzIEhUVFAgc3RhdHVzIGFuZAorLy8gdGhlIHN5bnRo
+    ZXRpYyBzdWJqZWN0IGl0IGFza2VkIHRvIGdyYW50LiBUaGUgbGFkZGVyIG9ubHkgYXBwZW5kcyBp
+    dDsgbm90aGluZyByZWFkcyBpdCB1bmxlc3MgdGhlCisvLyBuYW1lZCBjZW5zdXMgYXNzZXJ0aW9u
+    IGhhcyBhbHJlYWR5IGZhaWxlZC4KK3R5cGUgcmVwcm9PYnNBdHRlbXB0IHN0cnVjdCB7CisJYnVk
+    Z2V0ICB0aW1lLkR1cmF0aW9uCisJc3RhdHVzICBpbnQKKwlzdWJqZWN0IG1vZGVsLklECit9CisK
+    Ky8vIHJlcHJvT2JzZXJ2ZUxhZGRlckZhaWx1cmUgcnVucyBPTkxZIG9uIHRoZSBuYW1lZCBmYWls
+    dXJlIHBhdGggb2YgdGhlIHJvbGxiYWNrIGxhZGRlcjogYWZ0ZXIgdGhlCisvLyBjZW5zdXMgaGFz
+    IHNob3duIHRoZSBmYWlsdXJlIGFuZCBiZWZvcmUgdGhlIHVuY2hhbmdlZCB0LkZhdGFsZiByZXBv
+    cnRzIGl0LiBUaHJvdWdoIHRoZSBzYW1lCisvLyBzdG9yZSBBUEkgYW5kIHBhZ2luZyB0aGUgY2Vu
+    c3VzIHVzZXMsIGl0IHJlYWRzIHdoaWNoIGF0dGVtcHRzJyBzeW50aGV0aWMgc3ViamVjdHMgaG9s
+    ZCBkdXJhYmxlCisvLyBncmFudCByb3dzLCB3aGljaCBncmFudCByb3dzIGNyZWF0ZWQgc2luY2Ug
+    dGhlIGxhZGRlciBzdGFydGVkIGJlbG9uZyB0byBubyBhdHRlbXB0LCBhbmQgd2hpY2gKKy8vIGNo
+    YW5uZWwgYWN0cyBvY2N1cnJlZCBzaW5jZSB0aGVuLiBJdCB3cml0ZXMgUkVQUk9fT0JTX0EgbGlu
+    ZXMgb2Ygc3ludGhldGljIElEcyBhbmQgc3RydWN0dXJhbAorLy8gZmFjdHMgb25seS4gSXQgbmV2
+    ZXIgcmV0cmllcywgbmV2ZXIgd2FpdHMsIGFuZCBjYW5ub3QgY2hhbmdlIHRoZSBvdXRjb21lOiB0
+    aGUgcmVhZCBpcyBib3VuZGVkCisvLyAoMTAgcyksIHNvIGEgc3RhbGxlZCByZWFkIHJlcG9ydHMg
+    Y291bGRfbm90X2xvb2sgYW5kIHRoZSB1bmNoYW5nZWQgdC5GYXRhbGYgc3RpbGwgZm9sbG93cy4K
+    K2Z1bmMgcmVwcm9PYnNlcnZlTGFkZGVyRmFpbHVyZSh0ICp0ZXN0aW5nLlQsIGVuZyAqZW5naW5l
+    LCB0ZW5hbnQgbW9kZWwuVGVuYW50SUQsIHN0YXJ0IHRpbWUuVGltZSwgYXR0ZW1wdHMgW11yZXBy
+    b09ic0F0dGVtcHQpIHsKKwl0LkhlbHBlcigpCisJaWYgbGVuKGF0dGVtcHRzKSA9PSAwIHsKKwkJ
+    dC5Mb2dmKCJSRVBST19PQlNfQXxjb3VsZF9ub3RfbG9va3xyZWFzb249bm9fYXR0ZW1wdF9pbl9j
+    dXN0b2R5IikKKwkJcmV0dXJuCisJfQorCWluZGV4IDo9IG1ha2UobWFwW3N0cmluZ11pbnQsIGxl
+    bihhdHRlbXB0cykpCisJZm9yIGksIGEgOj0gcmFuZ2UgYXR0ZW1wdHMgeworCQlpbmRleFthLnN1
+    YmplY3QuU3RyaW5nKCldID0gaQorCX0KKwloZWxkIDo9IG1ha2UoW11bXXN0cmluZywgbGVuKGF0
+    dGVtcHRzKSkKKwl2YXIgc3RyYW5nZXJzLCBhY3RzIFtdc3RyaW5nCisJdW5yZWFkYWJsZSA6PSAw
+    CisJY3R4LCBjYW5jZWwgOj0gY29udGV4dC5XaXRoVGltZW91dChjb250ZXh0LkJhY2tncm91bmQo
+    KSwgMTAqdGltZS5TZWNvbmQpCisJZGVmZXIgY2FuY2VsKCkKKwllcnIgOj0gZW5nLnN0b3JlLlZp
+    ZXcoY3R4LCB0ZW5hbnQsIGZ1bmMoc2Mgc3RvcmUuU2NvcGUpIGVycm9yIHsKKwkJcmVwbywgZXJy
+    IDo9IHNjLkV4dCgic2Vzc2lvbnMuY2hhbm5lbF9ncmFudCIpCisJCWlmIGVyciAhPSBuaWwgewor
+    CQkJcmV0dXJuIGVycgorCQl9CisJCXF1ZXJ5IDo9IG1vZGVsLlF1ZXJ5e0xpbWl0OiA1MDB9CisJ
+    CWZvciB7CisJCQlyb3dzLCBwYWdlLCBlcnIgOj0gcmVwby5MaXN0KGN0eCwgcXVlcnkpCisJCQlp
+    ZiBlcnIgIT0gbmlsIHsKKwkJCQlyZXR1cm4gZXJyCisJCQl9CisJCQlmb3IgXywgcm93IDo9IHJh
+    bmdlIHJvd3MgeworCQkJCWNyZWF0ZWQsIG9rIDo9IHJlcHJvT2JzQ3JlYXRlZChyb3cpCisJCQkJ
+    ZmFjdCA6PSBmbXQuU3ByaW50Zigicm93PSV2IGNoYW5uZWw9JXYgZ2VuZXJhdGlvbj0ldiBzdGF0
+    ZT0ldiBjcmVhdGVkPSVzIiwKKwkJCQkJcm93WyJpZCJdLCByb3dbImNoYW5uZWxfaWQiXSwgcm93
+    WyJnZW5lcmF0aW9uIl0sIHJvd1sic3RhdGUiXSwgY3JlYXRlZCkKKwkJCQlpZiBpLCBtaW5lIDo9
+    IGluZGV4W3Jvdy5TdHJpbmcoInN1YmplY3RfcmVmIildOyBtaW5lIHsKKwkJCQkJaGVsZFtpXSA9
+    IGFwcGVuZChoZWxkW2ldLCBmYWN0KQorCQkJCQljb250aW51ZQorCQkJCX0KKwkJCQlpZiAhb2sg
+    eworCQkJCQl1bnJlYWRhYmxlKysKKwkJCQkJY29udGludWUKKwkJCQl9CisJCQkJaWYgIWNyZWF0
+    ZWQuVGltZSgpLkJlZm9yZShzdGFydCkgeworCQkJCQlzdHJhbmdlcnMgPSBhcHBlbmQoc3RyYW5n
+    ZXJzLCBmYWN0KQorCQkJCX0KKwkJCX0KKwkJCWlmICFwYWdlLkhhc01vcmUgeworCQkJCWJyZWFr
+    CisJCQl9CisJCQlpZiBwYWdlLkN1cnNvciA9PSAiIiB7CisJCQkJcmV0dXJuIGZtdC5FcnJvcmYo
+    InRoZSBncmFudCBsaXN0aW5nIGxvc3QgaXRzIGN1cnNvciIpCisJCQl9CisJCQlxdWVyeS5DdXJz
+    b3IgPSBwYWdlLkN1cnNvcgorCQl9CisJCXJldHVybiBzYy5BdWRpdCgpLldhbGsoY3R4LCAxLCBm
+    dW5jKGV2ZW50IG1vZGVsLkF1ZGl0RXZlbnQpIGVycm9yIHsKKwkJCWlmIHN0cmluZ3MuSGFzUHJl
+    Zml4KGV2ZW50LkFjdGlvbiwgInNlc3Npb25zLmNvbW11bmljYXRpb24uY2hhbm5lbC4iKSAmJiAh
+    ZXZlbnQuT2NjdXJyZWRBdC5UaW1lKCkuQmVmb3JlKHN0YXJ0KSB7CisJCQkJYWN0cyA9IGFwcGVu
+    ZChhY3RzLCBmbXQuU3ByaW50Zigic2VxPSVkIGFjdGlvbj0lcyB0YXJnZXQ9JXMgb2NjdXJyZWQ9
+    JXMgYmxpbmRlZD0ldCIsCisJCQkJCWV2ZW50LlNlcSwgc3RyaW5ncy5UcmltUHJlZml4KGV2ZW50
+    LkFjdGlvbiwgInNlc3Npb25zLmNvbW11bmljYXRpb24uY2hhbm5lbC4iKSwKKwkJCQkJZXZlbnQu
+    VGFyZ2V0SUQsIGV2ZW50Lk9jY3VycmVkQXQsIGV2ZW50Lk1ldGFCbGluZGVkKSkKKwkJCX0KKwkJ
+    CXJldHVybiBuaWwKKwkJfSkKKwl9KQorCWlmIGVyciAhPSBuaWwgeworCQl0LkxvZ2YoIlJFUFJP
+    X09CU19BfGNvdWxkX25vdF9sb29rfGVycl90eXBlPSVUIiwgZXJyKQorCQlyZXR1cm4KKwl9CisJ
+    bGFzdCA6PSBsZW4oYXR0ZW1wdHMpIC0gMQorCXByZXZpb3VzSW50ZXJydXB0ZWQsIHByZXZpb3Vz
+    Q29tbWl0dGVkRXh0cmEgOj0gMCwgMAorCWZvciBpLCBhIDo9IHJhbmdlIGF0dGVtcHRzIHsKKwkJ
+    cm9sZSA6PSAicHJldmlvdXMiCisJCWlmIGkgPT0gbGFzdCB7CisJCQlyb2xlID0gImN1cnJlbnQi
+    CisJCX0gZWxzZSBpZiBhLnN0YXR1cyAhPSAyMDAgeworCQkJcHJldmlvdXNJbnRlcnJ1cHRlZCAr
+    PSBsZW4oaGVsZFtpXSkKKwkJfSBlbHNlIGlmIGxlbihoZWxkW2ldKSA+PSAyIHsKKwkJCS8vIEEg
+    Y29tbWl0dGVkIGF0dGVtcHQgb3ducyBvbmUgZ3JhbnQ7IGV2ZXJ5IGZ1cnRoZXIgcm93IG9mIGl0
+    cyBzdWJqZWN0IGlzIGV4dHJhLgorCQkJcHJldmlvdXNDb21taXR0ZWRFeHRyYSArPSBsZW4oaGVs
+    ZFtpXSkgLSAxCisJCX0KKwkJdC5Mb2dmKCJSRVBST19PQlNfQXxhdHRlbXB0fGluZGV4PSVkfHJv
+    bGU9JXN8YnVkZ2V0PSVzfHN0YXR1cz0lZHxzdWJqZWN0PSVzfHJvd3M9JWR8JXMiLAorCQkJaSwg
+    cm9sZSwgYS5idWRnZXQsIGEuc3RhdHVzLCBhLnN1YmplY3QsIGxlbihoZWxkW2ldKSwgc3RyaW5n
+    cy5Kb2luKGhlbGRbaV0sICI7IikpCisJfQorCWZvciBpLCBzIDo9IHJhbmdlIHN0cmFuZ2VycyB7
+    CisJCWlmIGkgPT0gMjAgeworCQkJYnJlYWsKKwkJfQorCQl0LkxvZ2YoIlJFUFJPX09CU19BfHJv
+    d19vZl9ub19hdHRlbXB0fCVzIiwgcykKKwl9CisJZm9yIGksIHMgOj0gcmFuZ2UgYWN0cyB7CisJ
+    CWlmIGkgPT0gMjAgeworCQkJYnJlYWsKKwkJfQorCQl0LkxvZ2YoIlJFUFJPX09CU19BfGNoYW5u
+    ZWxfYWN0fCVzIiwgcykKKwl9CisJdmFyIGF0dHJpYnV0aW9uIFtdc3RyaW5nCisJaWYgbGVuKGhl
+    bGRbbGFzdF0pID49IDIgeworCQlhdHRyaWJ1dGlvbiA9IGFwcGVuZChhdHRyaWJ1dGlvbiwgImN1
+    cnJlbnQiKQorCX0KKwlpZiBwcmV2aW91c0ludGVycnVwdGVkID4gMCB7CisJCWF0dHJpYnV0aW9u
+    ID0gYXBwZW5kKGF0dHJpYnV0aW9uLCAicHJldmlvdXMiKQorCX0KKwlpZiBwcmV2aW91c0NvbW1p
+    dHRlZEV4dHJhID4gMCB7CisJCWF0dHJpYnV0aW9uID0gYXBwZW5kKGF0dHJpYnV0aW9uLCAicHJl
+    dmlvdXNfY29tbWl0dGVkIikKKwl9CisJaWYgbGVuKHN0cmFuZ2VycykgPiAwIHsKKwkJYXR0cmli
+    dXRpb24gPSBhcHBlbmQoYXR0cmlidXRpb24sICJuZWl0aGVyIikKKwl9CisJaWYgbGVuKGF0dHJp
+    YnV0aW9uKSA9PSAwIHsKKwkJYXR0cmlidXRpb24gPSBhcHBlbmQoYXR0cmlidXRpb24sICJub25l
+    X2ZvdW5kIikKKwl9CisJdC5Mb2dmKCJSRVBST19PQlNfQXxzdW1tYXJ5fGV4dHJhX2dyYW50PSVz
+    fGN1cnJlbnRfcm93cz0lZHxpbnRlcnJ1cHRlZF9hdHRlbXB0X3Jvd3M9JWR8Y29tbWl0dGVkX2F0
+    dGVtcHRfZXh0cmFfcm93cz0lZHxyb3dzX29mX25vX2F0dGVtcHQ9JWR8cm93c193aXRoX3VucmVh
+    ZGFibGVfY3JlYXRlZD0lZHxjaGFubmVsX2FjdHNfc2luY2Vfc3RhcnQ9JWR8Z2Fwcz1jb21taXRf
+    dmlzaWJpbGl0eSx0cmFuc2FjdGlvbl9pZGVudGl0eSxhY3RfdG9fZ3JhbnRfbGluayIsCisJCXN0
+    cmluZ3MuSm9pbihhdHRyaWJ1dGlvbiwgIisiKSwgbGVuKGhlbGRbbGFzdF0pLCBwcmV2aW91c0lu
+    dGVycnVwdGVkLCBwcmV2aW91c0NvbW1pdHRlZEV4dHJhLCBsZW4oc3RyYW5nZXJzKSwgdW5yZWFk
+    YWJsZSwgbGVuKGFjdHMpKQorfQorCisvLyByZXByb09ic0NyZWF0ZWQgcmVhZHMgYSBncmFudCBy
+    b3cncyBjcmVhdGVkX2F0LCB3aGljaCB0aGUgc3RvcmUga2VlcHMgYXMgYSB0aW1lc3RhbXAgc3Ry
+    aW5nLgorZnVuYyByZXByb09ic0NyZWF0ZWQocm93IG1vZGVsLlJlY29yZCkgKG1vZGVsLlRpbWVz
+    dGFtcCwgYm9vbCkgeworCXN3aXRjaCB2IDo9IHJvd1ttb2RlbC5Db2xDcmVhdGVkQXRdLih0eXBl
+    KSB7CisJY2FzZSBtb2RlbC5UaW1lc3RhbXA6CisJCXJldHVybiB2LCB0cnVlCisJY2FzZSB0aW1l
+    LlRpbWU6CisJCXJldHVybiBtb2RlbC5OZXdUaW1lc3RhbXAodiksIHRydWUKKwljYXNlIHN0cmlu
+    ZzoKKwkJdHMsIGVyciA6PSBtb2RlbC5QYXJzZVRpbWVzdGFtcCh2KQorCQlyZXR1cm4gdHMsIGVy
+    ciA9PSBuaWwKKwlkZWZhdWx0OgorCQlyZXR1cm4gbW9kZWwuVGltZXN0YW1we30sIGZhbHNlCisJ
+    fQorfQo=
+  OBS_PATCH_B: |-
+    ZGlmZiAtLWdpdCBhL2NvcmUvaW50ZXJuYWwvc3RvcmUvc3Fsc3RvcmUvZHJkZXN0aW5hdGlvbmF1
+    dGhvcml0eV9vYnNfcGdfdGVzdC5nbyBiL2NvcmUvaW50ZXJuYWwvc3RvcmUvc3Fsc3RvcmUvZHJk
+    ZXN0aW5hdGlvbmF1dGhvcml0eV9vYnNfcGdfdGVzdC5nbwpuZXcgZmlsZSBtb2RlIDEwMDY0NApp
+    bmRleCAwMDAwMDAwLi4zMmFmZDYxCi0tLSAvZGV2L251bGwKKysrIGIvY29yZS9pbnRlcm5hbC9z
+    dG9yZS9zcWxzdG9yZS9kcmRlc3RpbmF0aW9uYXV0aG9yaXR5X29ic19wZ190ZXN0LmdvCkBAIC0w
+    LDAgKzEsNzIgQEAKKy8vIFNQRFgtRmlsZUNvcHlyaWdodFRleHQ6IDIwMjYgT2xpdmFyZXMuQUkK
+    Ky8vIFNQRFgtTGljZW5zZS1JZGVudGlmaWVyOiBBR1BMLTMuMC1vbmx5CisvLyBBZGRpdGlvbmFs
+    IHRlcm1zIHVuZGVyIEFHUEwtMy4wLW9ubHkgc2VjdGlvbiA3KGEpIGRpc2NsYWltIHdhcnJhbnR5
+    IGFuZCBsaW1pdCBsaWFiaWxpdHk6IHNlZSBESVNDTEFJTUVSLm1kIGF0IHRoZSByZXBvc2l0b3J5
+    IHJvb3QuCisKK3BhY2thZ2Ugc3Fsc3RvcmUKKworaW1wb3J0ICgKKwkiY29udGV4dCIKKwkiZGF0
+    YWJhc2Uvc3FsIgorCSJ0ZXN0aW5nIgorCSJ0aW1lIgorKQorCisvLyByZXByb09ic2VydmVBZHZp
+    c29yeVJvd3MgcnVucyBPTkxZIGFmdGVyIGRkYU5vSG9sZGVycyBoYXMgYWxyZWFkeSByZXBvcnRl
+    ZCBhZHZpc29yeSByb3dzIHdpdGggaXRzCisvLyB1bmNoYW5nZWQgdC5FcnJvcmYuIEl0IHRha2Vz
+    IE9ORSBib3VuZGVkLCByZWFkLW9ubHkgc25hcHNob3Qgb2YgdGhlIGFkdmlzb3J5IHJvd3Mgb2Yg
+    dGhpcyBkYXRhYmFzZToKKy8vIHRoZSBvd25pbmcgb3Igd2FpdGluZyBwaWQsIHRoZSBsb2NrIG1v
+    ZGUsIHdoZXRoZXIgaXQgaXMgZ3JhbnRlZCwgd2hpY2gga25vd24gbG9jayBpZGVudGl0eSB0aGUg
+    cm93CisvLyBjYXJyaWVzICh0aGUgbWlncmF0aW9uIGxvY2ssIHRoZSByZXN0b3JlIGxvY2ssIHRo
+    ZSBEREwgYmFycmllciBrZXkpLCBhbmQgd2hldGhlciB0aGUgcGlkIHN0aWxsIGhhcworLy8gYSBz
+    ZXNzaW9uIGluIHBnX3N0YXRfYWN0aXZpdHkgYW5kIGluIHdoaWNoIHN0YXRlLiBJdCBuZXZlciB3
+    YWl0cywgbmV2ZXIgcG9sbHMgYW5kIGNhbm5vdCBjaGFuZ2UgdGhlCisvLyB2ZXJkaWN0LiBMaW5l
+    cyBjYXJyeSB0aGUgUkVQUk9fT0JTX0IgcHJlZml4IGFuZCBzdHJ1Y3R1cmFsIGZhY3RzIG9ubHk7
+    IG5vIHF1ZXJ5IHRleHQgaXMgcmVhZC4KK2Z1bmMgcmVwcm9PYnNlcnZlQWR2aXNvcnlSb3dzKHQg
+    KnRlc3RpbmcuVCwgZGIgKnNxbC5EQikgeworCXQuSGVscGVyKCkKKwljdHgsIGNhbmNlbCA6PSBj
+    b250ZXh0LldpdGhUaW1lb3V0KGNvbnRleHQuQmFja2dyb3VuZCgpLCAyKnRpbWUuU2Vjb25kKQor
+    CWRlZmVyIGNhbmNlbCgpCisJcm93cywgZXJyIDo9IGRiLlF1ZXJ5Q29udGV4dChjdHgsIGBTRUxF
+    Q1QgbC5waWQsIGwubW9kZSwgbC5ncmFudGVkLAorIENBU0UKKyAgV0hFTiBsLm9ianN1YmlkID0g
+    MSBBTkQgbC5jbGFzc2lkOjpiaWdpbnQgPSAoKGsubSA+PiAzMikgJiA0Mjk0OTY3Mjk1KSBBTkQg
+    bC5vYmppZDo6YmlnaW50ID0gKGsubSAmIDQyOTQ5NjcyOTUpIFRIRU4gJ21pZ3JhdGlvbicKKyAg
+    V0hFTiBsLm9ianN1YmlkID0gMSBBTkQgbC5jbGFzc2lkOjpiaWdpbnQgPSAoKGsuciA+PiAzMikg
+    JiA0Mjk0OTY3Mjk1KSBBTkQgbC5vYmppZDo6YmlnaW50ID0gKGsuciAmIDQyOTQ5NjcyOTUpIFRI
+    RU4gJ3Jlc3RvcmUnCisgIFdIRU4gbC5vYmpzdWJpZCA9IDEgQU5EIGwuY2xhc3NpZDo6YmlnaW50
+    ID0gKChrLmIgPj4gMzIpICYgNDI5NDk2NzI5NSkgQU5EIGwub2JqaWQ6OmJpZ2ludCA9IChrLmIg
+    JiA0Mjk0OTY3Mjk1KSBUSEVOICdkZGxfYmFycmllcicKKyAgRUxTRSAnb3RoZXInIEVORCwKKyBh
+    LnBpZCBJUyBOT1QgTlVMTCwgY29hbGVzY2UoYS5zdGF0ZSwgJycpLCBjb2FsZXNjZShhLmJhY2tl
+    bmRfdHlwZSwgJycpLCBjb2FsZXNjZShhLndhaXRfZXZlbnRfdHlwZSwgJycpLCBjb2FsZXNjZShh
+    LndhaXRfZXZlbnQsICcnKQorIEZST00gcGdfY2F0YWxvZy5wZ19sb2NrcyBsCisgQ1JPU1MgSk9J
+    TiAoU0VMRUNUIHBnX2NhdGFsb2cuaGFzaHRleHRleHRlbmRlZCgnb2xpdmFyZXMubWlncmF0ZS52
+    MScsIDApIEFTIG0sCisgIHBnX2NhdGFsb2cuaGFzaHRleHRleHRlbmRlZCgnb2xpdmFyZXMucmVz
+    dG9yZS52MTonIHx8IGN1cnJlbnRfZGF0YWJhc2UoKSB8fCAnOnB1YmxpYycsIDApIEFTIHIsCisg
+    IDgxOTIzNzQ2MzIxOjpiaWdpbnQgQVMgYikgaworIExFRlQgSk9JTiBwZ19jYXRhbG9nLnBnX3N0
+    YXRfYWN0aXZpdHkgYSBPTiBhLnBpZCA9IGwucGlkCisgV0hFUkUgbC5sb2NrdHlwZSA9ICdhZHZp
+    c29yeScKKyAgQU5EIGwuZGF0YWJhc2UgPSAoU0VMRUNUIG9pZCBGUk9NIHBnX2NhdGFsb2cucGdf
+    ZGF0YWJhc2UgV0hFUkUgZGF0bmFtZSA9IGN1cnJlbnRfZGF0YWJhc2UoKSkKKyBPUkRFUiBCWSBs
+    LnBpZCwgbC5ncmFudGVkIERFU0NgKQorCWlmIGVyciAhPSBuaWwgeworCQl0LkxvZ2YoIlJFUFJP
+    X09CU19CfGNvdWxkX25vdF9sb29rfGVycl90eXBlPSVUIiwgZXJyKQorCQlyZXR1cm4KKwl9CisJ
+    ZGVmZXIgcm93cy5DbG9zZSgpCisJc2VlbiwgcHJlc2VudCA6PSAwLCAwCisJaWRlbnRpdGllcyA6
+    PSBtYXBbc3RyaW5nXWludHt9CisJZm9yIHJvd3MuTmV4dCgpIHsKKwkJdmFyIHBpZCBpbnQKKwkJ
+    dmFyIG1vZGUsIGlkZW50aXR5LCBzdGF0ZSwgYmFja2VuZCwgd2FpdFR5cGUsIHdhaXRFdmVudCBz
+    dHJpbmcKKwkJdmFyIGdyYW50ZWQsIHNlc3Npb24gYm9vbAorCQlpZiBlcnIgOj0gcm93cy5TY2Fu
+    KCZwaWQsICZtb2RlLCAmZ3JhbnRlZCwgJmlkZW50aXR5LCAmc2Vzc2lvbiwgJnN0YXRlLCAmYmFj
+    a2VuZCwgJndhaXRUeXBlLCAmd2FpdEV2ZW50KTsgZXJyICE9IG5pbCB7CisJCQl0LkxvZ2YoIlJF
+    UFJPX09CU19CfGNvdWxkX25vdF9sb29rfGVycl90eXBlPSVUIiwgZXJyKQorCQkJcmV0dXJuCisJ
+    CX0KKwkJc2VlbisrCisJCWlkZW50aXRpZXNbaWRlbnRpdHldKysKKwkJd2hlcmUgOj0gImFic2Vu
+    dCIKKwkJaWYgc2Vzc2lvbiB7CisJCQlwcmVzZW50KysKKwkJCXdoZXJlID0gInByZXNlbnQiCisJ
+    CX0KKwkJaWYgc2VlbiA8PSAxNiB7CisJCQl0LkxvZ2YoIlJFUFJPX09CU19CfHJvd3xwaWQ9JWR8
+    aWRlbnRpdHk9JXN8bW9kZT0lc3xncmFudGVkPSV0fHNlc3Npb249JXN8c3RhdGU9JXN8YmFja2Vu
+    ZD0lc3x3YWl0PSVzOiVzIiwKKwkJCQlwaWQsIGlkZW50aXR5LCBtb2RlLCBncmFudGVkLCB3aGVy
+    ZSwgc3RhdGUsIGJhY2tlbmQsIHdhaXRUeXBlLCB3YWl0RXZlbnQpCisJCX0KKwl9CisJaWYgZXJy
+    IDo9IHJvd3MuRXJyKCk7IGVyciAhPSBuaWwgeworCQl0LkxvZ2YoIlJFUFJPX09CU19CfGNvdWxk
+    X25vdF9sb29rfGVycl90eXBlPSVUIiwgZXJyKQorCQlyZXR1cm4KKwl9CisJdC5Mb2dmKCJSRVBS
+    T19PQlNfQnxzdW1tYXJ5fHJvd3M9JWR8c2Vzc2lvbnNfcHJlc2VudD0lZHxtaWdyYXRpb249JWR8
+    cmVzdG9yZT0lZHxkZGxfYmFycmllcj0lZHxvdGhlcj0lZHxzbmFwc2hvdD1vbmNlX2FmdGVyX3Ro
+    ZV9mYWlsdXJlIiwKKwkJc2VlbiwgcHJlc2VudCwgaWRlbnRpdGllc1sibWlncmF0aW9uIl0sIGlk
+    ZW50aXRpZXNbInJlc3RvcmUiXSwgaWRlbnRpdGllc1siZGRsX2JhcnJpZXIiXSwgaWRlbnRpdGll
+    c1sib3RoZXIiXSkKK30KZGlmZiAtLWdpdCBhL2NvcmUvaW50ZXJuYWwvc3RvcmUvc3Fsc3RvcmUv
+    ZHJkZXN0aW5hdGlvbmF1dGhvcml0eV9wZ190ZXN0LmdvIGIvY29yZS9pbnRlcm5hbC9zdG9yZS9z
+    cWxzdG9yZS9kcmRlc3RpbmF0aW9uYXV0aG9yaXR5X3BnX3Rlc3QuZ28KaW5kZXggYWRkMzAwYy4u
+    MzRkNzdlYyAxMDA2NDQKLS0tIGEvY29yZS9pbnRlcm5hbC9zdG9yZS9zcWxzdG9yZS9kcmRlc3Rp
+    bmF0aW9uYXV0aG9yaXR5X3BnX3Rlc3QuZ28KKysrIGIvY29yZS9pbnRlcm5hbC9zdG9yZS9zcWxz
+    dG9yZS9kcmRlc3RpbmF0aW9uYXV0aG9yaXR5X3BnX3Rlc3QuZ28KQEAgLTQyLDYgKzQyLDcgQEAg
+    ZnVuYyBkZGFOb0hvbGRlcnModCAqdGVzdGluZy5ULCBkYiAqc3FsLkRCKSB7CiAJfQogCWlmIG4g
+    IT0gMCB7CiAJCXQuRXJyb3JmKCIlZCBhZHZpc29yeSBob2xkZXJzL3dhaXRlcnMgbGVha2VkIiwg
+    bikKKwkJcmVwcm9PYnNlcnZlQWR2aXNvcnlSb3dzKHQsIGRiKQogCX0KIH0KIAo=
+  # A push carries no inputs; the dispatch defaults apply then.
+  INPUT_SHA: ${{ inputs.sha || '20b3d0b1c632e8d4bef7b4ce15f4960293cc6e86' }}
+  INPUT_ARMS: ${{ inputs.arms || 'both' }}
+  # The shared shell library. It never turns a raw exit into a verdict by itself: run_arm keeps the
+  # stream, stderr and exit; the attribution step judges them with CTX_PY.
+  CTX_LIB: |
+    set -euo pipefail
+    : "${ARM:?ARM must name the arm of this job}"
+    OUT="${OUT:-$RUNNER_TEMP/context/$ARM}"
+    mkdir -p "$OUT"
+
+    fail() { printf '::error::%s\n' "$*"; return 1; }
+
+    # Inputs are validated deny-closed; every refusal returns explicitly (finalize calls this in an `if`).
+    validate_inputs() {
+      [ "${INPUT_SHA:-}" = "$PINNED_SHA" ] ||
+        { fail "sha [${INPUT_SHA:-}] is not the bound source $PINNED_SHA; this instrument quotes that source's assertion lines and blobs and measures no other commit"; return 1; }
+      case "${INPUT_ARMS:-}" in both | a | b) : ;; *) fail "arms must be both, a or b: [${INPUT_ARMS:-}]"; return 1 ;; esac
+    }
+
+    # The checkout is the bound source, clean, with the two quoted test-file blobs, on a GitHub-hosted runner.
+    identity() {
+      validate_inputs
+      [ "$(git rev-parse HEAD)" = "$PINNED_SHA" ] || fail "the checkout $(git rev-parse HEAD) is not the bound source $PINNED_SHA"
+      [ -z "$(git status --porcelain --untracked-files=all)" ] || fail "the checkout is not clean"
+      [ "$(git rev-parse "HEAD:$PINNED_FUNCTIONAL_TEST")" = "$PINNED_FUNCTIONAL_BLOB" ] || fail "$PINNED_FUNCTIONAL_TEST is not blob $PINNED_FUNCTIONAL_BLOB"
+      [ "$(git rev-parse "HEAD:$PINNED_DR_TEST")" = "$PINNED_DR_BLOB" ] || fail "$PINNED_DR_TEST is not blob $PINNED_DR_BLOB"
+      [ "${RUNNER_PLACEMENT:-}" = github-hosted ] ||
+        fail "this job runs on a ${RUNNER_PLACEMENT:-unknown} runner; the instrument runs on GitHub-hosted runners only"
+      {
+        printf 'arm %s\ninput_sha %s\nbound_sha %s\ntree %s\nworkflow_sha %s\n' \
+          "$ARM" "$INPUT_SHA" "$PINNED_SHA" "$(git rev-parse 'HEAD^{tree}')" "${GITHUB_WORKFLOW_SHA:-unknown}"
+        printf 'event %s ref %s repository %s run %s attempt %s\n' \
+          "$GITHUB_EVENT_NAME" "$GITHUB_REF" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"
+        printf 'runner %s placement %s %s %s image %s %s\n' "${RUNNER_NAME:-unknown}" "$RUNNER_PLACEMENT" \
+          "$RUNNER_OS" "$RUNNER_ARCH" "${ImageOS:-unknown}" "${ImageVersion:-unknown}"
+        printf 'blob %s %s\nblob %s %s\n' "$PINNED_FUNCTIONAL_TEST" "$PINNED_FUNCTIONAL_BLOB" "$PINNED_DR_TEST" "$PINNED_DR_BLOB"
+      } > "$OUT/identity.txt"
+      cat "$OUT/identity.txt"
+    }
+
+    # apply_observation: both evidence-only patches, after identity proved the pristine source. Refused
+    # unless each decoded patch has its pinned sha256 and applies cleanly, and the tree then differs
+    # from the bound source in exactly the pinned paths, each at its pinned blob.
+    apply_observation() {
+      local p b64 want path blob n=0 changed pinned
+      for p in A B; do
+        b64="$(printenv "OBS_PATCH_$p")" || { fail "no observation patch $p"; return 1; }
+        want="$(printenv "OBS_PATCH_${p}_SHA256")"
+        printf '%s\n' "$b64" | base64 -d > "$OUT/observation-$p.patch" || { fail "observation patch $p does not decode"; return 1; }
+        [ "$(sha256sum "$OUT/observation-$p.patch" | cut -d' ' -f1)" = "$want" ] || { fail "observation patch $p is not sha256 $want"; return 1; }
+        git apply --check "$OUT/observation-$p.patch" || { fail "observation patch $p does not apply to the bound source"; return 1; }
+        git apply "$OUT/observation-$p.patch" || { fail "observation patch $p did not apply"; return 1; }
+      done
+      while read -r path blob; do
+        [ -n "$path" ] || continue
+        [ "$(git hash-object -- "$path")" = "$blob" ] || { fail "$path is not blob $blob after the observation patches"; return 1; }
+        n=$((n + 1))
+      done <<< "$OBS_PATCH_BLOBS"
+      changed="$(git status --porcelain --untracked-files=all | awk '{print $2}' | LC_ALL=C sort | paste -sd' ' -)"
+      pinned="$(printf '%s\n' "$OBS_PATCH_BLOBS" | awk 'NF {print $1}' | LC_ALL=C sort | paste -sd' ' -)"
+      [ "$changed" = "$pinned" ] || { fail "the observation patches changed other paths: $changed"; return 1; }
+      printf 'observation patches A %s and B %s applied; %s pinned blobs verified; changed %s\n' \
+        "$OBS_PATCH_A_SHA256" "$OBS_PATCH_B_SHA256" "$n" "$changed" | tee "$OUT/observation-applied.txt"
+    }
+
+    # run_logged LABEL DIR COMMAND...: a non-test command, its log and raw exit kept.
+    run_logged() {
+      local label="$1" dir="$2" rc=0
+      shift 2
+      { printf 'cd %q && ' "$dir"; printf '%q ' "$@"; printf '\n'; } > "$OUT/$label.command"
+      ( cd "$dir" && "$@" ) > "$OUT/$label.log" 2>&1 || rc=$?
+      printf '%s\n' "$rc" > "$OUT/$label.exit"
+      cat "$OUT/$label.log"
+      [ "$rc" -eq 0 ] || fail "$label exited $rc"
+    }
+
+    # run_arm FORM DIR COMMAND...: the arm's original command, ONCE, verbatim. FORM json keeps stdout
+    # (the -json stream) and stderr apart; FORM text mirrors the original `2>&1 | tee` into one stream.
+    # The raw exit is the command's own, never tee's. The step always succeeds; the attribution step judges.
+    run_arm() {
+      local form="$1" dir="$2" rc=0 t0 t1
+      shift 2
+      { printf 'cd %q && ' "$dir"; printf '%q ' "$@"; printf '\n'; } > "$OUT/$ARM.command"
+      date -u +%Y-%m-%dT%H:%M:%S.%3NZ > "$OUT/$ARM.started"
+      t0="$(date +%s)"
+      if [ "$form" = json ]; then
+        ( cd "$dir" && "$@" ) > "$OUT/$ARM.json" 2> "$OUT/$ARM.stderr" || rc=$?
+      else
+        set +o pipefail
+        ( cd "$dir" && "$@" ) 2>&1 | tee "$OUT/$ARM.stream.txt"
+        rc="${PIPESTATUS[0]}"
+        set -o pipefail
+      fi
+      t1="$(date +%s)"
+      printf '%s\n' "$rc" > "$OUT/$ARM.exit"
+      printf '%s\n' "$((t1 - t0))" > "$OUT/$ARM.elapsed_s"
+      printf 'arm %s: raw exit %s after %ss\n' "$ARM" "$rc" "$((t1 - t0))"
+    }
+
+    # attribute: judge the kept stream with CTX_PY. A text stream is converted to events first.
+    attribute() {
+      local py="$RUNNER_TEMP/context-ctx.py" rc=0 events
+      printf '%s\n' "$CTX_PY" > "$py"
+      events="$OUT/$ARM.json"
+      if [ -f "$OUT/$ARM.stream.txt" ]; then
+        python3 "$py" v2json "$OUT/$ARM.stream.txt" "$OUT/$ARM.events.json" || fail "the $ARM stream could not be converted"
+        events="$OUT/$ARM.events.json"
+      fi
+      python3 "$py" classify "$events" "$OUT" "$ARM" "$(cat "$OUT/$ARM.exit")" || rc=$?
+      return "$rc"
+    }
+
+    # finalize SETUP_OUTCOMES: judge the arm if its command ran; otherwise write the target as an
+    # inability naming the step that stopped it. The job succeeds only when the target was measured
+    # (0 or 1). That describes the instrument, not the product.
+    finalize() {
+      local outcomes="$1" first_bad rc=0
+      first_bad="$(tr ' ' '\n' <<< "$outcomes" | awk -F= 'NF == 2 && $2 != "success" {print; exit}')"
+      printf 'setup outcomes: %s\n' "$outcomes" > "$OUT/setup-outcomes.txt"
+      if [ -f "$OUT/$ARM.exit" ]; then
+        attribute || rc=$?
+      else
+        printf 'arm\tpackage\tparent\tleaf\tverdict\tlabel\ttarget_result\ttarget_elapsed_s\tfirst_failure_line\twitness\tnamed_line_present_anywhere\tobservation_summary\n%s\t%s\t%s\t%s\t2\tINABILITY not run: %s\t-\t-\t\t\t-\t\n' \
+          "$ARM" "$TARGET_PKG" "$PARENT" "$LEAF" "${first_bad:-unknown step}" > "$OUT/target.tsv"
+        printf 'arm\tkind\tpackage\ttest\tfirst_fileline\tlast_fileline\tnote\n' > "$OUT/other_failures.tsv"
+        printf '%s\t2 INABILITY not run: %s\n' "$ARM" "${first_bad:-unknown step}" >> "$OUT/verdicts.tsv"
+        rc=3
+      fi
+      if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+        { printf '### arm %s\n\n```\n' "$ARM"; cat "$OUT/target.tsv"; printf '\nseparate observations: %s\n```\n' "$(($(wc -l < "$OUT/other_failures.tsv") - 1))"; } >> "$GITHUB_STEP_SUMMARY"
+      fi
+      [ "$rc" -eq 0 ] || fail "arm $ARM: the target could not be measured (verdict 2); every observation is still in the artifact"
+    }
+  # The attribution program: converts a -v stream to events (v2json) and judges one arm (classify).
+  CTX_PY: |
+    import sys, os, re, json
+
+    FILELINE = re.compile(r'^\s*[A-Za-z0-9_./-]+\.go:[0-9]+: ')
+    SUMMARY = re.compile(r'^(ok  |FAIL|\?   )\t(\S+)(\t|\s\[|$)')
+    MARKER = re.compile(r'^=== (RUN|PAUSE|CONT|NAME)\s+(\S+)\s*$')
+    RESULT = re.compile(r'^(\s*)--- (PASS|FAIL|SKIP): (\S+) \((\d+(?:\.\d+)?)s\)')
+
+
+    def v2json(src, dst):
+        """The verbose `go test -v` stream of a -p 1 run, read package by package (each package ends
+        at its summary line), written as test2json-like events. Output lines go to the test named by
+        the last === marker; a top-level result line ends that attribution."""
+        with open(src, encoding='utf-8', errors='replace') as f:
+            lines = f.read().split('\n')
+        segs, cur = [], []
+        for ln in lines:
+            cur.append(ln)
+            m = SUMMARY.match(ln)
+            if m:
+                segs.append((m.group(2), cur))
+                cur = []
+        if any(x.strip() for x in cur):
+            segs.append(('', cur))
+        with open(dst, 'w') as out:
+            def emit(**e):
+                out.write(json.dumps(e) + '\n')
+            for pkg, seg in segs:
+                test = None
+                for ln in seg:
+                    if ln == '' and seg[-1] is ln:
+                        continue
+                    m = MARKER.match(ln)
+                    if m:
+                        test = m.group(2)
+                        if m.group(1) == 'RUN':
+                            emit(Action='run', Package=pkg, Test=test)
+                        emit(Action='output', Package=pkg, Test=test, Output=ln + '\n')
+                        continue
+                    r = RESULT.match(ln)
+                    if r:
+                        name = r.group(3)
+                        emit(Action='output', Package=pkg, Test=name, Output=ln + '\n')
+                        emit(Action={'PASS': 'pass', 'FAIL': 'fail', 'SKIP': 'skip'}[r.group(2)], Package=pkg, Test=name, Elapsed=float(r.group(4)))
+                        if r.group(1) == '':
+                            test = None
+                        continue
+                    s = SUMMARY.match(ln)
+                    if s:
+                        emit(Action='output', Package=pkg, Output=ln + '\n')
+                        word = s.group(1).strip()
+                        emit(Action='pass' if word == 'ok' else ('skip' if word == '?' else 'fail'), Package=pkg)
+                        test = None
+                        continue
+                    if test:
+                        emit(Action='output', Package=pkg, Test=test, Output=ln + '\n')
+                    else:
+                        emit(Action='output', Package=pkg, Output=ln + '\n')
+
+
+    def first_last(lines):
+        fl = [l.strip() for l in lines if FILELINE.match(l)]
+        return (fl[0] if fl else ''), (fl[-1] if fl else '')
+
+
+    def tsv(s):
+        return str(s).replace('\t', ' ').replace('\r', ' ').replace('\n', ' ')
+
+
+    def classify(events_path, out, arm, raw_exit):
+        P, parent, leaf = os.environ['TARGET_PKG'], os.environ['PARENT'], os.environ['LEAF']
+        named = re.compile(os.environ['NAMED_RE'])
+        witness = re.compile(os.environ['WITNESS_RE'])
+        allowed = re.compile(os.environ['ALLOWED_LOG_RE'])
+        diag = re.compile(os.environ['DIAG_RE'])
+        diag_at = re.compile(os.environ['DIAG_AT_RE'])
+        diag_summary = re.compile(os.environ['DIAG_RE'] + r'summary[|]')
+        events = []
+        with open(events_path, encoding='utf-8', errors='replace') as f:
+            for ln in f:
+                ln = ln.strip()
+                if not ln.startswith('{'):
+                    continue
+                try:
+                    events.append(json.loads(ln))
+                except ValueError:
+                    continue
+        results, outputs, pkg_lines, pkg_result, build_failed = {}, {}, {}, {}, set()
+        for i, e in enumerate(events):
+            a = e.get('Action')
+            p = e.get('Package') or (e.get('ImportPath') or '').split(' ')[0]
+            t = e.get('Test')
+            if a in ('output', 'build-output'):
+                o = e.get('Output', '')
+                if t:
+                    outputs.setdefault((p, t), []).append((i, o))
+                pkg_lines.setdefault(p, []).append((i, t, o))
+                if '[build failed]' in o or '[setup failed]' in o:
+                    build_failed.add(p)
+            elif a == 'build-fail':
+                build_failed.add(p)
+            elif a in ('pass', 'fail', 'skip'):
+                if t:
+                    results[(p, t)] = (a, e.get('Elapsed'), i)
+                else:
+                    pkg_result[p] = a
+                    if e.get('FailedBuild'):
+                        build_failed.add(p)
+        text = lambda k: ''.join(o for _, o in outputs.get(k, []))
+        rows = []  # separate observations: kind, package, test, first, last, note
+        # every failing test that is not failing only because a child failed
+        failing = [k for k, v in results.items() if v[0] == 'fail']
+        fset = set(failing)
+        def derived(k):
+            return any(q[0] == k[0] and q[1].startswith(k[1] + '/') for q in fset)
+        tkey = (P, leaf)
+        # Observation ownership (DIAG_RE). A line belongs to the test whose output carries it, as the
+        # stream itself attributes it (the -json Test field; the -v converter's last === marker).
+        #   target         the target leaf: its lines must sit at DIAG_AT_RE beside a failing target.
+        #   other-failure  a failing test with its own test-failure row below: the lines are that
+        #                  test's evidence (its row note and the receipts); never the target's verdict.
+        #   refused        any other owner (a passing, skipped or unfinished test, a failing ancestor,
+        #                  or no test): an observation with no failure to belong to is an inability.
+        obs = []
+        for p, lst in pkg_lines.items():
+            for _, t, o in lst:
+                for l in o.split('\n'):
+                    if not diag.search(l):
+                        continue
+                    k = (p, t)
+                    res = results[k][0] if t and k in results else ('no-result' if t else 'no-test')
+                    disp = 'target' if k == tkey else ('other-failure' if res == 'fail' and not derived(k) else 'refused')
+                    obs.append((p, t or '', res, disp, l.strip()))
+        obs_target = [x[4] for x in obs if x[3] == 'target']
+        obs_refused = [x for x in obs if x[3] == 'refused']
+        obs_summary = next((l for l in obs_target if diag_summary.search(l)), '')
+        def obs_note(k):
+            mine = [x[4] for x in obs if x[3] == 'other-failure' and (x[0], x[1]) == k]
+            if not mine:
+                return ''
+            s = next((l for l in mine if diag_summary.search(l)), None)
+            return f'its own observation lines {len(mine)} (receipt {arm}.observations.tsv); ' + (f'summary: {s}' if s else f'last line: {mine[-1]}')
+        for k in sorted(failing):
+            if derived(k) or k == tkey:
+                continue
+            f, l = first_last([x for x in text(k).split('\n') if not diag.search(x)])
+            rows.append(('test-failure', k[0], k[1], f, l, obs_note(k)))
+        for p, v in sorted(pkg_result.items()):
+            if v == 'fail' and not any(k[0] == p for k in failing):
+                lines = [o for _, t, o in pkg_lines.get(p, [])]
+                kind = 'build-failure' if p in build_failed else 'package-failure'
+                first = next((o.strip() for o in lines if o.strip() and not o.startswith('=== ')), '')
+                rows.append((kind, p, '', first, '', 'no failing test carries this failure'))
+        timeout_idx = {}
+        for p, lst in sorted(pkg_lines.items()):
+            for i, t, o in lst:
+                if 'panic: test timed out' in o and p not in timeout_idx:
+                    timeout_idx[p] = i
+                    rows.append(('timeout', p, t or '', o.strip(), '', 'the Go test timeout fired in this package'))
+                if 'WARNING: DATA RACE' in o:
+                    rows.append(('data-race', p, t or '', o.strip(), '', 'a data race report'))
+                if o.startswith('CLUSTER_STATE|'):
+                    rows.append(('cluster-state', p, t or '', o.strip(), '', 'the package cluster-state check'))
+        # the target
+        tres = results.get(tkey)
+        tout = text(tkey).split('\n')
+        # Observation lines (DIAG_RE) never count as the named line.
+        named_lines = [l.strip() for l in tout if named.search(l) and not diag.search(l)]
+        wit = next((l.strip() for l in tout if witness.search(l)), '')
+        named_anywhere = any(named.search(o) and not diag.search(o) for lst in outputs.values() for _, o in lst)
+        extra = [l.strip() for l in tout if FILELINE.match(l) and not named.search(l) and not allowed.search(l)]
+        first = ''
+        if raw_exit not in ('0', '1'):
+            v, lab = 2, f'INABILITY the arm process ended with raw exit {raw_exit}'
+        elif P in build_failed:
+            v, lab = 2, 'INABILITY the target package did not build'
+        elif P in timeout_idx and (tres is None or tres[2] > timeout_idx[P]):
+            v, lab = 2, 'INABILITY the Go timeout fired in the target package before the target completed'
+        elif tres is None:
+            v, lab = 2, 'INABILITY the target produced no result (setup, crash or missing)'
+        elif tres[0] == 'skip':
+            v, lab = 2, 'INABILITY the target skipped'
+        elif obs_refused:
+            x = obs_refused[0]
+            v, lab = 2, f'INABILITY an observation line with no failure to belong to ({len(obs_refused)} line(s); first owner {x[1] or "no test"}, result {x[2]})'
+            first = x[4]
+        elif any(not diag_at.search(l) for l in obs_target):
+            v, lab = 2, 'INABILITY a target observation line off its exact file:line in the target leaf'
+            first = next(l for l in obs_target if not diag_at.search(l))
+        elif tres[0] == 'pass' and obs_target:
+            v, lab = 2, 'INABILITY a target observation line while the target passes (the observation output is failure-only)'
+            first = obs_target[0]
+        elif tres[0] == 'pass':
+            if wit:
+                v, lab = 0, 'PASS (the target passed; witness present)'
+            else:
+                v, lab = 2, 'INABILITY the target passed without its witness line'
+        elif named_lines:
+            v, lab, first = 1, 'NAMED assertion failed with the target', named_lines[0]
+            for x in extra:
+                rows.append(('target-extra-assertion', P, leaf, x, '', 'another assertion line in the target, beside the named one'))
+        else:
+            v, lab = 2, 'INABILITY the target failed without the named assertion'
+            f, l = first_last([x for x in tout if not diag.search(x)])
+            first = f
+            rows.append(('target-other-assertion', P, leaf, f, l, 'the target failed at another assertion; not the named symptom'
+                         + (f'; the target observation lines ({len(obs_target)}) are in {arm}.observation.txt' if obs_target else '')))
+        os.makedirs(out, exist_ok=True)
+        with open(os.path.join(out, 'results.tsv'), 'w') as f:
+            f.write('package\ttest\taction\telapsed_s\n')
+            for k in sorted(results):
+                f.write(f'{tsv(k[0])}\t{tsv(k[1])}\t{results[k][0]}\t{results[k][1]}\n')
+        with open(os.path.join(out, 'target.tsv'), 'w') as f:
+            f.write('arm\tpackage\tparent\tleaf\tverdict\tlabel\ttarget_result\ttarget_elapsed_s\tfirst_failure_line\twitness\tnamed_line_present_anywhere\tobservation_summary\n')
+            f.write('\t'.join(map(tsv, [arm, P, parent, leaf, v, lab, tres[0] if tres else '-', tres[1] if tres else '-', first, wit, 'yes' if named_anywhere else 'no', obs_summary])) + '\n')
+        # Receipts, never verdicts: the target's own lines (capped), and every observation line with
+        # the test that owns it and its disposition (capped; the whole stream is in the artifact).
+        with open(os.path.join(out, f'{arm}.observation.txt'), 'w') as f:
+            for l in obs_target[:100]:
+                f.write(l + '\n')
+            if len(obs_target) > 100:
+                f.write(f'# {len(obs_target) - 100} more target observation lines are in the stream\n')
+        with open(os.path.join(out, f'{arm}.observations.tsv'), 'w') as f:
+            f.write('package\ttest\towner_result\tdisposition\tline\n')
+            for x in obs[:2000]:
+                f.write('\t'.join(map(tsv, x)) + '\n')
+            if len(obs) > 2000:
+                f.write(f'# {len(obs) - 2000} more observation lines are in the stream\n')
+        with open(os.path.join(out, 'other_failures.tsv'), 'w') as f:
+            f.write('arm\tkind\tpackage\ttest\tfirst_fileline\tlast_fileline\tnote\n')
+            for r in rows:
+                f.write('\t'.join(map(tsv, (arm,) + r)) + '\n')
+        with open(os.path.join(out, 'verdicts.tsv'), 'a') as f:
+            f.write(f'{arm}\t{v} {lab}\n')
+        counts = {}
+        for k, r in results.items():
+            counts[r[0]] = counts.get(r[0], 0) + 1
+        print(f'arm {arm}: target verdict {v} ({lab}); tests {sum(counts.values())} {counts}; separate observations {len(rows)}; '
+              f'observation lines {len(obs)} (target {len(obs_target)}, other failures {sum(1 for x in obs if x[3] == "other-failure")}, refused {len(obs_refused)})')
+        if first:
+            print(f'  {first}')
+        for r in rows[:50]:
+            print('  observation: ' + ' | '.join(map(tsv, r[:4])))
+        return v
+
+
+    if __name__ == '__main__':
+        cmd = sys.argv[1]
+        if cmd == 'v2json':
+            v2json(sys.argv[2], sys.argv[3])
+        elif cmd == 'classify':
+            v = classify(sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5])
+            sys.exit(0 if v in (0, 1) else 3)
+
+jobs:
+  # ---------------------------------------------------------------------------------------------
+  # Arm a: the control-plane functional leg for the cmd/olivares module, once, unfiltered.
+  # ---------------------------------------------------------------------------------------------
+  arm-a-cmd-olivares:
+    if: github.repository == 'olivaresai/olivares' && contains(fromJSON('["both","a"]'), inputs.arms || 'both')
+    name: a · cmd/olivares module, complete original functional command, once
+    runs-on: ubuntu-latest
+    # The origin job ceiling. Step ceilings sum to 220 minutes, below it.
+    timeout-minutes: 320
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16@sha256:a36250871de0833b8757561c72f2477ef1ddd1101afa4e617fb552e0de514c6b
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+          --memory=1g
+          --memory-swap=1536m
+          --cpus=2
+          --pids-limit=512
+      postgres_other:
+        image: pgvector/pgvector:pg16@sha256:a36250871de0833b8757561c72f2477ef1ddd1101afa4e617fb552e0de514c6b
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+          --memory=1g
+          --memory-swap=1536m
+          --cpus=2
+          --pids-limit=512
+    env:
+      ARM: a
+      OLIVARES_GATE_STRICT_PG: "1"
+      # The origin job's env, carried for fidelity (the install-manifest gate that reads it is not run).
+      HELM_VERSION: "3.21.0"
+      HELM_SHA256: "0093eb572e3d2380f094df162ddb525e219249de88957afe24cfbb19632acd36"
+      TARGET_PKG: github.com/olivaresai/olivares/cmd/olivares
+      PARENT: TestCommunicationChannelHistoryWritesHTTPPostgres
+      LEAF: TestCommunicationChannelHistoryWritesHTTPPostgres/a_failed_mutation_leaves_no_partial_act
+      NAMED_RE: 'communicationchannelhistorywrites_http_test\.go:681: a committed grant at budget [^ ]+ moved the census by '
+      WITNESS_RE: 'communicationchannelhistorywrites_http_test\.go:692: K3_WRITER_ROLLBACK[|]interrupted=[0-9]+[|]committed=[0-9]+'
+      ALLOWED_LOG_RE: 'communicationchannelhistorywrites_http_test\.go:(242: K3_HTTP_PG_POSTURE|692: K3_WRITER_ROLLBACK|680: REPRO_OBS_A)[|]'
+      # The observation's prefix, and the one file:line its lines may carry (the call site, :680).
+      DIAG_RE: 'REPRO_OBS_A[|]'
+      DIAG_AT_RE: '^\s*communicationchannelhistorywrites_http_test\.go:680: REPRO_OBS_A[|]'
+    steps:
+      - name: the input names the bound source (any other sha is refused before checkout)
+        id: input
+        timeout-minutes: 1
+        run: |
+          eval "$CTX_LIB"
+          validate_inputs
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 10
+        with:
+          ref: 20b3d0b1c632e8d4bef7b4ce15f4960293cc6e86
+          persist-credentials: false
+          fetch-depth: 0
+      - name: the checkout is the bound source, clean, with the quoted test-file blobs
+        id: identity
+        timeout-minutes: 2
+        env:
+          RUNNER_PLACEMENT: ${{ runner.environment }}
+        run: |
+          eval "$CTX_LIB"
+          identity
+      - name: apply the evidence-only observation patches (pinned sha256 and resulting blobs; test files only)
+        id: patch
+        timeout-minutes: 1
+        run: |
+          eval "$CTX_LIB"
+          apply_observation
+      - name: Go caches under RUNNER_TEMP (as in the job that went red)
+        id: caches
+        timeout-minutes: 1
+        run: |
+          {
+            echo "GOCACHE=$RUNNER_TEMP/gocache"
+            echo "GOMODCACHE=$RUNNER_TEMP/gomodcache"
+            echo "GOPATH=$RUNNER_TEMP/gopath"
+            echo "GOBIN=$RUNNER_TEMP/gopath/bin"
+          } >> "$GITHUB_ENV"
+          echo "$RUNNER_TEMP/gopath/bin" >> "$GITHUB_PATH"
+          echo "PNPM_HOME=$RUNNER_TEMP/pnpm" >> "$GITHUB_ENV"
+          echo "$RUNNER_TEMP/pnpm" >> "$GITHUB_PATH"
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        id: setup-go
+        timeout-minutes: 10
+        with:
+          go-version-file: go.work
+          cache: ${{ runner.environment == 'github-hosted' }}
+          cache-dependency-path: go.work.sum
+      # The job that went red put node, pnpm and go-task on PATH before its tests; the same pins do here.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        id: node
+        timeout-minutes: 5
+        with:
+          node-version-file: .node-version
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+        id: pnpm
+        timeout-minutes: 5
+        with:
+          dest: ${{ runner.temp }}/setup-pnpm
+          standalone: true
+      - name: install go-task (pinned)
+        id: tools
+        timeout-minutes: 5
+        uses: ./.github/actions/olivares-tool-cache
+      - name: TMPDIR where an extracted binary can actually run (same selection as the job that went red)
+        id: tmpdir
+        timeout-minutes: 2
+        run: |
+          short=""
+          for c in "${HOME:-}" /var/tmp /dev/shm /run/user/"$(id -u)"; do
+            if [ -n "$c" ] && [ -d "$c" ]; then
+              find "$c" -maxdepth 1 -mindepth 1 -type d \( -name 'olv[0-9]*' -o -name 'olv-exec-[0-9]*' \) -user "$(id -un)" -mmin +360 -exec rm -rf {} + 2>/dev/null || true
+            fi
+          done
+          for c in "${HOME:-}" /var/tmp /dev/shm /run/user/"$(id -u)"; do
+            if [ -z "$c" ]; then echo "  candidate <empty>: variable unset"; continue; fi
+            if [ ! -d "$c" ]; then echo "  candidate $c: does not exist"; continue; fi
+            df -Pk "$c" 2>/dev/null | awk -v c="$c" 'NR==2{printf "  candidate %s: %d MiB free of %d on %s\n", c, $4/1024, $2/1024, $1}' || true
+            d="$c/olv$$"
+            if ! mkdir -p "$d" 2>/dev/null; then echo "  candidate $c: cannot create inside"; continue; fi
+            if ! printf '#!/bin/sh\nexit 7\n' >"$d/.p" 2>/dev/null; then echo "  candidate $c: cannot write"; rm -rf "$d"; continue; fi
+            chmod +x "$d/.p" 2>/dev/null || { echo "  candidate $c: chmod fails"; rm -rf "$d"; continue; }
+            rc=0; "$d/.p" 2>/dev/null || rc=$?
+            rm -f "$d/.p"
+            if [ "$rc" -ne 7 ]; then echo "  candidate $c: does not execute (rc=$rc)"; rm -rf "$d"; continue; fi
+            if [ "${#d}" -gt 24 ]; then echo "  candidate $c: executes but the path is ${#d} characters (>24)"; rm -rf "$d"; continue; fi
+            short="$d"; break
+          done
+          if [ -n "$short" ]; then
+            echo "TMPDIR=$short" >> "$GITHUB_ENV"
+            echo "TMPDIR short and executable: $short (${#short} characters)"
+          else
+            . scripts/lib/exec-workdir.sh
+            d="$(olivares_pick_exec_workdir o)" || {
+              echo "::error::no directory can execute a binary"
+              exit 1
+            }
+            echo "TMPDIR=$d" >> "$GITHUB_ENV"
+            echo "::warning::no SHORT candidate; using $d (${#d} characters): a unix socket path may exceed 108"
+          fi
+      - name: resolve the ephemeral Postgres ports into the test DSNs
+        id: pg-port
+        timeout-minutes: 2
+        env:
+          PGPORT_HOST: ${{ job.services.postgres.ports['5432'] }}
+          PGPORT_OTHER: ${{ job.services.postgres_other.ports['5432'] }}
+        run: |
+          set -euo pipefail
+          bash scripts/ci-postgres-service.sh resolve
+          # The job that went red resolved these two as well, beside the same DSNs.
+          {
+            echo "CLOUD_CP_INTEGRATION=1"
+            echo "CLOUD_CP_REQUIRE_INTEGRATION=1"
+          } >> "$GITHUB_ENV"
+      - name: provision postgres roles (least-privilege app role + BYPASSRLS admin)
+        id: pg-roles
+        timeout-minutes: 5
+        env:
+          PGPASSWORD: postgres
+        run: bash scripts/ci-postgres-service.sh provision
+      - name: PostgreSQL 16 is required, both clusters answer, and the roles hold their posture
+        id: posture
+        timeout-minutes: 2
+        run: |
+          eval "$CTX_LIB"
+          [ "${OLIVARES_TEST_POSTGRES_REQUIRED:-}" = 1 ] || fail "OLIVARES_TEST_POSTGRES_REQUIRED is not 1"
+          psql "$OLIVARES_TEST_POSTGRES_SUPERUSER_DSN" -X -v ON_ERROR_STOP=1 -Atc 'SHOW server_version_num' | tee "$OUT/postgres-version.txt"
+          psql "$OLIVARES_TEST_POSTGRES_OTHER_DSN" -X -v ON_ERROR_STOP=1 -Atc 'SHOW server_version_num' | tee "$OUT/postgres-other-version.txt"
+          psql "$OLIVARES_TEST_POSTGRES_SUPERUSER_DSN" -X -v ON_ERROR_STOP=1 -AtF ' ' \
+            -c "SELECT name, setting FROM pg_settings WHERE name IN ('max_connections', 'shared_buffers', 'default_transaction_isolation', 'log_disconnections', 'log_lock_waits') ORDER BY name" |
+            tee "$OUT/postgres-settings.txt"
+          psql "$OLIVARES_TEST_POSTGRES_SUPERUSER_DSN" -X -v ON_ERROR_STOP=1 -AtF ' ' \
+            -c "SELECT rolname, rolsuper, rolbypassrls, rolcreaterole, rolcreatedb FROM pg_roles WHERE rolname IN ('olivares_app', 'olivares_admin') ORDER BY rolname" |
+            tee "$OUT/roles.txt"
+          case "$(cat "$OUT/postgres-version.txt")" in 16*) : ;; *) fail "the primary server is not PostgreSQL 16" ;; esac
+          [ "$(awk '$1 == "olivares_app" {print $2, $3, $4, $5}' "$OUT/roles.txt")" = "f f f f" ] || fail "the application role is privileged"
+          [ "$(awk '$1 == "olivares_admin" {print $2, $3, $4, $5}' "$OUT/roles.txt")" = "f t f f" ] || fail "the admin role is not BYPASSRLS-only"
+      - name: record the toolchain
+        id: toolchain
+        timeout-minutes: 2
+        run: |
+          eval "$CTX_LIB"
+          {
+            go version
+            go env GOVERSION GOOS GOARCH GOFLAGS CGO_ENABLED GOCACHE
+            printf 'nproc %s\n' "$(nproc)"
+            printf 'cgroup memory.max %s\n' "$(cat /sys/fs/cgroup/memory.max 2>/dev/null || echo unreadable)"
+            printf 'TMPDIR %s\n' "${TMPDIR:-unset}"
+            jq --version
+            psql --version
+            python3 --version
+            timeout --version | head -n1
+          } 2>&1 | tee "$OUT/toolchain.txt"
+      - name: a · build the target package's test binary once (a build failure is an inability)
+        id: build
+        timeout-minutes: 30
+        run: |
+          eval "$CTX_LIB"
+          mkdir -p "$RUNNER_TEMP/build"
+          run_logged build "$GITHUB_WORKSPACE" go test -c -o "$RUNNER_TEMP/build/a.test" ./cmd/olivares
+      - name: a · the complete original command, once (the functional leg for the cmd/olivares module)
+        id: test
+        timeout-minutes: 120
+        env:
+          GO_WORK_EACH_ONLY: cmd/olivares
+        run: |
+          eval "$CTX_LIB"
+          # The resource witness the job that went red ran around its functional step.
+          WITNESS="$OUT/resource-witness.state"
+          bash scripts/ci-resource-witness.sh start "$WITNESS" >/dev/null
+          trap 'bash scripts/ci-resource-witness.sh report "$WITNESS" | tee "$OUT/resource-witness.report" || true' EXIT
+          run_arm json "$GITHUB_WORKSPACE" bash scripts/with-pg-env.sh bash scripts/go-work-each.sh go test -count=1 -timeout 45m -json ./...
+      - name: a · attribution (the target verdict; every other failure a separate observation)
+        if: always()
+        timeout-minutes: 5
+        env:
+          SETUP_OUTCOMES: >-
+            input=${{ steps.input.outcome }} identity=${{ steps.identity.outcome }} patch=${{ steps.patch.outcome }} caches=${{ steps.caches.outcome }}
+            setup-go=${{ steps.setup-go.outcome }} node=${{ steps.node.outcome }} pnpm=${{ steps.pnpm.outcome }}
+            tools=${{ steps.tools.outcome }} tmpdir=${{ steps.tmpdir.outcome }} pg-port=${{ steps.pg-port.outcome }}
+            pg-roles=${{ steps.pg-roles.outcome }} posture=${{ steps.posture.outcome }} toolchain=${{ steps.toolchain.outcome }}
+            build=${{ steps.build.outcome }} test=${{ steps.test.outcome }}
+        run: |
+          eval "$CTX_LIB"
+          finalize "$SETUP_OUTCOMES"
+      - name: keep both PostgreSQL server logs
+        if: always()
+        timeout-minutes: 2
+        env:
+          PG_PRIMARY_ID: ${{ job.services.postgres.id }}
+          PG_OTHER_ID: ${{ job.services.postgres_other.id }}
+        run: |
+          OUT="$RUNNER_TEMP/context/$ARM"
+          mkdir -p "$OUT"
+          docker logs --details "$PG_PRIMARY_ID" > "$OUT/postgres-primary.log" 2>&1 || echo "COULD NOT LOOK" >> "$OUT/postgres-primary.log"
+          docker logs --details "$PG_OTHER_ID" > "$OUT/postgres-other.log" 2>&1 || echo "COULD NOT LOOK" >> "$OUT/postgres-other.log"
+      - name: retain the whole stream, results, target, separate observations and the server logs
+        if: always()
+        timeout-minutes: 10
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: mainline-20b3-observe-context-a-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/context/a/
+          retention-days: 7
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------------------------
+  # Arm b: race-core partition 3 of 4, once, with its own selectors.
+  # ---------------------------------------------------------------------------------------------
+  arm-b-race-core-p3:
+    if: github.repository == 'olivaresai/olivares' && contains(fromJSON('["both","b"]'), inputs.arms || 'both')
+    name: b · race-core partition 3 of 4, complete original command, once
+    runs-on: ubuntu-latest
+    # The origin job ceiling. Step ceilings sum to 188 minutes, below it; the test step is 145, under
+    # the origin's 180, so that the separate build step fits inside the same 190.
+    timeout-minutes: 190
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16@sha256:a36250871de0833b8757561c72f2477ef1ddd1101afa4e617fb552e0de514c6b
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+          --memory=1g
+          --memory-swap=1536m
+          --cpus=2
+          --pids-limit=512
+      postgres_other:
+        image: pgvector/pgvector:pg16@sha256:a36250871de0833b8757561c72f2477ef1ddd1101afa4e617fb552e0de514c6b
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+          --memory=1g
+          --memory-swap=1536m
+          --cpus=2
+          --pids-limit=512
+    env:
+      ARM: b
+      OLIVARES_GATE_STRICT_PG: "1"
+      # The pair the job that went red exported (partition 3 of strategy.job-total 4): the partition
+      # helpers read it and choose the same packages and the same 317 sqlstore entries.
+      OLIVARES_CORE_RACE_PARTITION: "3"
+      OLIVARES_CORE_RACE_PARTITIONS: "4"
+      TARGET_PKG: github.com/olivaresai/olivares/core/internal/store/sqlstore
+      PARENT: TestDRDestinationHolderLossCannotCommit
+      LEAF: TestDRDestinationHolderLossCannotCommit/after_DDL
+      NAMED_RE: 'drdestinationauthority_pg_test\.go:338: [0-9]+ advisory holders/waiters leaked'
+      WITNESS_RE: 'drdestinationauthority_pg_test\.go:319: after_DDL: actual exclusive holder=[0-9]+ DDL/migration waiter=[0-9]+'
+      ALLOWED_LOG_RE: 'drdestinationauthority_pg_test\.go:(319: after_DDL: actual exclusive holder=[0-9]+ DDL/migration waiter=[0-9]+|338: REPRO_OBS_B[|])'
+      # The observation's prefix, and the one file:line its lines may carry (the lock check's caller, :338).
+      DIAG_RE: 'REPRO_OBS_B[|]'
+      DIAG_AT_RE: '^\s*drdestinationauthority_pg_test\.go:338: REPRO_OBS_B[|]'
+    steps:
+      - name: the input names the bound source (any other sha is refused before checkout)
+        id: input
+        timeout-minutes: 1
+        run: |
+          eval "$CTX_LIB"
+          validate_inputs
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 3
+        with:
+          ref: 20b3d0b1c632e8d4bef7b4ce15f4960293cc6e86
+          persist-credentials: false
+      - name: the checkout is the bound source, clean, with the quoted test-file blobs
+        id: identity
+        timeout-minutes: 1
+        env:
+          RUNNER_PLACEMENT: ${{ runner.environment }}
+        run: |
+          eval "$CTX_LIB"
+          identity
+      - name: apply the evidence-only observation patches (pinned sha256 and resulting blobs; test files only)
+        id: patch
+        timeout-minutes: 1
+        run: |
+          eval "$CTX_LIB"
+          apply_observation
+      - name: Go caches under RUNNER_TEMP (as in the job that went red)
+        id: caches
+        timeout-minutes: 1
+        run: |
+          {
+            echo "GOCACHE=$RUNNER_TEMP/gocache"
+            echo "GOMODCACHE=$RUNNER_TEMP/gomodcache"
+            echo "GOPATH=$RUNNER_TEMP/gopath"
+            echo "GOBIN=$RUNNER_TEMP/gopath/bin"
+          } >> "$GITHUB_ENV"
+          echo "$RUNNER_TEMP/gopath/bin" >> "$GITHUB_PATH"
+          echo "PNPM_HOME=$RUNNER_TEMP/pnpm" >> "$GITHUB_ENV"
+          echo "$RUNNER_TEMP/pnpm" >> "$GITHUB_PATH"
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        id: setup-go
+        timeout-minutes: 5
+        with:
+          go-version-file: go.work
+          cache: ${{ runner.environment == 'github-hosted' }}
+          cache-dependency-path: go.work.sum
+      - name: install go-task (pinned)
+        id: tools
+        timeout-minutes: 2
+        uses: ./.github/actions/olivares-tool-cache
+      - name: TMPDIR where an extracted binary can actually run (same selection as the job that went red)
+        id: tmpdir
+        timeout-minutes: 1
+        run: |
+          short=""
+          for c in "${HOME:-}" /var/tmp /dev/shm /run/user/"$(id -u)"; do
+            if [ -n "$c" ] && [ -d "$c" ]; then
+              find "$c" -maxdepth 1 -mindepth 1 -type d \( -name 'olv[0-9]*' -o -name 'olv-exec-[0-9]*' \) -user "$(id -un)" -mmin +360 -exec rm -rf {} + 2>/dev/null || true
+            fi
+          done
+          for c in "${HOME:-}" /var/tmp /dev/shm /run/user/"$(id -u)"; do
+            if [ -z "$c" ]; then echo "  candidate <empty>: variable unset"; continue; fi
+            if [ ! -d "$c" ]; then echo "  candidate $c: does not exist"; continue; fi
+            df -Pk "$c" 2>/dev/null | awk -v c="$c" 'NR==2{printf "  candidate %s: %d MiB free of %d on %s\n", c, $4/1024, $2/1024, $1}' || true
+            d="$c/olv$$"
+            if ! mkdir -p "$d" 2>/dev/null; then echo "  candidate $c: cannot create inside"; continue; fi
+            if ! printf '#!/bin/sh\nexit 7\n' >"$d/.p" 2>/dev/null; then echo "  candidate $c: cannot write"; rm -rf "$d"; continue; fi
+            chmod +x "$d/.p" 2>/dev/null || { echo "  candidate $c: chmod fails"; rm -rf "$d"; continue; }
+            rc=0; "$d/.p" 2>/dev/null || rc=$?
+            rm -f "$d/.p"
+            if [ "$rc" -ne 7 ]; then echo "  candidate $c: does not execute (rc=$rc)"; rm -rf "$d"; continue; fi
+            if [ "${#d}" -gt 24 ]; then echo "  candidate $c: executes but the path is ${#d} characters (>24)"; rm -rf "$d"; continue; fi
+            short="$d"; break
+          done
+          if [ -n "$short" ]; then
+            echo "TMPDIR=$short" >> "$GITHUB_ENV"
+            echo "TMPDIR short and executable: $short (${#short} characters)"
+          else
+            . scripts/lib/exec-workdir.sh
+            d="$(olivares_pick_exec_workdir o)" || {
+              echo "::error::no directory can execute a binary"
+              exit 1
+            }
+            echo "TMPDIR=$d" >> "$GITHUB_ENV"
+            echo "::warning::no SHORT candidate; using $d (${#d} characters): a unix socket path may exceed 108"
+          fi
+      - name: resolve the ephemeral Postgres ports into the test DSNs
+        id: pg-port
+        timeout-minutes: 1
+        env:
+          PGPORT_HOST: ${{ job.services.postgres.ports['5432'] }}
+          PGPORT_OTHER: ${{ job.services.postgres_other.ports['5432'] }}
+        run: bash scripts/ci-postgres-service.sh resolve
+      - name: provision postgres roles (least-privilege app role + BYPASSRLS admin)
+        id: pg-roles
+        timeout-minutes: 2
+        env:
+          PGPASSWORD: postgres
+        run: bash scripts/ci-postgres-service.sh provision
+      - name: PostgreSQL 16 is required, both clusters answer, and the roles hold their posture
+        id: posture
+        timeout-minutes: 1
+        run: |
+          eval "$CTX_LIB"
+          [ "${OLIVARES_TEST_POSTGRES_REQUIRED:-}" = 1 ] || fail "OLIVARES_TEST_POSTGRES_REQUIRED is not 1"
+          psql "$OLIVARES_TEST_POSTGRES_SUPERUSER_DSN" -X -v ON_ERROR_STOP=1 -Atc 'SHOW server_version_num' | tee "$OUT/postgres-version.txt"
+          psql "$OLIVARES_TEST_POSTGRES_OTHER_DSN" -X -v ON_ERROR_STOP=1 -Atc 'SHOW server_version_num' | tee "$OUT/postgres-other-version.txt"
+          psql "$OLIVARES_TEST_POSTGRES_SUPERUSER_DSN" -X -v ON_ERROR_STOP=1 -AtF ' ' \
+            -c "SELECT name, setting FROM pg_settings WHERE name IN ('max_connections', 'shared_buffers', 'default_transaction_isolation', 'log_disconnections', 'log_lock_waits') ORDER BY name" |
+            tee "$OUT/postgres-settings.txt"
+          psql "$OLIVARES_TEST_POSTGRES_SUPERUSER_DSN" -X -v ON_ERROR_STOP=1 -AtF ' ' \
+            -c "SELECT rolname, rolsuper, rolbypassrls, rolcreaterole, rolcreatedb FROM pg_roles WHERE rolname IN ('olivares_app', 'olivares_admin') ORDER BY rolname" |
+            tee "$OUT/roles.txt"
+          case "$(cat "$OUT/postgres-version.txt")" in 16*) : ;; *) fail "the primary server is not PostgreSQL 16" ;; esac
+          [ "$(awk '$1 == "olivares_app" {print $2, $3, $4, $5}' "$OUT/roles.txt")" = "f f f f" ] || fail "the application role is privileged"
+          [ "$(awk '$1 == "olivares_admin" {print $2, $3, $4, $5}' "$OUT/roles.txt")" = "f t f f" ] || fail "the admin role is not BYPASSRLS-only"
+      - name: record the toolchain
+        id: toolchain
+        timeout-minutes: 1
+        run: |
+          eval "$CTX_LIB"
+          {
+            go version
+            go env GOVERSION GOOS GOARCH GOFLAGS CGO_ENABLED GOCACHE
+            printf 'nproc %s\n' "$(nproc)"
+            printf 'cgroup memory.max %s\n' "$(cat /sys/fs/cgroup/memory.max 2>/dev/null || echo unreadable)"
+            printf 'TMPDIR %s\n' "${TMPDIR:-unset}"
+            jq --version
+            psql --version
+            python3 --version
+            timeout --version | head -n1
+          } 2>&1 | tee "$OUT/toolchain.txt"
+      - name: b · build the target package's -race test binary once (a build failure is an inability)
+        id: build
+        timeout-minutes: 15
+        run: |
+          eval "$CTX_LIB"
+          mkdir -p "$RUNNER_TEMP/build"
+          run_logged build "$GITHUB_WORKSPACE/core" go test -c -race -o "$RUNNER_TEMP/build/b.test" ./internal/store/sqlstore
+      - name: b · the complete original command, once (race-core partition 3 of 4)
+        id: test
+        timeout-minutes: 145
+        run: |
+          eval "$CTX_LIB"
+          run_arm text "$GITHUB_WORKSPACE" bash scripts/with-pg-env.sh bash scripts/core-race-partition.sh go test -race -count=1 -p 1 -timeout 90m
+      - name: timeout headroom census (warns above 75%, does not block; as in the job that went red)
+        if: always()
+        continue-on-error: true
+        timeout-minutes: 1
+        run: |
+          OUT="$RUNNER_TEMP/context/$ARM"
+          if [ -f "$OUT/$ARM.stream.txt" ]; then bash scripts/check-test-timeout-headroom.sh --raw race-core "$OUT/$ARM.stream.txt"; fi
+      - name: b · attribution (the target verdict; every other failure a separate observation)
+        if: always()
+        timeout-minutes: 3
+        env:
+          SETUP_OUTCOMES: >-
+            input=${{ steps.input.outcome }} identity=${{ steps.identity.outcome }} patch=${{ steps.patch.outcome }} caches=${{ steps.caches.outcome }}
+            setup-go=${{ steps.setup-go.outcome }} tools=${{ steps.tools.outcome }} tmpdir=${{ steps.tmpdir.outcome }}
+            pg-port=${{ steps.pg-port.outcome }} pg-roles=${{ steps.pg-roles.outcome }} posture=${{ steps.posture.outcome }}
+            toolchain=${{ steps.toolchain.outcome }} build=${{ steps.build.outcome }} test=${{ steps.test.outcome }}
+        run: |
+          eval "$CTX_LIB"
+          finalize "$SETUP_OUTCOMES"
+      - name: keep both PostgreSQL server logs
+        if: always()
+        timeout-minutes: 1
+        env:
+          PG_PRIMARY_ID: ${{ job.services.postgres.id }}
+          PG_OTHER_ID: ${{ job.services.postgres_other.id }}
+        run: |
+          OUT="$RUNNER_TEMP/context/$ARM"
+          mkdir -p "$OUT"
+          docker logs --details "$PG_PRIMARY_ID" > "$OUT/postgres-primary.log" 2>&1 || echo "COULD NOT LOOK" >> "$OUT/postgres-primary.log"
+          docker logs --details "$PG_OTHER_ID" > "$OUT/postgres-other.log" 2>&1 || echo "COULD NOT LOOK" >> "$OUT/postgres-other.log"
+      - name: retain the whole stream, results, target, separate observations and the server logs
+        if: always()
+        timeout-minutes: 3
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: mainline-20b3-observe-context-b-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/context/b/
+          retention-days: 7
+          if-no-files-found: error
