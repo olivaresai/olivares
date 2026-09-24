@@ -1,0 +1,378 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# communications-format-web-consumers — measures the web job's consumers ONCE on ONE exact commit,
+# 73fd30ddb19350de1ccf5da5f324402c2abd471e (tree c5ce301973e249a0542d3cc355f14d25c078d51a), the head of the pull request that reformats two
+# communications test files. DIAGNOSTIC ONLY: it runs from the branch
+# diag/communications-format-web-consumers, which adds this one file and is never merged. The job checks out
+# the pinned commit, not this branch, so the measured tree is exactly the pull request's tree.
+#
+# THE SEVEN STEPS are the commands of mainline-ci's `web` job, byte-equal and in its order:
+#   1 pnpm --dir web install --frozen-lockfile
+#   2 pnpm --dir web run typecheck
+#   3 pnpm --dir web run tokens:check
+#   4 task lint:format-ratchet
+#   5 task lint:console-perms
+#   6 pnpm --dir web exec vitest run --maxWorkers=2
+#   7 task web:check
+# `task check:web` is install plus typecheck (steps 1 and 2) and is not run a second time. The npm
+# advisory step depends on the network and on nothing these files change; it is not run here.
+# Every step runs once, whatever an earlier step answered, so every exit is recorded; no step is retried.
+# Each step keeps the command's exit, the capture's (tee) exit and the log's byte count.
+#
+# Ceilings: every step has one, and they sum to 68 minutes, within the job's 75, so the judge and the
+# artifact still run when a step is cut.
+#
+# JUDGE (inability first; WEB_JUDGE below):
+#   INABILITY: a named setup step (caches, checkout, identity, node, pnpm, setup-go, web-tools, toolchain) did
+#     not succeed; a step was cancelled or skipped; a step's exit, capture exit, log or byte count is missing
+#     or unreadable; a capture failed; a log's size differs from its recorded count; an outcome contradicts its
+#     exit; a command exit of 124, 126, 127, 137 or 143 (timed out, could not execute, not found, killed, terminated),
+#     kept with its code; or the final `git status` could not be read. None of these is a functional result.
+#   PASS: all seven exits are 0. The complete ratchet log prints `format-ratchet self-test: 30 pasan, 0 fallan`
+#     and `format-ratchet: 47 incumplidor(es) hoy · línea base 47 · nuevos 0 · arreglados 0`. Vitest's complete
+#     log passes both reformatted files and its one file summary is all passed (`Test Files  N passed (N)`). Nothing is changed or untracked after step 7.
+#   FAIL: anything else, with a complete measurement. Every log stays in the artifact.
+
+name: communications-format-web-consumers
+
+on:
+  push:
+    branches:
+      - diag/communications-format-web-consumers
+
+permissions:
+  contents: read
+
+# A running measurement is never canceled, because a canceled run carries no verdict at all.
+concurrency:
+  group: communications-format-web-consumers-${{ github.run_id }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  WEB_JUDGE: |
+    import json, os, re, sys
+
+    SETUP = ['caches', 'checkout', 'identity', 'node', 'pnpm', 'setup-go', 'web-tools', 'toolchain']
+    STEPS = [('s1', '1-install'), ('s2', '2-typecheck'), ('s3', '3-tokens'), ('s4', '4-format-ratchet'),
+             ('s5', '5-console-perms'), ('s6', '6-vitest'), ('s7', '7-web-check')]
+    SELFTEST = 'format-ratchet self-test: 30 pasan, 0 fallan'
+    GATE = 'format-ratchet: 47 incumplidor(es) hoy · línea base 47 · nuevos 0 · arreglados 0'
+    VFILES = ['src/features/communications/channel-admin-sheet.test.tsx', 'src/features/communications/errors.test.ts']
+    ANSI = re.compile(r'\x1b\[[0-9;?]*[A-Za-z]')
+    # A command that timed out, could not execute or was killed did not answer: INABILITY, never a functional FAIL.
+    # go-task's own 201 (a task command failed) and tsc's 2 stay functional failures.
+    NOT_AN_ANSWER = {'124': 'timed out', '126': 'could not execute', '127': 'command not found',
+                     '137': 'killed (SIGKILL)', '143': 'terminated (SIGTERM)'}
+    SUMMARY = re.compile(r'^\s*Test Files\s+(\d+) passed \((\d+)\)\s*$')
+
+
+    def read(path):
+        with open(path, encoding='utf-8', errors='strict') as f:
+            return f.read()
+
+
+    def judge(out, outcomes):
+        inability, failure, rows = [], [], []
+        for s in SETUP:
+            if outcomes.get(s) != 'success':
+                inability.append(f'setup {s} is {outcomes.get(s) or "absent"}')
+        logs = {}
+        for sid, name in STEPS:
+            oc = outcomes.get(sid, '')
+            row = {'step': name, 'outcome': oc or 'absent'}
+            try:
+                rc = read(os.path.join(out, name + '.exit')).strip()
+                cap = read(os.path.join(out, name + '.capture')).strip()
+                nbytes = read(os.path.join(out, name + '.bytes')).strip()
+                size = os.path.getsize(os.path.join(out, name + '.log'))
+                logs[name] = read(os.path.join(out, name + '.log'))
+            except (OSError, UnicodeDecodeError) as exc:
+                row.update(exit='unreadable', capture='unreadable', bytes='unreadable')
+                inability.append(f'{name}: a record is missing or unreadable ({type(exc).__name__})')
+                rows.append(row)
+                continue
+            row.update(exit=rc, capture=cap, bytes=nbytes, size=str(size))
+            rows.append(row)
+            if oc not in ('success', 'failure'):
+                inability.append(f'{name}: outcome {oc or "absent"}')
+            if not rc.isdigit() or not cap.isdigit() or not nbytes.isdigit():
+                inability.append(f'{name}: exit, capture or byte count is not a number')
+                continue
+            if cap != '0':
+                inability.append(f'{name}: the capture (tee) exited {cap}')
+            if int(nbytes) != size:
+                inability.append(f'{name}: the log is {size} bytes, not the recorded {nbytes}')
+            if (rc == '0') != (oc == 'success') and oc in ('success', 'failure') and cap == '0':
+                inability.append(f'{name}: outcome {oc} contradicts exit {rc}')
+            if rc in NOT_AN_ANSWER:
+                inability.append(f'{name}: exit {rc}, {NOT_AN_ANSWER[rc]}: the command did not answer')
+            elif rc != '0':
+                failure.append(f'{name} exited {rc}')
+        try:
+            st_rc = read(os.path.join(out, 'status-after.exit')).strip()
+            status = read(os.path.join(out, 'status-after.txt'))
+        except (OSError, UnicodeDecodeError) as exc:
+            st_rc, status = 'unreadable', ''
+        if st_rc != '0':
+            inability.append(f'git status after step 7 could not be read (exit {st_rc})')
+        elif status.strip():
+            failure.append(f'{len(status.splitlines())} changed or untracked path(s) after step 7')
+        lines = lambda n: [ANSI.sub('', l).rstrip('\r') for l in logs.get(n, '').splitlines()]
+        rl = lines('4-format-ratchet')
+        if logs.get('4-format-ratchet') is not None:
+            if SELFTEST not in rl:
+                failure.append('the ratchet self-test line is not 30/0')
+            if GATE not in rl:
+                failure.append('the ratchet gate line is not 47 / base 47 / new 0 / fixed 0')
+        vl = lines('6-vitest')
+        if logs.get('6-vitest') is not None:
+            for f in VFILES:
+                if not any(re.match(r'^\s*✓ ' + re.escape(f) + r' \(', l) for l in vl):
+                    failure.append(f'vitest did not pass {f}')
+            sm = [m for m in (SUMMARY.match(l) for l in vl) if m]
+            if len(sm) != 1 or sm[0].group(1) != sm[0].group(2):
+                failure.append('vitest has no single all-passed file summary')
+        try:
+            prettier = json.loads(read('web/node_modules/prettier/package.json')).get('version', 'unreadable')
+        except (OSError, ValueError, UnicodeDecodeError):
+            prettier = 'unreadable'
+        verdict = 'INABILITY' if inability else ('FAIL' if failure else 'PASS')
+        with open(os.path.join(out, 'verdict.tsv'), 'w', encoding='utf-8') as f:
+            f.write(f'verdict\t{verdict}\nprettier_installed\t{prettier}\n')
+            for r in inability:
+                f.write(f'inability\t{r}\n')
+            for r in failure:
+                f.write(f'failure\t{r}\n')
+        with open(os.path.join(out, 'steps.tsv'), 'w', encoding='utf-8') as f:
+            f.write('step\toutcome\texit\tcapture\tbytes\tsize\n')
+            for r in rows:
+                f.write('\t'.join(r.get(k, '') for k in ('step', 'outcome', 'exit', 'capture', 'bytes', 'size')) + '\n')
+        print(read(os.path.join(out, 'verdict.tsv')) + read(os.path.join(out, 'steps.tsv')))
+        return verdict
+
+
+    if __name__ == '__main__':
+        outcomes = dict(kv.split('=', 1) for kv in os.environ.get('STEP_OUTCOMES', '').split() if '=' in kv)
+        sys.exit(0 if judge(sys.argv[1], outcomes) == 'PASS' else 1)
+
+jobs:
+  web-consumers:
+    if: github.repository == 'olivaresai/olivares'
+    name: web consumers · the seven web-job commands on the pinned pull request head, once each
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    # Step ceilings sum to 68 minutes (1+2+1+2+2+2+2+1+5+5+2+4+8+20+6+2+3), within this ceiling.
+    timeout-minutes: 75
+    env:
+      PINNED_HEAD: 73fd30ddb19350de1ccf5da5f324402c2abd471e
+      PINNED_TREE: c5ce301973e249a0542d3cc355f14d25c078d51a
+      PINNED_PARENT: 34cfd09c444e845fb7eaa6b22b97c0fa899d5a63
+      F1: web/src/features/communications/channel-admin-sheet.test.tsx
+      F1_BLOB: 3f666e5f002ca942db3dc111b223ae2bbf8a2c13
+      F2: web/src/features/communications/errors.test.ts
+      F2_BLOB: cea5610439d9fb894302d1882961cd9b99ba0f53
+    steps:
+      - name: Go caches under RUNNER_TEMP (this runner may have no $HOME)
+        id: caches
+        timeout-minutes: 1
+        run: |
+          set -euo pipefail
+          {
+            echo "GOCACHE=$RUNNER_TEMP/gocache"
+            echo "GOMODCACHE=$RUNNER_TEMP/gomodcache"
+            echo "GOPATH=$RUNNER_TEMP/gopath"
+            echo "GOBIN=$RUNNER_TEMP/gopath/bin"
+          } >> "$GITHUB_ENV"
+          echo "$RUNNER_TEMP/gopath/bin" >> "$GITHUB_PATH"
+          {
+            echo "PNPM_HOME=$RUNNER_TEMP/pnpm"
+          } >> "$GITHUB_ENV"
+          echo "$RUNNER_TEMP/pnpm" >> "$GITHUB_PATH"
+          echo "OUT=$RUNNER_TEMP/web-consumers" >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/web-consumers"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        id: checkout
+        timeout-minutes: 2
+        with:
+          ref: 73fd30ddb19350de1ccf5da5f324402c2abd471e
+          persist-credentials: false
+          fetch-depth: 2
+      - name: the checkout is the pinned head and tree, clean, with the two reformatted blobs
+        id: identity
+        timeout-minutes: 1
+        run: |
+          set -euo pipefail
+          st="$(git status --porcelain --untracked-files=all)"
+          {
+            echo "head $(git rev-parse HEAD)"
+            echo "tree $(git rev-parse 'HEAD^{tree}')"
+            echo "parent $(git rev-parse 'HEAD^')"
+            echo "f1 $(git rev-parse "HEAD:$F1")"
+            echo "f2 $(git rev-parse "HEAD:$F2")"
+            echo "status_lines $(printf '%s' "$st" | grep -c . || true)"
+            echo "runner ${{ runner.environment }} ${{ runner.os }} ${{ runner.arch }}"
+          } > "$OUT/identity.txt"
+          cat "$OUT/identity.txt"
+          [ "$(git rev-parse HEAD)" = "$PINNED_HEAD" ] || { echo "::error::the checkout is not the pinned head"; exit 1; }
+          [ "$(git rev-parse 'HEAD^{tree}')" = "$PINNED_TREE" ] || { echo "::error::the tree is not the pinned tree"; exit 1; }
+          [ "$(git rev-parse 'HEAD^')" = "$PINNED_PARENT" ] || { echo "::error::the parent is not the pinned parent"; exit 1; }
+          [ "$(git rev-parse "HEAD:$F1")" = "$F1_BLOB" ] || { echo "::error::$F1 is not the pinned blob"; exit 1; }
+          [ "$(git rev-parse "HEAD:$F2")" = "$F2_BLOB" ] || { echo "::error::$F2 is not the pinned blob"; exit 1; }
+          [ -z "$st" ] || { echo "::error::the checkout is not clean"; exit 1; }
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        id: node
+        timeout-minutes: 2
+        with:
+          node-version-file: .node-version
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+        id: pnpm
+        timeout-minutes: 2
+        with:
+          dest: ${{ runner.temp }}/setup-pnpm
+          standalone: true
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        id: setup-go
+        timeout-minutes: 2
+        with:
+          go-version-file: go.work
+      - name: install go-task (pinned) — web:check is a Task, so the runner needs it
+        id: web-tools
+        timeout-minutes: 2
+        uses: ./.github/actions/olivares-tool-cache
+      - name: record the toolchain (every version read must succeed)
+        id: toolchain
+        timeout-minutes: 1
+        run: |
+          set -uo pipefail
+          rc=0
+          : > "$OUT/toolchain.tsv"
+          for tool in node pnpm go task; do
+            if [ "$tool" = go ]; then cmd=(go version); else cmd=("$tool" --version); fi
+            if v="$("${cmd[@]}" 2>&1)"; then r=0; else r=$?; rc=1; fi
+            printf '%s\t%s\t%s\n' "$tool" "$r" "$(printf '%s' "$v" | tr '\t\n' '  ')" >> "$OUT/toolchain.tsv" || rc=1
+          done
+          cat "$OUT/toolchain.tsv"
+          [ "$rc" -eq 0 ] || echo "::error::a toolchain version could not be read (toolchain.tsv)"
+          exit "$rc"
+      - name: 1 · pnpm --dir web install --frozen-lockfile
+        id: s1
+        if: ${{ !cancelled() && steps.identity.outcome == 'success' }}
+        timeout-minutes: 5
+        run: |
+          set +e
+          pnpm --dir web install --frozen-lockfile 2>&1 | tee "$OUT/1-install.log"
+          st=("${PIPESTATUS[@]}")
+          printf '%s\n' "${st[0]}" > "$OUT/1-install.exit" && printf '%s\n' "${st[1]}" > "$OUT/1-install.capture" &&
+            wc -c < "$OUT/1-install.log" | tr -d ' ' > "$OUT/1-install.bytes" || exit 90
+          [ "${st[1]}" = 0 ] || exit 91
+          exit "${st[0]}"
+      - name: 2 · pnpm --dir web run typecheck
+        id: s2
+        if: ${{ !cancelled() && steps.identity.outcome == 'success' }}
+        timeout-minutes: 5
+        run: |
+          set +e
+          pnpm --dir web run typecheck 2>&1 | tee "$OUT/2-typecheck.log"
+          st=("${PIPESTATUS[@]}")
+          printf '%s\n' "${st[0]}" > "$OUT/2-typecheck.exit" && printf '%s\n' "${st[1]}" > "$OUT/2-typecheck.capture" &&
+            wc -c < "$OUT/2-typecheck.log" | tr -d ' ' > "$OUT/2-typecheck.bytes" || exit 90
+          [ "${st[1]}" = 0 ] || exit 91
+          exit "${st[0]}"
+      - name: 3 · pnpm --dir web run tokens:check
+        id: s3
+        if: ${{ !cancelled() && steps.identity.outcome == 'success' }}
+        timeout-minutes: 2
+        run: |
+          set +e
+          pnpm --dir web run tokens:check 2>&1 | tee "$OUT/3-tokens.log"
+          st=("${PIPESTATUS[@]}")
+          printf '%s\n' "${st[0]}" > "$OUT/3-tokens.exit" && printf '%s\n' "${st[1]}" > "$OUT/3-tokens.capture" &&
+            wc -c < "$OUT/3-tokens.log" | tr -d ' ' > "$OUT/3-tokens.bytes" || exit 90
+          [ "${st[1]}" = 0 ] || exit 91
+          exit "${st[0]}"
+      - name: 4 · task lint:format-ratchet
+        id: s4
+        if: ${{ !cancelled() && steps.identity.outcome == 'success' }}
+        timeout-minutes: 4
+        run: |
+          set +e
+          task lint:format-ratchet 2>&1 | tee "$OUT/4-format-ratchet.log"
+          st=("${PIPESTATUS[@]}")
+          printf '%s\n' "${st[0]}" > "$OUT/4-format-ratchet.exit" && printf '%s\n' "${st[1]}" > "$OUT/4-format-ratchet.capture" &&
+            wc -c < "$OUT/4-format-ratchet.log" | tr -d ' ' > "$OUT/4-format-ratchet.bytes" || exit 90
+          [ "${st[1]}" = 0 ] || exit 91
+          exit "${st[0]}"
+      - name: 5 · task lint:console-perms
+        id: s5
+        if: ${{ !cancelled() && steps.identity.outcome == 'success' }}
+        timeout-minutes: 8
+        run: |
+          set +e
+          task lint:console-perms 2>&1 | tee "$OUT/5-console-perms.log"
+          st=("${PIPESTATUS[@]}")
+          printf '%s\n' "${st[0]}" > "$OUT/5-console-perms.exit" && printf '%s\n' "${st[1]}" > "$OUT/5-console-perms.capture" &&
+            wc -c < "$OUT/5-console-perms.log" | tr -d ' ' > "$OUT/5-console-perms.bytes" || exit 90
+          [ "${st[1]}" = 0 ] || exit 91
+          exit "${st[0]}"
+      - name: 6 · pnpm --dir web exec vitest run --maxWorkers=2
+        id: s6
+        if: ${{ !cancelled() && steps.identity.outcome == 'success' }}
+        timeout-minutes: 20
+        run: |
+          set +e
+          pnpm --dir web exec vitest run --maxWorkers=2 2>&1 | tee "$OUT/6-vitest.log"
+          st=("${PIPESTATUS[@]}")
+          printf '%s\n' "${st[0]}" > "$OUT/6-vitest.exit" && printf '%s\n' "${st[1]}" > "$OUT/6-vitest.capture" &&
+            wc -c < "$OUT/6-vitest.log" | tr -d ' ' > "$OUT/6-vitest.bytes" || exit 90
+          [ "${st[1]}" = 0 ] || exit 91
+          exit "${st[0]}"
+      - name: 7 · task web:check
+        id: s7
+        if: ${{ !cancelled() && steps.identity.outcome == 'success' }}
+        timeout-minutes: 6
+        run: |
+          set +e
+          task web:check 2>&1 | tee "$OUT/7-web-check.log"
+          st=("${PIPESTATUS[@]}")
+          printf '%s\n' "${st[0]}" > "$OUT/7-web-check.exit" && printf '%s\n' "${st[1]}" > "$OUT/7-web-check.capture" &&
+            wc -c < "$OUT/7-web-check.log" | tr -d ' ' > "$OUT/7-web-check.bytes" || exit 90
+          [ "${st[1]}" = 0 ] || exit 91
+          exit "${st[0]}"
+      - name: judge (inability first; every exit, capture and log is in the artifact)
+        id: judge
+        if: always()
+        timeout-minutes: 2
+        env:
+          STEP_OUTCOMES: >-
+            caches=${{ steps.caches.outcome }} checkout=${{ steps.checkout.outcome }} identity=${{ steps.identity.outcome }}
+            node=${{ steps.node.outcome }} pnpm=${{ steps.pnpm.outcome }} setup-go=${{ steps.setup-go.outcome }}
+            web-tools=${{ steps.web-tools.outcome }} toolchain=${{ steps.toolchain.outcome }} s1=${{ steps.s1.outcome }}
+            s2=${{ steps.s2.outcome }} s3=${{ steps.s3.outcome }} s4=${{ steps.s4.outcome }} s5=${{ steps.s5.outcome }}
+            s6=${{ steps.s6.outcome }} s7=${{ steps.s7.outcome }}
+        run: |
+          set -uo pipefail
+          OUT="${OUT:-$RUNNER_TEMP/web-consumers}"
+          mkdir -p "$OUT"
+          printf 'step outcomes: %s\n' "$STEP_OUTCOMES" > "$OUT/step-outcomes.txt"
+          git status --porcelain --untracked-files=all > "$OUT/status-after.txt" 2> "$OUT/status-after.err"
+          printf '%s\n' "$?" > "$OUT/status-after.exit"
+          printf '%s\n' "$WEB_JUDGE" > "$RUNNER_TEMP/web-judge.py"
+          rc=0
+          python3 "$RUNNER_TEMP/web-judge.py" "$OUT" || rc=$?
+          if [ -n "${GITHUB_STEP_SUMMARY:-}" ] && [ -f "$OUT/verdict.tsv" ]; then
+            { printf '### web consumers\n\n```\n'; cat "$OUT/verdict.tsv" "$OUT/steps.tsv"; printf '```\n'; } >> "$GITHUB_STEP_SUMMARY"
+          fi
+          [ "$rc" -eq 0 ] || { echo "::error::the verdict is not PASS (verdict.tsv and steps.tsv in the artifact)"; exit 1; }
+      - name: retain every log, exit, capture, identity, toolchain and verdict
+        if: always()
+        timeout-minutes: 3
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: communications-format-web-consumers-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/web-consumers
+          retention-days: 7
+          if-no-files-found: error
