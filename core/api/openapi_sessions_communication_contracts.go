@@ -170,7 +170,14 @@ func sessionsCommunicationResponses(r moduleRoute) (map[string]any, bool) {
 		"401", oaJSONResp("unauthenticated"),
 		"403", oaJSONResp("forbidden"),
 		"429", oaJSONResp("rate limited"),
-		"503", oaJSONResp("current authority, custody or store evidence is unavailable"),
+		// The 503 band carries TWO different facts, and a client that conflates
+		// them will get one of them wrong. `evidence_unavailable` and its siblings
+		// mean a read could not be completed, and looking again is the remedy.
+		// `commit_outcome_unknown` means the engine issued COMMIT and never learned
+		// whether the database applied it: the write MAY be durable, an automatic
+		// retry may produce a second effect, and no Retry-After is advertised
+		// because no interval makes repeating it safe.
+		"503", oaJSONResp("current authority, custody or store evidence is unavailable; or, with code commit_outcome_unknown, the write was issued and its outcome was never learned, so it may be durable and must not be retried automatically"),
 	)
 	addErrors := func(statuses ...string) {
 		for _, status := range statuses {

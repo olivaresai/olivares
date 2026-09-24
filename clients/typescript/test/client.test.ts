@@ -33,6 +33,18 @@ let rateCalls = 0;
 // columns and one line. 9007199254740993 is 2**53+1 — the oracle, not filler. A
 // consumer that routed this value through a JSON number and an IEEE double would hand
 // back 9007199254740992.
+// The EXACT production 503 body, byte for byte: the server encodes a map, so
+// encoding/json emits the three top-level keys in sorted order and appends a
+// newline, and the nested error object carries the same code as its message. A
+// shorter invented body would make the control pass against a fixture rather than
+// against the engine.
+const COMMIT_OUTCOME_UNKNOWN_ENVELOPE =
+  '{"code":"commit_outcome_unknown","error":{"code":"commit_outcome_unknown",' +
+  '"message":"commit_outcome_unknown"},"verdict":"NO_HE_PODIDO_MIRAR"}\n';
+const EVIDENCE_UNAVAILABLE_ENVELOPE =
+  '{"code":"evidence_unavailable","error":{"code":"evidence_unavailable",' +
+  '"message":"evidence_unavailable"},"verdict":"NO_HE_PODIDO_MIRAR"}\n';
+
 const STATEMENT_EXPORT_CSV =
   "cost_center_code,cost_center_name,model,provider,agent," +
   "input_tokens,output_tokens,cost_micro_usd,sample_count\n" +
@@ -115,6 +127,18 @@ beforeAll(async () => {
           'attachment; filename="chargeback_ENG-01_2026-06-01.csv"',
       });
       res.end(STATEMENT_EXPORT_CSV);
+    } else if (
+      url.pathname.includes("/grants") &&
+      req.method === "GET"
+    ) {
+      // Exact bytes and NO Retry-After: nothing about an undetermined commit is
+      // safe to repeat on a timer.
+      res.writeHead(503, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(
+        url.searchParams.get("state") === "evidence_unavailable"
+          ? EVIDENCE_UNAVAILABLE_ENVELOPE
+          : COMMIT_OUTCOME_UNKNOWN_ENVELOPE,
+      );
     } else if (url.pathname === "/raw-request") {
       json(200, {});
     } else if (url.pathname === "/v1/users" && req.method === "GET") {
@@ -287,6 +311,40 @@ describe("retry policy", () => {
     const c = newClient();
     await expect(c.postV1Memberships({})).rejects.toThrow(APIError);
     expect(seen.length).toBe(1);
+  });
+
+  // C32: an automatic retry of an undetermined commit is not a harmless second
+  // attempt. Even on a GET it re-runs a governed read that commits its own audit
+  // act, so the client would turn one uncertain write into a second one and the
+  // operator would see two acts for one intention.
+  it("never retries commit_outcome_unknown", async () => {
+    const c = newClient();
+    const err = await c
+      .getV1MSessionsChannelsByIdGrants("01a084d5-988c-7e46-b396-5cff04bf2793", {
+        workspace_id: "01a084d5-988c-7e46-b396-5cff04bf2794",
+      })
+      .then(
+        () => undefined,
+        (e: unknown) => e,
+      );
+    expect(err).toBeInstanceOf(APIError);
+    const ae = err as APIError;
+    expect([ae.status, ae.code]).toEqual([503, "commit_outcome_unknown"]);
+    expect(seen.length).toBe(1);
+    expect(slept).toEqual([]);
+  });
+
+  // The preservation positive, and it is NEW for this client (N2): the 503-GET
+  // retry that exists for the HA handoff is untouched for every other code.
+  it("still retries another 503 GET", async () => {
+    const c = newClient();
+    await expect(
+      c.getV1MSessionsChannelsByIdGrants("01a084d5-988c-7e46-b396-5cff04bf2793", {
+        workspace_id: "01a084d5-988c-7e46-b396-5cff04bf2794",
+        state: "evidence_unavailable",
+      }),
+    ).rejects.toThrow(APIError);
+    expect(seen.length).toBe(3);
   });
 });
 

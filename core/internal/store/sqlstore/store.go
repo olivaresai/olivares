@@ -2130,6 +2130,12 @@ func (s *sqlStore) View(ctx context.Context, tenant model.TenantID, fn func(stor
 // wrapped in store.ErrStoreUnavailable (cause-preserving multi-%w), everything
 // else passes through untouched. Wrapping only; the transactional shape is
 // unchanged.
+//
+// The COMMIT itself goes through mutateCommitOutcomeErr, which adds
+// store.ErrCommitOutcomeUnknown IN FRONT of that same chain when the outcome was
+// never learned. It is additive: both of its arms still apply
+// wrapUnavailableErr, so every errors.Is a caller already performs answers
+// exactly as before (commitoutcome.go).
 func (s *sqlStore) Mutate(ctx context.Context, tenant model.TenantID, fn func(store.Scope) error) error {
 	if tenant.IsZero() {
 		return store.ErrNoTenant
@@ -2190,7 +2196,23 @@ func (s *sqlStore) Mutate(ctx context.Context, tenant model.TenantID, fn func(st
 	if err := scope.finishEpilogue(ctx, epilogueLineage, scope.lineageWriter.finish); err != nil {
 		return wrapUnavailableErr(err)
 	}
-	return wrapUnavailableErr(tx.Commit())
+	// P0 — the LAST point at which this unit's outcome is still knowable.
+	//
+	// A caller who has already gone away cannot be told anything, but that is not
+	// the reason this check exists. The reason is that COMMIT is the one statement
+	// whose failure does not say whether it failed, so the only cancellation that
+	// can be reported as a definite rollback is one that lands BEFORE the bytes
+	// are issued. Here nothing was sent and the deferred Rollback settles the
+	// transaction, so the answer is known: not applied.
+	//
+	// It is a read, not a policy. No grace is taken, no context is detached and no
+	// deadline is widened; database/sql would refuse at Commit's own pre-check
+	// anyway, and the difference is that THAT refusal cannot be told apart from a
+	// cancellation delivered while the reply was being read.
+	if err := ctx.Err(); err != nil {
+		return wrapUnavailableErr(err)
+	}
+	return mutateCommitOutcomeErr(tx.Commit())
 }
 
 // Custody runs fn in a tenant-pinned read-write transaction that exposes ONLY the

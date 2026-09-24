@@ -801,6 +801,15 @@ const cancelToleranceMax = 250 * time.Millisecond
 //
 // Every other server error at commit IS settled: the protocol says the transaction
 // rolled back, and a cancellation does not erase that.
+//
+// NOT THE SAME QUESTION AS mutateCommitNotApplied (commitoutcome.go), and the two
+// must not be merged. This one serves a runner whose remedy is reconcile-and-retry,
+// so "settled" here means "no need to go and ask". That one serves sqlStore.Mutate,
+// which has neither retry nor reconciliation and hands the outcome to its caller, so
+// it may only call an outcome definite where the abort is PROVED and reports every
+// unproved server error as unknown. TestCommitOutcomeClassification carries one row
+// per documented shape and asserts both, side by side, so the divergence stays
+// measured. Nothing about this function's behavior changes.
 func commitOutcomeIsAmbiguous(err error) bool {
 	var pg *pgconn.PgError
 	if !errors.As(err, &pg) {

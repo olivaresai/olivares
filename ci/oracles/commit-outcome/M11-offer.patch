@@ -1,0 +1,16 @@
+diff --git a/modules/sessions/communication_handoff_offer_atomic.go b/modules/sessions/communication_handoff_offer_atomic.go
+index ce9b900..9832013 100644
+--- a/modules/sessions/communication_handoff_offer_atomic.go
++++ b/modules/sessions/communication_handoff_offer_atomic.go
+@@ -257,11 +257,6 @@ func (m *Module) applyAtomicWorkItemHandoffOffer(
+ 			if err != nil || !authorityLock.consume(tx, boundPreflight, authorityFacts) {
+ 				return communicationTransactionUnavailable("Handoff carrier authority", err)
+ 			}
+-			if err := tx.lockTransaction(
+-				ctx, handoffIdempotencyLockKey(normalized.handoffCommandIdentity),
+-			); err != nil {
+-				return err
+-			}
+ 			receipt, replay, err := findHandoffReceipt(ctx, tx, normalized.handoffCommandIdentity)
+ 			if err != nil {
+ 				return err
