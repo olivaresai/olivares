@@ -1,0 +1,492 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# pty-142-context — the next bounded instrument for ONE retained test failure of ONE exact commit,
+# d13bb3d1a1b90e0f682edd0986e8eca11a0e1699. DIAGNOSTIC ONLY: it runs from the branch
+# diag/pty-142-context, which adds this one file and is never merged. It edits nothing, mocks nothing
+# and weakens no assertion.
+#
+# THE ONE CHANGED VARIABLE is the execution context. The previous instrument ran the named test alone,
+# twenty times, and it passed every time. This one runs, ONCE, the complete original command of the job
+# that went red: the sessions shard of the pull-request suite, the shard's own packages with no -run
+# filter. It keeps the same source tree, test clock, PostgreSQL services, environment and ceilings.
+#   origin  pr-ci, job pr-test-shard (sessions), step "one shard of the Go suite, without the race
+#           detector" (step ceiling 35 min, job ceiling 45 min): task test:functional:shard
+#           = scripts/pr-suite-shards.sh run (OLIVARES_TEST_SHARD=sessions)
+#           = scripts/with-pg-env.sh go test -count=1 -timeout 30m <the shard's packages>
+#   here    the same final command. The packages come from the helper's own `packages sessions`, the
+#           exact list its `run` uses; the shard declares no name group and no leg. -json is the one
+#           added flag, and it changes the output format only, so every test result keeps its name.
+#   The origin tested the pull-request merge of d13bb3d1 into its own parent 20b3d0b1, whose tree is
+#   d13bb3d1's tree. There is no -race, the original 30m clock is kept, and the ps sampler is OFF, as in
+#   the origin.
+#
+# ATTRIBUTION (binding). Every test result keeps its own name: the whole -json stream is kept, and
+# results.tsv lists every test. The verdict (target.tsv, verdicts.tsv) speaks ONLY about
+# TestPTYRunner_ChildSeesTTYAndBridgesNDJSON:
+#   1  it failed with the named line "pty_runner_test.go:184: exit -1".
+#   0  it passed. The test prints no log line, so its pass event is the evidence.
+#   2  INABILITY for the target, when it could not be measured: the process ended outside exit 0/1; its
+#      package did not build; the Go timeout fired in its package before it completed; it skipped, or has
+#      no result; it failed at another assertion (that failure is also recorded).
+# ANY OTHER failing test, and any data race report, cluster-state line or timeout elsewhere, is written
+# SEPARATELY to other_failures.tsv (kind, package, test, first and last file:line line). It is its own
+# observation: never attributed to the target, never hidden, and it never turns the verdict into 1. It
+# makes the verdict 2 only when it kept the target from completing. One run is one observation: a 0
+# does not close the intermittent failure.
+name: pty-142-context
+
+# Triggers. workflow_dispatch may run it again on the bound source only. The push trigger is scoped to the
+# one diagnostic branch that carries this file.
+on:
+  push:
+    branches:
+      - diag/pty-142-context
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: The bound source. Only d13bb3d1a1b90e0f682edd0986e8eca11a0e1699 is accepted; any other value is refused before checkout.
+        required: true
+        default: d13bb3d1a1b90e0f682edd0986e8eca11a0e1699
+        type: string
+
+permissions:
+  contents: read
+
+# One run per dispatch; a running measurement is never cancelled, because a cancelled run carries no
+# verdict at all.
+concurrency:
+  group: pty-142-context-${{ github.run_id }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  # The origin workflow's own env.
+  PUBLIC_REPO: olivaresai/olivares
+  PINNED_SHA: d13bb3d1a1b90e0f682edd0986e8eca11a0e1699
+  PINNED_BLOBS: |-
+    modules/sessions/pty_runner_test.go 54762f35798bff4586359ac313c772c5c9103906
+    modules/sessions/pty_linux.go 9fe29d9c2a9ef66c8496f820400652174f430c45
+    modules/sessions/procrunner_unix.go 66fea89185cd55fb32bd54f7493e669dc8294386
+    modules/sessions/procrunner.go 4d6a21c4bd9e8ed54cb1598e33fd1738030e029a
+  # The shard's packages, as the run that went red printed them (2 packages).
+  EXPECTED_SHARD_PACKAGES: |-
+    github.com/olivaresai/olivares/modules/sessions
+    github.com/olivaresai/olivares/modules/sessions/cliruntime
+  # A push carries no inputs; the dispatch default applies then.
+  INPUT_SHA: ${{ inputs.sha || 'd13bb3d1a1b90e0f682edd0986e8eca11a0e1699' }}
+  # The shared shell library. It never turns a raw exit into a verdict by itself: run_arm keeps the
+  # stream, stderr and exit; the attribution step judges them with CTX_PY.
+  CTX_LIB: |
+    set -euo pipefail
+    : "${ARM:?ARM must name this job}"
+    OUT="${OUT:-$RUNNER_TEMP/context/$ARM}"
+    mkdir -p "$OUT"
+
+    fail() { printf '::error::%s\n' "$*"; return 1; }
+
+    # The input is validated deny-closed; the refusal returns explicitly (finalize calls this in an `if`).
+    validate_inputs() {
+      [ "${INPUT_SHA:-}" = "$PINNED_SHA" ] ||
+        { fail "sha [${INPUT_SHA:-}] is not the bound source $PINNED_SHA; this instrument quotes that source's assertion line and blobs and measures no other commit"; return 1; }
+    }
+
+    # The checkout is the bound source, clean, with every pinned blob, on a GitHub-hosted runner.
+    identity() {
+      local path blob n=0
+      validate_inputs
+      [ "$(git rev-parse HEAD)" = "$PINNED_SHA" ] || fail "the checkout $(git rev-parse HEAD) is not the bound source $PINNED_SHA"
+      [ -z "$(git status --porcelain --untracked-files=all)" ] || fail "the checkout is not clean"
+      while read -r path blob; do
+        [ -n "$path" ] || continue
+        [ "$(git rev-parse "HEAD:$path")" = "$blob" ] || fail "$path is not blob $blob"
+        n=$((n + 1))
+      done <<< "$PINNED_BLOBS"
+      [ "$n" = 4 ] || fail "expected 4 pinned blobs, checked $n"
+      [ "${RUNNER_PLACEMENT:-}" = github-hosted ] ||
+        fail "this job runs on a ${RUNNER_PLACEMENT:-unknown} runner; the instrument runs on GitHub-hosted runners only"
+      {
+        printf 'arm %s\ninput_sha %s\nbound_sha %s\ntree %s\nworkflow_sha %s\n' \
+          "$ARM" "$INPUT_SHA" "$PINNED_SHA" "$(git rev-parse 'HEAD^{tree}')" "${GITHUB_WORKFLOW_SHA:-unknown}"
+        printf 'event %s ref %s repository %s run %s attempt %s\n' \
+          "$GITHUB_EVENT_NAME" "$GITHUB_REF" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"
+        printf 'runner %s placement %s %s %s image %s %s\n' "${RUNNER_NAME:-unknown}" "$RUNNER_PLACEMENT" \
+          "$RUNNER_OS" "$RUNNER_ARCH" "${ImageOS:-unknown}" "${ImageVersion:-unknown}"
+        printf 'blob %s\n' "$PINNED_BLOBS"
+      } > "$OUT/identity.txt"
+      cat "$OUT/identity.txt"
+    }
+
+    # run_logged LABEL DIR COMMAND...: a non-test command, its log and raw exit kept.
+    run_logged() {
+      local label="$1" dir="$2" rc=0
+      shift 2
+      { printf 'cd %q && ' "$dir"; printf '%q ' "$@"; printf '\n'; } > "$OUT/$label.command"
+      ( cd "$dir" && "$@" ) > "$OUT/$label.log" 2>&1 || rc=$?
+      printf '%s\n' "$rc" > "$OUT/$label.exit"
+      cat "$OUT/$label.log"
+      [ "$rc" -eq 0 ] || fail "$label exited $rc"
+    }
+
+    # shard_selection: the shard's packages from the helper's own `packages sessions`, which is the list its
+    # `run` uses. The shard must declare no name group and no leg, its declared go clock must be the
+    # original 30 minutes, and the packages must be the two the run that went red printed. Any
+    # difference is a changed context: an inability, never a silent run.
+    shard_selection() {
+      bash scripts/pr-suite-shards.sh packages sessions > "$OUT/shard-packages.txt" || fail "the shard helper could not list the sessions packages"
+      [ -z "$(bash scripts/pr-suite-shards.sh groups sessions)" ] || fail "the sessions shard declares name groups; this instrument runs its packages only"
+      [ -z "$(bash scripts/pr-suite-shards.sh legs sessions)" ] || fail "the sessions shard declares legs; this instrument runs its packages only"
+      [ "$(bash scripts/pr-suite-shards.sh number go-timeout-minutes)" = 30 ] || fail "the declared shard clock is not the original 30 minutes"
+      [ "$(LC_ALL=C sort "$OUT/shard-packages.txt")" = "$(printf '%s\n' "$EXPECTED_SHARD_PACKAGES" | LC_ALL=C sort)" ] ||
+        fail "the shard's packages differ from the two the run that went red printed: $(paste -sd' ' "$OUT/shard-packages.txt")"
+      cat "$OUT/shard-packages.txt"
+    }
+
+    # run_arm DIR COMMAND...: the original command, ONCE, verbatim; the -json stream and stderr kept apart.
+    # The raw exit is the command's own. The step always succeeds; the attribution step judges.
+    run_arm() {
+      local dir="$1" rc=0 t0 t1
+      shift
+      { printf 'cd %q && ' "$dir"; printf '%q ' "$@"; printf '\n'; } > "$OUT/$ARM.command"
+      date -u +%Y-%m-%dT%H:%M:%S.%3NZ > "$OUT/$ARM.started"
+      t0="$(date +%s)"
+      ( cd "$dir" && "$@" ) > "$OUT/$ARM.json" 2> "$OUT/$ARM.stderr" || rc=$?
+      t1="$(date +%s)"
+      printf '%s\n' "$rc" > "$OUT/$ARM.exit"
+      printf '%s\n' "$((t1 - t0))" > "$OUT/$ARM.elapsed_s"
+      printf 'raw exit %s after %ss\n' "$rc" "$((t1 - t0))"
+    }
+
+    # finalize SETUP_OUTCOMES: judge the command's stream if it ran; otherwise write the target as an
+    # inability naming the step that stopped it. The job succeeds only when the target was measured (0 or 1).
+    finalize() {
+      local outcomes="$1" first_bad rc=0 py="$RUNNER_TEMP/context-ctx.py"
+      first_bad="$(tr ' ' '\n' <<< "$outcomes" | awk -F= 'NF == 2 && $2 != "success" {print; exit}')"
+      printf 'setup outcomes: %s\n' "$outcomes" > "$OUT/setup-outcomes.txt"
+      if [ -f "$OUT/$ARM.exit" ]; then
+        printf '%s\n' "$CTX_PY" > "$py"
+        python3 "$py" classify "$OUT/$ARM.json" "$OUT" "$ARM" "$(cat "$OUT/$ARM.exit")" || rc=$?
+      else
+        printf 'arm\tpackage\tparent\tleaf\tverdict\tlabel\ttarget_result\ttarget_elapsed_s\tfirst_failure_line\twitness\tnamed_line_present_anywhere\ttarget_package_elapsed_s\n%s\t%s\t%s\t%s\t2\tINABILITY not run: %s\t-\t-\t\t\t-\t-\n' \
+          "$ARM" "$TARGET_PKG" "$PARENT" "$LEAF" "${first_bad:-unknown step}" > "$OUT/target.tsv"
+        printf 'arm\tkind\tpackage\ttest\tfirst_fileline\tlast_fileline\tnote\n' > "$OUT/other_failures.tsv"
+        printf '%s\t2 INABILITY not run: %s\n' "$ARM" "${first_bad:-unknown step}" >> "$OUT/verdicts.tsv"
+        rc=3
+      fi
+      if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+        { printf '### %s\n\n```\n' "$ARM"; cat "$OUT/target.tsv"; printf '\nseparate observations: %s\n```\n' "$(($(wc -l < "$OUT/other_failures.tsv") - 1))"; } >> "$GITHUB_STEP_SUMMARY"
+      fi
+      [ "$rc" -eq 0 ] || fail "the target could not be measured (verdict 2); every observation is still in the artifact"
+    }
+  # The attribution program: judges the one run (classify), target verdict apart from every other failure.
+  CTX_PY: |
+    import sys, os, re, json
+
+    FILELINE = re.compile(r'^\s*[A-Za-z0-9_./-]+\.go:[0-9]+: ')
+
+
+    def first_last(lines):
+        fl = [l.strip() for l in lines if FILELINE.match(l)]
+        return (fl[0] if fl else ''), (fl[-1] if fl else '')
+
+
+    def tsv(s):
+        return str(s).replace('\t', ' ').replace('\r', ' ').replace('\n', ' ')
+
+
+    def classify(events_path, out, arm, raw_exit):
+        P, parent, leaf = os.environ['TARGET_PKG'], os.environ['PARENT'], os.environ['LEAF']
+        named = re.compile(os.environ['NAMED_RE'])
+        # The target may print no log line of its own: then there is no witness and no allowed log.
+        witness = re.compile(os.environ['WITNESS_RE']) if os.environ.get('WITNESS_RE') else None
+        allowed = re.compile(os.environ['ALLOWED_LOG_RE']) if os.environ.get('ALLOWED_LOG_RE') else None
+        events = []
+        with open(events_path, encoding='utf-8', errors='replace') as f:
+            for ln in f:
+                ln = ln.strip()
+                if not ln.startswith('{'):
+                    continue
+                try:
+                    events.append(json.loads(ln))
+                except ValueError:
+                    continue
+        results, outputs, pkg_lines, pkg_result, build_failed = {}, {}, {}, {}, set()
+        for i, e in enumerate(events):
+            a = e.get('Action')
+            p = e.get('Package') or (e.get('ImportPath') or '').split(' ')[0]
+            t = e.get('Test')
+            if a in ('output', 'build-output'):
+                o = e.get('Output', '')
+                if t:
+                    outputs.setdefault((p, t), []).append((i, o))
+                pkg_lines.setdefault(p, []).append((i, t, o))
+                if '[build failed]' in o or '[setup failed]' in o:
+                    build_failed.add(p)
+            elif a == 'build-fail':
+                build_failed.add(p)
+            elif a in ('pass', 'fail', 'skip'):
+                if t:
+                    results[(p, t)] = (a, e.get('Elapsed'), i)
+                else:
+                    pkg_result[p] = a
+                    if e.get('FailedBuild'):
+                        build_failed.add(p)
+        text = lambda k: ''.join(o for _, o in outputs.get(k, []))
+        rows = []  # separate observations: kind, package, test, first, last, note
+        # every failing test that is not failing only because a child failed
+        failing = [k for k, v in results.items() if v[0] == 'fail']
+        fset = set(failing)
+        def derived(k):
+            return any(q[0] == k[0] and q[1].startswith(k[1] + '/') for q in fset)
+        tkey = (P, leaf)
+        for k in sorted(failing):
+            if derived(k) or k == tkey:
+                continue
+            f, l = first_last(text(k).split('\n'))
+            rows.append(('test-failure', k[0], k[1], f, l, ''))
+        for p, v in sorted(pkg_result.items()):
+            if v == 'fail' and not any(k[0] == p for k in failing):
+                lines = [o for _, t, o in pkg_lines.get(p, [])]
+                kind = 'build-failure' if p in build_failed else 'package-failure'
+                first = next((o.strip() for o in lines if o.strip() and not o.startswith('=== ')), '')
+                rows.append((kind, p, '', first, '', 'no failing test carries this failure'))
+        timeout_idx = {}
+        for p, lst in sorted(pkg_lines.items()):
+            for i, t, o in lst:
+                if 'panic: test timed out' in o and p not in timeout_idx:
+                    timeout_idx[p] = i
+                    rows.append(('timeout', p, t or '', o.strip(), '', 'the Go test timeout fired in this package'))
+                if 'WARNING: DATA RACE' in o:
+                    rows.append(('data-race', p, t or '', o.strip(), '', 'a data race report'))
+                if o.startswith('CLUSTER_STATE|'):
+                    rows.append(('cluster-state', p, t or '', o.strip(), '', 'the package cluster-state check'))
+        # the target
+        tres = results.get(tkey)
+        tout = text(tkey).split('\n')
+        named_lines = [l.strip() for l in tout if named.search(l)]
+        wit = next((l.strip() for l in tout if witness.search(l)), '') if witness else ''
+        named_anywhere = any(named.search(o) for lst in outputs.values() for _, o in lst)
+        extra = [l.strip() for l in tout if FILELINE.match(l) and not named.search(l) and not (allowed and allowed.search(l))]
+        first = ''
+        if raw_exit not in ('0', '1'):
+            v, lab = 2, f'INABILITY the arm process ended with raw exit {raw_exit}'
+        elif P in build_failed:
+            v, lab = 2, 'INABILITY the target package did not build'
+        elif P in timeout_idx and (tres is None or tres[2] > timeout_idx[P]):
+            v, lab = 2, 'INABILITY the Go timeout fired in the target package before the target completed'
+        elif tres is None:
+            v, lab = 2, 'INABILITY the target produced no result (setup, crash or missing)'
+        elif tres[0] == 'skip':
+            v, lab = 2, 'INABILITY the target skipped'
+        elif tres[0] == 'pass':
+            if witness is None:
+                v, lab = 0, 'PASS (the target passed; it prints no witness line, its pass event is the evidence)'
+            elif wit:
+                v, lab = 0, 'PASS (the target passed; witness present)'
+            else:
+                v, lab = 2, 'INABILITY the target passed without its witness line'
+        elif named_lines:
+            v, lab, first = 1, 'NAMED assertion failed with the target', named_lines[0]
+            for x in extra:
+                rows.append(('target-extra-assertion', P, leaf, x, '', 'another assertion line in the target, beside the named one'))
+        else:
+            v, lab = 2, 'INABILITY the target failed without the named assertion'
+            f, l = first_last(tout)
+            first = f
+            rows.append(('target-other-assertion', P, leaf, f, l, 'the target failed at another assertion; not the named symptom'))
+        os.makedirs(out, exist_ok=True)
+        with open(os.path.join(out, 'target-output.txt'), 'w') as f:
+            f.write(text(tkey))
+        pkg_elapsed = next((e.get('Elapsed') for e in events if e.get('Package') == P and not e.get('Test') and e.get('Action') in ('pass', 'fail')), '-')
+        with open(os.path.join(out, 'results.tsv'), 'w') as f:
+            f.write('package\ttest\taction\telapsed_s\n')
+            for k in sorted(results):
+                f.write(f'{tsv(k[0])}\t{tsv(k[1])}\t{results[k][0]}\t{results[k][1]}\n')
+        with open(os.path.join(out, 'target.tsv'), 'w') as f:
+            f.write('arm\tpackage\tparent\tleaf\tverdict\tlabel\ttarget_result\ttarget_elapsed_s\tfirst_failure_line\twitness\tnamed_line_present_anywhere\ttarget_package_elapsed_s\n')
+            f.write('\t'.join(map(tsv, [arm, P, parent, leaf, v, lab, tres[0] if tres else '-', tres[1] if tres else '-', first, wit, 'yes' if named_anywhere else 'no', pkg_elapsed])) + '\n')
+        with open(os.path.join(out, 'other_failures.tsv'), 'w') as f:
+            f.write('arm\tkind\tpackage\ttest\tfirst_fileline\tlast_fileline\tnote\n')
+            for r in rows:
+                f.write('\t'.join(map(tsv, (arm,) + r)) + '\n')
+        with open(os.path.join(out, 'verdicts.tsv'), 'a') as f:
+            f.write(f'{arm}\t{v} {lab}\n')
+        counts = {}
+        for k, r in results.items():
+            counts[r[0]] = counts.get(r[0], 0) + 1
+        print(f'arm {arm}: target verdict {v} ({lab}); tests {sum(counts.values())} {counts}; separate observations {len(rows)}')
+        if first:
+            print(f'  {first}')
+        for r in rows[:50]:
+            print('  observation: ' + ' | '.join(map(tsv, r[:4])))
+        return v
+
+
+    if __name__ == '__main__':
+        cmd = sys.argv[1]
+        if cmd == 'classify':
+            v = classify(sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5])
+            sys.exit(0 if v in (0, 1) else 3)
+
+jobs:
+  pty-shard:
+    if: github.repository == 'olivaresai/olivares'
+    name: sessions shard, complete original command, once (target TestPTYRunner_ChildSeesTTYAndBridgesNDJSON)
+    runs-on: ubuntu-latest
+    # The origin job ceiling. As in the origin, the setup steps it inherits carry no step ceiling; the steps
+    # this instrument adds do, and with the origin's 35-minute test step they sum to 44 minutes, below it.
+    timeout-minutes: 45
+    # Both clusters exactly as the job that went red declared them.
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16@sha256:a36250871de0833b8757561c72f2477ef1ddd1101afa4e617fb552e0de514c6b
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+          --memory=1g
+      postgres_other:
+        image: pgvector/pgvector:pg16@sha256:a36250871de0833b8757561c72f2477ef1ddd1101afa4e617fb552e0de514c6b
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+          --memory=1g
+    env:
+      ARM: pty
+      # setup-go exported the same value in the job that went red; stated here so it cannot drift.
+      GOTOOLCHAIN: local
+      TARGET_PKG: github.com/olivaresai/olivares/modules/sessions
+      PARENT: TestPTYRunner_ChildSeesTTYAndBridgesNDJSON
+      LEAF: TestPTYRunner_ChildSeesTTYAndBridgesNDJSON
+      # Quoted from the bound source (the sha is pinned, so this line cannot drift).
+      NAMED_RE: 'pty_runner_test\.go:184: exit -1$'
+    steps:
+      - name: the input names the bound source (any other sha is refused before checkout)
+        id: input
+        timeout-minutes: 1
+        run: |
+          eval "$CTX_LIB"
+          validate_inputs
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: d13bb3d1a1b90e0f682edd0986e8eca11a0e1699
+          persist-credentials: false
+      - name: the checkout is the bound source, clean, with the four pinned blobs
+        id: identity
+        timeout-minutes: 1
+        env:
+          RUNNER_PLACEMENT: ${{ runner.environment }}
+        run: |
+          eval "$CTX_LIB"
+          identity
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        id: setup-go
+        with:
+          go-version-file: go.work
+          cache: true
+          cache-dependency-path: go.work.sum
+      - name: install go-task (pinned; the step the job that went red ran)
+        id: tools
+        run: |
+          export GOBIN="$RUNNER_TEMP/gopath/bin"
+          echo "GOBIN=$GOBIN" >> "$GITHUB_ENV"
+          echo "$GOBIN" >> "$GITHUB_PATH"
+          export PATH="$GOBIN:$PATH"
+          go install github.com/go-task/task/v3/cmd/task@v3.51.1
+          command -v task || { echo "::error::go install reported OK and task is not on PATH"; exit 1; }
+      - name: TMPDIR where an extracted binary can actually run (the step the job that went red ran)
+        id: tmpdir
+        run: |
+          mkdir -p "$RUNNER_TEMP/exec"
+          echo "TMPDIR=$RUNNER_TEMP/exec" >> "$GITHUB_ENV"
+          echo "GOTMPDIR=$RUNNER_TEMP/exec" >> "$GITHUB_ENV"
+      - name: resolve the ephemeral Postgres ports into the test DSNs
+        id: pg-port
+        env:
+          PGPORT_HOST: ${{ job.services.postgres.ports['5432'] }}
+          PGPORT_OTHER: ${{ job.services.postgres_other.ports['5432'] }}
+        run: |
+          set -euo pipefail
+          bash scripts/ci-postgres-service.sh resolve
+      - name: provision postgres roles (least-privilege app role + BYPASSRLS admin)
+        id: pg-roles
+        env:
+          PGPASSWORD: postgres
+        run: bash scripts/ci-postgres-service.sh provision
+      - name: record the toolchain, the TMPDIR and the PostgreSQL posture; select the shard; build its test binaries once
+        id: build
+        timeout-minutes: 4
+        run: |
+          eval "$CTX_LIB"
+          {
+            go version
+            go env GOVERSION GOOS GOARCH GOTOOLCHAIN GOFLAGS GOTMPDIR CGO_ENABLED
+            printf 'nproc %s\nTMPDIR %s\n' "$(nproc)" "${TMPDIR:-unset}"
+            printf 'mount of TMPDIR: %s\n' "$(findmnt -no TARGET,FSTYPE,OPTIONS -T "${TMPDIR:-/tmp}" 2>/dev/null || echo unreadable)"
+            printf 'mount of /tmp:   %s\n' "$(findmnt -no TARGET,FSTYPE,OPTIONS -T /tmp 2>/dev/null || echo unreadable)"
+            printf 'OLIVARES_TEST_POSTGRES_REQUIRED=%s\n' "${OLIVARES_TEST_POSTGRES_REQUIRED:-unset}"
+            psql "$OLIVARES_TEST_POSTGRES_SUPERUSER_DSN" -X -Atc 'SHOW server_version_num' 2>&1 || echo "COULD NOT LOOK"
+            python3 --version
+          } 2>&1 | tee "$OUT/toolchain.txt"
+          shard_selection
+          mapfile -t PKGS < "$OUT/shard-packages.txt"
+          mkdir -p "$RUNNER_TEMP/build"
+          run_logged build "$GITHUB_WORKSPACE" go test -c -o "$RUNNER_TEMP/build/" "${PKGS[@]}"
+      - name: the complete original command, once (the sessions shard, without the race detector)
+        id: test
+        timeout-minutes: 35
+        env:
+          OLIVARES_TEST_SHARD: sessions
+        run: |
+          eval "$CTX_LIB"
+          # The resource witness the job that went red ran around this step.
+          WITNESS="$OUT/resource-witness.state"
+          bash scripts/ci-resource-witness.sh start "$WITNESS" >/dev/null
+          trap 'bash scripts/ci-resource-witness.sh report "$WITNESS" | tee "$OUT/resource-witness.report" || true' EXIT
+          mapfile -t PKGS < "$OUT/shard-packages.txt"
+          run_arm "$GITHUB_WORKSPACE" bash scripts/with-pg-env.sh go test -count=1 -timeout 30m -json "${PKGS[@]}"
+      - name: attribution (the target verdict; every other failure a separate observation)
+        if: always()
+        timeout-minutes: 1
+        env:
+          SETUP_OUTCOMES: >-
+            input=${{ steps.input.outcome }} identity=${{ steps.identity.outcome }} setup-go=${{ steps.setup-go.outcome }}
+            tools=${{ steps.tools.outcome }} tmpdir=${{ steps.tmpdir.outcome }} pg-port=${{ steps.pg-port.outcome }}
+            pg-roles=${{ steps.pg-roles.outcome }} build=${{ steps.build.outcome }} test=${{ steps.test.outcome }}
+        run: |
+          eval "$CTX_LIB"
+          finalize "$SETUP_OUTCOMES"
+      - name: keep both PostgreSQL server logs
+        if: always()
+        timeout-minutes: 1
+        env:
+          PG_PRIMARY_ID: ${{ job.services.postgres.id }}
+          PG_OTHER_ID: ${{ job.services.postgres_other.id }}
+        run: |
+          OUT="$RUNNER_TEMP/context/$ARM"
+          mkdir -p "$OUT"
+          docker logs --details "$PG_PRIMARY_ID" > "$OUT/postgres-primary.log" 2>&1 || echo "COULD NOT LOOK" >> "$OUT/postgres-primary.log"
+          docker logs --details "$PG_OTHER_ID" > "$OUT/postgres-other.log" 2>&1 || echo "COULD NOT LOOK" >> "$OUT/postgres-other.log"
+      - name: retain the whole stream, results, target, separate observations and the server logs
+        if: always()
+        timeout-minutes: 1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: pty-142-context-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/context/pty/
+          retention-days: 7
+          if-no-files-found: error
