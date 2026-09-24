@@ -9,7 +9,7 @@ description: >-
 Esta página es la primera hora del plano de **proveedores**: dónde va tu clave de
 API, cómo sabes que funciona y cómo arranca una sesión con ella.
 
-Antes de v26.10 la respuesta a la primera pregunta era una variable de entorno en el
+En v26.9.0, la versión publicada, una variable de entorno del servidor es la única respuesta a la primera pregunta. En v26.10, pendiente de publicar, la respuesta aún puede ser una variable de entorno en el
 servidor. Esas variables siguen funcionando. Ya no son el único camino, y ya no son
 como empieza una operadora nueva.
 

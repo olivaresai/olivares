@@ -49,7 +49,7 @@ El comando se niega a adivinar. Declara la versión que sabes que está instalad
 protecciones seguirán activas:
 
 ```sh
-olivares upgrade --check --current-version 26.9.1
+olivares upgrade --check --current-version 26.9.0
 ```
 
 ## Canales de release

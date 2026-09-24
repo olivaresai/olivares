@@ -84,7 +84,7 @@
             "Trusted",
             "Verify",
             "View",
-            "Workspace", "DecisionReconstruction", "LegacyDecision"]
+            "Workspace", "DecisionReconstruction", "LegacyDecision", "CommitOutcome"]
         },
         {
           "name": "b",
@@ -688,7 +688,8 @@
             "WorkCommand",
             "WorkContent",
             "WorkOutbox",
-            "WorkPlan"
+            "WorkPlan",
+            "WorkStore"
           ]
         }
       ],
@@ -995,7 +996,8 @@
       "name": "root-e-communication",
       "tests_now": 56,
       "families": [
-        "Communication"
+        "Communication",
+        "CommitOutcome"
       ]
     },
     {

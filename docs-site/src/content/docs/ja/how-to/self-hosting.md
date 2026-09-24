@@ -172,7 +172,7 @@ ingress を前面に立てることができます。Compose スタックはホ�
 `deploy/helm/olivares` の Helm チャートは、control plane を **コア StatefulSet** (単一ライター。その
 データディレクトリには監査署名鍵と TLS マテリアルが格納される) としてデプロイし、
 分散トポロジー向けには、観測結果を **gRPC + mTLS** 経由でコアにプッシュする
-**コレクター DaemonSet** をデプロイします。エンジンの v26.9.1 リリースは OCI
+**コレクター DaemonSet** をデプロイします。エンジンの v26.9.0 リリースは OCI
 チャートを公開せず、独立した `chart-v*` タグもまだ workflow を実行していません。
 レビュー済みのソースを checkout からインストールし、公開イメージを digest で固定します。
 

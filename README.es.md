@@ -10,13 +10,13 @@
 
 [![License: AGPL-3.0-only](https://img.shields.io/badge/license-AGPL--3.0--only-blue)](LICENSING.md)
 [![SDK & connectors: Apache-2.0](https://img.shields.io/badge/SDK%20%26%20connectors-Apache--2.0-blue)](LICENSING.md)
-[![Release: v26.9.1](https://img.shields.io/badge/release-v26.9.1-28282B)](https://github.com/olivaresai/olivares/releases/tag/v26.9.1)
+[![Release: v26.9.0](https://img.shields.io/badge/release-v26.9.0-28282B)](https://github.com/olivaresai/olivares/releases/tag/v26.9.0)
 [![Status: beta](https://img.shields.io/badge/status-beta-F08000)](CHANGELOG.md)
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa)](CODE_OF_CONDUCT.md)
 
 </div>
 
-> **Beta**, en desarrollo activo. **v26.9.1** se entrega con archivos firmados, paquetes nativos e imágenes de contenedor. Qué funciona hoy, qué está bajo demanda y qué se encuentra en fase de diseño se indica en [Honestidad y límites](docs-site/src/content/docs/start/honesty-and-limits.md).
+> **Beta**, en desarrollo activo. **v26.9.0** se entrega con archivos firmados, paquetes nativos e imágenes de contenedor. Qué funciona hoy, qué está bajo demanda y qué se encuentra en fase de diseño se indica en [Honestidad y límites](docs-site/src/content/docs/start/honesty-and-limits.md).
 
 ## Qué es
 
@@ -72,7 +72,7 @@ git clone --depth 1 https://github.com/olivaresai/olivares.git && cd olivares
 docker compose -f deploy/compose/docker-compose.yml up --wait --wait-timeout 120
 ```
 
-**4 · Kubernetes** — el chart de Helm del árbol, o un manifiesto plano sin Helm; el chart aún no está publicado en un registro OCI.
+**4 · Kubernetes** — el chart de Helm del árbol, o un manifiesto plano sin Helm; la publicación OCI del chart no está verificada (`publication-unverified`: este repositorio nunca ejecutó su publicador de charts y no tiene etiqueta de chart ni asset de chart en una release, y el lado del registro no es observable).
 
 ```sh
 helm install olivares deploy/helm/olivares -n olivares-system --create-namespace
@@ -80,7 +80,7 @@ helm install olivares deploy/helm/olivares -n olivares-system --create-namespace
 kubectl create namespace olivares-system && kubectl apply -n olivares-system -f deploy/manifests/install.yaml
 ```
 
-**5 · Paquetes Linux** — `.deb`, `.rpm`, `.apk` desde la [página de la versión](https://github.com/olivaresai/olivares/releases/tag/v26.9.1): el binario, un fichero env de ejemplo, un usuario `olivares` sin login y una unidad endurecida; el servicio no se arranca por ti.
+**5 · Paquetes Linux** — `.deb`, `.rpm`, `.apk` desde la [página de la versión](https://github.com/olivaresai/olivares/releases/tag/v26.9.0): el binario, un fichero env de ejemplo, un usuario `olivares` sin login y una unidad endurecida; el servicio no se arranca por ti.
 
 ```sh
 sudo dpkg -i olivares_*_linux_amd64.deb        # Debian / Ubuntu   (sudo rpm -i … on RHEL / Fedora / SUSE; sudo apk add --allow-untrusted … on Alpine)

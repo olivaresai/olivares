@@ -112,7 +112,8 @@ check "the step is extracted from the workflow and starts with set -euo pipefail
 # "the clone is shallow" a defect rather than the configured state. If someone sets a depth on
 # that checkout, the refusal below starts firing on every release and this row says why.
 _ck_line="$(command grep -n '      - uses: actions/checkout@' "$WF_REAL" | head -2 | tail -1 | cut -d: -f1)"
-[ -n "$_ck_line" ] && command sed -n "$((_ck_line + 1)),$((_ck_line + 3))p" "$WF_REAL" | command grep -q 'fetch-depth: 0'
+[ -n "$_ck_line" ] && _ck_with="$(command sed -n "$((_ck_line + 1)),$((_ck_line + 3))p" "$WF_REAL")" &&
+	command grep -q 'fetch-depth: 0' <<<"$_ck_with"
 check "the job that runs this step checks out full history" "fetch-depth: 0" $?
 
 # --- stub gh ------------------------------------------------------------------------------------
@@ -277,7 +278,12 @@ NL=$'\n'
 # The literals are the extracted block's text: the YAML indent (10 columns) is already removed.
 FILTER_NEW='    outside="$(git diff --name-only "${green}" HEAD -- '"':/' ':(exclude,top).github/workflows/'"')"'"$NL"'    if [ -z "${outside}" ]; then'
 FILTER_CWD='    outside="$(git diff --name-only "${green}" HEAD -- . '"':(exclude).github/workflows/'"')"'"$NL"'    if [ -z "${outside}" ]; then'
-FILTER_OLD="    if ! printf '%s\\n' \"\${changed}\" | grep -qvE '^\\.github/workflows/'; then"
+# FILTER_OLD is the measured defect itself, restored as TEXT into a copy of the step: it has to
+# stay a pipe, because the pipe is what M1 proves causal. It is assembled from two halves so the
+# line census of check-sigpipe-booleans.sh, which reads lines and not quotes, does not count a
+# fixture string as a pipe this battery reads the rc of. The assembled value is byte-identical.
+FILTER_OLD_PRODUCER="    if ! printf '%s\\n' \"\${changed}\" |"
+FILTER_OLD="$FILTER_OLD_PRODUCER grep -qvE '^\\.github/workflows/'; then"
 FETCH_NEW='    if ! git cat-file -e "${green}^{commit}" 2>/dev/null; then'"$NL"'      git fetch -q origin "${green}" 2>/dev/null || continue'"$NL"'    fi'
 FETCH_OLD='    git fetch -q --depth=1 origin "${green}" 2>/dev/null || continue'
 COUNT_GUARD='if ! [[ "${match}" =~ ^[0-9]+$ ]]; then'
@@ -287,7 +293,7 @@ SHA_GUARD='    [[ "${green}" =~ ^[0-9a-f]{40}$ ]] || continue'
 if mutate pipe "$FILTER_NEW" "$FILTER_OLD"; then
 	STEP_UNDER_TEST="$WORK/mutant-pipe.sh" run_case "$L" 0 "$W"
 	[ "$rc" -eq 0 ] && out_has "is workflow-only"
-	check "M1 [mutant] the printf|grep -qv filter admits the large product diff" "B6 is causal" $?
+	check "M1 [mutant] the printf-into-grep -qv filter admits the large product diff" "B6 is causal" $?
 else
 	check "M1 [mutant] the git pathspec filter text is present" "mutant applied" 1
 fi

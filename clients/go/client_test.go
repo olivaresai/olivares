@@ -404,3 +404,94 @@ func TestStatementExportOperationConsumesCSV(t *testing.T) {
 		t.Errorf("Accept = %q, want no JSON demand on a raw operation", accept)
 	}
 }
+
+// ---- C32: the commit-outcome retry veto -------------------------------------
+//
+// commitOutcomeUnknownEnvelope is the EXACT production 503 body, byte for byte:
+// the server's writeJSON encodes a map, so encoding/json emits the three
+// top-level keys in sorted order and appends a newline, and the nested error
+// object carries the same code as its message. Inventing a shorter body here
+// would make the control pass against a fixture rather than against the engine.
+const commitOutcomeUnknownEnvelope = `{"code":"commit_outcome_unknown","error":{"code":"commit_outcome_unknown","message":"commit_outcome_unknown"},"verdict":"NO_HE_PODIDO_MIRAR"}` + "\n"
+
+// commitOutcomeUnknownHandler answers every request with that envelope and counts
+// the requests. There is no Retry-After: the engine advertises none, because
+// nothing about an undetermined commit is safe to retry on a timer.
+func commitOutcomeUnknownHandler(calls *atomic.Int32) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls.Add(1)
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_, _ = io.WriteString(w, commitOutcomeUnknownEnvelope)
+	})
+}
+
+// TestCommitOutcomeUnknownIsNeverRetried is the SDK half of C32.
+//
+// An automatic retry of an undetermined commit is not a harmless second attempt.
+// Even on a GET it re-runs a governed read that commits its own audit act, so the
+// client would turn one uncertain write into a second one, and the operator would
+// see two acts for one intention. The veto applies to every method and every
+// status carrying this code, and the caller decides what to do next.
+//
+// The 503-GET retry that exists for the HA handoff is preserved by
+// TestOther503GETStillRetried: this is one named exception, not a policy change.
+func TestCommitOutcomeUnknownIsNeverRetried(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		call func(c *Client) error
+	}{
+		{name: "GET", call: func(c *Client) error {
+			_, err := c.GetV1MSessionsChannelsByIDGrants(context.Background(),
+				"01a084d5-988c-7e46-b396-5cff04bf2793",
+				GetV1MSessionsChannelsByIDGrantsInput{WorkspaceID: "01a084d5-988c-7e46-b396-5cff04bf2794"})
+			return err
+		}},
+		{name: "POST", call: func(c *Client) error {
+			_, err := c.PostV1Agents(context.Background(), map[string]any{"name": "a"})
+			return err
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var calls atomic.Int32
+			c, slept := newTestClient(t, commitOutcomeUnknownHandler(&calls))
+			err := tc.call(c)
+			var ae *APIError
+			if !errors.As(err, &ae) {
+				t.Fatalf("err = %v, want *APIError", err)
+			}
+			if ae.Status != http.StatusServiceUnavailable || ae.Code != "commit_outcome_unknown" {
+				t.Errorf("APIError = %+v, want status 503 code commit_outcome_unknown", ae)
+			}
+			if calls.Load() != 1 {
+				t.Errorf("requests = %d, want exactly 1: retrying an undetermined commit can produce a second durable effect for one intention",
+					calls.Load())
+			}
+			if len(*slept) != 0 {
+				t.Errorf("slept = %v, want none: there is no interval on which this is safe to repeat", *slept)
+			}
+		})
+	}
+}
+
+// TestOther503GETStillRetried is the preservation positive: the retry policy the
+// SDK has always had is untouched for every other 503 code.
+func TestOther503GETStillRetried(t *testing.T) {
+	var calls atomic.Int32
+	c, _ := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls.Add(1)
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_, _ = io.WriteString(w,
+			`{"code":"evidence_unavailable","error":{"code":"evidence_unavailable","message":"evidence_unavailable"},"verdict":"NO_HE_PODIDO_MIRAR"}`+"\n")
+	}), WithMaxRetries(2))
+	if _, err := c.GetV1MSessionsChannelsByIDGrants(context.Background(),
+		"01a084d5-988c-7e46-b396-5cff04bf2793",
+		GetV1MSessionsChannelsByIDGrantsInput{WorkspaceID: "01a084d5-988c-7e46-b396-5cff04bf2794"}); err == nil {
+		t.Fatal("a 503 GET that never recovers must still surface an error")
+	}
+	if calls.Load() != 3 {
+		t.Errorf("requests = %d, want 3 (initial plus 2 retries): the HA handoff retry is not C32's to remove",
+			calls.Load())
+	}
+}

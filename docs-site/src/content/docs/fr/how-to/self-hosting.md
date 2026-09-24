@@ -174,7 +174,7 @@ pour que le volume de données, les ports et le flux de premier démarrage soien
 Le chart Helm dans `deploy/helm/olivares` déploie le control plane sous forme de **StatefulSet du cœur (core)**
 (écrivain unique ; son répertoire de données contient la clé de signature de l'audit et le matériel
 TLS) et, pour la topologie distribuée, d'un **DaemonSet de collecteurs** qui pousse les observations
-vers le cœur via **gRPC + mTLS**. La release moteur v26.9.1 ne publie pas le chart dans
+vers le cœur via **gRPC + mTLS**. La release moteur v26.9.0 ne publie pas le chart dans
 un registre OCI : aucun tag indépendant `chart-v*` n'a encore exécuté ce workflow.
 Installez le chart relu depuis un checkout et épinglez l'image publiée par digest.
 

@@ -1,0 +1,14 @@
+diff --git a/cmd/olivares/communicationcommitoutcome_proxy_test.go b/cmd/olivares/communicationcommitoutcome_proxy_test.go
+index cd30aaf..22d02c2 100644
+--- a/cmd/olivares/communicationcommitoutcome_proxy_test.go
++++ b/cmd/olivares/communicationcommitoutcome_proxy_test.go
+@@ -523,9 +523,6 @@ func (s *commitOutcomeProxySession) writeClient(frames ...[]byte) error {
+ // be able to pin this goroutine past the instrument's own limit.
+ func (s *commitOutcomeProxySession) writeLocked(frames ...[]byte) error {
+ 	for _, frame := range frames {
+-		if err := s.client.SetWriteDeadline(time.Now().Add(commitOutcomeProxyWriteLimit)); err != nil {
+-			return err
+-		}
+ 		if _, err := s.client.Write(frame); err != nil {
+ 			return err
+ 		}

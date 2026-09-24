@@ -83,6 +83,20 @@ failed_names=()
 # this output (an internal design note (not shipped)). Indent the word and every
 # mutant here is reported MISATRIBUIDO — a battery that reddens correctly while the harness
 # reads it as never reddening the case it named.
+#
+# A FAIL CARRIES ITS EVIDENCE. A case that reddens with nothing but its name cannot tell "the
+# phrase was not in the output" from "the probe could not see a phrase that was there", and that
+# is the first question every red here raises. So a FAIL also prints what the most recent
+# run_block left: its rc, its output as the cases read it (stdout and stderr interleaved, the one
+# stream run_block captures) and the gh stub's argv record. Indented, for the column-0 rule above.
+last_run_evidence() {
+	[ "${n:-0}" -gt 0 ] || return 0
+	printf '      last run #%s: rc=%s, output:\n' "$n" "${rc-}"
+	sed 's/^/      | /' <<<"${out-}"
+	printf '      last run #%s: gh stub argv:\n' "$n"
+	[ -f "${log-}" ] && sed 's/^/      | /' "$log"
+	return 0
+}
 check() {
 	if [ "$3" -eq 0 ]; then
 		pass=$((pass + 1))
@@ -91,6 +105,7 @@ check() {
 		fail=$((fail + 1))
 		failed_names+=("$1")
 		printf 'FAIL  %-58s %s\n' "$1" "$2"
+		last_run_evidence
 	fi
 }
 
@@ -546,6 +561,32 @@ argv_record() {
 	' "$log"
 }
 
+# --- the battery's own text probes: no `grep -q` behind a pipe ----------------------------
+# An assertion shaped `printf '%s' "$out" | command grep -q PHRASE` can call a phrase MISSING
+# that is there. bash's builtin printf writes a pipe one line per write(2); `grep -q` exits at its
+# first match, and a write still pending after that takes SIGPIPE, so under this file's
+# `pipefail` the pipeline returns 141 on a match. Measured on case B's own output (591 bytes,
+# seven lines, `BY NAME` on the third): PIPESTATUS `141 0` in 4 of 5,000 runs with both processes
+# on one CPU, and 5 of 24,000 on a loaded 16-CPU host. Negated, the same shape fails OPEN: J2's
+# `! … | grep -qE` passed a payload with a grep planted near its top in 23 of 5,000 runs.
+# test-release-workspace-e2e.sh closed the same class in its own assertions.
+#
+# WITNESS FOR THE HARNESS, not for the workflow, counted the way that battery counts it: putting
+# any assertion back behind a `grep -q` pipe must redden here deterministically, instead of
+# waiting for the scheduler to make the race fire. A continued pipeline is joined to its next
+# line so formatting cannot hide the old shape.
+_oracle_pipes="$(awk '
+	/^[[:space:]]*#/ { next }
+	{
+		line = carry $0
+		if (line ~ /\|[[:space:]]*(command[[:space:]]+)?grep[[:space:]]+-[[:alpha:]]*q/) n++
+		if ($0 ~ /\|[[:space:]]*$/) carry = $0 " "; else carry = ""
+	}
+	END { print n + 0 }
+' "$ROOT/scripts/test-release-security-sig-guard.sh")"
+[ "$_oracle_pipes" -eq 0 ]
+check "the battery has no timing-sensitive grep-q oracle" "zero boolean pipes, found ${_oracle_pipes}" $?
+
 # --- A · no security manifest on the draft: the ordinary release, GREEN ------------------
 run_block $'olivares_26.8.0_linux_amd64.tar.gz\nchecksums.txt\nstable-manifest.json\nstable-manifest.json.sig'
 [ "$rc" -eq 0 ]
@@ -568,12 +609,15 @@ check "a NOMINAL .sig does not authorize the ceremony" "deny-closed until #644" 
 # have_signature no longer changes the exit code, so the DIAGNOSIS is the only place its
 # guards remain observable — and therefore the only place their mutants can be witnessed.
 # The operator's next action differs between the two, which is why both are pinned.
-printf '%s' "$out" | command grep -q 'BY NAME'
+command grep -q 'BY NAME' <<<"$out"
 check "the refusal says the .sig counted for its NAME only" "the two refusals differ" $?
 
 # --- C · manifest without signature: RED -------------------------------------------------
+# The sentence the custody script prints for this half-state, held ONCE: case D refuses the same
+# string, so the two reds are told apart by what the guard actually prints and cannot drift apart.
+MISSING_SIG='no security-manifest.json.sig on the draft at all'
 run_block $'stable-manifest.json\nstable-manifest.json.sig\nsecurity-manifest.json'
-[ "$rc" -ne 0 ] && printf '%s' "$out" | command grep -q 'no security-manifest.json.sig on the draft at all'
+[ "$rc" -ne 0 ] && command grep -q "$MISSING_SIG" <<<"$out"
 check "security manifest with NO signature -> red, and says so" "the half-state" $?
 
 # --- D · THE ESCAPE · gh cannot read the inventory: RED ----------------------------------
@@ -586,9 +630,13 @@ check "gh FAILS to read the inventory -> red, never a silent skip" "could-not-lo
 # reason: the whole finding is that this red must be DISTINGUISHABLE from the other red.
 # A guard that fails closed with the "missing signature" message when the truth is "the API
 # was down" sends the custodian to extend the ceremony over an outage.
-printf '%s' "$out" | command grep -q 'could not read the draft'
+command grep -q 'could not read the draft' <<<"$out"
 check "the failure says it could not LOOK, not that there was nothing" "diagnosis, not silence" $?
-[ "$rc" -ne 0 ] && ! printf '%s' "$out" | command grep -q 'carries security-manifest.json with NO'
+# ON THE GUARD'S OWN WORDS. This probe refused "carries security-manifest.json with NO", a sentence
+# the custody script no longer prints, so it held whatever the read failure said: a read-failure
+# branch that ALSO printed case C's sentence passed the whole battery. It now refuses exactly the
+# phrase case C finds, and C's check is what proves that phrase is still printed at all.
+[ "$rc" -ne 0 ] && ! command grep -q "$MISSING_SIG" <<<"$out"
 check "a read failure is NOT reported as a missing signature" "the two reds stay apart" $?
 
 # --- E · a different gh failure code is still a failure ----------------------------------
@@ -624,7 +672,7 @@ run_block $'stable-manifest.json\nsecurity-manifest.json.txt\nxsecurity-manifest
 check "near-miss asset names are NOT the security manifest" "exact match, no firing" $?
 
 run_block $'stable-manifest.json\nsecurity-manifest.json\nsecurity-manifest.json.sig.bak'
-[ "$rc" -ne 0 ] && printf '%s' "$out" | command grep -q 'at all'
+[ "$rc" -ne 0 ] && command grep -q 'at all' <<<"$out"
 check "a near-miss .sig does NOT satisfy the signature" "exact match, no excusing" $?
 
 # --- I · the pipe that eats its own match -------------------------------------------------
@@ -669,7 +717,7 @@ check "unsigned manifest EARLY in a long inventory still refuses" "no SIGPIPE fa
 #   measured: grep -qx 'security-manifest.json.sig' MATCHES 'security-manifestXjsonYsig'.
 # A draft asset with that name would SATISFY the signature requirement.
 run_block $'stable-manifest.json\nsecurity-manifest.json\nsecurity-manifestXjsonYsig'
-[ "$rc" -ne 0 ] && printf '%s' "$out" | command grep -q 'at all'
+[ "$rc" -ne 0 ] && command grep -q 'at all' <<<"$out"
 check "a REGEX near-miss does not satisfy the signature" "names compared literally" $?
 
 # J2 · the guard invokes NO grep at all — asserted on the block, not by hiding grep.
@@ -688,7 +736,7 @@ check "a REGEX near-miss does not satisfy the signature" "names compared literal
 # against the block alone would silently stop covering the code that moved"). The parked-anchor
 # audit of 2026-08-15 found it by planting that mutant.
 _exec_only_payload="$(command grep -vE '^[[:space:]]*#' "$PAYLOAD")"
-! printf '%s\n' "$_exec_only_payload" | command grep -qE '(^|[^-[:alnum:]_])grep '
+! command grep -qE '(^|[^-[:alnum:]_])grep ' <<<"$_exec_only_payload"
 check "the guard invokes no grep at all" "no external parser, structurally" $?
 
 # J3 · a grep that CANNOT DECIDE (exit 2 is its "read/locale failure" code, 127 its absence).
@@ -710,13 +758,13 @@ BLOCK_PATH="$WORK/bin:/usr/bin:/bin"
 # third answer is the honest one. Whether gh can ever emit CRLF here is not a claim this
 # repository has a source for, so the guard neither assumes LF nor silently accepts CR.
 run_block $'stable-manifest.json\nsecurity-manifest.json\r'
-[ "$rc" -ne 0 ] && printf '%s' "$out" | command grep -q 'trailing CR'
+[ "$rc" -ne 0 ] && command grep -q 'trailing CR' <<<"$out"
 check "a CR-suffixed security name refuses as unclassifiable" "the third answer" $?
 # The SIGNATURE half of the same guard, asserted on its own: with the manifest name exact and
 # only the .sig carrying the CR, the manifest alternative cannot be what refuses. Without
 # this, a mutant removing just the .sig alternative survives.
 run_block $'stable-manifest.json\nsecurity-manifest.json\nsecurity-manifest.json.sig\r'
-[ "$rc" -ne 0 ] && printf '%s' "$out" | command grep -q 'trailing CR'
+[ "$rc" -ne 0 ] && command grep -q 'trailing CR' <<<"$out"
 check "a CR-suffixed SIGNATURE name refuses too" "both halves, separately" $?
 
 # --- L · authorization rests on the TAG'S DECLARATION, not on the draft snapshot ----------
@@ -729,12 +777,12 @@ check "a CR-suffixed SIGNATURE name refuses too" "both halves, separately" $?
 # clean inventory the racing GET would have returned.
 declare_security
 run_block $'stable-manifest.json\nstable-manifest.json.sig'
-[ "$rc" -ne 0 ] && printf '%s' "$out" | command grep -q 'DECLARED a security release'
+[ "$rc" -ne 0 ] && command grep -q 'DECLARED a security release' <<<"$out"
 check "a DECLARED security release refuses on a clean snapshot" "immutable fact, not a GET" $?
 # and nothing was written to the draft before refusing — the upload is a --clobber
 [ "$(command grep -c '^ARG upload$' "$log")" -eq 0 ]
 check "it refuses BEFORE the clobbering upload runs" "no draft mutation on refusal" $?
-printf '%s' "$out" | command grep -q 'CVE-2026-0001'
+command grep -q 'CVE-2026-0001' <<<"$out"
 check "the refusal names the advisories it read" "the declaration is quoted" $?
 declare_none
 
@@ -765,7 +813,7 @@ check "the tag resolving to the dispatched commit proceeds" "non-firing directio
 # tag-vs-evidence comparison rather than the evidence-vs-input one that now precedes it.
 prep_fixture "mover la etiqueta al OID ajeno" /usr/bin/git tag -f v26.8.0 "$OTHER_OID"
 run_block $'stable-manifest.json\nstable-manifest.json.sig'
-[ "$rc" -ne 0 ] && printf '%s' "$out" | command grep -q 'does not resolve to the commit'
+[ "$rc" -ne 0 ] && command grep -q 'does not resolve to the commit' <<<"$out"
 check "a tag that resolves ELSEWHERE refuses" "the object, not the name" $?
 prep_fixture "devolver la etiqueta al OID del fixture" /usr/bin/git tag -f v26.8.0 "$FIXTURE_OID"
 RELEASE_COMMIT_OVERRIDE="$OTHER_OID"
@@ -791,7 +839,7 @@ prep_fixture "situar HEAD en el OID ajeno" /usr/bin/git checkout -q "$OTHER_OID"
 prep_fixture "mover la etiqueta al OID ajeno" /usr/bin/git tag -f v26.8.0 "$OTHER_OID"
 RELEASE_COMMIT_OVERRIDE="$OTHER_OID"
 run_block $'stable-manifest.json\nstable-manifest.json.sig'
-[ "$rc" -ne 0 ] && printf '%s' "$out" | command grep -q 'not the one phase 1 recorded'
+[ "$rc" -ne 0 ] && command grep -q 'not the one phase 1 recorded' <<<"$out"
 check "a moved tag plus a matching raw input cannot impersonate phase 1" "evidence, not assertion" $?
 [ "$(command grep -c '^ARG upload$' "$log")" -eq 0 ]
 check "and it refuses before touching the draft" "no mutation on a forged identity" $?
@@ -801,12 +849,12 @@ prep_fixture "devolver la etiqueta al OID del fixture" /usr/bin/git tag -f v26.8
 
 printf '%s\n' "$FIXTURE_OID" >>"$WORK/root/ota-dist/release-commit.txt"
 run_block $'stable-manifest.json\nstable-manifest.json.sig'
-[ "$rc" -ne 0 ] && printf '%s' "$out" | command grep -q 'does not match its entry'
+[ "$rc" -ne 0 ] && command grep -q 'does not match its entry' <<<"$out"
 check "evidence altered after the checksums were signed refuses" "the binding is checked" $?
 _write_evidence
 rm -f "$WORK/root/ota-dist/release-commit.txt"
 run_block $'stable-manifest.json\nstable-manifest.json.sig'
-[ "$rc" -ne 0 ] && printf '%s' "$out" | command grep -q 'no commit evidence'
+[ "$rc" -ne 0 ] && command grep -q 'no commit evidence' <<<"$out"
 check "a draft with NO phase-1 evidence refuses" "absence is not permission" $?
 _write_evidence
 run_block $'stable-manifest.json\nstable-manifest.json.sig'
@@ -829,7 +877,7 @@ BLOCK_PATH="$WORK/shim:$WORK/bin:/usr/bin:/bin"
 run_block $'stable-manifest.json\nstable-manifest.json.sig'
 [ "$rc" -ne 0 ]
 check "a PATH shim that lies about status cannot pass a dirty tree" "the tool is the control" $?
-printf '%s' "$out" | command grep -q 'PATH resolves git to'
+command grep -q 'PATH resolves git to' <<<"$out"
 check "and it names the tool, not the tree" "the right diagnosis" $?
 (cd "$WORK/root" && /usr/bin/git checkout -q -- scripts/release-ota-channel.sh)
 run_block $'stable-manifest.json\nstable-manifest.json.sig'
@@ -845,12 +893,12 @@ check "with the trusted git first, the ceremony completes" "non-firing direction
 # says "If the upload fails, the original assets will be lost". Doing that to a published
 # release destroys a public artefact on the way to failing.
 run_block $'stable-manifest.json\nstable-manifest.json.sig' GH_STUB_IS_DRAFT=false
-[ "$rc" -ne 0 ] && printf '%s' "$out" | command grep -q 'is not a draft'
+[ "$rc" -ne 0 ] && command grep -q 'is not a draft' <<<"$out"
 check "a PUBLISHED release refuses before the clobber" "no clobbering the public pair" $?
 [ "$(command grep -c '^ARG upload$' "$log")" -eq 0 ]
 check "and nothing was uploaded to it" "refusal precedes mutation" $?
 run_block $'stable-manifest.json\nstable-manifest.json.sig' GH_STUB_IS_IMMUTABLE=true
-[ "$rc" -ne 0 ] && printf '%s' "$out" | command grep -q 'isImmutable'
+[ "$rc" -ne 0 ] && command grep -q 'isImmutable' <<<"$out"
 check "an IMMUTABLE release refuses" "clobber cannot apply" $?
 run_block $'stable-manifest.json\nstable-manifest.json.sig' GH_STUB_IS_IMMUTABLE=maybe
 [ "$rc" -ne 0 ]
@@ -885,7 +933,7 @@ check "a lone signature is staged too" "either member counts" $?
 run_block $'stable-manifest.json\nstable-manifest.json.sig' GH_STUB_UPLOAD_RC=1
 [ "$rc" -ne 0 ] && [ "$(command grep -c '^ARG upload$' "$log")" -eq 2 ]
 check "a failed upload triggers the ROLLBACK upload" "the pair is put back" $?
-printf '%s' "$out" | command grep -q 'Restoring the asset'
+command grep -q 'Restoring the asset' <<<"$out"
 check "the rollback says what it is doing" "audible recovery" $?
 
 # --- P · the commit is not the bytes (phase 2 reads the same rule) ------------------------
@@ -894,7 +942,7 @@ check "the rollback says what it is doing" "audible recovery" $?
 # the ceremony has been rewritten under them.
 printf '\n# injected by a prior uses: step\n' >>"$WORK/root/scripts/release-ota-channel.sh"
 run_block $'stable-manifest.json\nstable-manifest.json.sig'
-[ "$rc" -ne 0 ] && printf '%s' "$out" | command grep -q 'no longer matches the commit'
+[ "$rc" -ne 0 ] && command grep -q 'no longer matches the commit' <<<"$out"
 check "a TRACKED file modified without a checkout refuses" "the commit is not the bytes" $?
 [ "$(command grep -c '^ARG upload$' "$log")" -eq 0 ]
 check "and it refuses before touching the draft" "no mutation on a tampered tree" $?
@@ -956,9 +1004,9 @@ check "[custody 2] the draft carries exactly the two it had" "exact snapshot" $?
 # that says it happened.
 setup_remote stable-manifest.json
 run_block $'stable-manifest.json' GH_STUB_UPLOAD_PARTIAL=1 GH_STUB_POSTVIEW_RC=1
-[ "$rc" -ne 0 ] && printf '%s' "$out" | command grep -q 'UNKNOWN'
+[ "$rc" -ne 0 ] && command grep -q 'UNKNOWN' <<<"$out"
 check "[custody ?] an unreadable draft is declared UNKNOWN" "no invented rollback" $?
-! printf '%s' "$out" | command grep -q 'Rollback done'
+! command grep -q 'Rollback done' <<<"$out"
 check "[custody ?] and no rollback is claimed" "manual repair, said plainly" $?
 
 # NON-FIRING: a successful upload leaves the new pair and is not rolled back.

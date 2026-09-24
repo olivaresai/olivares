@@ -162,7 +162,7 @@ The engine enables profiled launches unconditionally (`cmd/olivares/boot.go`
 `EnableProfiledLaunches`), and `resolveLaunchProfileInto` answers **400 `select a
 provider profile before launching a session`** to a create with no profile. The old
 four-line form could not have worked on any shipped v26.9 server. Steps 1 and 3 are
-new in v26.10: before it, the credential lived in a host environment variable
+new in v26.10, which is pending. Before it, in the published v26.9.0, the credential lived in a host environment variable
 and there was no CLI verb for a profile at all.
 
 **The ordering that no single command's help states:** `rm` refuses a stopped session
@@ -183,7 +183,7 @@ are deny-closed (set OLIVARES_SESSION_RUNTIME_WIF or OLIVARES_SESSION_RUNTIME_TO
 remote-control launches do not need it»*, and a WIRED-but-unreadable token file answers 503
 with its own distinct sentence. The remedy is named in the answer.
 
-⚠ **And from v26.10 those variables are no longer the only path.** A profile bound to a
+⚠ **And from v26.10, which is pending, those variables will no longer be the only path.** A profile bound to a
 registered provider (step 1 above) resolves its credential from that provider, and the host
 variables apply only to profiles that name none. A bound credential that cannot be produced
 **denies** the launch — it does not fall back to the host's, because that would run the

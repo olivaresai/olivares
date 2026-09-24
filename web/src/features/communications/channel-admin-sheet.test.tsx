@@ -700,6 +700,73 @@ describe('ChannelAdminSheet — grants (history, revoke → grant as two acts)',
     expect(api.grantChannel).toHaveBeenCalledTimes(1)
   })
 
+  // C32. The transport did NOT fail here: the engine answered, with 503 and the
+  // code that says it issued COMMIT and never learned the result. That is the
+  // same situation as a dropped response and it must reach the same screen — the
+  // intent stays on the operator's screen and nothing is re-sent. Before the
+  // console arm exists this 503 is classified `unavailable`, which renders the
+  // refusal screen and CLEARS the intent, so this control is red by its
+  // assertion on the retained subject rather than by a missing element.
+  it('a 503 commit_outcome_unknown keeps the grant intent: the engine said it does not know, not that it refused', async () => {
+    api.listChannelGrants.mockResolvedValue(grantsPageOf({ items: [] }))
+    api.grantChannel.mockRejectedValueOnce(
+      new ApiError(
+        503,
+        'commit_outcome_unknown',
+        'commit_outcome_unknown',
+        'req-c32',
+        {},
+        {
+          code: 'commit_outcome_unknown',
+          error: {
+            code: 'commit_outcome_unknown',
+            message: 'commit_outcome_unknown',
+          },
+          verdict: 'NO_HE_PODIDO_MIRAR',
+        },
+      ),
+    )
+    mount()
+    const sheet = await screen.findByRole('dialog')
+    const user = userEvent.setup()
+    await openGrantsTab(user)
+    await user.click(
+      await within(sheet).findByRole('button', { name: 'Add grant' }),
+    )
+    const form = within(sheet).getByRole('form', {
+      name: 'New grant generation',
+    })
+    await user.type(
+      within(form).getByRole('textbox', { name: 'Reference (ID)' }),
+      USER_B,
+    )
+    await user.click(within(form).getByRole('checkbox', { name: 'Admin' }))
+    await user.click(within(form).getByRole('button', { name: 'Review grant' }))
+    await user.click(
+      within(sheet).getByRole('button', { name: 'Confirm grant' }),
+    )
+    expect(
+      await within(sheet).findByText('Result pending verification'),
+    ).toBeInTheDocument()
+    const unknown = sheet.querySelector(
+      '[data-slot="act-unknown"]',
+    ) as HTMLElement
+    expect(unknown).not.toBeNull()
+    // The intent is RETAINED: the subject the operator chose is still named, so
+    // they can verify and decide rather than start again from memory.
+    expect(within(unknown).getByText(`user:${USER_B}`)).toBeInTheDocument()
+    // And the refusal screen is NOT the one shown: a refusal would mean the
+    // engine decided against the act, which it did not.
+    expect(sheet.querySelector('[data-slot="act-refused"]')).toBeNull()
+    // No retry button: re-sending is the operator's decision, never the console's.
+    expect(within(sheet).queryByRole('button', { name: /retry/i })).toBeNull()
+    await user.click(
+      within(sheet).getByRole('button', { name: 'Re-read to verify' }),
+    )
+    await waitFor(() => expect(api.listChannelGrants).toHaveBeenCalledTimes(2))
+    expect(api.grantChannel).toHaveBeenCalledTimes(1)
+  })
+
   it("revoking the operator's OWN admin generation warns that it may sustain their access, without computing their authority", async () => {
     api.listChannelGrants.mockResolvedValue(
       grantsPageOf({

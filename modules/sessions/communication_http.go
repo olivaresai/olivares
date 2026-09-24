@@ -7,6 +7,8 @@ package sessions
 import (
 	"errors"
 	"net/http"
+
+	"github.com/olivaresai/olivares/core/store"
 )
 
 // writeCommunicationError maps communication decisions whose wire meaning
@@ -34,6 +36,20 @@ func communicationHTTPDisposition(
 	err error,
 ) (status int, code string, verdict AssessmentVerdict, ok bool) {
 	switch {
+	// FIRST, and the order is the decision. This arm and the evidence arm below
+	// share a status and a verdict, so whichever runs first names the outcome —
+	// and they are not the same outcome. `evidence_unavailable` says the engine
+	// could not COMPLETE A READ, and the remedy is to look again. This one says
+	// the engine ISSUED A WRITE and never learned whether the database applied
+	// it: the remedy is operation-specific, under the caller's current authority,
+	// and re-sending blind is exactly what must not happen.
+	//
+	// 503 rather than 500 because a write that may be durable is not a failure,
+	// and the UNKNOWN verdict rather than a new literal because the vocabulary
+	// already has the one that means "I could not look". There is no Retry-After:
+	// no interval makes this safe to repeat.
+	case errors.Is(err, store.ErrCommitOutcomeUnknown):
+		return http.StatusServiceUnavailable, "commit_outcome_unknown", VerdictUnknown, true
 	case errors.Is(err, ErrCommunicationPlanChanged):
 		return http.StatusPreconditionFailed, "plan_changed", VerdictBroken, true
 	case errors.Is(err, errDirectNoticeCursorVersionMismatch):

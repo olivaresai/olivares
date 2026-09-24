@@ -11,7 +11,7 @@ nicht das Produkt.
 
 Diese Seite dokumentiert die Community-Operate-Routen unter
 `/v1/m/sessions/runs`. Sie stehen bereits im
-[beta-OpenAPI-Dokument](/reference/api-beta/). v26.10 ergänzt den
+[beta-OpenAPI-Dokument](/reference/api-beta/). Die Version v26.10 steht noch aus. Sie ergänzt den
 Driver-Vertrag, einen lokalen PTY-Runner und die Journeys J01–J08 als Tests.
 
 ## Editionsgrenze

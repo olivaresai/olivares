@@ -1,0 +1,1 @@
+import{$t as e,un as t}from"./index-gu6i1Itb.js";function n(n){return t(e,n)}export{n as t};
