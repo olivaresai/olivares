@@ -10,7 +10,7 @@ Codex ni Grok Build. Las sesiones y los terminales son un módulo de este
 producto, no el producto.
 
 Esta página documenta las rutas Community de operate bajo `/v1/m/sessions/runs`.
-Ya existen en el [documento OpenAPI beta](/reference/api-beta/). v26.10 añade
+Ya existen en el [documento OpenAPI beta](/reference/api-beta/). v26.10 está pendiente. Añadirá
 el contrato de driver, un runner PTY local y los recorridos J01–J08 como tests.
 
 ## Corte de edición

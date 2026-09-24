@@ -7,8 +7,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 The Helm chart in `../helm/olivares` **will be published** as an **OCI
 artifact** to `ghcr.io/olivaresai/charts` once
 `../../.github/workflows/release-chart.yml` runs — it publishes only on a
-human-pushed `chart-v*` tag (it never auto-publishes), so until that tag is cut the
-registry path is **empty** and these manifests have no chart to pull yet. This
+human-pushed `chart-v*` tag (it never auto-publishes). Publication is **unverified**: this
+repository has never run that publisher or cut a chart tag, and the registry side is not
+observable, so these manifests have no verified chart to pull yet. This
 directory is the **consumption contract**: ready-to-adapt manifests for the three
 mainstream GitOps engines, all targeting that one signed chart once it is published.
 

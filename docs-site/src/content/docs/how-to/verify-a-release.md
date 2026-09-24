@@ -26,7 +26,7 @@ only then run them. The steps below are how.
 | `*.vex.sigstore.json` | OpenVEX as a signed in-toto attestation |
 | `*.intoto.jsonl` | SLSA Build L3 provenance |
 | container image | published to GHCR and Docker Hub, pinned and verified by digest |
-| Helm chart source | install from `deploy/helm/olivares`; no public OCI chart exists yet |
+| Helm chart source | install from `deploy/helm/olivares`; its OCI publication is unverified (`publication-unverified`: never published from this repository) |
 
 ## The one-command path
 
@@ -39,7 +39,7 @@ then verifies the SBOM, OpenVEX and SLSA attestations.
 scripts/verify-release.sh
 
 # Pin the SLSA provenance to a specific source tag.
-scripts/verify-release.sh --source-tag v26.9.1
+scripts/verify-release.sh --source-tag v26.9.0
 
 # Key-based: only for files signed with a private key you control.
 # Releases are signed keyless and do not publish a public key.

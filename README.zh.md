@@ -10,13 +10,13 @@
 
 [![License: AGPL-3.0-only](https://img.shields.io/badge/license-AGPL--3.0--only-blue)](LICENSING.md)
 [![SDK & connectors: Apache-2.0](https://img.shields.io/badge/SDK%20%26%20connectors-Apache--2.0-blue)](LICENSING.md)
-[![Release: v26.9.1](https://img.shields.io/badge/release-v26.9.1-28282B)](https://github.com/olivaresai/olivares/releases/tag/v26.9.1)
+[![Release: v26.9.0](https://img.shields.io/badge/release-v26.9.0-28282B)](https://github.com/olivaresai/olivares/releases/tag/v26.9.0)
 [![Status: beta](https://img.shields.io/badge/status-beta-F08000)](CHANGELOG.md)
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa)](CODE_OF_CONDUCT.md)
 
 </div>
 
-> **Beta**，处于活跃开发中。**v26.9.1** 随附签名归档、原生软件包和容器镜像。哪些能力今天可运行、哪些按需提供、哪些仍处于设计阶段，见[诚实与边界](docs-site/src/content/docs/start/honesty-and-limits.md)。
+> **Beta**，处于活跃开发中。**v26.9.0** 随附签名归档、原生软件包和容器镜像。哪些能力今天可运行、哪些按需提供、哪些仍处于设计阶段，见[诚实与边界](docs-site/src/content/docs/start/honesty-and-limits.md)。
 
 ## 它是什么
 
@@ -72,7 +72,7 @@ git clone --depth 1 https://github.com/olivaresai/olivares.git && cd olivares
 docker compose -f deploy/compose/docker-compose.yml up --wait --wait-timeout 120
 ```
 
-**4 · Kubernetes** — 树中的 Helm chart，或一份不含 Helm 的扁平清单；chart 尚未发布到 OCI 仓库。
+**4 · Kubernetes** — 树中的 Helm chart，或一份不含 Helm 的扁平清单；chart 的 OCI 发布未经验证（`publication-unverified`：本仓库从未运行其 chart 发布流程，没有 chart 标签，也没有发布中的 chart 资产，registry 一侧无法观测）。
 
 ```sh
 helm install olivares deploy/helm/olivares -n olivares-system --create-namespace
@@ -80,7 +80,7 @@ helm install olivares deploy/helm/olivares -n olivares-system --create-namespace
 kubectl create namespace olivares-system && kubectl apply -n olivares-system -f deploy/manifests/install.yaml
 ```
 
-**5 · Linux 软件包** — 来自[发布页面](https://github.com/olivaresai/olivares/releases/tag/v26.9.1)的 `.deb`、`.rpm`、`.apk`：二进制、示例 env 文件、无登录的 `olivares` 用户和加固单元；服务不会替你启动。
+**5 · Linux 软件包** — 来自[发布页面](https://github.com/olivaresai/olivares/releases/tag/v26.9.0)的 `.deb`、`.rpm`、`.apk`：二进制、示例 env 文件、无登录的 `olivares` 用户和加固单元；服务不会替你启动。
 
 ```sh
 sudo dpkg -i olivares_*_linux_amd64.deb        # Debian / Ubuntu   (sudo rpm -i … on RHEL / Fedora / SUSE; sudo apk add --allow-untrusted … on Alpine)

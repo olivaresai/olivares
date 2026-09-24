@@ -1,34 +1,31 @@
-# The single source of truth for the FIRST public release version (CalVer vYY.M.PATCH).
-# Every public surface that promises a first-release version (README ×7, CHANGELOG,
-# docs-site install/verify pages, trust one-pager, launch material) is checked against
-# this value by scripts/check-release-version.sh on every push and in CI.
+# The single source of truth for the CURRENT PUBLISHED RELEASE, the install baseline, in
+# CalVer vYY.M.PATCH. Every release-bearing surface (README ×7, the CHANGELOG masthead, INSTALL,
+# the docs-site install and verify pages, the trust one-pager, and the deploy/, packaging/ and
+# operator/ coordinates) is checked against this value by scripts/check-release-version.sh on
+# every push and in CI. SECURITY.md is not one of those surfaces: scripts/check-install-docs.sh
+# requires it to contain v<this value> (its supported-release row), and binds this value to its
+# dated witness, docs/releases/<this value>-install-surfaces.json.
 #
-# THE VALUE IS DERIVED, NOT CHOSEN. CalVer takes it from the DATE OF THE CUT: YY is the
-# two-digit year, M the month with no leading zero, PATCH the fix number within that
-# month. An August 2026 cut is therefore v26.8.0, its first same-month fix v26.8.1, and a
-# cut that slips to September becomes v26.9.0 — nobody picks that, the calendar does.
-# Signed by Fran Olivares, asked as "v26.6.0 or v26.7.0?" and answered "neither of the
-# two… the correction is mechanical", and restated later as "the version is derived".
+# THE VALUE NAMES A PUBLISHED RELEASE, NOT A PLAN. It is v26.9.0: public tag v26.9.0, GitHub
+# release 390836255, published 2026-09-17T16:33:50Z. Its install surfaces were read on
+# 2026-09-23 and are recorded in its witness: seven observed published, and the Helm OCI chart
+# publication-unverified (the registry refused both reads that could settle it). Both
+# published releases, v26.8.0 and v26.9.0, keep their own CHANGELOG.md sections
+# unchanged.
 #
-# WHAT CHANGING THE MONTH COSTS, so it is not a surprise later: the gate holds this value
-# against every release-bearing surface in the tree, so re-deriving it is one edit here
-# plus whatever the checker then reports red. That is the mechanical part; it is not
-# free, and it is the intended way round — surfaces follow the derivation, never the
-# reverse.
+# THE NEXT RELEASE IS v26.10, AND IT IS PENDING. Its tag-shaped target is v26.10.0, a target and
+# not a released fact. The owner's direction of 2026-09-22 names it: there is no v26.9.1, and no
+# release has been published after v26.9.0. Pending changes are recorded under [Unreleased] in
+# CHANGELOG.md with no release date. This value moves only once the next release is published
+# and its witness is observed; it never names a cut ahead of its tag, or a cut nobody made.
 #
-# WHAT IS NOT DERIVED, AND IS STILL FRAN'S: WHEN a cut happens. Three cuts have been decided
-# so far, and the two that shipped keep their own CHANGELOG.md sections unchanged: public tag
-# v26.8.0 resolves to its released commit, and public tag v26.9.0 to its own. The third is THIS
-# one. It is the first SAME-MONTH fix: the month does not move, so CalVer bumps only PATCH, and
-# a September 2026 cut after v26.9.0 is v26.9.1 — again nobody picks it, the calendar and the
-# count do. It names what this tree ships; the release itself is published by the tag, and
-# docs/releases/*-install-surfaces.json records the measured publication state of each surface
-# at the moment it was measured.
+# HOW A NUMBER IS DERIVED: CalVer takes it from the date of the cut. YY is the two-digit year,
+# M the month with no leading zero, and PATCH the release number within that month. The
+# calendar derives the number; WHETHER and WHEN a cut happens is the owner's decision.
 #
-# THE UNDECIDED ESCAPE STILL EXISTS IN THE CHECKER and is worth knowing about, because
-# this header used to be written as though it were the current state. Writing UNDECIDED
-# on the value line below puts the gate into census mode: it prints every divergent
-# occurrence grouped by value and exits 0 with a PENDING banner instead of blocking. That
-# is for a tree that has no answer yet. It is not this tree: v26.9.1 is derived and the
-# current install surfaces are bound to it by scripts/check-install-docs.sh.
-v26.9.1
+# THERE IS NO UNDECIDED. The checker once answered the value UNDECIDED with a census and
+# exit 0; that report mode was removed on 2026-09-23, because it certified a tree with no
+# canon behind it. UNDECIDED, or any value that is not vYY.M.PATCH, is refused before any
+# surface is read, and scripts/check-install-docs.sh binds the current install surfaces to
+# the value below through its dated witness.
+v26.9.0

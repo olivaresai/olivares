@@ -22,25 +22,20 @@ points (`deploy/compose/*.yml`), and the first-run flow they drive is the same
 one verified end-to-end against the binary in the
 [single-node tutorial](/tutorials/getting-started/single-node/).
 
-<Aside type="caution" title="Until v26.9.1 images are published, build locally">
-A prior tagged release already shipped signed images. This tree's canon is **v26.9.1**. The
-install-surface witness still records Docker Hub and GHCR as **not-published**
-for `26.9.1` until that tag's release job runs
-(`docs/releases/v26.9.1-install-surfaces.json`). The same honesty note is on
-[Deploy with Docker](/how-to/docker-deployment/). They are built and signed on
-`ghcr.io/olivaresai/olivares` first and then copied to Docker Hub by digest, so
-the ghcr.io coordinate serves the identical image as a fallback. Until the
-`26.9.1` tags exist, build the hardened distroless image from source and point
-the stack at it:
+<Aside type="caution" title="Pin the published v26.9.0 image by digest">
+Release **v26.9.0** published the signed images: the install-surface witness records Docker
+Hub and GHCR as **published** for `26.9.0` (`docs/releases/v26.9.0-install-surfaces.json`). The
+same note is on [Deploy with Docker](/how-to/docker-deployment/). They are built and signed on
+`ghcr.io/olivaresai/olivares` first and then copied to Docker Hub by digest, so the ghcr.io
+coordinate serves the identical image as a fallback. Set
+`OLIVARES_IMAGE=docker.io/olivaresai/olivares@sha256:<digest>` and
+[verify it](/how-to/verify-a-release/) first — by digest, never a tag. To run the development
+tree instead, build the hardened distroless image from source and point the stack at it:
 
 ```bash
 task image                                   # builds olivares:dev
 echo 'OLIVARES_IMAGE=olivares:dev' >> deploy/compose/.env
 ```
-
-When the `26.9.1` image exists: set
-`OLIVARES_IMAGE=docker.io/olivaresai/olivares@sha256:<digest>` and
-[verify it](/how-to/verify-a-release/) first — by digest, never a tag.
 </Aside>
 
 ## 1. Bring up the single-node stack (SQLite)

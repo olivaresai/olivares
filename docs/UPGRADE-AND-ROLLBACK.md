@@ -45,8 +45,8 @@ command is for binary/systemd/compose installs.
 
 ## 1. Versioning and the image coordinate
 
-Releases use CalVer (`vYY.M.PATCH`, e.g. `v26.9.1`); container tags drop the leading `v`
-(`:26.9.1`, `:latest`, `:26.9.1-fips`, `:26.9.1-stig`). See [`../INSTALL.md`](../INSTALL.md#versioning).
+Releases use CalVer (`vYY.M.PATCH`, e.g. `v26.9.0`); container tags drop the leading `v`
+(`:26.9.0`, `:latest`, `:26.9.0-fips`, `:26.9.0-stig`). See [`../INSTALL.md`](../INSTALL.md#versioning).
 
 The official registry is **Docker Hub**:
 
@@ -62,11 +62,11 @@ ghcr.io does not rate-limit anonymous pulls of public images. **In production, p
 digest** — a tag is mutable, a digest is exactly what you verified:
 
 ```sh
-cosign verify docker.io/olivaresai/olivares:26.9.1 \
+cosign verify docker.io/olivaresai/olivares:26.9.0 \
   --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 # then resolve and use the digest you verified (same value on either registry):
-crane digest docker.io/olivaresai/olivares:26.9.1   # -> sha256:<…>
+crane digest docker.io/olivaresai/olivares:26.9.0   # -> sha256:<…>
 ```
 
 ---
@@ -276,8 +276,9 @@ sudo systemctl restart olivares                  # /etc/olivares/olivares.env an
 
 **Helm**
 ```sh
-helm upgrade olivares oci://ghcr.io/olivaresai/charts/olivares \
-  --version <chart-version> --verify \
+# from the source chart of a checkout at the release you upgrade to: the OCI chart's
+# publication is unverified, so no remote chart is offered here
+helm upgrade olivares deploy/helm/olivares \
   --set image.digest=<new-sha256> --reuse-values
 ```
 On a Postgres HA release (`replicaCount>1`) this is a rolling update: the StatefulSet
@@ -480,7 +481,7 @@ olivares upgrade --enterprise --connect --data-dir /var/lib/olivares  # connecte
   (and the audit record truthful) rather than bypassing them:
 
   ```bash
-  olivares upgrade --target /opt/olivares/olivares --current-version 26.9.1
+  olivares upgrade --target /opt/olivares/olivares --current-version 26.9.0
   ```
 
   Released binaries are unaffected — every published artifact is stamped at build time, so
@@ -765,8 +766,8 @@ An air-gapped deployment upgrades from a **local bundle**, verified **offline** 
 network, no cosign, no Rekor. On a connected host, build the signed bundle for a release:
 
 ```sh
-scripts/export-update-bundle.sh --dir <release-dir> --channel stable --version 26.9.1 \
-  --sign-key <dedicated-ed25519-ota-key> --out olivares-update-26.9.1.tar.gz
+scripts/export-update-bundle.sh --dir <release-dir> --channel stable --version 26.9.0 \
+  --sign-key <dedicated-ed25519-ota-key> --out olivares-update-26.9.0.tar.gz
 ```
 
 The bundle is a tarball of the signed `manifest.json`, its signature, and the platform
@@ -775,10 +776,10 @@ the box** — `--check` does not — so stage the license first (it is a file; i
 gap the way the bundle does):
 
 ```sh
-olivares upgrade --bundle olivares-update-26.9.1.tar.gz --pubkey <release.pub> --check
+olivares upgrade --bundle olivares-update-26.9.0.tar.gz --pubkey <release.pub> --check
 olivares license install ./license.key   # once. Verified OFFLINE, against the license key
                                          # embedded in this binary — no call is made
-olivares upgrade --bundle olivares-update-26.9.1.tar.gz --pubkey <release.pub> --yes
+olivares upgrade --bundle olivares-update-26.9.0.tar.gz --pubkey <release.pub> --yes
 ```
 
 `--bundle` runs the identical verify → anti-rollback → SHA-bind → atomic-swap path as the
