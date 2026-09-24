@@ -121,7 +121,7 @@ jobs:
           build="$RUNNER_TEMP/cedar-measure-build"
           corpus=()
           if [ "$PACKET" = oframe ]; then
-            dir="$(GOMODCACHE="$build/gomodcache" GOCACHE="$build/gocache" \
+            dir="$(cd "$build/src" && GOMODCACHE="$build/gomodcache" GOCACHE="$build/gocache" \
               go list -m -f '{{.Dir}}' github.com/cedar-policy/cedar-go)"
             corpus=(--corpus "$dir/corpus-tests.tar.gz")
           fi

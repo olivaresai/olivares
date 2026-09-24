@@ -487,24 +487,41 @@ def skip_after_failure(entry, failed_at):
     return limit is not None and entry["point"] > limit
 
 
+MODULE_FILES = ("go.mod", "go.sum")   # the only owners of the Go and cedar-go pins
+ACCEPTED_MODULE_KINDS = ("unchanged", "toolchain_line_dropped")   # module_file_delta kinds setup may accept
+
+
+def source_dir():
+    """The admitted source: the directory this file was checked out in."""
+    return os.path.dirname(os.path.abspath(__file__))
+
+
 def module_pins(payload_dir):
-    """Read the Go and cedar-go pins from go.mod and go.sum, their only owners."""
-    pins = {}
-    with open(os.path.join(payload_dir, "go.mod"), encoding="utf-8") as f:
-        for line in f:
-            words = line.split()
-            if words[:1] == ["toolchain"]:
-                pins["go"] = words[1]
-            elif words[:2] == ["require", "github.com/cedar-policy/cedar-go"]:
-                pins["cedar_go"] = words[2]
-    with open(os.path.join(payload_dir, "go.sum"), encoding="utf-8") as f:
-        for line in f:
-            words = line.split()
-            if words[:2] == ["github.com/cedar-policy/cedar-go", pins.get("cedar_go")]:
-                pins["cedar_go_sum"] = words[2]
-    if set(pins) != {"go", "cedar_go", "cedar_go_sum"}:
+    """Read the Go and cedar-go pins from go.mod and go.sum, their only owners.
+
+    Each pin is stated exactly once and in one shape: one `go` line, one
+    `toolchain` line naming that same version, one single-line cedar-go
+    requirement and one go.sum hash for it. Anything else, or a file that
+    cannot be read, is the inability module_pins; nothing is inferred.
+    """
+    try:
+        with open(os.path.join(payload_dir, "go.mod"), encoding="utf-8") as f:
+            mod = [line.split() for line in f]
+        with open(os.path.join(payload_dir, "go.sum"), encoding="utf-8") as f:
+            sums = [line.split() for line in f]
+    except (OSError, UnicodeDecodeError):
         raise Inability("module_pins")
-    return pins
+    go = [w for w in mod if w[:1] == ["go"]]
+    toolchain = [w for w in mod if w[:1] == ["toolchain"]]
+    cedar = [w for w in mod if "github.com/cedar-policy/cedar-go" in w]
+    if len(go) != 1 or len(go[0]) != 2 or toolchain != [["toolchain", "go" + go[0][1]]] or \
+            len(cedar) != 1 or len(cedar[0]) != 3 or cedar[0][:2] != ["require", "github.com/cedar-policy/cedar-go"]:
+        raise Inability("module_pins")
+    version = cedar[0][2]
+    hashes = [w for w in sums if w[:2] == ["github.com/cedar-policy/cedar-go", version]]
+    if len(hashes) != 1 or len(hashes[0]) != 3 or not hashes[0][2].startswith("h1:"):
+        raise Inability("module_pins")
+    return {"go": toolchain[0][1], "cedar_go": version, "cedar_go_sum": hashes[0][2]}
 
 
 # ------------------------------------------------------------------ running --
@@ -745,16 +762,164 @@ def directory_bytes(path):
     return total
 
 
+def source_files(directory):
+    """sha256 of every build input in directory: each *.go file, go.mod and go.sum."""
+    try:
+        names = sorted(n for n in os.listdir(directory) if n.endswith(".go")) + list(MODULE_FILES)
+        return {name: sha256_file(os.path.join(directory, name)) for name in names}
+    except OSError:
+        raise Inability("source_files")
+
+
+def copy_build_inputs(source, admitted, work):
+    """Copy the admitted build inputs into a fresh working copy owned by the invoking user."""
+    uid, gid = invoking_user()
+    try:
+        os.makedirs(work)
+        os.chown(work, uid, gid)
+        for name in admitted:
+            with open(os.path.join(source, name), "rb") as f:
+                data = f.read()
+            with open(os.path.join(work, name), "wb") as f:
+                f.write(data)
+            os.chown(os.path.join(work, name), uid, gid)
+    except OSError:
+        raise Inability("setup_copy")
+    if source_files(work) != admitted:
+        raise Inability("setup_copy")
+    return work
+
+
+def toolchain_normalized(text):
+    """The admitted go.mod as the go command rewrites it: without the `toolchain`
+    line that only repeats the `go` line, and without the blank line after it.
+    None when the text has no such line."""
+    lines = text.split("\n")
+    go = [line.split() for line in lines if line.split()[:1] == ["go"]]
+    if len(go) != 1 or len(go[0]) != 2:
+        return None
+    for i, line in enumerate(lines):
+        if line == "toolchain go" + go[0][1]:
+            end = i + 2 if i + 1 < len(lines) and lines[i + 1] == "" else i + 1
+            return "\n".join(lines[:i] + lines[end:])
+    return None
+
+
+def module_file_delta(source, work):
+    """Compare the working copy's module files with the admitted ones after the go command ran.
+
+    kind is unchanged; toolchain_line_dropped, the one rewrite `go mod download`
+    makes on these files (it ignores GOFLAGS=-mod=readonly), whose dropped line only
+    repeats the go line; changed; or unreadable. Only the first two let setup
+    succeed. The record keeps both hashes of each file and both go.mod texts; a
+    changed go.sum keeps its working text.
+    """
+    rec, data = {}, {}
+    try:
+        for name in MODULE_FILES:
+            with open(os.path.join(source, name), "rb") as f:
+                admitted = f.read()
+            with open(os.path.join(work, name), "rb") as f:
+                working = f.read()
+            data[name] = (admitted, working)
+            rec[name] = {"admitted_sha256": hashlib.sha256(admitted).hexdigest(),
+                         "working_sha256": hashlib.sha256(working).hexdigest()}
+        rec["go.mod"]["admitted_text"] = data["go.mod"][0].decode("utf-8")
+        rec["go.mod"]["working_text"] = data["go.mod"][1].decode("utf-8")
+    except (OSError, UnicodeDecodeError):
+        rec["kind"] = "unreadable"
+        return rec
+    if data["go.sum"][0] != data["go.sum"][1]:
+        rec["go.sum"]["working_text"] = data["go.sum"][1].decode("utf-8", "replace")
+        rec["kind"] = "changed"
+    elif data["go.mod"][0] == data["go.mod"][1]:
+        rec["kind"] = "unchanged"
+    elif rec["go.mod"]["working_text"] == toolchain_normalized(rec["go.mod"]["admitted_text"]):
+        rec["kind"] = "toolchain_line_dropped"
+    else:
+        rec["kind"] = "changed"
+    return rec
+
+
+def working_inputs(admitted, work):
+    """The working copy's entries against the admitted build inputs, after the go command ran.
+
+    The copy must hold exactly the admitted names, each a regular file, and every
+    one but go.mod must keep its admitted hash; go.mod is judged only by
+    module_file_delta, the single place a change is allowed. unreadable is true
+    when the copy cannot be listed or an input cannot be hashed.
+    """
+    rec = {"added": [], "removed": [], "changed": [], "unreadable": False}
+    try:
+        present = sorted(os.listdir(work))
+        rec["added"] = [name for name in present if name not in admitted]
+        rec["removed"] = [name for name in sorted(admitted) if name not in present]
+        for name in sorted(admitted):
+            path = os.path.join(work, name)
+            if name in present and (os.path.islink(path) or not os.path.isfile(path) or
+                                    (name != "go.mod" and sha256_file(path) != admitted[name])):
+                rec["changed"].append(name)
+    except OSError:
+        rec["unreadable"] = True
+    return rec
+
+
+def inputs_admitted(module_files, inputs):
+    """The one rule by which a working copy is accepted after the go command ran:
+    go.mod and go.sum within ACCEPTED_MODULE_KINDS, and no input added, removed,
+    changed or unreadable."""
+    return isinstance(module_files, dict) and module_files.get("kind") in ACCEPTED_MODULE_KINDS and \
+        inputs == {"added": [], "removed": [], "changed": [], "unreadable": False}
+
+
+def setup_binding(out, source, binary):
+    """The run step's check that setup built this binary from these admitted bytes.
+
+    Setup must have exited 0 with no refusal reason and recorded the same pins,
+    build-input hashes and binary hash that the run finds now. The working copy
+    the binary was built from is judged again here by the rule setup applied
+    (inputs_admitted), from its own bytes: an unchanged admitted checkout never
+    stands in for the copy. Anything else is the inability setup_binding.
+    """
+    try:
+        with open(os.path.join(out, "setup.json"), encoding="utf-8") as f:
+            rec = json.load(f)
+        binary_sha256 = sha256_file(binary)
+    except (OSError, ValueError):
+        raise Inability("setup_binding")
+    admitted = source_files(source)
+    if not isinstance(rec, dict) or rec.get("exit") != EXIT_COHERENT or rec.get("reasons") != [] or \
+            rec.get("pins") != module_pins(source) or rec.get("source_files") != admitted or \
+            rec.get("binary_sha256") != binary_sha256 or not isinstance(rec.get("working_copy"), str) or \
+            not inputs_admitted(rec.get("module_files"), rec.get("working_inputs")) or \
+            not inputs_admitted(module_file_delta(source, rec["working_copy"]),
+                                working_inputs(admitted, rec["working_copy"])):
+        raise Inability("setup_binding")
+    return rec
+
+
 def run_setup(args, evidence):
     """Download, verify and build as the invoking user in a 4 GiB group.
 
-    Module and build caches live under --build and are never evidence; the
-    evidence keeps the commands, exits, times and `go version -m`.
+    The go command runs in a working copy of the build inputs under --build,
+    never in the admitted source, because `go mod download` rewrites go.mod
+    whatever GOFLAGS says. The pins are read from the admitted files before any
+    tool runs, and the working copy's module files are compared with them
+    afterwards (module_file_delta). Module and build caches live under --build
+    and are never evidence; the evidence keeps the commands, exits, times,
+    `go version -m`, both go.mod texts, the verdict on every copied input, and
+    the pins, build-input hashes and binary hash that the run step checks
+    (setup_binding). Once the steps have run, setup.json is written on every
+    path, with the refusal reasons that made the exit 2.
     """
     parent = establish()
+    source = source_dir()
+    pins = module_pins(source)
+    admitted = source_files(source)
     build = args.build
     os.makedirs(build, exist_ok=True)
     os.chmod(build, 0o777)
+    work = copy_build_inputs(source, admitted, os.path.join(build, "src"))
     go_env = {"PATH": os.path.dirname(args.go) + ":/usr/bin:/bin", "HOME": build, "LANG": "C",
               "GOTOOLCHAIN": "local", "GOFLAGS": "-mod=readonly", "GOWORK": "off", "CGO_ENABLED": "0",
               "GOPATH": os.path.join(build, "gopath"), "GOMODCACHE": os.path.join(build, "gomodcache"),
@@ -773,7 +938,7 @@ def run_setup(args, evidence):
             break
         group = new_group(parent, "setup-%d" % len(log))
         set_group_limits(group, SETUP_MEMORY_MAX, SETUP_PIDS_MAX)
-        run = run_in_group(group, [args.go] + step[1:], go_env, os.path.dirname(os.path.abspath(__file__)), left)
+        run = run_in_group(group, [args.go] + step[1:], go_env, work, left)
         remove_group(group)
         entry = {"step": step, "exit": run["returncode"], "elapsed_s": run["elapsed_s"],
                  "memory_peak_bytes": run["memory_peak"], "oom_kill": run["oom_kill"],
@@ -782,10 +947,33 @@ def run_setup(args, evidence):
         if run["returncode"] != 0 or run["oom_kill"] or run["backstop"]:
             code = EXIT_INABILITY
             break
+    reasons = []
+    if code != EXIT_COHERENT:
+        reasons.append("setup_budget" if log[-1].get("class") == "setup_budget" else "setup_step")
+    module_files = module_file_delta(source, work)
+    inputs = working_inputs(admitted, work)
+    if not inputs_admitted(module_files, inputs):
+        reasons.append("working_copy")
+    try:
+        source_unchanged = source_files(source) == admitted
+    except Inability:
+        source_unchanged = None
+    if source_unchanged is not True:
+        reasons.append("source_changed" if source_unchanged is False else "source_unreadable")
     disk = directory_bytes(build)
     if disk > SETUP_DISK_OBSERVED_MAX:
-        code = EXIT_INABILITY
-    evidence.write("setup.json", {"exit": code, "steps": log,
+        reasons.append("setup_disk")
+    binary_sha256 = None
+    if not reasons:
+        try:
+            binary_sha256 = sha256_file(binary)
+        except OSError:
+            reasons.append("binary_unreadable")
+    code = EXIT_INABILITY if reasons else EXIT_COHERENT
+    evidence.write("setup.json", {"exit": code, "reasons": reasons, "steps": log, "pins": pins,
+                                  "source_files": admitted, "source_unchanged": source_unchanged,
+                                  "module_files": module_files, "working_inputs": inputs,
+                                  "working_copy": work, "binary_sha256": binary_sha256,
                                   "disk_bytes_observed_after_build": disk,
                                   "disk_note": "an observation after the build, not a bound on the download"})
     return code
@@ -836,6 +1024,7 @@ def main(argv=None):
             raise Inability("corpus_missing")
         parent = establish()
         evidence.write("environment.json", environment_record(args.matrix))
+        setup_binding(args.out, source_dir(), args.bin)
         runner = Runner(args, parent, evidence, matrix)
         return runner.run_matrix() if args.packet == "matrix" else runner.run_oframe()
     except Inability as e:
