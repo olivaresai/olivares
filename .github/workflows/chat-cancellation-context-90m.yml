@@ -1,0 +1,959 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# chat-cancellation-context-90m — the complete cmd/olivares functional command, ONCE, on ONE exact
+# source: 34cfd09c444e845fb7eaa6b22b97c0fa899d5a63 with the corrected caller-cancellation test applied as
+# one pinned patch, which is exactly tree ed6c3d45e0611bc6a61737eb98e24f84cb883284 (checked). DIAGNOSTIC
+# ONLY: it runs from the branch diag/chat-cancellation-context-90m, which adds this one file and is never
+# merged. The product source is not changed.
+#
+# SUCCESSOR of chat-cancellation-combined (its run 36018016515). That run's selection job is kept as
+# measured (p1 and p2 pass with the exact witness; both causal mutants die on their named assertions)
+# and is not repeated here. Its context job passed the target inside the complete command, but the
+# command's Go test binary timeout (-timeout 45m) fired in cmd/olivares after 2700 s, so the complete
+# battery was not measured. This file changes that one budget and nothing the command runs:
+#   scripts/with-pg-env.sh scripts/go-work-each.sh go test -count=1 -timeout 90m ./...
+# with the same services, roles, DSNs, TMPDIR selection, module selector and -json output. The budget is
+# an explicit correction for the measured time (the tests added since the earlier passing run took 679 s,
+# and the tests common to both runs took 2016 s against 1311 s); it states no cause for the slowdown and
+# changes no product code. No test is filtered, skipped or excluded.
+#
+# Ceilings: the test step 95 minutes (90 for the binary plus the stream's end); every step ceiling sums
+# to 145 minutes, within the job ceiling of 150.
+#
+# CENSUS. After the command, the same wrapper lists every test of the same packages
+# (go test -list '.*' ./..., no filter). The judge subtracts the names: listed, started, finished,
+# started and not finished, and listed and never started, per package. The resource witness runs around
+# the command as before, and its state and report are kept.
+#
+# JUDGE (binding; inability first). The target verdict is the accepted one, kept apart from the context.
+# The context is PASS only with raw exit 0, no failing result, no separate observation, a complete list,
+# and every listed test started and finished. A Go timeout anywhere, an incomplete or missing list, zero
+# tests, or a listed test that never started or never finished is INABILITY, whatever else failed: the
+# battery was not measured, which is neither a pass nor a functional failure, and every observed failure
+# stays in other_failures.tsv. Test, package, build or data-race failures with a complete measurement are FAIL.
+name: chat-cancellation-context-90m
+
+# The one trigger: a push of the diagnostic branch that carries this file.
+on:
+  push:
+    branches:
+      - diag/chat-cancellation-context-90m
+
+permissions:
+  contents: read
+
+# A running measurement is never canceled, because a canceled run carries no verdict at all.
+concurrency:
+  group: chat-cancellation-context-90m-${{ github.run_id }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  PINNED_SHA: 34cfd09c444e845fb7eaa6b22b97c0fa899d5a63
+  PINNED_TREE: 4e7c4af9c706a6aecf9dd1fb8f946177746814ab
+  # 34cfd09c plus the corrected test: the tree the complete command runs on.
+  COMBINED_TREE: ed6c3d45e0611bc6a61737eb98e24f84cb883284
+  TEST_PATH: cmd/olivares/modelsguardedtext_test.go
+  TEST_BLOB_BEFORE: 4179c0853e1be10b1fe42dca023f39198647b789
+  TEST_BLOB_AFTER: 7c5e0410b77dfe0552bd7953bad420b473ab6c30
+  PRODUCT_PATH: cmd/olivares/modelsguardedtext.go
+  # The product blobs on the test's path, checked at HEAD and on disk before the patch, and on disk
+  # after every restore.
+  PINNED_BLOBS: |
+    cmd/olivares/modelsguardedtext.go 719017dbac41e10637b3723e5bd170941d079b5a
+    cmd/olivares/contentinspectorgate.go 7d0fb2967277fef3d0bdacde35d19cd7f3ad9fdc
+    connectors/modelprovider/chat_transport.go 46e4163f588c50a58488ea12e2783dfbd7c7ad51
+    modules/models/guardedtext.go 7bee887d8f42b9ad72ac7cb7eff137d48c28edaa
+    cmd/olivares/inferenceevidence.go 1878fbe82431e90875788cc4582d18582b2abdfc
+    core/internal/store/sqlstore/store.go 42352cee0ee4c3b1fdf17114c2c374c7d9809fea
+    core/internal/store/sqlstore/commitoutcome.go 1cc550a78ca0d5a6b212cf1dd969efda2803cab3
+    core/store/errors.go 5646d975f8803fc69c22c8a0e4d8a4d95a86900f
+  TEST_PATCH_SHA256: b8be46c48d10c37648a369ee18243c848d58a5f201255c28b3dea8e1f0eada88
+  TEST_PATCH_B64: ZGlmZiAtLWdpdCBhL2NtZC9vbGl2YXJlcy9tb2RlbHNndWFyZGVkdGV4dF90ZXN0LmdvIGIvY21kL29saXZhcmVzL21vZGVsc2d1YXJkZWR0ZXh0X3Rlc3QuZ28KaW5kZXggNDE3OWMwODUzZTFiZTEwYjFmZTQyZGNhMDIzZjM5MTk4NjQ3Yjc4OS4uN2M1ZTA0MTBiNzdkZmUwNTUyYmQ3OTUzYmFkNDIwYjQ3M2FiNmMzMCAxMDA2NDQKLS0tIGEvY21kL29saXZhcmVzL21vZGVsc2d1YXJkZWR0ZXh0X3Rlc3QuZ28KKysrIGIvY21kL29saXZhcmVzL21vZGVsc2d1YXJkZWR0ZXh0X3Rlc3QuZ28KQEAgLTEwODMsMzEgKzEwODMsODMgQEAgZnVuYyBUZXN0Q2hhdEJlc3RFZmZvcnRUZW5hbnRQcm9jZWVkc1dpdGhBTmFtZWRHYXAodCAqdGVzdGluZy5UKSB7CiAJfQogfQogCisvLyBjYW5jZWxBZnRlckRlY29kZUluc3BlY3RvciBpcyB0aGUgZXhlY3V0b3IncyBvd24gaW5zcGVjdG9yLCB1c2VkIGFzIHRoZSBjYW5jZWxsYXRpb24KKy8vIGJvdW5kYXJ5LiBUaGUgZXhlY3V0b3IgY29uc3VsdHMgaXQgaW4gdGhlIHJlc3BvbnNlIGRpcmVjdGlvbiBvbmx5IGZyb20gb3V0cHV0V2l0aGhlbGQsCisvLyB3aGljaCBydW5zIGFmdGVyIEMxIHJldHVybmVkIGEgZnVsbHkgcmVhZCBhbmQgZGVjb2RlZCByZXNwb25zZSBhbmQgYmVmb3JlIHRoZSBkZWZlcnJlZAorLy8gb3V0Y29tZSByZWNvcmQuIENhbmNlbGluZyB0aGUgY2FsbGVyIHRoZXJlIGlzIGxhdGUgYnkgY29uc3RydWN0aW9uLCBub3QgYnkgYSBjbG9jay4KK3R5cGUgY2FuY2VsQWZ0ZXJEZWNvZGVJbnNwZWN0b3Igc3RydWN0IHsKKwljYW5jZWwgY29udGV4dC5DYW5jZWxGdW5jCisJLy8gZmlyZWQgY291bnRzIHJlc3BvbnNlLWRpcmVjdGlvbiBjYWxsczsgYm91bmRhcnlFcnIgaXMgdGhlIGVycm9yIG9mIHRoZSBjb250ZXh0IHRoZQorCS8vIGV4ZWN1dG9yIHBhc3NlZCwgcmVhZCByaWdodCBhZnRlciB0aGUgY2FuY2VsOyBvdGhlciBrZWVwcyBhbnkgZGlyZWN0aW9uIHRoaXMgdGVzdCBkb2VzCisJLy8gbm90IGV4cGVjdC4KKwlmaXJlZCAgICAgICBpbnQKKwlib3VuZGFyeUVyciBlcnJvcgorCW90aGVyICAgICAgIFtdc3RyaW5nCit9CisKK2Z1bmMgKGMgKmNhbmNlbEFmdGVyRGVjb2RlSW5zcGVjdG9yKSBJbnNwZWN0KGN0eCBjb250ZXh0LkNvbnRleHQsIGluIGNsYXVkZWFwaS5Db250ZW50SW5zcGVjdGlvbklucHV0KSBjbGF1ZGVhcGkuQ29udGVudEluc3BlY3Rpb25EZWNpc2lvbiB7CisJc3dpdGNoIGluLkRpcmVjdGlvbiB7CisJY2FzZSBjbGF1ZGVhcGkuSW5zcGVjdERpcmVjdGlvblJlcXVlc3Q6CisJCXJldHVybiBjbGF1ZGVhcGkuQ29udGVudEluc3BlY3Rpb25EZWNpc2lvbntGb3J3YXJkOiB0cnVlfQorCWNhc2UgY2xhdWRlYXBpLkluc3BlY3REaXJlY3Rpb25SZXNwb25zZToKKwkJYy5maXJlZCsrCisJCWlmIGMuZmlyZWQgPT0gMSB7CisJCQljLmNhbmNlbCgpCisJCQljLmJvdW5kYXJ5RXJyID0gY3R4LkVycigpCisJCX0KKwkJLy8gRm9yd2FyZCB3aXRob3V0IEJsb2NrOiB0aGUgdmVyZGljdCBtdXN0IG5vdCBiZSB3aGF0IHdpdGhob2xkcyB0aGUgb3V0cHV0LgorCQlyZXR1cm4gY2xhdWRlYXBpLkNvbnRlbnRJbnNwZWN0aW9uRGVjaXNpb257Rm9yd2FyZDogdHJ1ZX0KKwlkZWZhdWx0OgorCQljLm90aGVyID0gYXBwZW5kKGMub3RoZXIsIGluLkRpcmVjdGlvbikKKwkJcmV0dXJuIGNsYXVkZWFwaS5Db250ZW50SW5zcGVjdGlvbkRlY2lzaW9ue30KKwl9Cit9CisKIC8vIFRlc3RDaGF0T3V0Y29tZUlzUmVjb3JkZWRFdmVuV2hlblRoZUNhbGxlckNhbmNlbHM6IHRoZSBjYWxsZXIgaGFuZ2luZyB1cCBtdXN0IG5vdCBjYW5jZWwKIC8vIHRoZSByZWNvcmQgb2YgYW4gZWZmZWN0IHRoYXQgYWxyZWFkeSBoYXBwZW5lZC4gVGhlIG91dGNvbWUgY29udGV4dCBpcyBkZXJpdmVkIHdpdGhvdXQKIC8vIGNhbmNlbGxhdGlvbiBhbmQgYm91bmRlZCBpbmRlcGVuZGVudGx5LgogZnVuYyBUZXN0Q2hhdE91dGNvbWVJc1JlY29yZGVkRXZlbldoZW5UaGVDYWxsZXJDYW5jZWxzKHQgKnRlc3RpbmcuVCkgewotCWYgOj0gbmV3Q2hhdEZpeHR1cmUodCwgY2hhdEZpeHR1cmVPcHRpb25ze30pCiAJY3R4LCBjYW5jZWwgOj0gY29udGV4dC5XaXRoQ2FuY2VsKGNvbnRleHQuQmFja2dyb3VuZCgpKQotCS8vIFRoZSB1cHN0cmVhbSBhbnN3ZXJzLCB0aGVuIHRoZSBjYWxsZXIncyBjb250ZXh0IGlzIGNhbmNlbGxlZCB3aGlsZSB0aGUgb3BlcmF0aW9uIGlzCi0JLy8gc3RpbGwgZmluaXNoaW5nOiBDMSBrZWVwcyBhIGZ1bGx5IHJlYWQgYW5kIGRlY29kZWQgcmVzcG9uc2UsIGFuZCB0aGUgb3V0Y29tZSBsZWcgbXVzdAotCS8vIHN0aWxsIGNvbW1pdC4KLQlmLmhhbmRsZXIuZGVsYXkgPSA0MCAqIHRpbWUuTWlsbGlzZWNvbmQKLQlnbyBmdW5jKCkgewotCQl0aW1lLlNsZWVwKDEyMCAqIHRpbWUuTWlsbGlzZWNvbmQpCi0JCWNhbmNlbCgpCi0JfSgpCisJZGVmZXIgY2FuY2VsKCkKKwkvLyBUaGUgdXBzdHJlYW0gYW5zd2VycyBhbmQgQzEga2VlcHMgYSBmdWxseSByZWFkIGFuZCBkZWNvZGVkIHJlc3BvbnNlOyBvbmx5IHRoZW4gZG9lcyB0aGUKKwkvLyByZXNwb25zZSBpbnNwZWN0b3IgY2FuY2VsIHRoZSBjYWxsZXIncyBjb250ZXh0LCBhbmQgdGhlIG91dGNvbWUgbGVnIG11c3Qgc3RpbGwgY29tbWl0LgorCS8vIE5vIGNsb2NrIG9yZGVycyB0aGUgY2FuY2VsOiBhIHJ1biB0aGF0IG5ldmVyIHJlYWNoZXMgdGhhdCBib3VuZGFyeSBmYWlscyBiZWxvdyBpbnN0ZWFkCisJLy8gb2YgcGFzc2luZyB3aXRob3V0IGEgY2FuY2VsbGF0aW9uLgorCWJvdW5kYXJ5IDo9ICZjYW5jZWxBZnRlckRlY29kZUluc3BlY3RvcntjYW5jZWw6IGNhbmNlbH0KKwlmIDo9IG5ld0NoYXRGaXh0dXJlKHQsIGNoYXRGaXh0dXJlT3B0aW9uc3tpbnNwZWN0b3I6IGJvdW5kYXJ5fSkKIAlyZXMsIGVyciA6PSBmLnJ1bkN0eChjdHgpCi0JY2FuY2VsKCkKKwkvLyBFeGVjdXRlQ2hhdCBoYXMgcmV0dXJuZWQsIHNvIGl0cyBvbmUgZGlzcGF0Y2ggaXMgY29tcGxldGU7IHRoZSBoYW5kbGVyJ3MgY291bnRlciBpcworCS8vIHN0aWxsIHJlYWQgdW5kZXIgdGhlIGhhbmRsZXIncyBvd24gbG9jay4KKwlmLmhhbmRsZXIubXUuTG9jaygpCisJaGl0cyA6PSBmLmhhbmRsZXIuaGl0cworCWYuaGFuZGxlci5tdS5VbmxvY2soKQorCXQuTG9nZigiQ0hBVF9DQU5DRUxfU0VBTXxmaXJlZD0lZHxib3VuZGFyeV9jdHhfZXJyPSV2fGNhbGxlcl9jdHhfZXJyPSV2fGdhdGV3YXlfaGl0cz0lZHxlcnI9JXYiLAorCQlib3VuZGFyeS5maXJlZCwgYm91bmRhcnkuYm91bmRhcnlFcnIsIGN0eC5FcnIoKSwgaGl0cywgZXJyKQorCWlmIGJvdW5kYXJ5LmZpcmVkICE9IDEgfHwgbGVuKGJvdW5kYXJ5Lm90aGVyKSAhPSAwIHsKKwkJdC5GYXRhbGYoInRoZSByZXNwb25zZSBpbnNwZWN0b3IgZmlyZWQgJWQgdGltZXMgKHVuZXhwZWN0ZWQgZGlyZWN0aW9ucyAldiksIHdhbnQgZXhhY3RseSBvbmNlIiwgYm91bmRhcnkuZmlyZWQsIGJvdW5kYXJ5Lm90aGVyKQorCX0KKwlpZiAhZXJyb3JzLklzKGJvdW5kYXJ5LmJvdW5kYXJ5RXJyLCBjb250ZXh0LkNhbmNlbGVkKSB8fCAhZXJyb3JzLklzKGN0eC5FcnIoKSwgY29udGV4dC5DYW5jZWxlZCkgeworCQl0LkZhdGFsZigiY29udGV4dCBhdCB0aGUgYm91bmRhcnkgPSAldiwgY2FsbGVyID0gJXY7IHdhbnQgYm90aCBjYW5jZWxsZWQiLCBib3VuZGFyeS5ib3VuZGFyeUVyciwgY3R4LkVycigpKQorCX0KKwlpZiBoaXRzICE9IDEgeworCQl0LkZhdGFsZigidGhlIGdhdGV3YXkgd2FzIHJlYWNoZWQgJWQgdGltZXMsIHdhbnQgZXhhY3RseSAxIiwgaGl0cykKKwl9CiAJaWYgZXJyICE9IG5pbCB7CiAJCXQuRmF0YWxmKCJFeGVjdXRlQ2hhdDogJXYiLCBlcnIpCiAJfQotCWlmIHJlcy5EaXNwYXRjaFN0YXRlICE9IG1vZGVscy5DaGF0RGlzcGF0Y2hBdHRlbXB0ZWQgewotCQl0LkZhdGFsZigiZGlzcGF0Y2ggc3RhdGUgPSAlcyIsIHJlcy5EaXNwYXRjaFN0YXRlKQorCWlmIHJlcy5EaXNwYXRjaFN0YXRlICE9IG1vZGVscy5DaGF0RGlzcGF0Y2hBdHRlbXB0ZWQgfHwgcmVzLkNvbXBsZXRpb25TdGF0ZSAhPSBtb2RlbHMuQ2hhdENvbXBsZXRpb25TdG9wIHsKKwkJdC5GYXRhbGYoInN0YXRlcyA9ICVzLyVzLCB3YW50IGF0dGVtcHRlZC9zdG9wIiwgcmVzLkRpc3BhdGNoU3RhdGUsIHJlcy5Db21wbGV0aW9uU3RhdGUpCisJfQorCWlmIHJlcy5PdXRwdXQgPT0gbmlsIHx8ICpyZXMuT3V0cHV0ICE9ICJoZWxsbyBmcm9tIHRoZSBmaXh0dXJlIiB7CisJCXQuRmF0YWxmKCJvdXRwdXQgPSAldjsgdGhlIGRlY29kZWQgcmVzcG9uc2Ugd2FzIG5vdCBrZXB0IiwgcmVzLk91dHB1dCkKIAl9CiAJaWYgZ290IDo9IGxlbihmLmV2ZW50c1dpdGhBY3Rpb24oY2hhdE91dGNvbWVBY3Rpb24pKTsgZ290ICE9IDEgewogCQl0LkZhdGFsZigicmVjb3JkZWQgJWQgb3V0Y29tZXMsIHdhbnQgZXhhY3RseSAxIiwgZ290KQogCX0KKwlyZWNvcmQgOj0gY2hhdE91dGNvbWVSZWNvcmQodCwgZikKKwlpZiByZWNvcmQubWV0YVsiZGlzcGF0Y2hfc3RhdGUiXSAhPSBtb2RlbHMuQ2hhdERpc3BhdGNoQXR0ZW1wdGVkIHx8IHJlY29yZC5tZXRhWyJjb21wbGV0aW9uX3N0YXRlIl0gIT0gbW9kZWxzLkNoYXRDb21wbGV0aW9uU3RvcCB7CisJCXQuRmF0YWxmKCJyZWNvcmRlZCBzdGF0ZXMgPSAldi8ldiwgd2FudCBhdHRlbXB0ZWQvc3RvcCIsIHJlY29yZC5tZXRhWyJkaXNwYXRjaF9zdGF0ZSJdLCByZWNvcmQubWV0YVsiY29tcGxldGlvbl9zdGF0ZSJdKQorCX0KIAlpZiByZXMuT3V0Y29tZURpc3Bvc2l0aW9uICE9IG1vZGVscy5DaGF0T3V0Y29tZUFuY2hvcmVkIHsKIAkJdC5GYXRhbGYoIm91dGNvbWUgZGlzcG9zaXRpb24gPSAlcyIsIHJlcy5PdXRjb21lRGlzcG9zaXRpb24pCiAJfQo=
+  M1_PATCH_SHA256: 213d2300e8583cdc1bdf3d77bcec6edd959eca05689e051cbb8767de005a6438
+  M1_PATCH_B64: LS0tIGEvY21kL29saXZhcmVzL21vZGVsc2d1YXJkZWR0ZXh0LmdvCisrKyBiL2NtZC9vbGl2YXJlcy9tb2RlbHNndWFyZGVkdGV4dC5nbwpAQCAtOTAxLDcgKzkwMSw3IEBACiAvLyByZWNsYXNzaWZ5IGFuIGF0dGVtcHRlZCBkaXNwYXRjaCBhcyBub3Rfc2VudCwgYW5kIGlzIG5ldmVyIGEgcmVhc29uIHRvIHJlcGVhdCB0aGUgbW9kZWwKIC8vIGNhbGwg4oCUIHJlcGVhdGluZyBhIGRpc3BhdGNoIHRvIHJlcGFpciBldmlkZW5jZSB3b3VsZCB0dXJuIG9uZSB1bmNlcnRhaW4gZWZmZWN0IGludG8gdHdvLgogZnVuYyAoeCAqbW9kZWxzQ2hhdEV4ZWN1dG9yKSByZWNvcmRDaGF0T3V0Y29tZShjdHggY29udGV4dC5Db250ZXh0LCBwbGFuICpjaGF0UGxhbiwgcmVzICptb2RlbHMuQ2hhdEV4ZWN1dGlvblJlc3VsdCwgb2JzZXJ2YXRpb24gKmNoYXRPYnNlcnZhdGlvbikgewotCW9jdHgsIGNhbmNlbCA6PSBjb250ZXh0LldpdGhUaW1lb3V0KGNvbnRleHQuV2l0aG91dENhbmNlbChjdHgpLCBjaGF0T3V0Y29tZUJvdW5kKQorCW9jdHgsIGNhbmNlbCA6PSBjb250ZXh0LldpdGhUaW1lb3V0KGN0eCwgY2hhdE91dGNvbWVCb3VuZCkKIAlkZWZlciBjYW5jZWwoKQogCXJlY2VpcHQsIGVyciA6PSBpbmZlcmVuY2VFdmlkZW5jZVdyaXRlcntzdG9yZTogeC5zdG9yZX0uQXBwZW5kKG9jdHgsIHBsYW4uaW4uVGVuYW50LCBwbGFuLmJpbmRpbmcsIG1vZGVsLkF1ZGl0RHJhZnR7CiAJCUFjdG9yOiAgICAgZmlyc3ROb25FbXB0eShwbGFuLmluLlByaW5jaXBhbC5BY3RvcigpLCBtb2RlbC5BY3RvclN5c3RlbSksCg==
+  M1_BLOB: 34ebd2b517fa499512e17517c71df32a3e642d09
+  M2_PATCH_SHA256: b476f38ba97fbde41f68029283316571fbe730b08175c69321c7c7e2b3528940
+  M2_PATCH_B64: LS0tIGEvY21kL29saXZhcmVzL21vZGVsc2d1YXJkZWR0ZXh0LmdvCisrKyBiL2NtZC9vbGl2YXJlcy9tb2RlbHNndWFyZGVkdGV4dC5nbwpAQCAtODM4LDYgKzgzOCw5IEBACiAJCXJlcy5Db21wbGV0aW9uU3RhdGUgPSBtb2RlbHMuQ2hhdENvbXBsZXRpb25PdXRwdXRXaXRoaGVsZAogCQlyZXR1cm4gbW9kZWxzLk5ld0NoYXRFeGVjdXRpb25FcnJvcihtb2RlbHMuQ2hhdEVyck91dHB1dFdpdGhoZWxkKQogCX0KKwlpZiBjdHguRXJyKCkgIT0gbmlsIHsKKwkJcmV0dXJuIG1vZGVscy5OZXdDaGF0RXhlY3V0aW9uRXJyb3IobW9kZWxzLkNoYXRFcnJSZXF1ZXN0Q2FuY2VsbGVkKQorCX0KIAkvLyBPbmx5IG5vdywgYWZ0ZXIgZXZlcnkgb3V0cHV0IGdhdGUsIGlzIHRoZSB0ZXh0IGF0dGFjaGVkIOKAlCBhbmQgZXZlbiB0aGVuIHRoZSBjYWxsZXIKIAkvLyByZWNlaXZlcyBpdCBvbmx5IG9uY2UgdGhpcyBtZXRob2QgcmV0dXJucywgd2hpY2ggaXMgYWZ0ZXIgdGhlIGRlZmVycmVkIGZpbmFsaXphdGlvbgogCS8vIGhhcyBydW4uIFRoZSBSQVcgUkVGVVNBTCBTVFJJTkcgSVMgTkVWRVIgQVRUQUNIRUQ6IFJlZnVzYWwgYWJvdmUgc2F5cyB0aGF0IGl0Cg==
+  M2_BLOB: 3755784b39ba03a2a1946c2b0e8a69ba8dc0d394
+  TARGET_PKG: github.com/olivaresai/olivares/cmd/olivares
+  NAMED_TEST: TestChatOutcomeIsRecordedEvenWhenTheCallerCancels
+  COMPANION_TEST: TestChatInspectsBothDirectionsThroughItsOwnInspector
+  WITNESS_PREFIX: 'CHAT_CANCEL_SEAM|fired=1|boundary_ctx_err=context canceled|caller_ctx_err=context canceled|gateway_hits=1|err='
+  PASS_ERR: '<nil>'
+  M1_ERR: '<nil>'
+  M1_FIRST: 'modelsguardedtext_test.go:1157: recorded 0 outcomes, want exactly 1'
+  M2_ERR: 'the request was cancelled before the governed Chat operation began'
+  M2_FIRST: 'modelsguardedtext_test.go:1148: ExecuteChat: the request was cancelled before the governed Chat operation began'
+  # The shared shell library: identity, the pinned patches, the source-state receipts and the runs.
+  # It never turns a raw exit into a verdict; the judge (QUAL_PY) does.
+  QUAL_LIB: |
+    set -euo pipefail
+    : "${ARM:?ARM must name the job}"
+    OUT="${OUT:-$RUNNER_TEMP/qualification/$ARM}"
+    PATCHES="${PATCHES:-$RUNNER_TEMP/qualification-patches}"
+    mkdir -p "$OUT" "$PATCHES"
+
+    fail() { printf '::error::%s\n' "$*"; return 1; }
+
+    # disk_blobs_pristine: every pinned product blob, on disk, is the pinned one.
+    disk_blobs_pristine() {
+      local path blob got
+      while read -r path blob; do
+        [ -n "$path" ] || continue
+        got="$(git hash-object "$path")"
+        [ "$got" = "$blob" ] || { fail "$path is blob $got on disk, not the pinned $blob"; return 1; }
+      done <<< "$PINNED_BLOBS"
+    }
+
+    # status_is LINE...: the working tree differs from HEAD by exactly these porcelain lines.
+    status_is() {
+      local want got
+      want="$(printf '%s\n' "$@" | LC_ALL=C sort)"
+      got="$(git status --porcelain --untracked-files=all | LC_ALL=C sort)"
+      [ "$got" = "$want" ] || { fail "the working tree is [$got], not [$want]"; return 1; }
+    }
+
+    # identity: the checkout is the pinned source and tree, clean, with the pinned test and product
+    # blobs at HEAD and on disk, on a GitHub-hosted runner.
+    identity() {
+      local path blob
+      [ "$(git rev-parse HEAD)" = "$PINNED_SHA" ] || { fail "the checkout $(git rev-parse HEAD) is not the pinned source $PINNED_SHA"; return 1; }
+      [ "$(git rev-parse 'HEAD^{tree}')" = "$PINNED_TREE" ] || { fail "the tree is not the pinned $PINNED_TREE"; return 1; }
+      status_is
+      [ "$(git rev-parse "HEAD:$TEST_PATH")" = "$TEST_BLOB_BEFORE" ] || { fail "HEAD:$TEST_PATH is not blob $TEST_BLOB_BEFORE"; return 1; }
+      [ "$(git hash-object "$TEST_PATH")" = "$TEST_BLOB_BEFORE" ] || { fail "$TEST_PATH on disk is not blob $TEST_BLOB_BEFORE"; return 1; }
+      while read -r path blob; do
+        [ -n "$path" ] || continue
+        [ "$(git rev-parse "HEAD:$path")" = "$blob" ] || { fail "HEAD:$path is not blob $blob"; return 1; }
+      done <<< "$PINNED_BLOBS"
+      disk_blobs_pristine
+      [ "${RUNNER_PLACEMENT:-}" = github-hosted ] ||
+        { fail "this job runs on a ${RUNNER_PLACEMENT:-unknown} runner; the instrument runs on GitHub-hosted runners only"; return 1; }
+      {
+        printf 'job %s\npinned_sha %s\ntree %s\nworkflow_sha %s\n' "$ARM" "$PINNED_SHA" "$PINNED_TREE" "${GITHUB_WORKFLOW_SHA:-unknown}"
+        printf 'event %s ref %s repository %s run %s attempt %s\n' \
+          "${GITHUB_EVENT_NAME:-}" "${GITHUB_REF:-}" "${GITHUB_REPOSITORY:-}" "${GITHUB_RUN_ID:-}" "${GITHUB_RUN_ATTEMPT:-}"
+        printf 'runner %s placement %s %s %s image %s %s\n' "${RUNNER_NAME:-unknown}" "$RUNNER_PLACEMENT" \
+          "${RUNNER_OS:-}" "${RUNNER_ARCH:-}" "${ImageOS:-unknown}" "${ImageVersion:-unknown}"
+        printf 'test %s %s\n' "$TEST_PATH" "$TEST_BLOB_BEFORE"
+        sed -n 's/^\(..*\)$/blob \1/p' <<< "$PINNED_BLOBS"
+      } > "$OUT/identity.txt"
+      cat "$OUT/identity.txt"
+    }
+
+    # state LABEL: the source state a phase runs on, recorded for the judge.
+    state() {
+      local path blob
+      {
+        printf 'head %s\n' "$(git rev-parse HEAD)"
+        printf 'test %s %s\n' "$TEST_PATH" "$(git hash-object "$TEST_PATH")"
+        while read -r path blob; do
+          [ -n "$path" ] && printf 'blob %s %s\n' "$path" "$(git hash-object "$path")"
+        done <<< "$PINNED_BLOBS"
+        git status --porcelain --untracked-files=all | sed 's/^/status /'
+      } > "$OUT/state-$1.txt"
+    }
+
+    # decode_patch NAME BASE64 SHA256: the embedded patch, outside the checkout, at its pinned digest.
+    decode_patch() {
+      local name="$1" b64="$2" want="$3" got
+      printf '%s' "$b64" | base64 -d > "$PATCHES/$name.patch" || { fail "the $name patch does not decode"; return 1; }
+      got="$(sha256sum "$PATCHES/$name.patch" | cut -d' ' -f1)"
+      printf '%s  %s.patch\n' "$got" "$name" >> "$OUT/patches.sha256"
+      [ "$got" = "$want" ] || { fail "the $name patch is sha256 $got, not the pinned $want"; return 1; }
+    }
+
+    # apply_test_patch: the corrected test, as one pinned patch, onto the pristine pinned source.
+    apply_test_patch() {
+      decode_patch test "$TEST_PATCH_B64" "$TEST_PATCH_SHA256"
+      git apply --check "$PATCHES/test.patch" || { fail "the test patch does not apply to the pinned source"; return 1; }
+      git apply "$PATCHES/test.patch"
+      [ "$(git hash-object "$TEST_PATH")" = "$TEST_BLOB_AFTER" ] || { fail "$TEST_PATH is not blob $TEST_BLOB_AFTER after the patch"; return 1; }
+      status_is " M $TEST_PATH"
+      disk_blobs_pristine
+      state after-test-patch
+    }
+
+    # apply_mutant M1|M2: one causal mutant of the product, from a pristine product only.
+    apply_mutant() {
+      local m="$1" b64 sha blob
+      b64="${m}_PATCH_B64"
+      sha="${m}_PATCH_SHA256"
+      blob="${m}_BLOB"
+      decode_patch "$m" "${!b64}" "${!sha}"
+      disk_blobs_pristine
+      status_is " M $TEST_PATH"
+      if git apply -R --check "$PATCHES/$m.patch" 2> /dev/null; then
+        fail "the $m mutation is already present"
+        return 1
+      fi
+      git apply --check "$PATCHES/$m.patch" || { fail "the $m patch does not apply to the pinned product"; return 1; }
+      git apply "$PATCHES/$m.patch"
+      [ "$(git hash-object "$PRODUCT_PATH")" = "${!blob}" ] || { fail "$PRODUCT_PATH is not the $m blob ${!blob}"; return 1; }
+      [ "$(git hash-object "$TEST_PATH")" = "$TEST_BLOB_AFTER" ] || { fail "$TEST_PATH changed under the $m mutation"; return 1; }
+      status_is " M $PRODUCT_PATH" " M $TEST_PATH"
+      state "$m-applied"
+    }
+
+    # restore_mutant M1|M2: the exact pinned product blobs again, the corrected test unchanged.
+    restore_mutant() {
+      local m="$1"
+      git apply -R "$PATCHES/$m.patch" || { fail "the $m mutation could not be reversed"; return 1; }
+      disk_blobs_pristine
+      [ "$(git hash-object "$TEST_PATH")" = "$TEST_BLOB_AFTER" ] || { fail "$TEST_PATH changed during $m"; return 1; }
+      status_is " M $TEST_PATH"
+      state "$m-restored"
+    }
+
+    # run_logged LABEL DIR COMMAND...: a non-test command, its log and raw exit kept.
+    run_logged() {
+      local label="$1" dir="$2" rc=0
+      shift 2
+      { printf 'cd %q && ' "$dir"; printf '%q ' "$@"; printf '\n'; } > "$OUT/$label.command"
+      ( cd "$dir" && "$@" ) > "$OUT/$label.log" 2>&1 || rc=$?
+      printf '%s\n' "$rc" > "$OUT/$label.exit"
+      cat "$OUT/$label.log"
+      [ "$rc" -eq 0 ] || fail "$label exited $rc"
+    }
+
+    # run_phase LABEL COMMAND...: one selection phase, ONCE; the -json stream, stderr and raw exit
+    # kept, with the source state it ran on. The step always succeeds; the judge decides.
+    run_phase() {
+      local label="$1" rc=0 t0 t1
+      shift
+      state "$label"
+      { printf 'cd %q && GO_WORK_EACH_ONLY=%q ' "$GITHUB_WORKSPACE" "${GO_WORK_EACH_ONLY:-}"; printf '%q ' "$@"; printf '\n'; } > "$OUT/$label.command"
+      t0="$(date +%s)"
+      ( cd "$GITHUB_WORKSPACE" && "$@" ) > "$OUT/$label.json" 2> "$OUT/$label.stderr" || rc=$?
+      t1="$(date +%s)"
+      printf '%s\n' "$rc" > "$OUT/$label.exit"
+      printf '%s\n' "$((t1 - t0))" > "$OUT/$label.elapsed_s"
+      printf '%s: raw exit %s after %ss\n' "$label" "$rc" "$((t1 - t0))"
+    }
+
+    # run_arm FORM DIR COMMAND...: the complete original command, ONCE, verbatim (the accepted context
+    # instrument's function). The raw exit is the command's own. The step always succeeds.
+    run_arm() {
+      local form="$1" dir="$2" rc=0 t0 t1
+      shift 2
+      { printf 'cd %q && ' "$dir"; printf '%q ' "$@"; printf '\n'; } > "$OUT/$ARM.command"
+      date -u +%Y-%m-%dT%H:%M:%S.%3NZ > "$OUT/$ARM.started"
+      t0="$(date +%s)"
+      if [ "$form" = json ]; then
+        ( cd "$dir" && "$@" ) > "$OUT/$ARM.json" 2> "$OUT/$ARM.stderr" || rc=$?
+      else
+        set +o pipefail
+        ( cd "$dir" && "$@" ) 2>&1 | tee "$OUT/$ARM.stream.txt"
+        rc="${PIPESTATUS[0]}"
+        set -o pipefail
+      fi
+      t1="$(date +%s)"
+      printf '%s\n' "$rc" > "$OUT/$ARM.exit"
+      printf '%s\n' "$((t1 - t0))" > "$OUT/$ARM.elapsed_s"
+      printf 'arm %s: raw exit %s after %ss\n' "$ARM" "$rc" "$((t1 - t0))"
+    }
+
+    # judge MODE ARGS...: the embedded judge (QUAL_PY), written outside the checkout.
+    judge() {
+      local py="$RUNNER_TEMP/qualification-judge.py"
+      printf '%s\n' "$QUAL_PY" > "$py"
+      python3 "$py" "$@"
+    }
+  # The judge: every selection phase, and the context target apart from every other failure.
+  QUAL_PY: |
+    import sys, os, re, json
+
+    # The judge for chat-cancellation-context-90m (context only). Inability first: a phase whose run was obstructed
+    # (process exit other than 0/1, a build or setup failure, a Go timeout, a panic, a data race report,
+    # a missing, extra or skipped test, a wrong source state) is never a pass and never a kill.
+
+    FILELINE = re.compile(r'^\s*[A-Za-z0-9_./-]+\.go:[0-9]+: ')
+    WITNESS = re.compile(r'^\s*modelsguardedtext_test\.go:113[67]: (CHAT_CANCEL_SEAM\|.*?)\s*$')
+    TIMEOUT, RACE, PANIC = 'panic: test timed out', 'WARNING: DATA RACE', 'panic: '
+    PHASES = [('p1', 'positive', ''), ('m1', 'mutant', 'M1'), ('m2', 'mutant', 'M2'), ('p2', 'positive', '')]
+
+
+    def env(name):
+        return os.environ[name]
+
+
+    def tsv(s):
+        return str(s).replace('\t', ' ').replace('\r', ' ').replace('\n', ' ')
+
+
+    def load(path):
+        events = []
+        with open(path, encoding='utf-8', errors='replace') as f:
+            for ln in f:
+                ln = ln.strip()
+                if not ln.startswith('{'):
+                    continue
+                try:
+                    events.append(json.loads(ln))
+                except ValueError:
+                    continue
+        return events
+
+
+    def parse(events):
+        results, outputs, pkg_lines, pkg_result, build_failed = {}, {}, {}, {}, set()
+        for i, e in enumerate(events):
+            a = e.get('Action')
+            p = e.get('Package') or (e.get('ImportPath') or '').split(' ')[0]
+            t = e.get('Test')
+            if a in ('output', 'build-output'):
+                o = e.get('Output', '')
+                if t:
+                    outputs.setdefault((p, t), []).append(o)
+                pkg_lines.setdefault(p, []).append((i, t, o))
+                if '[build failed]' in o or '[setup failed]' in o:
+                    build_failed.add(p)
+            elif a == 'build-fail':
+                build_failed.add(p)
+            elif a in ('pass', 'fail', 'skip'):
+                if t:
+                    results[(p, t)] = (a, e.get('Elapsed'), i)
+                else:
+                    pkg_result[p] = a
+                    if e.get('FailedBuild'):
+                        build_failed.add(p)
+        return results, outputs, pkg_lines, pkg_result, build_failed
+
+
+    def witnesses(lines):
+        return [m.group(1) for m in (WITNESS.match(l) for l in lines) if m]
+
+
+    def assertion_lines(lines):
+        return [l.strip() for l in lines if FILELINE.match(l) and not WITNESS.match(l)]
+
+
+    def expected_witness(err):
+        return env('WITNESS_PREFIX') + err
+
+
+    def judge_phase(kind, events, raw_exit, err, first_expected):
+        """One selection phase. Returns (verdict, label, witness, first_failure)."""
+        P, named, comp = env('TARGET_PKG'), env('NAMED_TEST'), env('COMPANION_TEST')
+        want_tests = {(P, named), (P, comp)} if kind == 'positive' else {(P, named)}
+        results, outputs, pkg_lines, pkg_result, build_failed = parse(events)
+        all_out = [o for lst in pkg_lines.values() for _, _, o in lst]
+        nout = outputs.get((P, named), [])
+        wl = witnesses(nout)
+        wit = wl[0] if len(wl) == 1 else ''
+        top = {k for k in results if '/' not in k[1]}
+        if raw_exit not in ('0', '1'):
+            return 'INABILITY', f'the process ended with raw exit {raw_exit}', wit, ''
+        if build_failed:
+            return 'INABILITY', 'a build or setup failure: ' + ' '.join(sorted(build_failed)), wit, ''
+        if any(TIMEOUT in o for o in all_out):
+            return 'INABILITY', 'the Go test timeout fired', wit, ''
+        if any(RACE in o for o in all_out):
+            return 'INABILITY', 'a data race report', wit, ''
+        if any(o.lstrip().startswith(PANIC) for o in all_out):
+            return 'INABILITY', 'a panic', wit, ''
+        if set(pkg_result) != {P}:
+            return 'INABILITY', f'package results {sorted(pkg_result)}, want exactly [{P}] (setup, no result or a wider run)', wit, ''
+        if top != want_tests:
+            return 'INABILITY', f'test results {sorted(t for _, t in top)}, want exactly {sorted(t for _, t in want_tests)} (a missing or extra test)', wit, ''
+        if any(results[k][0] == 'skip' for k in top):
+            return 'INABILITY', 'a selected test skipped', wit, ''
+        if len(wl) > 1:
+            return 'INABILITY', f'{len(wl)} witness lines, want exactly one', wit, ''
+        acts = {t: results[(P, t)][0] for _, t in top}
+        failing = sorted(t for t, a in acts.items() if a == 'fail')
+        pkg = pkg_result[P]
+        if kind == 'positive':
+            if not failing:
+                if raw_exit != '0' or pkg != 'pass':
+                    return 'INABILITY', f'every test passed but raw exit {raw_exit}, package {pkg}', wit, ''
+                if not wit:
+                    return 'INABILITY', 'the named test passed without its witness line (no cancellation at the boundary is proven)', wit, ''
+                if wit != expected_witness(err):
+                    return 'INABILITY', 'the named test passed with a different witness', wit, ''
+                if assertion_lines(nout):
+                    return 'INABILITY', 'the passing named test printed another file:line line', wit, ''
+                return 'PASS', 'both tests passed; exact witness', wit, ''
+            if raw_exit != '1' or pkg != 'fail':
+                return 'INABILITY', f'a test failed but raw exit {raw_exit}, package {pkg}', wit, ''
+            first = next((a for t in failing for a in assertion_lines(outputs.get((P, t), []))), '')
+            return 'FAIL', 'the corrected test failed on the pinned source: ' + ' '.join(failing), wit, first
+        # mutant
+        if not failing:
+            if raw_exit != '0' or pkg != 'pass':
+                return 'INABILITY', f'the named test passed but raw exit {raw_exit}, package {pkg}', wit, ''
+            if not wit:
+                return 'INABILITY', 'the named test passed without its witness line; survival is not proven at the boundary', wit, ''
+            return 'SURVIVED', 'the mutant passed the named test', wit, ''
+        if raw_exit != '1' or pkg != 'fail':
+            return 'INABILITY', f'the named test failed but raw exit {raw_exit}, package {pkg}', wit, ''
+        lines = assertion_lines(nout)
+        first = lines[0] if lines else ''
+        if not wit:
+            return 'UNEXPECTED', 'the named test failed without its witness line', wit, first
+        if wit != expected_witness(err):
+            return 'UNEXPECTED', 'the witness differs from the expected one', wit, first
+        if lines != [first_expected]:
+            return 'UNEXPECTED', f'assertion lines {lines[:3]}, want exactly [{first_expected}]', wit, first
+        return 'KILLED_AS_EXPECTED', 'the named first assertion after the exact witness', wit, first
+
+
+    def read_state(path):
+        st = {'blob': {}, 'status': []}
+        with open(path) as f:
+            for ln in f:
+                ln = ln.rstrip('\n')
+                k, _, v = ln.partition(' ')
+                if k == 'head':
+                    st['head'] = v
+                elif k in ('test', 'blob'):
+                    p, _, b = v.partition(' ')
+                    st['blob'][p] = b
+                elif k == 'status':
+                    st['status'].append(v)
+        return st
+
+
+    def state_ok(path, mutant):
+        """The source state recorded right before a phase ran: the corrected test, and exactly the one
+        expected product blob (pristine for a positive phase, the mutant's for a mutant phase)."""
+        if not os.path.isfile(path):
+            return False, 'no state receipt'
+        st = read_state(path)
+        want = {p: b for p, b in (l.split() for l in env('PINNED_BLOBS').strip().split('\n') if l.strip())}
+        want[env('TEST_PATH')] = env('TEST_BLOB_AFTER')
+        changed = [f' M {env("TEST_PATH")}']
+        if mutant:
+            want[env('PRODUCT_PATH')] = env(mutant + '_BLOB')
+            changed.append(f' M {env("PRODUCT_PATH")}')
+        if st.get('head') != env('PINNED_SHA'):
+            return False, f'head {st.get("head")} is not the pinned source'
+        for p, b in sorted(want.items()):
+            if st['blob'].get(p) != b:
+                return False, f'{p} is {st["blob"].get(p)}, want {b}' + (' (a pending mutation or a failed restore)' if p == env('PRODUCT_PATH') else '')
+        if sorted(st['status']) != sorted(changed):
+            return False, f'working tree {st["status"]}, want {changed}'
+        return True, 'exact source state'
+
+
+    def phase(out, label, kind, mutant):
+        exitf = os.path.join(out, label + '.exit')
+        if not os.path.isfile(exitf):
+            return None
+        ok, why = state_ok(os.path.join(out, f'state-{label}.txt'), mutant)
+        raw = open(exitf).read().strip()
+        if not ok:
+            return ('INABILITY', 'wrong source state: ' + why, '', '', raw)
+        err = env(mutant + '_ERR') if mutant else env('PASS_ERR')
+        first = env(mutant + '_FIRST') if mutant else ''
+        v, lab, wit, f = judge_phase(kind, load(os.path.join(out, label + '.json')), raw, err, first)
+        return (v, lab, wit, f, raw)
+
+
+    def selection(out, gate_only=False):
+        rows, verdicts = [], {}
+        outcomes = os.environ.get('STEP_OUTCOMES', '')
+        first_bad = next((x for x in outcomes.split() if '=' in x and x.split('=', 1)[1] not in ('success', '')), '')
+        for label, kind, mutant in PHASES[:1] if gate_only else PHASES:
+            r = phase(out, label, kind, mutant)
+            if label != 'p1' and verdicts.get('p1') != 'PASS':
+                # Without a passing p1 no later phase can be read: a mutant "kill" of a test that already
+                # fails means nothing. A result that exists anyway is kept but never counted.
+                r = ('NOT_MEASURED', 'prerequisite p1 is not PASS; this phase was not run', '', '', '-') if r is None else \
+                    ('NOT_COUNTED', 'prerequisite p1 is not PASS; this result is kept but not counted', r[2], r[3], r[4])
+            elif r is None:
+                r = ('INABILITY', 'not run: ' + (first_bad or 'unknown step'), '', '', '-')
+            verdicts[label] = r[0]
+            rows.append((label, kind, mutant or '-') + r)
+        v = [r[3] for r in rows]
+        if gate_only:
+            overall = v[0]
+        elif v[0] == 'INABILITY':
+            overall = 'INABILITY'
+        elif v[0] == 'FAIL':
+            overall = 'FAIL'
+        elif any(x in ('INABILITY', 'UNEXPECTED', 'NOT_MEASURED', 'NOT_COUNTED') for x in v[1:]):
+            overall = 'INABILITY'
+        elif 'SURVIVED' in v[1:3]:
+            overall = 'NOT_QUALIFIED'
+        elif v[3] == 'FAIL':
+            overall = 'FAIL'
+        elif v == ['PASS', 'KILLED_AS_EXPECTED', 'KILLED_AS_EXPECTED', 'PASS']:
+            overall = 'QUALIFIED'
+        else:
+            overall = 'INABILITY'
+        name = 'gate.tsv' if gate_only else 'phases.tsv'
+        with open(os.path.join(out, name), 'w') as f:
+            f.write('phase\tkind\tmutant\tverdict\tlabel\twitness\tfirst_failure\traw_exit\n')
+            for r in rows:
+                f.write('\t'.join(map(tsv, r)) + '\n')
+        if not gate_only:
+            with open(os.path.join(out, 'verdict.txt'), 'w') as f:
+                f.write(overall + '\n')
+        for r in rows:
+            print(f'{r[0]}: {r[3]} ({r[4]}); witness [{r[5]}]; first [{r[6]}]; raw exit {r[7]}')
+        print(('gate p1: ' if gate_only else 'selection: ') + overall)
+        return overall
+
+
+    NAME = re.compile(r'^(?:Test|Fuzz|Example)[A-Za-z0-9_]*$')
+    BENCH = re.compile(r'^Benchmark[A-Za-z0-9_]*$')
+    PKGLINE = re.compile(r'^(ok|\?|FAIL)\s+(\S+)')
+
+
+    def listed(path, rc):
+        """The `go test -list` output: names, each package closed by its ok/?/FAIL line. Benchmarks never
+        run without -bench and are not counted. Returns (names, packages, problems)."""
+        names, pkgs, problems, pending = set(), set(), [], []
+        if rc != '0':
+            problems.append(f'list raw exit {rc}')
+        try:
+            lines = open(path, encoding='utf-8', errors='replace').read().splitlines()
+        except OSError:
+            return names, pkgs, problems + ['list unreadable']
+        for ln in lines:
+            m = PKGLINE.match(ln)
+            if m:
+                if m.group(1) == 'FAIL':
+                    problems.append(f'list FAIL {m.group(2)}')
+                pkgs.add(m.group(2))
+                names.update((m.group(2), n) for n in pending)
+                pending = []
+            elif NAME.match(ln):
+                pending.append(ln)
+            elif BENCH.match(ln) or not ln.strip() or ln.startswith('==> '):
+                continue
+            else:
+                problems.append('unrecognized list line')
+        if pending:
+            problems.append(f'{len(pending)} listed name(s) with no package line')
+        if not names:
+            problems.append('the list names no test')
+        return names, pkgs, problems
+
+
+    def census(events, names):
+        started, finished = set(), set()
+        for e in events:
+            t, a = e.get('Test'), e.get('Action')
+            if not t or '/' in t:
+                continue
+            k = (e.get('Package') or '', t)
+            if a == 'run':
+                started.add(k)
+            elif a in ('pass', 'fail', 'skip'):
+                finished.add(k)
+        return {'listed': names, 'started': started, 'finished': finished,
+                'started_not_finished': started - finished, 'not_started': names - started,
+                'started_not_listed': started - names}
+
+
+    def context(events_path, out, raw_exit, list_path, list_exit):
+        P, named, comp = env('TARGET_PKG'), env('NAMED_TEST'), env('COMPANION_TEST')
+        events = load(events_path)
+        results, outputs, pkg_lines, pkg_result, build_failed = parse(events)
+        text = lambda k: outputs.get(k, [])
+        rows = []
+        failing = sorted(k for k, r in results.items() if r[0] == 'fail')
+        fset = set(failing)
+        derived = lambda k: any(q[0] == k[0] and q[1].startswith(k[1] + '/') for q in fset)
+        targets = {(P, named), (P, comp)}
+        for k in failing:
+            if derived(k) or k in targets:
+                continue
+            fl = assertion_lines(text(k))
+            rows.append(('test-failure', k[0], k[1], fl[0] if fl else '', fl[-1] if fl else '', ''))
+        for p, v in sorted(pkg_result.items()):
+            if v == 'fail' and not any(k[0] == p for k in failing):
+                lines = [o for _, _, o in pkg_lines.get(p, [])]
+                kind = 'build-failure' if p in build_failed else 'package-failure'
+                first = next((o.strip() for o in lines if o.strip() and not o.startswith('=== ')), '')
+                rows.append((kind, p, '', first, '', 'no failing test carries this failure'))
+        timeout_idx = {}
+        for p, lst in sorted(pkg_lines.items()):
+            for i, t, o in lst:
+                if TIMEOUT in o and p not in timeout_idx:
+                    timeout_idx[p] = i
+                    rows.append(('timeout', p, t or '', o.strip(), '', 'the Go test timeout fired in this package'))
+                if RACE in o:
+                    rows.append(('data-race', p, t or '', o.strip(), '', 'a data race report'))
+                if o.startswith('CLUSTER_STATE|'):
+                    rows.append(('cluster-state', p, t or '', o.strip(), '', 'the package cluster-state check'))
+        nres, cres = results.get((P, named)), results.get((P, comp))
+        wl = witnesses(text((P, named)))
+        wit = wl[0] if len(wl) == 1 else ''
+        first = ''
+        last_target = max((r[2] for r in (nres, cres) if r), default=None)
+        if raw_exit not in ('0', '1'):
+            tv, tl = 'INABILITY', f'the process ended with raw exit {raw_exit}'
+        elif P in build_failed:
+            tv, tl = 'INABILITY', 'the target package did not build'
+        elif P in timeout_idx and (nres is None or cres is None or last_target > timeout_idx[P]):
+            tv, tl = 'INABILITY', 'the Go timeout fired in the target package before both targets completed'
+        elif nres is None or cres is None:
+            tv, tl = 'INABILITY', 'a target produced no result'
+        elif 'skip' in (nres[0], cres[0]):
+            tv, tl = 'INABILITY', 'a target skipped'
+        elif nres[0] == 'pass' and cres[0] == 'pass':
+            if len(wl) == 1 and wit == expected_witness(env('PASS_ERR')):
+                tv, tl = 'PASS', 'both targets passed; exact witness'
+            else:
+                tv, tl = 'INABILITY', f'the named target passed without the exact witness ({len(wl)} witness lines)'
+        else:
+            failed = [t for t, r in ((named, nres), (comp, cres)) if r[0] == 'fail']
+            tv, tl = 'FAIL', 'a target failed: ' + ' '.join(failed)
+            first = next((a for t in failed for a in assertion_lines(text((P, t)))), '')
+        failures = [r for r in rows if r[0] in ('test-failure', 'package-failure', 'build-failure', 'timeout', 'data-race')]
+        names, pkgs, problems = listed(list_path, list_exit)
+        c = census(events, names)
+        gaps = len(c['not_started']) + len(c['started_not_finished']) + len(c['started_not_listed'])
+        if raw_exit not in ('0', '1'):
+            cv, cl = 'INABILITY', f'the complete command ended with raw exit {raw_exit}'
+        elif timeout_idx:
+            cv, cl = 'INABILITY', f'the Go timeout fired in {len(timeout_idx)} package(s): the battery was not measured completely'
+        elif problems:
+            cv, cl = 'INABILITY', 'the census list is incomplete: ' + '; '.join(problems[:3])
+        elif not c['started']:
+            cv, cl = 'INABILITY', 'no test started'
+        elif gaps:
+            cv, cl = 'INABILITY', (f'the census has {gaps} gap(s): the battery was not measured completely; '
+                                   f'{len(failing)} failing test result(s) and {len(failures)} observation(s) are kept in other_failures.tsv')
+        elif raw_exit == '0':
+            if failures or failing:
+                cv, cl = 'INABILITY', 'raw exit 0 with failing results'
+            else:
+                cv, cl = 'PASS', 'the complete command passed; every listed test started and finished'
+        elif failures or failing:
+            cv, cl = 'FAIL', f'the complete command failed with a complete measurement: {len(failing)} failing test result(s), {len(failures)} separate observation(s)'
+        else:
+            cv, cl = 'INABILITY', 'raw exit 1 without a failing result'
+        os.makedirs(out, exist_ok=True)
+        with open(os.path.join(out, 'results.tsv'), 'w') as f:
+            f.write('package\ttest\taction\telapsed_s\n')
+            for k in sorted(results):
+                f.write(f'{tsv(k[0])}\t{tsv(k[1])}\t{results[k][0]}\t{results[k][1]}\n')
+        with open(os.path.join(out, 'target.tsv'), 'w') as f:
+            f.write('package\tnamed\tcompanion\tverdict\tlabel\tnamed_result\tcompanion_result\tfirst_failure_line\twitness\n')
+            f.write('\t'.join(map(tsv, [P, named, comp, tv, tl, nres[0] if nres else '-', cres[0] if cres else '-', first, wit])) + '\n')
+        with open(os.path.join(out, 'other_failures.tsv'), 'w') as f:
+            f.write('kind\tpackage\ttest\tfirst_fileline\tlast_fileline\tnote\n')
+            for r in rows:
+                f.write('\t'.join(map(tsv, r)) + '\n')
+        with open(os.path.join(out, 'verdicts.tsv'), 'w') as f:
+            f.write(f'target\t{tv}\t{tl}\ncontext\t{cv}\t{cl}\n')
+        with open(os.path.join(out, 'census.tsv'), 'w') as f:
+            f.write('set\tcount\n')
+            for k in ('listed', 'started', 'finished', 'started_not_finished', 'not_started', 'started_not_listed'):
+                f.write(f'{k}\t{len(c[k])}\n')
+            f.write(f'packages_listed\t{len(pkgs)}\nlist_problems\t{len(problems)}\n')
+        for k in ('started_not_finished', 'not_started', 'started_not_listed'):
+            with open(os.path.join(out, f'census-{k}.tsv'), 'w') as f:
+                f.write('package\ttest\n')
+                for p, t in sorted(c[k]):
+                    f.write(f'{tsv(p)}\t{tsv(t)}\n')
+        with open(os.path.join(out, 'census-problems.txt'), 'w') as f:
+            f.write(''.join(p + '\n' for p in problems))
+        counts = {}
+        for r in results.values():
+            counts[r[0]] = counts.get(r[0], 0) + 1
+        print(f'target: {tv} ({tl}); context: {cv} ({cl}); tests {sum(counts.values())} {counts}; separate observations {len(rows)}')
+        print('census: ' + ', '.join(f'{k} {len(c[k])}' for k in ('listed', 'started', 'finished', 'started_not_finished', 'not_started', 'started_not_listed')))
+        for r in rows[:50]:
+            print('  observation: ' + ' | '.join(map(tsv, r[:4])))
+        return tv, cv
+
+
+    if __name__ == '__main__':
+        cmd = sys.argv[1]
+        if cmd == 'gate':
+            sys.exit(0 if selection(sys.argv[2], gate_only=True) == 'PASS' else 1)
+        elif cmd == 'selection':
+            sys.exit(0 if selection(sys.argv[2]) == 'QUALIFIED' else 1)
+        elif cmd == 'context':
+            tv, cv = context(sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5], sys.argv[6])
+            sys.exit(0 if (tv, cv) == ('PASS', 'PASS') else 1)
+        else:
+            sys.exit(2)
+
+jobs:
+  # ---------------------------------------------------------------------------------------------
+  # The complete original command for the cmd/olivares module, once, on the corrected source.
+  # ---------------------------------------------------------------------------------------------
+  context:
+    if: github.repository == 'olivaresai/olivares'
+    name: context · the complete original cmd/olivares functional command on the corrected source, once
+    runs-on: ubuntu-latest
+    # Step ceilings sum to 145 minutes (3+2+1+3+2+2+2+2+2+2+2+2+2+10+95+5+3+2+3), within this ceiling.
+    timeout-minutes: 150
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16@sha256:a36250871de0833b8757561c72f2477ef1ddd1101afa4e617fb552e0de514c6b
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+          --memory=1g
+          --memory-swap=1536m
+          --cpus=2
+          --pids-limit=512
+      postgres_other:
+        image: pgvector/pgvector:pg16@sha256:a36250871de0833b8757561c72f2477ef1ddd1101afa4e617fb552e0de514c6b
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+          --memory=1g
+          --memory-swap=1536m
+          --cpus=2
+          --pids-limit=512
+    env:
+      ARM: context
+      OLIVARES_GATE_STRICT_PG: "1"
+      # The origin job's env, carried for fidelity (the install-manifest gate that reads it is not run).
+      HELM_VERSION: "3.21.0"
+      HELM_SHA256: "0093eb572e3d2380f094df162ddb525e219249de88957afe24cfbb19632acd36"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        id: checkout
+        timeout-minutes: 3
+        with:
+          ref: 34cfd09c444e845fb7eaa6b22b97c0fa899d5a63
+          persist-credentials: false
+          fetch-depth: 0
+      - name: the checkout is the pinned source and tree, clean, with the pinned test and product blobs
+        id: identity
+        timeout-minutes: 2
+        env:
+          RUNNER_PLACEMENT: ${{ runner.environment }}
+        run: |
+          eval "$QUAL_LIB"
+          identity
+      - name: Go caches under RUNNER_TEMP (as in the job that went red)
+        id: caches
+        timeout-minutes: 1
+        run: |
+          {
+            echo "GOCACHE=$RUNNER_TEMP/gocache"
+            echo "GOMODCACHE=$RUNNER_TEMP/gomodcache"
+            echo "GOPATH=$RUNNER_TEMP/gopath"
+            echo "GOBIN=$RUNNER_TEMP/gopath/bin"
+          } >> "$GITHUB_ENV"
+          echo "$RUNNER_TEMP/gopath/bin" >> "$GITHUB_PATH"
+          echo "PNPM_HOME=$RUNNER_TEMP/pnpm" >> "$GITHUB_ENV"
+          echo "$RUNNER_TEMP/pnpm" >> "$GITHUB_PATH"
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        id: setup-go
+        timeout-minutes: 3
+        with:
+          go-version-file: go.work
+          cache: ${{ runner.environment == 'github-hosted' }}
+          cache-dependency-path: go.work.sum
+      # The job that went red put node, pnpm and go-task on PATH before its tests; the same pins do here.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        id: node
+        timeout-minutes: 2
+        with:
+          node-version-file: .node-version
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+        id: pnpm
+        timeout-minutes: 2
+        with:
+          dest: ${{ runner.temp }}/setup-pnpm
+          standalone: true
+      - name: install go-task (pinned)
+        id: tools
+        timeout-minutes: 2
+        uses: ./.github/actions/olivares-tool-cache
+      - name: TMPDIR where an extracted binary can actually run (same selection as the job that went red)
+        id: tmpdir
+        timeout-minutes: 2
+        run: |
+          short=""
+          for c in "${HOME:-}" /var/tmp /dev/shm /run/user/"$(id -u)"; do
+            if [ -n "$c" ] && [ -d "$c" ]; then
+              find "$c" -maxdepth 1 -mindepth 1 -type d \( -name 'olv[0-9]*' -o -name 'olv-exec-[0-9]*' \) -user "$(id -un)" -mmin +360 -exec rm -rf {} + 2>/dev/null || true
+            fi
+          done
+          for c in "${HOME:-}" /var/tmp /dev/shm /run/user/"$(id -u)"; do
+            if [ -z "$c" ]; then echo "  candidate <empty>: variable unset"; continue; fi
+            if [ ! -d "$c" ]; then echo "  candidate $c: does not exist"; continue; fi
+            df -Pk "$c" 2>/dev/null | awk -v c="$c" 'NR==2{printf "  candidate %s: %d MiB free of %d on %s\n", c, $4/1024, $2/1024, $1}' || true
+            d="$c/olv$$"
+            if ! mkdir -p "$d" 2>/dev/null; then echo "  candidate $c: cannot create inside"; continue; fi
+            if ! printf '#!/bin/sh\nexit 7\n' >"$d/.p" 2>/dev/null; then echo "  candidate $c: cannot write"; rm -rf "$d"; continue; fi
+            chmod +x "$d/.p" 2>/dev/null || { echo "  candidate $c: chmod fails"; rm -rf "$d"; continue; }
+            rc=0; "$d/.p" 2>/dev/null || rc=$?
+            rm -f "$d/.p"
+            if [ "$rc" -ne 7 ]; then echo "  candidate $c: does not execute (rc=$rc)"; rm -rf "$d"; continue; fi
+            if [ "${#d}" -gt 24 ]; then echo "  candidate $c: executes but the path is ${#d} characters (>24)"; rm -rf "$d"; continue; fi
+            short="$d"; break
+          done
+          if [ -n "$short" ]; then
+            echo "TMPDIR=$short" >> "$GITHUB_ENV"
+            echo "TMPDIR short and executable: $short (${#short} characters)"
+          else
+            . scripts/lib/exec-workdir.sh
+            d="$(olivares_pick_exec_workdir o)" || {
+              echo "::error::no directory can execute a binary"
+              exit 1
+            }
+            echo "TMPDIR=$d" >> "$GITHUB_ENV"
+            echo "::warning::no SHORT candidate; using $d (${#d} characters): a unix socket path may exceed 108"
+          fi
+      - name: resolve the ephemeral Postgres ports into the test DSNs
+        id: pg-port
+        timeout-minutes: 2
+        env:
+          PGPORT_HOST: ${{ job.services.postgres.ports['5432'] }}
+          PGPORT_OTHER: ${{ job.services.postgres_other.ports['5432'] }}
+        run: |
+          set -euo pipefail
+          bash scripts/ci-postgres-service.sh resolve
+          # The job that went red resolved these two as well, beside the same DSNs.
+          {
+            echo "CLOUD_CP_INTEGRATION=1"
+            echo "CLOUD_CP_REQUIRE_INTEGRATION=1"
+          } >> "$GITHUB_ENV"
+      - name: provision postgres roles (least-privilege app role + BYPASSRLS admin)
+        id: pg-roles
+        timeout-minutes: 2
+        env:
+          PGPASSWORD: postgres
+        run: bash scripts/ci-postgres-service.sh provision
+      - name: PostgreSQL 16 is required, both clusters answer, and the roles hold their posture
+        id: posture
+        timeout-minutes: 2
+        run: |
+          eval "$QUAL_LIB"
+          [ "${OLIVARES_TEST_POSTGRES_REQUIRED:-}" = 1 ] || fail "OLIVARES_TEST_POSTGRES_REQUIRED is not 1"
+          psql "$OLIVARES_TEST_POSTGRES_SUPERUSER_DSN" -X -v ON_ERROR_STOP=1 -Atc 'SHOW server_version_num' | tee "$OUT/postgres-version.txt"
+          psql "$OLIVARES_TEST_POSTGRES_OTHER_DSN" -X -v ON_ERROR_STOP=1 -Atc 'SHOW server_version_num' | tee "$OUT/postgres-other-version.txt"
+          psql "$OLIVARES_TEST_POSTGRES_SUPERUSER_DSN" -X -v ON_ERROR_STOP=1 -AtF ' ' \
+            -c "SELECT name, setting FROM pg_settings WHERE name IN ('max_connections', 'shared_buffers', 'default_transaction_isolation', 'log_disconnections', 'log_lock_waits') ORDER BY name" |
+            tee "$OUT/postgres-settings.txt"
+          psql "$OLIVARES_TEST_POSTGRES_SUPERUSER_DSN" -X -v ON_ERROR_STOP=1 -AtF ' ' \
+            -c "SELECT rolname, rolsuper, rolbypassrls, rolcreaterole, rolcreatedb FROM pg_roles WHERE rolname IN ('olivares_app', 'olivares_admin') ORDER BY rolname" |
+            tee "$OUT/roles.txt"
+          case "$(cat "$OUT/postgres-version.txt")" in 16*) : ;; *) fail "the primary server is not PostgreSQL 16" ;; esac
+          [ "$(awk '$1 == "olivares_app" {print $2, $3, $4, $5}' "$OUT/roles.txt")" = "f f f f" ] || fail "the application role is privileged"
+          [ "$(awk '$1 == "olivares_admin" {print $2, $3, $4, $5}' "$OUT/roles.txt")" = "f t f f" ] || fail "the admin role is not BYPASSRLS-only"
+      - name: record the toolchain
+        id: toolchain
+        timeout-minutes: 2
+        run: |
+          eval "$QUAL_LIB"
+          {
+            go version
+            go env GOVERSION GOOS GOARCH GOFLAGS CGO_ENABLED GOCACHE
+            printf 'nproc %s\n' "$(nproc)"
+            printf 'cgroup memory.max %s\n' "$(cat /sys/fs/cgroup/memory.max 2>/dev/null || echo unreadable)"
+            printf 'TMPDIR %s\n' "${TMPDIR:-unset}"
+            jq --version
+            psql --version
+            python3 --version
+            timeout --version | head -n1
+          } 2>&1 | tee "$OUT/toolchain.txt"
+      - name: the corrected test, as one pinned patch (sha256, apply --check, blobs after)
+        id: test-patch
+        timeout-minutes: 2
+        run: |
+          eval "$QUAL_LIB"
+          apply_test_patch
+          combined="$(export GIT_INDEX_FILE="$RUNNER_TEMP/combined.index"; git read-tree HEAD && git update-index --add -- "$TEST_PATH" && git write-tree)"
+          rm -f "$RUNNER_TEMP/combined.index"
+          printf 'combined_tree %s\n' "$combined" | tee "$OUT/combined-tree.txt"
+          [ "$combined" = "$COMBINED_TREE" ] || fail "the patched source is tree $combined, not the combined tree $COMBINED_TREE"
+      - name: build the target package's test binary once (a build failure is an inability)
+        id: build
+        timeout-minutes: 10
+        run: |
+          eval "$QUAL_LIB"
+          mkdir -p "$RUNNER_TEMP/build"
+          run_logged build "$GITHUB_WORKSPACE" go test -c -o "$RUNNER_TEMP/build/context.test" ./cmd/olivares
+      - name: the complete original command, once (the functional leg for the cmd/olivares module)
+        id: test
+        timeout-minutes: 95
+        env:
+          GO_WORK_EACH_ONLY: cmd/olivares
+        run: |
+          eval "$QUAL_LIB"
+          # The resource witness the job that went red ran around its functional step.
+          WITNESS="$OUT/resource-witness.state"
+          bash scripts/ci-resource-witness.sh start "$WITNESS" >/dev/null
+          trap 'bash scripts/ci-resource-witness.sh report "$WITNESS" | tee "$OUT/resource-witness.report" || true' EXIT
+          run_arm json "$GITHUB_WORKSPACE" bash scripts/with-pg-env.sh bash scripts/go-work-each.sh go test -count=1 -timeout 90m -json ./...
+      - name: the complete test list of the same packages, after the command (the census; no filter)
+        id: list
+        if: always() && steps.build.outcome == 'success'
+        timeout-minutes: 5
+        env:
+          GO_WORK_EACH_ONLY: cmd/olivares
+        run: |
+          eval "$QUAL_LIB"
+          rc=0
+          ( cd "$GITHUB_WORKSPACE" && bash scripts/with-pg-env.sh bash scripts/go-work-each.sh go test -list '.*' ./... ) > "$OUT/list.txt" 2> "$OUT/list.stderr" || rc=$?
+          printf '%s\n' "$rc" > "$OUT/list.exit"
+          printf 'list: raw exit %s, %s line(s)\n' "$rc" "$(wc -l < "$OUT/list.txt")"
+      - name: attribution (the target verdict; every other failure a separate observation)
+        if: always()
+        timeout-minutes: 3
+        env:
+          STEP_OUTCOMES: >-
+            checkout=${{ steps.checkout.outcome }} identity=${{ steps.identity.outcome }} caches=${{ steps.caches.outcome }}
+            setup-go=${{ steps.setup-go.outcome }} node=${{ steps.node.outcome }} pnpm=${{ steps.pnpm.outcome }}
+            tools=${{ steps.tools.outcome }} tmpdir=${{ steps.tmpdir.outcome }} pg-port=${{ steps.pg-port.outcome }}
+            pg-roles=${{ steps.pg-roles.outcome }} posture=${{ steps.posture.outcome }} toolchain=${{ steps.toolchain.outcome }}
+            test-patch=${{ steps.test-patch.outcome }} build=${{ steps.build.outcome }} test=${{ steps.test.outcome }}
+            list=${{ steps.list.outcome }}
+        run: |
+          eval "$QUAL_LIB"
+          printf 'step outcomes: %s\n' "$STEP_OUTCOMES" > "$OUT/step-outcomes.txt"
+          rc=0
+          if [ -f "$OUT/$ARM.exit" ]; then
+            judge context "$OUT/$ARM.json" "$OUT" "$(cat "$OUT/$ARM.exit")" "$OUT/list.txt" "$(cat "$OUT/list.exit" 2> /dev/null || echo absent)" || rc=$?
+          else
+            first_bad="$(tr ' ' '\n' <<< "$STEP_OUTCOMES" | awk -F= 'NF == 2 && $2 != "success" {print; exit}')"
+            printf 'target\tINABILITY\tnot run: %s\ncontext\tINABILITY\tnot run: %s\n' "${first_bad:-unknown step}" "${first_bad:-unknown step}" > "$OUT/verdicts.tsv"
+            rc=3
+          fi
+          if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+            { printf '### context\n\n```\n'; cat "$OUT/verdicts.tsv"; printf '\nseparate observations: %s\n```\n' "$(($(wc -l 2> /dev/null < "$OUT/other_failures.tsv" || echo 1) - 1))"; } >> "$GITHUB_STEP_SUMMARY"
+          fi
+          [ "$rc" -eq 0 ] || fail "the context did not pass cleanly (see verdicts.tsv: the target verdict and the context verdict are separate); every observation is in the artifact"
+      - name: keep both PostgreSQL server logs
+        if: always()
+        timeout-minutes: 2
+        env:
+          PG_PRIMARY_ID: ${{ job.services.postgres.id }}
+          PG_OTHER_ID: ${{ job.services.postgres_other.id }}
+        run: |
+          OUT="$RUNNER_TEMP/qualification/$ARM"
+          mkdir -p "$OUT"
+          docker logs --details "$PG_PRIMARY_ID" > "$OUT/postgres-primary.log" 2>&1 || echo "COULD NOT LOOK" >> "$OUT/postgres-primary.log"
+          docker logs --details "$PG_OTHER_ID" > "$OUT/postgres-other.log" 2>&1 || echo "COULD NOT LOOK" >> "$OUT/postgres-other.log"
+      - name: retain the whole stream, results, target, separate observations, census and the server logs
+        if: always()
+        timeout-minutes: 3
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: chat-cancellation-context-90m-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/qualification/context/
+            ${{ runner.temp }}/qualification-patches/
+          retention-days: 7
+          if-no-files-found: error
