@@ -148,8 +148,8 @@ func TestClassItself(t *testing.T) {
 }
 GO
 run_gate "$T"; rc="$RC"
-if [ "$rc" = 1 ] && printf '%s' "$LAST" | grep -q 'pkg/bad_test.go:4' &&
-	printf '%s' "$LAST" | grep -q 'TestClassItself'; then
+if [ "$rc" = 1 ] && grep -q 'pkg/bad_test.go:4' <<<"$LAST" &&
+	grep -q 'TestClassItself' <<<"$LAST"; then
 	ok "the class is refused and named with its budget line"
 else
 	ko "the class was not refused or not named (rc=$rc)" "$LAST"
@@ -252,7 +252,7 @@ else ko "a comment tripped the gate (rc=$rc)" "$LAST"; fi
 row "exemption"
 T="$(newtree c6)"
 run_gate "$T"; rc="$RC"
-if [ "$rc" = 0 ] && printf '%s' "$LAST" | grep -q '1 reviewed exemption(s) matched'; then
+if [ "$rc" = 0 ] && grep -q '1 reviewed exemption(s) matched' <<<"$LAST"; then
 	ok "the reviewed exemption matches the shape it waives and the tree stays green"
 else
 	ko "the reviewed exemption did not match (rc=$rc)" "$LAST"
@@ -280,7 +280,7 @@ func TestUserAuthorityBundleWriterRaces(t *testing.T) {
 }
 GO
 run_gate "$T"; rc="$RC"
-if [ "$rc" = 1 ] && printf '%s' "$LAST" | grep -q 'TestUserAuthorityBundleWriterRaces'; then
+if [ "$rc" = 1 ] && grep -q 'TestUserAuthorityBundleWriterRaces' <<<"$LAST"; then
 	ok "the 01f81b8e81 defect (f2aFreshTarget inside a 15 s budget) is caught"
 else ko "the 01f81b8e81 defect was not caught (rc=$rc)" "$LAST"; fi
 
@@ -307,7 +307,7 @@ func TestDirectoryEpochSQLiteLifecyclePathsShareGlobalWriterReservation(t *testi
 }
 GO
 run_gate "$T"; rc="$RC"
-if [ "$rc" = 1 ] && printf '%s' "$LAST" | grep -q 'LifecyclePathsShareGlobalWriterReservation'; then
+if [ "$rc" = 1 ] && grep -q 'LifecyclePathsShareGlobalWriterReservation' <<<"$LAST"; then
 	ok "the 4859cc43f3 defect (Open + provisionTenant inside a 15 s budget) is caught"
 else ko "the 4859cc43f3 defect was not caught (rc=$rc)" "$LAST"; fi
 
@@ -337,7 +337,7 @@ func TestSQLiteRowLockerFencesAnotherStoreInstance(t *testing.T) {
 }
 GO
 run_gate "$T"; rc="$RC"
-if [ "$rc" = 1 ] && printf '%s' "$LAST" | grep -q 'TestSQLiteRowLockerFencesAnotherStoreInstance'; then
+if [ "$rc" = 1 ] && grep -q 'TestSQLiteRowLockerFencesAnotherStoreInstance' <<<"$LAST"; then
 	ok "the 346bce0c8a defect (two Opens inside a 10 s budget) is caught"
 else ko "the 346bce0c8a defect was not caught (rc=$rc)" "$LAST"; fi
 
@@ -394,8 +394,8 @@ row "report shape"
 T="$(newtree c12)"
 cp "$WORK/c1/pkg/bad_test.go" "$T/pkg/bad_test.go"
 run_gate "$T"; rc="$RC"
-if [ "$rc" = 1 ] && printf '%s' "$LAST" | grep -q 'fixture inside the budget' &&
-	printf '%s' "$LAST" | grep -q 'wait that pays for it'; then
+if [ "$rc" = 1 ] && grep -q 'fixture inside the budget' <<<"$LAST" &&
+	grep -q 'wait that pays for it' <<<"$LAST"; then
 	ok "the refusal names the budget, the fixture and the wait"
 else ko "the refusal did not name all three sites (rc=$rc)" "$LAST"; fi
 
@@ -411,7 +411,7 @@ func TestNothingToSeeHere(t *testing.T) {
 }
 GO
 run_gate "$T"; rc="$RC"
-if [ "$rc" = 1 ] && printf '%s' "$LAST" | grep -q 'STALE EXEMPTION'; then
+if [ "$rc" = 1 ] && grep -q 'STALE EXEMPTION' <<<"$LAST"; then
 	ok "an exemption that matches nothing is refused, not silently carried"
 else ko "a stale exemption did not fail (rc=$rc)" "$LAST"; fi
 
@@ -424,7 +424,7 @@ row "whitespace path"
 T="$(newtree c14)"
 cp "$WORK/c1/pkg/bad_test.go" "$T/pkg/a file_test.go"
 run_gate "$T"; rc="$RC"
-if [ "$rc" = 1 ] && printf '%s' "$LAST" | grep -q 'a file_test.go:4'; then
+if [ "$rc" = 1 ] && grep -q 'a file_test.go:4' <<<"$LAST"; then
 	ok "a discovered path with a space is READ and its finding is named"
 else ko "a whitespace path was not read (rc=$rc)" "$LAST"; fi
 
@@ -434,7 +434,7 @@ T="$(newtree c14b)"
 cp "$WORK/c1/pkg/bad_test.go" "$T/pkg/aa_test.go"
 cp "$WORK/c1/pkg/bad_test.go" "$T/pkg/a[a]_test.go"
 run_gate "$T"; rc="$RC"
-if [ "$rc" = 1 ] && printf '%s' "$LAST" | grep -q 'a\[a\]_test.go:4' &&
+if [ "$rc" = 1 ] && grep -q 'a\[a\]_test.go:4' <<<"$LAST" &&
 	[ "$(printf '%s' "$LAST" | grep -c 'aa_test.go:4')" = 1 ]; then
 	ok "a path with a glob metacharacter is read once, and the real file is read"
 else ko "the glob path was expanded away (rc=$rc)" "$LAST"; fi
@@ -476,7 +476,7 @@ func (h *harness) waitAndRace(t *testing.T) {
 }
 GO
 run_gate "$T"; rc="$RC"
-if [ "$rc" = 1 ] && printf '%s' "$LAST" | grep -q 'in waitAndRace$'; then
+if [ "$rc" = 1 ] && grep -q 'in waitAndRace$' <<<"$LAST"; then
 	ok "a finding inside a METHOD is reported under the method name"
 else ko "the method name was not extracted (rc=$rc)" "$LAST"; fi
 
@@ -527,7 +527,7 @@ func TestSendDoesNotDisarm(t *testing.T) {
 }
 GO
 run_gate "$T"; rc="$RC"
-if [ "$rc" = 1 ] && printf '%s' "$LAST" | grep -q 'TestSendDoesNotDisarm'; then
+if [ "$rc" = 1 ] && grep -q 'TestSendDoesNotDisarm' <<<"$LAST"; then
 	ok "a send and a chan<- type do not close the window before the fixture"
 else ko "a send disarmed the rule (rc=$rc)" "$LAST"; fi
 
@@ -549,7 +549,7 @@ func TestMillisecondBudget(t *testing.T) {
 }
 GO
 run_gate "$T"; rc="$RC"
-if [ "$rc" = 1 ] && printf '%s' "$LAST" | grep -q '0.25s budget'; then
+if [ "$rc" = 1 ] && grep -q '0.25s budget' <<<"$LAST"; then
 	ok "250ms is read as 0.25 s and is in scope (the class at millisecond scale)"
 else ko "a millisecond budget was mis-read (rc=$rc)" "$LAST"; fi
 
@@ -572,7 +572,7 @@ func TestBareSecond(t *testing.T) {
 }
 GO
 run_gate "$T"; rc="$RC"
-if [ "$rc" = 1 ] && printf '%s' "$LAST" | grep -q '1s budget'; then
+if [ "$rc" = 1 ] && grep -q '1s budget' <<<"$LAST"; then
 	ok "a bare time.Second is read as 1 s"
 else ko "a bare time.Second was not read (rc=$rc)" "$LAST"; fi
 
@@ -600,7 +600,7 @@ func TestConstantBudgetIsRead(t *testing.T) {
 }
 GO
 run_gate "$T"; rc="$RC"
-if [ "$rc" = 1 ] && printf '%s' "$LAST" | grep -q '15s budget'; then
+if [ "$rc" = 1 ] && grep -q '15s budget' <<<"$LAST"; then
 	ok "a package constant of 15 s is resolved and refused"
 else ko "a package constant was not resolved (rc=$rc)" "$LAST"; fi
 
@@ -625,7 +625,7 @@ func TestBudgetFromAnIdentifierElsewhere(t *testing.T) {
 }
 GO
 run_gate "$T"; rc="$RC"
-if printf '%s' "$LAST" | grep -q '1 budget(s) this gate cannot read'; then
+if grep -q '1 budget(s) this gate cannot read' <<<"$LAST"; then
 	ok "a budget whose duration cannot be read is COUNTED on the verdict line"
 else ko "an unreadable budget was silently skipped (rc=$rc)" "$LAST"; fi
 
@@ -648,7 +648,7 @@ func TestDeadlineIsTheSameClass(t *testing.T) {
 }
 GO
 run_gate "$T"; rc="$RC"
-if [ "$rc" = 1 ] && printf '%s' "$LAST" | grep -q '10s budget'; then
+if [ "$rc" = 1 ] && grep -q '10s budget' <<<"$LAST"; then
 	ok "context.WithDeadline(…, time.Now().Add(D)) is the same class and is caught"
 else ko "WithDeadline was not caught (rc=$rc)" "$LAST"; fi
 
@@ -746,7 +746,7 @@ if cmp -s "$mutant_receiver" "$GATE"; then
 	printf '  FAIL %2d  MUTATION DID NOT APPLY: receiver\n' "$ROW" >&2
 else
 	run_gate "$WORK/c15" "$mutant_receiver"
-	if printf '%s' "$LAST" | grep -q 'in waitAndRace$'; then
+	if grep -q 'in waitAndRace$' <<<"$LAST"; then
 		ko "mutant 'receiver' still names the method, so row 15 proves nothing" "$LAST"
 	else
 		ok "mutant 'receiver' loses the method name — row 15 is not vacuous"
@@ -784,7 +784,7 @@ func TestChatTransportRealHTTPCancellationAndTimeout(t *testing.T) {
 GO
 run_gate "$T"
 rc="$RC"
-if [ "$rc" = 1 ] && printf '%s' "$LAST" | grep -q 'chat_transport_test.go:4'; then
+if [ "$rc" = 1 ] && grep -q 'chat_transport_test.go:4' <<<"$LAST"; then
 	ok "a 250 ms budget above chatTransport( is named, not invisible"
 else
 	ko "the modelprovider fixture head is not in the table (rc=$rc)" "$LAST"
