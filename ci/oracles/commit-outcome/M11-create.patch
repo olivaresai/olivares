@@ -1,0 +1,16 @@
+diff --git a/modules/sessions/communication_channel_service.go b/modules/sessions/communication_channel_service.go
+index ae3c289..8f4bd68 100644
+--- a/modules/sessions/communication_channel_service.go
++++ b/modules/sessions/communication_channel_service.go
+@@ -285,11 +285,6 @@ func (m *Module) CreateChannel(
+ 			if err := tx.lockAuthoritySnapshot(ctx, nil); err != nil {
+ 				return err
+ 			}
+-			if err := tx.lockTransaction(ctx, fmt.Sprintf(
+-				"sessions_channel_create|%s|%s|%s", scope.TenantID, scope.WorkspaceID, cmd.Slug,
+-			)); err != nil {
+-				return err
+-			}
+ 			routeGuard, err := lockCommunicationGuardByKind(
+ 				ctx, tx, CommunicationGuardRouteRevision,
+ 			)
