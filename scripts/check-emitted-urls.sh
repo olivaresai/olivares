@@ -37,6 +37,34 @@
 # confident wrong verdict on this very host on the day this was written.
 #
 # Three answers, never two: CLEAN / BROKEN / UNVERIFIED.
+#
+# ============ WHERE THE RECORD LIVES (2026-09-23) ===========================================
+# In two places, chosen by who can see the emitter. The INLINE record below ships with the
+# export, so it holds every line that a PUBLISHED file emits and no other. A line whose every
+# emitter is curated out of the export lives in docs/emitted-urls-hub-record.txt instead: same
+# format, with `#` and blank lines ignored, and the export curation removes it by one exact
+# entry. Left inline, such a line reads in the public tree as "declared and nothing emits it",
+# and the export cannot drop one line of an inline string.
+#
+# The record file's ABSENCE is not a password. The gate asks scripts/hub-leg.sh --classify
+# which tree it is in, and that answer rests on the marker sentence the export stamps AND on
+# the absence of every hub-only path:
+#   public   -> SCOPED, said on every run, and only the inline record is read
+#   hub      -> BROKEN (exit 1): a development tree has lost its record, and reading half of
+#               it would certify URLs nobody declared
+#   unknown  -> UNVERIFIED (exit 2), and the same for a classifier that cannot run: nothing
+#               proves this is the public export, so nothing is certified
+# A URL declared in BOTH places is BROKEN, because the two trees would judge it by different
+# lines.
+#
+# The split is ENFORCED in both directions, not only described. A URL that only the excluded record
+# declares, emitted by a file the export publishes, is BROKEN: the public tree would find it
+# undeclared, and the excluded record would be a way to whitelist a page through the one file the
+# export drops. And an INLINE row whose every emitter is curated out is BROKEN too (since
+# 2026-09-23): it belongs in the excluded record. Which files publish is read from
+# scripts/export-public.sh's own lists, by the rule its --manifest applies. Where that script is
+# absent, every file present counts as published, and lists the gate cannot read are
+# UNVERIFIED (exit 2).
 set -eu
 cd "$(dirname "$0")/.."
 
@@ -176,6 +204,9 @@ MAX_RECORD_AGE_DAYS=45
 #       repository that declares that profile. Measured 404 on 2026-09-16 before the cut was published. It is its own
 #       owner, not `public-repo-empty-release-blocker`, for the same reason Discussions is: a true
 #       status must carry its true reason, and this one resolves at release time, by the act.
+#       ⛔ RESOLVED on 2026-09-23. v26.9.0 was published on 2026-09-17 and its tag page answers
+#       200, so no row carries this owner any more. The paragraph stays so that the history above
+#       still names what it describes.
 #
 #   drill-fixture-not-a-location
 #       A security-DRILL advisory id in cmd/olivares/fixtures/. It identifies a rehearsal, is not
@@ -215,6 +246,18 @@ MAX_RECORD_AGE_DAYS=45
 # links, the releases index and the v26.9.0 tag page were measured with --probe from this box (five
 # attempts each). The tag page is 404 on the public repository until the v26.9.0 release is published
 # there (dev cut only, PR #2504); the README emitted it since that cut without a record line.
+# 2026-09-23 · release links. There is no v26.9.1: the next release is v26.10, and no v26.9.1
+# tag or release exists. The release canon is the published
+# v26.9.0, so README.md's release link names v26.9.0 and the v26.9.1 row left the record with
+# that correction. The v26.9.0 tag page answered 200 five of five times on 2026-09-23 (GET,
+# following redirects); v26.9.0 is the latest published release (2026-09-17). The v26.8.0 tag
+# page answers 200 too (published 2026-09-01), so its
+# 404, which was true when it was measured on 2026-08-31, now reads 200. The enterprise
+# repository page moved to the excluded record unchanged, because only curated-out files emit it.
+# 2026-09-23 · six more rows moved to the excluded record unchanged, for the same reason: the
+# CODE_OF_CONDUCT and honesty-and-limits blob links, Discussions, the v26.8.0 tag page, the raw
+# honesty-and-limits link and the raw install.sh one-liner. Only docs/launch/ files emit them. The
+# gate now refuses such a row inline, so the public tree never reads one as emitted by nothing.
 EMITTED_RECORD="https://alma.olivares.ai 200 2026-08-27
 https://docs.olivares.ai 200 2026-08-23
 https://docs.olivares.ai/cli 404 2026-08-28 docs-site-deploy-lag
@@ -223,20 +266,15 @@ https://docs.olivares.ai/reference/configuration/ 200 2026-09-11
 https://github.com/olivaresai/olivares 200 2026-08-18
 https://github.com/olivaresai/olivares.git 200 2026-08-18
 https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/\${tag} 404 2026-09-02 sigstore-certificate-identity-not-a-location
-https://github.com/olivaresai/olivares/blob/main/CODE_OF_CONDUCT.md 404 2026-08-18 public-repo-empty-release-blocker
-https://github.com/olivaresai/olivares/releases/tag/v26.9.0 404 2026-09-16 public-release-v26.9.0-pending
 https://github.com/olivaresai/olivares/blob/main/CONTRIBUTING.md 404 2026-08-18 public-repo-empty-release-blocker
 https://github.com/olivaresai/olivares/blob/main/GOVERNANCE.md 404 2026-08-27 public-repo-empty-release-blocker
 https://github.com/olivaresai/olivares/blob/main/INSTALL.md#operate-claude-code-co-deployment 404 2026-08-18 public-repo-empty-release-blocker
 https://github.com/olivaresai/olivares/blob/main/SECURITY.md 404 2026-08-18 public-repo-empty-release-blocker
 https://github.com/olivaresai/olivares/blob/main/SUPPORT.md 404 2026-08-27 public-repo-empty-release-blocker
-https://github.com/olivaresai/olivares/blob/main/docs-site/src/content/docs/start/honesty-and-limits.md 404 2026-08-18 public-repo-empty-release-blocker
 https://github.com/olivaresai/olivares/blob/main/docs/RELEASE-VERIFICATION.md 404 2026-08-18 public-repo-empty-release-blocker
 https://github.com/olivaresai/olivares/blob/main/scripts/smoke-agentops.sh 404 2026-08-18 public-repo-empty-release-blocker
-https://github.com/olivaresai/olivares/discussions 404 2026-08-27 discussions-not-enabled-maintainer-act
 https://github.com/olivaresai/olivares/releases 200 2026-09-17
-https://github.com/olivaresai/olivares/releases/tag/v26.8.0 404 2026-08-31 public-repo-empty-release-blocker
-https://github.com/olivaresai/olivares/releases/tag/v26.9.0 404 2026-09-17 public-release-not-yet-published
+https://github.com/olivaresai/olivares/releases/tag/v26.9.0 200 2026-09-23
 https://github.com/olivaresai/olivares/security/advisories/OLIVARES-DRILL-0001 404 2026-08-18 drill-fixture-not-a-location
 https://github.com/olivaresai/olivares/tree/main/examples/govern-claude-code 200 2026-08-18
 https://licenses.olivares.ai 200 2026-08-18
@@ -265,9 +303,7 @@ https://olivares.ai/status 200 2026-09-17
 https://olivares.ai/roadmap 200 2026-09-17
 https://olivares.ai/updates 404 2026-08-18 release-blocker-no-producer-no-server
 https://packages.olivares.ai 404 2026-09-02 package-repository-awaits-authorized-publish
-https://raw.githubusercontent.com/olivaresai/olivares/main/docs-site/src/content/docs/start/honesty-and-limits.md 404 2026-08-31 public-repo-empty-release-blocker
-https://raw.githubusercontent.com/olivaresai/olivares/main/scripts/install-agentops.sh 404 2026-08-18 public-repo-empty-release-blocker
-https://raw.githubusercontent.com/olivaresai/olivares/main/scripts/install.sh 404 2026-08-18 public-repo-empty-release-blocker"
+https://raw.githubusercontent.com/olivaresai/olivares/main/scripts/install-agentops.sh 404 2026-08-18 public-repo-empty-release-blocker"
 
 EMU_SELFTEST=0
 [ "${1:-}" = "--selftest" ] && EMU_SELFTEST=1
@@ -276,7 +312,7 @@ EMU_PROBE=0
 export EMU_SELFTEST EMU_PROBE EMITTED_RECORD MAX_RECORD_AGE_DAYS
 
 python3 - <<'PY'
-import os, re, socket, subprocess, sys, datetime
+import fnmatch, os, re, shutil, socket, stat, subprocess, sys, tempfile, datetime
 from urllib.parse import urlsplit
 
 SELFTEST = os.environ.get("EMU_SELFTEST") == "1"
@@ -343,14 +379,64 @@ def is_test(name):
     return name.endswith("_test.go") or ".test." in name or name.endswith(".spec.ts")
 
 
+def unread_emitter(path, exc):
+    """A file the census listed and cannot read is COULD NOT LOOK (exit 2), never a skip: a
+    forbidden emitter behind mode 000 would otherwise pass as "every one declared"."""
+    unverified(f"{path} was enumerated but cannot be read ({exc.strerror or exc}); an unread "
+               "emitter is not a clean one")
+
+
+def walk_refused(exc):
+    """os.walk's `onerror`: a directory the census cannot list hides every emitter in it, so it
+    is COULD NOT LOOK (exit 2), never a smaller census."""
+    unverified(f"{exc.filename} could not be listed ({exc.strerror or exc}); a directory the "
+               "census cannot list is not an empty one")
+
+
+def census_walk(top):
+    """-> os.walk(top) that refuses instead of skipping. A root that does not exist yields
+    nothing (a partial tree may lack it); a root that exists and cannot be examined, or is not a
+    directory, is COULD NOT LOOK, and so is any directory below it that cannot be listed."""
+    try:
+        os.lstat(top)
+    except FileNotFoundError:
+        return iter(())
+    except OSError as exc:
+        walk_refused(exc)
+    try:
+        is_dir = stat.S_ISDIR(os.stat(top).st_mode)
+    except OSError as exc:
+        walk_refused(exc)
+    if not is_dir:
+        unverified(f"{top} is a census root but not a directory; nothing below it can be listed")
+    return os.walk(top, onerror=walk_refused)
+
+
+def listed_source(path):
+    """-> True for a surface file the census must read, False for an optional one that is simply
+    absent (README.md, .github/FUNDING.yml). Present but unexaminable (a dangling link included)
+    or not a regular file is COULD NOT LOOK; os.path.isfile() answered False to both, a skip."""
+    try:
+        os.lstat(path)
+    except FileNotFoundError:
+        return False
+    except OSError as exc:
+        unread_emitter(path, exc)
+    try:
+        mode = os.stat(path).st_mode
+    except OSError as exc:
+        unread_emitter(path, exc)
+    if not stat.S_ISREG(mode):
+        unverified(f"{path} is listed as a surface file but is not a regular file")
+    return True
+
+
 def emitted():
     """-> {url: [(path, line)]}. Derived, never declared: a URL literal in shipping, non-test
     source is a URL this product can put in front of a customer."""
     found = {}
     for top in ROOTS:
-        if not os.path.isdir(top):
-            continue
-        for root, dirs, files in os.walk(top):
+        for root, dirs, files in census_walk(top):
             dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
             for f in sorted(files):
                 if not f.endswith(EXTS) or is_test(f):
@@ -358,17 +444,15 @@ def emitted():
                 path = os.path.join(root, f)
                 try:
                     text = open(path, encoding="utf-8", errors="replace").read()
-                except OSError:
-                    continue
+                except OSError as exc:
+                    unread_emitter(path, exc)
                 for i, line in enumerate(text.splitlines(), 1):
                     for m in URL.finditer(line):
                         found.setdefault(m.group(0).rstrip(".,"), []).append((path, i))
                     for m in ORG_URL.finditer(line):
                         found.setdefault(m.group(0).rstrip(".,"), []).append((path, i))
     for top in COPY_ROOTS:
-        if not os.path.isdir(top):
-            continue
-        for root, dirs, files in os.walk(top):
+        for root, dirs, files in census_walk(top):
             dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
             for f in sorted(files):
                 if not f.endswith(EXTS + (".mdx",)) or is_test(f):
@@ -376,27 +460,25 @@ def emitted():
                 path = os.path.join(root, f)
                 try:
                     text = open(path, encoding="utf-8", errors="replace").read()
-                except OSError:
-                    continue
+                except OSError as exc:
+                    unread_emitter(path, exc)
                 for i, line in enumerate(text.splitlines(), 1):
                     for m in ORG_URL.finditer(line):
                         found.setdefault(m.group(0).rstrip(".,"), []).append((path, i))
     copy_files = list(COPY_FILES)
     for top in PUBLISHED_SURFACE_ROOTS:
-        if not os.path.isdir(top):
-            continue
-        for root, dirs, files in os.walk(top):
+        for root, dirs, files in census_walk(top):
             dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
             for f in sorted(files):
                 if f.endswith(EXTS + (".mdx",)) and not is_test(f):
                     copy_files.append(os.path.join(root, f))
     for path in dict.fromkeys(copy_files):
-        if not os.path.isfile(path):
+        if not listed_source(path):
             continue
         try:
             text = open(path, encoding="utf-8", errors="replace").read()
-        except OSError:
-            continue
+        except OSError as exc:
+            unread_emitter(path, exc)
         for i, line in enumerate(text.splitlines(), 1):
             # Los dos patrones, no sólo el de la organización. Medido el 2026-08-26: con sólo
             # ORG_URL, `.github/FUNDING.yml` entraba en el censo y su `custom:` seguía invisible —
@@ -410,20 +492,189 @@ def emitted():
     return found
 
 
-def record():
-    """-> {url: (status, date, owner)}"""
+# export-closure: absent-by-design docs/emitted-urls-hub-record.txt — DATA, read and never run:
+#   the excluded half of the record. The export curation removes it by one exact entry, and in
+#   the published tree its absence is SCOPED by the tree's profile, never assumed.
+HUB_RECORD = "docs/emitted-urls-hub-record.txt"
+
+
+def parse_record(text, source):
+    """-> {url: (status, date, owner)} from `<url> <status> <date> [owner]` lines."""
     out = {}
-    for raw in os.environ["EMITTED_RECORD"].splitlines():
+    for raw in text.splitlines():
         parts = raw.split()
-        if not parts:
+        if not parts or parts[0].startswith("#"):
             continue
         if len(parts) < 3:
-            unverified(f"record line {raw!r} is not '<url> <status> <date> [owner]'")
+            unverified(f"{source}: record line {raw!r} is not '<url> <status> <date> [owner]'")
         url, status, when = parts[0], parts[1], parts[2]
         out[url] = (status, when, parts[3] if len(parts) > 3 else "")
+    return out
+
+
+def tree_profile():
+    """-> (profile, why): what scripts/hub-leg.sh --classify says this tree is. A classifier that
+    is missing, fails, or answers outside its three words gives `unknown`. That is an inability,
+    and it is never a reason to guess `public`."""
+    cls = os.path.join("scripts", "hub-leg.sh")
+    try:
+        r = subprocess.run(["bash", cls, "--classify", "--root", os.getcwd()],
+                           capture_output=True, text=True, timeout=60)
+    except (OSError, subprocess.SubprocessError) as exc:
+        return "unknown", f"{cls} --classify could not run ({exc})"
+    answer, why = r.stdout.strip(), r.stderr.strip()
+    if why.startswith("hub-leg: "):
+        why = why[len("hub-leg: "):]
+    if r.returncode != 0 or answer not in ("hub", "public", "unknown"):
+        return "unknown", f"{cls} --classify exited {r.returncode} answering {answer!r}"
+    return answer, why
+
+
+def hub_record_text():
+    """-> the excluded record's text, or None where the tree has none by design (the public export).
+
+    If the file is present, it is read whatever the profile. If it is absent, the profile decides,
+    and only a tree PROVEN public continues. A present file that cannot be read is COULD NOT LOOK."""
+    try:
+        os.lstat(HUB_RECORD)
+    except FileNotFoundError:
+        profile, why = tree_profile()
+        if profile == "public":
+            print(f"SCOPED check-emitted-urls: {HUB_RECORD} is hub-only and curated out of the "
+                  f"published tree ({why}); only the inline record is read here")
+            return None
+        if profile == "hub":
+            print(f"BROKEN check-emitted-urls: {HUB_RECORD} is missing from a development tree "
+                  f"({why}). It declares the URLs that only curated-out files emit, and the inline "
+                  "record alone would leave them undeclared or certify half a record.")
+            sys.exit(1)
+        unverified(f"{HUB_RECORD} is absent and this tree is not proven to be the public export "
+                   f"({why}); refusing to read the inline record alone")
+    except OSError as exc:
+        unverified(f"{HUB_RECORD} cannot be examined ({exc.strerror or exc})")
+    try:
+        with open(HUB_RECORD, encoding="utf-8") as fh:
+            return fh.read()
+    except (OSError, UnicodeDecodeError) as exc:
+        unverified(f"{HUB_RECORD} is present but cannot be read ({exc}); an unread half of the "
+                   "record is not an empty one")
+
+
+def record():
+    """-> ({url: (status, date, owner)}, hub_only, problems). The inline record, plus the excluded
+    record wherever the tree has one; `hub_only` is the set of URLs only the excluded record declares.
+    A URL declared in both is a problem: the public tree would judge it by the inline line and
+    the excluded record by whichever came last."""
+    out = parse_record(os.environ["EMITTED_RECORD"], "the inline record")
     if not out:
         unverified("the record parsed empty; refusing to certify against nothing")
-    return out
+    problems, hub_only = [], set()
+    text = hub_record_text()
+    if text is not None:
+        for url, row in parse_record(text, HUB_RECORD).items():
+            if url in out:
+                problems.append(
+                    f"{url} is declared in both the inline record and {HUB_RECORD}: keep the line "
+                    "where its emitters are (inline if any published file emits it)")
+            else:
+                out[url] = row
+                hub_only.add(url)
+    return out, hub_only, problems
+
+
+# export-closure: absent-by-design scripts/export-public.sh — DATA, read and never run: its lists
+#   say which files the export publishes. The export removes it, and in a tree without it every
+#   file present counts as published, which over-reports and never under-reports.
+EXPORT_SCRIPT = "scripts/export-public.sh"
+CURATION_LISTS = ("TOP_ALLOW", "TOP_BLOCK", "DOCS_BLOCK", "DOCS_KEEP", "SCRIPTS_BLOCK",
+                  "GITHUB_BLOCK", "COMMERCIAL_BLOCK", "MISC_BLOCK")
+# What a list entry may look like for fnmatch to match it exactly as the shell's [[ == ]] does:
+# path characters and `*`, nothing the two could read differently (`?`, `[`, quotes, `$`).
+CURATION_TOKEN = re.compile(r"^[A-Za-z0-9._/@+*-]+$")
+
+
+def publication_rule():
+    """-> (published(path) -> bool, source): the rule `export-public.sh --manifest` applies to a
+    path, read from that script's own lists and never restated here. A DOCS_KEEP entry is an exact
+    path that ships out of a blocked directory; a path that matches a *_BLOCK entry as a glob, or
+    sits below one, does not ship; every other path ships when its first segment is in TOP_ALLOW.
+
+    With no export script, the tree IS the export, so every file present counts as published. A
+    script that is present but unreadable, or whose lists this reader cannot follow (missing,
+    defined twice, appended to elsewhere, an empty TOP_ALLOW, an entry the shell would expand
+    differently), is UNVERIFIED: a curation nobody could read certifies nothing."""
+    try:
+        with open(EXPORT_SCRIPT, encoding="utf-8") as fh:
+            src = fh.read()
+    except FileNotFoundError:
+        return (lambda path: True), f"the tree itself ({EXPORT_SCRIPT} is absent, as in a public export)"
+    except (OSError, UnicodeDecodeError) as exc:
+        unverified(f"{EXPORT_SCRIPT} is present but cannot be read ({exc}); which files the export "
+                   "publishes is unknown")
+    lists = {}
+    for name in CURATION_LISTS:
+        bodies = re.findall(r"^" + name + r"=\((?:\)|\n(.*?)^\))", src, re.S | re.M)
+        if len(bodies) != 1 or len(re.findall(r"^\s*" + name + r"=", src, re.M)) != 1 \
+                or re.search(r"\b" + name + r"\+=", src):
+            unverified(f"{EXPORT_SCRIPT}: {name} is not one plain list defined once; the curation "
+                       "changed shape and which files it publishes cannot be read")
+        tokens = [t for ln in bodies[0].splitlines() for t in ln.split("#", 1)[0].split()]
+        odd = [t for t in tokens if not CURATION_TOKEN.match(t)]
+        if odd:
+            unverified(f"{EXPORT_SCRIPT}: {name} holds {odd[0]!r}, which this reader cannot match "
+                       "the way the shell does")
+        lists[name] = tokens
+    if not lists["TOP_ALLOW"]:
+        unverified(f"{EXPORT_SCRIPT}: TOP_ALLOW parsed empty; refusing to say nothing publishes")
+    keep, allow = set(lists["DOCS_KEEP"]), set(lists["TOP_ALLOW"])
+    blocks = [b for name in CURATION_LISTS if name.endswith("_BLOCK") for b in lists[name]]
+
+    def published(path):
+        blocked = path not in keep and any(
+            fnmatch.fnmatchcase(path, b) or fnmatch.fnmatchcase(path, b + "/*") for b in blocks)
+        return not blocked and path.split("/", 1)[0] in allow
+
+    return published, f"{EXPORT_SCRIPT} ({', '.join(CURATION_LISTS)})"
+
+
+def curated_out_inline(urls, inline):
+    """-> problems: an INLINE row whose every emitter is curated out. The inline record ships,
+    so in the public tree that row is "declared and nothing emits it"; it belongs in the excluded
+    record. Emitted by nothing at all is reported by the record check, not here. With no export
+    script every file present counts as published, so nothing is reported."""
+    emitted = sorted(u for u in inline if u in urls)
+    if not emitted:
+        return []
+    published, source = publication_rule()
+    problems = []
+    for url in emitted:
+        if not any(published(os.path.normpath(p)) for p, _ in urls[url]):
+            sites = ", ".join(f"{p}:{i}" for p, i in urls[url][:3])
+            problems.append(
+                f"{url} is declared inline, but every file that emits it is curated out ({sites}; "
+                f"publication read from {source}). The public tree would read it as declared and "
+                f"emitted by nothing: move the line to {HUB_RECORD}")
+    return problems
+
+
+def published_in_hub_record(urls, hub_only):
+    """-> problems: a URL only the excluded record declares that a PUBLISHED file emits. The public
+    tree reads the inline record alone, so there that URL is undeclared; certifying it in the excluded
+    record would be a green that the export turns red, and a way to whitelist a page through the one
+    file the export drops."""
+    emitted = sorted(u for u in hub_only if u in urls)
+    if not emitted:
+        return []
+    published, source = publication_rule()
+    problems = []
+    for url in emitted:
+        sites = [f"{p}:{i}" for p, i in urls[url] if published(os.path.normpath(p))]
+        if sites:
+            problems.append(
+                f"{url} is declared only in {HUB_RECORD}, but a published file emits it "
+                f"({', '.join(sites[:3])}; publication read from {source}). The public tree would "
+                "find it undeclared: declare it in the inline record")
+    return problems
 
 
 BLOB = re.compile(r"^https://github\.com/([^/]+)/([^/]+)/blob/")
@@ -446,7 +697,7 @@ def probe_target(url):
 def resolves(u):
     """(host, addrs) del URL. NO es una prueba de salud: separa «no hay registro» de «no contesta».
 
-    ⛔ ESCRITA POR EL HUB EL 2026-08-20, y digo por qué: llegó a `main` con la restauración de
+    ⛔ ESCRITA EL 2026-08-20, y digo por qué: llegó a `main` con la restauración de
     #824 **llamada cuatro veces y sin definir**, así que `lint:emitted-urls` moría con
     `NameError` y, por estar en el carril rápido, tumbaba el push de CUALQUIER rama. Su
     contrato no lo he inventado: lo fijan las tres casillas del propio auto-test —un nombre que
@@ -486,6 +737,67 @@ def probe(url, attempts=5):
             codes.append("000")
     answered = [c for c in codes if c != "000"]
     return (answered[-1] if answered else "000"), codes
+
+
+def fixture_run(profile, emits, inline=None, hub_record=None, classifier=True, exporter=None,
+                files=None, unreadable=None, links=None):
+    """Runs THIS gate, whole and unmodified except for its inline record when `inline` is given,
+    inside a throwaway tree of the named profile -> (exit code, everything it printed).
+
+    The profile is built the way scripts/hub-leg.sh --classify reads a tree, never declared to
+    the gate: `public` carries the marker sentence the export stamps and no hub-only path, `hub`
+    carries a hub-only path, `unknown` carries neither. `classifier=False` leaves the classifier
+    out of the tree, so the gate cannot ask. The tree's README.md emits `emits`, one per line.
+    `exporter` is the text of the tree's export script (itself a hub-only path), and `files` maps
+    further relative paths to their text, so that an emitter can sit where the curation drops it.
+
+    The inline record is swapped only where a case needs rows of its own: the real record ages
+    and grows, and a case about the record FILE must not start failing the day a real row goes
+    stale. A case about the real declaration keeps the real record (inline=None)."""
+    src = open(os.path.join("scripts", "check-emitted-urls.sh"), encoding="utf-8").read()
+    if inline is not None:
+        src, n = re.subn(r'(?ms)^EMITTED_RECORD="[^"]*"$', lambda m: 'EMITTED_RECORD="' + inline + '"', src)
+        if n != 1:
+            return None, "fixture: the inline record block was not found exactly once"
+    with tempfile.TemporaryDirectory(prefix="emitted-urls-selftest.") as t:
+        os.makedirs(os.path.join(t, "scripts"))
+        with open(os.path.join(t, "scripts", "check-emitted-urls.sh"), "w", encoding="utf-8") as fh:
+            fh.write(src)
+        if classifier:
+            shutil.copy(os.path.join("scripts", "hub-leg.sh"), os.path.join(t, "scripts", "hub-leg.sh"))
+        if profile == "public":
+            sig = subprocess.run(["bash", os.path.join("scripts", "hub-leg.sh"), "--marker-signature"],
+                                 capture_output=True, text=True, timeout=60).stdout
+            with open(os.path.join(t, "PUBLIC-EXPORT.md"), "w", encoding="utf-8") as fh:
+                fh.write("# Public export\n\n" + sig)
+        elif profile == "hub":
+            os.makedirs(os.path.join(t, "design"))
+        with open(os.path.join(t, "README.md"), "w", encoding="utf-8") as fh:
+            fh.write("\n".join(emits) + "\n")
+        if hub_record is not None:
+            os.makedirs(os.path.join(t, "docs"), exist_ok=True)
+            with open(os.path.join(t, "docs", "emitted-urls-hub-record.txt"), "w", encoding="utf-8") as fh:
+                fh.write(hub_record)
+        if exporter is not None:
+            with open(os.path.join(t, "scripts", "export-public.sh"), "w", encoding="utf-8") as fh:
+                fh.write(exporter)
+        for rel, text in (files or {}).items():
+            path = os.path.join(t, *rel.split("/"))
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write(text)
+        for rel, target in (links or {}).items():     # a listed source whose target is gone
+            path = os.path.join(t, *rel.split("/"))
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            os.symlink(target, path)
+        for rel in unreadable or ():
+            os.chmod(os.path.join(t, *rel.split("/")), 0)   # listed, not readable (a non-root uid)
+        r = subprocess.run(["bash", os.path.join(t, "scripts", "check-emitted-urls.sh")],
+                           capture_output=True, text=True, timeout=120)
+        for rel in unreadable or ():                        # so the throwaway tree can be removed
+            path = os.path.join(t, *rel.split("/"))
+            os.chmod(path, 0o755 if os.path.isdir(path) else 0o644)
+        return r.returncode, r.stdout + r.stderr
 
 
 def selftest():
@@ -547,6 +859,145 @@ def selftest():
     expect("an olivares.ai URL is untouched by the conversion",
            probe_target("https://olivares.ai/updates") == "https://olivares.ai/updates")
 
+    # --- the record split: an excluded record, read or refused by the profile of the tree ------
+    # The inline record SHIPS, so a line whose only emitters are curated out cannot live there: in
+    # the public tree it reads as "declared and nothing emits it". Such lines live in the excluded
+    # record, which the export curates out. Its absence is SCOPED only where the tree PROVES it is
+    # the public export; a development tree that lost it, or a tree nobody can classify, is never green.
+    day = datetime.date.today().isoformat()
+    shipped = "https://olivares.ai/selftest-inline"
+    hub_only = "https://github.com/olivaresai/selftest-hub-only"
+    inline = f"{shipped} 200 {day}"
+    rc, out = fixture_run("public", [shipped], inline=inline)
+    expect("a public tree without the excluded record says SCOPED and exits 0",
+           rc == 0 and "SCOPED" in out and "docs/emitted-urls-hub-record.txt" in out)
+    rc, out = fixture_run("hub", [shipped], inline=inline)
+    expect("a development tree without the excluded record is BROKEN, exit 1, never green",
+           rc == 1 and "BROKEN" in out and "docs/emitted-urls-hub-record.txt" in out
+           and "OK check-emitted-urls" not in out)
+    rc, out = fixture_run("unknown", [shipped], inline=inline)
+    expect("an unclassifiable tree without the excluded record is UNVERIFIED, exit 2, never green",
+           rc == 2 and "UNVERIFIED" in out and "OK check-emitted-urls" not in out)
+    rc, out = fixture_run("public", [shipped], inline=inline, classifier=False)
+    expect("a marked tree whose classifier cannot run is not proven public: exit 2",
+           rc == 2 and "UNVERIFIED" in out and "OK check-emitted-urls" not in out)
+    # A tree's export script says what it publishes (see the inline invariant below), so the `hub` profile
+    # cases carry a small one: README.md publishes, docs/launch does not.
+    curation = ("TOP_ALLOW=(\n  README.md docs scripts\n)\nTOP_BLOCK=(\n  design\n)\n"
+                "DOCS_BLOCK=(\n  docs/launch\n  docs/emitted-urls-hub-record.txt\n)\n"
+                "DOCS_KEEP=(\n)\nSCRIPTS_BLOCK=(\n)\nGITHUB_BLOCK=(\n)\nCOMMERCIAL_BLOCK=()\n"
+                "MISC_BLOCK=(\n)\n")
+    dropped = {"docs/launch/copy.md": hub_only + "\n"}
+    hub_line = f"{hub_only} 404 {day} selftest-fixture-owner\n"
+    rc, out = fixture_run("hub", [shipped], inline=inline, exporter=curation, files=dropped,
+                          hub_record="# a comment line\n\n" + hub_line)
+    expect("an excluded-record line for a curated-out emitter is honoured, its non-200 named with its owner",
+           rc == 0 and "OK check-emitted-urls" in out and hub_only in out
+           and "selftest-fixture-owner" in out)
+    rc, out = fixture_run("hub", [shipped], inline=inline, hub_record=f"{shipped} 200 {day}\n")
+    expect("a URL declared in both records is refused",
+           rc == 1 and "BROKEN" in out and "declared in both" in out)
+    # A fixture record here: the page is refused by any record that does not declare it.
+    v2691 = "https://github.com/olivaresai/olivares/releases/tag/v26.9.1"
+    rc, out = fixture_run("public", [shipped, v2691], inline=inline)
+    expect("an emitted v26.9.1 release link with no declaration is refused",
+           rc == 1 and f"{v2691} is emitted" in out and "not in the record" in out)
+    # And the REAL records, inline and excluded: no v26.9.1 release exists, so neither record
+    # declares its page, and the real inline record refuses a README that emits it.
+    real_hub = open(HUB_RECORD, encoding="utf-8").read() if os.path.exists(HUB_RECORD) else ""
+    declared = set(parse_record(os.environ["EMITTED_RECORD"], "the inline record"))
+    declared |= set(parse_record(real_hub, HUB_RECORD))
+    expect("the real records declare no v26.9.1 release page", v2691 not in declared)
+    rc, out = fixture_run("public", [v2691])
+    expect("the real inline record refuses an emitted v26.9.1 release link",
+           rc == 1 and f"{v2691} is emitted" in out and "not in the record" in out)
+
+    # --- the inline invariant: a URL that a PUBLISHED file emits is declared inline, never only in
+    # the excluded record. Otherwise that record certifies it, the public tree finds it undeclared, and a
+    # release page nobody published could be whitelisted through the file the export drops.
+    # Publication is read from the export script's own lists, by the rule its --manifest applies;
+    # a tree with no export script counts every file present as published.
+    rc, out = fixture_run("hub", [shipped, v2691], inline=inline, exporter=curation,
+                          hub_record=f"{v2691} 404 {day} selftest-fixture-owner\n")
+    expect("a published emitter's URL declared only in the excluded record is BROKEN, exit 1",
+           rc == 1 and "BROKEN" in out and f"{v2691} is declared only in" in out
+           and "README.md:2" in out)
+    rc, out = fixture_run("hub", [shipped, hub_only], inline=inline, hub_record=hub_line)
+    expect("with no export script every file present counts as published: that line is BROKEN",
+           rc == 1 and "BROKEN" in out and f"{hub_only} is declared only in" in out)
+    rc, out = fixture_run("hub", [shipped], inline=inline, files=dropped, hub_record=hub_line,
+                          exporter="# an export script whose lists are gone\n")
+    expect("an export script whose lists cannot be read is UNVERIFIED, exit 2, never green",
+           rc == 2 and "UNVERIFIED" in out and "OK check-emitted-urls" not in out)
+    # --- and the reverse direction (added 2026-09-23): an INLINE row whose every emitter is
+    # curated out reads in the public tree as "declared and nothing emits it", so in a tree that
+    # carries the export's lists it is BROKEN and belongs in the excluded record. One published emitter
+    # keeps it inline; with no export script every file counts as published and nothing moves.
+    only_dropped = inline + f"\n{hub_only} 404 {day} selftest-fixture-owner"
+    rc, out = fixture_run("hub", [shipped], inline=only_dropped, exporter=curation, files=dropped,
+                          hub_record="# empty\n")
+    expect("an inline row whose every emitter is curated out is BROKEN, exit 1: it belongs in the excluded record",
+           rc == 1 and "BROKEN" in out and f"{hub_only} is declared inline" in out
+           and "docs/launch/copy.md:1" in out)
+    rc, out = fixture_run("hub", [shipped, hub_only], inline=only_dropped, exporter=curation,
+                          files=dropped, hub_record="# empty\n")
+    expect("the same inline row with a published emitter as well stays inline -> OK",
+           rc == 0 and "OK check-emitted-urls" in out)
+    rc, out = fixture_run("hub", [shipped], inline=only_dropped, files=dropped, hub_record="# empty\n")
+    expect("with no export script every emitter counts as published: the inline row stays -> OK",
+           rc == 0 and "OK check-emitted-urls" in out)
+    own = os.path.join("scripts", "export-public.sh")
+    if os.path.exists(own):
+        with open(own, encoding="utf-8") as fh:
+            own_text = fh.read()
+        rc, out = fixture_run("hub", [shipped, v2691], inline=inline, exporter=own_text,
+                              files=dropped,
+                              hub_record=f"{v2691} 404 {day} selftest-fixture-owner\n" + hub_line)
+        expect("this tree's own export lists decide: README.md publishes, docs/launch does not",
+               rc == 1 and f"{v2691} is declared only in" in out
+               and f"{hub_only} is declared only in" not in out)
+    else:
+        profile = subprocess.run(["bash", os.path.join("scripts", "hub-leg.sh"), "--classify",
+                                  "--root", os.getcwd()], capture_output=True, text=True,
+                                 timeout=60).stdout.strip()
+        expect("no export script here, because this tree is the public export that removed it",
+               profile == "public")
+
+    # --- an emitter the census cannot read is COULD NOT LOOK (added 2026-09-24). A file listed and
+    # then skipped is a hole in the census, not a clean file: a forbidden emitter behind mode 000
+    # would pass. One case per enumerator (code roots, copy roots, published surface files), each
+    # beside its readable control, which must still refuse.
+    undeclared = "https://olivares.ai/selftest-undeclared"
+    org_undeclared = "https://github.com/olivaresai/selftest-undeclared"
+    sites = [("core/x.go", f'const u = "{undeclared}"\n', undeclared),
+             ("docs/launch/copy.md", org_undeclared + "\n", org_undeclared),
+             (".github/ISSUE_TEMPLATE/x.yml", f"url: {undeclared}\n", undeclared)]
+    if os.geteuid() == 0:
+        expect("unreadable emitter: the mode-000 staging needs a non-root uid; not applicable at uid 0", True)
+    else:
+        for rel, text, url in sites:
+            rc, out = fixture_run("hub", [shipped], inline=inline, hub_record="# empty\n", files={rel: text})
+            expect(f"a readable forbidden emitter still refuses: {rel} -> BROKEN, exit 1",
+                   rc == 1 and f"{url} is emitted" in out)
+            rc, out = fixture_run("hub", [shipped], inline=inline, hub_record="# empty\n", files={rel: text},
+                                  unreadable=[rel])
+            expect(f"an unreadable emitter is COULD NOT LOOK: {rel} at mode 000 -> UNVERIFIED, exit 2, named",
+                   rc == 2 and "UNVERIFIED" in out and rel in out and "OK check-emitted-urls" not in out)
+        # One level up (added 2026-09-24): a directory the walk cannot list hides every emitter
+        # in it, so it is COULD NOT LOOK too, never a smaller census. One per enumerator.
+        for d, rel, text in (("core/zz", "core/zz/x.go", f'const u = "{undeclared}"\n'),
+                             ("docs/launch/zz", "docs/launch/zz/copy.md", org_undeclared + "\n"),
+                             (".github/zz", ".github/zz/x.yml", f"url: {undeclared}\n")):
+            rc, out = fixture_run("hub", [shipped], inline=inline, hub_record="# empty\n", files={rel: text},
+                                  unreadable=[d])
+            expect(f"an unlistable directory is COULD NOT LOOK: {d} at mode 000 -> UNVERIFIED, exit 2, named",
+                   rc == 2 and "UNVERIFIED" in out and d in out and "OK check-emitted-urls" not in out)
+    # A listed source that cannot be examined (a dangling link) is COULD NOT LOOK at any uid.
+    gone = ".github/ISSUE_TEMPLATE/gone.yml"
+    rc, out = fixture_run("hub", [shipped], inline=inline, hub_record="# empty\n", links={gone: "nowhere.yml"})
+    expect(f"a dangling listed source is COULD NOT LOOK: {gone} -> UNVERIFIED, exit 2, named",
+           rc == 2 and "UNVERIFIED" in out and gone in out and "OK check-emitted-urls" not in out)
+
     expect("an old record is over the age limit",
            (datetime.date(2026, 8, 13) - old).days > MAX_AGE)
     print("selftest " + ("OK — every red case is red, every green case is green" if ok else "FAILED"))
@@ -580,8 +1031,9 @@ if PROBE:
     print(f"check-emitted-urls: {bad} of {len(urls)} do not answer 200")
     sys.exit(1 if bad else 0)
 
-rec = record()
-problems = []
+rec, hub_only, problems = record()
+problems += published_in_hub_record(urls, hub_only)
+problems += curated_out_inline(urls, set(rec) - hub_only)
 today = datetime.date.today()
 
 for url, sites in sorted(urls.items()):

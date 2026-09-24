@@ -50,7 +50,7 @@ refuse de deviner. Déclarez la version que vous savez installée et les protect
 actives :
 
 ```sh
-olivares upgrade --check --current-version 26.9.1
+olivares upgrade --check --current-version 26.9.0
 ```
 
 ## Canaux de publication

@@ -296,7 +296,7 @@ and every profile that names no provider uses it.
 
 ⛔ **The other sentence here said "provider-key forms in the console never accept a
 secret. Filling that tab does not enable launches." That was true of v26.9 and is
-false from v26.10.** The console now has a Providers screen that accepts the
+false for v26.10, which is pending.** Its console will have a Providers screen that accepts the
 key, seals it in the engine, tests the connection without spending anything, and
 binds it to a provider profile — and a session launched under that profile uses it,
 with no variable in the server's shell. The old sentence referred to
@@ -309,7 +309,7 @@ The guided path: [Add a provider and launch an agent](/how-to/add-a-provider/), 
 Operate-path launch, attach and stop: [Operate a provider session](/how-to/operate-provider-sessions/).
 The Community runtime's own contract is documented with that runtime, not here.
 
-## Gaps v26.10 closed (measured 2026-09-17)
+## Gaps closed for the pending v26.10 (measured 2026-09-17)
 
 | Step | Before (file:line) | After |
 |---|---|---|

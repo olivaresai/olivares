@@ -11,7 +11,7 @@ description: >-
 estate，而模块 II 则在同一条观测流之上为每个会话维护一个**实时运行叠加层**——并且只展示
 该流如实承载的内容。
 
-v26.9.1 还会在 [提供商配置文件](/how-to/operate-provider-sessions/) 下把官方提供商
+v26.9.0 还会在 [提供商配置文件](/how-to/operate-provider-sessions/) 下把官方提供商
 CLI **作为自有子进程启动**。该受管路径是同一模块。它不替代叠加层，也不合并两个
 宣布同一提供商会话 id 的主目录（`CHANGELOG.md` `[26.9.0]` B1/B2）。
 

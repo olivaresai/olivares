@@ -27,13 +27,13 @@ type: application
 # 0.2.4: image.repository default -> docker.io/olivaresai/olivares. Docker Hub is the
 #        OFFICIAL primary registry; ghcr.io stays the always-published
 #        fallback (same digest, same signatures) and is the coordinate to prefer under
-#        Docker Hub anonymous-pull rate limits. The CHART itself is still published
-#        only to oci://ghcr.io/olivaresai/charts (release-chart.yml) — unchanged.
+#        Docker Hub anonymous-pull rate limits. The CHART's own OCI publication (target
+#        oci://ghcr.io/olivaresai/charts) is unverified: install it from deploy/helm/olivares.
 version: 0.2.4
 
 # The default engine image tag this chart targets (engine CalVer). Overridden
 # per-release by `--set image.tag=` / `image.digest=` (air-gap pins by digest).
-appVersion: "26.9.1"
+appVersion: "26.9.0"
 
 kubeVersion: ">=1.25.0-0"
 

@@ -10514,7 +10514,7 @@ olivares release manifest
 | `--security` | `bool` | `false` | mark this as a security release |
 | `--sign-key` | `string` | — | base64 (or @file) Ed25519 PRIVATE key to sign the manifest |
 | `--start-at` | `string` | — | rollout start time (RFC3339); before it no node upgrades |
-| `--version` | `string` | — | release version (semver), e.g. 26.9.1 (required) |
+| `--version` | `string` | — | release version (semver), e.g. 26.9.0 (required) |
 
 #### Command: olivares release sign-manifest
 
