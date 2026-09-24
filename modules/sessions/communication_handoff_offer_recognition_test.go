@@ -220,8 +220,8 @@ func TestHandoffOfferRecognitionRefusesBeforeAnyRead(t *testing.T) {
 // itself in the response recognition estate. The real SQLite or PostgreSQL
 // authority lock produces the stale Claim conflict and the real receipt table is
 // read; handoffRecognitionData only gates each admission and records what its
-// transaction asked the store for. Four helpers add what that estate lacks for an
-// offer by its own Session, and nothing else.
+// transaction asked the store for. A guard reconcile and four helpers add what that
+// estate lacks for an offer by its own Session, and nothing else.
 
 // handoffOfferRecognitionFixture is the response recognition estate prepared for
 // an offer by its Session.
@@ -238,6 +238,14 @@ func newHandoffOfferRecognitionFixture(t *testing.T, backend *communicationSchem
 	})
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
+	// The estate writes the Deliveries of its two carriers directly, at sequences 1
+	// and 2, and never advances the workspace's delivery sequence guard, which still
+	// allocates 1. The offer is the first real publish in this estate, so the guard
+	// is brought to max(delivery_seq)+1 through the product's own staged reconcile,
+	// the step the direct-notice fixture takes after its direct Channel insert.
+	if err := f.m.ReconcileCommunicationGuards(ctx, f.tenant, CommunicationGuardReconcileStaged); err != nil {
+		t.Fatalf("reconcile the estate's communication guards after its direct Deliveries: %v", err)
+	}
 	handoffOfferRecognitionGrantWrite(t, ctx, f)
 	workID := handoffOfferRecognitionSessionWork(t, ctx, f)
 	// The estate's audience attestor still answers at the directory epoch from
