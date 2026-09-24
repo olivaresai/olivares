@@ -20,7 +20,7 @@ control plane は、公開された REST 契約 (`/v1`) に対する 4 つの **
 
 :::note[配布状況]
 SDK は製品リポジトリの `clients/` 配下に存在し、それとともにバージョン管理されます。
-このページは v26.9.1 のクライアントが pkg.go.dev、Maven Central、PyPI、npm にあるとは述べません。
+このページは v26.9.0 のクライアントが pkg.go.dev、Maven Central、PyPI、npm にあるとは述べません。
 上記の Go モジュールパス、`mvn -f clients/java install`、`pip install ./clients/python`、
 `npm install ./clients/typescript` でリポジトリから利用してください。このバージョンの
 レジストリパッケージを自分で検証した場合を除きます。

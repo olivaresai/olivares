@@ -9,7 +9,7 @@ description: >-
 是本产品的一个模块，不是产品本身。
 
 本页记录 `/v1/m/sessions/runs` 下的 Community operate 路由。它们已在
-[beta OpenAPI 文档](/reference/api-beta/) 中。v26.10 增加驱动契约、本地 PTY
+[beta OpenAPI 文档](/reference/api-beta/) 中。尚未发布的 v26.10 将增加驱动契约、本地 PTY
 运行器，以及作为测试的旅程 J01–J08。
 
 ## 版本边界
