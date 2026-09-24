@@ -304,7 +304,7 @@ ${ALWAYS_ECHO}
 	out="$(compare_pair "$d/mainline.yml" "$d/race-full.yml" 2>&1)"
 	rc=$?
 	expect_rc "mainline race-core exports OTHER_DSN, race-workspace does not: FINDING (1)" 1 "$rc" "$out"
-	printf '%s\n' "$out" | grep -q 'OLIVARES_TEST_POSTGRES_OTHER_DSN' || mal "gap names OTHER_DSN" "out=$out"
+	grep -q 'OLIVARES_TEST_POSTGRES_OTHER_DSN' <<<"$out" || mal "gap names OTHER_DSN" "out=$out"
 
 	d="$(write_pair echo-ok "$MAIN_WITH_OTHER" "$FULL_WITH_ECHO")"
 	out="$(compare_pair "$d/mainline.yml" "$d/race-full.yml" 2>&1)"
