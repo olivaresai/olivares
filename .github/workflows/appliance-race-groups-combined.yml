@@ -1,0 +1,394 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# appliance-race-groups-qualification — ONE measurement of the race-full partition gate on ONE
+# exact source, cbe541b8b354440c3d8f776ab8feb28bbaa7056f (#117 with main c5872c4e merged in), which adds the
+# appliance module to groups in scripts/race-groups.json. DIAGNOSTIC ONLY: it runs from the branch
+# diag/appliance-117-race-groups-combined, which adds this one file and is never merged. It changes no
+# product byte, compiles no package and runs no test.
+#
+# The gate is the existing one: `bash scripts/race-groups.sh check`, the command of
+# `task lint:race-groups` and of race-full's setup job. The gate owns the package inventory (its
+# own `go list` over go.work); this workflow owns source identity, one command per side,
+# classification and evidence. Two sides, one command each, on the same unmodified tree:
+#   current  bash scripts/race-groups.sh check, on the source as checked out (json e941ecba…).
+#   control  the SAME command with the script's own OLIVARES_RACE_GROUPS input pointing at the
+#            second parent's (main c5872c4e) race-groups.json (blob 0ae63ffe…), extracted outside the tree.
+#            That file is the final spec without the appliance group and nothing else, so the appliance
+#            module's test-bearing packages belong to no group.
+# The current side runs with OLIVARES_RACE_GROUPS explicitly unset, so an ambient value cannot
+# replace the checked-out spec; each side records its effective spec path and blob before and after
+# the gate, and the verdict requires the fixed blob on current and the parent's blob on control.
+# Each side also keeps the gate's own `groups` and `root-shards` outputs for its spec. This is
+# partition qualification only: it says every test-bearing package has exactly one race group
+# and every root shard owns live tests; it is not executed race coverage.
+#
+# Verdict (verdict.tsv, the job summary, and the job result):
+#   PASS       current exit 0 with the gate's complete result (its CLEAN line with the appliance
+#              group owning packages, and its root line listing every root shard with live
+#              tests), appliance in `groups` and not in `root-shards`, every root shard declaring
+#              families; AND control exit 1 with exactly the named orphan failure: 2 packages,
+#              appliance/answers and appliance/cmd/appliance-answers, and nothing else.
+#   FAIL       current exit 1 with the gate's FAIL, or its generated outputs contradict the move.
+#   INABILITY  anything else: an identity or setup failure, a go list failure (exit 2), a
+#              timeout, an unknown exit, missing or incomplete gate output, a dirty tree, or a
+#              control that does not reproduce exactly the named defect. Never a PASS.
+# The job succeeds only on PASS; every raw output is uploaded on every outcome.
+#
+# Budget. race-full's setup job does checkout, the cache fallback, setup-go and ONE `check` inside
+# 10 minutes. This job adds a second enumeration and the evidence steps, so it is NOT the same
+# budget: 28 minutes = identity 1 + current 9 (gate clock 7m + 30s kill + the repository's 1-minute
+# inner-clock margin) + control 6 (gate clock 4m + 30s + 1; the module cache is warm by then) +
+# verdict 1 + upload 2 = 19 guarded minutes, plus 6 for the three copied setup steps, which
+# race-full also leaves unguarded, plus 3 minutes for the post-job steps (checkout cleanup and the
+# setup-go cache save). No product, test or gate clock and no step ceiling changes.
+#
+# Shell. `defaults.run.shell: bash` runs every `run:` block, the copied cache fallback included, as
+# `bash --noprofile --norc -eo pipefail`; race-full runs that step as `bash -e`. The copied script
+# has no pipeline, so its behavior is unchanged.
+name: appliance-race-groups-qualification
+
+on:
+  push:
+    branches:
+      - diag/appliance-117-race-groups-combined
+
+permissions:
+  contents: read
+
+# One run per push; a running measurement is never cancelled.
+concurrency:
+  group: appliance-race-groups-qualification-${{ github.run_id }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  # The bound source and the four pinned blobs (go.work, the gate script, both group specs).
+  PRODUCT_SHA: cbe541b8b354440c3d8f776ab8feb28bbaa7056f
+  PRODUCT_PARENT: fc75623cc85323011cb544bb2ca315d2703a02f0
+  PRODUCT_TREE: 3e0da1c702cd64c0089652b9a7df9a82e9b1881b
+  PIN_GO_WORK: f97388201815a84da17cbf2c4c2a39a45c2b6aaf
+  PIN_SCRIPT: 401d49a179f6366a09438fc32696fcfd91e8e1c9
+  PIN_GROUPS_FIXED: e941ecba4e5e156fa54e8062e4ebed8a8a55facc
+  PIN_GROUPS_OLD: 0ae63ffeb7d7900c4bd670b72e258d283ad30eee
+  # The prior defect, named: the packages the gate must report as orphans with the old spec.
+  EXPECTED_ORPHANS: |-
+    github.com/olivaresai/olivares/appliance/answers
+    github.com/olivaresai/olivares/appliance/cmd/appliance-answers
+  # The shared library: identity, one command per side, the verdict. It never turns a raw exit
+  # into a verdict by itself; RG_PY judges the kept files.
+  RG_LIB: |
+    set -euo pipefail
+    OUT="${OUT:-$RUNNER_TEMP/race-groups-qualification}"
+    mkdir -p "$OUT"
+    fail() { printf '::error::%s\n' "$*"; return 1; }
+
+    # identity: the bound commit, its parent, its tree, the four blobs (in HEAD and on disk), a clean
+    # tree and a GitHub-hosted runner; the old spec is extracted OUTSIDE the tree and re-hashed.
+    identity() {
+      local path pin
+      [ "$(git rev-parse HEAD)" = "$PRODUCT_SHA" ] || { fail "HEAD $(git rev-parse HEAD) is not the bound source $PRODUCT_SHA"; return 1; }
+      [ "$(git rev-parse 'HEAD^{tree}')" = "$PRODUCT_TREE" ] || { fail "the tree is not $PRODUCT_TREE"; return 1; }
+      [ "$(git rev-parse 'HEAD^' 2>/dev/null)" = "$PRODUCT_PARENT" ] || { fail "the parent is not $PRODUCT_PARENT"; return 1; }
+      [ -z "$(git status --porcelain --untracked-files=all)" ] || { fail "the checkout is not clean"; return 1; }
+      while read -r path pin; do
+        [ "$(git rev-parse "HEAD:$path")" = "$pin" ] || { fail "$path is not blob $pin in HEAD"; return 1; }
+        [ "$(git hash-object -- "$path")" = "$pin" ] || { fail "$path on disk is not blob $pin"; return 1; }
+      done <<< "go.work $PIN_GO_WORK
+    scripts/race-groups.sh $PIN_SCRIPT
+    scripts/race-groups.json $PIN_GROUPS_FIXED"
+      [ "$(git rev-parse 'HEAD^2:scripts/race-groups.json')" = "$PIN_GROUPS_OLD" ] || { fail "the second parent's (main's) race-groups.json is not blob $PIN_GROUPS_OLD"; return 1; }
+      git cat-file blob "$PIN_GROUPS_OLD" > "$OUT/control.race-groups.json"
+      [ "$(git hash-object "$OUT/control.race-groups.json")" = "$PIN_GROUPS_OLD" ] || { fail "the extracted control spec is not blob $PIN_GROUPS_OLD"; return 1; }
+      [ "${RUNNER_PLACEMENT:-}" = github-hosted ] || { fail "this job runs on a ${RUNNER_PLACEMENT:-unknown} runner, not a GitHub-hosted one"; return 1; }
+      {
+        printf 'product_sha %s\nparent %s\ntree %s\n' "$(git rev-parse HEAD)" "$(git rev-parse 'HEAD^')" "$(git rev-parse 'HEAD^{tree}')"
+        printf 'blob go.work %s\nblob scripts/race-groups.sh %s\nblob scripts/race-groups.json %s\nblob second-parent:scripts/race-groups.json %s\n' \
+          "$PIN_GO_WORK" "$PIN_SCRIPT" "$PIN_GROUPS_FIXED" "$PIN_GROUPS_OLD"
+        printf 'workflow_sha %s event %s ref %s run %s attempt %s\n' "${GITHUB_WORKFLOW_SHA:-unknown}" "${GITHUB_EVENT_NAME:-}" "${GITHUB_REF:-}" "${GITHUB_RUN_ID:-}" "${GITHUB_RUN_ATTEMPT:-}"
+        printf 'runner %s placement %s image %s %s\n' "${RUNNER_NAME:-unknown}" "$RUNNER_PLACEMENT" "${ImageOS:-unknown}" "${ImageVersion:-unknown}"
+      } | tee "$OUT/identity.txt"
+    }
+
+    # side NAME SPEC COMMAND...: the command ONCE, raw stdout, stderr and exit kept. SPEC empty =
+    # the checked-out spec, with OLIVARES_RACE_GROUPS explicitly unset so an ambient value cannot
+    # replace it; otherwise OLIVARES_RACE_GROUPS=SPEC. The effective spec is read through the SAME
+    # environment prefix the gate receives, and its path and blob are recorded before and after the
+    # command. Then the gate's own `groups` and `root-shards` for the same spec, and the tree
+    # status, which must stay empty.
+    side() {
+      local name="$1" spec="$2" rc=0 sub src eff
+      shift 2
+      local -a pre=(env -u OLIVARES_RACE_GROUPS)
+      [ -z "$spec" ] || pre=(env "OLIVARES_RACE_GROUPS=$spec")
+      # The child shell, with the gate's environment, must expand it.
+      # shellcheck disable=SC2016
+      eff="$("${pre[@]}" bash -c 'printf "%s" "${OLIVARES_RACE_GROUPS:-scripts/race-groups.json}"')"
+      printf 'path %s\nblob_before %s\n' "$eff" "$(git hash-object -- "$eff" 2>/dev/null || true)" > "$OUT/$name.spec"
+      { printf '%q ' "${pre[@]}" "$@"; printf '\n'; } > "$OUT/$name.command"
+      "${pre[@]}" "$@" > "$OUT/$name.stdout" 2> "$OUT/$name.stderr" || rc=$?
+      printf '%s\n' "$rc" > "$OUT/$name.exit"
+      printf 'blob_after %s\n' "$(git hash-object -- "$eff" 2>/dev/null || true)" >> "$OUT/$name.spec"
+      for sub in groups root-shards; do
+        src=0
+        "${pre[@]}" bash scripts/race-groups.sh "$sub" > "$OUT/$name.$sub.stdout" 2> "$OUT/$name.$sub.stderr" || src=$?
+        printf '%s\n' "$src" > "$OUT/$name.$sub.exit"
+      done
+      git status --porcelain --untracked-files=all > "$OUT/$name.tree-status"
+      cat "$OUT/$name.stdout"
+      cat "$OUT/$name.stderr" >&2
+      printf '%s: raw exit %s; groups exit %s; root-shards exit %s; tree changes %s\n' "$name" "$rc" \
+        "$(cat "$OUT/$name.groups.exit")" "$(cat "$OUT/$name.root-shards.exit")" "$(grep -c . "$OUT/$name.tree-status" || true)"
+    }
+
+    # verdict SETUP_OUTCOMES: RG_PY judges the kept files; exit 0 only on PASS (1 FAIL, 2 INABILITY).
+    verdict() {
+      local rc=0
+      printf 'setup outcomes: %s\n' "$1" > "$OUT/setup-outcomes.txt"
+      printf '%s\n' "$RG_PY" > "$RUNNER_TEMP/race-groups-verdict.py"
+      python3 "$RUNNER_TEMP/race-groups-verdict.py" "$OUT" "$1" || rc=$?
+      if [ -n "${GITHUB_STEP_SUMMARY:-}" ] && [ -f "$OUT/verdict.tsv" ]; then
+        { printf '### appliance race-groups qualification\n\n```\n'; cat "$OUT/verdict.tsv"; printf '```\n'; } >> "$GITHUB_STEP_SUMMARY"
+      fi
+      return "$rc"
+    }
+  # The classifier: the gate's own messages decide; anything it cannot read is an inability.
+  RG_PY: |
+    import json, os, re, sys
+
+    out, outcomes = sys.argv[1], sys.argv[2]
+    CLEAN = re.compile(r'^race-groups: CLEAN — (\d+) paquete\(s\) con tests, 0 huérfanos, 0 patrones rancios, (\d+) excluido\(s\) con motivo escrito\. Reparto: (.*)$')
+    ROOT = re.compile(r'^race-groups: raiz — (\d+) test\(s\) de nivel superior en (\d+) turno\(s\), 0 huerfanos, 0 dobles\. Reparto: (.*)$')
+    ORPHANS = re.compile(r'^race-groups: FAIL — (\d+) paquete\(s\) con tests NO pertenecen a ningún grupo')
+    expected = sorted(l.strip() for l in os.environ['EXPECTED_ORPHANS'].splitlines() if l.strip())
+
+    def rd(name):
+        p = os.path.join(out, name)
+        return open(p, encoding='utf-8', errors='replace').read() if os.path.exists(p) else None
+
+    def facts(side):
+        names = [f'{side}.{x}' for x in ('command', 'spec', 'stdout', 'stderr', 'exit', 'tree-status', 'groups.stdout', 'groups.exit', 'root-shards.stdout', 'root-shards.exit')]
+        got = {n: rd(n) for n in names}
+        missing = [n for n, v in got.items() if v is None]
+        return got, missing
+
+    def listed(stdout, rc):
+        if rc is None or rc.strip() != '0':
+            return None
+        try:
+            v = json.loads(stdout)
+        except ValueError:
+            return None
+        return v if isinstance(v, list) and all(isinstance(x, str) for x in v) else None
+
+    # The blob is the identity; the path only says which file it was, so receipts re-judged elsewhere
+    # (a downloaded artifact) keep their verdict.
+    def spec_mismatch(g, side, name, blob):
+        rec = dict(l.split(' ', 1) for l in g[f'{side}.spec'].splitlines() if ' ' in l)
+        got = (rec.get('path', ''), rec.get('blob_before', ''), rec.get('blob_after', ''))
+        path_ok = got[0] == name if '/' in name else os.path.basename(got[0]) == name
+        if path_ok and got[1] == blob and got[2] == blob:
+            return ''
+        return f'the {side} side\'s effective spec was {got}, not {name} at blob {blob} before and after'
+
+    def raw_exit(v):
+        v = (v or '').strip()
+        return int(v) if re.fullmatch(r'[0-9]{1,3}', v) else None
+
+    def judge_current(g):
+        bad = spec_mismatch(g, 'current', 'scripts/race-groups.json', os.environ['PIN_GROUPS_FIXED'])
+        if bad:
+            return 'INABILITY', bad, ''
+        rc = raw_exit(g['current.exit'])
+        so, se = g['current.stdout'], g['current.stderr']
+        if rc is None:
+            return 'INABILITY', f'unreadable raw exit [{g["current.exit"].strip()}]', ''
+        if g['current.tree-status'].strip():
+            return 'INABILITY', 'the tree is not clean after the current side', g['current.tree-status'].splitlines()[0]
+        if rc in (124, 137) or rc > 124:
+            return 'INABILITY', f'the gate was stopped (raw exit {rc}: timeout or signal)', ''
+        if rc == 2:
+            return 'INABILITY', 'the gate could not look (raw exit 2)', next((l for l in se.splitlines() if 'COULD NOT LOOK' in l), '')
+        fails = [l for l in se.splitlines() if l.startswith('race-groups: FAIL — ')]
+        if rc == 1:
+            if fails:
+                return 'FAIL', 'the gate FAILS on the fixed source', fails[0]
+            return 'INABILITY', 'raw exit 1 without the gate\'s FAIL line', ''
+        if rc != 0:
+            return 'INABILITY', f'unknown raw exit {rc}', ''
+        lines = so.splitlines()
+        clean = [m for m in map(CLEAN.match, lines) if m]
+        root = [m for m in map(ROOT.match, lines) if m]
+        if fails or 'COULD NOT LOOK' in se or len(clean) != 1 or len(root) != 1:
+            return 'INABILITY', 'exit 0 without the gate\'s complete result (one CLEAN line and one root line, no FAIL)', ''
+        split = dict(re.findall(r'(\S+)=(\d+)', clean[0].group(3)))
+        roots = dict((n, int(c)) for n, c, _ in re.findall(r'(\S+)=(\d+)\(decl (\d+)\)', root[0].group(3)))
+        groups = listed(g['current.groups.stdout'], g['current.groups.exit'])
+        shards = listed(g['current.root-shards.stdout'], g['current.root-shards.exit'])
+        if groups is None or shards is None:
+            return 'INABILITY', 'the gate\'s groups/root-shards output is missing or not a JSON list', ''
+        if 'appliance' not in groups:
+            return 'FAIL', 'appliance is not in the generated groups', json.dumps(groups)
+        if 'appliance' in shards:
+            return 'FAIL', 'appliance is still a generated root shard', json.dumps(shards)
+        if int(split.get('appliance', '0')) < 1:
+            return 'FAIL', 'the gate\'s split gives the appliance group no package', clean[0].group(3)
+        spec = json.load(open('scripts/race-groups.json', encoding='utf-8'))
+        fam = {s['name']: s.get('families') for s in spec.get('root_shards', [])}
+        nofam = [s for s in shards if not fam.get(s)]
+        if nofam:
+            return 'FAIL', 'a generated root shard declares no families', ','.join(nofam)
+        if set(roots) != set(shards) or any(v < 1 for v in roots.values()):
+            return 'INABILITY', 'the gate\'s root split does not list every generated root shard with live tests', root[0].group(3)
+        return 'PASS', (f'CLEAN: {clean[0].group(1)} test-bearing packages, appliance={split["appliance"]}; '
+                        f'root: {root[0].group(1)} tests in {root[0].group(2)} shards, each with families and live tests'), clean[0].group(0)
+
+    def judge_control(g):
+        bad = spec_mismatch(g, 'control', 'control.race-groups.json', os.environ['PIN_GROUPS_OLD'])
+        if bad:
+            return 'INABILITY', bad, ''
+        rc = raw_exit(g['control.exit'])
+        se = g['control.stderr']
+        if rc is None:
+            return 'INABILITY', f'unreadable raw exit [{g["control.exit"].strip()}]', ''
+        if g['control.tree-status'].strip():
+            return 'INABILITY', 'the tree is not clean after the control side', g['control.tree-status'].splitlines()[0]
+        if rc in (124, 137) or rc > 124:
+            return 'INABILITY', f'the gate was stopped (raw exit {rc}: timeout or signal)', ''
+        if rc == 0:
+            return 'INABILITY', 'the prior defect did not reproduce: the old spec passed on this inventory, so the current result is not attributable to the move', ''
+        if rc == 2:
+            return 'INABILITY', 'the gate could not look (raw exit 2)', next((l for l in se.splitlines() if 'COULD NOT LOOK' in l), '')
+        if rc != 1:
+            return 'INABILITY', f'unknown raw exit {rc}', ''
+        lines = se.splitlines()
+        heads = [i for i, l in enumerate(lines) if l.startswith('race-groups: ')]
+        m = ORPHANS.match(lines[heads[0]]) if heads else None
+        if len(heads) != 1 or not m:
+            return 'INABILITY', 'the control failed differently from the named orphan defect', lines[heads[0]] if heads else '(no gate line)'
+        items = sorted(l.strip() for l in lines[heads[0] + 1:] if l.strip())
+        if int(m.group(1)) != len(expected) or items != expected:
+            return 'INABILITY', f'the control named {m.group(1)} orphan(s) {items}, not exactly {expected}', lines[heads[0]]
+        groups = listed(g['control.groups.stdout'], g['control.groups.exit'])
+        shards = listed(g['control.root-shards.stdout'], g['control.root-shards.exit'])
+        if groups is None or shards is None or 'appliance' in groups or 'appliance' in shards:
+            return 'INABILITY', 'main\'s spec generated groups/root-shards are not its shape (appliance neither a group nor a root shard)', ''
+        return 'REPRODUCED', f'exit 1: the {len(expected)} named appliance packages are orphans, nothing else', lines[heads[0]]
+
+    first_bad = next((kv for kv in outcomes.split() if '=' in kv and kv.split('=', 1)[1] != 'success'), '')
+    rows = []
+    cur_g, cur_missing = facts('current')
+    con_g, con_missing = facts('control')
+    if not rd('identity.txt'):
+        cur = con = ('INABILITY', f'not run: the source identity was not proved ({first_bad or "identity"})', '')
+    else:
+        cur = ('INABILITY', f'not run or incomplete: {first_bad or ",".join(cur_missing)}', '') if cur_missing else judge_current(cur_g)
+        con = ('INABILITY', f'not run or incomplete: {first_bad or ",".join(con_missing)}', '') if con_missing else judge_control(con_g)
+    if cur[0] == 'FAIL':
+        overall = ('FAIL', 'the fixed source fails the partition gate on the real inventory')
+    elif cur[0] == 'PASS' and con[0] == 'REPRODUCED' and not first_bad:
+        overall = ('PASS', 'the gate is CLEAN on the fixed source and names exactly the prior orphan defect on the old spec')
+    else:
+        overall = ('INABILITY', first_bad and f'step {first_bad}' or 'current or control could not be measured as required')
+    with open(os.path.join(out, 'verdict.tsv'), 'w') as f:
+        f.write('side\tverdict\tlabel\traw_exit\tgate_line\n')
+        f.write('\t'.join(['current', cur[0], cur[1], (cur_g.get('current.exit') or '-').strip(), cur[2]]) + '\n')
+        f.write('\t'.join(['control', con[0], con[1], (con_g.get('control.exit') or '-').strip(), con[2]]) + '\n')
+        f.write('\t'.join(['overall', overall[0], overall[1], '-', '-']) + '\n')
+    print(open(os.path.join(out, 'verdict.tsv')).read())
+    print(('::notice title=VERDICT::' if overall[0] == 'PASS' else '::error title=VERDICT::') + overall[0] + ' — ' + overall[1])
+    sys.exit({'PASS': 0, 'FAIL': 1}.get(overall[0], 2))
+
+jobs:
+  qualify:
+    if: github.repository == 'olivaresai/olivares'
+    name: appliance race-groups qualification (cbe541b; control = main c5872c4e's race-groups.json)
+    runs-on: ubuntu-latest
+    timeout-minutes: 28
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        id: checkout
+        with:
+          ref: cbe541b8b354440c3d8f776ab8feb28bbaa7056f
+          persist-credentials: false
+          fetch-depth: 2
+      - name: source identity (the bound commit, its parent, the pinned blobs, a clean tree, a hosted runner)
+        id: identity
+        timeout-minutes: 1
+        env:
+          RUNNER_PLACEMENT: ${{ runner.environment }}
+        run: |
+          eval "$RG_LIB"
+          identity
+      - name: Prepare Go caches when the runner environment is unusable
+        id: caches
+        # setup-go runs go env itself, so cache fallback must precede it.
+        # Keep persistent runner caches when the existing environment is usable.
+        run: |
+          relocate=""
+          if [ -z "${HOME:-}" ] || [ ! -w "${HOME:-/nonexistent}" ]; then
+            relocate="unusable home"
+          fi
+          case "${GOPATH:-}" in
+            "" | /* ) : ;;
+            * ) relocate="relative GOPATH" ;;
+          esac
+          if [ -z "$relocate" ]; then
+            for cache_dir in "$HOME/go" "$HOME/.cache"; do
+              [ -e "$cache_dir" ] || continue
+              [ -w "$cache_dir" ] || relocate="unwritable default cache directory"
+            done
+          fi
+          if [ -z "$relocate" ]; then
+            echo "Keeping the usable runner Go cache environment"
+            exit 0
+          fi
+          echo "Preparing Go caches under RUNNER_TEMP: $relocate"
+          {
+            echo "GOCACHE=$RUNNER_TEMP/gocache"
+            echo "GOMODCACHE=$RUNNER_TEMP/gomodcache"
+            echo "GOPATH=$RUNNER_TEMP/gopath"
+            echo "GOBIN=$RUNNER_TEMP/gopath/bin"
+          } >> "$GITHUB_ENV"
+          echo "$RUNNER_TEMP/gopath/bin" >> "$GITHUB_PATH"
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        id: setup-go
+        with:
+          go-version-file: go.work
+          cache: ${{ runner.environment == 'github-hosted' }}
+          cache-dependency-path: go.work.sum
+      - name: current — bash scripts/race-groups.sh check on the source as checked out
+        id: current
+        timeout-minutes: 9
+        run: |
+          eval "$RG_LIB"
+          side current "" timeout -s TERM -k 30s 7m bash scripts/race-groups.sh check
+      - name: control — the same command with OLIVARES_RACE_GROUPS at main's race-groups.json (second parent)
+        id: control
+        timeout-minutes: 6
+        run: |
+          eval "$RG_LIB"
+          side control "$OUT/control.race-groups.json" timeout -s TERM -k 30s 4m bash scripts/race-groups.sh check
+      - name: verdict (PASS, FAIL or INABILITY; the job succeeds only on PASS)
+        id: verdict
+        if: always()
+        timeout-minutes: 1
+        env:
+          SETUP_OUTCOMES: >-
+            checkout=${{ steps.checkout.outcome }} identity=${{ steps.identity.outcome }} caches=${{ steps.caches.outcome }}
+            setup-go=${{ steps.setup-go.outcome }} current=${{ steps.current.outcome }} control=${{ steps.control.outcome }}
+        run: |
+          eval "$RG_LIB"
+          verdict "$SETUP_OUTCOMES"
+      - name: retain every raw output, the identities and the verdict
+        if: always()
+        timeout-minutes: 2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: appliance-race-groups-qualification-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/race-groups-qualification/
+          retention-days: 7
+          if-no-files-found: error
