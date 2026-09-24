@@ -11,7 +11,10 @@
 #              completed; restored, green again; the four loopback controls green. Then the relay
 #              contrast (7a): with the relay paths from before the relay repair put back, the relay
 #              regression must give CONTRAST relay-before-fix 10 FAIL 7 PASS, and the final bytes
-#              are restored and proven; then the relay regression (7) must give GREEN 17.
+#              are restored and proven; then the relay regression (7) must give GREEN 17. Then the
+#              Terminate contrast (7b): with the three lines that withhold a client Terminate
+#              removed, the relay regression must give CONTRAST terminate-before-fix 3 FAIL 14 PASS,
+#              and the final bytes are restored and proven.
 #   routes     the six key-lock routes green on PostgreSQL; each route's own transaction lock
 #              deleted in turn (M11-<route>) must fail that route's lock-ownership assertion and
 #              nothing else; restored, green again; then the commit outcome families on both
@@ -418,7 +421,7 @@ jobs:
   oracle:
     if: github.repository == 'olivaresai/olivares' && github.event.deleted != true
     runs-on: ubuntu-latest
-    # Steps sum to 174 minutes; the job ceiling stays above that sum.
+    # Steps sum to 184 minutes; the job ceiling stays above that sum.
     timeout-minutes: 185
     outputs:
       s1: ${{ steps.s1.outputs.verdict }}
@@ -429,6 +432,7 @@ jobs:
       loopback: ${{ steps.loopback.outputs.verdict }}
       relay_regression: ${{ steps.relay_regression.outputs.verdict }}
       contrast_regression: ${{ steps.contrast_regression.outputs.verdict }}
+      terminate_contrast: ${{ steps.terminate_contrast.outputs.verdict }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         timeout-minutes: 5
@@ -707,6 +711,148 @@ jobs:
             TestCommunicationCommitOutcomeProxyRelay/terminate_on_another_session_is_relayed \
             TestCommunicationCommitOutcomeProxyRelay/malformed_terminate_is_relayed \
             TestCommunicationCommitOutcomeProxyRelay/terminate_during_held_answer_is_relayed
+
+      # The contrast for the Terminate rule of the test proxy, measured after step 7. A pinned
+      # patch turns the final proxy test file into a control: the same file without the three
+      # lines of clientToServer that withhold a client Terminate while that session's COMMIT is
+      # held, and nothing else. The relay regression must then fail in exactly the two subtests
+      # that need the Terminate withheld, each at its own assertion and with the Terminate received
+      # by the server, and every other subtest must pass. The patch's sha256 and the blob ids are
+      # pinned as this step's literals and proven in the same order as step 7a, and the final
+      # bytes are restored and proven before this step ends, whatever it measured. No later step
+      # measures: a stop before its verdict leaves this step without one, and the verdict job
+      # refuses an empty value.
+      - name: 7b · proxy Terminate contrast — the regression without the withheld Terminate fails as expected, final bytes restored and proven
+        id: terminate_contrast
+        if: ${{ !cancelled() && steps.toolchain.outcome == 'success' }}
+        timeout-minutes: 10
+        env:
+          RELAY_TEST_FILE: cmd/olivares/communicationcommitoutcome_proxyrelay_test.go
+          CONTRAST_PATCH: ci/oracles/commit-outcome/proxy-terminate-before-fix.patch
+          CONTRAST_PATCH_SHA256: 5d290f7df561947395773cbaa91508c49bed61c42efe6bafc2c5cbf18b125d28
+          FINAL_PROXY_BLOB: 2a47d1b876b4fe5a7a63e2db920a3a1c923e176e
+          CONTROL_PROXY_BLOB: cd998317469d362802a336f45d76534fa5aa35e3
+          RELAY_TEST_BLOB: 83687980ff45c99d3215c9d8d8bee69aa627b1cf
+        run: |
+          eval "$ORACLE_LIB"
+          pristine
+          label=terminate_contrast
+          contrast="CONTRAST terminate-before-fix 3 FAIL 14 PASS"
+          # Every result the selection must give with the control, with the assertion each failing
+          # subtest must stop at and, for the five passing subtests that cause a relay inability by
+          # design, the line the relay logs for it: action|test|assertion text|admitted COULD_NOT_LOOK.
+          expected_results() {
+          cat <<'LIST'
+          fail|TestCommunicationCommitOutcomeProxyRelay|
+          pass|TestCommunicationCommitOutcomeProxyRelay/oversized_server_frame_passes_through|
+          pass|TestCommunicationCommitOutcomeProxyRelay/oversized_client_frame_passes_through|
+          pass|TestCommunicationCommitOutcomeProxyRelay/held_total_stays_within_the_bound|
+          pass|TestCommunicationCommitOutcomeProxyRelay/oversized_frame_while_holding_is_refused|
+          pass|TestCommunicationCommitOutcomeProxyRelay/frame_length_below_4_from_server_is_named||COULD_NOT_LOOK: relay_error=from_server:frame_length_below_4: the test proxy could not carry a frame whole
+          pass|TestCommunicationCommitOutcomeProxyRelay/frame_length_below_4_from_client_is_named||COULD_NOT_LOOK: relay_error=from_client:frame_length_below_4: the test proxy could not carry a frame whole
+          pass|TestCommunicationCommitOutcomeProxyRelay/truncated_frame_is_named||COULD_NOT_LOOK: relay_error=from_server:short_read: the test proxy could not carry a frame whole
+          pass|TestCommunicationCommitOutcomeProxyRelay/truncated_oversized_frame_is_named||COULD_NOT_LOOK: relay_error=from_server:short_read: the test proxy could not carry a frame whole
+          pass|TestCommunicationCommitOutcomeProxyRelay/closed_peer_is_named|
+          pass|TestCommunicationCommitOutcomeProxyRelay/short_write_is_named||COULD_NOT_LOOK: relay_error=from_server:short_write: the test proxy could not carry a frame whole
+          fail|TestCommunicationCommitOutcomeProxyRelay/terminate_is_withheld_while_commit_held|the client's Terminate was not withheld while its COMMIT was held: the server received ("X\x00\x00\x00\x04", <nil>)
+          fail|TestCommunicationCommitOutcomeProxyRelay/sever_settles_a_withheld_terminate|the client's Terminate was not withheld while its COMMIT was held: the server received ("X\x00\x00\x00\x04", <nil>)
+          pass|TestCommunicationCommitOutcomeProxyRelay/terminate_without_a_held_commit_is_relayed|
+          pass|TestCommunicationCommitOutcomeProxyRelay/terminate_on_another_session_is_relayed|
+          pass|TestCommunicationCommitOutcomeProxyRelay/malformed_terminate_is_relayed|
+          pass|TestCommunicationCommitOutcomeProxyRelay/terminate_during_held_answer_is_relayed|
+          LIST
+          }
+          # prove FILE BLOB WHEN: git hash-object of FILE must be BLOB; every proof is recorded.
+          prove() {
+            local got
+            got="$(git hash-object -- "$1")"
+            printf '%s\t%s\t%s\twant %s\n' "$3" "$1" "$got" "$2" >> "$OUT/$label.blobs"
+            [ "$got" = "$2" ]
+          }
+          # prove_patch: the patch's sha256 must be the pinned literal; the proof is recorded.
+          prove_patch() {
+            local got
+            got="$(sha256sum < "$CONTRAST_PATCH" | cut -d ' ' -f 1)"
+            printf '%s\t%s\t%s\twant %s\n' patch-sha256 "$CONTRAST_PATCH" "$got" "$CONTRAST_PATCH_SHA256" >> "$OUT/$label.blobs"
+            [ "$got" = "$CONTRAST_PATCH_SHA256" ]
+          }
+          # The causal judgment. INABILITY: no result (build failure or empty selection), the Go
+          # timeout, a skip, or any COULD_NOT_LOOK other than the five admitted above, each only in
+          # its own passing subtest. The two failing subtests record no relay inability, so any
+          # other such line is a setup failure and never evidence of red.
+          contrast_judge() {
+            local got want act name text allowed ctest cline admitted
+            got="$(results "$label")"
+            printf '%s\n' "$got" > "$OUT/$label.results"
+            stream_text "$label" > "$OUT/$label.text"
+            want="$(expected_results | awk -F '|' '{print $1 "\t" $2}' | LC_ALL=C sort)"
+            if [ -z "$got" ]; then echo "INABILITY no test reached a result (build failure or empty selection)"; return 0; fi
+            if grep -qF 'panic: test timed out' "$OUT/$label.text"; then echo "INABILITY the Go test timeout fired"; return 0; fi
+            if grep -q '^skip' <<< "$got"; then echo "INABILITY a test was skipped"; return 0; fi
+            if grep -qF 'COULD_NOT_LOOK' "$OUT/$label.stderr"; then echo "INABILITY the run reported COULD_NOT_LOOK outside a test"; return 0; fi
+            jq -rR 'fromjson? | select(.Action == "output" and (.Output | contains("COULD_NOT_LOOK"))) | "\(.Test // "")\u001f\(.Output | rtrimstr("\n"))"' \
+              "$OUT/$label.json" > "$OUT/$label.could-not-look"
+            while IFS=$'\x1f' read -r ctest cline; do
+              [ -n "$ctest$cline" ] || continue
+              admitted=""
+              while IFS='|' read -r act name text allowed; do
+                if [ "$name" = "$ctest" ] && [ -n "$allowed" ] && [[ "$cline" == *"$allowed"* ]]; then admitted=yes; fi
+              done < <(expected_results)
+              if [ -z "$admitted" ]; then echo "INABILITY the run reported an undeclared COULD_NOT_LOOK in ${ctest:-the package}"; return 0; fi
+            done < "$OUT/$label.could-not-look"
+            if [ "$got" != "$want" ]; then
+              while IFS='|' read -r act name text; do
+                if [ "$act" = fail ] && grep -qxF -- "$(printf 'pass\t%s' "$name")" <<< "$got"; then
+                  echo "NO CONTRAST $name passed without the withheld Terminate"; return 0
+                fi
+              done < <(expected_results)
+              echo "OTHER the failing and passing tests are not exactly the expected ones"; return 0
+            fi
+            if [ "$RAW_EXIT" != 1 ]; then echo "OTHER raw exit $RAW_EXIT"; return 0; fi
+            while IFS='|' read -r act name text allowed; do
+              [ -n "$text" ] || continue
+              output_of "$label" "$name" > "$OUT/$label.${name##*/}.output"
+              if ! grep -qF -- "$text" "$OUT/$label.${name##*/}.output"; then
+                echo "OTHER ${name##*/} did not fail at its intended assertion"; return 0
+              fi
+            done < <(expected_results)
+            echo "$contrast"
+          }
+          if ! prove "$PROXY_FILE" "$FINAL_PROXY_BLOB" final-before || ! prove "$RELAY_TEST_FILE" "$RELAY_TEST_BLOB" regression-before; then
+            verdict="INABILITY the final proxy or regression bytes are not the pinned ones"
+          elif ! prove_patch; then
+            verdict="INABILITY the before-fix patch does not match its pinned sha256"
+          elif [ "$(git apply --numstat "$CONTRAST_PATCH")" != "$(printf '0\t3\t%s' "$PROXY_FILE")" ]; then
+            verdict="INABILITY the before-fix patch is not the expected single-file change to the control"
+          else
+            printf '%s\t%s\tpending\n' "$label" "$PROXY_FILE" > "$OUT/in-flight"
+            if ! git apply "$CONTRAST_PATCH" || ! prove "$PROXY_FILE" "$CONTROL_PROXY_BLOB" control-applied || ! prove "$RELAY_TEST_FILE" "$RELAY_TEST_BLOB" regression-applied; then
+              verdict="INABILITY the control proxy could not be established"
+            else
+              cp "$CONTRAST_PATCH" "$OUT/"
+              git diff --no-color -- "$PROXY_FILE" > "$OUT/$label.applied.diff"
+              run_go "$label" go test ./cmd/olivares -count=1 -timeout 8m \
+                -run '^TestCommunicationCommitOutcomeProxyRelay$' -json
+              verdict="$(contrast_judge)"
+            fi
+          fi
+          # The final bytes come back and are proven before this step ends, whatever was measured.
+          if git checkout HEAD -- "$PROXY_FILE" && prove "$PROXY_FILE" "$FINAL_PROXY_BLOB" final-restored && prove "$RELAY_TEST_FILE" "$RELAY_TEST_BLOB" regression-restored; then
+            rm -f "$OUT/in-flight"
+            echo "restore=PROVEN" >> "$GITHUB_OUTPUT"
+          else
+            if [ "$verdict" = "$contrast" ]; then
+              verdict="INABILITY the final proxy bytes were not proven restored"
+            else
+              verdict="$verdict; the final proxy bytes were not proven restored"
+            fi
+            # This step's verdict carries the inability; the marker turns `measured` so a step that
+            # enters after it restores the file without a second line for this label.
+            printf '%s\t%s\tmeasured\n' "$label" "$PROXY_FILE" > "$OUT/in-flight"
+            echo "restore=NOT_PROVEN" >> "$GITHUB_OUTPUT"
+          fi
+          record "$label" "$verdict"
+          [ "$verdict" = "$contrast" ] || fail "$label: $verdict"
 
       - name: retain the raw streams, exits and applied mutants
         if: always()
@@ -1095,6 +1241,7 @@ jobs:
           LOOPBACK: ${{ needs.oracle.outputs.loopback }}
           RELAY_REGRESSION: ${{ needs.oracle.outputs.relay_regression }}
           CONTRAST_REGRESSION: ${{ needs.oracle.outputs.contrast_regression }}
+          TERMINATE_CONTRAST: ${{ needs.oracle.outputs.terminate_contrast }}
           BASELINE: ${{ needs.routes.outputs.baseline }}
           SEND: ${{ needs.routes.outputs.send }}
           ACK: ${{ needs.routes.outputs.ack }}
@@ -1135,6 +1282,7 @@ jobs:
           expect "6 · every loopback control" "$LOOPBACK" "GREEN 10"
           expect "7a · proxy relay contrast before the fix" "$CONTRAST_REGRESSION" "CONTRAST relay-before-fix 10 FAIL 7 PASS"
           expect "7 · proxy relay regression" "$RELAY_REGRESSION" "GREEN 17"
+          expect "7b · proxy Terminate contrast without the withheld Terminate" "$TERMINATE_CONTRAST" "CONTRAST terminate-before-fix 3 FAIL 14 PASS"
           expect "six key-lock routes positive" "$BASELINE" "GREEN 25"
           expect "M11-send" "$SEND" KILLED
           expect "M11-ack" "$ACK" KILLED
@@ -1150,4 +1298,4 @@ jobs:
             printf '::error::no verdict: %s\n' "$bad"
             exit 1
           fi
-          echo "commit-outcome oracle PASS at $candidate ($GITHUB_EVENT_NAME): proxy positives 8/8 three times and all four loopback controls 10/10; release lock (M1) and write deadline (M2) mutants killed; six key-lock route mutants (M11) killed with routes positive 25/25 before and after; store $STORE_ENGINES and HTTP $HTTP_ENGINES on both engines; regenerated surfaces unchanged; repository variables CI_RUNNER=${CI_RUNNER_VAR:-unset} CI_RUNNER_LIGHT=${CI_RUNNER_LIGHT_VAR:-unset}; relay contrast (7a) CONTRAST relay-before-fix 10 FAIL 7 PASS; relay regression (7) GREEN 17"
+          echo "commit-outcome oracle PASS at $candidate ($GITHUB_EVENT_NAME): proxy positives 8/8 three times and all four loopback controls 10/10; release lock (M1) and write deadline (M2) mutants killed; six key-lock route mutants (M11) killed with routes positive 25/25 before and after; store $STORE_ENGINES and HTTP $HTTP_ENGINES on both engines; regenerated surfaces unchanged; repository variables CI_RUNNER=${CI_RUNNER_VAR:-unset} CI_RUNNER_LIGHT=${CI_RUNNER_LIGHT_VAR:-unset}; relay contrast (7a) CONTRAST relay-before-fix 10 FAIL 7 PASS; relay regression (7) GREEN 17; Terminate contrast (7b) CONTRAST terminate-before-fix 3 FAIL 14 PASS"

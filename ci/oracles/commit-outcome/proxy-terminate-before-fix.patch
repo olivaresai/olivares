@@ -1,0 +1,14 @@
+diff --git a/cmd/olivares/communicationcommitoutcome_proxy_test.go b/cmd/olivares/communicationcommitoutcome_proxy_test.go
+index 2a47d1b876..cd99831746 100644
+--- a/cmd/olivares/communicationcommitoutcome_proxy_test.go
++++ b/cmd/olivares/communicationcommitoutcome_proxy_test.go
+@@ -594,9 +594,6 @@ func (s *commitOutcomeProxySession) clientToServer() {
+ 			s.relayStopped(commitOutcomeRelayFromClient, end, nil)
+ 			return
+ 		}
+-		if kind == 'X' && body == 0 && s.p.withholdTerminate(s) {
+-			continue
+-		}
+ 		if kind == 'Q' && commitOutcomeIsCommitQuery(frame[5:]) {
+ 			if s.handleCommit(frame) {
+ 				continue

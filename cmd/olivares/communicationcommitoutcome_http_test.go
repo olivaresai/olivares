@@ -641,8 +641,13 @@ func TestCommunicationCommitOutcomeHTTPPostgres(t *testing.T) {
 		retries := commitOutcomeServeInBackground(retryCtx, f.estate.eng, http.MethodPost,
 			f.grantPath(), f.estate.owner.token, f.estate.tenant, body,
 			map[string]string{"If-Match": etag})
-		if !commitOutcomeWaitForRowLockWait(t, f.owner, event.pid, commitOutcomeChannelRelation) {
-			t.Fatal("COULD_NOT_LOOK: the remedy never waited on the original's Channel row lock, so convergence was not exercised")
+		waited, witnessFailures, witnessErr := commitOutcomeWaitForRowLockWait(
+			t, f.owner, event.pid, commitOutcomeChannelRelation)
+		if !waited {
+			// The original failure is recorded first; what follows only observes it.
+			t.Error("COULD_NOT_LOOK: the remedy never waited on the original's Channel row lock, so convergence was not exercised")
+			commitOutcomeObserveUnwaitedRemedy(t, f.owner, event.pid, retries, witnessErr, witnessFailures)
+			t.FailNow()
 		}
 		f.proxy.forward()
 		retry := commitOutcomeAwait(t, retries, "the waiting remedy")
@@ -682,11 +687,16 @@ func commitOutcomeWaitForAdvisoryHolderWait(t *testing.T, owner *sql.DB, key int
 // commitOutcomeWaitForRowLockWait observes a backend waiting on a tuple or
 // relation lock another backend holds on the named relation. It is the OCC
 // routes' fence: the remedy waits for the original rather than reading around it.
+// Besides whether a waiter was seen, it returns how many reads failed and the
+// last error its query returned: the poll retries a failed read, and a read
+// that kept failing must not look like a read that found nobody waiting.
 func commitOutcomeWaitForRowLockWait(
 	t *testing.T, owner *sql.DB, holderPID int, relation string,
-) bool {
+) (bool, int, error) {
 	t.Helper()
-	return commitOutcomePoll(context.Background(), commitOutcomeReturnLimit,
+	var lastErr error
+	failures := 0
+	waited := commitOutcomePoll(context.Background(), commitOutcomeReturnLimit,
 		func(callCtx context.Context) (bool, error) {
 			var waiting int
 			if err := owner.QueryRowContext(callCtx, `
@@ -698,10 +708,142 @@ func commitOutcomeWaitForRowLockWait(
 				    OR (waiter.locktype IN ('tuple', 'relation')
 				        AND waiter.relation = (SELECT oid FROM pg_class WHERE relname = $2))
 				  )`, holderPID, relation).Scan(&waiting); err != nil {
+				lastErr, failures = err, failures+1
 				return false, err
 			}
 			return waiting > 0, nil
 		})
+	return waited, failures, lastErr
+}
+
+// commitOutcomeObserveUnwaitedRemedy is a diagnostic for ONE failure only: the
+// list_is_not_proof remedy was never seen waiting on the original. The failure is
+// recorded before it runs, and the leaf fails whatever it observes. Each read is
+// taken once and bounded by the observation limit: whether the holder backend
+// still exists and its state; every ungranted lock as a structural tuple with its
+// pg_blocking_pids; the class of the witness's last query error. The remedy's
+// own channel is received from at most once — already answered, answered within
+// the return limit, or still pending at it are different outcomes, and an
+// unissued request is a fourth. It starts no request and no replacement remedy.
+func commitOutcomeObserveUnwaitedRemedy(
+	t *testing.T, owner *sql.DB, holderPID int,
+	remedy <-chan communicationHTTPTestResponse, witnessErr error, witnessFailures int,
+) {
+	t.Helper()
+	var response communicationHTTPTestResponse
+	outcome := ""
+	select {
+	case response = <-remedy:
+		outcome = "answered_before_observation"
+	default:
+	}
+	t.Logf("K3_LIST_REMEDY_OBSERVATION|holder=%d|holder_state=%s",
+		holderPID, commitOutcomeObservedHolderState(owner, holderPID))
+	t.Logf("K3_LIST_REMEDY_OBSERVATION|ungranted=%s", commitOutcomeObservedUngrantedLocks(owner))
+	t.Logf("K3_LIST_REMEDY_OBSERVATION|witness_failed_reads=%d|witness_last_error=%s",
+		witnessFailures, commitOutcomeErrorClass(witnessErr))
+	waited := time.Duration(0)
+	if outcome == "" {
+		started := time.Now()
+		select {
+		case response = <-remedy:
+			outcome = "answered_within_bound"
+		case <-time.After(commitOutcomeReturnLimit):
+			outcome = "pending_at_bound"
+		}
+		waited = time.Since(started)
+	}
+	if outcome != "pending_at_bound" && response.status == 0 {
+		outcome = "unissued"
+	}
+	t.Logf("K3_LIST_REMEDY_OBSERVATION|remedy=%s|status=%d|code=%s|waited_ms=%d",
+		outcome, response.status, commitOutcomeResponseCode(response), waited.Milliseconds())
+}
+
+// commitOutcomeObservedHolderState reads whether a backend still exists and its
+// state, once, within the observation limit. It is the holder half of
+// commitOutcomeHolderState, except that an unreadable state is returned as a
+// class rather than failing the test, so the observations after it still run.
+func commitOutcomeObservedHolderState(owner *sql.DB, pid int) string {
+	var state sql.NullString
+	var inTransaction bool
+	err := commitOutcomeObserve(context.Background(), func(ctx context.Context) error {
+		return owner.QueryRowContext(ctx,
+			`SELECT state, xact_start IS NOT NULL FROM pg_stat_activity WHERE pid = $1`, pid).
+			Scan(&state, &inTransaction)
+	})
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		return "absent"
+	case err != nil:
+		return "unreadable:" + commitOutcomeErrorClass(err)
+	case !state.Valid:
+		return "alive,state_not_visible"
+	default:
+		return fmt.Sprintf("alive,state=%q,in_transaction=%t", state.String, inTransaction)
+	}
+}
+
+// commitOutcomeObservedUngrantedLocks lists, once and within the observation
+// limit, every lock someone is waiting for, as a structural tuple:
+// pid:locktype:mode:relation:classid/objid/objsubid:blockers. No query text or
+// payload is read. At most 16 tuples are listed.
+func commitOutcomeObservedUngrantedLocks(owner *sql.DB) string {
+	var tuples []string
+	err := commitOutcomeObserve(context.Background(), func(ctx context.Context) error {
+		rows, err := owner.QueryContext(ctx, `
+			SELECT l.pid, l.locktype, l.mode,
+			       CASE WHEN l.database = (SELECT oid FROM pg_database WHERE datname = current_database())
+			            THEN coalesce(l.relation::regclass::text, '') ELSE '' END,
+			       coalesce(l.classid::bigint, 0), coalesce(l.objid::bigint, 0), coalesce(l.objsubid, 0),
+			       pg_blocking_pids(l.pid)::text
+			FROM pg_locks l
+			WHERE NOT l.granted
+			ORDER BY l.pid
+			LIMIT 16`)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = rows.Close() }()
+		for rows.Next() {
+			var pid int
+			var lockType, mode, relation, blockers string
+			var classID, objID, objSubID int64
+			if err := rows.Scan(&pid, &lockType, &mode, &relation, &classID, &objID, &objSubID, &blockers); err != nil {
+				return err
+			}
+			tuples = append(tuples, fmt.Sprintf("%d:%s:%s:%s:%d/%d/%d:%s",
+				pid, lockType, mode, relation, classID, objID, objSubID, blockers))
+		}
+		return rows.Err()
+	})
+	switch {
+	case err != nil:
+		return "unreadable:" + commitOutcomeErrorClass(err)
+	case len(tuples) == 0:
+		return "none"
+	default:
+		return strings.Join(tuples, ",")
+	}
+}
+
+// commitOutcomeErrorClass names an error by its class only — the SQLSTATE when
+// the server reported one, a deadline or a cancellation, otherwise its Go type —
+// never by its text.
+func commitOutcomeErrorClass(err error) string {
+	var coded interface{ SQLState() string }
+	switch {
+	case err == nil:
+		return "none"
+	case errors.As(err, &coded):
+		return "sqlstate_" + coded.SQLState()
+	case errors.Is(err, context.DeadlineExceeded):
+		return "deadline"
+	case errors.Is(err, context.Canceled):
+		return "canceled"
+	default:
+		return fmt.Sprintf("%T", err)
+	}
 }
 
 // ---- HC-5k / HC-5u: convergence behind an unresolved original ---------------
@@ -934,8 +1076,13 @@ func TestCommunicationCommitOutcomeRetryHTTPPostgres(t *testing.T) {
 				f.proxy.forward()
 				resend := commitOutcomeAwait(t, resends, route.name+" waiting resend")
 				if resend.status != route.replayStatus {
-					t.Fatalf("the resend that waited for a committed original = %d: %s\nwant %d",
+					// The original failure is recorded first; what follows only observes it.
+					t.Errorf("the resend that waited for a committed original = %d: %s\nwant %d",
 						resend.status, resend.raw, route.replayStatus)
+					if route.name == "offer" {
+						commitOutcomeObserveResendFollowUp(t, f, request, route.name, resend)
+					}
+					t.FailNow()
 				}
 				if route.wantReplayed && !commitOutcomeReportsReplayed(resend) {
 					t.Fatalf("the %s resend did not report itself a replay: %s", route.name, resend.raw)
@@ -997,6 +1144,54 @@ func TestCommunicationCommitOutcomeRetryHTTPPostgres(t *testing.T) {
 			})
 		})
 	}
+}
+
+// commitOutcomeObserveResendFollowUp is a diagnostic for ONE failure only: the
+// offer resend that waited behind a committed original was answered with
+// something other than its replay. The failure is recorded before it runs, and
+// the leaf fails whatever it observes. It sends the same request once more — same
+// method, path, token, body and headers, so the same idempotency key — within the
+// return limit, and logs the status, code, replayed flag and elapsed time of the
+// answer, never a token or header value. A 200 here is consistent with authority
+// evidence that went stale while the resend waited; it does not name the check
+// that refused the first answer, and a 503 stays compatible with several causes.
+func commitOutcomeObserveResendFollowUp(
+	t *testing.T, f *commitOutcomeKeyedFixture, request commitOutcomeKeyedRequest,
+	route string, first communicationHTTPTestResponse,
+) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), commitOutcomeReturnLimit)
+	defer cancel()
+	started := time.Now()
+	followUps := commitOutcomeServeInBackground(ctx, f.estate.eng,
+		request.method, request.path, request.token, f.estate.tenant,
+		request.body, request.headers)
+	var second communicationHTTPTestResponse
+	outcome := "pending_at_bound"
+	select {
+	case second = <-followUps:
+		outcome = "answered"
+		if second.status == 0 {
+			outcome = "unissued"
+		}
+	case <-ctx.Done():
+	}
+	t.Logf("K3_OFFER_FOLLOWUP|route=%s|first_status=%d|first_code=%s|followup=%s|status=%d|code=%s|replayed=%t|elapsed_ms=%d",
+		route, first.status, commitOutcomeResponseCode(first), outcome, second.status,
+		commitOutcomeResponseCode(second), outcome == "answered" && commitOutcomeReportsReplayed(second),
+		time.Since(started).Milliseconds())
+}
+
+// commitOutcomeResponseCode reads the machine-readable code of a response, or
+// nothing when the body carries none.
+func commitOutcomeResponseCode(response communicationHTTPTestResponse) string {
+	var body struct {
+		Code string `json:"code"`
+	}
+	if err := json.Unmarshal(response.raw, &body); err != nil {
+		return ""
+	}
+	return body.Code
 }
 
 // commitOutcomeReportsReplayed reads the replayed flag every keyed route returns.
