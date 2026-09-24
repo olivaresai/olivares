@@ -1,0 +1,93 @@
+{
+  "version": 1,
+  "superficies": [
+    {
+      "id": "agents",
+      "objetivo": 12,
+      "listar": "/v1/agents",
+      "bajo": "items"
+    },
+    {
+      "id": "alerting",
+      "objetivo": 6,
+      "listar": "/v1/m/notify/routes",
+      "bajo": "items"
+    },
+    {
+      "id": "guardian-rules",
+      "objetivo": 6,
+      "listar": "/v1/m/governance/guardian/rules",
+      "bajo": "items"
+    },
+    {
+      "id": "routine-policies",
+      "objetivo": 6,
+      "listar": "/v1/m/governance/routine-policies",
+      "bajo": "items"
+    },
+    {
+      "id": "agent-artifacts",
+      "objetivo": 8,
+      "listar": "/v1/m/models/agent-artifacts",
+      "bajo": "items"
+    },
+    {
+      "id": "console-bindings",
+      "objetivo": 8,
+      "listar": "/v1/m/sourcescope/bindings",
+      "bajo": "items"
+    },
+    {
+      "id": "capabilities",
+      "objetivo": 6,
+      "listar": "/v1/m/capabilities/configs",
+      "bajo": "items"
+    },
+    {
+      "id": "redteam",
+      "objetivo": 6,
+      "listar": "/v1/m/redteam/targets",
+      "bajo": "items"
+    },
+    {
+      "id": "knowledge",
+      "objetivo": 6,
+      "listar": "/v1/m/knowledge/kbs",
+      "bajo": "items"
+    },
+    {
+      "id": "deploy",
+      "objetivo": 6,
+      "listar": "/v1/m/deploy/definitions",
+      "bajo": "items"
+    },
+    {
+      "id": "approvals",
+      "objetivo": 6,
+      "listar": "/v1/m/governance/approvals",
+      "bajo": "items"
+    },
+    {
+      "id": "health",
+      "objetivo": 6,
+      "listar": "/v1/m/health/checks",
+      "bajo": "items"
+    },
+    {
+      "id": "killswitch",
+      "objetivo": 6,
+      "listar": "/v1/m/governance/killswitch",
+      "bajo": "items"
+    }
+  ],
+  "no_sembrables_por_api": [
+    {
+      "id": "identities",
+      "ruta": "/v1/m/governance/identities"
+    },
+    {
+      "id": "capabilities/servers",
+      "ruta": "/v1/m/capabilities/servers"
+    }
+  ]
+}
