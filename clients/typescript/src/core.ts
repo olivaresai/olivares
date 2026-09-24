@@ -49,6 +49,16 @@ export class APIError extends Error {
   }
 }
 
+/**
+ * The engine's answer when it issued COMMIT and never learned whether the database
+ * applied it. The write MAY be durable, which is why the client never retries it
+ * automatically: even on a GET a retry re-runs a governed read that commits its own
+ * audit act, so one uncertain write becomes two acts for one intention. What to do
+ * next is the caller's decision, and it is usually to READ the resource under the
+ * same authority rather than to re-send.
+ */
+export const COMMIT_OUTCOME_UNKNOWN = "commit_outcome_unknown";
+
 export interface ClientOptions {
   /** Absolute base URL, e.g. "https://olivares.example:8443". */
   endpoint: string;
@@ -56,7 +66,10 @@ export interface ClientOptions {
   token?: string;
   /** Default X-Olivares-Tenant; override per call via RequestOptions. */
   tenant?: string;
-  /** Retries for retryable statuses (429 always, 503 for GET). Default 2. */
+  /** Retries for retryable statuses (429 always, 503 for GET). Default 2.
+   * {@link COMMIT_OUTCOME_UNKNOWN} is never retried whatever this is set to: that
+   * code means the engine issued a write and never learned whether the database
+   * applied it, so a second attempt can produce a second durable effect. */
   maxRetries?: number;
   /** Replace the transport (custom TLS dispatch, proxies, test fakes). */
   fetch?: typeof fetch;
@@ -191,8 +204,9 @@ export class ClientCore {
   }
 
   /** The policy-aware retry loop: 429 is always retryable (the limiter rejects
-   * before execution and Retry-After is a safe lower bound), 503 only for GET.
-   * Everything else surfaces. */
+   * before execution and Retry-After is a safe lower bound), 503 only for GET,
+   * and {@link COMMIT_OUTCOME_UNKNOWN} never, on any method. Everything else
+   * surfaces. */
   private async execute(
     method: string,
     route: string,
@@ -210,7 +224,8 @@ export class ClientCore {
       } catch (err) {
         if (!(err instanceof APIError) || attempt >= maxRetries) throw err;
         const retryable =
-          err.status === 429 || (err.status === 503 && method === "GET");
+          err.code !== COMMIT_OUTCOME_UNKNOWN &&
+          (err.status === 429 || (err.status === 503 && method === "GET"));
         if (!retryable) throw err;
         const ms =
           err.retryAfterSeconds > 0

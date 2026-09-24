@@ -61489,7 +61489,7 @@ export interface paths {
             'application/json': Record<string, never>
           }
         }
-        /** @description current authority, custody or store evidence is unavailable */
+        /** @description current authority, custody or store evidence is unavailable; or, with code commit_outcome_unknown, the write was issued and its outcome was never learned, so it may be durable and must not be retried automatically */
         503: {
           headers: {
             [name: string]: unknown
@@ -61744,7 +61744,7 @@ export interface paths {
             'application/json': Record<string, never>
           }
         }
-        /** @description current authority, custody or store evidence is unavailable */
+        /** @description current authority, custody or store evidence is unavailable; or, with code commit_outcome_unknown, the write was issued and its outcome was never learned, so it may be durable and must not be retried automatically */
         503: {
           headers: {
             [name: string]: unknown
@@ -62007,7 +62007,7 @@ export interface paths {
             'application/json': Record<string, never>
           }
         }
-        /** @description current authority, custody or store evidence is unavailable */
+        /** @description current authority, custody or store evidence is unavailable; or, with code commit_outcome_unknown, the write was issued and its outcome was never learned, so it may be durable and must not be retried automatically */
         503: {
           headers: {
             [name: string]: unknown
@@ -62165,7 +62165,7 @@ export interface paths {
             'application/json': Record<string, never>
           }
         }
-        /** @description current authority, custody or store evidence is unavailable */
+        /** @description current authority, custody or store evidence is unavailable; or, with code commit_outcome_unknown, the write was issued and its outcome was never learned, so it may be durable and must not be retried automatically */
         503: {
           headers: {
             /** @description Always `no-store`. These pages are authorization-dependent and observation-dependent: the same request from the same client can legitimately produce a different answer a moment later, and a refusal must never be replayed from a cache after the authority behind it changed. There is no HTTP ETag and no 304 on these routes; the `etag` in the body is the Channel precondition for the existing mutations, not a representation validator. */
@@ -62294,7 +62294,7 @@ export interface paths {
             'application/json': Record<string, never>
           }
         }
-        /** @description current authority, custody or store evidence is unavailable */
+        /** @description current authority, custody or store evidence is unavailable; or, with code commit_outcome_unknown, the write was issued and its outcome was never learned, so it may be durable and must not be retried automatically */
         503: {
           headers: {
             [name: string]: unknown
@@ -62528,7 +62528,7 @@ export interface paths {
             'application/json': Record<string, never>
           }
         }
-        /** @description current authority, custody or store evidence is unavailable */
+        /** @description current authority, custody or store evidence is unavailable; or, with code commit_outcome_unknown, the write was issued and its outcome was never learned, so it may be durable and must not be retried automatically */
         503: {
           headers: {
             /** @description Always `no-store`. These pages are authorization-dependent and observation-dependent: the same request from the same client can legitimately produce a different answer a moment later, and a refusal must never be replayed from a cache after the authority behind it changed. There is no HTTP ETag and no 304 on these routes; the `etag` in the body is the Channel precondition for the existing mutations, not a representation validator. */
@@ -62782,7 +62782,7 @@ export interface paths {
             'application/json': Record<string, never>
           }
         }
-        /** @description current authority, custody or store evidence is unavailable */
+        /** @description current authority, custody or store evidence is unavailable; or, with code commit_outcome_unknown, the write was issued and its outcome was never learned, so it may be durable and must not be retried automatically */
         503: {
           headers: {
             [name: string]: unknown
@@ -63036,7 +63036,7 @@ export interface paths {
             'application/json': Record<string, never>
           }
         }
-        /** @description current authority, custody or store evidence is unavailable */
+        /** @description current authority, custody or store evidence is unavailable; or, with code commit_outcome_unknown, the write was issued and its outcome was never learned, so it may be durable and must not be retried automatically */
         503: {
           headers: {
             [name: string]: unknown
@@ -63777,7 +63777,7 @@ export interface paths {
             'application/json': Record<string, never>
           }
         }
-        /** @description current authority, custody or store evidence is unavailable */
+        /** @description current authority, custody or store evidence is unavailable; or, with code commit_outcome_unknown, the write was issued and its outcome was never learned, so it may be durable and must not be retried automatically */
         503: {
           headers: {
             [name: string]: unknown
@@ -63941,7 +63941,7 @@ export interface paths {
             'application/json': Record<string, never>
           }
         }
-        /** @description current authority, custody or store evidence is unavailable */
+        /** @description current authority, custody or store evidence is unavailable; or, with code commit_outcome_unknown, the write was issued and its outcome was never learned, so it may be durable and must not be retried automatically */
         503: {
           headers: {
             [name: string]: unknown
@@ -64097,7 +64097,7 @@ export interface paths {
             'application/json': Record<string, never>
           }
         }
-        /** @description current authority, custody or store evidence is unavailable */
+        /** @description current authority, custody or store evidence is unavailable; or, with code commit_outcome_unknown, the write was issued and its outcome was never learned, so it may be durable and must not be retried automatically */
         503: {
           headers: {
             [name: string]: unknown
@@ -64303,7 +64303,7 @@ export interface paths {
             'application/json': Record<string, never>
           }
         }
-        /** @description current authority, custody or store evidence is unavailable */
+        /** @description current authority, custody or store evidence is unavailable; or, with code commit_outcome_unknown, the write was issued and its outcome was never learned, so it may be durable and must not be retried automatically */
         503: {
           headers: {
             [name: string]: unknown
@@ -64475,7 +64475,7 @@ export interface paths {
             'application/json': Record<string, never>
           }
         }
-        /** @description current authority, custody or store evidence is unavailable */
+        /** @description current authority, custody or store evidence is unavailable; or, with code commit_outcome_unknown, the write was issued and its outcome was never learned, so it may be durable and must not be retried automatically */
         503: {
           headers: {
             [name: string]: unknown
@@ -64672,7 +64672,7 @@ export interface paths {
             'application/json': Record<string, never>
           }
         }
-        /** @description current authority, custody or store evidence is unavailable */
+        /** @description current authority, custody or store evidence is unavailable; or, with code commit_outcome_unknown, the write was issued and its outcome was never learned, so it may be durable and must not be retried automatically */
         503: {
           headers: {
             [name: string]: unknown
@@ -64792,7 +64792,7 @@ export interface paths {
             'application/json': Record<string, never>
           }
         }
-        /** @description current authority, custody or store evidence is unavailable */
+        /** @description current authority, custody or store evidence is unavailable; or, with code commit_outcome_unknown, the write was issued and its outcome was never learned, so it may be durable and must not be retried automatically */
         503: {
           headers: {
             [name: string]: unknown
@@ -64937,7 +64937,7 @@ export interface paths {
             'application/json': Record<string, never>
           }
         }
-        /** @description current authority, custody or store evidence is unavailable */
+        /** @description current authority, custody or store evidence is unavailable; or, with code commit_outcome_unknown, the write was issued and its outcome was never learned, so it may be durable and must not be retried automatically */
         503: {
           headers: {
             [name: string]: unknown
@@ -65098,7 +65098,7 @@ export interface paths {
             'application/json': Record<string, never>
           }
         }
-        /** @description current authority, custody or store evidence is unavailable */
+        /** @description current authority, custody or store evidence is unavailable; or, with code commit_outcome_unknown, the write was issued and its outcome was never learned, so it may be durable and must not be retried automatically */
         503: {
           headers: {
             [name: string]: unknown
@@ -65978,7 +65978,7 @@ export interface paths {
             'application/json': Record<string, never>
           }
         }
-        /** @description current authority, custody or store evidence is unavailable */
+        /** @description current authority, custody or store evidence is unavailable; or, with code commit_outcome_unknown, the write was issued and its outcome was never learned, so it may be durable and must not be retried automatically */
         503: {
           headers: {
             [name: string]: unknown
@@ -66146,7 +66146,7 @@ export interface paths {
             'application/json': Record<string, never>
           }
         }
-        /** @description current authority, custody or store evidence is unavailable */
+        /** @description current authority, custody or store evidence is unavailable; or, with code commit_outcome_unknown, the write was issued and its outcome was never learned, so it may be durable and must not be retried automatically */
         503: {
           headers: {
             [name: string]: unknown

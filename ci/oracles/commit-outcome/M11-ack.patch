@@ -1,0 +1,16 @@
+diff --git a/modules/sessions/communication_ack_service.go b/modules/sessions/communication_ack_service.go
+index ae9363c..b873d37 100644
+--- a/modules/sessions/communication_ack_service.go
++++ b/modules/sessions/communication_ack_service.go
+@@ -507,11 +507,6 @@ func (m *Module) acknowledgeDirectNoticeDeliveryWithAuthorityBinder(
+ 			if err != nil {
+ 				return err
+ 			}
+-			if err := tx.lockTransaction(
+-				ctx, directNoticeAckIdempotencyLockKey(normalized),
+-			); err != nil {
+-				return err
+-			}
+ 			receipt, found, err := findDirectNoticeAckReceipt(
+ 				ctx,
+ 				func(kind model.Kind) (communicationReadRepository, error) {

@@ -43,6 +43,14 @@ class _NoRedirects(_urlrequest.HTTPRedirectHandler):
 VERSION = "0.1.0"
 
 _RETRYABLE_GET_ONLY = {503}  # not_leader HA handoff — idempotent reads only
+
+#: The engine's answer when it issued COMMIT and never learned whether the database
+#: applied it. The write MAY be durable, so it is never retried automatically on any
+#: method: even on a GET a retry re-runs a governed read that commits its own audit
+#: act, and one uncertain write becomes two acts for one intention. What to do next is
+#: the caller's decision, and it is usually to READ the resource under the same
+#: authority rather than to re-send.
+COMMIT_OUTCOME_UNKNOWN = "commit_outcome_unknown"
 _BODY_LIMIT = 64 << 20
 
 
@@ -167,7 +175,8 @@ class ClientCore:
                  required_json_body=False) -> bytes:
         """The policy-aware retry loop: 429 is always retryable (the limiter
         rejects before execution and ``Retry-After`` is a safe lower bound),
-        503 only for GET. Everything else surfaces."""
+        503 only for GET, and COMMIT_OUTCOME_UNKNOWN never, on any method.
+        Everything else surfaces."""
         attempt = 0
         while True:
             try:
@@ -177,8 +186,9 @@ class ClientCore:
                                   raw_request_content_type=raw_request_content_type,
                                   required_json_body=required_json_body)
             except APIError as e:
-                retryable = e.status == 429 or (
-                    e.status in _RETRYABLE_GET_ONLY and method == "GET"
+                retryable = e.code != COMMIT_OUTCOME_UNKNOWN and (
+                    e.status == 429
+                    or (e.status in _RETRYABLE_GET_ONLY and method == "GET")
                 )
                 if not retryable or attempt >= self._max_retries:
                     raise

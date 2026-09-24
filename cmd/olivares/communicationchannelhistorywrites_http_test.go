@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -652,8 +653,37 @@ func exerciseChannelHistoryWriteRollback(
 	// Interrupted at increasing depths. Each attempt grants a NEW subject, so a
 	// commit is one row and one act and a rollback is neither; there is no
 	// outcome in between for the census to show.
-	interrupted, committed := 0, 0
-	for _, budget := range []time.Duration{
+	//
+	// R3′ — WHAT CHANGED, AND WHAT DID NOT. Every budget is preserved, 40 ms
+	// included, and so is the all-or-nothing assertion. What is added is
+	// ATTRIBUTION and SETTLEMENT, because without them this probe could see a
+	// census move and not know whose write moved it:
+	//
+	//   - each attempt records its own SUBJECT, so a row can be traced to the
+	//     attempt that asked for it;
+	//   - every non-200 attempt waits for the settlement barrier before its
+	//     census, since a read taken while a transaction is unresolved cannot
+	//     prove absence;
+	//   - a 200 must be PRESENT; commit_outcome_unknown may be present or absent,
+	//     but whichever it is the census must move all-or-nothing; anything else
+	//     must be ABSENT with the census unchanged;
+	//   - a row that appears LATE is named with its original attempt, and is
+	//     allowed only where that attempt was told the outcome was undetermined.
+	//     Anything else is an unexplained row change and fails.
+	//
+	// It remains a SAMPLING diagnostic of timing. It is not acceptance evidence
+	// for this change, and it never was.
+	type ladderAttempt struct {
+		index   int
+		subject model.ID
+		budget  time.Duration
+		status  int
+		code    string
+		present bool
+	}
+	var attempts []ladderAttempt
+	interrupted, committed, undetermined := 0, 0, 0
+	for index, budget := range []time.Duration{
 		200 * time.Microsecond, 500 * time.Microsecond, time.Millisecond,
 		2 * time.Millisecond, 5 * time.Millisecond, 10 * time.Millisecond,
 		20 * time.Millisecond, 40 * time.Millisecond, 80 * time.Millisecond,
@@ -661,34 +691,195 @@ func exerciseChannelHistoryWriteRollback(
 	} {
 		census := censusChannelGrantHistory(t, eng, tenant)
 		current := estate.sheetPage(t, owner.token, channel, wsQuery+"&state=active&limit=1")
+		subject := model.NewID()
 		deadline, stop := context.WithTimeout(context.Background(), budget)
 		attempt := communicationHTTPTestRequestWithContext(t, deadline, eng, http.MethodPost,
 			"/v1/m/sessions/channels/"+channel.String()+"/grants", owner.token, tenant,
 			map[string]any{
-				"subject":  channelAdministrationSubject("user", model.NewID()),
+				"subject":  channelAdministrationSubject("user", subject),
 				"can_read": true, "can_write": false, "can_admin": false,
 			}, map[string]string{"If-Match": current.ETag})
 		stop()
+		code := channelHistoryAttemptCode(attempt)
+		if attempt.status != http.StatusOK {
+			channelHistoryLadderSettlementBarrier(t, estate)
+		}
 		after := censusChannelGrantHistory(t, eng, tenant)
-		switch attempt.status {
-		case http.StatusOK:
+		present := channelHistoryGrantPresent(t, eng, tenant, subject)
+
+		// A row of an EARLIER attempt that was not there before is a late effect.
+		// It is named rather than absorbed into this attempt's census.
+		late := ""
+		for i := range attempts {
+			if attempts[i].present {
+				continue
+			}
+			if !channelHistoryGrantPresent(t, eng, tenant, attempts[i].subject) {
+				continue
+			}
+			attempts[i].present = true
+			late = fmt.Sprintf("%d", attempts[i].index)
+			if attempts[i].code != commitOutcomeUnknownCode {
+				t.Fatalf("attempt %d (budget %s, status %d, code %q) was answered definitively and its grant appeared LATER: an unexplained row change",
+					attempts[i].index, attempts[i].budget, attempts[i].status, attempts[i].code)
+			}
+		}
+
+		switch {
+		case attempt.status == http.StatusOK:
 			committed++
+			if !present {
+				t.Fatalf("a committed grant at budget %s named a subject that is not durable", budget)
+			}
 			if after.grants != census.grants+1 || after.audits != census.audits+1 {
 				t.Fatalf("a committed grant at budget %s moved the census by %+v -> %+v",
 					budget, census, after)
 			}
+			// The census counted the effect; this names WHOSE it is.
+			channelHistoryLadderAssertXminEquality(t, estate, channel, subject)
+		case code == commitOutcomeUnknownCode:
+			undetermined++
+			// PRESENT XOR ABSENT, and all-or-nothing either way. This is the only
+			// outcome where both answers are correct, which is exactly what the
+			// caller was told.
+			if present {
+				if after.grants != census.grants+1 || after.audits != census.audits+1 {
+					t.Fatalf("an undetermined grant at budget %s committed a PARTIAL act: %+v -> %+v",
+						budget, census, after)
+				}
+				// An undetermined commit that DID land must still have landed as one
+				// transaction attributed to this attempt. This is the row the ladder
+				// exists to catch and the one a count alone cannot explain.
+				channelHistoryLadderAssertXminEquality(t, estate, channel, subject)
+			} else if after != census {
+				t.Fatalf("an undetermined grant at budget %s left durable state without its own grant: %+v -> %+v",
+					budget, census, after)
+			}
 		default:
 			interrupted++
+			if present {
+				t.Fatalf("a definitively refused grant at budget %s (status %d: %s) left a durable row",
+					budget, attempt.status, attempt.raw)
+			}
 			if after != census {
 				t.Fatalf("an interrupted grant at budget %s left a partial act: %+v -> %+v (status %d: %s)",
 					budget, census, after, attempt.status, attempt.raw)
 			}
 		}
+		attempts = append(attempts, ladderAttempt{
+			index: index, subject: subject, budget: budget,
+			status: attempt.status, code: code, present: present,
+		})
+		t.Logf("K3_WRITER_ROLLBACK|budget=%s|status=%d|code=%s|present=%t|late=%s",
+			budget, attempt.status, code, present, late)
 	}
-	t.Logf("K3_WRITER_ROLLBACK|interrupted=%d|committed=%d", interrupted, committed)
-	if interrupted == 0 {
+	if interrupted+undetermined == 0 {
 		t.Fatal("no attempt was interrupted: the rollback probe measured nothing")
 	}
+	t.Logf("K3_WRITER_ROLLBACK_TOTALS|interrupted=%d|undetermined=%d|committed=%d",
+		interrupted, undetermined, committed)
+}
+
+// channelHistoryAttemptCode reads the engine's own code out of an attempt's
+// envelope. An attempt with no code is not treated as undetermined: silence is
+// not a claim.
+func channelHistoryAttemptCode(attempt communicationHTTPTestResponse) string {
+	var body struct {
+		Code  string `json:"code"`
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(attempt.raw, &body); err != nil {
+		return ""
+	}
+	if body.Code != "" {
+		return body.Code
+	}
+	return body.Error.Code
+}
+
+// channelHistoryGrantPresent answers whether one subject holds an active grant.
+// It pages the same way the census does, because these journeys deliberately
+// hold more rows than a single page.
+func channelHistoryGrantPresent(
+	t *testing.T, eng *engine, tenant model.TenantID, subject model.ID,
+) bool {
+	t.Helper()
+	found := false
+	if err := eng.store.View(context.Background(), tenant, func(sc store.Scope) error {
+		repo, err := sc.Ext("sessions.channel_grant")
+		if err != nil {
+			return err
+		}
+		query := model.Query{Limit: 500}
+		for {
+			rows, page, err := repo.List(context.Background(), query)
+			if err != nil {
+				return err
+			}
+			for _, row := range rows {
+				ref, _ := row["subject_ref"].(string)
+				state, _ := row["state"].(string)
+				if ref == subject.String() && state == "active" {
+					found = true
+					return nil
+				}
+			}
+			if !page.HasMore {
+				return nil
+			}
+			if page.Cursor == "" {
+				return fmt.Errorf("grant presence scan lost its cursor")
+			}
+			query.Cursor = page.Cursor
+		}
+	}); err != nil {
+		t.Fatalf("read back the grant of %s: %v", subject, err)
+	}
+	return found
+}
+
+// channelHistoryLadderSettlementBarrier waits until no transaction still holds a
+// write lock on the three relations this ladder moves. Until then a census can
+// show a row that is about to appear as absent, and the probe would report an
+// abort it never observed.
+//
+// The witness is pg_locks, which every role can read in full. It is deliberately
+// NOT a per-backend column of pg_stat_activity: those read NULL for a backend
+// owned by another role, so on this split-owner estate they would answer
+// "settled" immediately and manufacture the very evidence the barrier exists to
+// establish.
+//
+// SQLite needs no barrier and gets none, with the reason stated rather than
+// assumed: modernc runs COMMIT under context.Background() (tx.go:35-37), so a
+// COMMIT the driver received is resolved before Commit returns, and the single
+// writer means no second transaction can be open behind it.
+func channelHistoryLadderSettlementBarrier(t *testing.T, estate channelAdministrationHTTPEstate) {
+	t.Helper()
+	if estate.store.engine != "postgres" {
+		return
+	}
+	dsn, err := os.ReadFile(estate.store.ownerDSNFile)
+	if err != nil {
+		t.Fatalf("COULD_NOT_LOOK: read the owner DSN for the settlement barrier: %v", err)
+	}
+	db, err := sql.Open("pgx", strings.TrimSpace(string(dsn)))
+	if err != nil {
+		t.Fatalf("COULD_NOT_LOOK: open the settlement observer: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+	// Each observation carries its OWN deadline: an outer loop that only checks
+	// the wall clock between iterations cannot bound the call inside it.
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		holding, err := channelHistoryLadderHoldingLocks(db)
+		if err == nil && holding == 0 {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatal("COULD_NOT_LOOK: settlement not observed within 10s, so this attempt's census cannot prove absence")
 }
 
 // communicationHTTPTestRequestWithContext is communicationHTTPTestRequest with a
@@ -1286,5 +1477,81 @@ func reviveSeededGeneration(
 		return err
 	}); err != nil {
 		t.Fatalf("revive seeded row %s: %v", grantID, err)
+	}
+}
+
+// channelHistoryLadderHoldingLocks is one bounded observation of the write locks
+// this ladder's own relations still carry.
+func channelHistoryLadderHoldingLocks(db *sql.DB) (int, error) {
+	callCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	var holding int
+	err := db.QueryRowContext(callCtx, `
+		SELECT count(*) FROM pg_locks l
+		JOIN pg_class c ON c.oid = l.relation
+		WHERE c.relname IN ('sessions_channel', 'sessions_channel_grant', 'audit_events')
+		  AND l.mode IN ('RowExclusiveLock', 'ShareRowExclusiveLock',
+		                 'ExclusiveLock', 'AccessExclusiveLock')`).Scan(&holding)
+	return holding, err
+}
+
+// channelHistoryLadderAssertXminEquality is F3: after the settlement barrier, the
+// attributed attempt's Channel, grant and audit rows must carry ONE transaction
+// id.
+//
+// The ladder counts rows, and a census can only say how MANY things happened. It
+// cannot say they were written by the attempt that asked for them, and that is
+// precisely the question an undetermined commit raises: a row that is there may
+// belong to a different attempt entirely. Equality of xmin is what makes the
+// ladder's "present" mean "present because THIS attempt committed".
+//
+// It reads through the ADMIN (BYPASSRLS) role, because tenant rows and
+// audit_events carry FORCE row-level security, which applies to the table owner
+// as well. It is a PostgreSQL assertion by nature; the SQLite leg keeps the
+// row-count evidence it always had, and says so rather than silently skipping.
+func channelHistoryLadderAssertXminEquality(
+	t *testing.T,
+	estate channelAdministrationHTTPEstate,
+	channel model.ID,
+	subject model.ID,
+) {
+	t.Helper()
+	if estate.store.engine != "postgres" {
+		return
+	}
+	raw, err := os.ReadFile(estate.store.adminDSNFile)
+	if err != nil {
+		t.Fatalf("COULD_NOT_LOOK: read the admin DSN for the attribution read: %v", err)
+	}
+	db, err := sql.Open("pgx", strings.TrimSpace(string(raw)))
+	if err != nil {
+		t.Fatalf("COULD_NOT_LOOK: open the attribution reader: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	callCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	tenant := estate.tenant.String()
+	var grantXmin, channelXmin, auditXmin string
+	if err := db.QueryRowContext(callCtx, `
+		SELECT xmin::text FROM sessions_channel_grant
+		WHERE tenant_id = $1 AND subject_ref = $2 AND state = 'active'`,
+		tenant, subject.String()).Scan(&grantXmin); err != nil {
+		t.Fatalf("COULD_NOT_LOOK: read the attributed grant row for %s: %v", subject, err)
+	}
+	if err := db.QueryRowContext(callCtx, `
+		SELECT xmin::text FROM sessions_channel WHERE tenant_id = $1 AND id = $2`,
+		tenant, channel.String()).Scan(&channelXmin); err != nil {
+		t.Fatalf("COULD_NOT_LOOK: read the Channel row: %v", err)
+	}
+	if err := db.QueryRowContext(callCtx, `
+		SELECT xmin::text FROM audit_events
+		WHERE tenant_id = $1 AND action LIKE 'sessions.communication.channel.%'
+		ORDER BY seq DESC LIMIT 1`, tenant).Scan(&auditXmin); err != nil {
+		t.Fatalf("COULD_NOT_LOOK: read the newest communication audit row: %v", err)
+	}
+	if grantXmin != channelXmin || grantXmin != auditXmin {
+		t.Fatalf("the attempt for %s left effects written by DIFFERENT transactions (grant=%s channel=%s audit=%s): a durable row that its attempt did not write is an unexplained effect, and a census alone cannot see it",
+			subject, grantXmin, channelXmin, auditXmin)
 	}
 }

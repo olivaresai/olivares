@@ -1,0 +1,13 @@
+diff --git a/cmd/olivares/communicationcommitoutcome_proxy_test.go b/cmd/olivares/communicationcommitoutcome_proxy_test.go
+index cd30aaf..43f0d0f 100644
+--- a/cmd/olivares/communicationcommitoutcome_proxy_test.go
++++ b/cmd/olivares/communicationcommitoutcome_proxy_test.go
+@@ -481,8 +481,6 @@ func (s *commitOutcomeProxySession) releaseAndDrain() (int, error) {
+ 	// AHEAD of the buffered CommandComplete. Every individual write was serialized
+ 	// and the wire order was still wrong, which is exactly the failure a
+ 	// per-write mutex cannot catch.
+-	s.writeMu.Lock()
+-	defer s.writeMu.Unlock()
+ 
+ 	s.mu.Lock()
+ 	frames := s.buffered
