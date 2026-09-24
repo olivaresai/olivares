@@ -1,0 +1,896 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# mainline-20b3-repro — a bounded reproduction instrument for two test failures retained from ONE
+# exact commit, 20b3d0b1c632e8d4bef7b4ce15f4960293cc6e86. DIAGNOSTIC ONLY: it runs from the branch
+# diag/mainline-20b3-repro, which adds this one file and is never merged. It edits nothing, mocks
+# nothing and weakens no assertion. It checks out that commit and runs two named tests on it,
+# using the flags, race mode, PostgreSQL services and role posture of the jobs that went red. Each
+# test runs a finite number of times, and the instrument keeps every trial.
+#
+# Bound source. This file quotes that commit's assertion lines and test-file blobs:
+# communicationchannelhistorywrites_http_test.go 96a9e733ba… and drdestinationauthority_pg_test.go
+# add300c0fb…. Any other `sha` input is refused before checkout, and nothing else is ever measured.
+# A later source needs its own bound instrument.
+#
+# Selections. Each runs in its own job, with its own runner and its own PostgreSQL services:
+#   a  ./cmd/olivares  the complete named parent TestCommunicationChannelHistoryWritesHTTPPostgres,
+#      all seven subtests, so the target leaf a_failed_mutation_leaves_no_partial_act runs on the
+#      estate its earlier siblings mutated. The expected result set is pinned below (EXPECTED_SET).
+#      named assertion  communicationchannelhistorywrites_http_test.go:677 "a committed grant at budget"
+#      origin  mainline-ci control-plane, step "test (functional, no -race)": task test:functional
+#              = scripts/with-pg-env.sh scripts/go-work-each.sh go test -count=1 -timeout 45m ./...
+#              (in cmd/olivares, no -race); step ceiling 120 min, job ceiling 320 min.
+#   b  ./core          the complete named parent TestDRDestinationHolderLossCannotCommit
+#      (before_DDL and after_DDL); the target leaf is after_DDL.
+#      named assertion  drdestinationauthority_pg_test.go:337 "advisory holders/waiters leaked"
+#      origin  mainline-ci race-core (partition 3 of 4): task test:race-hot:core
+#              = scripts/with-pg-env.sh scripts/core-race-partition.sh go test -race -count=1 -p 1 -timeout 90m,
+#              whose sqlstore leg ran go test -race -count=1 -p 1 -timeout 90m -v -p 1 -run '^(<entries>)$'
+#              ./internal/store/sqlstore in core; step ceiling 180 min, job ceiling 190 min.
+#   Each selection is ONE named test, not the package suite. The concurrent package neighbours of
+#   the original runs (the rest of cmd/olivares; the other 316 sqlstore entries of partition 3)
+#   stay excluded, so no trial claims the full original execution context.
+#   The partition helpers own their -run and refuse an override, so selection b calls go test
+#   directly with the helper's own argv plus one anchored -run. The partition pair stays exported
+#   for fidelity; only those helpers read it. -json is the one added flag: it changes the output
+#   format only, and it implies -v.
+#
+# Verdict of one trial (<sel>.rate.tsv, verdicts.tsv). Inability is decided FIRST:
+#   2  INABILITY, excluded from the rate. Any one of: the Go test timeout; a raw exit other than 0
+#      or 1; a data race report; the package cluster-state check (CLUSTER_STATE|); a skip; results
+#      missing from or extra to the pinned expected set; a failing test other than the parent and
+#      its target leaf; another assertion line in the parent or the target leaf. This holds even
+#      when the named text is also present. That observation is kept in named_line_present and
+#      never counted.
+#   1  only then, a NAMED-ONLY failure: raw exit 1; every other expected test passed; the parent
+#      and the target leaf failed; and the leaf printed exactly one named file:line line (quoted
+#      verbatim into rate.tsv) and nothing else.
+#   0  the complete expected set passed, raw exit 0, and the target leaf printed its witness line.
+# The rate is n1 / (n0 + n1) over the trials that measured, and every 2 is reported beside it. A
+# trial classified 0 does not close an intermittent failure.
+#
+# Ceilings. Nothing is raised above its origin: the per-binary -timeout is exactly 45m (a) and
+# 90m (b). The trials step is 100 min, against origin step ceilings of 120 and 180 min. Each job
+# is 185 min, against 320 and 190 min. The budget_minutes input (5-90) bounds the trial loop, and
+# each trial is bounded by the budget that remains.
+name: mainline-20b3-repro
+
+# Triggers. workflow_dispatch carries the trial plan, and its sha must be the bound source. The push trigger is scoped to
+# the one diagnostic branch that carries this file, so the workflow can run without ever reaching
+# the default branch. A push run measures the defaults below, exactly as a dispatch without
+# overrides would.
+on:
+  push:
+    branches:
+      - diag/mainline-20b3-repro
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: The bound source. Only 20b3d0b1c632e8d4bef7b4ce15f4960293cc6e86 is accepted; any other value is refused before checkout.
+        required: true
+        default: 20b3d0b1c632e8d4bef7b4ce15f4960293cc6e86
+        type: string
+      selections:
+        description: Which named selections to run.
+        required: true
+        default: both
+        type: choice
+        options:
+          - both
+          - a
+          - b
+      trials:
+        description: Trials per selection, an integer 1-20. Every trial is kept.
+        required: true
+        default: '10'
+        type: string
+      budget_minutes:
+        description: Total time budget of the trials of ONE selection, an integer 5-90 minutes.
+        required: true
+        default: '60'
+        type: string
+
+permissions:
+  contents: read
+
+# One run per dispatch; a running measurement is never cancelled, because a cancelled run
+# carries no verdict at all.
+concurrency:
+  group: mainline-20b3-repro-${{ github.run_id }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  # The one source this instrument is bound to, and the blobs of the two test files whose lines it
+  # quotes. Nothing else is a supported measurement.
+  PINNED_SHA: 20b3d0b1c632e8d4bef7b4ce15f4960293cc6e86
+  PINNED_FUNCTIONAL_TEST: cmd/olivares/communicationchannelhistorywrites_http_test.go
+  PINNED_FUNCTIONAL_BLOB: 96a9e733ba6567c577715495eac6b0db5942b35e
+  PINNED_DR_TEST: core/internal/store/sqlstore/drdestinationauthority_pg_test.go
+  PINNED_DR_BLOB: add300c0fb089b457c11cf6125ec8ba290d60c03
+  # A push carries no inputs; the dispatch defaults apply then.
+  INPUT_SHA: ${{ inputs.sha || '20b3d0b1c632e8d4bef7b4ce15f4960293cc6e86' }}
+  INPUT_TRIALS: ${{ inputs.trials || '10' }}
+  INPUT_BUDGET_MINUTES: ${{ inputs.budget_minutes || '60' }}
+  # The shared shell library. Every step that measures or judges evaluates it first. It never
+  # turns a raw exit into a verdict by itself: run_trial keeps the stream, stderr and exit;
+  # classify judges them; trials_loop writes the judgement to rate.tsv and verdicts.tsv.
+  REPRO_LIB: |
+    set -euo pipefail
+    : "${SEL:?SEL must name the selection of this job}"
+    OUT="${OUT:-$RUNNER_TEMP/repro/$SEL}"
+    mkdir -p "$OUT"
+
+    fail() { printf '::error::%s\n' "$*"; return 1; }
+    count_lines() { awk 'NF {c++} END {print c+0}'; }
+    tsv_safe() { printf '%s' "$1" | tr '\t\r\n' '   '; }
+
+    # Inputs are validated deny-closed: an invalid input is an inability, never a run. Every
+    # refusal returns explicitly, because finalize calls this inside an `if`, where set -e is off.
+    validate_inputs() {
+      [ "${INPUT_SHA:-}" = "$PINNED_SHA" ] ||
+        { fail "sha [${INPUT_SHA:-}] is not the bound source $PINNED_SHA; this instrument quotes that source's assertion lines and blobs and measures no other commit"; return 1; }
+      { [[ "${INPUT_TRIALS:-}" =~ ^[1-9][0-9]?$ ]] && [ "$INPUT_TRIALS" -le 20 ]; } ||
+        { fail "trials must be an integer 1-20: [${INPUT_TRIALS:-}]"; return 1; }
+      { [[ "${INPUT_BUDGET_MINUTES:-}" =~ ^[1-9][0-9]?$ ]] && [ "$INPUT_BUDGET_MINUTES" -ge 5 ] &&
+        [ "$INPUT_BUDGET_MINUTES" -le 90 ]; } ||
+        { fail "budget_minutes must be an integer 5-90: [${INPUT_BUDGET_MINUTES:-}]"; return 1; }
+    }
+
+    # The checkout is the bound source, clean, with the two quoted test-file blobs, on a
+    # GitHub-hosted runner.
+    identity() {
+      validate_inputs
+      [ "$(git rev-parse HEAD)" = "$PINNED_SHA" ] || fail "the checkout $(git rev-parse HEAD) is not the bound source $PINNED_SHA"
+      [ -z "$(git status --porcelain --untracked-files=all)" ] || fail "the checkout is not clean"
+      [ "$(git rev-parse "HEAD:$PINNED_FUNCTIONAL_TEST")" = "$PINNED_FUNCTIONAL_BLOB" ] ||
+        fail "$PINNED_FUNCTIONAL_TEST is not blob $PINNED_FUNCTIONAL_BLOB"
+      [ "$(git rev-parse "HEAD:$PINNED_DR_TEST")" = "$PINNED_DR_BLOB" ] ||
+        fail "$PINNED_DR_TEST is not blob $PINNED_DR_BLOB"
+      [ "${RUNNER_PLACEMENT:-}" = github-hosted ] ||
+        fail "this job runs on a ${RUNNER_PLACEMENT:-unknown} runner; the instrument runs on GitHub-hosted runners only"
+      {
+        printf 'selection %s\ninput_sha %s\nbound_sha %s\ntree %s\nworkflow_sha %s\n' \
+          "$SEL" "$INPUT_SHA" "$PINNED_SHA" "$(git rev-parse 'HEAD^{tree}')" "${GITHUB_WORKFLOW_SHA:-unknown}"
+        printf 'event %s ref %s repository %s run %s attempt %s\n' \
+          "$GITHUB_EVENT_NAME" "$GITHUB_REF" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"
+        printf 'trials %s budget_minutes %s\n' "$INPUT_TRIALS" "$INPUT_BUDGET_MINUTES"
+        printf 'runner %s placement %s %s %s image %s %s\n' "${RUNNER_NAME:-unknown}" "$RUNNER_PLACEMENT" \
+          "$RUNNER_OS" "$RUNNER_ARCH" "${ImageOS:-unknown}" "${ImageVersion:-unknown}"
+        printf 'blob %s %s\nblob %s %s\n' "$PINNED_FUNCTIONAL_TEST" "$PINNED_FUNCTIONAL_BLOB" "$PINNED_DR_TEST" "$PINNED_DR_BLOB"
+      } > "$OUT/identity.txt"
+      cat "$OUT/identity.txt"
+    }
+
+    # run_logged LABEL DIR COMMAND...: a non-test command, its log and raw exit kept.
+    run_logged() {
+      local label="$1" dir="$2" rc=0
+      shift 2
+      { printf 'cd %q && ' "$dir"; printf '%q ' "$@"; printf '\n'; } > "$OUT/$label.command"
+      ( cd "$dir" && "$@" ) > "$OUT/$label.log" 2>&1 || rc=$?
+      printf '%s\n' "$rc" > "$OUT/$label.exit"
+      cat "$OUT/$label.log"
+      [ "$rc" -eq 0 ] || fail "$label exited $rc"
+    }
+
+    # Server-side state between trials, read outside the test process. Recorded, never judged.
+    pg_state() {
+      psql "$OLIVARES_TEST_POSTGRES_SUPERUSER_DSN" -X -v ON_ERROR_STOP=1 -AtF ' ' -c \
+        "SELECT 'databases', count(*) FROM pg_catalog.pg_database
+         UNION ALL SELECT 'advisory_rows', count(*) FROM pg_catalog.pg_locks WHERE locktype = 'advisory'
+         UNION ALL SELECT 'client_backends', count(*) FROM pg_catalog.pg_stat_activity WHERE backend_type = 'client backend'" \
+        > "$OUT/$1" 2>&1 || printf 'COULD NOT LOOK\n' >> "$OUT/$1"
+    }
+
+    # run_trial BASE DIR SECONDS COMMAND...: the command verbatim, bounded by the remaining budget;
+    # raw -json stream, stderr and exit kept. The clock itself is `bounded`, which only the trials
+    # step defines: its declared maximum is that step's static env TRIAL_CLOCK (the whole budget),
+    # and a trial is only ever given less. coreutils signals its whole process group, so a stopped
+    # trial takes its test binary with it.
+    run_trial() {
+      local base="$1" dir="$2" secs="$3" rc=0 t0 t1 max
+      shift 3
+      declare -F bounded >/dev/null || fail "run_trial needs the trials step's bounded()"
+      max="${TRIAL_CLOCK:?the trials step declares TRIAL_CLOCK}"; max="${max%s}"
+      [[ "$max" =~ ^[1-9][0-9]*$ ]] || fail "TRIAL_CLOCK must be whole seconds, got [$TRIAL_CLOCK]"
+      [ "$secs" -le "$max" ] || secs="$max"
+      {
+        printf 'cd %q && ' "$dir"; printf '%q ' "$@"; printf '\n'
+        printf '# per-trial clock %ss with a 30 s kill-after (the budget remaining when the trial started; at most %s)\n' "$secs" "$TRIAL_CLOCK"
+      } > "$OUT/$base.command"
+      STARTED="$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)"
+      t0="$(date +%s.%N)"
+      ( cd "$dir" && bounded "$secs" "$@" ) > "$OUT/$base.json" 2> "$OUT/$base.stderr" || rc=$?
+      t1="$(date +%s.%N)"
+      printf '%s\n' "$rc" > "$OUT/$base.exit"
+      ELAPSED="$(LC_ALL=C awk -v a="$t0" -v b="$t1" 'BEGIN { printf "%.1f", b - a }')"
+      RAW_EXIT="$rc"
+    }
+
+    # One "action<TAB>test" line per test that reached pass, fail or skip.
+    results() {
+      jq -rR 'fromjson? | select(.Test != null and (.Action == "pass" or .Action == "fail" or .Action == "skip")) | "\(.Action)\t\(.Test)"' \
+        "$OUT/$1.json" | LC_ALL=C sort
+    }
+    # Output is joined byte for byte (jq -j): each event already carries its own newline.
+    output_of() {
+      jq -jR --arg t "$2" 'fromjson? | select(.Test == $t and .Action == "output") | .Output' "$OUT/$1.json"
+    }
+    stream_text() {
+      jq -jR 'fromjson? | select(.Action == "output" or .Action == "build-output") | .Output' "$OUT/$1.json"
+      cat "$OUT/$1.stderr"
+    }
+
+    # expected_names: the pinned expected result set of this selection (EXPECTED_SET), sorted.
+    expected_names() { printf '%s\n' "$EXPECTED_SET" | awk 'NF' | LC_ALL=C sort; }
+
+    # fileline_lines FILE: every "<file>.go:<line>: " line of a test's own output. A log line and an
+    # assertion print in the same form, so only the log lines the source is known to print there
+    # (ALLOWED_LOG_RE) are set aside; anything else next to the named line is another assertion.
+    fileline_lines() { { grep -E '^[[:space:]]*[A-Za-z0-9_./-]+\.go:[0-9]+: ' "$1" || true; } | sed 's/^[[:space:]]*//'; }
+
+    # classify BASE: sets V (0/1/2), L, FIRST, WIT and NAMED_PRESENT (yes|no).
+    # INABILITY FIRST. Every obstruction returns 2 even when the named text is also present;
+    # NAMED_PRESENT keeps that observation apart, and a 2 is never counted in the rate. Only then
+    # a NAMED-ONLY failure is 1, and a complete expected pass with its witness is 0.
+    classify() {
+      local base="$1" got want names dups missing extra skips failing target other_failing other_lines named_count named_line name
+      got="$(results "$base")"
+      printf '%s\n' "$got" > "$OUT/$base.results"
+      stream_text "$base" > "$OUT/$base.text"
+      output_of "$base" "$PARENT" > "$OUT/$base.parent-output"
+      output_of "$base" "$LEAF" > "$OUT/$base.leaf-output"
+      want="$(expected_names)"
+      names="$({ awk -F '\t' 'NF == 2 {print $2}' <<< "$got" || true; } | LC_ALL=C sort)"
+      dups="$({ uniq -d <<< "$names" || true; } | paste -sd, -)"
+      missing="$({ LC_ALL=C comm -23 <(printf '%s\n' "$want") <(printf '%s\n' "$names" | uniq) || true; } | awk 'NF' | paste -sd, -)"
+      extra="$({ LC_ALL=C comm -13 <(printf '%s\n' "$want") <(printf '%s\n' "$names" | uniq) || true; } | awk 'NF' | paste -sd, -)"
+      [ -z "$dups" ] || extra="${extra:+$extra,}duplicate:$dups"
+      skips="$({ awk -F '\t' '$1 == "skip" {print $2}' <<< "$got" || true; } | paste -sd, -)"
+      failing="$({ awk -F '\t' '$1 == "fail" {print $2}' <<< "$got" || true; } | LC_ALL=C sort)"
+      target="$(printf '%s\n%s\n' "$PARENT" "$LEAF" | LC_ALL=C sort)"
+      other_failing="$({ grep -vxF -e "$PARENT" -e "$LEAF" <<< "$failing" || true; } | awk 'NF')"
+      cat "$OUT/$base.parent-output" "$OUT/$base.leaf-output" > "$OUT/$base.target-output"
+      other_lines="$(fileline_lines "$OUT/$base.target-output" | { grep -vE -- "$NAMED_RE" || true; } | { grep -vE -- "$ALLOWED_LOG_RE" || true; })"
+      named_count="$({ grep -E -- "$NAMED_RE" "$OUT/$base.leaf-output" || true; } | awk 'NF {c++} END {print c+0}')"
+      named_line="$({ grep -E -- "$NAMED_RE" "$OUT/$base.leaf-output" || true; } | awk 'NR == 1' | sed 's/^[[:space:]]*//')"
+      NAMED_PRESENT=no
+      if grep -qE -- "$NAMED_RE" "$OUT/$base.text"; then NAMED_PRESENT=yes; fi
+      WIT="$({ grep -E -- "$WITNESS_RE" "$OUT/$base.leaf-output" || true; } | awk 'NR == 1' | sed 's/^[[:space:]]*//')"
+      FIRST=""
+      # The actual output of every OTHER failing test, verbatim, in its own receipt.
+      : > "$OUT/$base.other-failures"
+      while IFS= read -r name; do
+        [ -n "$name" ] || continue
+        { printf '=== %s\n' "$name"; output_of "$base" "$name"; } >> "$OUT/$base.other-failures"
+      done <<< "$other_failing"
+      if grep -qF 'panic: test timed out' "$OUT/$base.text"; then
+        V=2; L="INABILITY the Go test timeout fired"
+        FIRST="$({ grep -F 'panic: test timed out' "$OUT/$base.text" || true; } | awk 'NR == 1')"
+      elif [ "$RAW_EXIT" != 0 ] && [ "$RAW_EXIT" != 1 ]; then
+        V=2; L="INABILITY the process ended with raw exit $RAW_EXIT (budget stop, signal or tool failure)"
+      elif grep -qF 'WARNING: DATA RACE' "$OUT/$base.text"; then
+        V=2; L="INABILITY a data race report"
+        FIRST="$({ grep -E 'race detected during execution of test|WARNING: DATA RACE' "$OUT/$base.text" || true; } | awk 'NR == 1' | sed 's/^[[:space:]]*//')"
+      elif grep -qF 'CLUSTER_STATE|' "$OUT/$base.text"; then
+        V=2; L="INABILITY the package cluster-state check reported"
+        FIRST="$({ grep -F 'CLUSTER_STATE|' "$OUT/$base.text" || true; } | awk 'NR == 1')"
+      elif [ -n "$skips" ]; then
+        V=2; L="INABILITY a selected test skipped: $skips"
+        FIRST="$(fileline_lines "$OUT/$base.text" | awk 'NR == 1')"
+      elif [ -n "$missing" ] || [ -n "$extra" ]; then
+        V=2; L="INABILITY the results differ from the pinned expected set (missing: ${missing:-none}; extra: ${extra:-none})"
+        FIRST="$({ grep -E '\[build failed\]|\[setup failed\]|^FAIL|panic:|cannot|error' "$OUT/$base.text" || true; } | awk 'NR == 1')"
+      elif [ -n "$other_failing" ]; then
+        V=2; L="INABILITY another test failed: $(paste -sd, - <<< "$other_failing") (verbatim in $base.other-failures)"
+        FIRST="$(fileline_lines "$OUT/$base.other-failures" | paste -sd '|' -)"
+      elif [ -n "$failing" ] && [ "$failing" != "$target" ]; then
+        V=2; L="INABILITY the failing set is not the parent with its target leaf: $(paste -sd, - <<< "$failing")"
+        FIRST="$(fileline_lines "$OUT/$base.target-output" | awk 'NR == 1')"
+      elif [ -n "$failing" ] && [ -n "$other_lines" ]; then
+        V=2; L="INABILITY another assertion line in the parent or the target leaf"
+        FIRST="$(paste -sd '|' - <<< "$other_lines")"
+      elif [ -n "$failing" ]; then
+        if [ "$RAW_EXIT" = 1 ] && [ "$named_count" = 1 ]; then
+          V=1; L="NAMED-ONLY assertion failure"; FIRST="$named_line"
+        else
+          V=2; L="INABILITY the target leaf failed without exactly one named line (named lines $named_count, raw exit $RAW_EXIT)"
+          FIRST="$(fileline_lines "$OUT/$base.leaf-output" | awk 'END {print}')"
+        fi
+      elif [ "$RAW_EXIT" = 0 ] && [ -n "$WIT" ]; then
+        V=0; L="PASS (the complete expected set passed; witness present)"
+      else
+        V=2; L="INABILITY no test failed, yet raw exit $RAW_EXIT or no witness line"
+      fi
+      return 0
+    }
+
+    # trials_loop DIR COMMAND...: INPUT_TRIALS trials of one command inside one time budget. Every
+    # trial keeps <sel>.tNN.{command,json,stderr,exit,results,text,parent-output,leaf-output,
+    # target-output,other-failures,pre,post}; a trial the budget cannot start is recorded as not
+    # run, never dropped.
+    trials_loop() {
+      local dir="$1" t base now remaining start budget
+      shift
+      [ -n "$(expected_names)" ] || fail "EXPECTED_SET is empty"
+      grep -qxF -- "$PARENT" <<< "$(expected_names)" || fail "EXPECTED_SET does not name the parent $PARENT"
+      grep -qxF -- "$LEAF" <<< "$(expected_names)" || fail "EXPECTED_SET does not name the target leaf $LEAF"
+      expected_names > "$OUT/$SEL.expected-set"
+      start="$(date +%s)"
+      budget=$((INPUT_BUDGET_MINUTES * 60))
+      printf 'trial\tverdict\tlabel\tstarted_utc\telapsed_s\traw_exit\tnamed_line_present\tfirst_failing_line\twitness\n' > "$OUT/$SEL.rate.tsv"
+      for t in $(seq 1 "$INPUT_TRIALS"); do
+        base="$(printf '%s.t%02d' "$SEL" "$t")"
+        now="$(date +%s)"
+        remaining=$((start + budget - now))
+        if [ "$remaining" -lt 60 ]; then
+          V=2; L="INABILITY not run: the ${INPUT_BUDGET_MINUTES}-minute budget was spent"
+          FIRST=""; WIT=""; STARTED="-"; ELAPSED="0"; RAW_EXIT="-"; NAMED_PRESENT="-"
+        else
+          pg_state "$base.pre"
+          run_trial "$base" "$dir" "$remaining" "$@"
+          pg_state "$base.post"
+          classify "$base"
+        fi
+        printf '%s\t%s\n' "$base" "$V $L" >> "$OUT/verdicts.tsv"
+        printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$t" "$V" "$(tsv_safe "$L")" "$STARTED" "$ELAPSED" "$RAW_EXIT" \
+          "$NAMED_PRESENT" "$(tsv_safe "$FIRST")" "$(tsv_safe "$WIT")" >> "$OUT/$SEL.rate.tsv"
+        printf 'trial %s: %s %s (named_line_present=%s)\n' "$t" "$V" "$L" "$NAMED_PRESENT"
+        [ -z "$FIRST" ] || printf '  %s\n' "$FIRST"
+      done
+    }
+
+    # summarize: the rate over the trials that measured, every inability beside it. Sets N2.
+    summarize() {
+      local n0 n1 n2named rows
+      [ -f "$OUT/$SEL.rate.tsv" ] || fail "no rate.tsv was written"
+      rows="$(awk -F '\t' 'NR > 1' "$OUT/$SEL.rate.tsv" | count_lines)"
+      n0="$(awk -F '\t' 'NR > 1 && $2 == "0"' "$OUT/$SEL.rate.tsv" | count_lines)"
+      n1="$(awk -F '\t' 'NR > 1 && $2 == "1"' "$OUT/$SEL.rate.tsv" | count_lines)"
+      N2="$(awk -F '\t' 'NR > 1 && $2 == "2"' "$OUT/$SEL.rate.tsv" | count_lines)"
+      n2named="$(awk -F '\t' 'NR > 1 && $2 == "2" && $7 == "yes"' "$OUT/$SEL.rate.tsv" | count_lines)"
+      {
+        printf 'selection\t%s\n' "$SEL"
+        printf 'bound_sha\t%s\n' "$PINNED_SHA"
+        printf 'trials_requested\t%s\n' "${INPUT_TRIALS:-invalid}"
+        printf 'rows\t%s\n' "$rows"
+        printf 'verdict_0_complete_pass\t%s\n' "$n0"
+        printf 'verdict_1_named_only_failure\t%s\n' "$n1"
+        printf 'verdict_2_inability\t%s\n' "$N2"
+        printf 'inabilities_with_named_text_present\t%s (observed, never counted)\n' "$n2named"
+        printf 'rate\t%s/%s trials that measured failed at the named assertion alone (%s inabilities excluded, each listed in rate.tsv)\n' \
+          "$n1" "$((n0 + n1))" "$N2"
+        printf 'note\ta 0 means the named assertion was not reached in that trial; it does not close an intermittent failure\n'
+      } > "$OUT/$SEL.summary"
+      cat "$OUT/$SEL.summary"
+      if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+        { printf '### %s\n\n```\n' "$SEL"; cat "$OUT/$SEL.summary"; printf '```\n'; } >> "$GITHUB_STEP_SUMMARY"
+      fi
+      [ "$rows" = "${INPUT_TRIALS:-x}" ] || N2=$((N2 + 1))
+    }
+
+    # finalize SETUP_OUTCOMES: when no trial could start, every requested trial is written as an
+    # inability that names the setup step that stopped it; then the summary. The job succeeds only
+    # when every trial measured (0 or 1). That describes the instrument, not the product.
+    finalize() {
+      local outcomes="$1" first_bad t rows
+      first_bad="$(tr ' ' '\n' <<< "$outcomes" | awk -F= 'NF == 2 && $2 != "success" {print; exit}')"
+      if [ -f "$OUT/$SEL.rate.tsv" ] && validate_inputs 2>/dev/null; then
+        # A trials step stopped mid-loop (its ceiling, a runner loss) leaves fewer rows than
+        # trials; each missing trial is written as an inability, never dropped.
+        rows="$(awk -F '\t' 'NR > 1' "$OUT/$SEL.rate.tsv" | count_lines)"
+        for t in $(seq "$((rows + 1))" "$INPUT_TRIALS"); do
+          printf '%s\t2\tINABILITY not classified: the trials step ended (%s)\t-\t0\t-\t-\t\t\n' "$t" "${first_bad:-unknown}" >> "$OUT/$SEL.rate.tsv"
+          printf '%s.t%02d\t2 INABILITY not classified: the trials step ended (%s)\n' "$SEL" "$t" "${first_bad:-unknown}" >> "$OUT/verdicts.tsv"
+        done
+      fi
+      if [ ! -f "$OUT/$SEL.rate.tsv" ]; then
+        printf 'trial\tverdict\tlabel\tstarted_utc\telapsed_s\traw_exit\tnamed_line_present\tfirst_failing_line\twitness\n' > "$OUT/$SEL.rate.tsv"
+        if validate_inputs 2>/dev/null; then
+          for t in $(seq 1 "$INPUT_TRIALS"); do
+            printf '%s\t2\tINABILITY not run: setup step %s\t-\t0\t-\t-\t\t\n' "$t" "${first_bad:-unknown}" >> "$OUT/$SEL.rate.tsv"
+            printf '%s.t%02d\t2 INABILITY not run: setup step %s\n' "$SEL" "$t" "${first_bad:-unknown}" >> "$OUT/verdicts.tsv"
+          done
+        else
+          printf '0\t2\tINABILITY refused inputs (sha not the bound source, or trials/budget_minutes out of range)\t-\t0\t-\t-\t\t\n' >> "$OUT/$SEL.rate.tsv"
+          printf '%s\t2 INABILITY refused inputs\n' "$SEL" >> "$OUT/verdicts.tsv"
+        fi
+      fi
+      printf 'setup outcomes: %s\n' "$outcomes" > "$OUT/setup-outcomes.txt"
+      summarize
+      [ "$N2" -eq 0 ] || fail "$SEL: $N2 trial(s) could not measure; the rate above excludes them and rate.tsv names each"
+    }
+
+jobs:
+  # ---------------------------------------------------------------------------------------------
+  # Selection a: the control-plane functional leg's PostgreSQL HTTP journey, one leaf.
+  # ---------------------------------------------------------------------------------------------
+  sel-a-history-writes:
+    if: github.repository == 'olivaresai/olivares' && contains(fromJSON('["both","a"]'), inputs.selections || 'both')
+    name: a · TestCommunicationChannelHistoryWritesHTTPPostgres (complete parent; target leaf a_failed_mutation_leaves_no_partial_act)
+    runs-on: ubuntu-latest
+    # Step ceilings sum to 177 minutes; the job ceiling stays above that sum and below the
+    # 320-minute ceiling of the job that went red.
+    timeout-minutes: 185
+    # Both clusters exactly as the job that went red declared them (same image digest, bare
+    # container port, the same health and resource options).
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16@sha256:a36250871de0833b8757561c72f2477ef1ddd1101afa4e617fb552e0de514c6b
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+          --memory=1g
+          --memory-swap=1536m
+          --cpus=2
+          --pids-limit=512
+      postgres_other:
+        image: pgvector/pgvector:pg16@sha256:a36250871de0833b8757561c72f2477ef1ddd1101afa4e617fb552e0de514c6b
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+          --memory=1g
+          --memory-swap=1536m
+          --cpus=2
+          --pids-limit=512
+    env:
+      SEL: a_history_rollback
+      OLIVARES_GATE_STRICT_PG: "1"
+      # The complete named parent: its seven subtests run in source order on one shared estate.
+      RUN_PATTERN: '^TestCommunicationChannelHistoryWritesHTTPPostgres$'
+      PARENT: TestCommunicationChannelHistoryWritesHTTPPostgres
+      LEAF: TestCommunicationChannelHistoryWritesHTTPPostgres/a_failed_mutation_leaves_no_partial_act
+      # Quoted from the bound source (the sha is pinned, so these lines cannot drift).
+      NAMED_RE: 'communicationchannelhistorywrites_http_test\.go:677: a committed grant at budget [^ ]+ moved the census by '
+      WITNESS_RE: 'communicationchannelhistorywrites_http_test\.go:688: K3_WRITER_ROLLBACK[|]interrupted=[0-9]+[|]committed=[0-9]+'
+      # The only log lines the source prints in the parent (:242, the posture of helper :200) and in the
+      # target leaf (:688, the witness). Any other file:line line there is another assertion.
+      ALLOWED_LOG_RE: 'communicationchannelhistorywrites_http_test\.go:(242: K3_HTTP_PG_POSTURE|688: K3_WRITER_ROLLBACK)[|]'
+      # Every result name the parent produces at the bound source: the parent and its seven t.Run
+      # subtests (:266, :312, :386, :419, :447, :451, :455), in Go's rewritten form. None nests further.
+      EXPECTED_SET: |-
+        TestCommunicationChannelHistoryWritesHTTPPostgres
+        TestCommunicationChannelHistoryWritesHTTPPostgres/a_configuration_change_no_longer_depends_on_the_grant_history
+        TestCommunicationChannelHistoryWritesHTTPPostgres/revoke_the_exact_deep_generation_and_issue_its_successor
+        TestCommunicationChannelHistoryWritesHTTPPostgres/revoking_an_old_generation_never_retires_its_successor
+        TestCommunicationChannelHistoryWritesHTTPPostgres/cross-tenant_and_cross-workspace_mutations_reach_nothing
+        TestCommunicationChannelHistoryWritesHTTPPostgres/concurrent_mutations_on_one_ETag_leave_exactly_one_act
+        TestCommunicationChannelHistoryWritesHTTPPostgres/authority_is_re-established_at_the_refreshed_instant
+        TestCommunicationChannelHistoryWritesHTTPPostgres/a_failed_mutation_leaves_no_partial_act
+    steps:
+      - name: the input names the bound source (any other sha is refused before checkout)
+        id: input
+        timeout-minutes: 1
+        run: |
+          eval "$REPRO_LIB"
+          validate_inputs
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 10
+        with:
+          ref: 20b3d0b1c632e8d4bef7b4ce15f4960293cc6e86
+          persist-credentials: false
+          fetch-depth: 0
+      - name: the checkout is the bound source, clean, with the quoted test-file blobs
+        id: identity
+        timeout-minutes: 2
+        env:
+          RUNNER_PLACEMENT: ${{ runner.environment }}
+        run: |
+          eval "$REPRO_LIB"
+          identity
+      - name: Go caches under RUNNER_TEMP (as in the job that went red)
+        id: caches
+        timeout-minutes: 1
+        run: |
+          {
+            echo "GOCACHE=$RUNNER_TEMP/gocache"
+            echo "GOMODCACHE=$RUNNER_TEMP/gomodcache"
+            echo "GOPATH=$RUNNER_TEMP/gopath"
+            echo "GOBIN=$RUNNER_TEMP/gopath/bin"
+          } >> "$GITHUB_ENV"
+          echo "$RUNNER_TEMP/gopath/bin" >> "$GITHUB_PATH"
+          echo "PNPM_HOME=$RUNNER_TEMP/pnpm" >> "$GITHUB_ENV"
+          echo "$RUNNER_TEMP/pnpm" >> "$GITHUB_PATH"
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        id: setup-go
+        timeout-minutes: 10
+        with:
+          go-version-file: go.work
+          cache: ${{ runner.environment == 'github-hosted' }}
+          cache-dependency-path: go.work.sum
+      - name: TMPDIR where an extracted binary can actually run (same selection as the job that went red)
+        id: tmpdir
+        timeout-minutes: 2
+        run: |
+          short=""
+          for c in "${HOME:-}" /var/tmp /dev/shm /run/user/"$(id -u)"; do
+            if [ -n "$c" ] && [ -d "$c" ]; then
+              find "$c" -maxdepth 1 -mindepth 1 -type d \( -name 'olv[0-9]*' -o -name 'olv-exec-[0-9]*' \) -user "$(id -un)" -mmin +360 -exec rm -rf {} + 2>/dev/null || true
+            fi
+          done
+          for c in "${HOME:-}" /var/tmp /dev/shm /run/user/"$(id -u)"; do
+            if [ -z "$c" ]; then echo "  candidate <empty>: variable unset"; continue; fi
+            if [ ! -d "$c" ]; then echo "  candidate $c: does not exist"; continue; fi
+            df -Pk "$c" 2>/dev/null | awk -v c="$c" 'NR==2{printf "  candidate %s: %d MiB free of %d on %s\n", c, $4/1024, $2/1024, $1}' || true
+            d="$c/olv$$"
+            if ! mkdir -p "$d" 2>/dev/null; then echo "  candidate $c: cannot create inside"; continue; fi
+            if ! printf '#!/bin/sh\nexit 7\n' >"$d/.p" 2>/dev/null; then echo "  candidate $c: cannot write"; rm -rf "$d"; continue; fi
+            chmod +x "$d/.p" 2>/dev/null || { echo "  candidate $c: chmod fails"; rm -rf "$d"; continue; }
+            rc=0; "$d/.p" 2>/dev/null || rc=$?
+            rm -f "$d/.p"
+            if [ "$rc" -ne 7 ]; then echo "  candidate $c: does not execute (rc=$rc)"; rm -rf "$d"; continue; fi
+            if [ "${#d}" -gt 24 ]; then echo "  candidate $c: executes but the path is ${#d} characters (>24)"; rm -rf "$d"; continue; fi
+            short="$d"; break
+          done
+          if [ -n "$short" ]; then
+            echo "TMPDIR=$short" >> "$GITHUB_ENV"
+            echo "TMPDIR short and executable: $short (${#short} characters)"
+          else
+            . scripts/lib/exec-workdir.sh
+            d="$(olivares_pick_exec_workdir o)" || {
+              echo "::error::no directory can execute a binary"
+              exit 1
+            }
+            echo "TMPDIR=$d" >> "$GITHUB_ENV"
+            echo "::warning::no SHORT candidate; using $d (${#d} characters): a unix socket path may exceed 108"
+          fi
+      - name: resolve the ephemeral Postgres ports into the test DSNs
+        id: pg-port
+        timeout-minutes: 2
+        env:
+          PGPORT_HOST: ${{ job.services.postgres.ports['5432'] }}
+          PGPORT_OTHER: ${{ job.services.postgres_other.ports['5432'] }}
+        run: |
+          set -euo pipefail
+          bash scripts/ci-postgres-service.sh resolve
+          # The job that went red resolved these two as well, beside the same DSNs.
+          {
+            echo "CLOUD_CP_INTEGRATION=1"
+            echo "CLOUD_CP_REQUIRE_INTEGRATION=1"
+          } >> "$GITHUB_ENV"
+      - name: provision postgres roles (least-privilege app role + BYPASSRLS admin)
+        id: pg-roles
+        timeout-minutes: 5
+        env:
+          PGPASSWORD: postgres
+        run: bash scripts/ci-postgres-service.sh provision
+      - name: PostgreSQL 16 is required, both clusters answer, and the roles hold their posture
+        id: posture
+        timeout-minutes: 2
+        run: |
+          eval "$REPRO_LIB"
+          [ "${OLIVARES_TEST_POSTGRES_REQUIRED:-}" = 1 ] || fail "OLIVARES_TEST_POSTGRES_REQUIRED is not 1"
+          psql "$OLIVARES_TEST_POSTGRES_SUPERUSER_DSN" -X -v ON_ERROR_STOP=1 -Atc 'SHOW server_version_num' | tee "$OUT/postgres-version.txt"
+          psql "$OLIVARES_TEST_POSTGRES_OTHER_DSN" -X -v ON_ERROR_STOP=1 -Atc 'SHOW server_version_num' | tee "$OUT/postgres-other-version.txt"
+          psql "$OLIVARES_TEST_POSTGRES_SUPERUSER_DSN" -X -v ON_ERROR_STOP=1 -AtF ' ' \
+            -c "SELECT name, setting FROM pg_settings WHERE name IN ('max_connections', 'shared_buffers', 'default_transaction_isolation', 'log_disconnections', 'log_lock_waits') ORDER BY name" |
+            tee "$OUT/postgres-settings.txt"
+          psql "$OLIVARES_TEST_POSTGRES_SUPERUSER_DSN" -X -v ON_ERROR_STOP=1 -AtF ' ' \
+            -c "SELECT rolname, rolsuper, rolbypassrls, rolcreaterole, rolcreatedb FROM pg_roles WHERE rolname IN ('olivares_app', 'olivares_admin') ORDER BY rolname" |
+            tee "$OUT/roles.txt"
+          case "$(cat "$OUT/postgres-version.txt")" in 16*) : ;; *) fail "the primary server is not PostgreSQL 16" ;; esac
+          [ "$(awk '$1 == "olivares_app" {print $2, $3, $4, $5}' "$OUT/roles.txt")" = "f f f f" ] || fail "the application role is privileged"
+          [ "$(awk '$1 == "olivares_admin" {print $2, $3, $4, $5}' "$OUT/roles.txt")" = "f t f f" ] || fail "the admin role is not BYPASSRLS-only"
+      - name: record the toolchain
+        id: toolchain
+        timeout-minutes: 2
+        run: |
+          eval "$REPRO_LIB"
+          {
+            go version
+            go env GOVERSION GOOS GOARCH GOFLAGS CGO_ENABLED GOCACHE
+            printf 'nproc %s\n' "$(nproc)"
+            printf 'cgroup memory.max %s\n' "$(cat /sys/fs/cgroup/memory.max 2>/dev/null || echo unreadable)"
+            printf 'TMPDIR %s\n' "${TMPDIR:-unset}"
+            jq --version
+            psql --version
+            timeout --version | head -n1
+          } 2>&1 | tee "$OUT/toolchain.txt"
+      - name: a · build the test binary once (a build failure is an inability for every trial)
+        id: build
+        timeout-minutes: 30
+        run: |
+          eval "$REPRO_LIB"
+          mkdir -p "$RUNNER_TEMP/build"
+          run_logged "$SEL.build" "$GITHUB_WORKSPACE" go test -c -o "$RUNNER_TEMP/build/$SEL.test" ./cmd/olivares
+      - name: a · trials of the complete parent (every trial kept; judged inline, inability first)
+        id: trials
+        timeout-minutes: 100
+        env:
+          # The largest per-trial clock: the whole budget at its 90-minute maximum. The workflow
+          # timeout gate reads this static value; each trial is given only the budget that remains.
+          TRIAL_CLOCK: 5400s
+        run: |
+          eval "$REPRO_LIB"
+          bounded() { local TRIAL_CLOCK="${1}s"; shift; timeout -k 30s "$TRIAL_CLOCK" "$@"; }
+          # The resource witness the job that went red ran around its functional step.
+          WITNESS="$OUT/resource-witness.state"
+          bash scripts/ci-resource-witness.sh start "$WITNESS" >/dev/null
+          trap 'bash scripts/ci-resource-witness.sh report "$WITNESS" > "$OUT/resource-witness.report" 2>&1 || true' EXIT
+          trials_loop "$GITHUB_WORKSPACE" \
+            bash scripts/with-pg-env.sh go test ./cmd/olivares -count=1 -timeout 45m -run "$RUN_PATTERN" -json
+      - name: a · rate and completeness (describes the instrument, not the product)
+        if: always()
+        timeout-minutes: 3
+        env:
+          SETUP_OUTCOMES: >-
+            input=${{ steps.input.outcome }} identity=${{ steps.identity.outcome }} caches=${{ steps.caches.outcome }}
+            setup-go=${{ steps.setup-go.outcome }} tmpdir=${{ steps.tmpdir.outcome }}
+            pg-port=${{ steps.pg-port.outcome }} pg-roles=${{ steps.pg-roles.outcome }}
+            posture=${{ steps.posture.outcome }} toolchain=${{ steps.toolchain.outcome }}
+            build=${{ steps.build.outcome }} trials=${{ steps.trials.outcome }}
+        run: |
+          eval "$REPRO_LIB"
+          finalize "$SETUP_OUTCOMES"
+      - name: keep both PostgreSQL server logs
+        if: always()
+        timeout-minutes: 2
+        env:
+          PG_PRIMARY_ID: ${{ job.services.postgres.id }}
+          PG_OTHER_ID: ${{ job.services.postgres_other.id }}
+        run: |
+          OUT="$RUNNER_TEMP/repro/$SEL"
+          mkdir -p "$OUT"
+          docker logs --details "$PG_PRIMARY_ID" > "$OUT/postgres-primary.log" 2>&1 || echo "COULD NOT LOOK" >> "$OUT/postgres-primary.log"
+          docker logs --details "$PG_OTHER_ID" > "$OUT/postgres-other.log" 2>&1 || echo "COULD NOT LOOK" >> "$OUT/postgres-other.log"
+      - name: retain every trial's stream, exit, results and the server logs
+        if: always()
+        timeout-minutes: 5
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: mainline-20b3-repro-a-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/repro/a_history_rollback/
+          retention-days: 7
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------------------------
+  # Selection b: the race-core partition-3 sqlstore leg, one top-level entry, -race.
+  # ---------------------------------------------------------------------------------------------
+  sel-b-holder-loss:
+    if: github.repository == 'olivaresai/olivares' && contains(fromJSON('["both","b"]'), inputs.selections || 'both')
+    name: b · TestDRDestinationHolderLossCannotCommit (after_DDL) under -race
+    runs-on: ubuntu-latest
+    # Step ceilings sum to 177 minutes; the job ceiling stays above that sum and below the
+    # 190-minute ceiling of the job that went red.
+    timeout-minutes: 185
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16@sha256:a36250871de0833b8757561c72f2477ef1ddd1101afa4e617fb552e0de514c6b
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+          --memory=1g
+          --memory-swap=1536m
+          --cpus=2
+          --pids-limit=512
+      postgres_other:
+        image: pgvector/pgvector:pg16@sha256:a36250871de0833b8757561c72f2477ef1ddd1101afa4e617fb552e0de514c6b
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+          --memory=1g
+          --memory-swap=1536m
+          --cpus=2
+          --pids-limit=512
+    env:
+      SEL: b_holder_loss
+      OLIVARES_GATE_STRICT_PG: "1"
+      # The pair the job that went red exported (partition 3 of strategy.job-total 4). Only the
+      # partition helpers read it; this selection calls go test directly.
+      OLIVARES_CORE_RACE_PARTITION: "3"
+      OLIVARES_CORE_RACE_PARTITIONS: "4"
+      RUN_PATTERN: '^TestDRDestinationHolderLossCannotCommit$'
+      PARENT: TestDRDestinationHolderLossCannotCommit
+      LEAF: TestDRDestinationHolderLossCannotCommit/after_DDL
+      # Quoted from the bound source (the sha is pinned, so these lines cannot drift).
+      NAMED_RE: 'drdestinationauthority_pg_test\.go:337: [0-9]+ advisory holders/waiters leaked'
+      WITNESS_RE: 'drdestinationauthority_pg_test\.go:318: after_DDL: actual exclusive holder=[0-9]+ DDL/migration waiter=[0-9]+'
+      # The only log line the source prints in the target leaf (:318, the witness); the parent prints none.
+      ALLOWED_LOG_RE: 'drdestinationauthority_pg_test\.go:318: after_DDL: actual exclusive holder=[0-9]+ DDL/migration waiter=[0-9]+'
+      # Every result name the parent produces at the bound source: the phase loop at :241 runs two
+      # t.Run subtests (:242), neither nested further.
+      EXPECTED_SET: |-
+        TestDRDestinationHolderLossCannotCommit
+        TestDRDestinationHolderLossCannotCommit/before_DDL
+        TestDRDestinationHolderLossCannotCommit/after_DDL
+    steps:
+      - name: the input names the bound source (any other sha is refused before checkout)
+        id: input
+        timeout-minutes: 1
+        run: |
+          eval "$REPRO_LIB"
+          validate_inputs
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 10
+        with:
+          ref: 20b3d0b1c632e8d4bef7b4ce15f4960293cc6e86
+          persist-credentials: false
+      - name: the checkout is the bound source, clean, with the quoted test-file blobs
+        id: identity
+        timeout-minutes: 2
+        env:
+          RUNNER_PLACEMENT: ${{ runner.environment }}
+        run: |
+          eval "$REPRO_LIB"
+          identity
+      - name: Go caches under RUNNER_TEMP (as in the job that went red)
+        id: caches
+        timeout-minutes: 1
+        run: |
+          {
+            echo "GOCACHE=$RUNNER_TEMP/gocache"
+            echo "GOMODCACHE=$RUNNER_TEMP/gomodcache"
+            echo "GOPATH=$RUNNER_TEMP/gopath"
+            echo "GOBIN=$RUNNER_TEMP/gopath/bin"
+          } >> "$GITHUB_ENV"
+          echo "$RUNNER_TEMP/gopath/bin" >> "$GITHUB_PATH"
+          echo "PNPM_HOME=$RUNNER_TEMP/pnpm" >> "$GITHUB_ENV"
+          echo "$RUNNER_TEMP/pnpm" >> "$GITHUB_PATH"
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        id: setup-go
+        timeout-minutes: 10
+        with:
+          go-version-file: go.work
+          cache: ${{ runner.environment == 'github-hosted' }}
+          cache-dependency-path: go.work.sum
+      - name: TMPDIR where an extracted binary can actually run (same selection as the job that went red)
+        id: tmpdir
+        timeout-minutes: 2
+        run: |
+          short=""
+          for c in "${HOME:-}" /var/tmp /dev/shm /run/user/"$(id -u)"; do
+            if [ -n "$c" ] && [ -d "$c" ]; then
+              find "$c" -maxdepth 1 -mindepth 1 -type d \( -name 'olv[0-9]*' -o -name 'olv-exec-[0-9]*' \) -user "$(id -un)" -mmin +360 -exec rm -rf {} + 2>/dev/null || true
+            fi
+          done
+          for c in "${HOME:-}" /var/tmp /dev/shm /run/user/"$(id -u)"; do
+            if [ -z "$c" ]; then echo "  candidate <empty>: variable unset"; continue; fi
+            if [ ! -d "$c" ]; then echo "  candidate $c: does not exist"; continue; fi
+            df -Pk "$c" 2>/dev/null | awk -v c="$c" 'NR==2{printf "  candidate %s: %d MiB free of %d on %s\n", c, $4/1024, $2/1024, $1}' || true
+            d="$c/olv$$"
+            if ! mkdir -p "$d" 2>/dev/null; then echo "  candidate $c: cannot create inside"; continue; fi
+            if ! printf '#!/bin/sh\nexit 7\n' >"$d/.p" 2>/dev/null; then echo "  candidate $c: cannot write"; rm -rf "$d"; continue; fi
+            chmod +x "$d/.p" 2>/dev/null || { echo "  candidate $c: chmod fails"; rm -rf "$d"; continue; }
+            rc=0; "$d/.p" 2>/dev/null || rc=$?
+            rm -f "$d/.p"
+            if [ "$rc" -ne 7 ]; then echo "  candidate $c: does not execute (rc=$rc)"; rm -rf "$d"; continue; fi
+            if [ "${#d}" -gt 24 ]; then echo "  candidate $c: executes but the path is ${#d} characters (>24)"; rm -rf "$d"; continue; fi
+            short="$d"; break
+          done
+          if [ -n "$short" ]; then
+            echo "TMPDIR=$short" >> "$GITHUB_ENV"
+            echo "TMPDIR short and executable: $short (${#short} characters)"
+          else
+            . scripts/lib/exec-workdir.sh
+            d="$(olivares_pick_exec_workdir o)" || {
+              echo "::error::no directory can execute a binary"
+              exit 1
+            }
+            echo "TMPDIR=$d" >> "$GITHUB_ENV"
+            echo "::warning::no SHORT candidate; using $d (${#d} characters): a unix socket path may exceed 108"
+          fi
+      - name: resolve the ephemeral Postgres ports into the test DSNs
+        id: pg-port
+        timeout-minutes: 2
+        env:
+          PGPORT_HOST: ${{ job.services.postgres.ports['5432'] }}
+          PGPORT_OTHER: ${{ job.services.postgres_other.ports['5432'] }}
+        run: bash scripts/ci-postgres-service.sh resolve
+      - name: provision postgres roles (least-privilege app role + BYPASSRLS admin)
+        id: pg-roles
+        timeout-minutes: 5
+        env:
+          PGPASSWORD: postgres
+        run: bash scripts/ci-postgres-service.sh provision
+      - name: PostgreSQL 16 is required, both clusters answer, and the roles hold their posture
+        id: posture
+        timeout-minutes: 2
+        run: |
+          eval "$REPRO_LIB"
+          [ "${OLIVARES_TEST_POSTGRES_REQUIRED:-}" = 1 ] || fail "OLIVARES_TEST_POSTGRES_REQUIRED is not 1"
+          psql "$OLIVARES_TEST_POSTGRES_SUPERUSER_DSN" -X -v ON_ERROR_STOP=1 -Atc 'SHOW server_version_num' | tee "$OUT/postgres-version.txt"
+          psql "$OLIVARES_TEST_POSTGRES_OTHER_DSN" -X -v ON_ERROR_STOP=1 -Atc 'SHOW server_version_num' | tee "$OUT/postgres-other-version.txt"
+          psql "$OLIVARES_TEST_POSTGRES_SUPERUSER_DSN" -X -v ON_ERROR_STOP=1 -AtF ' ' \
+            -c "SELECT name, setting FROM pg_settings WHERE name IN ('max_connections', 'shared_buffers', 'default_transaction_isolation', 'log_disconnections', 'log_lock_waits') ORDER BY name" |
+            tee "$OUT/postgres-settings.txt"
+          psql "$OLIVARES_TEST_POSTGRES_SUPERUSER_DSN" -X -v ON_ERROR_STOP=1 -AtF ' ' \
+            -c "SELECT rolname, rolsuper, rolbypassrls, rolcreaterole, rolcreatedb FROM pg_roles WHERE rolname IN ('olivares_app', 'olivares_admin') ORDER BY rolname" |
+            tee "$OUT/roles.txt"
+          case "$(cat "$OUT/postgres-version.txt")" in 16*) : ;; *) fail "the primary server is not PostgreSQL 16" ;; esac
+          [ "$(awk '$1 == "olivares_app" {print $2, $3, $4, $5}' "$OUT/roles.txt")" = "f f f f" ] || fail "the application role is privileged"
+          [ "$(awk '$1 == "olivares_admin" {print $2, $3, $4, $5}' "$OUT/roles.txt")" = "f t f f" ] || fail "the admin role is not BYPASSRLS-only"
+      - name: record the toolchain
+        id: toolchain
+        timeout-minutes: 2
+        run: |
+          eval "$REPRO_LIB"
+          {
+            go version
+            go env GOVERSION GOOS GOARCH GOFLAGS CGO_ENABLED GOCACHE
+            printf 'nproc %s\n' "$(nproc)"
+            printf 'cgroup memory.max %s\n' "$(cat /sys/fs/cgroup/memory.max 2>/dev/null || echo unreadable)"
+            printf 'TMPDIR %s\n' "${TMPDIR:-unset}"
+            jq --version
+            psql --version
+            timeout --version | head -n1
+          } 2>&1 | tee "$OUT/toolchain.txt"
+      - name: b · build the -race test binary once (a build failure is an inability for every trial)
+        id: build
+        timeout-minutes: 30
+        run: |
+          eval "$REPRO_LIB"
+          mkdir -p "$RUNNER_TEMP/build"
+          run_logged "$SEL.build" "$GITHUB_WORKSPACE/core" go test -c -race -o "$RUNNER_TEMP/build/$SEL.test" ./internal/store/sqlstore
+      - name: b · trials of the complete parent (every trial kept; judged inline, inability first)
+        id: trials
+        timeout-minutes: 100
+        env:
+          # The largest per-trial clock: the whole budget at its 90-minute maximum. The workflow
+          # timeout gate reads this static value; each trial is given only the budget that remains.
+          TRIAL_CLOCK: 5400s
+        run: |
+          eval "$REPRO_LIB"
+          bounded() { local TRIAL_CLOCK="${1}s"; shift; timeout -k 30s "$TRIAL_CLOCK" "$@"; }
+          trials_loop "$GITHUB_WORKSPACE/core" \
+            bash ../scripts/with-pg-env.sh go test -race -count=1 -p 1 -timeout 90m -v -p 1 -run "$RUN_PATTERN" -json ./internal/store/sqlstore
+      - name: b · rate and completeness (describes the instrument, not the product)
+        if: always()
+        timeout-minutes: 3
+        env:
+          SETUP_OUTCOMES: >-
+            input=${{ steps.input.outcome }} identity=${{ steps.identity.outcome }} caches=${{ steps.caches.outcome }}
+            setup-go=${{ steps.setup-go.outcome }} tmpdir=${{ steps.tmpdir.outcome }}
+            pg-port=${{ steps.pg-port.outcome }} pg-roles=${{ steps.pg-roles.outcome }}
+            posture=${{ steps.posture.outcome }} toolchain=${{ steps.toolchain.outcome }}
+            build=${{ steps.build.outcome }} trials=${{ steps.trials.outcome }}
+        run: |
+          eval "$REPRO_LIB"
+          finalize "$SETUP_OUTCOMES"
+      - name: keep both PostgreSQL server logs
+        if: always()
+        timeout-minutes: 2
+        env:
+          PG_PRIMARY_ID: ${{ job.services.postgres.id }}
+          PG_OTHER_ID: ${{ job.services.postgres_other.id }}
+        run: |
+          OUT="$RUNNER_TEMP/repro/$SEL"
+          mkdir -p "$OUT"
+          docker logs --details "$PG_PRIMARY_ID" > "$OUT/postgres-primary.log" 2>&1 || echo "COULD NOT LOOK" >> "$OUT/postgres-primary.log"
+          docker logs --details "$PG_OTHER_ID" > "$OUT/postgres-other.log" 2>&1 || echo "COULD NOT LOOK" >> "$OUT/postgres-other.log"
+      - name: retain every trial's stream, exit, results and the server logs
+        if: always()
+        timeout-minutes: 5
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: mainline-20b3-repro-b-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/repro/b_holder_loss/
+          retention-days: 7
+          if-no-files-found: error
