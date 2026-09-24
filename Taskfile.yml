@@ -3350,6 +3350,17 @@ tasks:
     cmds:
       - bash scripts/test-exec-tmpdir.sh
 
+  lint:docs-capture-seeding:selftest:
+    desc: >-
+      Battery of the estate seeding gate in scripts/docs-captures.sh, run on the harness's own
+      blocks with no engine, browser or network. It checks input validation: a missing,
+      unreadable, malformed or structurally invalid targets fixture is refused with exit 2 before
+      any request, and the fixture is the approved file. It also checks that a capture run
+      refuses to capture or publish after any seed exit other than 0. It does not show that the
+      real API populates the estate; only a hosted capture run does. About 2 s.
+    cmds:
+      - bash scripts/test-docs-capture-seeding.sh
+
   lint:sembrado-volumen:selftest:
     desc: >-
       Bateria del sembrador de volumen, que es quien llena las 13 superficies para que una captura
@@ -3358,6 +3369,7 @@ tasks:
       procedencia salio mal tres veces seguidas y por eso dejo de depender del cuidado de nadie.
       21 s, mismas condiciones.
     cmds:
+      - task: lint:docs-capture-seeding:selftest
       - bash scripts/test-seed-estate-volume.sh
 
   lint:adopcion-otlp:selftest:

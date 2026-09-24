@@ -50,7 +50,7 @@ defaults:
 env:
   # The product under qualification: pull request #116 at this public head commit.
   QUALIFIED_PR: '116'
-  QUALIFIED_HEAD: 44aaab2e57d7aee66a52624f6c10a8bf1ed40ed6
+  QUALIFIED_HEAD: 19541356e25c2ee0ff006dfc32d63f9beac78022
   # The one main both merges are composed on, pinned explicitly: GitHub computes each pull
   # request's refs/pull/N/merge lazily, so two of them can sit on different mains.
   PINNED_MAIN: 20b3d0b1c632e8d4bef7b4ce15f4960293cc6e86
@@ -150,7 +150,7 @@ jobs:
     needs: identify
     if: github.repository == 'olivaresai/olivares' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'ci/provider-accounts-console-qualification-vehicle'
     runs-on: ubuntu-latest
-    timeout-minutes: 50
+    timeout-minutes: 51
     outputs:
       verdict: ${{ steps.verdict.outputs.verdict }}
     env:
@@ -164,7 +164,7 @@ jobs:
           fetch-depth: 0
           filter: blob:none
       - name: recompose the product merge commit on the pinned main
-        timeout-minutes: 3
+        timeout-minutes: 1
         run: |
           set -euo pipefail
           if ! git fetch --no-tags --filter=blob:none origin "+refs/pull/$QUALIFIED_PR/head:refs/qualification/head" "$PINNED_MAIN"; then
@@ -323,7 +323,7 @@ jobs:
           fetch-depth: 0
           filter: blob:none
       - name: recompose the product merge commit on the pinned main
-        timeout-minutes: 3
+        timeout-minutes: 1
         run: |
           set -euo pipefail
           if ! git fetch --no-tags --filter=blob:none origin "+refs/pull/$QUALIFIED_PR/head:refs/qualification/head" "$PINNED_MAIN"; then
@@ -524,7 +524,7 @@ jobs:
           fetch-depth: 0
           filter: blob:none
       - name: recompose the product merge commit on the pinned main
-        timeout-minutes: 3
+        timeout-minutes: 1
         run: |
           set -euo pipefail
           if ! git fetch --no-tags --filter=blob:none origin "+refs/pull/$QUALIFIED_PR/head:refs/qualification/head" "$PINNED_MAIN"; then
@@ -678,7 +678,7 @@ jobs:
           fetch-depth: 0
           filter: blob:none
       - name: recompose the product merge commit on the pinned main
-        timeout-minutes: 3
+        timeout-minutes: 1
         run: |
           set -euo pipefail
           if ! git fetch --no-tags --filter=blob:none origin "+refs/pull/$QUALIFIED_PR/head:refs/qualification/head" "$PINNED_MAIN"; then
@@ -760,6 +760,19 @@ jobs:
       # single-theme takes, 102 in all), in series on one worker. Each test is bounded by
       # Playwright's 30 s test timeout, so 3 + 102 × 0.5 = 54, rounded up to 55. A healthy capture
       # uses a fraction of its bound, which leaves room for the CI retry of a failing one.
+      # The capture-seeding battery on this same product tree, before any capture: the gate that
+      # refuses to capture or publish after a failed seed is itself exercised here, not only
+      # reachable from a hook. A nonzero exit fails this step, so the capture step never runs;
+      # the always-run verdict and retention keep this log and its exit.
+      - name: capture-seeding battery on the product tree (a nonzero exit prevents the capture)
+        timeout-minutes: 2
+        run: |
+          set +e -o pipefail
+          mkdir -p "$EVIDENCE"
+          bash scripts/test-docs-capture-seeding.sh 2>&1 | tee "$EVIDENCE/capture-seeding-battery.log"
+          rc=$?
+          echo "$rc" >"$EVIDENCE/capture-seeding-battery.rc"
+          exit "$rc"
       - name: capture and publish every view (the repository harness, unfiltered)
         timeout-minutes: 55
         env:
@@ -804,6 +817,9 @@ jobs:
                   return open(os.path.join(ev, name)).read().strip()
               except OSError:
                   return default
+          battery = text("capture-seeding-battery.rc")
+          if battery != "0":
+              problems.append(f"the capture-seeding battery exited {battery}, want 0 (no capture was run)")
           rc = text("captures.rc")
           if rc != "0":
               problems.append(f"the capture harness exited {rc}, want 0 (a green run that published)")
