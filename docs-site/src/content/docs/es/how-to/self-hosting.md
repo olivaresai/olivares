@@ -172,7 +172,7 @@ datos, los puertos y el flujo de primer arranque queden cableados correctamente.
 El chart de Helm en `deploy/helm/olivares` despliega el control plane como un **StatefulSet del núcleo**
 (escritor único; su directorio de datos contiene la clave de firma de auditoría y el material TLS) y,
 para la topología distribuida, un **DaemonSet de colectores** que empuja observaciones al núcleo
-sobre **gRPC + mTLS**. La release v26.9.1 del motor no publica el chart en un registro OCI:
+sobre **gRPC + mTLS**. La release v26.9.0 del motor no publica el chart en un registro OCI:
 ninguna etiqueta independiente `chart-v*` ha ejecutado todavía ese workflow. Instala el
 chart revisado desde un checkout y fija la imagen publicada por digest.
 

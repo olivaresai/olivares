@@ -9,7 +9,7 @@ description: >-
 Diese Seite ist die erste Stunde der **Anbieter**-Ebene: wohin Ihr API-Schlüssel
 gehört, woran Sie erkennen, dass er funktioniert, und wie eine Sitzung damit startet.
 
-Vor v26.10 war die Antwort auf die erste Frage eine Umgebungsvariable auf dem Server.
+In v26.9.0, der veröffentlichten Version, ist eine Umgebungsvariable auf dem Server die einzige Antwort auf die erste Frage. In der noch ausstehenden Version v26.10 kann die Antwort weiterhin eine Umgebungsvariable auf dem Server sein.
 Diese Variablen funktionieren weiterhin. Sie sind nicht mehr der einzige Weg, und sie
 sind nicht mehr der Weg, mit dem eine neue Operatorin anfängt.
 

@@ -9,7 +9,7 @@ draft: false
 ---
 
 :::note[公開されているパッケージ名]
-GitHub の v26.9.1 リリースは `amd64` と `arm64` 向けの `.deb`、`.rpm`、`.apk` を公開し、
+GitHub の v26.9.0 リリースは `amd64` と `arm64` 向けの `.deb`、`.rpm`、`.apk` を公開し、
 あわせて `checksums.txt`、`checksums.txt.sig`、`checksums.txt.pem` を置く。以下のコマンドは
 そのリリースのリテラルな `amd64` 名を使う。64 ビット ARM ホストでは `amd64` を `arm64` に
 置き換える。このガイドでは、それらの検証済みリリース成果物からインストールする。ソースツリー
@@ -17,7 +17,7 @@ GitHub の v26.9.1 リリースは `amd64` と `arm64` 向けの `.deb`、`.rpm`
 
 **DIST-24-05 の認定。** CI が認定するのは検証済みの **シェルインストーラ** とそのサービス/doctor
 契約であり、`dpkg`、`rpm`、`apk` ではない。dispatch/pull request のマトリクスが、公開済み
-`v26.9.1` リリースに対して Debian stable、Ubuntu 24.04 LTS、Fedora、openSUSE Leap、Alpine の
+リリースに対して Debian stable、Ubuntu 24.04 LTS、Fedora、openSUSE Leap、Alpine の
 コンテナ userland とホスト型 macOS 14 ランナーでそれを実行し、公開リリースに到達できないときは
 dry-run をカバレッジに数えず「測定不能」として失敗する。このマトリクスはネイティブなパッケージ
 マネージャによるインストールを認定しない。このソースツリーから構築したパッケージのネイティブな
@@ -75,13 +75,13 @@ Debian/Ubuntu と RHEL/Fedora/SUSE のデフォルトは **systemd** である�
 
 ```bash
 # Debian / Ubuntu
-sudo dpkg -i olivares_26.9.1_linux_amd64.deb
+sudo dpkg -i olivares_26.9.0_linux_amd64.deb
 
 # RHEL / Fedora / SUSE
-sudo rpm -Uvh olivares_26.9.1_linux_amd64.rpm
+sudo rpm -Uvh olivares_26.9.0_linux_amd64.rpm
 
 # Alpine
-sudo apk add --allow-untrusted olivares_26.9.1_linux_amd64.apk
+sudo apk add --allow-untrusted olivares_26.9.0_linux_amd64.apk
 ```
 
 インストールは **システムユーザーとグループ `olivares` を作成する**（シェルは

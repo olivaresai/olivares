@@ -42,7 +42,7 @@ dit plutôt que de laisser entendre le contraire.
 - **Les versions sont signées et vérifiables hors ligne.** La signature, la
   provenance SLSA, le SBOM et l'OpenVEX peuvent tous être
   [vérifiés sans accès réseau](/fr/how-to/verify-a-release/), et le produit livre
-  un [bundle air-gap](/fr/how-to/air-gap-install/). La dernière version taguée, **v26.9.1**, est publiée avec des archives signées, des paquets natifs et des images de conteneur ; les API, les schémas et la surface des modules peuvent encore changer avant la 1.0.
+  un [bundle air-gap](/fr/how-to/air-gap-install/). La dernière version taguée, **v26.9.0**, est publiée avec des archives signées, des paquets natifs et des images de conteneur ; les API, les schémas et la surface des modules peuvent encore changer avant la 1.0.
 
 ## Open core — ce qui est ouvert vs entreprise
 

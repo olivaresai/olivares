@@ -8,7 +8,7 @@ draft: false
 ---
 
 :::note[已发布的软件包名称]
-GitHub 的 v26.9.1 发行发布 `amd64` 与 `arm64` 的 `.deb`、`.rpm` 和 `.apk`，并附带
+GitHub 的 v26.9.0 发行发布 `amd64` 与 `arm64` 的 `.deb`、`.rpm` 和 `.apk`，并附带
 `checksums.txt`、`checksums.txt.sig` 和 `checksums.txt.pem`。下面的命令使用该发行的字面
 `amd64` 名称；在 64 位 ARM 主机上将 `amd64` 换成 `arm64`。请从这些已验证的发行产物安装。
 源码树中的仓库元数据生成器不是本指南的安装说明。
@@ -16,7 +16,7 @@ GitHub 的 v26.9.1 发行发布 `amd64` 与 `arm64` 的 `.deb`、`.rpm` 和 `.ap
 **DIST-24-05 资格认定。** CI 认定的是经验证的 **shell 安装器** 及其服务/doctor 契约，而不是
 `dpkg`、`rpm` 或 `apk`：一个 dispatch/pull request 矩阵在 Debian stable、Ubuntu 24.04 LTS、
 Fedora、openSUSE Leap 和 Alpine 的容器 userland 以及托管的 macOS 14 runner 上，针对已发布的
-`v26.9.1` 发行运行它；当公开发行不可达时，它以「不可测量」失败，而不是把 dry-run 算作覆盖。
+发行运行它；当公开发行不可达时，它以「不可测量」失败，而不是把 dry-run 算作覆盖。
 该矩阵不认证原生包管理器安装。本源码树构建的软件包的原生生命周期 — 安装、启动、重启、升级
 正在运行的 OpenRC 服务以及移除 — 已在一次性的 Alpine 客户机中本地演练；这是对本源码树的证据，
 不是已签名、已托管或 preproduction 的资格认定，那些仍待完成。
@@ -63,13 +63,13 @@ linux tarball 携带许可证文本、README 和 `SECURITY.md`；它不含 `scri
 
 ```bash
 # Debian / Ubuntu
-sudo dpkg -i olivares_26.9.1_linux_amd64.deb
+sudo dpkg -i olivares_26.9.0_linux_amd64.deb
 
 # RHEL / Fedora / SUSE
-sudo rpm -Uvh olivares_26.9.1_linux_amd64.rpm
+sudo rpm -Uvh olivares_26.9.0_linux_amd64.rpm
 
 # Alpine
-sudo apk add --allow-untrusted olivares_26.9.1_linux_amd64.apk
+sudo apk add --allow-untrusted olivares_26.9.0_linux_amd64.apk
 ```
 
 安装会 **创建系统用户和组 `olivares`**（shell 为 `/usr/sbin/nologin`，家目录为

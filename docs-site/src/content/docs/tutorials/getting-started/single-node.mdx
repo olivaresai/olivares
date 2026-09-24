@@ -30,14 +30,12 @@ for this guide).
 
 - A Linux host with systemd and `curl`.
 - **Go 1.26+** to build the binary (the store is pure-Go SQLite, so no C
-  toolchain). A prior tagged release already shipped signed archives and packages. This
-  tree's canon is **v26.9.1**; the install-surface witness still records
-  GitHub archives and native packages as **not-published** until that tag's
-  release job runs (`docs/releases/v26.9.1-install-surfaces.json`). Until
-  those assets exist, build from a checkout. The verified installer on
-  `main` (`scripts/install.sh`) is a published surface independent of the
-  tag. [Verify a release](/how-to/verify-a-release/) is the chain for
-  artifacts once they exist; [Install from a package](/how-to/install-from-packages/)
+  toolchain). The published release **v26.9.0** ships signed archives and native
+  packages: the install-surface witness records both as **published**
+  (`docs/releases/v26.9.0-install-surfaces.json`). This tutorial builds from a
+  checkout; the verified installer on `main` (`scripts/install.sh`) installs the
+  published release instead. [Verify a release](/how-to/verify-a-release/) is the chain
+  for those artifacts; [Install from a package](/how-to/install-from-packages/)
   is the `.deb` / `.rpm` / `.apk` path.
 
 ## 1. Build and install the binary

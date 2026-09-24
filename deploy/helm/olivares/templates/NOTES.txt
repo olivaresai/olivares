@@ -50,15 +50,17 @@ Collectors:   {{ if .Values.collectors.enabled }}ENABLED (DaemonSet, push to {{ 
    - DSN is read from Secret "{{ .Values.postgres.dsnSecret }}" (key "{{ .Values.postgres.dsnKey }}"){{ if .Values.postgres.adminDsnKey }}; cross-tenant admin DSN from key "{{ .Values.postgres.adminDsnKey }}"{{ else }}; cross-tenant System reads are RLS-scoped (set postgres.adminDsnKey to enable the BYPASSRLS admin pool){{ end }}.
 {{- end }}
 
-VERIFY WHAT YOU INSTALLED (supply-chain): this chart and the engine image are
-signed. Verify the chart's signature before trusting it:
+VERIFY WHAT YOU INSTALLED (supply-chain): this chart is installed from its source,
+deploy/helm/olivares. Its OCI publication is unverified (publication-unverified: it has
+never been published from this repository), so this source install carries no chart
+signature to check. The engine image is signed; verify it by digest before trusting it:
 
-   # cosign signature over the OCI chart manifest (keyless / Sigstore):
-   cosign verify ghcr.io/olivaresai/charts/olivares:{{ .Chart.Version }} \
+   # cosign signature over the engine image (keyless / Sigstore):
+   cosign verify <image>@sha256:<digest> \
      --certificate-identity-regexp '^https://github.com/olivaresai/olivares' \
      --certificate-oidc-issuer https://token.actions.githubusercontent.com
 
-   # OR the Helm-native GPG provenance (.prov), air-gap friendly:
+   # Only for the chart .tgz of an air-gap bundle built with scripts/airgap-bundle.sh --gpg-key:
    helm verify olivares-{{ .Chart.Version }}.tgz   # needs the public key in your keyring
 
 For the air-gapped / offline install (pinned digests + offline cosign verify),

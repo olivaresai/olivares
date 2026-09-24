@@ -3,23 +3,25 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 #
-# check-release-version.sh — one first-release version, stated everywhere or nowhere.
+# check-release-version.sh — one release version, stated everywhere or nowhere.
 #
 # The public surfaces disagreed for weeks (README ×7 promised v26.7.0, CHANGELOG said
 # v26.6.0, a launch draft carried v0.1.0) and no job noticed. The version CHOICE is the
 # owner's; this gate owns the MECHANICS: RELEASE-VERSION at the repo root is the single
 # source of truth, and every product-version-shaped token (CalVer vYY.M.PATCH, YY >= 26)
-# on a release-bearing surface must equal it — or one of its derived forms: the -fips /
-# -stig image variants and the next-patch upgrade example the docs legitimately use.
+# on a release-bearing surface must equal it — or its one derived form: the -fips / -stig
+# image variants, where image tags are documented. The next-patch upgrade example is gone
+# (2026-09-23): the canon is the published baseline, and its same-month patch names a release
+# nobody cut, so no document may state it as an example.
 #
-# While RELEASE-VERSION says UNDECIDED, the gate prints the full divergence census
-# (grouped by value, so the owner can decide from evidence) and exits 0 with a loud
-# PENDING banner — the lint:commerce report-mode precedent: land the gate before the
-# decision, so the decision lands enforced. The moment a real version is written, any
-# divergent surface turns the gate red.
+# RELEASE-VERSION always holds a version: the current published install baseline. The report
+# mode this gate once had for UNDECIDED (print the census, exit 0 with a PENDING banner) was
+# removed on 2026-09-23, because it was a green with no canon behind it: UNDECIDED, or any
+# record that is not vYY.M.PATCH, is refused before any surface is read, and every judge
+# refuses it again. A divergent surface is red, and the FAIL listing is the census.
 #
-# Exemptions, always explicit and context-bound: the -fips/-stig variants and the
-# next-patch upgrade example are allowed ONLY at the named doc paths (DERIVED_ALLOW);
+# Exemptions, always explicit and context-bound: the -fips/-stig variants are allowed ONLY
+# at the named doc paths (DERIVED_ALLOW);
 # dated ADRs and the frozen 2026-06 docs snapshot are out of scope by directory. There is
 # no line-level waiver: a second opinion measured a general marker-line skip hiding a
 # foreign version, and nothing that legitimately needs a waiver matches the CalVer shape.
@@ -294,19 +296,19 @@ VERSION = re.compile(r"\bv?(2[6-9]|[3-9][0-9])\.([1-9]|1[0-2])\.([0-9]+)(-fips|-
 
 # Exact allowlist records: (path suffix, exemption kind, reason). Kinds:
 #   variants   — the -fips/-stig image-tag forms of the exact canon
-#   next-patch — the canon's next patch, ONLY as the documented upgrade example
+# (A second kind, next-patch, admitted the canon's next patch as an upgrade example. It was
+# removed on 2026-09-23: with the canon at the published v26.9.0 it admitted a v26.9.1 that
+# nobody cut. An example of the next release names it in its two-part form or a placeholder.)
 # Nothing else is ever exempt; there is no line-level waiver (a readiness marker or an
 # illustrative SemVer example never matches the CalVer shape, so neither needs one — and
 # a general line-skip was measured hiding a foreign version on a marker line).
 DERIVED_ALLOW = [
-    # INSTALL.md documents the SAME two things its two allowlisted siblings do — the FIPS/STIG
-    # image tags and a same-month fix as the upgrade example — and was simply never listed. It
-    # only surfaced when a canon was finally set: while RELEASE-VERSION said UNDECIDED the gate
-    # printed a census instead of judging, so the omission could not show.
+    # INSTALL.md documents the SAME thing its allowlisted siblings do — the FIPS/STIG image
+    # tags — and was simply never listed. It only surfaced when a canon was finally set: while
+    # RELEASE-VERSION said UNDECIDED the gate printed a census instead of judging, so the
+    # omission could not show.
     ("INSTALL.md", "variants", "the FIPS/STIG image tags the install guide documents"),
-    ("INSTALL.md", "next-patch", "the same-month fix named as the CalVer example"),
     ("how-to/docker-deployment.md", "variants", "image tags for the FIPS/STIG builds"),
-    ("how-to/docker-deployment.md", "next-patch", "the documented upgrade example"),
     ("how-to/air-gap-install.md", "variants", "air-gap bundle filenames for the hardened builds"),
     # The Docker Hub overview IS the artefact matrix — the same class as its two siblings above,
     # and it never surfaced because `packaging/` was outside the census entirely (see below).
@@ -316,12 +318,8 @@ DERIVED_ALLOW = [
     # EXEMPTIONS are exact, so a doc nobody exempted is required to state the canon.
     ("docs/UPGRADE-AND-ROLLBACK.md", "variants",
      "the :TAG, :TAG-fips and :TAG-stig image coordinates the upgrade guide documents"),
-    ("docs/UPGRADE-AND-ROLLBACK.md", "next-patch",
-     "the LTS line's first backport, named as the patch-bumping example"),
     ("docs/HA-LEADER-ROUTING.md", "min-version",
      "the /pod-readyz precondition is a compatibility FLOOR, not a shipped coordinate"),
-    ("docs/PSIRT-RUNBOOK.md", "next-patch",
-     "the out-of-band security release the incident drill cuts"),
     ("docs/PSIRT-RUNBOOK.md", "min-version",
      "the advisory's affected-range START (--min-version / introduced), a bound not a claim"),
     # The release-key ledger's first column is the FIRST release a signing pair covers, which is
@@ -330,20 +328,6 @@ DERIVED_ALLOW = [
     # the canon exactly — the allowance is scoped to the TOKEN on the bound, as everywhere else.
     ("docs/RELEASE-VERIFICATION.md", "min-version",
      "the key ledger's first column is the first release a signing pair covers, a coverage FLOOR"),
-    # A consumed tag cannot be un-published, so both release runbooks prescribe the same
-    # remedy: cut the NEXT PATCH, never re-point the tag. That is the canon's next patch
-    # named as a remedy rather than as an upgrade example — same value, same kind.
-    # export-closure: absent-by-design docs/RELEASE-GO-LIVE-RUNBOOK.md — a SUBJECT of this
-    # rule, not a caller. The export removes it (the export curation script, line 175), and this record
-    # is DATA: in the published tree the path is simply never matched. Nothing executes it, so
-    # there is no call to guard — hub-only would be the wrong class.
-    # export-closure: absent-by-design docs/RELEASE-NEXT-ACTIONS.md — same class, same reason
-    # (removed at the export curation script, line 177): named here only so the HUB tree does not demand
-    # the canon inside a runbook whose whole prescription is to cut the NEXT patch.
-    ("docs/RELEASE-GO-LIVE-RUNBOOK.md", "next-patch",
-     "the next patch named as the roll-forward remedy for a bad tag"),
-    ("docs/RELEASE-NEXT-ACTIONS.md", "next-patch",
-     "the next patch named as the roll-forward remedy for a bad tag"),
 ]
 
 # ── ARM B: an artefact PIN, anywhere the export publishes ──────────────────────────────────
@@ -631,6 +615,11 @@ HISTORICAL_ALLOW = [
     ("docs/accessibility/VPAT-olivares-admin.md", "conformance-record",
      "the conformance statement names the release run that produced its evidence; a run that "
      "happened cannot be renamed"),
+    # export-closure: absent-by-design docs/RELEASE-GO-LIVE-RUNBOOK.md — a SUBJECT of this
+    # rule, not a caller. The export removes it (the export curation script), and this record is
+    # DATA: in the published tree the path is simply never matched. Nothing executes it, so there
+    # is no call to guard — hub-only would be the wrong class.
+    # export-closure: absent-by-design docs/RELEASE-NEXT-ACTIONS.md — same class, same reason.
     ("docs/RELEASE-GO-LIVE-RUNBOOK.md", "release-act-record",
      "the runbook of the go-live act that was executed, with the tag it cut"),
     ("docs/RELEASE-NEXT-ACTIONS.md", "release-act-record",
@@ -645,10 +634,16 @@ HISTORICAL_ALLOW = [
     ("docs/RELEASE-INSTALLER.md", "release-act-record",
      "the qualification names the published tag that predates the service adapter, which is why "
      "each leg tests two subjects"),
+    # export-closure: absent-by-design docs/emitted-urls-hub-record.txt — DATA, not a caller: the
+    # emitted-URL gate's excluded record, removed by one exact DOCS_BLOCK entry. Named here so the
+    # development tree judges it; nothing runs it. (added 2026-09-23)
+    ("docs/emitted-urls-hub-record.txt", "excluded-url-record",
+     "the emitted-URL declarations of files the export drops, among them a posted launch record's "
+     "link to a past release page; tied to the one exact entry that curates the record out"),
 ]
 
 # Directory members whose allowance is granted only while the export curation removes them.
-CURATION_TIED = {"docs/launch", "docs/contracts"}
+CURATION_TIED = {"docs/launch", "docs/contracts", "docs/emitted-urls-hub-record.txt"}
 
 # The one other way a DIRECTORY member can be safe without the tie: a kind whose allowance is
 # bound by the FILE ITSELF, so a document nobody has written yet earns nothing. `release-witness`
@@ -805,8 +800,7 @@ def scan_pins(tops):
 
 def judge_pins(canon, hits, curated=None, kept=None):
     """A pin must name the canon (or, where DERIVED_ALLOW says so, a derived form)."""
-    if canon == "UNDECIDED":
-        return []
+    require_decided(canon)
     if curated is None:
         curated = curated_out()
     if kept is None:
@@ -942,8 +936,7 @@ def artifact_allowed(canon, path, tok, line):
 
 def judge_artifacts(canon, hits):
     """-> failures. Empty only when every artifact coordinate states the canon."""
-    if canon == "UNDECIDED":
-        return []
+    require_decided(canon)
     return [(p, i, tok) for p, i, tok, line, _dated in hits
             if not artifact_allowed(canon, p, tok, line)[0]]
 
@@ -957,16 +950,32 @@ def artifact_files():
     return sorted(f for f in out if regular_file(f))
 
 def read_canon(text):
-    """Schema, not scrape: exactly ONE non-comment record, and it must be UNDECIDED or a
-    v-prefixed CalVer with a real month. Anything else refuses before any surface scan —
-    a malformed canon certified OK was the measured failure mode."""
+    """Schema, not scrape: exactly ONE non-comment record, and it must be a v-prefixed CalVer
+    with a real month. Anything else refuses before any surface scan — a malformed canon
+    certified OK was the measured failure mode.
+
+    UNDECIDED is refused too, with UNVERIFIED and exit 2: it names no canon to hold the surfaces
+    to, and the report mode that answered it with exit 0 was a success escape (removed
+    2026-09-23)."""
     records = [ln.strip() for ln in text.splitlines() if ln.strip() and not ln.strip().startswith("#")]
     if len(records) != 1:
         sys.exit(f"FAIL check-release-version: RELEASE-VERSION must contain exactly one record, found {len(records)}")
     canon = records[0]
-    if canon != "UNDECIDED" and not CANON_SHAPE.fullmatch(canon):
-        sys.exit(f"FAIL check-release-version: RELEASE-VERSION record {canon!r} is neither UNDECIDED nor vYY.M.PATCH (month 1-12)")
+    if canon == "UNDECIDED":
+        unverified("UNVERIFIED check-release-version: RELEASE-VERSION says UNDECIDED; there is no canon "
+                   "to hold the release-bearing surfaces to, and nothing is certified without one.")
+    if not CANON_SHAPE.fullmatch(canon):
+        sys.exit(f"FAIL check-release-version: RELEASE-VERSION record {canon!r} is not vYY.M.PATCH (month 1-12)")
     return canon
+
+
+def require_decided(canon):
+    """Every judge's first line: a canon that is not vYY.M.PATCH is refused (exit 2), never
+    judged as 'no failures'. read_canon() already refuses it; this keeps a caller that skips the
+    schema from turning UNDECIDED back into a pass."""
+    if not CANON_SHAPE.fullmatch(str(canon)):
+        unverified(f"UNVERIFIED check-release-version: {canon!r} is not a decided canon (vYY.M.PATCH); "
+                   "no surface is judged against it.")
 
 def allowed_at(canon, path):
     m = CANON_SHAPE.fullmatch(canon)
@@ -978,9 +987,6 @@ def allowed_at(canon, path):
             continue
         if kind == "variants":
             allowed |= {f"{base}-fips", f"{base}-stig"}
-        elif kind == "next-patch":
-            nxt = f"{yy}.{mm}.{int(pp) + 1}"
-            allowed |= {nxt, f"v{nxt}"}
     return allowed
 
 def scan(files, rd):
@@ -1024,12 +1030,11 @@ def doc_allowed(canon, path, tok, line, dated, curated, kept=frozenset()):
 
 
 def judge(canon, hits, curated=None, kept=None):
-    """-> (failures, census) — failures non-empty only when the canon is decided."""
+    """-> (failures, census). The canon must be decided (require_decided)."""
+    require_decided(canon)
     census = {}
     for path, i, tok, line, dated in hits:
         census.setdefault(tok.lstrip("v").replace("-fips", "").replace("-stig", ""), []).append((path, i, tok))
-    if canon == "UNDECIDED":
-        return [], census
     if curated is None:
         curated = curated_out()
     if kept is None:
@@ -1185,7 +1190,6 @@ def selftest():
     canon_refuses("two canon records -> refuse", "v26.7.0\nv29.1.0\n")
     canon_refuses("month-zero canon -> refuse", "v26.0.1\n")
     canon_refuses("prefixless canon -> refuse", "26.7.0\n")
-    expect("UNDECIDED canon -> accepted", read_canon("# c\nUNDECIDED\n") == "UNDECIDED")
     expect("well-formed canon -> accepted", read_canon("v26.7.0\n") == "v26.7.0")
     # ── decided canon: divergence is red; derived forms only in their contexts ──
     tree = {"README.md": "ships with `v26.7.0` today", "CHANGELOG.md": "the first release is `v26.6.0`"}
@@ -1194,7 +1198,8 @@ def selftest():
     tree = {"docs-site/src/content/docs/how-to/docker-deployment.md":
             "pull olivares:26.7.0-fips then upgrade to 26.7.1"}
     fails, _ = judge("v26.7.0", scan(tree, rd(tree)))
-    expect("fips + next-patch INSIDE the upgrade doc -> green", fails == [])
+    expect("fips INSIDE the upgrade doc -> green; the canon's next patch there -> red (no invented release)",
+           fails == [("docs-site/src/content/docs/how-to/docker-deployment.md", 1, "26.7.1")])
     tree = {"README.md": "the first release will be v26.7.1"}
     fails, _ = judge("v26.7.0", scan(tree, rd(tree)))
     expect("next-patch OUTSIDE its documented example -> red", fails == [("README.md", 1, "v26.7.1")])
@@ -1212,8 +1217,8 @@ def selftest():
     expect("dependency versions -> not product-shaped", scan(tree, rd(tree)) == [])
     tree = {"e.md": "since 26.0.9 things"}
     expect("month-zero token -> not product-shaped", scan(tree, rd(tree)) == [])
-    fails, census = judge("UNDECIDED", scan({"f.md": "v26.6.0 and v26.7.0"}, rd({"f.md": "v26.6.0 and v26.7.0"})))
-    expect("undecided canon -> census only", fails == [] and set(census) == {"26.6.0", "26.7.0"})
+    _, census = judge("v26.7.0", scan({"f.md": "v26.6.0 and v26.7.0"}, rd({"f.md": "v26.6.0 and v26.7.0"})))
+    expect("the divergence census groups every shaped token by value", set(census) == {"26.6.0", "26.7.0"})
     # ── arm B: the pin/floor distinction, and the coverage that made arm A caducate ──
     pins = lambda text, path="operator/config/samples/x.yaml": judge_pins(
         "v26.7.0", [(path, i, m.group(0), ln, False)
@@ -1719,6 +1724,57 @@ def selftest():
            judge("v26.9.1", scan({"docs/launch/fixture-post.md": "see `CHANGELOG.md` `[26.8.0]`"},
                                  rd({"docs/launch/fixture-post.md": "see `CHANGELOG.md` `[26.8.0]`"})),
                  curated=hist)[0] == [])
+    # 9b · THE EXCLUDED EMITTED-URL RECORD (added 2026-09-23). docs/emitted-urls-hub-record.txt
+    #      declares URLs that only curated-out files emit, among them the v26.8.0 release page a
+    #      posted launch record links. A past release there is a record, and only while the export
+    #      really drops that exact file: without the curation, from any other path, above the canon,
+    #      or re-published by DOCS_KEEP, the same bytes are red.
+    rec_path = "docs/emitted-urls-hub-record.txt"
+    rec_line = "https://github.com/olivaresai/olivares/releases/tag/v26.8.0 200 2026-09-23"
+    rec = lambda path, text=rec_line, cur=frozenset({rec_path}), kept=frozenset(): judge(
+        "v26.9.0", scan({path: text}, rd({path: text})), curated=set(cur), kept=set(kept))[0]
+    expect("excluded record: a past release page in the exact record the export drops -> green",
+           rec(rec_path) == [])
+    expect("excluded record: WITHOUT its export exclusion the same line is red",
+           rec(rec_path, cur=frozenset()) == [(rec_path, 1, "v26.8.0")])
+    expect("excluded record: re-published by DOCS_KEEP it earns nothing -> red",
+           rec(rec_path, kept=frozenset({rec_path})) == [(rec_path, 1, "v26.8.0")])
+    expect("excluded record: a sibling path is not the record -> red (exact file)",
+           rec("docs/emitted-urls-hub-record-old.txt", cur=frozenset({rec_path, "docs/emitted-urls-hub-record-old"}))
+           == [("docs/emitted-urls-hub-record-old.txt", 1, "v26.8.0")])
+    expect("excluded record: a release ABOVE the canon there -> red (nobody published it)",
+           rec(rec_path, text="https://github.com/olivaresai/olivares/releases/tag/v26.10.0 404 2026-09-23 x")
+           == [(rec_path, 1, "v26.10.0")])
+    # 9c · THE PUBLISHED BASELINE AND THE PENDING RELEASE (added 2026-09-23). The canon is the
+    #      published install baseline and the next release is pending. The canon's same-month patch
+    #      is not an example anyone may write: it names a release nobody cut. The pending release is
+    #      written in its two-part form, which is no version token; its tag form is judged like any
+    #      other version (there is no pending-target allowance); and past releases keep their records.
+    live = lambda path, text: judge("v26.9.0", scan({path: text}, rd({path: text})), curated={"docs/launch"})[0]
+    for path in ("INSTALL.md", "docs-site/src/content/docs/how-to/docker-deployment.md",
+                 "docs/UPGRADE-AND-ROLLBACK.md", "docs/PSIRT-RUNBOOK.md"):
+        expect(f"stale: the canon's next patch in {path} -> red (it names a release nobody cut)",
+               live(path, "a same-month fix is v26.9.1") == [(path, 1, "v26.9.1")])
+    expect("stale: a current-install pin one patch above the canon -> red",
+           live("INSTALL.md", "docker pull docker.io/olivaresai/olivares:26.9.1")
+           == [("INSTALL.md", 1, "26.9.1")])
+    expect("pending: the next release in its two-part form (v26.10) is not a version token",
+           scan({"INSTALL.md": "the next release is v26.10, pending"},
+                rd({"INSTALL.md": "the next release is v26.10, pending"})) == [])
+    expect("pending: its tag form on a live surface is judged like any version -> red (no pending-target allowance)",
+           live("INSTALL.md", "the next tag is v26.10.0") == [("INSTALL.md", 1, "v26.10.0")])
+    base2 = ("# Changelog\n\nthe latest published release is `v26.9.0`.\n\n## [Unreleased]\n\n"
+             "pending for v26.10\n\n## [26.9.0] - 2026-09-16\n\nTag `v26.9.0`\n\n"
+             "## [26.8.0] - 2026-09-01\n\nTag `v26.8.0`\n")
+    expect("historical: the dated sections survive under the published baseline, and the masthead states it",
+           live("CHANGELOG.md", base2) == [])
+    expect("historical: a masthead naming a past release as the current one -> red",
+           live("CHANGELOG.md", base2.replace("`v26.9.0`.", "`v26.8.0`.", 1)) == [("CHANGELOG.md", 3, "v26.8.0")])
+    expect("historical: the dated witness of the previous release survives",
+           live("docs/releases/v26.8.0-install-surfaces.json", '  "version": "v26.8.0",') == [])
+    expect("historical: a witness labelled with a release above the canon -> red",
+           live("docs/releases/v26.9.1-install-surfaces.json", '  "version": "v26.9.1",')
+           == [("docs/releases/v26.9.1-install-surfaces.json", 1, "v26.9.1")])
     # 8 · every member carries a written reason, and the two tied ones are the two the export
     #     curates. Asserted so a member added without a reason, or a tie invented for a
     #     directory the export publishes, fails here rather than in review.
@@ -2028,8 +2084,17 @@ def selftest():
     expect("floor in an operator file OUTSIDE the discovered scope -> red (scope did not widen)",
            judge_artifacts("v26.8.0", scan(tree, rd(tree)))
            == [("operator/internal/controller/reconcile.go", 1, "26.7.0")])
-    expect("undecided canon -> artifacts judged as census, never red",
-           judge_artifacts("UNDECIDED", scan({"deploy/x.yaml": "26.7.0"}, rd({"deploy/x.yaml": "26.7.0"}))) == [])
+    # ── NO SUCCESS ESCAPE (2026-09-23) ──
+    # RELEASE-VERSION is the published install baseline, so a tree always has one. UNDECIDED used
+    # to put the run into a report mode that printed the census and exited 0: a green with no canon
+    # behind it. It is refused now, by the schema and by every judge, and never with exit 0.
+    code, msg = refusal(lambda: read_canon("# c\nUNDECIDED\n"))
+    expect("UNDECIDED canon -> refused (exit 2), never a success", code == 2 and "UNDECIDED" in msg)
+    und = scan({"deploy/x.yaml": "26.7.0"}, rd({"deploy/x.yaml": "26.7.0"}))
+    expect("no judge treats UNDECIDED as a pass: documents, pins and artefacts all refuse (exit 2)",
+           refusal(lambda: judge("UNDECIDED", und))[0] == 2
+           and refusal(lambda: judge_pins("UNDECIDED", und, curated=set(), kept=set()))[0] == 2
+           and refusal(lambda: judge_artifacts("UNDECIDED", und))[0] == 2)
     print("selftest " + ("OK — every red case is red, every green case is green" if ok else "FAILED"))
     sys.exit(0 if ok else 1)
 
@@ -2106,18 +2171,6 @@ if not crd_types_files():
     print("  product word, and the public-export leak gate refuses that word in scripts/).", file=sys.stderr)
     sys.exit(2)
 afailures = judge_artifacts(canon, ahits)
-
-if canon == "UNDECIDED":
-    for path, i, tok, _line, _dated in ahits:
-        census.setdefault(tok.lstrip("v").replace("-fips", "").replace("-stig", ""), []).append((path, i, tok))
-    print("check-release-version: PENDING — RELEASE-VERSION is UNDECIDED (the choice is the owner's).")
-    print("Divergence census across release-bearing surfaces (this becomes RED the moment a version is set):")
-    for value in sorted(census):
-        locs = census[value]
-        print(f"  {value}: {len(locs)} occurrence(s) in {len({p for p, _, _ in locs})} file(s)")
-        for p, i, tok in locs[:3]:
-            print(f"      e.g. {p}:{i} ({tok})")
-    sys.exit(0)
 
 if failures or afailures:
     total = len(failures) + len(afailures)
