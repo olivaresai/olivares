@@ -1,0 +1,545 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# c32-race-groups-complete — ONE measurement of the WHOLE race-full partition gate on ONE exact
+# source, 5e977461a70959a71957ef4bae11f2b723dba1f1 (#139). Its only change to its parent is scripts/race-groups.json, which
+# assigns the commit-outcome tests to one turn each: CommitOutcome to the root turn
+# root-e-communication, CommitOutcome to heavy-stores turn a, WorkStore to modules-sessions turn h.
+# DIAGNOSTIC ONLY: it runs from the branch diag/c32-race-groups, which adds this one file and is
+# never merged. It changes no product byte, compiles no package and runs no test.
+#
+# Why isolated negatives: the gate stops at its FIRST failure (its fail() exits), root partition
+# before the sharded groups, so a control with the parent's spec shows only the root defect. Each
+# family therefore gets its own negatives, derived here from the source's spec by removing or
+# duplicating exactly that family, and each must fail exactly on its own block with the named list.
+#
+# Sides, one command each, on the same unmodified tree (OLIVARES_RACE_GROUPS points outside it):
+#   current          bash scripts/race-groups.sh check on the source's spec (json 0ae63ffe)
+#   control-parent   the same on the parent's spec (blob 280aa1ce): the first block to fail is the root one
+#   remove-root      CommitOutcome removed from root-e-communication: the 5 root orphans
+#   remove-heavy     CommitOutcome removed from heavy-stores a: the 7 heavy-stores orphans
+#   remove-sessions  WorkStore removed from modules-sessions h: the 1 modules-sessions orphan
+#   dup-root         CommitOutcome also in root-e-rest: the 5 root doubles
+#   dup-heavy        CommitOutcome also in heavy-stores b: the 7 heavy-stores doubles
+#   dup-sessions     WorkStore also in modules-sessions d: the 1 modules-sessions double
+# Consumers, on the source's spec, dry run (OLIVARES_RACE_DRYRUN=1; nothing is tested):
+#   root-run root-e-communication, run heavy-stores#a, run modules-sessions#h.
+#
+# Verdict (verdict.tsv, the job summary, and the job result):
+#   PASS       current exit 0 with the gate's complete result: one CLEAN line, one root line with 0
+#              orphans and 0 doubles listing every root turn with live tests, and one group line with
+#              0 orphans and 0 doubles for EVERY sharded group with its declared turn count; the three
+#              families where declared; AND every control and negative exit 1 with exactly one gate
+#              FAIL line, of its own kind, group and count, followed by exactly the named tests; AND
+#              every consumer names its family in its -run and its package, with root-run counting
+#              exactly the live tests the check gave root-e-communication.
+#   FAIL       current exit 1 with the gate's FAIL, or its outputs contradict the assignment.
+#   INABILITY  anything else. Never a PASS.
+# The job succeeds only on PASS; every raw output is uploaded on every outcome.
+name: c32-race-groups-complete
+
+on:
+  push:
+    branches:
+      - diag/c32-race-groups
+
+permissions:
+  contents: read
+
+# One run per push; a running measurement is never cancelled.
+concurrency:
+  group: c32-race-groups-complete-${{ github.run_id }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  PRODUCT_SHA: 5e977461a70959a71957ef4bae11f2b723dba1f1
+  PRODUCT_PARENT: b75d44c2d3ee6e06359a31d117a9268b2c30e273
+  PRODUCT_TREE: 4e7c4af9c706a6aecf9dd1fb8f946177746814ab
+  PIN_GO_WORK: 6903bf42861311f1b605d1b563e15cb6d327c3e7
+  PIN_SCRIPT: 401d49a179f6366a09438fc32696fcfd91e8e1c9
+  PIN_GROUPS_FIXED: 0ae63ffeb7d7900c4bd670b72e258d283ad30eee
+  PIN_GROUPS_OLD: 280aa1ce51f3f32a25e78441dc44ec264c3bd0ab
+  # The named tests of each family.
+  NAMES_ROOT: |-
+    TestCommitOutcomeFenceWitnessRefusesASharedKey
+    TestCommitOutcomeLineageWitnessRefusesForeignWaits
+    TestCommitOutcomeProxyArmIsSingleUse
+    TestCommitOutcomeProxyNonReadingPeerIsBounded
+    TestCommitOutcomeProxyReleaseDrainsInWireOrder
+  NAMES_HEAVY: |-
+    TestCommitOutcomeClassification
+    TestCommitOutcomeDefiniteRollbackPostgres
+    TestCommitOutcomeDefiniteRollbackSQLite
+    TestCommitOutcomeExternalCancelPostgres
+    TestCommitOutcomePositiveExternalCancelPostgres
+    TestCommitOutcomeServerRejectionPostgres
+    TestCommitOutcomeStalledObservationIsBoundedPostgres
+  NAMES_SESSIONS: |-
+    TestWorkStoreErrorCommitOutcomePreserved
+  # Every derived spec: side name, operation, where (root:<turn> or <group>:<turn>), family.
+  VARIANTS: |-
+    remove-root remove root:root-e-communication CommitOutcome
+    remove-heavy remove heavy-stores:a CommitOutcome
+    remove-sessions remove modules-sessions:h WorkStore
+    dup-root add root:root-e-rest CommitOutcome
+    dup-heavy add heavy-stores:b CommitOutcome
+    dup-sessions add modules-sessions:d WorkStore
+  # One transform, used to write each variant and again by the verdict to re-derive it.
+  RG_DERIVE: |
+    import copy, json, sys
+    def derive(spec, op, where, fam):
+        s = copy.deepcopy(spec)
+        grp, turn = where.split(':', 1)
+        pool = s['root_shards'] if grp == 'root' else next(g for g in s['groups'] if g['name'] == grp)['shards']
+        t = next(x for x in pool if x['name'] == turn)
+        if op == 'remove':
+            if fam not in t['families']:
+                raise SystemExit(f'{where} does not declare {fam}: nothing to remove')
+            t['families'] = [f for f in t['families'] if f != fam]
+        elif op == 'add':
+            if fam in t['families']:
+                raise SystemExit(f'{where} already declares {fam}')
+            t['families'] = t['families'] + [fam]
+        else:
+            raise SystemExit(f'unknown operation {op}')
+        return s
+    if __name__ == '__main__':
+        src, op, where, fam, dst = sys.argv[1:6]
+        with open(dst, 'w', encoding='utf-8') as f:
+            json.dump(derive(json.load(open(src, encoding='utf-8')), op, where, fam), f, indent=2, ensure_ascii=False)
+            f.write('\n')
+  RG_LIB: |
+    set -euo pipefail
+    OUT="${OUT:-$RUNNER_TEMP/race-groups-complete}"
+    mkdir -p "$OUT"
+    fail() { printf '::error::%s\n' "$*"; return 1; }
+
+    # identity: the bound commit, its parent, its tree, the pinned blobs (in HEAD and on disk), a
+    # clean tree and a GitHub-hosted runner; the parent's spec and every variant are written OUTSIDE
+    # the tree and hashed.
+    identity() {
+      local path pin name op where fam
+      [ "$(git rev-parse HEAD)" = "$PRODUCT_SHA" ] || { fail "HEAD $(git rev-parse HEAD) is not the bound source $PRODUCT_SHA"; return 1; }
+      [ "$(git rev-parse 'HEAD^{tree}')" = "$PRODUCT_TREE" ] || { fail "the tree is not $PRODUCT_TREE"; return 1; }
+      [ "$(git rev-parse 'HEAD^' 2>/dev/null)" = "$PRODUCT_PARENT" ] || { fail "the parent is not $PRODUCT_PARENT"; return 1; }
+      [ "$(git diff --no-renames --name-only HEAD^ HEAD)" = scripts/race-groups.json ] || { fail "the source changes more than scripts/race-groups.json"; return 1; }
+      [ -z "$(git status --porcelain --untracked-files=all)" ] || { fail "the checkout is not clean"; return 1; }
+      while read -r path pin; do
+        [ "$(git rev-parse "HEAD:$path")" = "$pin" ] || { fail "$path is not blob $pin in HEAD"; return 1; }
+        [ "$(git hash-object -- "$path")" = "$pin" ] || { fail "$path on disk is not blob $pin"; return 1; }
+      done <<< "go.work $PIN_GO_WORK
+    scripts/race-groups.sh $PIN_SCRIPT
+    scripts/race-groups.json $PIN_GROUPS_FIXED"
+      [ "$(git rev-parse 'HEAD^:scripts/race-groups.json')" = "$PIN_GROUPS_OLD" ] || { fail "the parent's race-groups.json is not blob $PIN_GROUPS_OLD"; return 1; }
+      git cat-file blob "$PIN_GROUPS_OLD" > "$OUT/control-parent.race-groups.json"
+      [ "$(git hash-object "$OUT/control-parent.race-groups.json")" = "$PIN_GROUPS_OLD" ] || { fail "the extracted parent spec is not blob $PIN_GROUPS_OLD"; return 1; }
+      git cat-file blob "$PIN_GROUPS_FIXED" > "$OUT/source.race-groups.json"
+      printf '%s\n' "$RG_DERIVE" > "$OUT/derive.py"
+      : > "$OUT/variants.txt"
+      while read -r name op where fam; do
+        [ -n "$name" ] || continue
+        python3 "$OUT/derive.py" "$OUT/source.race-groups.json" "$op" "$where" "$fam" "$OUT/$name.race-groups.json"
+        printf '%s %s %s %s %s\n' "$name" "$op" "$where" "$fam" "$(git hash-object "$OUT/$name.race-groups.json")" >> "$OUT/variants.txt"
+      done <<< "$VARIANTS"
+      [ "${RUNNER_PLACEMENT:-}" = github-hosted ] || { fail "this job runs on a ${RUNNER_PLACEMENT:-unknown} runner, not a GitHub-hosted one"; return 1; }
+      {
+        printf 'product_sha %s\nparent %s\ntree %s\n' "$(git rev-parse HEAD)" "$(git rev-parse 'HEAD^')" "$(git rev-parse 'HEAD^{tree}')"
+        printf 'blob go.work %s\nblob scripts/race-groups.sh %s\nblob scripts/race-groups.json %s\nblob parent:scripts/race-groups.json %s\n' \
+          "$PIN_GO_WORK" "$PIN_SCRIPT" "$PIN_GROUPS_FIXED" "$PIN_GROUPS_OLD"
+        sed 's/^/variant /' "$OUT/variants.txt"
+        printf 'workflow_sha %s event %s ref %s run %s attempt %s\n' "${GITHUB_WORKFLOW_SHA:-unknown}" "${GITHUB_EVENT_NAME:-}" "${GITHUB_REF:-}" "${GITHUB_RUN_ID:-}" "${GITHUB_RUN_ATTEMPT:-}"
+        printf 'runner %s placement %s image %s %s\n' "${RUNNER_NAME:-unknown}" "$RUNNER_PLACEMENT" "${ImageOS:-unknown}" "${ImageVersion:-unknown}"
+      } | tee "$OUT/identity.txt"
+    }
+
+    # side NAME SPEC COMMAND...: the command ONCE, raw stdout, stderr and exit kept. SPEC empty =
+    # the checked-out spec, with OLIVARES_RACE_GROUPS explicitly unset; otherwise
+    # OLIVARES_RACE_GROUPS=SPEC. The effective spec's path and blob are recorded before and after,
+    # then the gate's own `groups` and `root-shards` for the same spec, and the tree status.
+    side() {
+      local name="$1" spec="$2" rc=0 sub src eff
+      shift 2
+      local -a pre=(env -u OLIVARES_RACE_GROUPS -u OLIVARES_RACE_DRYRUN)
+      [ -z "$spec" ] || pre=(env -u OLIVARES_RACE_DRYRUN "OLIVARES_RACE_GROUPS=$spec")
+      # The child shell, with the gate's environment, must expand it.
+      # shellcheck disable=SC2016
+      eff="$("${pre[@]}" bash -c 'printf "%s" "${OLIVARES_RACE_GROUPS:-scripts/race-groups.json}"')"
+      printf 'path %s\nblob_before %s\n' "$eff" "$(git hash-object -- "$eff" 2>/dev/null || true)" > "$OUT/$name.spec"
+      { printf '%q ' "${pre[@]}" "$@"; printf '\n'; } > "$OUT/$name.command"
+      "${pre[@]}" "$@" > "$OUT/$name.stdout" 2> "$OUT/$name.stderr" || rc=$?
+      printf '%s\n' "$rc" > "$OUT/$name.exit"
+      printf 'blob_after %s\n' "$(git hash-object -- "$eff" 2>/dev/null || true)" >> "$OUT/$name.spec"
+      for sub in groups root-shards; do
+        src=0
+        "${pre[@]}" bash scripts/race-groups.sh "$sub" > "$OUT/$name.$sub.stdout" 2> "$OUT/$name.$sub.stderr" || src=$?
+        printf '%s\n' "$src" > "$OUT/$name.$sub.exit"
+      done
+      git status --porcelain --untracked-files=all > "$OUT/$name.tree-status"
+      cat "$OUT/$name.stdout"
+      cat "$OUT/$name.stderr" >&2
+      printf '%s: raw exit %s; groups exit %s; root-shards exit %s; tree changes %s\n' "$name" "$rc" \
+        "$(cat "$OUT/$name.groups.exit")" "$(cat "$OUT/$name.root-shards.exit")" "$(grep -c . "$OUT/$name.tree-status" || true)"
+    }
+
+    # consumer NAME ARGS...: the gate's own consumer on the checked-out spec, dry run; raw outputs kept.
+    consumer() {
+      local name="$1" rc=0
+      shift
+      { printf '%q ' env -u OLIVARES_RACE_GROUPS OLIVARES_RACE_DRYRUN=1 bash scripts/race-groups.sh "$@"; printf '\n'; } > "$OUT/consumer-$name.command"
+      env -u OLIVARES_RACE_GROUPS OLIVARES_RACE_DRYRUN=1 bash scripts/race-groups.sh "$@" > "$OUT/consumer-$name.stdout" 2> "$OUT/consumer-$name.stderr" || rc=$?
+      printf '%s\n' "$rc" > "$OUT/consumer-$name.exit"
+      git status --porcelain --untracked-files=all > "$OUT/consumer-$name.tree-status"
+      cat "$OUT/consumer-$name.stdout"
+      cat "$OUT/consumer-$name.stderr" >&2
+      printf 'consumer %s: raw exit %s\n' "$name" "$rc"
+    }
+
+    # verdict SETUP_OUTCOMES: RG_PY judges the kept files; exit 0 only on PASS (1 FAIL, 2 INABILITY).
+    verdict() {
+      local rc=0
+      printf 'setup outcomes: %s\n' "$1" > "$OUT/setup-outcomes.txt"
+      printf '%s\n' "$RG_PY" > "$RUNNER_TEMP/race-groups-verdict.py"
+      python3 "$RUNNER_TEMP/race-groups-verdict.py" "$OUT" "$1" || rc=$?
+      if [ -n "${GITHUB_STEP_SUMMARY:-}" ] && [ -f "$OUT/verdict.tsv" ]; then
+        { printf '### c32 race-groups complete qualification\n\n```\n'; cat "$OUT/verdict.tsv"; printf '```\n'; } >> "$GITHUB_STEP_SUMMARY"
+      fi
+      return "$rc"
+    }
+  # The classifier: the gate's own messages decide; anything it cannot read is an inability.
+  RG_PY: |
+    import json, os, re, shlex, subprocess, sys
+
+    out, outcomes = sys.argv[1], sys.argv[2]
+    CLEAN = re.compile(r'^race-groups: CLEAN — (\d+) paquete\(s\) con tests, 0 huérfanos, 0 patrones rancios, (\d+) excluido\(s\) con motivo escrito\. Reparto: (.*)$')
+    ROOT = re.compile(r'^race-groups: raiz — (\d+) test\(s\) de nivel superior en (\d+) turno\(s\), 0 huerfanos, 0 dobles\. Reparto: (.*)$')
+    GROUP = re.compile(r'^race-groups: grupo (\S+) — (\d+) test\(s\) en (\d+) turno\(s\), 0 huerfanos, 0 dobles$')
+    names = lambda k: sorted(l.strip() for l in os.environ[k].splitlines() if l.strip())
+    ROOT_N, HEAVY_N, SESS_N = names('NAMES_ROOT'), names('NAMES_HEAVY'), names('NAMES_SESSIONS')
+    # side -> (FAIL message prefix, the exact following lines)
+    EXPECT = {
+        'control-parent': (f'race-groups: FAIL — {len(ROOT_N)} test(s) del paquete raiz no caen en ningun turno', ROOT_N),
+        'remove-root': (f'race-groups: FAIL — {len(ROOT_N)} test(s) del paquete raiz no caen en ningun turno', ROOT_N),
+        'remove-heavy': (f'race-groups: FAIL — {len(HEAVY_N)} test(s) de heavy-stores no caen en ningun turno', HEAVY_N),
+        'remove-sessions': (f'race-groups: FAIL — {len(SESS_N)} test(s) de modules-sessions no caen en ningun turno', SESS_N),
+        'dup-root': (f'race-groups: FAIL — {len(ROOT_N)} test(s) caen en DOS turnos (una familia es prefijo de otra en otro turno)',
+                     [f'{t} → root-e-communication,root-e-rest' for t in ROOT_N]),
+        'dup-heavy': (f'race-groups: FAIL — {len(HEAVY_N)} test(s) de heavy-stores caen en DOS turnos (familia prefijo de otra)',
+                      [f'{t} -> a,b' for t in HEAVY_N]),
+        'dup-sessions': (f'race-groups: FAIL — {len(SESS_N)} test(s) de modules-sessions caen en DOS turnos (familia prefijo de otra)',
+                         [f'{t} -> d,h' for t in SESS_N]),
+    }
+    FAMILIES = [('root', 'root-e-communication', 'CommitOutcome'), ('root', 'root-e-communication', 'Communication'),
+                ('heavy-stores', 'a', 'CommitOutcome'), ('modules-sessions', 'h', 'WorkStore')]
+
+    def rd(name):
+        p = os.path.join(out, name)
+        return open(p, encoding='utf-8', errors='replace').read() if os.path.exists(p) else None
+
+    def facts(side):
+        ns = [f'{side}.{x}' for x in ('command', 'spec', 'stdout', 'stderr', 'exit', 'tree-status', 'groups.stdout', 'groups.exit', 'root-shards.stdout', 'root-shards.exit')]
+        got = {n: rd(n) for n in ns}
+        return got, [n for n, v in got.items() if v is None or (n.endswith('.command') and not v.strip())]
+
+    def listed(stdout, rc):
+        if rc is None or rc.strip() != '0':
+            return None
+        try:
+            v = json.loads(stdout)
+        except ValueError:
+            return None
+        return v if isinstance(v, list) and all(isinstance(x, str) for x in v) else None
+
+    def blob(path):
+        try:
+            return subprocess.check_output(['git', 'hash-object', '--', path]).decode().strip()
+        except Exception:
+            return ''
+
+    def spec_mismatch(g, side, name, want):
+        rec = dict(l.split(' ', 1) for l in g[f'{side}.spec'].splitlines() if ' ' in l)
+        got = (rec.get('path', ''), rec.get('blob_before', ''), rec.get('blob_after', ''))
+        path_ok = got[0] == name if '/' in name else os.path.basename(got[0]) == name
+        return '' if path_ok and got[1] == want and got[2] == want else f'the {side} side\'s effective spec was {got}, not {name} at blob {want} before and after'
+
+    def raw_exit(v):
+        v = (v or '').strip()
+        return int(v) if re.fullmatch(r'[0-9]{1,3}', v) else None
+
+    def fams(spec, grp, turn):
+        pool = spec.get('root_shards', []) if grp == 'root' else next((g.get('shards') or [] for g in spec.get('groups', []) if g['name'] == grp), [])
+        return next((s.get('families') or [] for s in pool if s['name'] == turn), [])
+
+    def judge_current(g, spec):
+        bad = spec_mismatch(g, 'current', 'scripts/race-groups.json', os.environ['PIN_GROUPS_FIXED'])
+        if bad:
+            return 'INABILITY', bad, '', {}
+        rc = raw_exit(g['current.exit'])
+        so, se = g['current.stdout'], g['current.stderr']
+        if rc is None:
+            return 'INABILITY', f'unreadable raw exit [{g["current.exit"].strip()}]', '', {}
+        if g['current.tree-status'].strip():
+            return 'INABILITY', 'the tree is not clean after the current side', g['current.tree-status'].splitlines()[0], {}
+        if rc in (124, 137) or rc > 124:
+            return 'INABILITY', f'the gate was stopped (raw exit {rc}: timeout or signal)', '', {}
+        if rc == 2:
+            return 'INABILITY', 'the gate could not look (raw exit 2)', next((l for l in se.splitlines() if 'COULD NOT LOOK' in l), ''), {}
+        fails = [l for l in se.splitlines() if l.startswith('race-groups: FAIL — ')]
+        if rc == 1:
+            return ('FAIL', 'the gate FAILS on the source', fails[0], {}) if fails else ('INABILITY', 'raw exit 1 without the gate\'s FAIL line', '', {})
+        if rc != 0:
+            return 'INABILITY', f'unknown raw exit {rc}', '', {}
+        lines = so.splitlines()
+        clean = [m for m in map(CLEAN.match, lines) if m]
+        root = [m for m in map(ROOT.match, lines) if m]
+        grp = [m for m in map(GROUP.match, lines) if m]
+        if fails or 'COULD NOT LOOK' in se or len(clean) != 1 or len(root) != 1 or int(clean[0].group(1)) < 1:
+            return 'INABILITY', 'exit 0 without the gate\'s complete result (one CLEAN line and one root line, no FAIL)', '', {}
+        sharded = {x['name']: len(x['shards']) for x in spec.get('groups', []) if x.get('shards')}
+        seen = {m.group(1): (int(m.group(2)), int(m.group(3))) for m in grp}
+        if len(grp) != len(seen) or set(seen) != set(sharded) or any(seen[k][1] != sharded[k] or seen[k][0] < 1 for k in sharded):
+            return 'INABILITY', f'the group lines {seen} are not exactly one per sharded group with its declared turns {sharded}', '', {}
+        root_rows = re.findall(r'(\S+)=(\d+)\(decl (\d+)\)', root[0].group(3))
+        roots = {n: int(c) for n, c, _ in root_rows}
+        expected_roots = [s['name'] for s in spec['root_shards']]
+        shards = listed(g['current.root-shards.stdout'], g['current.root-shards.exit'])
+        groups = listed(g['current.groups.stdout'], g['current.groups.exit'])
+        expected_groups = [f"{g['name']}#{s['name']}" if s else g['name']
+                           for g in spec['groups'] for s in (g.get('shards') or [None])]
+        if groups is None or shards is None or len(groups) != len(set(groups)) or groups != expected_groups:
+            return 'INABILITY', 'the gate\'s groups/root-shards output is missing or not a JSON list', '', {}
+        missing = [f'{a}#{b}:{c}' for a, b, c in FAMILIES if c not in fams(spec, a, b)]
+        if missing:
+            return 'FAIL', 'a family is not declared where assigned', ','.join(missing), {}
+        nofam = [s['name'] for s in spec.get('root_shards', []) if not s.get('families')]
+        if nofam:
+            return 'FAIL', 'a root turn declares no families', ','.join(nofam), {}
+        if ([n for n, _, _ in root_rows] != expected_roots or shards != expected_roots
+                or len(root_rows) != len(roots) or len(shards) != len(set(shards))
+                or int(root[0].group(2)) != len(shards) or sum(roots.values()) != int(root[0].group(1))
+                or any(v < 1 for v in roots.values())):
+            return 'INABILITY', 'the gate\'s root split does not list every generated root turn with live tests', root[0].group(3), {}
+        return 'PASS', (f'CLEAN: {clean[0].group(1)} packages; root {root[0].group(1)} tests in {root[0].group(2)} turns, 0/0; groups '
+                        + ' '.join(f'{k}={v[0]}/{v[1]}' for k, v in sorted(seen.items()))), root[0].group(0), {'root_comm': roots.get('root-e-communication', 0)}
+
+    def judge_negative(side, g, spec_name, spec_blob):
+        bad = spec_mismatch(g, side, spec_name, spec_blob)
+        if bad:
+            return 'INABILITY', bad, ''
+        rc = raw_exit(g[f'{side}.exit'])
+        se = g[f'{side}.stderr']
+        if rc is None:
+            return 'INABILITY', f'unreadable raw exit [{g[f"{side}.exit"].strip()}]', ''
+        if g[f'{side}.tree-status'].strip():
+            return 'INABILITY', f'the tree is not clean after {side}', g[f'{side}.tree-status'].splitlines()[0]
+        if rc == 0:
+            return 'INABILITY', f'{side} passed: the gate did not see the named defect, so the current result is not attributable', ''
+        if rc != 1:
+            return 'INABILITY', f'{side}: raw exit {rc} (could not look, stopped or unknown)', ''
+        lines = se.splitlines()
+        heads = [i for i, l in enumerate(lines) if l.startswith('race-groups: ')]
+        prefix, items = EXPECT[side]
+        if len(heads) != 1 or not lines[heads[0]].startswith(prefix):
+            return 'INABILITY', f'{side} failed differently from its named defect', lines[heads[0]] if heads else '(no gate line)'
+        got = sorted(l.strip() for l in lines[heads[0] + 1:] if l.strip())
+        if got != sorted(items):
+            return 'INABILITY', f'{side} named {got}, not exactly {sorted(items)}', lines[heads[0]]
+        return 'REPRODUCED', f'exit 1: exactly the {len(items)} named test(s) on its own block', lines[heads[0]]
+
+    def judge_consumer(name, want_fam, want_pkg, root_comm, spec):
+        so, se, ex = rd(f'consumer-{name}.stdout'), rd(f'consumer-{name}.stderr'), rd(f'consumer-{name}.exit')
+        if so is None or se is None or ex is None or rd(f'consumer-{name}.tree-status') is None or not (rd(f'consumer-{name}.command') or '').strip():
+            return 'INABILITY', f'consumer {name} not run', ''
+        if raw_exit(ex) != 0:
+            return 'INABILITY', f'consumer {name}: raw exit {ex.strip()}', se.strip().splitlines()[-1] if se.strip() else ''
+        if (rd(f'consumer-{name}.tree-status') or '').strip():
+            return 'INABILITY', f'the tree is not clean after consumer {name}', ''
+        cmd = [l for l in so.splitlines() if l.startswith(('go test ', 'cd cmd/olivares && go test '))]
+        if len(cmd) != 1:
+            return 'FAIL', f'consumer {name}: expected exactly one dry-run command', '(missing or multiple commands)'
+        tokens = shlex.split(cmd[0])
+        location = {'root-run-root-e-communication': ('root', 'root-e-communication'),
+                    'run-heavy-stores-a': ('heavy-stores', 'a'),
+                    'run-modules-sessions-h': ('modules-sessions', 'h')}[name]
+        families = fams(spec, *location)
+        want_regex = '^Test(' + '|'.join(sorted(families, key=len, reverse=True)) + ')'
+        run_at = [i for i, token in enumerate(tokens) if token == '-run']
+        got_regex = tokens[run_at[0] + 1] if len(run_at) == 1 and run_at[0] + 1 < len(tokens) else ''
+        if want_fam not in families or got_regex != want_regex:
+            return 'FAIL', f'consumer {name}: its -run differs from the declared families', cmd[0]
+        if name.startswith('root-run'):
+            package_ok = tokens[:5] == ['cd', 'cmd/olivares', '&&', 'go', 'test'] and tokens[-1] == '.'
+        else:
+            package_ok = tokens[:2] == ['go', 'test'] and ('github.com/olivaresai/olivares/' + want_pkg) in tokens[2:]
+        if not package_ok:
+            return 'FAIL', f'consumer {name}: its command does not reach exactly {want_pkg}', cmd[0]
+        if root_comm is not None:
+            n = re.search(r'turno root-e-communication: (\d+) test', se)
+            if not n or int(n.group(1)) != root_comm:
+                return 'FAIL', f'root-run counts {n and n.group(1)} tests, the check gave root-e-communication {root_comm}', ''
+        return 'PASS', f'-run {got_regex}', cmd[0][:200]
+
+    setup_keys = {'checkout', 'identity', 'caches', 'setup-go', 'current', 'negatives', 'consumers'}
+    setup_pairs = [kv.split('=', 1) for kv in outcomes.split() if '=' in kv]
+    first_bad = next((kv for kv in outcomes.split() if '=' in kv and kv.split('=', 1)[1] != 'success'), '')
+    if len(setup_pairs) != len(setup_keys) or {kv[0] for kv in setup_pairs} != setup_keys:
+        first_bad = 'missing-or-malformed-setup-outcomes'
+    rows = []
+    try:
+        if not rd('identity.txt'):
+            rows.append(('identity', 'INABILITY', f'not run: the source identity was not proved ({first_bad or "identity"})', '-', ''))
+        else:
+            spec = json.load(open('scripts/race-groups.json', encoding='utf-8'))
+            g, miss = facts('current')
+            cur = ('INABILITY', f'not run or incomplete: {",".join(miss)}', '', {}) if miss else judge_current(g, spec)
+            rows.append(('current', cur[0], cur[1], (g.get('current.exit') or '-').strip(), cur[2]))
+            sys.path.insert(0, out)
+            from derive import derive
+            variants = {l.split()[0]: l.split() for l in open(os.path.join(out, 'variants.txt')) if l.strip()}
+            for side in EXPECT:
+                g, miss = facts(side)
+                if miss:
+                    rows.append((side, 'INABILITY', f'not run or incomplete: {",".join(miss)}', '-', '')); continue
+                if side == 'control-parent':
+                    r = judge_negative(side, g, 'control-parent.race-groups.json', os.environ['PIN_GROUPS_OLD'])
+                else:
+                    _, op, where, fam, b = variants[side]
+                    if json.load(open(os.path.join(out, f'{side}.race-groups.json'), encoding='utf-8')) != derive(spec, op, where, fam) or blob(os.path.join(out, f'{side}.race-groups.json')) != b:
+                        r = ('INABILITY', f'{side}: the variant on disk is not the source spec with {op} {fam} at {where}', '')
+                    else:
+                        r = judge_negative(side, g, f'{side}.race-groups.json', b)
+                rows.append((side, r[0], r[1], (g.get(f'{side}.exit') or '-').strip(), r[2]))
+            rc_ = cur[3].get('root_comm') if cur[0] == 'PASS' else None
+            for name, fam, pkg, rc in (('root-run-root-e-communication', 'CommitOutcome', 'cd cmd/olivares', rc_),
+                                       ('run-heavy-stores-a', 'CommitOutcome', 'core/internal/store/sqlstore', None),
+                                       ('run-modules-sessions-h', 'WorkStore', 'modules/sessions', None)):
+                if name.startswith('root-run') and rc is None:
+                    rows.append((f'consumer {name}', 'INABILITY', 'no live count from a passing current side to compare', '-', '')); continue
+                r = judge_consumer(name, fam, pkg, rc, spec)
+                rows.append((f'consumer {name}', r[0], r[1], (rd(f'consumer-{name}.exit') or '-').strip(), r[2]))
+    except (Exception, SystemExit) as exc:
+        rows = [('instrument', 'INABILITY', f'classifier inputs unavailable or malformed ({type(exc).__name__})', '-', '')]
+    verdicts = [r[1] for r in rows]
+    if rows and rows[0][0] == 'current' and rows[0][1] == 'FAIL':
+        overall = ('FAIL', 'the source fails the partition gate on the real inventory')
+    elif any(v == 'FAIL' for v in verdicts):
+        overall = ('FAIL', 'a consumer or a declared family contradicts the assignment')
+    elif rows and rows[0][1] == 'PASS' and all(v in ('PASS', 'REPRODUCED') for v in verdicts) and len(rows) == 1 + len(EXPECT) + 3 and not first_bad:
+        overall = ('PASS', 'the whole gate is CLEAN on the source; every isolated negative fails exactly on its own block; the consumers name every family')
+    else:
+        overall = ('INABILITY', first_bad and f'step {first_bad}' or 'a side could not be measured as required')
+    with open(os.path.join(out, 'verdict.tsv'), 'w') as f:
+        f.write('side\tverdict\tlabel\traw_exit\tgate_line\n')
+        for r in rows:
+            f.write('\t'.join(r) + '\n')
+        f.write('\t'.join(['overall', overall[0], overall[1], '-', '-']) + '\n')
+    print(open(os.path.join(out, 'verdict.tsv')).read())
+    print(('::notice title=VERDICT::' if overall[0] == 'PASS' else '::error title=VERDICT::') + overall[0] + ' — ' + overall[1])
+    sys.exit({'PASS': 0, 'FAIL': 1}.get(overall[0], 2))
+
+jobs:
+  qualify:
+    if: github.repository == 'olivaresai/olivares'
+    name: c32 race-groups complete qualification (5e977461; six isolated negatives and the parent)
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        id: checkout
+        with:
+          ref: 5e977461a70959a71957ef4bae11f2b723dba1f1
+          persist-credentials: false
+          fetch-depth: 2
+      - name: source identity (the bound commit, its parent, the pinned blobs, the derived specs, a hosted runner)
+        id: identity
+        timeout-minutes: 1
+        env:
+          RUNNER_PLACEMENT: ${{ runner.environment }}
+        run: |
+          eval "$RG_LIB"
+          identity
+      - name: Prepare Go caches when the runner environment is unusable
+        id: caches
+        # setup-go runs go env itself, so cache fallback must precede it.
+        # Keep persistent runner caches when the existing environment is usable.
+        run: |
+          relocate=""
+          if [ -z "${HOME:-}" ] || [ ! -w "${HOME:-/nonexistent}" ]; then
+            relocate="unusable home"
+          fi
+          case "${GOPATH:-}" in
+            "" | /* ) : ;;
+            * ) relocate="relative GOPATH" ;;
+          esac
+          if [ -z "$relocate" ]; then
+            for cache_dir in "$HOME/go" "$HOME/.cache"; do
+              [ -e "$cache_dir" ] || continue
+              [ -w "$cache_dir" ] || relocate="unwritable default cache directory"
+            done
+          fi
+          if [ -z "$relocate" ]; then
+            echo "Keeping the usable runner Go cache environment"
+            exit 0
+          fi
+          echo "Preparing Go caches under RUNNER_TEMP: $relocate"
+          {
+            echo "GOCACHE=$RUNNER_TEMP/gocache"
+            echo "GOMODCACHE=$RUNNER_TEMP/gomodcache"
+            echo "GOPATH=$RUNNER_TEMP/gopath"
+            echo "GOBIN=$RUNNER_TEMP/gopath/bin"
+          } >> "$GITHUB_ENV"
+          echo "$RUNNER_TEMP/gopath/bin" >> "$GITHUB_PATH"
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        id: setup-go
+        with:
+          go-version-file: go.work
+          cache: ${{ runner.environment == 'github-hosted' }}
+          cache-dependency-path: go.work.sum
+      - name: current — bash scripts/race-groups.sh check on the source as checked out
+        id: current
+        timeout-minutes: 9
+        run: |
+          eval "$RG_LIB"
+          side current "" timeout -s TERM -k 30s 7m bash scripts/race-groups.sh check
+      - name: control and isolated negatives — the same command on the parent's spec and on each derived spec
+        id: negatives
+        timeout-minutes: 25
+        run: |
+          eval "$RG_LIB"
+          side control-parent "$OUT/control-parent.race-groups.json" timeout -s TERM -k 30s 3m bash scripts/race-groups.sh check
+          while read -r name _; do
+            [ -n "$name" ] || continue
+            side "$name" "$OUT/$name.race-groups.json" timeout -s TERM -k 30s 3m bash scripts/race-groups.sh check
+          done <<< "$VARIANTS"
+      - name: consumers — root-run and run on the source's spec, dry run
+        id: consumers
+        timeout-minutes: 8
+        run: |
+          eval "$RG_LIB"
+          consumer root-run-root-e-communication root-run root-e-communication
+          consumer run-heavy-stores-a run 'heavy-stores#a'
+          consumer run-modules-sessions-h run 'modules-sessions#h'
+      - name: verdict (PASS, FAIL or INABILITY; the job succeeds only on PASS)
+        id: verdict
+        if: always()
+        timeout-minutes: 1
+        env:
+          SETUP_OUTCOMES: >-
+            checkout=${{ steps.checkout.outcome }} identity=${{ steps.identity.outcome }} caches=${{ steps.caches.outcome }}
+            setup-go=${{ steps.setup-go.outcome }} current=${{ steps.current.outcome }} negatives=${{ steps.negatives.outcome }}
+            consumers=${{ steps.consumers.outcome }}
+        run: |
+          eval "$RG_LIB"
+          verdict "$SETUP_OUTCOMES"
+      - name: retain every raw output, the identities, the derived specs and the verdict
+        if: always()
+        timeout-minutes: 2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: c32-race-groups-complete-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/race-groups-complete/
+          retention-days: 7
+          if-no-files-found: error
