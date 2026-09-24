@@ -18,6 +18,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -636,19 +637,32 @@ func TestCommunicationCommitOutcomeHTTPPostgres(t *testing.T) {
 		t.Logf("K3_ABSENCE_NOT_PROOF|subject=%s|state=absent_while_unresolved", subject)
 
 		// The remedy starts while the original is STILL unresolved and must wait.
+		// The first lock it can wait on is the store's lineage writer lock of this
+		// tenant, which every business transaction takes before its callback and
+		// the held original still owns; the Channel row comes after it.
 		retryCtx, stopRetry := context.WithCancel(context.Background())
 		defer stopRetry()
 		retries := commitOutcomeServeInBackground(retryCtx, f.estate.eng, http.MethodPost,
 			f.grantPath(), f.estate.owner.token, f.estate.tenant, body,
 			map[string]string{"If-Match": etag})
-		waited, witnessFailures, witnessErr := commitOutcomeWaitForRowLockWait(
-			t, f.owner, event.pid, commitOutcomeChannelRelation)
+		lineage := commitOutcomeNamedFenceKey(t, f.owner,
+			commitOutcomeLineageWriterLockPrefix+f.estate.tenant.String())
+		remedyPID, waited, witnessFailures, witnessErr := commitOutcomeWaitForLineageWriterWait(
+			t, f.owner, f.proxy, event.pid, lineage)
 		if !waited {
 			// The original failure is recorded first; what follows only observes it.
-			t.Error("COULD_NOT_LOOK: the remedy never waited on the original's Channel row lock, so convergence was not exercised")
+			if witnessFailures > 0 {
+				t.Errorf("COULD_NOT_LOOK: the lineage writer witness could not read pg_locks (%d failed reads, last %s), so the remedy's wait was not observed",
+					witnessFailures, commitOutcomeErrorClass(witnessErr))
+			} else {
+				t.Errorf("COULD_NOT_LOOK: the remedy's exact wait on the original's tenant lineage writer lock %q (classid=%d objid=%d objsubid=1) was not proved, so convergence was not exercised",
+					lineage.name, lineage.classID, lineage.objID)
+			}
 			commitOutcomeObserveUnwaitedRemedy(t, f.owner, event.pid, retries, witnessErr, witnessFailures)
 			t.FailNow()
 		}
+		t.Logf("K3_REMEDY_BLOCKED|route=list|remedy_pid=%d|blockers=[%d]|original=%d|key=(%d,%d,1)",
+			remedyPID, event.pid, event.pid, lineage.classID, lineage.objID)
 		f.proxy.forward()
 		retry := commitOutcomeAwait(t, retries, "the waiting remedy")
 		if retry.status != http.StatusConflict {
@@ -684,36 +698,158 @@ func commitOutcomeWaitForAdvisoryHolderWait(t *testing.T, owner *sql.DB, key int
 		})
 }
 
-// commitOutcomeWaitForRowLockWait observes a backend waiting on a tuple or
-// relation lock another backend holds on the named relation. It is the OCC
-// routes' fence: the remedy waits for the original rather than reading around it.
-// Besides whether a waiter was seen, it returns how many reads failed and the
-// last error its query returned: the poll retries a failed read, and a read
-// that kept failing must not look like a read that found nobody waiting.
-func commitOutcomeWaitForRowLockWait(
-	t *testing.T, owner *sql.DB, holderPID int, relation string,
-) (bool, int, error) {
+// commitOutcomeLineageWriterLockPrefix names the store's lineage writer lock of
+// one tenant (core/internal/store/sqlstore/lineage_writer.go:18). sqlStore.Mutate
+// takes pg_advisory_xact_lock(hashtextextended(prefix||tenant, 0)) for every
+// business tenant before it runs the callback (store.go:2159-2162,
+// lineage_writer.go:60), so it is the first lock a second writer of the same
+// tenant waits on while a held original is still open.
+const commitOutcomeLineageWriterLockPrefix = "core.lineage.writer.tenant.v8:"
+
+// commitOutcomeAdvisoryLock is one advisory pg_locks row as the lineage witness
+// reads it: who, which tuple, which mode, granted or not, and who blocks it.
+type commitOutcomeAdvisoryLock struct {
+	pid      int
+	classID  int64
+	objID    int64
+	objSubID int64
+	mode     string
+	granted  bool
+	blockers []int64
+}
+
+// commitOutcomeWaitForLineageWriterWait is the list remedy's serialization
+// witness. It replaces a row-lock witness that could neither see this wait nor
+// refuse a wrong one. That witness counted an ungranted transactionid, or a
+// tuple or relation lock on the Channel table, from ANY backend, and never asked
+// who blocked it. The remedy never reaches the Channel row while the original is
+// held: it parks first on the tenant lineage writer lock, an advisory lock that
+// predicate did not read.
+//
+// It polls one bounded read of the current database's advisory locks with the
+// same interval and window, and hands each read to
+// commitOutcomeExactLineageWaiter. It returns the remedy's backend, whether it
+// was seen, how many reads failed and the last read error: a read that kept
+// failing is an inability, never "nobody waited".
+func commitOutcomeWaitForLineageWriterWait(
+	t *testing.T, owner *sql.DB, proxy *commitOutcomeProxy, holderPID int, want commitOutcomeFenceKey,
+) (int, bool, int, error) {
 	t.Helper()
 	var lastErr error
-	failures := 0
+	failures, remedyPID := 0, 0
 	waited := commitOutcomePoll(context.Background(), commitOutcomeReturnLimit,
 		func(callCtx context.Context) (bool, error) {
-			var waiting int
-			if err := owner.QueryRowContext(callCtx, `
-				SELECT count(*) FROM pg_locks waiter
-				WHERE NOT waiter.granted
-				  AND waiter.pid <> $1
-				  AND (
-				    waiter.locktype = 'transactionid'
-				    OR (waiter.locktype IN ('tuple', 'relation')
-				        AND waiter.relation = (SELECT oid FROM pg_class WHERE relname = $2))
-				  )`, holderPID, relation).Scan(&waiting); err != nil {
+			locks, err := commitOutcomeReadAdvisoryLocks(callCtx, owner, holderPID)
+			if err != nil {
 				lastErr, failures = err, failures+1
 				return false, err
 			}
-			return waiting > 0, nil
+			pid, found := commitOutcomeExactLineageWaiter(locks, holderPID, want, proxy.observedBackendPIDs())
+			remedyPID = pid
+			return found, nil
 		})
-	return waited, failures, lastErr
+	return remedyPID, waited, failures, lastErr
+}
+
+// commitOutcomeReadAdvisoryLocks reads, in one statement, every advisory lock
+// the holder has and every advisory lock anyone waits for in the current
+// database, with each waiter's blockers. It reads no query text or payload, and
+// a census larger than its bound is an error rather than a silent truncation.
+func commitOutcomeReadAdvisoryLocks(
+	ctx context.Context, owner *sql.DB, holderPID int,
+) ([]commitOutcomeAdvisoryLock, error) {
+	rows, err := owner.QueryContext(ctx, `
+		SELECT l.pid, l.classid::bigint, l.objid::bigint, l.objsubid::bigint, l.mode, l.granted,
+		       CASE WHEN l.granted THEN '' ELSE array_to_string(pg_blocking_pids(l.pid), ',') END
+		FROM pg_locks l
+		WHERE l.locktype = 'advisory'
+		  AND l.pid IS NOT NULL
+		  AND l.database = (SELECT oid FROM pg_database WHERE datname = current_database())
+		  AND (l.pid = $1 OR NOT l.granted)
+		ORDER BY l.pid, l.granted
+		LIMIT 65`, holderPID)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var locks []commitOutcomeAdvisoryLock
+	for rows.Next() {
+		var lock commitOutcomeAdvisoryLock
+		var blockers string
+		if err := rows.Scan(&lock.pid, &lock.classID, &lock.objID, &lock.objSubID,
+			&lock.mode, &lock.granted, &blockers); err != nil {
+			return nil, err
+		}
+		for _, field := range strings.Split(blockers, ",") {
+			if field == "" {
+				continue
+			}
+			pid, err := strconv.ParseInt(field, 10, 64)
+			if err != nil {
+				return nil, fmt.Errorf("pg_blocking_pids returned %q", blockers)
+			}
+			lock.blockers = append(lock.blockers, pid)
+		}
+		locks = append(locks, lock)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(locks) > 64 {
+		return nil, errors.New("more than 64 advisory lock rows: the census is incomplete")
+	}
+	return locks, nil
+}
+
+// commitOutcomeExactLineageWaiter decides, from one read, which backend is the
+// remedy waiting on the original's exact lineage writer tuple. Every clause is a
+// refusal the replaced witness did not make:
+//   - the original holds the exact tuple, granted and Exclusive, in the same read;
+//   - the waiter wants that tuple (classid, objid and objsubid 1, the one-bigint
+//     form), Exclusive and ungranted;
+//   - the waiter is a backend this proxy's own connections announced, and not
+//     the original;
+//   - PostgreSQL names the original, and only the original, as its blocker;
+//   - exactly one proxy-owned backend waits on that tuple, so another writer of
+//     the tenant cannot stand in for the remedy.
+//
+// It is pure, so each refusal is controlled without a database; the hosted
+// list_is_not_proof leaf stays the integration oracle.
+func commitOutcomeExactLineageWaiter(
+	locks []commitOutcomeAdvisoryLock, holderPID int, want commitOutcomeFenceKey, candidates []int,
+) (int, bool) {
+	if !want.known {
+		return 0, false
+	}
+	exact := func(lock commitOutcomeAdvisoryLock) bool {
+		return lock.classID == want.classID && lock.objID == want.objID &&
+			lock.objSubID == 1 && lock.mode == "ExclusiveLock"
+	}
+	held := false
+	for _, lock := range locks {
+		held = held || (lock.pid == holderPID && lock.granted && exact(lock))
+	}
+	if !held {
+		return 0, false
+	}
+	owned := make(map[int]bool, len(candidates))
+	for _, pid := range candidates {
+		owned[pid] = pid != holderPID
+	}
+	remedy, waiting := 0, 0
+	for _, lock := range locks {
+		if lock.granted || !exact(lock) || !owned[lock.pid] {
+			continue
+		}
+		waiting++
+		if len(lock.blockers) == 1 && lock.blockers[0] == int64(holderPID) {
+			remedy = lock.pid
+		}
+	}
+	if waiting != 1 || remedy == 0 {
+		return 0, false
+	}
+	return remedy, true
 }
 
 // commitOutcomeObserveUnwaitedRemedy is a diagnostic for ONE failure only: the
@@ -2137,6 +2273,60 @@ func TestCommitOutcomeFenceWitnessRefusesASharedKey(t *testing.T) {
 	}()
 	if !guard.failed {
 		t.Fatal("the fence witness accepted a key that is also the tenant audit key: a lock both the original and its resend take for another reason is not the route's fence, and accepting it would let M11 pass with the fence deleted")
+	}
+}
+
+// TestCommitOutcomeLineageWitnessRefusesForeignWaits controls the list remedy's
+// serialization witness without a database. The exact wait is accepted. A
+// foreign tuple, a foreign, extra or missing blocker, an unannounced or second
+// waiter, and an original that does not hold the tuple are each refused.
+func TestCommitOutcomeLineageWitnessRefusesForeignWaits(t *testing.T) {
+	const original, remedy, foreign = 6608, 6619, 7001
+	want := commitOutcomeFenceKey{
+		name: commitOutcomeLineageWriterLockPrefix + "tenant", classID: 1399943649, objID: 66326770, known: true,
+	}
+	audit := commitOutcomeFenceKey{name: "tenant", classID: 7, objID: 11, known: true}
+	lock := func(pid int, key commitOutcomeFenceKey, granted bool, blockers ...int64) commitOutcomeAdvisoryLock {
+		return commitOutcomeAdvisoryLock{
+			pid: pid, classID: key.classID, objID: key.objID, objSubID: 1, mode: "ExclusiveLock",
+			granted: granted, blockers: blockers,
+		}
+	}
+	held := lock(original, want, true)
+	owned := []int{original, remedy}
+	pid, ok := commitOutcomeExactLineageWaiter(
+		[]commitOutcomeAdvisoryLock{held, lock(remedy, want, false, original)}, original, want, owned)
+	if !ok || pid != remedy {
+		t.Fatalf("the exact wait was refused: backend %d, accepted %t", pid, ok)
+	}
+	shared := lock(remedy, want, false, original)
+	shared.mode = "ShareLock"
+	twoInt := lock(remedy, want, false, original)
+	twoInt.objSubID = 2
+	for _, tc := range []struct {
+		name       string
+		locks      []commitOutcomeAdvisoryLock
+		candidates []int
+		key        commitOutcomeFenceKey
+	}{
+		{"wrong tuple: the tenant audit key", []commitOutcomeAdvisoryLock{held, lock(remedy, audit, false, original)}, owned, want},
+		{"wrong blocker", []commitOutcomeAdvisoryLock{held, lock(remedy, want, false, foreign)}, owned, want},
+		{"an extra blocker", []commitOutcomeAdvisoryLock{held, lock(remedy, want, false, original, foreign)}, owned, want},
+		{"no blocker", []commitOutcomeAdvisoryLock{held, lock(remedy, want, false)}, owned, want},
+		{"the original does not hold the tuple", []commitOutcomeAdvisoryLock{lock(remedy, want, false, original)}, owned, want},
+		{"the original holds another tuple", []commitOutcomeAdvisoryLock{lock(original, audit, true), lock(remedy, want, false, original)}, owned, want},
+		{"a waiter no proxy connection announced", []commitOutcomeAdvisoryLock{held, lock(foreign, want, false, original)}, owned, want},
+		{"two proxy-owned waiters", []commitOutcomeAdvisoryLock{held, lock(remedy, want, false, original), lock(foreign, want, false, original)}, []int{original, remedy, foreign}, want},
+		{"the original as its own waiter", []commitOutcomeAdvisoryLock{held, lock(original, want, false, original)}, owned, want},
+		{"a shared request", []commitOutcomeAdvisoryLock{held, shared}, owned, want},
+		{"the two-int form", []commitOutcomeAdvisoryLock{held, twoInt}, owned, want},
+		{"an unnamed key", []commitOutcomeAdvisoryLock{held, lock(remedy, want, false, original)}, owned, commitOutcomeFenceKey{classID: want.classID, objID: want.objID}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if pid, ok := commitOutcomeExactLineageWaiter(tc.locks, original, tc.key, tc.candidates); ok {
+				t.Fatalf("the witness accepted backend %d although %s", pid, tc.name)
+			}
+		})
 	}
 }
 
