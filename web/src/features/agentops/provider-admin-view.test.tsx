@@ -2,10 +2,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// The two doors of the provider-profile plane. Each opens on the tab its entrance
-// names, each tab is offered on ITS read tier, and a principal who holds only one of
-// the two tiers reads only that plane — no profile, run or live request leaves the
-// browser for a binding-only reader, and no binding request for a profile-only one.
+// The doors of the provider-profile plane. Each opens on the tab its entrance names,
+// each tab is offered on ITS read tier, and a principal who holds only one of the
+// tiers reads only that plane — no profile, run or live request leaves the browser for
+// a binding-only reader, no binding request for a profile-only one, and nothing but
+// the account list for an account-only reader.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -33,6 +34,7 @@ const api = vi.hoisted(() => ({
   listProfiles: vi.fn(),
   listBindings: vi.fn(),
   listRuns: vi.fn(),
+  listAccounts: vi.fn(),
 }))
 vi.mock('./api', async (orig) => {
   const real = (await orig()) as Record<string, unknown>
@@ -47,8 +49,9 @@ import { ProviderAdminView } from './provider-admin-view'
 
 const PR = 'sessions:profile:read'
 const BR = 'sessions:profile-binding:read'
+const AR = 'sessions:account:read'
 
-function wrap(entrance: 'profiles' | 'bindings') {
+function wrap(entrance: 'profiles' | 'bindings' | 'accounts') {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={qc}>
@@ -64,6 +67,7 @@ beforeEach(() => {
   api.listProfiles.mockResolvedValue({ items: [], has_more: false })
   api.listBindings.mockResolvedValue({ items: [], has_more: false })
   api.listRuns.mockResolvedValue({ items: [], has_more: false })
+  api.listAccounts.mockResolvedValue({ items: [], has_more: false })
 })
 
 describe('ProviderAdminView — two doors, one room', () => {
@@ -139,6 +143,48 @@ describe('ProviderAdminView — two doors, one room', () => {
       'aria-selected',
       'true',
     )
+  })
+})
+
+describe('ProviderAdminView — the accounts door', () => {
+  it('opens on the accounts tab under its own h1', async () => {
+    auth.perms = new Set([PR, BR, AR])
+    wrap('accounts')
+    expect(
+      await screen.findByRole('heading', { name: 'Provider accounts' }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Accounts' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
+    await waitFor(() => expect(api.listAccounts).toHaveBeenCalledOnce())
+    expect(api.listProfiles).not.toHaveBeenCalled()
+  })
+
+  it('an account-only reader reaches the account plane and asks for nothing else', async () => {
+    auth.perms = new Set([AR])
+    wrap('accounts')
+    expect(
+      await screen.findByRole('heading', { name: 'Provider accounts' }),
+    ).toBeInTheDocument()
+    await waitFor(() => expect(api.listAccounts).toHaveBeenCalledOnce())
+    expect(screen.queryByRole('tab', { name: 'Profiles' })).toBeNull()
+    expect(screen.queryByRole('tab', { name: 'Bindings' })).toBeNull()
+    expect(api.listProfiles).not.toHaveBeenCalled()
+    expect(api.listBindings).not.toHaveBeenCalled()
+    expect(api.listRuns).not.toHaveBeenCalled()
+    // Reading is not adopting: the verb is the write tier's.
+    expect(
+      screen.queryByRole('button', { name: 'Adopt a profile' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('a profile reader without the account tier gets no accounts tab and no account request', async () => {
+    auth.perms = new Set([PR, BR])
+    wrap('profiles')
+    await waitFor(() => expect(api.listProfiles).toHaveBeenCalledOnce())
+    expect(screen.queryByRole('tab', { name: 'Accounts' })).toBeNull()
+    expect(api.listAccounts).not.toHaveBeenCalled()
   })
 })
 

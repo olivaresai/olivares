@@ -17,6 +17,7 @@ import {
   type HostToolObservation,
 } from './host-tools'
 import type {
+  AdoptAccountRequest,
   CreateBindingRequest,
   CreateProfileRequest,
   CreateRunRequest,
@@ -25,6 +26,7 @@ import type {
   FileListResponse,
   FileReadResponse,
   PatchProfileRequest,
+  ProviderAccountDTO,
   ProviderBindingDTO,
   ProviderProfileConfigurationDTO,
   ProviderProfileDTO,
@@ -60,6 +62,7 @@ const RUNS = '/v1/m/sessions/runs'
 const WORKSPACES = '/v1/m/sessions/workspaces'
 const PROFILES = '/v1/m/sessions/provider-profiles'
 const BINDINGS = '/v1/m/sessions/provider-source-bindings'
+const ACCOUNTS = '/v1/m/sessions/provider-accounts'
 
 const ref = (r: string) => encodeURIComponent(r)
 
@@ -85,6 +88,14 @@ export interface RunListParams {
 export interface ProfileListParams {
   state?: string
   limit?: number
+  cursor?: string
+}
+
+/** The page of the account list. The list is keyset-paginated (cursor + has_more);
+ * a screen that shows one page says whether more exist. */
+export const ACCOUNT_PAGE = 100
+
+export interface AccountListParams {
   cursor?: string
 }
 
@@ -275,6 +286,40 @@ export const agentOpsApi = {
   revokeBinding: (r: string) =>
     http.post<ProviderBindingDTO>(`${BINDINGS}/${ref(r)}/revoke`),
 
+  // --- Provider accounts (named profiles; references and labels, never a path) ----
+  // Gated by `sessions:account:{read,write}`: read lists and gets, write adopts an
+  // existing profile as an account. The reads take the AbortSignal of their query, so
+  // a moved authority boundary cancels them at the network.
+  listAccounts: (params?: AccountListParams, opts?: { signal?: AbortSignal }) =>
+    http.get<ListResponse<ProviderAccountDTO>>(ACCOUNTS, {
+      query: { limit: ACCOUNT_PAGE, cursor: params?.cursor },
+      signal: opts?.signal,
+    }),
+  getAccount: (r: string, opts?: { signal?: AbortSignal }) =>
+    http.get<ProviderAccountDTO>(`${ACCOUNTS}/${ref(r)}`, {
+      signal: opts?.signal,
+    }),
+  /**
+   * Adopt ONE existing profile as an account. The body is always a JSON object — `{}`
+   * asks the server to generate the name, and the engine refuses an empty body. The
+   * tenant is the one the operator submitted under, and the dispatch guard runs
+   * immediately before the request leaves, so a draft confirmed under one authority
+   * is never sent under the next.
+   */
+  adoptAccount: (
+    profileRef: string,
+    body: AdoptAccountRequest,
+    scope: TenantRequestOptions & Pick<RequestOptions, 'dispatchGuard'>,
+  ) =>
+    http.post<ProviderAccountDTO>(
+      `${ACCOUNTS}/${ref(profileRef)}/adopt`,
+      body,
+      {
+        tenant: scope.tenant,
+        dispatchGuard: scope.dispatchGuard,
+      },
+    ),
+
   // --- Workspaces (governed file plane) ----------------------------------------
   listWorkspaces: (params?: WorkspaceListParams) =>
     http.get<ListResponse<WorkspaceDTO>>(WORKSPACES, { query: { ...params } }),
@@ -439,6 +484,20 @@ export const agentOpsKeys = {
       : (['agentops', tenant, 'b', epoch, 'bindings', params] as const),
   binding: (tenant: string | null, epoch: number, r: string) =>
     ['agentops', tenant, 'b', epoch, 'binding', r] as const,
+  /** The account list and the account point reads, under the same boundary scope as
+   * the profile plane, so the boundary's cancel-and-remove reaches them too. Without a
+   * ref, `account` is the prefix of every point read. */
+  accounts: (tenant: string | null, epoch: number) =>
+    ['agentops', tenant, 'b', epoch, 'accounts'] as const,
+  account: (tenant: string | null, epoch: number, r?: string) =>
+    r === undefined
+      ? (['agentops', tenant, 'b', epoch, 'account'] as const)
+      : (['agentops', tenant, 'b', epoch, 'account', r] as const),
+  /** A submitted adoption whose answer the page has not shown (the profile reference
+   *  only, never an account). No request answers this key: the page writes it. It is
+   *  under the boundary scope, so a boundary move removes it. */
+  accountAdoption: (tenant: string | null, epoch: number) =>
+    ['agentops', tenant, 'b', epoch, 'account-adoption'] as const,
   runEvents: (tenant: string | null, r: string, params?: EventListParams) =>
     params === undefined
       ? (['agentops', tenant, 'run', r, 'events'] as const)

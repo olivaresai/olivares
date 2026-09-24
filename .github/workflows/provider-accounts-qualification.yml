@@ -1,0 +1,931 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+# Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+#
+# provider-accounts-qualification — a one-branch qualification vehicle for the provider-account
+# console. It runs ONLY on a pull request whose head is the branch
+# `ci/provider-accounts-console-qualification-vehicle` of this repository. That branch carries
+# pull request #116's product plus three vehicle files: this workflow and the two mutant patches
+# under ci/qualification/. The identify job pins #116's head and one main, composes #116's merge
+# and this pull request's merge on that pinned main itself, and requires the two merge trees to
+# differ by exactly those three files. Every other job recomposes and runs on that explicit
+# composition, #116's pinned head merged into the pinned main, so each result names exactly the
+# product it qualifies.
+#
+#   baseline         the browser journey and the custody test both pass;
+#   m1-intent        with the M1 mutant, the journey fails at an assertion that requires the
+#                    unresolved adoption of profile D while the engine refuses the account read;
+#   custody-removal  with the custody mutant, the custody test fails inside retiredAdoptionGone;
+#   captures         only after those three verdicts, the capture harness runs once, unfiltered,
+#                    and publishes the complete capture set with its manifest and hashes.
+#
+# A MUTANT PROVES SOMETHING ONLY WHEN IT FAILS AT ITS NAMED ASSERTION. Each mutant job reads the
+# machine-readable report (Playwright JSON, vitest JSON) and fails the vehicle when the mutant
+# survives, or when it fails anywhere else: install, build, setup, harness or another assertion.
+# Both mutant jobs need a green baseline, so a red that the baseline shares is never counted.
+# Each of the three verdict steps sets its job's `verdict` output only when it holds, and the
+# captures job requires all three.
+#
+# Runner class, action pins and step guards follow pr-web-journey in pr-ci.yml. Budgets are the
+# measured journey job (4 min 40 s, journey step 3 min 36 s) under the same guards. The capture
+# step's budget is derived at that step.
+
+name: provider-accounts-qualification
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: provider-accounts-qualification-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  # The product under qualification: pull request #116 at this public head commit.
+  QUALIFIED_PR: '116'
+  QUALIFIED_HEAD: 19541356e25c2ee0ff006dfc32d63f9beac78022
+  # The one main both merges are composed on, pinned explicitly: GitHub computes each pull
+  # request's refs/pull/N/merge lazily, so two of them can sit on different mains.
+  PINNED_MAIN: 20b3d0b1c632e8d4bef7b4ce15f4960293cc6e86
+
+jobs:
+  # The vehicle's own identity. The branch may reach this repository as one squashed commit
+  # over main that also carries #116's whole delta, so the product cannot be named by ancestry.
+  # Main may also move after the branch was cut, so the vehicle head's own tree lacks main's
+  # newer files while #116's merge tree has them. The product is therefore named by comparing
+  # two MERGE trees on one main, both composed here on the pinned main (a commit of main):
+  #   · #116's merge commit: first parent the pinned main, second parent the pinned #116 head;
+  #   · this pull request's merge commit: first parent the pinned main, second parent this run's head.
+  # They must differ by exactly the vehicle's three files. Anything else (a product change in
+  # the vehicle, a moved #116 head, a pinned main that is not on main, a merge conflict) refuses
+  # with exit 2 and names what differs. The merge commits have a fixed identity and date, so
+  # every later job recomposes the same commit and checks it against this job's outputs.
+  identify:
+    if: github.repository == 'olivaresai/olivares' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'ci/provider-accounts-console-qualification-vehicle'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      product_ref: ${{ steps.product.outputs.product_ref }}
+      product_tree: ${{ steps.product.outputs.product_tree }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          filter: blob:none
+      - name: identify the product merge tree the vehicle carries
+        id: product
+        timeout-minutes: 3
+        env:
+          VEHICLE_HEAD: ${{ github.event.pull_request.head.sha }}
+          VEHICLE_PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          [ "$(git rev-parse HEAD)" = "$VEHICLE_HEAD" ] || { echo "::error::HEAD is not the pull request's head"; exit 2; }
+          if ! git fetch --no-tags --filter=blob:none origin \
+            "+refs/heads/main:refs/qualification/main" \
+            "+refs/pull/$QUALIFIED_PR/head:refs/qualification/head" \
+            "$PINNED_MAIN"; then
+            echo "::error::main, #$QUALIFIED_PR's head or the pinned main $PINNED_MAIN could not be fetched from this repository"
+            exit 2
+          fi
+          head="$(git rev-parse --verify 'refs/qualification/head^{commit}')"
+          if [ "$head" != "$QUALIFIED_HEAD" ]; then
+            echo "::error::#$QUALIFIED_PR's head is $head, not the pinned $QUALIFIED_HEAD"
+            exit 2
+          fi
+          tip="$(git rev-parse --verify 'refs/qualification/main^{commit}')"
+          if ! git merge-base --is-ancestor "$PINNED_MAIN" "$tip"; then
+            echo "::error::the pinned main $PINNED_MAIN is not a commit of main (main is $tip)"
+            exit 2
+          fi
+          # compose <second parent> <variable>: the merge of <second parent> into the pinned main.
+          # A conflict refuses. The fixed identity and date make the commit the same in every job.
+          compose() {
+            local tree commit
+            if ! tree="$(git merge-tree --write-tree "$PINNED_MAIN" "$1")"; then
+              echo "::error::$1 does not merge cleanly into the pinned main $PINNED_MAIN"
+              exit 2
+            fi
+            commit="$(GIT_AUTHOR_NAME=provider-accounts-qualification GIT_AUTHOR_EMAIL=qualification@example.invalid \
+              GIT_AUTHOR_DATE=2026-09-23T00:00:00Z GIT_COMMITTER_NAME=provider-accounts-qualification \
+              GIT_COMMITTER_EMAIL=qualification@example.invalid GIT_COMMITTER_DATE=2026-09-23T00:00:00Z \
+              git commit-tree "$tree" -p "$PINNED_MAIN" -p "$1" -m "Merge $1 into $PINNED_MAIN")"
+            if [ "$(git rev-parse "$commit^1")" != "$PINNED_MAIN" ] || [ "$(git rev-parse "$commit^2")" != "$1" ]; then
+              echo "::error::$commit is not the merge of $1 into the pinned main"
+              exit 2
+            fi
+            printf -v "$2" '%s' "$commit"
+          }
+          compose "$QUALIFIED_HEAD" merge
+          compose "$VEHICLE_HEAD" vmerge
+          expected="$(printf '%s\n' .github/workflows/provider-accounts-qualification.yml \
+            ci/qualification/custody-removal-skipped.patch \
+            ci/qualification/m1-intent-dropped-on-refused-read.patch | sort)"
+          changed="$(git diff --name-only "$merge" "$vmerge" | sort)"
+          if [ "$changed" != "$expected" ]; then
+            echo "::error::this pull request's merge tree differs from #$QUALIFIED_PR's merge tree by more than the vehicle's three files"
+            comm -13 <(printf '%s\n' "$expected") <(printf '%s\n' "$changed") | sed 's/^/  extra: /'
+            comm -23 <(printf '%s\n' "$expected") <(printf '%s\n' "$changed") | sed 's/^/  missing: /'
+            exit 2
+          fi
+          tree="$(git rev-parse "$merge^{tree}")"
+          echo "product_ref=$merge" >>"$GITHUB_OUTPUT"
+          echo "product_tree=$tree" >>"$GITHUB_OUTPUT"
+          {
+            echo "### Provider accounts qualification vehicle"
+            echo "Vehicle head \`$VEHICLE_HEAD\`, composed as \`$vmerge\`. Every job qualifies #$QUALIFIED_PR's merge tree \`$tree\` (commit \`$merge\`):"
+            echo "head \`$QUALIFIED_HEAD\` merged into the pinned main \`$PINNED_MAIN\` (main is now \`$tip\`)."
+          } >>"$GITHUB_STEP_SUMMARY"
+
+  baseline:
+    needs: identify
+    if: github.repository == 'olivaresai/olivares' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'ci/provider-accounts-console-qualification-vehicle'
+    runs-on: ubuntu-latest
+    timeout-minutes: 51
+    outputs:
+      verdict: ${{ steps.verdict.outputs.verdict }}
+    env:
+      PRODUCT_REF: ${{ needs.identify.outputs.product_ref }}
+      PRODUCT_TREE: ${{ needs.identify.outputs.product_tree }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          filter: blob:none
+      - name: recompose the product merge commit on the pinned main
+        timeout-minutes: 1
+        run: |
+          set -euo pipefail
+          if ! git fetch --no-tags --filter=blob:none origin "+refs/pull/$QUALIFIED_PR/head:refs/qualification/head" "$PINNED_MAIN"; then
+            echo "::error::#$QUALIFIED_PR's head or the pinned main $PINNED_MAIN could not be fetched from this repository"
+            exit 2
+          fi
+          [ "$(git rev-parse --verify 'refs/qualification/head^{commit}')" = "$QUALIFIED_HEAD" ] || { echo "::error::#$QUALIFIED_PR's head is no longer the pinned $QUALIFIED_HEAD"; exit 2; }
+          if ! tree="$(git merge-tree --write-tree "$PINNED_MAIN" "$QUALIFIED_HEAD")"; then
+            echo "::error::$QUALIFIED_HEAD does not merge cleanly into the pinned main $PINNED_MAIN"
+            exit 2
+          fi
+          [ "$tree" = "$PRODUCT_TREE" ] || { echo "::error::the recomposed tree $tree is not identify's $PRODUCT_TREE"; exit 2; }
+          merge="$(GIT_AUTHOR_NAME=provider-accounts-qualification GIT_AUTHOR_EMAIL=qualification@example.invalid \
+            GIT_AUTHOR_DATE=2026-09-23T00:00:00Z GIT_COMMITTER_NAME=provider-accounts-qualification \
+            GIT_COMMITTER_EMAIL=qualification@example.invalid GIT_COMMITTER_DATE=2026-09-23T00:00:00Z \
+            git commit-tree "$tree" -p "$PINNED_MAIN" -p "$QUALIFIED_HEAD" -m "Merge $QUALIFIED_HEAD into $PINNED_MAIN")"
+          [ "$merge" = "$PRODUCT_REF" ] || { echo "::error::the recomposed merge commit $merge is not identify's $PRODUCT_REF"; exit 2; }
+          git checkout -q --detach "$PRODUCT_REF"
+      - name: confirm the product merge tree
+        timeout-minutes: 1
+        run: |
+          set -euo pipefail
+          [ "$(git rev-parse HEAD)" = "$PRODUCT_REF" ] || { echo "::error::checkout is not the product merge commit"; exit 2; }
+          EVIDENCE="$RUNNER_TEMP/qualification"
+          echo "EVIDENCE=$EVIDENCE" >>"$GITHUB_ENV"
+          mkdir -p "$EVIDENCE"
+      # NODE FIRST: pnpm/action-setup installs pnpm THROUGH npm, so it needs a node on PATH.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+        with:
+          dest: ${{ runner.temp }}/setup-pnpm
+          standalone: true
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.work
+          cache: true
+          cache-dependency-path: go.work.sum
+      - name: install the console dependencies (frozen; a failure fails the job)
+        timeout-minutes: 8
+        run: pnpm --dir web install --frozen-lockfile
+      - name: install the chromium playwright driver (web/, pinned by the project)
+        timeout-minutes: 5
+        run: pnpm --dir web exec playwright install chromium
+      - name: run the provider-account journey on a virgin engine
+        timeout-minutes: 25
+        env:
+          E2E_SPECS: e2e/provider-accounts-journey.spec.ts
+          E2E_REPORT_DIR: ${{ runner.temp }}/qualification/journey-report
+        run: |
+          set +e
+          bash scripts/web-e2e.sh
+          echo "$?" >"$EVIDENCE/journey.rc"
+      - name: run the custody test
+        timeout-minutes: 5
+        run: |
+          set +e
+          pnpm --dir web exec vitest run src/features/agentops/provider-accounts-custody.test.tsx \
+            --reporter=default --reporter=json --outputFile.json="$EVIDENCE/custody-vitest.json"
+          echo "$?" >"$EVIDENCE/custody.rc"
+      - name: baseline verdict (both pass, from their reports)
+        id: verdict
+        timeout-minutes: 1
+        run: |
+          python3 - "$EVIDENCE" <<'PY'
+          import json, os, sys
+          ev = sys.argv[1]
+          problems, lines = [], []
+          def rc(name):
+              try:
+                  return int(open(os.path.join(ev, name)).read().strip())
+              except (OSError, ValueError):
+                  return None
+          jrc, crc = rc("journey.rc"), rc("custody.rc")
+          try:
+              stats = json.load(open(os.path.join(ev, "journey-report", "provider-accounts-journey.json")))["stats"]
+          except (OSError, ValueError, KeyError) as e:
+              stats = None
+              problems.append(f"journey report unreadable: {e}")
+          if jrc != 0:
+              problems.append(f"journey harness exit {jrc}, want 0")
+          if stats and not (stats["expected"] == 1 and stats["unexpected"] == 0 and stats["flaky"] == 0 and stats["skipped"] == 0):
+              problems.append(f"journey stats {stats}, want exactly one expected pass")
+          try:
+              v = json.load(open(os.path.join(ev, "custody-vitest.json")))
+              files = v["testResults"]
+              ok = (len(files) == 1 and files[0]["name"].endswith("provider-accounts-custody.test.tsx")
+                    and v["numTotalTests"] == 4 and v["numPassedTests"] == 4 and v["numFailedTests"] == 0 and v["success"])
+              if not ok:
+                  problems.append(f"custody test: {v['numPassedTests']}/{v['numTotalTests']} passed, success={v['success']}, want 4/4")
+              lines.append(f"custody test: {v['numPassedTests']}/{v['numTotalTests']} passed (exit {crc})")
+          except (OSError, ValueError, KeyError, IndexError) as e:
+              problems.append(f"custody vitest report unreadable: {e}")
+          lines.insert(0, f"journey: exit {jrc}, stats {stats}")
+          verdict = {"job": "baseline", "product_ref": os.environ["PRODUCT_REF"], "passed": not problems,
+                     "problems": problems, "evidence": lines}
+          json.dump(verdict, open(os.path.join(ev, "verdict.json"), "w"), indent=2)
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as s:
+              s.write("### baseline: " + ("PASSED" if not problems else "FAILED") + "\n")
+              for l in lines + [f"PROBLEM: {p}" for p in problems]:
+                  s.write(f"- {l}\n")
+          if not problems:
+              with open(os.environ["GITHUB_OUTPUT"], "a") as out:
+                  out.write("verdict=passed\n")
+          sys.exit(0 if not problems else 1)
+          PY
+      - name: retain the baseline evidence
+        if: always()
+        timeout-minutes: 3
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: provider-accounts-qualification-baseline-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/qualification/
+            web/test-results/
+          retention-days: 7
+          if-no-files-found: error
+      - name: stop any engine this job left running
+        if: always()
+        timeout-minutes: 1
+        run: |
+          set -uo pipefail
+          left=0
+          for exe in /proc/[0-9]*/exe; do
+            pid="${exe#/proc/}"
+            pid="${pid%/exe}"
+            [ "$(readlink "$exe" 2>/dev/null)" = "$GITHUB_WORKSPACE/bin/olivares" ] || continue
+            left=$((left + 1))
+            echo "::warning::engine pid $pid outlived the harness; stopping it"
+            kill "$pid" 2>/dev/null || true
+          done
+          echo "engines left by the harness: $left"
+          [ "$left" -eq 0 ] || { echo "::error::the harness left $left engine(s) running"; exit 1; }
+
+  # M1: the unresolved-adoption notice drops its intent when its reconciliation read is refused.
+  # Named failure: in the step for profile D, an assertion that requires that notice while the
+  # read is refused or right after it is restored. Which of the three fires first depends only on
+  # how fast the refused read answers (the notice is gone from that moment), so all three are
+  # named; any other failure point, or a pass, fails the vehicle.
+  m1-intent:
+    needs: [identify, baseline]
+    if: github.repository == 'olivaresai/olivares' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'ci/provider-accounts-console-qualification-vehicle'
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    outputs:
+      verdict: ${{ steps.verdict.outputs.verdict }}
+    env:
+      PRODUCT_REF: ${{ needs.identify.outputs.product_ref }}
+      PRODUCT_TREE: ${{ needs.identify.outputs.product_tree }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          filter: blob:none
+      - name: recompose the product merge commit on the pinned main
+        timeout-minutes: 1
+        run: |
+          set -euo pipefail
+          if ! git fetch --no-tags --filter=blob:none origin "+refs/pull/$QUALIFIED_PR/head:refs/qualification/head" "$PINNED_MAIN"; then
+            echo "::error::#$QUALIFIED_PR's head or the pinned main $PINNED_MAIN could not be fetched from this repository"
+            exit 2
+          fi
+          [ "$(git rev-parse --verify 'refs/qualification/head^{commit}')" = "$QUALIFIED_HEAD" ] || { echo "::error::#$QUALIFIED_PR's head is no longer the pinned $QUALIFIED_HEAD"; exit 2; }
+          if ! tree="$(git merge-tree --write-tree "$PINNED_MAIN" "$QUALIFIED_HEAD")"; then
+            echo "::error::$QUALIFIED_HEAD does not merge cleanly into the pinned main $PINNED_MAIN"
+            exit 2
+          fi
+          [ "$tree" = "$PRODUCT_TREE" ] || { echo "::error::the recomposed tree $tree is not identify's $PRODUCT_TREE"; exit 2; }
+          merge="$(GIT_AUTHOR_NAME=provider-accounts-qualification GIT_AUTHOR_EMAIL=qualification@example.invalid \
+            GIT_AUTHOR_DATE=2026-09-23T00:00:00Z GIT_COMMITTER_NAME=provider-accounts-qualification \
+            GIT_COMMITTER_EMAIL=qualification@example.invalid GIT_COMMITTER_DATE=2026-09-23T00:00:00Z \
+            git commit-tree "$tree" -p "$PINNED_MAIN" -p "$QUALIFIED_HEAD" -m "Merge $QUALIFIED_HEAD into $PINNED_MAIN")"
+          [ "$merge" = "$PRODUCT_REF" ] || { echo "::error::the recomposed merge commit $merge is not identify's $PRODUCT_REF"; exit 2; }
+          git checkout -q --detach "$PRODUCT_REF"
+      - name: apply the M1 mutant to the product merge tree
+        timeout-minutes: 2
+        env:
+          VEHICLE_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          EVIDENCE="$RUNNER_TEMP/qualification"
+          echo "EVIDENCE=$EVIDENCE" >>"$GITHUB_ENV"
+          mkdir -p "$EVIDENCE"
+          [ "$(git rev-parse HEAD)" = "$PRODUCT_REF" ] || { echo "::error::checkout is not the product merge commit"; exit 2; }
+          # The patch comes from the vehicle head; the tree it is applied to is the product's.
+          git fetch --no-tags --depth=1 origin "$VEHICLE_HEAD" || { echo "::error::the vehicle head could not be fetched"; exit 2; }
+          git show "$VEHICLE_HEAD:ci/qualification/m1-intent-dropped-on-refused-read.patch" >"$EVIDENCE/mutant.patch"
+          git apply --check "$EVIDENCE/mutant.patch"
+          git apply "$EVIDENCE/mutant.patch"
+          git diff --stat | tee "$EVIDENCE/mutant.diffstat"
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+        with:
+          dest: ${{ runner.temp }}/setup-pnpm
+          standalone: true
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.work
+          cache: true
+          cache-dependency-path: go.work.sum
+      - name: install the console dependencies (frozen; a failure fails the job)
+        timeout-minutes: 8
+        run: pnpm --dir web install --frozen-lockfile
+      - name: install the chromium playwright driver (web/, pinned by the project)
+        timeout-minutes: 5
+        run: pnpm --dir web exec playwright install chromium
+      - name: run the journey against the mutant console
+        timeout-minutes: 25
+        env:
+          E2E_SPECS: e2e/provider-accounts-journey.spec.ts
+          E2E_REPORT_DIR: ${{ runner.temp }}/qualification/journey-report
+        run: |
+          set +e
+          bash scripts/web-e2e.sh
+          echo "$?" >"$EVIDENCE/journey.rc"
+      - name: M1 verdict (the journey fails at its named assertion, from the Playwright report)
+        id: verdict
+        timeout-minutes: 1
+        run: |
+          python3 - "$EVIDENCE" web/e2e/provider-accounts-journey.spec.ts <<'PY'
+          import glob, json, os, re, sys
+          ev, spec_path = sys.argv[1], sys.argv[2]
+          ANSI = re.compile(r"\x1b\[[0-9;]*m")
+          problems, lines = [], []
+          named = {
+              "notice-after-drop": re.compile(r"Locator: .*The outcome of adopting [^']+ is not known here\."),
+              "check-refused": re.compile(r"Locator: .*The check could not be completed\."),
+              "held-after-restore": re.compile(r"the adoption is still held after the read is restored"),
+          }
+          src = open(spec_path, encoding="utf-8").read().splitlines()
+          def step_line(prefix):
+              for i, l in enumerate(src, 1):
+                  if f"await test.step('{prefix}" in l:
+                      return i
+              return None
+          d_start, c_start = step_line("adopt profile D;"), step_line("adopt profile C;")
+          if not d_start or not c_start or c_start <= d_start:
+              problems.append("could not place the step for profile D in the spec")
+          try:
+              jrc = int(open(os.path.join(ev, "journey.rc")).read().strip())
+          except (OSError, ValueError):
+              jrc = None
+          if jrc != 1:
+              problems.append(f"journey harness exit {jrc}, want 1 (a test failure); 0 means the mutant survived, 2 means nothing was judged")
+          try:
+              report = json.load(open(os.path.join(ev, "journey-report", "provider-accounts-journey.json")))
+          except (OSError, ValueError) as e:
+              report = None
+              problems.append(f"no Playwright report: the run failed before the journey (install, build or setup): {e}")
+          if report:
+              tests = []
+              def walk(s):
+                  for sp in s.get("specs", []):
+                      tests.extend(sp.get("tests", []))
+                  for c in s.get("suites", []):
+                      walk(c)
+              for s in report.get("suites", []):
+                  walk(s)
+              if len(tests) != 1 or len(tests[0].get("results", [])) != 1:
+                  problems.append(f"want one test with one result, got {len(tests)} test(s)")
+              else:
+                  r = tests[0]["results"][0]
+                  steps = r.get("steps") or []
+                  failed = [s["title"] for s in steps if s.get("error")]
+                  lines.append(f"result status {r['status']}, steps run {len(steps)}, failed step(s) {failed}")
+                  if r["status"] != "failed":
+                      problems.append(f"result status {r['status']}, want failed (a timeout or a pass is not the named failure)")
+                  if not steps or not steps[-1]["title"].startswith("adopt profile D;") or failed != [steps[-1]["title"]]:
+                      problems.append("the failure is not in the step for profile D, or an earlier step failed")
+                  errs = r.get("errors") or []
+                  if not errs:
+                      problems.append("the failed result carries no error")
+                  else:
+                      msg = ANSI.sub("", errs[0].get("message", ""))
+                      loc = errs[0].get("location") or {}
+                      # The labelled assertion's message also shows the notice's locator: its own
+                      # label decides first.
+                      if named["held-after-restore"].search(msg):
+                          hit = ["held-after-restore"]
+                      else:
+                          hit = [k for k in ("notice-after-drop", "check-refused") if named[k].search(msg)]
+                      lines.append(f"first error at {os.path.basename(loc.get('file', '?'))}:{loc.get('line')}: {msg.splitlines()[0] if msg else ''}")
+                      if len(hit) != 1 or "toBeVisible" not in msg:
+                          problems.append(f"the first error is not one of the named notice assertions: {msg[:300]!r}")
+                      else:
+                          lines.append(f"named assertion: {hit[0]}")
+                      line = loc.get("line")
+                      if not (loc.get("file", "").endswith("e2e/provider-accounts-journey.spec.ts") and d_start and c_start and isinstance(line, int) and d_start <= line < c_start):
+                          problems.append(f"the first error's location {loc} is outside the step for profile D (lines {d_start}-{c_start - 1 if c_start else '?'})")
+                      elif isinstance(line, int):
+                          lines.append(f"source line {line}: {src[line - 1].strip()}")
+          for f in glob.glob("web/test-results/*/effect-receipt.json"):
+              lines.append(f"effect receipt read_refusal_statuses: {json.load(open(f)).get('read_refusal_statuses')}")
+          verdict = {"job": "m1-intent", "product_ref": os.environ["PRODUCT_REF"], "named_assertions": list(named),
+                     "failed_as_named": not problems, "problems": problems, "evidence": lines}
+          json.dump(verdict, open(os.path.join(ev, "verdict.json"), "w"), indent=2)
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as s:
+              s.write("### m1-intent: " + ("FAILED AS NAMED (mutant killed)" if not problems else "NOT AS NAMED") + "\n")
+              for l in lines + [f"PROBLEM: {p}" for p in problems]:
+                  s.write(f"- {l}\n")
+          if not problems:
+              with open(os.environ["GITHUB_OUTPUT"], "a") as out:
+                  out.write("verdict=killed\n")
+          sys.exit(0 if not problems else 1)
+          PY
+      - name: retain the M1 evidence
+        if: always()
+        timeout-minutes: 3
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: provider-accounts-qualification-m1-intent-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/qualification/
+            web/test-results/
+          retention-days: 7
+          if-no-files-found: error
+      - name: stop any engine this job left running
+        if: always()
+        timeout-minutes: 1
+        run: |
+          set -uo pipefail
+          left=0
+          for exe in /proc/[0-9]*/exe; do
+            pid="${exe#/proc/}"
+            pid="${pid%/exe}"
+            [ "$(readlink "$exe" 2>/dev/null)" = "$GITHUB_WORKSPACE/bin/olivares" ] || continue
+            left=$((left + 1))
+            echo "::warning::engine pid $pid outlived the harness; stopping it"
+            kill "$pid" 2>/dev/null || true
+          done
+          echo "engines left by the harness: $left"
+          [ "$left" -eq 0 ] || { echo "::error::the harness left $left engine(s) running"; exit 1; }
+
+  # Custody removal: the shell's boundary custody no longer removes a retired boundary's
+  # mutations. Named failure: the three retired-boundary tests fail inside retiredAdoptionGone
+  # (their first test-file stack frame lies in that helper), and the same-boundary test passes.
+  custody-removal:
+    needs: [identify, baseline]
+    if: github.repository == 'olivaresai/olivares' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'ci/provider-accounts-console-qualification-vehicle'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    outputs:
+      verdict: ${{ steps.verdict.outputs.verdict }}
+    env:
+      PRODUCT_REF: ${{ needs.identify.outputs.product_ref }}
+      PRODUCT_TREE: ${{ needs.identify.outputs.product_tree }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          filter: blob:none
+      - name: recompose the product merge commit on the pinned main
+        timeout-minutes: 1
+        run: |
+          set -euo pipefail
+          if ! git fetch --no-tags --filter=blob:none origin "+refs/pull/$QUALIFIED_PR/head:refs/qualification/head" "$PINNED_MAIN"; then
+            echo "::error::#$QUALIFIED_PR's head or the pinned main $PINNED_MAIN could not be fetched from this repository"
+            exit 2
+          fi
+          [ "$(git rev-parse --verify 'refs/qualification/head^{commit}')" = "$QUALIFIED_HEAD" ] || { echo "::error::#$QUALIFIED_PR's head is no longer the pinned $QUALIFIED_HEAD"; exit 2; }
+          if ! tree="$(git merge-tree --write-tree "$PINNED_MAIN" "$QUALIFIED_HEAD")"; then
+            echo "::error::$QUALIFIED_HEAD does not merge cleanly into the pinned main $PINNED_MAIN"
+            exit 2
+          fi
+          [ "$tree" = "$PRODUCT_TREE" ] || { echo "::error::the recomposed tree $tree is not identify's $PRODUCT_TREE"; exit 2; }
+          merge="$(GIT_AUTHOR_NAME=provider-accounts-qualification GIT_AUTHOR_EMAIL=qualification@example.invalid \
+            GIT_AUTHOR_DATE=2026-09-23T00:00:00Z GIT_COMMITTER_NAME=provider-accounts-qualification \
+            GIT_COMMITTER_EMAIL=qualification@example.invalid GIT_COMMITTER_DATE=2026-09-23T00:00:00Z \
+            git commit-tree "$tree" -p "$PINNED_MAIN" -p "$QUALIFIED_HEAD" -m "Merge $QUALIFIED_HEAD into $PINNED_MAIN")"
+          [ "$merge" = "$PRODUCT_REF" ] || { echo "::error::the recomposed merge commit $merge is not identify's $PRODUCT_REF"; exit 2; }
+          git checkout -q --detach "$PRODUCT_REF"
+      - name: apply the custody mutant to the product merge tree
+        timeout-minutes: 2
+        env:
+          VEHICLE_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          EVIDENCE="$RUNNER_TEMP/qualification"
+          echo "EVIDENCE=$EVIDENCE" >>"$GITHUB_ENV"
+          mkdir -p "$EVIDENCE"
+          [ "$(git rev-parse HEAD)" = "$PRODUCT_REF" ] || { echo "::error::checkout is not the product merge commit"; exit 2; }
+          # The patch comes from the vehicle head; the tree it is applied to is the product's.
+          git fetch --no-tags --depth=1 origin "$VEHICLE_HEAD" || { echo "::error::the vehicle head could not be fetched"; exit 2; }
+          git show "$VEHICLE_HEAD:ci/qualification/custody-removal-skipped.patch" >"$EVIDENCE/mutant.patch"
+          git apply --check "$EVIDENCE/mutant.patch"
+          git apply "$EVIDENCE/mutant.patch"
+          git diff --stat | tee "$EVIDENCE/mutant.diffstat"
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+        with:
+          dest: ${{ runner.temp }}/setup-pnpm
+          standalone: true
+      - name: install the console dependencies (frozen; a failure fails the job)
+        timeout-minutes: 8
+        run: pnpm --dir web install --frozen-lockfile
+      - name: run the custody test against the mutant custody
+        timeout-minutes: 5
+        run: |
+          set +e
+          pnpm --dir web exec vitest run src/features/agentops/provider-accounts-custody.test.tsx \
+            --reporter=default --reporter=json --outputFile.json="$EVIDENCE/custody-vitest.json"
+          echo "$?" >"$EVIDENCE/custody.rc"
+      - name: custody-removal verdict (the test fails at retiredAdoptionGone, from the vitest report)
+        id: verdict
+        timeout-minutes: 1
+        run: |
+          python3 - "$EVIDENCE" web/src/features/agentops/provider-accounts-custody.test.tsx <<'PY'
+          import json, os, re, sys
+          ev, test_path = sys.argv[1], sys.argv[2]
+          ANSI = re.compile(r"\x1b\[[0-9;]*m")
+          FRAME = re.compile(r"provider-accounts-custody\.test\.tsx:(\d+):\d+")
+          problems, lines = [], []
+          src = open(test_path, encoding="utf-8").read().splitlines()
+          start = next((i for i, l in enumerate(src, 1) if l.startswith("async function retiredAdoptionGone(")), None)
+          end = next((i for i, l in enumerate(src, 1) if start and i > start and l == "}"), None)
+          if not start or not end:
+              problems.append("could not place retiredAdoptionGone in the test file")
+          retired = ("terminal 401", "credential rotation", "tenant switch")
+          try:
+              crc = int(open(os.path.join(ev, "custody.rc")).read().strip())
+          except (OSError, ValueError):
+              crc = None
+          try:
+              v = json.load(open(os.path.join(ev, "custody-vitest.json")))
+          except (OSError, ValueError) as e:
+              v = None
+              problems.append(f"no vitest report: the run failed before the tests (install or setup): {e}")
+          if v:
+              files = v.get("testResults", [])
+              if len(files) != 1 or not files[0]["name"].endswith("provider-accounts-custody.test.tsx"):
+                  problems.append(f"want exactly the custody test file, got {[f['name'] for f in files]}")
+              elif files[0].get("message"):
+                  problems.append(f"the file itself failed (import, transform or setup): {files[0]['message'][:300]!r}")
+              else:
+                  results = files[0]["assertionResults"]
+                  failed = [a for a in results if a["status"] == "failed"]
+                  passed = [a for a in results if a["status"] == "passed"]
+                  lines.append(f"vitest exit {crc}: {len(passed)} passed, {len(failed)} failed of {len(results)}")
+                  if len(results) != 4 or len(failed) != 3 or len(passed) != 1:
+                      problems.append("want 3 failed (the retired-boundary tests) and 1 passed (the same-boundary test)")
+                  if passed and "read leaves and returns" not in passed[0]["title"]:
+                      problems.append(f"the passing test is not the same-boundary test: {passed[0]['title']!r}")
+                  for marker in retired:
+                      hits = [a for a in failed if marker in a["title"]]
+                      if len(hits) != 1:
+                          problems.append(f"no single failed test for the {marker!r} move")
+                          continue
+                      msg = ANSI.sub("", (hits[0]["failureMessages"] or [""])[0])
+                      frame = FRAME.search(msg)
+                      line = int(frame.group(1)) if frame else None
+                      lines.append(f"{marker}: {msg.splitlines()[0] if msg else '(no message)'} at test line {line}")
+                      if "expected true to be false" not in msg:
+                          problems.append(f"{marker}: not the cache-content assertion: {msg[:200]!r}")
+                      if not (line and start and end and start < line < end):
+                          problems.append(f"{marker}: first test-file frame line {line} is outside retiredAdoptionGone (lines {start}-{end})")
+                      elif line:
+                          lines.append(f"  source line {line}: {src[line - 1].strip()}")
+          verdict = {"job": "custody-removal", "product_ref": os.environ["PRODUCT_REF"],
+                     "named_assertion": "retiredAdoptionGone", "failed_as_named": not problems,
+                     "problems": problems, "evidence": lines}
+          json.dump(verdict, open(os.path.join(ev, "verdict.json"), "w"), indent=2)
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as s:
+              s.write("### custody-removal: " + ("FAILED AS NAMED (mutant killed)" if not problems else "NOT AS NAMED") + "\n")
+              for l in lines + [f"PROBLEM: {p}" for p in problems]:
+                  s.write(f"- {l}\n")
+          if not problems:
+              with open(os.environ["GITHUB_OUTPUT"], "a") as out:
+                  out.write("verdict=killed\n")
+          sys.exit(0 if not problems else 1)
+          PY
+      - name: retain the custody-removal evidence
+        if: always()
+        timeout-minutes: 3
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: provider-accounts-qualification-custody-removal-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/qualification/
+          retention-days: 7
+          if-no-files-found: error
+
+  # THE ONE UNFILTERED CAPTURE, and only after the three verdicts above: the baseline passed, and
+  # both mutants were killed at their named assertions, on this same product merge commit. The
+  # repository's capture harness runs as it is, with no selection. PUBLICAR=1 publishes under the
+  # harness's own conditions (a green run on a clean tree, with its manifest) into
+  # docs-site/public/console/, and the manifest records this run's takes only. The verdict
+  # requires the published directory to be exactly what this run emitted, byte for byte with
+  # that manifest. The artifact carries the complete set with its input, head and output hashes,
+  # and the unchanged screenshot-coverage result on the complete set.
+  captures:
+    needs: [identify, baseline, m1-intent, custody-removal]
+    if: github.repository == 'olivaresai/olivares' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'ci/provider-accounts-console-qualification-vehicle' && needs.baseline.outputs.verdict == 'passed' && needs.m1-intent.outputs.verdict == 'killed' && needs.custody-removal.outputs.verdict == 'killed'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      PRODUCT_REF: ${{ needs.identify.outputs.product_ref }}
+      PRODUCT_TREE: ${{ needs.identify.outputs.product_tree }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          filter: blob:none
+      - name: recompose the product merge commit on the pinned main
+        timeout-minutes: 1
+        run: |
+          set -euo pipefail
+          if ! git fetch --no-tags --filter=blob:none origin "+refs/pull/$QUALIFIED_PR/head:refs/qualification/head" "$PINNED_MAIN"; then
+            echo "::error::#$QUALIFIED_PR's head or the pinned main $PINNED_MAIN could not be fetched from this repository"
+            exit 2
+          fi
+          [ "$(git rev-parse --verify 'refs/qualification/head^{commit}')" = "$QUALIFIED_HEAD" ] || { echo "::error::#$QUALIFIED_PR's head is no longer the pinned $QUALIFIED_HEAD"; exit 2; }
+          if ! tree="$(git merge-tree --write-tree "$PINNED_MAIN" "$QUALIFIED_HEAD")"; then
+            echo "::error::$QUALIFIED_HEAD does not merge cleanly into the pinned main $PINNED_MAIN"
+            exit 2
+          fi
+          [ "$tree" = "$PRODUCT_TREE" ] || { echo "::error::the recomposed tree $tree is not identify's $PRODUCT_TREE"; exit 2; }
+          merge="$(GIT_AUTHOR_NAME=provider-accounts-qualification GIT_AUTHOR_EMAIL=qualification@example.invalid \
+            GIT_AUTHOR_DATE=2026-09-23T00:00:00Z GIT_COMMITTER_NAME=provider-accounts-qualification \
+            GIT_COMMITTER_EMAIL=qualification@example.invalid GIT_COMMITTER_DATE=2026-09-23T00:00:00Z \
+            git commit-tree "$tree" -p "$PINNED_MAIN" -p "$QUALIFIED_HEAD" -m "Merge $QUALIFIED_HEAD into $PINNED_MAIN")"
+          [ "$merge" = "$PRODUCT_REF" ] || { echo "::error::the recomposed merge commit $merge is not identify's $PRODUCT_REF"; exit 2; }
+          git checkout -q --detach "$PRODUCT_REF"
+      - name: confirm the product merge tree and hash the committed capture set (input)
+        timeout-minutes: 1
+        env:
+          VEHICLE_HEAD: ${{ github.event.pull_request.head.sha }}
+          GATES: baseline=${{ needs.baseline.outputs.verdict }} m1-intent=${{ needs.m1-intent.outputs.verdict }} custody-removal=${{ needs.custody-removal.outputs.verdict }}
+        run: |
+          set -euo pipefail
+          [ "$(git rev-parse HEAD)" = "$PRODUCT_REF" ] || { echo "::error::checkout is not the product merge commit"; exit 2; }
+          [ -z "$(git status --porcelain)" ] || { echo "::error::the checkout is not clean"; exit 2; }
+          EVIDENCE="$RUNNER_TEMP/qualification"
+          echo "EVIDENCE=$EVIDENCE" >>"$GITHUB_ENV"
+          mkdir -p "$EVIDENCE"
+          # The recomposed merge commit's own header: the pinned main, then #116's head.
+          parents="$(git cat-file -p HEAD | sed -n '/^$/q; s/^parent //p' | tr '\n' ' ')"
+          {
+            echo "product_ref $PRODUCT_REF"
+            echo "product_tree $(git rev-parse 'HEAD^{tree}')"
+            echo "product_parents $parents"
+            echo "vehicle_head $VEHICLE_HEAD"
+            echo "qualified_by $GATES"
+          } >"$EVIDENCE/head.txt"
+          (cd docs-site/public/console && for f in *; do if [ -f "$f" ]; then sha256sum -- "$f"; fi; done) >"$EVIDENCE/input.sha256"
+          echo "committed capture set: $(wc -l <"$EVIDENCE/input.sha256") file(s)"
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+        with:
+          dest: ${{ runner.temp }}/setup-pnpm
+          standalone: true
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.work
+          cache: true
+          cache-dependency-path: go.work.sum
+      - name: install go-task (pinned)
+        timeout-minutes: 3
+        run: |
+          export GOBIN="$RUNNER_TEMP/gopath/bin"
+          echo "GOBIN=$GOBIN" >> "$GITHUB_ENV"
+          echo "$GOBIN" >> "$GITHUB_PATH"
+          export PATH="$GOBIN:$PATH"
+          go install github.com/go-task/task/v3/cmd/task@v3.51.1
+          command -v task || { echo "::error::go install reported OK and task is not on PATH"; exit 1; }
+      - name: install the console dependencies (frozen; a failure fails the job)
+        timeout-minutes: 8
+        run: pnpm --dir web install --frozen-lockfile
+      - name: install the chromium playwright driver (web/, pinned by the project)
+        timeout-minutes: 5
+        run: pnpm --dir web exec playwright install chromium
+      - name: screenshot coverage before the captures (evidence; the ceiling is unchanged)
+        timeout-minutes: 2
+        run: |
+          set +e
+          task lint:screenshot-coverage 2>&1 | tee "$EVIDENCE/screenshot-coverage.before.txt"
+          echo "${PIPESTATUS[0]}" >"$EVIDENCE/screenshot-coverage.before.rc"
+      # THE BUDGET, in whole minutes. The single-view run's job took 4 min 30 s in all; less its
+      # setup and install steps (about 1 min 30 s), the harness's fixed cost is about 3 min: the
+      # web bundle, the connectors and the binary, two engine boots, seeding, the manifest and the
+      # publication. The unfiltered run adds 101 more capture tests (84 views plus 18
+      # single-theme takes, 102 in all), in series on one worker. Each test is bounded by
+      # Playwright's 30 s test timeout, so 3 + 102 × 0.5 = 54, rounded up to 55. A healthy capture
+      # uses a fraction of its bound, which leaves room for the CI retry of a failing one.
+      # The capture-seeding battery on this same product tree, before any capture: the gate that
+      # refuses to capture or publish after a failed seed is itself exercised here, not only
+      # reachable from a hook. A nonzero exit fails this step, so the capture step never runs;
+      # the always-run verdict and retention keep this log and its exit.
+      - name: capture-seeding battery on the product tree (a nonzero exit prevents the capture)
+        timeout-minutes: 2
+        run: |
+          set +e -o pipefail
+          mkdir -p "$EVIDENCE"
+          bash scripts/test-docs-capture-seeding.sh 2>&1 | tee "$EVIDENCE/capture-seeding-battery.log"
+          rc=$?
+          echo "$rc" >"$EVIDENCE/capture-seeding-battery.rc"
+          exit "$rc"
+      - name: capture and publish every view (the repository harness, unfiltered)
+        timeout-minutes: 55
+        env:
+          PUBLICAR: '1'
+        run: |
+          set +e
+          bash scripts/docs-captures.sh 2>&1 | tee "$EVIDENCE/captures.log"
+          echo "${PIPESTATUS[0]}" >"$EVIDENCE/captures.rc"
+      - name: screenshot coverage after the captures (evidence; the ceiling is unchanged)
+        if: always()
+        timeout-minutes: 2
+        run: |
+          set +e
+          task lint:screenshot-coverage 2>&1 | tee "$EVIDENCE/screenshot-coverage.after.txt"
+          echo "${PIPESTATUS[0]}" >"$EVIDENCE/screenshot-coverage.after.rc"
+      - name: captures verdict (the complete published set is this run's output, byte for byte)
+        if: always()
+        timeout-minutes: 2
+        run: |
+          python3 - "$EVIDENCE" <<'PY'
+          import hashlib, json, os, shutil, subprocess, sys
+          ev = sys.argv[1]
+          dest, emitted_dir = "docs-site/public/console", "web/playwright-report/docs"
+          product = os.environ["PRODUCT_REF"]
+          problems, lines = [], []
+          def sha(path):
+              h = hashlib.sha256()
+              with open(path, "rb") as fh:
+                  for block in iter(lambda: fh.read(1 << 20), b""):
+                      h.update(block)
+              return h.hexdigest()
+          def listing(d):
+              if not os.path.isdir(d):
+                  return {}
+              return {n: sha(os.path.join(d, n)) for n in sorted(os.listdir(d))
+                      if os.path.isfile(os.path.join(d, n)) and not n.endswith(".evidence.json")}
+          def write(name, table):
+              with open(os.path.join(ev, name), "w") as fh:
+                  fh.writelines(f"{h}  {n}\n" for n, h in table.items())
+          def text(name, default="missing"):
+              try:
+                  return open(os.path.join(ev, name)).read().strip()
+              except OSError:
+                  return default
+          battery = text("capture-seeding-battery.rc")
+          if battery != "0":
+              problems.append(f"the capture-seeding battery exited {battery}, want 0 (no capture was run)")
+          rc = text("captures.rc")
+          if rc != "0":
+              problems.append(f"the capture harness exited {rc}, want 0 (a green run that published)")
+          inputs = dict(reversed(l.split("  ", 1)) for l in text("input.sha256", "").splitlines())
+          emitted = listing(emitted_dir)
+          output = listing(dest)
+          write("emitted.sha256", emitted)
+          write("output.sha256", output)
+          pngs = {n: h for n, h in emitted.items() if n.endswith(".png")}
+          if "manifest.json" not in emitted:
+              problems.append("this run emitted no manifest.json")
+          try:
+              man = json.load(open(os.path.join(dest, "manifest.json"), encoding="utf8"))
+          except (OSError, ValueError) as e:
+              man = None
+              problems.append(f"no readable published manifest: {e}")
+          if man is not None:
+              takes = man.get("take") or []
+              described = {f"{t.get('id')}-{t.get('theme')}.png": t.get("sha256") for t in takes}
+              lines.append(f"manifest: commit {man.get('commit')}, tree_dirty {man.get('tree_dirty')}, views "
+                           f"{man.get('views')}, captures {man.get('captures')}, unpaired {man.get('unpaired')}")
+              if man.get("commit") != product:
+                  problems.append(f"the manifest names commit {man.get('commit')}, not the product merge {product}")
+              if man.get("tree_dirty") is not False:
+                  problems.append(f"the manifest's tree_dirty is {man.get('tree_dirty')}, want false")
+              if man.get("unpaired"):
+                  problems.append(f"takes without their light/dark pair: {man.get('unpaired')}")
+              if "partial_retakes" in man:
+                  problems.append("the manifest carries partial_retakes, so it is not one run's manifest")
+              if not man.get("captures") == len(takes) == len(described) == len(pngs):
+                  problems.append(f"counts disagree: manifest captures {man.get('captures')}, takes {len(takes)}, "
+                                  f"distinct {len(described)}, emitted PNGs {len(pngs)}")
+              if man.get("views") != len({t.get("id") for t in takes}):
+                  problems.append(f"the manifest's views {man.get('views')} is not the number of views its takes name")
+              for label, names in (
+                  ("takes without an emitted PNG", sorted(set(described) - set(pngs))),
+                  ("emitted PNGs the manifest does not describe", sorted(set(pngs) - set(described))),
+                  ("PNGs whose bytes differ from their manifest hash",
+                   sorted(n for n in set(described) & set(pngs) if described[n] != pngs[n])),
+              ):
+                  if names:
+                      problems.append(f"{label}: {', '.join(names[:10])}{' …' if len(names) > 10 else ''}")
+          unpublished = sorted(n for n, h in emitted.items() if output.get(n) != h)
+          if unpublished:
+              problems.append(f"emitted files not published byte for byte: {', '.join(unpublished[:10])}")
+          # A committed file this run did not emit would stay published without a manifest entry:
+          # that mixed set is hand-merged provenance, not one run's output.
+          stale = sorted(n for n in output if n not in emitted)
+          with open(os.path.join(ev, "not-emitted.txt"), "w") as fh:
+              fh.writelines(f"{n}\n" for n in stale)
+          if stale:
+              problems.append(f"{len(stale)} published file(s) this run did not emit, so its manifest does not "
+                              f"describe them: {', '.join(stale[:10])}{' …' if len(stale) > 10 else ''}")
+          new = sum(1 for n in output if n not in inputs)
+          same = sum(1 for n in output if inputs.get(n) == output[n])
+          lines.append(f"published set: {len(output)} file(s), {len(inputs)} committed before: {new} new, "
+                       f"{len(output) - new - same} changed, {same} byte-identical")
+          cov = text("screenshot-coverage.after.rc")
+          lines.append(f"screenshot coverage, ceiling unchanged: before {text('screenshot-coverage.before.rc')}, after {cov}")
+          if cov != "0":
+              problems.append(f"screenshot coverage on the complete set exited {cov}, want 0")
+          published = os.path.join(ev, "published")
+          os.makedirs(published, exist_ok=True)
+          for n in output:
+              shutil.copy2(os.path.join(dest, n), os.path.join(published, n))
+          copied = listing(published)
+          if copied != output:
+              problems.append("the artifact's copy of the published set differs from docs-site/public/console")
+          write(os.path.join("published", "SHA256SUMS"), copied)
+          def git(*a):
+              return subprocess.run(["git", *a], capture_output=True, text=True).stdout
+          open(os.path.join(ev, "changes.txt"), "w").write(git("status", "--porcelain", "--", dest))
+          open(os.path.join(ev, "manifest.diff"), "w").write(git("diff", "--", f"{dest}/manifest.json"))
+          verdict = {"job": "captures", "product_ref": product, "published": not problems, "problems": problems,
+                     "evidence": lines, "counts": {"committed": len(inputs), "emitted": len(emitted),
+                                                   "published": len(output), "not_emitted": len(stale)}}
+          json.dump(verdict, open(os.path.join(ev, "verdict.json"), "w"), indent=2)
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as s:
+              s.write("### captures: " + ("PUBLISHED, COMPLETE SET" if not problems else "NOT PUBLISHED AS REQUIRED") + "\n")
+              for l in lines + [f"PROBLEM: {p}" for p in problems]:
+                  s.write(f"- {l}\n")
+              s.write("```\n" + text("head.txt") + "\n```\n")
+          sys.exit(0 if not problems else 1)
+          PY
+      - name: retain the complete capture set and its hashes
+        if: always()
+        timeout-minutes: 5
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: provider-accounts-qualification-captures-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/qualification/
+          retention-days: 7
+          if-no-files-found: error
+      - name: stop any engine this job left running
+        if: always()
+        timeout-minutes: 1
+        run: |
+          set -uo pipefail
+          left=0
+          for exe in /proc/[0-9]*/exe; do
+            pid="${exe#/proc/}"
+            pid="${pid%/exe}"
+            [ "$(readlink "$exe" 2>/dev/null)" = "$GITHUB_WORKSPACE/bin/olivares" ] || continue
+            left=$((left + 1))
+            echo "::warning::engine pid $pid outlived the harness; stopping it"
+            kill "$pid" 2>/dev/null || true
+          done
+          echo "engines left by the harness: $left"
+          [ "$left" -eq 0 ] || { echo "::error::the harness left $left engine(s) running"; exit 1; }

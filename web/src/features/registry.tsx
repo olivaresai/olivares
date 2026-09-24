@@ -31,6 +31,7 @@ import {
   ClipboardList,
   Coins,
   Compass,
+  ContactRound,
   Container,
   Cpu,
   Database,
@@ -167,11 +168,12 @@ const SessionsWorkspaceView = lazy(() =>
     default: m.SessionsWorkspaceView,
   })),
 )
-// The provider-profile plane: its OWN room with two doors, same pattern as above.
-// `/provider-profiles` (sessions:profile:read) and `/provider-bindings`
-// (sessions:profile-binding:read) mount one view; the entrance names the tab that
-// opens first. They exist because the plane's read tiers are independent of runs
-// and live sessions, and a principal holding only one of them had no route.
+// The provider-profile plane: its OWN room with three doors, same pattern as above.
+// `/provider-profiles` (sessions:profile:read), `/provider-bindings`
+// (sessions:profile-binding:read) and `/provider-accounts` (sessions:account:read)
+// mount one view; the entrance names the tab that opens first. They exist because
+// the plane's read tiers are independent of runs and live sessions, and of each
+// other, and a principal holding only one of them had no route.
 const ProviderAdminView = lazy(() =>
   import('./agentops/provider-admin-view').then((m) => ({
     default: m.ProviderAdminView,
@@ -540,6 +542,7 @@ export const PRODUCT_NOUNS: readonly ProductNoun[] = [
       'providers',
       'providerProfiles',
       'providerBindings',
+      'providerAccounts',
       'voice',
       'recordings',
       'session-viewer',
@@ -1484,6 +1487,21 @@ export const FEATURE_VIEWS: FeatureView[] = [
     icon: Link2,
     permission: 'sessions:profile-binding:read',
     element: lazyView(ProviderAdminView, { entrance: 'bindings' as const }),
+  },
+  {
+    // The provider-account door, gated on the account plane's OWN read tier. A named
+    // account is a profile, but reading accounts is a separate tier, and a member who
+    // holds only it would otherwise reach no screen. Same view as the two entries
+    // above, opened on the accounts tab; adopting gates on sessions:account:write
+    // inside, and choosing the profile from a list also needs sessions:profile:read.
+    id: 'providerAccounts',
+    path: '/provider-accounts',
+    navigation: { kind: 'feature', areaId: 'ai', sectionId: 'environments' },
+    helpHref: '/reference/modules/ii-sessions',
+    hub: 'operate',
+    icon: ContactRound,
+    permission: 'sessions:account:read',
+    element: lazyView(ProviderAdminView, { entrance: 'accounts' as const }),
   },
   {
     // Agent-artifact supply chain. This is tenant-estate metadata and its

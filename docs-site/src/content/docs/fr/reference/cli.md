@@ -161,7 +161,7 @@ traduction humaine. Le guide éditorial qui les entoure est localisé.
 
 ## Complete command reference
 
-This section is generated from the command tree of the community (AGPL) build of the `olivares` binary at this commit. It covers 837 command nodes — the root command and 836 subcommands, of which 183 are groups that carry subcommands and 9 are hidden diagnostics — together with the 2887 flags they declare. It is regenerated from the binary rather than kept by hand, so a command or flag added without a documentation change fails the push gate.
+This section is generated from the command tree of the community (AGPL) build of the `olivares` binary at this commit. It covers 841 command nodes — the root command and 840 subcommands, of which 184 are groups that carry subcommands and 9 are hidden diagnostics — together with the 2915 flags they declare. It is regenerated from the binary rather than kept by hand, so a command or flag added without a documentation change fails the push gate.
 
 Nothing here is a stability promise: see [Stability](#stability) below for what may still change.
 
@@ -193,7 +193,7 @@ Command groups declare further flags that their own subcommands inherit. A flag 
 
 ### Command index
 
-All 837 commands, in alphabetical order.
+All 841 commands, in alphabetical order.
 
 | Command | Summary |
 |---|---|
@@ -832,6 +832,10 @@ All 837 commands, in alphabetical order.
 | [`olivares posture`](#command-olivares-posture) | Export the tenant's governance posture as one document |
 | [`olivares posture export`](#command-olivares-posture-export) | Export inventory, drift and findings as one posture document |
 | [`olivares provider`](#command-olivares-provider) | Register, test and withdraw the provider credentials sessions launch with |
+| [`olivares provider account`](#command-olivares-provider-account) | List, read and adopt the named provider accounts sessions launch under |
+| [`olivares provider account adopt`](#command-olivares-provider-account-adopt) | Make an existing provider profile a named account — exit 4 for an unknown profile, 5 when it is already an account or the name is taken |
+| [`olivares provider account get`](#command-olivares-provider-account-get) | Show one provider account — exit 4 when no account has that reference |
+| [`olivares provider account ls`](#command-olivares-provider-account-ls) | List the named provider accounts — exit 3 when the caller may not read them |
 | [`olivares provider add`](#command-olivares-provider-add) | Register a provider credential with the control plane |
 | [`olivares provider bind`](#command-olivares-provider-bind) | Make a provider profile launch with this credential |
 | [`olivares provider get`](#command-olivares-provider-get) | Show one registered provider |
@@ -9911,6 +9915,79 @@ olivares provider
 ```
 
 Declares no flags of its own; it takes those of [`olivares`](#command-olivares) and the root command.
+
+#### Command: olivares provider account
+
+List, read and adopt the named provider accounts sessions launch under
+
+```
+olivares provider account
+```
+
+Declares no flags of its own; it takes those of [`olivares provider`](#command-olivares-provider) and the root command.
+
+#### Command: olivares provider account adopt
+
+Make an existing provider profile a named account — exit 4 for an unknown profile, 5 when it is already an account or the name is taken
+
+```
+olivares provider account adopt <profile-ref>
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--ca-cert` | `string` | — | PEM CA bundle used to verify the control plane (default: the active client context) |
+| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed dev planes only) |
+| `--json` | `bool` | `false` | deprecated alias for -o json |
+| `--name` | `string` | — | the account's name; omit it and the server generates one |
+| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | control-plane base URL (default $OLIVARES_SERVER_URL or the active client context) |
+| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | request timeout |
+| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
+
+#### Command: olivares provider account get
+
+Show one provider account — exit 4 when no account has that reference
+
+```
+olivares provider account get <account-ref>
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--ca-cert` | `string` | — | PEM CA bundle used to verify the control plane (default: the active client context) |
+| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed dev planes only) |
+| `--json` | `bool` | `false` | deprecated alias for -o json |
+| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | control-plane base URL (default $OLIVARES_SERVER_URL or the active client context) |
+| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | request timeout |
+| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
+
+#### Command: olivares provider account ls
+
+List the named provider accounts — exit 3 when the caller may not read them
+
+```
+olivares provider account ls
+```
+
+Aliases: `list`
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--ca-cert` | `string` | — | PEM CA bundle used to verify the control plane (default: the active client context) |
+| `--driver` | `string` | — | only accounts of this driver |
+| `--environment` | `string` | — | only accounts of this execution environment |
+| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed dev planes only) |
+| `--json` | `bool` | `false` | deprecated alias for -o json |
+| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | control-plane base URL (default $OLIVARES_SERVER_URL or the active client context) |
+| `--state` | `string` | — | only accounts in this state (active, disabled or retired) |
+| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | request timeout |
+| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
 
 #### Command: olivares provider add
 

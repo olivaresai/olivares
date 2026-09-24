@@ -1,0 +1,22 @@
+Mutant for the provider-account journey (web/e2e/provider-accounts-journey.spec.ts).
+
+The unresolved-adoption notice dismisses its own intent as soon as its reconciliation
+read is refused (403). A console with this defect loses an unresolved adoption while the
+engine refuses the account read, within one authority boundary. The journey's step for
+profile D must then fail at an assertion that requires that notice. Applied by the
+provider accounts qualification workflow; never committed to product source.
+
+diff --git a/web/src/features/agentops/provider-accounts-panel.tsx b/web/src/features/agentops/provider-accounts-panel.tsx
+index 338f612..16df0d9 100644
+--- a/web/src/features/agentops/provider-accounts-panel.tsx
++++ b/web/src/features/agentops/provider-accounts-panel.tsx
+@@ -466,6 +466,9 @@ function UnresolvedAdoption({
+     queryFn: ({ signal }) => agentOpsApi.getAccount(profileRef, { signal }),
+     ...ACCOUNT_READ_LIFETIME,
+   })
++  useEffect(() => {
++    if (check.error instanceof ApiError && check.error.isForbidden) onDismiss()
++  }, [check.error, onDismiss])
+   const notAccount = check.error instanceof ApiError && check.error.isNotFound
+   const current = check.isFetching
+     ? t('accounts.adoption.checking', { ref: profileRef })

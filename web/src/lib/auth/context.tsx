@@ -90,6 +90,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     staleTime: 60_000,
   })
 
+  // A session that ends takes its principal with it. The terminal-401 path clears only
+  // the stores (app/providers.tsx), so the answer whoami gave for the ended session
+  // would stay in the cache younger than staleTime. The next session re-enables the
+  // query on that data, reads nothing and shows the previous principal as its own.
+  // It is dropped in the commit that renders the signed-out state. A renewal keeps a
+  // token throughout and never gets here.
+  const signedOut = !token
+  useLayoutEffect(() => {
+    if (!signedOut) return
+    queryClient.removeQueries({ queryKey: queryKeys.whoami, exact: true })
+  }, [signedOut, queryClient])
+
   const principal = token ? (whoami.data ?? null) : null
   // Memoize so the array identity is stable per principal (keeps the tenant effect
   // and the context value from recomputing every render).

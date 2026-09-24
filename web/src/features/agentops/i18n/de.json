@@ -524,8 +524,10 @@
     "view": {
       "profilesTitle": "Anbieterprofile",
       "bindingsTitle": "Quellenbindungen",
+      "accountsTitle": "Anbieterkonten",
       "tabProfiles": "Profile",
       "tabBindings": "Bindungen",
+      "tabAccounts": "Konten",
       "openProfiles": "Seite der Anbieterprofile öffnen",
       "openBindings": "Seite der Quellenbindungen öffnen",
       "crossHint": "Profile und Bindungen haben außerdem je eine eigene Seite, jede mit ihrer eigenen Leseberechtigung."
@@ -542,6 +544,102 @@
       "loadMoreProfiles": "Weitere Profile laden",
       "loadedProfiles": "{{n}} aktive Profile geladen; es gibt weitere.",
       "loadingProfiles": "Profile werden geladen…"
+    }
+  },
+  "accounts": {
+    "subtitle": "Die benannten Anbieterkonten dieses Mandanten. Übernehmen benennt ein vorhandenes Anbieterprofil genau einmal; sein Verzeichnis bleibt, wo es ist.",
+    "adopt": "Profil übernehmen",
+    "cols": {
+      "name": "Konto",
+      "driver": "Treiber",
+      "environment": "Ausführungsumgebung",
+      "state": "Status",
+      "isolation": "Isolation",
+      "created": "Erstellt"
+    },
+    "empty": {
+      "title": "Keine Anbieterkonten",
+      "adoptHint": "Benennen Sie über „{{control}}“ ein vorhandenes Anbieterprofil als Konto.",
+      "noWrite": "Ein Anbieterprofil als Konto zu übernehmen erfordert sessions:account:write, das Ihre Rolle nicht enthält."
+    },
+    "more": "Bisher angezeigt: {{shown}}. Es gibt weitere Konten; laden Sie mehr, um sie zu sehen.",
+    "moreFailed": "Die nächste Seite der Konten konnte nicht gelesen werden. Die angezeigten Konten sind nicht die vollständige Liste.",
+    "isolation": {
+      "shared": "Geteilt",
+      "dedicated": "Dediziert",
+      "sharedMeaning": "Geteilt: Dieses Verzeichnis läuft unter dem eigenen Systembenutzer des Servers. Es ist kein dediziertes, isoliertes Verzeichnis.",
+      "dedicatedMeaning": "Dediziert: Der Server führt dieses Verzeichnis als diesem Konto vorbehalten."
+    },
+    "home": {
+      "adopted": "Übernommen (ein vorhandenes Verzeichnis)",
+      "managed": "Vom Server verwaltet"
+    },
+    "authSource": {
+      "provider_account_home": "Gespeicherte Anmeldung im Verzeichnis des Kontos",
+      "managed_injection": "Verwaltete Zugangsdaten",
+      "none": "Keine autorisiert"
+    },
+    "details": {
+      "name": "Name",
+      "ref": "Referenz",
+      "driver": "Treiber",
+      "environment": "Ausführungsumgebung",
+      "state": "Status",
+      "home": "Verzeichnis",
+      "isolation": "Isolation",
+      "osUser": "Systembenutzer",
+      "authSource": "Authentifizierungsquelle",
+      "providerRecord": "Anbieter",
+      "identity": "Angemeldete Identität",
+      "release": "Release",
+      "pendingRelease": "Ausstehendes Release",
+      "created": "Erstellt",
+      "updated": "Aktualisiert",
+      "loading": "Konto wird gelesen…",
+      "notFound": "Dieses Konto wurde nicht gefunden. Es existiert vielleicht nicht oder ist für Sie nicht sichtbar."
+    },
+    "identity": {
+      "notChecked": "Nicht geprüft: Niemand hat den Anbieter gefragt, wer angemeldet ist.",
+      "reported": "{{identity}} (gemeldet von {{source}})",
+      "empty": "Nichts gemeldet (Quelle: {{source}})"
+    },
+    "adoptDialog": {
+      "title": "Anbieterprofil übernehmen",
+      "description": "Benennen Sie ein vorhandenes Anbieterprofil als Konto. Sein Verzeichnis bleibt, wo es ist, und wird als geteilt, nicht dediziert, erfasst. Es wird nichts installiert und niemand angemeldet.",
+      "profile": "Profil",
+      "profilePlaceholder": "Profil wählen",
+      "profileOption": "{{name}} ({{ref}})",
+      "knownAccount": "{{label}} — bereits ein Konto",
+      "manual": "Referenz eingeben…",
+      "loadMoreProfiles": "Weitere Profile laden",
+      "profilesPartial": "Nur die geladenen Profile sind aufgeführt. Laden Sie mehr oder geben Sie eine Referenz ein.",
+      "profilesFailed": "Die Profile konnten nicht aufgelistet werden. Geben Sie stattdessen eine Referenz ein.",
+      "profilesLoading": "Profile werden geladen…",
+      "reference": "Profilreferenz",
+      "referenceHint": "Die Referenz eines vorhandenen Anbieterprofils in diesem Mandanten; sie beginnt mit ppf_.",
+      "referenceHintNoList": "Ihre Rolle kann keine Anbieterprofile auflisten. Geben Sie die Referenz eines vorhandenen ein; sie beginnt mit ppf_.",
+      "name": "Kontoname (optional)",
+      "nameHint": "Kleinbuchstaben, Ziffern und Bindestriche, beginnend mit einem Buchstaben, höchstens 32 Zeichen. Leer lassen, und der Server erzeugt einen, etwa claude oder claude-b.",
+      "submit": "Übernehmen",
+      "submitting": "Wird übernommen…",
+      "pendingStatus": "{{ref}} wird übernommen. Warten auf die Antwort des Servers.",
+      "success": "Übernommen als {{name}}",
+      "failedTitle": "Das Profil wurde nicht übernommen",
+      "forbidden": "Ihre Rolle kann in diesem Mandanten keine Konten übernehmen. Es wurde nichts geändert."
+    },
+    "adoption": {
+      "pending": "{{ref}} wird übernommen. Der Server hat noch nicht geantwortet.",
+      "adopted": "{{ref}} wurde als {{name}} übernommen.",
+      "refused": "{{ref}} wurde nicht übernommen:",
+      "forbidden": "{{ref}} wurde nicht übernommen: Ihre Rolle kann in diesem Mandanten keine Konten übernehmen. Es wurde nichts geändert.",
+      "unknown": "Das Ergebnis der Übernahme von {{ref}} ist hier nicht bekannt.",
+      "checking": "Es wird geprüft, ob {{ref}} jetzt ein Konto ist…",
+      "isAccount": "Bei diesem Lesen ist {{ref}} das Konto {{name}}.",
+      "notAccount": "Bei diesem Lesen ist {{ref}} kein Konto.",
+      "checkFailed": "Die Prüfung konnte nicht abgeschlossen werden.",
+      "checkAgain": "Erneut prüfen",
+      "open": "Konto öffnen",
+      "dismiss": "Schließen"
     }
   },
   "readiness": {

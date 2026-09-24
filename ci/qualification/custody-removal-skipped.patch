@@ -1,0 +1,23 @@
+Mutant for the custody test (web/src/features/agentops/provider-accounts-custody.test.tsx).
+
+The shell's authority-boundary custody no longer removes a retired boundary's mutations
+from the MutationCache; it still removes that boundary's queries. A pending adoption's
+variables then outlive the boundary that submitted them, so the custody test must fail in
+retiredAdoptionGone. Applied by the provider accounts qualification workflow; never
+committed to product source.
+
+diff --git a/web/src/features/agentops/auth-boundary.ts b/web/src/features/agentops/auth-boundary.ts
+index b59551b..9241653 100644
+--- a/web/src/features/agentops/auth-boundary.ts
++++ b/web/src/features/agentops/auth-boundary.ts
+@@ -93,10 +93,6 @@ export function useAuthBoundary(): AuthBoundary {
+       const scope = agentOpsKeys.boundaryScope(prev.tenant, prev.epoch)
+       void queryClient.cancelQueries({ queryKey: scope })
+       queryClient.removeQueries({ queryKey: scope })
+-      const mutations = queryClient.getMutationCache()
+-      for (const mutation of mutations.findAll({ mutationKey: scope })) {
+-        mutations.remove(mutation)
+-      }
+     }
+     previous.current = { tenant: boundary.tenant, epoch: boundary.epoch }
+   }, [boundary, queryClient])

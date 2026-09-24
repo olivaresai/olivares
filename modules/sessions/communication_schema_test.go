@@ -345,6 +345,8 @@ func TestCommunicationSchemaRegistersNamespaceOnce(t *testing.T) {
 			// so the accepted-state lease-effect rule can change without touching
 			// the shared function the other communication triggers are pinned to.
 			"0024_work_handoff_vacant_transfer.sql",
+			// Provider accounts: the (tenant, environment, name) expression unique.
+			"0025_provider_account_name_uniq.sql",
 		},
 		"sqlite": communicationSQLiteMigrationNames(),
 	}
@@ -489,6 +491,8 @@ func communicationSQLiteMigrationNames() []string {
 		// OT-V: the two halves of the accepted-state lease-effect rule.
 		"0096_work_handoff_vacant_transfer_ins.sql",
 		"0097_work_handoff_vacant_transfer_upd.sql",
+		// Provider accounts: the (tenant, environment, name) expression unique.
+		"0098_provider_account_name_uniq.sql",
 	)
 }
 

@@ -6983,6 +6983,33 @@ export class Client extends ClientCore {
   }
 
   /**
+   * GET /v1/m/sessions/provider-accounts — Lists the tenant's named provider accounts, optionally narrowed by environment, driver and state; a profile nobody has named is never listed.
+   *
+   * Stability: beta.
+   */
+  getV1MSessionsProviderAccounts(opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/m/sessions/provider-accounts", "/v1/m/sessions/provider-accounts", undefined, opts);
+  }
+
+  /**
+   * GET /v1/m/sessions/provider-accounts/{ref} — Returns one provider account by its reference, without its paths; a profile nobody has named is not an account and answers not found.
+   *
+   * Stability: beta.
+   */
+  getV1MSessionsProviderAccountsByRef(ref: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/m/sessions/provider-accounts/{ref}", `/v1/m/sessions/provider-accounts/${encodeURIComponent(ref)}`, undefined, opts);
+  }
+
+  /**
+   * POST /v1/m/sessions/provider-accounts/{ref}/adopt — Names an existing provider profile as an account, under the given name or a generated one; the database decides whether the name is free, and the home is recorded as shared isolation.
+   *
+   * Stability: beta.
+   */
+  postV1MSessionsProviderAccountsByRefAdopt(ref: string, body: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.doJsonRequired("POST", "/v1/m/sessions/provider-accounts/{ref}/adopt", `/v1/m/sessions/provider-accounts/${encodeURIComponent(ref)}/adopt`, body, opts);
+  }
+
+  /**
    * GET /v1/m/sessions/provider-profiles — Lists the tenant's provider profiles as references and labels, never paths.
    *
    * Stability: beta.

@@ -420,17 +420,46 @@ def carga_objetivos(ruta):
         return None, None, f"no encuentro el fichero de objetivos `{ruta}`"
     except json.JSONDecodeError as e:
         return None, None, f"`{ruta}` no es JSON valido: {e}"
+    # ⛔ UN FICHERO QUE NO SE PUEDE LEER NO ES UNA SUPERFICIE POR DEBAJO. Sin permiso de lectura, con
+    #    un directorio en su sitio o con bytes que no son UTF-8, la excepcion salia sin capturar, y
+    #    una excepcion sin capturar sale con 1: el codigo de «alguna superficie se queda corta».
+    except (OSError, UnicodeDecodeError) as e:
+        return None, None, f"no puedo leer el fichero de objetivos `{ruta}`: {type(e).__name__}"
+    # ⛔ LA FORMA SE COMPRUEBA ENTERA ANTES DEL PRIMER GET, porque lo que se escapa de aqui revienta
+    #    DESPUES de sembrar: una `listar` que no es una ruta falla al pedirla, con las superficies
+    #    anteriores ya sembradas; un `no_sembrables_por_api` que no es una lista falla al imprimir el
+    #    reparto; un id repetido pisaba al primero sin decirlo, y un objetivo `true` contaba como 1.
+    if not isinstance(d, dict):
+        return None, None, f"`{ruta}` no es un objeto JSON"
+    if type(d.get("version")) is not int or d["version"] != 1:
+        return None, None, f"`{ruta}` declara la version {d.get('version')!r}; este guion lee la 1"
     sup = d.get("superficies")
     if not isinstance(sup, list) or not sup:
         return None, None, f"`{ruta}` no trae una lista `superficies` con contenido"
     decl = {}
     for s in sup:
+        if not isinstance(s, dict):
+            return None, None, f"una superficie de `{ruta}` no es un objeto: {s!r}"
         for campo in ("id", "objetivo", "listar", "bajo"):
             if campo not in s:
                 return None, None, f"una superficie de `{ruta}` no declara `{campo}`: {s}"
-        if not isinstance(s["objetivo"], int) or s["objetivo"] < 1:
+        if not isinstance(s["id"], str) or not s["id"]:
+            return None, None, f"una superficie de `{ruta}` declara un id que no es un texto: {s['id']!r}"
+        if type(s["objetivo"]) is not int or s["objetivo"] < 1:
             return None, None, f"`{s['id']}` declara un objetivo que no es un entero positivo"
+        if not isinstance(s["listar"], str) or not s["listar"].startswith("/"):
+            return None, None, f"`{s['id']}` declara un `listar` que no es una ruta de la API: {s['listar']!r}"
+        if not isinstance(s["bajo"], str) or not s["bajo"]:
+            return None, None, f"`{s['id']}` declara un `bajo` que no es un nombre de campo: {s['bajo']!r}"
+        if s["id"] in decl:
+            return None, None, f"`{s['id']}` se declara dos veces en `{ruta}`"
         decl[s["id"]] = s
+    no_sembrables = d.get("no_sembrables_por_api", [])
+    if not isinstance(no_sembrables, list) or not all(
+            isinstance(n, dict) and isinstance(n.get("id"), str) and isinstance(n.get("ruta"), str)
+            and isinstance(n.get("evidencia", ""), str) for n in no_sembrables):
+        return None, None, (f"`{ruta}` trae un `no_sembrables_por_api` que no es una lista de "
+                            f"objetos con `id` y `ruta`")
     # ⛔ LAS DOS DIRECCIONES, y la segunda es la que un mutante rompe sin que se note: una
     #    superficie con generador y SIN declarar se sembraria sin objetivo y sin aparecer en el
     #    reparto — es decir, trabajo invisible que nadie podria auditar.
@@ -440,7 +469,7 @@ def carga_objetivos(ruta):
     faltan_decl = sorted(set(GENERADORES) - set(decl))
     if faltan_decl:
         return None, None, f"con generador en el guion y SIN declarar en `{ruta}`: {faltan_decl}"
-    return decl, d.get("no_sembrables_por_api", []), None
+    return decl, no_sembrables, None
 
 
 def main(argv):
