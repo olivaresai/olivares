@@ -7709,7 +7709,7 @@ tasks:
   lint:public-prose:selftest:
     desc: >-
       MUTATION BATTERY for scripts/check-public-prose.sh, the leg that refuses to publish prose
-      describing the private development process instead of the product. 35 cases, BOTH
+      describing the private development process instead of the product. 96 cases, BOTH
       DIRECTIONS, and the no-fire half is the load-bearing one: three of the words this gate
       judges — "lane", "integrator" and the model names — are ALSO product vocabulary here (the
       QoS delivery lanes of the event bus, the API audience the SDK docs address, the catalogue
@@ -7722,7 +7722,7 @@ tasks:
       that is not one decimal integer are COULD NOT LOOK, never a green — and asserts that every
       rule pattern COMPILES under the grep on this box, which is not decoration: `grep` here
       resolves to ugrep in one shell and GNU grep in another, and they disagree about a negated
-      class whose last character is `-`. Throwaway trees, no network, ~2 s.
+      class whose last character is `-`. Throwaway trees and git snapshots, no network, ~10 s.
       The gate itself is not run from here: its subject is the EXPORT, and it runs as leg 8 of
       the export leak gate, so `lint:export` and `export:check` are where a real tree is judged.
     cmds:
@@ -7732,14 +7732,18 @@ tasks:
 
   lint:public-prose:
     desc: >-
-      Run the public-prose gate over A CURATED EXPORT: `task lint:public-prose -- <dir>`. It
+      Run the public-prose gate over A CURATED EXPORT: `task lint:public-prose -- <dir>`. The
+      task passes this checkout as `--source-root`, the snapshot the export is made from: the
+      one baseline the gate reads there is private and is never in `<dir>`. It
       answers honestly about the tree it is given, so pointing it at a full source tree would be
       measuring the wrong object — that tree legitimately carries the internal notes the export
       removes — and the script REFUSES there (exit 2, `--anyway` overrides) rather than printing
       a number that looks like debt. The enforcement point is `lint:export`, which runs this same
       script as leg 8 over the tree it is about to publish, and `export:check`.
     cmds:
-      - bash scripts/hub-leg.sh lint:public-prose scripts/check-public-prose.sh {{.CLI_ARGS}}
+      # `.` is this checkout: hub-leg.sh enters its own root before it runs the script, and the
+      # gate accepts no source but the snapshot it is loaded from.
+      - bash scripts/hub-leg.sh lint:public-prose scripts/check-public-prose.sh {{.CLI_ARGS}} --source-root .
 
   lint:export-closure:
     desc: >-
