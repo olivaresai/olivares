@@ -1,0 +1,331 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "additionalProperties": false,
+ "properties": {
+  "cell": {
+   "type": "string"
+  },
+  "control": {
+   "enum": [
+    "none",
+    "skip-op",
+    "read-before"
+   ]
+  },
+  "detail": {
+   "type": "object"
+  },
+  "env": {
+   "additionalProperties": false,
+   "properties": {
+    "cedar_go": {
+     "type": "string"
+    },
+    "cedar_go_sum": {
+     "type": "string"
+    },
+    "go_version": {
+     "type": "string"
+    },
+    "goarch": {
+     "type": "string"
+    },
+    "godebug": {
+     "type": "string"
+    },
+    "gogc": {
+     "type": "string"
+    },
+    "gomaxprocs": {
+     "type": "integer"
+    },
+    "gomemlimit": {
+     "type": "string"
+    },
+    "goos": {
+     "type": "string"
+    },
+    "num_cpu": {
+     "type": "integer"
+    },
+    "x_exp": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "go_version",
+    "goos",
+    "goarch",
+    "gomaxprocs",
+    "num_cpu",
+    "godebug",
+    "gogc",
+    "gomemlimit",
+    "cedar_go",
+    "cedar_go_sum",
+    "x_exp"
+   ],
+   "type": "object"
+  },
+  "id": {
+   "type": "string"
+  },
+  "input_bytes": {
+   "minimum": 1,
+   "type": "integer"
+  },
+  "input_sha256": {
+   "pattern": "^[0-9a-f]{64}$",
+   "type": "string"
+  },
+  "measurement": {
+   "additionalProperties": false,
+   "properties": {
+    "after": {
+     "additionalProperties": false,
+     "properties": {
+      "at_ns": {
+       "minimum": 0,
+       "type": "integer"
+      },
+      "live_heap_bytes": {
+       "minimum": 0,
+       "type": "integer"
+      },
+      "mallocs": {
+       "minimum": 0,
+       "type": "integer"
+      },
+      "seq": {
+       "minimum": 0,
+       "type": "integer"
+      },
+      "stacks_bytes": {
+       "minimum": 0,
+       "type": "integer"
+      },
+      "total_alloc_bytes": {
+       "minimum": 0,
+       "type": "integer"
+      }
+     },
+     "required": [
+      "seq",
+      "at_ns",
+      "total_alloc_bytes",
+      "mallocs",
+      "stacks_bytes",
+      "live_heap_bytes"
+     ],
+     "type": "object"
+    },
+    "baseline": {
+     "additionalProperties": false,
+     "properties": {
+      "at_ns": {
+       "minimum": 0,
+       "type": "integer"
+      },
+      "live_heap_bytes": {
+       "minimum": 0,
+       "type": "integer"
+      },
+      "mallocs": {
+       "minimum": 0,
+       "type": "integer"
+      },
+      "seq": {
+       "minimum": 0,
+       "type": "integer"
+      },
+      "stacks_bytes": {
+       "minimum": 0,
+       "type": "integer"
+      },
+      "total_alloc_bytes": {
+       "minimum": 0,
+       "type": "integer"
+      }
+     },
+     "required": [
+      "seq",
+      "at_ns",
+      "total_alloc_bytes",
+      "mallocs",
+      "stacks_bytes",
+      "live_heap_bytes"
+     ],
+     "type": "object"
+    },
+    "live": {
+     "additionalProperties": false,
+     "properties": {
+      "at_ns": {
+       "minimum": 0,
+       "type": "integer"
+      },
+      "live_heap_bytes": {
+       "minimum": 0,
+       "type": "integer"
+      },
+      "mallocs": {
+       "minimum": 0,
+       "type": "integer"
+      },
+      "seq": {
+       "minimum": 0,
+       "type": "integer"
+      },
+      "stacks_bytes": {
+       "minimum": 0,
+       "type": "integer"
+      },
+      "total_alloc_bytes": {
+       "minimum": 0,
+       "type": "integer"
+      }
+     },
+     "required": [
+      "seq",
+      "at_ns",
+      "total_alloc_bytes",
+      "mallocs",
+      "stacks_bytes",
+      "live_heap_bytes"
+     ],
+     "type": "object"
+    },
+    "op_end": {
+     "additionalProperties": false,
+     "properties": {
+      "at_ns": {
+       "minimum": 0,
+       "type": "integer"
+      },
+      "seq": {
+       "minimum": 1,
+       "type": "integer"
+      }
+     },
+     "required": [
+      "seq",
+      "at_ns"
+     ],
+     "type": "object"
+    },
+    "op_start": {
+     "additionalProperties": false,
+     "properties": {
+      "at_ns": {
+       "minimum": 0,
+       "type": "integer"
+      },
+      "seq": {
+       "minimum": 1,
+       "type": "integer"
+      }
+     },
+     "required": [
+      "seq",
+      "at_ns"
+     ],
+     "type": "object"
+    }
+   },
+   "required": [
+    "baseline",
+    "op_start",
+    "op_end",
+    "after"
+   ],
+   "type": "object"
+  },
+  "mode": {
+   "enum": [
+    "child",
+    "validate",
+    "oframe"
+   ]
+  },
+  "op": {
+   "type": "string"
+  },
+  "outcome": {
+   "enum": [
+    "observed",
+    "mismatch",
+    "inability"
+   ]
+  },
+  "point": {
+   "type": "integer"
+  },
+  "reason": {
+   "type": "string"
+  },
+  "result": {
+   "additionalProperties": false,
+   "properties": {
+    "annotations": {
+     "type": "integer"
+    },
+    "compiled": {
+     "type": "boolean"
+    },
+    "depth": {
+     "type": "integer"
+    },
+    "discriminates": {
+     "type": "boolean"
+    },
+    "errors": {
+     "minimum": 0,
+     "type": "integer"
+    },
+    "nodes": {
+     "type": "integer"
+    },
+    "ran": {
+     "type": "boolean"
+    },
+    "reasons": {
+     "items": {
+      "type": "string"
+     },
+     "type": "array"
+    },
+    "steps": {
+     "type": "integer"
+    },
+    "type_len": {
+     "type": "integer"
+    }
+   },
+   "required": [
+    "ran",
+    "errors"
+   ],
+   "type": "object"
+  },
+  "schema": {
+   "const": "cedar-measure/record/v1"
+  },
+  "setup_ns": {
+   "minimum": 0,
+   "type": "integer"
+  },
+  "token": {
+   "type": "string"
+  }
+ },
+ "required": [
+  "schema",
+  "mode",
+  "token",
+  "control",
+  "env",
+  "outcome"
+ ],
+ "title": "cedar-measure record",
+ "type": "object"
+}

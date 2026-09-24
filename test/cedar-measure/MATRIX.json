@@ -1,0 +1,1805 @@
+{
+ "children": [
+  {
+   "cell": "R1a",
+   "expected": {
+    "errors": 0,
+    "steps": 5,
+    "type_len": 3070
+   },
+   "id": "R1a/parse/1024",
+   "input_bytes": 3115,
+   "input_sha256": "f5526dd51aebcac3879e8753d4a70a4c241750dba079dcce4e96b420c6c01469",
+   "labels": [
+    "parse: ast.Policy.UnmarshalCedar only",
+    "parse only"
+   ],
+   "op": "parse",
+   "ordinal": 1,
+   "param": "m",
+   "point": 1024,
+   "residual": "R1"
+  },
+  {
+   "cell": "R1a",
+   "expected": {
+    "errors": 0,
+    "steps": 5,
+    "type_len": 12286
+   },
+   "id": "R1a/parse/4096",
+   "input_bytes": 12331,
+   "input_sha256": "e380a6fee2b51bf7f791ace0f8cb3ef46db6e8d1b09e2135955aa7623c10e9e8",
+   "labels": [
+    "parse: ast.Policy.UnmarshalCedar only",
+    "parse only"
+   ],
+   "op": "parse",
+   "ordinal": 2,
+   "param": "m",
+   "point": 4096,
+   "residual": "R1"
+  },
+  {
+   "cell": "R1a",
+   "expected": {
+    "errors": 0,
+    "steps": 5,
+    "type_len": 49150
+   },
+   "id": "R1a/parse/16384",
+   "input_bytes": 49195,
+   "input_sha256": "f492efbd1e38f80c45261164db1cf2f6670e478d121f6878490612e504963a31",
+   "labels": [
+    "parse: ast.Policy.UnmarshalCedar only",
+    "parse only"
+   ],
+   "op": "parse",
+   "ordinal": 3,
+   "param": "m",
+   "point": 16384,
+   "residual": "R1"
+  },
+  {
+   "cell": "R1b",
+   "expected": {
+    "annotations": 1024,
+    "errors": 0,
+    "steps": 1028
+   },
+   "id": "R1b/parse/1024",
+   "input_bytes": 5156,
+   "input_sha256": "59a12a49fd343cb3b77a68af99e133102bbc7746db1d638f65226e365166b15b",
+   "labels": [
+    "parse: ast.Policy.UnmarshalCedar only",
+    "parse only"
+   ],
+   "op": "parse",
+   "ordinal": 4,
+   "param": "a",
+   "point": 1024,
+   "residual": "R1"
+  },
+  {
+   "cell": "R1b",
+   "expected": {
+    "annotations": 8192,
+    "errors": 0,
+    "steps": 8196
+   },
+   "id": "R1b/parse/8192",
+   "input_bytes": 40996,
+   "input_sha256": "7236528f039112b8f5ecd1592f04362574e35363c5e76b8eea71ba30c784454c",
+   "labels": [
+    "parse: ast.Policy.UnmarshalCedar only",
+    "parse only"
+   ],
+   "op": "parse",
+   "ordinal": 5,
+   "param": "a",
+   "point": 8192,
+   "residual": "R1"
+  },
+  {
+   "cell": "R1b",
+   "expected": {
+    "annotations": 32768,
+    "errors": 0,
+    "steps": 32772
+   },
+   "id": "R1b/parse/32768",
+   "input_bytes": 163876,
+   "input_sha256": "e0591b0d7a5577fc7f4f037c23cc56ac14f21f91510cfe3da77ee94b24c1466f",
+   "labels": [
+    "parse: ast.Policy.UnmarshalCedar only",
+    "parse only"
+   ],
+   "op": "parse",
+   "ordinal": 6,
+   "param": "a",
+   "point": 32768,
+   "residual": "R1"
+  },
+  {
+   "cell": "R2a",
+   "expected": {
+    "errors": 0,
+    "steps": 5
+   },
+   "id": "R2a/parse/1024",
+   "input_bytes": 2098,
+   "input_sha256": "72fa5a14d6b46da8c5894e4e578548c40f0898a3558f7ebce3a88261df72a10f",
+   "labels": [
+    "parse: ast.Policy.UnmarshalCedar only",
+    "parse only; parentheses add no AST node"
+   ],
+   "op": "parse",
+   "ordinal": 7,
+   "param": "d",
+   "point": 1024,
+   "residual": "R2"
+  },
+  {
+   "cell": "R2a",
+   "expected": {
+    "errors": 0,
+    "steps": 5
+   },
+   "id": "R2a/parse/8192",
+   "input_bytes": 16434,
+   "input_sha256": "769c9a206e1ad49997de8853c1093151b193181219290046caf427c9eb29c552",
+   "labels": [
+    "parse: ast.Policy.UnmarshalCedar only",
+    "parse only; parentheses add no AST node"
+   ],
+   "op": "parse",
+   "ordinal": 8,
+   "param": "d",
+   "point": 8192,
+   "residual": "R2"
+  },
+  {
+   "cell": "R2a",
+   "expected": {
+    "errors": 0,
+    "steps": 5
+   },
+   "id": "R2a/parse/32768",
+   "input_bytes": 65586,
+   "input_sha256": "5a9883ef7bf14ab4541bb590993d489511088cd2ee0859bd1c0403c2e97f7f6c",
+   "labels": [
+    "parse: ast.Policy.UnmarshalCedar only",
+    "parse only; parentheses add no AST node"
+   ],
+   "op": "parse",
+   "ordinal": 9,
+   "param": "d",
+   "point": 32768,
+   "residual": "R2"
+  },
+  {
+   "cell": "R2b",
+   "expected": {
+    "errors": 0,
+    "steps": 3077
+   },
+   "id": "R2b/parse/1024",
+   "input_bytes": 24626,
+   "input_sha256": "e66cda0a3de76d18973bec40e266217f04820d7cd38d65e975691d581dc191d6",
+   "labels": [
+    "parse: ast.Policy.UnmarshalCedar only",
+    "parse only"
+   ],
+   "op": "parse",
+   "ordinal": 10,
+   "param": "d",
+   "point": 1024,
+   "residual": "R2"
+  },
+  {
+   "cell": "R2b",
+   "expected": {
+    "errors": 0,
+    "steps": 12293
+   },
+   "id": "R2b/parse/4096",
+   "input_bytes": 98354,
+   "input_sha256": "cd5b9fff8d4af5d29acb0f1cbecfa4659046507abdf5bb5154c83be26798f730",
+   "labels": [
+    "parse: ast.Policy.UnmarshalCedar only",
+    "parse only"
+   ],
+   "op": "parse",
+   "ordinal": 11,
+   "param": "d",
+   "point": 4096,
+   "residual": "R2"
+  },
+  {
+   "cell": "R2b",
+   "expected": {
+    "errors": 0,
+    "steps": 24581
+   },
+   "id": "R2b/parse/8192",
+   "input_bytes": 196658,
+   "input_sha256": "f4b1354cad717080fcb982b2d224e4f0fb4a4d414b2f7833a426779efff28e85",
+   "labels": [
+    "parse: ast.Policy.UnmarshalCedar only",
+    "parse only"
+   ],
+   "op": "parse",
+   "ordinal": 12,
+   "param": "d",
+   "point": 8192,
+   "residual": "R2"
+  },
+  {
+   "cell": "R3a",
+   "expected": {
+    "errors": 0,
+    "reasons": [
+     "base"
+    ],
+    "steps": 6
+   },
+   "id": "R3a/compile/1024",
+   "input_bytes": 2105,
+   "input_sha256": "80fe354255b3a3ad98c5831261c1838e72de3d70e60772a8ac34674abd388dce",
+   "labels": [
+    "compile: joint fold + ToEval (one public call)",
+    "joint fold + ToEval; final wildcard-led chunk"
+   ],
+   "op": "compile",
+   "ordinal": 13,
+   "param": "n",
+   "point": 1024,
+   "residual": "R3"
+  },
+  {
+   "cell": "R3a",
+   "expected": {
+    "errors": 0,
+    "reasons": [
+     "base"
+    ],
+    "steps": 6
+   },
+   "id": "R3a/compile/4096",
+   "input_bytes": 8249,
+   "input_sha256": "24f3e1affde0d12b7035ac01313adc34b484c77413980ff01daf28178f5955eb",
+   "labels": [
+    "compile: joint fold + ToEval (one public call)",
+    "joint fold + ToEval; final wildcard-led chunk"
+   ],
+   "op": "compile",
+   "ordinal": 14,
+   "param": "n",
+   "point": 4096,
+   "residual": "R3"
+  },
+  {
+   "cell": "R3a",
+   "expected": {
+    "errors": 0,
+    "reasons": [
+     "base"
+    ],
+    "steps": 6
+   },
+   "id": "R3a/compile/16384",
+   "input_bytes": 32825,
+   "input_sha256": "14f660d788dac5303f027e6772725b2eab35c23a56504938faf65bdd862ed673",
+   "labels": [
+    "compile: joint fold + ToEval (one public call)",
+    "joint fold + ToEval; final wildcard-led chunk"
+   ],
+   "op": "compile",
+   "ordinal": 15,
+   "param": "n",
+   "point": 16384,
+   "residual": "R3"
+  },
+  {
+   "cell": "R3b",
+   "expected": {
+    "errors": 1,
+    "reasons": [
+     "base"
+    ],
+    "steps": 7
+   },
+   "id": "R3b/compile/1",
+   "input_bytes": 8258,
+   "input_sha256": "dd72a7f737a6f2c1fcaff02cc143ce74fac40f06dc8ad47f44430daea77fe3e9",
+   "labels": [
+    "compile: joint fold + ToEval (one public call)",
+    "joint fold + ToEval; like folded once per reference, n = 4,096"
+   ],
+   "op": "compile",
+   "ordinal": 16,
+   "param": "k",
+   "point": 1,
+   "residual": "R3"
+  },
+  {
+   "cell": "R3b",
+   "expected": {
+    "errors": 1,
+    "reasons": [
+     "base"
+    ],
+    "steps": 25
+   },
+   "id": "R3b/compile/4",
+   "input_bytes": 8267,
+   "input_sha256": "d7303dd02e6485a13001512230b95f8ffa6144db5facb79be96ce62012ab26ee",
+   "labels": [
+    "compile: joint fold + ToEval (one public call)",
+    "joint fold + ToEval; like folded once per reference, n = 4,096"
+   ],
+   "op": "compile",
+   "ordinal": 17,
+   "param": "k",
+   "point": 4,
+   "residual": "R3"
+  },
+  {
+   "cell": "R3b",
+   "expected": {
+    "errors": 1,
+    "reasons": [
+     "base"
+    ],
+    "steps": 187
+   },
+   "id": "R3b/compile/16",
+   "input_bytes": 8310,
+   "input_sha256": "a38be208cb11bd87c90c815eccded465970cf54ea2b83e632767a3165e3ac715",
+   "labels": [
+    "compile: joint fold + ToEval (one public call)",
+    "joint fold + ToEval; like folded once per reference, n = 4,096"
+   ],
+   "op": "compile",
+   "ordinal": 18,
+   "param": "k",
+   "point": 16,
+   "residual": "R3"
+  },
+  {
+   "cell": "R3c",
+   "expected": {
+    "errors": 0,
+    "reasons": [
+     "base"
+    ],
+    "steps": 3079
+   },
+   "id": "R3c/compile/1024",
+   "input_bytes": 12258,
+   "input_sha256": "1e5032b0c925ee2142ed5175388ff65b6d72083cfe9628a43d9a41059201614e",
+   "labels": [
+    "compile: joint fold + ToEval (one public call)",
+    "joint fold + ToEval; equal-hash set built at fold"
+   ],
+   "op": "compile",
+   "ordinal": 19,
+   "param": "n",
+   "point": 1024,
+   "residual": "R3"
+  },
+  {
+   "cell": "R3c",
+   "expected": {
+    "errors": 0,
+    "reasons": [
+     "base"
+    ],
+    "steps": 12295
+   },
+   "id": "R3c/compile/4096",
+   "input_bytes": 52194,
+   "input_sha256": "092ef7d9ca162af740068cbca4692471e6369ae7495d970771a4db177cd541a0",
+   "labels": [
+    "compile: joint fold + ToEval (one public call)",
+    "joint fold + ToEval; equal-hash set built at fold"
+   ],
+   "op": "compile",
+   "ordinal": 20,
+   "param": "n",
+   "point": 4096,
+   "residual": "R3"
+  },
+  {
+   "cell": "R3c",
+   "expected": {
+    "errors": 0,
+    "reasons": [
+     "base"
+    ],
+    "steps": 49159
+   },
+   "id": "R3c/compile/16384",
+   "input_bytes": 218323,
+   "input_sha256": "28250c23483046abb899f6b4201ad32f5a1c69d00018366002a45a3fbce0c2c2",
+   "labels": [
+    "compile: joint fold + ToEval (one public call)",
+    "joint fold + ToEval; equal-hash set built at fold"
+   ],
+   "op": "compile",
+   "ordinal": 21,
+   "param": "n",
+   "point": 16384,
+   "residual": "R3"
+  },
+  {
+   "cell": "R3d",
+   "expected": {
+    "errors": 0,
+    "reasons": [
+     "base"
+    ],
+    "steps": 3082
+   },
+   "id": "R3d/compile/1024",
+   "input_bytes": 12273,
+   "input_sha256": "7c4dca64db27f1bda684b8d96539fe4a419c7c896b887208f862577f07945caa",
+   "labels": [
+    "compile: joint fold + ToEval (one public call)",
+    "authorize: equal-hash set built on every request"
+   ],
+   "op": "compile",
+   "ordinal": 22,
+   "param": "n",
+   "point": 1024,
+   "residual": "R3"
+  },
+  {
+   "cell": "R3d",
+   "expected": {
+    "errors": 0,
+    "reasons": [
+     "base"
+    ],
+    "steps": 3082
+   },
+   "id": "R3d/authorize/1024",
+   "input_bytes": 12273,
+   "input_sha256": "7c4dca64db27f1bda684b8d96539fe4a419c7c896b887208f862577f07945caa",
+   "labels": [
+    "authorize: one cedar.Authorize with a product-shaped flat request",
+    "authorize: equal-hash set built on every request"
+   ],
+   "op": "authorize",
+   "ordinal": 23,
+   "param": "n",
+   "point": 1024,
+   "residual": "R3"
+  },
+  {
+   "cell": "R3d",
+   "expected": {
+    "errors": 0,
+    "reasons": [
+     "base"
+    ],
+    "steps": 12298
+   },
+   "id": "R3d/compile/4096",
+   "input_bytes": 52209,
+   "input_sha256": "ec146e70fbfbc2bcb2f957fb937ec5ea4e09ca5e1d7b6ff0ddcc1ff0d30e77a7",
+   "labels": [
+    "compile: joint fold + ToEval (one public call)",
+    "authorize: equal-hash set built on every request"
+   ],
+   "op": "compile",
+   "ordinal": 24,
+   "param": "n",
+   "point": 4096,
+   "residual": "R3"
+  },
+  {
+   "cell": "R3d",
+   "expected": {
+    "errors": 0,
+    "reasons": [
+     "base"
+    ],
+    "steps": 12298
+   },
+   "id": "R3d/authorize/4096",
+   "input_bytes": 52209,
+   "input_sha256": "ec146e70fbfbc2bcb2f957fb937ec5ea4e09ca5e1d7b6ff0ddcc1ff0d30e77a7",
+   "labels": [
+    "authorize: one cedar.Authorize with a product-shaped flat request",
+    "authorize: equal-hash set built on every request"
+   ],
+   "op": "authorize",
+   "ordinal": 25,
+   "param": "n",
+   "point": 4096,
+   "residual": "R3"
+  },
+  {
+   "cell": "R3d",
+   "expected": {
+    "errors": 0,
+    "reasons": [
+     "base"
+    ],
+    "steps": 49162
+   },
+   "id": "R3d/compile/16384",
+   "input_bytes": 218338,
+   "input_sha256": "0614fe09a38de38df610cd43d3117bd83c2a00ce2445c9a93cb7d49f64508bdf",
+   "labels": [
+    "compile: joint fold + ToEval (one public call)",
+    "authorize: equal-hash set built on every request"
+   ],
+   "op": "compile",
+   "ordinal": 26,
+   "param": "n",
+   "point": 16384,
+   "residual": "R3"
+  },
+  {
+   "cell": "R3d",
+   "expected": {
+    "errors": 0,
+    "reasons": [
+     "base"
+    ],
+    "steps": 49162
+   },
+   "id": "R3d/authorize/16384",
+   "input_bytes": 218338,
+   "input_sha256": "0614fe09a38de38df610cd43d3117bd83c2a00ce2445c9a93cb7d49f64508bdf",
+   "labels": [
+    "authorize: one cedar.Authorize with a product-shaped flat request",
+    "authorize: equal-hash set built on every request"
+   ],
+   "op": "authorize",
+   "ordinal": 27,
+   "param": "n",
+   "point": 16384,
+   "residual": "R3"
+  },
+  {
+   "cell": "R3e",
+   "expected": {
+    "errors": 0,
+    "reasons": [
+     "base"
+    ],
+    "steps": 6
+   },
+   "id": "R3e/compile/1024",
+   "input_bytes": 2106,
+   "input_sha256": "34c0ba19c99fd0bfdecdf5036e33b397e00223e90e738bd86362f61b33d5e469",
+   "labels": [
+    "compile: joint fold + ToEval (one public call)",
+    "joint fold + ToEval; non-final wildcard-led chunk"
+   ],
+   "op": "compile",
+   "ordinal": 28,
+   "param": "n",
+   "point": 1024,
+   "residual": "R3"
+  },
+  {
+   "cell": "R3e",
+   "expected": {
+    "errors": 0,
+    "reasons": [
+     "base"
+    ],
+    "steps": 6
+   },
+   "id": "R3e/compile/4096",
+   "input_bytes": 8250,
+   "input_sha256": "768cadc007ebe7c94a42c607867536e13ad3dd9a92b68e9658deb72c48772a42",
+   "labels": [
+    "compile: joint fold + ToEval (one public call)",
+    "joint fold + ToEval; non-final wildcard-led chunk"
+   ],
+   "op": "compile",
+   "ordinal": 29,
+   "param": "n",
+   "point": 4096,
+   "residual": "R3"
+  },
+  {
+   "cell": "R3e",
+   "expected": {
+    "errors": 0,
+    "reasons": [
+     "base"
+    ],
+    "steps": 6
+   },
+   "id": "R3e/compile/16384",
+   "input_bytes": 32826,
+   "input_sha256": "a8a2a03922cf8168288e94755a2e817c63efd6a014403ae1ad8f8f92be5235e8",
+   "labels": [
+    "compile: joint fold + ToEval (one public call)",
+    "joint fold + ToEval; non-final wildcard-led chunk"
+   ],
+   "op": "compile",
+   "ordinal": 30,
+   "param": "n",
+   "point": 16384,
+   "residual": "R3"
+  },
+  {
+   "cell": "R4a",
+   "expected": {
+    "errors": 0,
+    "reasons": [
+     "base"
+    ],
+    "steps": 132355
+   },
+   "id": "R4a/compile/512",
+   "input_bytes": 2509,
+   "input_sha256": "46b2c53633d5428cdd1cf7b9d1fccbe80ab6610cdcadfaf2260b11e5970cb459",
+   "labels": [
+    "compile: joint fold + ToEval (one public call)",
+    "authorize evaluates k + 1 nodes: cannot observe per-request work"
+   ],
+   "op": "compile",
+   "ordinal": 31,
+   "param": "k",
+   "point": 512,
+   "residual": "R4"
+  },
+  {
+   "cell": "R4a",
+   "expected": {
+    "errors": 0,
+    "reasons": [
+     "base"
+    ],
+    "steps": 132355
+   },
+   "id": "R4a/authorize/512",
+   "input_bytes": 2509,
+   "input_sha256": "46b2c53633d5428cdd1cf7b9d1fccbe80ab6610cdcadfaf2260b11e5970cb459",
+   "labels": [
+    "authorize: one cedar.Authorize with a product-shaped flat request",
+    "authorize evaluates k + 1 nodes: cannot observe per-request work"
+   ],
+   "op": "authorize",
+   "ordinal": 32,
+   "param": "k",
+   "point": 512,
+   "residual": "R4"
+  },
+  {
+   "cell": "R4a",
+   "expected": {
+    "errors": 0,
+    "reasons": [
+     "base"
+    ],
+    "steps": 526851
+   },
+   "id": "R4a/compile/1024",
+   "input_bytes": 5094,
+   "input_sha256": "25f234e74c997adc06410866752e8aefcefe04615aa42bf68145ce9578f01e2c",
+   "labels": [
+    "compile: joint fold + ToEval (one public call)",
+    "authorize evaluates k + 1 nodes: cannot observe per-request work"
+   ],
+   "op": "compile",
+   "ordinal": 33,
+   "param": "k",
+   "point": 1024,
+   "residual": "R4"
+  },
+  {
+   "cell": "R4a",
+   "expected": {
+    "errors": 0,
+    "reasons": [
+     "base"
+    ],
+    "steps": 526851
+   },
+   "id": "R4a/authorize/1024",
+   "input_bytes": 5094,
+   "input_sha256": "25f234e74c997adc06410866752e8aefcefe04615aa42bf68145ce9578f01e2c",
+   "labels": [
+    "authorize: one cedar.Authorize with a product-shaped flat request",
+    "authorize evaluates k + 1 nodes: cannot observe per-request work"
+   ],
+   "op": "authorize",
+   "ordinal": 34,
+   "param": "k",
+   "point": 1024,
+   "residual": "R4"
+  },
+  {
+   "cell": "R4a",
+   "expected": {
+    "errors": 0,
+    "reasons": [
+     "base"
+    ],
+    "steps": 1047628
+   },
+   "id": "R4a/compile/1445",
+   "input_bytes": 7620,
+   "input_sha256": "85110c3e9ad00edfa4f873fc0685289b029b72d5398d2a2ccf554f56a21c262e",
+   "labels": [
+    "compile: joint fold + ToEval (one public call)",
+    "authorize evaluates k + 1 nodes: cannot observe per-request work"
+   ],
+   "op": "compile",
+   "ordinal": 35,
+   "param": "k",
+   "point": 1445,
+   "residual": "R4"
+  },
+  {
+   "cell": "R4a",
+   "expected": {
+    "errors": 0,
+    "reasons": [
+     "base"
+    ],
+    "steps": 1047628
+   },
+   "id": "R4a/authorize/1445",
+   "input_bytes": 7620,
+   "input_sha256": "85110c3e9ad00edfa4f873fc0685289b029b72d5398d2a2ccf554f56a21c262e",
+   "labels": [
+    "authorize: one cedar.Authorize with a product-shaped flat request",
+    "authorize evaluates k + 1 nodes: cannot observe per-request work"
+   ],
+   "op": "authorize",
+   "ordinal": 36,
+   "param": "k",
+   "point": 1445,
+   "residual": "R4"
+  },
+  {
+   "cell": "R4b",
+   "expected": {
+    "errors": 0,
+    "reasons": [
+     "base"
+    ],
+    "steps": 132355
+   },
+   "id": "R4b/compile/512",
+   "input_bytes": 2504,
+   "input_sha256": "b04e93828481dd037060d27c8f10cb93c82f8937691ecf5abd13ff8f72b348ec",
+   "labels": [
+    "compile: joint fold + ToEval (one public call)",
+    "authorize evaluates k nodes: cannot observe per-request work"
+   ],
+   "op": "compile",
+   "ordinal": 37,
+   "param": "k",
+   "point": 512,
+   "residual": "R4"
+  },
+  {
+   "cell": "R4b",
+   "expected": {
+    "errors": 0,
+    "reasons": [
+     "base"
+    ],
+    "steps": 132355
+   },
+   "id": "R4b/authorize/512",
+   "input_bytes": 2504,
+   "input_sha256": "b04e93828481dd037060d27c8f10cb93c82f8937691ecf5abd13ff8f72b348ec",
+   "labels": [
+    "authorize: one cedar.Authorize with a product-shaped flat request",
+    "authorize evaluates k nodes: cannot observe per-request work"
+   ],
+   "op": "authorize",
+   "ordinal": 38,
+   "param": "k",
+   "point": 512,
+   "residual": "R4"
+  },
+  {
+   "cell": "R4b",
+   "expected": {
+    "errors": 0,
+    "reasons": [
+     "base"
+    ],
+    "steps": 526851
+   },
+   "id": "R4b/compile/1024",
+   "input_bytes": 5089,
+   "input_sha256": "8f68604dc7834da9dbe26666c1d4219895c441543e06b59c9a05ba9c55fcd36d",
+   "labels": [
+    "compile: joint fold + ToEval (one public call)",
+    "authorize evaluates k nodes: cannot observe per-request work"
+   ],
+   "op": "compile",
+   "ordinal": 39,
+   "param": "k",
+   "point": 1024,
+   "residual": "R4"
+  },
+  {
+   "cell": "R4b",
+   "expected": {
+    "errors": 0,
+    "reasons": [
+     "base"
+    ],
+    "steps": 526851
+   },
+   "id": "R4b/authorize/1024",
+   "input_bytes": 5089,
+   "input_sha256": "8f68604dc7834da9dbe26666c1d4219895c441543e06b59c9a05ba9c55fcd36d",
+   "labels": [
+    "authorize: one cedar.Authorize with a product-shaped flat request",
+    "authorize evaluates k nodes: cannot observe per-request work"
+   ],
+   "op": "authorize",
+   "ordinal": 40,
+   "param": "k",
+   "point": 1024,
+   "residual": "R4"
+  },
+  {
+   "cell": "R4b",
+   "expected": {
+    "errors": 0,
+    "reasons": [
+     "base"
+    ],
+    "steps": 1047628
+   },
+   "id": "R4b/compile/1445",
+   "input_bytes": 7615,
+   "input_sha256": "3f31ae88ac87b7b7ef7bfab80defbba06175afa3a7e0c303419b0beae2b9e16c",
+   "labels": [
+    "compile: joint fold + ToEval (one public call)",
+    "authorize evaluates k nodes: cannot observe per-request work"
+   ],
+   "op": "compile",
+   "ordinal": 41,
+   "param": "k",
+   "point": 1445,
+   "residual": "R4"
+  },
+  {
+   "cell": "R4b",
+   "expected": {
+    "errors": 0,
+    "reasons": [
+     "base"
+    ],
+    "steps": 1047628
+   },
+   "id": "R4b/authorize/1445",
+   "input_bytes": 7615,
+   "input_sha256": "3f31ae88ac87b7b7ef7bfab80defbba06175afa3a7e0c303419b0beae2b9e16c",
+   "labels": [
+    "authorize: one cedar.Authorize with a product-shaped flat request",
+    "authorize evaluates k nodes: cannot observe per-request work"
+   ],
+   "op": "authorize",
+   "ordinal": 42,
+   "param": "k",
+   "point": 1445,
+   "residual": "R4"
+  },
+  {
+   "cell": "R4c",
+   "expected": {
+    "errors": 0,
+    "reasons": [
+     "base",
+     "p0"
+    ],
+    "steps": 99203
+   },
+   "id": "R4c/authorize/256",
+   "input_bytes": 2918,
+   "input_sha256": "46a41272d53081db17c302dd5801c988b9b95f21998bb3fdc7308b06fd4399d1",
+   "labels": [
+    "authorize: one cedar.Authorize with a product-shaped flat request",
+    "per request: every body step evaluated, k*k records built (model prediction)"
+   ],
+   "op": "authorize",
+   "ordinal": 43,
+   "param": "k",
+   "point": 256,
+   "residual": "R4"
+  },
+  {
+   "cell": "R4c",
+   "expected": {
+    "errors": 0,
+    "reasons": [
+     "base",
+     "p0"
+    ],
+    "steps": 395011
+   },
+   "id": "R4c/authorize/512",
+   "input_bytes": 5990,
+   "input_sha256": "0e822be0416c800d6ee2d0d686f9cc1dd2fc2204f1d99573e829af097b8e8fa6",
+   "labels": [
+    "authorize: one cedar.Authorize with a product-shaped flat request",
+    "per request: every body step evaluated, k*k records built (model prediction)"
+   ],
+   "op": "authorize",
+   "ordinal": 44,
+   "param": "k",
+   "point": 512,
+   "residual": "R4"
+  },
+  {
+   "cell": "R4c",
+   "expected": {
+    "errors": 0,
+    "reasons": [
+     "base",
+     "p0"
+    ],
+    "steps": 1576451
+   },
+   "id": "R4c/authorize/1024",
+   "input_bytes": 12184,
+   "input_sha256": "9bbe4a0f06e9293bf2cc7450cb6bda630c46e1962c6fdc483b755f1cc64b7add",
+   "labels": [
+    "authorize: one cedar.Authorize with a product-shaped flat request",
+    "per request: every body step evaluated, k*k records built (model prediction)"
+   ],
+   "op": "authorize",
+   "ordinal": 45,
+   "param": "k",
+   "point": 1024,
+   "residual": "R4"
+  },
+  {
+   "cell": "R4d",
+   "expected": {
+    "errors": 0,
+    "reasons": [
+     "base",
+     "p0"
+    ],
+    "steps": 100483
+   },
+   "id": "R4d/authorize/256",
+   "input_bytes": 2942,
+   "input_sha256": "a8e2852e03913f07407ac2699e8aef05fd900a1249c65ee681a15df0147e544a",
+   "labels": [
+    "authorize: one cedar.Authorize with a product-shaped flat request",
+    "per request: k(k-1)/2 + 8k - 1 evaluations, no record built (model prediction)"
+   ],
+   "op": "authorize",
+   "ordinal": 46,
+   "param": "k",
+   "point": 256,
+   "residual": "R4"
+  },
+  {
+   "cell": "R4d",
+   "expected": {
+    "errors": 0,
+    "reasons": [
+     "base",
+     "p0"
+    ],
+    "steps": 397571
+   },
+   "id": "R4d/authorize/512",
+   "input_bytes": 6014,
+   "input_sha256": "6e67cefcbb49c670e5d943d8b31eb75dceeee2f1c65b68f7e95b54cb6488c2f4",
+   "labels": [
+    "authorize: one cedar.Authorize with a product-shaped flat request",
+    "per request: k(k-1)/2 + 8k - 1 evaluations, no record built (model prediction)"
+   ],
+   "op": "authorize",
+   "ordinal": 47,
+   "param": "k",
+   "point": 512,
+   "residual": "R4"
+  },
+  {
+   "cell": "R4d",
+   "expected": {
+    "errors": 0,
+    "reasons": [
+     "base",
+     "p0"
+    ],
+    "steps": 1581571
+   },
+   "id": "R4d/authorize/1024",
+   "input_bytes": 12208,
+   "input_sha256": "64152dbca0f04d7eced4eedebc34f647a03daa2c6f16b0ab317b1dd166880cf6",
+   "labels": [
+    "authorize: one cedar.Authorize with a product-shaped flat request",
+    "per request: k(k-1)/2 + 8k - 1 evaluations, no record built (model prediction)"
+   ],
+   "op": "authorize",
+   "ordinal": 48,
+   "param": "k",
+   "point": 1024,
+   "residual": "R4"
+  },
+  {
+   "cell": "R5a",
+   "expected": {
+    "errors": 1,
+    "reasons": [
+     "base"
+    ],
+    "steps": 1030
+   },
+   "id": "R5a/compile/1024",
+   "input_bytes": 1079,
+   "input_sha256": "bdc64f4d589cd49b7bc0a47398ef687f4cc0efae5b36d8c78c2e95ff4b35bbc1",
+   "labels": [
+    "compile: joint fold + ToEval (one public call)",
+    "compile: joint fold + ToEval; inspect: recursive Inspect"
+   ],
+   "op": "compile",
+   "ordinal": 49,
+   "param": "d",
+   "point": 1024,
+   "residual": "R5"
+  },
+  {
+   "cell": "R5a",
+   "expected": {
+    "errors": 1,
+    "reasons": [
+     "base"
+    ],
+    "steps": 1030
+   },
+   "id": "R5a/authorize/1024",
+   "input_bytes": 1079,
+   "input_sha256": "bdc64f4d589cd49b7bc0a47398ef687f4cc0efae5b36d8c78c2e95ff4b35bbc1",
+   "labels": [
+    "authorize: one cedar.Authorize with a product-shaped flat request",
+    "compile: joint fold + ToEval; inspect: recursive Inspect"
+   ],
+   "op": "authorize",
+   "ordinal": 50,
+   "param": "d",
+   "point": 1024,
+   "residual": "R5"
+  },
+  {
+   "cell": "R5a",
+   "expected": {
+    "errors": 0,
+    "nodes": 1026,
+    "steps": 1030
+   },
+   "id": "R5a/inspect/1024",
+   "input_bytes": 1079,
+   "input_sha256": "bdc64f4d589cd49b7bc0a47398ef687f4cc0efae5b36d8c78c2e95ff4b35bbc1",
+   "labels": [
+    "inspect: one recursive x/exp/ast Inspect of the body",
+    "compile: joint fold + ToEval; inspect: recursive Inspect"
+   ],
+   "op": "inspect",
+   "ordinal": 51,
+   "param": "d",
+   "point": 1024,
+   "residual": "R5"
+  },
+  {
+   "cell": "R5a",
+   "expected": {
+    "errors": 1,
+    "reasons": [
+     "base"
+    ],
+    "steps": 16390
+   },
+   "id": "R5a/compile/16384",
+   "input_bytes": 16439,
+   "input_sha256": "96d4daaa295aceb6d973e07c862e3bd235bb5825354c022c5e835132c92bb919",
+   "labels": [
+    "compile: joint fold + ToEval (one public call)",
+    "compile: joint fold + ToEval; inspect: recursive Inspect"
+   ],
+   "op": "compile",
+   "ordinal": 52,
+   "param": "d",
+   "point": 16384,
+   "residual": "R5"
+  },
+  {
+   "cell": "R5a",
+   "expected": {
+    "errors": 1,
+    "reasons": [
+     "base"
+    ],
+    "steps": 16390
+   },
+   "id": "R5a/authorize/16384",
+   "input_bytes": 16439,
+   "input_sha256": "96d4daaa295aceb6d973e07c862e3bd235bb5825354c022c5e835132c92bb919",
+   "labels": [
+    "authorize: one cedar.Authorize with a product-shaped flat request",
+    "compile: joint fold + ToEval; inspect: recursive Inspect"
+   ],
+   "op": "authorize",
+   "ordinal": 53,
+   "param": "d",
+   "point": 16384,
+   "residual": "R5"
+  },
+  {
+   "cell": "R5a",
+   "expected": {
+    "errors": 0,
+    "nodes": 16386,
+    "steps": 16390
+   },
+   "id": "R5a/inspect/16384",
+   "input_bytes": 16439,
+   "input_sha256": "96d4daaa295aceb6d973e07c862e3bd235bb5825354c022c5e835132c92bb919",
+   "labels": [
+    "inspect: one recursive x/exp/ast Inspect of the body",
+    "compile: joint fold + ToEval; inspect: recursive Inspect"
+   ],
+   "op": "inspect",
+   "ordinal": 54,
+   "param": "d",
+   "point": 16384,
+   "residual": "R5"
+  },
+  {
+   "cell": "R5a",
+   "expected": {
+    "errors": 1,
+    "reasons": [
+     "base"
+    ],
+    "steps": 65542
+   },
+   "id": "R5a/compile/65536",
+   "input_bytes": 65591,
+   "input_sha256": "2575e7264a9c9e57aa5c8dc55d99014db720d3bb434f869dd7a95b6c3ade6f9f",
+   "labels": [
+    "compile: joint fold + ToEval (one public call)",
+    "compile: joint fold + ToEval; inspect: recursive Inspect"
+   ],
+   "op": "compile",
+   "ordinal": 55,
+   "param": "d",
+   "point": 65536,
+   "residual": "R5"
+  },
+  {
+   "cell": "R5a",
+   "expected": {
+    "errors": 1,
+    "reasons": [
+     "base"
+    ],
+    "steps": 65542
+   },
+   "id": "R5a/authorize/65536",
+   "input_bytes": 65591,
+   "input_sha256": "2575e7264a9c9e57aa5c8dc55d99014db720d3bb434f869dd7a95b6c3ade6f9f",
+   "labels": [
+    "authorize: one cedar.Authorize with a product-shaped flat request",
+    "compile: joint fold + ToEval; inspect: recursive Inspect"
+   ],
+   "op": "authorize",
+   "ordinal": 56,
+   "param": "d",
+   "point": 65536,
+   "residual": "R5"
+  },
+  {
+   "cell": "R5a",
+   "expected": {
+    "errors": 0,
+    "nodes": 65538,
+    "steps": 65542
+   },
+   "id": "R5a/inspect/65536",
+   "input_bytes": 65591,
+   "input_sha256": "2575e7264a9c9e57aa5c8dc55d99014db720d3bb434f869dd7a95b6c3ade6f9f",
+   "labels": [
+    "inspect: one recursive x/exp/ast Inspect of the body",
+    "compile: joint fold + ToEval; inspect: recursive Inspect"
+   ],
+   "op": "inspect",
+   "ordinal": 57,
+   "param": "d",
+   "point": 65536,
+   "residual": "R5"
+  },
+  {
+   "cell": "R5b",
+   "expected": {
+    "errors": 0,
+    "reasons": [
+     "base",
+     "p0"
+    ],
+    "steps": 1028
+   },
+   "id": "R5b/compile/1024",
+   "input_bytes": 11300,
+   "input_sha256": "b1e754cd5c9af8fe4896258a09eff8ca5395135552e89236827178affe45b693",
+   "labels": [
+    "compile: joint fold + ToEval (one public call)",
+    "the compiled And chain"
+   ],
+   "op": "compile",
+   "ordinal": 58,
+   "param": "c",
+   "point": 1024,
+   "residual": "R5"
+  },
+  {
+   "cell": "R5b",
+   "expected": {
+    "errors": 0,
+    "reasons": [
+     "base",
+     "p0"
+    ],
+    "steps": 1028
+   },
+   "id": "R5b/authorize/1024",
+   "input_bytes": 11300,
+   "input_sha256": "b1e754cd5c9af8fe4896258a09eff8ca5395135552e89236827178affe45b693",
+   "labels": [
+    "authorize: one cedar.Authorize with a product-shaped flat request",
+    "the compiled And chain"
+   ],
+   "op": "authorize",
+   "ordinal": 59,
+   "param": "c",
+   "point": 1024,
+   "residual": "R5"
+  },
+  {
+   "cell": "R5b",
+   "expected": {
+    "errors": 0,
+    "reasons": [
+     "base",
+     "p0"
+    ],
+    "steps": 4100
+   },
+   "id": "R5b/compile/4096",
+   "input_bytes": 45092,
+   "input_sha256": "0d2bf6d5122f040ba279254fcf0f60524cb65955673aa6c6b1c2788e0c039384",
+   "labels": [
+    "compile: joint fold + ToEval (one public call)",
+    "the compiled And chain"
+   ],
+   "op": "compile",
+   "ordinal": 60,
+   "param": "c",
+   "point": 4096,
+   "residual": "R5"
+  },
+  {
+   "cell": "R5b",
+   "expected": {
+    "errors": 0,
+    "reasons": [
+     "base",
+     "p0"
+    ],
+    "steps": 4100
+   },
+   "id": "R5b/authorize/4096",
+   "input_bytes": 45092,
+   "input_sha256": "0d2bf6d5122f040ba279254fcf0f60524cb65955673aa6c6b1c2788e0c039384",
+   "labels": [
+    "authorize: one cedar.Authorize with a product-shaped flat request",
+    "the compiled And chain"
+   ],
+   "op": "authorize",
+   "ordinal": 61,
+   "param": "c",
+   "point": 4096,
+   "residual": "R5"
+  },
+  {
+   "cell": "R5b",
+   "expected": {
+    "errors": 0,
+    "reasons": [
+     "base",
+     "p0"
+    ],
+    "steps": 16388
+   },
+   "id": "R5b/compile/16384",
+   "input_bytes": 180260,
+   "input_sha256": "8705d91bbc07eec84dfbfd45fa89857e30abed8eda91bc7d13bad9375cdf075f",
+   "labels": [
+    "compile: joint fold + ToEval (one public call)",
+    "the compiled And chain"
+   ],
+   "op": "compile",
+   "ordinal": 62,
+   "param": "c",
+   "point": 16384,
+   "residual": "R5"
+  },
+  {
+   "cell": "R5b",
+   "expected": {
+    "errors": 0,
+    "reasons": [
+     "base",
+     "p0"
+    ],
+    "steps": 16388
+   },
+   "id": "R5b/authorize/16384",
+   "input_bytes": 180260,
+   "input_sha256": "8705d91bbc07eec84dfbfd45fa89857e30abed8eda91bc7d13bad9375cdf075f",
+   "labels": [
+    "authorize: one cedar.Authorize with a product-shaped flat request",
+    "the compiled And chain"
+   ],
+   "op": "authorize",
+   "ordinal": 63,
+   "param": "c",
+   "point": 16384,
+   "residual": "R5"
+  },
+  {
+   "cell": "R5c",
+   "expected": {
+    "errors": 0,
+    "reasons": [
+     "base",
+     "p0"
+    ],
+    "steps": 2055
+   },
+   "id": "R5c/compile/1024",
+   "input_bytes": 4148,
+   "input_sha256": "2e58550e83b7ecb040d2a8d9c57bb93082bd42705e8b54619f624bb58bad61f0",
+   "labels": [
+    "compile: joint fold + Set.Equal + ToEval (one public call)",
+    "joint fold + Set.Equal + ToEval"
+   ],
+   "op": "compile",
+   "ordinal": 64,
+   "param": "d",
+   "point": 1024,
+   "residual": "R5"
+  },
+  {
+   "cell": "R5c",
+   "expected": {
+    "errors": 0,
+    "reasons": [
+     "base",
+     "p0"
+    ],
+    "steps": 8199
+   },
+   "id": "R5c/compile/4096",
+   "input_bytes": 16436,
+   "input_sha256": "0f27e8f6d4e5a729c45ac8f4b91647767023a83cd7ad15602e99cbee1624a68f",
+   "labels": [
+    "compile: joint fold + Set.Equal + ToEval (one public call)",
+    "joint fold + Set.Equal + ToEval"
+   ],
+   "op": "compile",
+   "ordinal": 65,
+   "param": "d",
+   "point": 4096,
+   "residual": "R5"
+  },
+  {
+   "cell": "R5c",
+   "expected": {
+    "errors": 0,
+    "reasons": [
+     "base",
+     "p0"
+    ],
+    "steps": 32775
+   },
+   "id": "R5c/compile/16384",
+   "input_bytes": 65588,
+   "input_sha256": "9ebb82f72b280b747447a742d6f1bc16afe892f99f722123b712e225755c48d9",
+   "labels": [
+    "compile: joint fold + Set.Equal + ToEval (one public call)",
+    "joint fold + Set.Equal + ToEval"
+   ],
+   "op": "compile",
+   "ordinal": 66,
+   "param": "d",
+   "point": 16384,
+   "residual": "R5"
+  },
+  {
+   "cell": "R5d",
+   "expected": {
+    "discriminates": true,
+    "errors": 0,
+    "reasons": [
+     "base",
+     "p0"
+    ],
+    "steps": 2056
+   },
+   "id": "R5d/authorize/1024",
+   "input_bytes": 4168,
+   "input_sha256": "b605473ea8e8cd095fb6a2cfd2346f972ae64945593931429a3051086ac5d34c",
+   "labels": [
+    "authorize: one cedar.Authorize with a product-shaped flat request",
+    "joint per-request set construction + Set.Equal; equal leaves keep Equal recursing"
+   ],
+   "op": "authorize",
+   "ordinal": 67,
+   "param": "d",
+   "point": 1024,
+   "residual": "R5"
+  },
+  {
+   "cell": "R5d",
+   "expected": {
+    "discriminates": true,
+    "errors": 0,
+    "reasons": [
+     "base",
+     "p0"
+    ],
+    "steps": 8200
+   },
+   "id": "R5d/authorize/4096",
+   "input_bytes": 16456,
+   "input_sha256": "22f272a04e35bb052dd0cf6c8eca1e00e4e082a5ccf317ef69065d0432edb3ca",
+   "labels": [
+    "authorize: one cedar.Authorize with a product-shaped flat request",
+    "joint per-request set construction + Set.Equal; equal leaves keep Equal recursing"
+   ],
+   "op": "authorize",
+   "ordinal": 68,
+   "param": "d",
+   "point": 4096,
+   "residual": "R5"
+  },
+  {
+   "cell": "R5d",
+   "expected": {
+    "discriminates": true,
+    "errors": 0,
+    "reasons": [
+     "base",
+     "p0"
+    ],
+    "steps": 32776
+   },
+   "id": "R5d/authorize/16384",
+   "input_bytes": 65608,
+   "input_sha256": "fbf42c9feb94d461f5f9f77868d3c2467a6c6c29ba283018ecfc1dd405cf9196",
+   "labels": [
+    "authorize: one cedar.Authorize with a product-shaped flat request",
+    "joint per-request set construction + Set.Equal; equal leaves keep Equal recursing"
+   ],
+   "op": "authorize",
+   "ordinal": 69,
+   "param": "d",
+   "point": 16384,
+   "residual": "R5"
+  },
+  {
+   "cell": "W",
+   "expected": {
+    "depth": 516,
+    "errors": 0,
+    "steps": 132355
+   },
+   "id": "W/walk/512",
+   "input_bytes": 2509,
+   "input_sha256": "46b2c53633d5428cdd1cf7b9d1fccbe80ab6610cdcadfaf2260b11e5970cb459",
+   "labels": [
+    "walk: the reproduced admission walk",
+    "reproduced admission walk: the algorithm, not product code"
+   ],
+   "op": "walk",
+   "ordinal": 70,
+   "param": "k",
+   "point": 512,
+   "residual": "R3-8"
+  },
+  {
+   "cell": "W",
+   "expected": {
+    "depth": 1028,
+    "errors": 0,
+    "steps": 526851
+   },
+   "id": "W/walk/1024",
+   "input_bytes": 5094,
+   "input_sha256": "25f234e74c997adc06410866752e8aefcefe04615aa42bf68145ce9578f01e2c",
+   "labels": [
+    "walk: the reproduced admission walk",
+    "reproduced admission walk: the algorithm, not product code"
+   ],
+   "op": "walk",
+   "ordinal": 71,
+   "param": "k",
+   "point": 1024,
+   "residual": "R3-8"
+  },
+  {
+   "cell": "W",
+   "expected": {
+    "depth": 1449,
+    "errors": 0,
+    "steps": 1047628
+   },
+   "id": "W/walk/1445",
+   "input_bytes": 7620,
+   "input_sha256": "85110c3e9ad00edfa4f873fc0685289b029b72d5398d2a2ccf554f56a21c262e",
+   "labels": [
+    "walk: the reproduced admission walk",
+    "reproduced admission walk: the algorithm, not product code"
+   ],
+   "op": "walk",
+   "ordinal": 72,
+   "param": "k",
+   "point": 1445,
+   "residual": "R3-8"
+  }
+ ],
+ "low_points": [
+  {
+   "cell": "R1a",
+   "expected": {
+    "errors": 0,
+    "steps": 5,
+    "type_len": 4
+   },
+   "point": 2,
+   "text": "permit(principal == A::A::\"x\", action, resource);"
+  },
+  {
+   "cell": "R1b",
+   "expected": {
+    "annotations": 2,
+    "errors": 0,
+    "steps": 6
+   },
+   "point": 2,
+   "text": "@aaa @aab permit(principal, action, resource);"
+  },
+  {
+   "cell": "R2a",
+   "expected": {
+    "errors": 0,
+    "steps": 5
+   },
+   "point": 2,
+   "text": "permit(principal, action, resource) when { ((true)) };"
+  },
+  {
+   "cell": "R2b",
+   "expected": {
+    "errors": 0,
+    "steps": 11
+   },
+   "point": 2,
+   "text": "permit(principal, action, resource) when { if true then if true then true else false else false };"
+  },
+  {
+   "cell": "R3a",
+   "expected": {
+    "errors": 0,
+    "reasons": [
+     "base"
+    ],
+    "steps": 6
+   },
+   "point": 2,
+   "text": "permit(principal, action, resource) when { \"aa\" like \"*ab\" };"
+  },
+  {
+   "cell": "R3b",
+   "expected": {
+    "errors": 1,
+    "reasons": [
+     "base"
+    ],
+    "steps": 12
+   },
+   "point": 2,
+   "text": "permit(principal, action, resource) when { (\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\" like \"*aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab\") has a1.a2 };"
+  },
+  {
+   "cell": "R3c",
+   "expected": {
+    "errors": 0,
+    "reasons": [
+     "base"
+    ],
+    "steps": 13
+   },
+   "point": 2,
+   "text": "permit(principal, action, resource) when { [[1,32767],[2,32766]] == [] };"
+  },
+  {
+   "cell": "R3d",
+   "expected": {
+    "errors": 0,
+    "reasons": [
+     "base"
+    ],
+    "steps": 13
+   },
+   "point": 1,
+   "text": "permit(principal, action, resource) when { [[1,32767],[context.time]] == [] };"
+  },
+  {
+   "cell": "R3e",
+   "expected": {
+    "errors": 0,
+    "reasons": [
+     "base"
+    ],
+    "steps": 6
+   },
+   "point": 2,
+   "text": "permit(principal, action, resource) when { \"aa\" like \"*ab*\" };"
+  },
+  {
+   "cell": "R4a",
+   "expected": {
+    "depth": 4,
+    "errors": 0,
+    "reasons": [
+     "base"
+    ],
+    "steps": 6
+   },
+   "point": 1,
+   "text": "permit(principal, action, resource) when { context has a1 };"
+  },
+  {
+   "cell": "R4a",
+   "expected": {
+    "depth": 6,
+    "errors": 0,
+    "reasons": [
+     "base"
+    ],
+    "steps": 10
+   },
+   "point": 2,
+   "text": "permit(principal, action, resource) when { context has a1.a2 };"
+  },
+  {
+   "cell": "R4b",
+   "expected": {
+    "errors": 0,
+    "reasons": [
+     "base"
+    ],
+    "steps": 10
+   },
+   "point": 2,
+   "text": "permit(principal, action, resource) when { {} has a1.a2 };"
+  },
+  {
+   "cell": "R4c",
+   "expected": {
+    "errors": 0,
+    "reasons": [
+     "base",
+     "p0"
+    ],
+    "steps": 16
+   },
+   "point": 2,
+   "text": "permit(principal, action, resource) when { {a1:{a2:context.time}} has a1.a2 };"
+  },
+  {
+   "cell": "R4d",
+   "expected": {
+    "errors": 0,
+    "reasons": [
+     "base",
+     "p0"
+    ],
+    "steps": 26
+   },
+   "point": 2,
+   "text": "permit(principal, action, resource) when { (if context.time > 0 then {a1:{a2:1}} else {}) has a1.a2 };"
+  },
+  {
+   "cell": "R5a",
+   "expected": {
+    "errors": 1,
+    "nodes": 4,
+    "reasons": [
+     "base"
+    ],
+    "steps": 8
+   },
+   "point": 2,
+   "text": "permit(principal, action, resource) when { !!context.a };"
+  },
+  {
+   "cell": "R5b",
+   "expected": {
+    "depth": 4,
+    "errors": 0,
+    "reasons": [
+     "base",
+     "p0"
+    ],
+    "steps": 6
+   },
+   "point": 2,
+   "text": "permit(principal, action, resource) when{true} when{true};"
+  },
+  {
+   "cell": "R5c",
+   "expected": {
+    "errors": 0,
+    "reasons": [
+     "base",
+     "p0"
+    ],
+    "steps": 11
+   },
+   "point": 2,
+   "text": "permit(principal, action, resource) when { [[1]] == [[1]] };"
+  },
+  {
+   "cell": "R5d",
+   "expected": {
+    "discriminates": true,
+    "errors": 0,
+    "reasons": [
+     "base",
+     "p0"
+    ],
+    "steps": 12
+   },
+   "point": 2,
+   "text": "permit(principal, action, resource) when { [[context.time]] == [[1790000000]] };"
+  },
+  {
+   "cell": "W",
+   "expected": {
+    "depth": 6,
+    "errors": 0,
+    "steps": 10
+   },
+   "point": 2,
+   "text": "permit(principal, action, resource) when { context has a1.a2 };"
+  }
+ ],
+ "readings": {
+  "alloc_bytes_objects": "runtime.MemStats TotalAlloc and Mallocs, after minus baseline",
+  "live_heap_bytes": "compile only: /gc/heap/live:bytes after a collection with the compiled policy reachable",
+  "memory_peak_bytes": "cgroup memory.peak of the child's own fresh group: whole-child high-water mark",
+  "op_ns": "monotonic nanoseconds between op_start and op_end",
+  "stacks_bytes": "aggregate retained-stack observation, process-wide, with stack shrinking disabled by the supervisor's child environment; not a per-function peak"
+ },
+ "request_time": 1790000000,
+ "schema": "cedar-measure/matrix/v1",
+ "stop_rule": "a child that is not observed stops every larger point of the same cell"
+}

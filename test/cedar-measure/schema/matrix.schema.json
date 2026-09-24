@@ -1,0 +1,242 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "additionalProperties": false,
+ "properties": {
+  "children": {
+   "items": {
+    "additionalProperties": false,
+    "properties": {
+     "cell": {
+      "pattern": "^(R[1-5][a-e]|W)$",
+      "type": "string"
+     },
+     "expected": {
+      "additionalProperties": false,
+      "properties": {
+       "annotations": {
+        "minimum": 1,
+        "type": "integer"
+       },
+       "depth": {
+        "minimum": 1,
+        "type": "integer"
+       },
+       "discriminates": {
+        "const": true,
+        "type": "boolean"
+       },
+       "errors": {
+        "maximum": 1,
+        "minimum": 0,
+        "type": "integer"
+       },
+       "nodes": {
+        "minimum": 1,
+        "type": "integer"
+       },
+       "reasons": {
+        "items": {
+         "enum": [
+          "base",
+          "p0"
+         ],
+         "type": "string"
+        },
+        "minItems": 1,
+        "type": "array"
+       },
+       "steps": {
+        "minimum": 1,
+        "type": "integer"
+       },
+       "type_len": {
+        "minimum": 1,
+        "type": "integer"
+       }
+      },
+      "required": [
+       "steps",
+       "errors"
+      ],
+      "type": "object"
+     },
+     "id": {
+      "pattern": "^(R[1-5][a-e]|W)/(parse|compile|authorize|inspect|walk)/[0-9]+$",
+      "type": "string"
+     },
+     "input_bytes": {
+      "maximum": 262144,
+      "minimum": 1,
+      "type": "integer"
+     },
+     "input_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+     },
+     "labels": {
+      "items": {
+       "type": "string"
+      },
+      "minItems": 1,
+      "type": "array"
+     },
+     "op": {
+      "enum": [
+       "parse",
+       "compile",
+       "authorize",
+       "inspect",
+       "walk"
+      ]
+     },
+     "ordinal": {
+      "maximum": 72,
+      "minimum": 1,
+      "type": "integer"
+     },
+     "param": {
+      "enum": [
+       "m",
+       "a",
+       "d",
+       "n",
+       "k",
+       "c"
+      ]
+     },
+     "point": {
+      "minimum": 1,
+      "type": "integer"
+     },
+     "residual": {
+      "enum": [
+       "R1",
+       "R2",
+       "R3",
+       "R4",
+       "R5",
+       "R3-8"
+      ]
+     }
+    },
+    "required": [
+     "ordinal",
+     "id",
+     "cell",
+     "op",
+     "point",
+     "param",
+     "residual",
+     "input_bytes",
+     "input_sha256",
+     "expected",
+     "labels"
+    ],
+    "type": "object"
+   },
+   "maxItems": 72,
+   "minItems": 72,
+   "type": "array"
+  },
+  "low_points": {
+   "items": {
+    "additionalProperties": false,
+    "properties": {
+     "cell": {
+      "pattern": "^(R[1-5][a-e]|W)$",
+      "type": "string"
+     },
+     "expected": {
+      "additionalProperties": false,
+      "properties": {
+       "annotations": {
+        "minimum": 1,
+        "type": "integer"
+       },
+       "depth": {
+        "minimum": 1,
+        "type": "integer"
+       },
+       "discriminates": {
+        "const": true,
+        "type": "boolean"
+       },
+       "errors": {
+        "maximum": 1,
+        "minimum": 0,
+        "type": "integer"
+       },
+       "nodes": {
+        "minimum": 1,
+        "type": "integer"
+       },
+       "reasons": {
+        "items": {
+         "enum": [
+          "base",
+          "p0"
+         ],
+         "type": "string"
+        },
+        "minItems": 1,
+        "type": "array"
+       },
+       "steps": {
+        "minimum": 1,
+        "type": "integer"
+       },
+       "type_len": {
+        "minimum": 1,
+        "type": "integer"
+       }
+      },
+      "required": [
+       "steps",
+       "errors"
+      ],
+      "type": "object"
+     },
+     "point": {
+      "minimum": 1,
+      "type": "integer"
+     },
+     "text": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "cell",
+     "point",
+     "text",
+     "expected"
+    ],
+    "type": "object"
+   },
+   "minItems": 18,
+   "type": "array"
+  },
+  "readings": {
+   "type": "object"
+  },
+  "request_time": {
+   "minimum": 1,
+   "type": "integer"
+  },
+  "schema": {
+   "const": "cedar-measure/matrix/v1"
+  },
+  "stop_rule": {
+   "type": "string"
+  }
+ },
+ "required": [
+  "schema",
+  "request_time",
+  "readings",
+  "stop_rule",
+  "children",
+  "low_points"
+ ],
+ "title": "cedar-measure matrix",
+ "type": "object"
+}

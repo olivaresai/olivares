@@ -1,0 +1,140 @@
+# Bounded measurement of the cedar-go policy library (test/cedar-measure).
+#
+# supervisor.py runs one child process at a time, each alone in a fresh cgroup
+# v2 group with hard time, memory, swap and task limits and a fixed runtime
+# environment. supervisor.py is the only owner of those limits and of its inner
+# clock; this file owns only the outer clocks of its two jobs.
+#
+# Triggers: manual dispatch with a packet choice, or a push to one of two
+# fixed measurement branches that are never merged; each branch selects one
+# packet. A push to any other branch starts nothing. A manual dispatch
+# runs its chosen packet. Unsupported events or packet values are refused
+# before anything is checked out or built.
+#
+# Outer clock, minutes. Select: 1 of its job's 2. Measure: check out 2 +
+# install Go 3 + isolation 1 + build 7 = 13 of the 15-minute setup budget;
+# run 83; evidence 3. Total 99 of the job's 100. The derivation of the inner
+# clock is in supervisor.py.
+#
+# One outcome policy: 0 coherent, 1 measured mismatch, 2 inability (timeout,
+# out-of-memory kill, abnormal exit, missing record, missing isolation,
+# exhausted budget or a supervisor fault). A non-zero exit fails the job; the
+# evidence is kept; nothing retries.
+name: cedar-measure
+
+on:
+  workflow_dispatch:
+    inputs:
+      packet:
+        description: "matrix: the 72 measured children; oframe: framer agreement over the cedar-go corpus"
+        type: choice
+        options: [matrix, oframe]
+        default: matrix
+  push:
+    branches:
+      - qual/cedar-policy-matrix-20260924
+      - qual/cedar-policy-oframe-20260924
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cedar-measure-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  select:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      packet: ${{ steps.select.outputs.packet }}
+    steps:
+      - name: Select the packet from the event
+        id: select
+        timeout-minutes: 1
+        env:
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          REQUESTED: ${{ inputs.packet }}
+        run: |
+          set -euo pipefail
+          case "$EVENT" in
+            workflow_dispatch)
+              case "$REQUESTED" in
+                matrix | oframe) packet="$REQUESTED" ;;
+                *) echo "cedar-measure: refused: packet_not_declared" >&2; exit 2 ;;
+              esac ;;
+            push)
+              case "$REF" in
+                refs/heads/qual/cedar-policy-matrix-20260924) packet=matrix ;;
+                refs/heads/qual/cedar-policy-oframe-20260924) packet=oframe ;;
+                *) echo "cedar-measure: refused: ref_not_declared: $REF" >&2; exit 2 ;;
+              esac ;;
+            *) echo "cedar-measure: refused: event_not_declared: $EVENT" >&2; exit 2 ;;
+          esac
+          echo "packet=$packet" >> "$GITHUB_OUTPUT"
+
+  measure:
+    needs: select
+    runs-on: ubuntu-latest
+    timeout-minutes: 100
+    env:
+      PACKET: ${{ needs.select.outputs.packet }}
+      GOTOOLCHAIN: local
+      GOFLAGS: -mod=readonly
+      GOWORK: "off"
+    defaults:
+      run:
+        shell: bash
+        working-directory: test/cedar-measure
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 2
+        with:
+          persist-credentials: false
+
+      - name: Install the Go toolchain named by go.mod
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        timeout-minutes: 3
+        with:
+          go-version-file: test/cedar-measure/go.mod
+          cache: false
+
+      - name: Establish isolation
+        timeout-minutes: 1
+        run: >-
+          sudo --preserve-env=GITHUB_EVENT_NAME,GITHUB_REF,GITHUB_SHA,GITHUB_RUN_ID,GITHUB_RUN_ATTEMPT,GITHUB_WORKFLOW_REF,ImageOS,ImageVersion,RUNNER_OS,RUNNER_ARCH
+          python3 supervisor.py probe --out "$RUNNER_TEMP/cedar-measure"
+
+      - name: Download, verify and build, bounded
+        timeout-minutes: 7
+        run: >-
+          sudo python3 supervisor.py setup --out "$RUNNER_TEMP/cedar-measure"
+          --build "$RUNNER_TEMP/cedar-measure-build" --go "$(command -v go)"
+
+      - name: Run the packet
+        timeout-minutes: 83
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/cedar-measure"
+          build="$RUNNER_TEMP/cedar-measure-build"
+          corpus=()
+          if [ "$PACKET" = oframe ]; then
+            dir="$(GOMODCACHE="$build/gomodcache" GOCACHE="$build/gocache" \
+              go list -m -f '{{.Dir}}' github.com/cedar-policy/cedar-go)"
+            corpus=(--corpus "$dir/corpus-tests.tar.gz")
+          fi
+          sudo --preserve-env=GITHUB_EVENT_NAME,GITHUB_REF,GITHUB_SHA,GITHUB_RUN_ID,GITHUB_RUN_ATTEMPT,GITHUB_WORKFLOW_REF,ImageOS,ImageVersion,RUNNER_OS,RUNNER_ARCH \
+            python3 supervisor.py run --packet "$PACKET" --out "$out" \
+            --bin "$build/bin/cedar-measure" --matrix "$PWD/MATRIX.json" "${corpus[@]}"
+
+      - name: Keep the evidence
+        if: always()
+        timeout-minutes: 3
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cedar-measure-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/cedar-measure
+          if-no-files-found: error
+          retention-days: 30
