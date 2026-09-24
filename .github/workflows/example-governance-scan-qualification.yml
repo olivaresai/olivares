@@ -1,0 +1,246 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+name: Examples qualification
+
+on:
+  push:
+    branches: [qualify/example-governance-scan-post147-20260924]
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  examples:
+    if: github.repository == 'olivaresai/olivares' && github.event_name == 'push' && github.event.deleted != true
+    # Job-level superseding (see the concurrency note above the jobs block).
+    concurrency:
+      group: examples-qualification-${{ github.ref }}-${{ github.run_id }}
+      cancel-in-progress: true
+    runs-on: ubuntu-latest
+    # 30 -> 60 el 2026-08-22. ⚠ Y ESTE JOB NO ESTABA FALLANDO: the orchestrator midio su historial
+    # —21 · 22 · 24 min contra el techo de 30, siempre verde— y tiene razon en que la aritmetica
+    # SOLA lo habria reportado como si mordiera. NO muerde. Lo que se arregla aqui es su MODO DE
+    # FALLO el dia que muerda: con 30 sobre una suma de pasos de 45, el primero en disparar seria
+    # el techo del JOB, que cancela los pasos restantes y sale MUDO, en vez de la guarda del paso,
+    # que nombra cual se colgo.
+    #
+    # ⇒ Y el arreglo MEJOR no es este: es apretar los `timeout-minutes` de sus PASOS hasta cerca de
+    # lo observado, que satisface la invariante Y sigue matando pronto un cuelgue de verdad. No lo
+    # hago hoy porque no tengo las duraciones POR PASO, solo la del job, y apretar una guarda sin
+    # su medida fabrica rojos falsos. Subir el techo no puede producir ninguno: un techo acota, no
+    # reserva. Cuando alguien mida los pasos, este numero debe BAJAR.
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - id: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - name: Bind the public source and vehicle
+        id: preflight
+        timeout-minutes: 1
+        env:
+          EXPECTED_SOURCE_COMMIT: 7f34c54b0d431a18dd95cc1ed57058bc2ea0c538
+          EXPECTED_SMOKE_SHA256: c4b9d55c312741d9277fc7665e2f3b6d3fec851f1a5b3d32e8d6902714413c55
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, os, pathlib, re, subprocess, sys
+          root = pathlib.Path.cwd()
+          receipt = pathlib.Path(os.environ["RUNNER_TEMP"]) / "examples-qualification"
+          receipt.mkdir(parents=True, exist_ok=True)
+          workflow = ".github/workflows/example-governance-scan-qualification.yml"
+          def refuse(reason):
+              print("examples qualification preflight refused: " + reason, file=sys.stderr)
+              raise SystemExit(1)
+          def git(*args):
+              result = subprocess.run(["git", "--no-replace-objects", *args], text=True, capture_output=True, timeout=10)
+              if result.returncode:
+                  refuse("Git could not read the bound source")
+              return result.stdout.strip()
+          source = os.environ["EXPECTED_SOURCE_COMMIT"]
+          head = os.environ.get("GITHUB_SHA", "")
+          if os.environ.get("GITHUB_REPOSITORY") != "olivaresai/olivares":
+              refuse("repository differs")
+          if os.environ.get("GITHUB_REF") != "refs/heads/qualify/example-governance-scan-post147-20260924":
+              refuse("ref differs")
+          if os.environ.get("GITHUB_EVENT_NAME") != "push":
+              refuse("event differs")
+          if os.environ.get("RUNNER_ENVIRONMENT") != "github-hosted":
+              refuse("runner is not GitHub-hosted")
+          if not re.fullmatch(r"[0-9a-f]{40}", head) or git("rev-parse", "HEAD") != head:
+              refuse("checkout differs from event source")
+          if git("rev-parse", "HEAD^") != source:
+              refuse("public source parent differs")
+          if git("diff", "--name-status", "--no-renames", source, "HEAD") != "A\t" + workflow:
+              refuse("vehicle changes more than its workflow")
+          if git("status", "--porcelain"):
+              refuse("checkout is dirty")
+          smoke = root / "examples/bring-your-own-protocol/smoke.sh"
+          digest = hashlib.sha256(smoke.read_bytes()).hexdigest()
+          if digest != os.environ["EXPECTED_SMOKE_SHA256"]:
+              refuse("exported smoke postimage differs")
+          result = subprocess.run(["grep", "--version"], text=True, capture_output=True, timeout=10)
+          if result.returncode:
+              refuse("grep could not identify itself")
+          data = {
+              "repository": os.environ["GITHUB_REPOSITORY"], "ref": os.environ["GITHUB_REF"],
+              "head": head, "public_source": source, "run_id": os.environ.get("GITHUB_RUN_ID"),
+              "run_attempt": os.environ.get("GITHUB_RUN_ATTEMPT"), "runner_environment": os.environ["RUNNER_ENVIRONMENT"],
+              "runner_os": os.environ.get("RUNNER_OS"), "runner_arch": os.environ.get("RUNNER_ARCH"),
+              "workflow_sha256": hashlib.sha256((root / workflow).read_bytes()).hexdigest(),
+              "smoke_sha256": digest, "grep_version": result.stdout.splitlines()[0],
+          }
+          (receipt / "source.json").write_text(json.dumps(data, indent=2) + "\n")
+          print(json.dumps(data, sort_keys=True))
+          PY
+      - name: Go caches under RUNNER_TEMP (this runner may have no $HOME)
+        id: cache-paths
+        # ⛔ VA ANTES DE `setup-go`, Y ESE ORDEN ES EL ARREGLO. La primera version de este
+        # paso iba DESPUES, y habria sido inutil: cuando se etiqueto `ci-runner-4` el 2026-08-18
+        # el job no murio en `go install`, murio dentro de `setup-go` con «GOCACHE is not
+        # defined and neither $XDG_CACHE_HOME nor $HOME are defined». Un arreglo colocado
+        # despues del paso que falla no arregla nada — sale verde en los runners que ya
+        # funcionaban y sigue rojo en los seis que no.
+        run: |
+          {
+            echo "GOCACHE=$RUNNER_TEMP/gocache"
+            echo "GOMODCACHE=$RUNNER_TEMP/gomodcache"
+            echo "GOPATH=$RUNNER_TEMP/gopath"
+          # Y su `bin` AL PATH, o mover GOPATH rompe todo lo que se instala con `go install`.
+          # Medido en CI: con GOPATH redirigido y sin esta linea, helm-render fallo con
+          # "check-helm-render: kubeconform not found on PATH". La herramienta SI se instalaba,
+          # en $RUNNER_TEMP/gopath/bin, que no esta en PATH — mientras que el $HOME/go/bin de
+          # antes si lo estaba. El arreglo del $HOME introdujo esa regresion, y este la cierra.
+            echo "GOBIN=$RUNNER_TEMP/gopath/bin"
+          } >> "$GITHUB_ENV"
+          echo "$RUNNER_TEMP/gopath/bin" >> "$GITHUB_PATH"
+          # Y pnpm IGUAL, por la misma causa y con otro sintoma. Medido en ci-runner-9: el
+          # servicio corre con HOME=/root, asi que pnpm/action-setup se auto-instalo en
+          # /root/setup-pnpm y murio con ERR_PNPM_BROKEN_PNPM_INSTALL (exit 127). Ese fallo
+          # SALTA los pasos siguientes —incluida la instalacion de go-task— y entonces un
+          # gate posterior canta "task: command not found", que es la CONSECUENCIA y manda a
+          # investigar el PATH en vez de pnpm.
+          {
+            echo "PNPM_HOME=$RUNNER_TEMP/pnpm"
+          } >> "$GITHUB_ENV"
+          echo "$RUNNER_TEMP/pnpm" >> "$GITHUB_PATH"
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        id: setup-go
+        with:
+          go-version-file: go.work
+          cache: ${{ runner.environment == 'github-hosted' }}
+          cache-dependency-path: go.work.sum
+      - name: install go-task (pinned)
+        # MEASURED 2026-09-14 (run 34854565361): `go install …/task@v3.51.1` compiled the tool in
+        # every job, 4m00s–6m20s each on ci-runner-1..9. The composite action installs the pinned
+        # release tarball (SHA-256 verified) into the runner tool cache and proves it is reachable.
+        id: tools
+        uses: ./.github/actions/olivares-tool-cache
+      - name: pick a temp dir where an extracted binary can actually run
+        id: workdir
+        # ⛔ NO ES PREVENTIVO. Medido el 2026-08-18 en ci-runner-6 y ci-runner-7: el smoke de
+        # otel-genai muere con «fork/exec …: permission denied» sobre un plugin que el extractor
+        # deja en 0700 A PROPOSITO (cmd/olivares/firstparty/embed.go:90). El bit esta puesto: lo
+        # que falla es que `_work` esta montado NOEXEC en esas maquinas, y ahi cae por defecto
+        # `$ROOT/.examples-tmp`. El ejemplo NO se toca —es artefacto publico y ya honra la
+        # variable—: el conocimiento del entorno es del CI, y aqui vive.
+        #
+        # El directorio no se elige, se PRUEBA: lib/exec-workdir.sh crea un ejecutable de verdad
+        # y lo ejecuta. Si ningun candidato sirve, este paso falla NOMBRANDO la causa, que es
+        # mucho mejor que un deny-closed tres capas mas abajo diciendo «source not wired».
+        run: |
+          . scripts/lib/exec-workdir.sh
+          # ⛔ --traversable-by-others, y NO es una precaucion de mas. El smoke arranca el motor,
+          # que si corre como root baja cada plugin a un uid DEDICADO no-root: «yo puedo ejecutar
+          # aqui» y «puede ejecutar aqui ese uid» son preguntas distintas. Medido en ci-runner-7:
+          # la sonda pasaba —somos el dueño— y el plugin no arrancaba porque /home/runner es
+          # -rwx------ y el hijo no puede ATRAVESARLO. El fallo salia tres capas mas abajo como
+          # «source not wired», y solo se supo por la pista del loader, que nombra el ancestro.
+          d="$(olivares_pick_exec_workdir examples-smoke --traversable-by-others)" || {
+            echo "::error::ningun directorio candidato es ejecutable Y atravesable por otro uid (RUNNER_TEMP, TMPDIR, /tmp, HOME). El smoke lanza plugins bajo un uid dedicado y no puede correr aqui."
+            exit 1
+          }
+          echo "OLIVARES_SMOKE_TMPDIR=$d" >> "$GITHUB_ENV"
+          echo "cadena de $d:"
+          p="$d"; while :; do printf '  %s %s\n' "$(stat -c '%a' "$p")" "$p"; [ "$p" = "/" ] && break; p="$(dirname "$p")"; done
+      - name: examples smoke (governed hooks · OTel GenAI · connector scaffold)
+        id: smoke
+        timeout-minutes: 25
+        run: task smoke:examples 2>&1 | tee "$RUNNER_TEMP/ci-fail-examples.log" && rm "$RUNNER_TEMP/ci-fail-examples.log"
+      # ⛔ THE SEVEN READMEs WE PUBLISH SAY "CI walks the same path: `task smoke:quickstart`",
+      # AND UNTIL NOW NOTHING IN .github/ REFERENCED IT. The task exists and works; it was simply
+      # never wired, so the quickstart's install→value path and its drift numbers were unwatched.
+      # The numbers were true — what was false is that anything was keeping them true.
+      #
+      # It runs HERE rather than in a job of its own because it needs the same thing the examples
+      # smoke needs (a built binary and go-task) and shares its 30-minute budget, and because the
+      # two are the same promise: a documented path that still works.
+      - name: quickstart smoke (the path the READMEs promise CI walks)
+        id: smoke-quickstart
+        timeout-minutes: 20
+        run: task smoke:quickstart 2>&1 | tee "$RUNNER_TEMP/ci-fail-quickstart.log" && rm "$RUNNER_TEMP/ci-fail-quickstart.log"
+      - name: Collect source and step evidence
+        id: collect
+        if: ${{ always() }}
+        timeout-minutes: 1
+        env:
+          STEPS_JSON: ${{ toJSON(steps) }}
+        run: |
+          python3 - <<'PY'
+          import json, os, pathlib, shutil
+          root = pathlib.Path(os.environ["RUNNER_TEMP"])
+          receipt = root / "examples-qualification"
+          receipt.mkdir(parents=True, exist_ok=True)
+          steps = json.loads(os.environ["STEPS_JSON"])
+          (receipt / "steps-before-retention.json").write_text(json.dumps(steps, indent=2) + "\n")
+          for path in root.glob("ci-fail-*.log"):
+              if path.is_file():
+                  shutil.copyfile(path, receipt / path.name)
+          print("Collected source identity, step outcomes and any retained failure logs.")
+          PY
+      - name: Retain qualification evidence
+        id: retain
+        if: ${{ always() }}
+        timeout-minutes: 2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: examples-qualification-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/examples-qualification
+          if-no-files-found: error
+          retention-days: 14
+      - name: Require every measurement and retention step
+        id: verdict
+        if: ${{ always() }}
+        timeout-minutes: 1
+        env:
+          STEPS_JSON: ${{ toJSON(steps) }}
+        run: |
+          python3 - <<'PY'
+          import json, os, pathlib, sys
+          required = ["checkout", "preflight", "cache-paths", "setup-go", "tools", "workdir", "smoke", "smoke-quickstart", "collect", "retain"]
+          try:
+              steps = json.loads(os.environ["STEPS_JSON"])
+              if not isinstance(steps, dict):
+                  raise ValueError("step outcomes are not an object")
+          except (KeyError, ValueError, TypeError):
+              print("examples qualification: could not read step outcomes", file=sys.stderr)
+              raise SystemExit(2)
+          failed = [name for name in required if not isinstance(steps.get(name), dict)
+                    or steps[name].get("outcome") != "success" or steps[name].get("conclusion") != "success"]
+          result = {"status": "qualified" if not failed else "rejected", "required_steps": required, "non_success_steps": failed}
+          text = json.dumps(result, sort_keys=True)
+          try:
+              with pathlib.Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a") as summary:
+                  summary.write("Examples qualification: " + result["status"] + "\n\n" + text + "\n")
+          except (KeyError, OSError):
+              print("examples qualification: could not retain the verdict summary", file=sys.stderr)
+              raise SystemExit(2)
+          print(text)
+          raise SystemExit(1 if failed else 0)
+          PY
