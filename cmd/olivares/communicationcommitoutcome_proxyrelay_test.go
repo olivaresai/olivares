@@ -31,6 +31,14 @@ import (
 // entry before causing it; the proxy's end-of-test custody check fails every
 // test that records an inability it did not declare, the positives here
 // included.
+//
+// The Terminate controls own one more relay rule. A driver that gives up on a
+// canceled request closes its connection with a Terminate; while that same
+// session's COMMIT is held, the proxy keeps the Terminate from the server, whose
+// transaction would otherwise end and release the locks the hold exists to keep,
+// and delivers it after the COMMIT when the hold is forwarded. Every other
+// Terminate — no hold, another session, a malformed one, a held answer — is
+// relayed as before.
 
 // commitOutcomeRelayOversized is a payload larger than any frame the proxy may
 // retain or inspect.
@@ -246,6 +254,97 @@ func TestCommunicationCommitOutcomeProxyRelay(t *testing.T) {
 		commitOutcomeRelayExpectNamed(t, proxy, "relay_error=from_server:short_write")
 		commitOutcomeRelayAssertNoPayload(t, proxy)
 	})
+
+	t.Run("terminate_is_withheld_while_commit_held", func(t *testing.T) {
+		rig := newCommitOutcomeRelayRig(t)
+		rig.holdCommit(t)
+		// The driver's own close: Terminate, then the socket.
+		rig.expectTerminateWithheld(t)
+		_ = rig.client.Close()
+		// The relay decides whether to keep the server socket when it sees the
+		// close; forward() gives up the hold, so it must not run before that.
+		commitOutcomeRelayExpectCustody(t, rig.proxy, "client_gone_upstream_retained")
+		rig.proxy.forward()
+		first, err := commitOutcomeRelayReadFrame(rig.upstream)
+		if err != nil {
+			t.Fatalf("COULD_NOT_LOOK: the forwarded COMMIT did not reach the scripted server: %v", err)
+		}
+		if first[0] != 'Q' {
+			t.Fatalf("the server received a %q frame before the held COMMIT: the client's Terminate was relayed while the COMMIT was held, which ends the transaction the hold keeps",
+				first[:1])
+		}
+		second, err := commitOutcomeRelayReadFrame(rig.upstream)
+		if err != nil || !bytes.Equal(second, commitOutcomeRelayTerminate()) {
+			t.Fatalf("after the held COMMIT the server received (%q, %v), want the withheld Terminate: it is delivered, never dropped",
+				second, err)
+		}
+		commitOutcomeRelayExpectCustody(t, rig.proxy, "terminate_forwarded=4242")
+	})
+
+	t.Run("sever_settles_a_withheld_terminate", func(t *testing.T) {
+		rig := newCommitOutcomeRelayRig(t)
+		rig.holdCommit(t)
+		rig.expectTerminateWithheld(t)
+		_ = rig.client.Close()
+		commitOutcomeRelayExpectCustody(t, rig.proxy, "client_gone_upstream_retained")
+		// A reset closes the held connection; the server learns of it from the
+		// socket, and the Terminate goes with the connection it belonged to.
+		rig.proxy.sever()
+		commitOutcomeRelayExpectClosed(t, rig.upstream, "server")
+		commitOutcomeRelayExpectCustody(t, rig.proxy, "terminate_closed=4242")
+	})
+
+	t.Run("terminate_without_a_held_commit_is_relayed", func(t *testing.T) {
+		rig := newCommitOutcomeRelayRig(t)
+		rig.open(t, 4242)
+		rig.clientWrite(t, commitOutcomeRelayTerminate())
+		got, err := commitOutcomeRelayReadFrame(rig.upstream)
+		if err != nil || !bytes.Equal(got, commitOutcomeRelayTerminate()) {
+			t.Fatalf("with no held COMMIT the server received (%q, %v), want the client's Terminate", got, err)
+		}
+		commitOutcomeRelayExpectNoEntry(t, rig.proxy, "terminate_")
+	})
+
+	t.Run("terminate_on_another_session_is_relayed", func(t *testing.T) {
+		held := newCommitOutcomeRelayRig(t)
+		held.holdCommit(t)
+		other := held.connectAnother(t)
+		other.open(t, 4343)
+		other.clientWrite(t, commitOutcomeRelayTerminate())
+		got, err := commitOutcomeRelayReadFrame(other.upstream)
+		if err != nil || !bytes.Equal(got, commitOutcomeRelayTerminate()) {
+			t.Fatalf("another session's server received (%q, %v), want that session's Terminate", got, err)
+		}
+		if held.proxy.heldSession() == nil {
+			t.Fatal("another session's Terminate ended the held COMMIT")
+		}
+		commitOutcomeRelayExpectNoEntry(t, held.proxy, "terminate_")
+	})
+
+	t.Run("malformed_terminate_is_relayed", func(t *testing.T) {
+		rig := newCommitOutcomeRelayRig(t)
+		rig.holdCommit(t)
+		// A Terminate carries no body; this one declares a length of 5.
+		malformed := commitOutcomeFrame('X', []byte{0})
+		rig.clientWrite(t, malformed)
+		got, err := commitOutcomeRelayReadFrame(rig.upstream)
+		if err != nil || !bytes.Equal(got, malformed) {
+			t.Fatalf("the server received (%q, %v), want the malformed Terminate relayed as it is", got, err)
+		}
+		commitOutcomeRelayExpectNoEntry(t, rig.proxy, "terminate_")
+	})
+
+	t.Run("terminate_during_held_answer_is_relayed", func(t *testing.T) {
+		rig := newCommitOutcomeRelayRig(t)
+		rig.holdAnswer(t)
+		// The COMMIT already reached the server; only its answer is held.
+		rig.clientWrite(t, commitOutcomeRelayTerminate())
+		got, err := commitOutcomeRelayReadFrame(rig.upstream)
+		if err != nil || !bytes.Equal(got, commitOutcomeRelayTerminate()) {
+			t.Fatalf("while an answer was held the server received (%q, %v), want the client's Terminate", got, err)
+		}
+		commitOutcomeRelayExpectNoEntry(t, rig.proxy, "terminate_")
+	})
 }
 
 // commitOutcomeRelayRig is one test proxy between a raw client and a scripted
@@ -253,6 +352,8 @@ func TestCommunicationCommitOutcomeProxyRelay(t *testing.T) {
 // itself.
 type commitOutcomeRelayRig struct {
 	proxy    *commitOutcomeProxy
+	listener net.Listener
+	address  string
 	client   net.Conn
 	upstream net.Conn
 }
@@ -267,7 +368,15 @@ func newCommitOutcomeRelayRig(t *testing.T) *commitOutcomeRelayRig {
 	proxy, redirected := newCommitOutcomeProxy(t, "postgres://u:p@"+listener.Addr().String()+"/db?sslmode=disable")
 	address := strings.TrimPrefix(redirected, "postgres://u:p@")
 	address = strings.TrimSuffix(address, "/db?sslmode=disable")
-	client := newCommitOutcomeProxyClient(t, address)
+	return (&commitOutcomeRelayRig{proxy: proxy, listener: listener, address: address}).connectAnother(t)
+}
+
+// connectAnother opens one more client connection through the same proxy, to
+// the same scripted server, and returns it as its own rig: a second session.
+func (r *commitOutcomeRelayRig) connectAnother(t *testing.T) *commitOutcomeRelayRig {
+	t.Helper()
+	listener := r.listener
+	client := newCommitOutcomeProxyClient(t, r.address)
 	tcpListener, ok := listener.(*net.TCPListener)
 	if !ok {
 		t.Fatalf("COULD_NOT_LOOK: the scripted server's listener is a %T, not TCP", listener)
@@ -300,7 +409,9 @@ func newCommitOutcomeRelayRig(t *testing.T) *commitOutcomeRelayRig {
 	if version := binary.BigEndian.Uint32(startup[:4]); version != commitOutcomeProxyStartupMagic {
 		t.Fatalf("COULD_NOT_LOOK: the startup message names protocol %d", version)
 	}
-	return &commitOutcomeRelayRig{proxy: proxy, client: client.conn, upstream: upstream}
+	return &commitOutcomeRelayRig{
+		proxy: r.proxy, listener: listener, address: r.address, client: client.conn, upstream: upstream,
+	}
 }
 
 // serverWrite sends small frames from the scripted server, bounded by the
@@ -322,26 +433,9 @@ func (r *commitOutcomeRelayRig) serverWrite(t *testing.T, frames ...[]byte) {
 // session that now withholds that answer.
 func (r *commitOutcomeRelayRig) holdAnswer(t *testing.T) *commitOutcomeProxySession {
 	t.Helper()
-	key := make([]byte, 8)
-	binary.BigEndian.PutUint32(key, 4242)
-	r.serverWrite(t,
-		commitOutcomeFrame('R', []byte{0, 0, 0, 0}),
-		commitOutcomeFrame('K', key),
-		commitOutcomeFrame('Z', []byte{'I'}),
-	)
-	for _, want := range []byte("RKZ") {
-		frame, err := commitOutcomeRelayReadFrame(r.client)
-		if err != nil || frame[0] != want {
-			t.Fatalf("COULD_NOT_LOOK: the opening exchange did not pass through (%q, %v)", frame, err)
-		}
-	}
+	r.open(t, 4242)
 	r.proxy.arm(commitOutcomeProxyHoldAck, func(context.Context, int) bool { return true })
-	if err := r.client.SetWriteDeadline(time.Now().Add(commitOutcomeProxyWriteLimit)); err != nil {
-		t.Fatalf("COULD_NOT_LOOK: bound the client's write: %v", err)
-	}
-	if _, err := r.client.Write(commitOutcomeFrame('Q', commitOutcomeStringPayload("commit"))); err != nil {
-		t.Fatalf("COULD_NOT_LOOK: the client could not send COMMIT: %v", err)
-	}
+	r.clientWrite(t, commitOutcomeFrame('Q', commitOutcomeStringPayload("commit")))
 	query, err := commitOutcomeRelayReadFrame(r.upstream)
 	if err != nil || query[0] != 'Q' {
 		t.Fatalf("COULD_NOT_LOOK: the COMMIT did not reach the scripted server (%q, %v)", query, err)
@@ -353,6 +447,65 @@ func (r *commitOutcomeRelayRig) holdAnswer(t *testing.T) *commitOutcomeProxySess
 		t.Fatal("COULD_NOT_LOOK: no session owns the held answer")
 	}
 	return session
+}
+
+// open plays the server's side of a successful startup naming backend pid, and
+// reads it back through the proxy.
+func (r *commitOutcomeRelayRig) open(t *testing.T, pid uint32) {
+	t.Helper()
+	key := make([]byte, 8)
+	binary.BigEndian.PutUint32(key, pid)
+	r.serverWrite(t,
+		commitOutcomeFrame('R', []byte{0, 0, 0, 0}),
+		commitOutcomeFrame('K', key),
+		commitOutcomeFrame('Z', []byte{'I'}),
+	)
+	for _, want := range []byte("RKZ") {
+		frame, err := commitOutcomeRelayReadFrame(r.client)
+		if err != nil || frame[0] != want {
+			t.Fatalf("COULD_NOT_LOOK: the opening exchange did not pass through (%q, %v)", frame, err)
+		}
+	}
+}
+
+// holdCommit opens the connection with backend pid 4242, arms the proxy to hold
+// the next COMMIT, and has the client send one. The server never sees it until
+// forward().
+func (r *commitOutcomeRelayRig) holdCommit(t *testing.T) {
+	t.Helper()
+	r.open(t, 4242)
+	r.proxy.arm(commitOutcomeProxyHoldCommit, func(context.Context, int) bool { return true })
+	r.clientWrite(t, commitOutcomeFrame('Q', commitOutcomeStringPayload("commit")))
+	r.proxy.waitForEvent("commit_held")
+}
+
+// expectTerminateWithheld sends the client's Terminate on the session whose
+// COMMIT is held and requires the proxy to keep it. It waits on the proxy's own
+// record, which the relay writes before it reads another frame; when that
+// record never comes, the frame the server received instead is the evidence in
+// the failure.
+func (r *commitOutcomeRelayRig) expectTerminateWithheld(t *testing.T) {
+	t.Helper()
+	r.clientWrite(t, commitOutcomeRelayTerminate())
+	if !commitOutcomeRelayAwaitCustody(r.proxy, "terminate_withheld=4242") {
+		got, err := commitOutcomeRelayReadFrame(r.upstream)
+		t.Fatalf("the client's Terminate was not withheld while its COMMIT was held: the server received (%q, %v), which ends the transaction the hold keeps",
+			got, err)
+	}
+}
+
+// clientWrite sends small frames from the client, bounded by the instrument's
+// write limit.
+func (r *commitOutcomeRelayRig) clientWrite(t *testing.T, frames ...[]byte) {
+	t.Helper()
+	if err := r.client.SetWriteDeadline(time.Now().Add(commitOutcomeProxyWriteLimit)); err != nil {
+		t.Fatalf("COULD_NOT_LOOK: bound the client's write: %v", err)
+	}
+	for _, frame := range frames {
+		if _, err := r.client.Write(frame); err != nil {
+			t.Fatalf("COULD_NOT_LOOK: the client could not write: %v", err)
+		}
+	}
 }
 
 // release lets the held answer go and returns the next want frames the client
@@ -517,6 +670,30 @@ func commitOutcomeRelayExpectClosed(t *testing.T, conn net.Conn, side string) {
 	n, err := conn.Read(one[:])
 	if n != 0 || !errors.Is(err, io.EOF) {
 		t.Fatalf("the %s read %d byte(s) and %v, want the connection closed with nothing delivered", side, n, err)
+	}
+}
+
+// commitOutcomeRelayTerminate is a valid protocol Terminate: kind X, no body.
+func commitOutcomeRelayTerminate() []byte { return commitOutcomeFrame('X', nil) }
+
+// commitOutcomeRelayExpectCustody requires the proxy to record exactly want.
+func commitOutcomeRelayExpectCustody(t *testing.T, proxy *commitOutcomeProxy, want string) {
+	t.Helper()
+	if !commitOutcomeRelayAwaitCustody(proxy, want) {
+		t.Logf("custody log: %q", proxy.custodyLog())
+		t.Fatalf("the test proxy did not record %q", want)
+	}
+}
+
+// commitOutcomeRelayExpectNoEntry requires the custody log to hold no entry
+// starting with prefix. The caller has already observed the frame the proxy
+// relayed, so the decision it would have recorded has been made.
+func commitOutcomeRelayExpectNoEntry(t *testing.T, proxy *commitOutcomeProxy, prefix string) {
+	t.Helper()
+	for _, line := range proxy.custodyLog() {
+		if strings.HasPrefix(line, prefix) {
+			t.Fatalf("the test proxy recorded %q where it must relay the frame unchanged", line)
+		}
 	}
 }
 

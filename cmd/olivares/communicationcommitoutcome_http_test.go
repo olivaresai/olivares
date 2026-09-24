@@ -1033,7 +1033,7 @@ func TestCommunicationCommitOutcomeKeyReuseHTTPPostgres(t *testing.T) {
 		rebound[key] = value
 	}
 	rebound["content"] = map[string]any{
-		"subject": "rebound", "blocks": []map[string]any{{"type": "text", "text": "a different body"}},
+		"subject": "rebound", "blocks": []map[string]any{{"type": "text", "format": "plain", "text": "a different body"}},
 	}
 	reuse := communicationHTTPTestRequest(t, f.estate.eng, request.method, request.path,
 		request.token, f.estate.tenant, rebound, request.headers)
@@ -1085,7 +1085,7 @@ func commitOutcomeSendRoute() commitOutcomeKeyedRoute {
 					},
 					"content": map[string]any{
 						"subject": "commit-outcome-send-" + key,
-						"blocks":  []map[string]any{{"type": "text", "text": "commit outcome " + key}},
+						"blocks":  []map[string]any{{"type": "text", "format": "plain", "text": "commit outcome " + key}},
 					},
 				},
 				headers: map[string]string{"Idempotency-Key": key},
@@ -1247,7 +1247,9 @@ func commitOutcomeResponseRoute() commitOutcomeKeyedRoute {
 				method: http.MethodPost,
 				path:   "/v1/m/sessions/handoffs/" + offered.HandoffID.String() + "/responses",
 				token:  f.estate.recipient.token,
-				body:   map[string]any{"transition": "reject"},
+				body: map[string]any{"transition": "reject", "reason": map[string]any{
+					"code": "not_mine", "text": "The recipient declines the transfer",
+				}},
 				headers: map[string]string{
 					"If-Match": offered.ETag, "Idempotency-Key": key,
 				},
@@ -1331,7 +1333,7 @@ func commitOutcomeSendOneDelivery(t *testing.T, f *commitOutcomeKeyedFixture) co
 			},
 			"content": map[string]any{
 				"subject": "commit-outcome-seed-" + key,
-				"blocks":  []map[string]any{{"type": "text", "text": "seed " + key}},
+				"blocks":  []map[string]any{{"type": "text", "format": "plain", "text": "seed " + key}},
 			},
 		}, map[string]string{"Idempotency-Key": key})
 	if sent.status != http.StatusCreated {

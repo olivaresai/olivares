@@ -1,8 +1,8 @@
 diff --git a/cmd/olivares/communicationcommitoutcome_proxy_test.go b/cmd/olivares/communicationcommitoutcome_proxy_test.go
-index 98c0d3a85e..4feb9f7730 100644
+index 2a47d1b876..706f187b47 100644
 --- a/cmd/olivares/communicationcommitoutcome_proxy_test.go
 +++ b/cmd/olivares/communicationcommitoutcome_proxy_test.go
-@@ -562,42 +562,25 @@ func (s *commitOutcomeProxySession) clientToServer() {
+@@ -565,45 +565,28 @@ func (s *commitOutcomeProxySession) clientToServer() {
  	defer s.closeUpstreamUnlessHeld()
  
  	if err := s.relayStartup(); err != nil {
@@ -19,42 +19,47 @@ index 98c0d3a85e..4feb9f7730 100644
 -		kind, body, end := commitOutcomeRelayHeader(s.client, &header)
 -		if end != "" {
 -			s.relayStopped(commitOutcomeRelayFromClient, end, nil)
-+		frame, kind, payload, err := commitOutcomeReadTypedFrame(s.client)
-+		if err != nil {
- 			return
- 		}
+-			return
+-		}
 -		if body+4 > commitOutcomeProxyBufferLimit {
 -			// Too large to be the COMMIT this proxy looks for: carried, never
 -			// inspected.
 -			if end, err := s.streamToServer(header[:], body, buf); end != "" || err != nil {
 -				s.relayStopped(commitOutcomeRelayFromClient, end, err)
 -				return
-+		if kind == 'Q' && commitOutcomeIsCommitQuery(payload) {
-+			if s.handleCommit(frame) {
-+				continue
- 			}
+-			}
 -			continue
- 		}
+-		}
 -		frame, end := commitOutcomeRelayWhole(s.client, header[:], body, buf)
 -		if end != "" {
 -			s.relayStopped(commitOutcomeRelayFromClient, end, nil)
-+		if err := s.upstream.SetWriteDeadline(time.Now().Add(commitOutcomeProxyWriteLimit)); err != nil {
++		frame, kind, payload, err := commitOutcomeReadTypedFrame(s.client)
++		if err != nil {
  			return
  		}
+-		if kind == 'X' && body == 0 && s.p.withholdTerminate(s) {
++		if kind == 'X' && len(payload) == 0 && s.p.withholdTerminate(s) {
+ 			continue
+ 		}
 -		if kind == 'Q' && commitOutcomeIsCommitQuery(frame[5:]) {
--			if s.handleCommit(frame) {
--				continue
--			}
-+		if _, err := s.upstream.Write(frame); err != nil {
-+			return
++		if kind == 'Q' && commitOutcomeIsCommitQuery(payload) {
+ 			if s.handleCommit(frame) {
+ 				continue
+ 			}
  		}
 -		if err := s.writeServer(frame); err != nil {
 -			s.relayStopped(commitOutcomeRelayFromClient, "", err)
++		if err := s.upstream.SetWriteDeadline(time.Now().Add(commitOutcomeProxyWriteLimit)); err != nil {
++			return
++		}
++		if _, err := s.upstream.Write(frame); err != nil {
++			return
++		}
 +		if err := s.upstream.SetWriteDeadline(time.Time{}); err != nil {
  			return
  		}
  	}
-@@ -706,7 +689,6 @@ func (p *commitOutcomeProxy) emit(event commitOutcomeProxyEvent) {
+@@ -712,7 +695,6 @@ func (p *commitOutcomeProxy) emit(event commitOutcomeProxyEvent) {
  
  // serverToClient relays backend messages, recording only the type byte and, for
  // CommandComplete, the tag.
@@ -62,7 +67,7 @@ index 98c0d3a85e..4feb9f7730 100644
  func (s *commitOutcomeProxySession) serverToClient() {
  	defer s.p.wg.Done()
  	// The client side is retained for the same reason, in the other direction:
-@@ -715,27 +697,11 @@ func (s *commitOutcomeProxySession) serverToClient() {
+@@ -721,27 +703,11 @@ func (s *commitOutcomeProxySession) serverToClient() {
  	// HC-1b measures.
  	defer s.closeClientUnlessHeld()
  
@@ -92,7 +97,7 @@ index 98c0d3a85e..4feb9f7730 100644
  		s.mu.Lock()
  		arrived := s.onRelayFrame
  		s.mu.Unlock()
-@@ -770,7 +736,6 @@ func (s *commitOutcomeProxySession) serverToClient() {
+@@ -776,7 +742,6 @@ func (s *commitOutcomeProxySession) serverToClient() {
  		// writeClient serializes with an in-flight release drain, so a frame that
  		// arrives mid-drain lands AFTER the drained frames rather than inside them.
  		if err := s.writeClient(frame); err != nil {
@@ -100,7 +105,7 @@ index 98c0d3a85e..4feb9f7730 100644
  			return
  		}
  	}
-@@ -1215,8 +1180,7 @@ func (p *commitOutcomeProxy) checkRelayCustody() {
+@@ -1309,8 +1274,7 @@ func (p *commitOutcomeProxy) recordHoldDisposition() {
  }
  
  // commitOutcomeReadTypedFrame reads one typed protocol message and returns the

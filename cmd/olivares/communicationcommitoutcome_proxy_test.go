@@ -145,6 +145,7 @@ type commitOutcomeProxyHold struct {
 	client   net.Conn
 	session  *commitOutcomeProxySession
 	mode     commitOutcomeProxyMode
+	withheld bool // a client Terminate kept behind the held COMMIT
 }
 
 // newCommitOutcomeProxy starts the proxy in front of the server named by appDSN
@@ -334,6 +335,7 @@ func (p *commitOutcomeProxy) forward() {
 	if _, err := held.upstream.Write(held.commit); err != nil {
 		p.t.Fatalf("COULD_NOT_LOOK: forward the held COMMIT: %v", err)
 	}
+	p.forwardWithheldTerminate(held)
 	if err := held.upstream.SetWriteDeadline(time.Time{}); err != nil {
 		p.t.Fatalf("COULD_NOT_LOOK: clear the held COMMIT write deadline: %v", err)
 	}
@@ -375,6 +377,7 @@ func (p *commitOutcomeProxy) sever() {
 	p.held = nil
 	p.mu.Unlock()
 	if held != nil {
+		p.settleWithheldTerminate(held)
 		_ = held.upstream.Close()
 		_ = held.client.Close()
 		return
@@ -590,6 +593,9 @@ func (s *commitOutcomeProxySession) clientToServer() {
 		if end != "" {
 			s.relayStopped(commitOutcomeRelayFromClient, end, nil)
 			return
+		}
+		if kind == 'X' && body == 0 && s.p.withholdTerminate(s) {
+			continue
 		}
 		if kind == 'Q' && commitOutcomeIsCommitQuery(frame[5:]) {
 			if s.handleCommit(frame) {
@@ -1160,9 +1166,10 @@ func (s *commitOutcomeProxySession) relayEnded(direction, reason string) {
 // commitOutcomeRelayExpected prefixes a declaration in the custody log.
 const commitOutcomeRelayExpected = "expect_relay_error="
 
-// recordRelay appends a relay end, a relay inability or a declaration to the
-// custody log even past its ordinary cap: checkRelayCustody reads these, so
-// none may be dropped. There are at most two relay entries per connection.
+// recordRelay appends a relay end, a relay inability, a declaration or a
+// Terminate disposition to the custody log even past its ordinary cap:
+// checkRelayCustody reads these, so none may be dropped. There are at most two
+// relay entries per connection and one Terminate disposition per hold.
 func (p *commitOutcomeProxy) recordRelay(line string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -1186,6 +1193,7 @@ func (p *commitOutcomeProxy) expectRelayError(entry string) {
 // An undeclared occurrence, an occurrence beyond the declared count, and a
 // declaration nothing consumed each fail the owning test.
 func (p *commitOutcomeProxy) checkRelayCustody() {
+	p.recordHoldDisposition()
 	var declared []string
 	pending := make(map[string]int)
 	for _, line := range p.custodyLog() {
@@ -1212,6 +1220,92 @@ func (p *commitOutcomeProxy) checkRelayCustody() {
 				entry)
 		}
 	}
+}
+
+// commitOutcomeTerminate is the Terminate a driver sends as it closes a
+// connection: kind X, a length of 4 and no body.
+func commitOutcomeTerminate() []byte { return []byte{'X', 0, 0, 0, 4} }
+
+// withholdTerminate keeps a client Terminate from the server while THIS
+// session's COMMIT is held. A driver closes a canceled connection with a
+// Terminate (pgconn asyncClose); relayed, it ends the server's transaction and
+// releases the locks the hold exists to keep, which is the outcome
+// clientToServer's retained-upstream rule is written to prevent. Only a valid
+// Terminate (protocol length 4, no body) on the session that owns a HoldCommit
+// is withheld; every other frame, session and mode relays as before. The
+// decision is taken under p.mu with the hold itself, so forward() and sever(),
+// which take the hold under the same lock, see its final state: a Terminate
+// withheld before they take the hold is theirs to settle, and one arriving
+// after it relays like any other frame.
+func (p *commitOutcomeProxy) withholdTerminate(s *commitOutcomeProxySession) bool {
+	p.mu.Lock()
+	held := p.held
+	if held == nil || held.session != s || held.mode != commitOutcomeProxyHoldCommit {
+		p.mu.Unlock()
+		return false
+	}
+	first := !held.withheld
+	held.withheld = true
+	pid := held.pid
+	p.mu.Unlock()
+	if first {
+		p.recordRelay("terminate_withheld=" + strconv.Itoa(pid))
+	}
+	return true
+}
+
+// forwardWithheldTerminate delivers the Terminate withheld behind a held COMMIT
+// right after forward() has written that COMMIT, under the same write deadline,
+// so the server receives the client's frames in the order the client sent them
+// and ends that backend after the COMMIT. PRECONDITION: held has been taken out
+// of p.held, so no relay can change it any more.
+func (p *commitOutcomeProxy) forwardWithheldTerminate(held *commitOutcomeProxyHold) {
+	p.t.Helper()
+	if !held.withheld {
+		return
+	}
+	if _, err := held.upstream.Write(commitOutcomeTerminate()); err != nil {
+		p.t.Fatalf("COULD_NOT_LOOK: deliver the Terminate withheld behind the held COMMIT: %v", err)
+	}
+	p.recordRelay("terminate_forwarded=" + strconv.Itoa(held.pid))
+}
+
+// settleWithheldTerminate records that a withheld Terminate goes with the
+// connection sever() is about to close: the server learns of the close from the
+// socket and ends that backend, so nothing stays retained. PRECONDITION: held
+// has been taken out of p.held.
+func (p *commitOutcomeProxy) settleWithheldTerminate(held *commitOutcomeProxyHold) {
+	if held.withheld {
+		p.recordRelay("terminate_closed=" + strconv.Itoa(held.pid))
+	}
+}
+
+// recordHoldDisposition finishes the custody of a hold at the end of the test,
+// after close() has closed every socket: a Terminate still withheld went with
+// the held connection close() dropped. It then logs the hold's nonsecret
+// disposition — permits consumed, and each Terminate withheld, forwarded or
+// closed — so a failed control shows what the instrument did with the
+// connection it held.
+func (p *commitOutcomeProxy) recordHoldDisposition() {
+	p.mu.Lock()
+	consumed, pid, withheld := p.consumed, 0, false
+	if p.held != nil {
+		pid, withheld = p.held.pid, p.held.withheld
+	}
+	p.mu.Unlock()
+	if withheld {
+		p.recordRelay("terminate_closed=" + strconv.Itoa(pid))
+	}
+	if consumed == 0 {
+		return
+	}
+	line := "K3_PROXY_HOLD|consumed=" + strconv.Itoa(consumed)
+	for _, entry := range p.custodyLog() {
+		if strings.HasPrefix(entry, "terminate_") {
+			line += "|" + entry
+		}
+	}
+	p.t.Log(line)
 }
 
 // commitOutcomeReadTypedFrame reads one typed protocol message and returns the
@@ -1545,8 +1639,34 @@ func commitOutcomeAssertExactHolder(
 			return rows > 0, nil
 		})
 	if !held {
-		t.Fatalf("backend %d does not hold the exact advisory tuple for %q (classid=%d objid=%d objsubid=1 ExclusiveLock granted, current database): the route's own transaction lock is absent",
-			holderPID, want.name, want.classID, want.objID)
+		t.Fatalf("backend %d does not hold the exact advisory tuple for %q (classid=%d objid=%d objsubid=1 ExclusiveLock granted, current database): the route's own transaction lock is absent; holder %s",
+			holderPID, want.name, want.classID, want.objID, commitOutcomeHolderState(t, owner, holderPID))
+	}
+}
+
+// commitOutcomeHolderState reads, through the owner connection, whether the
+// holder backend still exists, for the message of a failed fence observation.
+// A backend that ended and one alive without its lock are different outcomes;
+// a state that cannot be read is an inability, never evidence of absence.
+func commitOutcomeHolderState(t *testing.T, owner *sql.DB, pid int) string {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), commitOutcomeProxyObserveLimit)
+	defer cancel()
+	var state sql.NullString
+	var inTransaction bool
+	err := owner.QueryRowContext(ctx,
+		`SELECT state, xact_start IS NOT NULL FROM pg_stat_activity WHERE pid = $1`, pid).
+		Scan(&state, &inTransaction)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		return "absent from pg_stat_activity: that backend has ended"
+	case err != nil:
+		t.Fatalf("COULD_NOT_LOOK: the state of holder backend %d could not be read after its fence observation failed: %v", pid, err)
+		return ""
+	case !state.Valid:
+		return "alive; its state is not visible to the owner role"
+	default:
+		return fmt.Sprintf("alive, state=%q, in transaction=%t", state.String, inTransaction)
 	}
 }
 
