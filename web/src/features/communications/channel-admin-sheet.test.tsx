@@ -710,14 +710,21 @@ describe('ChannelAdminSheet — grants (history, revoke → grant as two acts)',
   it('a 503 commit_outcome_unknown keeps the grant intent: the engine said it does not know, not that it refused', async () => {
     api.listChannelGrants.mockResolvedValue(grantsPageOf({ items: [] }))
     api.grantChannel.mockRejectedValueOnce(
-      new ApiError(503, 'commit_outcome_unknown', 'commit_outcome_unknown', 'req-c32', {}, {
-        code: 'commit_outcome_unknown',
-        error: {
+      new ApiError(
+        503,
+        'commit_outcome_unknown',
+        'commit_outcome_unknown',
+        'req-c32',
+        {},
+        {
           code: 'commit_outcome_unknown',
-          message: 'commit_outcome_unknown',
+          error: {
+            code: 'commit_outcome_unknown',
+            message: 'commit_outcome_unknown',
+          },
+          verdict: 'NO_HE_PODIDO_MIRAR',
         },
-        verdict: 'NO_HE_PODIDO_MIRAR',
-      }),
+      ),
     )
     mount()
     const sheet = await screen.findByRole('dialog')

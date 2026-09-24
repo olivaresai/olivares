@@ -62,9 +62,16 @@ describe('classifyFailure and the commit outcome', () => {
    */
   it('does not treat a bare 503 as ambiguous', () => {
     const f = classifyFailure(
-      new ApiError(503, 'internal', 'unavailable', 'req-c32', {}, {
-        error: { message: 'unavailable' },
-      }),
+      new ApiError(
+        503,
+        'internal',
+        'unavailable',
+        'req-c32',
+        {},
+        {
+          error: { message: 'unavailable' },
+        },
+      ),
     )
     expect(f.kind).toBe('unavailable')
   })
