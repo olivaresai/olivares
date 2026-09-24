@@ -1,0 +1,881 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# mainline-20b3-context — the next bounded instrument for two test failures retained from ONE exact
+# commit, 20b3d0b1c632e8d4bef7b4ce15f4960293cc6e86. DIAGNOSTIC ONLY: it runs from the branch
+# diag/mainline-20b3-context, which adds this one file and is never merged. It edits nothing, mocks
+# nothing and weakens no assertion.
+#
+# THE ONE CHANGED VARIABLE is the execution context. The previous instrument ran each named test
+# alone, ten times, and both passed every time. This one runs, ONCE per arm, the complete original
+# command that went red, with the same source, clocks, flags, race mode, PostgreSQL services, roles
+# and pins. It has no trials loop, no retry and no narrowing:
+#   a  the control-plane functional leg for the cmd/olivares module, with no -run filter:
+#      scripts/with-pg-env.sh scripts/go-work-each.sh go test -count=1 -timeout 45m ./...
+#      (Taskfile test:functional), restricted to that module by the helper's own GO_WORK_EACH_ONLY.
+#      Every package of the module runs, concurrently, as it did. -json is the one added flag (output
+#      format only), so every test result keeps its name. Origin: step 120 min, job 320 min, 45m per
+#      binary.
+#   b  race-core partition 3 of 4, exactly as the shard ran it:
+#      scripts/with-pg-env.sh scripts/core-race-partition.sh go test -race -count=1 -p 1 -timeout 90m
+#      (Taskfile test:race-hot:core) with OLIVARES_CORE_RACE_PARTITION=3 and _PARTITIONS=4. The
+#      sqlstore entry shard therefore uses its own 317-entry -run selector, followed by the 15 other
+#      packages of the partition. The helpers accept no output flag, so the chain runs byte for byte
+#      and its own -v stream is converted to events afterwards. Origin: step 180 min, job 190 min,
+#      90m per binary.
+#   Excluded, stated rather than implied: the jobs' earlier lint and build steps and the other
+#   workspace modules, all of which ran before these tests and never alongside them.
+#
+# ATTRIBUTION (binding). Every test result keeps its own name: the whole stream is kept, and
+# results.tsv lists every test. The arm verdict (target.tsv, verdicts.tsv) speaks ONLY about the
+# named target symptom:
+#   1  the named assertion failed with the target test (a: communicationchannelhistorywrites_http_test.go:677
+#      "a committed grant at budget"; b: drdestinationauthority_pg_test.go:337 "advisory holders/waiters
+#      leaked" in TestDRDestinationHolderLossCannotCommit/after_DDL).
+#   0  the target test passed, with its witness line.
+#   2  INABILITY for the target, when the target could not be measured: the process ended outside
+#      exit 0/1; the target package did not build; the Go timeout fired in the target package before
+#      the target completed; the target skipped, or has no result; the target failed at another
+#      assertion.
+# ANY OTHER failing test, and any data race report, cluster-state line or timeout elsewhere, is written
+# SEPARATELY to other_failures.tsv (kind, package, test, first and last file:line line). It is its own
+# observation: never attributed to the target, never hidden, and it never turns the verdict into 1. It
+# makes the verdict 2 only when it kept the target from completing. A single run proves nothing
+# about the rate: a 0 does not close an intermittent failure, and a 1 is one observation.
+name: mainline-20b3-context
+
+# Triggers. workflow_dispatch chooses the arms, and its sha must be the bound source. The push trigger is
+# scoped to the one diagnostic branch that carries this file; a push run measures both arms.
+on:
+  push:
+    branches:
+      - diag/mainline-20b3-context
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: The bound source. Only 20b3d0b1c632e8d4bef7b4ce15f4960293cc6e86 is accepted; any other value is refused before checkout.
+        required: true
+        default: 20b3d0b1c632e8d4bef7b4ce15f4960293cc6e86
+        type: string
+      arms:
+        description: Which arms to run, once each.
+        required: true
+        default: both
+        type: choice
+        options:
+          - both
+          - a
+          - b
+
+permissions:
+  contents: read
+
+# One run per dispatch; a running measurement is never cancelled, because a cancelled run carries
+# no verdict at all.
+concurrency:
+  group: mainline-20b3-context-${{ github.run_id }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  PINNED_SHA: 20b3d0b1c632e8d4bef7b4ce15f4960293cc6e86
+  PINNED_FUNCTIONAL_TEST: cmd/olivares/communicationchannelhistorywrites_http_test.go
+  PINNED_FUNCTIONAL_BLOB: 96a9e733ba6567c577715495eac6b0db5942b35e
+  PINNED_DR_TEST: core/internal/store/sqlstore/drdestinationauthority_pg_test.go
+  PINNED_DR_BLOB: add300c0fb089b457c11cf6125ec8ba290d60c03
+  # A push carries no inputs; the dispatch defaults apply then.
+  INPUT_SHA: ${{ inputs.sha || '20b3d0b1c632e8d4bef7b4ce15f4960293cc6e86' }}
+  INPUT_ARMS: ${{ inputs.arms || 'both' }}
+  # The shared shell library. It never turns a raw exit into a verdict by itself: run_arm keeps the
+  # stream, stderr and exit; the attribution step judges them with CTX_PY.
+  CTX_LIB: |
+    set -euo pipefail
+    : "${ARM:?ARM must name the arm of this job}"
+    OUT="${OUT:-$RUNNER_TEMP/context/$ARM}"
+    mkdir -p "$OUT"
+
+    fail() { printf '::error::%s\n' "$*"; return 1; }
+
+    # Inputs are validated deny-closed; every refusal returns explicitly (finalize calls this in an `if`).
+    validate_inputs() {
+      [ "${INPUT_SHA:-}" = "$PINNED_SHA" ] ||
+        { fail "sha [${INPUT_SHA:-}] is not the bound source $PINNED_SHA; this instrument quotes that source's assertion lines and blobs and measures no other commit"; return 1; }
+      case "${INPUT_ARMS:-}" in both | a | b) : ;; *) fail "arms must be both, a or b: [${INPUT_ARMS:-}]"; return 1 ;; esac
+    }
+
+    # The checkout is the bound source, clean, with the two quoted test-file blobs, on a GitHub-hosted runner.
+    identity() {
+      validate_inputs
+      [ "$(git rev-parse HEAD)" = "$PINNED_SHA" ] || fail "the checkout $(git rev-parse HEAD) is not the bound source $PINNED_SHA"
+      [ -z "$(git status --porcelain --untracked-files=all)" ] || fail "the checkout is not clean"
+      [ "$(git rev-parse "HEAD:$PINNED_FUNCTIONAL_TEST")" = "$PINNED_FUNCTIONAL_BLOB" ] || fail "$PINNED_FUNCTIONAL_TEST is not blob $PINNED_FUNCTIONAL_BLOB"
+      [ "$(git rev-parse "HEAD:$PINNED_DR_TEST")" = "$PINNED_DR_BLOB" ] || fail "$PINNED_DR_TEST is not blob $PINNED_DR_BLOB"
+      [ "${RUNNER_PLACEMENT:-}" = github-hosted ] ||
+        fail "this job runs on a ${RUNNER_PLACEMENT:-unknown} runner; the instrument runs on GitHub-hosted runners only"
+      {
+        printf 'arm %s\ninput_sha %s\nbound_sha %s\ntree %s\nworkflow_sha %s\n' \
+          "$ARM" "$INPUT_SHA" "$PINNED_SHA" "$(git rev-parse 'HEAD^{tree}')" "${GITHUB_WORKFLOW_SHA:-unknown}"
+        printf 'event %s ref %s repository %s run %s attempt %s\n' \
+          "$GITHUB_EVENT_NAME" "$GITHUB_REF" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"
+        printf 'runner %s placement %s %s %s image %s %s\n' "${RUNNER_NAME:-unknown}" "$RUNNER_PLACEMENT" \
+          "$RUNNER_OS" "$RUNNER_ARCH" "${ImageOS:-unknown}" "${ImageVersion:-unknown}"
+        printf 'blob %s %s\nblob %s %s\n' "$PINNED_FUNCTIONAL_TEST" "$PINNED_FUNCTIONAL_BLOB" "$PINNED_DR_TEST" "$PINNED_DR_BLOB"
+      } > "$OUT/identity.txt"
+      cat "$OUT/identity.txt"
+    }
+
+    # run_logged LABEL DIR COMMAND...: a non-test command, its log and raw exit kept.
+    run_logged() {
+      local label="$1" dir="$2" rc=0
+      shift 2
+      { printf 'cd %q && ' "$dir"; printf '%q ' "$@"; printf '\n'; } > "$OUT/$label.command"
+      ( cd "$dir" && "$@" ) > "$OUT/$label.log" 2>&1 || rc=$?
+      printf '%s\n' "$rc" > "$OUT/$label.exit"
+      cat "$OUT/$label.log"
+      [ "$rc" -eq 0 ] || fail "$label exited $rc"
+    }
+
+    # run_arm FORM DIR COMMAND...: the arm's original command, ONCE, verbatim. FORM json keeps stdout
+    # (the -json stream) and stderr apart; FORM text mirrors the original `2>&1 | tee` into one stream.
+    # The raw exit is the command's own, never tee's. The step always succeeds; the attribution step judges.
+    run_arm() {
+      local form="$1" dir="$2" rc=0 t0 t1
+      shift 2
+      { printf 'cd %q && ' "$dir"; printf '%q ' "$@"; printf '\n'; } > "$OUT/$ARM.command"
+      date -u +%Y-%m-%dT%H:%M:%S.%3NZ > "$OUT/$ARM.started"
+      t0="$(date +%s)"
+      if [ "$form" = json ]; then
+        ( cd "$dir" && "$@" ) > "$OUT/$ARM.json" 2> "$OUT/$ARM.stderr" || rc=$?
+      else
+        set +o pipefail
+        ( cd "$dir" && "$@" ) 2>&1 | tee "$OUT/$ARM.stream.txt"
+        rc="${PIPESTATUS[0]}"
+        set -o pipefail
+      fi
+      t1="$(date +%s)"
+      printf '%s\n' "$rc" > "$OUT/$ARM.exit"
+      printf '%s\n' "$((t1 - t0))" > "$OUT/$ARM.elapsed_s"
+      printf 'arm %s: raw exit %s after %ss\n' "$ARM" "$rc" "$((t1 - t0))"
+    }
+
+    # attribute: judge the kept stream with CTX_PY. A text stream is converted to events first.
+    attribute() {
+      local py="$RUNNER_TEMP/context-ctx.py" rc=0 events
+      printf '%s\n' "$CTX_PY" > "$py"
+      events="$OUT/$ARM.json"
+      if [ -f "$OUT/$ARM.stream.txt" ]; then
+        python3 "$py" v2json "$OUT/$ARM.stream.txt" "$OUT/$ARM.events.json" || fail "the $ARM stream could not be converted"
+        events="$OUT/$ARM.events.json"
+      fi
+      python3 "$py" classify "$events" "$OUT" "$ARM" "$(cat "$OUT/$ARM.exit")" || rc=$?
+      return "$rc"
+    }
+
+    # finalize SETUP_OUTCOMES: judge the arm if its command ran; otherwise write the target as an
+    # inability naming the step that stopped it. The job succeeds only when the target was measured
+    # (0 or 1). That describes the instrument, not the product.
+    finalize() {
+      local outcomes="$1" first_bad rc=0
+      first_bad="$(tr ' ' '\n' <<< "$outcomes" | awk -F= 'NF == 2 && $2 != "success" {print; exit}')"
+      printf 'setup outcomes: %s\n' "$outcomes" > "$OUT/setup-outcomes.txt"
+      if [ -f "$OUT/$ARM.exit" ]; then
+        attribute || rc=$?
+      else
+        printf 'arm\tpackage\tparent\tleaf\tverdict\tlabel\ttarget_result\ttarget_elapsed_s\tfirst_failure_line\twitness\tnamed_line_present_anywhere\n%s\t%s\t%s\t%s\t2\tINABILITY not run: %s\t-\t-\t\t\t-\n' \
+          "$ARM" "$TARGET_PKG" "$PARENT" "$LEAF" "${first_bad:-unknown step}" > "$OUT/target.tsv"
+        printf 'arm\tkind\tpackage\ttest\tfirst_fileline\tlast_fileline\tnote\n' > "$OUT/other_failures.tsv"
+        printf '%s\t2 INABILITY not run: %s\n' "$ARM" "${first_bad:-unknown step}" >> "$OUT/verdicts.tsv"
+        rc=3
+      fi
+      if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+        { printf '### arm %s\n\n```\n' "$ARM"; cat "$OUT/target.tsv"; printf '\nseparate observations: %s\n```\n' "$(($(wc -l < "$OUT/other_failures.tsv") - 1))"; } >> "$GITHUB_STEP_SUMMARY"
+      fi
+      [ "$rc" -eq 0 ] || fail "arm $ARM: the target could not be measured (verdict 2); every observation is still in the artifact"
+    }
+  # The attribution program: converts a -v stream to events (v2json) and judges one arm (classify).
+  CTX_PY: |
+    import sys, os, re, json
+
+    FILELINE = re.compile(r'^\s*[A-Za-z0-9_./-]+\.go:[0-9]+: ')
+    SUMMARY = re.compile(r'^(ok  |FAIL|\?   )\t(\S+)(\t|\s\[|$)')
+    MARKER = re.compile(r'^=== (RUN|PAUSE|CONT|NAME)\s+(\S+)\s*$')
+    RESULT = re.compile(r'^(\s*)--- (PASS|FAIL|SKIP): (\S+) \((\d+(?:\.\d+)?)s\)')
+
+
+    def v2json(src, dst):
+        """The verbose `go test -v` stream of a -p 1 run, read package by package (each package ends
+        at its summary line), written as test2json-like events. Output lines go to the test named by
+        the last === marker; a top-level result line ends that attribution."""
+        with open(src, encoding='utf-8', errors='replace') as f:
+            lines = f.read().split('\n')
+        segs, cur = [], []
+        for ln in lines:
+            cur.append(ln)
+            m = SUMMARY.match(ln)
+            if m:
+                segs.append((m.group(2), cur))
+                cur = []
+        if any(x.strip() for x in cur):
+            segs.append(('', cur))
+        with open(dst, 'w') as out:
+            def emit(**e):
+                out.write(json.dumps(e) + '\n')
+            for pkg, seg in segs:
+                test = None
+                for ln in seg:
+                    if ln == '' and seg[-1] is ln:
+                        continue
+                    m = MARKER.match(ln)
+                    if m:
+                        test = m.group(2)
+                        if m.group(1) == 'RUN':
+                            emit(Action='run', Package=pkg, Test=test)
+                        emit(Action='output', Package=pkg, Test=test, Output=ln + '\n')
+                        continue
+                    r = RESULT.match(ln)
+                    if r:
+                        name = r.group(3)
+                        emit(Action='output', Package=pkg, Test=name, Output=ln + '\n')
+                        emit(Action={'PASS': 'pass', 'FAIL': 'fail', 'SKIP': 'skip'}[r.group(2)], Package=pkg, Test=name, Elapsed=float(r.group(4)))
+                        if r.group(1) == '':
+                            test = None
+                        continue
+                    s = SUMMARY.match(ln)
+                    if s:
+                        emit(Action='output', Package=pkg, Output=ln + '\n')
+                        word = s.group(1).strip()
+                        emit(Action='pass' if word == 'ok' else ('skip' if word == '?' else 'fail'), Package=pkg)
+                        test = None
+                        continue
+                    if test:
+                        emit(Action='output', Package=pkg, Test=test, Output=ln + '\n')
+                    else:
+                        emit(Action='output', Package=pkg, Output=ln + '\n')
+
+
+    def first_last(lines):
+        fl = [l.strip() for l in lines if FILELINE.match(l)]
+        return (fl[0] if fl else ''), (fl[-1] if fl else '')
+
+
+    def tsv(s):
+        return str(s).replace('\t', ' ').replace('\r', ' ').replace('\n', ' ')
+
+
+    def classify(events_path, out, arm, raw_exit):
+        P, parent, leaf = os.environ['TARGET_PKG'], os.environ['PARENT'], os.environ['LEAF']
+        named = re.compile(os.environ['NAMED_RE'])
+        witness = re.compile(os.environ['WITNESS_RE'])
+        allowed = re.compile(os.environ['ALLOWED_LOG_RE'])
+        events = []
+        with open(events_path, encoding='utf-8', errors='replace') as f:
+            for ln in f:
+                ln = ln.strip()
+                if not ln.startswith('{'):
+                    continue
+                try:
+                    events.append(json.loads(ln))
+                except ValueError:
+                    continue
+        results, outputs, pkg_lines, pkg_result, build_failed = {}, {}, {}, {}, set()
+        for i, e in enumerate(events):
+            a = e.get('Action')
+            p = e.get('Package') or (e.get('ImportPath') or '').split(' ')[0]
+            t = e.get('Test')
+            if a in ('output', 'build-output'):
+                o = e.get('Output', '')
+                if t:
+                    outputs.setdefault((p, t), []).append((i, o))
+                pkg_lines.setdefault(p, []).append((i, t, o))
+                if '[build failed]' in o or '[setup failed]' in o:
+                    build_failed.add(p)
+            elif a == 'build-fail':
+                build_failed.add(p)
+            elif a in ('pass', 'fail', 'skip'):
+                if t:
+                    results[(p, t)] = (a, e.get('Elapsed'), i)
+                else:
+                    pkg_result[p] = a
+                    if e.get('FailedBuild'):
+                        build_failed.add(p)
+        text = lambda k: ''.join(o for _, o in outputs.get(k, []))
+        rows = []  # separate observations: kind, package, test, first, last, note
+        # every failing test that is not failing only because a child failed
+        failing = [k for k, v in results.items() if v[0] == 'fail']
+        fset = set(failing)
+        def derived(k):
+            return any(q[0] == k[0] and q[1].startswith(k[1] + '/') for q in fset)
+        tkey = (P, leaf)
+        for k in sorted(failing):
+            if derived(k) or k == tkey:
+                continue
+            f, l = first_last(text(k).split('\n'))
+            rows.append(('test-failure', k[0], k[1], f, l, ''))
+        for p, v in sorted(pkg_result.items()):
+            if v == 'fail' and not any(k[0] == p for k in failing):
+                lines = [o for _, t, o in pkg_lines.get(p, [])]
+                kind = 'build-failure' if p in build_failed else 'package-failure'
+                first = next((o.strip() for o in lines if o.strip() and not o.startswith('=== ')), '')
+                rows.append((kind, p, '', first, '', 'no failing test carries this failure'))
+        timeout_idx = {}
+        for p, lst in sorted(pkg_lines.items()):
+            for i, t, o in lst:
+                if 'panic: test timed out' in o and p not in timeout_idx:
+                    timeout_idx[p] = i
+                    rows.append(('timeout', p, t or '', o.strip(), '', 'the Go test timeout fired in this package'))
+                if 'WARNING: DATA RACE' in o:
+                    rows.append(('data-race', p, t or '', o.strip(), '', 'a data race report'))
+                if o.startswith('CLUSTER_STATE|'):
+                    rows.append(('cluster-state', p, t or '', o.strip(), '', 'the package cluster-state check'))
+        # the target
+        tres = results.get(tkey)
+        tout = text(tkey).split('\n')
+        named_lines = [l.strip() for l in tout if named.search(l)]
+        wit = next((l.strip() for l in tout if witness.search(l)), '')
+        named_anywhere = any(named.search(o) for lst in outputs.values() for _, o in lst)
+        extra = [l.strip() for l in tout if FILELINE.match(l) and not named.search(l) and not allowed.search(l)]
+        first = ''
+        if raw_exit not in ('0', '1'):
+            v, lab = 2, f'INABILITY the arm process ended with raw exit {raw_exit}'
+        elif P in build_failed:
+            v, lab = 2, 'INABILITY the target package did not build'
+        elif P in timeout_idx and (tres is None or tres[2] > timeout_idx[P]):
+            v, lab = 2, 'INABILITY the Go timeout fired in the target package before the target completed'
+        elif tres is None:
+            v, lab = 2, 'INABILITY the target produced no result (setup, crash or missing)'
+        elif tres[0] == 'skip':
+            v, lab = 2, 'INABILITY the target skipped'
+        elif tres[0] == 'pass':
+            if wit:
+                v, lab = 0, 'PASS (the target passed; witness present)'
+            else:
+                v, lab = 2, 'INABILITY the target passed without its witness line'
+        elif named_lines:
+            v, lab, first = 1, 'NAMED assertion failed with the target', named_lines[0]
+            for x in extra:
+                rows.append(('target-extra-assertion', P, leaf, x, '', 'another assertion line in the target, beside the named one'))
+        else:
+            v, lab = 2, 'INABILITY the target failed without the named assertion'
+            f, l = first_last(tout)
+            first = f
+            rows.append(('target-other-assertion', P, leaf, f, l, 'the target failed at another assertion; not the named symptom'))
+        os.makedirs(out, exist_ok=True)
+        with open(os.path.join(out, 'results.tsv'), 'w') as f:
+            f.write('package\ttest\taction\telapsed_s\n')
+            for k in sorted(results):
+                f.write(f'{tsv(k[0])}\t{tsv(k[1])}\t{results[k][0]}\t{results[k][1]}\n')
+        with open(os.path.join(out, 'target.tsv'), 'w') as f:
+            f.write('arm\tpackage\tparent\tleaf\tverdict\tlabel\ttarget_result\ttarget_elapsed_s\tfirst_failure_line\twitness\tnamed_line_present_anywhere\n')
+            f.write('\t'.join(map(tsv, [arm, P, parent, leaf, v, lab, tres[0] if tres else '-', tres[1] if tres else '-', first, wit, 'yes' if named_anywhere else 'no'])) + '\n')
+        with open(os.path.join(out, 'other_failures.tsv'), 'w') as f:
+            f.write('arm\tkind\tpackage\ttest\tfirst_fileline\tlast_fileline\tnote\n')
+            for r in rows:
+                f.write('\t'.join(map(tsv, (arm,) + r)) + '\n')
+        with open(os.path.join(out, 'verdicts.tsv'), 'a') as f:
+            f.write(f'{arm}\t{v} {lab}\n')
+        counts = {}
+        for k, r in results.items():
+            counts[r[0]] = counts.get(r[0], 0) + 1
+        print(f'arm {arm}: target verdict {v} ({lab}); tests {sum(counts.values())} {counts}; separate observations {len(rows)}')
+        if first:
+            print(f'  {first}')
+        for r in rows[:50]:
+            print('  observation: ' + ' | '.join(map(tsv, r[:4])))
+        return v
+
+
+    if __name__ == '__main__':
+        cmd = sys.argv[1]
+        if cmd == 'v2json':
+            v2json(sys.argv[2], sys.argv[3])
+        elif cmd == 'classify':
+            v = classify(sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5])
+            sys.exit(0 if v in (0, 1) else 3)
+
+jobs:
+  # ---------------------------------------------------------------------------------------------
+  # Arm a: the control-plane functional leg for the cmd/olivares module, once, unfiltered.
+  # ---------------------------------------------------------------------------------------------
+  arm-a-cmd-olivares:
+    if: github.repository == 'olivaresai/olivares' && contains(fromJSON('["both","a"]'), inputs.arms || 'both')
+    name: a · cmd/olivares module, complete original functional command, once
+    runs-on: ubuntu-latest
+    # The origin job ceiling. Step ceilings sum to 219 minutes, below it.
+    timeout-minutes: 320
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16@sha256:a36250871de0833b8757561c72f2477ef1ddd1101afa4e617fb552e0de514c6b
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+          --memory=1g
+          --memory-swap=1536m
+          --cpus=2
+          --pids-limit=512
+      postgres_other:
+        image: pgvector/pgvector:pg16@sha256:a36250871de0833b8757561c72f2477ef1ddd1101afa4e617fb552e0de514c6b
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+          --memory=1g
+          --memory-swap=1536m
+          --cpus=2
+          --pids-limit=512
+    env:
+      ARM: a
+      OLIVARES_GATE_STRICT_PG: "1"
+      # The origin job's env, carried for fidelity (the install-manifest gate that reads it is not run).
+      HELM_VERSION: "3.21.0"
+      HELM_SHA256: "0093eb572e3d2380f094df162ddb525e219249de88957afe24cfbb19632acd36"
+      TARGET_PKG: github.com/olivaresai/olivares/cmd/olivares
+      PARENT: TestCommunicationChannelHistoryWritesHTTPPostgres
+      LEAF: TestCommunicationChannelHistoryWritesHTTPPostgres/a_failed_mutation_leaves_no_partial_act
+      NAMED_RE: 'communicationchannelhistorywrites_http_test\.go:677: a committed grant at budget [^ ]+ moved the census by '
+      WITNESS_RE: 'communicationchannelhistorywrites_http_test\.go:688: K3_WRITER_ROLLBACK[|]interrupted=[0-9]+[|]committed=[0-9]+'
+      ALLOWED_LOG_RE: 'communicationchannelhistorywrites_http_test\.go:(242: K3_HTTP_PG_POSTURE|688: K3_WRITER_ROLLBACK)[|]'
+    steps:
+      - name: the input names the bound source (any other sha is refused before checkout)
+        id: input
+        timeout-minutes: 1
+        run: |
+          eval "$CTX_LIB"
+          validate_inputs
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 10
+        with:
+          ref: 20b3d0b1c632e8d4bef7b4ce15f4960293cc6e86
+          persist-credentials: false
+          fetch-depth: 0
+      - name: the checkout is the bound source, clean, with the quoted test-file blobs
+        id: identity
+        timeout-minutes: 2
+        env:
+          RUNNER_PLACEMENT: ${{ runner.environment }}
+        run: |
+          eval "$CTX_LIB"
+          identity
+      - name: Go caches under RUNNER_TEMP (as in the job that went red)
+        id: caches
+        timeout-minutes: 1
+        run: |
+          {
+            echo "GOCACHE=$RUNNER_TEMP/gocache"
+            echo "GOMODCACHE=$RUNNER_TEMP/gomodcache"
+            echo "GOPATH=$RUNNER_TEMP/gopath"
+            echo "GOBIN=$RUNNER_TEMP/gopath/bin"
+          } >> "$GITHUB_ENV"
+          echo "$RUNNER_TEMP/gopath/bin" >> "$GITHUB_PATH"
+          echo "PNPM_HOME=$RUNNER_TEMP/pnpm" >> "$GITHUB_ENV"
+          echo "$RUNNER_TEMP/pnpm" >> "$GITHUB_PATH"
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        id: setup-go
+        timeout-minutes: 10
+        with:
+          go-version-file: go.work
+          cache: ${{ runner.environment == 'github-hosted' }}
+          cache-dependency-path: go.work.sum
+      # The job that went red put node, pnpm and go-task on PATH before its tests; the same pins do here.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        id: node
+        timeout-minutes: 5
+        with:
+          node-version-file: .node-version
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+        id: pnpm
+        timeout-minutes: 5
+        with:
+          dest: ${{ runner.temp }}/setup-pnpm
+          standalone: true
+      - name: install go-task (pinned)
+        id: tools
+        timeout-minutes: 5
+        uses: ./.github/actions/olivares-tool-cache
+      - name: TMPDIR where an extracted binary can actually run (same selection as the job that went red)
+        id: tmpdir
+        timeout-minutes: 2
+        run: |
+          short=""
+          for c in "${HOME:-}" /var/tmp /dev/shm /run/user/"$(id -u)"; do
+            if [ -n "$c" ] && [ -d "$c" ]; then
+              find "$c" -maxdepth 1 -mindepth 1 -type d \( -name 'olv[0-9]*' -o -name 'olv-exec-[0-9]*' \) -user "$(id -un)" -mmin +360 -exec rm -rf {} + 2>/dev/null || true
+            fi
+          done
+          for c in "${HOME:-}" /var/tmp /dev/shm /run/user/"$(id -u)"; do
+            if [ -z "$c" ]; then echo "  candidate <empty>: variable unset"; continue; fi
+            if [ ! -d "$c" ]; then echo "  candidate $c: does not exist"; continue; fi
+            df -Pk "$c" 2>/dev/null | awk -v c="$c" 'NR==2{printf "  candidate %s: %d MiB free of %d on %s\n", c, $4/1024, $2/1024, $1}' || true
+            d="$c/olv$$"
+            if ! mkdir -p "$d" 2>/dev/null; then echo "  candidate $c: cannot create inside"; continue; fi
+            if ! printf '#!/bin/sh\nexit 7\n' >"$d/.p" 2>/dev/null; then echo "  candidate $c: cannot write"; rm -rf "$d"; continue; fi
+            chmod +x "$d/.p" 2>/dev/null || { echo "  candidate $c: chmod fails"; rm -rf "$d"; continue; }
+            rc=0; "$d/.p" 2>/dev/null || rc=$?
+            rm -f "$d/.p"
+            if [ "$rc" -ne 7 ]; then echo "  candidate $c: does not execute (rc=$rc)"; rm -rf "$d"; continue; fi
+            if [ "${#d}" -gt 24 ]; then echo "  candidate $c: executes but the path is ${#d} characters (>24)"; rm -rf "$d"; continue; fi
+            short="$d"; break
+          done
+          if [ -n "$short" ]; then
+            echo "TMPDIR=$short" >> "$GITHUB_ENV"
+            echo "TMPDIR short and executable: $short (${#short} characters)"
+          else
+            . scripts/lib/exec-workdir.sh
+            d="$(olivares_pick_exec_workdir o)" || {
+              echo "::error::no directory can execute a binary"
+              exit 1
+            }
+            echo "TMPDIR=$d" >> "$GITHUB_ENV"
+            echo "::warning::no SHORT candidate; using $d (${#d} characters): a unix socket path may exceed 108"
+          fi
+      - name: resolve the ephemeral Postgres ports into the test DSNs
+        id: pg-port
+        timeout-minutes: 2
+        env:
+          PGPORT_HOST: ${{ job.services.postgres.ports['5432'] }}
+          PGPORT_OTHER: ${{ job.services.postgres_other.ports['5432'] }}
+        run: |
+          set -euo pipefail
+          bash scripts/ci-postgres-service.sh resolve
+          # The job that went red resolved these two as well, beside the same DSNs.
+          {
+            echo "CLOUD_CP_INTEGRATION=1"
+            echo "CLOUD_CP_REQUIRE_INTEGRATION=1"
+          } >> "$GITHUB_ENV"
+      - name: provision postgres roles (least-privilege app role + BYPASSRLS admin)
+        id: pg-roles
+        timeout-minutes: 5
+        env:
+          PGPASSWORD: postgres
+        run: bash scripts/ci-postgres-service.sh provision
+      - name: PostgreSQL 16 is required, both clusters answer, and the roles hold their posture
+        id: posture
+        timeout-minutes: 2
+        run: |
+          eval "$CTX_LIB"
+          [ "${OLIVARES_TEST_POSTGRES_REQUIRED:-}" = 1 ] || fail "OLIVARES_TEST_POSTGRES_REQUIRED is not 1"
+          psql "$OLIVARES_TEST_POSTGRES_SUPERUSER_DSN" -X -v ON_ERROR_STOP=1 -Atc 'SHOW server_version_num' | tee "$OUT/postgres-version.txt"
+          psql "$OLIVARES_TEST_POSTGRES_OTHER_DSN" -X -v ON_ERROR_STOP=1 -Atc 'SHOW server_version_num' | tee "$OUT/postgres-other-version.txt"
+          psql "$OLIVARES_TEST_POSTGRES_SUPERUSER_DSN" -X -v ON_ERROR_STOP=1 -AtF ' ' \
+            -c "SELECT name, setting FROM pg_settings WHERE name IN ('max_connections', 'shared_buffers', 'default_transaction_isolation', 'log_disconnections', 'log_lock_waits') ORDER BY name" |
+            tee "$OUT/postgres-settings.txt"
+          psql "$OLIVARES_TEST_POSTGRES_SUPERUSER_DSN" -X -v ON_ERROR_STOP=1 -AtF ' ' \
+            -c "SELECT rolname, rolsuper, rolbypassrls, rolcreaterole, rolcreatedb FROM pg_roles WHERE rolname IN ('olivares_app', 'olivares_admin') ORDER BY rolname" |
+            tee "$OUT/roles.txt"
+          case "$(cat "$OUT/postgres-version.txt")" in 16*) : ;; *) fail "the primary server is not PostgreSQL 16" ;; esac
+          [ "$(awk '$1 == "olivares_app" {print $2, $3, $4, $5}' "$OUT/roles.txt")" = "f f f f" ] || fail "the application role is privileged"
+          [ "$(awk '$1 == "olivares_admin" {print $2, $3, $4, $5}' "$OUT/roles.txt")" = "f t f f" ] || fail "the admin role is not BYPASSRLS-only"
+      - name: record the toolchain
+        id: toolchain
+        timeout-minutes: 2
+        run: |
+          eval "$CTX_LIB"
+          {
+            go version
+            go env GOVERSION GOOS GOARCH GOFLAGS CGO_ENABLED GOCACHE
+            printf 'nproc %s\n' "$(nproc)"
+            printf 'cgroup memory.max %s\n' "$(cat /sys/fs/cgroup/memory.max 2>/dev/null || echo unreadable)"
+            printf 'TMPDIR %s\n' "${TMPDIR:-unset}"
+            jq --version
+            psql --version
+            python3 --version
+            timeout --version | head -n1
+          } 2>&1 | tee "$OUT/toolchain.txt"
+      - name: a · build the target package's test binary once (a build failure is an inability)
+        id: build
+        timeout-minutes: 30
+        run: |
+          eval "$CTX_LIB"
+          mkdir -p "$RUNNER_TEMP/build"
+          run_logged build "$GITHUB_WORKSPACE" go test -c -o "$RUNNER_TEMP/build/a.test" ./cmd/olivares
+      - name: a · the complete original command, once (the functional leg for the cmd/olivares module)
+        id: test
+        timeout-minutes: 120
+        env:
+          GO_WORK_EACH_ONLY: cmd/olivares
+        run: |
+          eval "$CTX_LIB"
+          # The resource witness the job that went red ran around its functional step.
+          WITNESS="$OUT/resource-witness.state"
+          bash scripts/ci-resource-witness.sh start "$WITNESS" >/dev/null
+          trap 'bash scripts/ci-resource-witness.sh report "$WITNESS" | tee "$OUT/resource-witness.report" || true' EXIT
+          run_arm json "$GITHUB_WORKSPACE" bash scripts/with-pg-env.sh bash scripts/go-work-each.sh go test -count=1 -timeout 45m -json ./...
+      - name: a · attribution (the target verdict; every other failure a separate observation)
+        if: always()
+        timeout-minutes: 5
+        env:
+          SETUP_OUTCOMES: >-
+            input=${{ steps.input.outcome }} identity=${{ steps.identity.outcome }} caches=${{ steps.caches.outcome }}
+            setup-go=${{ steps.setup-go.outcome }} node=${{ steps.node.outcome }} pnpm=${{ steps.pnpm.outcome }}
+            tools=${{ steps.tools.outcome }} tmpdir=${{ steps.tmpdir.outcome }} pg-port=${{ steps.pg-port.outcome }}
+            pg-roles=${{ steps.pg-roles.outcome }} posture=${{ steps.posture.outcome }} toolchain=${{ steps.toolchain.outcome }}
+            build=${{ steps.build.outcome }} test=${{ steps.test.outcome }}
+        run: |
+          eval "$CTX_LIB"
+          finalize "$SETUP_OUTCOMES"
+      - name: keep both PostgreSQL server logs
+        if: always()
+        timeout-minutes: 2
+        env:
+          PG_PRIMARY_ID: ${{ job.services.postgres.id }}
+          PG_OTHER_ID: ${{ job.services.postgres_other.id }}
+        run: |
+          OUT="$RUNNER_TEMP/context/$ARM"
+          mkdir -p "$OUT"
+          docker logs --details "$PG_PRIMARY_ID" > "$OUT/postgres-primary.log" 2>&1 || echo "COULD NOT LOOK" >> "$OUT/postgres-primary.log"
+          docker logs --details "$PG_OTHER_ID" > "$OUT/postgres-other.log" 2>&1 || echo "COULD NOT LOOK" >> "$OUT/postgres-other.log"
+      - name: retain the whole stream, results, target, separate observations and the server logs
+        if: always()
+        timeout-minutes: 10
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: mainline-20b3-context-a-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/context/a/
+          retention-days: 7
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------------------------
+  # Arm b: race-core partition 3 of 4, once, with its own selectors.
+  # ---------------------------------------------------------------------------------------------
+  arm-b-race-core-p3:
+    if: github.repository == 'olivaresai/olivares' && contains(fromJSON('["both","b"]'), inputs.arms || 'both')
+    name: b · race-core partition 3 of 4, complete original command, once
+    runs-on: ubuntu-latest
+    # The origin job ceiling. Step ceilings sum to 187 minutes, below it; the test step is 145, under
+    # the origin's 180, so that the separate build step fits inside the same 190.
+    timeout-minutes: 190
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16@sha256:a36250871de0833b8757561c72f2477ef1ddd1101afa4e617fb552e0de514c6b
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+          --memory=1g
+          --memory-swap=1536m
+          --cpus=2
+          --pids-limit=512
+      postgres_other:
+        image: pgvector/pgvector:pg16@sha256:a36250871de0833b8757561c72f2477ef1ddd1101afa4e617fb552e0de514c6b
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+          --memory=1g
+          --memory-swap=1536m
+          --cpus=2
+          --pids-limit=512
+    env:
+      ARM: b
+      OLIVARES_GATE_STRICT_PG: "1"
+      # The pair the job that went red exported (partition 3 of strategy.job-total 4): the partition
+      # helpers read it and choose the same packages and the same 317 sqlstore entries.
+      OLIVARES_CORE_RACE_PARTITION: "3"
+      OLIVARES_CORE_RACE_PARTITIONS: "4"
+      TARGET_PKG: github.com/olivaresai/olivares/core/internal/store/sqlstore
+      PARENT: TestDRDestinationHolderLossCannotCommit
+      LEAF: TestDRDestinationHolderLossCannotCommit/after_DDL
+      NAMED_RE: 'drdestinationauthority_pg_test\.go:337: [0-9]+ advisory holders/waiters leaked'
+      WITNESS_RE: 'drdestinationauthority_pg_test\.go:318: after_DDL: actual exclusive holder=[0-9]+ DDL/migration waiter=[0-9]+'
+      ALLOWED_LOG_RE: 'drdestinationauthority_pg_test\.go:318: after_DDL: actual exclusive holder=[0-9]+ DDL/migration waiter=[0-9]+'
+    steps:
+      - name: the input names the bound source (any other sha is refused before checkout)
+        id: input
+        timeout-minutes: 1
+        run: |
+          eval "$CTX_LIB"
+          validate_inputs
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 3
+        with:
+          ref: 20b3d0b1c632e8d4bef7b4ce15f4960293cc6e86
+          persist-credentials: false
+      - name: the checkout is the bound source, clean, with the quoted test-file blobs
+        id: identity
+        timeout-minutes: 1
+        env:
+          RUNNER_PLACEMENT: ${{ runner.environment }}
+        run: |
+          eval "$CTX_LIB"
+          identity
+      - name: Go caches under RUNNER_TEMP (as in the job that went red)
+        id: caches
+        timeout-minutes: 1
+        run: |
+          {
+            echo "GOCACHE=$RUNNER_TEMP/gocache"
+            echo "GOMODCACHE=$RUNNER_TEMP/gomodcache"
+            echo "GOPATH=$RUNNER_TEMP/gopath"
+            echo "GOBIN=$RUNNER_TEMP/gopath/bin"
+          } >> "$GITHUB_ENV"
+          echo "$RUNNER_TEMP/gopath/bin" >> "$GITHUB_PATH"
+          echo "PNPM_HOME=$RUNNER_TEMP/pnpm" >> "$GITHUB_ENV"
+          echo "$RUNNER_TEMP/pnpm" >> "$GITHUB_PATH"
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        id: setup-go
+        timeout-minutes: 5
+        with:
+          go-version-file: go.work
+          cache: ${{ runner.environment == 'github-hosted' }}
+          cache-dependency-path: go.work.sum
+      - name: install go-task (pinned)
+        id: tools
+        timeout-minutes: 2
+        uses: ./.github/actions/olivares-tool-cache
+      - name: TMPDIR where an extracted binary can actually run (same selection as the job that went red)
+        id: tmpdir
+        timeout-minutes: 1
+        run: |
+          short=""
+          for c in "${HOME:-}" /var/tmp /dev/shm /run/user/"$(id -u)"; do
+            if [ -n "$c" ] && [ -d "$c" ]; then
+              find "$c" -maxdepth 1 -mindepth 1 -type d \( -name 'olv[0-9]*' -o -name 'olv-exec-[0-9]*' \) -user "$(id -un)" -mmin +360 -exec rm -rf {} + 2>/dev/null || true
+            fi
+          done
+          for c in "${HOME:-}" /var/tmp /dev/shm /run/user/"$(id -u)"; do
+            if [ -z "$c" ]; then echo "  candidate <empty>: variable unset"; continue; fi
+            if [ ! -d "$c" ]; then echo "  candidate $c: does not exist"; continue; fi
+            df -Pk "$c" 2>/dev/null | awk -v c="$c" 'NR==2{printf "  candidate %s: %d MiB free of %d on %s\n", c, $4/1024, $2/1024, $1}' || true
+            d="$c/olv$$"
+            if ! mkdir -p "$d" 2>/dev/null; then echo "  candidate $c: cannot create inside"; continue; fi
+            if ! printf '#!/bin/sh\nexit 7\n' >"$d/.p" 2>/dev/null; then echo "  candidate $c: cannot write"; rm -rf "$d"; continue; fi
+            chmod +x "$d/.p" 2>/dev/null || { echo "  candidate $c: chmod fails"; rm -rf "$d"; continue; }
+            rc=0; "$d/.p" 2>/dev/null || rc=$?
+            rm -f "$d/.p"
+            if [ "$rc" -ne 7 ]; then echo "  candidate $c: does not execute (rc=$rc)"; rm -rf "$d"; continue; fi
+            if [ "${#d}" -gt 24 ]; then echo "  candidate $c: executes but the path is ${#d} characters (>24)"; rm -rf "$d"; continue; fi
+            short="$d"; break
+          done
+          if [ -n "$short" ]; then
+            echo "TMPDIR=$short" >> "$GITHUB_ENV"
+            echo "TMPDIR short and executable: $short (${#short} characters)"
+          else
+            . scripts/lib/exec-workdir.sh
+            d="$(olivares_pick_exec_workdir o)" || {
+              echo "::error::no directory can execute a binary"
+              exit 1
+            }
+            echo "TMPDIR=$d" >> "$GITHUB_ENV"
+            echo "::warning::no SHORT candidate; using $d (${#d} characters): a unix socket path may exceed 108"
+          fi
+      - name: resolve the ephemeral Postgres ports into the test DSNs
+        id: pg-port
+        timeout-minutes: 1
+        env:
+          PGPORT_HOST: ${{ job.services.postgres.ports['5432'] }}
+          PGPORT_OTHER: ${{ job.services.postgres_other.ports['5432'] }}
+        run: bash scripts/ci-postgres-service.sh resolve
+      - name: provision postgres roles (least-privilege app role + BYPASSRLS admin)
+        id: pg-roles
+        timeout-minutes: 2
+        env:
+          PGPASSWORD: postgres
+        run: bash scripts/ci-postgres-service.sh provision
+      - name: PostgreSQL 16 is required, both clusters answer, and the roles hold their posture
+        id: posture
+        timeout-minutes: 1
+        run: |
+          eval "$CTX_LIB"
+          [ "${OLIVARES_TEST_POSTGRES_REQUIRED:-}" = 1 ] || fail "OLIVARES_TEST_POSTGRES_REQUIRED is not 1"
+          psql "$OLIVARES_TEST_POSTGRES_SUPERUSER_DSN" -X -v ON_ERROR_STOP=1 -Atc 'SHOW server_version_num' | tee "$OUT/postgres-version.txt"
+          psql "$OLIVARES_TEST_POSTGRES_OTHER_DSN" -X -v ON_ERROR_STOP=1 -Atc 'SHOW server_version_num' | tee "$OUT/postgres-other-version.txt"
+          psql "$OLIVARES_TEST_POSTGRES_SUPERUSER_DSN" -X -v ON_ERROR_STOP=1 -AtF ' ' \
+            -c "SELECT name, setting FROM pg_settings WHERE name IN ('max_connections', 'shared_buffers', 'default_transaction_isolation', 'log_disconnections', 'log_lock_waits') ORDER BY name" |
+            tee "$OUT/postgres-settings.txt"
+          psql "$OLIVARES_TEST_POSTGRES_SUPERUSER_DSN" -X -v ON_ERROR_STOP=1 -AtF ' ' \
+            -c "SELECT rolname, rolsuper, rolbypassrls, rolcreaterole, rolcreatedb FROM pg_roles WHERE rolname IN ('olivares_app', 'olivares_admin') ORDER BY rolname" |
+            tee "$OUT/roles.txt"
+          case "$(cat "$OUT/postgres-version.txt")" in 16*) : ;; *) fail "the primary server is not PostgreSQL 16" ;; esac
+          [ "$(awk '$1 == "olivares_app" {print $2, $3, $4, $5}' "$OUT/roles.txt")" = "f f f f" ] || fail "the application role is privileged"
+          [ "$(awk '$1 == "olivares_admin" {print $2, $3, $4, $5}' "$OUT/roles.txt")" = "f t f f" ] || fail "the admin role is not BYPASSRLS-only"
+      - name: record the toolchain
+        id: toolchain
+        timeout-minutes: 1
+        run: |
+          eval "$CTX_LIB"
+          {
+            go version
+            go env GOVERSION GOOS GOARCH GOFLAGS CGO_ENABLED GOCACHE
+            printf 'nproc %s\n' "$(nproc)"
+            printf 'cgroup memory.max %s\n' "$(cat /sys/fs/cgroup/memory.max 2>/dev/null || echo unreadable)"
+            printf 'TMPDIR %s\n' "${TMPDIR:-unset}"
+            jq --version
+            psql --version
+            python3 --version
+            timeout --version | head -n1
+          } 2>&1 | tee "$OUT/toolchain.txt"
+      - name: b · build the target package's -race test binary once (a build failure is an inability)
+        id: build
+        timeout-minutes: 15
+        run: |
+          eval "$CTX_LIB"
+          mkdir -p "$RUNNER_TEMP/build"
+          run_logged build "$GITHUB_WORKSPACE/core" go test -c -race -o "$RUNNER_TEMP/build/b.test" ./internal/store/sqlstore
+      - name: b · the complete original command, once (race-core partition 3 of 4)
+        id: test
+        timeout-minutes: 145
+        run: |
+          eval "$CTX_LIB"
+          run_arm text "$GITHUB_WORKSPACE" bash scripts/with-pg-env.sh bash scripts/core-race-partition.sh go test -race -count=1 -p 1 -timeout 90m
+      - name: timeout headroom census (warns above 75%, does not block; as in the job that went red)
+        if: always()
+        continue-on-error: true
+        timeout-minutes: 1
+        run: |
+          OUT="$RUNNER_TEMP/context/$ARM"
+          if [ -f "$OUT/$ARM.stream.txt" ]; then bash scripts/check-test-timeout-headroom.sh --raw race-core "$OUT/$ARM.stream.txt"; fi
+      - name: b · attribution (the target verdict; every other failure a separate observation)
+        if: always()
+        timeout-minutes: 3
+        env:
+          SETUP_OUTCOMES: >-
+            input=${{ steps.input.outcome }} identity=${{ steps.identity.outcome }} caches=${{ steps.caches.outcome }}
+            setup-go=${{ steps.setup-go.outcome }} tools=${{ steps.tools.outcome }} tmpdir=${{ steps.tmpdir.outcome }}
+            pg-port=${{ steps.pg-port.outcome }} pg-roles=${{ steps.pg-roles.outcome }} posture=${{ steps.posture.outcome }}
+            toolchain=${{ steps.toolchain.outcome }} build=${{ steps.build.outcome }} test=${{ steps.test.outcome }}
+        run: |
+          eval "$CTX_LIB"
+          finalize "$SETUP_OUTCOMES"
+      - name: keep both PostgreSQL server logs
+        if: always()
+        timeout-minutes: 1
+        env:
+          PG_PRIMARY_ID: ${{ job.services.postgres.id }}
+          PG_OTHER_ID: ${{ job.services.postgres_other.id }}
+        run: |
+          OUT="$RUNNER_TEMP/context/$ARM"
+          mkdir -p "$OUT"
+          docker logs --details "$PG_PRIMARY_ID" > "$OUT/postgres-primary.log" 2>&1 || echo "COULD NOT LOOK" >> "$OUT/postgres-primary.log"
+          docker logs --details "$PG_OTHER_ID" > "$OUT/postgres-other.log" 2>&1 || echo "COULD NOT LOOK" >> "$OUT/postgres-other.log"
+      - name: retain the whole stream, results, target, separate observations and the server logs
+        if: always()
+        timeout-minutes: 3
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: mainline-20b3-context-b-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/context/b/
+          retention-days: 7
+          if-no-files-found: error
