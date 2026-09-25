@@ -3470,14 +3470,14 @@ tasks:
       check-c05-dodo-sku.sh and #948/#933/#921. Does not apply
       OnboardFirstOwner. Does not restack overlay #75/#107.
     cmds:
-      - bash scripts/check-c05-dodo-sku-prep.sh
+      - bash scripts/hub-leg.sh lint:c05-dodo-sku-prep scripts/check-c05-dodo-sku-prep.sh
 
   lint:c05-dodo-sku-prep:selftest:
     desc: >-
       C05 Dodo SKU — executable empty-fallback mutant, semantic
       rename no-fire, exact Go witness LOOK 2, and HOLD assertions.
     cmds:
-      - bash scripts/test-c05-dodo-sku-prep.sh
+      - bash scripts/hub-leg.sh lint:c05-dodo-sku-prep:selftest scripts/test-c05-dodo-sku-prep.sh
   lint:c05-webhook-sku-prep:
     desc: >-
       C05 webhook Cloud SKU remasured. Unique leftover unique vs
@@ -4410,14 +4410,14 @@ tasks:
       unique vs #940. Does not copy catalog.ts. Does not restack
       #1320-#1417.
     cmds:
-      - bash scripts/check-cfg-12-forward-off.sh
+      - bash scripts/hub-leg.sh lint:cfg-12-forward-off scripts/check-cfg-12-forward-off.sh
 
   lint:cfg-12-forward-off:selftest:
     desc: >-
       CFG-12 — battery (flip a block to true, drop a Cloud pdt_,
       production sale ON, missing wrangler, HOLD line).
     cmds:
-      - bash scripts/test-cfg-12-forward-off.sh
+      - bash scripts/hub-leg.sh lint:cfg-12-forward-off:selftest scripts/test-cfg-12-forward-off.sh
   lint:pr-ci-regime:
     desc: >-
       The public repository's PULL-REQUEST regime is coherent with the branch protection that
@@ -4682,24 +4682,24 @@ tasks:
       CFG-03 — production worker switches stay off. This lote inventories
       them; it does not flip them.
     cmds:
-      - bash scripts/check-cfg03-prod-switches.sh
+      - bash scripts/hub-leg.sh lint:cfg-03-prod-switches scripts/check-cfg03-prod-switches.sh
 
   lint:cfg-03-prod-switches:selftest:
     desc: CFG-03 — mutants flip a production switch.
     cmds:
-      - bash scripts/test-cfg03-prod-switches.sh
+      - bash scripts/hub-leg.sh lint:cfg-03-prod-switches:selftest scripts/test-cfg03-prod-switches.sh
 
   lint:c05-both-pdt-remeasure:
     desc: >-
       C05 — both Cloud pdt_ stay in cloud_products, out of OTA
       set_codes; inviteFirstOwner stays. Production fulfilment off.
     cmds:
-      - bash scripts/check-c05-both-pdt-remeasure.sh
+      - bash scripts/hub-leg.sh lint:c05-both-pdt-remeasure scripts/check-c05-both-pdt-remeasure.sh
 
   lint:c05-both-pdt-remeasure:selftest:
     desc: C05 — mutants put Cloud SKUs in set_codes or drop invite.
     cmds:
-      - bash scripts/test-c05-both-pdt-remeasure.sh
+      - bash scripts/hub-leg.sh lint:c05-both-pdt-remeasure:selftest scripts/test-c05-both-pdt-remeasure.sh
 
   lint:c04-aws-estate:
     desc: >-
@@ -5210,12 +5210,12 @@ tasks:
       CFG-01 — production Cloudflare stays unprovisioned. Section 9
       not met. Does not wrangler deploy production.
     cmds:
-      - bash scripts/check-cfg-01-production-hold.sh
+      - bash scripts/hub-leg.sh lint:cfg-01-production-hold scripts/check-cfg-01-production-hold.sh
 
   lint:cfg-01-production-hold:selftest:
     desc: CFG-01 — mutants flip production provisioned or fulfillment.
     cmds:
-      - bash scripts/test-cfg-01-production-hold.sh
+      - bash scripts/hub-leg.sh lint:cfg-01-production-hold:selftest scripts/test-cfg-01-production-hold.sh
   lint:c0022-exit1-callers:
     desc: >-
       0022 §5 Exit 1 — published 0016/0018 win. No 0022_*.sql. Callers
@@ -5243,12 +5243,12 @@ tasks:
       CFG-03 remainder — panel secrets stay off vars; C-16 live list
       unrun; production fulfillment stays false. Does not wrangler.
     cmds:
-      - bash scripts/check-cfg03-secret-deploy.sh
+      - bash scripts/hub-leg.sh lint:cfg-03-secret-deploy scripts/check-cfg03-secret-deploy.sh
 
   lint:cfg-03-secret-deploy:selftest:
     desc: CFG-03 remainder — mutants put a secret in vars or claim C-16.
     cmds:
-      - bash scripts/test-cfg03-secret-deploy.sh
+      - bash scripts/hub-leg.sh lint:cfg-03-secret-deploy:selftest scripts/test-cfg03-secret-deploy.sh
 
   lint:eco03-restoration-absent:
     desc: >-
@@ -5341,12 +5341,12 @@ tasks:
       not AAL3 onboard. Unique vs both-pdt-applied #1379. Does
       not restack #864/#948. Production fulfilment off.
     cmds:
-      - bash scripts/check-c05-first-owner.sh
+      - bash scripts/hub-leg.sh lint:c05-first-owner scripts/check-c05-first-owner.sh
 
   lint:c05-first-owner:selftest:
     desc: C05 — mutants call /v1/onboard or drop a Cloud SKU.
     cmds:
-      - bash scripts/test-c05-first-owner.sh
+      - bash scripts/hub-leg.sh lint:c05-first-owner:selftest scripts/test-c05-first-owner.sh
 
   lint:c05-both-pdt-applied:
     desc: >-
@@ -6219,6 +6219,7 @@ tasks:
     desc: C03-11 — mutants claim binaries replaced or turn production on.
     cmds:
       - bash scripts/test-c03-11-fase-r.sh
+      - bash scripts/hub-leg.sh lint:c03-11-fase-r:selftest scripts/test-c03-11-fase-r-staged.sh
 
   lint:c03-06-needs-decision:
     desc: >-
@@ -8474,8 +8475,8 @@ tasks:
       - bash scripts/check-tier-card.sh
       - bash scripts/check-d1-slot-census.sh
       - bash scripts/check-c05-16-serial-env.sh
-      - bash scripts/check-cfg03-prod-switches.sh
-      - bash scripts/check-c05-both-pdt-remeasure.sh
+      - bash scripts/hub-leg.sh lint:addon-sets scripts/check-cfg03-prod-switches.sh
+      - bash scripts/hub-leg.sh lint:addon-sets scripts/check-c05-both-pdt-remeasure.sh
       - bash scripts/check-c03-05-roster-accumulate.sh
       - bash scripts/check-c02-r2-key-from-token.sh
       - bash scripts/hub-leg.sh lint:addon-sets scripts/check-c02-70-no-land-snapshot.sh
@@ -8510,13 +8511,13 @@ tasks:
       - bash scripts/check-cfg-10-sandbox-redeploy.sh
       - bash scripts/check-alc-01-s1-named-nil.sh
       - bash scripts/check-cfg-01-dns-resolves.sh
-      - bash scripts/check-cfg-01-production-hold.sh
+      - bash scripts/hub-leg.sh lint:addon-sets scripts/check-cfg-01-production-hold.sh
       - bash scripts/check-eco-16-exit-restore.sh
       - bash scripts/check-eco-09-k-bound.sh
       - bash scripts/check-eco-13-evidence-absent.sh
       - bash scripts/check-0022-exit1-callers.sh
       - bash scripts/check-c03-33-refund-first.sh
-      - bash scripts/check-cfg03-secret-deploy.sh
+      - bash scripts/hub-leg.sh lint:addon-sets scripts/check-cfg03-secret-deploy.sh
       - bash scripts/check-c02-09-cost.sh
       - bash scripts/check-c02-08-blobs-ids.sh
       - bash scripts/check-eco12-counsel-p0.sh
@@ -8524,7 +8525,7 @@ tasks:
       - bash scripts/check-eco-11-reserve-funded.sh
       - bash scripts/check-helm-chart-prep.sh
       - bash scripts/check-c02-r2-set-key-prep.sh
-      - bash scripts/check-c05-dodo-sku-prep.sh
+      - bash scripts/hub-leg.sh lint:addon-sets scripts/check-c05-dodo-sku-prep.sh
       - bash scripts/check-c05-webhook-sku-prep.sh
       - bash scripts/check-ver-09-stub-r2-prep.sh
       - bash scripts/check-c05-cloud-skus-prep.sh
@@ -8573,7 +8574,7 @@ tasks:
       - bash scripts/check-aws-estate.sh
       - bash scripts/check-c0022-exit1-remeasure.sh
       - bash scripts/check-c02-producer-r2-from-grants.sh
-      - bash scripts/check-c05-first-owner.sh
+      - bash scripts/hub-leg.sh lint:addon-sets scripts/check-c05-first-owner.sh
       - bash scripts/check-c05-both-pdt-applied.sh
       - bash scripts/check-c04-lb-deletion-protection.sh
       - bash scripts/check-c04-ecr-lifecycle-rds-logs.sh
@@ -8666,7 +8667,7 @@ tasks:
       - bash scripts/check-c13-07-ar-holds-prep.sh
       - bash scripts/check-ver-10-og-prep.sh
       - bash scripts/check-int-12-no-land-prep.sh
-      - bash scripts/check-cfg-12-forward-off.sh
+      - bash scripts/hub-leg.sh lint:addon-sets scripts/check-cfg-12-forward-off.sh
       - bash scripts/check-community-updates-prep.sh
       - bash scripts/hub-leg.sh lint:pr-ci-regime scripts/check-pr-ci-regime.sh
       - bash scripts/check-ver-02-cut-hold.sh
@@ -8729,8 +8730,8 @@ tasks:
       - bash scripts/check-c03-02-sign-features.sh
       - bash scripts/test-c03-02-sign-features.sh
       - bash scripts/test-c05-16-serial-env.sh
-      - bash scripts/test-cfg03-prod-switches.sh
-      - bash scripts/test-c05-both-pdt-remeasure.sh
+      - bash scripts/hub-leg.sh lint:addon-sets-gate scripts/test-cfg03-prod-switches.sh
+      - bash scripts/hub-leg.sh lint:addon-sets-gate scripts/test-c05-both-pdt-remeasure.sh
       - bash scripts/test-c03-05-roster-accumulate.sh
       - bash scripts/test-c02-r2-key-from-token.sh
       - bash scripts/hub-leg.sh lint:addon-sets-gate scripts/test-overlay-live-facts.sh
@@ -8780,13 +8781,13 @@ tasks:
       - bash scripts/test-cfg-10-sandbox-redeploy.sh
       - bash scripts/test-alc-01-s1-named-nil.sh
       - bash scripts/test-cfg-01-dns-resolves.sh
-      - bash scripts/test-cfg-01-production-hold.sh
+      - bash scripts/hub-leg.sh lint:addon-sets-gate scripts/test-cfg-01-production-hold.sh
       - bash scripts/test-eco-16-exit-restore.sh
       - bash scripts/test-eco-09-k-bound.sh
       - bash scripts/test-eco-13-evidence-absent.sh
       - bash scripts/test-0022-exit1-callers.sh
       - bash scripts/test-c03-33-refund-first.sh
-      - bash scripts/test-cfg03-secret-deploy.sh
+      - bash scripts/hub-leg.sh lint:addon-sets-gate scripts/test-cfg03-secret-deploy.sh
       - bash scripts/test-eco03-restoration-absent.sh
       - bash scripts/test-caep-inbound.sh
       - bash scripts/test-unit-econ-unknowns.sh
@@ -8799,7 +8800,7 @@ tasks:
       - bash scripts/test-aws-estate.sh
       - bash scripts/test-c0022-exit1-remeasure.sh
       - bash scripts/test-c02-producer-r2-from-grants.sh
-      - bash scripts/test-c05-first-owner.sh
+      - bash scripts/hub-leg.sh lint:addon-sets-gate scripts/test-c05-first-owner.sh
       - bash scripts/test-c05-both-pdt-applied.sh
       - bash scripts/test-c04-lb-deletion-protection.sh
       - bash scripts/test-c04-ecr-lifecycle-rds-logs.sh
@@ -8862,6 +8863,7 @@ tasks:
       - bash scripts/test-c03-21-channel-right.sh
       - bash scripts/test-c03-20-named-403.sh
       - bash scripts/test-c03-11-fase-r.sh
+      - bash scripts/hub-leg.sh lint:addon-sets-gate scripts/test-c03-11-fase-r-staged.sh
       - bash scripts/test-c03-06-needs-decision.sh
       - bash scripts/test-c13-06-canon-proposals.sh
       - bash scripts/test-unit-econ-sourced.sh
@@ -8877,7 +8879,7 @@ tasks:
       - bash scripts/test-eco-11-reserve-funded.sh
       - bash scripts/test-helm-chart-prep.sh
       - bash scripts/test-c02-r2-set-key-prep.sh
-      - bash scripts/test-c05-dodo-sku-prep.sh
+      - bash scripts/hub-leg.sh lint:addon-sets-gate scripts/test-c05-dodo-sku-prep.sh
       - bash scripts/test-c05-webhook-sku-prep.sh
       - bash scripts/test-ver-09-stub-r2-prep.sh
       - bash scripts/test-c05-cloud-skus-prep.sh
@@ -8944,7 +8946,7 @@ tasks:
       - bash scripts/test-c13-07-ar-holds-prep.sh
       - bash scripts/test-ver-10-og-prep.sh
       - bash scripts/test-int-12-no-land-prep.sh
-      - bash scripts/test-cfg-12-forward-off.sh
+      - bash scripts/hub-leg.sh lint:addon-sets-gate scripts/test-cfg-12-forward-off.sh
       - bash scripts/test-community-updates-prep.sh
       - bash scripts/hub-leg.sh lint:pr-ci-regime:selftest scripts/test-pr-ci-regime.sh
       - bash scripts/test-ver-02-cut-hold.sh

@@ -291,6 +291,7 @@ func TestDRDualControlTheProvenanceFOLLOWSWhoeverAsksLast(t *testing.T) {
 	if r.code != http.StatusAccepted || r.body["job_id"] == nil {
 		t.Fatalf("LOCKOUT: an admin was held for a disarm somebody else requested: %d %s", r.code, r.raw)
 	}
+	waitForDRJob(t, h, first, r)
 	// And the one who did ask is the one now held.
 	r = h.do("POST", "/v1/console/dr/restore/upload-2/apply", second, map[string]any{
 		"passphrase": "correct horse battery staple",
@@ -378,6 +379,7 @@ func TestDRDualControlADisarmDoesFreeADIFFERENTAdmin(t *testing.T) {
 	if r.code != http.StatusAccepted || r.body["job_id"] == nil {
 		t.Fatalf("LOCKOUT: an admin who did not disarm anything was still held after the cool-down: %d %s", r.code, r.raw)
 	}
+	waitForDRJob(t, h, second, r)
 }
 
 // TestDRDualControlRearmIsImmediateAndCancelsAPendingDisarm is the other half of
