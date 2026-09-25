@@ -61,6 +61,7 @@ func newHarness(t *testing.T, optFn func(signerPub ed25519.PublicKey) []Option) 
 // integrity coverage for off-box-signed checkpoints.
 func newHarnessSigner(t *testing.T, signerOpts []audit.Option, optFn func(s *audit.Signer) []Option) *harness {
 	t.Helper()
+	auth.SetTestHashParams(auth.TestArgonMemKiB, auth.TestArgonTime, auth.TestArgonThreads)
 	ctx := context.Background()
 	h := &harness{t: t}
 

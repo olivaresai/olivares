@@ -76,7 +76,7 @@ func (h *sweepMutateHold) Mutate(ctx context.Context, tenant model.TenantID, fn 
 // TestDurableFreshnessPostgresReappearanceMeetsTheSweepAtTheTenantGate is causal
 // group 5 on a real PostgreSQL 16 server.
 //
-// The claim is narrow and it is the one root adjudicated: the sweep and an
+// The claim is narrow and it is the one the design makes: the sweep and an
 // ingestion refresh OF THE SAME TENANT are already serialized BEFORE either
 // callback reads anything, by the lineage writer's per-tenant advisory lock
 // (core/internal/store/sqlstore/lineage_writer.go:52-63), so no extra row lock

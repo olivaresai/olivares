@@ -106,29 +106,19 @@ var dummySecretHash = sha256.Sum256([]byte("olivares.constant-time.dummy.secret"
 
 // --- Password hashing (argon2id) ---------------------------------------------
 
-// argon2id parameters. m is the memory cost in KiB (64 MiB, well over the OWASP
-// 19 MiB floor); t the time cost; p the parallelism. They are stored in the
-// encoded hash so they can be raised later and old hashes re-hashed on login.
-const (
-	argonMemKiB  = 64 * 1024
-	argonTime    = 3
-	argonThreads = 1
-	argonSaltLen = 16
-	argonKeyLen  = 32
-)
-
 // ErrMalformedHash is returned when an encoded password hash cannot be parsed.
 var ErrMalformedHash = errors.New("auth: malformed password hash")
 
 // HashPassword returns an argon2id PHC-format encoded hash of pw.
 func HashPassword(pw string) (string, error) {
+	mem, timeCost, threads := currentArgonParams()
 	salt := make([]byte, argonSaltLen)
 	if _, err := rand.Read(salt); err != nil {
 		return "", fmt.Errorf("auth: read entropy: %w", err)
 	}
-	key := argon2.IDKey([]byte(pw), salt, argonTime, argonMemKiB, argonThreads, argonKeyLen)
+	key := argon2.IDKey([]byte(pw), salt, timeCost, mem, threads, argonKeyLen)
 	return fmt.Sprintf("$argon2id$v=%d$m=%d,t=%d,p=%d$%s$%s",
-		argon2.Version, argonMemKiB, argonTime, argonThreads,
+		argon2.Version, mem, timeCost, threads,
 		base64.RawStdEncoding.EncodeToString(salt),
 		base64.RawStdEncoding.EncodeToString(key)), nil
 }
@@ -192,21 +182,35 @@ func parseArgonParams(s string) (mem uint32, time uint32, threads uint8, err err
 // against it on an unknown-user login path makes that path cost the same as a
 // real verify, flattening timing-based user enumeration (docs/SECURITY-HARDENING.md).
 var dummyHash struct {
-	once sync.Once
-	val  string
+	mu  sync.Mutex
+	val string
+}
+
+func resetDummyHash() {
+	dummyHash.mu.Lock()
+	dummyHash.val = ""
+	dummyHash.mu.Unlock()
 }
 
 // DummyVerify runs an argon2id verification against a fixed dummy hash and
 // discards the result. It exists solely to equalize the timing of the
 // unknown-user login path with the known-user path.
 func DummyVerify(pw string) {
-	dummyHash.once.Do(func() {
+	dummyHash.mu.Lock()
+	val := dummyHash.val
+	dummyHash.mu.Unlock()
+	if val == "" {
 		h, err := HashPassword("olivares-dummy-password-for-constant-time")
 		if err == nil {
-			dummyHash.val = h
+			dummyHash.mu.Lock()
+			if dummyHash.val == "" {
+				dummyHash.val = h
+			}
+			val = dummyHash.val
+			dummyHash.mu.Unlock()
 		}
-	})
-	if dummyHash.val != "" {
-		_, _ = VerifyPassword(pw, dummyHash.val)
+	}
+	if val != "" {
+		_, _ = VerifyPassword(pw, val)
 	}
 }

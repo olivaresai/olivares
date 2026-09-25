@@ -236,7 +236,7 @@ var errDRControlShape = errors.New("the restore control's shape is not the one t
 //     reinstalled as clean.
 //   - absent WITHOUT any witness is `legacy_or_lost_unknown`: on a new node that
 //     lost the control and every witness, a genuine legacy estate and a destroyed
-//     enrolment are indistinguishable. Root accepted that limit explicitly. The
+//     enrolment are indistinguishable. The design accepts that limit explicitly. The
 //     ordinary boot continues with ALL of its guards; nothing is rebated, and no
 //     "clean" control is written to convert not-knowing into retrospective proof.
 func judgeDRRestoreGate(g drGate, dest drDestination, w RestoreEnrolmentWitness) error {

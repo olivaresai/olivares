@@ -547,7 +547,7 @@ expect 1 "has no aws-actions/configure-aws-credentials step" "the credential exc
 
 stage
 subst "$WF_T" \
-  'aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4' \
+  'aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0' \
   'aws-actions/configure-aws-credentials@v6'
 expect 1 "which is not a 40-hex commit OID" "a moving TAG instead of a commit digest is a finding"
 
@@ -583,7 +583,7 @@ expect 1 "BEFORE the credential exchange" "the exchange placed AFTER tofu is a f
 stage
 subst "$WF_T" '      - name: estate shape (no apply)' \
   '      - name: sneak credentials into the push path
-        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
           role-to-assume: ${{ env.AWS_ROLE_ARN }}
           aws-region: us-east-1
@@ -639,7 +639,7 @@ subst "$WF_I" '          bash scripts/cosign-verified.sh sign --yes --upload=tru
 expect 1 "publishes without a cosign-verified.sh sign COMMAND" "pushing unsigned images is a finding"
 
 stage
-subst "$WF_I" '        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4' \
+subst "$WF_I" '        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0' \
              '        uses: aws-actions/configure-aws-credentials@main'
 expect 1 "which is not a 40-hex commit OID" "a branch pin on the ECR path is a finding"
 
@@ -654,8 +654,8 @@ expect 2 "missing workflow parser source" "missing workflow parser source is COU
 # del carril rápido no la tiene. Se escribe como caso para que nadie lea el verde como
 # si sí lo comprobara.
 stage
-subst "$WF_T" '@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4' \
-             '@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v9.9.9-inventada'
+subst "$WF_T" '@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0' \
+             '@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v9.9.9-inventada'
 if run; then
   ok "declared blind spot: a wrong version COMMENT does not fire (the digest is what is pinned)"
 else
@@ -754,11 +754,11 @@ expect 1 "has no 2012-10-17 Version" \
 
 # 1 · Un canje CONDICIONAL puede no ocurrir, y el paso siguiente corre igual.
 stage
-subst "$WF_T" '        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
+subst "$WF_T" '        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
           role-to-assume: ${{ env.AWS_ROLE_ARN }}
           aws-region: us-east-1' \
-  '        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
+  '        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         if: env.SOMETHING == '"'"'yes'"'"'
         with:
           role-to-assume: ${{ env.AWS_ROLE_ARN }}
@@ -768,9 +768,9 @@ expect 1 "guards the credential exchange with" \
 
 # 2 · `continue-on-error` se traga el fallo del canje y deja correr al apply.
 stage
-subst "$WF_T" '        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
+subst "$WF_T" '        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:' \
-  '        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
+  '        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         continue-on-error: true
         with:'
 expect 1 "sets continue-on-error on the credential exchange" \
@@ -781,7 +781,7 @@ expect 1 "sets continue-on-error on the credential exchange" \
 stage
 subst "$WF_T" '      - name: tofu apply (sandbox estate only)' \
   '      - name: a second exchange nobody looked at
-        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
           role-to-assume: arn:aws:iam::000000000000:role/somebody-elses
           aws-region: us-east-1
@@ -1949,7 +1949,7 @@ p = sys.argv[1]
 s = open(p, encoding="utf-8").read()
 i = s.index("apply-production:")
 head, tail = s[:i], s[i:]
-old = "cbe3b392738ccf3f987d68400dafcf4b0624a56c"
+old = "e1253824e5c10ff9df46874f81ed3ec929e19cfd"
 if tail.count(old) != 1:
     sys.exit("el ancla del pin de OIDC no esta una sola vez en apply-production")
 open(p, "w", encoding="utf-8").write(head + tail.replace(old, "1" * 40, 1))

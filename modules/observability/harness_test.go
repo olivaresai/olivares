@@ -78,6 +78,7 @@ type harness struct {
 // so the store opens with no extension registrar.
 func newHarness(t *testing.T, opts ...Option) *harness {
 	t.Helper()
+	auth.SetTestHashParams(auth.TestArgonMemKiB, auth.TestArgonTime, auth.TestArgonThreads)
 	ctx := context.Background()
 	clk := newClock(time.Date(2026, 6, 12, 12, 0, 0, 0, time.UTC))
 	h := &harness{t: t, clk: clk}

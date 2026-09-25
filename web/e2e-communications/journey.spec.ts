@@ -1471,7 +1471,7 @@ interface I3Evidence {
 const i3: I3Evidence = {
   scope: {
     contract:
-      'assessments/product/k3-i3-browser-qualification-inputs/I3-BROWSER-CONSTRUCTION-1.md',
+      'K3 I3 work handoff through the real console, browser construction contract 1',
     selector: "--grep 'K3 I3:'",
     titles: [
       'K3 I3: offered work survives restart and accepted ownership survives a second restart',

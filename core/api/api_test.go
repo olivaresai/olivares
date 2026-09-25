@@ -99,6 +99,7 @@ func newHarnessOptionsFromStoreSource(
 	modules ...api.Module,
 ) (api.Options, store.Store, string, *secure.SetupToken, *auth.Authenticator, *audit.Signer) {
 	t.Helper()
+	auth.SetTestHashParams(auth.TestArgonMemKiB, auth.TestArgonTime, auth.TestArgonThreads)
 	st := source.resolve(t)
 	_, priv, _ := ed25519.GenerateKey(nil)
 	signer, _ := audit.NewSigner(priv)

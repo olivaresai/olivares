@@ -86,7 +86,7 @@ var codeNames = map[Code]string{
 	CodeHostNotAName:       "host_not_a_name",
 }
 
-// The differential corpus: the published table, plus the classes root named —
+// The differential corpus: the published table, plus the classes the design requires —
 // percent escapes, Bidi and joiners, numeric overflow, leading and empty labels,
 // hyphens — plus the controls that keep each of those honest.
 var differentialCorpus = []struct {

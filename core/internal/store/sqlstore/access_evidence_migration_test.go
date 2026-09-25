@@ -1148,7 +1148,7 @@ func loadPublicReleaseCensus(t *testing.T) publicReleaseCensus {
 }
 
 // TestPublicV268ProductBaselineHasACompiledAccessEvidenceEdge is the additional mandatory
-// fixture the root decision names: the real first public release, tag v26.8.0, commit
+// fixture the design requires: the real first public release, tag v26.8.0, commit
 // f443e084 / tree cea97471, with its EXACT product callback — not a hub tree, not
 // sessions-only, and not `migrate manifest` output, which omits two of the callback's
 // three calls.

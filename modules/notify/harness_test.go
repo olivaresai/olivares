@@ -166,6 +166,7 @@ func newHarnessNudged(t *testing.T, opts ...Option) *harness { return buildHarne
 
 func buildHarness(t *testing.T, nudge bool, opts ...Option) *harness {
 	t.Helper()
+	auth.SetTestHashParams(auth.TestArgonMemKiB, auth.TestArgonTime, auth.TestArgonThreads)
 	ctx := context.Background()
 	h := &harness{t: t, clk: newClock(time.Date(2026, 6, 4, 12, 0, 0, 0, time.UTC))}
 

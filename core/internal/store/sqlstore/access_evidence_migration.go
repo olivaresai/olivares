@@ -421,7 +421,7 @@ func verifyAllowlistedLegacySourceProfile(
 // accessEvidenceAllowlistedLegacySourceCommit is R2 §5.2's one ratified real <=v5 profile:
 // core-only, `register == nil`, the parent immediately before core v6 was introduced.
 //
-// It is a CONSTANT and not a lookup because widening it is a root decision. The historical
+// It is a CONSTANT and not a lookup because widening it is an architecture decision. The historical
 // fixture generated from this exact commit is a separate delivery; until it lands, this
 // constant is what the refusal cites, and citing it is not the same as having run it.
 const accessEvidenceAllowlistedLegacySourceCommit = "c166ed79efc66e3a8922c007a74defb0ad1228c8"

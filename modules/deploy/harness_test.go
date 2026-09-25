@@ -193,6 +193,7 @@ func newHarness(t *testing.T) *harness {
 // to that bus to observe the published PERMITTED edges (the feed).
 func newHarnessWith(t *testing.T, opts ...Option) *harness {
 	t.Helper()
+	auth.SetTestHashParams(auth.TestArgonMemKiB, auth.TestArgonTime, auth.TestArgonThreads)
 	ctx := context.Background()
 	h := &harness{t: t}
 

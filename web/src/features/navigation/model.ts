@@ -38,7 +38,7 @@ import { Settings } from 'lucide-react'
  * The pinned Settings utility (app/routes.tsx settingsRoute) is not a FEATURE_VIEWS entry
  * and has no permission: every signed-in principal reaches it. It belongs to System & settings
  * → Preferences in the directory and the breadcrumb, while the sidebar keeps it pinned at the
- * foot and does NOT repeat it inside the area list (root decision: its presence in the
+ * foot and does NOT repeat it inside the area list (design decision: its presence in the
  * directory "does not require duplicating the link in the same sidebar list").
  */
 export const SETTINGS_UTILITY = {
