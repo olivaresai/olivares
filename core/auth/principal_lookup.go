@@ -53,30 +53,49 @@ func superadminQuery() model.Query {
 // it is "no access", never a fabricated principal.
 func (a *Authenticator) PrincipalForUser(ctx context.Context, ref string, assurance int) (p Principal, found bool, err error) {
 	verr := a.st.AuthView(ctx, func(as store.AuthScope) error {
-		u, ok, e := lookupUser(ctx, as, ref)
-		if e != nil || !ok {
-			return e
-		}
-		if u.Status != model.StatusActive {
-			return nil // inactive ⇒ found stays false: it authorizes nothing
-		}
-		grants, groups, confined, e := loadGrants(ctx, as, u.ID)
-		if e != nil {
-			return e
-		}
-		// CredID is the user id (not a live session id): a simulated principal stands
-		// for the user's STANDING entitlement, not one credential. No authored grant
-		// keys on a specific credential id (targets Role/User/Group), so this is
-		// decision-irrelevant; it gives the Cedar principal a stable, meaningful UID.
-		p = newPrincipal(KindUser, u.ID, u.ID, u.IsSuperadmin, u.DisplayName, grants, groups).withConfinements(confined)
-		p.AAL = clampUserAAL(assurance)
-		found = true
-		return nil
+		var e error
+		p, found, e = principalForUserInScope(ctx, as, ref, assurance)
+		return e
 	})
 	if verr != nil {
 		return Principal{}, false, verr
 	}
 	return p, found, nil
+}
+
+// principalForUserInScope is PrincipalForUser's callback without the transaction: it
+// builds the same standing principal from an auth view the CALLER already holds, so a
+// caller that must read other authorization facts in that one read transaction — a
+// directory generation before the reconstruction and the same one after, say — can
+// rebuild the principal between them. The store's evidence contract asks for exactly
+// that (auth_evidence.go: such a caller "must not open a second Store transaction"),
+// and on the SQLite engine, whose pool is a single connection, a nested view would
+// block rather than read.
+//
+// Its semantics are PrincipalForUser's, unchanged and deliberately not duplicated: an
+// absent or inactive account is (zero, false, nil) because it authorizes nothing,
+// CredID is the user id, the assurance is clamped to [AAL1, AAL3] and the
+// workspace confinements are applied. It stays unexported because it is a seam inside
+// this package, not a second public way to build a principal.
+func principalForUserInScope(ctx context.Context, as store.AuthScope, ref string, assurance int) (Principal, bool, error) {
+	u, ok, err := lookupUser(ctx, as, ref)
+	if err != nil || !ok {
+		return Principal{}, false, err
+	}
+	if u.Status != model.StatusActive {
+		return Principal{}, false, nil // inactive ⇒ not found: it authorizes nothing
+	}
+	grants, groups, confined, err := loadGrants(ctx, as, u.ID)
+	if err != nil {
+		return Principal{}, false, err
+	}
+	// CredID is the user id (not a live session id): a simulated principal stands
+	// for the user's STANDING entitlement, not one credential. No authored grant
+	// keys on a specific credential id (targets Role/User/Group), so this is
+	// decision-irrelevant; it gives the Cedar principal a stable, meaningful UID.
+	p := newPrincipal(KindUser, u.ID, u.ID, u.IsSuperadmin, u.DisplayName, grants, groups).withConfinements(confined)
+	p.AAL = clampUserAAL(assurance)
+	return p, true, nil
 }
 
 // PrincipalForToken builds the authorization principal for the stored API token with
