@@ -80,6 +80,28 @@ class FakeControlPlane(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    # COMMIT_OUTCOME_UNKNOWN_ENVELOPE is the EXACT production 503 body, byte for
+    # byte: the server encodes a map, so encoding/json emits the three top-level keys
+    # in sorted order and appends a newline, and the nested error object carries the
+    # same code as its message. A shorter invented body would make the control pass
+    # against a fixture instead of against the engine.
+    COMMIT_OUTCOME_UNKNOWN_ENVELOPE = (
+        b'{"code":"commit_outcome_unknown","error":{"code":"commit_outcome_unknown",'
+        b'"message":"commit_outcome_unknown"},"verdict":"NO_HE_PODIDO_MIRAR"}\n'
+    )
+    EVIDENCE_UNAVAILABLE_ENVELOPE = (
+        b'{"code":"evidence_unavailable","error":{"code":"evidence_unavailable",'
+        b'"message":"evidence_unavailable"},"verdict":"NO_HE_PODIDO_MIRAR"}\n'
+    )
+
+    def _raw(self, status, body, content_type):
+        """Write exact bytes, so the fixture is the engine's envelope and not a re-encoding."""
+        self.send_response(status)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
     def _handle(self):
         length = int(self.headers.get("Content-Length", "0"))
         FakeControlPlane.request_bodies.append(
@@ -99,6 +121,15 @@ class FakeControlPlane(BaseHTTPRequestHandler):
         elif url.path.startswith("/v1/agents/"):
             self._json(404, {"error": {"code": "not_found", "message": "no such agent"}},
                        headers=[("X-Request-ID", "req-42")])
+        elif "/grants" in url.path and self.command == "GET":
+            # There is deliberately NO Retry-After: nothing about an undetermined
+            # commit is safe to repeat on a timer.
+            envelope = (
+                FakeControlPlane.EVIDENCE_UNAVAILABLE_ENVELOPE
+                if q.get("state") == ["evidence_unavailable"]
+                else FakeControlPlane.COMMIT_OUTCOME_UNKNOWN_ENVELOPE
+            )
+            self._raw(503, envelope, "application/json; charset=utf-8")
         elif url.path == "/v1/server-info":
             self._json(200, {"version": "test"}, headers=[
                 ("Deprecation", "@1780272000"),
@@ -255,6 +286,46 @@ class ClientSmokeTest(unittest.TestCase):
         with self.assertRaises(APIError):
             self.client.post_v1_memberships(body={})
         self.assertEqual(len(FakeControlPlane.requests), 1)
+
+    # --- C32: the commit-outcome retry veto ---------------------------------
+
+    def test_commit_outcome_unknown_is_never_retried(self):
+        """An automatic retry of an undetermined commit is not a harmless second
+        attempt. Even on a GET it re-runs a governed read that commits its own audit
+        act, so the client would turn one uncertain write into a second one and the
+        operator would see two acts for one intention. The veto covers every method.
+        """
+        with self.assertRaises(APIError) as cm:
+            self.client.get_v1_m_sessions_channels_by_id_grants(
+                "01a084d5-988c-7e46-b396-5cff04bf2793",
+                workspace_id="01a084d5-988c-7e46-b396-5cff04bf2794",
+            )
+        e = cm.exception
+        self.assertEqual((e.status, e.code), (503, "commit_outcome_unknown"))
+        self.assertEqual(
+            len(FakeControlPlane.requests), 1,
+            "retrying an undetermined commit can produce a second durable effect for one intention",
+        )
+        self.assertEqual(
+            self.slept, [], "there is no interval on which this is safe to repeat"
+        )
+
+    def test_other_503_get_still_retried(self):
+        """The preservation positive, and it is NEW for this client (N2): the
+        503-GET retry that exists for the HA handoff is untouched for every other
+        code. C32 adds one named exception, not a retry-policy change.
+        """
+        with self.assertRaises(APIError) as cm:
+            self.client.get_v1_m_sessions_channels_by_id_grants(
+                "01a084d5-988c-7e46-b396-5cff04bf2793",
+                workspace_id="01a084d5-988c-7e46-b396-5cff04bf2794",
+                state="evidence_unavailable",
+            )
+        self.assertEqual(cm.exception.code, "evidence_unavailable")
+        self.assertEqual(
+            len(FakeControlPlane.requests), 3,
+            "initial plus two retries: the HA handoff retry is not C32's to remove",
+        )
 
     def test_pagination(self):
         ids = [i["id"] for i in self.client.paginate("/v1/agents")]

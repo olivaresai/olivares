@@ -604,7 +604,7 @@ echo "pre-push:   test-hook-parallelism + test-hook-parallelism:selftest + ci-se
 echo "pre-push:   alc-02-f4-hold:selftest + alc-04-xff-hold:selftest + c02-hold-key-until-producer:selftest + c02-r2-key-from-token:selftest + c02-r2-set-key-prep:selftest + c03-02-sign-features-prep:selftest +"
 echo "pre-push:   c03-02-sign-features:selftest + c03-11-fase-r:selftest + c05-14-effect-key-prep:selftest + c13-07-ar-holds-prep:selftest + c13-07-holds + cfg-01-production-hold:selftest + eco-01-activation-hold:selftest +"
 echo "pre-push:   eco-11-reserve-funded:selftest + meta-12-phone-home:selftest + ver-02-cut-hold:selftest + business-chain:selftest + ci-history-depth + ci-history-depth:selftest +"
-echo "pre-push:   openapi-op-descriptions + runbook-coverage + reserve-numbers:selftest + release-diagrams + claim-safety:selftest + classify-paths-parity + classify-paths-parity:selftest + publisher-contract + publisher-contract:selftest + roles-oneshot + aws-iam-phase2:selftest + export-closure:selftest + ci-int12-step:selftest + pre-verify-tanda:selftest + refs-file-readers:selftest + scan-box-secrets:selftest + fabricated-paths + fabricated-paths:selftest + purge-scratch:selftest + race-report:selftest + race-groups:selftest + race-full-services-parity + modules-race-partition + hot-race-partition + release-smoke-answers + release-smoke-stamp + session-record:selftest + launch-placeholders:selftest + overlay-seal:selftest + export-identity:selftest + baseline-shrink:selftest + cra-pack:selftest + guard-bash + prepush-treesnap + catalog-dodo-discount + prepush-refclass)."
+echo "pre-push:   openapi-op-descriptions + runbook-coverage + reserve-numbers:selftest + release-diagrams + claim-safety:selftest + classify-paths-parity + classify-paths-parity:selftest + publisher-contract + publisher-contract:selftest + roles-oneshot + aws-iam-phase2:selftest + export-closure:selftest + ci-int12-step:selftest + pre-verify-tanda:selftest + refs-file-readers:selftest + scan-box-secrets:selftest + fabricated-paths + fabricated-paths:selftest + purge-scratch:selftest + race-report:selftest + race-groups:selftest + race-full-services-parity + modules-race-partition + hot-race-partition + release-smoke-answers + release-smoke-stamp + session-record:selftest + launch-placeholders:selftest + overlay-seal:selftest + export-identity:selftest + public-prose:selftest + baseline-shrink:selftest + cra-pack:selftest + guard-bash + prepush-treesnap + catalog-dodo-discount + prepush-refclass)."
 
 
 
@@ -1449,8 +1449,8 @@ task lint:client-callers-selftest
 # then invoked by NOTHING for ten days: measured 2026-08-14 by replanting the literal incident,
 # after which this hook ran all fifty fast lints and exited 0. It costs 0.29s.
 task lint:kms-backends
-# One first-release version everywhere (RELEASE-VERSION is the canon; report-only while
-# the owner's choice is UNDECIDED, enforcing the moment it is set).
+# One release version everywhere (RELEASE-VERSION is the canon, the published install
+# baseline; UNDECIDED is refused, never reported as green).
 task lint:release-version
 # Public capability and supply-chain wording must remain normalized and must not
 # resurrect known overclaims. Pure POSIX sh, no network.

@@ -31,18 +31,18 @@ SBOM/OpenVEX/происхождение и выдаёт единый tarball с 
 
 ```bash
 scripts/airgap-bundle.sh \
-  --version v26.9.1 \
-  --image docker.io/olivaresai/olivares:26.9.1-amd64 \
+  --version v26.9.0 \
+  --image ghcr.io/olivaresai/olivares:26.9.0-amd64 \
   --chart deploy/helm/olivares \
   --cosign-key cosign.key \
   [--collector-image <ref>] [--out dist/airgap] [--gpg-key <id>]
 ```
 
-Образ вытягивается из Docker Hub по его официальной координате (`docker.io/olivaresai/olivares`);
-то же содержимое также находится в `ghcr.io/olivaresai/olivares`, идентичное по
-digest, если вы предпочитаете зеркалировать оттуда. Docker Hub ограничивает частоту
-**анонимных** пулов, а ghcr.io для публичных образов — нет, что помогает на
-неаутентифицированном хосте сборки.
+Тег архитектуры (`26.9.0-amd64`) опубликован в `ghcr.io/olivaresai/olivares`, где релиз
+собирается и подписывается. Docker Hub (`docker.io/olivaresai/olivares`, официальный пул) несёт
+мультиархитектурные и укреплённые теги, идентичные по digest, но не `26.9.0-amd64`
+(`docs/releases/v26.9.0-install-surfaces.json`). ghcr.io не ограничивает частоту анонимных пулов
+публичных образов, что помогает и на неаутентифицированном хосте сборки.
 
 :::caution[SBOM/VEX/происхождение поставляются, а не генерируются]
 Сборщик копирует SBOM, OpenVEX и происхождение в комплект **по принципу
@@ -100,7 +100,7 @@ cosign verify-blob --key cosign.pub --insecure-ignore-tlog \
 
 ```bash
 scripts/airgap-mirror.sh \
-  --bundle olivares-airgap-v26.9.1.tar.gz \
+  --bundle olivares-airgap-v26.9.0.tar.gz \
   --registry registry.internal:5000 [--insecure]
 ```
 

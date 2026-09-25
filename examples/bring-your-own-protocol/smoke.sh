@@ -61,11 +61,23 @@ echo "== boundary check =="
 )
 
 echo "== zero governance code grep =="
-if rg -n 'github.com/olivaresai/olivares/(core|modules|connectors)|sourcescope|RetrievalScopeGate' "${CONNECTOR}" --glob '*.go'; then
-  echo "governance code/imports found in the connector; expected SDK-only implementation" >&2
-  exit 1
-fi
-echo "Connector contains no engine governance imports or scope-gate code."
+scan_status=0
+grep -rEn --include='*.go' \
+  'github.com/olivaresai/olivares/(core|modules|connectors)|sourcescope|RetrievalScopeGate' \
+  "${CONNECTOR}" || scan_status=$?
+case "${scan_status}" in
+  0)
+    echo "governance code/imports found in the connector; expected SDK-only implementation" >&2
+    exit 1
+    ;;
+  1)
+    echo "Connector contains no engine governance imports or scope-gate code."
+    ;;
+  *)
+    echo "could not scan connector governance code (grep exit ${scan_status})" >&2
+    exit 2
+    ;;
+esac
 
 echo "== offline sign and admission check =="
 BUNDLE="${WORK}/acme-fabworks-erp.sigstore.json"

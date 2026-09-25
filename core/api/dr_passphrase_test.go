@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/olivaresai/olivares/core/api"
 )
@@ -28,6 +29,53 @@ func drHarness(t *testing.T) (*harness, string) {
 	})
 	// The service's default backup dir (newDRService): <DataDir>/backups.
 	return h, filepath.Join(dataDir, "backups")
+}
+
+// waitForDRJob holds the test until the DR job named by an accepted (202) backup,
+// restore-apply or restore-approve response reaches a terminal state, reading it
+// through GET /v1/console/dr/jobs as a console client would.
+//
+// Those handlers answer 202 and run the job on a detached goroutine. A test that
+// returns on the 202 leaves the job writing into the data directory (the restore's
+// control lock, a backup's snapshot) while t.TempDir's cleanup is removing it, and
+// the cleanup then fails with "directory not empty". Waiting here keeps the job
+// inside the test that started it. Running out the bound fails the test.
+func waitForDRJob(t *testing.T, h *harness, token string, accepted resp) {
+	t.Helper()
+	jobID, _ := accepted.body["job_id"].(string)
+	if jobID == "" {
+		t.Fatalf("the accepted response names no DR job to wait for: %d %s", accepted.code, accepted.raw)
+	}
+	const bound = 30 * time.Second
+	deadline := time.NewTimer(bound)
+	defer deadline.Stop()
+	poll := time.NewTicker(20 * time.Millisecond)
+	defer poll.Stop()
+	for {
+		r := h.do("GET", "/v1/console/dr/jobs", token, nil, nil)
+		if r.code != http.StatusOK {
+			t.Fatalf("list DR jobs while waiting for %s = %d %s", jobID, r.code, r.raw)
+		}
+		status, listed := "", false
+		items, _ := r.body["items"].([]any)
+		for _, it := range items {
+			if m, ok := it.(map[string]any); ok && m["id"] == jobID {
+				status, _ = m["status"].(string)
+				listed = true
+			}
+		}
+		if !listed {
+			t.Fatalf("DR job %s is missing from the job list, although it is registered before the 202: %s", jobID, r.raw)
+		}
+		if status == "completed" || status == "failed" {
+			return
+		}
+		select {
+		case <-deadline.C:
+			t.Fatalf("DR job %s is still %q after %s; it would outlive this test and race the TempDir cleanup", jobID, status, bound)
+		case <-poll.C:
+		}
+	}
 }
 
 func TestDRBackupPassphraseFloor(t *testing.T) {
@@ -49,6 +97,9 @@ func TestDRBackupPassphraseFloor(t *testing.T) {
 	r = h.do("POST", "/v1/console/dr/backup", admin, map[string]any{"passphrase": "ññññññññññññ"}, nil)
 	if r.code == http.StatusBadRequest {
 		t.Fatalf("backup with 12-rune passphrase = %d %s, floor must count runes not bytes", r.code, r.raw)
+	}
+	if r.code == http.StatusAccepted {
+		waitForDRJob(t, h, admin, r)
 	}
 
 	// Empty stays its own explicit error (required), not a floor message.
@@ -84,6 +135,7 @@ func TestDRRestoreApplyAllowsLegacyShortPassphrase(t *testing.T) {
 	if r.code != http.StatusAccepted {
 		t.Fatalf("restore apply with legacy 5-char passphrase = %d %s, want 202", r.code, r.raw)
 	}
+	waitForDRJob(t, h, admin, r)
 }
 
 func TestDRRestoreApproveAllowsLegacyShortPassphrase(t *testing.T) {

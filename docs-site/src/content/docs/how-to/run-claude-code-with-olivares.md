@@ -71,14 +71,14 @@ auto-update disabled. Pin the engine base by digest and verify it first:
 
 ```sh
 # verify the engine image you build FROM (it is cosign-signed)
-cosign verify docker.io/olivaresai/olivares:26.9.1 \
+cosign verify docker.io/olivaresai/olivares:26.9.0 \
   --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 
 docker build -f Dockerfile.agentops \
   --build-arg OLIVARES_IMAGE=docker.io/olivaresai/olivares@sha256:<digest> \
   --build-arg CLAUDE_CHANNEL=stable \
-  -t olivares-agentops:26.9.1 .
+  -t olivares-agentops:26.9.0 .
 ```
 
 Bring your own `claude` instead with `--build-arg CLAUDE_INSTALL=byo` (the image ships
@@ -87,7 +87,7 @@ without `claude`; mount yours at runtime and set `OLIVARES_SESSION_RUNTIME_CLAUD
 ### Bring it up
 
 ```sh
-export OLIVARES_AGENTOPS_IMAGE=olivares-agentops:26.9.1
+export OLIVARES_AGENTOPS_IMAGE=olivares-agentops:26.9.0
 docker compose -f deploy/compose/docker-compose.yml \
                -f deploy/compose/docker-compose.agentops.yml up -d
 ```

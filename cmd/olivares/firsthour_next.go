@@ -236,11 +236,26 @@ Next:
   {{.}}
 {{end}}`
 
-// installFirstHourHelp wires the template function and the template. Cobra
-// resolves HelpTemplate() up the parent chain, so setting it on the root gives it
-// to every subcommand.
-func installFirstHourHelp(root *cobra.Command) []string {
+// init registers the template function that helpTemplateWithNext calls, ONCE per
+// process.
+//
+// Cobra keeps template functions in one package-level map. AddTemplateFunc writes
+// it without a lock, and every custom help template reads it when it renders.
+// MEASURED 2026-09-25: the registration lived in installFirstHourHelp, so it ran
+// once per ROOT COMMAND, and two parallel tests that each built one wrote the map
+// at the same time; the runtime aborted the whole test binary with
+// "concurrent map writes". Package initialization runs once, on one goroutine,
+// before main and before any test, so the map is complete before anything can
+// build a root command or render help.
+func init() {
 	cobra.AddTemplateFunc("olivaresNextCommand", nextCommandFor)
+}
+
+// installFirstHourHelp wires the template. Cobra resolves HelpTemplate() up the
+// parent chain, so setting it on the root gives it to every subcommand. The
+// template function it calls is registered in init above, not here: this runs
+// for every root command, and the map that function lives in is process-wide.
+func installFirstHourHelp(root *cobra.Command) []string {
 	root.SetHelpTemplate(helpTemplateWithNext)
 	return applyFirstHourNextCommands(root)
 }

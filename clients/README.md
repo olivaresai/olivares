@@ -48,7 +48,10 @@ Each SDK is two layers:
 - a **hand-written core** — auth (opaque `olvs_`/`olvk_` bearer tokens),
   tenancy (`X-Olivares-Tenant`), the single error envelope, cursor pagination
   (`items`/`cursor`/`has_more`), Retry-After-aware retries (429 always, 503
-  for GET), and the stability policy's deprecation signal (RFC 9745
+  for GET, and NEVER for `commit_outcome_unknown` on any method — that code
+  means the engine issued a write and never learned whether the database
+  applied it, so an automatic retry can produce a second durable effect), and
+  the stability policy's deprecation signal (RFC 9745
   `Deprecation` / RFC 8594 `Sunset` headers surfaced once per endpoint);
 - a **generated operation layer** — one method per published operation, with
   generic JSON values even when the contract publishes a request schema, exact

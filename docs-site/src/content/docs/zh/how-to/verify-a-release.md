@@ -21,7 +21,7 @@ description: >-
 | `*.vex.sigstore.json` | 作为已签名 in-toto 证明的 OpenVEX |
 | `*.intoto.jsonl` | SLSA Build L3 来源证明 |
 | 容器镜像 | 发布到 GHCR 和 Docker Hub，按 digest 验证并固定 |
-| Helm chart 源码 | 从 `deploy/helm/olivares` 安装；目前尚无公开 OCI chart |
+| Helm chart 源码 | 从 `deploy/helm/olivares` 安装；其 OCI 发布未经验证（`publication-unverified`：从未从本仓库发布） |
 
 ## 单命令路径
 
@@ -32,7 +32,7 @@ description: >-
 scripts/verify-release.sh
 
 # Pin the SLSA provenance to a specific source tag.
-scripts/verify-release.sh --source-tag v26.9.1
+scripts/verify-release.sh --source-tag v26.9.0
 
 # Key-based: only for files signed with a private key you control.
 # Releases are signed keyless and do not publish a public key.

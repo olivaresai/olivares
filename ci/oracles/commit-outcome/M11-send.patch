@@ -1,0 +1,14 @@
+diff --git a/modules/sessions/communication_service.go b/modules/sessions/communication_service.go
+index 13f6c21..6283bba 100644
+--- a/modules/sessions/communication_service.go
++++ b/modules/sessions/communication_service.go
+@@ -472,9 +472,6 @@ func (m *Module) publishDirectNoticeWithCurrentAuthority(
+ 			if err != nil {
+ 				return err
+ 			}
+-			if err := tx.lockTransaction(ctx, directNoticeIdempotencyLockKey(preflight)); err != nil {
+-				return err
+-			}
+ 			_, found, err := readDirectNoticeReplayReceipt(
+ 				ctx,
+ 				func(kind model.Kind) (communicationReadRepository, error) { return tx.repo(kind) },

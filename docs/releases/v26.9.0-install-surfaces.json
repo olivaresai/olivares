@@ -2,11 +2,11 @@
   "$comment": "SPDX-FileCopyrightText: 2026 Olivares.AI; SPDX-License-Identifier: AGPL-3.0-only",
   "schema": "olivares.ai/install-surfaces/v1",
   "version": "v26.9.0",
-  "measured_at": "2026-09-15T20:29:52Z",
+  "measured_at": "2026-09-23T20:28:11Z",
   "surfaces": [
     {
       "id": "github-release",
-      "status": "not-published",
+      "status": "published",
       "producer": {
         "path": ".goreleaser.yaml",
         "matches": "^release:$"
@@ -15,11 +15,11 @@
         "path": "README.md",
         "contains": "https://github.com/olivaresai/olivares/releases/tag/v26.9.0"
       },
-      "evidence": "No v26.9.0 tag exists in this repository when measured (git tag --list 'v26.9.0' empty at 206d03b158); release.yml produces the release from the tag push"
+      "evidence": "Observed 2026-09-23T20:26:21Z with the unauthenticated GitHub Releases API: release 390836255, tag v26.9.0, draft=false, prerelease=false, published 2026-09-17T16:33:50Z, 67 assets; the tag page answered 200 five of five times (20:28:06Z-20:28:09Z) and releases/latest names this tag"
     },
     {
       "id": "archives",
-      "status": "not-published",
+      "status": "published",
       "producer": {
         "path": ".goreleaser.yaml",
         "matches": "^archives:$"
@@ -28,11 +28,11 @@
         "path": "INSTALL.md",
         "contains": "olivares_${ver#v}_${os}_${arch}.tar.gz"
       },
-      "evidence": "The archives producer is present and unchanged; no v26.9.0 archive can exist before the tag that builds it"
+      "evidence": "Observed 2026-09-23T20:26:38Z-20:26:45Z: each of the eight base and FIPS archives for linux and darwin, amd64 and arm64, answered a one-byte range request with 206, and each total size equals the size the release lists for that asset"
     },
     {
       "id": "native-packages",
-      "status": "not-published",
+      "status": "published",
       "producer": {
         "path": ".goreleaser.yaml",
         "matches": "^nfpms:$"
@@ -41,11 +41,11 @@
         "path": "docs-site/src/content/docs/how-to/install-from-packages.md",
         "contains": "olivares_26.9.0_linux_amd64.deb"
       },
-      "evidence": "The nfpms producer is present and unchanged; no v26.9.0 deb, rpm or apk asset can exist before the tag that builds it"
+      "evidence": "Observed 2026-09-23T20:26:51Z-20:26:56Z: each of the six deb, rpm and apk assets for amd64 and arm64 answered a one-byte range request with 206, sizes equal to the release's asset list; checksums.txt with its .sig and .pem is in the same release"
     },
     {
       "id": "ghcr",
-      "status": "not-published",
+      "status": "published",
       "producer": {
         "path": ".goreleaser.yaml",
         "matches": "^dockers:$"
@@ -54,11 +54,11 @@
         "path": "INSTALL.md",
         "contains": "ghcr.io/olivaresai/olivares:26.9.0"
       },
-      "evidence": "The dockers producer is present and unchanged; the 26.9.0 image tag is pushed by the release job, which the tag has not run"
+      "evidence": "Observed 2026-09-23T20:27:14Z-20:27:15Z with the registry's anonymous pull token (no credential): ghcr.io/olivaresai/olivares:26.9.0 resolves to manifest list sha256:f0c2572015de9344d6f633245440222e8e556a2fb91f0fc03c475cc92c6cf821 (amd64, arm64), and the -fips and -stig variants resolve (amd64); the per-architecture 26.9.0-amd64 resolves too (20:31:29Z)"
     },
     {
       "id": "docker-hub",
-      "status": "not-published",
+      "status": "published",
       "producer": {
         "path": ".github/workflows/release.yml",
         "matches": "^[[:space:]]+MIRROR_IMAGE_REPO:.*['\"]docker[.]io/olivaresai/olivares['\"]"
@@ -67,11 +67,11 @@
         "path": "INSTALL.md",
         "contains": "docker.io/olivaresai/olivares:26.9.0"
       },
-      "evidence": "The mirror producer is present and unchanged; the Docker Hub 26.9.0 tag is mirrored by the release job, which the tag has not run"
+      "evidence": "Observed 2026-09-23T20:27:22Z-20:27:24Z with the unauthenticated Docker Hub API: docker.io/olivaresai/olivares:26.9.0 (amd64, arm64) and its -fips and -stig variants are active with the same digests as the ghcr.io tags; the per-architecture 26.9.0-amd64 is not mirrored (404, 20:31:27Z)"
     },
     {
       "id": "homebrew",
-      "status": "not-published",
+      "status": "published",
       "producer": {
         "path": ".goreleaser.yaml",
         "matches": "^homebrew_casks:$"
@@ -80,7 +80,7 @@
         "path": "INSTALL.md",
         "contains": "brew install olivaresai/tap/olivares"
       },
-      "evidence": "The cask producer is present and unchanged; the tap cask is bumped by the release job, which the tag has not run"
+      "evidence": "Observed 2026-09-23T20:27:31Z: olivaresai/homebrew-tap Casks/olivares.rb on main names version 26.9.0 and four platform archives whose sha256 values equal the release's asset digests; the cask's last commit is the v26.9.0 cask update of 2026-09-17T15:25:13Z"
     },
     {
       "id": "installer",
@@ -93,20 +93,32 @@
         "path": "INSTALL.md",
         "contains": "https://olivares.ai/olivares/install.sh"
       },
-      "evidence": "The installer is served from main, not from a release asset, so its publication state does not depend on the v26.9.0 tag; it verifies whichever signed payload it resolves"
+      "evidence": "Observed 2026-09-23T20:27:44Z: https://olivares.ai/olivares/install.sh answered 200 with a body whose sha256 (7c6bb49d16c28b98) equals this tree's scripts/install.sh when measured; it is served from main, not from a release asset, and verifies the signed payload it resolves"
     },
     {
       "id": "helm-oci",
-      "status": "not-published",
+      "status": "publication-unverified",
       "producer": {
         "path": ".github/workflows/release-chart.yml",
         "matches": "^[[:space:]]+tags: [[][\"]chart-v[*][\"][]]$"
       },
       "prose": {
         "path": "INSTALL.md",
-        "contains": "is **not live yet**"
+        "contains": "cosign-signed — is **unverified**"
       },
-      "evidence": "No chart-v tag exists in this repository when measured (git tag --list empty of chart-v at 206d03b158) and no release-chart run has published the public OCI name"
+      "evidence": "Repository-originated publication did not happen: the only chart publisher, .github/workflows/release-chart.yml (trigger: chart-v* tags; target oci://ghcr.io/olivaresai/charts), has no run, no chart-v tag exists, the engine release run has no chart job, and none of the release's 67 assets is a chart archive. Registry-side absence is not demonstrated: both reads that could settle it were refused (inabilities). Publication is unverified; the chart ships as source in deploy/helm/olivares",
+      "inabilities": [
+        {
+          "observed_at": "2026-09-23T20:27:44Z",
+          "request": "anonymous pull token for ghcr.io/olivaresai/charts/olivares (scope repository:olivaresai/charts/olivares:pull)",
+          "answer": "HTTP 403 {\"errors\":[{\"code\":\"DENIED\",\"message\":\"requested access to the resource is denied\"}]}"
+        },
+        {
+          "observed_at": "2026-09-23T23:44:52Z",
+          "request": "authenticated read of the organization's container package inventory (GET /orgs/olivaresai/packages?package_type=container)",
+          "answer": "HTTP 403 {\"message\":\"Resource not accessible by personal access token\"}"
+        }
+      ]
     }
   ]
 }

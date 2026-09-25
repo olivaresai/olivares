@@ -193,7 +193,7 @@ session runtime: no inference credential source configured; stream-json launches
 
 (`cmd/olivares/sessionruntime.go`). Définissez **une** de
 `OLIVARES_SESSION_RUNTIME_WIF` ou `OLIVARES_SESSION_RUNTIME_TOKEN_FILE`.
-Depuis la v26.10 ce n'est plus le seul chemin : enregistrez l'identifiant dans
+À partir de la v26.10, encore à paraître, ce ne sera plus le seul chemin : enregistrez l'identifiant dans
 la console et liez-le à un profil. Voir
 [Ajouter un fournisseur et lancer un agent](/fr/how-to/add-a-provider/) et
 [Exploiter une session fournisseur](/how-to/operate-provider-sessions/).

@@ -19,6 +19,7 @@ toolchain go1.26.6
 // DECISIÓN escrita (mantener su árbol de dependencias fuera del go.sum y el SBOM de core);
 // éste estaba fuera sin que nadie lo decidiera.
 use (
+	./appliance
 	./clients/generator
 	./clients/go
 	./cmd/olivares

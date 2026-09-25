@@ -165,9 +165,20 @@ public abstract class ClientCore {
     }
 
     /**
+     * The engine's answer when it issued COMMIT and never learned whether the database
+     * applied it. The write MAY be durable, which is why it is never retried
+     * automatically: even on a GET a retry re-runs a governed read that commits its own
+     * audit act, so one uncertain write becomes two and the operator sees two acts for
+     * one intention. Deciding what to do next belongs to the caller, and the usual next
+     * step is to READ the resource under the same authority rather than to re-send.
+     */
+    public static final String CODE_COMMIT_OUTCOME_UNKNOWN = "commit_outcome_unknown";
+
+    /**
      * The policy-aware retry loop: 429 is always retryable (the limiter rejects
      * before execution and {@code Retry-After} is a safe lower bound), 503 only
-     * for GET (the not_leader HA handoff — idempotent reads only). Everything
+     * for GET (the not_leader HA handoff — idempotent reads only), and
+     * {@link #CODE_COMMIT_OUTCOME_UNKNOWN} never, on any method. Everything
      * else surfaces immediately. Transport failures ({@link UncheckedIOException})
      * are not retried.
      */
@@ -179,8 +190,9 @@ public abstract class ClientCore {
                 return once(method, route, path, wantJson, body, rawRequestContentType,
                         requiredJsonBody, options);
             } catch (OlivaresApiException e) {
-                boolean retryable = e.getStatus() == 429
-                        || (e.getStatus() == 503 && method.equals("GET"));
+                boolean retryable = !CODE_COMMIT_OUTCOME_UNKNOWN.equals(e.getCode())
+                        && (e.getStatus() == 429
+                        || (e.getStatus() == 503 && method.equals("GET")));
                 if (!retryable || attempt >= maxRetries) {
                     throw e;
                 }

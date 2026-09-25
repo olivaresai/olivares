@@ -1,0 +1,14 @@
+diff --git a/modules/sessions/communication_cursor_service.go b/modules/sessions/communication_cursor_service.go
+index 2a1aff2..cb9d19c 100644
+--- a/modules/sessions/communication_cursor_service.go
++++ b/modules/sessions/communication_cursor_service.go
+@@ -1176,9 +1176,6 @@ func applyDirectNoticeCursorAdvance(
+ 		return DirectNoticeCursorAdvanceResult{},
+ 			normalizeDirectNoticeAuthorityLockError(err)
+ 	}
+-	if err := tx.lockTransaction(ctx, directNoticeCursorIdempotencyLockKey(preflight.normalized)); err != nil {
+-		return DirectNoticeCursorAdvanceResult{}, err
+-	}
+ 	receiptRepo, err := tx.repo(communicationCommandKind)
+ 	if err != nil {
+ 		return DirectNoticeCursorAdvanceResult{}, err

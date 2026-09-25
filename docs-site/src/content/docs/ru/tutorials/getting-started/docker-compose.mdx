@@ -23,22 +23,20 @@ control plane с резервными копиями.
 действие, — тот же, что проверен от начала до конца против бинарника в
 [туториале по одному узлу](/tutorials/getting-started/single-node/).
 
-<Aside type="caution" title="Пока образы v26.9.1 не опубликованы, собирайте локально">
-Предыдущий тегированный выпуск уже поставил подписанные образы. Канон этого дерева — **v26.9.1**.
-Свидетель поверхностей установки всё ещё записывает Docker Hub и GHCR как
-**not-published** для `26.9.1`, пока не выполнится release-задание этого тега
-(`docs/releases/v26.9.1-install-surfaces.json`). Та же честность есть в
-[Развёртывание с Docker](/how-to/docker-deployment/). Пока тегов `26.9.1` нет,
-соберите укреплённый distroless-образ из исходников и направьте на него стек:
+<Aside type="caution" title="Закрепите опубликованный образ v26.9.0 по digest">
+Релиз **v26.9.0** опубликовал подписанные образы: свидетель поверхностей установки
+записывает Docker Hub и GHCR для `26.9.0` как **published**
+(`docs/releases/v26.9.0-install-surfaces.json`). Та же честность есть в
+[Развёртывание с Docker](/how-to/docker-deployment/). Установите
+`OLIVARES_IMAGE=docker.io/olivaresai/olivares@sha256:<digest>` и сначала
+[проверьте его](/how-to/verify-a-release/) — по digest, никогда по тегу. Чтобы вместо этого
+запустить дерево разработки, соберите укреплённый distroless-образ из исходников и направьте
+на него стек:
 
 ```bash
 task image                                   # builds olivares:dev
 echo 'OLIVARES_IMAGE=olivares:dev' >> deploy/compose/.env
 ```
-
-Когда образ `26.9.1` существует: установите
-`OLIVARES_IMAGE=docker.io/olivaresai/olivares@sha256:<digest>` и сначала
-[проверьте его](/how-to/verify-a-release/) — по digest, никогда по тегу.
 </Aside>
 
 ## 1. Поднимите одноузловой стек (SQLite)

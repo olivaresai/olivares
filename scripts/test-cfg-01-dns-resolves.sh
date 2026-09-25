@@ -24,15 +24,12 @@ stage() {
 	chmod +x "$TMP/tree/scripts/check-cfg-01-dns-resolves.sh"
 	cp "$ROOT/design/cfg-01-dns-resolves.json" "$TMP/tree/design/"
 	cp "$ROOT/design/CFG-01-DNS-RESOLVES-2026-08-20.md" "$TMP/tree/design/"
-	cat >"$TMP/tree/commercial/license-worker/wrangler.jsonc" <<'EOF'
-{
-  "env": {
-    "production": {
-      "FULFILLMENT_ENABLED": "false"
-    }
-  }
-}
-EOF
+	cp "$ROOT/commercial/license-worker/wrangler.jsonc" \
+		"$TMP/tree/commercial/license-worker/"
+	mkdir -p "$TMP/tree/commercial/license-worker/config/production"
+	cp "$ROOT/design/PRODUCTION-STATE-2026-09-24.json" "$TMP/tree/design/"
+	cp "$ROOT/commercial/license-worker/config/production/dodo-checkout-offers.json" \
+		"$TMP/tree/commercial/license-worker/config/production/"
 }
 
 run() {
@@ -89,17 +86,17 @@ python3 - "$TMP/tree/commercial/license-worker/wrangler.jsonc" <<'PY'
 from pathlib import Path
 import sys
 p = Path(sys.argv[1])
-p.write_text(p.read_text().replace(
-    '"FULFILLMENT_ENABLED": "false"',
-    '"FULFILLMENT_ENABLED": "true"',
-    1,
-))
+t = p.read_text()
+# Production's value only: the sandbox block before it also reads "true".
+on = '"FULFILLMENT_ENABLED": "true"'
+j = t.index(on, t.index('"production": {'))
+p.write_text(t[:j] + '"FULFILLMENT_ENABLED": "false"' + t[j + len(on):])
 PY
 run
-if [ "$(cat "$TMP/rc")" = 1 ]; then
-	ok "firing: production fulfillment true is FAIL"
+if [ "$(cat "$TMP/rc")" = 1 ] && grep -qF "production FULFILLMENT_ENABLED is 'false', want 'true'" "$TMP/err"; then
+	ok "firing: production fulfillment reverted to false is FAIL"
 else
-	bad "fulfillment true should FAIL 1 ($(cat "$TMP/rc") $(cat "$TMP/err"))"
+	bad "production fulfillment false should FAIL 1, named ($(cat "$TMP/rc") $(cat "$TMP/err"))"
 fi
 
 stage
