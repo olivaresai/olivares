@@ -85,6 +85,23 @@ func (openCodeDriver) TransportProfile() DriverTransportProfile {
 	}
 }
 
+// LaunchTerms declares what an OpenCode launch hands its child. The model and
+// the effort travel on session/set_config_option, each only as an exact value the
+// agent offered, and a value it did not offer fails the handshake rather than
+// falling back to a default. The permission mode reaches no frame, so it is not
+// carried; here that comes with a refusal rather than a drop, because a launch
+// that asks for any mode but the default is refused before the spawn
+// (refuseOpenCodeUnsupportedControls). The models can be discovered by probing
+// the credential a profile binds; the driver lists none.
+func (openCodeDriver) LaunchTerms() DriverLaunchTerms {
+	return DriverLaunchTerms{
+		Model:          TermCarried,
+		Effort:         TermCarried,
+		PermissionMode: TermNotCarried,
+		ModelDiscovery: ModelDiscoveryBoundCredentialProbe,
+	}
+}
+
 func (openCodeDriver) LaunchEnv(DriverLaunch) []EnvVar {
 	return []EnvVar{{Name: envOpenCodeDisableAutoUpdate, Value: "1"}}
 }

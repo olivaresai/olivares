@@ -152,6 +152,20 @@ func (grokDriver) TransportProfile() DriverTransportProfile {
 	}
 }
 
+// LaunchTerms declares what a Grok launch hands its child. The model and the
+// effort travel on the argv as `--model` and `--reasoning-effort`. The permission
+// mode is Claude Code's own enum: no flag of this agent and no ACP frame this
+// driver sends carries it. The models can be discovered by probing the
+// credential a profile binds; the driver lists none.
+func (grokDriver) LaunchTerms() DriverLaunchTerms {
+	return DriverLaunchTerms{
+		Model:          TermCarried,
+		Effort:         TermCarried,
+		PermissionMode: TermNotCarried,
+		ModelDiscovery: ModelDiscoveryBoundCredentialProbe,
+	}
+}
+
 // LaunchEnv pins the child's version. Nothing else: authentication is resolved by
 // the runtime and a driver never sees a credential value.
 func (grokDriver) LaunchEnv(DriverLaunch) []EnvVar {
