@@ -16,7 +16,10 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
+	"os"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -128,6 +131,23 @@ func contLoopbackClient(timeout time.Duration) *http.Client {
 	}}
 }
 
+// contRefusingClient answers every dial the way the kernel answers a port nobody listens
+// on: connection refused, wrapped as net.Dial reports it. A closed test server's port is
+// not that destination, because a parallel test can bind it and answer before the dial.
+// This client opens no socket at all, so nothing can answer in its place.
+func contRefusingClient(timeout time.Duration) *http.Client {
+	return &http.Client{Timeout: timeout, Transport: &http.Transport{
+		DialContext: func(_ context.Context, network, addr string) (net.Conn, error) {
+			var to net.Addr
+			if ap, err := netip.ParseAddrPort(addr); err == nil {
+				to = net.TCPAddrFromAddrPort(ap)
+			}
+			return nil, &net.OpError{Op: "dial", Net: network, Addr: to,
+				Err: os.NewSyscallError("connect", syscall.ECONNREFUSED)}
+		},
+	}}
+}
+
 // requestEcho is what Status repeats back from the request rather than from a diagnostic:
 // the configured channel and the running version, each in its own JSON key. The contract
 // preserves both, and a caller that configures a decoy as its channel name gets that decoy
@@ -189,7 +209,7 @@ func TestCheckContainsEveryFailureStage(t *testing.T) {
 	goodManifest, goodSig, goodKey := contSigned(t, release.ChannelStable, "26.9.0", nil)
 	good := contChannelServer(t, release.ChannelStable, goodManifest, goodSig)
 
-	// A 404 channel, a 502 signature, a dead listener and a remote-controlled redirect.
+	// A 404 channel, a 502 signature, a refusing destination and a remote-controlled redirect.
 	notFound := httptest.NewServer(http.NotFoundHandler())
 	t.Cleanup(notFound.Close)
 
@@ -203,9 +223,9 @@ func TestCheckContainsEveryFailureStage(t *testing.T) {
 	sigSrv := httptest.NewServer(sigBroken)
 	t.Cleanup(sigSrv.Close)
 
-	dead := httptest.NewServer(http.NotFoundHandler())
-	deadURL := dead.URL
-	dead.Close()
+	// The refusing client never dials this address, so its state on the host does not matter.
+	refusing := contRefusingClient(10 * time.Second)
+	const refusedURL = "http://127.0.0.1:1"
 
 	redirector := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "http://127.0.0.1:1/"+contLocation+"?token="+contQuery, http.StatusFound)
@@ -296,9 +316,9 @@ func TestCheckContainsEveryFailureStage(t *testing.T) {
 		},
 		{
 			name: "a refused connection is a network error, not a URL",
-			cfg:  Config{Endpoint: contCredentialed(deadURL), Channel: "stable", PubKey: anyKey, Client: client},
+			cfg:  Config{Endpoint: contCredentialed(refusedURL), Channel: "stable", PubKey: anyKey, Client: refusing},
 			want: "update check: " + stageManifest + " (%s): " + reasonNetwork,
-			host: deadURL,
+			host: refusedURL,
 		},
 		{
 			name: "a remote Location header cannot name the failure",
