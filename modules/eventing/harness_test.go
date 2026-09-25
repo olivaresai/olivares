@@ -155,6 +155,7 @@ type harness struct {
 // authorizer (no ABAC), and a millisecond retry ladder. Caller opts win.
 func newHarness(t *testing.T, opts ...Option) *harness {
 	t.Helper()
+	auth.SetTestHashParams(auth.TestArgonMemKiB, auth.TestArgonTime, auth.TestArgonThreads)
 	ctx := context.Background()
 	h := &harness{t: t, clk: newClock(time.Date(2026, 6, 11, 12, 0, 0, 0, time.UTC))}
 

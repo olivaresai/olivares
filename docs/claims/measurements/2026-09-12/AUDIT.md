@@ -52,17 +52,17 @@ This audit separates two kinds of fact and never merges them.
 All twelve claims therefore keep `state: implemented_unaccepted`, `evidence: null`,
 `mutation: null` and `testsAreAcceptance: false`, and all six jobs stay `implemented: false`.
 
-## Independently accepted component receipts, with exact scope
+## Component checks outside the claim format, with exact scope
 
-Real accepted work exists and is recorded here so that it is not described as nonexistent.
-None of it is claim-format capability acceptance.
+Some components were checked outside the claim format. They are listed here so that they are
+not described as nonexistent. None of these checks is claim-format capability acceptance.
 
-| Receipt | State | Exact scope, and what it does not cover |
+| Component | What was checked, and what it showed | What it does not cover |
 |---|---|---|
-| an internal acceptance record (not shipped) | accepted-for-website-composition | The MC1 contract core module at website `e95717815ee8271508326359678654f1cc8edc2b`. Validators only. No page wiring, no current measurement, no capability promotion. |
-| an internal acceptance record (not shipped) | accepted-for-normal-web-dev-PR | Website persona pages and the MC1 core at head `b51d885e`. Build and hermetic checks. No product RC or production release claim. |
-| an internal acceptance record (not shipped) | `state: accepted-local-private-composition` | Its own fields: `gate_exit: 0`, `remote_received: false`, `complete_rc: false`, head `d8869212…`, public `fcf029f7…`. It binds none of the six claim jobs. The wiring scope wording ("preserve fixed gate floor and membership cross-check") belongs to the sibling `WIRING-ACCEPTANCE.json` (`owner: Astra`, 2026-09-12T00:43:57Z) and is attributed there, not here. |
-| an internal acceptance record (not shipped) | partially-observed | 117 of 117 persona pages matched the measured title and H1. This does not establish complete page-byte equality. Root acceptance is an internal acceptance record (not shipped); deployment identity remains unknown. No capability acceptance. |
+| The MC1 contract core module at website `e95717815ee8271508326359678654f1cc8edc2b` | Checked with its validators; fit for website composition. | Validators only. No page wiring, no current measurement, no capability promotion. |
+| Website persona pages and the MC1 core at head `b51d885e` | Build and hermetic checks; fit for an ordinary website development change. | No product RC or production release claim. |
+| A private composition at head `d8869212…`, public `fcf029f7…` | A local composition gate exited 0 (`gate_exit: 0`). Nothing was received remotely (`remote_received: false`) and no complete RC exists (`complete_rc: false`). | It binds none of the six claim jobs. The wiring scope wording ("preserve fixed gate floor and membership cross-check") comes from a separate wiring record (2026-09-12T00:43:57Z), not from this check. |
+| Website persona pages | 117 of 117 persona pages matched the measured title and H1. | This does not establish complete page-byte equality. Deployment identity remains unknown. No capability acceptance. |
 
 ## What was corrected in this revision
 
@@ -95,8 +95,8 @@ None of it is claim-format capability acceptance.
 - Release facts are not in this manifest. The public release of `v26.8.0` is a separate
   dimension and is recorded through the release contract, never as a capability state.
 
-## Root correction of the first corrected producer
+## Correction of the first corrected producer
 
-At 2026-09-12T04:35:41.685142+00:00, Root adjudicated the independent review of producer `19e7b1834fd6cfcc9fe8a1c5ba656eee4002a34c`. The source map now names the real command-tree files, all anchor counts include the newly inspected sessions permission declaration, and the website lookup limitation is consistent throughout. Historical withdrawn sentences remain in this audit and index; public gaps describe current verification limits. The work-item acceptance job must exercise existing work/handoff controls and state the unqualified progress boundary. Its implementation state remains false. These corrections change documentation and evidence attribution only.
+At 2026-09-12T04:35:41.685142+00:00, producer `19e7b1834fd6cfcc9fe8a1c5ba656eee4002a34c` received a second correction. The source map now names the real command-tree files, all anchor counts include the newly inspected sessions permission declaration, and the website lookup limitation is consistent throughout. Historical withdrawn sentences remain in this audit and index; public gaps describe current verification limits. The work-item acceptance job must exercise existing work/handoff controls and state the unqualified progress boundary. Its implementation state remains false. These corrections change documentation and evidence attribution only.
 
 The private orchestration receipts retain account routing and physical checkout paths. They are omitted from this selected project audit so the website build can receive it without provider account metadata or environment paths. Author models, observation times, source identities and review scope remain recorded.

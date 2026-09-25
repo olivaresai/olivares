@@ -1,7 +1,7 @@
 {
   "purpose": "public connect-v1 B credentials for the C refresh planning test; public signer only, no private key or secret",
   "source": {
-    "path": "assessments/integration/r115-connect-paid-mixed-joint/workerd/c-consumer-fixtures.json",
+    "path": "c-consumer-fixtures.json of the connect-v1 B workerd paid mixed-renewal journey (not in this repository)",
     "sha256": "19d7e3b493b740e62b362e1bd2d44e89518ba5d6ef82002365f7776b9ec88624",
     "b_commit": "174ceb1fbffd48c80941fa2f6900ab0a604a7dec",
     "receipt": "09-workerd-joint-journey-resignin",

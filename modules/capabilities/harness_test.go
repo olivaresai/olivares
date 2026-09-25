@@ -122,6 +122,7 @@ func openHarness(
 	opts ...capabilities.Option,
 ) *harness {
 	t.Helper()
+	auth.SetTestHashParams(auth.TestArgonMemKiB, auth.TestArgonTime, auth.TestArgonThreads)
 	ctx := context.Background()
 	cap := capabilities.New(opts...)
 	inv := inventory.New()

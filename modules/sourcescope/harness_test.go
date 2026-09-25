@@ -90,6 +90,7 @@ func newHarness(t *testing.T) *harness {
 // in-memory engine is a defect measured on the engine that cannot have it.
 func newHarnessOn(t *testing.T, cfg store.Config) *harness {
 	t.Helper()
+	auth.SetTestHashParams(auth.TestArgonMemKiB, auth.TestArgonTime, auth.TestArgonThreads)
 	ctx := context.Background()
 	host := &fakeHost{}
 	gov := governance.New()

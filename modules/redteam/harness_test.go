@@ -63,6 +63,7 @@ type harness struct {
 // → degraded runs); a non-nil sandbox is wired via WithSandbox.
 func newHarness(t *testing.T, sb Sandbox) *harness {
 	t.Helper()
+	auth.SetTestHashParams(auth.TestArgonMemKiB, auth.TestArgonTime, auth.TestArgonThreads)
 	ctx := context.Background()
 	h := &harness{t: t}
 

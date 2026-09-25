@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // mcp_beta_transport_test.go — the MCP beta TRANSPORT oracle (C8 E2-3 prerequisite;
-// accepted MCP contract §7 and Root adjudication m9).
+// MCP contract §7 and its design ruling m9).
 //
 // The Messages, count_tokens and batch-create endpoint schemas each declare the MCP
 // fields and the CURRENT beta mcp-client-2025-11-20. These tests observe the ACTUAL

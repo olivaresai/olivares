@@ -476,9 +476,9 @@ jobs:
       #
       # ⛔ EL PIN ES UN OID DE COMMIT, NO UNA ETIQUETA. `@v6` es un puntero móvil: quien
       # controle ese repositorio decide qué código corre en un job que asume un rol con
-      # AdministratorAccess sobre nuestra cuenta. `cbe3b392…` es el commit que la
-      # etiqueta v6.2.4 apuntaba el 2026-09-11 (`chore(main): release 6.2.4 (#1942)`,
-      # 2026-08-31T23:17:23Z, resuelto contra la API de GitHub). El comentario `# v6.2.4`
+      # AdministratorAccess sobre nuestra cuenta. `e1253824…` es el commit que la
+      # etiqueta v6.3.0 apuntaba el 2026-09-22 (`chore(main): release 6.3.0 (#1963)`,
+      # 2026-09-15T05:12:41Z, resuelto contra la API de GitHub). El comentario `# v6.3.0`
       # existe para que esa correspondencia se pueda re-verificar a mano al bumpear:
       # `scripts/aws-apply-guard` comprueba la FORMA del digest y **no puede** comprobar
       # que sea el commit que la etiqueta nombra — eso exige red y el gate no la tiene.
@@ -486,7 +486,7 @@ jobs:
       # `node24`, como `actions/checkout@v7.0.1` y `actions/setup-go@v7.0.0` que este
       # mismo workflow ya corre en estos runners: no estrena runtime.
       - name: assume the sandbox apply role (OIDC → STS)
-        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
           role-to-assume: ${{ env.AWS_ROLE_ARN }}
           aws-region: us-east-1
@@ -773,7 +773,7 @@ jobs:
           "$RUNNER_TEMP/bin/aws" --version
 
       - name: assume the production apply role (OIDC → STS)
-        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
           role-to-assume: ${{ env.AWS_ROLE_ARN }}
           aws-region: us-east-1

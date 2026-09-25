@@ -45,6 +45,7 @@ type harness struct {
 
 func newHarness(t *testing.T, m *Module) *harness {
 	t.Helper()
+	auth.SetTestHashParams(auth.TestArgonMemKiB, auth.TestArgonTime, auth.TestArgonThreads)
 	ctx := context.Background()
 	st, err := openStore(ctx, m)
 	if err != nil {

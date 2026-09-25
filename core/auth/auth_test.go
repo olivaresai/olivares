@@ -166,6 +166,95 @@ func TestPasswordHashRoundTrip(t *testing.T) {
 	}
 }
 
+func TestProductionHashParamsUnchanged(t *testing.T) {
+	if auth.DefaultArgonMemKiB != 64*1024 || auth.DefaultArgonTime != 3 || auth.DefaultArgonThreads != 1 {
+		t.Fatalf("production argon2id defaults = m=%d t=%d p=%d, want m=65536 t=3 p=1",
+			auth.DefaultArgonMemKiB, auth.DefaultArgonTime, auth.DefaultArgonThreads)
+	}
+	h, err := auth.HashPassword("default-params-probe")
+	if err != nil {
+		t.Fatal(err)
+	}
+	mem, timeCost, threads := mustParseArgonParams(t, h)
+	if mem != auth.DefaultArgonMemKiB || timeCost != auth.DefaultArgonTime || threads != auth.DefaultArgonThreads {
+		t.Fatalf("HashPassword encoded m=%d,t=%d,p=%d, want production defaults m=%d,t=%d,p=%d",
+			mem, timeCost, threads, auth.DefaultArgonMemKiB, auth.DefaultArgonTime, auth.DefaultArgonThreads)
+	}
+}
+
+func TestSetTestHashParamsEncodesReducedCost(t *testing.T) {
+	t.Cleanup(func() {
+		auth.SetTestHashParams(auth.DefaultArgonMemKiB, auth.DefaultArgonTime, auth.DefaultArgonThreads)
+	})
+	auth.SetTestHashParams(auth.TestArgonMemKiB, auth.TestArgonTime, auth.TestArgonThreads)
+	h, err := auth.HashPassword("reduced-params-probe")
+	if err != nil {
+		t.Fatal(err)
+	}
+	mem, timeCost, threads := mustParseArgonParams(t, h)
+	if mem != auth.TestArgonMemKiB || timeCost != auth.TestArgonTime || threads != auth.TestArgonThreads {
+		t.Fatalf("after SetTestHashParams encoded m=%d,t=%d,p=%d, want test params m=%d,t=%d,p=%d",
+			mem, timeCost, threads, auth.TestArgonMemKiB, auth.TestArgonTime, auth.TestArgonThreads)
+	}
+	ok, err := auth.VerifyPassword("reduced-params-probe", h)
+	if err != nil || !ok {
+		t.Fatalf("verify reduced hash = (%v,%v)", ok, err)
+	}
+}
+
+func TestVerifyPasswordUsesTheParametersStoredInTheHash(t *testing.T) {
+	const pw = "stored-params-probe"
+	defaultHash, err := auth.HashPassword(pw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		auth.SetTestHashParams(auth.DefaultArgonMemKiB, auth.DefaultArgonTime, auth.DefaultArgonThreads)
+	})
+	auth.SetTestHashParams(auth.TestArgonMemKiB, auth.TestArgonTime, auth.TestArgonThreads)
+	reducedHash, err := auth.HashPassword(pw)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Each verify below runs under live parameters that differ from the ones
+	// stored in the hash it checks.
+	mem, timeCost, threads := mustParseArgonParams(t, defaultHash)
+	if mem != 65536 || timeCost != 3 || threads != 1 {
+		t.Fatalf("hash made at the defaults encodes m=%d,t=%d,p=%d, want m=65536,t=3,p=1", mem, timeCost, threads)
+	}
+	mem, timeCost, threads = mustParseArgonParams(t, reducedHash)
+	if mem != auth.TestArgonMemKiB || timeCost != auth.TestArgonTime || threads != auth.TestArgonThreads {
+		t.Fatalf("hash made after lowering encodes m=%d,t=%d,p=%d, want m=%d,t=%d,p=%d",
+			mem, timeCost, threads, auth.TestArgonMemKiB, auth.TestArgonTime, auth.TestArgonThreads)
+	}
+
+	if ok, err := auth.VerifyPassword(pw, defaultHash); err != nil || !ok {
+		t.Errorf("verify default-cost hash under reduced live parameters = (%v,%v), want (true,<nil>)", ok, err)
+	}
+	if ok, err := auth.VerifyPassword("wrong", defaultHash); err != nil || ok {
+		t.Errorf("verify wrong password against default-cost hash = (%v,%v), want (false,<nil>)", ok, err)
+	}
+
+	auth.SetTestHashParams(auth.DefaultArgonMemKiB, auth.DefaultArgonTime, auth.DefaultArgonThreads)
+	if ok, err := auth.VerifyPassword(pw, reducedHash); err != nil || !ok {
+		t.Errorf("verify reduced-cost hash under default live parameters = (%v,%v), want (true,<nil>)", ok, err)
+	}
+}
+
+func mustParseArgonParams(t *testing.T, encoded string) (mem, timeCost uint32, threads uint8) {
+	t.Helper()
+	parts := strings.Split(encoded, "$")
+	if len(parts) != 6 {
+		t.Fatalf("encoded hash %q: want 6 $-fields", encoded)
+	}
+	var m, tt, p int
+	if _, err := fmt.Sscanf(parts[3], "m=%d,t=%d,p=%d", &m, &tt, &p); err != nil {
+		t.Fatalf("parse %q: %v", parts[3], err)
+	}
+	return uint32(m), uint32(tt), uint8(p)
+}
+
 func TestCredentialFormat(t *testing.T) {
 	c, err := auth.NewCredential(auth.PrefixToken)
 	if err != nil {

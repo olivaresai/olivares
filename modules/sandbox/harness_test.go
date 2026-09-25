@@ -76,6 +76,7 @@ type harness struct {
 // history that yields zero steps).
 func newHarness(t *testing.T, opts ...Option) *harness {
 	t.Helper()
+	auth.SetTestHashParams(auth.TestArgonMemKiB, auth.TestArgonTime, auth.TestArgonThreads)
 	ctx := context.Background()
 	h := &harness{t: t}
 

@@ -152,6 +152,7 @@ type harness struct {
 
 func newHarness(t *testing.T, opts ...recording.Option) *harness {
 	t.Helper()
+	auth.SetTestHashParams(auth.TestArgonMemKiB, auth.TestArgonTime, auth.TestArgonThreads)
 	ctx := context.Background()
 	clk := &fakeClock{t: baseTime}
 	host := &fakeHost{}

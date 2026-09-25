@@ -767,7 +767,7 @@ describe('SessionsWorkspaceView — one half refused, the other still admitted',
         'spr-auth/run-stepup/live-origin-is-not-read',
       )
       .toBeInTheDocument()
-    // ⛔ MISSING METADATA IS NOT ZERO INVENTORY (root adjudication). The review's
+    // ⛔ MISSING METADATA IS NOT ZERO INVENTORY (a design rule). An earlier
     //    fixture expected `0` here; `0` would report an empty inventory of launches
     //    when the truth is that the half nobody read cannot be counted.
     expect

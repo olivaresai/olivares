@@ -58,6 +58,7 @@ type harness struct {
 // WithSessionSource) are applied after it.
 func newHarness(t *testing.T, judge Judge, extra ...Option) *harness {
 	t.Helper()
+	auth.SetTestHashParams(auth.TestArgonMemKiB, auth.TestArgonTime, auth.TestArgonThreads)
 	ctx := context.Background()
 	h := &harness{t: t}
 

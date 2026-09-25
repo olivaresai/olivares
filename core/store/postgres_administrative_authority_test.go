@@ -15,8 +15,8 @@ import (
 
 // postgres_administrative_authority_test.go — the bank for RA2-A1.
 //
-// The nine canonical vectors below are ASTRA ROOT'S, copied verbatim from
-// an internal design note (not shipped)
+// The nine canonical vectors below are the reference set this bank calls "root",
+// copied verbatim from the unshipped RA2-A1 canonical-vector file
 // (sha256 657246b8311823d479c5cce380db713f36c8872a972cd3774752a062e0479132). They
 // were produced by an independent Python framing before this implementation existed
 // and were independently recomputed by the construction's reviewer. NOTHING here

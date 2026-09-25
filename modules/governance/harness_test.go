@@ -204,6 +204,7 @@ func newHarness(t *testing.T) *harness { return newHarnessWith(t, harnessOpts{})
 
 func newHarnessWith(t *testing.T, hopts harnessOpts) *harness {
 	t.Helper()
+	auth.SetTestHashParams(auth.TestArgonMemKiB, auth.TestArgonTime, auth.TestArgonThreads)
 	ctx := context.Background()
 	clk := &fakeClock{t: baseTime}
 	host := &fakeHost{}

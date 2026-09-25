@@ -203,7 +203,7 @@ func (m *Module) Sweep(ctx context.Context, now time.Time) (int, error) {
 // sweepTenant runs ONE turn for one tenant in ONE transaction.
 //
 // The count is returned only when Mutate itself returned successfully. That is
-// the correction root adjudicated: the previous shape incremented a counter
+// the correction this design makes: the previous shape incremented a counter
 // inside the callback and returned it even when the transaction failed, so a
 // rolled-back page was reported as marked. A commit that fails does not prove a
 // rollback either — the outcome is UNCERTAIN — so the only honest number for a
