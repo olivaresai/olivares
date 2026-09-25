@@ -128,6 +128,28 @@ var (
 	// ledger_unavailable, sdk/evidence.go) from a genuine write fault
 	// (constraint, serialization, bad statement), which stays unwrapped.
 	ErrStoreUnavailable = errors.New("store backend unavailable")
+	// ErrCommitOutcomeUnknown is wrapped, with its original cause, when a unit of
+	// work issued COMMIT and did not learn whether the database applied it. The
+	// work MAY be durable.
+	//
+	// It is deliberately none of the four answers the store already has, and that
+	// is the whole reason it exists. It is not a rollback: inferring "nothing
+	// happened" from a failed acknowledgement is the specific error this sentinel
+	// prevents. It is not ErrStoreUnavailable either — that one says the backend
+	// could not be reached, which is a statement about the CONNECTION, while this
+	// one is a statement about a WRITE whose fate is undetermined. It is not a
+	// denial, and it is not a success.
+	//
+	// A caller that receives it must not report an abort, must not re-send blind,
+	// and must not treat a read taken before the transaction settles as proof of
+	// absence. The supported remedy is operation-specific and runs behind the same
+	// row or key fence and the same authority as the original.
+	//
+	// It is produced only on positive proof of the negative: the commit boundary
+	// classifies the outcomes it can PROVE were not applied and marks everything
+	// else unknown, so a wrong answer is always a false unknown and never a false
+	// definite.
+	ErrCommitOutcomeUnknown = errors.New("commit outcome unknown")
 	// ErrResourceCycle is returned when a resource-tree Move would make a resource
 	// its own ancestor (moving it under itself or one of its descendants), which
 	// would corrupt the materialized path (FASE X). The move is rejected

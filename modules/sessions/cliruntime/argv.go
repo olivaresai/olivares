@@ -112,6 +112,20 @@ func claudeGovernedTail(req LaunchRequest) []string {
 	return args
 }
 
+// LaunchTerms says which choices of a LaunchRequest an owned launch form hands
+// the child on its argv. A false field is a choice that form drops.
+type LaunchTerms struct {
+	Model, Effort, PermissionMode bool
+}
+
+// ClaudeLaunchTerms is which choices the owned Claude Code argv carries. The
+// governed tail both forms share puts each of the three on the argv as its own
+// flag — `--permission-mode` always, `--model` and `--effort` whenever one was
+// chosen — so the declaration lives beside the table that makes it true.
+func ClaudeLaunchTerms() LaunchTerms {
+	return LaunchTerms{Model: true, Effort: true, PermissionMode: true}
+}
+
 // CodexArgs is the owned stdio app-server of the official Codex CLI.
 func CodexArgs(LaunchRequest) []string {
 	return []string{"app-server", "--listen", "stdio://"}

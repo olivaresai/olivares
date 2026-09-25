@@ -9,7 +9,7 @@ draft: false
 ---
 
 :::note[Nombres de paquete publicados]
-La release v26.9.1 de GitHub publica artefactos `.deb`, `.rpm` y `.apk` para `amd64` y
+La release v26.9.0 de GitHub publica artefactos `.deb`, `.rpm` y `.apk` para `amd64` y
 `arm64`, con `checksums.txt`, `checksums.txt.sig` y `checksums.txt.pem`. Los comandos
 de abajo usan los nombres literales `amd64` de esa release; sustituye `amd64` por
 `arm64` en un host ARM de 64 bits. Instala desde esos artefactos de release verificados.
@@ -84,13 +84,13 @@ ficheros adaptadores están en el archivo firmado del árbol para la siguiente r
 
 ```bash
 # Debian / Ubuntu
-sudo dpkg -i olivares_26.9.1_linux_amd64.deb
+sudo dpkg -i olivares_26.9.0_linux_amd64.deb
 
 # RHEL / Fedora / SUSE
-sudo rpm -Uvh olivares_26.9.1_linux_amd64.rpm
+sudo rpm -Uvh olivares_26.9.0_linux_amd64.rpm
 
 # Alpine
-sudo apk add --allow-untrusted olivares_26.9.1_linux_amd64.apk
+sudo apk add --allow-untrusted olivares_26.9.0_linux_amd64.apk
 ```
 
 La instalación **crea el usuario y el grupo de sistema `olivares`** (con

@@ -17,21 +17,18 @@ import { Steps, Aside } from '@astrojs/starlight/components'
 （`deploy/compose/*.yml`），它们驱动的首次运行流程，与[单节点教程](/tutorials/getting-started/single-node/)中
 针对二进制端到端验证过的流程相同。
 
-<Aside type="caution" title="在 v26.9.1 镜像发布之前，请在本地构建">
-先前的带标签发布已经交付过签名镜像。本树的 canon 是 **v26.9.1**。安装面证人仍将
-`26.9.1` 的 Docker Hub 与 GHCR 记为 **not-published**，直到该 tag 的发布作业
-运行（`docs/releases/v26.9.1-install-surfaces.json`）。同样的诚实说明见
-[用 Docker 部署](/how-to/docker-deployment/)。在 `26.9.1` 标签存在之前，请从
+<Aside type="caution" title="按 digest 固定已发布的 v26.9.0 镜像">
+版本 **v26.9.0** 已发布签名镜像：安装面证人将 `26.9.0` 的 Docker Hub 与 GHCR 记为
+**published**（`docs/releases/v26.9.0-install-surfaces.json`）。同样的诚实说明见
+[用 Docker 部署](/how-to/docker-deployment/)。设置
+`OLIVARES_IMAGE=docker.io/olivaresai/olivares@sha256:<digest>` 并先
+[验证它](/how-to/verify-a-release/)——按 digest，绝不按 tag。若要改为运行开发树，请从
 源码构建加固的 distroless 镜像，并让栈指向它：
 
 ```bash
 task image                                   # builds olivares:dev
 echo 'OLIVARES_IMAGE=olivares:dev' >> deploy/compose/.env
 ```
-
-当 `26.9.1` 镜像存在时：设置
-`OLIVARES_IMAGE=docker.io/olivaresai/olivares@sha256:<digest>` 并先
-[验证它](/how-to/verify-a-release/)——按 digest，绝不按 tag。
 </Aside>
 
 ## 1. 启动单节点栈（SQLite）

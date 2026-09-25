@@ -106,16 +106,40 @@ need(issue, "issue-context.ts", 'phase: "refund_window",', 1)
 forbid(cohort, "cohort.ts", 'action: "issue",', "the barrier hardcodes the commercial action again")
 need(cohort, "cohort.ts", "export function classifyPaidPurchase(", 1)
 need(cohort, "cohort.ts", 'action: prior.size > 0 ? "renew" : "issue"', 1)
-need(cohort, "cohort.ts", 'treatment: prior.has(line.lineKey) ? "renewed" : "initial_eligible",', 1)
+# A line continues when this subscription already holds its exact line key OR, with committed
+# history, its set code (the right moved to another provider object; cohort.ts "A RIGHT THE HOLDER
+# ALREADY HOLDS CONTINUES"). Neither the exact key alone nor the aggregate may decide it.
+forbid(cohort, "cohort.ts", 'treatment: prior.has(line.lineKey) ? "renewed" : "initial_eligible",',
+       "the treatment is keyed on the exact line key alone again: a held right carried by a moved "
+       "provider object would restart as a first purchase")
+forbid(cohort, "cohort.ts", 'treatment: prior.size > 0 ? "renewed" : "initial_eligible",',
+       "the treatment is keyed on the aggregate history again, not on each line")
+need(cohort, "cohort.ts", "const continues = prior.has(line.lineKey) || (code !== null && held.setCodes.has(code));", 1)
+need(cohort, "cohort.ts", 'treatment: continues ? "renewed" : "initial_eligible",', 1)
 
 # The signer applies the plan by line_key, never by position.
 need(cred, "credential-v3.ts", "export function credentialFromLinePlan(", 1)
 need(cred, "credential-v3.ts", "const entry = byLine.get(line.lineKey)!;", 1)
 
-# The real producers: normal join and operator replay classify from the history they read, the
-# sequence rebuild reclassifies from the history it re-read, and the route signs the plan.
-need(webhook, "webhook.ts", "classifyPaidPurchase(decision.purchase, prior)", 2)
-need(webhook, "webhook.ts", "classifyPaidPurchase(refreshed.purchase, prior)", 1)
+# The real producers: normal join, operator replay and the sequence rebuild each enter the one
+# completer with the committed history they read (the rebuild re-reads it after the lost race),
+# the completer classifies once, from that history and the rights the holder holds, and the route
+# signs the plan.
+need(webhook, "webhook.ts", "classifyPaidPurchase(", 1)
+need(webhook, "webhook.ts", "classifyPaidPurchase(decision.purchase, prior, heldRightsOf(catalog, held))", 1)
+need(webhook, "webhook.ts",
+     "return await fulfilCompleteCohort(env, deps, payment, subscription, prior, held, {\n"
+     "    webhookId, businessId, eventType, bodySha256, nowISO,", 1)
+need(webhook, "webhook.ts",
+     "return await fulfilCompleteCohort(env, deps, payment, subscription, prior, held, {\n"
+     '    ...input, detailPrefix: "operator replay: ", judgedBy: "operator_replay",', 1)
+need(webhook, "webhook.ts",
+     "const prior = await deps.store.readDodoPriorGrantState(\n    purchase.businessId,\n"
+     "    purchase.subscriptionId,\n    purchase.paymentId,\n  );", 1)
+need(webhook, "webhook.ts",
+     "return await fulfilCompleteCohort(env, deps, payment, subscription, prior, held, {\n"
+     "    ...input, rebuilds: rebuilds + 1,", 1)
+need(webhook, "webhook.ts", "fulfilCompleteCohort(env, deps, payment, subscription, prior, held, {", 4)
 need(webhook, "webhook.ts", "credentialFromLinePlan(purchase, issuance.lines, issuance.ctx)", 1)
 forbid(webhook, "webhook.ts", "credentialFromPurchase(", "the route signs through the uniform adapter again")
 forbid(webhook, "webhook.ts", "issuance.phase", "the route reads a purchase-wide phase again")

@@ -187,7 +187,7 @@ an einen Agenten bindet. Siehe [eBPF/Tetragon](/de/how-to/connectors/ebpf-tetrag
 
 ### live_ref
 
-Die vom Server vergebene Identität **einer** Live-Session-Zeile. v26.9.1
+Die vom Server vergebene Identität **einer** Live-Session-Zeile. v26.9.0
 schlüsselt Beobachtung nach `(Beobachtungsumfang, externe ID)`, damit zwei
 Anbieter-Homes, die dieselbe Session-ID bekanntgeben, zwei Zeilen bleiben.
 Konsolen- und API-Reads, die „diese Zeile“ meinen, nutzen `live_ref`, nicht

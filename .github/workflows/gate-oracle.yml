@@ -1,0 +1,537 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# gate-oracle — named lint gates measured on a base commit and on the pushed head: red, then green.
+#
+# WHAT IT MEASURES, on the two commits this run binds and on nothing else:
+#   base     the named gates on the base commit: the tip of base_ref, which is the repository's
+#            default branch unless a dispatch names another. A gate the head repairs is EXPECTED red
+#            here. A gate already green here is reported as "nothing to repair", never hidden.
+#   head     the same gates on the exact head that was pushed or dispatched. Each is expected green.
+#   verdict  ONE line, printed only after both jobs measured every named gate and both succeeded.
+#            A gate green at base also gets one warning annotation.
+#
+# Each measuring job checks out its commit at full depth with the same pinned actions/checkout and
+# installs the toolchain as pr-ci.yml's pr-lint job does: Go from go.work, then go-task v3.51.1.
+# It then installs Node from .node-version with pr-ci.yml's pinned setup-node, because
+# lint:engine-output runs node. It runs `task -x <gate>` under a literal clock for each named gate
+# and records, per gate, the raw exit, the gate's last 40 lines and ONE line
+# `gate-oracle: <job> <gate> exit=<n>`. `-x` passes the gate's own exit through; plain `task` reports
+# every failing command as 201, which would make a gate that could not look (2) read as a red one.
+#
+# THE INABILITY RULE. Exit 0 is green and exit 1 is red. Any other exit is an INABILITY: the gate
+# could not look (2), its clock fired (124, 137), a tool it needs is missing (126, 127), or go-task
+# could not run it (its own codes). A measuring job fails exactly when it could not measure, so a
+# toolchain that fails to install fails it too. The verdict is INABILITY, exit 2, unless both
+# measuring jobs succeeded and every named gate has a 0 or 1 in both. An inability is never a pass.
+#
+# TRIGGERS. A push to a branch of this repository measures the pushed head against the default
+# branch, on the gates of that branch: fix/gate-sigpipe-* and fix/gate-scripts-sigpipe-*
+# lint:sigpipe-booleans, fix/gate-declarations-* lint:engine-output and lint:prepush-refclass,
+# fix/gate-emitted-* lint:emitted-urls, ci/gate-oracle-* every default gate. Any other fix/gate-*
+# branch is refused.
+# A branch of a fork never pushes here. `workflow_dispatch` measures a named head: candidate_sha
+# must be the head of the dispatched ref, and an empty or malformed value is refused. Its `gates`,
+# when given, override the branch's gates.
+#   gh workflow run gate-oracle.yml --repo olivaresai/olivares --ref <branch> \
+#     -f candidate_sha=<the 40-hex head of <branch>> [-f gates='<gate> ...'] [-f base_ref=<ref>]
+# The design, the accepted gates and the expected exits: ci/oracles/gate-oracle/EXPECTED.md.
+#
+# Nothing from another run is consumed: no artifact is downloaded and the Go cache is off, so every
+# exit this run reports was produced in this run.
+
+name: gate-oracle
+
+on:
+  push:
+    branches: ['fix/gate-*', 'ci/gate-oracle-*']
+  workflow_dispatch:
+    inputs:
+      candidate_sha:
+        description: The 40-hex commit this run must measure. It must be the head of the dispatched ref.
+        required: true
+        type: string
+      gates:
+        description: Space-separated accepted gate names. Empty means the gates of the dispatched branch (see EXPECTED.md).
+        required: false
+        type: string
+        default: ''
+      base_ref:
+        description: The branch, tag or 40-hex commit measured as the base. Empty means the default branch.
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+# One measurement per COMMIT at a time, so every pushed head keeps its own run. A running
+# measurement is never cancelled: a cancelled run carries no verdict at all.
+concurrency:
+  group: gate-oracle-${{ github.sha }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  # Empty on a push. On a dispatch, the values given; `bind` refuses them unless they are well
+  # formed, and never replaces a refused value with another.
+  DISPATCH_CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+  DISPATCH_GATES: ${{ inputs.gates }}
+  DISPATCH_BASE_REF: ${{ inputs.base_ref }}
+  DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+  # Every default gate: what a push to ci/gate-oracle-* measures (see `gates_of_ref` below).
+  DEFAULT_GATES: lint:sigpipe-booleans lint:engine-output lint:prepush-refclass
+  # The only gates this oracle runs, each at most once per job. Four names bound the measuring
+  # step: four clocks of 10 min plus 30 s in series are 42 min, under that step's ceiling of 45.
+  ACCEPTED_GATES: lint:sigpipe-booleans lint:engine-output lint:prepush-refclass lint:emitted-urls
+  # The shared shell library. Every step that binds, checks or judges evaluates it first. It holds
+  # no clock: the only clock is the literal in each measuring step, where the repository's
+  # inner-clock gate reads it.
+  GATE_ORACLE_LIB: |
+    set -euo pipefail
+    : "${OUT:?OUT must name the evidence directory of this job}"
+    mkdir -p "$OUT"
+
+    fail() { printf '::error::%s\n' "$*"; return 1; }
+
+    # The commit this run measures: the pushed head on a push, the named head on a dispatch.
+    candidate() {
+      case "$GITHUB_EVENT_NAME" in
+        push) printf '%s' "$GITHUB_SHA" ;;
+        workflow_dispatch) printf '%s' "${DISPATCH_CANDIDATE_SHA:-}" ;;
+        *) printf 'unsupported-event-%s' "$GITHUB_EVENT_NAME" ;;
+      esac
+    }
+
+    # A base the checkout may fetch: a branch, a tag or a 40-hex commit, and nothing that git or a
+    # shell could read as an option, a range or a second word.
+    valid_ref() {
+      [[ "$1" =~ ^[A-Za-z0-9][A-Za-z0-9._/-]{0,199}$ ]] || return 1
+      case "$1" in *..* | *//* | */ | *.) return 1 ;; esac
+    }
+
+    # gates_of_ref REF: the gates a branch measures when the run names none. Each repair branch
+    # measures its own gates, so a pull request that repairs one gate is judged on that gate only;
+    # the oracle's own branches measure every default gate. Any other ref maps to no gate.
+    gates_of_ref() {
+      case "$1" in
+        refs/heads/fix/gate-sigpipe-*) printf '%s' 'lint:sigpipe-booleans' ;;
+        refs/heads/fix/gate-scripts-sigpipe-*) printf '%s' 'lint:sigpipe-booleans' ;;
+        refs/heads/fix/gate-declarations-*) printf '%s' 'lint:engine-output lint:prepush-refclass' ;;
+        refs/heads/fix/gate-emitted-*) printf '%s' 'lint:emitted-urls' ;;
+        refs/heads/ci/gate-oracle-*) printf '%s' "$DEFAULT_GATES" ;;
+      esac
+    }
+
+    # bind: the commit this run measures, the gates it runs and the base it runs them on. Each is
+    # refused unless well formed, and a refusal writes no output. It needs no checkout. A push runs
+    # its branch's gates; a dispatch runs its own `gates` when given, else its branch's.
+    bind() {
+      local cand gates base g list="" names_re='^[A-Za-z0-9:._ -]*$'
+      local -a named
+      cand="$(candidate)"
+      [[ "$cand" =~ ^[0-9a-f]{40}$ ]] || fail "the candidate is not a 40-hex commit: [$cand]"
+      [ "$cand" = "$GITHUB_SHA" ] || fail "the head of $GITHUB_REF is $GITHUB_SHA, not the candidate $cand"
+      if [ "$GITHUB_EVENT_NAME" = push ]; then
+        gates=""
+        base="$DEFAULT_BRANCH"
+      else
+        gates="${DISPATCH_GATES:-}"
+        base="${DISPATCH_BASE_REF:-}"
+        base="${base:-$DEFAULT_BRANCH}"
+      fi
+      [[ "$gates" =~ $names_re ]] || fail "the gates are not space-separated task names: [$gates]"
+      read -r -a named <<< "$gates"
+      if [ "${#named[@]}" -eq 0 ]; then
+        gates="$(gates_of_ref "$GITHUB_REF")"
+        read -r -a named <<< "$gates"
+      fi
+      [ "${#named[@]}" -gt 0 ] ||
+        fail "no gate is named: the run names none and $GITHUB_REF is not a branch the gate map names"
+      for g in "${named[@]}"; do
+        case " $ACCEPTED_GATES " in
+          *" $g "*) ;;
+          *) fail "$g is not a gate this oracle runs; the accepted gates are: $ACCEPTED_GATES" ;;
+        esac
+        case " $list " in
+          *" $g "*) fail "$g is named twice" ;;
+        esac
+        list="${list:+$list }$g"
+      done
+      valid_ref "$base" || fail "the base is not a branch, tag or 40-hex commit name: [$base]"
+      {
+        printf 'candidate=%s\n' "$cand"
+        printf 'gates=%s\n' "$list"
+        printf 'base_ref=%s\n' "$base"
+      } >> "$GITHUB_OUTPUT"
+      { printf 'CANDIDATE=%s\n' "$cand"; printf 'GATES=%s\n' "$list"; } >> "$GITHUB_ENV"
+      printf 'event %s\ncandidate %s\nref %s\ngates %s\nbase %s\n' \
+        "$GITHUB_EVENT_NAME" "$cand" "$GITHUB_REF" "$list" "$base" | tee "$OUT/binding.txt"
+    }
+
+    # identity JOB: the checkout is the commit this job measures, at full depth and clean, on a
+    # GitHub-hosted runner. On the base it also records whether that commit is an ancestor of the
+    # candidate: a change between the two commits is the head's own only when it is.
+    identity() {
+      local job="$1" head ancestor=n/a
+      head="$(git rev-parse HEAD)"
+      [[ "$head" =~ ^[0-9a-f]{40}$ ]] || fail "the checkout is not a commit: [$head]"
+      [ "$(git rev-parse --is-shallow-repository)" = false ] ||
+        fail "the checkout is shallow; both commits are measured at full depth"
+      [ -z "$(git status --porcelain --untracked-files=all)" ] || fail "the checkout is not clean"
+      [ "${RUNNER_PLACEMENT:-}" = github-hosted ] ||
+        fail "this job runs on a ${RUNNER_PLACEMENT:-unknown} runner; the oracle runs on GitHub-hosted runners only"
+      case "$job" in
+        head)
+          [ "$head" = "$CANDIDATE" ] || fail "the checkout $head is not the candidate $CANDIDATE"
+          ;;
+        base)
+          if git merge-base --is-ancestor "$head" "$CANDIDATE" 2> /dev/null; then
+            ancestor=yes
+          elif git cat-file -e "$CANDIDATE^{commit}" 2> /dev/null; then
+            ancestor=no
+          else
+            ancestor=unknown
+          fi
+          printf 'ancestor=%s\n' "$ancestor" >> "$GITHUB_OUTPUT"
+          ;;
+        *) fail "identity: unknown job $job" ;;
+      esac
+      printf 'commit=%s\n' "$head" >> "$GITHUB_OUTPUT"
+      {
+        printf 'job %s\ncommit %s\nancestor of the candidate %s\n' "$job" "$head" "$ancestor"
+        printf 'runner %s placement %s %s %s image %s %s\n' "${RUNNER_NAME:-unknown}" "$RUNNER_PLACEMENT" \
+          "$RUNNER_OS" "$RUNNER_ARCH" "${ImageOS:-unknown}" "${ImageVersion:-unknown}"
+      } | tee "$OUT/identity.txt"
+    }
+
+    # The toolchain as installed (Go, go-task, and node from .node-version), and the paths of the
+    # tools the gates reach. python3 is the runner image's own: named here, not installed.
+    toolchain() {
+      {
+        go version
+        task --version
+        printf 'bash %s\n' "$BASH_VERSION"
+        printf 'image %s %s\n' "${ImageOS:-unknown}" "${ImageVersion:-unknown}"
+        printf 'on PATH: %s\n' "$(command -v git python3 node | tr '\n' ' ')"
+      } | tee "$OUT/toolchain.txt"
+    }
+
+    # label GATE: the file name a gate's evidence is kept under (an artifact path may not hold ':').
+    label() { printf '%s' "${1//:/_}"; }
+
+    # record_gate JOB GATE EXIT: the raw exit, the gate's last 40 lines and ONE verdict line. Each
+    # kept line is prefixed, so nothing a gate prints can pass for this line or for a runner command.
+    record_gate() {
+      local job="$1" gate="$2" rc="$3" f
+      f="$OUT/$(label "$gate")"
+      printf '%s\n' "$rc" > "$f.exit"
+      printf '%s=%s\n' "$gate" "$rc" >> "$OUT/exits.txt"
+      printf -- '--- the last 40 lines of %s on the %s commit\n' "$gate" "$job"
+      tail -n 40 "$f.log" | sed 's/^/  | /'
+      printf 'gate-oracle: %s %s exit=%s\n' "$job" "$gate" "$rc"
+    }
+
+    # finish JOB: publish every measured exit as the job's output, then fail the job exactly when
+    # it could not measure: no gate measured, or an exit other than 0 or 1. A red, at base or at
+    # head, is a measurement: the job succeeds and the verdict judges it.
+    finish() {
+      local job="$1" line exits="" bad=""
+      [ -s "$OUT/exits.txt" ] || fail "no gate was measured on the $job commit"
+      while IFS= read -r line; do
+        exits="${exits:+$exits }$line"
+        case "${line#*=}" in
+          0 | 1) ;;
+          *) bad="${bad:+$bad }$line" ;;
+        esac
+      done < "$OUT/exits.txt"
+      printf 'exits=%s\n' "$exits" >> "$GITHUB_OUTPUT"
+      [ -z "$bad" ] ||
+        fail "could not measure on the $job commit: $bad (any exit but 0 or 1 is an inability, never a pass)"
+    }
+
+    # A raw exit is a measurement only when it is 0 (green) or 1 (red).
+    measured() { case "$1" in 0|1) return 0 ;; *) return 1 ;; esac; }
+
+    # Why a raw exit is not a measurement.
+    inability() {
+      case "$1" in
+        '') printf 'no exit was recorded, so the gate never ran' ;;
+        2) printf 'exit=2, the gate could not look' ;;
+        124 | 137) printf 'exit=%s, its clock fired' "$1" ;;
+        126 | 127) printf 'exit=%s, a tool it needs is missing' "$1" ;;
+        *) printf 'exit=%s, neither green (0) nor red (1)' "$1" ;;
+      esac
+      printf ' — an inability, never a pass'
+    }
+
+    # exit_of GATE EXITS: the raw exit recorded for GATE in "gate=exit gate=exit ...", or nothing.
+    exit_of() {
+      local tok
+      local -a toks
+      read -r -a toks <<< "$2"
+      for tok in "${toks[@]}"; do
+        if [ "${tok%%=*}" = "$1" ]; then
+          printf '%s' "${tok#*=}"
+          return 0
+        fi
+      done
+    }
+
+    # judge: ONE verdict line. It is green only after both measuring jobs succeeded and measured
+    # every named gate on the commits they were bound to; anything less is INABILITY, exit 2. It
+    # reads the two jobs' results and outputs and nothing else: it runs no gate and reads no
+    # artifact. Each gate green at base is also a warning, and each gate red at head an error.
+    judge() {
+      local g b h bad="" repaired="" nothing="" red="" rows="" line rc
+      local -a named
+      [ "${BASE_RESULT:-}" = success ] || bad="$bad"$'\n'"the base job's result is ${BASE_RESULT:-unknown}, not success: its measurement or its evidence is incomplete"
+      [ "${HEAD_RESULT:-}" = success ] || bad="$bad"$'\n'"the head job's result is ${HEAD_RESULT:-unknown}, not success: its measurement or its evidence is incomplete"
+      hex() { [[ "$2" =~ ^[0-9a-f]{40}$ ]] || bad="$bad"$'\n'"$1 is [$2], not a 40-hex commit"; }
+      hex "the base job's candidate" "${BASE_CANDIDATE:-}"
+      hex "the head job's candidate" "${HEAD_CANDIDATE:-}"
+      hex "the base commit" "${BASE_COMMIT:-}"
+      if [ "${BASE_CANDIDATE:-}" != "$GITHUB_SHA" ] || [ "${HEAD_CANDIDATE:-}" != "$GITHUB_SHA" ]; then
+        bad="$bad"$'\n'"the jobs were bound to [${BASE_CANDIDATE:-}] and [${HEAD_CANDIDATE:-}], not both to $GITHUB_SHA"
+      fi
+      [ "${HEAD_COMMIT:-}" = "$GITHUB_SHA" ] ||
+        bad="$bad"$'\n'"the head job measured [${HEAD_COMMIT:-}], not the candidate $GITHUB_SHA"
+      [ "${BASE_COMMIT:-}" != "$GITHUB_SHA" ] ||
+        bad="$bad"$'\n'"the base is the head itself, so there is no change to measure"
+      [ "${BASE_ANCESTOR:-}" = yes ] ||
+        bad="$bad"$'\n'"the base is not known to be an ancestor of the head (${BASE_ANCESTOR:-unset}), so a change between them is not the head's own"
+      if [ -z "${BASE_GATES:-}" ] || [ "${BASE_GATES:-}" != "${HEAD_GATES:-}" ]; then
+        bad="$bad"$'\n'"the jobs were bound to different gates: [${BASE_GATES:-}] and [${HEAD_GATES:-}]"
+      fi
+      [ "${RUNNER_PLACEMENT:-}" = github-hosted ] ||
+        bad="$bad"$'\n'"the verdict runs on a ${RUNNER_PLACEMENT:-unknown} runner, not a GitHub-hosted one"
+      read -r -a named <<< "${HEAD_GATES:-}"
+      for g in "${named[@]}"; do
+        b="$(exit_of "$g" "${BASE_EXITS:-}")"
+        h="$(exit_of "$g" "${HEAD_EXITS:-}")"
+        measured "$b" || bad="$bad"$'\n'"$g at base: $(inability "$b")"
+        measured "$h" || bad="$bad"$'\n'"$g at head: $(inability "$h")"
+        [ "$b" != 0 ] || printf '::warning::%s is green at base (exit 0): nothing to repair, so this run shows no red-first for it\n' "$g"
+        [ "$h" != 1 ] || printf '::error::%s is red at head (exit 1)\n' "$g"
+        case "$b/$h" in
+          1/0) repaired="${repaired:+$repaired }$g" ;;
+          0/0) nothing="${nothing:+$nothing }$g" ;;
+          0/1 | 1/1) red="${red:+$red }$g" ;;
+        esac
+        rows="$rows| \`$g\` | ${b:-not measured} | ${h:-not measured} |"$'\n'
+      done
+      if [ -n "$bad" ]; then
+        printf '%s\n' "$bad" | sed '/^$/d; s/^/::error::/'
+        line="gate-oracle verdict: INABILITY at $GITHUB_SHA — not every named gate was measured, by two successful jobs, on the commits bound (base job ${BASE_RESULT:-unknown}, head job ${HEAD_RESULT:-unknown}); an inability is never a pass"
+        rc=2
+      elif [ -n "$red" ]; then
+        line="gate-oracle verdict: FAIL at $HEAD_COMMIT over base $BASE_COMMIT: red at head: $red; repaired: ${repaired:-none}; nothing to repair: ${nothing:-none}"
+        rc=1
+      elif [ -n "$repaired" ]; then
+        line="gate-oracle verdict: REPAIRED at $HEAD_COMMIT over base $BASE_COMMIT: red at base and green at head: $repaired; nothing to repair (green at base): ${nothing:-none}"
+        rc=0
+      else
+        line="gate-oracle verdict: NOTHING TO REPAIR at $HEAD_COMMIT over base $BASE_COMMIT: every named gate is green at base and at head: $nothing"
+        rc=0
+      fi
+      printf '%s\n' "$line"
+      if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+        printf '| gate | base exit | head exit |\n|---|---|---|\n%s\n%s\n' "$rows" "$line" >> "$GITHUB_STEP_SUMMARY"
+      fi
+      return "$rc"
+    }
+
+jobs:
+  base:
+    if: github.repository == 'olivaresai/olivares' && github.event.deleted != true
+    runs-on: ubuntu-latest
+    # Steps sum to 81 minutes; the job ceiling stays above that sum.
+    timeout-minutes: 90
+    outputs:
+      candidate: ${{ steps.bind.outputs.candidate }}
+      gates: ${{ steps.bind.outputs.gates }}
+      commit: ${{ steps.identity.outputs.commit }}
+      ancestor: ${{ steps.identity.outputs.ancestor }}
+      exits: ${{ steps.measure.outputs.exits }}
+    steps:
+      - name: bind the candidate, the gates and the base
+        id: bind
+        timeout-minutes: 2
+        run: |
+          OUT="$RUNNER_TEMP/gate-oracle/base"
+          echo "OUT=$OUT" >> "$GITHUB_ENV"
+          eval "$GATE_ORACLE_LIB"
+          bind
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
+        with:
+          ref: ${{ steps.bind.outputs.base_ref }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: the checkout is the base commit, at full depth, on a GitHub-hosted runner
+        id: identity
+        timeout-minutes: 2
+        env:
+          RUNNER_PLACEMENT: ${{ runner.environment }}
+        run: |
+          eval "$GATE_ORACLE_LIB"
+          identity base
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        timeout-minutes: 10
+        with:
+          go-version-file: go.work
+          cache: false
+      - name: install go-task (pinned)
+        timeout-minutes: 5
+        run: |
+          export GOBIN="$RUNNER_TEMP/gopath/bin"
+          echo "GOBIN=$GOBIN" >> "$GITHUB_ENV"
+          echo "$GOBIN" >> "$GITHUB_PATH"
+          export PATH="$GOBIN:$PATH"
+          go install github.com/go-task/task/v3/cmd/task@v3.51.1
+          command -v task || { echo "::error::go install reported OK and task is not on PATH"; exit 1; }
+      # lint:engine-output runs node: the repository's pinned version, with pr-ci.yml's pin.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        timeout-minutes: 5
+        with:
+          node-version-file: .node-version
+      - name: record the toolchain
+        timeout-minutes: 2
+        run: |
+          eval "$GATE_ORACLE_LIB"
+          toolchain
+      # One gate after another, each under the same literal clock. At most four gates (the
+      # accepted ones, each once), so the step ceiling covers them in series: 4 x 10.5 = 42 < 45.
+      - name: measure the named gates on the base commit (a red here is recorded, not judged)
+        id: measure
+        timeout-minutes: 45
+        run: |
+          eval "$GATE_ORACLE_LIB"
+          read -r -a named <<< "$GATES"
+          for gate in "${named[@]}"; do
+            rc=0
+            timeout --kill-after=30s 10m task -x "$gate" > "$OUT/$(label "$gate").log" 2>&1 || rc=$?
+            record_gate base "$gate" "$rc"
+          done
+          finish base
+      - name: retain the gate logs, exits and records
+        if: always()
+        timeout-minutes: 5
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: gate-oracle-base-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/gate-oracle/base/
+          retention-days: 7
+          if-no-files-found: error
+
+  head:
+    if: github.repository == 'olivaresai/olivares' && github.event.deleted != true
+    runs-on: ubuntu-latest
+    # Steps sum to 81 minutes; the job ceiling stays above that sum.
+    timeout-minutes: 90
+    outputs:
+      candidate: ${{ steps.bind.outputs.candidate }}
+      gates: ${{ steps.bind.outputs.gates }}
+      commit: ${{ steps.identity.outputs.commit }}
+      exits: ${{ steps.measure.outputs.exits }}
+    steps:
+      - name: bind the candidate, the gates and the base
+        id: bind
+        timeout-minutes: 2
+        run: |
+          OUT="$RUNNER_TEMP/gate-oracle/head"
+          echo "OUT=$OUT" >> "$GITHUB_ENV"
+          eval "$GATE_ORACLE_LIB"
+          bind
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: the checkout is the candidate, at full depth, on a GitHub-hosted runner
+        id: identity
+        timeout-minutes: 2
+        env:
+          RUNNER_PLACEMENT: ${{ runner.environment }}
+        run: |
+          eval "$GATE_ORACLE_LIB"
+          identity head
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        timeout-minutes: 10
+        with:
+          go-version-file: go.work
+          cache: false
+      - name: install go-task (pinned)
+        timeout-minutes: 5
+        run: |
+          export GOBIN="$RUNNER_TEMP/gopath/bin"
+          echo "GOBIN=$GOBIN" >> "$GITHUB_ENV"
+          echo "$GOBIN" >> "$GITHUB_PATH"
+          export PATH="$GOBIN:$PATH"
+          go install github.com/go-task/task/v3/cmd/task@v3.51.1
+          command -v task || { echo "::error::go install reported OK and task is not on PATH"; exit 1; }
+      # lint:engine-output runs node: the repository's pinned version, with pr-ci.yml's pin.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        timeout-minutes: 5
+        with:
+          node-version-file: .node-version
+      - name: record the toolchain
+        timeout-minutes: 2
+        run: |
+          eval "$GATE_ORACLE_LIB"
+          toolchain
+      # The same clock and the same series bound as the base job.
+      - name: measure the named gates on the head (each is expected green)
+        id: measure
+        timeout-minutes: 45
+        run: |
+          eval "$GATE_ORACLE_LIB"
+          read -r -a named <<< "$GATES"
+          for gate in "${named[@]}"; do
+            rc=0
+            timeout --kill-after=30s 10m task -x "$gate" > "$OUT/$(label "$gate").log" 2>&1 || rc=$?
+            record_gate head "$gate" "$rc"
+          done
+          finish head
+      - name: retain the gate logs, exits and records
+        if: always()
+        timeout-minutes: 5
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: gate-oracle-head-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/gate-oracle/head/
+          retention-days: 7
+          if-no-files-found: error
+
+  # `always()` so a red, skipped or cancelled measuring job is NAMED here instead of silently
+  # skipping the verdict. This job checks out nothing and runs no gate: it reads the two jobs'
+  # outputs of this run.
+  verdict:
+    needs: [base, head]
+    if: ${{ always() && github.repository == 'olivaresai/olivares' && github.event.deleted != true }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: one verdict line, printed only after both jobs measured every named gate
+        timeout-minutes: 3
+        env:
+          RUNNER_PLACEMENT: ${{ runner.environment }}
+          BASE_RESULT: ${{ needs.base.result }}
+          HEAD_RESULT: ${{ needs.head.result }}
+          BASE_CANDIDATE: ${{ needs.base.outputs.candidate }}
+          HEAD_CANDIDATE: ${{ needs.head.outputs.candidate }}
+          BASE_GATES: ${{ needs.base.outputs.gates }}
+          HEAD_GATES: ${{ needs.head.outputs.gates }}
+          BASE_COMMIT: ${{ needs.base.outputs.commit }}
+          HEAD_COMMIT: ${{ needs.head.outputs.commit }}
+          BASE_ANCESTOR: ${{ needs.base.outputs.ancestor }}
+          BASE_EXITS: ${{ needs.base.outputs.exits }}
+          HEAD_EXITS: ${{ needs.head.outputs.exits }}
+        run: |
+          export OUT="$RUNNER_TEMP/gate-oracle/verdict"
+          eval "$GATE_ORACLE_LIB"
+          judge

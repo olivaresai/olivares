@@ -119,7 +119,7 @@ trap cleanup EXIT HUP INT TERM
 # Declaring the number closes it: a run that measures less than this battery claims to measure
 # is a FAILED run, whatever its individual cases said. Raise it deliberately when you add a
 # case — a diff that changes this line is exactly the review signal you want.
-EXPECTED_CASES=157
+EXPECTED_CASES=159
 
 pass=0
 fail=0
@@ -2290,6 +2290,15 @@ check "a renamed/absent task is UNVERIFIED, never a pass" "exit 2" $?
 #                        passing suite into a hard failure on any box with no Postgres — measured
 #                        2026-08-25, wrapped rc=1 / unwrapped rc=0. Its premise is ASSERTED below
 #                        with the same sweep that proves the other two.
+#   appliance:test:answers — ./appliance is the offline answers validator and planner: its own
+#                        module with no requirements, stdlib imports only, whose tests read
+#                        testdata/ and run a binary built inside t.TempDir(). It has no pgtest
+#                        reference and no OLIVARES_TEST_POSTGRES_* read, so the wrapper has nothing
+#                        to hand it, and wrapping it fails the way hookpar did: with no DSN,
+#                        with-pg-env.sh refuses (rc=1, measured 2026-09-25) before a single test
+#                        runs. The arm is the WHOLE recipe, anchored at the end of the line, so a
+#                        package appended to it is unwrapped again. Its premise is ASSERTED below
+#                        by the same sweep, with its own red case on a copy of the real tree.
 #
 # test:race-hot:modules was the FOURTH entry on this list until 2026-08-01, exempted
 # because ./modules was Postgres-free. It is not exempt any more, and the exemption line
@@ -2309,6 +2318,7 @@ while IFS= read -r line; do
 	*"go test -race -count=1 -timeout 10m ./..."*) continue ;;
 	*"go test -count=1 -timeout 10m ./..."*) continue ;;
 	*"cd scripts/hookpar"*) continue ;;
+	*"- go test -race -count=1 -timeout 120s ./appliance/...") continue ;;
 	esac
 	unwrapped=$((unwrapped + 1))
 	printf '        unwrapped go-test entry point: %s\n' "$line"
@@ -2375,7 +2385,8 @@ exempt_harness_sweep() {
 # como los demás (Taskfile.yml, task test:cloud). Ampliarla habría dejado un árbol que lee
 # el arnés excusado de decidir su entorno, que es exactamente el agujero que el caso
 # «an exempt tree that STARTS reading the harness is DETECTED» existe para cerrar.
-for exempt in "core/license:test:release" "scripts/hookpar:lint:test-hook-parallelism:selftest"; do
+for exempt in "core/license:test:release" "scripts/hookpar:lint:test-hook-parallelism:selftest" \
+	"appliance:appliance:test:answers"; do
 	exempt_tree="${exempt%%:*}"
 	exempt_entry="${exempt#*:}"
 	if [ -d "$ROOT/$exempt_tree" ]; then
@@ -2421,6 +2432,30 @@ var dsn = os.Getenv("DATABASE_URL")
 EOF
 exempt_harness_sweep "$EXEMPT_GREEN" >/dev/null
 check "a tree with its OWN Postgres, not the harness, stays exempt" "the detector can say no" $?
+
+# AND THE SAME RED ON THE APPLIANCE TREE ITSELF (2026-09-25). The synthetic tree above proves
+# the detector can say yes; this proves it says yes about the tree the newest exemption answers
+# for, as that tree really is (its own module, nested packages, testdata/), plus ONE test file
+# that reads the harness. The copy must sweep GREEN before that file lands: that is the
+# fixture's own control. Without it, a copy that failed would leave a directory holding only
+# the harness file, and the red would prove nothing about appliance.
+APPLIANCE_RED="$WORK/appliance-red"
+if [ -d "$ROOT/appliance/answers" ] && cp -R "$ROOT/appliance" "$APPLIANCE_RED" 2>/dev/null &&
+	[ -f "$APPLIANCE_RED/go.mod" ] && exempt_harness_sweep "$APPLIANCE_RED" >/dev/null; then
+	cat >"$APPLIANCE_RED/answers/harness_test.go" <<'EOF'
+package answers
+
+import "os"
+
+var harnessDSN = os.Getenv("OLIVARES_TEST_POSTGRES_DSN")
+EOF
+	exempt_harness_sweep "$APPLIANCE_RED" >/dev/null
+	rc_appliance_red=$?
+	[ "$rc_appliance_red" -ne 0 ]
+	check "appliance STARTING to read the harness ends its exemption" "nonzero" $?
+else
+	unexercised "appliance STARTING to read the harness ends its exemption"
+fi
 
 grep -q 'scripts/pg-test-env.sh' "$ROOT/.githooks/pre-push"
 check "the pre-push hook still makes the decision too" "hook wired" $?

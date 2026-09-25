@@ -6,9 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [CalVer](https://calver.org/) — `vYY.M.PATCH` (two-digit year,
 month, release-of-month).
 
-> **Status: beta.** The development candidate is **v26.9.1**. Its section below records the
-> proposed contents and cut date; it does not establish a published release or available artifacts.
-> The latest published release is the newest entry on the [releases page](https://github.com/olivaresai/olivares/releases).
+> **Status: beta.** The latest published release is **v26.9.0**; its dated section below is the
+> record of what it shipped. The next release is **v26.10**, pending: its changes are recorded
+> under **[Unreleased]**, with no release date until it is published. The
+> [releases page](https://github.com/olivaresai/olivares/releases) lists every published release.
 > Release notes and artifacts become authoritative when the corresponding release is published.
 > Every earlier release keeps its own dated section, unchanged.
 > APIs, schemas and the module surface MAY still change before a
@@ -34,6 +35,9 @@ month, release-of-month).
 
 ## [Unreleased]
 
+Pending for **v26.10**, the next planned release. Nothing below is published until that release
+is, and the section is dated only then.
+
 ### Added
 
 - **A run can say what it was launched at, to a reader that holds no run.** A new read port,
@@ -51,6 +55,16 @@ month, release-of-month).
   serves for its node agents. Empty, the default, means no listener. A startup that sets it no
   longer logs it as ignored, and `olivares config validate` and `config effective --strict`
   accept it. The Community build does not read it.
+- **Each provider driver now says which launch choices its tool actually receives.** The Claude
+  Code, Codex, Grok and OpenCode drivers declare whether a session launch hands the model, the
+  effort and the permission mode to the tool they start, and where the models offered for them
+  come from; the sessions module reads that declaration per driver. Claude Code receives all
+  three. Codex, Grok and OpenCode receive the model and the effort but not the permission mode,
+  which is Claude Code's own setting. The models of every driver can be discovered by testing
+  the provider credential a profile is bound to, and no driver lists models itself. A driver
+  that declares nothing reads as unknown rather than as a guess, and a conformance test holds
+  each declaration to what the launch actually sends. No launch changes, and no API or console
+  surface presents the declaration yet.
 ### Changed
 
 - **Content inspection now also receives decoded tool-use arguments, with separate bounded work.**
@@ -112,9 +126,12 @@ month, release-of-month).
   every single-tenant deployment, is unchanged.
 
 
-## [26.9.1] - 2026-09-21
+### Also pending for v26.10
 
-### Added
+Prepared for a September candidate cut that was never tagged or published; these entries are
+pending for v26.10 together with the ones above.
+
+#### Added
 
 - **A console built around the work.** The session is the unit of work: one screen lists
   every agent session on the plane in a keyboard-navigable rail grouped by what each session
@@ -192,7 +209,7 @@ month, release-of-month).
   previous token stops working. The command sits with `quickstart` under *Setup &
   Configuration* in `olivares --help`.
 
-### Changed
+#### Changed
 
 - **One renderer for the terminal.** Panels, tables, refusals and next steps of the CLI now
   go through one plain-first, width-aware renderer: the first-hour commands, the governance
@@ -269,7 +286,7 @@ month, release-of-month).
   as declared shards, each with the time it measures on the hosted runner; the estate-shape
   self-test answers *not applicable* where the tree carries no `design/` instead of red.
 
-### Fixed
+#### Fixed
 
 - Accepting an invitation now passes the same login policy as every other way of obtaining a
   session. The invited user's first session is minted through the single door that applies the
@@ -348,7 +365,7 @@ month, release-of-month).
   than claiming tamper-proof storage, and state a routine's cadence as a minimum interval rather
   than an ambiguous label.
 
-### Security
+#### Security
 
 - The Backstage connector resolves `adm-zip` 0.6.1
   ([GHSA-7q85-xj36-vmfc](https://github.com/advisories/GHSA-7q85-xj36-vmfc): uncontrolled
@@ -1099,6 +1116,5 @@ shadow mode and final work authority (design only); a general message bus for ar
   [`SECURITY.md`](SECURITY.md).
 
 [Unreleased]: #unreleased
-[26.9.1]: https://github.com/olivaresai/olivares/releases/tag/v26.9.1
 [26.9.0]: https://github.com/olivaresai/olivares/releases/tag/v26.9.0
 [26.8.0]: https://github.com/olivaresai/olivares/releases/tag/v26.8.0

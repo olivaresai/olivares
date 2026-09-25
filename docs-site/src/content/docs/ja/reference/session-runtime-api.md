@@ -10,7 +10,7 @@ description: >-
 ない。
 
 このページは `/v1/m/sessions/runs` 下の Community operate ルートを文書化する。
-ルートは既に [beta OpenAPI](/reference/api-beta/) にある。v26.10 はドライバ契約、
+ルートは既に [beta OpenAPI](/reference/api-beta/) にある。未リリースの v26.10 はドライバ契約、
 ローカル PTY ランナー、旅程 J01–J08 をテストとして追加する。
 
 ## エディション境界

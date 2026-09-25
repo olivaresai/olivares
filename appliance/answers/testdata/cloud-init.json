@@ -1,0 +1,17 @@
+{
+  "schema_version": "appliance-answers/v1",
+  "source": "file",
+  "host": {
+    "owner": "cloud-init",
+    "hostname": "olivares.example.test",
+    "network": { "mode": "dhcp" },
+    "time": { "timezone": "UTC", "servers": ["time.example.test"] },
+    "ssh_authorized_keys": ["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAARIjNEVWZ3iJmqu8zd7v8AESIzRFVmd4iZqrvM3e7/"]
+  },
+  "product": {
+    "storage_profile": "single-node-prod",
+    "public_console_url": "https://olivares.example.test",
+    "update_channel": "stable",
+    "node_role": "control"
+  }
+}

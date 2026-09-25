@@ -38,7 +38,7 @@ etwas noch nicht abdeckt, sagt die Seite das, statt es zu suggerieren.
   mehreren SIEM-Formaten exportiert werden.
 - **Releases sind signiert und offline verifizierbar.** Signatur, SLSA-Provenienz,
   SBOM und OpenVEX lassen sich allesamt [ohne Netzwerkzugang verifizieren](/de/how-to/verify-a-release/),
-  und das Produkt liefert ein [Air-Gap-Bundle](/de/how-to/air-gap-install/). Das neueste getaggte Release, **v26.9.1**, ist mit signierten Archiven, nativen Paketen und Container-Images veröffentlicht; APIs, Schemata und die Modul-Oberfläche können sich vor 1.0 noch ändern.
+  und das Produkt liefert ein [Air-Gap-Bundle](/de/how-to/air-gap-install/). Das neueste getaggte Release, **v26.9.0**, ist mit signierten Archiven, nativen Paketen und Container-Images veröffentlicht; APIs, Schemata und die Modul-Oberfläche können sich vor 1.0 noch ändern.
 
 ## Open Core — was offen ist vs. Enterprise
 

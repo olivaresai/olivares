@@ -10,7 +10,7 @@ draft: false
 ---
 
 :::note[Veröffentlichte Paketnamen]
-Die GitHub-Release v26.9.1 veröffentlicht `.deb`-, `.rpm`- und `.apk`-Artefakte für
+Die GitHub-Release v26.9.0 veröffentlicht `.deb`-, `.rpm`- und `.apk`-Artefakte für
 `amd64` und `arm64`, zusammen mit `checksums.txt`, `checksums.txt.sig` und
 `checksums.txt.pem`. Die Befehle unten verwenden die wörtlichen `amd64`-Namen dieser
 Release; ersetzen Sie `amd64` auf einem 64-Bit-ARM-Host durch `arm64`. Installieren
@@ -88,13 +88,13 @@ nächste Release.
 
 ```bash
 # Debian / Ubuntu
-sudo dpkg -i olivares_26.9.1_linux_amd64.deb
+sudo dpkg -i olivares_26.9.0_linux_amd64.deb
 
 # RHEL / Fedora / SUSE
-sudo rpm -Uvh olivares_26.9.1_linux_amd64.rpm
+sudo rpm -Uvh olivares_26.9.0_linux_amd64.rpm
 
 # Alpine
-sudo apk add --allow-untrusted olivares_26.9.1_linux_amd64.apk
+sudo apk add --allow-untrusted olivares_26.9.0_linux_amd64.apk
 ```
 
 Die Installation **erzeugt den Systembenutzer und die Gruppe `olivares`** (mit

@@ -5,10 +5,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 # Olivares AI — Helm chart
 
 The Kubernetes distribution channel for the engine (SCP-05). The chart source ships
-in this repository, but it is **not published to the public OCI registry** as of the
-v26.9.1 engine release: no independent `chart-v*` tag has exercised the chart workflow.
-REL-87 is the publication act and has not completed. Install from the source tree
-today. Do not present the future OCI coordinate as a working download.
+in this repository; its publication to the public OCI registry is **unverified** as of the
+v26.9.0 engine release. It is not published to the public OCI registry from this repository:
+no independent `chart-v*` tag has exercised the chart workflow, and REL-87, the publication
+act, has not completed. Whether the registry holds the chart is not established, because it
+refuses an anonymous read. Install from the source tree today. Do not present the OCI
+coordinate as a working download.
 
 > A future OCI publish is automated by `../../.github/workflows/release-chart.yml`
 > (lint → package → push → cosign-sign), gated on a `chart-v*` tag. The chart is
@@ -105,7 +107,8 @@ OpenGitOps 1.0 alignment, and digest-pinning guidance live in
 
 ## Verify a published chart before installing
 
-There is no public OCI chart to verify yet. Once a `chart-v*` tag successfully runs
+The chart's OCI publication is unverified (`publication-unverified`): it has never been published
+from this repository. Once a `chart-v*` tag successfully runs
 `release-chart.yml`, **signing policy = cosign-only**: the OCI chart is signed with cosign
 (keyless OIDC, over the OCI manifest, by digest) and carries **no** Helm-native GPG
 `.prov` layer — the tag-triggered `release-chart.yml` runs `helm package` without

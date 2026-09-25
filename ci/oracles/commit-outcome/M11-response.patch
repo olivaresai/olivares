@@ -1,0 +1,14 @@
+diff --git a/modules/sessions/communication_handoff_apply.go b/modules/sessions/communication_handoff_apply.go
+index 4547948..90cb3c5 100644
+--- a/modules/sessions/communication_handoff_apply.go
++++ b/modules/sessions/communication_handoff_apply.go
+@@ -152,9 +152,6 @@ func (m *Module) applyHandoffResponse(
+ 				}
+ 				return normalizeDirectNoticeAuthorityLockError(err)
+ 			}
+-			if err := tx.lockTransaction(ctx, handoffIdempotencyLockKey(normalized.handoffCommandIdentity)); err != nil {
+-				return err
+-			}
+ 			receipt, replay, err := findHandoffReceipt(ctx, tx, normalized.handoffCommandIdentity)
+ 			if err != nil {
+ 				return err

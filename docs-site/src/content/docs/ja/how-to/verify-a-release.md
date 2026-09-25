@@ -26,7 +26,7 @@ control plane はセキュリティ製品なので、リリースに対して最
 | `*.vex.sigstore.json` | 署名済み in-toto 表明としての OpenVEX |
 | `*.intoto.jsonl` | SLSA Build L3 プロベナンス |
 | コンテナイメージ | GHCR と Docker Hub に公開され、digest で検証・固定 |
-| Helm チャートのソース | `deploy/helm/olivares` からインストール。公開 OCI チャートはまだありません |
+| Helm チャートのソース | `deploy/helm/olivares` からインストール。OCI 公開は未検証です（`publication-unverified`：このリポジトリから公開されたことはありません） |
 
 ## ワンコマンドの経路
 
@@ -39,7 +39,7 @@ SBOM、OpenVEX、SLSA の表明を検証します。
 scripts/verify-release.sh
 
 # Pin the SLSA provenance to a specific source tag.
-scripts/verify-release.sh --source-tag v26.9.1
+scripts/verify-release.sh --source-tag v26.9.0
 
 # Key-based: only for files signed with a private key you control.
 # Releases are signed keyless and do not publish a public key.

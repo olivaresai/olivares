@@ -87,7 +87,7 @@ run for a real estate). Run the full proof-of-value in 10 business days — see
 [evaluation-guide.md](./evaluation-guide.md).
 
 Status disclosure: the product is beta, pre-1.0. The latest tagged release,
-`v26.9.1`, is published: evaluations can use the signed release
+`v26.9.0`, is published: evaluations can use the signed release
 artifacts (cosign, SLSA provenance, SBOM, OpenVEX), which verify against the
 published tag, or build from source.
 

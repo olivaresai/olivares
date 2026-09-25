@@ -30,15 +30,11 @@ pour ce guide).
 
 - Un hôte Linux avec systemd et `curl`.
 - **Go 1.26+** pour compiler le binaire (le store est du SQLite pur-Go, donc pas de
-  chaîne d'outils C). Une version étiquetée antérieure a déjà livré des archives et des paquets signés.
-  Le canon de cet arbre est **v26.9.1** ; le témoin des surfaces d’installation
-  enregistre encore les archives GitHub et les paquets natifs comme
-  **not-published** jusqu’au job de release de ce tag
-  (`docs/releases/v26.9.1-install-surfaces.json`). Tant que ces artefacts
-  n’existent pas, compilez depuis un checkout. L’installateur vérifié sur `main`
-  (`scripts/install.sh`) est une surface publiée indépendante du tag.
-  [Vérifier une version](/fr/how-to/verify-a-release/) est la chaîne pour les
-  artefacts une fois qu’ils existent.
+  chaîne d'outils C). La version publiée **v26.9.0** livre des archives signées et des paquets
+  natifs : le témoin des surfaces d’installation les enregistre comme **published**
+  (`docs/releases/v26.9.0-install-surfaces.json`). Ce tutoriel compile depuis un checkout ;
+  l’installateur vérifié sur `main` (`scripts/install.sh`) installe plutôt la version publiée.
+  [Vérifier une version](/fr/how-to/verify-a-release/) est la chaîne pour ces artefacts.
 
 ## 1. Compiler et installer le binaire
 

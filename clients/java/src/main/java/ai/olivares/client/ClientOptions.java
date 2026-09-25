@@ -75,7 +75,13 @@ public final class ClientOptions {
             return this;
         }
 
-        /** Retries for retryable statuses (429 always, 503 for GET). 0 disables. Default 2. */
+        /**
+         * Retries for retryable statuses (429 always, 503 for GET). 0 disables. Default 2.
+         *
+         * <p>{@code commit_outcome_unknown} is never retried, whatever this is set to: that
+         * code means the engine issued a write and never learned whether the database
+         * applied it, so a second attempt can produce a second durable effect.
+         */
         public Builder maxRetries(int maxRetries) {
             this.maxRetries = maxRetries;
             return this;
