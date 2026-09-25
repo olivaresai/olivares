@@ -54,7 +54,14 @@
 # The canonical list, WRITTEN ONCE. Every one of these redirects where git reads or
 # writes; leaving any of them set is what lets a temp-dir command reach the live
 # repository. Read by the gate via `olivares_git_env_vars` so the list and its
-# enforcement cannot drift apart.
+# enforcement cannot drift apart. GIT_REPLACE_REF_BASE is here because it moves which refs
+# git reads as REPLACEMENT objects: under a prefix of the caller's choosing, an object id
+# answers with other bytes while HEAD and `git status` show it unchanged. GIT_CONFIG_PARAMETERS
+# is here because it is config handed to git in the environment (what `git -c` exports to its
+# children), and `core.useReplaceRefs=true` there turns replacements back on over
+# --no-replace-objects. Unsetting them is not enough for a reader that must never honour a
+# replacement: config files can turn them on too, so such a reader also passes
+# `-c core.useReplaceRefs=false`, the one config git reads after all the others.
 olivares_git_env_vars() {
 	cat <<'EOF'
 GIT_DIR
@@ -64,6 +71,7 @@ GIT_INDEX_FILE
 GIT_OBJECT_DIRECTORY
 GIT_ALTERNATE_OBJECT_DIRECTORIES
 GIT_NAMESPACE
+GIT_REPLACE_REF_BASE
 GIT_PREFIX
 GIT_QUARANTINE_PATH
 GIT_CEILING_DIRECTORIES
@@ -71,6 +79,7 @@ GIT_CONFIG
 GIT_CONFIG_GLOBAL
 GIT_CONFIG_SYSTEM
 GIT_CONFIG_COUNT
+GIT_CONFIG_PARAMETERS
 EOF
 }
 
@@ -79,9 +88,9 @@ EOF
 olivares_git_env_isolate() {
 	unset GIT_DIR GIT_COMMON_DIR GIT_WORK_TREE GIT_INDEX_FILE \
 		GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES \
-		GIT_NAMESPACE GIT_PREFIX GIT_QUARANTINE_PATH \
+		GIT_NAMESPACE GIT_REPLACE_REF_BASE GIT_PREFIX GIT_QUARANTINE_PATH \
 		GIT_CEILING_DIRECTORIES \
-		GIT_CONFIG GIT_CONFIG_GLOBAL GIT_CONFIG_SYSTEM GIT_CONFIG_COUNT
+		GIT_CONFIG GIT_CONFIG_GLOBAL GIT_CONFIG_SYSTEM GIT_CONFIG_COUNT GIT_CONFIG_PARAMETERS
 	# GIT_CONFIG_COUNT gates GIT_CONFIG_KEY_<n>/GIT_CONFIG_VALUE_<n>; with the count
 	# gone git ignores the pairs, so they need no enumeration of an unbounded index.
 }

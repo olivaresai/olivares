@@ -15,9 +15,9 @@ wenn Sie sie brauchen. Jeder Pfad behält dieselben sicheren Standardwerte: kein
 ein einmaliges Setup-Token und TLS standardmäßig aktiv. Der Host-Port wird auf allen
 Schnittstellen veröffentlicht, denn dies ist ein Server — beschränken Sie ihn bewusst, wie unten.
 
-:::note[Beta — 26.9.1 ist noch nicht veröffentlicht]
-Olivares AI ist **Beta**. Die Image-Koordinaten unten lösen sich erst **nach Veröffentlichung
-von Release `26.9.1`** auf; bis dahin haben die Registries nichts zum Pullen.
+:::note[Beta — Images für 26.9.0 veröffentlicht]
+Olivares AI ist **Beta**. Die Image-Koordinaten unten lösen sich auf: Release `26.9.0` hat sie auf
+Docker Hub und `ghcr.io` veröffentlicht (Install-Surface-Zeuge `docs/releases/v26.9.0-install-surfaces.json`).
 Behandeln Sie dies als die Deployment-Form, die Sie verwenden werden, nicht als produktionsreife Garantie.
 :::
 
@@ -31,7 +31,7 @@ den Kubernetes/Helm-Pfad unten.
 Der primäre Container-Pull ist **Docker Hub**:
 
 ```bash
-docker pull docker.io/olivaresai/olivares:26.9.1
+docker pull docker.io/olivaresai/olivares:26.9.0
 ```
 
 Derselbe Inhalt wird auch auf `ghcr.io/olivaresai/olivares` veröffentlicht — identisch per
@@ -39,7 +39,7 @@ Digest, verwendet als Backup und als Build-Registry. Docker Hub begrenzt die Rat
 Pulls; ghcr.io begrenzt anonyme Pulls öffentlicher Images nicht — `docker login` oder die
 ghcr.io-Koordinate ist daher der Ausweg, wenn ein CI-Knoten oder eine große Flotte an die
 Grenze stößt. Tags tragen **kein führendes `v`**:
-`:26.9.1` pinnt ein Release, `:latest` floatet, und `:26.9.1-fips` / `:26.9.1-stig` sind
+`:26.9.0` pinnt ein Release, `:latest` floatet, und `:26.9.0-fips` / `:26.9.0-stig` sind
 die gehärteten Varianten. Die Basis- und `:latest`-Tags sind multi-arch
 (`linux/amd64`, `linux/arm64`); `fips`/`stig` sind ausschließlich `amd64`.
 
@@ -50,7 +50,7 @@ identisch gegen beide Registries — die Signaturen und Attestierungen werden pe
 
 ```bash
 IMAGE=docker.io/olivaresai/olivares          # fallback: ghcr.io/olivaresai/olivares (same digest)
-DIGEST="$(crane digest "$IMAGE:26.9.1")"
+DIGEST="$(crane digest "$IMAGE:26.9.0")"
 REF="$IMAGE@$DIGEST"
 
 cosign verify "$REF" \
@@ -85,7 +85,7 @@ docker run -d --name olivares \
   -v olivares-data:/var/lib/olivares \
   -p 8443:8443 \
   -p 8444:8444 \
-  docker.io/olivaresai/olivares:26.9.1 \
+  docker.io/olivaresai/olivares:26.9.0 \
   serve \
     --listen=0.0.0.0:8443 \
     --grpc-listen=0.0.0.0:8444 \
@@ -281,7 +281,7 @@ den neuen gepinnten Tag pullen, den Container neu erstellen.
 ```bash
 # 1. Back up first (see §4).
 # 2. Pull the new release and re-verify it (see §1):
-docker pull docker.io/olivaresai/olivares:26.9.2
+docker pull docker.io/olivaresai/olivares:<new-version>
 
 # docker run:
 docker stop olivares && docker rm olivares
@@ -297,7 +297,7 @@ Image erneut, bevor Sie es neu erstellen.
 
 ## 8. Für die Produktion per Digest pinnen
 
-Veränderbare Tags (`:26.9.1`, `:latest`) sind für die Evaluierung. In Produktion pinnen Sie den
+Veränderbare Tags (`:26.9.0`, `:latest`) sind für die Evaluierung. In Produktion pinnen Sie den
 **Digest**, den Sie verifiziert haben — ein Digest ist unveränderlich und ist genau das, was Sie abgesegnet haben:
 
 ```bash
@@ -311,7 +311,7 @@ OLIVARES_IMAGE=docker.io/olivaresai/olivares@sha256:<digest>
 ```
 
 Für Scale-out und Multi-Node verwenden Sie das Chart aus `deploy/helm/olivares` und
-pinnen das veröffentlichte Image per Digest. Das Chart ist noch kein öffentliches OCI-Artefakt.
+pinnen das veröffentlichte Image per Digest. Die OCI-Veröffentlichung des Charts ist unbestätigt (`publication-unverified`): Aus diesem Repository wurde es nie veröffentlicht, und die Registry-Seite ist nicht beobachtbar.
 Siehe [Die Control Plane selbst hosten](/de/how-to/self-hosting/) für den Quellbefehl und
 [In einer Air-Gapped-Umgebung installieren](/de/how-to/air-gap-install/) für vollständig
 getrennte Standorte.

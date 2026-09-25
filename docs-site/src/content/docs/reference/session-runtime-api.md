@@ -10,7 +10,7 @@ Codex or Grok Build. Sessions and terminals are one module of this product, not
 the product.
 
 This page documents the Community operate routes under `/v1/m/sessions/runs`.
-They already exist in the [beta OpenAPI document](/reference/api-beta/). v26.10
+They already exist in the [beta OpenAPI document](/reference/api-beta/). v26.10 is pending. It
 adds the driver contract, the transport each launch form needs, and journeys
 J01–J08 as tests.
 

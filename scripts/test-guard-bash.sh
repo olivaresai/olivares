@@ -152,7 +152,7 @@ if [ "${GUARD_BASH_SKIP_PUBLIC_FIXTURE:-}" != "1" ]; then
 	_pub_txt="$(
 		cd "$_pub" && env GUARD_BASH_SKIP_PUBLIC_FIXTURE=1 bash scripts/test-guard-bash.sh
 	)" || _pub_out=$?
-	if [ "$_pub_out" -eq 0 ] && printf '%s' "$_pub_txt" | grep -qF 'SCOPED'; then
+	if [ "$_pub_out" -eq 0 ] && grep -qF 'SCOPED' <<<"$_pub_txt"; then
 		printf 'ok    %-58s rc=0 SCOPED\n' "public export without the hook is SCOPED, not exit 2"
 		pass=$((pass + 1))
 	else

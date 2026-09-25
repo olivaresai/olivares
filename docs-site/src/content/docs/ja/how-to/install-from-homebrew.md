@@ -2,7 +2,7 @@
 title: Homebrew でインストール
 description: >-
   Olivares AI の macOS Homebrew cask 座標、cask が Gatekeeper に対して行うこと、および
-  v26.9.1 の tap bump の公開状態。
+  v26.9.0 の tap bump の公開状態。
 draft: false
 ---
 
@@ -12,14 +12,13 @@ Linux パッケージ経路
 （[パッケージからインストール](/how-to/install-from-packages/)）でも Docker
 （[Docker でデプロイ](/how-to/docker-deployment/)）でもありません。
 
-:::note[ベータ — v26.9.1 の cask はまだ公開されていない]
-インストール面の証人は Homebrew を **not-published** と記録しています
-（`docs/releases/v26.9.1-install-surfaces.json`、測定
-2026-09-15T20:29:52Z）。プロデューサーは `.goreleaser.yaml`
-`homebrew_casks:` です。tap の cask はリリースジョブが上げますが、そのタグは
-走っていません。下のコマンドは `INSTALL.md` が名付ける座標です
-（`brew install olivaresai/tap/olivares`）。証人が変わるまで、生きた tap
-ではなくインストール形状として扱ってください。
+:::note[ベータ — v26.9.0 の cask は公開済み]
+インストール面の証人は Homebrew を **published** と記録しています
+（`docs/releases/v26.9.0-install-surfaces.json`、測定
+2026-09-23T20:28:11Z）。tap の `Casks/olivares.rb` はバージョン 26.9.0 と、SHA-256 が
+リリースのものと一致する 4 つのプラットフォーム向けアーカイブを示しています。プロデューサーは
+`.goreleaser.yaml` `homebrew_casks:` で、tap の cask はリリースジョブが上げます。下のコマンドは
+`INSTALL.md` が名付ける座標です（`brew install olivaresai/tap/olivares`）。
 :::
 
 ## 1. cask をインストールする

@@ -399,7 +399,7 @@ expected_id() {
     return
   fi
   case "$1" in
-    core/*|modules/*|web/*)            echo "AGPL-3.0-only" ;;
+    core/*|modules/*|web/*|appliance/*) echo "AGPL-3.0-only" ;;
     cmd/*)                             echo "AGPL-3.0-only" ;;
     docs-site/*|docs/*)                echo "AGPL-3.0-only" ;;
     terraform-provider-olivares/*)     echo "AGPL-3.0-only" ;;

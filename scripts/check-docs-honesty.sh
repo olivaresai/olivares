@@ -9,6 +9,12 @@
 # (C6) the gitops README asserting the Helm chart "is published" while the
 # release is still DRAFT (no chart-v* tag cut). Pure content lint — no network.
 #
+# Updated 2026-09-24: the chart's publication is UNVERIFIED, not absent. This repository never ran
+# its chart publisher (no chart-v* tag, no publisher run, no chart release asset), and the
+# registry refuses the reads that could settle its side. So the Helm surfaces must say
+# "unverified", may state an absence only within that demonstrated scope ("from this
+# repository"), and the READMEs name the witness result `publication-unverified`.
+#
 # Updated 2026-06-08: the Actuate taxonomy is now three-way — `v1` (live in
 # the default binary), `on-demand` (backend built and wired, deny-closed/degraded
 # until an operator provisions it), and `seam` (no backend at all). The earlier
@@ -92,18 +98,51 @@ if has -q 'is published as an \*\*OCI' "$GITOPS"; then
 fi
 has -q 'will be published' "$GITOPS" \
   || fail "gitops/README.md must state the chart 'will be published' once release-chart.yml runs (C6)"
-has -q 'registry path is \*\*empty\*\*' "$GITOPS" \
-  || fail "gitops/README.md must note the registry path is empty until the chart-v* tag is cut (C6)"
+has -q 'Publication is \*\*unverified\*\*' "$GITOPS" \
+  || fail "gitops/README.md must state that the chart's publication is **unverified** until a chart-v* tag publishes it (C6)"
+if has -Eq 'registry path is \*\*empty\*\*|not published( to [^.]*)? yet' "$GITOPS"; then
+  fail "gitops/README.md states an absence nobody observed; the chart's publication is unverified (C6)"
+fi
 # Body intact: the engine entry-points must survive the rewrite.
 has -q 'kustomize build --enable-helm' "$GITOPS" \
   || fail "gitops/README.md lost the Kustomize entry point — the C6 rewrite must keep Argo/Flux/Kustomize guidance (C6)"
+
+# ---- C6b: the READMEs name the witness's Helm result (2026-09-24) --------------
+# In README.md and its six translations the chart's OCI registry state is spoken of on one line.
+# That line names the witness result, `publication-unverified`: in any language "not published
+# yet" is an absence nobody observed. Every line that mentions OCI must carry the token.
+READMES_SEEN=0
+HITS_OCI="$(mktemp)"
+for readme in "$ROOT/README.md" "$ROOT"/README.??.md; do
+  [ -f "$readme" ] || fail "missing $readme"
+  READMES_SEEN=$((READMES_SEEN + 1))
+  has -q '`publication-unverified`' "$readme" \
+    || fail "${readme#$ROOT/} must name the witness result \`publication-unverified\` on its Kubernetes line (C6b)"
+  : > "$HITS_OCI"
+  has -n 'OCI' "$readme" > "$HITS_OCI" || true
+  if has -v 'publication-unverified' "$HITS_OCI" > /dev/null; then
+    fail "${readme#$ROOT/}: a line about the chart's OCI registry state must name the witness result \`publication-unverified\` (C6b):
+$(grep -v 'publication-unverified' "$HITS_OCI")"
+  fi
+done
+rm -f "$HITS_OCI"
+[ "$READMES_SEEN" -eq 7 ] || fail "expected README.md and six translations, found $READMES_SEEN (C6b)"
 
 # ---- DIST-24-07: source chart is not a published OCI channel ----------------
 for path in "$HELM_README" "$HELM_CHART"; do
   [ -f "$path" ] || fail "missing $path"
 done
-has -q 'not published to the public OCI registry' "$HELM_README" \
-  || fail "deploy/helm/README.md must label the OCI chart not published until REL-87"
+has -q 'its publication to the public OCI registry is \*\*unverified\*\*' "$HELM_README" \
+  || fail "deploy/helm/README.md must state its publication to the public OCI registry is **unverified** until REL-87 publishes it"
+# An absence only within its demonstrated scope: this repository published nothing. Through a
+# file, not a pipe: a pipe would hide a failing first grep behind the second one's answer.
+HITS_ABSENCE="$(mktemp)"
+has 'not published to the public OCI registry' "$HELM_README" > "$HITS_ABSENCE" || true
+if has -qv 'from this repository' "$HITS_ABSENCE"; then
+  rm -f "$HITS_ABSENCE"
+  fail "deploy/helm/README.md states an absence beyond its demonstrated scope; only this repository's publication is observed, and the registry side is unverified"
+fi
+rm -f "$HITS_ABSENCE"
 has -q 'REL-87' "$HELM_README" \
   || fail "deploy/helm/README.md lost the named publication act REL-87"
 if has -Eq 'chart (is|has been) published( and consumed)? as an OCI artifact' "$HELM_CHART"; then
@@ -111,6 +150,15 @@ if has -Eq 'chart (is|has been) published( and consumed)? as an OCI artifact' "$
 fi
 has -q 'REL-87 has not published it yet' "$HELM_CHART" \
   || fail "Chart.yaml must distinguish the planned OCI producer from live publication"
+# Its full-line comments too (2026-09-24): they are evidence about the chart and must not call it
+# published. Its YAML values (coordinates, annotations) are product data and are not read here.
+CHART_COMMENTS="$(mktemp)"
+has -E '^[[:space:]]*#' "$HELM_CHART" > "$CHART_COMMENTS" || true
+if has -Eiq 'chart( itself)? (is|has been)( still)? published' "$CHART_COMMENTS"; then
+  rm -f "$CHART_COMMENTS"
+  fail "Chart.yaml comments call the chart published; its OCI publication is unverified (DIST-24-07)"
+fi
+rm -f "$CHART_COMMENTS"
 
 # ---- supply-chain wording honesty ------------------------------------
 LIVE_FILES="$(mktemp)"
@@ -240,5 +288,104 @@ if [ "$floor" -lt 3 ]; then
   no una aprobacion: prometerlo como control es prometer algo que no existe."
   fi
 fi
+
+# ---- C6c: no remote chart COMMAND on a published doc (2026-09-24) -----------
+# While the chart's publication is unverified, a remote `helm install|upgrade|pull|show|template
+# … oci://ghcr.io/olivaresai/charts` command is a claim that the chart can be pulled, wherever a
+# reader copies it from: the root READMEs, INSTALL.md, the chart README, the gitops README and
+# every doc under docs/ that the export publishes. The command shape is matched, with a command
+# wrapped over `\` continuations joined first; the coordinate alone is not a claim (INSTALL.md
+# names it to say it is unverified). Limits, stated: a CRLF continuation is not joined; a `#` or
+# `|` between the verb and the coordinate ends the match; a command assembled from variables is
+# not seen; under docs/ only md, mdx and txt are read. A symlinked entry is a document too: the
+# curation decides on its own path first, and it is read only when it resolves to a regular file
+# inside the tree that the export also publishes. C6c does not read the witness, so a published
+# chart would need this rule changed with it.
+#
+# export-closure: absent-by-design scripts/export-public.sh — DATA, read and never run: its
+# *_BLOCK and DOCS_KEEP lists say which docs the export drops, by the rule the export applies.
+# In a public export it is absent and every doc present counts as published (over-reports, never
+# under-reports). A curation this reader cannot follow is UNVERIFIED, never "all published".
+REMOTE_CMD_RX='helm[ 	]+(install|upgrade|pull|show|template)[^|#]*oci://ghcr[.]io/olivaresai/charts'
+EXPORTER="$ROOT/scripts/export-public.sh"
+C6C="$(mktemp -d)"
+trap 'rm -rf "$LIVE_FILES" "$SLSA_HITS" "$FIPS_RAW_HITS" "$FIPS_HITS" "$C6C"' EXIT HUP INT TERM
+c6c_unverified() { echo "docs-honesty: $1; the remote-command claims are UNVERIFIED." >&2; exit 2; }
+: > "$C6C/curation"
+if [ -e "$EXPORTER" ] || [ -L "$EXPORTER" ]; then
+  [ -r "$EXPORTER" ] || c6c_unverified "cannot read $EXPORTER (which docs the export publishes)"
+  if has -Eq '^[[:space:]]*[A-Z_]+(_BLOCK|_KEEP)\+=' "$EXPORTER"; then
+    c6c_unverified "$EXPORTER: a curation list is appended to"
+  fi
+  # The grammar is check-emitted-urls.sh's publication_rule(), no wider: each list is defined
+  # once, at the start of a line, as `NAME=()` or as `NAME=(` whose body closes on a line that
+  # starts with `)`. Inline, indented, repeated, appended or open lists are UNVERIFIED.
+  awk -v names='TOP_BLOCK DOCS_BLOCK SCRIPTS_BLOCK GITHUB_BLOCK COMMERCIAL_BLOCK MISC_BLOCK DOCS_KEEP' '
+    BEGIN { n = split(names, l, " "); for (i = 1; i <= n; i++) want[l[i]] = 1 }
+    {
+      line = $0; sub(/^[ \t]+/, "", line)
+      if (match(line, /^[A-Z_]+[+]?=/)) {
+        name = substr(line, 1, RLENGTH); plus = (name ~ /[+]=$/); sub(/[+]?=$/, "", name)
+        if (name in want) {
+          if (plus || k != "") exit 3
+          seen[name]++
+          if ($0 == name "=(") { k = (name == "DOCS_KEEP") ? "K" : "B"; next }
+          if (index($0, name "=()") == 1) next
+          exit 3
+        }
+      }
+    }
+    k != "" && /^\)/ { k = ""; next }
+    k != "" { sub(/#.*/, ""); for (i = 1; i <= NF; i++) print k, $i }
+    END { if (k != "") exit 3; for (x in want) if (seen[x] != 1) exit 3 }
+  ' "$EXPORTER" > "$C6C/curation" \
+    || c6c_unverified "$EXPORTER: a curation list is written in a form this reader does not follow (inline, indented, defined twice, appended to or left open)"
+  if has -Ev '^[BK] [A-Za-z0-9._/@+*-]+$' "$C6C/curation" > /dev/null; then
+    c6c_unverified "$EXPORTER: a curation entry this reader cannot match as the shell does"
+  fi
+  has -q '^B docs' "$C6C/curation" || c6c_unverified "$EXPORTER: no curation entry reaches docs/"
+fi
+c6c_published() { # c6c_published <path from ROOT>: 0 when the export publishes it
+  if has -qxF "K $1" "$C6C/curation"; then return 0; fi
+  while read -r kind entry; do
+    [ "$kind" = B ] || continue
+    # The entry IS a glob, matched as the export matches it.
+    case "$1" in $entry | $entry/*) return 1 ;; esac
+  done < "$C6C/curation"
+  return 0
+}
+C6C_ROOT="$(readlink -f -- "$ROOT")" || c6c_unverified "cannot resolve $ROOT"
+{
+  for f in "$ROOT/README.md" "$ROOT"/README.??.md "$ROOT/INSTALL.md" \
+      "$ROOT/deploy/helm/README.md" "$ROOT/deploy/gitops/README.md"; do
+    if [ -e "$f" ] || [ -L "$f" ]; then printf '%s\n' "$f"; fi
+  done
+  find "$ROOT/docs" \( -type f \( -name '*.md' -o -name '*.mdx' -o -name '*.txt' \) -o -type l \) -print
+} > "$C6C/docs" || c6c_unverified "cannot enumerate the READMEs, INSTALL.md, the chart and gitops READMEs and docs/"
+: > "$C6C/hits"
+while IFS= read -r f; do
+  rel="${f#"$ROOT"/}"
+  # The curation decides first: a curated-out path is never read, whatever it points to.
+  c6c_published "$rel" || continue
+  if [ -L "$f" ]; then
+    # A linked directory is not walked (no loop, no escape), so what it holds is unread.
+    [ ! -d "$f" ] || c6c_unverified "$rel is a linked directory; the census does not follow it"
+    case "$f" in *.md | *.mdx | *.txt) ;; *) continue ;; esac
+    [ -e "$f" ] || c6c_unverified "$rel is a dangling link; a document the census cannot read"
+    target="$(readlink -f -- "$f")" || c6c_unverified "cannot resolve the link $rel"
+    case "$target" in "$C6C_ROOT"/*) ;; *) c6c_unverified "$rel resolves outside the tree; $target is not read" ;; esac
+    [ -f "$target" ] || c6c_unverified "$rel does not resolve to a regular document"
+    c6c_published "${target#"$C6C_ROOT"/}" \
+      || c6c_unverified "$rel resolves to curated-out content; it is not read, and in the export the link dangles"
+  fi
+  awk -v rel="$rel" -v rx="$REMOTE_CMD_RX" '
+    { if (buf == "") start = FNR }
+    /\\$/ { buf = buf substr($0, 1, length($0) - 1) " "; next }
+    { buf = buf $0; if (buf ~ rx) print rel ":" start ": " buf; buf = "" }
+    END { if (buf != "" && buf ~ rx) print rel ":" start ": " buf }
+  ' "$f" >> "$C6C/hits" || c6c_unverified "could not read $rel"
+done < "$C6C/docs"
+[ ! -s "$C6C/hits" ] || fail "a published doc offers a remote chart command while the chart's publication is unverified (C6c):
+$(cat "$C6C/hits")"
 
 echo "docs-honesty: OK across $scanned live files (C3 modules catalog + C6 gitops README + supply-chain wording)"

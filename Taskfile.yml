@@ -220,6 +220,16 @@ tasks:
       - task build:commerce
       - task build:commerce-core
 
+  appliance:build:answers:
+    desc: Build the offline appliance answers validator and planner.
+    cmds:
+      - go build -o bin/appliance-answers ./appliance/cmd/appliance-answers
+
+  appliance:test:answers:
+    desc: Test the appliance answers boundary and its read-only executable.
+    cmds:
+      - go test -race -count=1 -timeout 120s ./appliance/...
+
   build:commerce:
     desc: >-
       Compile the commercial canon lint (its own module, outside go.work).
@@ -1231,11 +1241,11 @@ tasks:
 
   lint:release-version:
     desc: >-
-      One first-release version, stated everywhere or nowhere: every product-version-shaped
+      One release version, stated everywhere or nowhere: every product-version-shaped
       token (CalVer vYY.M.PATCH) on a release-bearing surface — README ×7, CHANGELOG,
       docs-site install/verify pages, trust and launch material — must equal the canon in
-      RELEASE-VERSION or a derived form (-fips/-stig image variants, the next-patch upgrade
-      example). Since 2026-08-14 it also walks the SHIPPED COORDINATES that documentation
+      RELEASE-VERSION (the published install baseline) or its -fips/-stig image variants.
+      Since 2026-08-14 it also walks the SHIPPED COORDINATES that documentation
       cannot show: deploy/ (the chart appVersion that a default helm install resolves, and
       the generated kubectl manifest), packaging/ (the Docker Hub page uploaded verbatim at
       release) and operator/ — the three roots that were declaring 26.7.0 while this gate
@@ -1247,9 +1257,9 @@ tasks:
       are NOT swept to the canon; they are checked against the invariant that a floor may
       never exceed it, and the allowance is scoped to the TOKEN, not the line — an advisory
       writes `introduced` and `fixed` together and only the first of them is a bound.
-      An empty or shrunken walk is UNVERIFIED + exit 2, never green. While the canon is
-      UNDECIDED (the choice is the owner's) this prints the divergence census and exits 0 —
-      the lint:commerce report-mode precedent; the moment a version is written it enforces.
+      An empty or shrunken walk is UNVERIFIED + exit 2, never green. There is no report mode:
+      a canon that is UNDECIDED, or not vYY.M.PATCH, is refused (UNVERIFIED, exit 2) before
+      any surface is read, and every divergent surface is red with its file and line.
       Red-fixture battery runs first, and it classifies the tree with scripts/hub-leg.sh
       --classify: in the full source tree it proves the census and the docs curation are READ from the
       export script; in a stamped public export, where that script is absent by design, it
@@ -3460,14 +3470,14 @@ tasks:
       check-c05-dodo-sku.sh and #948/#933/#921. Does not apply
       OnboardFirstOwner. Does not restack overlay #75/#107.
     cmds:
-      - bash scripts/check-c05-dodo-sku-prep.sh
+      - bash scripts/hub-leg.sh lint:c05-dodo-sku-prep scripts/check-c05-dodo-sku-prep.sh
 
   lint:c05-dodo-sku-prep:selftest:
     desc: >-
       C05 Dodo SKU — executable empty-fallback mutant, semantic
       rename no-fire, exact Go witness LOOK 2, and HOLD assertions.
     cmds:
-      - bash scripts/test-c05-dodo-sku-prep.sh
+      - bash scripts/hub-leg.sh lint:c05-dodo-sku-prep:selftest scripts/test-c05-dodo-sku-prep.sh
   lint:c05-webhook-sku-prep:
     desc: >-
       C05 webhook Cloud SKU remasured. Unique leftover unique vs
@@ -4400,14 +4410,14 @@ tasks:
       unique vs #940. Does not copy catalog.ts. Does not restack
       #1320-#1417.
     cmds:
-      - bash scripts/check-cfg-12-forward-off.sh
+      - bash scripts/hub-leg.sh lint:cfg-12-forward-off scripts/check-cfg-12-forward-off.sh
 
   lint:cfg-12-forward-off:selftest:
     desc: >-
       CFG-12 — battery (flip a block to true, drop a Cloud pdt_,
       production sale ON, missing wrangler, HOLD line).
     cmds:
-      - bash scripts/test-cfg-12-forward-off.sh
+      - bash scripts/hub-leg.sh lint:cfg-12-forward-off:selftest scripts/test-cfg-12-forward-off.sh
   lint:pr-ci-regime:
     desc: >-
       The public repository's PULL-REQUEST regime is coherent with the branch protection that
@@ -4415,19 +4425,21 @@ tasks:
       mainline-ci contexts, and mainline-ci has NO pull_request trigger — so every required check
       on a public PR would have waited forever for a job nothing starts, and the first external
       contribution would have been unmergeable. Both files were plausible alone; only their
-      PAIRING was broken, which is why it needs a gate. Pins three things: every pr-ci.yml job
+      PAIRING was broken, which is why it needs a gate. Pins four things: every pr-ci.yml job
       carries the repository guard (a job that lost it would run on the private hub, the
       automatic-CI regime the owner closed on 2026-08-02); the guard names the same repository the
       export targets (a rename turns the regime into skipped jobs, and skipped jobs SATISFY
-      required checks — green with nothing run); and the required contexts are exactly pr-ci.yml's
-      job ids, in both directions. Three answers: CLEAN, FAIL, COULD NOT LOOK.
+      required checks — green with nothing run); the required contexts are exactly pr-ci.yml's
+      job ids, in both directions; and mainline-ci.yml's classify job carries exactly the same guard,
+      its job conditions evaluated for three pushes to main rather than matched as text. Three
+      answers: CLEAN, FAIL, COULD NOT LOOK.
     cmds:
       - bash scripts/hub-leg.sh lint:pr-ci-regime scripts/check-pr-ci-regime.sh
 
   lint:pr-ci-regime:selftest:
     desc: >-
       PR-CI regime — battery: an unguarded job, a guard naming another repository, a required
-      context with no job, a job that is not required, each of the three files absent, an
+      context with no job, a job that is not required, each of the five files absent, an
       unreadable contexts line, and the two non-firing directions (clean stays clean; the same
       set in another order does not fire).
     cmds:
@@ -4670,24 +4682,24 @@ tasks:
       CFG-03 — production worker switches stay off. This lote inventories
       them; it does not flip them.
     cmds:
-      - bash scripts/check-cfg03-prod-switches.sh
+      - bash scripts/hub-leg.sh lint:cfg-03-prod-switches scripts/check-cfg03-prod-switches.sh
 
   lint:cfg-03-prod-switches:selftest:
     desc: CFG-03 — mutants flip a production switch.
     cmds:
-      - bash scripts/test-cfg03-prod-switches.sh
+      - bash scripts/hub-leg.sh lint:cfg-03-prod-switches:selftest scripts/test-cfg03-prod-switches.sh
 
   lint:c05-both-pdt-remeasure:
     desc: >-
       C05 — both Cloud pdt_ stay in cloud_products, out of OTA
       set_codes; inviteFirstOwner stays. Production fulfilment off.
     cmds:
-      - bash scripts/check-c05-both-pdt-remeasure.sh
+      - bash scripts/hub-leg.sh lint:c05-both-pdt-remeasure scripts/check-c05-both-pdt-remeasure.sh
 
   lint:c05-both-pdt-remeasure:selftest:
     desc: C05 — mutants put Cloud SKUs in set_codes or drop invite.
     cmds:
-      - bash scripts/test-c05-both-pdt-remeasure.sh
+      - bash scripts/hub-leg.sh lint:c05-both-pdt-remeasure:selftest scripts/test-c05-both-pdt-remeasure.sh
 
   lint:c04-aws-estate:
     desc: >-
@@ -5198,12 +5210,12 @@ tasks:
       CFG-01 — production Cloudflare stays unprovisioned. Section 9
       not met. Does not wrangler deploy production.
     cmds:
-      - bash scripts/check-cfg-01-production-hold.sh
+      - bash scripts/hub-leg.sh lint:cfg-01-production-hold scripts/check-cfg-01-production-hold.sh
 
   lint:cfg-01-production-hold:selftest:
     desc: CFG-01 — mutants flip production provisioned or fulfillment.
     cmds:
-      - bash scripts/test-cfg-01-production-hold.sh
+      - bash scripts/hub-leg.sh lint:cfg-01-production-hold:selftest scripts/test-cfg-01-production-hold.sh
   lint:c0022-exit1-callers:
     desc: >-
       0022 §5 Exit 1 — published 0016/0018 win. No 0022_*.sql. Callers
@@ -5231,12 +5243,12 @@ tasks:
       CFG-03 remainder — panel secrets stay off vars; C-16 live list
       unrun; production fulfillment stays false. Does not wrangler.
     cmds:
-      - bash scripts/check-cfg03-secret-deploy.sh
+      - bash scripts/hub-leg.sh lint:cfg-03-secret-deploy scripts/check-cfg03-secret-deploy.sh
 
   lint:cfg-03-secret-deploy:selftest:
     desc: CFG-03 remainder — mutants put a secret in vars or claim C-16.
     cmds:
-      - bash scripts/test-cfg03-secret-deploy.sh
+      - bash scripts/hub-leg.sh lint:cfg-03-secret-deploy:selftest scripts/test-cfg03-secret-deploy.sh
 
   lint:eco03-restoration-absent:
     desc: >-
@@ -5329,12 +5341,12 @@ tasks:
       not AAL3 onboard. Unique vs both-pdt-applied #1379. Does
       not restack #864/#948. Production fulfilment off.
     cmds:
-      - bash scripts/check-c05-first-owner.sh
+      - bash scripts/hub-leg.sh lint:c05-first-owner scripts/check-c05-first-owner.sh
 
   lint:c05-first-owner:selftest:
     desc: C05 — mutants call /v1/onboard or drop a Cloud SKU.
     cmds:
-      - bash scripts/test-c05-first-owner.sh
+      - bash scripts/hub-leg.sh lint:c05-first-owner:selftest scripts/test-c05-first-owner.sh
 
   lint:c05-both-pdt-applied:
     desc: >-
@@ -6207,6 +6219,7 @@ tasks:
     desc: C03-11 — mutants claim binaries replaced or turn production on.
     cmds:
       - bash scripts/test-c03-11-fase-r.sh
+      - bash scripts/hub-leg.sh lint:c03-11-fase-r:selftest scripts/test-c03-11-fase-r-staged.sh
 
   lint:c03-06-needs-decision:
     desc: >-
@@ -7709,7 +7722,7 @@ tasks:
   lint:public-prose:selftest:
     desc: >-
       MUTATION BATTERY for scripts/check-public-prose.sh, the leg that refuses to publish prose
-      describing the private development process instead of the product. 35 cases, BOTH
+      describing the private development process instead of the product. 96 cases, BOTH
       DIRECTIONS, and the no-fire half is the load-bearing one: three of the words this gate
       judges — "lane", "integrator" and the model names — are ALSO product vocabulary here (the
       QoS delivery lanes of the event bus, the API audience the SDK docs address, the catalogue
@@ -7717,12 +7730,14 @@ tasks:
       deleting product. Every rule therefore carries a no-fire case built from a line that
       really ships: "Docker Hub's anonymous-pull rate limit", `hub-only`, `lane_path_for`,
       "an integrator", a connector line listing the models it supports, and the maintainer's
-      full name on an ADR author line.
+      full name on an ADR author line. Since 2026-09-18 it also pins the second ratchet,
+      lane-code-in-code: a stream code such as `(L1)` in a Go comment fires and names file:line,
+      while `L3/L4`, `(R5)` and `B1's` — levels, review rounds and product codes — do not.
       It also pins the two ways the ratchet could fail OPEN — a missing baseline and a baseline
       that is not one decimal integer are COULD NOT LOOK, never a green — and asserts that every
       rule pattern COMPILES under the grep on this box, which is not decoration: `grep` here
       resolves to ugrep in one shell and GNU grep in another, and they disagree about a negated
-      class whose last character is `-`. Throwaway trees, no network, ~2 s.
+      class whose last character is `-`. Throwaway trees and git snapshots, no network, ~10 s.
       The gate itself is not run from here: its subject is the EXPORT, and it runs as leg 8 of
       the export leak gate, so `lint:export` and `export:check` are where a real tree is judged.
     cmds:
@@ -7732,14 +7747,18 @@ tasks:
 
   lint:public-prose:
     desc: >-
-      Run the public-prose gate over A CURATED EXPORT: `task lint:public-prose -- <dir>`. It
+      Run the public-prose gate over A CURATED EXPORT: `task lint:public-prose -- <dir>`. The
+      task passes this checkout as `--source-root`, the snapshot the export is made from: the
+      one baseline the gate reads there is private and is never in `<dir>`. It
       answers honestly about the tree it is given, so pointing it at a full source tree would be
       measuring the wrong object — that tree legitimately carries the internal notes the export
       removes — and the script REFUSES there (exit 2, `--anyway` overrides) rather than printing
       a number that looks like debt. The enforcement point is `lint:export`, which runs this same
       script as leg 8 over the tree it is about to publish, and `export:check`.
     cmds:
-      - bash scripts/hub-leg.sh lint:public-prose scripts/check-public-prose.sh {{.CLI_ARGS}}
+      # `.` is this checkout: hub-leg.sh enters its own root before it runs the script, and the
+      # gate accepts no source but the snapshot it is loaded from.
+      - bash scripts/hub-leg.sh lint:public-prose scripts/check-public-prose.sh {{.CLI_ARGS}} --source-root .
 
   lint:export-closure:
     desc: >-
@@ -8456,8 +8475,8 @@ tasks:
       - bash scripts/check-tier-card.sh
       - bash scripts/check-d1-slot-census.sh
       - bash scripts/check-c05-16-serial-env.sh
-      - bash scripts/check-cfg03-prod-switches.sh
-      - bash scripts/check-c05-both-pdt-remeasure.sh
+      - bash scripts/hub-leg.sh lint:addon-sets scripts/check-cfg03-prod-switches.sh
+      - bash scripts/hub-leg.sh lint:addon-sets scripts/check-c05-both-pdt-remeasure.sh
       - bash scripts/check-c03-05-roster-accumulate.sh
       - bash scripts/check-c02-r2-key-from-token.sh
       - bash scripts/hub-leg.sh lint:addon-sets scripts/check-c02-70-no-land-snapshot.sh
@@ -8492,13 +8511,13 @@ tasks:
       - bash scripts/check-cfg-10-sandbox-redeploy.sh
       - bash scripts/check-alc-01-s1-named-nil.sh
       - bash scripts/check-cfg-01-dns-resolves.sh
-      - bash scripts/check-cfg-01-production-hold.sh
+      - bash scripts/hub-leg.sh lint:addon-sets scripts/check-cfg-01-production-hold.sh
       - bash scripts/check-eco-16-exit-restore.sh
       - bash scripts/check-eco-09-k-bound.sh
       - bash scripts/check-eco-13-evidence-absent.sh
       - bash scripts/check-0022-exit1-callers.sh
       - bash scripts/check-c03-33-refund-first.sh
-      - bash scripts/check-cfg03-secret-deploy.sh
+      - bash scripts/hub-leg.sh lint:addon-sets scripts/check-cfg03-secret-deploy.sh
       - bash scripts/check-c02-09-cost.sh
       - bash scripts/check-c02-08-blobs-ids.sh
       - bash scripts/check-eco12-counsel-p0.sh
@@ -8506,7 +8525,7 @@ tasks:
       - bash scripts/check-eco-11-reserve-funded.sh
       - bash scripts/check-helm-chart-prep.sh
       - bash scripts/check-c02-r2-set-key-prep.sh
-      - bash scripts/check-c05-dodo-sku-prep.sh
+      - bash scripts/hub-leg.sh lint:addon-sets scripts/check-c05-dodo-sku-prep.sh
       - bash scripts/check-c05-webhook-sku-prep.sh
       - bash scripts/check-ver-09-stub-r2-prep.sh
       - bash scripts/check-c05-cloud-skus-prep.sh
@@ -8555,7 +8574,7 @@ tasks:
       - bash scripts/check-aws-estate.sh
       - bash scripts/check-c0022-exit1-remeasure.sh
       - bash scripts/check-c02-producer-r2-from-grants.sh
-      - bash scripts/check-c05-first-owner.sh
+      - bash scripts/hub-leg.sh lint:addon-sets scripts/check-c05-first-owner.sh
       - bash scripts/check-c05-both-pdt-applied.sh
       - bash scripts/check-c04-lb-deletion-protection.sh
       - bash scripts/check-c04-ecr-lifecycle-rds-logs.sh
@@ -8648,7 +8667,7 @@ tasks:
       - bash scripts/check-c13-07-ar-holds-prep.sh
       - bash scripts/check-ver-10-og-prep.sh
       - bash scripts/check-int-12-no-land-prep.sh
-      - bash scripts/check-cfg-12-forward-off.sh
+      - bash scripts/hub-leg.sh lint:addon-sets scripts/check-cfg-12-forward-off.sh
       - bash scripts/check-community-updates-prep.sh
       - bash scripts/hub-leg.sh lint:pr-ci-regime scripts/check-pr-ci-regime.sh
       - bash scripts/check-ver-02-cut-hold.sh
@@ -8711,8 +8730,8 @@ tasks:
       - bash scripts/check-c03-02-sign-features.sh
       - bash scripts/test-c03-02-sign-features.sh
       - bash scripts/test-c05-16-serial-env.sh
-      - bash scripts/test-cfg03-prod-switches.sh
-      - bash scripts/test-c05-both-pdt-remeasure.sh
+      - bash scripts/hub-leg.sh lint:addon-sets-gate scripts/test-cfg03-prod-switches.sh
+      - bash scripts/hub-leg.sh lint:addon-sets-gate scripts/test-c05-both-pdt-remeasure.sh
       - bash scripts/test-c03-05-roster-accumulate.sh
       - bash scripts/test-c02-r2-key-from-token.sh
       - bash scripts/hub-leg.sh lint:addon-sets-gate scripts/test-overlay-live-facts.sh
@@ -8762,13 +8781,13 @@ tasks:
       - bash scripts/test-cfg-10-sandbox-redeploy.sh
       - bash scripts/test-alc-01-s1-named-nil.sh
       - bash scripts/test-cfg-01-dns-resolves.sh
-      - bash scripts/test-cfg-01-production-hold.sh
+      - bash scripts/hub-leg.sh lint:addon-sets-gate scripts/test-cfg-01-production-hold.sh
       - bash scripts/test-eco-16-exit-restore.sh
       - bash scripts/test-eco-09-k-bound.sh
       - bash scripts/test-eco-13-evidence-absent.sh
       - bash scripts/test-0022-exit1-callers.sh
       - bash scripts/test-c03-33-refund-first.sh
-      - bash scripts/test-cfg03-secret-deploy.sh
+      - bash scripts/hub-leg.sh lint:addon-sets-gate scripts/test-cfg03-secret-deploy.sh
       - bash scripts/test-eco03-restoration-absent.sh
       - bash scripts/test-caep-inbound.sh
       - bash scripts/test-unit-econ-unknowns.sh
@@ -8781,7 +8800,7 @@ tasks:
       - bash scripts/test-aws-estate.sh
       - bash scripts/test-c0022-exit1-remeasure.sh
       - bash scripts/test-c02-producer-r2-from-grants.sh
-      - bash scripts/test-c05-first-owner.sh
+      - bash scripts/hub-leg.sh lint:addon-sets-gate scripts/test-c05-first-owner.sh
       - bash scripts/test-c05-both-pdt-applied.sh
       - bash scripts/test-c04-lb-deletion-protection.sh
       - bash scripts/test-c04-ecr-lifecycle-rds-logs.sh
@@ -8844,6 +8863,7 @@ tasks:
       - bash scripts/test-c03-21-channel-right.sh
       - bash scripts/test-c03-20-named-403.sh
       - bash scripts/test-c03-11-fase-r.sh
+      - bash scripts/hub-leg.sh lint:addon-sets-gate scripts/test-c03-11-fase-r-staged.sh
       - bash scripts/test-c03-06-needs-decision.sh
       - bash scripts/test-c13-06-canon-proposals.sh
       - bash scripts/test-unit-econ-sourced.sh
@@ -8859,7 +8879,7 @@ tasks:
       - bash scripts/test-eco-11-reserve-funded.sh
       - bash scripts/test-helm-chart-prep.sh
       - bash scripts/test-c02-r2-set-key-prep.sh
-      - bash scripts/test-c05-dodo-sku-prep.sh
+      - bash scripts/hub-leg.sh lint:addon-sets-gate scripts/test-c05-dodo-sku-prep.sh
       - bash scripts/test-c05-webhook-sku-prep.sh
       - bash scripts/test-ver-09-stub-r2-prep.sh
       - bash scripts/test-c05-cloud-skus-prep.sh
@@ -8926,7 +8946,7 @@ tasks:
       - bash scripts/test-c13-07-ar-holds-prep.sh
       - bash scripts/test-ver-10-og-prep.sh
       - bash scripts/test-int-12-no-land-prep.sh
-      - bash scripts/test-cfg-12-forward-off.sh
+      - bash scripts/hub-leg.sh lint:addon-sets-gate scripts/test-cfg-12-forward-off.sh
       - bash scripts/test-community-updates-prep.sh
       - bash scripts/hub-leg.sh lint:pr-ci-regime:selftest scripts/test-pr-ci-regime.sh
       - bash scripts/test-ver-02-cut-hold.sh

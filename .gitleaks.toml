@@ -825,3 +825,19 @@ regexes = [
   paths = ['''^commercial/license-worker/src/connect/canonical-vectors\.json$''']
   regexTarget = "match"
   regexes = ['''^Olivares-Connect-New-Key-Proof": "oQ4kdmdnB_Gi2fhgBHh58xEB1ApsBu-OT2nKiMyzv-0SRCxj-2UEMRVNYWdAeX6Sa1U6uO62J5btnULWNdexCg"$''']
+
+# ── 2026-09-24 · generic-api-key · commercial/license-worker/test/d1-sandbox-settlement.worker.ts:103
+# `const ACCESS_AUDIENCE = "s706-settlement-probe"` names the Cloudflare Access audience of the
+# settlement probe's own test identity. The probe generates that identity's RSA key pair inside
+# its isolate at run time (`generateProbeAccess`, :820) and mints tokens for this audience only
+# there, so the string authorizes nothing and there is nothing to rotate. The detector captures
+# the value (entropy 3.59); the commerce probe's "s706-commerce-probe" stays under the threshold.
+# Rule-specific AND exact-path AND exact-Secret, like the blocks above: a different value on that
+# line, this value in another file, or any other rule on that path is STILL a finding.
+[[allowlists]]
+  description = "settlement probe: the synthetic Cloudflare Access audience of its in-isolate test identity, not a credential"
+  targetRules = ["generic-api-key"]
+  condition = "AND"
+  paths = ['''^commercial/license-worker/test/d1-sandbox-settlement\.worker\.ts$''']
+  regexTarget = "secret"
+  regexes = ['''^s706-settlement-probe$''']

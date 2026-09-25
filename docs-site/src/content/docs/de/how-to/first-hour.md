@@ -193,7 +193,7 @@ session runtime: no inference credential source configured; stream-json launches
 
 (`cmd/olivares/sessionruntime.go`). Setzen Sie **eine** von
 `OLIVARES_SESSION_RUNTIME_WIF` oder `OLIVARES_SESSION_RUNTIME_TOKEN_FILE`.
-Seit v26.10 ist das nicht mehr der einzige Weg: Registrieren Sie die
+Ab der noch ausstehenden Version v26.10 wird das nicht mehr der einzige Weg sein: Registrieren Sie die
 Zugangsdaten in der Konsole und binden Sie sie an ein Profil. Siehe
 [Anbieter hinzufügen und Agenten starten](/de/how-to/add-a-provider/) und
 [Eine Anbietersitzung betreiben](/how-to/operate-provider-sessions/).

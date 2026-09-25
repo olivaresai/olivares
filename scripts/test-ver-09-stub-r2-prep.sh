@@ -61,20 +61,25 @@ $(grep -oE 'lib/[a-z0-9._-]+\.sh' "$_sujeto" | sed 's#.*/##' | sort -u)
 DEPS
   done
   unset _sujeto
-  cp "$ROOT/commercial/license-worker/src/download/artifacts.ts" \
-    "$ROOT/commercial/license-worker/src/download/sets.ts" \
-    "$ROOT/commercial/license-worker/src/download/manifests.ts" \
-    "$TMP/tree/commercial/license-worker/src/download/"
-  cp "$ROOT/commercial/license-worker/src/dodo/catalog.ts" \
-    "$TMP/tree/commercial/license-worker/src/dodo/"
-  # src/env.ts joined the preflight's dependency list on 2026-09-16, when the CFG-12 refusal
-  # started importing cloudForwardMode from the Worker instead of restating its three states.
-  # This copy list IS the preflight's dependency manifest for the hermetic tree; without the
-  # file the whole battery degrades to COULD NOT LOOK, which is how this gate found the gap.
-  cp "$ROOT/commercial/license-worker/src/env.ts" \
-    "$TMP/tree/commercial/license-worker/src/"
-  cp "$ROOT/commercial/license-worker/src/polar/products.ts" \
-    "$TMP/tree/commercial/license-worker/src/polar/"
+  # The Worker sources are derived from what the preflight names, like the libs above: every
+  # commercial/license-worker/src/*.ts path in its text is copied to the same relative path.
+  # This copy IS the preflight's dependency manifest for the hermetic tree. Written by hand it
+  # missed src/env.ts once, and later src/index.ts and src/dodo/webhook.ts, which the CFG-12
+  # self-test reads; each time the battery went red inside a case instead of naming the file. A
+  # name in a comment copies one file too many, which costs nothing; a named source that does
+  # not exist is said out loud (exit 2).
+  while IFS= read -r _src; do
+    [ -n "$_src" ] || continue
+    if [ ! -r "$ROOT/$_src" ]; then
+      echo "test-ver-09-stub-r2-prep: COULD NOT LOOK: check-commerce-preflight.sh names $_src and it does not exist" >&2
+      exit 2
+    fi
+    mkdir -p "$TMP/tree/$(dirname "$_src")"
+    cp "$ROOT/$_src" "$TMP/tree/$_src"
+  done <<SRCS
+$(grep -oE 'commercial/license-worker/src/[A-Za-z0-9/._-]+\.ts' "$ROOT/scripts/check-commerce-preflight.sh" | sort -u)
+SRCS
+  unset _src
   cp "$CHECK" "$TMP/tree/scripts/"
   chmod +x "$TMP/tree/scripts/check-ver-09-stub-r2-prep.sh"
 }

@@ -181,7 +181,7 @@ PY
 case "$WFOUT" in CANNOT*) cannot "${WFOUT#CANNOT }" ;; esac
 
 RC=0
-if printf '%s\n' "$WFOUT" | grep -qx 'NOMATRIX'; then
+if grep -qx 'NOMATRIX' <<<"$WFOUT"; then
   finding "no job in $WF declares a \`shard:\` matrix, so $SPEC partitions a suite that nothing runs in parts. A shard list nobody reads is a list that stops being true the day after it is written."
   RC=1
   WF_MATRIX=""

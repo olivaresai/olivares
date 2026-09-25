@@ -123,7 +123,7 @@ Versioning is provided by the [`starlight-versions`](https://starlight-versions.
 plugin and is **active**. The only archived version is honestly labelled as a
 **dated docs snapshot**, not a product release: slug `2026-06`, label
 **"2026-06 (pre-1.0 preview)"**. The first public CalVer cut was `v26.8.0`.
-The current canon is `v26.9.1` (`RELEASE-VERSION`). The docs tree remains
+The current canon is `v26.9.0` (`RELEASE-VERSION`). The docs tree remains
 **Latest** until a maintainer cuts a dated snapshot; do not fabricate a
 release archive.
 

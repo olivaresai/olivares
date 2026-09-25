@@ -92,7 +92,7 @@ For the deny-by-default model, the privileged nature of viewing the access graph
 
 ### Complete variable reference
 
-The table below is generated from the product's own sources: 292 variables and 17 runtime-constructed families, covering the engine, the CLI, the Kubernetes operator, the Terraform provider and the connectors. It is regenerated and checked against those sources on every change, so it does not fall behind the binary.
+The table below is generated from the product's own sources: 293 variables and 17 runtime-constructed families, covering the engine, the CLI, the Kubernetes operator, the Terraform provider and the connectors. It is regenerated and checked against those sources on every change, so it does not fall behind the binary.
 
 **Required** means the feature that reads the variable does not start without it; most variables are optional and the engine runs with none of them set.
 

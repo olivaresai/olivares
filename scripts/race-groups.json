@@ -84,7 +84,7 @@
             "Trusted",
             "Verify",
             "View",
-            "Workspace", "DecisionReconstruction", "LegacyDecision"]
+            "Workspace", "DecisionReconstruction", "LegacyDecision", "CommitOutcome"]
         },
         {
           "name": "b",
@@ -688,7 +688,8 @@
             "WorkCommand",
             "WorkContent",
             "WorkOutbox",
-            "WorkPlan"
+            "WorkPlan",
+            "WorkStore"
           ]
         }
       ],
@@ -701,7 +702,8 @@
       "patterns": [
         "github.com/olivaresai/olivares/modules/..."
       ]
-    }
+    },
+    {"name": "appliance", "measured": "not yet measured on the hosted runner: standard-library-only packages of the appliance module, expected well under a minute", "patterns": ["github.com/olivaresai/olivares/appliance/..."]}
   ],
   "cloud_task_group": "sdk-and-tools",
   "root_package": "github.com/olivaresai/olivares/cmd/olivares",
@@ -994,7 +996,8 @@
       "name": "root-e-communication",
       "tests_now": 56,
       "families": [
-        "Communication"
+        "Communication",
+        "CommitOutcome"
       ]
     },
     {

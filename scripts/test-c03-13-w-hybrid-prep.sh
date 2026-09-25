@@ -38,6 +38,12 @@ expect() {
   if [ "$(cat "$TMP/rc")" = "$2" ]; then ok "$1"
   else bad "$1: rc=$(cat "$TMP/rc") want $2 ($(cat "$TMP/err"))"; fi
 }
+# A kill must be for the named reason: the rc and the message the guard gives for it.
+expect_named() {
+  run
+  if [ "$(cat "$TMP/rc")" = "$2" ] && grep -F -q -- "$3" "$TMP/err"; then ok "$1"
+  else bad "$1: rc=$(cat "$TMP/rc") want $2 naming '$3' ($(cat "$TMP/err"))"; fi
+}
 # Replace exactly one occurrence, or stop the battery: a mutant that silently does not apply
 # would be reported as "killed" by a check that never saw it.
 mutate() {
@@ -81,9 +87,24 @@ expect "mutant (one aggregate phase for every line restored) is killed" 1
 
 stage
 mutate "$LW/dodo/cohort.ts" \
-  'treatment: prior.has(line.lineKey) ? "renewed" : "initial_eligible",' \
+  'treatment: continues ? "renewed" : "initial_eligible",' \
+  'treatment: prior.has(line.lineKey) ? "renewed" : "initial_eligible",'
+expect_named "mutant (the exact-key treatment restored) is killed" 1 \
+  "the treatment is keyed on the exact line key alone again"
+
+stage
+mutate "$LW/dodo/cohort.ts" \
+  'const continues = prior.has(line.lineKey) || (code !== null && held.setCodes.has(code));' \
+  'const continues = prior.has(line.lineKey);'
+expect_named "mutant (the set-code arm dropped) is killed" 1 \
+  "expected 1 of 'const continues = prior.has(line.lineKey) || (code !== null && held.setCodes.has(code));', found 0"
+
+stage
+mutate "$LW/dodo/cohort.ts" \
+  'treatment: continues ? "renewed" : "initial_eligible",' \
   'treatment: prior.size > 0 ? "renewed" : "initial_eligible",'
-expect "mutant (per-line classification removed: treatment from the aggregate) is killed" 1
+expect_named "mutant (per-line classification removed: treatment from the aggregate) is killed" 1 \
+  "the treatment is keyed on the aggregate history again"
 
 stage
 mutate "$LW/dodo/cohort.ts" \
@@ -91,21 +112,49 @@ mutate "$LW/dodo/cohort.ts" \
   'action: "issue"'
 expect "mutant (hardcoded issue action restored) is killed" 1
 
-stage
-mutate "$LW/dodo/webhook.ts" \
-  '  const classified = classifyPaidPurchase(decision.purchase, prior);
-  if (classified.kind === "history_unclassifiable") {
-    return await settle(deps.store, {' \
-  '  const classified = classifyPaidPurchase(decision.purchase, { maxIssueSeq: 0, priorLineKeys: [], legacyUnprojected: false });
-  if (classified.kind === "history_unclassifiable") {
-    return await settle(deps.store, {'
-expect "mutant (operator replay classifies without committed history) is killed" 1
+EMPTY_HISTORY='{ maxIssueSeq: 0, priorLineKeys: [], legacyUnprojected: false }'
 
 stage
 mutate "$LW/dodo/webhook.ts" \
-  'classifyPaidPurchase(refreshed.purchase, prior)' \
-  'classifyPaidPurchase(refreshed.purchase, { maxIssueSeq: 0, priorLineKeys: [], legacyUnprojected: false })'
-expect "mutant (sequence rebuild ignores the re-read history) is killed" 1
+  'classifyPaidPurchase(decision.purchase, prior, heldRightsOf(catalog, held))' \
+  "classifyPaidPurchase(decision.purchase, $EMPTY_HISTORY, heldRightsOf(catalog, held))"
+expect_named "mutant (the completer classifies without committed history) is killed" 1 \
+  "expected 1 of 'classifyPaidPurchase(decision.purchase, prior, heldRightsOf(catalog, held))', found 0"
+
+stage
+mutate "$LW/dodo/webhook.ts" \
+  'return await fulfilCompleteCohort(env, deps, payment, subscription, prior, held, {
+    ...input, detailPrefix: "operator replay: ", judgedBy: "operator_replay",' \
+  "return await fulfilCompleteCohort(env, deps, payment, subscription, $EMPTY_HISTORY, held, {
+    ...input, detailPrefix: \"operator replay: \", judgedBy: \"operator_replay\","
+expect_named "mutant (operator replay classifies without committed history) is killed" 1 \
+  "judgedBy: \"operator_replay\",', found 0"
+
+stage
+mutate "$LW/dodo/webhook.ts" \
+  'return await fulfilCompleteCohort(env, deps, payment, subscription, prior, held, {
+    ...input, rebuilds: rebuilds + 1,' \
+  "return await fulfilCompleteCohort(env, deps, payment, subscription, $EMPTY_HISTORY, held, {
+    ...input, rebuilds: rebuilds + 1,"
+expect_named "mutant (sequence rebuild ignores the re-read history) is killed" 1 \
+  "...input, rebuilds: rebuilds + 1,', found 0"
+
+stage
+mutate "$LW/dodo/webhook.ts" \
+  'const prior = await deps.store.readDodoPriorGrantState(
+    purchase.businessId,
+    purchase.subscriptionId,
+    purchase.paymentId,
+  );' \
+  'const prior = { maxIssueSeq: error.observedMaxIssueSeq, priorLineKeys: [], legacyUnprojected: false };'
+expect_named "mutant (sequence rebuild does not re-read the history) is killed" 1 \
+  "purchase.paymentId,\\n  );', found 0"
+
+stage
+printf '\nexport function secondClassifier(p: never, h: never) { return classifyPaidPurchase(p, h, undefined as never); }\n' \
+  >> "$TMP/tree/$LW/dodo/webhook.ts"
+expect_named "mutant (a second classification site) is killed" 1 \
+  "expected 1 of 'classifyPaidPurchase(', found 2"
 
 stage
 mutate "$LW/dodo/webhook.ts" \

@@ -11,7 +11,7 @@ produit, pas le produit.
 
 Cette page documente les routes Community d’operate sous `/v1/m/sessions/runs`.
 Elles existent déjà dans le [document OpenAPI bêta](/reference/api-beta/).
-v26.10 ajoute le contrat de driver, un runner PTY local et les parcours J01–J08
+La v26.10, encore à paraître, ajoutera le contrat de driver, un runner PTY local et les parcours J01–J08
 comme tests.
 
 ## Frontière d’édition
