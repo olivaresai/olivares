@@ -22,20 +22,24 @@ type workspaceDTO struct {
 	UpdatedAt       string   `json:"updated_at,omitempty"`
 }
 
-func toWorkspaceDTO(rec model.Record) workspaceDTO {
+func toWorkspaceDTO(rec model.Record) (workspaceDTO, error) {
+	subpaths, err := decodeSubpaths(rec)
+	if err != nil {
+		return workspaceDTO{}, err
+	}
 	return workspaceDTO{
 		WorkspaceRef:    rec.String(colWsRef),
 		Name:            rec.String(colWsName),
 		RootPath:        rec.String(colWsRootPath),
 		MountMode:       rec.String(colWsMountMode),
 		ContainerTarget: rec.String(colWsContainerTgt),
-		AllowSubpaths:   decodeSubpaths(rec),
+		AllowSubpaths:   subpaths,
 		MaxReadBytes:    workspaceMaxRead(rec),
 		DLPMode:         rec.String(colWsDLPMode),
 		State:           rec.String(colWsState),
 		CreatedAt:       rec.String(model.ColCreatedAt),
 		UpdatedAt:       rec.String(model.ColUpdatedAt),
-	}
+	}, nil
 }
 
 // workspaceMaxRead returns the configured per-read cap, or the default when NULL/0.
