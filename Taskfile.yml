@@ -4455,9 +4455,9 @@ tasks:
       about the ones it was not. Pins five things: every test-bearing package of the
       workspace is in exactly one shard (none in two, none in none); every declared pattern
       matches something, except the ones the spec marks optional because the module they
-      name is not published everywhere, and those are PRINTED; the matrix of pr-ci.yml is
-      the shard list of ci/pr-suite-shards.txt, in order; the ceilings the workflow
-      declares are the ones the spec declares, with the Go timeout under the step ceiling so
+      name is not published everywhere, and those are PRINTED; the shard matrix of pr-ci.yml
+      and the one of mainline-ci.yml are each the shard list of ci/pr-suite-shards.txt, in
+      order; the ceilings each workflow declares are the ones the spec declares, with the Go timeout under the step ceiling so
       Go names the package that hung instead of the step being cancelled mute; and every
       top-level test, fuzz target and example of a package split by `group` records is in
       exactly one group, with exactly one remainder group per package, NO group and no
@@ -4472,7 +4472,7 @@ tasks:
 
   lint:pr-suite-shards:selftest:
     desc: >-
-      PR suite shards — battery of 42 cases: the three mutants the package split exists to
+      PR suite shards — battery of 46 cases: the three mutants the package split exists to
       catch (a package in two shards, a package in no shard, a pattern naming packages that
       do not exist), the matrix out of step with the spec in both directions, a Go timeout at
       or above the step ceiling, a leg that is not a task, an empty shard, a spec line the
@@ -4492,7 +4492,9 @@ tasks:
       line. And a shard whose whole-package run is red, whose name group is green and whose leg
       runs: the shard reports the red and the log carries all three, because a failure that
       cancels the rest of its shard publishes no verdict for the rest. And a count that could
-      not be made: a `grep` that exits 2 is COULD NOT LOOK, never a selection of zero. And the non-firing
+      not be made: a `grep` that exits 2 is COULD NOT LOOK, never a selection of zero. Then the same
+      pins on mainline-ci.yml, broken there alone: a matrix that lost a shard, no shard matrix at all,
+      a job ceiling off the spec, and an absent file (COULD NOT LOOK). And the non-firing
       directions, without which a gate that refused everything would look perfect: the real
       tree stays clean, the fixture stays clean with and without a name split, and an optional
       pattern that matches nothing is a notice instead of a finding.

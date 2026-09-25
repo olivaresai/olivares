@@ -17,6 +17,11 @@
 # no override at all and requires CLEAN: it is the only case that can notice the spec and
 # the workflow drifting apart in the tree that ships.
 #
+# ⛔ TWO WORKFLOWS RUN THE SHARDS, and the gate pins both: pr-ci.yml on pull requests and
+# mainline-ci.yml on main. The fixture carries a miniature of each ($T/wf.yml and
+# $T/wf-main.yml); cases 43-46 break the mainline one alone, so a gate that only read
+# pr-ci.yml would pass everything above and fail exactly there.
+#
 # ⛔ THE NAME GROUPS (cases 21-30) NEED A SECOND SYNTHETIC UNIVERSE. A `group` record splits
 # ONE package across shards by test NAME, so the mutants are "a test in no group" and "a test
 # in two groups" — the same two defects as the package partition, one level down, and with a
@@ -107,6 +112,38 @@ jobs:
         timeout-minutes: 45
         run: task test:functional:shard
 EOF
+  # The mainline miniature: the shard matrix beside a required aggregate job with ceilings of
+  # its own, so the reader has to attribute each ceiling to the job that declares it.
+  cat > "$T/wf-main.yml" <<'EOF'
+name: fixture-mainline
+
+jobs:
+  classify:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo classify
+  functional-shard:
+    needs: [classify]
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [a, b]
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - name: one shard
+        timeout-minutes: 45
+        run: task test:functional:shard
+  control-plane:
+    needs: [classify, functional-shard]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 320
+    steps:
+      - name: a lint with a ceiling of its own
+        timeout-minutes: 15
+        run: echo lint
+EOF
 }
 
 base_taskfile() {
@@ -131,7 +168,7 @@ group_fixture() {
     printf 'group a example.test/tree/cmd/tool alpha A\n'
     printf 'group t1 example.test/tree/cmd/tool rest *\n'
   } >> "$T/spec.txt"
-  sed -i 's|shard: \[a, b\]|shard: [a, b, t1]|' "$T/wf.yml"
+  sed -i 's|shard: \[a, b\]|shard: [a, b, t1]|' "$T/wf.yml" "$T/wf-main.yml"
 }
 
 run_gate() {
@@ -139,6 +176,7 @@ run_gate() {
   OLIVARES_PR_SUITE_PACKAGES="$T/pkgs.txt" \
   OLIVARES_PR_SUITE_TESTS="$T/tests.txt" \
   OLIVARES_PR_CI_WF="$T/wf.yml" \
+  OLIVARES_MAINLINE_CI_WF="$T/wf-main.yml" \
   OLIVARES_TASKFILE="$T/Taskfile.yml" \
   bash "$GATE" > "$T/out.txt" 2> "$T/err.txt"
   echo "$?"
@@ -300,6 +338,7 @@ run_gate_real_enum() {
   OLIVARES_PR_SUITE_SHARDS="$T/spec.txt" \
   OLIVARES_PR_SUITE_PACKAGES="$T/pkgs.txt" \
   OLIVARES_PR_CI_WF="$T/wf.yml" \
+  OLIVARES_MAINLINE_CI_WF="$T/wf-main.yml" \
   OLIVARES_TASKFILE="$T/Taskfile.yml" \
   bash "$GATE" > "$T/out.txt" 2> "$T/err.txt"
   echo "$?"
@@ -384,6 +423,7 @@ run_gate_no_pkg_override() {
   GOPROXY=off GOFLAGS='' \
   OLIVARES_PR_SUITE_SHARDS="$T/spec.txt" \
   OLIVARES_PR_CI_WF="$T/wf.yml" \
+  OLIVARES_MAINLINE_CI_WF="$T/wf-main.yml" \
   OLIVARES_TASKFILE="$T/Taskfile.yml" \
   bash "$GATE" > "$T/out.txt" 2> "$T/err.txt"
   echo "$?"
@@ -527,7 +567,7 @@ check "case 15 — a leg that is not a task" 1 "not a task of"
 
 reset_fixture
 printf 'shard c\n' >> "$T/spec.txt"
-sed -i 's|shard: \[a, b\]|shard: [a, b, c]|' "$T/wf.yml"
+sed -i 's|shard: \[a, b\]|shard: [a, b, c]|' "$T/wf.yml" "$T/wf-main.yml"
 check "case 16 — a shard that owns nothing and declares no leg" 1 "runs nothing and reports success"
 
 reset_fixture
@@ -725,13 +765,33 @@ export STUB_GREP_EXIT=2
 check_runner "case 42 — a count that could not be made is not a count of zero" t1 2 "grep exited 2"
 unset STUB_GREP_EXIT
 
+# MAINLINE-CI ─────────────────────────────────────────────────────────────────────────
+# The same pins on the second workflow, broken there alone: pr-ci.yml stays correct in every
+# case below, so only a gate that reads mainline-ci.yml can turn them red.
+echo
+reset_fixture
+sed -i 's|shard: \[a, b\]|shard: [a]|' "$T/wf-main.yml"
+check "case 43 — mainline-ci's matrix lost a shard that pr-ci still runs" 1 "wf-main.yml and the shard list disagree"
+
+reset_fixture
+sed -i '/^    strategy:$/,/^        shard: \[a, b\]$/d' "$T/wf-main.yml"
+check "case 44 — mainline-ci runs no shard matrix at all" 1 "wf-main.yml declares a"
+
+reset_fixture
+sed -i '/^  functional-shard:$/,/^  control-plane:$/ s|^    timeout-minutes: 55$|    timeout-minutes: 90|' "$T/wf-main.yml"
+check "case 45 — mainline-ci's shard job ceiling is not the declared one" 1 "job 'functional-shard' in"
+
+reset_fixture
+rm -f "$T/wf-main.yml"
+check "case 46 — an absent mainline-ci workflow is COULD NOT LOOK" 2 "missing"
+
 echo
 printf 'test-check-pr-suite-shards: %d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ] || exit 1
 # A battery that ran nothing exits 0 for free. It has to say how many it ran, and refuse
 # if the number is not the one it was written with.
-[ "$PASS" -eq 42 ] || {
-  echo "test-check-pr-suite-shards: only $PASS of 42 cases ran — the battery was edited without its count" >&2
+[ "$PASS" -eq 46 ] || {
+  echo "test-check-pr-suite-shards: only $PASS of 46 cases ran — the battery was edited without its count" >&2
   exit 1
 }
 exit 0
