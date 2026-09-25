@@ -353,8 +353,15 @@ jobs:
     # Gated by the internal change gate: journal-only pushes skip this code-input job.
     # On pull_request / dispatch the classify job always answers code=true (no
     # PR-side filtering of any kind).
-    needs: [classify]
-    if: needs.classify.outputs.code == 'true'
+    #
+    # AND IT WAITS FOR THE FUNCTIONAL SHARDS (2026-09-25): this job is the required context that
+    # carries their verdict (see functional-shard below, and the aggregate step where the serial
+    # functional step used to be). `always()` is what lets it say no: without it GitHub adds an
+    # implicit "every need succeeded", a failed shard SKIPS this job, and a skipped job satisfies
+    # a required check, so the red would land as green. The classify clause keeps the
+    # journal-only shape, exactly as race-hot does: both jobs skip together, neither goes red.
+    needs: [classify, functional-shard]
+    if: ${{ always() && needs.classify.outputs.code == 'true' }}
     # Job-level superseding (see the concurrency note above the jobs block).
     # ⛔ `-${{ github.run_id }}` NO es decorativo: sin el, este grupo es ciego a la CORRIDA y dos
     # corridas del MISMO ref se matan los jobs entre si. MEDIDO el 2026-08-26 sobre la corrida
@@ -366,13 +373,14 @@ jobs:
     # es un check REQUERIDO que solo puede ponerse verde desde una corrida de `main`. El
     # superseding real lo hace el bloque de nivel de CORRIDA.
     #
-    # ⛔ Y QUE QUEDE DICHO LO QUE ESTE GRUPO **NO** HACE, porque la primera version de esta nota
-    # prometia que «evita duplicados dentro de su propia corrida» y eso es FALSO: el workflow tiene
-    # CERO `strategy:` y CERO `matrix:` (verificado con el YAML cargado, no con un grep), asi que
-    # dentro de una misma corrida NO PUEDE haber dos jobs del mismo nombre y este grupo no colapsa
-    # nada nunca. Con el `run_id` queda INERTE a proposito: su valor entero es desactivar el
-    # fratricidio ENTRE corridas. Lo cazo the planner revisando el diff; sin la correccion, alguien
-    # citaria dentro de un mes una proteccion que no existe.
+    # ⛔ AND WHAT THIS GROUP DOES NOT DO, said because the first version of this note promised it
+    # "avoids duplicates within its own run", which is false. control-plane declares no
+    # `strategy:` and no `matrix:`, so one run holds exactly one control-plane job and this group
+    # never collapses anything. With the `run_id` it stays INERT on purpose: its whole value is
+    # disabling the fratricide BETWEEN runs. (Corrected 2026-09-25: this note used to say the
+    # whole WORKFLOW had no matrix, which stopped being true on 2026-09-11. The matrix jobs,
+    # race-modules, race-core, race-sessions, race-hot-manifest and functional-shard, each put
+    # their matrix value in their own group; control-plane is still not one of them.)
     concurrency:
       group: mainline-ci-control-plane-${{ github.ref }}-${{ github.run_id }}
       cancel-in-progress: true
@@ -410,7 +418,10 @@ jobs:
     # pasos que faltan, el reportero de fallos no llega a publicar, y GitHub lo etiqueta
     # `cancelled`, que es la palabra de la supersesión. El rojo saldría MUDO. 255 devuelve los 15
     # minutos de holgura que el job tenía antes de que yo le añadiera un paso.
-    # Keep the job deadline above the 302-minute sum of bounded steps.
+    # Keep the job deadline above the sum of bounded steps: 182 minutes since the 120-minute
+    # functional step moved to the functional-shard matrix (it was 302). The deadline stays at
+    # 320 on purpose: a backstop reserves nothing, and the TMPDIR orphan sweep in this file
+    # (-mmin +360) is written against 320 being its largest ceiling.
     # The uninstall mutation battery has a 20-minute step deadline.
     timeout-minutes: 320
     # pull-requests/issues write is ONLY for the on-failure pr-failure-report
@@ -1991,45 +2002,44 @@ jobs:
       # paths (every module but the cmd/olivares root + the root's hot tests via the
       # fail-closed scripts/race-hot-tests.sh manifest). The full -race sweep runs
       # WEEKLY in race-full.yml. Bounded CI minutes, no silent race gap.
-      - name: test (functional, no -race)
+      # THE FUNCTIONAL VERDICT (2026-09-25). The suite runs in the functional-shard matrix; this
+      # step is where control-plane, a required context, turns that matrix's result into its own.
+      # `needs.<job>.result` for a matrix job is `success` only when every shard succeeded, and
+      # `fail-fast: false` does not soften that. The arms are race-hot's and pr-test's, the empty
+      # one included.
+      #
+      # `always()`, not `!cancelled()`, and this is the one step of the job where the difference
+      # decides the verdict: control-plane itself runs under `always()`, and a job whose steps
+      # are all skipped concludes SUCCESS. This is the step that can say no, so it must never be
+      # skipped; it costs one `case`. It sits where the serial step sat, so the steps after it
+      # keep their order and their `!cancelled()` guards. The failing packages are named in the
+      # red shard's own log and failure report; this step names the job to open.
+      - name: test (functional) — every functional shard must have succeeded
         id: test-functional
-        # ⛔ 45 -> 120 el 2026-08-23. Este paso NO se pasó de largo: TOPÓ. Duró **2713 s contra un
-        # techo de 2700** —trece segundos— en la corrida 32605874242, así que fue CORTADO, y por
-        # tanto la lista de tests fallidos que publicó era el PREFIJO de una corrida truncada, no
-        # el inventario. Es la misma forma que convirtió «cinco rojos heredados» en OCHO el 08-22.
-        #
-        # Y debajo mordía un SEGUNDO techo, el del binario: cuatro paquetes murieron en el mismo
-        # número —`panic: test timed out after 15m0s`, 900,09x s— con un quinto al 88 %. Ése sube a
-        # 45m en el Taskfile, en este mismo commit; sin subir también ÉSTE, el paso seguiría
-        # cortando antes de que el presupuesto nuevo sirviera para nada.
-        #
-        # `control-plane` es uno de los cuatro contextos que la protección de `main` EXIGE: mientras
-        # los dos techos muerdan no puede dar veredicto completo ni ponerse verde. 120 es COTA, no
-        # medida — ninguno de los cuatro paquetes ha TERMINADO nunca en esta pata.
-        timeout-minutes: 120
-        # Record sampled host resources on EXIT/TERM when the shell and log transport remain
-        # available. The observed shutdown signal/143 did not establish the cause. These
-        # samples are host memory use, not process RSS, and can miss intervening peaks.
-        # SIGKILL or host loss can prevent a report; missing evidence is not a zero reading.
-        # Explicit unavailable-data paths print COULD NOT LOOK and return zero.
-        #
-        # `set -euo pipefail` y el `rm` en su propia linea conservan la disciplina que esta
-        # cabecera ya exige (:181): el estado de salida es el de `task` y no el del `tee`, y el
-        # log de fallo solo se borra cuando el paso ha ido bien.
+        if: ${{ always() }}
+        env:
+          RESULT: ${{ needs.functional-shard.result }}
         run: |
-          set -euo pipefail
-          WITNESS="$RUNNER_TEMP/resource-witness-functional.txt"
-          bash scripts/ci-resource-witness.sh start "$WITNESS" >/dev/null
-          witness_said=""
-          witness() {
-            if [ -z "$witness_said" ]; then
-              witness_said=yes
-              bash scripts/ci-resource-witness.sh report "$WITNESS"
-            fi
-          }
-          trap witness EXIT TERM
-          task test:functional 2>&1 | tee "$RUNNER_TEMP/ci-fail-test-functional.log"
-          rm "$RUNNER_TEMP/ci-fail-test-functional.log"
+          echo "functional-shard result: $RESULT"
+          # AN EMPTY RESULT IS THE `missing` CASE AND IT IS RED: the expression expands to the
+          # empty string when the job id does not exist (a rename, a deletion, a bad merge), and
+          # an empty string matching no arm would fall through a `case` with no default.
+          case "$RESULT" in
+            success)
+              echo "every shard of the functional suite passed." ;;
+            "")
+              echo "::error::functional-shard reported NO result at all — the job id does not exist in this workflow, so nothing ran the functional suite."
+              exit 1 ;;
+            skipped)
+              echo "::error::functional-shard was SKIPPED while code changed, so this run carries NO functional verdict. A green check that quietly stopped checking is worse than no check."
+              exit 1 ;;
+            cancelled)
+              echo "::error::functional-shard was CANCELLED, so this run carries no functional verdict — read it off the run that replaced it, or re-run this one."
+              exit 1 ;;
+            *)
+              echo "::error::functional-shard did not succeed ($RESULT) — open the functional-shard jobs of this run: each red shard names its failing packages in its log and in its failure report."
+              exit 1 ;;
+          esac
       # NOTE: test:race-hot moved to the parallel `race-hot` job (2026-07-24) —
       # the workspace -race leg alone exceeded this job's old budget.
       - name: client SDK codegen drift (snapshot → Go/Python/TS operation layers)
@@ -2140,6 +2150,563 @@ jobs:
         with:
           steps-json: ${{ toJSON(steps) }}
 
+  # THE FUNCTIONAL SUITE, AS PARALLEL SHARDS (2026-09-25). Until this change control-plane ran
+  # it as one serial step, `task test:functional`: one `go test -timeout 45m ./...` per module
+  # under a 120-minute step ceiling. Two of four push runs on the public repository went red on
+  # budget alone, with no failing test and no race: run 36043808854 (cmd/olivares timed out at
+  # 2700.1 s, and the step was cut inside ./modules, so the operator, the SDKs and the provider
+  # never ran) and run 36066051228 (cmd/olivares timed out at 2700.7 s). Pull-request CI already
+  # runs the same suite as the nine shards of ci/pr-suite-shards.txt, where the four cmd/olivares
+  # name groups summed 1739-1834 s over three runs. This job runs exactly those shards, so no
+  # single per-binary or per-step ceiling can cut main's verdict: a slow runner costs one shard
+  # its headroom instead of costing the whole suite its answer.
+  #
+  # WHAT STAYS THE SAME. The universe is test:functional's, and scripts/check-pr-suite-shards.sh
+  # proves it: every test-bearing package of the workspace in exactly one shard, every test of a
+  # package split by name in exactly one group, and this matrix equal to the spec's shard list,
+  # in order. The three legs test:functional runs after its sweep (test:cloud:norace,
+  # test:commerce, test:commerce-core:norace) ride in root-rest. The environment is the one
+  # control-plane's functional step had: both Postgres clusters, the strict posture, the full
+  # history, the Go caches, node, the pinned go-task, the short executable TMPDIR, the core
+  # roles, and the cloud control-plane roles with their eleven capability DSNs. Every shard gets
+  # all of it, so a package moved between shards cannot land where its environment is missing.
+  #
+  # WHAT CHANGES, and each difference is deliberate. The Go timeout is the spec's 30m per binary
+  # instead of 45m. Packages without test files are not handed to `go test`, which only printed
+  # `[no test files]` for them; `build every workspace module` in control-plane still compiles
+  # them. And control-plane, the required context, now waits for this job and carries its
+  # verdict through an aggregate step that is red on a failed, cancelled, skipped or missing
+  # shard.
+  #
+  # Same route as every code-input job: journal-only pushes skip it, and control-plane with it.
+  functional-shard:
+    needs: [classify]
+    if: needs.classify.outputs.code == 'true'
+    strategy:
+      # `fail-fast: false`: a red shard must not cancel its siblings. A cancelled shard publishes
+      # no verdict at all, so one failure would hide the state of the rest of the suite. The
+      # aggregate in control-plane is red either way.
+      fail-fast: false
+      matrix:
+        shard: [root-a, root-b, root-c, root-rest, store-a, store-b, store-rest, sessions, modules]
+    name: functional-shard (${{ matrix.shard }})
+    # The group names the shard, and without that the matrix cancels itself: a job-level group
+    # is per job instance, so nine legs sharing one string with cancel-in-progress would
+    # supersede each other. The run_id keeps a run from cancelling its own legs across pushes.
+    concurrency:
+      group: mainline-ci-functional-shard-${{ matrix.shard }}-${{ github.ref }}-${{ github.run_id }}
+      cancel-in-progress: true
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    # The spec's job ceiling: the 35-minute step plus checkout, toolchain setup, role
+    # provisioning and the two services (under a minute of those on control-plane in run
+    # 36066051228).
+    timeout-minutes: 45
+    # pull-requests/issues write is ONLY for the on-failure pr-failure-report step.
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    # The same two clusters as control-plane, image digest and limits included: lint:pg-env
+    # refuses a second digest in this file, and the failover test needs the second cluster to be
+    # a distinct server. Each shard gets its own pair, on ephemeral host ports.
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16@sha256:a36250871de0833b8757561c72f2477ef1ddd1101afa4e617fb552e0de514c6b
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+          --memory=1g
+          --memory-swap=1536m
+          --cpus=2
+          --pids-limit=512
+      postgres_other:
+        image: pgvector/pgvector:pg16@sha256:a36250871de0833b8757561c72f2477ef1ddd1101afa4e617fb552e0de514c6b
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+          --memory=1g
+          --memory-swap=1536m
+          --cpus=2
+          --pids-limit=512
+    env:
+      # Promotion regime, as in control-plane: this job provisions real Postgres, so a PG-less
+      # partial pass could only mean the service died — fail, not skip.
+      OLIVARES_GATE_STRICT_PG: "1"
+    steps:
+      # control-plane's resolver, with its executable lines unchanged, and the same for the TMPDIR
+      # and role steps below; the reasons are written once, on control-plane's copies. It writes
+      # the same variables the functional step read there: PGHOSTPORT, the app, admin and
+      # maintenance DSNs, the second cluster's DSN, REQUIRED, the vector DSN, and the two switches
+      # that make the cloud control-plane integration tests RUN and refuse to skip. Keep the
+      # copies identical to control-plane's.
+      - name: resolve the ephemeral Postgres port into the test DSNs
+        id: pg-port
+        env:
+          PGPORT_HOST: ${{ job.services.postgres.ports['5432'] }}
+          PGPORT_OTHER: ${{ job.services.postgres_other.ports['5432'] }}
+        run: |
+          set -euo pipefail
+          case "${PGPORT_HOST:-}" in
+            '' | *[!0-9]*)
+              echo "::error::mapped host port for services.postgres:5432 is empty or non-numeric (got '${PGPORT_HOST:-}')" >&2
+              exit 1 ;;
+          esac
+          read -r LOPORT HIPORT < /proc/sys/net/ipv4/ip_local_port_range
+          if [ "$PGPORT_HOST" -lt "$LOPORT" ] || [ "$PGPORT_HOST" -gt "$HIPORT" ]; then
+            echo "::error::docker published Postgres on ${PGPORT_HOST}, outside this host's ephemeral range ${LOPORT}-${HIPORT}; refusing to continue" >&2
+            exit 1
+          fi
+          case "${PGPORT_OTHER:-}" in
+            '' | *[!0-9]*)
+              echo "::error::mapped host port for services.postgres_other:5432 is empty or non-numeric (got '${PGPORT_OTHER:-}')" >&2
+              exit 1 ;;
+          esac
+          if [ "$PGPORT_OTHER" -lt "$LOPORT" ] || [ "$PGPORT_OTHER" -gt "$HIPORT" ]; then
+            echo "::error::docker published the SECOND Postgres on ${PGPORT_OTHER}, outside this host's ephemeral range ${LOPORT}-${HIPORT}; refusing to continue" >&2
+            exit 1
+          fi
+          if [ "$PGPORT_OTHER" = "$PGPORT_HOST" ]; then
+            echo "::error::both Postgres services resolved to host port ${PGPORT_HOST}; they must be two distinct servers" >&2
+            exit 1
+          fi
+          {
+            echo "PGHOSTPORT=127.0.0.1:${PGPORT_HOST}"
+            echo "OLIVARES_TEST_POSTGRES_DSN=postgres://olivares_app:apppw@127.0.0.1:${PGPORT_HOST}/olivares?sslmode=disable"
+            echo "OLIVARES_TEST_POSTGRES_ADMIN_DSN=postgres://olivares_admin:adminpw@127.0.0.1:${PGPORT_HOST}/olivares?sslmode=disable"
+            echo "OLIVARES_TEST_POSTGRES_SUPERUSER_DSN=postgres://postgres:postgres@127.0.0.1:${PGPORT_HOST}/postgres?sslmode=disable"
+            echo "OLIVARES_TEST_POSTGRES_OTHER_DSN=postgres://postgres:postgres@127.0.0.1:${PGPORT_OTHER}/postgres?sslmode=disable"
+            echo "OLIVARES_TEST_POSTGRES_REQUIRED=1"
+            echo "OLIVARES_TEST_VECTOR_DSN=postgres://olivares_app:apppw@127.0.0.1:${PGPORT_HOST}/olivares?sslmode=disable"
+            echo "CLOUD_CP_INTEGRATION=1"
+            echo "CLOUD_CP_REQUIRE_INTEGRATION=1"
+          } >> "$GITHUB_ENV"
+          echo "resolved Postgres host port: ${PGPORT_HOST} (ephemeral range ${LOPORT}-${HIPORT})"
+      # Full history, as in control-plane: on a persistent self-hosted runner a shallow clone
+      # makes the answer depend on what an earlier job left behind.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Go caches under RUNNER_TEMP (this runner may have no $HOME)
+        run: |
+          {
+            echo "GOCACHE=$RUNNER_TEMP/gocache"
+            echo "GOMODCACHE=$RUNNER_TEMP/gomodcache"
+            echo "GOPATH=$RUNNER_TEMP/gopath"
+            echo "GOBIN=$RUNNER_TEMP/gopath/bin"
+          } >> "$GITHUB_ENV"
+          echo "$RUNNER_TEMP/gopath/bin" >> "$GITHUB_PATH"
+          {
+            echo "PNPM_HOME=$RUNNER_TEMP/pnpm"
+          } >> "$GITHUB_ENV"
+          echo "$RUNNER_TEMP/pnpm" >> "$GITHUB_PATH"
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        id: setup-go
+        with:
+          go-version-file: go.work
+          cache: ${{ runner.environment == 'github-hosted' }}
+          cache-dependency-path: go.work.sum
+      # NODE IS A TEST DEPENDENCY HERE, not a lint one. Two cmd/olivares tests skip without it
+      # (the published locale roster and the release Worker bridge) and the cloud control-plane
+      # integration tests execute it outright. control-plane installed it before its functional
+      # step, so a shard without it would turn executed tests into skips on a bare runner.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        id: node
+        with:
+          node-version-file: .node-version
+      - name: install go-task (pinned)
+        id: tools
+        uses: ./.github/actions/olivares-tool-cache
+      - name: TMPDIR where an extracted binary can actually run
+        run: |
+          corto=""
+          for c in "${HOME:-}" /var/tmp /dev/shm /run/user/"$(id -u)"; do
+            if [ -n "$c" ] && [ -d "$c" ]; then
+              find "$c" -maxdepth 1 -mindepth 1 -type d \( -name 'olv[0-9]*' -o -name 'olv-exec-[0-9]*' \) -user "$(id -un)" -mmin +360 -exec rm -rf {} + 2>/dev/null || true
+            fi
+          done
+          for c in "${HOME:-}" /var/tmp /dev/shm /run/user/"$(id -u)"; do
+            if [ -z "$c" ]; then echo "  candidato <vacio>: variable sin definir"; continue; fi
+            if [ ! -d "$c" ]; then echo "  candidato $c: NO EXISTE"; continue; fi
+            df -Pk "$c" 2>/dev/null | awk -v c="$c" 'NR==2{printf "  candidato %s: %d MiB libres de %d en %s\n", c, $4/1024, $2/1024, $1}' || true
+            d="$c/olv$$"
+            if ! mkdir -p "$d" 2>/dev/null; then echo "  candidato $c: no puedo crear dentro"; continue; fi
+            if ! printf '#!/bin/sh\nexit 7\n' >"$d/.p" 2>/dev/null; then echo "  candidato $c: no puedo escribir"; rm -rf "$d"; continue; fi
+            chmod +x "$d/.p" 2>/dev/null || { echo "  candidato $c: chmod falla"; rm -rf "$d"; continue; }
+            rc=0; "$d/.p" 2>/dev/null || rc=$?
+            rm -f "$d/.p"
+            if [ "$rc" -ne 7 ]; then echo "  candidato $c: NO EJECUTA (rc=$rc; 126 = noexec o sin permiso)"; rm -rf "$d"; continue; fi
+            if [ "${#d}" -gt 24 ]; then echo "  candidato $c: ejecuta pero la ruta mide ${#d} (>24)"; rm -rf "$d"; continue; fi
+            corto="$d"; break
+          done
+          if [ -n "$corto" ]; then
+            echo "TMPDIR=$corto" >> "$GITHUB_ENV"
+            echo "TMPDIR corto y ejecutable: $corto (${#corto} caracteres)"
+          else
+            . scripts/lib/exec-workdir.sh
+            d="$(olivares_pick_exec_workdir o)" || {
+              echo "::error::ningun directorio permite ejecutar un binario"
+              exit 1
+            }
+            echo "TMPDIR=$d" >> "$GITHUB_ENV"
+            echo "::warning::sin candidato CORTO; uso $d (${#d} caracteres): un socket unix puede pasarse de 108"
+          fi
+      - name: provision postgres roles (least-privilege app role + BYPASSRLS admin)
+        id: pg-roles
+        env:
+          PGPASSWORD: postgres
+        run: |
+          command -v psql >/dev/null 2>&1 || { sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client; }
+          psql "postgres://postgres@${PGHOSTPORT:?PGHOSTPORT unset - the resolver step must run first}/postgres" -v ON_ERROR_STOP=1 \
+            -v app_password=apppw -f deploy/postgres/01-app-role.sql
+          psql "postgres://postgres@${PGHOSTPORT:?PGHOSTPORT unset - the resolver step must run first}/postgres" -v ON_ERROR_STOP=1 -c \
+            "DROP ROLE IF EXISTS olivares_admin; CREATE ROLE olivares_admin LOGIN PASSWORD 'adminpw' NOSUPERUSER BYPASSRLS NOCREATEROLE NOCREATEDB NOREPLICATION;"
+          psql "postgres://postgres@${PGHOSTPORT:?PGHOSTPORT unset - the resolver step must run first}/postgres" -v ON_ERROR_STOP=1 -c \
+            "GRANT CONNECT ON DATABASE olivares TO olivares_admin;"
+          psql "postgres://postgres@${PGHOSTPORT:?PGHOSTPORT unset - the resolver step must run first}/olivares" -v ON_ERROR_STOP=1 -c \
+            "GRANT USAGE ON SCHEMA public TO olivares_admin; ALTER DEFAULT PRIVILEGES FOR ROLE olivares_app IN SCHEMA public GRANT SELECT ON TABLES TO olivares_admin;"
+          psql "postgres://postgres@${PGHOSTPORT:?PGHOSTPORT unset - the resolver step must run first}/olivares" -v ON_ERROR_STOP=1 -c \
+            "CREATE EXTENSION IF NOT EXISTS vector;"
+      # Every shard carries the eleven capability DSNs the cloud control-plane packages and the
+      # test:cloud:norace leg read.
+      - name: provision cloud control-plane roles (the 009 RLS migration refuses without them)
+        id: pg-roles-cloud
+        env:
+          PGPASSWORD: postgres
+        run: |
+          set -euo pipefail
+          # export-closure: hub-only cloud/control-plane/deploy/cloud-control-roles.sql — el modulo no viaja al export y el paso se declara NOT APPLICABLE sin el
+          if [ ! -d cloud/control-plane ]; then
+            echo "::notice::cloud-control-roles: NOT APPLICABLE — cloud/control-plane no viaja en este árbol (export curado); no hay roles que provisionar."
+            echo "provisioned=false" >> "$GITHUB_OUTPUT"
+            echo "cloud-control-roles: NOT APPLICABLE (cloud/control-plane not exported)" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          echo "provisioned=true" >> "$GITHUB_OUTPUT"
+          CP_DB=cloudcp
+          CP_MAINT_DB=postgres
+          CP_URI_MAINT="postgres://postgres@${PGHOSTPORT:?PGHOSTPORT unset - the resolver step must run first}/${CP_MAINT_DB}"
+          CP_URI_TARGET="postgres://postgres@${PGHOSTPORT}/${CP_DB}"
+          CP_OBS="$(mktemp -d "${RUNNER_TEMP:?RUNNER_TEMP unset - this step needs a private observation directory}/cloud-cp-obs.XXXXXX")"
+          cp_cleanup() {
+            local rc=$?
+            if [ -d "$CP_OBS" ] && ! rm -rf "$CP_OBS"; then
+              echo "::error::cloud-cp: could not remove the private observation directory"
+              if [ "$rc" -eq 0 ]; then rc=1; fi
+            fi
+            exit "$rc"
+          }
+          trap cp_cleanup EXIT
+          cat > "$CP_OBS/validate.py" <<'PY'
+          import argparse
+          import json
+          import os
+          import sys
+
+          CEILING = 65536
+          DB_KEYS = ("oid", "database", "owner", "datacl_is_null", "datacl",
+                     "public_connect", "public_create", "public_temporary")
+
+
+          def fail(message):
+              # Written through the byte stream with backslashreplace, so a catalog value the
+              # log encoding cannot represent is escaped instead of raising out of the error
+              # path. A failure must stay a named failure, not become a traceback.
+              text = "::error::cloud-cp: " + message + "\n"
+              stream = getattr(sys.stderr, "buffer", None)
+              if stream is None:
+                  sys.stderr.write(text)
+              else:
+                  stream.write(text.encode("utf-8", "backslashreplace"))
+                  stream.flush()
+              raise SystemExit(1)
+
+
+          def _pairs(pairs):
+              names = [name for name, _ in pairs]
+              if len(set(names)) != len(names):
+                  raise ValueError("duplicate key in the catalog projection")
+              return dict(pairs)
+
+
+          def observation(path, keys, kind):
+              """Exactly one line, one JSON object, exactly `keys`. Anything else is a failure."""
+              try:
+                  size = os.path.getsize(path)
+              except OSError:
+                  fail("the %s observation is unreadable" % kind)
+              if size > CEILING:
+                  fail("the %s observation is %d bytes, above the %d byte ceiling"
+                       % (kind, size, CEILING))
+              # STRICT UTF-8, and this is a correction with a measured cause. Reading with
+              # errors="replace" mapped EVERY invalid byte to the same U+FFFD, so two
+              # different malformed ACLs decoded to one string and the maintenance
+              # comparison passed on inputs whose bytes differ. Replacement decoding is
+              # silent normalisation of exactly the value this step must preserve exactly.
+              # Undecodable bytes are a malformed observation, which the contract already
+              # requires this reader to reject; they are classified here through the same
+              # fixed diagnostic as every other malformation, and are never echoed.
+              # Valid non-ASCII catalog names and ACLs decode normally and are unaffected.
+              try:
+                  with open(path, encoding="utf-8") as handle:
+                      raw = handle.read()
+              except OSError:
+                  fail("the %s observation is unreadable" % kind)
+              except UnicodeDecodeError:
+                  fail("the %s observation is not valid UTF-8; undecodable catalog bytes are"
+                       " a malformed observation and are not reproduced here" % kind)
+              body = raw[:-1] if raw.endswith("\n") else raw
+              if not body:
+                  fail("the %s observation is empty: the catalog returned no row" % kind)
+              if "\n" in body:
+                  fail("the %s observation carries %d lines; exactly one row is required"
+                       % (kind, body.count("\n") + 1))
+              try:
+                  value = json.loads(body, object_pairs_hook=_pairs)
+              except ValueError:
+                  fail("the %s observation is not one valid JSON object" % kind)
+              if not isinstance(value, dict):
+                  fail("the %s observation is not a JSON object" % kind)
+              missing = [key for key in keys if key not in value]
+              unexpected = [key for key in value if key not in keys]
+              if missing or unexpected:
+                  fail("the %s observation has the wrong keys (missing: %s; unexpected: %s)"
+                       % (kind, ",".join(missing) or "none", ",".join(unexpected) or "none"))
+              return value
+
+
+          def flag(value, key, kind):
+              if not isinstance(value[key], bool):
+                  fail("%s: %s is not a JSON boolean" % (kind, key))
+              return value[key]
+
+
+          def database(value, kind, name, owner):
+              oid = value["oid"]
+              if isinstance(oid, bool) or not isinstance(oid, int):
+                  fail("%s: oid is not a JSON integer" % kind)
+              if oid <= 0:
+                  fail("%s: oid %r is not a positive catalog identifier" % (kind, oid))
+              for key in ("database", "owner"):
+                  if not isinstance(value[key], str):
+                      fail("%s: %s is not a JSON string" % (kind, key))
+              if value["database"] != name:
+                  fail("%s: the row names database %r, not %r" % (kind, value["database"], name))
+              if value["owner"] != owner:
+                  fail("%s: the database is owned by %r, not %r" % (kind, value["owner"], owner))
+              is_null = flag(value, "datacl_is_null", kind)
+              if is_null and value["datacl"] is not None:
+                  fail("%s: datacl_is_null is true while datacl carries a value" % kind)
+              if not is_null and not isinstance(value["datacl"], str):
+                  fail("%s: datacl_is_null is false while datacl is not a string" % kind)
+              for key in ("public_connect", "public_create", "public_temporary"):
+                  flag(value, key, kind)
+              return value
+
+
+          def main(argv):
+              parser = argparse.ArgumentParser(add_help=False)
+              sub = parser.add_subparsers(dest="command", required=True)
+              one = sub.add_parser("database", add_help=False)
+              one.add_argument("--file", required=True)
+              one.add_argument("--kind", required=True)
+              one.add_argument("--database", required=True)
+              one.add_argument("--owner", required=True)
+              one.add_argument("--match")
+              one.add_argument("--identical")
+              one.add_argument("--public-false", action="store_true")
+              one.add_argument("--print", dest="print_key", choices=("oid",))
+              many = sub.add_parser("flags", add_help=False)
+              many.add_argument("--file", required=True)
+              many.add_argument("--kind", required=True)
+              many.add_argument("--keys", required=True)
+              many.add_argument("--expect", required=True, choices=("true", "false"))
+              args = parser.parse_args(argv)
+
+              if args.command == "flags":
+                  keys = tuple(key for key in args.keys.split(",") if key)
+                  value = observation(args.file, keys, args.kind)
+                  expected = args.expect == "true"
+                  wrong = [key for key in keys if flag(value, key, args.kind) != expected]
+                  if wrong:
+                      fail("%s: %s is not %s" % (args.kind, ",".join(wrong), args.expect))
+                  return 0
+
+              value = database(observation(args.file, DB_KEYS, args.kind),
+                               args.kind, args.database, args.owner)
+              if args.public_false:
+                  for key in ("public_connect", "public_create", "public_temporary"):
+                      if value[key]:
+                          fail("%s: PUBLIC still holds %s on %s"
+                               % (args.kind, key.split("_", 1)[1].upper(), value["database"]))
+              if args.match:
+                  kind = args.kind + " (bound identity)"
+                  bound = database(observation(args.match, DB_KEYS, kind), kind,
+                                   args.database, args.owner)
+                  for key in ("oid", "database", "owner"):
+                      if value[key] != bound[key]:
+                          fail("%s: %s moved from %r to %r; the object under this name is not the one"
+                               " this step bound" % (args.kind, key, bound[key], value[key]))
+              if args.identical:
+                  kind = args.kind + " (before)"
+                  before = database(observation(args.identical, DB_KEYS, kind), kind,
+                                    args.database, args.owner)
+                  for key in DB_KEYS:
+                      if value[key] != before[key]:
+                          fail("%s: %s changed while the cloud plane was bootstrapped (%r -> %r)"
+                               % (args.kind, key, before[key], value[key]))
+              if args.print_key:
+                  sys.stdout.write("%d\n" % value[args.print_key])
+              return 0
+
+
+          raise SystemExit(main(sys.argv[1:]))
+          PY
+          cp_public_flag() { # <privilege> -> the EXISTS predicate for PUBLIC (grantee 0)
+            printf '%s' "EXISTS(SELECT 1 FROM aclexplode(COALESCE(d.datacl, acldefault('d'::\"char\", d.datdba))) AS a(grantor, grantee, privilege_type, is_grantable) WHERE a.grantee = 0 AND a.privilege_type = '$1')"
+          }
+          cp_sql_database() { # <exact datname> -> the one-row identity/ACL projection
+            printf '%s' "SELECT json_build_object('oid', d.oid::bigint, 'database', d.datname::text, 'owner', r.rolname::text, 'datacl_is_null', (d.datacl IS NULL), 'datacl', CASE WHEN d.datacl IS NULL THEN NULL ELSE d.datacl::text END, 'public_connect', $(cp_public_flag CONNECT), 'public_create', $(cp_public_flag CREATE), 'public_temporary', $(cp_public_flag TEMPORARY))::text FROM pg_database d JOIN pg_roles r ON r.oid = d.datdba WHERE d.datname = '$1'"
+          }
+          cp_sql_target_objects() {
+            printf '%s' "SELECT json_build_object('cloud_control_present', EXISTS(SELECT 1 FROM pg_namespace n WHERE n.nspname = 'cloud_control'), 'cloud_control_owned_by_owner', EXISTS(SELECT 1 FROM pg_namespace n JOIN pg_roles r ON r.oid = n.nspowner WHERE n.nspname = 'cloud_control' AND r.rolname = 'cloud_cp_owner'), 'schema_migrations_present', EXISTS(SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public' AND c.relname = 'schema_migrations' AND c.relkind = 'r'), 'schema_migrations_owned_by_migrator', EXISTS(SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace JOIN pg_roles r ON r.oid = c.relowner WHERE n.nspname = 'public' AND c.relname = 'schema_migrations' AND c.relkind = 'r' AND r.rolname = 'cloud_cp_migrator'))::text"
+          }
+          cp_sql_maintenance_objects() { # <maintenance database OID>
+            printf '%s' "SELECT json_build_object('cloud_control_present', EXISTS(SELECT 1 FROM pg_namespace n WHERE n.nspname = 'cloud_control'), 'cloud_schema_migrations_present', EXISTS(SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace JOIN pg_roles r ON r.oid = c.relowner WHERE n.nspname = 'public' AND c.relname = 'schema_migrations' AND c.relkind = 'r' AND r.rolname IN ('cloud_cp_migrator', 'cloud_cp_owner')), 'cloud_role_settings_present', EXISTS(SELECT 1 FROM pg_db_role_setting s JOIN pg_roles r ON r.oid = s.setrole WHERE s.setdatabase = $1 AND r.rolname LIKE 'cloud\_cp\_%'))::text"
+          }
+          cp_sql_settings() { # <cloud database OID>
+            printf '%s' "SELECT json_build_object('migrator_role_setting_ok', EXISTS(SELECT 1 FROM pg_db_role_setting s JOIN pg_roles r ON r.oid = s.setrole WHERE s.setdatabase = $1 AND r.rolname = 'cloud_cp_migrator' AND s.setconfig @> ARRAY['role=cloud_cp_owner']), 'migrator_search_path_ok', EXISTS(SELECT 1 FROM pg_db_role_setting s JOIN pg_roles r ON r.oid = s.setrole WHERE s.setdatabase = $1 AND r.rolname = 'cloud_cp_migrator' AND s.setconfig @> ARRAY['search_path=public']))::text"
+          }
+          cp_query() { # <label> <connect uri> <sql>
+            if ! psql "$2" -X -v ON_ERROR_STOP=1 -tAc "$3" > "$CP_OBS/$1.json"; then
+              echo "::error::cloud-cp: the ${1} catalog observation did not complete (psql exited nonzero)"
+              return 1
+            fi
+          }
+          cp_query maint-pre "$CP_URI_MAINT" "$(cp_sql_database "$CP_MAINT_DB")"
+          CP_MAINT_OID="$(python3 "$CP_OBS/validate.py" database --file "$CP_OBS/maint-pre.json" \
+            --kind "the maintenance database before CREATE" --database "$CP_MAINT_DB" --owner postgres --print oid)"
+          cp_query maint-objects-pre "$CP_URI_MAINT" "$(cp_sql_maintenance_objects "$CP_MAINT_OID")"
+          python3 "$CP_OBS/validate.py" flags --file "$CP_OBS/maint-objects-pre.json" \
+            --kind "cloud objects on the maintenance database before CREATE" \
+            --keys cloud_control_present,cloud_schema_migrations_present,cloud_role_settings_present --expect false
+          psql "$CP_URI_MAINT" -X -v ON_ERROR_STOP=1 -c "CREATE DATABASE ${CP_DB} TEMPLATE template0 OWNER postgres"
+          cp_query target-pre "$CP_URI_MAINT" "$(cp_sql_database "$CP_DB")"
+          CP_TARGET_OID="$(python3 "$CP_OBS/validate.py" database --file "$CP_OBS/target-pre.json" \
+            --kind "the created cloud database" --database "$CP_DB" --owner postgres --print oid)"
+          args=()
+          for r in migrator tenant sweeper admin_ro metering_poller notifier billing \
+                   customer_resolver exporter webhook_idempotency; do
+            pw="$(openssl rand -hex 16)"
+            args+=(-v "cloud_cp_${r}_password=${pw}")
+            eval "PW_${r}=\$pw"
+          done
+          psql "$CP_URI_TARGET" \
+            -X -v ON_ERROR_STOP=1 "${args[@]}" -f cloud/control-plane/deploy/cloud-control-roles.sql
+          psql "$CP_URI_MAINT" -X -tAc \
+            "SELECT 1 FROM pg_roles WHERE rolname='cloud_cp_owner' AND NOT rolcanlogin AND NOT rolsuper AND NOT rolbypassrls" \
+            > "$RUNNER_TEMP/cloud_cp_owner.txt"
+          [ "$(cat "$RUNNER_TEMP/cloud_cp_owner.txt")" = "1" ] || { echo "::error::el bootstrap de roles no dejo cloud_cp_owner con la forma que exige la migracion 009"; exit 1; }
+          cp_query target-post "$CP_URI_MAINT" "$(cp_sql_database "$CP_DB")"
+          python3 "$CP_OBS/validate.py" database --file "$CP_OBS/target-post.json" \
+            --kind "the cloud database after bootstrap" --database "$CP_DB" --owner postgres \
+            --match "$CP_OBS/target-pre.json" --public-false
+          cp_query target-objects "$CP_URI_TARGET" "$(cp_sql_target_objects)"
+          python3 "$CP_OBS/validate.py" flags --file "$CP_OBS/target-objects.json" \
+            --kind "the cloud plane objects inside ${CP_DB}" \
+            --keys cloud_control_present,cloud_control_owned_by_owner,schema_migrations_present,schema_migrations_owned_by_migrator --expect true
+          cp_query target-settings "$CP_URI_MAINT" "$(cp_sql_settings "$CP_TARGET_OID")"
+          python3 "$CP_OBS/validate.py" flags --file "$CP_OBS/target-settings.json" \
+            --kind "the migrator's per-database settings on ${CP_DB}" \
+            --keys migrator_role_setting_ok,migrator_search_path_ok --expect true
+          cp_query maint-post "$CP_URI_MAINT" "$(cp_sql_database "$CP_MAINT_DB")"
+          python3 "$CP_OBS/validate.py" database --file "$CP_OBS/maint-post.json" \
+            --kind "the maintenance database after bootstrap" --database "$CP_MAINT_DB" --owner postgres --identical "$CP_OBS/maint-pre.json"
+          cp_query maint-objects-post "$CP_URI_MAINT" "$(cp_sql_maintenance_objects "$CP_MAINT_OID")"
+          python3 "$CP_OBS/validate.py" flags --file "$CP_OBS/maint-objects-post.json" \
+            --kind "cloud objects on the maintenance database after bootstrap" \
+            --keys cloud_control_present,cloud_schema_migrations_present,cloud_role_settings_present --expect false
+          {
+            echo "DATABASE_MIGRATOR_URL=postgres://cloud_cp_migrator:${PW_migrator}@${PGHOSTPORT}/${CP_DB}?sslmode=disable"
+            echo "DATABASE_TENANT_URL=postgres://cloud_cp_tenant:${PW_tenant}@${PGHOSTPORT}/${CP_DB}?sslmode=disable"
+            echo "DATABASE_TENANT_POOLED_URL=postgres://cloud_cp_tenant:${PW_tenant}@${PGHOSTPORT}/${CP_DB}?sslmode=disable"
+            echo "DATABASE_SWEEPER_URL=postgres://cloud_cp_sweeper_ro:${PW_sweeper}@${PGHOSTPORT}/${CP_DB}?sslmode=disable"
+            echo "DATABASE_ADMIN_URL=postgres://cloud_cp_admin_ro:${PW_admin_ro}@${PGHOSTPORT}/${CP_DB}?sslmode=disable"
+            echo "DATABASE_POLLER_URL=postgres://cloud_cp_metering_poller_ro:${PW_metering_poller}@${PGHOSTPORT}/${CP_DB}?sslmode=disable"
+            echo "DATABASE_NOTIFIER_URL=postgres://cloud_cp_notifier_ro:${PW_notifier}@${PGHOSTPORT}/${CP_DB}?sslmode=disable"
+            echo "DATABASE_BILLING_URL=postgres://cloud_cp_billing:${PW_billing}@${PGHOSTPORT}/${CP_DB}?sslmode=disable"
+            echo "DATABASE_RESOLVER_URL=postgres://cloud_cp_customer_resolver:${PW_customer_resolver}@${PGHOSTPORT}/${CP_DB}?sslmode=disable"
+            echo "DATABASE_EXPORTER_URL=postgres://cloud_cp_exporter_ro:${PW_exporter}@${PGHOSTPORT}/${CP_DB}?sslmode=disable"
+            echo "DATABASE_IDEMPOTENCY_URL=postgres://cloud_cp_webhook_idempotency_ro:${PW_webhook_idempotency}@${PGHOSTPORT}/${CP_DB}?sslmode=disable"
+          } >> "$GITHUB_ENV"
+      # ONE SHARD, through the one reader of ci/pr-suite-shards.txt: its whole packages, then its
+      # name groups, then its legs, each `go test` under the spec's 30-minute binary timeout. The
+      # 35-minute step ceiling is the spec's too, and scripts/check-pr-suite-shards.sh pins both
+      # numbers and this matrix to the spec, so Go's timeout (a goroutine dump naming the package)
+      # always fires before the step is cancelled mute.
+      #
+      # Sampled host resources are recorded on EXIT/TERM when the shell and log transport remain
+      # available. These samples are host memory use, not process RSS, and can miss intervening
+      # peaks; SIGKILL or host loss can prevent a report, and missing evidence is not a zero
+      # reading.
+      #
+      # The log carries the shard in its name, because .github/actions/pr-failure-report titles
+      # its report with the job id, the same in all nine shards, and attaches the tail of every
+      # $RUNNER_TEMP/ci-fail-*.log. A shard keeps running after a red package, so the tail alone
+      # may end on later green lines: on a failure the step appends this log's FAIL, panic and
+      # refusal lines to its end, so the report names the failing packages.
+      - name: test (functional shard ${{ matrix.shard }}, no -race)
+        id: test-functional
+        timeout-minutes: 35
+        env:
+          OLIVARES_TEST_SHARD: ${{ matrix.shard }}
+        run: |
+          set -euo pipefail
+          LOG="$RUNNER_TEMP/ci-fail-test-functional-${{ matrix.shard }}.log"
+          WITNESS="$RUNNER_TEMP/resource-witness-functional-${{ matrix.shard }}.txt"
+          bash scripts/ci-resource-witness.sh start "$WITNESS" >/dev/null
+          witness_said=""
+          witness() {
+            if [ -z "$witness_said" ]; then
+              witness_said=yes
+              bash scripts/ci-resource-witness.sh report "$WITNESS"
+            fi
+          }
+          trap witness EXIT TERM
+          rc=0
+          task test:functional:shard 2>&1 | tee "$LOG" || rc=$?
+          if [ "$rc" -ne 0 ]; then
+            PAT='^(FAIL|--- FAIL|panic: )|^pr-suite-shards: (FAIL|COULD NOT LOOK)|^task: Failed'
+            summary="(no FAIL, panic or refusal line was printed: read the whole step log)"
+            if grep -qE "$PAT" "$LOG"; then
+              summary="$(grep -E "$PAT" "$LOG" | tail -n 80)"
+            fi
+            {
+              echo
+              echo "=== shard ${{ matrix.shard }}: the FAIL, panic and refusal lines of this log ==="
+              printf '%s\n' "$summary"
+            } | tee -a "$LOG"
+            exit "$rc"
+          fi
+          rm "$LOG"
+      - name: report failure (PR comment, or issue on a main push; PAT-blind)
+        if: ${{ failure() }}
+        uses: ./.github/actions/pr-failure-report
+        with:
+          steps-json: ${{ toJSON(steps) }}
+
   # The push gate's -race legs (split from control-plane 2026-07-24: the
   # workspace sub-leg alone exceeds 45 min on a 2-vCPU runner; sharded 2026-07-25
   # after run 30138745627 crossed the 70-minute step ceiling with sdk/* and
@@ -2196,6 +2763,9 @@ jobs:
   # -race legs are the only jobs that run with -race, and race-modules was the
   # one racing ./modules with no server, so under it — and only under it —
   # those tests skipped. The weekly race-full sweep did cover them.
+  # (Since 2026-09-25 that suite runs in the functional-shard matrix, these tests in its
+  # `modules` shard, with the same services and strict posture; control-plane carries its
+  # verdict.)
   #
   # A narrower benefit than first claimed, and still a real one: a data race in
   # a fence trigger's Go side would be found weekly instead of on the PR that

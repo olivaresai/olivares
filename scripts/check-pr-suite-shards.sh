@@ -23,10 +23,12 @@
 #      it is in looks fuller than it is. The exception is written in the spec with the word
 #      `optional` and this gate PRINTS it — an exemption that keeps quiet is an exemption
 #      nobody reviews.
-#   3. THE WORKFLOW'S MATRIX IS THE SPEC'S SHARD LIST, in the same order. The names are in
-#      two files, so they can drift; this is what makes the drift impossible rather than
-#      unlikely. A shard declared and not in the matrix never runs and nothing says so.
-#   4. THE CEILINGS THE WORKFLOW DECLARES ARE THE ONES THE SPEC DECLARES, and the Go
+#   3. EACH WORKFLOW'S MATRIX IS THE SPEC'S SHARD LIST, in the same order. The names are in
+#      several files, so they can drift; this is what makes the drift impossible rather than
+#      unlikely. A shard declared and not in the matrix never runs and nothing says so. Two
+#      workflows run the shards: pr-ci.yml on pull requests, and mainline-ci.yml on main,
+#      whose required `control-plane` carries their verdict. Both are pinned.
+#   4. THE CEILINGS EACH WORKFLOW DECLARES ARE THE ONES THE SPEC DECLARES, and the Go
 #      timeout stays under the step ceiling. Go's timeout fires with a goroutine dump and
 #      the package name; the step ceiling only cancels. Inverting them costs the diagnosis.
 #   5. EVERY TEST OF A PACKAGE SPLIT BY NAME BELONGS TO EXACTLY ONE GROUP. This is (1) one
@@ -45,6 +47,7 @@ cd "$ROOT" || { echo "check-pr-suite-shards: COULD NOT LOOK — cannot enter $RO
 
 SPEC="${OLIVARES_PR_SUITE_SHARDS:-ci/pr-suite-shards.txt}"
 WF="${OLIVARES_PR_CI_WF:-.github/workflows/pr-ci.yml}"
+MAINLINE_WF="${OLIVARES_MAINLINE_CI_WF:-.github/workflows/mainline-ci.yml}"
 TASKFILE="${OLIVARES_TASKFILE:-Taskfile.yml}"
 READER="${OLIVARES_PR_SUITE_READER:-scripts/pr-suite-shards.sh}"
 
@@ -52,7 +55,7 @@ say()    { printf '%s\n' "$*"; }
 finding(){ printf 'check-pr-suite-shards: FAIL — %s\n' "$*" >&2; }
 cannot() { printf 'check-pr-suite-shards: COULD NOT LOOK — %s\n' "$*" >&2; exit 2; }
 
-for f in "$SPEC" "$WF" "$TASKFILE" "$READER"; do
+for f in "$SPEC" "$WF" "$MAINLINE_WF" "$TASKFILE" "$READER"; do
   [ -r "$f" ] || cannot "missing $f"
 done
 command -v python3 >/dev/null 2>&1 || cannot "python3 is not on PATH"
@@ -105,10 +108,31 @@ elif [ "$READER_RC" -ne 0 ]; then
 fi
 [ -n "$SHARDS" ] || cannot "the reader produced no shard names"
 
-# ── the workflow: the matrix and the two ceilings ─────────────────────────────────────
+# ── the clocks the spec declares ─────────────────────────────────────────────────────
+GOTO="$(bash "$READER" number go-timeout-minutes)" || cannot "the reader could not give the go timeout"
+STEPC="$(bash "$READER" number step-ceiling-minutes)" || cannot "the reader could not give the step ceiling"
+JOBC="$(bash "$READER" number job-ceiling-minutes)" || cannot "the reader could not give the job ceiling"
+
+RC=0
+if [ "$GOTO" -ge "$STEPC" ]; then
+  finding "the Go timeout (${GOTO}m) is not under the step ceiling (${STEPC}m): the step would be cancelled before Go could name the package that hung, and a cancelled step is indistinguishable from a superseded run."
+  RC=1
+fi
+if [ "$STEPC" -ge "$JOBC" ]; then
+  finding "the step ceiling (${STEPC}m) is not under the job ceiling (${JOBC}m): a job ceiling that fires first cancels the remaining steps, so the red comes out mute."
+  RC=1
+fi
+SPEC_MATRIX="$(printf '%s\n' "$SHARDS" | paste -sd, -)"
+
+# ── each workflow: the matrix and the two ceilings ────────────────────────────────────
 # A conservative read, in the shape scripts/ci-timeouts.py already justifies for this
 # repository: no tabs, no anchors, no flow mappings. Anything it cannot read with
-# certainty is a refusal, never a guess.
+# certainty is a refusal, never a guess. The same reading and the same comparisons for
+# every workflow that runs the shards, so the two cannot be held to different rules.
+PINNED=""
+# The body is not indented because the reader below is a heredoc that must stay at column 0.
+pin_workflow() {
+local WF="$1" WFOUT WF_JOB WF_MATRIX WF_JOBCEIL WF_STEPCEILS
 WFOUT="$(WF="$WF" python3 - <<'PY'
 import os, re, sys
 
@@ -180,7 +204,6 @@ PY
 
 case "$WFOUT" in CANNOT*) cannot "${WFOUT#CANNOT }" ;; esac
 
-RC=0
 if grep -qx 'NOMATRIX' <<<"$WFOUT"; then
   finding "no job in $WF declares a \`shard:\` matrix, so $SPEC partitions a suite that nothing runs in parts. A shard list nobody reads is a list that stops being true the day after it is written."
   RC=1
@@ -193,9 +216,8 @@ else
   WF_STEPCEILS="$(printf '%s\n' "$WFOUT" | sed -n 's/^STEPCEILINGS //p')"
 fi
 
-SPEC_MATRIX="$(printf '%s\n' "$SHARDS" | paste -sd, -)"
 if [ -n "$WF_JOB" ] && [ "$WF_MATRIX" != "$SPEC_MATRIX" ]; then
-  finding "the matrix of job '$WF_JOB' and the shard list disagree."
+  finding "the matrix of job '$WF_JOB' in $WF and the shard list disagree."
   say "  declared in $SPEC : $SPEC_MATRIX" >&2
   say "  matrix of $WF_JOB  : $WF_MATRIX" >&2
   say "  A shard declared and not in the matrix never runs; a matrix value with no shard" >&2
@@ -204,29 +226,21 @@ if [ -n "$WF_JOB" ] && [ "$WF_MATRIX" != "$SPEC_MATRIX" ]; then
 fi
 
 # ── the ceilings ─────────────────────────────────────────────────────────────────────
-GOTO="$(bash "$READER" number go-timeout-minutes)" || cannot "the reader could not give the go timeout"
-STEPC="$(bash "$READER" number step-ceiling-minutes)" || cannot "the reader could not give the step ceiling"
-JOBC="$(bash "$READER" number job-ceiling-minutes)" || cannot "the reader could not give the job ceiling"
-
-if [ "$GOTO" -ge "$STEPC" ]; then
-  finding "the Go timeout (${GOTO}m) is not under the step ceiling (${STEPC}m): the step would be cancelled before Go could name the package that hung, and a cancelled step is indistinguishable from a superseded run."
-  RC=1
-fi
-if [ "$STEPC" -ge "$JOBC" ]; then
-  finding "the step ceiling (${STEPC}m) is not under the job ceiling (${JOBC}m): a job ceiling that fires first cancels the remaining steps, so the red comes out mute."
-  RC=1
-fi
 if [ -n "$WF_JOB" ]; then
   if [ "${WF_JOBCEIL:-}" != "$JOBC" ]; then
-    finding "job '$WF_JOB' declares timeout-minutes ${WF_JOBCEIL:-none} and $SPEC declares ${JOBC}."
+    finding "job '$WF_JOB' in $WF declares timeout-minutes ${WF_JOBCEIL:-none} and $SPEC declares ${JOBC}."
     RC=1
   fi
   case ",$WF_STEPCEILS," in
     *",$STEPC,"*) ;;
-    *) finding "no step of job '$WF_JOB' declares timeout-minutes ${STEPC}, which is the step ceiling $SPEC declares (the workflow declares: ${WF_STEPCEILS:-none}). A job whose long step has no ceiling of its own can only die the way nobody can read."
+    *) finding "no step of job '$WF_JOB' in $WF declares timeout-minutes ${STEPC}, which is the step ceiling $SPEC declares (the workflow declares: ${WF_STEPCEILS:-none}). A job whose long step has no ceiling of its own can only die the way nobody can read."
        RC=1 ;;
   esac
+  PINNED="${PINNED}  matrix of ${WF_JOB} (${WF}) = ${WF_MATRIX}; ceilings go ${GOTO}m < step ${STEPC}m < job ${JOBC}m."$'\n'
 fi
+}
+pin_workflow "$WF"
+pin_workflow "$MAINLINE_WF"
 
 # ── the legs are real tasks ──────────────────────────────────────────────────────────
 # Same predicate check-gate-parity.sh uses to know what IS a task: a name that is not a
@@ -482,7 +496,7 @@ fi
 say "check-pr-suite-shards: CLEAN — ${TOTAL} package(s) with tests, each in exactly one shard."
 say "  universe: ${SOURCE}"
 say "  split: ${REPARTO}"
-say "  matrix of ${WF_JOB} = ${WF_MATRIX}; ceilings go ${GOTO}m < step ${STEPC}m < job ${JOBC}m."
+printf '%s' "$PINNED"
 if [ -n "$GROUPSPLIT" ]; then
   while IFS= read -r line; do
     [ -n "$line" ] && say "  name groups — $line"
