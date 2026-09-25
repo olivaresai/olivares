@@ -231,4 +231,5 @@ func TestDRRestoreDualControlAdmitsASecondAccountTheRequesterMinted(t *testing.T
 	if r.code != http.StatusAccepted {
 		t.Fatalf("a DIFFERENT account must be able to approve, got %d %s", r.code, r.raw)
 	}
+	waitForDRJob(t, h, second, r)
 }
