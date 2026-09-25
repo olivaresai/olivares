@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -425,4 +426,84 @@ func TestNextCommandPlaceholdersAreLoadBearing(t *testing.T) {
 			t.Errorf("topLevelNextCommands[%q] = %q, want %q", path, got, want)
 		}
 	}
+}
+
+// TestFirstHourHelpSurvivesConcurrentRootBuilds builds the root command on
+// several goroutines at once and renders help on each, which is what the parallel
+// tests of this package do on every run.
+//
+// MEASURED 2026-09-25: installFirstHourHelp registered its template function with
+// cobra.AddTemplateFunc, so every root command wrote cobra's package-level
+// template map, unlocked, and every help render read it. A pull-request run
+// aborted the whole test binary with "fatal error: concurrent map writes" from
+// two parallel tests that each built a root command. The registration now runs
+// once, in init.
+//
+// It has two phases because each one reaches the defect a different way. The
+// first is the path that failed: newRootCmd on every goroutine at once, then a
+// help render. The second calls installFirstHourHelp again on every root after
+// one barrier, as helpFor and admits do. Nothing orders the goroutines between
+// that barrier and the call, so under -race a write to a process-wide map inside
+// it is reported on any schedule, not only when two goroutines happen to collide.
+func TestFirstHourHelpSurvivesConcurrentRootBuilds(t *testing.T) {
+	t.Parallel()
+	cases := []struct{ path, next string }{
+		{"quickstart", "olivares first-boot"},
+		{"first-boot", "olivares doctor"},
+		{"doctor", "olivares agent tool detect"},
+		{"agent deploy", "olivares agent session create --provider-profile <ref>"},
+	}
+	const builders = 8
+	roots := make([]*cobra.Command, builders)
+
+	// together releases every goroutine at the same instant and waits for all of
+	// them, so the calls inside step overlap instead of running one after another.
+	together := func(step func(i int)) {
+		start := make(chan struct{})
+		var wg sync.WaitGroup
+		for i := range builders {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				<-start
+				step(i)
+			}()
+		}
+		close(start)
+		wg.Wait()
+	}
+	// helpEndsWithNext renders help the way an operator reads it. It reports with
+	// t.Errorf, which is safe from any goroutine; t.Fatal is not.
+	helpEndsWithNext := func(phase string, i int) {
+		tc := cases[i%len(cases)]
+		cmd, _, err := roots[i].Find(strings.Fields(tc.path))
+		if err != nil {
+			t.Errorf("%s, builder %d: find %q: %v", phase, i, tc.path, err)
+			return
+		}
+		var out bytes.Buffer
+		cmd.SetOut(&out)
+		cmd.SetErr(&out)
+		if err := cmd.Help(); err != nil {
+			t.Errorf("%s, builder %d: help for %q: %v", phase, i, tc.path, err)
+			return
+		}
+		got := out.String()
+		if !strings.Contains(got, "Next:") || !strings.HasSuffix(strings.TrimSpace(got), tc.next) {
+			t.Errorf("%s, builder %d: help for %q does not end with the next command %q:\n%s",
+				phase, i, tc.path, tc.next, got)
+		}
+	}
+
+	together(func(i int) {
+		roots[i] = newRootCmd()
+		helpEndsWithNext("concurrent newRootCmd", i)
+	})
+	together(func(i int) {
+		if missing := installFirstHourHelp(roots[i]); len(missing) > 0 {
+			t.Errorf("concurrent installFirstHourHelp, builder %d: the tables name paths "+
+				"this binary does not have: %v", i, missing)
+		}
+		helpEndsWithNext("concurrent installFirstHourHelp", i)
+	})
 }
