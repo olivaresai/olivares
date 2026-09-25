@@ -268,8 +268,8 @@ func TestCollectToolUse(t *testing.T) {
 	if !hasText(c, "rm -rf /") || !hasText(c, "bash") {
 		t.Errorf("tool_use args not extracted: %v", c.Texts)
 	}
-	if channelKinds(c)[ChannelToolUse] != 1 {
-		t.Errorf("want a tool_use channel; got %v", channelKinds(c))
+	if channelKinds(c)[ChannelToolUse] != 3 {
+		t.Errorf("want the raw channel plus the decoded key and value; got %v", channelKinds(c))
 	}
 }
 

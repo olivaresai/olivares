@@ -841,3 +841,11 @@ regexes = [
   paths = ['''^commercial/license-worker/test/d1-sandbox-settlement\.worker\.ts$''']
   regexTarget = "secret"
   regexes = ['''^s706-settlement-probe$''']
+
+[[allowlists]]
+  description = "the decoded-argument walker exposes a JSON object key on its own channel, not a credential"
+  targetRules = ["generic-api-key"]
+  condition = "AND"
+  regexTarget = "match"
+  paths = ['''^connectors/claude-api/contentscan\.go$''']
+  regexes = ['''^key, "arguments/key"$''']

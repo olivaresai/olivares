@@ -67,6 +67,17 @@ is, and the section is dated only then.
   surface presents the declaration yet.
 ### Changed
 
+- **Content inspection now also receives decoded tool-use arguments, with separate bounded work.**
+  Request/response DLP receives every JSON-unescaped tool-use argument key and string and every
+  decoded URL/base64 variant, each with its original trust provenance and once per occurrence.
+  The pre-existing channels and decoding are preserved with their original limits, and the new
+  work never consumes them. The new work has its own limits per request or response, covering
+  the whole resent conversation: 32 MiB of decoded output, 64 MiB of parsed or decoded input,
+  262,144 JSON tokens, 65,536 added channels, and six encoding levels. When a limit is reached
+  the content is marked unscanned: the stock policy refuses the request or withholds the
+  buffered response; with an explicit unscanned-allow rule, or with the inspector alone, the
+  pre-existing decoding and channels still apply, but the remaining added decoding is not
+  inspected. Wire bytes are unchanged.
 - **A right-to-erasure receipt now states what its verification examined.** The residual scan
   that runs after the erase pass and before the crypto-shred reports the method it used and
   the targets it opened against the targets this request's data-class scope required; the

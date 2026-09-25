@@ -17,8 +17,8 @@
 // classifier; bounded base64/URL encodings are decoded and rescanned, while anything
 // opaque is marked UNSCANNED, so the decider's
 // deny-closed posture (modules/inferenceproxy.dlpPolicy.unscannedDenied — "*" does NOT
-// cover unscanned) closes the bypass. This collection runs in BOTH builds (it is core,
-// AGPL); the closed firewall's deep detectors are the additive paid layer above it.
+// cover unscanned) closes the bypass. This Apache-licensed collection runs in BOTH
+// builds; the closed firewall's deep detectors are the additive paid layer above it.
 //
 // MINIMAL DATA (docs/SECURITY-HARDENING.md). The collector handles prompt/response content in flight — the
 // same posture as the connector's existing fingerprinting — and returns the extracted
@@ -31,13 +31,27 @@
 // DENY-CLOSED BY CONSTRUCTION. Unrecognized or unparseable non-text blocks are marked
 // unscanned (not silently skipped), so a block shape this connector does not yet model can
 // never slip sensitive content past DLP — the fail-safe direction.
+//
+// TWO ACCOUNTING DOMAINS. Compatibility is what the collector did before decoded channels:
+// the original channels (text, the raw tool name+input, a source URL, a decoded text/plain
+// base64 document) and the classifier texts with their bounded URL/base64 decodings, under
+// the legacy limits and with the legacy opaque outcomes. Added work is everything beyond
+// it: every JSON-unescaped key and string of a tool input, the decodings of those strings,
+// and one EXPANSION channel, with the source's kind and role, for each decoding of any
+// source occurrence. Added work has its own limits. Reaching one stops only added work and
+// marks each affected source unscanned once; it never removes, starves or charges
+// compatibility coverage. A result therefore holds the original channels, plus bounded
+// expansion channels, plus at most one overflow disposition per original source.
 
 package claudeapi
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"net/url"
+	"slices"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -62,18 +76,45 @@ const (
 )
 
 // maxContentDepth bounds recursion into nested content (a document "content" source, a
-// tool_result content array). Anthropic's shapes nest at most a couple of levels; this is
-// a hostile-input backstop, not a real limit — content below it is marked unscanned, never
-// silently dropped.
+// tool_result content array) and, continuing from the enclosing block's depth, into tool
+// input nesting: the input value sits at the block's depth and a container's members one
+// level deeper. maxEncodingDepth separately bounds nested URL/base64 layers; every source
+// string, an argument string included, starts at encoding depth zero. Anthropic's shapes
+// nest at most a couple of levels; these are hostile-input backstops, not real limits —
+// content below them is marked unscanned, never silently dropped.
+//
+// maxDecodedContentSize is the unchanged legacy bound. Per request or response, it caps the
+// decoded text the compatibility decoding may newly add to the classifier input. The same
+// value is also the per-item guard of every decoder in both domains: a percent-encoded text
+// or a base64 source above it, or a base64 candidate longer than its encoded length, is
+// marked unscanned without being decoded.
+//
+// The four added-work limits apply per request or response, each to its own unit and with
+// its own fixed opaque reason. They are provisional construction bounds on the work this
+// collector adds, not measured capacity and not a bound on the process heap. Input is
+// charged before a decoder is constructed or advanced, and a token before each Token call;
+// output is charged after the standard decoder has materialized the string it emits.
 const (
 	maxContentDepth       = 6
-	maxDecodedContentSize = 1 << 20 // 1 MiB total decoded plaintext per request/response
+	maxEncodingDepth      = 6
+	maxDecodedContentSize = 1 << 20
+	maxAddedOutput        = 32 << 20 // "decoded/output-limit": bytes of every expansion channel
+	maxAddedInput         = 64 << 20 // "decoded/input-limit": argument tokenizer and added decoder input
+	maxAddedTokens        = 1 << 18  // "arguments/token-limit": JSON tokens read by the argument walk
+	maxAddedChannels      = 1 << 16  // "decoded/channel-limit": expansion channels, scannable and opaque
 )
 
 // ContentChannel is one extracted unit of message/response content. Text is the classifiable
 // plaintext ("" when the channel is opaque); Scannable=false means it contributed to
 // Unscanned (binary/file_id/encrypted/opaque/unknown). Ref is non-sensitive structural
 // context (media_type, url host, file_id, tool name, block type) — never the content bytes.
+// Expansion channels use the fixed refs "arguments/key", "arguments/string" and
+// "encoded"; these refs never contain the decoded key or value. Opaque reasons include
+// "arguments/unparseable", "arguments/max-depth", "arguments/ambiguous-member",
+// "encoded/undecodable-or-oversized", "encoded/max-depth" and "encoded/oversized".
+// Added-work overflow uses "decoded/output-limit", "decoded/input-limit",
+// "arguments/token-limit" or "decoded/channel-limit". These are dispositions of an
+// original source, not additional wire blocks.
 type ContentChannel struct {
 	Kind      string
 	Role      string // "user" | "assistant" | "system" | ""
@@ -86,6 +127,20 @@ type ContentChannel struct {
 // the distinct extractable texts (the classifier input), and whether ANY channel carried
 // content that could not be reduced to plaintext (the unscanned signal the deny-closed DLP
 // policy consumes).
+//
+// Channels retains original channels and adds bounded argument/encoding expansions.
+// Each original source has at most one copy of an opaque reason and at most one
+// added-work overflow disposition. Repeated expansions still consume the added budget
+// even when Texts deduplicates their text. Reaching an added limit does not stop the
+// original walk or spend the separate legacy decoding allowance.
+//
+// Per call, added work is bounded by 32 MiB of emitted expansion text, 64 MiB of
+// tokenizer/decoder input, 262,144 JSON tokens and 65,536 added channels (including
+// opaque channels). Argument and encoding depth each have a six-level bound. The
+// unchanged 1 MiB legacy decoding allowance and decoder per-item guards also apply.
+// These are work limits, not a heap or transport-capacity guarantee: a decoder can
+// materialize a string before its output charge. Unscanned reports incomplete coverage;
+// this collector neither grants a policy exception nor decides whether to forward.
 type CollectedContent struct {
 	Channels  []ContentChannel
 	Texts     []string
@@ -93,7 +148,8 @@ type CollectedContent struct {
 }
 
 // CollectRequestContent walks a request's system prefix and message content. System blocks
-// are attributed role "system"; message blocks carry their message role.
+// are attributed role "system"; message blocks carry their message role. The work
+// limits and expansion/overflow invariants of CollectedContent apply to the whole call.
 func CollectRequestContent(req MessageRequest) CollectedContent {
 	c := &contentCollector{}
 	c.blocks("system", req.System, 0, "")
@@ -105,6 +161,7 @@ func CollectRequestContent(req MessageRequest) CollectedContent {
 
 // CollectResponseContent walks a response's content (the assistant turn) — text, thinking,
 // tool_use/server_tool_use action args, and any web_search/search results round-tripped in.
+// It starts a new set of the per-call allowances documented on CollectedContent.
 func CollectResponseContent(resp MessageResponse) CollectedContent {
 	c := &contentCollector{}
 	c.blocks(roleAssistant, resp.Content, 0, "")
@@ -116,24 +173,49 @@ func CollectResponseContent(resp MessageResponse) CollectedContent {
 type contentCollector struct {
 	channels  []ContentChannel
 	texts     []string
-	seenText  map[string]bool
+	seenText  map[string]bool // classifier texts; true once the compatibility domain has seen one
 	unscanned bool
-	decoded   int
+
+	// compatDecoded is the legacy total of decoded text the compatibility decoding newly
+	// classified, bounded by maxDecodedContentSize. Added work never reads or changes it.
+	compatDecoded int
+
+	// Added work, each unit counted against its own limit. addedExhausted is the fixed
+	// reason of the first limit reached; no added work runs after it.
+	addedInput, addedOutput, addedTokens, addedChannels int
+	addedExhausted                                      string
+}
+
+// source is one original occurrence: a channel read from the wire, such as a text, a raw
+// tool call or a URL. Everything decoded from it keeps its kind and role, and it carries
+// each opaque reason at most once, however many of its strings produce that reason. Two
+// occurrences with the same kind, role and text are still distinct sources.
+type source struct {
+	kind, role string
+	reasons    []string
 }
 
 func (c *contentCollector) result() CollectedContent {
 	return CollectedContent{Channels: c.channels, Texts: c.texts, Unscanned: c.unscanned}
 }
 
-// scannable records an extractable-text channel (and de-duplicates the text for the
-// classifier). Empty text is ignored (nothing to classify), but the channel is still
-// recorded so the firewall can see structure.
-func (c *contentCollector) scannable(kind, role, text, ref string) {
+// scannable records an original channel: extractable text read from the wire. It is
+// compatibility output, never charged, and it returns the source that owns whatever is
+// decoded from it. Empty text is not classified, but the channel is still recorded so
+// the firewall can see structure.
+func (c *contentCollector) scannable(kind, role, text, ref string) *source {
 	c.channels = append(c.channels, ContentChannel{Kind: kind, Role: role, Text: text, Scannable: true, Ref: ref})
-	c.addTextAndDecoded(kind, role, text, 0)
+	src := &source{kind: kind, role: role}
+	c.addText(text, true)
+	c.decode(src, text, 0, true)
+	return src
 }
 
-func (c *contentCollector) addText(text string) bool {
+// addText adds text to the classifier input once. legacy marks a text the compatibility
+// domain classifies; the result reports whether that domain sees it for the first time,
+// its legacy condition for charging and decoding it further. A text that added work put
+// into the classifier input first does not change that answer.
+func (c *contentCollector) addText(text string, legacy bool) bool {
 	t := strings.TrimSpace(text)
 	if t == "" {
 		return false
@@ -141,43 +223,137 @@ func (c *contentCollector) addText(text string) bool {
 	if c.seenText == nil {
 		c.seenText = map[string]bool{}
 	}
-	if c.seenText[t] {
+	seenLegacy, classified := c.seenText[t]
+	if !classified {
+		c.texts = append(c.texts, text)
+	}
+	if !legacy {
+		if !classified {
+			c.seenText[t] = false
+		}
 		return false
 	}
 	c.seenText[t] = true
-	c.texts = append(c.texts, text)
-	return true
+	return !seenLegacy
 }
 
-// addTextAndDecoded records the original text and recursively adds bounded URL/base64
-// decodings for the sensitivity classifier. Decoded values remain in-memory only. The
-// same depth-six cap as nested content plus a one-MiB aggregate cap prevents decode bombs;
-// content that would exceed either bound becomes unscanned so the effective policy denies
-// it by default.
-func (c *contentCollector) addTextAndDecoded(kind, role, text string, depth int) {
-	c.addText(text)
-	variants, unsafe := decodedTextVariants(text)
+// decode handles the bounded URL/base64 decodings of text, a string of src at encoding
+// depth depth: each decoding is classified, recorded as an expansion channel of src and
+// decoded further. Classifier deduplication never suppresses an expansion channel, so a
+// decoding keeps its own provenance even when another source supplied the same bytes.
+//
+// legacy is true when the pre-decoded-channel collector decoded text. That decoding is
+// compatibility work: it is not charged to added work, keeps the legacy bounds and
+// outcomes, and continues only into decodings it classifies for the first time. The
+// deeper layers of an already classified decoding, and every decoding of an argument
+// string, are added work, done to keep this occurrence's provenance in the channels.
+func (c *contentCollector) decode(src *source, text string, depth int, legacy bool) {
+	var charge func(int) bool
+	if !legacy {
+		charge = func(n int) bool { return c.chargeInput(src, n) }
+	}
+	variants, unsafe, ok := textVariants(text, charge)
+	if !ok {
+		return // chargeInput recorded the overflow disposition
+	}
 	if unsafe {
-		c.opaque(kind, role, "encoded/undecodable-or-oversized")
+		c.mark(src, "encoded/undecodable-or-oversized", !legacy)
 	}
 	if len(variants) == 0 {
 		return
 	}
-	if depth >= maxContentDepth {
-		c.opaque(kind, role, "encoded/max-depth")
+	if depth >= maxEncodingDepth {
+		c.mark(src, "encoded/max-depth", !legacy)
 		return
 	}
-	for _, decoded := range variants {
-		if len(decoded) > maxDecodedContentSize-c.decoded {
-			c.opaque(kind, role, "encoded/oversized")
-			return
+	for _, v := range variants {
+		fresh := false // v continues as compatibility work
+		if legacy {
+			// The legacy bound is checked before deduplication, as it always was.
+			if len(v) > maxDecodedContentSize-c.compatDecoded {
+				c.mark(src, "encoded/oversized", false)
+				return
+			}
+			if c.addText(v, true) {
+				c.compatDecoded += len(v)
+				fresh = true
+			}
 		}
-		if !c.addText(decoded) {
-			continue
+		recorded := c.expand(src, v, "encoded")
+		if !legacy {
+			if !recorded {
+				return
+			}
+			c.addText(v, false)
 		}
-		c.decoded += len(decoded)
-		c.addTextAndDecoded(kind, role, decoded, depth+1)
+		if fresh || recorded {
+			c.decode(src, v, depth+1, fresh)
+		}
 	}
+}
+
+// expand records one decoded occurrence of src as a scannable expansion channel and
+// reports whether it fit. Every occurrence is charged, even when the classifier already
+// has the text, so repetition cannot make expansion free.
+func (c *contentCollector) expand(src *source, text, ref string) bool {
+	if !c.chargeChannel(src, len(text)) {
+		return false
+	}
+	c.channels = append(c.channels, ContentChannel{
+		Kind: src.kind, Role: src.role, Text: text, Scannable: true, Ref: ref,
+	})
+	return true
+}
+
+// mark records an opaque reason for src once. A reason found by added work is an expansion
+// channel and is charged as one; a compatibility reason is not.
+func (c *contentCollector) mark(src *source, reason string, added bool) {
+	if slices.Contains(src.reasons, reason) {
+		return
+	}
+	if added && !c.chargeChannel(src, 0) {
+		return
+	}
+	src.reasons = append(src.reasons, reason)
+	c.opaque(src.kind, src.role, reason)
+}
+
+// overflow marks src unscanned with the reason of the exhausted added-work limit. It is
+// recorded at most once per source and is not charged, so it stays outside the exhausted
+// expansion allowance.
+func (c *contentCollector) overflow(src *source) {
+	c.mark(src, c.addedExhausted, false)
+}
+
+// chargeInput charges bytes about to be given to the argument tokenizer or an added decoder.
+func (c *contentCollector) chargeInput(src *source, n int) bool {
+	return c.charge(src, &c.addedInput, n, maxAddedInput, "decoded/input-limit")
+}
+
+// chargeToken charges one JSON token about to be read by the argument walk.
+func (c *contentCollector) chargeToken(src *source) bool {
+	return c.charge(src, &c.addedTokens, 1, maxAddedTokens, "arguments/token-limit")
+}
+
+// chargeChannel charges one expansion channel that carries n bytes of text.
+func (c *contentCollector) chargeChannel(src *source, n int) bool {
+	return c.charge(src, &c.addedChannels, 1, maxAddedChannels, "decoded/channel-limit") &&
+		c.charge(src, &c.addedOutput, n, maxAddedOutput, "decoded/output-limit")
+}
+
+// charge adds n to *used while added work runs and n fits under limit. Otherwise the first
+// limit reached stops all added work, and src gets its overflow disposition. *used never
+// exceeds limit, so the remaining-capacity comparison cannot overflow.
+func (c *contentCollector) charge(src *source, used *int, n, limit int, reason string) bool {
+	if c.addedExhausted == "" && n <= limit-*used {
+		*used += n
+		return true
+	}
+	if c.addedExhausted == "" {
+		c.addedExhausted = reason
+	}
+	c.overflow(src)
+	return false
 }
 
 // opaque records a channel whose content could NOT be reduced to plaintext, and trips the
@@ -245,9 +421,9 @@ func (c *contentCollector) block(role string, b ContentBlock, depth int, kindCtx
 	case "redacted_thinking":
 		c.opaque(ChannelThinking, role, "redacted_thinking")
 	case "tool_use":
-		c.toolUse(ChannelToolUse, role, b.raw)
+		c.toolUse(ChannelToolUse, role, b.raw, depth)
 	case "server_tool_use":
-		c.toolUse(ChannelServerToolUse, role, b.raw)
+		c.toolUse(ChannelServerToolUse, role, b.raw, depth)
 	default:
 		// An unmodeled block type carrying content we cannot parse to plaintext. Deny-closed:
 		// mark unscanned so the DLP policy can refuse it, never forward it blind.
@@ -303,8 +479,10 @@ func (c *contentCollector) document(role string, raw json.RawMessage, depth int)
 	case "base64":
 		c.base64Source(ChannelDocument, role, d.Source.Data, d.Source.MediaType, "document/base64:")
 	case "url":
-		c.addTextAndDecoded(ChannelDocument, role, d.Source.URL, 0)
-		c.opaque(ChannelDocument, role, "document/url:"+hostOf(d.Source.URL))
+		// The URL string is inspectable; the remote document it names is not.
+		ref := "document/url:" + hostOf(d.Source.URL)
+		c.scannable(ChannelDocument, role, d.Source.URL, ref)
+		c.opaque(ChannelDocument, role, ref)
 	case "file":
 		c.opaque(ChannelFileID, role, "document/file:"+d.Source.FileID)
 	default:
@@ -328,8 +506,9 @@ func (c *contentCollector) image(role string, raw json.RawMessage) {
 	case "base64":
 		c.base64Source(ChannelImage, role, im.Source.Data, im.Source.MediaType, "image/base64:")
 	case "url":
-		c.addTextAndDecoded(ChannelImage, role, im.Source.URL, 0)
-		c.opaque(ChannelImage, role, "image/url:"+hostOf(im.Source.URL))
+		ref := "image/url:" + hostOf(im.Source.URL)
+		c.scannable(ChannelImage, role, im.Source.URL, ref)
+		c.opaque(ChannelImage, role, ref)
 	case "file":
 		c.opaque(ChannelFileID, role, "image/file:"+im.Source.FileID)
 	default:
@@ -453,8 +632,10 @@ func (c *contentCollector) thinking(role string, raw json.RawMessage) {
 }
 
 // toolUse / server_tool_use: the model's tool invocation — name + JSON-stringified input.
-// The unsafe-action detector reads the action args from here.
-func (c *contentCollector) toolUse(kind, role string, raw json.RawMessage) {
+// The unsafe-action detector reads the action args from this pre-existing raw channel, so
+// it is recorded first and unconditionally. The decoded argument keys and strings follow
+// as expansion channels of the same source; only that added work can stop at a limit.
+func (c *contentCollector) toolUse(kind, role string, raw json.RawMessage, depth int) {
 	var tu struct {
 		Name  string          `json:"name"`
 		Input json.RawMessage `json:"input"`
@@ -467,9 +648,184 @@ func (c *contentCollector) toolUse(kind, role string, raw json.RawMessage) {
 	sb.WriteString(tu.Name)
 	if len(tu.Input) > 0 {
 		sb.WriteByte(' ')
-		sb.Write(tu.Input) // compact JSON of the input args (in-flight; never persisted)
+		sb.Write(tu.Input) // original JSON remains transient and unchanged
 	}
-	c.scannable(kind, role, sb.String(), kind+":"+tu.Name)
+	src := c.scannable(kind, role, sb.String(), kind+":"+tu.Name)
+	c.toolArguments(src, raw, depth)
+}
+
+var (
+	// errArgumentLimit stops an argument walk after charge has recorded the source's
+	// overflow disposition.
+	errArgumentLimit = errors.New("claudeapi: added argument work limit reached")
+	errArgumentShape = errors.New("claudeapi: tool-use block is not a JSON object")
+)
+
+// toolArguments exposes every key and string of the tool input, JSON-unescaped and in
+// document order, from the standard tokenizer over the original block bytes. Unlike a
+// map, the token stream keeps a repeated key's earlier values, and exact number tokens
+// cannot turn an out-of-range float into a parse failure that hides its siblings.
+// encoding/json matches field names case-insensitively, so every member that folds to
+// "input" is exposed; a repeated input or name member marks the block ambiguous, since
+// the raw channel shows only the last one and an executor may read another.
+func (c *contentCollector) toolArguments(src *source, raw json.RawMessage, depth int) {
+	if !c.chargeInput(src, len(raw)) {
+		return
+	}
+	w := argumentWalk{c: c, src: src, dec: json.NewDecoder(bytes.NewReader(raw))}
+	w.dec.UseNumber()
+	if err := w.block(depth); err != nil && !errors.Is(err, errArgumentLimit) {
+		c.mark(src, "arguments/unparseable", true)
+	}
+	if w.overDepth {
+		c.mark(src, "arguments/max-depth", true)
+	}
+	if w.ambiguous {
+		c.mark(src, "arguments/ambiguous-member", true)
+	}
+}
+
+// argumentWalk is one bounded pass over a tool-use block. Every token is charged before
+// it is read, including the tokens of skipped members and over-depth values.
+type argumentWalk struct {
+	c         *contentCollector
+	src       *source
+	dec       *json.Decoder
+	overDepth bool // a key or value deeper than maxContentDepth was skipped
+	ambiguous bool // an input or name member repeats
+}
+
+func (w *argumentWalk) block(depth int) error {
+	tok, err := w.next()
+	if err != nil {
+		return err
+	}
+	if tok != json.Delim('{') {
+		return errArgumentShape
+	}
+	inputs, names := 0, 0
+	for w.dec.More() {
+		if tok, err = w.next(); err != nil {
+			return err
+		}
+		key, _ := tok.(string)
+		switch {
+		case strings.EqualFold(key, "input"):
+			inputs++
+			err = w.value(depth)
+		case strings.EqualFold(key, "name"):
+			names++
+			err = w.skip()
+		default:
+			err = w.skip()
+		}
+		if err != nil {
+			return err
+		}
+	}
+	w.ambiguous = inputs > 1 || names > 1
+	_, err = w.next() // the closing brace
+	return err
+}
+
+// value exposes the keys and strings of the next JSON value, whose argument depth is
+// depth; a container's keys and members are one level deeper. A key or value beyond
+// maxContentDepth is skipped, not exposed, and its siblings are still walked.
+func (w *argumentWalk) value(depth int) error {
+	tok, err := w.next()
+	if err != nil {
+		return err
+	}
+	if depth > maxContentDepth {
+		w.overDepth = true
+		return w.skipFrom(tok)
+	}
+	switch tok := tok.(type) {
+	case string:
+		return w.expose(tok, "arguments/string")
+	case json.Delim: // an opening delimiter; More stops before every closing one
+		for w.dec.More() {
+			if tok == '{' {
+				if err := w.key(depth + 1); err != nil {
+					return err
+				}
+			}
+			if err := w.value(depth + 1); err != nil {
+				return err
+			}
+		}
+		_, err = w.next() // the matching closing delimiter
+		return err
+	}
+	return nil // a number, bool or null carries no text
+}
+
+func (w *argumentWalk) key(depth int) error {
+	tok, err := w.next()
+	if err != nil {
+		return err
+	}
+	if depth > maxContentDepth {
+		w.overDepth = true
+		return nil
+	}
+	key, _ := tok.(string)
+	return w.expose(key, "arguments/key")
+}
+
+// skip consumes the next value without exposing it.
+func (w *argumentWalk) skip() error {
+	tok, err := w.next()
+	if err != nil {
+		return err
+	}
+	return w.skipFrom(tok)
+}
+
+// skipFrom consumes the rest of a value whose first token is tok.
+func (w *argumentWalk) skipFrom(tok json.Token) error {
+	open := 0
+	for {
+		switch tok {
+		case json.Delim('{'), json.Delim('['):
+			open++
+		case json.Delim('}'), json.Delim(']'):
+			open--
+		}
+		if open == 0 {
+			return nil
+		}
+		var err error
+		if tok, err = w.next(); err != nil {
+			return err
+		}
+	}
+}
+
+// next charges one token, then reads it.
+func (w *argumentWalk) next() (json.Token, error) {
+	if !w.c.chargeToken(w.src) {
+		return nil, errArgumentLimit
+	}
+	return w.dec.Token()
+}
+
+// expose records a decoded key or string as an expansion channel under a fixed Ref, then
+// classifies and decodes it; the text never enters the Ref. An empty string carries
+// nothing to inspect.
+func (w *argumentWalk) expose(text, ref string) error {
+	if text == "" {
+		return nil
+	}
+	if !w.c.expand(w.src, text, ref) {
+		return errArgumentLimit
+	}
+	w.c.addText(text, false)
+	w.c.decode(w.src, text, 0, false)
+	if w.c.addedExhausted != "" {
+		return errArgumentLimit
+	}
+	return nil
 }
 
 // --- helpers ----------------------------------------------------------------------------
@@ -513,76 +869,98 @@ func (c *contentCollector) base64Source(kind, role, data, mediaType, refPrefix s
 		return
 	}
 	decoded, ok := decodeBase64(data)
-	if !ok || len(decoded) > maxDecodedContentSize-c.decoded || !printableText(decoded) {
+	if !ok || len(decoded) > maxDecodedContentSize-c.compatDecoded {
 		c.opaque(kind, role, ref+"/undecodable")
 		return
 	}
-	c.decoded += len(decoded)
+	c.compatDecoded += len(decoded)
 	text := string(decoded)
 	if textMediaType(mediaType) {
 		c.scannable(kind, role, text, ref)
 		return
 	}
-	c.addTextAndDecoded(kind, role, text, 0)
+	// Printable bytes of binary media are classified as a decoding of this source, whatever
+	// the declared type; the source keeps its opaque marker, since this parses no image.
+	src := &source{kind: kind, role: role}
+	c.addText(text, true)
+	c.expand(src, text, ref)
+	c.decode(src, text, 0, true)
 	c.opaque(kind, role, ref)
 }
 
-// decodedTextVariants returns distinct, printable one-layer decodings of a plaintext
-// field. URL decoding covers percent/form encoding. Base64 candidates may be the entire
-// field or a token embedded in prose; only sufficiently long candidates are considered
-// to avoid treating ordinary short words as encodings.
-func decodedTextVariants(text string) ([]string, bool) {
-	seen := map[string]bool{}
-	var out []string
-	unsafe := false
-	add := func(s string) {
-		if s == "" || s == text || seen[s] || !printableText([]byte(s)) {
+// textVariants returns the distinct printable one-layer URL/base64 decodings of text, and
+// whether an explicit encoding could not be decoded or exceeded the per-item guard. Base64
+// candidates may be the entire text or a token embedded in prose; only sufficiently long
+// candidates count, so ordinary short words are not treated as encodings. charge, when
+// set, receives the size of each decoder input before that decoder runs; when it refuses,
+// textVariants stops and reports ok false.
+func textVariants(text string, charge func(int) bool) (variants []string, unsafe, ok bool) {
+	var seen map[string]bool
+	add := func(decoded string) {
+		if decoded == "" || decoded == text || seen[decoded] || !printableText([]byte(decoded)) {
 			return
 		}
-		seen[s] = true
-		out = append(out, s)
+		if seen == nil {
+			seen = map[string]bool{}
+		}
+		seen[decoded] = true
+		variants = append(variants, decoded)
 	}
 	if hasPercentEscape(text) {
-		if len(text) > maxDecodedContentSize {
+		switch {
+		case len(text) > maxDecodedContentSize:
 			unsafe = true
-		} else if decoded, err := url.QueryUnescape(text); err == nil {
-			add(decoded)
-		} else {
-			unsafe = true
+		case charge != nil && !charge(len(text)):
+			return nil, false, false
+		default:
+			if decoded, err := url.QueryUnescape(text); err != nil {
+				unsafe = true
+			} else {
+				add(decoded)
+			}
 		}
 	}
-	for _, candidate := range base64Candidates(text) {
+	ok = true
+	visitBase64Candidates(text, func(candidate string) bool {
 		if len(candidate) > base64.StdEncoding.EncodedLen(maxDecodedContentSize) {
 			unsafe = true
-			continue
+			return true
 		}
-		if decoded, ok := decodeBase64(candidate); ok {
+		if charge != nil && !charge(len(candidate)) {
+			ok = false
+			return false
+		}
+		if decoded, isText := decodeBase64(candidate); isText {
 			add(string(decoded))
 		} else if strings.ContainsAny(candidate, "=+/_") {
 			// Padded/alternate-alphabet candidates are explicit enough to treat a failed or
 			// binary decode as opaque. Pure alphanumeric prose remains ordinary text.
 			unsafe = true
 		}
+		return true
+	})
+	if !ok {
+		return nil, false, false
 	}
-	return out, unsafe
+	return variants, unsafe, true
 }
 
-func base64Candidates(text string) []string {
-	// The shortest secret recognized by the key=value rule is four value bytes;
-	// encoding e.g. "token=s373" is only 16 characters. Keep the threshold below
-	// that attack while requiring enough bytes to avoid ordinary short words.
+// visitBase64Candidates yields candidates without allocating a slice proportional
+// to the input. The callback can stop the walk as soon as a charge is refused.
+func visitBase64Candidates(text string, visit func(string) bool) {
+	// The shortest key=value secret is four value bytes: token=s373 encodes to 16.
 	const minBase64Candidate = 12
-	var out []string
 	start := -1
-	flush := func(end int) {
+	flush := func(end int) bool {
 		if start < 0 {
-			return
+			return true
 		}
 		candidate := text[start:end]
 		start = -1
 		if len(candidate) >= minBase64Candidate && plausibleBase64Candidate(candidate) {
-			out = append(out, candidate)
+			return visit(candidate)
 		}
+		return true
 	}
 	for i, r := range text {
 		if (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') ||
@@ -592,10 +970,11 @@ func base64Candidates(text string) []string {
 			}
 			continue
 		}
-		flush(i)
+		if !flush(i) {
+			return
+		}
 	}
 	flush(len(text))
-	return out
 }
 
 func plausibleBase64Candidate(s string) bool {
