@@ -26,6 +26,8 @@ import (
 	"crypto/tls"
 	"encoding/binary"
 	"fmt"
+	"net/netip"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -85,8 +87,8 @@ type Conn interface {
 	Close() error
 }
 
-// Dialer opens a connection to an LDAP URL. It is injectable so a test supplies a
-// fake; production dials go-ldap with the configured page size (see dialer).
+// Dialer opens a connection to an LDAP URL, completing TLS before returning for
+// ldaps. It is injectable so a test supplies a fake; production uses go-ldap.
 type Dialer func(url string) (Conn, error)
 
 // Source is the LDAP identity connector. It satisfies sdk.SourceConnector
@@ -145,7 +147,7 @@ func (s *Source) Descriptor() sdk.Descriptor {
 		Title:       "AD / LDAP",
 		Description: "Reads users, service accounts and groups from Active Directory / LDAP (read-only metadata; never passwords).",
 		ConfigFields: []sdk.ConfigField{
-			{Key: "url", Type: sdk.FieldString, Description: "LDAP URL (ldap://host:389 or ldaps://host:636). Empty = offline (empty graph)."},
+			{Key: "url", Type: sdk.FieldString, Description: "LDAP URL (ldap://host:389 or ldaps://host:636). Credentialed binds require ldaps:// or start_tls=true. Empty = offline (empty graph)."},
 			{Key: "bind_dn", Type: sdk.FieldString, Description: "Read-only service account DN used to bind."},
 			{Key: "bind_password", Type: sdk.FieldString, Secret: true, Description: "Bind password reference (read-only; never persisted)."},
 			{Key: "base_dn", Type: sdk.FieldString, Required: true, Description: "Search base DN (e.g. dc=corp,dc=example,dc=com)."},
@@ -161,9 +163,8 @@ func (s *Source) Descriptor() sdk.Descriptor {
 	}
 }
 
-// Open reads configuration. It never dials here (the connection lifetime belongs
-// to a Snapshot call), so a configuration error is a missing base_dn only; an
-// unreachable server surfaces on Snapshot.
+// Open validates configuration without dialing. Snapshot and Gather each own
+// their connection; transport and server failures surface on those calls.
 func (s *Source) Open(_ context.Context, cfg sdk.Config) error {
 	s.url = cfg.Get("url")
 	s.bindDN = cfg.Get("bind_dn")
@@ -195,6 +196,10 @@ func (s *Source) Open(_ context.Context, cfg sdk.Config) error {
 
 	if s.url != "" && s.baseDN == "" {
 		return fmt.Errorf("ldap: base_dn is required when url is set")
+	}
+	if s.url != "" {
+		_, err := s.transportURL()
+		return err
 	}
 	return nil
 }
@@ -376,17 +381,55 @@ func (s *Source) Snapshot(ctx context.Context) (identitysource.Graph, error) {
 	return g, nil
 }
 
-// connect dials, optionally upgrades to TLS, and binds with the read-only
+// transportURL validates the endpoint and the required protection before dial.
+// Open calls it early; connect repeats it at the owner of every Bind effect.
+func (s *Source) transportURL() (*url.URL, error) {
+	invalid := func() error {
+		return fmt.Errorf("ldap: url requires the ldap or ldaps scheme, a valid host and port, and no user information")
+	}
+	endpoint, err := url.Parse(s.url)
+	if err != nil || (endpoint.Scheme != "ldap" && endpoint.Scheme != "ldaps") ||
+		endpoint.Opaque != "" || endpoint.Hostname() == "" || endpoint.User != nil {
+		return nil, invalid()
+	}
+	host := endpoint.Hostname()
+	if strings.HasPrefix(endpoint.Host, "[") {
+		address, err := netip.ParseAddr(host)
+		if err != nil || !address.Is6() {
+			return nil, invalid()
+		}
+	} else if strings.Contains(host, ":") {
+		return nil, invalid()
+	}
+	if strings.HasSuffix(endpoint.Host, ":") {
+		return nil, invalid()
+	}
+	if port := endpoint.Port(); port != "" {
+		number, err := strconv.ParseUint(port, 10, 16)
+		if err != nil || number == 0 {
+			return nil, invalid()
+		}
+	}
+	if s.bindDN != "" && endpoint.Scheme == "ldap" && !s.startTLS {
+		return nil, fmt.Errorf("ldap: credentialed bind requires ldaps:// or start_tls=true")
+	}
+	return endpoint, nil
+}
+
+// connect dials, establishes required TLS, and binds with the read-only
 // service account. Snapshot and Gather share it, but each call owns its own
-// connection — there is no cross-half cache. Errors never carry the bind
-// credential.
+// connection — there is no cross-half cache or plaintext fallback.
 func (s *Source) connect() (Conn, error) {
+	endpoint, err := s.transportURL()
+	if err != nil {
+		return nil, err
+	}
 	conn, err := s.dialer()(s.url)
 	if err != nil {
 		return nil, fmt.Errorf("ldap: dial %s: %w", s.url, err)
 	}
-	if s.startTLS {
-		if err := conn.StartTLS(&tls.Config{InsecureSkipVerify: s.skipVerify, MinVersion: tls.VersionTLS12}); err != nil { // #nosec G402 -- skipVerify is an explicit, documented operator opt-in; default verifies
+	if endpoint.Scheme == "ldap" && s.startTLS {
+		if err := conn.StartTLS(&tls.Config{ServerName: endpoint.Hostname(), InsecureSkipVerify: s.skipVerify, MinVersion: tls.VersionTLS12}); err != nil { // #nosec G402 -- skipVerify is an explicit, documented operator opt-in; default verifies
 			_ = conn.Close()
 			return nil, fmt.Errorf("ldap: starttls: %w", err)
 		}
