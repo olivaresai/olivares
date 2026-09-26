@@ -4,4 +4,4 @@
 // enumerating the routes the modules register.
 module github.com/olivaresai/olivares/scripts/openapi-op-descriptions
 
-go 1.26.6
+go 1.26.8

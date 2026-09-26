@@ -157,6 +157,13 @@ func (a *Authenticator) SCIMUpdateUser(ctx context.Context, actor Principal, ten
 		if err := prepareUserAuthorityWrite(ctx, as, id); err != nil {
 			return err
 		}
+		// The preflight may have raced a departure. Preparation holds the
+		// directory writer lock, so this membership remains valid until commit.
+		if _, ok, err := membershipOf(ctx, as, id, tenant); err != nil {
+			return err
+		} else if !ok {
+			return store.ErrNotFound
+		}
 		u, err := as.Users().Get(ctx, id)
 		if err != nil {
 			return err
@@ -228,19 +235,29 @@ func revokeUserAccess(ctx context.Context, as store.AuthScope, actor Principal, 
 // idempotent.
 func (a *Authenticator) SCIMDeprovisionUser(ctx context.Context, actor Principal, tenant model.TenantID, id model.ID) error {
 	return a.st.AuthMutate(ctx, func(as store.AuthScope) error {
+		// Serialize the membership read before claiming any User authority.
+		// An absent resource (including a departed or unknown User) is a no-op.
+		if err := prepareUserAuthorityWrite(ctx, as); err != nil {
+			return err
+		}
+		m, ok, err := membershipOf(ctx, as, id, tenant)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return nil
+		}
+		// A real departure may revoke sessions and disable an orphan. Declare
+		// its H before the first membership/G write or audit, under the same lock.
 		if err := prepareUserAuthorityWrite(ctx, as, id); err != nil {
 			return err
 		}
 		// 1. Remove the membership in this tenant.
-		if m, ok, err := membershipOf(ctx, as, id, tenant); err != nil {
+		if err := as.Memberships().Delete(ctx, m.ID); err != nil {
 			return err
-		} else if ok {
-			if err := as.Memberships().Delete(ctx, m.ID); err != nil {
-				return err
-			}
-			if err := auditAct(ctx, as, actor, "scim.user.leave", "core.membership", id); err != nil {
-				return err
-			}
+		}
+		if err := auditAct(ctx, as, actor, "scim.user.leave", "core.membership", id); err != nil {
+			return err
 		}
 		// 2. Remove the user's rows in THIS tenant's groups. A stale member row
 		// grants nothing today (loadGrants requires a direct membership in the

@@ -4,4 +4,4 @@
 // enumerating. Stdlib only — no dependency to resolve in an air-gapped gate.
 module github.com/olivaresai/olivares/scripts/guide-docs
 
-go 1.26.6
+go 1.26.8

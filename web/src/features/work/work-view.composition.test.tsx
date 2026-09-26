@@ -57,6 +57,30 @@ vi.mock('./api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./api')>()
   return { ...actual, ...api }
 })
+vi.mock('@/lib/hooks/use-url-state', async () => {
+  const react = await import('react')
+  return {
+    useUrlState: () => {
+      const [state, setState] = react.useState<
+        Record<string, string | undefined>
+      >({})
+      const patch = react.useCallback(
+        (p: Record<string, string | undefined>) => {
+          setState((prev) => {
+            const next = { ...prev }
+            for (const [k, v] of Object.entries(p)) {
+              if (v === undefined || v === '') delete next[k]
+              else next[k] = v
+            }
+            return next
+          })
+        },
+        [],
+      )
+      return [state, patch]
+    },
+  }
+})
 
 import { WorkView } from './work-view'
 import { WORK_REFRESH_WINDOW_MS } from './coalesce'
@@ -65,8 +89,10 @@ import './i18n'
 import '@/features/_intel'
 import '@/features/communications/i18n'
 
+const ITEM_ID = '0192f2c0-aaaa-7000-8000-00000000aa01'
+
 const item = {
-  id: 'work-1',
+  id: ITEM_ID,
   workspace_id: 'workspace-1',
   version: 3,
   created_at: '2026-08-26T00:00:00Z',
@@ -126,7 +152,7 @@ describe('WorkView composition', () => {
         // 83b4685f8 bound tenant scope to every operation: assert the scope,
         // not just the id — an unscoped read is the defect that commit closed.
       ).toHaveBeenCalledWith(
-        'work-1',
+        ITEM_ID,
         { tenant: 't1' },
         expect.any(AbortSignal),
       ),
@@ -168,7 +194,7 @@ describe('WorkView composition — the handoff offer entry', () => {
     //    with the EXPLICIT captured tenant and the host's own abort signal.
     await waitFor(() => expect(api.getWorkItem).toHaveBeenCalledTimes(2))
     expect(api.getWorkItem.mock.calls[1]).toEqual([
-      'work-1',
+      ITEM_ID,
       { tenant: 't1' },
       expect.any(AbortSignal),
     ])
@@ -188,15 +214,14 @@ describe('WorkView composition — the handoff offer entry', () => {
       await screen.findByRole('button', { name: /composition work item/i }),
     )
     await screen.findByRole('dialog')
-    // The transition row is gone…
-    expect(screen.queryByRole('button', { name: 'Mark ready' })).toBeNull()
-    // …and the offer entry is still there, which is the whole assertion.
+    expect(screen.getByRole('button', { name: 'Mark ready' })).toBeDisabled()
+    expect(screen.getByText(/sessions:work:write/)).toBeVisible()
     expect(
       await screen.findByRole('button', { name: 'Offer handoff' }),
     ).toBeEnabled()
   })
 
-  it('without message-send:write the offer entry is not offered, while the transitions remain', async () => {
+  it('without message-send:write the offer entry is disabled with the reason, while the transitions remain', async () => {
     auth.can = (p: string) => p !== 'sessions:message-send:write'
     const user = userEvent.setup()
     renderIntel(<WorkView />)
@@ -204,7 +229,10 @@ describe('WorkView composition — the handoff offer entry', () => {
       await screen.findByRole('button', { name: /composition work item/i }),
     )
     await screen.findByRole('dialog')
-    expect(screen.queryByRole('button', { name: 'Offer handoff' })).toBeNull()
+    expect(
+      await screen.findByRole('button', { name: 'Offer handoff' }),
+    ).toBeDisabled()
+    expect(screen.getByText(/sessions:message-send:write/)).toBeVisible()
     // POSITIVE CONTROL: the neighbouring work permission is untouched.
     expect(
       await screen.findByRole('button', { name: 'Mark ready' }),
@@ -234,7 +262,7 @@ describe('WorkView composition — the handoff offer entry', () => {
       await screen.findByRole('button', { name: 'Offer handoff' }),
     )
     await waitFor(() => expect(api.getWorkItem).toHaveBeenCalledTimes(3))
-    expect(api.getWorkItem.mock.calls[2][0]).toBe('work-1')
+    expect(api.getWorkItem.mock.calls[2][0]).toBe(ITEM_ID)
     expect(
       await screen.findByRole('dialog', { name: 'Offer handoff' }),
     ).toBeVisible()

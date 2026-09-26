@@ -1,0 +1,25 @@
+#cloud-config
+{
+ "hostname": "olivares",
+ "fqdn": "olivares.example.test",
+ "prefer_fqdn_over_hostname": true,
+ "write_files": [
+  {
+   "path": "/etc/olivares-appliance/carriers/nocloud.json",
+   "owner": "root:root",
+   "permissions": "0600",
+   "encoding": "b64",
+   "content": "ewogICJzY2hlbWFfdmVyc2lvbiI6ICJhcHBsaWFuY2UtYW5zd2Vycy92MSIsCiAgInNvdXJjZSI6ICJub2Nsb3VkIiwKICAiaG9zdCI6IHsKICAgICJvd25lciI6ICJjbG91ZC1pbml0IiwKICAgICJob3N0bmFtZSI6ICJvbGl2YXJlcy5leGFtcGxlLnRlc3QiLAogICAgIm5ldHdvcmsiOiB7ICJtb2RlIjogImRoY3AiIH0sCiAgICAidGltZSI6IHsgInRpbWV6b25lIjogIlVUQyIsICJzZXJ2ZXJzIjogWyJ0aW1lLmV4YW1wbGUudGVzdCJdIH0sCiAgICAic3NoX2F1dGhvcml6ZWRfa2V5cyI6IFsic3NoLWVkMjU1MTkgQUFBQUMzTnphQzFsWkRJMU5URTVBQUFBSUFBUklqTkVWV1ozaUptcXU4emQ3djhBRVNJelJGVm1kNGlacXJ2TTNlNy8iXQogIH0sCiAgInByb2R1Y3QiOiB7CiAgICAic3RvcmFnZV9wcm9maWxlIjogInNpbmdsZS1ub2RlLXByb2QiLAogICAgInB1YmxpY19jb25zb2xlX3VybCI6ICJodHRwczovL29saXZhcmVzLmV4YW1wbGUudGVzdCIsCiAgICAidXBkYXRlX2NoYW5uZWwiOiAic3RhYmxlIiwKICAgICJub2RlX3JvbGUiOiAiY29udHJvbCIKICB9Cn0K"
+  }
+ ],
+ "users": [
+  {
+   "name": "appliance-admin",
+   "lock_passwd": true,
+   "shell": "/bin/bash",
+   "ssh_authorized_keys": [
+    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAARIjNEVWZ3iJmqu8zd7v8AESIzRFVmd4iZqrvM3e7/"
+   ]
+  }
+ ]
+}

@@ -7,7 +7,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 **Status:** stable (Phase A). **Modules:** `/sdk` and `/sdk/plugin` (Apache-2.0), `/core/eventbus` and
 `/core/runtime` (AGPL-3.0-only). **Go 1.26.5** module baseline; the workspace
-toolchain is Go 1.26.6.
+toolchain is Go 1.26.8.
 **Consumed by:** the connectors, the modules and the API/authz layer.
 
 This document is the most consumed contract in the project: **every** connector or module

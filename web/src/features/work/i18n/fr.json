@@ -242,7 +242,9 @@
     "item.complete": "Terminer",
     "item.fail": "Marquer échouée",
     "item.cancel": "Annuler",
-    "item.archive": "Archiver"
+    "item.archive": "Archiver",
+    "noWrite": "Votre rôle ne peut pas modifier cet élément. Cet acte exige sessions:work:write.",
+    "noAdmin": "Échec et archivage exigent sessions:work:admin."
   },
   "truncation": {
     "label": "{{n}} lignes chargées ; il y en a d'autres",
@@ -270,6 +272,10 @@
   },
   "handoff": {
     "offer": "Proposer un transfert",
-    "offerHint": "Proposez la responsabilité de cet élément à un destinataire via un canal. La propriété ne change qu'à son acceptation."
+    "offerHint": "Proposez la responsabilité de cet élément à un destinataire via un canal. La propriété ne change qu'à son acceptation.",
+    "noPermission": "Votre rôle ne peut pas proposer un transfert. Cet acte exige sessions:message-send:write."
+  },
+  "url": {
+    "invalidItem": "L'adresse nomme un identifiant d'élément que cet écran ne peut pas utiliser, il a donc été ignoré."
   }
 }

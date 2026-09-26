@@ -75,8 +75,8 @@ This is exactly what the `.goreleaser.yaml` `olivares-fips` build, the
 
 ### Why `v1.0.0` and not `v1.26.0`/`latest`
 
-This repo's workspace toolchain is **Go 1.26.6** (`go.work`: `go 1.26.6` /
-`toolchain go1.26.6`).
+This repo's workspace toolchain is **Go 1.26.8** (`go.work`: `go 1.26.8` /
+`toolchain go1.26.8`).
 The module matching it is **v1.26.0** — but as of **2026-04-28** that module is
 **"Pending Review"** on the CMVP **Modules-In-Process List** (CAVP cert **A8028**) —
 i.e. **NOT yet validated**. The **v1.0.0** module (frozen from Go 1.24) holds

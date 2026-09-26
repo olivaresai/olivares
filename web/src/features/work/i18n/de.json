@@ -242,7 +242,9 @@
     "item.complete": "Abschließen",
     "item.fail": "Als fehlgeschlagen markieren",
     "item.cancel": "Abbrechen",
-    "item.archive": "Archivieren"
+    "item.archive": "Archivieren",
+    "noWrite": "Ihre Rolle kann dieses Element nicht ändern. Dieser Vorgang braucht sessions:work:write.",
+    "noAdmin": "Fehlschlag und Archivierung brauchen sessions:work:admin."
   },
   "truncation": {
     "label": "{{n}} Zeilen geladen; es gibt mehr",
@@ -270,6 +272,10 @@
   },
   "handoff": {
     "offer": "Übergabe anbieten",
-    "offerHint": "Bieten Sie die Verantwortung für dieses Element einer empfangenden Partei über einen Kanal an. Die Inhaberschaft wechselt erst mit deren Annahme."
+    "offerHint": "Bieten Sie die Verantwortung für dieses Element einer empfangenden Partei über einen Kanal an. Die Inhaberschaft wechselt erst mit deren Annahme.",
+    "noPermission": "Ihre Rolle kann keine Übergabe anbieten. Dieser Vorgang braucht sessions:message-send:write."
+  },
+  "url": {
+    "invalidItem": "Die Adresse nennt eine Elementkennung, die diese Ansicht nicht verwenden kann, und wurde ignoriert."
   }
 }

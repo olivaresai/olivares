@@ -3,4 +3,4 @@
 // so a broken module elsewhere cannot stop it from looking.
 module github.com/olivaresai/olivares/scripts/check-list-page-discarded
 
-go 1.26.6
+go 1.26.8

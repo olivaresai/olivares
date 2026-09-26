@@ -417,12 +417,20 @@ export function DeliverySheet({
               </section>
             ) : null}
             {!canDeliveryWrite ? (
-              <p className="text-caption text-muted-foreground">
+              <p
+                id="delivery-ack-denied"
+                className="text-caption text-muted-foreground"
+                data-slot="delivery-ack-denied"
+              >
                 {t('delivery.ack.noPermission')}
               </p>
             ) : null}
             {!canMessageRead ? (
-              <p className="text-caption text-muted-foreground">
+              <p
+                id="delivery-message-denied"
+                className="text-caption text-muted-foreground"
+                data-slot="delivery-message-denied"
+              >
                 {t('delivery.noMessageRead')}
               </p>
             ) : null}
@@ -437,23 +445,41 @@ export function DeliverySheet({
           >
             {t('actions.reread')}
           </Button>
-          {result && canMessageRead ? (
+          {result ? (
             <Button
               type="button"
               variant="outline"
+              disabled={!canMessageRead}
               onClick={() => onOpenMessage(result.message.id)}
-              title={t('delivery.openMessageHint')}
+              title={
+                canMessageRead
+                  ? t('delivery.openMessageHint')
+                  : t('delivery.noMessageRead')
+              }
+              aria-describedby={
+                !canMessageRead ? 'delivery-message-denied' : undefined
+              }
             >
               {t('actions.openMessage')}
             </Button>
           ) : null}
           {result &&
-          canDeliveryWrite &&
           (phase === 'idle' ||
             phase === 'applied' ||
             phase === 'replayed' ||
             phase === 'refused') ? (
-            <Button type="button" variant="primary" onClick={beginAck}>
+            <Button
+              type="button"
+              variant="primary"
+              disabled={!canDeliveryWrite}
+              title={
+                !canDeliveryWrite ? t('delivery.ack.noPermission') : undefined
+              }
+              aria-describedby={
+                !canDeliveryWrite ? 'delivery-ack-denied' : undefined
+              }
+              onClick={beginAck}
+            >
               <CheckCheck className="size-4" aria-hidden="true" />
               {t('actions.ack')}
             </Button>

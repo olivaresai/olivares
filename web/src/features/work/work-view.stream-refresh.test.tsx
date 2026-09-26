@@ -59,6 +59,11 @@ vi.mock('./stream', () => ({
     return { status: 'open' as const, cursor: null, unavailableCode: null }
   },
 }))
+// The view keeps its selection and filters in the address. This bench mounts no router
+// and does not test the address, so the hook answers an empty one.
+vi.mock('@/lib/hooks/use-url-state', () => ({
+  useUrlState: () => [{}, vi.fn()],
+}))
 
 import { WorkView } from './work-view'
 import './i18n'

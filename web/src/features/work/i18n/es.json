@@ -242,7 +242,9 @@
     "item.complete": "Completar",
     "item.fail": "Marcar fallida",
     "item.cancel": "Cancelar",
-    "item.archive": "Archivar"
+    "item.archive": "Archivar",
+    "noWrite": "Tu rol no puede cambiar este ítem. Ese acto exige sessions:work:write.",
+    "noAdmin": "Fallar y archivar exigen sessions:work:admin."
   },
   "truncation": {
     "label": "Cargadas {{n}} filas; hay más",
@@ -270,6 +272,10 @@
   },
   "handoff": {
     "offer": "Ofrecer un traspaso",
-    "offerHint": "Ofrece la responsabilidad de este ítem a un destinatario a través de un canal. La titularidad no se mueve hasta que lo acepte."
+    "offerHint": "Ofrece la responsabilidad de este ítem a un destinatario a través de un canal. La titularidad no se mueve hasta que lo acepte.",
+    "noPermission": "Tu rol no puede ofrecer un traspaso. Ese acto exige sessions:message-send:write."
+  },
+  "url": {
+    "invalidItem": "La dirección nombra un identificador de ítem que esta pantalla no puede usar, así que se ignoró."
   }
 }

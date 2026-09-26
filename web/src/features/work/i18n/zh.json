@@ -242,7 +242,9 @@
     "item.complete": "完成",
     "item.fail": "标记为失败",
     "item.cancel": "取消",
-    "item.archive": "归档"
+    "item.archive": "归档",
+    "noWrite": "你的角色不能更改此工作项。该操作需要 sessions:work:write。",
+    "noAdmin": "失败与归档需要 sessions:work:admin。"
   },
   "truncation": {
     "label": "已加载 {{n}} 行；还有更多",
@@ -270,6 +272,10 @@
   },
   "handoff": {
     "offer": "提议交接",
-    "offerHint": "通过频道把这个工作项的责任提议给一位收件人。在对方接受之前，归属不会转移。"
+    "offerHint": "通过频道把这个工作项的责任提议给一位收件人。在对方接受之前，归属不会转移。",
+    "noPermission": "你的角色不能提议交接。该操作需要 sessions:message-send:write。"
+  },
+  "url": {
+    "invalidItem": "地址中的工作项标识此屏幕无法使用，因此已忽略。"
   }
 }

@@ -3,4 +3,4 @@
 // a broken module elsewhere cannot stop it from looking. Standard library only.
 module github.com/olivaresai/olivares/scripts/suspend-fence-guard
 
-go 1.26.6
+go 1.26.8

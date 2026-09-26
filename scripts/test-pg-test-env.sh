@@ -119,7 +119,7 @@ trap cleanup EXIT HUP INT TERM
 # Declaring the number closes it: a run that measures less than this battery claims to measure
 # is a FAILED run, whatever its individual cases said. Raise it deliberately when you add a
 # case — a diff that changes this line is exactly the review signal you want.
-EXPECTED_CASES=159
+EXPECTED_CASES=160
 
 pass=0
 fail=0
@@ -2299,6 +2299,16 @@ check "a renamed/absent task is UNVERIFIED, never a pass" "exit 2" $?
 #                        runs. The arm is the WHOLE recipe, anchored at the end of the line, so a
 #                        package appended to it is unwrapped again. Its premise is ASSERTED below
 #                        by the same sweep, with its own red case on a copy of the real tree.
+#   appliance:test:base — the first-boot layer and the answers carriers, `./appliance/layer/...`
+#                        and `./appliance/answers/carriers/...`: packages of that same module,
+#                        standard library only, whose tests read the unit files and the package
+#                        manifest from the tree, write only under t.TempDir() and serve a local
+#                        HTTPS readiness endpoint. No pgtest reference and no
+#                        OLIVARES_TEST_POSTGRES_* read, so the premise and the wrapper's refusal
+#                        (rc=1 with no DSN, measured again 2026-09-25) are the ones above. Its own
+#                        arm, anchored at the end of the line like the one above, so a package
+#                        appended to this recipe is unwrapped again; its premise is ASSERTED by its
+#                        own row of the same sweep over ./appliance.
 #
 # test:race-hot:modules was the FOURTH entry on this list until 2026-08-01, exempted
 # because ./modules was Postgres-free. It is not exempt any more, and the exemption line
@@ -2319,6 +2329,7 @@ while IFS= read -r line; do
 	*"go test -count=1 -timeout 10m ./..."*) continue ;;
 	*"cd scripts/hookpar"*) continue ;;
 	*"- go test -race -count=1 -timeout 120s ./appliance/...") continue ;;
+	*"- go test -race -count=1 -timeout 120s ./appliance/layer/... ./appliance/answers/carriers/...") continue ;;
 	esac
 	unwrapped=$((unwrapped + 1))
 	printf '        unwrapped go-test entry point: %s\n' "$line"
@@ -2386,7 +2397,7 @@ exempt_harness_sweep() {
 # el arnés excusado de decidir su entorno, que es exactamente el agujero que el caso
 # «an exempt tree that STARTS reading the harness is DETECTED» existe para cerrar.
 for exempt in "core/license:test:release" "scripts/hookpar:lint:test-hook-parallelism:selftest" \
-	"appliance:appliance:test:answers"; do
+	"appliance:appliance:test:answers" "appliance:appliance:test:base"; do
 	exempt_tree="${exempt%%:*}"
 	exempt_entry="${exempt#*:}"
 	if [ -d "$ROOT/$exempt_tree" ]; then

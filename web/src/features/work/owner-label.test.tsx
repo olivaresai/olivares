@@ -41,6 +41,9 @@ vi.mock('./api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./api')>()
   return { ...actual, ...api }
 })
+vi.mock('@/lib/hooks/use-url-state', () => ({
+  useUrlState: () => [{}, vi.fn()],
+}))
 
 const { WorkView } = await import('./work-view')
 
