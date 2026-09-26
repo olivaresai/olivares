@@ -1,0 +1,145 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# appliance-a1 — the disposable hosted fixture of the appliance base package, and a probe of
+# what a hosted runner offers the image phase.
+#
+# fixture: builds the first-boot and answers binaries, packages olivares-appliance-base with a
+# pinned nfpm, builds a development product binary, builds a Debian 13 container image with
+# systemd as PID 1 and cloud-init, and runs appliance/layer/base/fixture/firstboot-battery.sh:
+# every named assertion with its negative control, over four scenarios (no carrier,
+# conflicting carriers, agreeing carriers, restart and changed answers, then package removal),
+# plus the job graph systemd loaded (multi-user.target's ordering, the boot journal's ordering
+# cycles, systemd-analyze verify and list-dependencies, kept as evidence). Assertions this head
+# cannot fail are reported as vacuous. The battery exits 0 when every assertion held and every
+# control failed, 1 on a defect and 2 when the fixture could not be measured. It is component
+# evidence of the systemd lifecycle; it qualifies no image, hypervisor import, firmware or
+# Secure Boot.
+#
+# runner-probe: records /dev/kvm, the CPU virtualization flags, memory, disk, the container
+# runtime and the runner image, for the image phase's runner contract. It never fails the run.
+#
+# Hosted runners on purpose: the fixture starts privileged containers, which must never run on
+# a runner that shares a host with other builds. No job reads a secret.
+name: appliance-a1
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - appliance/**
+      - packaging/nfpm/olivares-appliance-base.yaml
+      - .github/workflows/appliance-a1.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: appliance-a1-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        timeout-minutes: 3
+        with:
+          go-version-file: go.work
+          cache: true
+          cache-dependency-path: go.work.sum
+      - name: build the appliance binaries and a development product binary
+        timeout-minutes: 8
+        run: |
+          set -euo pipefail
+          CGO_ENABLED=0 go build -trimpath -o bin/appliance-firstboot ./appliance/cmd/appliance-firstboot
+          CGO_ENABLED=0 go build -trimpath -o bin/appliance-answers ./appliance/cmd/appliance-answers
+          CGO_ENABLED=0 go build -trimpath -o bin/olivares ./cmd/olivares
+      - name: package olivares-appliance-base with nfpm v2.47.0
+        timeout-minutes: 4
+        env:
+          VERSION: 0.0.0-fixture
+          ARCH: amd64
+        run: |
+          set -euo pipefail
+          export GOBIN="$RUNNER_TEMP/gopath/bin"
+          go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.47.0
+          mkdir -p dist
+          "$GOBIN/nfpm" package --config packaging/nfpm/olivares-appliance-base.yaml \
+            --packager deb --target dist/olivares-appliance-base.deb
+          dpkg-deb --info dist/olivares-appliance-base.deb
+          dpkg-deb --contents dist/olivares-appliance-base.deb
+      - name: build the Debian 13 fixture image from a staged context
+        timeout-minutes: 12
+        run: |
+          set -euo pipefail
+          # The repository's .dockerignore excludes bin/ and dist/, so the context is staged.
+          context="$RUNNER_TEMP/appliance-a1-context"
+          mkdir -p "$context"
+          cp bin/olivares dist/olivares-appliance-base.deb appliance/layer/base/fixture/cloud-init.conf \
+            packaging/systemd/olivares.service packaging/nfpm/package-init-systemd.txt \
+            packaging/olivares.env.example packaging/nfpm/postinstall.sh "$context/"
+          docker build --file appliance/layer/base/fixture/Containerfile --tag appliance-a1-fixture "$context"
+          # The base is pinned by digest in the Containerfile; a digest-pinned build need not
+          # leave a local debian:13 tag, so the reference is printed from the file.
+          sed -n 's/^FROM //p' appliance/layer/base/fixture/Containerfile
+      - name: run the first-boot battery
+        timeout-minutes: 36
+        run: bash appliance/layer/base/fixture/firstboot-battery.sh appliance-a1-fixture "$RUNNER_TEMP/appliance-a1-evidence"
+      - name: retain the evidence
+        if: always()
+        timeout-minutes: 3
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: appliance-a1-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/appliance-a1-evidence/
+          retention-days: 7
+          if-no-files-found: warn
+
+  runner-probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    continue-on-error: true
+    steps:
+      - name: measure what this runner offers an image build and a QEMU boot
+        run: |
+          set -uo pipefail
+          {
+            echo "measured_at: $(date -u +%FT%TZ)"
+            echo "runner_image: ${ImageOS:-unknown} ${ImageVersion:-unknown}"
+            echo "os: $(sed -n 's/^PRETTY_NAME=//p' /etc/os-release | tr -d '"')"
+            echo "kernel: $(uname -srm)"
+            echo "processors: $(nproc)"
+            echo "processors_with_vmx_or_svm: $(grep -Ecw 'vmx|svm' /proc/cpuinfo)"
+            if [ -e /dev/kvm ]; then
+              echo "dev_kvm: present $(stat -c '%A %U:%G' /dev/kvm)"
+            else
+              echo "dev_kvm: absent"
+            fi
+            if [ -r /dev/kvm ] && [ -w /dev/kvm ]; then
+              echo "dev_kvm_access: read-write for $(id -un)"
+            else
+              echo "dev_kvm_access: not read-write for $(id -un)"
+            fi
+            for nested in /sys/module/kvm_intel/parameters/nested /sys/module/kvm_amd/parameters/nested; do
+              if [ -r "$nested" ]; then echo "nested ${nested}: $(cat "$nested")"; fi
+            done
+            echo "memory: $(free -m | awk '/^Mem:/ {print $2 " MiB total, " $7 " MiB available"}')"
+            echo "disk_root: $(df -h --output=size,avail / | tail -n 1)"
+            echo "disk_runner_temp: $(df -h --output=size,avail "$RUNNER_TEMP" | tail -n 1)"
+            echo "docker: $(docker version --format '{{.Server.Version}}' 2>/dev/null || echo absent)"
+            echo "cgroup_fs: $(stat -fc %T /sys/fs/cgroup)"
+            if sudo -n true 2>/dev/null; then echo "sudo: passwordless"; else echo "sudo: unavailable"; fi
+            for tool in qemu-system-x86_64 qemu-system-aarch64 qemu-img podman kiwi-ng xorriso; do
+              echo "${tool}: $(command -v "$tool" || echo absent)"
+            done
+          } | tee -a "$GITHUB_STEP_SUMMARY"

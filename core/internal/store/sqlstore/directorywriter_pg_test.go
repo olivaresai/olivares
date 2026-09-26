@@ -7,7 +7,6 @@ package sqlstore
 import (
 	"context"
 	"database/sql"
-	"net/url"
 	"strings"
 	"sync"
 	"testing"
@@ -637,12 +636,9 @@ func directoryWriterTestDefaultIsolationDSN(
 	isolation string,
 ) string {
 	t.Helper()
-	u, err := url.Parse(dsn)
+	isolated, err := directoryTestDSNWithParam(dsn, "default_transaction_isolation", isolation)
 	if err != nil {
 		t.Fatalf("parse PostgreSQL isolation test DSN: %v", err)
 	}
-	query := u.Query()
-	query.Set("default_transaction_isolation", isolation)
-	u.RawQuery = query.Encode()
-	return u.String()
+	return isolated
 }

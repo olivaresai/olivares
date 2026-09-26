@@ -1,0 +1,54 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# The second half of an appliance's first boot. The first-boot unit queues the product's start
+# but cannot wait for it. This unit, pulled in by the first-boot unit and ordered after the
+# product, runs the same command: completed stages are compared, not repeated, and first boot
+# becomes ready only when the product's own readiness endpoint, its store and its identity files
+# pass. Until then the record says pending. It is wanted by no target, so no target waits for it.
+[Unit]
+Description=Olivares appliance first-boot readiness
+Documentation=https://github.com/olivaresai/olivares/tree/main/appliance
+After=olivares.service olivares-appliance-firstboot.service
+ConditionPathExists=!/var/lib/olivares-appliance/ready
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/appliance-firstboot apply
+ImportCredential=olivares.appliance.answers
+StateDirectory=olivares-appliance
+StateDirectoryMode=0700
+# appliance-firstboot's own 10-minute deadline ends first, so a slow poll records why it stopped.
+TimeoutStartSec=15min
+
+# --- hardening: the product unit's set (packaging/systemd/olivares.service) by the same values,
+# except where a line below says why first boot needs a different one.
+NoNewPrivileges=true
+ProtectSystem=strict
+# Writable: the product configuration the product's generator writes, and the drop-in directory.
+# Both may be missing ("-"): the stage that needs one then records its refusal, where a missing
+# required path would stop the unit before first boot could record anything.
+ReadWritePaths=-/etc/olivares -/etc/systemd/system/olivares.service.d
+# ProtectHome: read-only, not true: verify-host-settings reads the authorized SSH keys in /home and /root.
+ProtectHome=read-only
+PrivateTmp=true
+PrivateDevices=true
+ProtectClock=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+RestrictNamespaces=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+# CapabilityBoundingSet: CAP_DAC_READ_SEARCH where the product keeps none: first boot runs as root and
+# reads other accounts' authorized keys and the product's 0750 data directory. Nothing else.
+CapabilityBoundingSet=CAP_DAC_READ_SEARCH
+AmbientCapabilities=
+# UMask: 0077, tighter than the product's 0027: first boot writes only root-private records.
+UMask=0077

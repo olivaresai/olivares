@@ -1,0 +1,30 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# The disposable Debian 13 system of the appliance base fixture: systemd as PID 1, cloud-init
+# as the host-settings owner reading a NoCloud seed, OpenSSH for the host keys cloud-init
+# generates, the product installed from its own files by its own postinstall, and
+# olivares-appliance-base installed from the built package the way an image recipe installs
+# it: offline, starting nothing. The build context is a staging directory holding exactly the
+# files copied below, because the repository's .dockerignore excludes bin/ and dist/; the
+# appliance-a1 workflow stages it. A container is component evidence; it does not qualify an
+# image, a hypervisor or firmware.
+# debian:13 as Docker Hub listed it on 2026-09-21 (pushed 2026-09-19), pinned by its index digest.
+FROM debian:13@sha256:9cc080028c43b27d2074d63a5f9caf7166d731494965616c1a6d2827a004585c
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends systemd systemd-sysv dbus cloud-init openssh-server \
+ && rm -rf /var/lib/apt/lists/*
+# A template carries no instance identity: no SSH host key and an empty machine ID.
+RUN rm -f /etc/ssh/ssh_host_* && : > /etc/machine-id
+COPY cloud-init.conf /etc/cloud/cloud.cfg.d/99-appliance-fixture.cfg
+COPY olivares /usr/bin/olivares
+COPY olivares.service /usr/lib/systemd/system/olivares.service
+COPY package-init-systemd.txt /usr/lib/olivares/package-init
+COPY olivares.env.example /etc/olivares/olivares.env
+COPY postinstall.sh /tmp/olivares-postinstall.sh
+RUN sh /tmp/olivares-postinstall.sh && rm /tmp/olivares-postinstall.sh
+COPY olivares-appliance-base.deb /tmp/olivares-appliance-base.deb
+RUN dpkg -i /tmp/olivares-appliance-base.deb && rm /tmp/olivares-appliance-base.deb
+STOPSIGNAL SIGRTMIN+3
+CMD ["/sbin/init"]

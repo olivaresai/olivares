@@ -162,7 +162,7 @@ export function HandoffSheet({
   const answer = fresh.current && state.status === 'ready' ? state.data : null
   const detail = answer && answer.ok ? answer.value : null
   const current = detail?.offer_context === 'current'
-  const respondable = detail !== null && current && canRespond
+  const respondable = detail !== null && current
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -357,7 +357,11 @@ export function HandoffSheet({
               </div>
             ) : null}
             {current && !canRespond ? (
-              <p className="text-caption text-muted-foreground">
+              <p
+                id="handoff-respond-denied"
+                className="text-caption text-muted-foreground"
+                data-slot="handoff-respond-denied"
+              >
                 {t('handoff.detail.noRespondPermission')}
               </p>
             ) : null}
@@ -379,6 +383,15 @@ export function HandoffSheet({
               <Button
                 type="button"
                 variant="secondary"
+                disabled={!canRespond}
+                title={
+                  !canRespond
+                    ? t('handoff.detail.noRespondPermission')
+                    : undefined
+                }
+                aria-describedby={
+                  !canRespond ? 'handoff-respond-denied' : undefined
+                }
                 onClick={() =>
                   onRespond('reject', {
                     handoffId: detail.handoff.id,
@@ -395,6 +408,15 @@ export function HandoffSheet({
               <Button
                 type="button"
                 variant="primary"
+                disabled={!canRespond}
+                title={
+                  !canRespond
+                    ? t('handoff.detail.noRespondPermission')
+                    : undefined
+                }
+                aria-describedby={
+                  !canRespond ? 'handoff-respond-denied' : undefined
+                }
                 onClick={() =>
                   onRespond('accept', {
                     handoffId: detail.handoff.id,

@@ -26,6 +26,7 @@ import {
 import { useCoalescedRefresh } from './coalesce'
 import { useOwnerLabel } from './owner-label'
 import { useAuth } from '@/lib/auth/context'
+import { useUrlState } from '@/lib/hooks/use-url-state'
 import {
   getWorkItem,
   listWorkItems,
@@ -33,7 +34,7 @@ import {
   type ListWorkParams,
 } from './api'
 import { DecisionsPanel } from './decisions-panel'
-import { ItemDetailSheet } from './item-detail'
+import { ItemDetailSheet, type WorkDetailTab } from './item-detail'
 import { StatusBadge } from './status-badge'
 import { useWorkStream } from './stream'
 import { WorkSection } from './work-section'
@@ -69,6 +70,49 @@ const STATUSES: WorkStatus[] = [
  * convenience default — it is the engine's behaviour when the key is absent. */
 type ArchivedFilter = 'any' | 'false' | 'true'
 
+/**
+ * Address-bar keys this room owns. A reload, a pasted link and Back/Forward all
+ * re-read the engine; nothing of the snapshot is kept only in React state.
+ * `item` is the WorkItem id, `detail` the sheet tab, `tab` the page tab, and the
+ * rest are the store-wide filters.
+ */
+const WORK_URL_KEYS = [
+  'item',
+  'tab',
+  'status',
+  'priority',
+  'archived',
+  'detail',
+] as const
+
+/** The engine's WorkItem id is a UUID (model.ParseID). Anything else in the
+ * address is untrusted input, not a fetch. */
+const ITEM_ID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+const DETAIL_TABS: readonly WorkDetailTab[] = [
+  'overview',
+  'acceptance',
+  'dependencies',
+  'lease',
+  'events',
+]
+
+function decodeItemId(raw: string | undefined): string | null {
+  if (!raw) return null
+  return ITEM_ID.test(raw) ? raw : null
+}
+
+function decodeDetailTab(raw: string | undefined): WorkDetailTab {
+  return DETAIL_TABS.includes(raw as WorkDetailTab)
+    ? (raw as WorkDetailTab)
+    : 'overview'
+}
+
+function decodeArchived(raw: string | undefined): ArchivedFilter {
+  return raw === 'true' || raw === 'false' || raw === 'any' ? raw : 'any'
+}
+
 export function WorkView() {
   const etiquetaDuenno = useOwnerLabel()
   const { t } = useTranslation('work')
@@ -78,10 +122,16 @@ export function WorkView() {
   const canStartWork = can('sessions:run:write')
   const qc = useQueryClient()
 
-  const [status, setStatus] = useState<string>('')
-  const [priority, setPriority] = useState<string>('')
-  const [archived, setArchived] = useState<ArchivedFilter>('any')
-  const [openItem, setOpenItem] = useState<string | null>(null)
+  const [url, patchUrl] = useUrlState(WORK_URL_KEYS)
+  const status = url.status ?? ''
+  const priority = url.priority ?? ''
+  const archived = decodeArchived(url.archived)
+  const openItem = decodeItemId(url.item)
+  const invalidItem = Boolean(url.item && !openItem)
+  const canReadDecisions = can('sessions:decision:read')
+  const pageTab =
+    url.tab === 'decisions' && canReadDecisions ? 'decisions' : 'items'
+  const detailTab = decodeDetailTab(url.detail)
   /** Whether the reader narrowed the list themselves — the three controls above it. */
   const hayFiltro = status !== '' || priority !== '' || archived !== 'any'
   const [streamUnavailable, setStreamUnavailable] = useState<string | null>(
@@ -214,20 +264,36 @@ export function WorkView() {
         </div>
       }
       notices={
-        /* The stream told us it could not look. That is NOT a disconnect and must not
-           be shown as one: the list on screen may be stale in ways nothing else will
-           reveal. */
-        streamUnavailable ? (
-          <UnavailableNotice code={streamUnavailable}>
-            <p className="text-caption">{t('stream.unavailableBody')}</p>
-          </UnavailableNotice>
-        ) : null
+        <>
+          {invalidItem ? (
+            <p
+              role="status"
+              className="text-body text-muted-foreground"
+              data-slot="work-url-invalid-item"
+            >
+              {t('url.invalidItem')}
+            </p>
+          ) : null}
+          {/* The stream told us it could not look. That is NOT a disconnect and must not
+             be shown as one: the list on screen may be stale in ways nothing else will
+             reveal. */}
+          {streamUnavailable ? (
+            <UnavailableNotice code={streamUnavailable}>
+              <p className="text-caption">{t('stream.unavailableBody')}</p>
+            </UnavailableNotice>
+          ) : null}
+        </>
       }
     >
-      <Tabs defaultValue="items">
+      <Tabs
+        value={pageTab}
+        onValueChange={(v) =>
+          patchUrl({ tab: v === 'decisions' ? 'decisions' : undefined })
+        }
+      >
         <TabsList>
           <TabsTrigger value="items">{t('tabs.items')}</TabsTrigger>
-          {can('sessions:decision:read') ? (
+          {canReadDecisions ? (
             <TabsTrigger value="decisions">{t('tabs.decisions')}</TabsTrigger>
           ) : null}
         </TabsList>
@@ -245,7 +311,9 @@ export function WorkView() {
               <div className="flex flex-wrap gap-2">
                 <Select
                   value={status || 'all'}
-                  onValueChange={(v) => setStatus(v === 'all' ? '' : v)}
+                  onValueChange={(v) =>
+                    patchUrl({ status: v === 'all' ? undefined : v })
+                  }
                 >
                   <SelectTrigger
                     className="w-40"
@@ -267,7 +335,9 @@ export function WorkView() {
 
                 <Select
                   value={priority || 'all'}
-                  onValueChange={(v) => setPriority(v === 'all' ? '' : v)}
+                  onValueChange={(v) =>
+                    patchUrl({ priority: v === 'all' ? undefined : v })
+                  }
                 >
                   <SelectTrigger
                     className="w-32"
@@ -291,7 +361,11 @@ export function WorkView() {
                     one means rather than reading as an on/off switch. */}
                 <Select
                   value={archived}
-                  onValueChange={(v) => setArchived(v as ArchivedFilter)}
+                  onValueChange={(v) =>
+                    patchUrl({
+                      archived: v === 'any' ? undefined : v,
+                    })
+                  }
                 >
                   <SelectTrigger
                     className="w-44"
@@ -341,11 +415,13 @@ export function WorkView() {
                         <Button
                           variant="secondary"
                           size="sm"
-                          onClick={() => {
-                            setStatus('')
-                            setPriority('')
-                            setArchived('any')
-                          }}
+                          onClick={() =>
+                            patchUrl({
+                              status: undefined,
+                              priority: undefined,
+                              archived: undefined,
+                            })
+                          }
                         >
                           {t('filters.clear')}
                         </Button>
@@ -360,12 +436,19 @@ export function WorkView() {
                   />
                 ) : (
                   <>
-                    <ul className="flex flex-col divide-y divide-border">
+                    <ul
+                      className="flex flex-col divide-y divide-border"
+                      data-slot="work-list"
+                    >
                       {page.items.map((item) => (
                         <li key={item.id}>
                           <button
                             type="button"
-                            onClick={() => setOpenItem(item.id)}
+                            data-slot="work-item-row"
+                            aria-current={
+                              openItem === item.id ? 'true' : undefined
+                            }
+                            onClick={() => patchUrl({ item: item.id })}
                             className="flex w-full items-start justify-between gap-4 py-3 text-left hover:bg-muted/40"
                           >
                             <div className="min-w-0 space-y-1">
@@ -414,8 +497,12 @@ export function WorkView() {
 
       <ItemDetailSheet
         itemId={openItem}
+        detailTab={detailTab}
+        onDetailTabChange={(tab) =>
+          patchUrl({ detail: tab === 'overview' ? undefined : tab })
+        }
         onOpenChange={(open) => {
-          if (!open) setOpenItem(null)
+          if (!open) patchUrl({ item: undefined, detail: undefined })
         }}
         onOffer={(itemId) => {
           offerInvocation.current += 1

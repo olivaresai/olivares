@@ -242,7 +242,9 @@
     "item.complete": "完了にする",
     "item.fail": "失敗にする",
     "item.cancel": "キャンセルする",
-    "item.archive": "アーカイブする"
+    "item.archive": "アーカイブする",
+    "noWrite": "この役割ではこのアイテムを変更できません。その操作には sessions:work:write が必要です。",
+    "noAdmin": "失敗とアーカイブには sessions:work:admin が必要です。"
   },
   "truncation": {
     "label": "{{n}} 件を読み込みました。さらに存在します",
@@ -270,6 +272,10 @@
   },
   "handoff": {
     "offer": "ハンドオフを提案",
-    "offerHint": "このアイテムの責任をチャネル経由で受信者に提案します。相手が承諾するまで所有権は移りません。"
+    "offerHint": "このアイテムの責任をチャネル経由で受信者に提案します。相手が承諾するまで所有権は移りません。",
+    "noPermission": "この役割ではハンドオフを提案できません。その操作には sessions:message-send:write が必要です。"
+  },
+  "url": {
+    "invalidItem": "アドレスがこの画面では使えないアイテム ID を示しているため、無視しました。"
   }
 }

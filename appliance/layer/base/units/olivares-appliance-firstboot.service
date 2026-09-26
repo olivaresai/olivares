@@ -1,0 +1,76 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# First boot of an Olivares appliance, installed by olivares-appliance-base. It reads one
+# appliance-answers/v1 document from its carriers, verifies what cloud-init applied, has the
+# product's own generator write the product configuration, and starts the product only after
+# the setup-token delivery and the host firewall are measured. Each completed stage is recorded
+# atomically in /var/lib/olivares-appliance/state.json; a restart compares instead of
+# repeating. Once first boot is ready the unit is skipped. It never prints a setup token.
+#
+# Ordering. Debian 13's cloud-final.service and cloud-init.target are ordered after
+# multi-user.target, and a target is ordered after every unit it wants unless that unit sets
+# DefaultDependencies=no (systemd.target(5)). This unit is wanted by multi-user.target and
+# waits for cloud-final.service, so it sets DefaultDependencies=no: multi-user.target does not
+# wait for it, and it runs once multi-user.target and cloud-init's final stage are done. It
+# restates the dependencies systemd.service(5) gives a service by default. It is not ordered
+# before the product: first boot alone enables and starts the product, and a product unit
+# ordered after this one would, once enabled, put multi-user.target in a cycle again. The
+# readiness unit it pulls in measures the product after the product starts. Without cloud-init
+# the ordering on cloud-final.service is inert and verify-host-settings refuses.
+[Unit]
+Description=Olivares appliance first boot
+Documentation=https://github.com/olivaresai/olivares/tree/main/appliance
+DefaultDependencies=no
+Requires=sysinit.target
+Wants=network-online.target olivares-appliance-readiness.service
+After=sysinit.target basic.target network-online.target multi-user.target cloud-final.service
+Before=olivares-appliance-readiness.service shutdown.target
+Conflicts=shutdown.target
+ConditionPathExists=!/var/lib/olivares-appliance/ready
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/appliance-firstboot apply
+# The answers may arrive as a system credential (SMBIOS type 11, the kernel command line or
+# a container manager); a missing credential is not an error.
+ImportCredential=olivares.appliance.answers
+StateDirectory=olivares-appliance
+StateDirectoryMode=0700
+# appliance-firstboot's own 10-minute deadline ends first, so a slow run records why it stopped.
+TimeoutStartSec=15min
+
+# --- hardening: the product unit's set (packaging/systemd/olivares.service) by the same values,
+# except where a line below says why first boot needs a different one.
+NoNewPrivileges=true
+ProtectSystem=strict
+# Writable: the product configuration the product's generator writes, and the drop-in directory.
+# Both may be missing ("-"): the stage that needs one then records its refusal, where a missing
+# required path would stop the unit before first boot could record anything.
+ReadWritePaths=-/etc/olivares -/etc/systemd/system/olivares.service.d
+# ProtectHome: read-only, not true: verify-host-settings reads the authorized SSH keys in /home and /root.
+ProtectHome=read-only
+PrivateTmp=true
+PrivateDevices=true
+ProtectClock=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+RestrictNamespaces=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+# CapabilityBoundingSet: CAP_DAC_READ_SEARCH where the product keeps none: first boot runs as root and
+# reads other accounts' authorized keys and the product's 0750 data directory. Nothing else.
+CapabilityBoundingSet=CAP_DAC_READ_SEARCH
+AmbientCapabilities=
+# UMask: 0077, tighter than the product's 0027: first boot writes only root-private records.
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

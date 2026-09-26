@@ -8,9 +8,9 @@
 // terraform-provider-olivares is a separate module (the manage-as-code provider):
 // it keeps the large hashicorp/terraform-plugin-framework dependency tree out of
 // core's go.sum/SBOM and is a pure REST client (imports neither /core nor /sdk).
-go 1.26.6
+go 1.26.8
 
-toolchain go1.26.6
+toolchain go1.26.8
 
 // cloud/control-plane ENTRA aquí el 2026-08-16. Estaba fuera y nadie lo había declarado:
 // 23.403 líneas de Go con 276 tests que NUNCA habían pasado por golangci-lint ni por el gate,

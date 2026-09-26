@@ -6,7 +6,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 # Contract S165 — Cloud management-plane connectors (GCP/Azure)
 
 **Status:** stable. **Module:** `/connectors` (Apache-2.0). **Go 1.26.5** module
-baseline; the workspace toolchain is Go 1.26.6.
+baseline; the workspace toolchain is Go 1.26.8.
 **Consumed by:** the access map module (R/RW), the governance module (identity↔agent
 resolution, NHI roster), the egress/exfiltration module and the SIEM egress.
 **Depends on:** the SDK [`SourceConnector`/`Sink`, open `SignalSource`](S02-sdk-runtime-eventbus.md)

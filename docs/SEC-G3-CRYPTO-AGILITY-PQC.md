@@ -66,7 +66,7 @@ is the PQC risk with a real clock.
   A6650) — the post-quantum KEM does not force leaving the validated module.
 - Version gotcha, already resolved in this repo: under `fips140=only` the hybrids
   were broken from Go 1.25 to go1.26.2 (#78178; fixed in go1.26.3+). This
-  repo pins the workspace toolchain to `go1.26.6` (`go.work`) and the core module's
+  repo pins the workspace toolchain to `go1.26.8` (`go.work`) and the core module's
   language directive to `go 1.26.5` (`core/go.mod`); both are past the fix.
 
 **Measured against the running binary, not inferred (2026-08-06).** The

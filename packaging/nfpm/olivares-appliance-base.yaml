@@ -1,0 +1,42 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# nfpm configuration of olivares-appliance-base, the layer every appliance recipe installs
+# beside the product package: the first-boot command and its two units, the answers tool,
+# the console banner, the first-boot state directory and the directory of the drop-in first
+# boot writes for the product unit. It owns no path of the product package. It is written in
+# the JSON subset of YAML so the appliance module's tests read it with the standard library;
+# file modes are therefore decimal (493 = 0755, 420 = 0644, 448 = 0700). Built by
+# `task appliance:package:base` (nfpm v2.47.0) from the repository root, with VERSION and ARCH
+# in the environment and the binaries in bin/.
+{
+  "name": "olivares-appliance-base",
+  "arch": "${ARCH}",
+  "platform": "linux",
+  "version": "${VERSION}",
+  "section": "admin",
+  "priority": "optional",
+  "maintainer": "Olivares.AI <enterprise@olivares.ai>",
+  "description": "First boot for Olivares AI appliances.\nReads one appliance-answers/v1 document from a NoCloud seed, OVF guestinfo, a systemd\ncredential or a local file, verifies the host settings cloud-init applied, generates the\nproduct configuration with the product's own generator and starts the product only after\nits prerequisites are measured.",
+  "vendor": "Olivares.AI",
+  "homepage": "https://olivares.ai",
+  "license": "AGPL-3.0-only",
+  "recommends": ["olivares", "cloud-init", "openssh-server"],
+  "contents": [
+    {"src": "bin/appliance-firstboot", "dst": "/usr/bin/appliance-firstboot", "file_info": {"mode": 493}},
+    {"src": "bin/appliance-answers", "dst": "/usr/bin/appliance-answers", "file_info": {"mode": 493}},
+    {"src": "appliance/layer/base/units/olivares-appliance-firstboot.service", "dst": "/usr/lib/systemd/system/olivares-appliance-firstboot.service", "file_info": {"mode": 420}},
+    {"src": "appliance/layer/base/units/olivares-appliance-readiness.service", "dst": "/usr/lib/systemd/system/olivares-appliance-readiness.service", "file_info": {"mode": 420}},
+    {"src": "appliance/layer/base/units/tty1-banner.txt", "dst": "/etc/issue.d/olivares-appliance.issue", "type": "config|noreplace", "file_info": {"mode": 420}},
+    {"dst": "/var/lib/olivares-appliance", "type": "dir", "file_info": {"mode": 448}},
+    {"dst": "/etc/systemd/system/olivares.service.d", "type": "dir", "file_info": {"mode": 493}},
+    {"src": "LICENSE", "dst": "/usr/share/doc/olivares-appliance-base/LICENSE", "file_info": {"mode": 420}},
+    {"src": "NOTICE", "dst": "/usr/share/doc/olivares-appliance-base/NOTICE", "file_info": {"mode": 420}},
+    {"src": "DISCLAIMER.md", "dst": "/usr/share/doc/olivares-appliance-base/DISCLAIMER.md", "file_info": {"mode": 420}}
+  ],
+  "scripts": {
+    "postinstall": "appliance/layer/base/package/postinstall.sh",
+    "preremove": "appliance/layer/base/package/preremove.sh",
+    "postremove": "appliance/layer/base/package/postremove.sh"
+  }
+}

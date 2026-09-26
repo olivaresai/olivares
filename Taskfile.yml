@@ -230,6 +230,27 @@ tasks:
     cmds:
       - go test -race -count=1 -timeout 120s ./appliance/...
 
+  appliance:build:firstboot:
+    desc: Build the appliance first-boot command and the answers tool, static, into bin/.
+    cmds:
+      - CGO_ENABLED=0 go build -trimpath -o bin/appliance-firstboot ./appliance/cmd/appliance-firstboot
+      - CGO_ENABLED=0 go build -trimpath -o bin/appliance-answers ./appliance/cmd/appliance-answers
+
+  appliance:package:base:
+    desc: >-
+      Package olivares-appliance-base as dist/olivares-appliance-base.deb with nfpm v2.47.0.
+      VERSION defaults to 0.0.0-dev and ARCH to the Go architecture. Not a push gate: the
+      appliance-a1 workflow builds, installs and boots it.
+    deps: [appliance:build:firstboot]
+    cmds:
+      - mkdir -p dist
+      - VERSION="${VERSION:-0.0.0-dev}" ARCH="${ARCH:-$(go env GOARCH)}" go run github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.47.0 package --config packaging/nfpm/olivares-appliance-base.yaml --packager deb --target dist/olivares-appliance-base.deb
+
+  appliance:test:base:
+    desc: Test the first-boot stage machine, its seams, the carriers and the package manifest.
+    cmds:
+      - go test -race -count=1 -timeout 120s ./appliance/layer/... ./appliance/answers/carriers/...
+
   build:commerce:
     desc: >-
       Compile the commercial canon lint (its own module, outside go.work).

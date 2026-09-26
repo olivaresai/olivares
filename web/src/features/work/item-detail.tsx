@@ -45,11 +45,23 @@ const TRANSITIONS = [
   'item.cancel',
 ] as const
 const ADMIN_TRANSITIONS = ['item.fail', 'item.archive'] as const
+const DETAIL_TAB_VALUES: WorkDetailTab[] = [
+  'overview',
+  'acceptance',
+  'dependencies',
+  'lease',
+  'events',
+]
+
+export type WorkDetailTab =
+  'overview' | 'acceptance' | 'dependencies' | 'lease' | 'events'
 
 export function ItemDetailSheet({
   itemId,
   onOpenChange,
   onOffer,
+  detailTab = 'overview',
+  onDetailTabChange,
 }: {
   itemId: string | null
   onOpenChange: (open: boolean) => void
@@ -60,6 +72,9 @@ export function ItemDetailSheet({
    * the item itself before anything can be confirmed.
    */
   onOffer?: (itemId: string) => void
+  /** Which inner tab the address named. Reload re-opens this tab, then re-reads. */
+  detailTab?: WorkDetailTab
+  onDetailTabChange?: (tab: WorkDetailTab) => void
 }) {
   const { t } = useTranslation('work')
   const { activeTenant } = useAuth()
@@ -89,90 +104,102 @@ export function ItemDetailSheet({
   return (
     <Sheet open={!!itemId} onOpenChange={onOpenChange}>
       <SheetContent className="max-w-2xl overflow-y-auto">
-        <WorkSection query={query}>
-          {({ snapshot, etag }) => (
-            <>
-              <SheetHeader>
-                <SheetTitle className="flex items-center gap-2">
-                  {snapshot.item.title}
-                  <StatusBadge item={snapshot.item} />
-                </SheetTitle>
-                <SheetDescription>
-                  {t('detail.subtitle', {
-                    kind: snapshot.item.work_kind,
-                    version: snapshot.item.version,
-                  })}
-                </SheetDescription>
-              </SheetHeader>
+        <div data-slot="work-detail">
+          <WorkSection query={query}>
+            {({ snapshot, etag }) => (
+              <>
+                <SheetHeader>
+                  <SheetTitle className="flex items-center gap-2">
+                    {snapshot.item.title}
+                    <StatusBadge item={snapshot.item} />
+                  </SheetTitle>
+                  <SheetDescription>
+                    {t('detail.subtitle', {
+                      kind: snapshot.item.work_kind,
+                      version: snapshot.item.version,
+                    })}
+                  </SheetDescription>
+                </SheetHeader>
 
-              <Tabs defaultValue="overview" className="mt-4">
-                <TabsList>
-                  <TabsTrigger value="overview">
-                    {t('detail.tabs.overview')}
-                  </TabsTrigger>
-                  <TabsTrigger value="acceptance">
-                    {t('detail.tabs.acceptance')}
-                  </TabsTrigger>
-                  <TabsTrigger value="dependencies">
-                    {t('detail.tabs.dependencies')}
-                  </TabsTrigger>
-                  <TabsTrigger value="lease">
-                    {t('detail.tabs.lease')}
-                  </TabsTrigger>
-                  <TabsTrigger value="events">
-                    {t('detail.tabs.events')}
-                  </TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="overview">
-                  <OverviewTab
-                    item={snapshot.item}
-                    etag={etag}
-                    onIntent={setIntent}
-                    onOffer={onOffer}
-                  />
-                </TabsContent>
-                <TabsContent value="acceptance">
-                  <AcceptanceTab
-                    snapshot={snapshot}
-                    etag={etag}
-                    onIntent={setIntent}
-                    onAcceptanceState={setAcceptanceState}
-                  />
-                </TabsContent>
-                <TabsContent value="dependencies">
-                  <DependenciesTab itemId={snapshot.item.id} />
-                </TabsContent>
-                <TabsContent value="lease">
-                  <LeaseTab
-                    itemId={snapshot.item.id}
-                    etag={etag}
-                    onIntent={setIntent}
-                  />
-                </TabsContent>
-                <TabsContent value="events">
-                  <EventsTab itemId={snapshot.item.id} />
-                </TabsContent>
-              </Tabs>
-
-              <ApplyFlow
-                open={intent !== null}
-                onOpenChange={(open) => {
-                  if (!open) {
-                    setIntent(null)
-                    setAcceptanceState(undefined)
+                <Tabs
+                  value={detailTab}
+                  onValueChange={(v) =>
+                    onDetailTabChange?.(
+                      (DETAIL_TAB_VALUES.includes(v as WorkDetailTab)
+                        ? v
+                        : 'overview') as WorkDetailTab,
+                    )
                   }
-                }}
-                intent={intent}
-                acceptanceState={acceptanceState}
-                title={t('detail.applyTitle')}
-                onApplied={() => refreshIntentTenant(intent)}
-                // A version conflict is resolved by RE-READING, which is exactly this.
-                onReread={() => refreshIntentTenant(intent)}
-              />
-            </>
-          )}
-        </WorkSection>
+                  className="mt-4"
+                >
+                  <TabsList>
+                    <TabsTrigger value="overview">
+                      {t('detail.tabs.overview')}
+                    </TabsTrigger>
+                    <TabsTrigger value="acceptance">
+                      {t('detail.tabs.acceptance')}
+                    </TabsTrigger>
+                    <TabsTrigger value="dependencies">
+                      {t('detail.tabs.dependencies')}
+                    </TabsTrigger>
+                    <TabsTrigger value="lease">
+                      {t('detail.tabs.lease')}
+                    </TabsTrigger>
+                    <TabsTrigger value="events">
+                      {t('detail.tabs.events')}
+                    </TabsTrigger>
+                  </TabsList>
+
+                  <TabsContent value="overview">
+                    <OverviewTab
+                      item={snapshot.item}
+                      etag={etag}
+                      onIntent={setIntent}
+                      onOffer={onOffer}
+                    />
+                  </TabsContent>
+                  <TabsContent value="acceptance">
+                    <AcceptanceTab
+                      snapshot={snapshot}
+                      etag={etag}
+                      onIntent={setIntent}
+                      onAcceptanceState={setAcceptanceState}
+                    />
+                  </TabsContent>
+                  <TabsContent value="dependencies">
+                    <DependenciesTab itemId={snapshot.item.id} />
+                  </TabsContent>
+                  <TabsContent value="lease">
+                    <LeaseTab
+                      itemId={snapshot.item.id}
+                      etag={etag}
+                      onIntent={setIntent}
+                    />
+                  </TabsContent>
+                  <TabsContent value="events">
+                    <EventsTab itemId={snapshot.item.id} />
+                  </TabsContent>
+                </Tabs>
+
+                <ApplyFlow
+                  open={intent !== null}
+                  onOpenChange={(open) => {
+                    if (!open) {
+                      setIntent(null)
+                      setAcceptanceState(undefined)
+                    }
+                  }}
+                  intent={intent}
+                  acceptanceState={acceptanceState}
+                  title={t('detail.applyTitle')}
+                  onApplied={() => refreshIntentTenant(intent)}
+                  // A version conflict is resolved by RE-READING, which is exactly this.
+                  onReread={() => refreshIntentTenant(intent)}
+                />
+              </>
+            )}
+          </WorkSection>
+        </div>
       </SheetContent>
     </Sheet>
   )
@@ -245,29 +272,46 @@ function OverviewTab({
         <dd className="font-mono text-caption">{etag ?? '—'}</dd>
       </dl>
 
-      {onOffer && canOffer ? (
-        <div className="flex flex-wrap items-center gap-2 border-t border-border pt-4">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onOffer(item.id)}
-            data-slot="work-offer-handoff"
-          >
-            {t('handoff.offer')}
-          </Button>
-          <span className="text-caption text-muted-foreground">
-            {t('handoff.offerHint')}
-          </span>
+      {onOffer ? (
+        <div className="flex flex-col gap-2 border-t border-border pt-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!canOffer}
+              title={!canOffer ? t('handoff.noPermission') : undefined}
+              aria-describedby={!canOffer ? 'work-handoff-denied' : undefined}
+              onClick={() => onOffer(item.id)}
+              data-slot="work-offer-handoff"
+            >
+              {t('handoff.offer')}
+            </Button>
+            {canOffer ? (
+              <span className="text-caption text-muted-foreground">
+                {t('handoff.offerHint')}
+              </span>
+            ) : (
+              <p
+                id="work-handoff-denied"
+                className="text-caption text-muted-foreground"
+                data-slot="work-offer-denied"
+              >
+                {t('handoff.noPermission')}
+              </p>
+            )}
+          </div>
         </div>
       ) : null}
 
-      {canWrite ? (
-        <div className="flex flex-wrap gap-2 border-t border-border pt-4">
+      <div className="flex flex-col gap-2 border-t border-border pt-4">
+        <div className="flex flex-wrap gap-2">
           {TRANSITIONS.map((cmd) => (
             <Button
               key={cmd}
               variant="outline"
               size="sm"
+              disabled={!canWrite}
+              title={!canWrite ? t('transition.noWrite') : undefined}
               onClick={() =>
                 onIntent(
                   buildIntent({
@@ -284,29 +328,42 @@ function OverviewTab({
               {t(`transition.${cmd}`)}
             </Button>
           ))}
-          {canAdmin
-            ? ADMIN_TRANSITIONS.map((cmd) => (
-                <Button
-                  key={cmd}
-                  variant="outline"
-                  size="sm"
-                  onClick={() =>
-                    onIntent(
-                      buildIntent({
-                        tenant: activeTenant,
-                        command: cmd,
-                        itemId: item.id,
-                        etag,
-                      }),
-                    )
-                  }
-                >
-                  {t(`transition.${cmd}`)}
-                </Button>
-              ))
-            : null}
+          {ADMIN_TRANSITIONS.map((cmd) => (
+            <Button
+              key={cmd}
+              variant="outline"
+              size="sm"
+              disabled={!canAdmin}
+              title={!canAdmin ? t('transition.noAdmin') : undefined}
+              onClick={() =>
+                onIntent(
+                  buildIntent({
+                    tenant: activeTenant,
+                    command: cmd,
+                    itemId: item.id,
+                    etag,
+                  }),
+                )
+              }
+            >
+              {t(`transition.${cmd}`)}
+            </Button>
+          ))}
         </div>
-      ) : null}
+        {!canWrite ? (
+          <p
+            className="text-caption text-muted-foreground"
+            data-slot="work-write-denied"
+          >
+            {t('transition.noWrite')}
+          </p>
+        ) : null}
+        {canWrite && !canAdmin ? (
+          <p className="text-caption text-muted-foreground">
+            {t('transition.noAdmin')}
+          </p>
+        ) : null}
+      </div>
     </div>
   )
 }
@@ -560,6 +617,15 @@ export function LeaseTab({
       size="sm"
       variant="outline"
       disabled={!allowed}
+      title={
+        !allowed
+          ? command === 'lease.takeover' ||
+            command === 'lease.revoke' ||
+            command === 'lease.clock_rebase'
+            ? t('lease.noAdmin')
+            : t('lease.noWrite')
+          : undefined
+      }
       onClick={() =>
         onIntent(
           // The ETag comes from the item read, never rebuilt from `lease.version`: the engine
@@ -599,7 +665,7 @@ export function LeaseTab({
   }
 
   return (
-    <div className="py-4">
+    <div className="py-4" data-slot="work-lease">
       <WorkSection query={query}>
         {({ lease }) => (
           <div className="flex flex-col gap-4">

@@ -3,4 +3,4 @@
 // graph into a fast lint, and so a broken module elsewhere cannot stop it looking.
 module github.com/olivaresai/olivares/scripts/cli-render-tabwriter
 
-go 1.26.6
+go 1.26.8

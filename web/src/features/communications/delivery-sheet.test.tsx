@@ -332,12 +332,18 @@ describe('DeliverySheet — explicit Ack with the read version', () => {
     expect(screen.queryByText('Stale scope')).toBeNull()
   })
 
-  it('without delivery:write the Ack is not offered; without message:read the message is not opened', async () => {
+  it('without delivery:write the Ack is disabled with the reason; without message:read Open message is disabled', async () => {
     api.getDelivery.mockResolvedValue(readOf())
     const { onOpenMessage } = mount({ canWrite: false, canMessageRead: false })
     expect(await screen.findByText('Deploy window')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Acknowledge' })).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Open message' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Acknowledge' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Open message' })).toBeDisabled()
+    expect(
+      screen.getByText(/do not hold the delivery-write permission/i),
+    ).toBeVisible()
+    expect(
+      screen.getByText(/do not hold the message-read permission/i),
+    ).toBeVisible()
     expect(onOpenMessage).not.toHaveBeenCalled()
   })
 

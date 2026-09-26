@@ -90,3 +90,112 @@ Go callers use `answers.Build(io.Reader)` followed by `Plan.JSON()`. The module 
 in `go.work`, so workspace build/test/vet sweeps include it. Run its bounded tests
 with `task appliance:test:answers`. The implementation uses the standard library
 and imports no product runtime or host adapter.
+
+## Base package and first boot
+
+`olivares-appliance-base` is the layer every appliance recipe installs beside the
+product package (`packaging/nfpm/olivares-appliance-base.yaml`). It installs
+`/usr/bin/appliance-firstboot`, `/usr/bin/appliance-answers`, the units
+`olivares-appliance-firstboot.service` and `olivares-appliance-readiness.service`,
+the console banner `/etc/issue.d/olivares-appliance.issue`, the state directory
+`/var/lib/olivares-appliance` and the directory
+`/etc/systemd/system/olivares.service.d` for the drop-in first boot writes. It owns no
+path of the product package and recommends `olivares`, `cloud-init` and
+`openssh-server` (first boot records the instance's SSH host keys). Installing it
+enables the first-boot unit and starts nothing, so it installs into an image root the
+same way it installs onto a host. Removing it disables the unit and keeps the
+first-boot record, the configuration first boot generated and the product; a
+reinstallation enables the unit again if the removal found it enabled.
+Build and test with `task appliance:build:firstboot`, `task appliance:package:base`
+and `task appliance:test:base`; the `appliance-a1` workflow installs the package in
+a Debian 13 container with systemd and cloud-init and runs
+`appliance/layer/base/fixture/firstboot-battery.sh`. A container is component
+evidence: it qualifies no image, hypervisor import, firmware or Secure Boot.
+
+### Ordering and hardening
+
+Debian 13's `cloud-final.service` and `cloud-init.target` are ordered after
+`multi-user.target`. The first-boot unit is wanted by `multi-user.target` and runs
+after `cloud-final.service`, so it sets `DefaultDependencies=no` and restates a
+service's default dependencies: `multi-user.target` does not wait for it, and no
+ordering cycle exists. It is not ordered before the product, which only first boot
+enables. Both units carry the product unit's hardening directives with the same
+values, except `ProtectHome=read-only` (the authorized SSH keys are verified),
+`CapabilityBoundingSet=CAP_DAC_READ_SEARCH` (first boot reads other accounts' keys and
+the product's data directory as root) and `UMask=0077`; each unit states why. They
+may write only `/etc/olivares` and the drop-in directory.
+
+### Carriers
+
+First boot reads one `appliance-answers/v1` document from these carriers and
+refuses, naming them, when present carriers disagree:
+
+| Carrier | Where the document is |
+| --- | --- |
+| `nocloud` | `/etc/olivares-appliance/carriers/nocloud.json`, written by cloud-init from the NoCloud seed's `write_files` (see `answers/carriers/testdata/nocloud/user-data`, which also sets `fqdn` and `prefer_fqdn_over_hostname` so the kernel hostname is the complete `host.hostname`). |
+| `guestinfo` | Property `olivares-appliance-answers`, base64, of the OVF environment in `guestinfo.ovfEnv`, read with `vmware-rpctool` or `vmtoolsd --cmd`. |
+| `systemd-credential` | Credential `olivares.appliance.answers`, imported by the unit from the system credentials (SMBIOS type 11, `systemd.set_credential=` or a container manager). |
+| `file` | `/etc/olivares-appliance/answers.json`, written by an operator or the local assistant. |
+
+Carriers are compared by the answers module's canonical plan without the `source`
+label, so formatting does not matter and any difference in an answer refuses.
+`source` is advisory: it states where the author meant the document to travel, it is
+neither compared nor part of the restart digest, and the first-boot record's `source`
+names the carrier that actually delivered the answers. Writing one carrier name to
+`/etc/olivares-appliance/carrier` selects it explicitly. Every carrier input must be a
+regular file owned by root and not writable by group or others; links are refused. A
+carrier that is gone at a later boot (a removed SMBIOS credential, for example) leaves
+the recorded outcome in place; first boot continues when a carrier is present again.
+
+### Stages and status
+
+`appliance-firstboot apply` runs, under a lock in the state directory, the stages
+`validate`, `prepare-identity`, `verify-host-settings`, `generate-product-config`,
+`initialize-storage`, `prepare-setup-delivery`, `verify-firewall`, `start-services`
+and `measure-readiness`. A stage is recorded as in progress before its effect can
+begin, and each completed stage atomically in `/var/lib/olivares-appliance/state.json`;
+a later run compares the recorded effect with the host instead of repeating it. The
+record's `product_may_have_started`, written with start-services' in-progress record
+before the product's start can be queued and never cleared, means the product's store
+and keys are this instance's: a later refusal, a carrier read error or a drifted effect
+does not turn them into an imported installation. The field is additive within schema
+v1; a record written without it derives it when read from start-services in progress or
+completed, never from a refusal recorded at start-services. A seam, the
+answers loader or the identity inspection that is not installed refuses before any
+stage runs. cloud-init owns the host settings: first boot waits
+for it and verifies the hostname, UTC, the authorized SSH keys and its error-free
+completion, and never applies them. The product's own `config generate` writes the
+product configuration; the public console address goes to a drop-in the appliance
+owns. initialize-storage records the data directory's owner and mode; the product's
+first start creates the store, and readiness measures it. First boot never starts the product
+until the setup-token delivery and the host firewall are measured, and both seams
+refuse by default: the product has no protected setup-token delivery sink yet, and no
+firewall owner is selected. Ready requires the product's `/readyz` over this
+instance's certificate, polled until it answers ok because the product unit is
+`Type=simple` and active before the product has created its files, and then its store
+and its identity files: not a `systemctl` exit.
+
+The answers' digest is recorded with the first stage that depends on them,
+verify-host-settings. Answers corrected before then simply apply; answers changed
+after then are refused. `sudo appliance-firstboot reconcile` is the recovery before
+the product starts: it forgets the recorded stages that depend on the answers
+(prepare-identity and the instance identity stay), and
+`sudo systemctl start olivares-appliance-firstboot.service` runs them again with the
+current answers and host, inside the unit, with its credentials and hardening; an
+`appliance-firstboot apply` from a shell has neither. The same recovers a stage whose
+recorded effect the host no longer matches. Once the product may have started, reconcile refuses and
+changes nothing: first boot does not reconfigure a started product.
+
+`appliance-firstboot status` (root: `sudo appliance-firstboot status`) prints the
+record and exits 0 when ready, 1 when refused and 2 when pending, applying or
+unrecorded. `apply` exits 0 when ready or pending, 1 when refused and 2 when it could
+not run; `reconcile` exits 0 when it reconciled, 1 when refused and 2 when it could not
+run. A record written by another version (schema other than
+`olivares-appliance-firstboot/v1`) is refused by name with exit 1 and never rewritten:
+a newer version migrates older records forward, and an older version refuses a newer
+record until the newer package is installed again. `appliance-firstboot plan` prints
+the plan of the document the carriers deliver, and `appliance-firstboot
+check-template ROOT` exits 1 naming every instance identity under an image root (SSH
+host keys, machine ID, the product's TLS key, setup token, audit, catalog and policy
+signing keys and store, and a first-boot record): an initialized instance is never a
+template.

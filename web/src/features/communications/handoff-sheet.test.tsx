@@ -277,15 +277,18 @@ describe('the response controls exist only for a CURRENT offer', () => {
     expect(screen.queryByText('Expired')).toBeNull()
   })
 
-  it('without the response permission it says so and offers no control', async () => {
+  it('without the response permission it says so and disables the controls', async () => {
     api.getHandoffDetail.mockResolvedValue(handoffDetailOf())
     mount({ canRespond: false })
     expect(
       await screen.findByText(/requires sessions:handoff-response:write/i),
     ).toBeVisible()
     expect(
-      screen.queryByRole('button', { name: 'Accept responsibility' }),
-    ).toBeNull()
+      screen.getByRole('button', { name: 'Accept responsibility' }),
+    ).toBeDisabled()
+    expect(
+      screen.getByRole('button', { name: 'Reject handoff' }),
+    ).toBeDisabled()
   })
 
   it('renders supplied text safely and never turns an artifact reference into a link', async () => {
