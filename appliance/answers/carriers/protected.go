@@ -16,6 +16,8 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"slices"
+	"strings"
 	"syscall"
 )
 
@@ -25,8 +27,23 @@ const MaxDocumentBytes = 64 * 1024
 // Runner runs a program with fixed arguments and returns its standard output.
 type Runner func(ctx context.Context, name string, args ...string) ([]byte, error)
 
-// ExecRunner runs name from PATH. Standard error is discarded: tools may echo values there.
+// ErrUnlistedProgram reports a program that is not on ExecRunner's closed list. It never runs.
+var ErrUnlistedProgram = errors.New("first boot runs no such program")
+
+// programs is ExecRunner's closed list, by the exact name each caller passes: the guestinfo
+// carrier asks vmware-rpctool, then vmtoolsd (sources.go); the base layer's host adapters run
+// cloud-init, systemctl and id from PATH and the product's configuration generator by its
+// absolute path (layer/base/adapters.go, on the Host rooted at "/" that appliance-firstboot runs).
+var programs = [...]string{"vmware-rpctool", "vmtoolsd", "cloud-init", "systemctl", "id", "/usr/bin/olivares"}
+
+// ExecRunner runs name when it is on the closed list, a tool from PATH or the product binary by
+// its absolute path, and refuses any other name before exec. Standard error is discarded: tools
+// may echo values there.
 func ExecRunner(ctx context.Context, name string, args ...string) ([]byte, error) {
+	if !slices.Contains(programs[:], name) {
+		return nil, fmt.Errorf("%w: %q; it runs only %s", ErrUnlistedProgram, name, strings.Join(programs[:], ", "))
+	}
+	// #nosec G204 -- name is one of the six literals of programs, checked above; every caller passes constant arguments, and exec hands them to the program as an argument vector, never to a shell.
 	return exec.CommandContext(ctx, name, args...).Output()
 }
 
