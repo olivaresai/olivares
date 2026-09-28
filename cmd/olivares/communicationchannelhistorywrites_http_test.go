@@ -1229,9 +1229,30 @@ func TestCommunicationChannelWriterRefusesDuplicateGenerationHTTP(t *testing.T) 
 
 	channel := estate.createChannel(t, workspace, "duplicate-generation", []map[string]any{ownerAll})
 	// Three generations, the last one revoked, so the "already active" refusal
-	// cannot mask the one being measured.
-	subject, seeded := seedChannelGrantHistoryForSubject(t, eng, tenant, workspace,
-		channel.Channel.ID, owner.id, estate.viewer.id, 3)
+	// cannot mask the one being measured. Unlike the synthetic history-size fixture,
+	// this subject is a real account: the typed fixture writer pins its authority.
+	subject := estate.viewer.id
+	var seeded []model.ID
+	for generation := int64(1); generation <= 3; generation++ {
+		record := model.Record{
+			"workspace_id": workspace.String(), "channel_id": channel.Channel.ID.String(),
+			"subject_kind": "user", "subject_ref": subject.String(),
+			"generation": generation,
+			"can_read":   true, "can_write": false, "can_admin": false,
+			"state":           "revoked",
+			"granted_by_kind": "user", "granted_by_ref": owner.id.String(),
+			"revoked_by_kind": "user", "revoked_by_ref": owner.id.String(),
+		}
+		if generation == 3 {
+			record["state"] = "active"
+			delete(record, "revoked_by_kind")
+			delete(record, "revoked_by_ref")
+		}
+		if len(seeded) != 0 {
+			record["supersedes_id"] = seeded[len(seeded)-1].String()
+		}
+		seeded = append(seeded, insertChannelGrantRow(t, eng, tenant, record))
+	}
 	revokeSeededHead(t, eng, tenant, seeded[len(seeded)-1], owner.id)
 
 	sheet := estate.sheetPage(t, owner.token, channel.Channel.ID, wsQuery+"&state=all&limit=50")
@@ -1282,7 +1303,7 @@ func TestCommunicationChannelWriterRefusesDuplicateGenerationHTTP(t *testing.T) 
 	// A DIFFERENT subject on the same Channel is unaffected: the ambiguity is the
 	// subject's, and it is not read on anyone else's behalf.
 	healthy := estate.grant(t, owner.token, channel.Channel.ID, map[string]any{
-		"subject":  channelAdministrationSubject("user", model.NewID()),
+		"subject":  channelAdministrationSubject("user", estate.editor.id),
 		"can_read": true, "can_write": false, "can_admin": false,
 	}, current.ETag)
 	if healthy.status != http.StatusOK {
