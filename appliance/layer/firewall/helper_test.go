@@ -30,7 +30,10 @@ func candidateJSON(t *testing.T) string {
 }
 
 func TestRequest_IsClosedAndTakesNoPath(t *testing.T) {
-	id := operationID(1)
+	id := operationID(10)
+	if strings.ToUpper(id) == id {
+		t.Fatal("the operation fixture must contain letters to test upper-case refusal")
+	}
 	candidate := candidateJSON(t)
 	for _, doc := range []string{
 		`{"op":"status"}`,

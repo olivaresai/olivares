@@ -240,7 +240,14 @@ class Spec(unittest.TestCase):
     @unittest.skipUnless(shutil.which("rpm"), "rpm comment expansion requires the hosted RPM toolchain")
     def test_comment_text_survives_real_rpm_expansion(self):
         # Supply a multiline macro even on a host without selinux-policy-devel.
-        macro = "selinux_modules_install() first\nif [ -e /etc/selinux/config ]; then\n:; fi"
+        body = "first\nif [ -e /etc/selinux/config ]; then\n:; fi"
+        # RPM ends an unbraced definition at an unescaped newline. Continue every
+        # line so the control exercises the same multiline expansion as the package.
+        macro = "selinux_modules_install() " + body.replace("\n", "\\\n")
+        expanded = subprocess.run(["rpm", "--define", macro, "--eval", "%selinux_modules_install"],
+                                  capture_output=True, text=True, check=False, timeout=5)
+        self.assertEqual(expanded.returncode, 0, expanded.stderr)
+        self.assertEqual(expanded.stdout, body + "\n", "the fixture must define the complete multiline body")
         comments = "\n".join(line for line in self.text.splitlines() if line.lstrip().startswith("#"))
         result = subprocess.run(["rpm", "--define", macro, "--eval", comments], capture_output=True,
                                 text=True, check=False, timeout=5)
@@ -250,7 +257,7 @@ class Spec(unittest.TestCase):
         negative = subprocess.run(["rpm", "--define", macro, "--eval", "# %selinux_modules_install"],
                                   capture_output=True, text=True, check=False, timeout=5)
         self.assertEqual(negative.returncode, 0, negative.stderr)
-        self.assertIn("\nif [ -e /etc/selinux/config ]; then", negative.stdout)
+        self.assertEqual(negative.stdout, "# " + body + "\n")
 
     def test_the_scriptlets_parse_as_sh(self):
         for section in ("%pre", "%post", "%postun", "%posttrans"):

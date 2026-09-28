@@ -310,10 +310,16 @@ credential() {
 # container before systemd starts, and the scenario is unmeasured, naming the remount. On a
 # machine systemd marks / shared itself.
 remount_failed='fixture-boot: mount --make-rshared / failed'
+# Expand this program only inside the disposable container.
+# shellcheck disable=SC2016
 boot_command='address=$(ip -o -4 address show dev eth0 scope global | awk "{print \$4}")
   gateway=$(ip -4 route show default dev eth0 | awk "{print \$3}")
   [ -n "$address" ] && [ -n "$gateway" ] || exit 2
   printf "network:\n  version: 2\n  ethernets:\n    eth0:\n      addresses: [%s]\n      gateway4: %s\n" "$address" "$gateway" > /etc/cloud/cloud.cfg.d/98-fixture-network.cfg
+  # Docker has already configured eth0. On the first NM start, select the
+  # persistent cloud-init profile instead of adopting that external configuration.
+  mkdir -p /etc/NetworkManager/conf.d
+  printf "[device-olivares-fixture]\nmatch-device=interface-name:eth0\nkeep-configuration=no\n" > /etc/NetworkManager/conf.d/90-olivares-fixture.conf
   for m in / /run; do
     echo "fixture-boot: before remount: $(findmnt --noheadings --output TARGET,PROPAGATION --mountpoint "$m" 2>&1)"
   done
@@ -382,7 +388,20 @@ capture_network() {
   network_probe "$name" "$dir" cloud-init-renderer-config sh -c \
     'grep -nE -A 6 "renderers:|activators:" /etc/cloud/cloud.cfg /etc/cloud/cloud.cfg.d/*.cfg'
   network_probe "$name" "$dir" network-files find /etc/NetworkManager/system-connections \
-    /run/NetworkManager/system-connections /etc/netplan /run/systemd/network -maxdepth 1 -type f -print
+    /run/NetworkManager/system-connections /etc/netplan /run/systemd/network \
+    /etc/network/interfaces.d /etc/sysconfig/network-scripts /etc/systemd/network \
+    /usr/lib/systemd/network -maxdepth 1 -type f -print
+  # File variables belong to the container, not the invoking host shell.
+  # shellcheck disable=SC2016
+  network_probe "$name" "$dir" network-owner-configs sh -c \
+    'for file in /etc/network/interfaces /etc/network/interfaces.d/* /etc/sysconfig/network-scripts/ifcfg-* /etc/systemd/network/*.network /run/systemd/network/*.network /usr/lib/systemd/network/*.network /etc/netplan/*.yaml /etc/netplan/*.yml; do
+      [ -f "$file" ] || continue
+      printf "FILE %s\n" "$file"
+      stat -c "%a %U:%G %s" "$file"
+      sed -n -E "/^[[:space:]]*(\\[Match\\]|Name=|OriginalName=|Kind=|Type=|Driver=|Virtualization=|iface[[:space:]]|source[[:space:]]|auto[[:space:]]|allow-hotplug[[:space:]]|renderer:|networkd)/p" "$file"
+    done'
+  network_probe "$name" "$dir" networkd-enabled systemctl is-enabled systemd-networkd.service systemd-networkd.socket
+  network_probe "$name" "$dir" networkd-active systemctl is-active systemd-networkd.service systemd-networkd.socket
 }
 
 # unsettled SCENARIO NAME DIR WHAT — settle failed: keep Docker's view of the container
