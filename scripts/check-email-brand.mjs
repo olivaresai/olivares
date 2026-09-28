@@ -309,6 +309,7 @@ const MIGRATED = [
   'commercial/license-worker/src/portal/handler.ts',
   'commercial/license-worker/src/delivery/resend.ts',
   'commercial/license-worker/src/email/render.ts',
+  'cmd/olivares/invitemail.go',
   'core/emailtemplate/emailtemplate.go',
   'email/layout.mjs',
   'email/templates.mjs',

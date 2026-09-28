@@ -116,8 +116,11 @@ func guard(scheme string) []string {
 		"-c", "http.followRedirects=false",
 		"-c", "protocol.allow=never",
 	}
-	if scheme != "" {
-		g = append(g, "-c", "protocol."+scheme+".allow=always")
+	switch scheme {
+	case "https":
+		g = append(g, "-c", "protocol.https.allow=always")
+	case "file":
+		g = append(g, "-c", "protocol.file.allow=always")
 	}
 	return g
 }
@@ -128,6 +131,10 @@ func (x *Executor) run(ctx context.Context, repo string, header Secret, scheme s
 }
 
 func (x *Executor) exec(ctx context.Context, dir, repo string, header Secret, scheme string, args ...string) (string, int, error) {
+	// Private callers supply literal verbs/flags and validated operands: absolute
+	// paths, SHA-prefixed revisions, branch refs and HTTPS/file URLs. guard keeps
+	// all other transports disabled; in particular, ext cannot run commands.
+	// #nosec G204 -- NewExecutor pins an absolute executable; private callers validate operands; no shell.
 	cmd := exec.CommandContext(ctx, x.git, append(guard(scheme), args...)...)
 	cmd.Dir = dir
 	cmd.Env = x.closedEnv(header, repo)
@@ -297,8 +304,14 @@ func (x *Executor) object(ctx context.Context, repo, commit, path string) (strin
 // then runs one leased push. A returned error means NOTHING was dispatched;
 // otherwise the Result classifies what the host said.
 func (x *Executor) Push(ctx context.Context, r PushRequest) (Result, error) {
+	if r.Scheme != "https" && r.Scheme != "file" {
+		return Result{}, ErrDestination
+	}
 	u, err := url.Parse(r.URL)
-	if err != nil || r.Scheme == "" || u.Scheme != r.Scheme || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+	if err != nil || u.Scheme != r.Scheme || !strings.HasPrefix(r.URL, r.Scheme+"://") || u.Opaque != "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+		return Result{}, ErrDestination
+	}
+	if (r.Scheme == "https" && u.Host == "") || (r.Scheme == "file" && !strings.HasPrefix(u.Path, "/")) {
 		return Result{}, ErrDestination
 	}
 	if !refRe.MatchString(r.Ref) || strings.Contains(r.Ref, "..") || (r.ExpectedOld != "" && !shaRe.MatchString(r.ExpectedOld)) {
