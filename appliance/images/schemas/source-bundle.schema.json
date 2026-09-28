@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/olivaresai/olivares/blob/main/appliance/images/schemas/source-bundle.schema.json",
+  "title": "olivares.ai/appliance-source-bundle/v1",
+  "description": "source-bundle.json, which the appliance build writes beside the images for the corresponding source bundle: the bundle's archive basename, byte size and SHA-256, the count of regular files it holds including the root SOURCES.json, and the SHA-256 of the exact root SOURCES.json bytes.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "name",
+    "size",
+    "sha256",
+    "members",
+    "sources_sha256"
+  ],
+  "properties": {
+    "schema": {
+      "const": "olivares.ai/appliance-source-bundle/v1"
+    },
+    "name": {
+      "type": "string",
+      "pattern": "^olivares-appliance-[0-9]+\\.[0-9]+\\.[0-9]+-source\\.tar\\.zst$"
+    },
+    "size": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "members": {
+      "type": "integer",
+      "minimum": 2
+    },
+    "sources_sha256": {
+      "$ref": "#/$defs/sha256"
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  }
+}

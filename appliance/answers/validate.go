@@ -31,8 +31,8 @@ func validate(d *document) error {
 		return invalid("$.host.hostname", "expected a DNS-shaped kernel hostname of at most 64 ASCII bytes with a nonnumeric final label")
 	}
 	d.Host.Hostname = strings.ToLower(d.Host.Hostname)
-	if d.Host.Network.Mode != "dhcp" {
-		return invalid("$.host.network.mode", "only dhcp prerequisites are supported")
+	if err := validateNetwork(&d.Host.Network); err != nil {
+		return err
 	}
 	if d.Host.Time.Timezone != "UTC" {
 		return invalid("$.host.time.timezone", "only UTC prerequisites are supported")
@@ -61,6 +61,20 @@ func validate(d *document) error {
 	if sortAndHasDuplicate(d.Host.SSHAuthorizedKeys) {
 		return invalid("$.host.ssh_authorized_keys", "duplicate SSH public key")
 	}
+	// The decoder yields a non-nil slice for any array present, empty or not.
+	if d.Host.ManagementInterfaces != nil {
+		if len(d.Host.ManagementInterfaces) < 1 {
+			return invalid("$.host.management_interfaces", "expected 1 to 16 interface names when present")
+		}
+		for i, name := range d.Host.ManagementInterfaces {
+			if !interfaceName(name) {
+				return invalid("$.host.management_interfaces["+strconv.Itoa(i)+"]", "expected an interface name of 1 to 15 ASCII letters, digits, dots, hyphens or underscores, beginning with a letter or digit")
+			}
+		}
+		if sortAndHasDuplicate(d.Host.ManagementInterfaces) {
+			return invalid("$.host.management_interfaces", "duplicate interface name")
+		}
+	}
 	// Vocabulary follows cmd/olivares/cmd_config.go. Supporting postgres-prod also
 	// requires protected DSN and signing-key references, which are not implemented here.
 	if d.Product.StorageProfile != "single-node-prod" {
@@ -81,7 +95,39 @@ func validate(d *document) error {
 	if d.Product.NodeRole != "control" {
 		return invalid("$.product.node_role", "only control is supported; inference is not implemented")
 	}
+	// The Appliance Console listens on loopback or on the selected management
+	// interfaces. There is no value for every address.
+	if d.Portal != nil && d.Portal.Listen != nil {
+		switch *d.Portal.Listen {
+		case "local":
+		case "management":
+			if len(d.Host.ManagementInterfaces) == 0 {
+				return invalid("$.portal.listen", "management requires host.management_interfaces")
+			}
+		default:
+			return invalid("$.portal.listen", "expected local or management")
+		}
+	}
 	return nil
+}
+
+// interfaceName accepts the Linux interface names this schema supports: at most 15 bytes
+// (IFNAMSIZ less its terminator), ASCII, beginning with a letter or digit. Names are
+// case-sensitive and are not normalized.
+func interfaceName(name string) bool {
+	if len(name) < 1 || len(name) > 15 {
+		return false
+	}
+	for i := 0; i < len(name); i++ {
+		c := name[i]
+		switch {
+		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9':
+		case i > 0 && (c == '.' || c == '-' || c == '_'):
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 // Set-valued prerequisites have no ordering significance. Sorting after normalization

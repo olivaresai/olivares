@@ -38,6 +38,7 @@ from package_repository_lib import (
 KEY_SCHEMA = "olivares.ai/package-repository-key/v1"
 MANIFEST_SCHEMA = "olivares.ai/package-repositories/v1"
 KEY_PURPOSE = "apt-rpm-apk-repository-metadata"
+RPM_DELIVERY_SCHEMA = "olivares.ai/rpm-delivery/v1"
 
 
 def fail(message: str) -> "NoReturn":
@@ -458,6 +459,75 @@ def render_rpm(root: Path, channel: str, packages: list[Package], signer: Signer
     return records
 
 
+def rpm_nevra(package: Package) -> str:
+    epoch = "" if str(package.epoch) in ("", "0") else f"{package.epoch}:"
+    return f"{package.name}-{epoch}{package.version}-{package.release}.{package.arch}"
+
+
+def adopt_s3_rpm(
+    root: Path, channel: str, packages: list[Package], rpm_tree: Path, fingerprint: str, epoch: int
+) -> list[dict[str, object]]:
+    """Take this channel's rpm-md trees from S3's signed path instead of render_rpm.
+
+    S3 (test-rpm-repository.sh --publish-rpm) re-signs each release rpm header
+    and writes rpm-md, repomd.xml.asc and delivery.json per arch. The record
+    carries the served rpm's digest and size; verify-package-repositories.py
+    --rpm-s3 checks the tree with S3's verifier and binds each rpm to the
+    payload of its authenticated release asset.
+    """
+    records: list[dict[str, object]] = []
+    source_root = rpm_tree / channel / "rpm"
+    if not source_root.is_dir() or source_root.is_symlink():
+        blind(f"S3 rpm tree for {channel} is missing: {source_root}")
+    rpms = sorted((item for item in packages if item.format == "rpm"), key=lambda item: item.arch)
+    if sorted(entry.name for entry in source_root.iterdir()) != sorted(package.arch for package in rpms):
+        fail(f"S3 rpm tree for {channel} does not hold exactly the release rpm arches")
+    for package in rpms:
+        source = source_root / package.arch
+        try:
+            delivery = json.loads((source / "delivery.json").read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError):
+            fail(f"S3 delivery.json for {channel}/{package.arch} is not readable JSON")
+        entries = delivery.get("packages") if isinstance(delivery, dict) else None
+        if (
+            not isinstance(delivery, dict)
+            or delivery.get("schema") != RPM_DELIVERY_SCHEMA
+            or delivery.get("key_fingerprint") != fingerprint
+            or not isinstance(entries, list)
+            or len(entries) != 1
+            or not isinstance(entries[0], dict)
+        ):
+            fail(f"S3 delivery.json for {channel}/{package.arch} is not one package signed by the descriptor key")
+        entry = entries[0]
+        if (entry.get("name"), entry.get("arch"), entry.get("nevra")) != (package.name, package.arch, rpm_nevra(package)):
+            fail(f"S3 delivery.json for {channel}/{package.arch} does not name {rpm_nevra(package)}")
+        target = root / channel / "rpm" / package.arch
+        for directory, dirnames, filenames in os.walk(source):
+            for name in sorted((*dirnames, *filenames)):
+                entry_path = Path(directory) / name
+                if entry_path.is_symlink() or not (entry_path.is_dir() or entry_path.is_file()):
+                    fail(f"S3 rpm tree has a non-regular entry: {entry_path.relative_to(rpm_tree)}")
+            for name in sorted(filenames):
+                source_file = Path(directory) / name
+                write_bytes(target / source_file.relative_to(source), source_file.read_bytes(), epoch)
+        served = target / str(entry.get("file", ""))
+        if not served.is_file() or digest_file(served) != entry.get("sha256"):
+            fail(f"S3 rpm for {channel}/{package.arch} does not match its delivery.json digest")
+        records.append(
+            {
+                "format": "rpm",
+                "asset": package.source_name,
+                "asset_arch": package.asset_arch,
+                "internal_arch": package.arch,
+                "repo_path": (Path(channel) / "rpm" / package.arch / str(entry["file"])).as_posix(),
+                "sha256": str(entry["sha256"]),
+                "size": served.stat().st_size,
+                "version": f"{package.version}-{package.release}",
+            }
+        )
+    return records
+
+
 def apk_index_entry(package: Package, epoch: int) -> str:
     description = " ".join(package.description.splitlines()).strip()
     fields = [
@@ -518,6 +588,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--source-date-epoch", required=True, type=int)
     parser.add_argument("--valid-until-epoch", required=True, type=int)
     parser.add_argument("--out", required=True, type=Path)
+    parser.add_argument(
+        "--rpm-tree",
+        type=Path,
+        help="S3 output of test-rpm-repository.sh --publish-rpm; replaces the unsigned rpm render",
+    )
     return parser.parse_args()
 
 
@@ -559,7 +634,17 @@ def main() -> int:
             records += render_apt(
                 staging, args.channel, packages, signer, args.source_date_epoch, args.valid_until_epoch
             )
-            records += render_rpm(staging, args.channel, packages, signer, args.source_date_epoch)
+            if args.rpm_tree is None:
+                records += render_rpm(staging, args.channel, packages, signer, args.source_date_epoch)
+            else:
+                records += adopt_s3_rpm(
+                    staging,
+                    args.channel,
+                    packages,
+                    args.rpm_tree,
+                    str(descriptor["openpgp_fingerprint"]),
+                    args.source_date_epoch,
+                )
             records += render_apk(staging, args.channel, packages, signer, args.source_date_epoch, scratch)
             manifest = {
                 "schema": MANIFEST_SCHEMA,

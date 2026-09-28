@@ -849,3 +849,36 @@ regexes = [
   regexTarget = "match"
   paths = ['''^connectors/claude-api/contentscan\.go$''']
   regexes = ['''^key, "arguments/key"$''']
+
+# ── 2026-09-26 · generic-api-key · appliance/images/toolchain/input-lock.json, history only
+# The first appliance toolchain lock (345cc0093b) recorded the repository it then took KIWI from,
+# the openSUSE Build Service repository Virtualization:Appliances:Builder/Debian_13_x86_64, with
+# the OpenPGP fingerprint of that repository's PUBLIC signing key (signing_key_fingerprint) and
+# the SHA-256 of the key file (signing_key_sha256). Both identify a public key that anyone
+# downloads beside the repository; neither authorizes anything. A later commit on the same branch
+# dropped that route, so the lines live only in history. Rule-specific AND commit AND exact-path
+# AND exact-Secret: the same value in another commit or file, another value on those lines, or
+# any other rule stays a finding.
+[[allowlists]]
+  description = "appliance toolchain lock history: the public OBS repository signing-key fingerprint and key digest, not credentials"
+  targetRules = ["generic-api-key"]
+  condition = "AND"
+  commits = ["345cc0093ba56d7999dbe918911b4e071e43dcaf"]
+  paths = ['''^appliance/images/toolchain/input-lock\.json$''']
+  regexTarget = "secret"
+  regexes = ['''^85E26470357A6391DBA1BC9E0739B8027BF939EF$''', '''^b4a55c9bfb197702bbeda3cd261c0c2f6f4dd273b43b9bc8510b10caa9e0a083$''']
+
+# Public repository signing identifiers, pinned by production-key-descriptor.json
+# and the appliance Fedora repository metadata. They identify public keys and
+# cannot authorize an operation. Other values, paths and rules remain findings.
+[[allowlists]]
+  description = "appliance recipe tests: exact public signing fingerprints and key-file digest"
+  targetRules = ["generic-api-key"]
+  condition = "AND"
+  paths = ['''^appliance/test/test_recipe_composition\.py$''']
+  regexTarget = "secret"
+  regexes = [
+    '''^AE27B5B818C9BCFE485B4D8B155E5EC6550A6EF8$''',
+    '''^93642aec521a1e5e96dd715f7ae0ec0850ebc9de09a94ce03cae5263f26cc18a$''',
+    '''^36F612DCF27F7D1A48A835E4DBFCF71C6D9F90A6$''',
+  ]

@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-FileCopyrightText: 2026 Olivares.AI -->
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<!--
+  The OVF envelope of the appliance, filled in by ova.sh. @NAME@ placeholders are the only
+  thing that changes between builds.
+
+  Two things in it are load-bearing and not decoration:
+    * ovf:transport="com.vmware.guestInfo" on the hardware section is what puts the OVF
+      environment into guestinfo.ovfEnv, which is where the appliance layer's guestinfo
+      carrier reads the answers from (appliance/README.md, carriers).
+    * the olivares-appliance-answers property is that carrier's own field: one
+      appliance-answers/v1 document, base64, typed into the import dialog of the hypervisor.
+  The operating system identifiers are the hypervisor's own enumerations, not product names.
+-->
+<Envelope xmlns="http://schemas.dmtf.org/ovf/envelope/1"
+          xmlns:ovf="http://schemas.dmtf.org/ovf/envelope/1"
+          xmlns:rasd="http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/CIM_ResourceAllocationSettingData"
+          xmlns:vssd="http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/CIM_VirtualSystemSettingData"
+          xmlns:vmw="http://www.vmware.com/schema/ovf"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <References>
+    <File ovf:href="@DISK_FILE@" ovf:id="file1" ovf:size="@DISK_BYTES@"/>
+  </References>
+  <DiskSection>
+    <Info>Virtual disk information</Info>
+    <Disk ovf:capacity="@DISK_CAPACITY@" ovf:capacityAllocationUnits="byte" ovf:diskId="vmdisk1"
+          ovf:fileRef="file1" ovf:populatedSize="@DISK_BYTES@"
+          ovf:format="http://www.vmware.com/interfaces/specifications/vmdk.html#streamOptimized"/>
+  </DiskSection>
+  <NetworkSection>
+    <Info>The logical networks the appliance attaches to</Info>
+    <Network ovf:name="VM Network">
+      <Description>The network the appliance's console and the management interface answer on</Description>
+    </Network>
+  </NetworkSection>
+  <VirtualSystem ovf:id="@SYSTEM_ID@">
+    <Info>@PRODUCT@ @VERSION@</Info>
+    <Name>@PRODUCT@</Name>
+    <OperatingSystemSection ovf:id="101" vmw:osType="otherLinux64Guest">
+      <Info>The guest operating system identifier of the hypervisor</Info>
+      <Description>@BASE@</Description>
+    </OperatingSystemSection>
+    <VirtualHardwareSection ovf:transport="com.vmware.guestInfo">
+      <Info>Virtual hardware requirements</Info>
+      <System>
+        <vssd:ElementName>Virtual Hardware Family</vssd:ElementName>
+        <vssd:InstanceID>0</vssd:InstanceID>
+        <vssd:VirtualSystemIdentifier>@PRODUCT@</vssd:VirtualSystemIdentifier>
+        <vssd:VirtualSystemType>vmx-13</vssd:VirtualSystemType>
+      </System>
+      <Item>
+        <rasd:AllocationUnits>hertz * 10^6</rasd:AllocationUnits>
+        <rasd:Description>Number of Virtual CPUs</rasd:Description>
+        <rasd:ElementName>@CPUS@ virtual CPU(s)</rasd:ElementName>
+        <rasd:InstanceID>1</rasd:InstanceID>
+        <rasd:ResourceType>3</rasd:ResourceType>
+        <rasd:VirtualQuantity>@CPUS@</rasd:VirtualQuantity>
+      </Item>
+      <Item>
+        <rasd:AllocationUnits>byte * 2^20</rasd:AllocationUnits>
+        <rasd:Description>Memory Size</rasd:Description>
+        <rasd:ElementName>@MEMORY_MIB@MB of memory</rasd:ElementName>
+        <rasd:InstanceID>2</rasd:InstanceID>
+        <rasd:ResourceType>4</rasd:ResourceType>
+        <rasd:VirtualQuantity>@MEMORY_MIB@</rasd:VirtualQuantity>
+      </Item>
+      <Item>
+        <rasd:Address>0</rasd:Address>
+        <rasd:Description>SCSI Controller</rasd:Description>
+        <rasd:ElementName>SCSI Controller 0</rasd:ElementName>
+        <rasd:InstanceID>3</rasd:InstanceID>
+        <rasd:ResourceSubType>VirtualSCSI</rasd:ResourceSubType>
+        <rasd:ResourceType>6</rasd:ResourceType>
+      </Item>
+      <Item>
+        <rasd:AddressOnParent>0</rasd:AddressOnParent>
+        <rasd:ElementName>Hard Disk 1</rasd:ElementName>
+        <rasd:HostResource>ovf:/disk/vmdisk1</rasd:HostResource>
+        <rasd:InstanceID>4</rasd:InstanceID>
+        <rasd:Parent>3</rasd:Parent>
+        <rasd:ResourceType>17</rasd:ResourceType>
+      </Item>
+      <Item>
+        <rasd:AddressOnParent>7</rasd:AddressOnParent>
+        <rasd:AutomaticAllocation>true</rasd:AutomaticAllocation>
+        <rasd:Connection>VM Network</rasd:Connection>
+        <rasd:Description>VmxNet3 ethernet adapter</rasd:Description>
+        <rasd:ElementName>Network adapter 1</rasd:ElementName>
+        <rasd:InstanceID>5</rasd:InstanceID>
+        <rasd:ResourceSubType>VmxNet3</rasd:ResourceSubType>
+        <rasd:ResourceType>10</rasd:ResourceType>
+      </Item>
+      <vmw:Config ovf:required="false" vmw:key="firmware" vmw:value="efi"/>
+      <vmw:Config ovf:required="false" vmw:key="uefi.secureBoot.enabled" vmw:value="true"/>
+    </VirtualHardwareSection>
+    <ProductSection ovf:required="false">
+      <Info>Information about the installed software</Info>
+      <Product>@PRODUCT@</Product>
+      <Vendor>@VENDOR@</Vendor>
+      <Version>@VERSION@</Version>
+      <ProductUrl>https://olivares.ai</ProductUrl>
+      <VendorUrl>https://olivares.ai</VendorUrl>
+      <Category>Appliance answers</Category>
+      <Property ovf:key="olivares-appliance-answers" ovf:type="string" ovf:userConfigurable="true" ovf:value="">
+        <Label>Appliance answers (base64)</Label>
+        <Description>One appliance-answers/v1 document, base64 encoded. First boot reads it from the OVF environment and refuses answers that disagree with another carrier. Leave it empty to configure the appliance from its console instead.</Description>
+      </Property>
+    </ProductSection>
+  </VirtualSystem>
+</Envelope>

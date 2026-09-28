@@ -202,8 +202,9 @@ awk '
 	}
 ' "${files[@]}" > "$consts_f" || blind "awk could not read the discovered files (pass 1)"
 
+# A character class preserves the literal parenthesis through awk's -v decoding.
 awk -v maxs="$MAXS" -v window="$WINDOW" -v exf="$exempt_f" -v cof="$consts_f" \
-	-v FIXTURE='(^|[^A-Za-z0-9_.])(Open|isolatedPG[A-Za-z0-9_]*|[A-Za-z0-9_]*FreshTarget|provisionTenant[A-Za-z0-9_]*|drOpenSuper|chatTransport|chatPrepared|new[A-Za-z0-9_]*(Harness|Fixture|Target|Estate))\(' '
+	-v FIXTURE='(^|[^A-Za-z0-9_.])(Open|isolatedPG[A-Za-z0-9_]*|[A-Za-z0-9_]*FreshTarget|provisionTenant[A-Za-z0-9_]*|drOpenSuper|chatTransport|chatPrepared|new[A-Za-z0-9_]*(Harness|Fixture|Target|Estate))[(]' '
 	BEGIN {
 		while ((getline l < exf) > 0) { if (l != "") ex[l] = 1 }
 		close(exf)

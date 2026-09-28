@@ -1,0 +1,18 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# One automatic update route (F5 r3 §3): the product timer drives the managed DNF5 route, so dnf5-automatic is
+# installed and stays disabled. dnf-automatic.timer is the same unit under its alias (dnf5-plugin-automatic 5.4.5.0-1).
+# The first matching preset line wins, and this file sorts before Fedora's (systemd.preset(5)).
+disable dnf5-automatic.timer
+disable dnf-automatic.timer
+disable dnf5-automatic.service
+# The module helpers' sockets, which the Appliance Console connects to for the services, storage and firewall reads.
+# The root helpers' sockets are packaged, not enabled.
+enable olivares-helper-units.socket
+enable olivares-helper-storage.socket
+enable olivares-helper-firewall.socket
+# The firewall owner's boot load, which loads the confirmed policy before the network, and its guard, which reverts
+# an unconfirmed change at its deadline.
+enable olivares-firewall.service
+enable olivares-firewall-guard.service

@@ -1,0 +1,76 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# Public rpm-md qualification. createrepo_c, rpmsign, and dnf5 run only in the
+# Fedora 44 image pinned below. The DNF transaction container is started with
+# --network none. The key is the disposable package-repository test key.
+name: rpm-repository
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: Published community release without a leading v
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rpm-repository-${{ github.ref }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  rpm-repository:
+    if: github.repository == 'olivaresai/olivares' || vars.OLIVARES_RELEASE_PROFILE == 'preprod'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 3
+        with:
+          persist-credentials: false
+
+      - name: static self-test
+        timeout-minutes: 5
+        env:
+          TMPDIR: ${{ runner.temp }}
+        run: bash scripts/test-rpm-repository.sh --self-test
+
+      - name: disposable package-repository key
+        timeout-minutes: 5
+        env:
+          OLIVARES_PACKAGE_REPO_TEST_ONLY: "1"
+          TMPDIR: ${{ runner.temp }}
+        run: |
+          set -euo pipefail
+          key_dir="${RUNNER_TEMP}/rpm-repository-test-key"
+          bash scripts/generate-package-repository-test-key.sh "$key_dir"
+          printf 'key_dir=%s\n' "$key_dir" >>"$GITHUB_ENV"
+
+      - name: fetch the published amd64 rpm
+        timeout-minutes: 10
+        env:
+          RELEASE_VERSION: ${{ inputs.release_version }}
+        run: |
+          set -euo pipefail
+          dest="${RUNNER_TEMP}/rpm-payload"
+          bash scripts/test-rpm-repository.sh --fetch-release "$RELEASE_VERSION" "$dest"
+          name="olivares_${RELEASE_VERSION}_linux_amd64.rpm"
+          printf 'rpm_path=%s\n' "$dest/$name" >>"$GITHUB_ENV"
+
+      - name: signed repository and Fedora 44 DNF5 transaction
+        timeout-minutes: 30
+        env:
+          OLIVARES_PACKAGE_REPO_TEST_ONLY: "1"
+          OLIVARES_PACKAGE_REPO_KEY_DESCRIPTOR_FILE: ${{ env.key_dir }}/descriptor.json
+          OLIVARES_PACKAGE_REPO_OPENPGP_SECRET_KEY_FILE: ${{ env.key_dir }}/openpgp-secret.asc
+          FEDORA_44_IMAGE: registry.fedoraproject.org/fedora@sha256:539cadb5d8a43564d8abefd6eafdfcbcd4809070efbb900ec248229903db5911
+          TMPDIR: ${{ runner.temp }}
+        run: bash scripts/test-rpm-repository.sh --qualify --image "$FEDORA_44_IMAGE" --rpm "$rpm_path"

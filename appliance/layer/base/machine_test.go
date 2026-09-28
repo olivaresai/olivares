@@ -59,7 +59,7 @@ func (h *fakeHost) Measure(context.Context, Input) (Measurement, error) {
 
 func (h *fakeHost) seams() Seams {
 	return Seams{
-		Identity: fakeStep{h, StageIdentity}, HostSettings: fakeStep{h, StageHostSettings},
+		Identity: fakeStep{h, StageIdentity}, HostSettings: fakeStep{h, StageHostSettings}, HostHandoff: fakeStep{h, StageHostHandoff},
 		ProductConfig: fakeStep{h, StageProductConfig}, Storage: fakeStep{h, StageStorage},
 		SetupDelivery: fakeStep{h, StageSetupDelivery}, Firewall: fakeStep{h, StageFirewall},
 		StartServices: fakeStep{h, StageStartServices}, Readiness: h,

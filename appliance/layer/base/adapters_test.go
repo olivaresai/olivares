@@ -21,18 +21,30 @@ import (
 	"time"
 )
 
-// hostTools answers the two host commands these adapters run: the service account lookup and
-// the product unit's state.
-func hostTools(uid int, active string) func(context.Context, string, ...string) ([]byte, error) {
+// hostTools answers the one host command readiness runs: the product unit's state. First boot's
+// observe paths run none; the service account comes from the host's files.
+func hostTools(active string) func(context.Context, string, ...string) ([]byte, error) {
 	return func(_ context.Context, name string, args ...string) ([]byte, error) {
-		switch {
-		case name == "id" && len(args) == 2 && args[0] == "-u" && args[1] == productAccount:
-			return []byte(strconv.Itoa(uid) + "\n"), nil
-		case name == "systemctl" && len(args) == 2 && args[0] == "is-active" && args[1] == productUnit:
+		if name == "systemctl" && len(args) == 2 && args[0] == "is-active" && args[1] == productUnit {
 			return []byte(active + "\n"), nil
 		}
 		return nil, errors.New("unexpected command " + name)
 	}
+}
+
+// noProgram is a Host.Run that records every program it was asked for and runs none.
+type noProgram struct{ asked []string }
+
+func (n *noProgram) run(_ context.Context, name string, args ...string) ([]byte, error) {
+	n.asked = append(n.asked, strings.Join(append([]string{name}, args...), " "))
+	return nil, errors.New("no program runs here: " + name)
+}
+
+// serviceAccount writes the host's /etc/passwd with the product's service account at uid.
+func serviceAccount(t *testing.T, root string, uid int) {
+	t.Helper()
+	place(t, root, "etc/passwd", "root:x:0:0:root:/root:/bin/bash\n"+
+		productAccount+":x:"+strconv.Itoa(uid)+":"+strconv.Itoa(uid)+":Olivares AI:/var/lib/olivares:/usr/sbin/nologin\n")
 }
 
 func TestStorage_RecordsOnlyWhatItMeasured(t *testing.T) {
@@ -44,7 +56,8 @@ func TestStorage_RecordsOnlyWhatItMeasured(t *testing.T) {
 	if err := os.Chmod(data, 0o750); err != nil {
 		t.Fatal(err)
 	}
-	storage := Storage{Host: Host{Root: root, Run: hostTools(os.Getuid(), "inactive")}}
+	serviceAccount(t, root, os.Getuid())
+	storage := Storage{Host: Host{Root: root, Run: hostTools("inactive")}}
 	effect, err := storage.Apply(context.Background(), Input{})
 	if err != nil {
 		t.Fatalf("a data directory private to the service account was refused: %v", err)
@@ -57,9 +70,9 @@ func TestStorage_RecordsOnlyWhatItMeasured(t *testing.T) {
 	}
 }
 
-// The account lookup is the runner's `id -u`, which the fake answers, so this case reaches the
-// effect whatever accounts the test host has: it can fail only on what the stage records.
-func TestStorage_RecordsTheOwnerAndModeItMeasuredThroughTheInjectedLookup(t *testing.T) {
+// The account comes from the /etc/passwd under the test's root, so this case reaches the effect
+// whatever accounts the test host has: it can fail only on what the stage records.
+func TestStorage_RecordsTheOwnerAndModeItMeasuredThroughThePasswdFile(t *testing.T) {
 	root := t.TempDir()
 	data := filepath.Join(root, ProductDataDir)
 	if err := os.MkdirAll(data, 0o750); err != nil {
@@ -69,7 +82,8 @@ func TestStorage_RecordsTheOwnerAndModeItMeasuredThroughTheInjectedLookup(t *tes
 		t.Fatal(err)
 	}
 	uid := os.Getuid()
-	effect, err := Storage{Host: Host{Root: root, Run: hostTools(uid, "inactive")}}.Apply(context.Background(), Input{})
+	serviceAccount(t, root, uid)
+	effect, err := Storage{Host: Host{Root: root, Run: hostTools("inactive")}}.Apply(context.Background(), Input{})
 	if err != nil {
 		t.Fatalf("the lookup answered and the directory is private, yet the stage refused: %v", err)
 	}
@@ -81,8 +95,61 @@ func TestStorage_RecordsTheOwnerAndModeItMeasuredThroughTheInjectedLookup(t *tes
 	if strings.Contains(string(effect), "created") {
 		t.Fatalf("initialize-storage claims a store the product has not created: %q", effect)
 	}
-	if _, err := (Storage{Host: Host{Root: root, Run: hostTools(uid+1, "inactive")}}).Apply(context.Background(), Input{}); err == nil {
+	serviceAccount(t, root, uid+1)
+	if _, err := (Storage{Host: Host{Root: root, Run: hostTools("inactive")}}).Apply(context.Background(), Input{}); err == nil {
 		t.Fatal("a data directory owned by another account than the looked-up one was accepted")
+	}
+}
+
+// The service account resolves from files alone: the host's /etc/passwd, and only when the
+// account is not there, a systemd userdb drop-in record named for it. No program runs.
+func TestStorage_ResolvesTheServiceAccountFromThePasswdFileThenUserdbAndRunsNoProgram(t *testing.T) {
+	uid := os.Getuid()
+	passwd := func(name string, uid int) string {
+		return "root:x:0:0:root:/root:/bin/bash\n" + name + ":x:" + strconv.Itoa(uid) + ":0::/var/lib/olivares:/usr/sbin/nologin\n"
+	}
+	record := func(name string, uid int) string {
+		return `{"userName": "` + name + `", "uid": ` + strconv.Itoa(uid) + `, "disposition": "system"}` + "\n"
+	}
+	cases := []struct {
+		name  string
+		files map[string]string
+		ok    bool
+	}{
+		{"in /etc/passwd", map[string]string{"etc/passwd": passwd(productAccount, uid)}, true},
+		{"only in a userdb drop-in", map[string]string{"etc/passwd": passwd("root2", 1), "run/userdb/" + productAccount + ".user": record(productAccount, uid)}, true},
+		{"/etc/passwd first: a userdb record for another uid is not read", map[string]string{
+			"etc/passwd": passwd(productAccount, uid), "etc/userdb/" + productAccount + ".user": record(productAccount, uid+1)}, true},
+		{"a longer name that begins with the account's", map[string]string{"etc/passwd": passwd(productAccount+"x", uid)}, false},
+		{"a userdb record for another user under the account's name", map[string]string{
+			"etc/passwd": passwd("root2", 1), "usr/lib/userdb/" + productAccount + ".user": record("someone", uid)}, false},
+		{"in neither", map[string]string{"etc/passwd": passwd("root2", 1)}, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			data := filepath.Join(root, ProductDataDir)
+			if err := os.MkdirAll(data, 0o750); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Chmod(data, 0o750); err != nil {
+				t.Fatal(err)
+			}
+			for path, content := range tc.files {
+				place(t, root, path, content)
+			}
+			programs := &noProgram{}
+			effect, err := Storage{Host: Host{Root: root, Run: programs.run}}.Apply(context.Background(), Input{})
+			if len(programs.asked) != 0 {
+				t.Fatalf("resolving the service account ran %q", programs.asked)
+			}
+			switch {
+			case tc.ok && (err != nil || !strings.Contains(string(effect), "uid "+strconv.Itoa(uid))):
+				t.Fatalf("the account was not resolved to uid %d: %q %v", uid, effect, err)
+			case !tc.ok && (err == nil || !strings.Contains(err.Error(), "the product service account is missing")):
+				t.Fatalf("an unresolvable account was not refused as missing: %q %v", effect, err)
+			}
+		})
 	}
 }
 
@@ -108,7 +175,7 @@ func TestReadiness_WaitsForTheProductsOwnReadinessBeforeJudgingItsFiles(t *testi
 			_ = os.WriteFile(filepath.Join(root, ProductDataDir, name), []byte("instance\n"), 0o600)
 		}
 	}()
-	readiness := ProductReadiness{Host: Host{Root: root, Run: hostTools(os.Getuid(), "active")}, Poll: 10 * time.Millisecond}
+	readiness := ProductReadiness{Host: Host{Root: root, Run: hostTools("active")}, Poll: 10 * time.Millisecond}
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
 	got, err := readiness.Measure(ctx, Input{})
@@ -184,7 +251,7 @@ func TestReadiness_JudgesTheIdentityFilesAndTheStoreOnceReadyzAnswersOk(t *testi
 					t.Fatal(err)
 				}
 			}
-			readiness := ProductReadiness{Host: Host{Root: root, Run: hostTools(os.Getuid(), "active")}, Poll: 10 * time.Millisecond}
+			readiness := ProductReadiness{Host: Host{Root: root, Run: hostTools("active")}, Poll: 10 * time.Millisecond}
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 			got, err := readiness.Measure(ctx, Input{})

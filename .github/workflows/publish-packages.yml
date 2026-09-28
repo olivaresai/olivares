@@ -144,10 +144,13 @@ jobs:
         run: bash scripts/assert-cosign-binary.sh --isolate
 
       - name: prove producer, verifier and wrong-key mutant before custody
-        timeout-minutes: 4
+        timeout-minutes: 8
         env:
           TMPDIR: ${{ runner.temp }}
-        run: bash scripts/test-package-repositories.sh
+        run: |
+          set -euo pipefail
+          bash scripts/test-package-repositories.sh
+          bash scripts/test-rpm-repository.sh --self-test
 
       - name: fetch and authenticate public release package assets
         id: release
@@ -196,7 +199,7 @@ jobs:
             --out "${RUNNER_TEMP}/repository-key" --github-output "$GITHUB_OUTPUT"
 
       - name: render and verify stable and security with the production key
-        timeout-minutes: 15
+        timeout-minutes: 45
         env:
           DIST: ${{ steps.release.outputs.dist }}
           KEY_DIR: ${{ steps.key.outputs.key_dir }}
@@ -211,18 +214,25 @@ jobs:
           export OLIVARES_PACKAGE_REPO_APK_PRIVATE_KEY_FILE="$KEY_DIR/apk-private.pem"
           export OLIVARES_PACKAGE_REPO_OPENPGP_PASSPHRASE_FILE="$KEY_DIR/passphrase"
           export OLIVARES_PACKAGE_REPO_APK_PASSPHRASE_FILE="$KEY_DIR/passphrase"
+          # rpm is S3's signed path: header signatures, rpm-md, repomd.xml.asc and
+          # delivery.json, built in the pinned Fedora 44 tools image. apt and apk
+          # are rendered as before.
+          rpm_tree="${RUNNER_TEMP}/package-repository-rpm-s3"
+          bash scripts/test-rpm-repository.sh --publish-rpm --assets "$DIST" --version "$RELEASE_VERSION" \
+            --public-key "$KEY_DIR/olivares-packages.asc" --out "$rpm_tree" \
+            --work "${RUNNER_TEMP}/rpm-publish-work"
           for channel in stable security; do
             output="${RUNNER_TEMP}/package-repository-${channel}"
             python3 scripts/render-package-repositories.py \
               --checksums "$DIST/checksums.txt" --artifact-dir "$DIST" \
               --version "$RELEASE_VERSION" --channel "$channel" \
               --source-date-epoch "$SOURCE_EPOCH" --valid-until-epoch "$VALID_UNTIL" \
-              --out "$output"
+              --out "$output" --rpm-tree "$rpm_tree"
             python3 scripts/verify-package-repositories.py \
               --repo-root "$output" --checksums "$DIST/checksums.txt" --artifact-dir "$DIST" \
               --version "$RELEASE_VERSION" --channel "$channel" \
               --openpgp-key "$KEY_DIR/olivares-packages.asc" \
-              --apk-key "$KEY_DIR/${{ steps.key.outputs.apk_public_key_name }}"
+              --apk-key "$KEY_DIR/${{ steps.key.outputs.apk_public_key_name }}" --rpm-s3
           done
           python3 scripts/assemble-package-repository-publish-tree.py \
             --stable "${RUNNER_TEMP}/package-repository-stable" \
@@ -254,10 +264,11 @@ jobs:
       - name: clean rpm client verifies staged HTTPS repository
         timeout-minutes: 20
         run: >-
-          bash scripts/package-repository-client-ci.sh --family rpm
-          --image fedora:latest@sha256:43b29f65a41eb9c35e1cd5323e3bdf3b655c2357a9f4f1ff2f9c2798e5045d80
-          --repository-url "$PACKAGE_ORIGIN/staging/$STAGING_ID"
-          --assets "${{ steps.release.outputs.dist }}" --version "${{ needs.preflight.outputs.version }}"
+          bash scripts/dnf-repository-client.sh
+          --image registry.fedoraproject.org/fedora@sha256:539cadb5d8a43564d8abefd6eafdfcbcd4809070efbb900ec248229903db5911
+          --baseurl "$PACKAGE_ORIGIN/staging/$STAGING_ID/stable/rpm/\$basearch"
+          --gpgkey "${{ steps.key.outputs.key_dir }}/olivares-packages.asc"
+          --package olivares --version "${{ needs.preflight.outputs.version }}" --expect install
           --evidence-file "${RUNNER_TEMP}/package-evidence/rpm.ok" --staging-id "$STAGING_ID"
 
       - name: clean APK client verifies staged HTTPS repository
@@ -291,10 +302,11 @@ jobs:
       - name: clean rpm client verifies promoted HTTPS repository
         timeout-minutes: 20
         run: >-
-          bash scripts/package-repository-client-ci.sh --family rpm
-          --image fedora:latest@sha256:43b29f65a41eb9c35e1cd5323e3bdf3b655c2357a9f4f1ff2f9c2798e5045d80
-          --repository-url "$PACKAGE_ORIGIN" --assets "${{ steps.release.outputs.dist }}"
-          --version "${{ needs.preflight.outputs.version }}"
+          bash scripts/dnf-repository-client.sh
+          --image registry.fedoraproject.org/fedora@sha256:539cadb5d8a43564d8abefd6eafdfcbcd4809070efbb900ec248229903db5911
+          --baseurl "$PACKAGE_ORIGIN/stable/rpm/\$basearch"
+          --gpgkey "${{ steps.key.outputs.key_dir }}/olivares-packages.asc"
+          --package olivares --version "${{ needs.preflight.outputs.version }}" --expect install
 
       - name: clean APK client verifies promoted HTTPS repository
         timeout-minutes: 20
@@ -326,3 +338,9 @@ jobs:
             "${RUNNER_TEMP}/repository-key/passphrase"; do
             if [[ -f "$target" ]]; then shred -u -- "$target"; fi
           done
+          # The rpm publish step's work directory held the signer's GnuPG home.
+          work="${RUNNER_TEMP}/rpm-publish-work"
+          if [[ -d "$work" ]]; then
+            find "$work" -type f -exec shred -u -- {} +
+            rm -rf -- "$work"
+          fi

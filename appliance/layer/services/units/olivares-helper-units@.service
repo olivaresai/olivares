@@ -1,0 +1,45 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# One connection to the units helper, started by olivares-helper-units.socket with the
+# connection as standard input and output. The helper takes no argument and no path. It asks
+# the service manager over the system bus to list units, read their state, start, stop,
+# restart, reload, enable and disable them, as the unit class table admits, and runs journalctl
+# with one fixed argument vector for the logs read. It runs as root with no capability, as the
+# power helper does: the service manager admits a uid-0 bus caller's unit methods by its uid,
+# and root reads the journal files it owns. It opens no network socket and writes no file. The
+# bus socket is a file-system socket, reachable without a network namespace.
+[Unit]
+Description=Appliance units helper (one connection)
+Documentation=https://github.com/olivaresai/olivares
+
+[Service]
+ExecStart=/usr/libexec/olivares/olivares-portal-units
+User=root
+StandardInput=socket
+StandardOutput=socket
+StandardError=journal
+RuntimeMaxSec=150
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+PrivateNetwork=yes
+RestrictAddressFamilies=AF_UNIX
+IPAddressDeny=any
+ProtectClock=yes
+ProtectHostname=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+RestrictNamespaces=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+AmbientCapabilities=
+UMask=0077

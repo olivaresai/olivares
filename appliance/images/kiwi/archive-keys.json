@@ -1,0 +1,12 @@
+{
+  "schema": "olivares-appliance-archive-keys/v1",
+  "purpose": "The key files archive-signed-by.sh binds each Debian repository of config.xml to, read from the builder and refused unless each sha256 matches.",
+  "basis": "debian-archive-keyring 2025.1, the version the builder's dpkg inventory records. Its package pool/main/d/debian-archive-keyring/debian-archive-keyring_2025.1_all.deb (sha256 9ea7778e443144ca490668737a8ab22dd3e748bb99e805e22ec055abeb3c7fac, 179244 bytes) is the one the trixie main Packages index lists, and that index is verified by the trixie InRelease whose sha256 is the toolchain lock's inrelease_sha256. The digest below is of the file in that package, read on 2026-09-26.",
+  "keys": [
+    {
+      "path": "/usr/share/keyrings/debian-archive-keyring.pgp",
+      "sha256": "506b815cbb32d9b6066b4a2aa524071e071761e7e7f68c3ac74f3061ba852017",
+      "bytes": 55918
+    }
+  ]
+}

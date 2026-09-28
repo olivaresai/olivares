@@ -617,8 +617,22 @@ jobs:
           #
           # El coste es tiempo de clonado. La alternativa barata seria `|| true` sobre el gate, que
           # convierte un rojo ruidoso en un verde silencioso: prohibido aqui, y con ficha propia.
-          # `lint:ci-history-depth` impide que esta pareja se vuelva a separar.
+          # The static history checker follows direct task calls only.
+          # The next step checks this checkout before dispatched gates run.
           fetch-depth: 0
+      - name: require complete checkout history
+        id: checkout-history
+        run: |
+          set -euo pipefail
+          if ! shallow="$(git rev-parse --is-shallow-repository 2>/dev/null)"; then
+            echo "::error::Cannot read checkout history depth. Check the repository checkout."
+            exit 2
+          fi
+          if [ "$shallow" != "false" ]; then
+            echo "::error::History-dependent checks require a non-shallow checkout. Restore fetch-depth: 0."
+            exit 2
+          fi
+          echo "Checkout is not shallow."
       - name: Go caches under RUNNER_TEMP (this runner may have no $HOME)
         # ⛔ VA ANTES DE `setup-go`, Y ESE ORDEN ES EL ARREGLO. La primera version de este
         # paso iba DESPUES, y habria sido inutil: cuando se etiqueto `ci-runner-4` el 2026-08-18
@@ -1513,6 +1527,9 @@ jobs:
       # (runs 35127191064, 35127694552). The battery measures the chooser before the gate uses it.
       - name: ensure-shellcheck destination battery
         run: task lint:ensure-shellcheck:selftest
+      - name: verified Task installation and following-step selection
+        id: ci-task-install
+        run: task lint:ci-task-install:selftest
       - name: workflow validity (actionlint)
         id: lint-actions
         run: task lint:actions
@@ -1752,6 +1769,12 @@ jobs:
       - name: migration online-safety (expand-contract)
         id: lint-migrations
         run: task lint:migrations
+      - name: test budgets start after fixture setup
+        id: lint-test-budget-placement
+        run: task lint:test-budget-placement
+      - name: test budget checker regression tests
+        id: test-test-budget-placement
+        run: task lint:test-budget-placement:selftest
       # NOTE: open≡enterprise schema-parity moved to the private enterprise
       # distribution — only that repo can build both the community and the
       # -tags enterprise binary, so the parity diff runs in its CI, not here.
@@ -4730,8 +4753,8 @@ jobs:
   # hallazgo en un bloqueo del tronco para los cinco carriles. Sale ROJA de verdad —no es un
   # aviso que no puede fallar, que es justo el antipatron que este repositorio persigue— pero
   # no cierra la puerta hasta que se sepa su color. Cuando este verde de forma estable, se
-  # promueve a requerida y se anota la fecha del primer run real en
-  # `docs/contracts-tests-terraform.md:13`, cuya frase «already had thorough test
+  # promueve a requerida y se anota la fecha del primer run real en el contrato de las pruebas
+  # del SDK y de Terraform, cuya frase «already had thorough test
   # suites» es CIERTA y engaña: existir una bateria y ejecutarse una bateria son dos hechos.
   #
   # ⭐ YA SE SABE SU COLOR, y la parte de arriba que decia «no se sabe si pasa» queda en pasado.
@@ -4790,7 +4813,7 @@ jobs:
       # Shared task runner must be installed before Maven: a Java download failure
       # must leave the Python and TypeScript suites runnable under if: always().
       - name: install go-task
-        run: go install github.com/go-task/task/v3/cmd/task@v3.45.4
+        uses: ./.github/actions/olivares-tool-cache
       # MAVEN NO LO TRAE `setup-java`, Y ESTE PASO ES EL ARREGLO DE UN ROJO MEDIDO.
       # Corrida 33951517673, job sdk-tests, paso "sdk tests - java": murio en UN segundo con
       #

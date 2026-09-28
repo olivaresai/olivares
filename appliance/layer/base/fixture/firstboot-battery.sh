@@ -5,9 +5,10 @@
 #
 # firstboot-battery.sh — the hosted fixture of olivares-appliance-base.
 #
-# It boots disposable Debian 13 containers built from fixture/Containerfile, with systemd as
-# PID 1, cloud-init reading a NoCloud seed and, where a scenario says so, the answers passed as
-# a system credential; then it asserts what first boot recorded for that input. Every named
+# It boots disposable containers of the family IMAGE was built for, Debian 13 from
+# fixture/Containerfile or Fedora 44 from fixture/fedora/Containerfile, with systemd as PID 1, cloud-init reading a NoCloud seed and, where a scenario says so, the answers passed as
+# a system credential; then it asserts what first boot recorded for that input, and the
+# Appliance Console's selection it published (or, without the console's fields, did not). Every named
 # assertion runs against evidence captured from the container and has a negative control: the
 # same assertion fed a counterfeit of that evidence must fail. Before any boot it asserts that
 # no login the seed declares is already a user or a group of the image: cloud-init's useradd
@@ -255,7 +256,7 @@ seed_logins_absent() {
   done <<< "$logins"
 }
 
-# seed_lookup_control — root is a user and a group of every Debian image, so the same lookup
+# seed_lookup_control — root is a user and a group of every Debian and Fedora image, so the same lookup
 # must find it in both databases; a lookup that finds nothing would pass every seed login.
 seed_lookup_control() {
   local hits
@@ -293,7 +294,11 @@ credential() {
 # container before systemd starts, and the scenario is unmeasured, naming the remount. On a
 # machine systemd marks / shared itself.
 remount_failed='fixture-boot: mount --make-rshared / failed'
-boot_command='for m in / /run; do
+boot_command='address=$(ip -o -4 address show dev eth0 scope global | awk "{print \$4}")
+  gateway=$(ip -4 route show default dev eth0 | awk "{print \$3}")
+  [ -n "$address" ] && [ -n "$gateway" ] || exit 2
+  printf "network:\n  version: 2\n  ethernets:\n    eth0:\n      addresses: [%s]\n      gateway4: %s\n" "$address" "$gateway" > /etc/cloud/cloud.cfg.d/98-fixture-network.cfg
+  for m in / /run; do
     echo "fixture-boot: before remount: $(findmnt --noheadings --output TARGET,PROPAGATION --mountpoint "$m" 2>&1)"
   done
   mount --make-rshared / || {
@@ -364,6 +369,29 @@ in_container() {
   if docker exec "$name" "$@" >/dev/null 2>&1; then echo present; else echo absent; fi
 }
 
+# remove_base NAME — remove olivares-appliance-base with the booted family's own package tool,
+# chosen by the container's /etc/os-release: dpkg on Debian, rpm on Fedora. One family's tool
+# never runs on the other. It prints what failed: status 1 when the tool failed, 2 when the
+# container names no family this battery knows, which is unmeasured, never a guess.
+remove_base() {
+  local name=$1 id
+  id=$(docker exec "$name" sh -c '. /etc/os-release && printf %s "$ID"' 2>/dev/null) || id=
+  case $id in
+    debian)
+      docker exec "$name" dpkg --remove olivares-appliance-base >/dev/null ||
+        { echo "dpkg could not remove olivares-appliance-base"; return 1; }
+      ;;
+    fedora)
+      docker exec "$name" rpm --erase olivares-appliance-base >/dev/null ||
+        { echo "rpm could not erase olivares-appliance-base"; return 1; }
+      ;;
+    *)
+      echo "the container's /etc/os-release names no family this battery knows (ID=${id:-unreadable})"
+      return 2
+      ;;
+  esac
+}
+
 # capture NAME DIR — copy the evidence of one moment out of the container.
 capture() {
   local name=$1 dir=$2
@@ -376,6 +404,13 @@ capture() {
   docker exec "$name" systemctl is-enabled olivares-appliance-firstboot.service > "$dir/firstboot.enabled" 2>/dev/null || true
   docker exec "$name" sh -c 'cat /etc/olivares/olivares.env; stat -c "%i %Y" /etc/olivares/olivares.env' > "$dir/olivares.env" 2>/dev/null || true
   docker exec "$name" cat /etc/systemd/system/olivares.service.d/50-olivares-appliance.conf > "$dir/drop-in.conf" 2>/dev/null || true
+  # The Appliance Console's directory and the selection first boot publishes in it: owner, mode
+  # and type as stat prints them ("absent" when there is none), and the selection's bytes.
+  docker exec "$name" stat -c '%U:%G %a %F' /etc/olivares-portal > "$dir/console-dir.stat" 2>/dev/null ||
+    echo absent > "$dir/console-dir.stat"
+  docker exec "$name" stat -c '%U:%G %a %F' /etc/olivares-portal/selection.json > "$dir/selection.stat" 2>/dev/null ||
+    echo absent > "$dir/selection.stat"
+  docker exec "$name" cat /etc/olivares-portal/selection.json > "$dir/selection.json" 2>/dev/null || true
   in_container "$name" test -e /var/lib/olivares-appliance/ready > "$dir/ready"
   # The job graph: what multi-user.target and first boot are ordered after, as systemd loaded it.
   docker exec "$name" systemctl show --property=After --value multi-user.target > "$dir/multi-user.after" 2>/dev/null || true
@@ -495,6 +530,8 @@ no_carrier() {
   control package_enabled_first_boot is "$(counterfeit_text disabled)" enabled
   check package_left_the_product_disabled is_not "$d/product.enabled" enabled
   control package_left_the_product_disabled is_not "$(counterfeit_text enabled)" enabled
+  check package_created_the_console_directory is "$d/console-dir.stat" "root:root755directory"
+  control package_created_the_console_directory is "$(counterfeit_text 'root:root 700 directory')" "root:root755directory"
   job_graph no-carrier "$d"
   journal_is_clean no-carrier "$d"
 }
@@ -546,6 +583,9 @@ agreeing() {
   control product_generator_wrote_the_configuration holds "$here/../../../../packaging/olivares.env.example" "(profile: single-node-prod)"
   check public_url_declared_in_the_appliance_drop_in holds "$d/drop-in.conf" "Environment=OLIVARES_PUBLIC_URL=https://olivares.example.test"
   control public_url_declared_in_the_appliance_drop_in holds "$(counterfeit_text '[Service]')" "Environment=OLIVARES_PUBLIC_URL=https://olivares.example.test"
+  # These answers declare none of the console's fields, so first boot publishes no selection.
+  check no_selection_without_the_console_fields is "$d/selection.stat" absent
+  control no_selection_without_the_console_fields is "$(counterfeit_text 'root:root 644 regular file')" absent
   # The setup-token seam refuses first, so this shows the product is not started while a seam
   # refuses; that the firewall stage precedes the start is asserted by the Go tests only.
   check product_not_started_while_a_seam_refuses is_not "$d/product.active" active
@@ -562,6 +602,69 @@ agreeing() {
   check never_ready_without_measured_readiness is "$d/ready" absent
   control never_ready_without_measured_readiness is "$(counterfeit_text present)" absent
   journal_is_clean agreeing "$d"
+}
+
+# portal_seed — a NoCloud seed whose answers also declare the Appliance Console's selection:
+# portal.enabled true, portal.listen management and host.management_interfaces [eth1, eth0].
+portal_seed() {
+  local dir body answers
+  dir=$(seed)
+  body=$(sed '1{/^#cloud-config$/d}' "$dir/user-data")
+  answers=$(jq -r '.write_files[0].content' <<< "$body" | base64 -d |
+    jq -c '.portal = {"enabled": true, "listen": "management"} | .host.management_interfaces = ["eth1", "eth0"]' |
+    base64 -w0)
+  { echo '#cloud-config'; jq --arg content "$answers" '.write_files[0].content = $content' <<< "$body"; } > "$dir/user-data"
+  printf '%s\n' "$dir"
+}
+
+# published_selection — the selection first boot publishes for portal_seed's answers: their
+# validated values, the interfaces sorted, in the published document's fixed order.
+published_selection() {
+  cat <<'JSON'
+{
+  "schema_version": "olivares-portal-selection/v1",
+  "portal": {
+    "enabled": true,
+    "listen": "management"
+  },
+  "host": {
+    "management_interfaces": [
+      "eth0",
+      "eth1"
+    ]
+  }
+}
+JSON
+}
+
+# selection_recorded FILE — generate-product-config's recorded effect covers the selection.
+selection_recorded() {
+  jq -e 'any(.completed[]; .stage == "generate-product-config" and (.effect | contains(" portal-selection=")))' "$1" >/dev/null
+}
+
+portal_selection() {
+  local d="$evidence/portal-selection" expected
+  boot fx-portal "$(portal_seed)"
+  settle fx-portal || { unsettled portal-selection fx-portal "$d" "the container did not finish booting"; return; }
+  capture fx-portal "$d"
+  applied fx-portal "$d" || {
+    unable "portal-selection: cloud-init did not apply the NoCloud seed; cloud-init errors: $(cloud_init_errors "$d")"
+    return
+  }
+  expected="$d/selection.expected"
+  published_selection > "$expected"
+  check console_fields_stop_at_the_token_seam record_is "$d/state.json" refused prepare-setup-delivery
+  control console_fields_stop_at_the_token_seam record_is \
+    "$(counterfeit "$d/state.json" '.stage = "validate"')" refused prepare-setup-delivery
+  check selection_published_from_the_validated_answers same "$d/selection.json" "$expected"
+  control selection_published_from_the_validated_answers same \
+    "$(counterfeit_text '{"schema_version": "olivares-portal-selection/v1", "portal": {"listen": "local"}}')" "$expected"
+  check selection_is_root_owned_0644 is "$d/selection.stat" "root:root644regularfile"
+  control selection_is_root_owned_0644 is "$(counterfeit_text 'root:root 664 regular file')" "root:root644regularfile"
+  check selection_digest_recorded selection_recorded "$d/state.json"
+  control selection_digest_recorded selection_recorded \
+    "$(counterfeit "$d/state.json" '(.completed[] | select(.stage == "generate-product-config") | .effect) = "olivares.env=0 drop-in=0"')"
+  journal_is_clean portal-selection "$d"
 }
 
 restart_and_change() {
@@ -606,11 +709,20 @@ restart_and_change() {
   control changed_answers_apply_nothing same "$d/first/completed.json" "$(counterfeit "$d/changed/completed.json" '. + [{"stage": "prepare-setup-delivery"}]')"
   journal_is_clean restart "$d/changed"
 
-  if ! docker exec fx-restart dpkg --remove olivares-appliance-base >/dev/null; then
-    say "FAIL package_removal: dpkg could not remove olivares-appliance-base"
-    failures=$((failures + 1))
-    return
-  fi
+  local how status=0
+  how=$(remove_base fx-restart) || status=$?
+  case $status in
+    0) ;;
+    2)
+      unable "package_removal: $how"
+      return
+      ;;
+    *)
+      say "FAIL package_removal: $how"
+      failures=$((failures + 1))
+      return
+      ;;
+  esac
   mkdir -p "$d/removed"
   in_container fx-restart test -s /var/lib/olivares-appliance/state.json > "$d/removed/record"
   in_container fx-restart test -x /usr/bin/olivares > "$d/removed/product"
@@ -628,6 +740,7 @@ seed_lookup_control
 no_carrier
 conflict
 agreeing
+portal_selection
 restart_and_change
 
 say "failed: $failures; unmeasured: $unmeasured"

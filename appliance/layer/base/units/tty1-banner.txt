@@ -1,4 +1,4 @@
-Olivares AI appliance \n
+Olivares Server \n
 First boot: run `sudo appliance-firstboot status`. Once it reports ready, the console answers
 at https://\4:8443 and the one-time setup token is delivered as that status describes;
 it is never shown on this screen or written to the system journal.

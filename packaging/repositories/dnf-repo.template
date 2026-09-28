@@ -1,0 +1,18 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# DNF5 repository file for the public rpm-md repository.
+# pkg_gpgcheck and repo_gpgcheck are set on their own. Under gpgcheck_policy=legacy
+# (the DNF5 default), gpgcheck=1 would set only pkg_gpgcheck.
+# https://dnf5.readthedocs.io/en/latest/dnf5.conf.5.html retrieved 2026-09-27
+# from the upstream dnf5.conf.5.rst: pkg_gpgcheck, repo_gpgcheck, gpgkey, baseurl.
+# The trust anchor is gpgkey=file:// to a preinstalled key, never a repository URL.
+[{{REPO_ID}}]
+name={{REPO_NAME}}
+baseurl={{BASEURL}}
+enabled=1
+pkg_gpgcheck=1
+repo_gpgcheck=1
+gpgkey={{GPGKEY}}
+metadata_expire=0
+type=rpm-md

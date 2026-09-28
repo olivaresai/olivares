@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"slices"
 	"strings"
 	"time"
@@ -41,6 +42,7 @@ const (
 	StageValidate      Stage = "validate"
 	StageIdentity      Stage = "prepare-identity"
 	StageHostSettings  Stage = "verify-host-settings"
+	StageHostHandoff   Stage = "hand-over-host-settings"
 	StageProductConfig Stage = "generate-product-config"
 	StageStorage       Stage = "initialize-storage"
 	StageSetupDelivery Stage = "prepare-setup-delivery"
@@ -52,7 +54,7 @@ const (
 // Stages is the order of first boot. The firewall stage precedes the first stage that
 // exposes a service beyond loopback.
 var Stages = []Stage{
-	StageValidate, StageIdentity, StageHostSettings, StageProductConfig, StageStorage,
+	StageValidate, StageIdentity, StageHostSettings, StageHostHandoff, StageProductConfig, StageStorage,
 	StageSetupDelivery, StageFirewall, StageStartServices, StageReadiness,
 }
 
@@ -99,6 +101,7 @@ type Readiness interface {
 type Seams struct {
 	Identity      Step
 	HostSettings  Step
+	HostHandoff   Step
 	ProductConfig Step
 	Storage       Step
 	SetupDelivery Step
@@ -113,6 +116,8 @@ func (s Seams) step(stage Stage) Step {
 		return s.Identity
 	case StageHostSettings:
 		return s.HostSettings
+	case StageHostHandoff:
+		return s.HostHandoff
 	case StageProductConfig:
 		return s.ProductConfig
 	case StageStorage:
@@ -209,8 +214,8 @@ func (m *Machine) Run(ctx context.Context) (Record, error) {
 	}
 	if rec.Digest != "" && rec.Digest != in.Digest {
 		recovery := "run `appliance-firstboot reconcile` to apply them before the product starts, or restore them"
-		if mayHaveStarted(rec) {
-			recovery = "restore the answers the record was built from: first boot does not reconfigure a started product"
+		if rec.HostSettingsOwner != "" || mayHaveStarted(rec) {
+			recovery = "restore the answers the record was built from: first boot does not reconfigure handed-over host settings or a started product"
 		}
 		return m.finish(rec, StageValidate, Refuse("the answers changed after "+string(lastCompleted(rec))+
 			" completed; "+recovery))
@@ -251,6 +256,9 @@ func (m *Machine) Run(ctx context.Context) (Record, error) {
 			return rec, errCrashed
 		}
 		rec.Completed = append(rec.Completed, Completed{Stage: stage, Effect: effect})
+		if stage == StageHostHandoff {
+			rec.HostSettingsOwner = "appliance"
+		}
 		if rec.Digest == "" && bindsAnswers(stage) {
 			// The digest is recorded with the first stage that depends on the answers.
 			rec.Digest = in.Digest
@@ -333,6 +341,14 @@ func (m *Machine) Reconcile() (Record, error) {
 	}
 	if !found {
 		return Record{}, Refuse("first boot has recorded nothing to reconcile")
+	}
+	if rec.HostSettingsOwner != "" {
+		return rec, Refuse("host_settings_already_handed_over")
+	}
+	if step, ok := m.Seams.HostHandoff.(HostSettingsHandoff); ok {
+		if _, err := os.Lstat(step.Host.path(HostOwnerFile)); !errors.Is(err, os.ErrNotExist) {
+			return rec, Refuse("host_settings_already_handed_over")
+		}
 	}
 	if rec.State == Ready || mayHaveStarted(rec) {
 		return rec, Refuse("the product may have started and first boot does not reconfigure it; " +

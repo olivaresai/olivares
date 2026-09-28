@@ -47,6 +47,13 @@ case "$family" in apt | rpm | apk) ;; *) usage >&2; exit 2 ;; esac
 fail() { printf 'package-repository-client: HALLAZGO — %s\n' "$*" >&2; exit 1; }
 blind() { printf 'package-repository-client: NO HE PODIDO MIRAR — %s\n' "$*" >&2; exit 2; }
 
+# The published rpm repository carries S3's re-signed rpms and is checked by
+# dnf-repository-client.sh (pkg_gpgcheck=1, repo_gpgcheck=1, pinned key). This
+# rpm path (gpgcheck=0, release-byte comparison) stays for local trees only.
+if [[ "$family" == rpm && ( -n "$repository_url" || -n "${CLIENT_REPOSITORY_URL:-}" ) ]]; then
+	blind 'the published rpm repository is checked by dnf-repository-client.sh, not this gpgcheck=0 client'
+fi
+
 if [[ "$inside" -eq 0 ]]; then
 	[[ -n "$image" ]] || blind '--image is required'
 	if [[ -n "$repository_url" ]]; then

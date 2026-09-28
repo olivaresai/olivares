@@ -18,11 +18,17 @@ import (
 // Answers holds the validated public settings first boot verifies and applies. The answers
 // module normalizes them; this package reads its canonical plan and never re-validates.
 type Answers struct {
+	Network           answers.Network
 	Hostname          string
 	Timezone          string
 	SSHAuthorizedKeys []string
 	StorageProfile    string
 	PublicConsoleURL  string
+	// The Appliance Console's selection: portal.enabled, portal.listen and
+	// host.management_interfaces, each nil or empty when the document omits it.
+	PortalEnabled        *bool
+	PortalListen         *string
+	ManagementInterfaces []string
 }
 
 // Input is one validated answers document with the digest first boot compares on restart.
@@ -53,16 +59,22 @@ func NewInput(source, selected string, document []byte) (Input, error) {
 	var view struct {
 		Answers struct {
 			Host struct {
-				Hostname string `json:"hostname"`
+				Hostname string          `json:"hostname"`
+				Network  answers.Network `json:"network"`
 				Time     struct {
 					Timezone string `json:"timezone"`
 				} `json:"time"`
-				SSHAuthorizedKeys []string `json:"ssh_authorized_keys"`
+				SSHAuthorizedKeys    []string `json:"ssh_authorized_keys"`
+				ManagementInterfaces []string `json:"management_interfaces"`
 			} `json:"host"`
 			Product struct {
 				StorageProfile   string `json:"storage_profile"`
 				PublicConsoleURL string `json:"public_console_url"`
 			} `json:"product"`
+			Portal *struct {
+				Enabled *bool   `json:"enabled"`
+				Listen  *string `json:"listen"`
+			} `json:"portal"`
 		} `json:"answers"`
 	}
 	if err := json.Unmarshal(canonical, &view); err != nil {
@@ -74,15 +86,21 @@ func NewInput(source, selected string, document []byte) (Input, error) {
 	}
 	sum := sha256.Sum256([]byte(digestDomain + selected + "\n" + string(form)))
 	host, product := view.Answers.Host, view.Answers.Product
-	return Input{
+	in := Input{
 		Source: source,
 		Digest: hex.EncodeToString(sum[:]),
 		Answers: Answers{
-			Hostname:          host.Hostname,
-			Timezone:          host.Time.Timezone,
-			SSHAuthorizedKeys: host.SSHAuthorizedKeys,
-			StorageProfile:    product.StorageProfile,
-			PublicConsoleURL:  product.PublicConsoleURL,
+			Network:              host.Network,
+			Hostname:             host.Hostname,
+			Timezone:             host.Time.Timezone,
+			SSHAuthorizedKeys:    host.SSHAuthorizedKeys,
+			StorageProfile:       product.StorageProfile,
+			PublicConsoleURL:     product.PublicConsoleURL,
+			ManagementInterfaces: host.ManagementInterfaces,
 		},
-	}, nil
+	}
+	if portal := view.Answers.Portal; portal != nil {
+		in.Answers.PortalEnabled, in.Answers.PortalListen = portal.Enabled, portal.Listen
+	}
+	return in, nil
 }

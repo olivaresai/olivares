@@ -228,6 +228,10 @@ classify() {
   case "$1" in
     scripts/fixtures/package-upgrade/records-v1/*.line|scripts/fixtures/package-upgrade/records-v1/*.record)
       echo data; return ;;
+    # This template renders the shipped DNF repository configuration and already
+    # carries its source license header. Other template formats remain unknown.
+    packaging/repositories/dnf-repo.template)
+      echo source; return ;;
   esac
   case "$base" in
     # ---- SOURCE -------------------------------------------------------------
@@ -281,6 +285,11 @@ classify() {
     # Structured data, config and manifests — including the Go module metadata.
     *.json|*.json5|*.jsonc|*.jsonl|*.jsonlog|*.ndjson|*.yaml|*.yml|*.toml|*.xml) echo data; return ;;
     *.mod|*.sum|*.work|*.example|*.conf|*.service|*.webmanifest|*.node-version) echo data; return ;;
+    # systemd socket units are shipped source with their own header: REUSE.toml lists no unit glob.
+    *.socket) echo source; return ;;
+    *.rules) echo source; return ;;  # polkit rules are JavaScript polkitd runs; they carry a // header.
+    *.te|*.if|*.fc|*.spec) echo source; return ;;  # SELinux policy module sources and the rpm spec that builds them; # headers.
+    *.repo|*.preset) echo source; return ;;  # the image's DNF repository file and systemd preset; # headers.
     # Tabular/log FIXTURES and captured evidence: connector testdata, audit patches.
     *.csv|*.csvlog|*.tsv|*.log|*.patch|*.baseline|*.unpublished-baseline) echo data; return ;;
     # Build stamps: a line of digest + count written by a build task, consumed by a gate.

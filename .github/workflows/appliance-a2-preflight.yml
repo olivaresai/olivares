@@ -1,0 +1,81 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# appliance-a2-preflight — does this runner offer what an appliance image build needs?
+#
+# harness: runs the bounded judgement suite of the prerequisite check. It needs no privilege,
+# no container and no accelerator: it drives the judge and the accelerator probe against
+# fixtures and stub programs, so a red names a rule of the mechanism.
+#
+# preflight: runs the real check once on a disposable hosted virtual machine. It builds the
+# pinned toolchain container, proves it reports the locked appliance builder version, proves
+# one explicitly named accelerator initializes, and proves loop-device and mount privilege on
+# a small image it owns and then releases. Its receipt is classified as eligible, unavailable
+# or defect, and that classification is the job's result: it is never continued over, never
+# softened and never reported as a skip.
+#
+# eligible means the prerequisites measured for one next attempt. This workflow builds no
+# appliance image, boots no guest, imports nothing into a hypervisor, signs nothing and
+# publishes nothing. A green run here qualifies no ISO, qcow2 or OVA.
+#
+# Hosted runners on purpose: a container build of a disk image is privileged, and must never
+# run on a runner that shares a host with another build. No job reads a secret.
+name: appliance-a2-preflight
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - appliance/images/toolchain/**
+      - appliance/test/runner/**
+      - .github/workflows/appliance-a2-preflight.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: appliance-a2-preflight-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  harness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: judge the prerequisite contract against its fixtures and controls
+        run: python3 -m unittest discover -s appliance/test/runner -p 'test_*.py' -v
+
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: measure what this runner offers an appliance image build
+        id: measure
+        env:
+          EVIDENCE: ${{ runner.temp }}/appliance-a2-preflight
+        run: python3 appliance/test/runner/workflow.py
+
+      - name: retain the receipt and its hashes
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: appliance-a2-preflight-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/appliance-a2-preflight/receipt.json
+            ${{ runner.temp }}/appliance-a2-preflight/preflight.log
+            ${{ runner.temp }}/appliance-a2-preflight/workflow-result.json
+            ${{ runner.temp }}/appliance-a2-preflight/SHA256SUMS
+          retention-days: 7
+          if-no-files-found: error
