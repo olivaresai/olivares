@@ -914,6 +914,18 @@ var consoleMachineFacing = map[string]string{
 	"POST /v1/m/governance/approvals/{}/consume": "el canje lo hace el puente (approvalbridge.go:554), no un operador",
 	"POST /v1/m/governance/breakglass/consume":   "lo canjea el puente (approvalbridge.go:514); la consola concede, no consume",
 
+	// FinOps admission: the three steps of one billable effect and the reconciliation JOB.
+	// Whoever reserves settles, with the handle it was answered with: the engine's own
+	// gates (budgetgate.go, inferenceproxy.go, mcpgateway.go) or a connector. A hold reserved
+	// from a screen and never settled is the drift the reconciliation reports. The job runs
+	// on the engine's scheduler (admissionreconcile.go); the console READS the report through
+	// GET /admission/reconciliation (web/src/features/finops/api.ts), which is therefore not
+	// declared here.
+	"POST /v1/m/finops/admission/reserve":   "first step of a billable effect: the engine's gates or a connector reserve, and whoever reserves settles",
+	"POST /v1/m/finops/admission/commit":    "settles a hold at its measured cost: called by the holder of the handle, not by an operator",
+	"POST /v1/m/finops/admission/release":   "returns an unused hold: called by the holder of the handle when the effect did not run",
+	"POST /v1/m/finops/admission/reconcile": "the reconciliation JOB (budget write): the engine's scheduler runs it; the operator reads GET /admission/reconciliation",
+
 	"/v1/auth/federation/": "arranque y retorno de federación: son NAVEGACIONES del navegador, no XHR",
 	"/v1/auth/token":       "endpoints de token OAuth: máquina a máquina",
 }
@@ -1036,10 +1048,14 @@ func walkEveryRoute(t *testing.T) map[string]bool {
 	}); err != nil {
 		t.Fatal(err)
 	}
+	// The composition root wires the authenticator as the principal evidence producer
+	// (boot.go), and api.New refuses to mount a module's governed routes without one,
+	// so the route walk composes the server the same way.
+	authr := auth.NewAuthenticator(st, nil)
 	srv, err := api.New(api.Options{
-		Store: st, Authenticator: auth.NewAuthenticator(st, nil), Authorizer: auth.NewAuthorizer(nil),
+		Store: st, Authenticator: authr, Authorizer: auth.NewAuthorizer(nil),
 		Signer: signer, SetupToken: secure.NewSetupToken(filepath.Join(t.TempDir(), "setup.token")),
-		Logger: log, Version: "test", Modules: set.all,
+		Logger: log, Version: "test", Modules: set.all, PrincipalEvidenceProducer: authr,
 	})
 	if err != nil {
 		t.Fatal(err)

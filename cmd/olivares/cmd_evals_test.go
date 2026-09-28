@@ -156,3 +156,26 @@ func TestRunLabelSession(t *testing.T) {
 		t.Errorf("summary wrong: %s", out.String())
 	}
 }
+
+func TestEvalsGateComparisonRefusalAndExperimentFlags(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Error(err)
+		}
+		comparison, _ := req["comparison"].(map[string]any)
+		if req["model_ref"] != "model-b" || req["prompt_variant"] != "new" || comparison["mode"] != "candidate_change" || comparison["version"] != float64(1) {
+			t.Errorf("experiment fields not sent: %#v", req)
+		}
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{"id":"g1","verdict":"fail","effective_verdict":"fail","reasons":["baseline_unavailable"],"comparison":{"version":1,"status":"unknown","reason":"baseline_unavailable","mode":"candidate_change"}}`))
+	}))
+	defer srv.Close()
+	err, out := runGateCLI(t, srv, `{"one":"answer"}`, "--suite", "s1", "--outputs", "-", "--baseline", "missing", "--model", "model-b", "--variant", "new", "--comparison-mode", "candidate_change")
+	if !errors.Is(err, errGateFailed) {
+		t.Fatalf("comparison refusal did not block CLI: %v %s", err, out)
+	}
+	if !strings.Contains(out, "comparison=unknown reason=baseline_unavailable mode=candidate_change") {
+		t.Fatalf("comparison diagnostics not rendered: %s", out)
+	}
+}

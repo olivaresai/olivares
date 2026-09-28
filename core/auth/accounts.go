@@ -79,6 +79,12 @@ type NewUser struct {
 	DisplayName string
 	Password    string
 	Superadmin  bool
+	// Tenant, when set, is granted Role in the create transaction (optionally
+	// confined to WorkspaceID), so the account and its first membership commit
+	// together or not at all. An existing account is never joined afterwards.
+	Tenant      model.TenantID
+	Role        string
+	WorkspaceID model.ID
 }
 
 // bootstrapLockKey serializes first-boot bootstrap across every process on the
@@ -194,6 +200,7 @@ func (a *Authenticator) BootstrapSuperadminOwning(ctx context.Context, email, pa
 		u, err := as.Users().Create(ctx, model.User{
 			Email: normalizeEmail(email), DisplayName: "Administrator",
 			Status: model.StatusActive, PasswordHash: hash, IsSuperadmin: true,
+			CredentialCustody: model.CustodyDeployment,
 		})
 		if err != nil {
 			return err
@@ -253,18 +260,40 @@ func (a *Authenticator) TenantHasMembership(ctx context.Context, tenant model.Te
 
 // CreateUser creates an operator account, recording the acting principal.
 func (a *Authenticator) CreateUser(ctx context.Context, actor Principal, in NewUser) (model.User, error) {
+	u, _, err := a.CreateUserWithMembership(ctx, actor, in)
+	return u, err
+}
+
+// CreateUserWithMembership creates a deployment account and, when in.Tenant is
+// set, grants its first membership in the same transaction. The deployment
+// created the account, so its credentials are the deployment's.
+func (a *Authenticator) CreateUserWithMembership(ctx context.Context, actor Principal, in NewUser) (model.User, model.Membership, error) {
 	if in.Password != "" && len(in.Password) < MinPasswordLen {
-		return model.User{}, ErrWeakPassword
+		return model.User{}, model.Membership{}, ErrWeakPassword
+	}
+	if !in.Tenant.IsZero() {
+		if in.Tenant.IsSystem() {
+			return model.User{}, model.Membership{}, fmt.Errorf("%w: invalid tenant", ErrInvalidToken)
+		}
+		if !IsRole(in.Role) {
+			return model.User{}, model.Membership{}, ErrInvalidRole
+		}
+		if err := checkRoleCeiling(actor, in.Tenant, in.Role); err != nil {
+			return model.User{}, model.Membership{}, err
+		}
 	}
 	var hash string
 	if in.Password != "" {
 		h, err := HashPassword(in.Password)
 		if err != nil {
-			return model.User{}, err
+			return model.User{}, model.Membership{}, err
 		}
 		hash = h
 	}
-	var out model.User
+	var (
+		out model.User
+		mem model.Membership
+	)
 	err := a.st.AuthMutate(ctx, func(as store.AuthScope) error {
 		// The retained seat seam. Since B10 it is an unconditional no-op (accounts
 		// are unlimited in every self-hosted tier); the call stays so the "no seat
@@ -275,14 +304,25 @@ func (a *Authenticator) CreateUser(ctx context.Context, actor Principal, in NewU
 		u, err := as.Users().Create(ctx, model.User{
 			Email: normalizeEmail(in.Email), DisplayName: in.DisplayName,
 			Status: model.StatusActive, PasswordHash: hash, IsSuperadmin: in.Superadmin,
+			CredentialCustody: model.CustodyDeployment,
 		})
 		if err != nil {
 			return err
 		}
 		out = u
-		return auditAct(ctx, as, actor, "user.create", "core.user", u.ID)
+		if err := auditAct(ctx, as, actor, "user.create", "core.user", u.ID); err != nil {
+			return err
+		}
+		if in.Tenant.IsZero() {
+			return nil
+		}
+		mem, err = grantMembershipTx(ctx, as, actor, u.ID, in.Tenant, in.Role, in.WorkspaceID)
+		return err
 	})
-	return out, err
+	if err != nil {
+		return model.User{}, model.Membership{}, err
+	}
+	return out, mem, nil
 }
 
 // SetPassword sets a user's password (admin reset or self-service), re-hashing
@@ -333,9 +373,30 @@ func (a *Authenticator) GrantMembership(ctx context.Context, actor Principal, us
 	}
 	var out model.Membership
 	err := a.st.AuthMutate(ctx, func(as store.AuthScope) error {
-		m, e := grantMembershipTx(ctx, as, actor, userID, tenant, role, workspaceID)
-		out = m
-		return e
+		// A grant never joins an account that is not already a member: a member
+		// takes the re-grant path, an account this tenant created and removed is
+		// re-admitted once its removal completed, and any other account answers
+		// ErrConsentRequired with nothing written.
+		if err := prepareUserAuthorityWrite(ctx, as, userID); err != nil {
+			return err
+		}
+		u, err := as.Users().Get(ctx, userID)
+		if err != nil {
+			return err
+		}
+		member, custodian, err := joinOrConsent(ctx, as, u, tenant)
+		if err != nil {
+			return err
+		}
+		if custodian {
+			out, err = readmitCustodian(ctx, as, actor, u, tenant, role, workspaceID)
+			return err
+		}
+		if !member {
+			return ErrConsentRequired
+		}
+		out, err = grantMembershipTx(ctx, as, actor, userID, tenant, role, workspaceID)
+		return err
 	})
 	return out, err
 }

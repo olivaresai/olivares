@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/olivaresai/olivares/core/api"
+	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 )
@@ -69,7 +70,15 @@ func (m *Module) handleRegisterAgent(w http.ResponseWriter, r *http.Request, mc 
 		httpStatus int
 		promoted   bool // true = promoted existing NHI row; false = created new row
 	)
-	err := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
+	// The sponsor is a fenced reference: the accounts that carry its external id
+	// are read for standing before the write and pinned inside it.
+	subjects, rerr := auth.ResolveExternalIDs(r.Context(), mc.Standing, []string{in.SponsorRef})
+	if rerr != nil {
+		writeStoreError(w, rerr)
+		return
+	}
+	mutate := func(fn func(store.Scope) error) error { return mc.Data.Mutate(r.Context(), fn) }
+	err := auth.FencedWrite(r.Context(), mc.Standing, mc.Tenant, subjects, auth.FenceDirectory, mutate, func(sc store.Scope, _ bool) error {
 		// Validate the sponsor is a human identity in the roster.
 		found, human, _, verr := resolveHumanIdentity(r.Context(), sc, in.SponsorRef)
 		if verr != nil {
@@ -153,6 +162,9 @@ func (m *Module) handleRegisterAgent(w http.ResponseWriter, r *http.Request, mc 
 			"identity_ref": in.IdentityRef, "sponsor_ref": in.SponsorRef, "source": in.Source,
 		})
 	})
+	if writeFenceRefusal(w, err) {
+		return
+	}
 	if err != nil {
 		writeStoreError(w, err)
 		return

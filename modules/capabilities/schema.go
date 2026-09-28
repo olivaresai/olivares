@@ -118,6 +118,44 @@ const (
 	colStatusAt    = "status_at"
 )
 
+// Principal declarations of the text and JSON columns above: what each stored
+// value says about accounts, with the reader lines that show it.
+var (
+	// Managed config and its revision snapshot.
+	pdeclNoneServerRef = model.None("an MCP server name, matched only against inventory server names: servers.go:153, servers.go:223")
+	pdeclNoneTransport = model.None("a transport from a closed set: config.go:29, config.go:70")
+	pdeclNoneEndpoint  = model.None("an MCP endpoint locator, refused when it carries inline credentials and only rendered: config.go:74, config.go:179, config.go:476")
+	pdeclNoneScope     = model.None("an operator-set scope label, stored and rendered only: config.go:180, config.go:477")
+	pdeclNoneNote      = model.None("operator prose, rendered only: config.go:181, config.go:478")
+	pdeclSecretRefs    = model.Nested([]secretRefDTO(nil), model.ClassEvidence,
+		model.Leaf("[].name", model.None("the logical name of a referenced credential, decoded only for display: config.go:152, config.go:180")),
+		model.Leaf("[].ref_kind", model.None("where a credential lives, from a closed set: config.go:33, config.go:88")),
+		model.Leaf("[].ref", model.None("a locator of where a credential lives, refused when it holds the value and never resolved: config.go:97, config.go:180")),
+		model.Leaf("[].hint", model.None("a short masked partial of a credential, length-bounded and rendered only: config.go:94, config.go:180")),
+	)
+	pdeclNoneChangeAction = model.None("the change verb, one of create, update or delete: config.go:284, config.go:334, config.go:369")
+
+	// Wiring edges.
+	pdeclNoneOriginKind     = model.None("an origin kind from a closed set: reactor.go:175")
+	pdeclNoneOriginRef      = model.None("a session, agent, MCP server or workspace reference (identity origins are dropped), rendered as a graph node: reactor.go:175, wiring.go:150")
+	pdeclNoneCapabilityKind = model.None("a capability kind from a closed set: reactor.go:101, reactor.go:195")
+	pdeclNoneCapabilityRef  = model.None("an MCP server, tool, resource, skill or declared capability name: reactor.go:101, wiring.go:128")
+	pdeclNoneToolRef        = model.None("a tool name, rendered only: reactor.go:116, reactor.go:155, wiring.go:35")
+	pdeclSignalSources      = model.Nested([]string(nil), model.ClassEvidence,
+		model.Leaf("[]", model.None("the name of the collector that produced an edge, rendered only: reactor.go:74, sdk/model/enums.go:47, wiring.go:36")),
+	)
+
+	// Health overlay.
+	pdeclNoneSubjectKind = model.None("the kind label of a health finding's subject, used only as a lookup filter: servers.go:339, servers.go:393")
+	// A health finding's subject kind is passed through unchanged (reactor.go:310),
+	// so its reference may be any reported string and is matched against aliases.
+	pdeclScanSubjectRef = model.Scan(model.ClassEvidence)
+	pdeclNoneStatus     = model.None("a connection status from a closed set: reactor.go:86, reactor.go:298, servers.go:418")
+	pdeclNoneSeverity   = model.None("a finding severity from a closed set: sdk/model/enums.go:153, reactor.go:303")
+	pdeclNoneLastTitle  = model.None("a short display summary of a finding, rendered only: sdk/model/observation.go:239, servers.go:104")
+	pdeclNoneDetailHash = model.None("a SHA-256 digest of a redacted finding detail, rendered only: connectors/mcp/mcp.go:251, servers.go:104")
+)
+
 // RegisterSchema declares the module's owned entities. It satisfies the
 // engine-side runtime.SchemaProvider seam (structural — no runtime import) and is
 // called once, at store construction, before any Scope exists (S02 §7 /).
@@ -141,13 +179,13 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Kind:  configKind,
 		Table: configTable,
 		Fields: []model.FieldSpec{
-			{Name: colServerRef, Kind: model.KindText, Indexed: true},
-			{Name: colTransport, Kind: model.KindText},
-			{Name: colEndpointRef, Kind: model.KindText, Nullable: true},
-			{Name: colScope, Kind: model.KindText, Nullable: true},
-			{Name: colSecretRefs, Kind: model.KindJSON, Nullable: true},
+			{Name: colServerRef, Kind: model.KindText, Indexed: true, Principal: pdeclNoneServerRef},
+			{Name: colTransport, Kind: model.KindText, Principal: pdeclNoneTransport},
+			{Name: colEndpointRef, Kind: model.KindText, Nullable: true, Principal: pdeclNoneEndpoint},
+			{Name: colScope, Kind: model.KindText, Nullable: true, Principal: pdeclNoneScope},
+			{Name: colSecretRefs, Kind: model.KindJSON, Nullable: true, Principal: pdeclSecretRefs},
 			{Name: colEnabled, Kind: model.KindBool},
-			{Name: colNote, Kind: model.KindText, Nullable: true},
+			{Name: colNote, Kind: model.KindText, Nullable: true, Principal: pdeclNoneNote},
 			{Name: colRevision, Kind: model.KindInt},
 		},
 		Indexes: []model.IndexSpec{{
@@ -166,16 +204,16 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Table:      revisionTable,
 		AppendOnly: true, // immutable version history (docs/SECURITY-HARDENING.md)
 		Fields: []model.FieldSpec{
-			{Name: colServerRef, Kind: model.KindText, Indexed: true},
+			{Name: colServerRef, Kind: model.KindText, Indexed: true, Principal: pdeclNoneServerRef},
 			{Name: colRevision, Kind: model.KindInt},
-			{Name: colTransport, Kind: model.KindText},
-			{Name: colEndpointRef, Kind: model.KindText, Nullable: true},
-			{Name: colScope, Kind: model.KindText, Nullable: true},
-			{Name: colSecretRefs, Kind: model.KindJSON, Nullable: true},
+			{Name: colTransport, Kind: model.KindText, Principal: pdeclNoneTransport},
+			{Name: colEndpointRef, Kind: model.KindText, Nullable: true, Principal: pdeclNoneEndpoint},
+			{Name: colScope, Kind: model.KindText, Nullable: true, Principal: pdeclNoneScope},
+			{Name: colSecretRefs, Kind: model.KindJSON, Nullable: true, Principal: pdeclSecretRefs},
 			{Name: colEnabled, Kind: model.KindBool},
-			{Name: colNote, Kind: model.KindText, Nullable: true},
-			{Name: colChangeActor, Kind: model.KindText},
-			{Name: colChangeAction, Kind: model.KindText},
+			{Name: colNote, Kind: model.KindText, Nullable: true, Principal: pdeclNoneNote},
+			{Name: colChangeActor, Kind: model.KindText, Principal: model.Ref(model.EncodeUserRef, model.ClassEvidence)},
+			{Name: colChangeAction, Kind: model.KindText, Principal: pdeclNoneChangeAction},
 			{Name: colChangedAt, Kind: model.KindTimestamp},
 		},
 		Indexes: []model.IndexSpec{{
@@ -191,12 +229,12 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Kind:  wiringKind,
 		Table: wiringTable,
 		Fields: []model.FieldSpec{
-			{Name: colOriginKind, Kind: model.KindText, Indexed: true},
-			{Name: colOriginRef, Kind: model.KindText, Indexed: true},
-			{Name: colCapabilityKind, Kind: model.KindText, Indexed: true},
-			{Name: colCapabilityRef, Kind: model.KindText, Indexed: true},
-			{Name: colToolRef, Kind: model.KindText, Nullable: true},
-			{Name: colSignalSources, Kind: model.KindJSON, Nullable: true},
+			{Name: colOriginKind, Kind: model.KindText, Indexed: true, Principal: pdeclNoneOriginKind},
+			{Name: colOriginRef, Kind: model.KindText, Indexed: true, Principal: pdeclNoneOriginRef},
+			{Name: colCapabilityKind, Kind: model.KindText, Indexed: true, Principal: pdeclNoneCapabilityKind},
+			{Name: colCapabilityRef, Kind: model.KindText, Indexed: true, Principal: pdeclNoneCapabilityRef},
+			{Name: colToolRef, Kind: model.KindText, Nullable: true, Principal: pdeclNoneToolRef},
+			{Name: colSignalSources, Kind: model.KindJSON, Nullable: true, Principal: pdeclSignalSources},
 			{Name: colFirstSeen, Kind: model.KindTimestamp},
 			{Name: colLastSeen, Kind: model.KindTimestamp, Indexed: true},
 			{Name: colOccurrence, Kind: model.KindInt},
@@ -216,12 +254,12 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Kind:  healthKind,
 		Table: healthTable,
 		Fields: []model.FieldSpec{
-			{Name: colSubjectKind, Kind: model.KindText, Indexed: true},
-			{Name: colSubjectRef, Kind: model.KindText, Indexed: true},
-			{Name: colStatus, Kind: model.KindText, Indexed: true},
-			{Name: colSeverity, Kind: model.KindText, Nullable: true},
-			{Name: colLastTitle, Kind: model.KindText, Nullable: true},
-			{Name: colDetailHash, Kind: model.KindText, Nullable: true},
+			{Name: colSubjectKind, Kind: model.KindText, Indexed: true, Principal: pdeclNoneSubjectKind},
+			{Name: colSubjectRef, Kind: model.KindText, Indexed: true, Principal: pdeclScanSubjectRef},
+			{Name: colStatus, Kind: model.KindText, Indexed: true, Principal: pdeclNoneStatus},
+			{Name: colSeverity, Kind: model.KindText, Nullable: true, Principal: pdeclNoneSeverity},
+			{Name: colLastTitle, Kind: model.KindText, Nullable: true, Principal: pdeclNoneLastTitle},
+			{Name: colDetailHash, Kind: model.KindText, Nullable: true, Principal: pdeclNoneDetailHash},
 			{Name: colStatusAt, Kind: model.KindTimestamp},
 			{Name: colOccurrence, Kind: model.KindInt},
 		},

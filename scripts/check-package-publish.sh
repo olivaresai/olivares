@@ -34,7 +34,8 @@ for path in \
 	scripts/publish-package-repositories.sh \
 	scripts/package-repository-client-ci.sh \
 	scripts/check-package-publish.sh \
-	scripts/test-package-publish.sh; do
+	scripts/test-package-publish.sh \
+	scripts/test-package-publish-pacman.sh; do
 	bash -n "$root/$path"
 done
 
@@ -102,8 +103,14 @@ assert workflow.index("--mode promote --apply") < workflow.index("clean apt clie
 for token in (
     "DRY-RUN", "OLIVARES_PACKAGE_PUBLISH_APPROVED", "4.100.0",
     "olivares-packages | olivares-packages-sandbox", "staging/$staging_id",
-    "for family in apt rpm apk", '"$evidence_dir/$family.ok"',
+    "families=(apt rpm apk)", 'for family in "${families[@]}"', '"$evidence_dir/$family.ok"',
     "root_files", "content_files",
+    "families+=(pacman)", "pacman_verify_tree", "pacman-render)",
+    "*/pacman/*/olivares.db | */pacman/*/olivares.db.sig", "*.pkg.tar.zst | *.pkg.tar.zst.sig | keys/*",
+    "*.sig) printf '%s\\n' application/pgp-signature", "pacman database is unsigned",
+    "signature does not verify with $pacman_key_rel", "OLIVARES_PACMAN_SIGNING_FINGERPRINT",
+    "OLIVARES_PACMAN_EXPECTED_FINGERPRINT", "is not the expected key", '-path "$tree/pacman/*"',
+
     "for rel in \"${content_files[@]}\"", "for rel in \"${root_files[@]}\"",
     "rolling canonical objects back", "10007|does not exist|not found",
     "put_and_verify", "is_immutable_key", "refusing overwrite",
@@ -111,6 +118,8 @@ for token in (
 ):
     assert token in publisher, token
 assert publisher.index('for rel in "${content_files[@]}"') < publisher.index('for rel in "${root_files[@]}"')
+# The pacman checks run before the dry-run exit, so an unsigned database never stages.
+assert publisher.index("\tpacman_verify_tree\n\tfamilies+=(pacman)") < publisher.index("DRY-RUN")
 
 battery = read("scripts/test-package-publish.sh")
 for token in (
@@ -119,8 +128,17 @@ for token in (
     "mutant immutable package collision",
     "previous canonical package", "FAKE_FAIL_KEY=stable/apt/dists/stable/InRelease",
     "positive promotion writes content before signed discovery roots",
+    "scripts/test-package-publish-pacman.sh", "18/18 cases green",
 ):
     assert token in battery, token
+pacman_battery = read("scripts/test-package-publish-pacman.sh")
+for token in (
+    "case_unsigned_database", "case_wrongly_signed_database", "case_altered_database",
+    "case_unsigned_package", "case_database_names_other_bytes", "case_promote_needs_pacman_evidence",
+    "case_render_then_publish_roots_last", "TEST ONLY", "case_tree_wholly_signed_by_another_key",
+    "case_pacman_without_expected_fingerprint", "case_toplevel_pacman_tree_is_checked",
+):
+    assert token in pacman_battery, token
 
 for token in (
     "member.isfile()", "member.name.startswith", "PurePosixPath",

@@ -131,28 +131,39 @@ func TestSnapshot_Live(t *testing.T) {
 		t.Fatalf("models = %d, want 4", len(cat.Models))
 	}
 
+	// Tariff IDs keep the base limit assertions. Pricing stays nil: the page
+	// publishes a peak and off-peak tariff, not the old single rate.
 	flash, ok := cat.FindModel("deepseek-v4-flash")
-	if !ok || flash.Pricing == nil {
-		t.Fatalf("deepseek-v4-flash not present/priced: %+v", flash)
+	if !ok || flash.Pricing != nil {
+		t.Fatalf("deepseek-v4-flash present/priced: %+v", flash)
 	}
 	if flash.ContextWindow != 1_000_000 || flash.MaxOutputTokens != 384_000 {
 		t.Fatalf("deepseek-v4-flash limits = context %d output %d", flash.ContextWindow, flash.MaxOutputTokens)
 	}
-	if flash.Pricing.InputPerMTokUSD != 0.14 || flash.Pricing.CacheReadPerMTokUSD != 0.0028 || flash.Pricing.OutputPerMTokUSD != 0.28 {
-		t.Fatalf("deepseek-v4-flash pricing = %+v", flash.Pricing)
+	if !flash.Deprecated || len(flash.Retirements) != 1 || flash.Retirements[0].ReplacementRef != "deepseek-flash" {
+		t.Fatalf("deepseek-v4-flash served-by = %+v", flash.Retirements)
 	}
-	if flash.Pricing.AsOf != "2026-07-04" {
-		t.Fatalf("deepseek-v4-flash pricing AsOf = %q", flash.Pricing.AsOf)
+	for _, want := range []modelprovider.Capability{
+		modelprovider.CapStreaming, modelprovider.CapToolUse, modelprovider.CapStructuredOutputs, modelprovider.CapVision,
+	} {
+		if !flash.HasCapability(want) {
+			t.Fatalf("deepseek-v4-flash missing %q (caps=%v)", want, flash.Capabilities)
+		}
 	}
 
 	pro, ok := cat.FindModel("deepseek-v4-pro")
-	if !ok || pro.Pricing == nil ||
-		pro.Pricing.InputPerMTokUSD != 0.435 ||
-		pro.Pricing.CacheReadPerMTokUSD != 0.003625 ||
-		pro.Pricing.OutputPerMTokUSD != 0.87 ||
+	if !ok || pro.Pricing != nil ||
 		pro.ContextWindow != 1_000_000 ||
-		pro.MaxOutputTokens != 384_000 {
-		t.Fatalf("deepseek-v4-pro = %+v", pro)
+		pro.MaxOutputTokens != 384_000 ||
+		pro.Deprecated || pro.HasCapability(modelprovider.CapVision) {
+		t.Fatalf("deepseek-v4-pro = %+v caps %v", pro, pro.Capabilities)
+	}
+	for _, want := range []modelprovider.Capability{
+		modelprovider.CapStreaming, modelprovider.CapToolUse, modelprovider.CapStructuredOutputs,
+	} {
+		if !pro.HasCapability(want) {
+			t.Fatalf("deepseek-v4-pro missing %q (caps=%v)", want, pro.Capabilities)
+		}
 	}
 
 	chat, ok := cat.FindModel("deepseek-chat")
@@ -242,7 +253,7 @@ func TestSnapshot_Offline(t *testing.T) {
 		t.Fatalf("offline deepseek-chat not priced: %+v", chat)
 	}
 	flash, ok := cat.FindModel("deepseek-v4-flash")
-	if !ok || flash.Pricing == nil || flash.ContextWindow != 1_000_000 || flash.MaxOutputTokens != 384_000 {
+	if !ok || flash.Pricing != nil || flash.ContextWindow != 1_000_000 || flash.MaxOutputTokens != 384_000 || !flash.Deprecated {
 		t.Fatalf("offline deepseek-v4-flash not declared correctly: %+v", flash)
 	}
 }
@@ -440,8 +451,8 @@ func TestFamilyFor_LongestPrefix(t *testing.T) {
 		wantIn    float64
 		wantMatch bool
 	}{
-		{"deepseek-v4-flash", 0.14, true},
-		{"deepseek-v4-pro", 0.435, true},
+		{"deepseek-v4-flash", 0, false},
+		{"deepseek-v4-pro", 0, false},
 		{"deepseek-chat", 0.27, true},
 		{"deepseek-chat-20260601", 0.27, true}, // dated id resolves via prefix
 		{"deepseek-reasoner", 0.55, true},

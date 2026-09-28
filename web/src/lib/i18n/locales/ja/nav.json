@@ -44,11 +44,13 @@
     "communicationsAdministration": "チャネル管理",
     "communicationsHandoffs": "ハンドオフ",
     "console": "管理",
+    "sourceDiff": "ソースの差分",
     "permissions": "権限",
     "identity": "アイデンティティとNHI",
     "claudePolicy": "Claude Codeガバナンス",
     "routinePolicies": "ルーチンポリシー",
     "deploy": "デプロイ",
+    "gitPublication": "Git 公開",
     "knowledge": "ナレッジ",
     "catalog": "カタログ",
     "killswitch": "キルスイッチ",
@@ -106,7 +108,7 @@
   "descriptions": {
     "home": "エステートの概要と正常性を一目で把握",
     "onboarding": "ステップバイステップのデプロイメント設定",
-    "inventory": "すべてのエージェント、MCP、モデルを検出してカタログ化",
+    "inventory": "コネクタが観察したエージェント、MCP サーバー、モデルを検出してカタログ化",
     "sessions": "ライブおよび検出されたセッションとそのタイムラインを観測します。「セッションを運用」と画面を共有します",
     "accessMap": "各エージェントが読み書きする対象（R/RW）",
     "health": "エージェントとMCPの稼働状況とSLA",
@@ -122,6 +124,7 @@
     "identity": "SSO、SCIM、NHIロスター、WIFグラフ",
     "claudePolicy": "管理対象ポリシー、フック、MCP、サンドボックス、ポリシーアズコード",
     "deploy": "エージェントをプロビジョニングしインフラに配線",
+    "gitPublication": "承認済みの Git ターゲットを通じてコミットのプッシュ、プルリクエストの作成、マージを行う",
     "knowledge": "ナレッジベース、RAG、データリネージ",
     "catalog": "キュレーションされ承認されたエージェントとケーパビリティ",
     "killswitch": "緊急停止、二重統制による復旧、ガーディアンによる封じ込め",
@@ -165,7 +168,8 @@
     "eventing": "送信 Webhook サブスクリプション、取得したイベントログ、配信、デッドレターキュー",
     "team-costs": "チーム別のコスト帰属: セッション、トークン、支出を日次推移とプロジェクト別・モデル別の内訳で表示",
     "backups": "コントロールプレーンの暗号化された災害復旧スナップショット: 作成、スケジュール、ダウンロード、復元",
-    "logs": "エンジンのライブログストリーム。レベルとモジュールのフィルター、検索、一時停止"
+    "logs": "エンジンのライブログストリーム。レベルとモジュールのフィルター、検索、一時停止",
+    "sourceDiff": "接続された Git リポジトリのベースリビジョンとヘッドリビジョンをファイルごとに比較します"
   },
   "commandActions": {
     "eventing": {
@@ -334,5 +338,73 @@
     "wireAria": "セッション入力行",
     "turnFailed": "セッションはこのターンを受け付けられませんでした。",
     "sendBackgroundHint": "Ctrl+Enter で送信し、次の文の下書きを残します。"
+  },
+  "shell": {
+    "journeysLabel": "作業の流れ",
+    "journeys": {
+      "home": "ホーム",
+      "sessions": "セッション",
+      "workspaceDashboard": "ワークスペース",
+      "providers": "AI ツール",
+      "deploy": "デプロイ"
+    },
+    "phoneBarLabel": "メイン",
+    "newSession": "新しいセッション",
+    "searchCommands": "検索とコマンド",
+    "brandHome": "Olivares AI ホーム",
+    "allAreas": "すべての領域",
+    "more": "その他",
+    "moreLabel": "その他: すべての領域",
+    "workspaceSwitch": "ワークスペースを切り替える。現在: {{name}}",
+    "workspaceCount": "ワークスペース: {{count}}",
+    "rail": {
+      "title": "セッション",
+      "all": "すべて",
+      "groups": {
+        "needsYou": "対応が必要",
+        "working": "実行中",
+        "earlier": "以前"
+      },
+      "empty": {
+        "needsYou": "待っているものはありません。",
+        "working": "実行中のものはありません。",
+        "earlier": "以前のセッションはありません。"
+      },
+      "state": {
+        "need": "対応が必要",
+        "live": "実行中",
+        "ended": "終了",
+        "idle": "待機中"
+      },
+      "workItem": "作業項目",
+      "handoffFrom": "あなたへの引き継ぎ · {{from}} から",
+      "session": "セッション",
+      "minutes": "{{count}} 分",
+      "hours": "{{count}} 時間",
+      "days": "{{count}} 日",
+      "loading": "セッションを読み込み中…",
+      "error": "セッションを読み込めませんでした。"
+    },
+    "engine": {
+      "checking": "エンジンを確認中",
+      "ready": "エンジン準備完了",
+      "unreachable": "エンジンに接続できません",
+      "offline": "{{time}} からオフライン"
+    },
+    "panel": {
+      "show": "{{title}} を表示",
+      "hide": "{{title}} を隠す",
+      "close": "パネルを閉じる"
+    },
+    "keys": {
+      "command": {
+        "session": {
+          "new": "新しいセッション"
+        }
+      },
+      "when": {
+        "outsideField": "入力欄の外"
+      }
+    }
   }
 }

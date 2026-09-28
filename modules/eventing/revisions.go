@@ -52,11 +52,11 @@ func revisionDescriptor() model.EntityDescriptor {
 		Table:      revisionTable,
 		AppendOnly: true,
 		Fields: []model.FieldSpec{
-			{Name: colRevSubject, Kind: model.KindText, Indexed: true},
-			{Name: colRevOp, Kind: model.KindText},
-			{Name: colRevSnapshot, Kind: model.KindText},
-			{Name: colRevActor, Kind: model.KindText},
-			{Name: colRevActorK, Kind: model.KindText},
+			{Name: colRevSubject, Kind: model.KindText, Indexed: true, Principal: model.None("the id of the subscription the revision belongs to, compared on restore: revisions.go:178")},
+			{Name: colRevOp, Kind: model.KindText, Principal: model.None("a closed revision operation set: revisions.go:42-45")},
+			{Name: colRevSnapshot, Kind: model.KindText, Principal: pdeclSubscriptionSnapshot},
+			{Name: colRevActor, Kind: model.KindText, Principal: model.Ref(model.EncodeUserRef, model.ClassEvidence)},
+			{Name: colRevActorK, Kind: model.KindText, Principal: pdeclNoneActorKind},
 		},
 	}
 }

@@ -62,6 +62,7 @@ func TestWorkLeaseSchemaUpgradeBackfillsExactlyOnce(t *testing.T) {
 					t.Fatalf("open %s: %v", be.name, err)
 				}
 				m.UseData(api.NewModuleData(st))
+				bindStoreStanding(m, st)
 				return m, st
 			}
 
@@ -232,6 +233,7 @@ func TestWorkLeaseSQLiteFinalGuardUpgradeIsAtomicAndRefusesInvalidHistory(t *tes
 		}, m.RegisterSchema)
 		if err == nil {
 			m.UseData(api.NewModuleData(st))
+			bindStoreStanding(m, st)
 		}
 		return m, st, err
 	}

@@ -35,6 +35,8 @@ path = [
   "**/Taskfile.yml",
   "**/*.env.example",
   "**/CODEOWNERS",
+  # makepkg --printsrcinfo output, compared byte for byte (packaging/aur/*/.SRCINFO).
+  "**/.SRCINFO",
   # Build stamps written by a build task and compared byte for byte by a gate
   # (core/internal/webui/bundle-source.stamp). They cannot carry an inline header:
   # prepending one would change the bytes the comparison is about.
@@ -140,3 +142,15 @@ path = [
 precedence = "override"
 SPDX-FileCopyrightText = "2026 Olivares.AI"
 SPDX-License-Identifier = "CC0-1.0"
+
+# --- Package-upgrade record fixtures -----------------------------------------
+# The exact lines and records the package maintainer scripts write, read byte for
+# byte by check-records-v1.py against the grammar's size bounds, so an inline
+# header would change what the grammar reads. scripts/check-spdx.sh classifies
+# this directory's .line and .record files as data; this annotation is the other
+# half, and it licenses the extensionless valid/pkg-phases record the same way.
+[[annotations]]
+path = ["scripts/fixtures/package-upgrade/records-v1/**"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Olivares.AI"
+SPDX-License-Identifier = "AGPL-3.0-only"

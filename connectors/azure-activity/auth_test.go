@@ -46,7 +46,7 @@ func TestClientCredentialsFlow(t *testing.T) {
 		}
 		switch {
 		case strings.Contains(r.URL.Path, "Microsoft.ResourceGraph"):
-			_, _ = w.Write([]byte(`{"data":[]}`))
+			_, _ = w.Write([]byte(`{"data":[],"count":0,"totalRecords":0,"resultTruncated":"false"}`))
 		default:
 			_, _ = w.Write([]byte(`{"value":[]}`))
 		}

@@ -85,6 +85,8 @@
     "/voice",
     "/work",
     "/workspace",
-    "/workspace-templates"
+    "/workspace-templates",
+    "/console/sources/diff",
+    "/git-publication"
   ]
 }

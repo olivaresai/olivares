@@ -19,6 +19,8 @@ import (
 	"strings"
 
 	"github.com/olivaresai/olivares/connectors/identitysource"
+	"github.com/olivaresai/olivares/core/auth"
+	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 )
 
@@ -31,6 +33,28 @@ var federatedOwnershipSources = map[identitysource.SourceKind]bool{
 	identitysource.SourceEntraAgent:  true,
 	identitysource.SourceAgentCore:   true,
 	identitysource.SourceGoogleAgent: true,
+}
+
+// federatedOwnershipAccounts returns the accounts a graph's registry-declared
+// owners and sponsors name, for the fence a roster write opens its transaction
+// with: the refs of the identities syncFederatedOwnership reads (a federation
+// source, an anchored ref) are resolved from their directory external ids
+// through the standing port, before any transaction.
+func federatedOwnershipAccounts(ctx context.Context, r auth.StandingReader, graph identitysource.Graph) ([]model.ID, error) {
+	var refs []string
+	seen := map[string]bool{}
+	for _, id := range graph.Identities {
+		if !federatedOwnershipSources[id.Source] || strings.TrimSpace(id.Ref) == "" {
+			continue
+		}
+		for _, key := range []string{"owner_ref", "sponsor_ref"} {
+			if ref := strings.TrimSpace(id.Attributes[key]); ref != "" && !seen[ref] {
+				seen[ref] = true
+				refs = append(refs, ref)
+			}
+		}
+	}
+	return auth.ResolveExternalIDs(ctx, r, refs)
 }
 
 // syncFederatedOwnership maps registry-declared owner/sponsor refs AND the

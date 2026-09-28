@@ -145,9 +145,10 @@ and point `--admin-dsn` at it.
 ## 3. Active-passive HA
 
 With Postgres as the shared store, run several replicas. One is elected
-leader (a Postgres advisory lock); standbys answer `/readyz` with
-`503 {"status":"standby"}` so the Service only routes to the leader, and a
-standby takes over automatically when the leader goes away.
+leader through a Postgres advisory lock; standbys answer `/readyz` with
+`503 {"status":"standby"}` so the Service routes to the leader. When the
+lock becomes available, a standby can be elected automatically. This is an
+election capability, not qualification of safe failover under every fault.
 
 Two things are structurally required, and the chart **enforces both** (we
 verified the guards render as hard failures, not warnings):
@@ -168,10 +169,13 @@ helm install olivares deploy/helm/olivares \
   --set core.auditSigningKeySecret=olivares-audit-key
 ```
 
-The canonical HA sizes are 3 or 5 replicas, active-passive. This single-writer
-design is deliberate (it matches the product's consistency model); the
-[production-readiness numbers](/how-to/monitor-with-prometheus/) document the
-availability tiers it supports.
+The canonical HA sizes are 3 or 5 replicas, active-passive. The single-writer
+design matches the product's consistency model. The
+[production-readiness numbers](/how-to/monitor-with-prometheus/) are operating targets, not measured availability for this topology.
+Existing epoch and fence checks protect specific paths; their presence does not
+establish coverage of every write or external effect. Transaction fencing and
+failover behavior must be qualified, with recovery evidence for the exact
+deployment, before claiming achieved HA service levels.
 
 ## 4. Scheduled encrypted backups
 
@@ -193,7 +197,7 @@ backup's `pg_dump` keeps `row_security=off` and aborts as the application role
 under `FORCE ROW LEVEL SECURITY`, so a CronJob wired to the app DSN would fail
 every run and leave you with no backup at all.
 
-Defaults: every 6 hours (`backup.schedule` sets your RPO), 14-day local
+Defaults: every 6 hours (`backup.schedule` sets the backup interval, not an observed RPO), 14-day local
 retention, a dedicated destination PVC. **Mirror the destination offsite and
 keep the KEK separate from the bundles** — a same-cluster backup is not
 disaster recovery. Drill restores with `olivares dr verify`; the full

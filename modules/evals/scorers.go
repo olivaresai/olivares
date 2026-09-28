@@ -61,10 +61,16 @@ type ScoreInput struct {
 
 // ScoreResult is one scorer's judgement of one output.
 type ScoreResult struct {
-	Score   float64
-	Passed  bool
-	Outcome string // pass|fail|error|skipped
-	Reason  string
+	// judgeUnavailable is stamped only by the built-in judge scorer from errNoJudge.
+	// An external scorer cannot grant this exception through a reason string.
+	judgeUnavailable bool
+	ObservedModel    string
+	ProtocolUnknown  bool
+	Cached           bool
+	Score            float64
+	Passed           bool
+	Outcome          string // pass|fail|error|skipped
+	Reason           string
 }
 
 // Scorer maps an output to a result. Built-ins are pure and deterministic; llm_judge
@@ -254,9 +260,12 @@ func (s *judgeScorer) Score(ctx context.Context, in ScoreInput) ScoreResult {
 	})
 	switch {
 	case errors.Is(err, errNoJudge):
-		return ScoreResult{Outcome: outcomeSkipped, Reason: "no judge wired — llm_judge skipped"}
+		return ScoreResult{Outcome: outcomeSkipped, Reason: "no judge wired — llm_judge skipped", judgeUnavailable: true}
 	case err != nil:
-		return scoreErr(clamp(err.Error(), maxLabelLen))
+		res := scoreErr(clamp(err.Error(), maxLabelLen))
+		res.ObservedModel = verdict.ObservedModel
+		res.ProtocolUnknown = verdict.ProtocolUnknown
+		return res
 	}
 	outcome := outcomeFail
 	if verdict.Passed {
@@ -268,5 +277,5 @@ func (s *judgeScorer) Score(ctx context.Context, in ScoreInput) ScoreResult {
 	} else if score > 1 {
 		score = 1
 	}
-	return ScoreResult{Score: score, Passed: verdict.Passed, Outcome: outcome, Reason: clamp(verdict.Reason, maxLabelLen)}
+	return ScoreResult{Score: score, Passed: verdict.Passed, Outcome: outcome, Reason: clamp(verdict.Reason, maxLabelLen), ObservedModel: verdict.ObservedModel, ProtocolUnknown: verdict.ProtocolUnknown, Cached: verdict.Cached}
 }

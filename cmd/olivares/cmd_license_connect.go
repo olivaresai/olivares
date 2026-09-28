@@ -15,6 +15,8 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
+	"github.com/olivaresai/olivares/core/license/aptrefresh"
+	"github.com/olivaresai/olivares/core/license/dnfrefresh"
 )
 
 // cmd_license_connect.go is `olivares license connect`: the installed client of connect-v1.
@@ -185,9 +187,11 @@ func licenseConnectCmd() *cobra.Command {
 			"credential replaces the installed license only after it verifies against this deployment's license\n" +
 			"trust and confers a current right. Nothing here runs at boot: the engine stays offline.",
 		Example: "  olivares license connect start --data-dir /var/lib/olivares --business-id bus_123 --holder-id sub_456 --license-id lic_789\n" +
-			"  olivares license connect refresh --data-dir /var/lib/olivares",
+			"  olivares license connect refresh --data-dir /var/lib/olivares\n" +
+			"  olivares license connect apt-refresh --data-dir /var/lib/olivares --cycle 0123456789abcdef0123456789abcdef\n" +
+			"  olivares license connect dnf-refresh --data-dir /var/lib/olivares --cycle 0123456789abcdef0123456789abcdef",
 	}
-	root.AddCommand(licenseConnectStartCmd(), licenseConnectRefreshCmd(), licenseConnectRotateCmd(),
+	root.AddCommand(licenseConnectStartCmd(), licenseConnectRefreshCmd(), licenseConnectAptRefreshCmd(), licenseConnectDnfRefreshCmd(), licenseConnectRotateCmd(),
 		licenseConnectApprovedRotationCmd("recover"), licenseConnectApprovedRotationCmd("reactivate"),
 		licenseConnectDeactivateCmd(), licenseConnectStatusCmd(), licenseConnectAbandonCmd())
 	return root
@@ -268,6 +272,92 @@ func licenseConnectRefreshCmd() *cobra.Command {
 	}
 	common.register(cmd)
 	cmd.Flags().StringVar(&channel, "channel", "stable", "release channel: stable | security (default the recorded channel)")
+	return cmd
+}
+
+// licenseConnectAptRefreshCmd is the product operation the appliance helper starts once per cycle, through
+// its template unit (Interface Q3 r3 §3.10 I4). It takes --data-dir and --cycle only: the handoff
+// directory is compiled in, and the network timeout is fixed.
+func licenseConnectAptRefreshCmd() *cobra.Command {
+	var dataDir, cycle string
+	cmd := &cobra.Command{
+		Use:   "apt-refresh",
+		Short: "Obtain this cycle's APT download credential by proof of possession and hand it to the appliance helper",
+		Long: "apt-refresh proves possession of the bound key over a one-use challenge and obtains the download\n" +
+			"credential with which APT on this appliance fetches its entitled security packages. It uses no owner\n" +
+			"evidence, portal session or provider credential. --cycle is the appliance helper's cycle, exactly 32\n" +
+			"lowercase hexadecimal characters; anything else is refused as cycle_invalid (exit 2) before any other step.\n" +
+			"It prints no credential and writes only the handoff of its cycle, " + aptrefresh.HandoffDir + "/<cycle>.json,\n" +
+			"a directory compiled into the product; it writes neither the installed license nor ota.token. It exits 0\n" +
+			"only when a credential was issued; otherwise the handoff names the outcome. A lost answer keeps the\n" +
+			"operation pending, and the next cycle repeats it and receives the same credential.",
+		Example:      "  olivares license connect apt-refresh --data-dir /var/lib/olivares --cycle 0123456789abcdef0123456789abcdef",
+		Args:         cobra.NoArgs,
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			// Before any network call, state read, operation change or file write.
+			if err := aptrefresh.CheckCycle(cycle); err != nil {
+				return exitcode.New(exitcode.Usage, err)
+			}
+			common := connectCommonFlags{dataDir: dataDir, timeout: aptRefreshTimeout}
+			run, err := openConnectRun(&common, nil, nil)
+			if err != nil {
+				return connectExit(aptRefreshOpenFailed(cycle, err))
+			}
+			defer func() { _ = run.store.Close() }()
+			ctx, cancel := connectContext(cmd, &common)
+			defer cancel()
+			rep, err := run.aptRefresh(ctx, cycle)
+			if err != nil {
+				return connectExit(err)
+			}
+			return renderConnect(cmd, rep)
+		},
+	}
+	cmd.Flags().StringVar(&dataDir, "data-dir", "", "data directory that holds this deployment's connected identity (default $OLIVARES_DATA_DIR, an existing ./olivares-data, else $XDG_DATA_HOME/olivares or ~/.local/share/olivares)")
+	cmd.Flags().StringVar(&cycle, "cycle", "", "the appliance helper's cycle: exactly 32 lowercase hexadecimal characters")
+	return cmd
+}
+
+// licenseConnectDnfRefreshCmd is the product operation a Fedora appliance helper starts once per cycle.
+// It takes --data-dir and --cycle only: the handoff directory is compiled in, and the network timeout is fixed.
+func licenseConnectDnfRefreshCmd() *cobra.Command {
+	var dataDir, cycle string
+	cmd := &cobra.Command{
+		Use:   "dnf-refresh",
+		Short: "Obtain this cycle's DNF download credential by proof of possession and hand it to the appliance helper",
+		Long: "dnf-refresh proves possession of the bound key over a one-use challenge and obtains the download\n" +
+			"credential with which DNF on this appliance fetches its entitled packages. It uses no owner\n" +
+			"evidence, portal session or provider credential. --cycle is the appliance helper's cycle, exactly 32\n" +
+			"lowercase hexadecimal characters; anything else is refused as cycle_invalid (exit 2) before any other step.\n" +
+			"It prints no credential and writes only the handoff of its cycle, " + dnfrefresh.HandoffDir + "/<cycle>.json,\n" +
+			"a directory compiled into the product; it writes neither the installed license nor ota.token. It exits 0\n" +
+			"only when a credential was issued; otherwise the handoff names the outcome. A lost answer keeps the\n" +
+			"operation pending, and the next cycle repeats it and receives the same credential.",
+		Example:      "  olivares license connect dnf-refresh --data-dir /var/lib/olivares --cycle 0123456789abcdef0123456789abcdef",
+		Args:         cobra.NoArgs,
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if err := dnfrefresh.CheckCycle(cycle); err != nil {
+				return exitcode.New(exitcode.Usage, err)
+			}
+			common := connectCommonFlags{dataDir: dataDir, timeout: dnfRefreshTimeout}
+			run, err := openConnectRun(&common, nil, nil)
+			if err != nil {
+				return connectExit(dnfRefreshOpenFailed(cycle, err))
+			}
+			defer func() { _ = run.store.Close() }()
+			ctx, cancel := connectContext(cmd, &common)
+			defer cancel()
+			rep, err := run.dnfRefresh(ctx, cycle)
+			if err != nil {
+				return connectExit(err)
+			}
+			return renderConnect(cmd, rep)
+		},
+	}
+	cmd.Flags().StringVar(&dataDir, "data-dir", "", "data directory that holds this deployment's connected identity (default $OLIVARES_DATA_DIR, an existing ./olivares-data, else $XDG_DATA_HOME/olivares or ~/.local/share/olivares)")
+	cmd.Flags().StringVar(&cycle, "cycle", "", "the appliance helper's cycle: exactly 32 lowercase hexadecimal characters")
 	return cmd
 }
 

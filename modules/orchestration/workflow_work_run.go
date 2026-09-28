@@ -7,19 +7,23 @@ package orchestration
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/olivaresai/olivares/core/api"
+	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 )
 
 func workStepActor(run model.Record) WorkActor {
+	binding, _ := auth.ParseCredentialBindingStorage(run.String(colWrCredentialBinding))
 	return WorkActor{
 		Kind: run.String(colWrActorKind), Ref: run.String(colWrActor), Admin: run.Bool(colWrActorAdmin),
 		UserIdentity:  model.ID(run.String(colWrUserIdentity)),
 		AgentIdentity: run.String(colWrAgentIdentity), SessionIdentity: run.String(colWrSessionIdentity),
 		SessionRunRef: run.String(colWrSessionRunRef), SessionFence: run.Int(colWrSessionFence),
 		PurposeRestricted: run.Bool(colWrPurposeRestricted),
+		CredentialBinding: binding, RunID: model.ID(run.String(model.ColID)),
 	}
 }
 
@@ -101,6 +105,36 @@ func failK4Outcome(step runStepState, detail string) runOutcome {
 	out := baseK4Outcome(step)
 	out.status, out.detail, out.ledgerOp = stepStatusFailed, detail, opStatusFailed
 	return out
+}
+
+// Operator-facing lines of the two communication refusals the run handles
+// apart from a failure. Neither carries the credential or its handle.
+const (
+	reauthRequiredDetail = "reauthentication required: the run's credential no longer authorizes its effects; reauthorize the run"
+	effectDeniedDetail   = "denied by current policy"
+)
+
+// communicationK4Outcome maps a refused communication effect. A binding that
+// needs reauthorization pauses the run and holds the step for resumption with
+// its unchanged attempt semantic; a current-policy denial blocks the step; any
+// other error fails it as before.
+func communicationK4Outcome(step runStepState, fromStatus, resume, label string, err error) runOutcome {
+	switch {
+	case errors.Is(err, ErrWorkflowReauthenticationRequired):
+		return runOutcome{
+			ref: step.Ref, fromStatus: fromStatus, status: stepStatusReauthRequired,
+			detail: reauthRequiredDetail, reauthResume: resume, pauseReauth: true,
+		}
+	case errors.Is(err, ErrWorkflowEffectDenied):
+		return runOutcome{
+			ref: step.Ref, fromStatus: fromStatus, status: stepStatusBlocked,
+			detail: label + " " + effectDeniedDetail, ledger: true, ledgerOp: opStatusBlocked,
+		}
+	case fromStatus == stepStatusWaitingAck:
+		return failK4OutcomeFromWait(step, label+" failed: "+clamp(err.Error(), 160))
+	default:
+		return failK4Outcome(step, label+" failed: "+clamp(err.Error(), 160))
+	}
 }
 
 func commandOutcome(step runStepState, result WorkCommandResult, detail string) runOutcome {
@@ -255,7 +289,7 @@ func (m *Module) executeK4WorkStep(ctx context.Context, mc api.ModuleContext, ru
 			Body:      cfg.Body, BodyRef: cfg.BodyRef, AckDueAt: cfg.AckDueAt, Urgency: cfg.Urgency,
 		})
 		if err != nil {
-			return failK4Outcome(step, "work-message failed: "+clamp(err.Error(), 160))
+			return communicationK4Outcome(step, stepStatusExecuting, stepStatusPending, "work-message", err)
 		}
 		if result.WorkItemID != workID || result.MessageID.IsZero() || result.CommandID.IsZero() ||
 			result.EventID.IsZero() || result.EventSeq < 1 {
@@ -391,7 +425,7 @@ func (m *Module) offerK4WorkHandoff(
 		Context: contextText, ContextRef: contextRef, AckDeadline: ackDeadline,
 	})
 	if err != nil {
-		return failK4Outcome(step, "work-handoff failed: "+clamp(err.Error(), 160))
+		return communicationK4Outcome(step, stepStatusExecuting, stepStatusPending, "work-handoff", err)
 	}
 	if result.WorkItemID != workID || result.HandoffID.IsZero() || result.CommandID.IsZero() ||
 		result.EventID.IsZero() || result.EventSeq < 1 || result.OwnerEpoch < 1 ||
@@ -421,7 +455,8 @@ func (m *Module) pollK4WorkAck(ctx context.Context, mc api.ModuleContext, run mo
 		AfterEventSeq: step.WaitingAfterEventSeq,
 	})
 	if err != nil {
-		return failK4OutcomeFromWait(step, "acknowledgement observation failed: "+clamp(err.Error(), 160)), true
+		return communicationK4Outcome(step, stepStatusWaitingAck, stepStatusWaitingAck,
+			"acknowledgement observation", err), true
 	}
 	if observation.EventSeq > 0 && observation.EventSeq <= step.WaitingAfterEventSeq {
 		return failK4OutcomeFromWait(step, "acknowledgement reader returned a non-advancing event cursor"), true

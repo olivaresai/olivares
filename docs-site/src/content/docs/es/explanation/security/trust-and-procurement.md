@@ -45,9 +45,9 @@ El paquete completo orientado al comprador vive en el repositorio bajo `docs/tru
   reverificaciones según eventos), alcance y un flujo de remediación conectado a los
   objetivos de remediación de CVE publicados en `SECURITY.md`.
 - **Arquitectura de referencia** — topologías de despliegue (nodo único, HA
-  activo-pasivo, multirregión, air-gapped), zonas de confianza, líneas base de
-  dimensionamiento medidas, niveles de RPO/RTO y la superficie de integración con
-  IdP/SIEM/ITSM/KMS.
+  activo-pasivo, multirregión, air-gapped), zonas de confianza, mediciones de
+  dimensionamiento fechadas con límites de carga, estimaciones de planificación,
+  objetivos de RPO/RTO y la superficie de integración con IdP/SIEM/ITSM/KMS.
 - **Artefactos de compra para la UE** — una plantilla de documentación técnica del
   Anexo IV del Reglamento de IA de la UE poblada a partir de evidencia en vivo, y una
   correspondencia cláusula por cláusula con las cláusulas contractuales modelo MCC-AI
@@ -84,9 +84,14 @@ propio despliegue.
   (CycloneDX 1.6 / SPDX 3.0.1 AI profile), las model cards y el calendario regulatorio
   son todos respuestas de API, no PDF — el producto trata las fechas y
   correspondencias de cumplimiento como datos con versión fijada.
-- **Afirmaciones operativas:** los números de SLO, dimensionamiento y RPO/RTO de la
-  arquitectura de referencia se remontan a líneas base medidas registradas en el
-  repositorio.
+- **Afirmaciones operativas:** distingue objetivos operativos, mediciones
+  históricas acotadas y compromisos con el cliente. Los objetivos de SLO y RPO/RTO
+  no son líneas base medidas; las observaciones de dimensionamiento solo se aplican
+  a la carga y plataforma registradas. Los tiempos medidos de restauración SQLite
+  no cualifican la recuperación PostgreSQL ni una reconstrucción completa con
+  claves, permisos y reconciliación de efectos externos. Consulta el estado de
+  cualificación, la procedencia y los límites en `deploy/support-matrix.md`,
+  `docs/17-PRODUCTION-READINESS-SLO.md` y `docs/SIZING-AND-CAPACITY.md`.
 
 ## Soporte y accesibilidad
 

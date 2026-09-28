@@ -188,7 +188,8 @@ func newHarnessWithRecorder(t *testing.T, wrap func(api.SessionRecorder) api.Ses
 	}
 	apiSrv, err := api.New(api.Options{
 		Store: st, Authenticator: authr, Authorizer: authz, Signer: signer,
-		SetupToken: setupTok, Logger: log, Version: "e2e", Modules: set.all,
+		PrincipalEvidenceProducer: authr,
+		SetupToken:                setupTok, Logger: log, Version: "e2e", Modules: set.all,
 		KnowledgeStatus: set.knowledgeStatus,
 		// mirror production — module routes are recorded through the wired
 		// recorder (break-glass e2e depends on the deny-closed gate being real).

@@ -1,14 +1,14 @@
 ---
 title: "Live-ingest — el productor de observación en proceso"
 description: >-
-  Uno de los 30 módulos: el productor "live-tap" que publica los eventos
+  Uno de los 31 módulos: el productor "live-tap" que publica los eventos
   detective que un connector fuera de proceso no puede emitir. Deny-closed y de
   datos mínimos: no mueve contenido crudo, y cada mitad de observación que posee
   está honestamente vacía en lugar de falseada. Parcial — es de adhesión
   explícita y se sujeta por variable de entorno.
 ---
 
-Live-ingest (`modules/liveingest`) es uno de los 30 módulos conectados — un **productor en
+Live-ingest (`modules/liveingest`) es uno de los 31 módulos conectados — un **productor en
 proceso** más que una ranura de capacidad. No forma parte del mapa histórico
 numerado I–XXIII. Existe por una razón arquitectónica:
 un `SourceConnector` fuera de proceso solo puede transmitir la suma de
@@ -93,7 +93,7 @@ backend la alimenta.
 - [Módulo II — operación en vivo y sesiones](/es/reference/modules/ii-sessions/) — deriva su
   propio `goal` / `agent_ref` / `summary` directamente de señales que ya consume, en lugar
   de hacerlo vía un evento de live-ingest.
-- [Catálogo de módulos](/es/reference/modules/overview/) — los 30 módulos y la honesta
+- [Catálogo de módulos](/es/reference/modules/overview/) — los 31 módulos y la honesta
   división Gobierno/Observación-frente-a-Actuación que respalda este productor en proceso.
 - [Visión general de la arquitectura](/es/explanation/architecture/overview/) — dónde se sitúan los módulos en proceso
   y los connectors fuera de proceso.

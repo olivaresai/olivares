@@ -85,13 +85,9 @@ func TestSearchFederatedRBAC(t *testing.T) {
 	tenant := h.createOrg(admin, "acme")
 
 	mkUser := func(email, pass, role string) string {
-		r := h.do("POST", "/v1/users", admin, map[string]any{"email": email, "password": pass}, nil)
+		r := h.do("POST", "/v1/users", admin, map[string]any{"email": email, "password": pass, "tenant": tenant.String(), "role": role}, nil)
 		if r.code != http.StatusCreated {
 			t.Fatalf("create user %s = %d %s", email, r.code, r.raw)
-		}
-		uid := r.body["id"].(string)
-		if g := h.do("POST", "/v1/memberships", admin, map[string]any{"user_id": uid, "tenant": tenant.String(), "role": role}, nil); g.code != http.StatusCreated {
-			t.Fatalf("grant %s = %d %s", email, g.code, g.raw)
 		}
 		lr := h.do("POST", "/v1/auth/login", "", map[string]any{"email": email, "password": pass}, nil)
 		if lr.code != http.StatusOK {
@@ -180,20 +176,16 @@ func TestSearchUsersWorkspaceConfinement(t *testing.T) {
 	wsA := mkWS("Alpha", "alpha")
 	wsB := mkWS("Beta", "beta")
 
-	// mkUser creates a user, grants a membership (confined to wsID when non-empty), and
+	// mkUser creates a user with its membership (confined to wsID when non-empty), and
 	// returns the user's session token.
 	mkUser := func(email, pass, role, wsID string) string {
-		r := h.do("POST", "/v1/users", admin, map[string]any{"email": email, "password": pass}, nil)
+		create := map[string]any{"email": email, "password": pass, "tenant": tenant.String(), "role": role}
+		if wsID != "" {
+			create["workspace_id"] = wsID
+		}
+		r := h.do("POST", "/v1/users", admin, create, nil)
 		if r.code != http.StatusCreated {
 			t.Fatalf("create user %s = %d %s", email, r.code, r.raw)
-		}
-		uid := r.body["id"].(string)
-		grant := map[string]any{"user_id": uid, "tenant": tenant.String(), "role": role}
-		if wsID != "" {
-			grant["workspace_id"] = wsID
-		}
-		if g := h.do("POST", "/v1/memberships", admin, grant, nil); g.code != http.StatusCreated {
-			t.Fatalf("grant %s = %d %s", email, g.code, g.raw)
 		}
 		lr := h.do("POST", "/v1/auth/login", "", map[string]any{"email": email, "password": pass}, nil)
 		if lr.code != http.StatusOK {

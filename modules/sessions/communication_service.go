@@ -1104,6 +1104,9 @@ func (m *Module) preflightDirectNoticePublishBody(
 			ErrCommunicationEvidenceUnknown, "direct notice preflight ports are unavailable",
 		)
 	}
+	// Inside a replay transaction the evidence below was read before it opened;
+	// a publish its owning replay did not prepare refuses rather than wait.
+	ports := m.communicationEvidencePorts(ctx, scope.TenantID, true)
 
 	// Core authorization is the first observer. A denied caller must not learn
 	// whether the Channel exists, how it is protected, or whether a proposed
@@ -1142,7 +1145,7 @@ func (m *Module) preflightDirectNoticePublishBody(
 			)
 		}
 	}
-	closure, err := m.communicationGrantClosure.ResolveChannelGrantSubjects(ctx, scope, principal)
+	closure, err := ports.closure.ResolveChannelGrantSubjects(ctx, scope, principal)
 	if err != nil {
 		return directNoticePublishPreflight{}, communicationError(
 			ErrCommunicationEvidenceUnknown, "ChannelGrant subject closure failed",
@@ -1256,10 +1259,11 @@ func (m *Module) preflightDirectNoticePublishBody(
 		ProtectionGeneration: channel.ProtectionGeneration, RequestedAt: requestedAt,
 		Selectors: []AudienceSelector{selector},
 	}
+	audienceRequest.RequestedAt = ports.audienceRequestedAt(audienceRequest)
 	if err := ValidatePublicationAudienceRequest(audienceRequest); err != nil {
 		return directNoticePublishPreflight{}, err
 	}
-	snapshot, attestation, err := m.communicationAudienceAttestor.AttestPublicationAudience(
+	snapshot, attestation, err := ports.attestor.AttestPublicationAudience(
 		ctx, cloneDirectNoticePublicationAudienceRequest(audienceRequest),
 	)
 	if err != nil {
@@ -1291,7 +1295,7 @@ func (m *Module) preflightDirectNoticePublishBody(
 	if err != nil {
 		return directNoticePublishPreflight{}, err
 	}
-	recipientClosure, err := m.communicationGrantClosure.ResolveChannelGrantSubjects(
+	recipientClosure, err := ports.closure.ResolveChannelGrantSubjects(
 		ctx, scope, recipientPrincipal,
 	)
 	recipientClosure = cloneDirectNoticeChannelGrantSubjectClosure(recipientClosure)

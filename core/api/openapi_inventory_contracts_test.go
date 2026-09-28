@@ -379,3 +379,109 @@ func inventorySortedKeysOfArms(arms map[string]map[string]any) []string {
 	sort.Strings(out)
 	return out
 }
+
+// TestInventoryCollectionsOpenAPIContract pins the same document builder used by
+// the public beta endpoint. Generic inference cannot describe these selectors.
+func TestInventoryCollectionsOpenAPIContract(t *testing.T) {
+	t.Parallel()
+	route := moduleRoute{ns: "inventory", method: http.MethodGet, pattern: "/collections", perm: "inventory:catalog:read"}
+	doc := buildModuleOpenAPI([]moduleRoute{route})
+	paths := mustMap(t, doc["paths"], "paths")
+	op := mustMap(t, mustMap(t, paths["/v1/m/inventory/collections"], "path")["get"], "get")
+	if op["x-required-permission"] != "inventory:catalog:read" || op["requestBody"] != nil {
+		t.Fatalf("authority/body changed: %v", op)
+	}
+	params := inventoryParams(t, op)
+	if got := inventoryParamNames(params); !reflect.DeepEqual(got, []string{"X-Olivares-Tenant", "source_id", "source_revision", "environment_ref"}) {
+		t.Fatalf("selectors = %v", got)
+	}
+	for _, p := range params[1:] {
+		if p["in"] != "query" || p["required"] != true {
+			t.Errorf("selector not required: %v", p)
+		}
+		schema := mustMap(t, p["schema"], "selector")
+		if p["name"] == "source_revision" {
+			if schema["type"] != "integer" || schema["format"] != "int64" || schema["minimum"] != 1 {
+				t.Errorf("revision schema: %v", schema)
+			}
+		} else if schema["type"] != "string" || schema["minLength"] != 1 || !strings.Contains(p["description"].(string), "128 bytes") {
+			t.Errorf("identity bound: %v", p)
+		}
+	}
+	responses := mustMap(t, op["responses"], "responses")
+	for _, code := range []string{"200", "400", "401", "403", "423", "500"} {
+		if responses[code] == nil {
+			t.Errorf("missing status %s", code)
+		}
+	}
+	page := inventoryResponseSchema(t, responses, "200")
+	inventoryAssertClosed(t, page, "page", []string{"cursor", "has_more", "items"}, []string{"has_more", "items"})
+	pageProps := mustMap(t, page["properties"], "page.properties")
+	item := mustMap(t, mustMap(t, pageProps["items"], "items")["items"], "item")
+	inventoryAssertClosed(t, item, "item", []string{"current", "last_qualified_success"}, []string{"current"})
+	props := mustMap(t, item["properties"], "item.properties")
+	current := mustMap(t, props["current"], "current")
+	inventoryAssertClosed(t, current, "current",
+		[]string{"admitted_count", "committed_count", "coverage", "environment_ref", "expected_count", "family", "fulfilled_scope", "host_finished_at", "host_started_at", "producer_finished_at", "producer_started_at", "projection", "qualified_at", "reason", "rejection_reason", "requested_scope", "run_id", "run_order", "scope_contract", "source_id", "source_revision"},
+		[]string{"admitted_count", "committed_count", "coverage", "environment_ref", "expected_count", "host_started_at", "projection", "reason", "run_id", "run_order", "source_id", "source_revision"})
+	cp := mustMap(t, current["properties"], "current.properties")
+	if !reflect.DeepEqual(mustMap(t, cp["coverage"], "coverage")["enum"], oaEnum("complete", "partial", "unavailable", "unsupported", "unknown")) {
+		t.Error("coverage vocabulary lost")
+	}
+	if !reflect.DeepEqual(mustMap(t, cp["projection"], "projection")["enum"], oaEnum("pending", "committed", "failed")) {
+		t.Error("projection vocabulary lost")
+	}
+	// Unknown selection serializes empty run_id and host_started_at; the API
+	// cannot promise a UUID or date-time for these two current fields.
+	for _, name := range []string{"run_id", "host_started_at"} {
+		schema := mustMap(t, cp[name], name)
+		if schema["format"] != nil || !strings.Contains(schema["description"].(string), "empty") {
+			t.Errorf("unknown selection invalidated: %v", schema)
+		}
+	}
+	for _, name := range []string{"admitted_count", "committed_count", "expected_count"} {
+		schema := mustMap(t, cp[name], name)
+		if schema["type"] != "integer" || schema["format"] != "int64" || schema["minimum"] != 0 || schema["maximum"] != 100000 {
+			t.Errorf("member bound: %v", schema)
+		}
+	}
+	history := mustMap(t, props["last_qualified_success"], "history")
+	fields := []string{"environment_ref", "expected_count", "family", "fulfilled_scope", "host_finished_at", "host_started_at", "producer_finished_at", "producer_started_at", "qualified_at", "requested_scope", "run_id", "scope_contract", "source_id", "source_revision"}
+	inventoryAssertClosed(t, history, "history", fields, fields)
+	hp := mustMap(t, history["properties"], "history.properties")
+	for _, name := range []string{"qualified_at", "host_started_at", "host_finished_at", "producer_started_at", "producer_finished_at"} {
+		if mustMap(t, hp[name], name)["format"] != "date-time" {
+			t.Errorf("historical instant %s not typed", name)
+		}
+	}
+	description := mustMap(t, responses["200"], "200")["description"].(string)
+	for _, required := range []string{"CURRENT", "unknown", "historical", "authorization", "projection"} {
+		if !strings.Contains(description, required) {
+			t.Errorf("missing contract meaning %q", required)
+		}
+	}
+	names := map[string]bool{}
+	inventoryWalkSchema(t, page, "page", names)
+	for _, forbidden := range []string{"binding_ref", "selectors", "tenant_id", "raw_facts", "facts_hash", "event_id"} {
+		if names[forbidden] {
+			t.Errorf("private field published: %s", forbidden)
+		}
+	}
+}
+
+func TestInventoryCollectionsContractIsExact(t *testing.T) {
+	t.Parallel()
+	for _, r := range []moduleRoute{
+		{ns: "other", method: http.MethodGet, pattern: "/collections"},
+		{ns: "inventory", method: http.MethodPost, pattern: "/collections"},
+		{ns: "inventory", method: http.MethodGet, pattern: "/collections/{id}"},
+	} {
+		op := moduleOperation(r)
+		if got := inventoryParamNames(inventoryParams(t, op)); strings.Contains(strings.Join(got, ","), "source_revision") {
+			t.Errorf("look-alike gained selector: %v", r)
+		}
+		if !reflect.DeepEqual(mustMap(t, op["responses"], "responses")["200"], oaJSONResp("OK")) {
+			t.Errorf("look-alike gained DTO: %v", r)
+		}
+	}
+}

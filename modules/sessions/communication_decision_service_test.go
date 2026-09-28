@@ -55,8 +55,11 @@ func newDecisionResponseFixtureWithDueDelay(
 	// The test seeds the already-created K1 aggregate at its event-sequence
 	// boundary. Decision response then has to advance it and create seq=2.
 	workRecord[colWorkLastEventSeq] = int64(1)
-	createdWork, err := communicationCreateWithID(
-		ctx, fixture.m, fixture.tenant, workItemKind, workItemID, workRecord,
+	// The sender is an account, and the item's owner, the delivery's recipients
+	// and the request's requester and owner are counted references to it, so each
+	// such row is written the way a fenced writer writes it.
+	createdWork, err := communicationCreateFencedWithID(
+		ctx, fixture.m, fixture.st, fixture.tenant, workItemKind, workItemID, workRecord, fixture.sender,
 	)
 	if err != nil {
 		t.Fatalf("create DecisionRequest WorkItem: %v", err)
@@ -172,8 +175,9 @@ func newDecisionResponseFixtureWithDueDelay(
 	if err != nil {
 		t.Fatalf("encode DecisionRequest Delivery: %v", err)
 	}
-	if _, err := communicationCreateWithID(
-		ctx, fixture.m, fixture.tenant, messageDeliveryKind, delivery.ID, deliveryRecord,
+	if _, err := communicationCreateFencedWithID(
+		ctx, fixture.m, fixture.st, fixture.tenant, messageDeliveryKind, delivery.ID, deliveryRecord,
+		fixture.sender,
 	); err != nil {
 		t.Fatalf("create DecisionRequest Delivery: %v", err)
 	}
@@ -181,9 +185,9 @@ func newDecisionResponseFixtureWithDueDelay(
 	if err != nil {
 		t.Fatalf("encode DecisionRequest audience contribution: %v", err)
 	}
-	if _, err := communicationCreateWithID(
-		ctx, fixture.m, fixture.tenant, messageAudienceRecipientKind,
-		contribution.ID, contributionRecord,
+	if _, err := communicationCreateFencedWithID(
+		ctx, fixture.m, fixture.st, fixture.tenant, messageAudienceRecipientKind,
+		contribution.ID, contributionRecord, fixture.sender,
 	); err != nil {
 		t.Fatalf("create DecisionRequest audience contribution: %v", err)
 	}
@@ -220,8 +224,9 @@ func newDecisionResponseFixtureWithDueDelay(
 	if err != nil {
 		t.Fatalf("encode DecisionRequest: %v", err)
 	}
-	createdRequest, err := communicationCreateWithID(
-		ctx, fixture.m, fixture.tenant, decisionRequestKind, request.ID, requestRecord,
+	createdRequest, err := communicationCreateFencedWithID(
+		ctx, fixture.m, fixture.st, fixture.tenant, decisionRequestKind, request.ID, requestRecord,
+		fixture.sender,
 	)
 	if err != nil {
 		t.Fatalf("create DecisionRequest: %v", err)

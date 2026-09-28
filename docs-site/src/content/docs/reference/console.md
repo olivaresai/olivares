@@ -53,7 +53,7 @@ identity, Deployment, Observability & evidence, then System & settings.
 
 <!-- BEGIN GENERATED olivares-console-routes — regenerate with `bash scripts/check-guide-docs.sh --write`; do not edit by hand -->
 
-The console publishes **76 routes**. Every one of them is in the tables below, with the
+The console publishes **78 routes**. Every one of them is in the tables below, with the
 permission it requires and the reference page its in-product help link opens.
 
 ### Operate
@@ -101,7 +101,8 @@ permission it requires and the reference page its in-product help link opens.
 | Catalog | `/catalog` | Curated, approved agents and capabilities | `catalog:entry:read` | [reference/modules/xiv-catalog](/reference/modules/xiv-catalog/) |
 | Protocol bindings | `/communications/protocol-bindings` | Compose and reconcile governed A2A and MCP bindings | `sessions:protocol-binding:read` | [reference/modules/ii-sessions](/reference/modules/ii-sessions/) |
 | Deployment | `/deploy` | Provision and wire agents to infrastructure | `deploy:deployment:read` | [reference/modules/vii-deploy](/reference/modules/vii-deploy/) |
-| Inventory | `/inventory` | Discover and catalog every agent, MCP and model | `inventory:catalog:read` | [reference/modules/i-inventory](/reference/modules/i-inventory/) |
+| Git publication | `/git-publication` | Push commits, open pull requests and merge through approved Git targets | `gitpublish:target:read` | [reference/modules/gitpublish](/reference/modules/gitpublish/) |
+| Inventory | `/inventory` | Discover and catalog the agents, MCP servers and models that connectors observed. | `inventory:catalog:read` | [reference/modules/i-inventory](/reference/modules/i-inventory/) |
 | Knowledge | `/knowledge` | Knowledge bases, RAG and data lineage | `knowledge:kb:read` | [reference/modules/viii-knowledge](/reference/modules/viii-knowledge/) |
 | Model Operations | `/model-operations` | Owned models, admission and deployments | `models:registry:read` | [reference/modules/xxiii-model-operations](/reference/modules/xxiii-model-operations/) |
 | Models | `/models` | Models, routing and provider keys | `models:catalog:read` | [reference/modules/x-models](/reference/modules/x-models/) |
@@ -116,6 +117,7 @@ permission it requires and the reference page its in-product help link opens.
 | AgentCore export | `/agentcore-export` | Plan, review and apply the projection of this tenant's governance rules onto AWS AgentCore as Cedar policies; planning writes nothing | `governance:agentcore-export:admin` | [reference/modules/vi-governance](/reference/modules/vi-governance/) |
 | Claude Code governance | `/claude-policy` | Managed policy, hooks, MCP, sandbox and policy-as-code | `governance:claude-policy:read` | [how-to/connectors/claude-code-hooks-pep](/how-to/connectors/claude-code-hooks-pep/) |
 | Administration | `/console` | Users, SSO/IdP, workspaces, agent groups, roles, secrets, connectors, API keys and this installation's licence | `tenant:admin` | [reference/modules/xx-multi-tenancy](/reference/modules/xx-multi-tenancy/) |
+| Source diff | `/console/sources/diff` | Compare a base and a head revision of a connected Git repository, file by file | `system:admin` | [reference/console](/reference/console/) |
 | Identity & NHI | `/identity` | SSO, SCIM, the NHI roster and the WIF graph | `governance:identity:read` | [reference/modules/vi-governance](/reference/modules/vi-governance/) |
 | Inference proxy | `/inference-proxy` | Proxy gates, egress DLP rules and device approvals | `inferenceproxy:config:read` | [reference/modules/inferenceproxy](/reference/modules/inferenceproxy/) |
 | Permissions | `/permissions` | Identity, roles and approvals | `governance:identity:read` | [reference/modules/vi-governance](/reference/modules/vi-governance/) |

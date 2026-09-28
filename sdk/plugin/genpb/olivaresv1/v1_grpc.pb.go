@@ -36,10 +36,11 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	SourceService_Describe_FullMethodName = "/olivares.sdk.v1.SourceService/Describe"
-	SourceService_Open_FullMethodName     = "/olivares.sdk.v1.SourceService/Open"
-	SourceService_Gather_FullMethodName   = "/olivares.sdk.v1.SourceService/Gather"
-	SourceService_Close_FullMethodName    = "/olivares.sdk.v1.SourceService/Close"
+	SourceService_Describe_FullMethodName        = "/olivares.sdk.v1.SourceService/Describe"
+	SourceService_Open_FullMethodName            = "/olivares.sdk.v1.SourceService/Open"
+	SourceService_Gather_FullMethodName          = "/olivares.sdk.v1.SourceService/Gather"
+	SourceService_GatherInventory_FullMethodName = "/olivares.sdk.v1.SourceService/GatherInventory"
+	SourceService_Close_FullMethodName           = "/olivares.sdk.v1.SourceService/Close"
 )
 
 // SourceServiceClient is the client API for SourceService service.
@@ -54,6 +55,7 @@ type SourceServiceClient interface {
 	Describe(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*DescribeResponse, error)
 	Open(ctx context.Context, in *OpenRequest, opts ...grpc.CallOption) (*Empty, error)
 	Gather(ctx context.Context, in *Empty, opts ...grpc.CallOption) (grpc.ServerStreamingClient[Observation], error)
+	GatherInventory(ctx context.Context, in *GatherInventoryRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[Observation], error)
 	Close(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Empty, error)
 }
 
@@ -104,6 +106,25 @@ func (c *sourceServiceClient) Gather(ctx context.Context, in *Empty, opts ...grp
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type SourceService_GatherClient = grpc.ServerStreamingClient[Observation]
 
+func (c *sourceServiceClient) GatherInventory(ctx context.Context, in *GatherInventoryRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[Observation], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &SourceService_ServiceDesc.Streams[1], SourceService_GatherInventory_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[GatherInventoryRequest, Observation]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type SourceService_GatherInventoryClient = grpc.ServerStreamingClient[Observation]
+
 func (c *sourceServiceClient) Close(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Empty, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Empty)
@@ -126,6 +147,7 @@ type SourceServiceServer interface {
 	Describe(context.Context, *Empty) (*DescribeResponse, error)
 	Open(context.Context, *OpenRequest) (*Empty, error)
 	Gather(*Empty, grpc.ServerStreamingServer[Observation]) error
+	GatherInventory(*GatherInventoryRequest, grpc.ServerStreamingServer[Observation]) error
 	Close(context.Context, *Empty) (*Empty, error)
 	mustEmbedUnimplementedSourceServiceServer()
 }
@@ -145,6 +167,9 @@ func (UnimplementedSourceServiceServer) Open(context.Context, *OpenRequest) (*Em
 }
 func (UnimplementedSourceServiceServer) Gather(*Empty, grpc.ServerStreamingServer[Observation]) error {
 	return status.Errorf(codes.Unimplemented, "method Gather not implemented")
+}
+func (UnimplementedSourceServiceServer) GatherInventory(*GatherInventoryRequest, grpc.ServerStreamingServer[Observation]) error {
+	return status.Errorf(codes.Unimplemented, "method GatherInventory not implemented")
 }
 func (UnimplementedSourceServiceServer) Close(context.Context, *Empty) (*Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Close not implemented")
@@ -217,6 +242,17 @@ func _SourceService_Gather_Handler(srv interface{}, stream grpc.ServerStream) er
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type SourceService_GatherServer = grpc.ServerStreamingServer[Observation]
 
+func _SourceService_GatherInventory_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(GatherInventoryRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(SourceServiceServer).GatherInventory(m, &grpc.GenericServerStream[GatherInventoryRequest, Observation]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type SourceService_GatherInventoryServer = grpc.ServerStreamingServer[Observation]
+
 func _SourceService_Close_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(Empty)
 	if err := dec(in); err != nil {
@@ -259,6 +295,11 @@ var SourceService_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "Gather",
 			Handler:       _SourceService_Gather_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "GatherInventory",
+			Handler:       _SourceService_GatherInventory_Handler,
 			ServerStreams: true,
 		},
 	},

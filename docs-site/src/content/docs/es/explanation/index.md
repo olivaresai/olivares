@@ -1,6 +1,6 @@
 ---
 title: "Explicación"
-description: "Visión general orientada a la comprensión de Olivares AI: cómo integra, gestiona y asegura la IA empresarial de forma un único ground truth: Claude Code al nivel más profundo, Codex y Grok Build a su lado — su arquitectura modular a lo largo de 30 módulos, el access map read-first y el modelo open-core."
+description: "Visión general orientada a la comprensión de Olivares AI: cómo integra, gestiona y asegura la IA empresarial de forma un único ground truth: Claude Code al nivel más profundo, Codex y Grok Build a su lado — su arquitectura modular a lo largo de 31 módulos, el access map read-first y el modelo open-core."
 ---
 
 Esta sección está orientada a la comprensión. Explica *por qué* Olivares AI tiene la forma
@@ -27,7 +27,7 @@ embebida y servida desde el mismo origen que la API. La arquitectura es una
 plataforma, no una sola herramienta: un **motor central** proporciona los subsistemas compartidos —
 ingesta y un bus de eventos in-process, el SDK de conectores, el runtime de módulos, un
 modelo de datos multitenant, la API REST/gRPC, autenticación y autorización, y
-el audit ledger append-only — y cada capacidad es uno de **30 módulos** que
+el audit ledger append-only — y cada capacidad es uno de **31 módulos** que
 cuelga de esos subsistemas sin re-arquitecturar el núcleo. Los **conectores** alimentan
 el motor desde fuera a través de un SDK estable; un conector nunca importa del
 núcleo, lo que mantiene limpia la frontera de licencia.
@@ -35,7 +35,7 @@ núcleo, lo que mantiene limpia la frontera de licencia.
 El store predeterminado es SQLite (pure-Go) para uso de un solo nodo y air-gapped, pasando
 a Postgres con row-level security para multitenancy y escala. El bus de eventos es
 in-process por defecto; NATS es un binding distribuido opcional, no un
-requisito. La plataforma entrega hoy **30 módulos**, cada uno con su propia madurez honesta
+requisito. La plataforma entrega hoy **31 módulos**, cada uno con su propia madurez honesta
 — la mayoría en vivo y cableados de extremo a extremo, algunos parciales u opt-in — a lo largo de nueve
 áreas de capacidad; el registro de modelos propios y el fine-tuning es una **capacidad planificada**,
 no un módulo entregado.

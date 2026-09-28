@@ -55,6 +55,10 @@ type genericRepo struct {
 	// touch or for a bound custodial handle. See custodial_write_gate.go.
 	origin     writeOrigin
 	writeGuard func(scopeWriteOp, writeOrigin, model.Kind, model.ID) error
+	// userRefs is the write seam (userrefseam.go): non-nil on a repository a
+	// business-tenant Scope issued, it refuses a counted reference to an account
+	// whose authority the transaction has not pinned.
+	userRefs func(context.Context, []userReference) error
 	// scanTargets, when non-nil, supplies the Scan destinations for get and List
 	// in place of a scanState's own. Only policy snapshot reads install it, on a
 	// value copy; the zero value keeps the established typed targets.
@@ -142,6 +146,9 @@ func (r *genericRepo) insertWithIDAt(
 	out := make(model.Record, len(in)+6)
 	for _, f := range r.desc.Fields {
 		out[f.Name] = redactField(f, in[f.Name])
+	}
+	if err := r.checkUserReferences(ctx, out); err != nil {
+		return nil, err
 	}
 	base := model.BaseFields{
 		ID:        id,
@@ -527,6 +534,9 @@ func (r *genericRepo) updateAt(
 		return nil, store.ErrNotFound
 	}
 	if err := r.noteWrite(id); err != nil {
+		return nil, err
+	}
+	if err := r.checkChangedUserReferences(ctx, id, in); err != nil {
 		return nil, err
 	}
 	set := make([]string, 0, len(r.desc.Fields)+2)

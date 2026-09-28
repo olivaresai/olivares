@@ -1,0 +1,244 @@
+{
+  "title": "Publicación en Git",
+  "subtitle": "Haz push de commits, abre pull requests y fusiona a través de destinos de publicación aprobados.",
+  "notice": "Cada solicitud se comprueba contra las vinculaciones aprobadas del destino y tu autoridad en el momento en que la envías. Un resultado incierto en el host nunca se vuelve a enviar: reconcílialo para leer el host.",
+  "actions": {
+    "refresh": "Actualizar",
+    "newTarget": "Nuevo destino",
+    "open": "Abrir",
+    "edit": "Editar",
+    "delete": "Eliminar",
+    "cancel": "Cancelar",
+    "close": "Cerrar",
+    "push": "Hacer push",
+    "pull_request": "Abrir pull request",
+    "merge": "Fusionar",
+    "reconcile": "Reconciliar",
+    "abandon": "Abandonar"
+  },
+  "columns": {
+    "target": "Destino",
+    "workspace": "Espacio de trabajo",
+    "pushPrefix": "Prefijo de push",
+    "mergeBases": "Bases de fusión",
+    "version": "Versión",
+    "actions": "Acciones"
+  },
+  "targets": {
+    "title": "Destinos de publicación",
+    "description": "Cada destino vincula una credencial y un repositorio aprobados a un prefijo de push y a las ramas en las que puede fusionar.",
+    "empty": "No hay destinos de publicación",
+    "emptyAdmin": "Selecciona un espacio de trabajo y crea un destino a partir de una vinculación de credencial y una vinculación de repositorio aprobadas.",
+    "emptyReader": "Los destinos los crea un administrador de destinos. Aquí aparecen los destinos que puedes leer.",
+    "open": "Abrir destino {{id}}"
+  },
+  "target": {
+    "title": "Destino {{id}}",
+    "description": "La vinculación a través de la que publica este destino, la autoridad que exige cada acción y las intenciones que retiene.",
+    "binding": "Vinculación",
+    "credentialBinding": "Vinculación de credencial",
+    "repositoryBinding": "Vinculación de repositorio",
+    "withheld": "Visible solo para administradores de destinos",
+    "noMergeBases": "Ninguna",
+    "bindingHint": "Los push se quedan bajo el prefijo de push, y las pull requests y las fusiones solo van a las bases de fusión. El motor comprueba que ambas vinculaciones estén aprobadas en el espacio de trabajo cada vez que se envía una solicitud.",
+    "actions": "Acciones",
+    "administration": "Administración del destino",
+    "notHeld": "Permiso no concedido",
+    "created": "Destino de publicación creado",
+    "updated": "Destino de publicación actualizado",
+    "deleted": "Destino de publicación eliminado",
+    "deleteTitle": "¿Eliminar el destino {{id}}?",
+    "deleteDescription": "El motor se niega a eliminar un destino que todavía retiene una intención en despacho, incierta o abandonada."
+  },
+  "targetForm": {
+    "createTitle": "Nuevo destino de publicación",
+    "editTitle": "Editar destino {{id}}",
+    "description": "Vincula una credencial y un repositorio aprobados a las ramas que este destino puede publicar.",
+    "credentialHint": "El ID de una vinculación de credencial aprobada en este espacio de trabajo. La consola nunca ve su secreto.",
+    "repositoryHint": "El ID de una vinculación de repositorio aprobada en este espacio de trabajo. Su propietario debe ser uno de los que permite la vinculación de credencial.",
+    "keepBinding": "Déjalo vacío para conservar la vinculación actual.",
+    "prefixHint": "Los push deben quedarse bajo este prefijo de rama. Termina en barra y no puede abarcar una base de fusión.",
+    "prefixSlash": "El prefijo de push debe terminar en barra.",
+    "basesHint": "Las ramas a las que pueden apuntar las pull requests y las fusiones, una por línea. Como máximo 16.",
+    "create": "Crear destino",
+    "save": "Guardar cambios"
+  },
+  "effects": {
+    "push": "Push",
+    "pull_request": "Pull request",
+    "merge": "Fusión"
+  },
+  "authority": {
+    "requires": "Requiere {{permission}}",
+    "requiresAal3": "Requiere {{permission}} y una elevación a AAL3"
+  },
+  "publish": {
+    "push": {
+      "title": "Hacer push de un commit",
+      "description": "Hace push de un commit exacto a una rama bajo {{prefix}}, condicionado a que la rama siga en el commit actual esperado.",
+      "submit": "Solicitar push"
+    },
+    "pull_request": {
+      "title": "Abrir una pull request",
+      "description": "Abre una pull request desde una rama bajo {{prefix}} hacia una base de fusión, o adopta la que ya esté abierta y coincida.",
+      "submit": "Solicitar pull request"
+    },
+    "merge": {
+      "title": "Fusionar una pull request",
+      "description": "Fusiona una pull request solo mientras su head siga siendo el commit revisado.",
+      "submit": "Solicitar fusión"
+    }
+  },
+  "fields": {
+    "ref": "Ref de la rama",
+    "refHint": "Una ref completa bajo el prefijo de push, por ejemplo refs/heads/{{prefix}}change.",
+    "expectedOld": "Commit actual esperado",
+    "expectedOldHint": "Opcional. El push se condiciona a este valor; déjalo vacío para una rama nueva.",
+    "commit": "Commit",
+    "tree": "Árbol",
+    "treeHint": "El ID del árbol del commit. El motor rechaza el push si el repositorio gestionado contiene un árbol distinto.",
+    "headRef": "Rama head",
+    "headRefHint": "Una rama bajo {{prefix}}.",
+    "base": "Rama base",
+    "title": "Título",
+    "body": "Descripción",
+    "draft": "Abrir como borrador",
+    "number": "Número de pull request",
+    "expectedHead": "Commit head revisado",
+    "expectedHeadHint": "La fusión solo se produce mientras el head de la pull request sea este commit.",
+    "method": "Método de fusión",
+    "acknowledgeIntent": "Reconocer intención abandonada",
+    "acknowledgeIntentHint": "Opcional. El ID de una intención abandonada que retiene este ámbito. Indicarlo requiere administración del destino con AAL3.",
+    "operationId": "ID de operación",
+    "operationIdHint": "Enviar de nuevo esta misma solicitud con este ID devuelve la intención registrada. No se despacha por segunda vez."
+  },
+  "methods": {
+    "merge": "Commit de fusión",
+    "squash": "Squash",
+    "rebase": "Rebase"
+  },
+  "states": {
+    "dispatching": "En despacho",
+    "applied": "Aplicada",
+    "adopted": "Adoptada",
+    "rejected": "Rechazada por el host",
+    "not_dispatched": "No despachada",
+    "uncertain": "Incierta",
+    "abandoned": "Abandonada"
+  },
+  "receipts": {
+    "caused": "Esta solicitud causó el efecto en el host.",
+    "existing_effect": "Ya existía en el host un efecto coincidente y se adoptó.",
+    "none": "No se atribuye a esta solicitud ningún efecto en el host."
+  },
+  "outcome": {
+    "toast": "El motor respondió: {{state}}",
+    "settled": {
+      "title": "La solicitud tiene un resultado definitivo"
+    },
+    "uncertain": {
+      "title": "El resultado en el host es incierto",
+      "body": "La solicitud se despachó, pero su resultado en el host no está confirmado. Puede que se haya aplicado. No la vuelvas a enviar: reconciliar lee el host y registra lo que observa."
+    },
+    "rejected": {
+      "title": "El host rechazó la solicitud",
+      "body": "El host rechazó el efecto. La intención registra el rechazo."
+    },
+    "refused": {
+      "title": "El motor rechazó la solicitud",
+      "code": "Código de rechazo:"
+    },
+    "unknown": {
+      "title": "No llegó la respuesta del motor",
+      "body": "Puede que la solicitud se haya registrado. Abre las intenciones de este destino para comprobarlo y, si es incierta, reconcíliala allí."
+    }
+  },
+  "refusals": {
+    "authority_expired": "La comprobación de autoridad no terminó a tiempo, así que la solicitud no se llevó a cabo.",
+    "authority_unavailable": "El motor no pudo decidir sobre esta solicitud, así que no se llevó a cabo.",
+    "base_not_allowed": "La rama base no es una de las bases de fusión de este destino.",
+    "binding_not_approved": "Una vinculación de credencial o de repositorio no está aprobada en este espacio de trabajo.",
+    "content_mismatch": "El commit o el árbol no coinciden con lo que contiene el repositorio gestionado.",
+    "default_branch_refused": "La rama es la rama predeterminada del repositorio y se rechaza publicar en ella.",
+    "dispatch_deadline_passed": "El plazo de despacho venció antes de que se enviara la solicitud. No se despachó nada.",
+    "field_not_accepted": "La solicitud incluía un campo que esta ruta no acepta.",
+    "forbidden": "Tu autoridad actual no permite esta acción en este destino.",
+    "head_mismatch": "El head de la pull request ya no es el commit revisado.",
+    "host_credential_refused": "El host de Git rechazó la credencial de la vinculación o su ámbito. No se despachó nada.",
+    "host_unavailable": "No se pudo contactar con el host de Git. No se despachó nada.",
+    "intent_settled": "La intención ya tiene un resultado definitivo, así que no se puede abandonar.",
+    "invalid_request": "La solicitud está incompleta o mal formada. Revisa los nombres de rama y los ID de commit.",
+    "lookup_incomplete": "No se pudo leer por completo el estado actual del host, así que no se despachó nada.",
+    "not_found": "El destino o la intención no existe, o no puedes verlo.",
+    "not_mergeable": "El host indica que la pull request no se puede fusionar.",
+    "operation_conflict": "Este ID de operación ya se usó para una solicitud distinta.",
+    "protected_branch_refused": "La rama está protegida en el host y se rechaza publicar en ella.",
+    "push_prefix_overlaps_base": "El prefijo de push permitiría que un push llegara a una base de fusión.",
+    "ref_not_allowed": "La rama no está bajo el prefijo de push de este destino.",
+    "repository_outside_binding": "El repositorio está fuera de los propietarios que permite la vinculación de credencial.",
+    "runtime_credential_refused": "La credencial de runtime de una sesión no puede publicar. Actúa con tu propia credencial.",
+    "scoped_grant_required": "Esta acción necesita una concesión acotada sobre este destino.",
+    "stale_lease": "La rama ya no está en el commit actual esperado.",
+    "step_up_required": "Esta acción necesita una elevación a AAL3. Complétala cuando se te pida.",
+    "subject_mismatch": "Este ID de operación pertenece a una solicitud hecha por otro sujeto.",
+    "target_changed": "El destino cambió después de que se admitiera la solicitud. No se despachó nada.",
+    "target_in_use": "Una intención en despacho, incierta o abandonada todavía retiene este destino.",
+    "unresolved_intent": "Una intención sin resolver ya retiene esta rama, pull request o fusión.",
+    "unsupported_requirement": "El host no puede cumplir este requisito, por ejemplo una fusión con rebase en GitLab.",
+    "version_conflict": "El destino cambió desde que lo abriste. Vuelve a abrirlo para ver la versión actual.",
+    "workflow_change_refused": "El commit modifica archivos de workflow de CI, que este destino se niega a publicar.",
+    "unknown": "El motor rechazó la solicitud con un código que esta consola no describe."
+  },
+  "intents": {
+    "title": "Intenciones",
+    "empty": "No hay intenciones de publicación registradas para este destino.",
+    "open": "Abrir intención {{id}}"
+  },
+  "intent": {
+    "title": "Intención {{id}}",
+    "description": "Lo que se solicitó, lo que se observó por última vez en el host y si el host acusó recibo de la solicitud se registran por separado.",
+    "state": "Estado",
+    "effect": "Efecto",
+    "receipt": "Recibo",
+    "operationId": "ID de operación",
+    "attempt": "Intento",
+    "targetVersion": "Versión del destino",
+    "reason": "Motivo",
+    "authorizedBy": "Asumida por",
+    "dispatchDeadline": "Plazo de despacho",
+    "releaseFailure": "Fallo al liberar la credencial",
+    "requested": "Solicitado",
+    "observed": "Observado en el host",
+    "notObserved": "El host no se ha observado para esta intención.",
+    "present": "Presente",
+    "sha": "Commit en el host",
+    "headSha": "Commit head",
+    "merged": "Fusionada",
+    "mergeCommit": "Commit de fusión",
+    "mergeTree": "Árbol de fusión",
+    "contentMatch": "El head coincide con el commit solicitado",
+    "source": "Origen",
+    "at": "Momento",
+    "acknowledged": "Acuse de recibo del host",
+    "acknowledgedValue": "Acuse recibido",
+    "status": "Estado devuelto por el host",
+    "requestId": "ID de solicitud del host",
+    "acknowledgedHint": "Un acuse de recibo es la respuesta de éxito del host a esta solicitud. No es una observación del efecto.",
+    "yes": "Sí",
+    "no": "No",
+    "observations": "Observaciones",
+    "observationsEmpty": "No hay observaciones registradas para esta intención.",
+    "obs": {
+      "at": "Momento",
+      "attempt": "Intento",
+      "source": "Origen",
+      "result": "Resultado",
+      "host": "Objeto, estado y solicitud del host"
+    },
+    "abandonedNote": "Un administrador asumió la responsabilidad de esta intención. Eso no prueba nada sobre el host. Su ámbito sigue retenido hasta que una nueva solicitud indique esta intención en Reconocer intención abandonada.",
+    "abandoned": "Intención abandonada",
+    "abandonTitle": "¿Abandonar la intención {{id}}?",
+    "abandonDescription": "Abandonar registra que asumes la responsabilidad de esta intención sin resolver. No modifica ni lee el host, y el ámbito sigue retenido hasta que una nueva solicitud reconozca esta intención.",
+    "abandonReason": "Motivo (256 caracteres como máximo)"
+  }
+}

@@ -6,6 +6,7 @@ package evals
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
@@ -20,6 +21,9 @@ import (
 
 // ScoreOutputsRequest is the evals-owned input the sandbox adapter translates into.
 type ScoreOutputsRequest struct {
+	Comparison  *ComparisonRequest
+	BaselineRef string
+	ModelRef    string
 	// SuiteRef is the suite to score against.
 	SuiteRef string
 	// SubjectKind/SubjectRef identify what produced the outputs (defaults to the
@@ -38,16 +42,17 @@ type ScoreOutputsRequest struct {
 // per-case scores. It carries no internal table shape so a caller (the sandbox) is
 // decoupled from evals' schema.
 type Scorecard struct {
-	RunRef   string      `json:"run_ref"`
-	Total    int         `json:"total"`
-	Passed   int         `json:"passed"`
-	Failed   int         `json:"failed"`
-	Errors   int         `json:"errors"`
-	Skipped  int         `json:"skipped"`
-	Score    float64     `json:"score"`
-	PassRate float64     `json:"pass_rate"`
-	Status   string      `json:"status"`
-	Cases    []CaseScore `json:"cases"`
+	Comparison ComparisonEvidence `json:"comparison"`
+	RunRef     string             `json:"run_ref"`
+	Total      int                `json:"total"`
+	Passed     int                `json:"passed"`
+	Failed     int                `json:"failed"`
+	Errors     int                `json:"errors"`
+	Skipped    int                `json:"skipped"`
+	Score      float64            `json:"score"`
+	PassRate   float64            `json:"pass_rate"`
+	Status     string             `json:"status"`
+	Cases      []CaseScore        `json:"cases"`
 }
 
 // CaseScore is one scored case in a Scorecard (evals-owned).
@@ -65,6 +70,10 @@ type CaseScore struct {
 // two-phase — the judge's network I/O never runs inside the write
 // transaction. The regression bus signal is emitted after the commit (best-effort).
 func (m *Module) ScoreOutputs(ctx context.Context, tenant model.TenantID, req ScoreOutputsRequest) (Scorecard, error) {
+	comparison, valid := normalizeComparison(req.Comparison, req.BaselineRef)
+	if !valid {
+		return Scorecard{}, fmt.Errorf("evals: invalid comparison or baseline_ref")
+	}
 	suiteID, ok := idParam(req.SuiteRef)
 	if !ok {
 		return Scorecard{}, store.ErrNotFound
@@ -75,10 +84,16 @@ func (m *Module) ScoreOutputs(ctx context.Context, tenant model.TenantID, req Sc
 	}
 	var suite suiteDTO
 	var cases []caseDTO
+	var subj runSubject
 	found := false
 	if err := m.data.View(ctx, tenant, func(sc store.Scope) error {
 		s, cs, ok, lerr := loadSuiteAndCases(ctx, sc, suiteID)
 		suite, cases, found = s, cs, ok
+		if lerr != nil || !ok {
+			return lerr
+		}
+		subj = runSubject{suiteRef: suiteID.String(), suiteVer: s.SuiteVersion, subjectKind: firstNonEmpty(req.SubjectKind, s.SubjectKind), subjectRef: req.SubjectRef, modelRef: req.ModelRef, variant: req.Variant, baselineRef: req.BaselineRef, launchedBy: actor, comparison: comparison}
+		subj.plan, lerr = m.prepareComparison(ctx, sc, s, subj, cs, cs, m.scorerByID(s.Scorer), "", 0)
 		return lerr
 	}); err != nil {
 		return Scorecard{}, err
@@ -87,11 +102,6 @@ func (m *Module) ScoreOutputs(ctx context.Context, tenant model.TenantID, req Sc
 		return Scorecard{}, store.ErrNotFound
 	}
 
-	subj := runSubject{
-		suiteRef: suiteID.String(), suiteVer: suite.SuiteVersion,
-		subjectKind: firstNonEmpty(req.SubjectKind, suite.SubjectKind), subjectRef: req.SubjectRef,
-		variant: req.Variant, launchedBy: actor,
-	}
 	agg := m.executeRun(ctx, tenant, suite, cases, clampOutputs(req.Outputs), m.scorerByID(suite.Scorer))
 
 	var card Scorecard
@@ -118,7 +128,7 @@ func toScorecard(dto runDTO, agg runAggregate) Scorecard {
 		cases = append(cases, CaseScore{CaseKey: c.caseKey, Outcome: c.outcome, Score: c.score, Passed: c.passed})
 	}
 	return Scorecard{
-		RunRef: dto.ID, Total: agg.total, Passed: agg.passed, Failed: agg.failed, Errors: agg.errors,
+		Comparison: dto.Comparison, RunRef: dto.ID, Total: agg.total, Passed: agg.passed, Failed: agg.failed, Errors: agg.errors,
 		Skipped: agg.skipped, Score: agg.score, PassRate: agg.passRate, Status: agg.status, Cases: cases,
 	}
 }

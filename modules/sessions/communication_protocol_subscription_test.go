@@ -123,6 +123,7 @@ func TestProtocolSubscriptionLedgerPersistsCatchUpAcrossRestart(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = st.Close() })
 	restarted.UseData(api.NewModuleData(st))
+	bindStoreStanding(restarted, st)
 
 	page, err := restarted.CatchUpProtocolSubscription(
 		context.Background(), fixture.tenant,

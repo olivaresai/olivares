@@ -103,6 +103,58 @@ is, and the section is dated only then.
   it* fails closed — a declared gap, or a refusal naming the seam. One that swallows a failed type
   assertion and reports itself complete still seals a verified receipt, exactly as it did before
   this change: what makes that verdict honest is the contract, and a seam cannot enforce it.
+- **Onboarding and granting no longer join an existing account.** Onboarding or granting a
+  membership to an address that already has an account, which is not a member of the tenant,
+  answers `202` with `{"status":"consent_required"}` and writes nothing; SCIM provisioning of
+  such an address answers a conflict, whoever asks. This release has no path for the holder
+  to consent: a person who already has an account joins a further organization only once a
+  later release ships that consent. `POST /v1/users` accepts `tenant`, `role` and
+  `workspace_id` to create an account with its first membership in one step, and
+  `olivares users create` gains `--member-of` and `--role`. An address in an email domain
+  another tenant's identity provider claims is refused.
+- **A tenant removes a member only from itself, and the account's retirement precedes any
+  re-admission.** A tenant's disable, deprovision, SCIM event or CAEP signal removes the
+  account's membership in that tenant, its group rows there and the tokens and sessions bound
+  to that tenant. It never changes the account's global status, its other memberships, its
+  account-wide sessions or its passkeys. The console's *Disable* is now *Remove from
+  organization*. The removed account's grants stop matching at once. What the tenant stored
+  that names it is then retired in the background, or listed by id for an administrator to
+  resolve; until the retirement completes the account cannot be admitted to the tenant again
+  (`409 retirement_pending`), and afterwards only the tenant that created the account
+  re-admits it directly. Removing a member that is already removed writes nothing.
+  Sessions of an account a tenant created are scoped to that tenant.
+- **Writes that name accounts take the deployment's directory admission, and are bounded.** A
+  write that stores a reference letting an account act in a tenant, or binding it to a duty
+  there, reads the standing of the accounts it names and takes the deployment's directory
+  admission in its transaction; while a named account is being removed from the tenant it
+  answers `409 subject_retirement_active`. One such write names at most 64 accounts, counted
+  once each after its ids, credential ids and email addresses resolve to accounts; above that
+  it answers `409 too_many_subjects`. A model-access forbid only restricts, so it is never
+  refused and the retirement keeps it.
+- **SCIM writes an account's attributes only when the tenant alone governs it.** An attribute
+  change of an account another tenant shares, whose holder took custody of it, or that the
+  deployment suspended answers `403` and writes nothing. `active=true` writes nothing, and
+  `active=false` removes the member from that tenant only; an attribute change is never read
+  as a removal.
+- **Stored kinds must be known.** A policy of a kind no module registered, and a policy
+  revision on a surface the revision store does not list, are refused. A stored policy,
+  revision or workflow step of an unknown kind, left by an earlier version or a restore, keeps
+  a retirement in its tenant blocked until the row is migrated or removed.
+- **Invitations need the deployment's mail destination and its declared console address.**
+  Invite mode mails the invitation to the invitee through the destination
+  `OLIVARES_INVITE_MAIL_DESTINATION` names in `OLIVARES_NOTIFY_CONFIG`, which the operator must
+  scope to no tenant (`"tenants": []`), with a link to the console address declared by
+  `--public-url` or `OLIVARES_PUBLIC_URL`. Without either it answers
+  `409 invite_delivery_unavailable` and writes nothing. A pending invitation can be resent
+  with a new secret.
+- **A tenant's erasure request keeps the account's global record.** It removes the account's
+  membership in that tenant and anonymizes no account, not even one the tenant created; the
+  receipt records that the global record waits for the deployment's erasure ceremony.
+- **Upgrade every replica together; a rollback reopens what this release closes.** The core
+  schema moves to version 14, and a binary of an earlier version refuses to open an upgraded
+  database. Rolling back therefore means an earlier binary on an earlier database, and that
+  binary again joins existing accounts and lets tenant actions write global status, as it did
+  before this release.
 - **PostgreSQL connection strings are read the way libpq reads them.** The PostgreSQL driver is
   now pgx v5.11.0, and it reads both connection-string forms as libpq does. Check any configured
   string that relies on the old reading:
@@ -145,6 +197,14 @@ is, and the section is dated only then.
   there. Depth is stated once, by the pre-shred scan, in the receipt's `residual_scan_depth`. A
   coordinator that still sets it is not contradicted; it is simply not repeated.
 
+### Removed
+
+- **An invitation response no longer carries the redemption token or its link.** Onboarding in
+  invite mode answers the invitation's `id`, `expires_at` and `delivery` state; `token` and
+  `accept_url` are gone, and the link reaches only the invitee's mailbox.
+- **A SCIM delete no longer disables an account.** Deleting a member removes it from the tenant;
+  an account left with no membership keeps its global status.
+
 ### Fixed
 
 - Reporting now passes its tenant-scoped data handle to external data consumers, restoring
@@ -152,6 +212,10 @@ is, and the section is dated only then.
 
 ### Security
 
+- **An organization can no longer join an existing account without its holder's consent, act on
+  an account beyond its own membership, or keep authority for a member it removed.** The
+  behavior that changes for operators, integrations and administrators is listed under
+  *Changed* and *Removed*.
 - Federated sign-in through a tenant's identity provider is bound to that tenant. It
   returns a session only for a member of the tenant whose address lies in an email domain
   that provider claims, and it provisions a new account only in such a domain, with a

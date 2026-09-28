@@ -82,15 +82,24 @@ var orgDescriptor = model.EntityDescriptor{
 	Kind:  "core.org",
 	Table: "orgs",
 	Fields: []model.FieldSpec{
-		field("name", model.KindText, false),
-		field("slug", model.KindText, false),
-		field("status", model.KindText, false),
-		field("settings", model.KindJSON, true),
+		pdecl(field("name", model.KindText, false),
+			model.None("the organization's display name, rendered only: core/model/entities.go:20, core/api/dto.go:146")),
+		pdecl(field("slug", model.KindText, false),
+			model.None("a unique URL-safe org handle: core/model/entities.go:22, core/api/dto.go:147")),
+		pdecl(field("status", model.KindText, false), pdeclNoneLifecycle),
+		// settings is a tenant's trust configuration (SET publisher issuers,
+		// audiences and keys: core/auth/set_publisher.go:39) and, on the system
+		// organization, the backup schedule (core/api/dr_schedule.go:87). The
+		// schedule names the account that asked to disarm the restore gate's dual
+		// control (core/api/dr_schedule.go:67), which the gate then refuses
+		// (core/api/dr_handler.go:249): a reference that only restricts.
+		pdecl(field("settings", model.KindJSON, true), model.Scan(model.ClassRestrict)),
 		// data_region is the residency pin (OPS-4). Nullable so it is added
 		// additively to an already-migrated orgs table by reconcileColumns;
 		// empty/NULL means the tenant is unpinned. It is indexed so a region-scoped
 		// instance can enumerate its resident tenants cheaply at boot.
-		indexedField("data_region", model.KindText, true),
+		pdecl(indexedField("data_region", model.KindText, true),
+			model.None("a residency region code: core/model/entities.go:28, core/api/dto.go:141")),
 	},
 	Indexes: []model.IndexSpec{{Name: "orgs_slug_uniq", Columns: []string{"slug"}, Unique: true}},
 }
@@ -116,6 +125,16 @@ var orgCodec = model.Codec[model.Org]{
 	},
 }
 
+// pdeclNoneLifecycle, pdeclNoneWorkspaceLineage, pdeclNoneFreeContext and
+// pdeclNoneCostOrigin are why no reader resolves these catalog columns to a
+// principal.
+var (
+	pdeclNoneLifecycle        = model.None("a lifecycle state from the closed active/inactive/error/suspended vocabulary: core/model/enums.go:55")
+	pdeclNoneWorkspaceLineage = model.None("the core workspace the row is scoped to, read only as its workspace lineage: core/model/descriptor.go:149, core/store/bounded_read.go:114")
+	pdeclNoneFreeContext      = model.None("free-form, non-sensitive context that holds no payload or secret and is only rendered: core/model/entities.go:12")
+	pdeclNoneCostOrigin       = model.None("a session, agent, model or provider row the cost is tied to: core/model/entities.go:267")
+)
+
 // --- Agent -------------------------------------------------------------------
 
 var agentDescriptor = model.EntityDescriptor{
@@ -125,22 +144,31 @@ var agentDescriptor = model.EntityDescriptor{
 	AuthorizationFact:      true,
 	AuthorizationLockOrder: 20,
 	Fields: []model.FieldSpec{
-		field("name", model.KindText, false),
-		indexedField("kind", model.KindText, false),
-		field("external_id", model.KindText, true),
-		field("status", model.KindText, false),
-		field("identity_id", model.KindUUID, true),
-		field("labels", model.KindJSON, true),
-		field("metadata", model.KindJSON, true),
+		pdecl(field("name", model.KindText, false),
+			model.None("the agent's display name: core/model/entities.go:40, core/api/dto.go:57")),
+		pdecl(indexedField("kind", model.KindText, false),
+			model.None("an agent classification label: core/model/entities.go:42")),
+		pdecl(field("external_id", model.KindText, true),
+			model.None("the agent's id in its source system, matched only against agent origins: core/model/entities.go:44, modules/access-map/bridge.go:88")),
+		pdecl(field("status", model.KindText, false), pdeclNoneLifecycle),
+		// identity_id names the row of the identity roster the agent runs as, never
+		// an account row; it records the binding.
+		pdecl(field("identity_id", model.KindUUID, true),
+			model.Ref(model.EncodeIdentity, model.ClassEvidence)),
+		pdecl(field("labels", model.KindJSON, true),
+			model.None("free-form tags, rendered and projected as display fields, never resolved: core/api/dto.go:59, cmd/olivares/protocollocalresource.go:98")),
+		pdecl(field("metadata", model.KindJSON, true),
+			model.None("free-form, non-sensitive context, rendered and projected as display fields, never resolved: core/api/dto.go:59, cmd/olivares/protocollocalresource.go:102")),
 		// workspace_id is the FASE X scoping dimension. Nullable and
 		// appended last so it is added additively to an already-migrated agents
 		// table by reconcileColumns; NULL resolves to the tenant's default
 		// workspace (back-compat).
-		indexedField("workspace_id", model.KindUUID, true),
+		pdecl(indexedField("workspace_id", model.KindUUID, true), pdeclNoneWorkspaceLineage),
 		// risk_tier is the agent's effective governance risk tier.
 		// Nullable; reconcileColumns adds it additively. The governance module
 		// is the sole writer; empty means unclassified.
-		indexedField("risk_tier", model.KindText, true),
+		pdecl(indexedField("risk_tier", model.KindText, true),
+			model.None("a governance risk tier from the closed low/medium/high/critical vocabulary: core/model/entities.go:56")),
 	},
 	WorkspaceLineage: model.WorkspaceLineageSpec{
 		Column:   "workspace_id",
@@ -195,18 +223,24 @@ var sessionDescriptor = model.EntityDescriptor{
 		// (OTEL session.id) has no agent reference, so it stays unlinked (NULL)
 		// rather than carrying an empty sentinel — matching the other optional
 		// links (model_id, mcp_server_id).
-		indexedField("agent_id", model.KindUUID, true),
-		field("external_id", model.KindText, true),
-		field("state", model.KindText, false),
-		field("goal", model.KindText, true),
-		field("summary", model.KindText, true),
-		field("model_id", model.KindUUID, true),
+		pdecl(indexedField("agent_id", model.KindUUID, true),
+			model.None("the agent row that owns the session: core/model/entities.go:73")),
+		pdecl(field("external_id", model.KindText, true),
+			model.None("the session's id in its source system, matched only against session origins: core/model/entities.go:75, modules/access-map/bridge.go:103")),
+		pdecl(field("state", model.KindText, false),
+			model.None("a session state from the closed running/completed/failed vocabulary: core/model/enums.go:79")),
+		pdecl(field("goal", model.KindText, true),
+			model.None("the session's stated objective, prose only: core/model/entities.go:79")),
+		pdecl(field("summary", model.KindText, true),
+			model.None("a short, non-sensitive session summary: core/model/entities.go:81")),
+		pdecl(field("model_id", model.KindUUID, true),
+			model.None("the model row the session used: core/model/entities.go:89")),
 		field("started_at", model.KindTimestamp, false),
 		field("ended_at", model.KindTimestamp, true),
-		field("metadata", model.KindJSON, true),
+		pdecl(field("metadata", model.KindJSON, true), pdeclNoneFreeContext),
 		// workspace_id is the FASE X scoping dimension. Nullable, appended
 		// last for additive reconcile; NULL resolves to the default workspace.
-		indexedField("workspace_id", model.KindUUID, true),
+		pdecl(indexedField("workspace_id", model.KindUUID, true), pdeclNoneWorkspaceLineage),
 	},
 	WorkspaceLineage: model.WorkspaceLineageSpec{
 		Column:   "workspace_id",
@@ -255,11 +289,15 @@ var providerDescriptor = model.EntityDescriptor{
 	Kind:  "core.provider",
 	Table: "providers",
 	Fields: []model.FieldSpec{
-		field("name", model.KindText, false),
-		indexedField("kind", model.KindText, false),
-		field("base_url", model.KindText, true),
-		field("status", model.KindText, false),
-		field("config", model.KindJSON, true),
+		pdecl(field("name", model.KindText, false),
+			model.None("the provider's display name: core/model/entities.go:102")),
+		pdecl(indexedField("kind", model.KindText, false),
+			model.None("a provider kind label: core/model/entities.go:104")),
+		pdecl(field("base_url", model.KindText, true),
+			model.None("the provider API endpoint: core/model/entities.go:106")),
+		pdecl(field("status", model.KindText, false), pdeclNoneLifecycle),
+		pdecl(field("config", model.KindJSON, true),
+			model.None("non-secret provider configuration: core/model/entities.go:110")),
 	},
 }
 
@@ -289,15 +327,19 @@ var modelDescriptor = model.EntityDescriptor{
 	Kind:  "core.model",
 	Table: "models",
 	Fields: []model.FieldSpec{
-		indexedField("provider_id", model.KindUUID, false),
-		field("name", model.KindText, false),
-		field("family", model.KindText, true),
+		pdecl(indexedField("provider_id", model.KindUUID, false),
+			model.None("the owning provider row: core/model/entities.go:117")),
+		pdecl(field("name", model.KindText, false),
+			model.None("the model name: core/model/entities.go:119")),
+		pdecl(field("family", model.KindText, true),
+			model.None("a model family label: core/model/entities.go:121")),
 		field("context_window", model.KindInt, false),
 		field("input_cost_micro_usd", model.KindInt, false),
 		field("output_cost_micro_usd", model.KindInt, false),
-		field("modality", model.KindText, true),
-		field("status", model.KindText, false),
-		field("metadata", model.KindJSON, true),
+		pdecl(field("modality", model.KindText, true),
+			model.None("a modality label: core/model/entities.go:129")),
+		pdecl(field("status", model.KindText, false), pdeclNoneLifecycle),
+		pdecl(field("metadata", model.KindJSON, true), pdeclNoneFreeContext),
 	},
 }
 
@@ -331,12 +373,16 @@ var mcpServerDescriptor = model.EntityDescriptor{
 	Kind:  "core.mcp_server",
 	Table: "mcp_servers",
 	Fields: []model.FieldSpec{
-		field("name", model.KindText, false),
-		field("transport", model.KindText, false),
-		field("endpoint", model.KindText, true),
-		field("server_version", model.KindText, true),
-		field("status", model.KindText, false),
-		field("metadata", model.KindJSON, true),
+		pdecl(field("name", model.KindText, false),
+			model.None("the server's display name: core/model/entities.go:140")),
+		pdecl(field("transport", model.KindText, false),
+			model.None("the MCP transport label: core/model/entities.go:142")),
+		pdecl(field("endpoint", model.KindText, true),
+			model.None("the server address or command: core/model/entities.go:144")),
+		pdecl(field("server_version", model.KindText, true),
+			model.None("the reported server version: core/model/entities.go:146")),
+		pdecl(field("status", model.KindText, false), pdeclNoneLifecycle),
+		pdecl(field("metadata", model.KindJSON, true), pdeclNoneFreeContext),
 	},
 }
 
@@ -367,13 +413,18 @@ var skillDescriptor = model.EntityDescriptor{
 	Kind:  "core.skill",
 	Table: "skills",
 	Fields: []model.FieldSpec{
-		field("name", model.KindText, false),
-		field("source", model.KindText, true),
-		field("skill_version", model.KindText, true),
-		field("mcp_server_id", model.KindUUID, true),
-		field("description", model.KindText, true),
-		field("status", model.KindText, false),
-		field("metadata", model.KindJSON, true),
+		pdecl(field("name", model.KindText, false),
+			model.None("the skill's display name: core/model/entities.go:157")),
+		pdecl(field("source", model.KindText, true),
+			model.None("where the skill is defined, a repository or server: core/model/entities.go:159")),
+		pdecl(field("skill_version", model.KindText, true),
+			model.None("the skill version: core/model/entities.go:161")),
+		pdecl(field("mcp_server_id", model.KindUUID, true),
+			model.None("the MCP server row that provides the skill: core/model/entities.go:163")),
+		pdecl(field("description", model.KindText, true),
+			model.None("a short, non-sensitive description: core/model/entities.go:165")),
+		pdecl(field("status", model.KindText, false), pdeclNoneLifecycle),
+		pdecl(field("metadata", model.KindJSON, true), pdeclNoneFreeContext),
 	},
 }
 
@@ -405,14 +456,19 @@ var toolDescriptor = model.EntityDescriptor{
 	Kind:  "core.tool",
 	Table: "tools",
 	Fields: []model.FieldSpec{
-		field("name", model.KindText, false),
-		field("mcp_server_id", model.KindUUID, true),
-		field("kind", model.KindText, true),
+		pdecl(field("name", model.KindText, false),
+			model.None("the tool name: core/model/entities.go:177")),
+		pdecl(field("mcp_server_id", model.KindUUID, true),
+			model.None("the MCP server row that exposes the tool: core/model/entities.go:179")),
+		pdecl(field("kind", model.KindText, true),
+			model.None("a tool classification label: core/model/entities.go:181")),
 		field("read_only_hint", model.KindBool, false),
 		field("destructive_hint", model.KindBool, false),
-		field("schema_hash", model.KindBytes, true),
-		field("description", model.KindText, true),
-		field("metadata", model.KindJSON, true),
+		pdecl(field("schema_hash", model.KindBytes, true),
+			model.None("a hash of the tool input schema, for change detection: core/model/entities.go:187")),
+		pdecl(field("description", model.KindText, true),
+			model.None("a short, non-sensitive description: core/model/entities.go:189")),
+		pdecl(field("metadata", model.KindJSON, true), pdeclNoneFreeContext),
 	},
 }
 
@@ -444,19 +500,27 @@ var resourceDescriptor = model.EntityDescriptor{
 	Kind:  "core.resource",
 	Table: "resources",
 	Fields: []model.FieldSpec{
-		field("name", model.KindText, false),
-		indexedField("kind", model.KindText, false),
-		field("uri", model.KindText, true),
-		field("sensitivity", model.KindText, true),
-		field("owner", model.KindText, true),
-		field("metadata", model.KindJSON, true),
+		pdecl(field("name", model.KindText, false),
+			model.None("the resource's display name: core/model/entities.go:202")),
+		pdecl(indexedField("kind", model.KindText, false),
+			model.None("a resource classification label: core/model/entities.go:204")),
+		pdecl(field("uri", model.KindText, true),
+			model.None("the resource's natural identifier: core/model/entities.go:207")),
+		pdecl(field("sensitivity", model.KindText, true),
+			model.None("an operator-assigned sensitivity label: core/model/entities.go:209")),
+		// owner is free text naming the responsible team or person, so it may carry
+		// an account alias; it is matched as text and records who is responsible.
+		pdecl(field("owner", model.KindText, true), model.Scan(model.ClassEvidence)),
+		pdecl(field("metadata", model.KindJSON, true), pdeclNoneFreeContext),
 		// FASE X scoping + hierarchy columns. All nullable and appended
 		// last for additive reconcile. workspace_id NULL resolves to the default
 		// workspace; parent_id NULL is a tree root; path is the store-maintained
 		// materialized path, indexed so a subtree is one prefix scan.
-		indexedField("workspace_id", model.KindUUID, true),
-		indexedField("parent_id", model.KindUUID, true),
-		indexedField("path", model.KindText, true),
+		pdecl(indexedField("workspace_id", model.KindUUID, true), pdeclNoneWorkspaceLineage),
+		pdecl(indexedField("parent_id", model.KindUUID, true),
+			model.None("the parent resource row: core/model/entities.go:217")),
+		pdecl(indexedField("path", model.KindText, true),
+			model.None("the store-maintained path of ancestor resource ids: core/model/entities.go:221")),
 	},
 	WorkspaceLineage: model.WorkspaceLineageSpec{
 		Column:   "workspace_id",
@@ -496,11 +560,17 @@ var identityDescriptor = model.EntityDescriptor{
 	AuthorizationFact:      true,
 	AuthorizationLockOrder: 10,
 	Fields: []model.FieldSpec{
-		field("name", model.KindText, false),
-		indexedField("kind", model.KindText, false),
-		field("external_id", model.KindText, true),
-		field("provider", model.KindText, true),
-		field("metadata", model.KindJSON, true),
+		// name falls back to the directory reference itself when the roster has no
+		// display name, so it may carry an account alias verbatim.
+		pdecl(field("name", model.KindText, false), model.Scan(model.ClassEvidence)),
+		pdecl(indexedField("kind", model.KindText, false),
+			model.None("an identity classification label: core/model/entities.go:240")),
+		pdecl(field("external_id", model.KindText, true),
+			model.Ref(model.EncodeExternalID, model.ClassEvidence)),
+		pdecl(field("provider", model.KindText, true),
+			model.None("the identity provider label: core/model/entities.go:244")),
+		pdecl(field("metadata", model.KindJSON, true),
+			model.None("closed governance keys and allow-listed, non-identifying directory attributes: modules/governance/roster.go:45, modules/governance/roster.go:277")),
 	},
 }
 
@@ -530,9 +600,13 @@ var policyDescriptor = model.EntityDescriptor{
 	Kind:  "core.policy",
 	Table: "policies",
 	Fields: []model.FieldSpec{
-		field("name", model.KindText, false),
-		indexedField("kind", model.KindText, false),
-		field("spec", model.KindJSON, true),
+		pdecl(field("name", model.KindText, false),
+			model.None("the policy name: core/model/entities.go:253")),
+		pdecl(indexedField("kind", model.KindText, false),
+			model.None("a policy kind, refused unless the policy-kind registry has it: policy_snapshot.go:60")),
+		// The spec's shape is the variant its kind selects from the policy-kind
+		// registry, the same registry the policy writer refuses an unknown kind by.
+		pdecl(field("spec", model.KindJSON, true), model.Union("kind", model.PolicyKinds)),
 		field("enabled", model.KindBool, false),
 	},
 }
@@ -562,16 +636,19 @@ var costDescriptor = model.EntityDescriptor{
 	Kind:  "core.cost_record",
 	Table: "cost_records",
 	Fields: []model.FieldSpec{
-		field("session_id", model.KindUUID, true),
-		field("agent_id", model.KindUUID, true),
-		field("model_id", model.KindUUID, true),
-		field("provider_id", model.KindUUID, true),
+		pdecl(field("session_id", model.KindUUID, true), pdeclNoneCostOrigin),
+		pdecl(field("agent_id", model.KindUUID, true), pdeclNoneCostOrigin),
+		pdecl(field("model_id", model.KindUUID, true), pdeclNoneCostOrigin),
+		pdecl(field("provider_id", model.KindUUID, true), pdeclNoneCostOrigin),
 		indexedField("occurred_at", model.KindTimestamp, false),
 		field("input_tokens", model.KindInt, false),
 		field("output_tokens", model.KindInt, false),
 		field("cost_micro_usd", model.KindInt, false),
-		field("currency", model.KindText, true),
-		field("metadata", model.KindJSON, true),
+		pdecl(field("currency", model.KindText, true),
+			model.None("the display currency code: core/model/entities.go:280")),
+		// metadata carries the usage actor and identity references the ingest
+		// copies from the provider; erasure matches the actor against a subject.
+		pdecl(field("metadata", model.KindJSON, true), model.Scan(model.ClassEvidence)),
 	},
 }
 
@@ -609,14 +686,18 @@ var evalDescriptor = model.EntityDescriptor{
 	Kind:  "core.eval_result",
 	Table: "eval_results",
 	Fields: []model.FieldSpec{
-		indexedField("suite", model.KindText, false),
-		field("subject_kind", model.KindText, false),
-		field("subject_id", model.KindUUID, false),
+		pdecl(indexedField("suite", model.KindText, false),
+			model.None("the eval suite name: core/model/entities.go:289")),
+		pdecl(field("subject_kind", model.KindText, false),
+			model.None("the kind of the evaluated subject, read as the kind of subject_id: core/model/entities.go:291")),
+		pdecl(field("subject_id", model.KindUUID, false),
+			model.KindRef("subject_kind", model.ClassEvidence)),
 		field("score", model.KindFloat, false),
 		field("passed", model.KindBool, false),
 		field("occurred_at", model.KindTimestamp, false),
-		field("metrics", model.KindJSON, true),
-		field("metadata", model.KindJSON, true),
+		pdecl(field("metrics", model.KindJSON, true),
+			model.None("free-form metric counts, rates and scores: core/model/entities.go:300, modules/evals/runs.go:194")),
+		pdecl(field("metadata", model.KindJSON, true), pdeclNoneFreeContext),
 	},
 }
 
@@ -661,16 +742,25 @@ var findingDescriptor = model.EntityDescriptor{
 	Table:      "findings",
 	SoftDelete: true,
 	Fields: []model.FieldSpec{
-		indexedField("kind", model.KindText, false),
-		field("severity", model.KindText, false),
-		indexedField("status", model.KindText, false),
-		field("source", model.KindText, true),
-		field("subject_kind", model.KindText, true),
-		field("subject_id", model.KindUUID, true),
-		field("title", model.KindText, false),
-		field("detail_hash", model.KindBytes, true),
+		pdecl(indexedField("kind", model.KindText, false),
+			model.None("a finding classification label: core/model/entities.go:310")),
+		pdecl(field("severity", model.KindText, false),
+			model.None("a severity from the closed low/medium/high/critical vocabulary: core/model/enums.go:8")),
+		pdecl(indexedField("status", model.KindText, false),
+			model.None("a triage state from the closed open/triaged/resolved/dismissed vocabulary: core/model/enums.go:23")),
+		pdecl(field("source", model.KindText, true),
+			model.None("the detector or connector that produced the finding: core/model/entities.go:316")),
+		pdecl(field("subject_kind", model.KindText, true),
+			model.None("the kind of the finding's subject, read as the kind of subject_id: core/model/entities.go:318")),
+		pdecl(field("subject_id", model.KindUUID, true),
+			model.KindRef("subject_kind", model.ClassEvidence)),
+		pdecl(field("title", model.KindText, false),
+			model.None("a short, non-sensitive summary safe to display: core/model/entities.go:321")),
+		pdecl(field("detail_hash", model.KindBytes, true),
+			model.None("a hash of the redacted detail; the raw detail is not kept: core/model/entities.go:323")),
 		field("occurred_at", model.KindTimestamp, false),
-		field("metadata", model.KindJSON, true),
+		// metadata may carry a subject reference that readers match as text.
+		pdecl(field("metadata", model.KindJSON, true), model.Scan(model.ClassEvidence)),
 	},
 }
 
@@ -708,13 +798,17 @@ var healthDescriptor = model.EntityDescriptor{
 	Kind:  "core.health_status",
 	Table: "health_statuses",
 	Fields: []model.FieldSpec{
-		field("subject_kind", model.KindText, false),
-		field("subject_id", model.KindUUID, false),
-		field("state", model.KindText, false),
+		pdecl(field("subject_kind", model.KindText, false),
+			model.None("the kind of the monitored subject, read as the kind of subject_id: core/model/entities.go:335")),
+		pdecl(field("subject_id", model.KindUUID, false),
+			model.KindRef("subject_kind", model.ClassEvidence)),
+		pdecl(field("state", model.KindText, false),
+			model.None("a health state from the closed unknown/healthy/degraded/down vocabulary: core/model/enums.go:39")),
 		field("checked_at", model.KindTimestamp, false),
 		field("latency_ms", model.KindInt, false),
-		field("detail", model.KindText, true),
-		field("metadata", model.KindJSON, true),
+		pdecl(field("detail", model.KindText, true),
+			model.None("a short, non-sensitive health detail: core/model/entities.go:344")),
+		pdecl(field("metadata", model.KindJSON, true), pdeclNoneFreeContext),
 	},
 }
 
@@ -750,15 +844,22 @@ var deploymentDescriptor = model.EntityDescriptor{
 	Kind:  "core.deployment",
 	Table: "deployments",
 	Fields: []model.FieldSpec{
-		field("subject_kind", model.KindText, false),
-		field("subject_id", model.KindUUID, false),
-		field("target", model.KindText, true),
-		indexedField("environment", model.KindText, true),
-		field("status", model.KindText, false),
-		field("release_version", model.KindText, true),
+		pdecl(field("subject_kind", model.KindText, false),
+			model.None("the kind of the deployed subject, read as the kind of subject_id: core/model/entities.go:354")),
+		pdecl(field("subject_id", model.KindUUID, false),
+			model.KindRef("subject_kind", model.ClassEvidence)),
+		pdecl(field("target", model.KindText, true),
+			model.None("where the subject was deployed, a host or cluster: core/model/entities.go:357")),
+		pdecl(indexedField("environment", model.KindText, true),
+			model.None("the deployment environment label: core/model/entities.go:359")),
+		pdecl(field("status", model.KindText, false),
+			model.None("the deployment status label: core/model/entities.go:361")),
+		pdecl(field("release_version", model.KindText, true),
+			model.None("the deployed version: core/model/entities.go:363")),
 		field("deployed_at", model.KindTimestamp, false),
-		field("config_hash", model.KindBytes, true),
-		field("metadata", model.KindJSON, true),
+		pdecl(field("config_hash", model.KindBytes, true),
+			model.None("a hash of the applied configuration: core/model/entities.go:367")),
+		pdecl(field("metadata", model.KindJSON, true), pdeclNoneFreeContext),
 	},
 }
 
@@ -795,20 +896,30 @@ var accessEdgeDescriptor = model.EntityDescriptor{
 	Kind:  "core.access_edge",
 	Table: "access_edges",
 	Fields: []model.FieldSpec{
-		field("origin_kind", model.KindText, false),
-		field("origin_id", model.KindUUID, false),
-		field("resource_id", model.KindUUID, false),
-		field("mode", model.KindText, false),
-		field("signal_source", model.KindText, false),
-		field("confidence", model.KindText, false),
+		pdecl(field("origin_kind", model.KindText, false),
+			model.None("the acting node kind, agent, identity or session: core/model/accessedge.go:21, modules/access-map/bridge.go:83")),
+		pdecl(field("origin_id", model.KindUUID, false),
+			model.None("the agent, session or credential-identity row the bridge resolved, never an account: modules/access-map/bridge.go:93, modules/access-map/bridge.go:119, modules/access-map/bridge.go:127")),
+		pdecl(field("resource_id", model.KindUUID, false),
+			model.None("the accessed resource row: core/model/accessedge.go:25")),
+		pdecl(field("mode", model.KindText, false),
+			model.None("a read/write mode from the shared closed vocabulary: sdk/model/enums.go:19")),
+		pdecl(field("signal_source", model.KindText, false),
+			model.None("the collector label from the shared vocabulary: sdk/model/enums.go:47")),
+		pdecl(field("confidence", model.KindText, false),
+			model.None("an attribution confidence from the shared closed vocabulary: sdk/model/enums.go:127")),
 		field("permitted", model.KindBool, false),
 		field("observed", model.KindBool, false),
-		field("tool_id", model.KindUUID, true),
-		field("session_id", model.KindUUID, true),
+		pdecl(field("tool_id", model.KindUUID, true),
+			model.None("the tool row that performed the access: core/model/accessedge.go:38")),
+		pdecl(field("session_id", model.KindUUID, true),
+			model.None("the session row the edge is tied to: core/model/accessedge.go:40")),
 		field("first_seen", model.KindTimestamp, false),
 		field("last_seen", model.KindTimestamp, false),
 		field("occurrence_count", model.KindInt, false),
-		field("metadata", model.KindJSON, true),
+		// metadata keeps the connector's raw origin reference (a session id or a
+		// credential name) as display evidence.
+		pdecl(field("metadata", model.KindJSON, true), model.Scan(model.ClassEvidence)),
 	},
 	Indexes: []model.IndexSpec{{
 		Name:    "access_edges_natural_key",

@@ -12,12 +12,12 @@
 //    false. That is what keeps `p` from pinning while an operator types a session name,
 //    and `Enter` from starting a launch while they are walking the rail.
 //
-// ⛔ AND THE `g`-SEQUENCES ARE NOT HERE, ON PURPOSE. They are a LEADER SEQUENCE — two
-//    keystrokes with a timeout, and a destination read from the feature registry at
-//    render time (`shortcuts.tsx`, `NAV_SHORTCUTS`) — not a chord. Modelling them as
-//    fifteen chords would be a second, less true copy of a list the registry already
-//    owns. The documentation page shows both, from their own sources, and says which is
-//    which.
+// ⛔ AND THE `g`-SEQUENCES ARE NOT CHORDS, so they are not rules of `KEYBINDINGS`. They
+//    are a LEADER SEQUENCE — two keystrokes with a timeout — and each names a registry id,
+//    not a path: `shortcuts.tsx` reads the destination from the registry at render time.
+//    They are DECLARED here, in `NAV_SEQUENCES`, so every key the shell answers is declared
+//    in this one file. The documentation page shows both, from their own sources, and
+//    says which is which.
 import type { KeyRule } from './model'
 
 /** The context keys this table uses. Anything else resolves false. */
@@ -28,6 +28,10 @@ export const KEY_CONTEXTS = [
   'launcherFocused',
   /** The sessions work surface is the routed view. */
   'workSurface',
+  /** No field has focus, so a bare letter is a command and not text. */
+  'outsideField',
+  /** The source diff view is on screen and the event is outside a field. */
+  'sourceDiff',
 ] as const
 
 export type KeyContextName = (typeof KEY_CONTEXTS)[number]
@@ -39,6 +43,7 @@ export type KeyGroup = (typeof KEY_GROUPS)[number]
 /** A command's group, for the one page that documents the table. */
 export const COMMAND_GROUP: Readonly<Record<string, KeyGroup>> = {
   'palette.open': 'general',
+  'session.new': 'general',
   'help.toggle': 'general',
   'nav.toggleRail': 'general',
   'launcher.focus': 'launcher',
@@ -52,6 +57,10 @@ export const COMMAND_GROUP: Readonly<Record<string, KeyGroup>> = {
   'rail.last': 'surface',
   'rail.open': 'surface',
   'rail.pin': 'surface',
+  'sourceDiff.nextFile': 'surface',
+  'sourceDiff.previousFile': 'surface',
+  'sourceDiff.nextHunk': 'surface',
+  'sourceDiff.previousHunk': 'surface',
 }
 
 export const KEYBINDINGS: readonly KeyRule[] = [
@@ -63,6 +72,9 @@ export const KEYBINDINGS: readonly KeyRule[] = [
   // because this one has to work while the operator is typing — it is how you get the
   // width back mid-task — and the guard above only lets a MODIFIED chord through a field.
   { command: 'nav.toggleRail', keys: 'Mod+b' },
+  // New session (redesign §3.7.13): a bare letter, so only outside a field. `Shift+N`
+  // (with another account) waits for the composer's account picker.
+  { command: 'session.new', keys: 'n', when: 'outsideField' },
 
   // ── the launcher, only while its field has focus ──────────────────────────
   { command: 'launcher.start', keys: 'Enter', when: 'launcherFocused' },
@@ -84,4 +96,55 @@ export const KEYBINDINGS: readonly KeyRule[] = [
   { command: 'rail.open', keys: 'Enter', when: 'railFocused' },
   { command: 'rail.open', keys: 'Space', when: 'railFocused' },
   { command: 'rail.pin', keys: 'p', when: 'railFocused' },
+
+  // ── source diff, only while that view is listening and the target is not a field
+  { command: 'sourceDiff.nextFile', keys: 'Alt+ArrowDown', when: 'sourceDiff' },
+  {
+    command: 'sourceDiff.previousFile',
+    keys: 'Alt+ArrowUp',
+    when: 'sourceDiff',
+  },
+  {
+    command: 'sourceDiff.nextHunk',
+    keys: 'Alt+ArrowRight',
+    when: 'sourceDiff',
+  },
+  {
+    command: 'sourceDiff.previousHunk',
+    keys: 'Alt+ArrowLeft',
+    when: 'sourceDiff',
+  },
 ]
+
+/** The key that arms a navigation sequence, and how long it stays armed. */
+export const NAV_LEADER = 'g'
+export const NAV_SEQUENCE_TIMEOUT_MS = 1200
+
+/**
+ * THE `g`-SEQUENCES: letter → registry id. A sequence only fires (and only shows on the
+ * documentation page) when the principal may open that view — the sidebar's rule.
+ *
+ * The five journeys come first, on the letters of redesign §3.7.13: Home, Sessions,
+ * Workspaces, AI tools (T), Deploy (D). `d` named Dashboards before the journeys; it moved
+ * to `b` so that no destination lost its sequence.
+ */
+export const NAV_SEQUENCES: ReadonlyArray<{ key: string; featureId: string }> =
+  [
+    { key: 'h', featureId: 'home' },
+    { key: 's', featureId: 'sessions' },
+    { key: 'w', featureId: 'workspaceDashboard' },
+    { key: 't', featureId: 'providers' },
+    { key: 'd', featureId: 'deploy' },
+    { key: 'i', featureId: 'inventory' },
+    { key: 'a', featureId: 'automations' },
+    { key: 'e', featureId: 'eventing' },
+    { key: 'n', featureId: 'alerting' },
+    { key: 'o', featureId: 'orchestration' },
+    { key: 'c', featureId: 'console' },
+    { key: 'p', featureId: 'permissions' },
+    { key: 'm', featureId: 'models' },
+    { key: 'f', featureId: 'finops' },
+    { key: 'b', featureId: 'dashboards' },
+    { key: 'u', featureId: 'audit' },
+    { key: 'k', featureId: 'knowledge' },
+  ]

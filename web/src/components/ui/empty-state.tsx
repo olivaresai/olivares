@@ -98,8 +98,8 @@ export function EmptyState({
         )}
         {...props}
       >
-        <span className="text-foreground">{title}</span>
-        <span className="min-w-0 text-muted-foreground">{description}</span>
+        <span className="text-text">{title}</span>
+        <span className="min-w-0 text-caption text-text-2">{description}</span>
       </div>
     )
   }
@@ -121,15 +121,16 @@ export function EmptyState({
       {...props}
     >
       {icon ? (
-        <div className="flex size-10 items-center justify-center rounded-lg bg-muted text-muted-foreground [&_svg]:size-5 [&_svg]:shrink-0">
+        <div
+          data-slot="state-icon"
+          className="flex size-10 items-center justify-center rounded-card border border-line bg-surface text-text-3 [&_svg]:size-5 [&_svg]:shrink-0"
+        >
           {icon}
         </div>
       ) : null}
       <div className="flex flex-col items-center gap-1.5">
-        <p className="text-heading text-foreground">{title}</p>
-        <p className="max-w-sm text-body text-muted-foreground">
-          {description}
-        </p>
+        <p className="text-heading text-text">{title}</p>
+        <p className="max-w-sm text-caption text-text-2">{description}</p>
       </div>
       {action || secondaryAction ? (
         <div className="mt-1 flex flex-wrap items-center justify-center gap-2">

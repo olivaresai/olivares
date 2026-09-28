@@ -551,6 +551,12 @@ func (h *appsGatewayHandler) handleSpendLimitAudit(w http.ResponseWriter, r *htt
 }
 
 func (h *appsGatewayHandler) writeSpendStoreError(w http.ResponseWriter, err error, requestID string) {
+	// A user spend limit names an account: while that account is being removed
+	// from the tenant or erased, the fenced write answers its stable code.
+	if code, ok := auth.FenceRefusalCode(err); ok {
+		writeSpendError(w, http.StatusConflict, code, err.Error(), requestID)
+		return
+	}
 	switch {
 	case errors.Is(err, finops.ErrInvalidSpendLimit):
 		writeSpendError(w, http.StatusBadRequest, "invalid_request_error", strings.TrimPrefix(err.Error(), finops.ErrInvalidSpendLimit.Error()+": "), requestID)

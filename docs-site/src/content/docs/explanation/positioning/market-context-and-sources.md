@@ -79,4 +79,6 @@ and it is the honest core of every positioning page here.
   **readiness**, not certificates — see the trust & procurement package that ships
   with the source).
 - No invented benchmarks, throughput claims, or accuracy numbers. Capacity figures
-  come only from the reproducible benchmark harness, with hardware provenance.
+  come only from the benchmark harness, which records commit, Go version, CPU,
+  memory and filesystem. Arrival pattern, warmup and deployment profile are not
+  recorded.

@@ -1,0 +1,19 @@
+{
+  "models": [
+    {
+      "name": "fixture-down:1b",
+      "model": "fixture-down:1b",
+      "digest": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+    },
+    {
+      "name": "fixture-absent:1b",
+      "model": "fixture-absent:1b",
+      "digest": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    },
+    {
+      "name": "fixture-tools:1b",
+      "model": "fixture-tools:1b",
+      "digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    }
+  ]
+}

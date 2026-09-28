@@ -73,6 +73,19 @@
       "throttle": "Throttle",
       "block": "Block"
     },
+    "admission": {
+      "holds": "Active ledger rows: {{n}}",
+      "drift": "The ledger has drifted from what its callers settled",
+      "outstanding": {
+        "corrupt": "Admission rows failing their integrity check: {{n}}",
+        "unresolved": "Recovery writes still undecided: {{n}}",
+        "undecodable": "Rows whose owed list does not decode: {{n}}",
+        "owed_remaining": "Holds still owed: {{n}}",
+        "frontier_blocked": "Holds the attempt lifecycle blocks: {{n}}",
+        "legacy_pending": "Claims an earlier build left: {{n}}",
+        "legacy_owes_release": "Releases an earlier build owes: {{n}}"
+      }
+    },
     "dialog": {
       "title": "New budget",
       "name": "Name",

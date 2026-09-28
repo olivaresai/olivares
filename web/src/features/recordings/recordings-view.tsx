@@ -514,7 +514,7 @@ export function RecordingsView() {
               patchFilters({ opened_after: rfc3339FromDay(e.target.value) })
             }
             aria-label={t('filterOpenedAfter')}
-            className="h-7 rounded-md border border-input bg-background px-2 text-caption text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+            className="h-7 rounded-md border border-ctl-border bg-background px-2 text-caption text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
           />
         </div>
 
@@ -529,7 +529,7 @@ export function RecordingsView() {
               patchFilters({ opened_before: rfc3339FromDay(e.target.value) })
             }
             aria-label={t('filterOpenedBefore')}
-            className="h-7 rounded-md border border-input bg-background px-2 text-caption text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+            className="h-7 rounded-md border border-ctl-border bg-background px-2 text-caption text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
           />
         </div>
       </div>

@@ -89,7 +89,18 @@
     "results": "结果",
     "searchResults": "数据中的结果",
     "searchTruncated": "还有更多匹配项 — 请细化搜索。",
-    "searchDegraded": "部分来源无法搜索 — 此列表不完整。"
+    "searchDegraded": "部分来源无法搜索 — 此列表不完整。",
+    "deniedReason": "需要 {{permission}}。",
+    "deniedHelp": "请向可以授予该权限的管理员申请。",
+    "noTargetReason": "需要一个可在其中运行的组织。",
+    "noTargetHelp": "请选择组织，然后重试。",
+    "goTo": "前往",
+    "recentSessions": "最近的会话",
+    "settingsGroup": "设置",
+    "scope": "在 {{name}} 中",
+    "footerMove": "移动",
+    "footerOpen": "打开",
+    "footerCommands": "仅命令"
   },
   "status": {
     "active": "活跃",
@@ -257,5 +268,51 @@
     "modNote": "在 Windows 和 Linux 上，⌘ 即 Control。",
     "problems_other": "有 {{count}} 个按键绑定无法读取，不会生效：{{commands}}",
     "navRailNote": "导航栏只占一个 Tab 停靠点。这些按键在其获得焦点时生效。"
+  },
+  "ui": {
+    "status": {
+      "working": "运行中",
+      "needsYou": "需要你处理",
+      "done": "已完成",
+      "failed": "失败",
+      "paused": "已暂停",
+      "idle": "未开始"
+    },
+    "state": {
+      "loading": "加载中…",
+      "filtered": {
+        "hidden_other": "筛选隐藏了 {{count}} 项。",
+        "clear": "清除筛选"
+      },
+      "error": {
+        "title": "无法连接引擎。",
+        "description": "列表并非为空，只是无法读取。",
+        "retry": "重试",
+        "diagnostics": "打开诊断",
+        "request": "请求 {{id}} · {{time}}",
+        "requestId": "请求 {{id}}"
+      },
+      "stale": {
+        "message": "显示 <0>{{lastGood}}</0> 的结果。{{failedAt}} 的刷新失败。",
+        "retry": "重试"
+      },
+      "noAccess": {
+        "title": "你无法打开此项",
+        "description": "你的角色不包含此项。不会显示关于它的其他信息。"
+      },
+      "unknown": {
+        "title": "请求已发送，但响应丢失。",
+        "description": "正在向引擎核对同一请求。请勿再次发送。",
+        "checking": "请求 {{id}} · 已核对 {{elapsed}}",
+        "retry": "再次发送",
+        "retryReason": "引擎确认未启动任何操作后可用。"
+      }
+    },
+    "codeLine": {
+      "label": "在终端中执行相同操作",
+      "copy": "复制命令",
+      "copied": "已复制",
+      "copyFailed": "无法复制。请选中命令后手动复制。"
+    }
   }
 }

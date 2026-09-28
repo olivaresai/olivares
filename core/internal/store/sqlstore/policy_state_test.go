@@ -23,6 +23,14 @@ import (
 
 const policyStateKind = "recovery"
 
+// The fixture policy kinds these tests store; the policy writer refuses an
+// unregistered kind.
+func init() {
+	fixture := model.None("a fixture policy kind no reader resolves: policy_state_test.go:24")
+	model.MustRegisterPolicyKind(policyStateKind, fixture)
+	model.MustRegisterPolicyKind("valid", fixture)
+}
+
 func policyState(t *testing.T, sc store.Scope) store.PolicyStateWriter {
 	t.Helper()
 	repo, ok := sc.Policies().(store.PolicyStateWriter)

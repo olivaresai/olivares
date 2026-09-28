@@ -48,6 +48,17 @@ func buildCoreMigrations(
 		if d.Kind == evidenceOpDescriptor.Kind {
 			d = evidenceDescriptorWith(evidenceOpStateWords6, "")
 		}
+		// v14 owns consent custody. v2 renders the auth relations as they were
+		// before it, and the reconcile gives every database the v14 relations and
+		// columns.
+		if consentCustodyRelation(d.Kind) {
+			continue
+		}
+		// v15 owns the credential binding relation; the reconcile creates it.
+		if credentialBindingRelation(d.Kind) {
+			continue
+		}
+		d = beforeConsentCustody(d)
 		entity = append(entity, dia.CreateTableStmts(d)...)
 	}
 	migrations := []migrate.Migration{
@@ -126,8 +137,10 @@ func buildCoreMigrationPlan(
 		coreUserAuthorityMigration(dia, userAuthorityRoles...),
 		coreEvidenceRefusedMigration(dia, evidenceStates),
 		// v12 is reserved for FinOps custody and deliberately unregistered; the compiled
-		// plan is 1..11 then 13 (ROOT-CONSTRUCTION-R5-1 §2).
+		// plan is 1..11, 13, 14, 15.
 		coreLoginCapabilityMigration(dia, userAuthorityRoles...),
+		coreConsentCustodyMigration(),
+		coreCredentialBindingMigration(),
 	)
 }
 

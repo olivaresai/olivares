@@ -89,7 +89,18 @@
     "results": "Ergebnisse",
     "searchResults": "Treffer in Ihren Daten",
     "searchTruncated": "Weitere Treffer vorhanden — Suche verfeinern.",
-    "searchDegraded": "Einige Quellen konnten nicht durchsucht werden — diese Liste ist unvollständig."
+    "searchDegraded": "Einige Quellen konnten nicht durchsucht werden — diese Liste ist unvollständig.",
+    "deniedReason": "Erfordert {{permission}}.",
+    "deniedHelp": "Bitten Sie eine Verwaltungsperson, die das gewähren kann.",
+    "noTargetReason": "Erfordert eine Organisation, in der es ausgeführt wird.",
+    "noTargetHelp": "Wählen Sie eine Organisation und versuchen Sie es erneut.",
+    "goTo": "Gehe zu",
+    "recentSessions": "Letzte Sitzungen",
+    "settingsGroup": "Einstellungen",
+    "scope": "in {{name}}",
+    "footerMove": "bewegen",
+    "footerOpen": "öffnen",
+    "footerCommands": "nur Befehle"
   },
   "status": {
     "active": "Aktiv",
@@ -258,5 +269,52 @@
     "problems_one": "{{count}} Tastenkürzel konnte nicht gelesen werden und löst nicht aus: {{commands}}",
     "problems_other": "{{count}} Tastenkürzel konnten nicht gelesen werden und lösen nicht aus: {{commands}}",
     "navRailNote": "Die Leiste ist ein einziger Tabstopp. Diese Tasten wirken, solange sie den Fokus hat."
+  },
+  "ui": {
+    "status": {
+      "working": "Läuft",
+      "needsYou": "Braucht dich",
+      "done": "Fertig",
+      "failed": "Fehlgeschlagen",
+      "paused": "Pausiert",
+      "idle": "Nicht gestartet"
+    },
+    "state": {
+      "loading": "Wird geladen…",
+      "filtered": {
+        "hidden_one": "Die Filter blenden {{count}} Eintrag aus.",
+        "hidden_other": "Die Filter blenden {{count}} Einträge aus.",
+        "clear": "Filter zurücksetzen"
+      },
+      "error": {
+        "title": "Die Engine ist nicht erreichbar.",
+        "description": "Die Liste ist nicht leer. Sie konnte nicht gelesen werden.",
+        "retry": "Erneut versuchen",
+        "diagnostics": "Diagnose öffnen",
+        "request": "Anfrage {{id}} · {{time}}",
+        "requestId": "Anfrage {{id}}"
+      },
+      "stale": {
+        "message": "Ergebnisse von <0>{{lastGood}}</0>. Die Aktualisierung um {{failedAt}} ist fehlgeschlagen.",
+        "retry": "Erneut laden"
+      },
+      "noAccess": {
+        "title": "Du kannst das nicht öffnen",
+        "description": "Deine Rolle umfasst es nicht. Mehr wird darüber nicht angezeigt."
+      },
+      "unknown": {
+        "title": "Die Anfrage wurde gesendet, die Antwort ging verloren.",
+        "description": "Dieselbe Anfrage wird bei der Engine geprüft. Sende sie nicht erneut.",
+        "checking": "Anfrage {{id}} · Prüfung seit {{elapsed}}",
+        "retry": "Erneut senden",
+        "retryReason": "Verfügbar, sobald die Engine bestätigt, dass nichts gestartet wurde."
+      }
+    },
+    "codeLine": {
+      "label": "Dasselbe im Terminal",
+      "copy": "Befehl kopieren",
+      "copied": "Kopiert",
+      "copyFailed": "Kopieren fehlgeschlagen. Markiere den Befehl und kopiere ihn."
+    }
   }
 }

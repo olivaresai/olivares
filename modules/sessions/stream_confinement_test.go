@@ -64,6 +64,7 @@ func newStreamConfinementFixture(t *testing.T, cfg store.Config) *streamConfinem
 		t.Fatal(err)
 	}
 	m.UseData(api.NewModuleData(st))
+	bindStoreStanding(m, st)
 	gov.UseData(api.NewModuleData(st))
 	stopModuleAtCleanup(t, m)
 	_, key, err := ed25519.GenerateKey(nil)
@@ -99,15 +100,12 @@ func newStreamConfinementFixture(t *testing.T, cfg store.Config) *streamConfinem
 
 func (f *streamConfinementFixture) member(t *testing.T, admin string, tenant model.TenantID, email string, ws model.ID) string {
 	t.Helper()
-	r := f.doJSON("POST", "/v1/users", admin, map[string]any{"email": email, "password": "memberpass1"}, nil)
-	if r.code != http.StatusCreated {
-		t.Fatalf("create user = %d %s", r.code, r.raw)
-	}
-	r = f.doJSON("POST", "/v1/memberships", admin, map[string]any{
-		"user_id": r.body["id"], "tenant": tenant.String(), "role": auth.RoleEditor, "workspace_id": ws.String(),
+	r := f.doJSON("POST", "/v1/users", admin, map[string]any{
+		"email": email, "password": "memberpass1",
+		"tenant": tenant.String(), "role": auth.RoleEditor, "workspace_id": ws.String(),
 	}, nil)
 	if r.code != http.StatusCreated {
-		t.Fatalf("create membership = %d %s", r.code, r.raw)
+		t.Fatalf("create user = %d %s", r.code, r.raw)
 	}
 	r = f.doJSON("POST", "/v1/auth/login", "", map[string]any{"email": email, "password": "memberpass1"}, nil)
 	if r.code != http.StatusOK {
@@ -316,14 +314,22 @@ func TestSessionsStreamConfinement(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if _, err := f.authr.GrantMembership(ctx, root, principal.UserID, other, auth.RoleEditor, ""); err != nil {
-				t.Fatal(err)
+			// Both accounts below already exist and are not members of the tenant
+			// they are placed in, so a grant would not join them: the memberships
+			// are seeded through the store, as memberships that predate that rule.
+			seedEditor := func(user model.ID, in model.TenantID, ws model.ID) {
+				t.Helper()
+				if err := f.st.AuthMutate(ctx, func(as store.AuthScope) error {
+					_, err := as.Memberships().Create(ctx, model.Membership{UserID: user, TargetTenantID: in, Role: auth.RoleEditor, WorkspaceID: ws})
+					return err
+				}); err != nil {
+					t.Fatal(err)
+				}
 			}
+			seedEditor(principal.UserID, other, "")
 			// The exception is tested with a superadmin who really DOES carry a
 			// confined membership, so omitting !Superadmin cannot pass unnoticed.
-			if _, err := f.authr.GrantMembership(ctx, root, root.UserID, tenant, auth.RoleEditor, workspace); err != nil {
-				t.Fatal(err)
-			}
+			seedEditor(root.UserID, tenant, workspace)
 			root, err = f.authr.Authenticate(ctx, admin)
 			if err != nil {
 				t.Fatal(err)

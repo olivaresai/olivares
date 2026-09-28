@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// THE SHELL'S REGIONS: rail · one header row · the work, and NOTHING BELOW THE WORK.
+// THE SHELL'S REGIONS: sidebar · one header row · the work, and NOTHING BELOW THE WORK.
+// Since the v26.10 frame the work sits in the sheet's body, a ROW that may also hold the
+// side panel a page declares — beside the work, never below it.
 //
 // ⛔ THIS FILE EXISTS BECAUSE ITS ABSENCE WAS MEASURED. An independent review of this
 //    lane ran the obvious mutation — a fixed 90 px bar reinstated after `</main>` in
@@ -44,9 +46,14 @@ vi.mock('@/lib/auth/context', () => ({
   useAuth: () => ({ status: 'authenticated' }),
 }))
 
+vi.mock('./app-sidebar', () => ({
+  AppSidebar: () => <div data-testid="rail">rail</div>,
+}))
 vi.mock('./sidebar', () => ({
-  Sidebar: () => <div data-testid="rail">rail</div>,
-  MobileNav: () => <div data-testid="mobile-nav" />,
+  AreasSheet: () => <div data-testid="areas-sheet" />,
+}))
+vi.mock('./phone-bar', () => ({
+  PhoneBar: () => <nav data-testid="phone-bar" />,
 }))
 vi.mock('./topbar', () => ({
   Topbar: () => <header data-slot="topbar">bar</header>,
@@ -86,7 +93,7 @@ describe('the shell has three regions and nothing else', () => {
     // And the other shape the same region takes: anchored to the viewport instead of
     // stacked. Nothing in the shell may be `fixed` to an edge — a floating bar occludes
     // the last row of every table and form, which is the defect this pass was given.
-    const shell = main.closest('div.flex.h-svh') as HTMLElement
+    const shell = main.closest('[data-slot="app-frame"]') as HTMLElement
     const anchored = [...shell.querySelectorAll('[class*="fixed"]')].filter(
       (el) => /\bfixed\b/.test(el.className),
     )
@@ -96,14 +103,18 @@ describe('the shell has three regions and nothing else', () => {
   it('has ONE header row, and it is the only thing above the work', () => {
     render(<AppLayout />)
     const main = work()
-    const column = main.parentElement as HTMLElement
+    const body = main.parentElement as HTMLElement
+    const sheet = body.parentElement as HTMLElement
     expect(document.querySelectorAll('[data-slot="topbar"]')).toHaveLength(1)
-    // The column is exactly: the bar, then the work. A second row — the context row
-    // this pass removed, a notice strip, a tab bar hoisted out of a route — would add
+    // The sheet is exactly: the bar, then the body. A second row — the context row an
+    // earlier pass removed, a notice strip, a tab bar hoisted out of a route — would add
     // a third child here and is what this count refuses.
-    expect(column.children).toHaveLength(2)
-    expect(column.firstElementChild?.getAttribute('data-slot')).toBe('topbar')
-    expect(main.previousElementSibling).toBe(column.firstElementChild)
+    expect(sheet.getAttribute('data-slot')).toBe('sheet')
+    expect(sheet.children).toHaveLength(2)
+    expect(sheet.firstElementChild?.getAttribute('data-slot')).toBe('topbar')
+    expect(body.previousElementSibling).toBe(sheet.firstElementChild)
+    // And the body opens with the work: nothing is stacked above it inside the sheet.
+    expect(body.firstElementChild).toBe(main)
   })
 
   it('mounts no composer of its own: starting work belongs to the routes and the palette', () => {

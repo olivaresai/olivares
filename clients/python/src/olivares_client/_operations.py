@@ -11,7 +11,7 @@ from typing import TypedDict, cast
 from urllib.parse import quote
 
 API_VERSION = "v1"
-SPEC_HASH = "74069393c14808d2970857e797267d5ffe8e3fa317b7c048764fb9d92a7baec0"
+SPEC_HASH = "2793a247ca86bd6b9e4aa19953ab2947ffa491900c03ec1e6ba55c56232b4702"
 STABILITY_POLICY = "https://olivares.ai/docs"
 
 class _AuthCapabilityQuestionRequired(TypedDict):
@@ -2416,6 +2416,41 @@ class OperationsMixin:
         """
         return self._do("POST", "/v1/m/eventing/subscriptions/{id}/test", "/v1/m/eventing/subscriptions/" + quote(str(id), safe="") + "/test", query=query, tenant=tenant)
 
+    def post_v1_m_finops_admission_commit(self, body, *, tenant=None, **query):
+        """POST /v1/m/finops/admission/commit — Settles a hold with the cost the effect actually incurred, returning whatever headroom the estimate held beyond it.
+
+        Stability: beta.
+        """
+        return self._do_json_required("POST", "/v1/m/finops/admission/commit", "/v1/m/finops/admission/commit", body=body, query=query, tenant=tenant)
+
+    def post_v1_m_finops_admission_reconcile(self, *, tenant=None, **query):
+        """POST /v1/m/finops/admission/reconcile — Runs admission recovery, sweeps holds that expired unsettled, compares what remains against the commits and releases its callers made, and files a posture finding when the ledger drifted.
+
+        Stability: beta.
+        """
+        return self._do("POST", "/v1/m/finops/admission/reconcile", "/v1/m/finops/admission/reconcile", query=query, tenant=tenant)
+
+    def get_v1_m_finops_admission_reconciliation(self, *, tenant=None, **query):
+        """GET /v1/m/finops/admission/reconciliation — Reports the reservation ledger against its commits and releases, and what recovery left outstanding: holds still owed, claims and releases an earlier build left, undecided recovery writes, and admission rows that fail their integrity check.
+
+        Stability: beta.
+        """
+        return self._do("GET", "/v1/m/finops/admission/reconciliation", "/v1/m/finops/admission/reconciliation", query=query, tenant=tenant)
+
+    def post_v1_m_finops_admission_release(self, body, *, tenant=None, **query):
+        """POST /v1/m/finops/admission/release — Returns an unused hold to its budget when the effect did not happen, so an abandoned reservation stops withholding headroom from the next caller.
+
+        Stability: beta.
+        """
+        return self._do_json_required("POST", "/v1/m/finops/admission/release", "/v1/m/finops/admission/release", body=body, query=query, tenant=tenant)
+
+    def post_v1_m_finops_admission_reserve(self, body, *, tenant=None, **query):
+        """POST /v1/m/finops/admission/reserve — Holds the estimated spend of a billable effect against every enforcing budget that scopes the request, and against the named actor's spend limits, under one handle.
+
+        Stability: beta.
+        """
+        return self._do_json_required("POST", "/v1/m/finops/admission/reserve", "/v1/m/finops/admission/reserve", body=body, query=query, tenant=tenant)
+
     def get_v1_m_finops_alerts(self, *, tenant=None, **query):
         """GET /v1/m/finops/alerts — finops module route (requires finops:budget:read)
 
@@ -2709,6 +2744,97 @@ class OperationsMixin:
         Stability: beta.
         """
         return self._do("GET", "/v1/m/finops/value/summary", "/v1/m/finops/value/summary", query=query, tenant=tenant)
+
+    def get_v1_m_gitpublish_intents(self, *, tenant=None, **query):
+        """GET /v1/m/gitpublish/intents — Lists the publication intents of one target, named by ?target_id, with what each requested, what the host was last observed to hold and its current state.
+
+        Stability: beta.
+        """
+        return self._do("GET", "/v1/m/gitpublish/intents", "/v1/m/gitpublish/intents", query=query, tenant=tenant)
+
+    def get_v1_m_gitpublish_intents_by_id(self, id, *, tenant=None, **query):
+        """GET /v1/m/gitpublish/intents/{id} — Returns one publication intent: what it requested, what the host was last observed to hold, whether the host acknowledged the request, and its state.
+
+        Stability: beta.
+        """
+        return self._do("GET", "/v1/m/gitpublish/intents/{id}", "/v1/m/gitpublish/intents/" + quote(str(id), safe=""), query=query, tenant=tenant)
+
+    def post_v1_m_gitpublish_intents_by_id_abandon(self, id, body, *, tenant=None, **query):
+        """POST /v1/m/gitpublish/intents/{id}/abandon — Records that an administrator takes responsibility for an unresolved publication intent, with a bounded reason.
+
+        Stability: beta.
+        """
+        return self._do_json_required("POST", "/v1/m/gitpublish/intents/{id}/abandon", "/v1/m/gitpublish/intents/" + quote(str(id), safe="") + "/abandon", body=body, query=query, tenant=tenant)
+
+    def get_v1_m_gitpublish_intents_by_id_observations(self, id, *, tenant=None, **query):
+        """GET /v1/m/gitpublish/intents/{id}/observations — Lists every observation recorded for one publication intent: each host read, dispatcher outcome and refusal, with its attempt, result and time.
+
+        Stability: beta.
+        """
+        return self._do("GET", "/v1/m/gitpublish/intents/{id}/observations", "/v1/m/gitpublish/intents/" + quote(str(id), safe="") + "/observations", query=query, tenant=tenant)
+
+    def post_v1_m_gitpublish_intents_by_id_reconcile(self, id, *, tenant=None, **query):
+        """POST /v1/m/gitpublish/intents/{id}/reconcile — Reads the host again for one publication intent and records what it observed.
+
+        Stability: beta.
+        """
+        return self._do("POST", "/v1/m/gitpublish/intents/{id}/reconcile", "/v1/m/gitpublish/intents/" + quote(str(id), safe="") + "/reconcile", query=query, tenant=tenant)
+
+    def get_v1_m_gitpublish_targets(self, *, tenant=None, **query):
+        """GET /v1/m/gitpublish/targets — Lists the publication targets the caller can read, without their credential and repository binding ids.
+
+        Stability: beta.
+        """
+        return self._do("GET", "/v1/m/gitpublish/targets", "/v1/m/gitpublish/targets", query=query, tenant=tenant)
+
+    def post_v1_m_gitpublish_targets(self, body, *, tenant=None, **query):
+        """POST /v1/m/gitpublish/targets — Records a publication target in a workspace: an approved credential binding, an approved repository binding, the branch prefix pushes must stay under and the allowed merge bases.
+
+        Stability: beta.
+        """
+        return self._do_json_required("POST", "/v1/m/gitpublish/targets", "/v1/m/gitpublish/targets", body=body, query=query, tenant=tenant)
+
+    def get_v1_m_gitpublish_targets_by_id(self, id, *, tenant=None, **query):
+        """GET /v1/m/gitpublish/targets/{id} — Returns one publication target.
+
+        Stability: beta.
+        """
+        return self._do("GET", "/v1/m/gitpublish/targets/{id}", "/v1/m/gitpublish/targets/" + quote(str(id), safe=""), query=query, tenant=tenant)
+
+    def put_v1_m_gitpublish_targets_by_id(self, id, body, *, tenant=None, **query):
+        """PUT /v1/m/gitpublish/targets/{id} — Replaces a publication target's bindings, push prefix and merge bases under optimistic concurrency, refusing a stale expected_version.
+
+        Stability: beta.
+        """
+        return self._do_json_required("PUT", "/v1/m/gitpublish/targets/{id}", "/v1/m/gitpublish/targets/" + quote(str(id), safe=""), body=body, query=query, tenant=tenant)
+
+    def delete_v1_m_gitpublish_targets_by_id(self, id, *, tenant=None, **query):
+        """DELETE /v1/m/gitpublish/targets/{id} — Deletes a publication target that no dispatching, uncertain or abandoned intent still holds.
+
+        Stability: beta.
+        """
+        return self._do("DELETE", "/v1/m/gitpublish/targets/{id}", "/v1/m/gitpublish/targets/" + quote(str(id), safe=""), query=query, tenant=tenant)
+
+    def post_v1_m_gitpublish_targets_by_id_merges(self, id, body, *, tenant=None, **query):
+        """POST /v1/m/gitpublish/targets/{id}/merges — Merges one pull request only while its head is still the reviewed expected_head, and returns the publication intent with the merge commit and tree it recorded.
+
+        Stability: beta.
+        """
+        return self._do_json_required("POST", "/v1/m/gitpublish/targets/{id}/merges", "/v1/m/gitpublish/targets/" + quote(str(id), safe="") + "/merges", body=body, query=query, tenant=tenant)
+
+    def post_v1_m_gitpublish_targets_by_id_pull_requests(self, id, body, *, tenant=None, **query):
+        """POST /v1/m/gitpublish/targets/{id}/pull-requests — Opens a pull request from a branch under the target's push prefix into an allowed merge base, or adopts the matching open one, and returns the publication intent with its receipt.
+
+        Stability: beta.
+        """
+        return self._do_json_required("POST", "/v1/m/gitpublish/targets/{id}/pull-requests", "/v1/m/gitpublish/targets/" + quote(str(id), safe="") + "/pull-requests", body=body, query=query, tenant=tenant)
+
+    def post_v1_m_gitpublish_targets_by_id_pushes(self, id, body, *, tenant=None, **query):
+        """POST /v1/m/gitpublish/targets/{id}/pushes — Pushes one exact commit to a branch under the target's push prefix, leased on the branch's expected current value, and returns the publication intent with its receipt.
+
+        Stability: beta.
+        """
+        return self._do_json_required("POST", "/v1/m/gitpublish/targets/{id}/pushes", "/v1/m/gitpublish/targets/" + quote(str(id), safe="") + "/pushes", body=body, query=query, tenant=tenant)
 
     def get_v1_m_governance_agent_risk_profiles(self, *, tenant=None, **query):
         """GET /v1/m/governance/agent-risk-profiles — Lists profiles, optionally filtered by tier.
@@ -3529,6 +3655,13 @@ class OperationsMixin:
         """
         return self._do("DELETE", "/v1/m/inferenceproxy/dlp/rules/{id}", "/v1/m/inferenceproxy/dlp/rules/" + quote(str(id), safe=""), query=query, tenant=tenant)
 
+    def get_v1_m_inventory_collections(self, *, tenant=None, **query):
+        """GET /v1/m/inventory/collections — Returns the collection coverage of one opened source registration, selected by ?source_id, ?source_revision and ?environment_ref: the current run's result, and the last qualified run when its scope has one.
+
+        Stability: beta.
+        """
+        return self._do("GET", "/v1/m/inventory/collections", "/v1/m/inventory/collections", query=query, tenant=tenant)
+
     def get_v1_m_inventory_entities(self, *, tenant=None, **query):
         """GET /v1/m/inventory/entities — Lists catalog entries, optionally filtered by kind and status, paginated by the default id keyset cursor.
 
@@ -4041,7 +4174,7 @@ class OperationsMixin:
         return self._do("DELETE", "/v1/m/models/datasets/{id}", "/v1/m/models/datasets/" + quote(str(id), safe=""), query=query, tenant=tenant)
 
     def get_v1_m_models_features(self, *, tenant=None, **query):
-        """GET /v1/m/models/features — Returns the capability matrix: per API feature, which declared families support it.
+        """GET /v1/m/models/features — Returns the capability matrix: per API feature, which declared families declare it, and the matrix is not a gateway invocation guarantee.
 
         Stability: beta.
         """
@@ -4697,6 +4830,13 @@ class OperationsMixin:
         Stability: beta.
         """
         return self._do("GET", "/v1/m/orchestration/workflows/{id}/runs/{run}", "/v1/m/orchestration/workflows/" + quote(str(id), safe="") + "/runs/" + quote(str(run), safe=""), query=query, tenant=tenant)
+
+    def post_v1_m_orchestration_workflows_by_id_runs_by_run_reauthorize(self, id, run, body, *, tenant=None, **query):
+        """POST /v1/m/orchestration/workflows/{id}/runs/{run}/reauthorize — Continues a run paused for reauthentication: it binds the caller's own fresh credential as the run's successor binding and resumes the paused steps.
+
+        Stability: beta.
+        """
+        return self._do_json_required("POST", "/v1/m/orchestration/workflows/{id}/runs/{run}/reauthorize", "/v1/m/orchestration/workflows/" + quote(str(id), safe="") + "/runs/" + quote(str(run), safe="") + "/reauthorize", body=body, query=query, tenant=tenant)
 
     def put_v1_m_orchestration_workflows_by_id_steps(self, id, body, *, tenant=None, **query):
         """PUT /v1/m/orchestration/workflows/{id}/steps — Replaces the whole step graph atomically (write-tier, revisioned).

@@ -11,23 +11,27 @@
 // ⛔ THE CONTEXT ROW IS GONE, AND THE ASSERTIONS THAT PINNED IT ARE REPLACED RATHER
 //    THAN DELETED. The bar carried a second 40 px row below `lg` holding the
 //    organisation and workspace switchers, and the consequence measured 52 % of a
-//    390×844 phone spent on chrome before any content. The switchers
-//    moved to the rail (`sidebar.tsx`), where the scope belongs, and the checks below
-//    now say the opposite of what they used to say: there is NO `topbar-context`
-//    wrapper, and no switcher in this bar. A test that had merely been deleted would
-//    have left nothing saying which way it must be.
+//    390×844 phone spent on chrome before any content. The switchers live in the
+//    sidebar (`app-sidebar.tsx`), and the checks below say so: there is NO
+//    `topbar-context` wrapper, and no switcher in this bar.
+//
+// THE v26.10 BAR (redesign §3.2) is breadcrumb · page state · page actions · panel
+// toggles, 52 px. Search sits in the sidebar beside New session, and on the phone, where
+// the sidebar gives way to the phone bar, in this bar; theme, settings and the account sit
+// in the sidebar footer (the account also here on the phone).
 import { within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { ComponentProps, ReactNode } from 'react'
 import { renderIntel } from '@/test/intel'
 
+const routerState = vi.hoisted(() => ({ pathname: '/console' }))
 vi.mock('@tanstack/react-router', () => ({
   useRouterState: ({
     select,
   }: {
     select: (s: { location: { pathname: string } }) => unknown
-  }) => select({ location: { pathname: '/console' } }),
+  }) => select({ location: { pathname: routerState.pathname } }),
   useNavigate: () => vi.fn(),
   Link: ({
     children,
@@ -99,118 +103,88 @@ vi.mock('./notification-bell', () => ({
   ),
 }))
 
+import { afterEach } from 'vitest'
+import { useWorkspaceStore } from '@/stores/workspace'
 import { Topbar } from './topbar'
 
-const bar = () => document.querySelector('[data-slot="topbar"]') as HTMLElement
+afterEach(() => {
+  routerState.pathname = '/console'
+  useWorkspaceStore.setState({
+    activeWorkspace: null,
+    activeWorkspaceName: null,
+  })
+})
 
 describe('Topbar — responsive structure', () => {
-  it('renders the trail, every action and the context switchers once each', async () => {
-    renderIntel(<Topbar onMenuClick={() => {}} />)
-    const header = bar()
-    expect(header.tagName).toBe('HEADER')
-    // ONE ROW AT EVERY WIDTH, and its height is the token — not an emergent property
-    // of whatever happens to be in it.
-    expect(header).toHaveClass('flex-nowrap', 'shrink-0')
-    expect(header.className).toContain('h-[var(--console-header-height)]')
-    expect(header.className).not.toContain('flex-wrap')
-
-    const trail = within(header).getByRole('navigation', { name: 'Breadcrumb' })
-    // N1: /console is «Administration» under System & settings; the trail is the
-    // area (linked) then the page — not «Overview › …».
-    const page = within(trail).getByRole('link', { name: 'Administration' })
-    expect(page).toHaveAttribute('aria-current', 'page')
-    expect(page).toHaveAttribute('title', 'Administration')
-    // Two renderings of the parent crumb (icon below sm, text from sm), the SAME
-    // accessible name and href in both — condensed, not hidden — and each a 24 px
-    // pointer target.
-    const parents = within(trail).getAllByRole('link', {
-      name: 'System & settings',
-    })
-    expect(parents).toHaveLength(2)
-    for (const parent of parents)
-      expect(parent).toHaveAttribute('href', '/areas/system')
-    expect(parents[0]).toHaveClass('sm:hidden', 'size-6')
-    // A 24 px minimum width: the area name may be two letters ("AI"), and the text link
-    // must still be a WCAG 2.5.8 target — axe measured 14 px on the built console.
-    expect(parents[1]).toHaveClass(
-      'hidden',
-      'sm:inline-block',
-      'leading-6',
-      'min-w-6',
-    )
-    // The old «Overview» parent crumb is gone from a module page.
-    expect(within(trail).queryByRole('link', { name: 'Overview' })).toBeNull()
-
-    expect(
-      within(header).getByRole('button', { name: 'Open menu' }),
-    ).toHaveClass('lg:hidden')
-    expect(
-      within(header).getByRole('button', { name: 'Search' }),
-    ).toBeInTheDocument()
-    expect(
-      within(header).getByRole('link', { name: /documentation/i }),
-    ).toBeInTheDocument()
-    expect(
-      within(header).getByRole('button', { name: 'Notifications' }),
-    ).toBeInTheDocument()
-
-    // NO SECOND ROW AND NO SCOPE CONTROL IN THIS BAR. Both switchers live in the rail
-    // now; the bar must not grow a second copy of either.
+  it('is one 52 px row with the trail, the reserved page slots and each action once', async () => {
+    const { container } = renderIntel(<Topbar />)
+    const header = container.querySelector('header') as HTMLElement
+    expect(header.getAttribute('data-slot')).toBe('topbar')
+    expect(header.className).toContain('h-13')
+    expect(header.className).toContain('flex-nowrap')
+    // No second row and no switcher in the bar.
     expect(header.querySelector('[data-slot="topbar-context"]')).toBeNull()
     expect(
-      within(header).queryByRole('button', { name: /01a0776d/ }),
+      within(header).queryByRole('button', { name: /workspace/i }),
     ).toBeNull()
+    // The trail: the area links, the page does not.
+    const nav = within(header).getByRole('navigation', { name: 'Breadcrumb' })
     expect(
-      within(header).queryByRole('button', { name: /All workspaces/ }),
-    ).toBeNull()
-    // Theme and account are still the last two controls of the one row.
-    const theme = within(header).getByRole('button', { name: /theme/i })
-    const account = within(header).getByRole('button', { name: 'Account' })
-    expect(
-      theme.compareDocumentPosition(account) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy()
-    // Exactly one of each: no duplicated control for the narrow layout.
-    expect(
-      within(header).getAllByRole('button', { name: 'Account' }),
-    ).toHaveLength(1)
-  })
-
-  it('Tab order is the reading order, and it no longer detours through a second row', async () => {
-    const user = userEvent.setup()
-    renderIntel(<Topbar onMenuClick={() => {}} />)
-    await within(bar()).findByRole('button', { name: 'Search' })
-    const names: string[] = []
-    for (let i = 0; i < 8; i++) {
-      await user.tab()
-      const el = document.activeElement as HTMLElement
-      names.push(el.getAttribute('aria-label') ?? el.textContent?.trim() ?? '')
-    }
-    // The old sequence visited the context row between Notifications and the theme
-    // toggle — an irregularity the retired comment documented as a stated trade. With
-    // one row there is nothing to detour through: the order is simply the DOM.
-    // `FavoriteButton` is absent here: it renders nothing without a personal-navigation
-    // partition, and this test mounts the bar alone. That is its real behaviour, not a
-    // gap in the mock.
-    expect(names.slice(0, 6)).toEqual([
-      'Open menu',
-      'System & settings', // the icon variant (first in DOM; jsdom does not apply sm:hidden)
-      'System & settings',
-      'Search',
-      'Open documentation for this view',
+      within(nav).getAllByRole('link', { name: /System/ })[0],
+    ).toHaveAttribute('href', '/areas/system')
+    // The places a screen fills are reserved, and empty until it does.
+    expect(header.querySelector('[data-slot="page-state"]')).not.toBeNull()
+    expect(header.querySelector('[data-slot="page-actions"]')).not.toBeNull()
+    // One instance of each action.
+    for (const name of [
+      'Search and commands',
       'Notifications',
+      'Open documentation for this view',
     ])
-    expect(names[6]).toMatch(/theme/i)
-    expect(names[7]).toBe('Account')
+      expect(header.querySelectorAll(`[aria-label="${name}"]`)).toHaveLength(1)
+    // The phone-only controls say so in their classes: jsdom does not lay out.
+    expect(
+      within(header).getByRole('button', { name: 'Search and commands' })
+        .className,
+    ).toContain('min-[761px]:hidden')
   })
 
-  it('the search text label and shortcut hint show only from xl; the button keeps its name', () => {
-    renderIntel(<Topbar onMenuClick={() => {}} />)
-    const search = within(bar()).getByRole('button', { name: 'Search' })
-    const label = within(search).getByText(/Search/)
-    expect(label).toHaveClass('hidden', 'xl:inline')
-    expect(within(search).getByText('⌘K')).toHaveClass(
-      'hidden',
-      'xl:inline-flex',
+  it('Tab order is the reading order: the trail, then the actions', async () => {
+    const user = userEvent.setup()
+    const { container } = renderIntel(<Topbar />)
+    const header = container.querySelector('header') as HTMLElement
+    const order: string[] = []
+    await user.tab()
+    while (header.contains(document.activeElement)) {
+      const el = document.activeElement as HTMLElement
+      order.push(el.getAttribute('aria-label') ?? el.textContent ?? '')
+      await user.tab()
+    }
+    const at = (name: string) => order.findIndex((n) => n.includes(name))
+    expect(at('System')).toBeGreaterThanOrEqual(0)
+    expect(at('System')).toBeLessThan(at('Search and commands'))
+    expect(at('Search and commands')).toBeLessThan(at('Notifications'))
+    expect(at('Notifications')).toBeLessThan(at('Open documentation'))
+  })
+
+  it('reads a journey the way the sidebar names it, after the workspace it operates on', () => {
+    routerState.pathname = '/providers'
+    useWorkspaceStore.setState({
+      activeWorkspace: 'w1',
+      activeWorkspaceName: 'Billing operations',
+    })
+    const { container } = renderIntel(<Topbar />)
+    const nav = within(
+      container.querySelector('header') as HTMLElement,
+    ).getByRole('navigation', { name: 'Breadcrumb' })
+    expect(nav.textContent?.replace(/\s+/g, ' ')).toMatch(
+      /Billing operations.*AI tools/,
+    )
+    // The journey is the page (the breadcrumb's current page), and the workspace is a
+    // caption, not a door: no anchor in the trail.
+    expect(nav.querySelectorAll('a')).toHaveLength(0)
+    expect(nav.querySelector('[aria-current="page"]')?.textContent).toBe(
+      'AI tools',
     )
   })
 })

@@ -755,7 +755,14 @@ func (m *Module) decidePostureRequest(w http.ResponseWriter, r *http.Request, mc
 		out     postureRequestDTO
 		applied *bindingDTO
 	)
-	err := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
+	// An approval that applies a user-tree binding is a fenced write over the
+	// account the proposal names.
+	subjects, err := proposalSubjects(r.Context(), mc, id, approve)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	err = fencedWrite(r, mc, subjects, func(sc store.Scope) error {
 		repo, err := sc.Ext(postureRequestKind)
 		if err != nil {
 			return err
@@ -852,6 +859,9 @@ func (m *Module) decidePostureRequest(w http.ResponseWriter, r *http.Request, mc
 		out = toPostureRequestDTO(rec)
 		return auditPosture(r.Context(), sc, mc, verb, out)
 	})
+	if writeFenceRefusal(w, err) {
+		return
+	}
 	if ferr, ok := err.(forbiddenError); ok {
 		writeJSON(w, http.StatusForbidden, errorBody(string(ferr)))
 		return

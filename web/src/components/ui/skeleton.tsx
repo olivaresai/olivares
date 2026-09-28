@@ -5,14 +5,17 @@ import type { ComponentProps } from 'react'
 import { cn } from '@/lib/utils'
 
 /**
- * Skeleton — a loading placeholder. A `muted` block with a subtle pulse; size it with
- * width/height utilities to mirror the real content (text lines, an avatar circle, a
- * row). The pulse respects `prefers-reduced-motion` via global CSS, so it stays calm.
+ * Skeleton — a loading placeholder. A block on the selection fill with a subtle pulse; size
+ * it with width/height utilities to mirror the real content (text lines, an avatar circle,
+ * a row). The pulse stops under the reduced-motion preference and the Reduce motion setting.
  */
 export function Skeleton({ className, ...props }: ComponentProps<'div'>) {
   return (
     <div
-      className={cn('animate-pulse rounded-md bg-muted', className)}
+      className={cn(
+        'animate-pulse rounded-[6px] bg-active motion-reduce:animate-none [[data-motion=reduce]_&]:animate-none',
+        className,
+      )}
       {...props}
     />
   )

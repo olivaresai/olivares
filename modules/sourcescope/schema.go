@@ -207,23 +207,23 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 			Kind:  bindingKind,
 			Table: bindingTable,
 			Fields: []model.FieldSpec{
-				{Name: colSourceType, Kind: model.KindText, Indexed: true},
-				{Name: colSourceRef, Kind: model.KindText, Indexed: true},
-				{Name: colScopeTree, Kind: model.KindText},
-				{Name: colScopeRef, Kind: model.KindText},
-				{Name: colWorkspaceID, Kind: model.KindText, Nullable: true},
-				{Name: colCredName, Kind: model.KindText, Nullable: true},
-				{Name: colCredRefKind, Kind: model.KindText, Nullable: true},
-				{Name: colCredRef, Kind: model.KindText, Nullable: true},
-				{Name: colCredHint, Kind: model.KindText, Nullable: true},
+				{Name: colSourceType, Kind: model.KindText, Indexed: true, Principal: model.None("a closed source-type set, validated at write: binding.go:98-100")},
+				{Name: colSourceRef, Kind: model.KindText, Indexed: true, Principal: model.None("the governed source's own reference (MCP server, model, provider, knowledge base or data source), matched as a lookup key: resolver.go:535")},
+				{Name: colScopeTree, Kind: model.KindText, Principal: model.None("a closed scope-tree set, validated at write: binding.go:107")},
+				{Name: colScopeRef, Kind: model.KindText, Principal: pdeclBindingScopeRef},
+				{Name: colWorkspaceID, Kind: model.KindText, Nullable: true, Principal: model.None("the resolved id of the scope's workspace, read as a workspace: resolver.go:548")},
+				{Name: colCredName, Kind: model.KindText, Nullable: true, Principal: model.None("a scoped credential's logical name, read into a credential reference: resolver.go:551-552")},
+				{Name: colCredRefKind, Kind: model.KindText, Nullable: true, Principal: model.None("a closed credential-locator kind set, validated at write: binding.go:140")},
+				{Name: colCredRef, Kind: model.KindText, Nullable: true, Principal: model.None("a credential locator, never a value, read into a credential reference: resolver.go:551-552")},
+				{Name: colCredHint, Kind: model.KindText, Nullable: true, Principal: model.None("a bounded masked credential hint, rendered only: binding.go:150, binding.go:204")},
 				{Name: colEnabled, Kind: model.KindBool},
-				{Name: colCreatedBy, Kind: model.KindText},
-				{Name: colNote, Kind: model.KindText, Nullable: true},
-				{Name: colFolderPath, Kind: model.KindText, Nullable: true},
+				{Name: colCreatedBy, Kind: model.KindText, Principal: model.Ref(model.EncodeUserRef, model.ClassEvidence)},
+				{Name: colNote, Kind: model.KindText, Nullable: true, Principal: model.None("operator prose, rendered only: binding.go:206")},
+				{Name: colFolderPath, Kind: model.KindText, Nullable: true, Principal: model.None("an advisory, store-resolved folder path, rendered only: binding.go:200")},
 				// appended last and nullable (expand-only). Empty ⇒ allow, so a
 				// pre row reconciles to an allow binding unchanged. NOT in the unique
 				// index below — the natural key stays (source_type, source_ref, tree, ref).
-				{Name: colEffect, Kind: model.KindText, Nullable: true},
+				{Name: colEffect, Kind: model.KindText, Nullable: true, Principal: model.None("a closed effect set (allow or forbid): binding.go:128-129")},
 			},
 			Indexes: []model.IndexSpec{{
 				Name:    "sourcescope_binding_uniq",
@@ -239,13 +239,13 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 			Kind:  assignmentKind,
 			Table: assignmentTable,
 			Fields: []model.FieldSpec{
-				{Name: colAssignConnector, Kind: model.KindText, Indexed: true},
-				{Name: colAssignWorkspace, Kind: model.KindText, Indexed: true},
-				{Name: colAssignWsID, Kind: model.KindText, Nullable: true},
-				{Name: colAssignMode, Kind: model.KindText, Nullable: true},
+				{Name: colAssignConnector, Kind: model.KindText, Indexed: true, Principal: model.None("a deployment connector's name, matched as a lookup key: assignment.go:358")},
+				{Name: colAssignWorkspace, Kind: model.KindText, Indexed: true, Principal: model.None("a workspace slug, compared with the requested workspace: assignment.go:366")},
+				{Name: colAssignWsID, Kind: model.KindText, Nullable: true, Principal: model.None("the resolved workspace id, the entity's workspace lineage column: api.go:59")},
+				{Name: colAssignMode, Kind: model.KindText, Nullable: true, Principal: model.None("a closed access mode (r or rw): assignment.go:76-83")},
 				{Name: colAssignEnabled, Kind: model.KindBool},
-				{Name: colAssignCreatedBy, Kind: model.KindText},
-				{Name: colAssignNote, Kind: model.KindText, Nullable: true},
+				{Name: colAssignCreatedBy, Kind: model.KindText, Principal: model.Ref(model.EncodeUserRef, model.ClassEvidence)},
+				{Name: colAssignNote, Kind: model.KindText, Nullable: true, Principal: model.None("operator prose, rendered only: assignment.go:72")},
 			},
 			Indexes: []model.IndexSpec{{
 				Name:    "sourcescope_connector_assignment_uniq",
@@ -261,17 +261,17 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 			Kind:  wsConnectorKind,
 			Table: wsConnectorTable,
 			Fields: []model.FieldSpec{
-				{Name: colWCName, Kind: model.KindText, Indexed: true},
-				{Name: colWCKind, Kind: model.KindText, Indexed: true},
-				{Name: colWCWorkspace, Kind: model.KindText, Indexed: true},
-				{Name: colWCWsID, Kind: model.KindText, Nullable: true},
-				{Name: colWCConfig, Kind: model.KindJSON, Nullable: true},
-				{Name: colWCSecretsRef, Kind: model.KindJSON, Nullable: true},
+				{Name: colWCName, Kind: model.KindText, Indexed: true, Principal: model.None("the connector's name, rendered only: wsconnector.go:144")},
+				{Name: colWCKind, Kind: model.KindText, Indexed: true, Principal: model.None("the connector's type label, rendered only: wsconnector.go:145")},
+				{Name: colWCWorkspace, Kind: model.KindText, Indexed: true, Principal: model.None("a workspace slug, the lookup key of the workspace's connectors: wsconnector.go:455")},
+				{Name: colWCWsID, Kind: model.KindText, Nullable: true, Principal: model.None("the resolved workspace id, the entity's workspace lineage column: api.go:60")},
+				{Name: colWCConfig, Kind: model.KindJSON, Nullable: true, Principal: pdeclConnectorConfig},
+				{Name: colWCSecretsRef, Kind: model.KindJSON, Nullable: true, Principal: pdeclConnectorSecretRefs},
 				{Name: colWCPollSeconds, Kind: model.KindInt},
 				{Name: colWCEnabled, Kind: model.KindBool},
-				{Name: colWCCreatedBy, Kind: model.KindText},
-				{Name: colWCNote, Kind: model.KindText, Nullable: true},
-				{Name: colWCStatus, Kind: model.KindText, Nullable: true},
+				{Name: colWCCreatedBy, Kind: model.KindText, Principal: model.Ref(model.EncodeUserRef, model.ClassEvidence)},
+				{Name: colWCNote, Kind: model.KindText, Nullable: true, Principal: model.None("operator prose, rendered only: wsconnector.go:151")},
+				{Name: colWCStatus, Kind: model.KindText, Nullable: true, Principal: model.None("a lifecycle label set at create, rendered only: wsconnector.go:229, wsconnector.go:152")},
 			},
 			Indexes: []model.IndexSpec{{
 				Name:    "sourcescope_workspace_connector_uniq",
@@ -284,11 +284,11 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 			Kind:  guardPostureKind,
 			Table: guardPostureTable,
 			Fields: []model.FieldSpec{
-				{Name: colSourceType, Kind: model.KindText, Indexed: true},
-				{Name: colSourceRef, Kind: model.KindText, Indexed: true},
-				{Name: colGuardProfile, Kind: model.KindText, Indexed: true},
-				{Name: colGuardReason, Kind: model.KindText, Nullable: true},
-				{Name: colGuardUpdatedBy, Kind: model.KindText},
+				{Name: colSourceType, Kind: model.KindText, Indexed: true, Principal: model.None("the guarded source's type, a lookup key: guardposture.go:194")},
+				{Name: colSourceRef, Kind: model.KindText, Indexed: true, Principal: model.None("the guarded knowledge base's reference, a lookup key: guardposture.go:194")},
+				{Name: colGuardProfile, Kind: model.KindText, Indexed: true, Principal: model.None("a closed guard-profile set: guardposture.go:51-58")},
+				{Name: colGuardReason, Kind: model.KindText, Nullable: true, Principal: model.None("operator prose, rendered only: guardposture.go:46")},
+				{Name: colGuardUpdatedBy, Kind: model.KindText, Principal: model.Ref(model.EncodeUserRef, model.ClassEvidence)},
 			},
 			Indexes: []model.IndexSpec{{
 				Name:    "sourcescope_guard_posture_uniq",
@@ -301,16 +301,16 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 			Kind:  postureRequestKind,
 			Table: postureRequestTable,
 			Fields: []model.FieldSpec{
-				{Name: colPRSourceType, Kind: model.KindText, Indexed: true},
-				{Name: colPRSourceRef, Kind: model.KindText, Indexed: true},
-				{Name: colPROp, Kind: model.KindText},
-				{Name: colPRTargetID, Kind: model.KindText, Nullable: true},
-				{Name: colPRProposed, Kind: model.KindText, Nullable: true},
-				{Name: colPRReason, Kind: model.KindText, Nullable: true},
-				{Name: colPRProposer, Kind: model.KindText},
-				{Name: colPRStatus, Kind: model.KindText, Indexed: true},
-				{Name: colPRDecidedBy, Kind: model.KindText, Nullable: true},
-				{Name: colPRNote, Kind: model.KindText, Nullable: true},
+				{Name: colPRSourceType, Kind: model.KindText, Indexed: true, Principal: model.None("the proposal's source type, a lookup key: posture.go:1042")},
+				{Name: colPRSourceRef, Kind: model.KindText, Indexed: true, Principal: model.None("the proposal's source reference or connector name, a lookup key: posture.go:1042")},
+				{Name: colPROp, Kind: model.KindText, Principal: model.None("a closed operation set: posture.go:31-46, posture.go:944")},
+				{Name: colPRTargetID, Kind: model.KindText, Nullable: true, Principal: model.None("the id of the binding or assignment the request targets, loaded by id: posture.go:946, posture.go:1116")},
+				{Name: colPRProposed, Kind: model.KindText, Nullable: true, Principal: model.Scan(model.ClassEvidence)},
+				{Name: colPRReason, Kind: model.KindText, Nullable: true, Principal: model.None("the relaxation reason, compared as the approval premise and rendered: posture.go:943, posture.go:102")},
+				{Name: colPRProposer, Kind: model.KindText, Principal: model.Ref(model.EncodeUserRef, model.ClassRestrict)},
+				{Name: colPRStatus, Kind: model.KindText, Indexed: true, Principal: model.None("a closed status set: posture.go:48-50")},
+				{Name: colPRDecidedBy, Kind: model.KindText, Nullable: true, Principal: model.Ref(model.EncodeUserRef, model.ClassEvidence)},
+				{Name: colPRNote, Kind: model.KindText, Nullable: true, Principal: model.None("no writer sets it; rendered only: posture.go:108")},
 				// the HUMAN behind each leg, beside the credential string.
 				//
 				// proposer/decided_by hold Actor(), which is "user:<UserID>" for a session and
@@ -326,8 +326,8 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 				// has "" here, which is why the check still falls back to Actor() when the
 				// stored user is empty: a request pending across the upgrade must not become
 				// unguarded.
-				{Name: colPRProposerUser, Kind: model.KindText, Nullable: true},
-				{Name: colPRDecidedByUser, Kind: model.KindText, Nullable: true},
+				{Name: colPRProposerUser, Kind: model.KindText, Nullable: true, Principal: model.Ref(model.EncodeUserID, model.ClassRestrict)},
+				{Name: colPRDecidedByUser, Kind: model.KindText, Nullable: true, Principal: model.Ref(model.EncodeUserID, model.ClassRestrict)},
 			},
 		},
 	}
@@ -338,3 +338,16 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 	}
 	return nil
 }
+
+// Principal declarations of the workspace connector's JSON maps. Both hold a flat
+// string map the writer marshals and the reader parses back; neither names an account.
+var (
+	pdeclConnectorConfig = model.Nested(map[string]string{}, model.ClassEvidence,
+		model.Leaf("{key}", model.None("a connector setting name, refused when credential-bearing: wsconnector.go:80")),
+		model.Leaf("{}", model.None("a non-secret connector setting, parsed back as a string map and rendered: wsconnector.go:134, wsconnector.go:147")),
+	)
+	pdeclConnectorSecretRefs = model.Nested(map[string]string{}, model.ClassEvidence,
+		model.Leaf("{key}", model.None("the connector field a secret belongs to, rendered only: wsconnector.go:161")),
+		model.Leaf("{}", model.None("a sealed-secret locator, masked in every response: wsconnector.go:138, wsconnector.go:161-163")),
+	)
+)

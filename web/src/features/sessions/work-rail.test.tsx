@@ -73,7 +73,7 @@ function renderRail(over: Partial<Parameters<typeof WorkRail>[0]> = {}) {
 const rows = () => screen.getAllByRole('option')
 
 describe('WorkRail — what a row says', () => {
-  it('gives a long name the remaining width of a 256 px rail', () => {
+  it('paints a long name whole in a 256 px rail, with its reference on the hover', () => {
     const name = 'dependency-audit-across-the-whole-estate'
     const long = mergeSessions(
       [],
@@ -113,20 +113,16 @@ describe('WorkRail — what a row says', () => {
     // identifier the row no longer paints stays reachable from it.
     expect(nameEl.getAttribute('title')).toContain(name)
     expect(nameEl.getAttribute('title')).toContain('run-long')
+    // The name has a line of its own and wraps; the state and the time are whole
+    // (work-rail.reflow.test.tsx pins the arrangement).
     expect(nameEl.className.split(/\s+/)).toEqual(
-      expect.arrayContaining(['flex-1', 'min-w-0', 'truncate']),
+      expect.arrayContaining(['basis-full', 'min-w-0']),
     )
-    const growers = [...rowEl.children].filter(
-      (el) => el instanceof HTMLElement && /\bflex-1\b/.test(el.className),
-    )
-    expect(growers).toEqual([nameEl])
-    const badge = within(rowEl).getByText('Running')
-    expect(badge.className.split(/\s+/)).toContain('min-w-0')
-    expect(badge.className.split(/\s+/)).not.toContain('shrink-0')
+    expect(nameEl.className.split(/\s+/)).not.toContain('truncate')
+    expect(within(rowEl).getByText('Running')).toBeInTheDocument()
     const age = rowEl.querySelector('time')
     expect(age).not.toBeNull()
-    expect(age!.className.split(/\s+/)).toContain('min-w-0')
-    expect(age!.className.split(/\s+/)).not.toContain('shrink-0')
+    expect(age!.className.split(/\s+/)).toContain('shrink-0')
   })
 
   it('names the session and its state on the line, and carries the rest on the row', () => {
@@ -139,9 +135,13 @@ describe('WorkRail — what a row says', () => {
     // …and the NAME is what the session is doing, never its reference. `sess-a` was
     // the second rung of the old label, so a rail of discovered sessions read as six
     // machine ids. The reference is on the name's own `title`.
+    // The clause is the action and resource the engine reported: both identifiers, each
+    // in its own code element, with only the separator as copy.
+    const name = within(first).getByTestId('rail-row-name')
+    expect(name).toHaveTextContent('create_issue · github/create_issue')
     expect(
-      within(first).getByText('create_issue · github/create_issue'),
-    ).toBeInTheDocument()
+      Array.from(name.querySelectorAll('code')).map((c) => c.textContent),
+    ).toEqual(['create_issue', 'github/create_issue'])
     expect(within(first).queryByText('sess-a')).toBeNull()
     expect(
       within(first).getByTestId('rail-row-name').getAttribute('title'),

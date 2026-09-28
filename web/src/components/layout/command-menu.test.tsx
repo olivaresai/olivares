@@ -165,7 +165,12 @@ describe('CommandMenu', () => {
       expect(searchConsoleMock).toHaveBeenCalledWith('billing'),
     )
 
-    const hit = await screen.findByText('Billing-Alerts')
+    const hit = await screen.findByText((_, node) => {
+      return (
+        node?.getAttribute('data-slot') === 'palette-name' &&
+        node.textContent === 'Billing-Alerts'
+      )
+    })
     expect(hit).toBeInTheDocument()
     await user.click(hit)
     expect(navigateMock).toHaveBeenCalledWith({ to: '/eventing' })
@@ -337,24 +342,28 @@ describe('CommandMenu', () => {
     qc.clear()
   })
 
-  // ⛔ THE DEFECT ITSELF (spec04 §1): "An action in the palette requires its mutation
-  //    permission, target, and current context; read permission for its page does not
-  //    authorize it." A reader of these three pages used to be offered all three verbs.
-  it('offers NO creation verb to a principal holding only the page reads', async () => {
+  // Read permission for the page does not authorize the verb. The verb stays
+  // visible and does not run: hiding it left the operator with an empty list.
+  it('shows creation verbs disabled to a principal holding only the page reads', async () => {
     const user = userEvent.setup()
     holding(READS)
     const qc = openPalette()
     await user.type(screen.getByRole('combobox'), 'new')
-    const values = optionValues()
     for (const verb of [
       'action:eventing:createSubscription',
       'action:alerting:createRoute',
       'action:orchestration:createSchedule',
-    ])
-      expect(values.some((v) => v.startsWith(verb))).toBe(false)
-    // AND THE READ-ONLY PALETTE IS INTACT: the three pages are still reachable and the two
-    // non-mutating commands are still offered, because removing a verb must not remove the
-    // navigation it happened to sit next to.
+    ]) {
+      const option = screen
+        .getAllByRole('option')
+        .find((o) => (o.getAttribute('data-value') ?? '').startsWith(verb))
+      expect(option, verb).toBeTruthy()
+      expect(option).toHaveAttribute('aria-disabled', 'true')
+    }
+    await user.click(screen.getByRole('option', { name: /New alert route/ }))
+    expect(useCommandStore.getState().pendingAction).toBeNull()
+    expect(navigateMock).not.toHaveBeenCalled()
+    // The pages and the non-mutating commands stay reachable.
     await user.clear(screen.getByRole('combobox'))
     const whole = optionValues()
     for (const entry of [
@@ -366,7 +375,14 @@ describe('CommandMenu', () => {
       'signout ',
     ])
       expect(whole.some((v) => v.startsWith(entry))).toBe(true)
-    expect(whole.some((v) => v.startsWith('action:'))).toBe(false)
+    const runnable = screen
+      .getAllByRole('option')
+      .filter(
+        (o) =>
+          (o.getAttribute('data-value') ?? '').startsWith('action:') &&
+          o.getAttribute('aria-disabled') !== 'true',
+      )
+    expect(runnable).toHaveLength(0)
     qc.clear()
   })
 
@@ -379,23 +395,34 @@ describe('CommandMenu', () => {
     holding([...READS, permission])
     const qc = openPalette()
     await user.type(screen.getByRole('combobox'), 'new')
-    const verbs = optionValues().filter((v) => v.startsWith('action:'))
-    // FIRES IF: one verb's permission is wired to another's — each write buys ITS OWN
-    // verb and no other. orchestration is the case that matters most: its page reads
-    // `orchestration:graph:read`, a different RESOURCE from the schedule it creates.
-    expect(verbs).toHaveLength(1)
-    expect(verbs[0]).toMatch(new RegExp(`^${expected} `))
+    const runnable = screen.getAllByRole('option').filter((o) => {
+      const value = o.getAttribute('data-value') ?? ''
+      return (
+        value.startsWith('action:') &&
+        o.getAttribute('aria-disabled') !== 'true'
+      )
+    })
+    // Each write buys its own verb and no other. The rest stay visible and disabled.
+    expect(runnable).toHaveLength(1)
+    expect(runnable[0]?.getAttribute('data-value') ?? '').toMatch(
+      new RegExp(`^${expected} `),
+    )
     qc.clear()
   })
 
-  it('offers no creation verb with no tenant selected, and still navigates', async () => {
+  it('disables creation verbs with no tenant selected, and still navigates', async () => {
     const user = userEvent.setup()
     holding([...READS, ...WRITES])
     authState.activeTenant = null
     useTenantStore.setState({ activeTenant: null })
     const qc = openPalette()
     await user.type(screen.getByRole('combobox'), 'new')
-    expect(optionValues().some((v) => v.startsWith('action:'))).toBe(false)
+    const verbs = screen
+      .getAllByRole('option')
+      .filter((o) => (o.getAttribute('data-value') ?? '').startsWith('action:'))
+    expect(verbs.length).toBeGreaterThan(0)
+    for (const verb of verbs)
+      expect(verb).toHaveAttribute('aria-disabled', 'true')
     await user.clear(screen.getByRole('combobox'))
     await user.type(screen.getByRole('combobox'), 'alert')
     // Navigation, theme and sign-out are not mutations and do not need a tenant.
@@ -404,25 +431,23 @@ describe('CommandMenu', () => {
     qc.clear()
   })
 
-  it('withdraws the offered verb as soon as the grant is revoked', async () => {
+  it('disables the offered verb as soon as the grant is revoked', async () => {
     const user = userEvent.setup()
     holding([...READS, ...WRITES])
     const qc = openPalette()
     await user.type(screen.getByRole('combobox'), 'new')
     expect(
-      optionValues().some((v) => v.startsWith('action:alerting:createRoute')),
-    ).toBe(true)
+      screen.getByRole('option', { name: /New alert route/ }),
+    ).not.toHaveAttribute('aria-disabled', 'true')
     // The revocation lands, and the next render of the list is the console's answer to it.
     holding(READS)
     await user.type(screen.getByRole('combobox'), ' ')
     await user.clear(screen.getByRole('combobox'))
     await user.type(screen.getByRole('combobox'), 'new')
-    expect(
-      optionValues().some((v) => v.startsWith('action:alerting:createRoute')),
-    ).toBe(false)
-    expect(
-      screen.queryByRole('option', { name: /New alert route/ }),
-    ).not.toBeInTheDocument()
+    const revoked = screen.getByRole('option', { name: /New alert route/ })
+    expect(revoked).toHaveAttribute('aria-disabled', 'true')
+    await user.click(revoked)
+    expect(useCommandStore.getState().pendingAction).toBeNull()
     qc.clear()
   })
 
@@ -524,7 +549,7 @@ describe('the palette row gives its width to the name', () => {
     return el as HTMLElement
   }
 
-  it('puts the name alone on line one, in the row\'s only flexible child', () => {
+  it("puts the name alone on line one, in the row's only flexible child", () => {
     openPalette()
     const nameEl = firstRow().querySelector(
       '[data-slot="palette-name"]',

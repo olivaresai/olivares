@@ -1,0 +1,6 @@
+{
+  "capabilities": ["embedding"],
+  "model_info": {
+    "nomic.context_length": 2048
+  }
+}

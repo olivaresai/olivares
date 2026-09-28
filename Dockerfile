@@ -34,8 +34,10 @@
 # convention, see connectors/ebpf/deploy/*.yaml).
 FROM node:26-bookworm-slim AS web
 WORKDIR /src
-# Enable corepack/pnpm without a network round-trip beyond the registry.
-RUN corepack enable
+# Node.js stopped bundling corepack in version 25, so this stage installs a pinned
+# corepack and enables its pnpm shims only; corepack then runs the pnpm that
+# web/package.json's packageManager names (lint:dockerfile-node-toolchain holds both rules).
+RUN npm install -g corepack@0.34.6 && corepack enable pnpm
 # Copy only what the web build needs first, for layer caching.
 COPY web/package.json web/pnpm-lock.yaml ./web/
 RUN cd web && pnpm install --frozen-lockfile

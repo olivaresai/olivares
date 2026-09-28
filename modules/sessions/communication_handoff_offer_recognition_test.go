@@ -253,6 +253,10 @@ func newHandoffOfferRecognitionFixture(t *testing.T, backend *communicationSchem
 	// closure answer at f.epoch, and the carrier preflight requires they agree.
 	f.attestor.epoch = f.epoch
 	handoffOfferRecognitionReadiness(t, ctx, f)
+	// The offer names its parties' accounts, so it reads their standing before
+	// its transaction. The composition binds that port at boot; the estate binds
+	// the store's own authenticator, as every module that fences its writers does.
+	f.m.UseStanding(auth.NewAuthenticator(f.st, nil))
 	f.m.data = &handoffRecognitionData{inner: f.m.data}
 	return handoffOfferRecognitionFixture{
 		handoffRecognitionFixture: f, workID: workID,
@@ -662,6 +666,85 @@ func TestHandoffOfferRecognitionAtRealStoreSeams(t *testing.T) {
 					return err
 				}
 			}, nil, tc.lost, 2, 1)
+		})
+	}
+}
+
+// TestFencedHandoffOfferRecognitionKeepsItsOutcomes offers the WorkItem to an
+// account, so the offer is a fenced write: each of its transactions pins the
+// recipient's authority version through the directory barrier, and the stale
+// sender Claim that barrier meets marks the fence moved. The recognition still
+// owns the outcome, on both engines. It never creates an offer that did not
+// commit, a second collision ends it, and a lost or uncertain outcome returns
+// no result: nothing runs the offer again after it.
+func TestFencedHandoffOfferRecognitionKeepsItsOutcomes(t *testing.T) {
+	for _, engine := range vacantTransferEngines(t) {
+		t.Run(engine.name, func(t *testing.T) {
+			backend := engine.newBackend(t, "fenced-offer-recognition")
+			f := newHandoffOfferRecognitionFixture(t, &backend)
+			fenced := func(key string) WorkItemHandoffOfferCommand {
+				cmd := f.offerCommand(key)
+				cmd.Recipient = RecipientRef{Kind: RecipientUser, Ref: f.targetAccount.String()}
+				return cmd
+			}
+			cmd := fenced(model.NewID().String())
+			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Minute)
+			defer cancel()
+			first := &handoffRecognitionAttempt{}
+			original := handoffOfferRecognitionWait(t, ctx, handoffOfferRecognitionStart(ctx, f, cmd, first))
+			if original.err != nil || original.result.Replayed {
+				t.Fatalf("the original fenced offer = %+v, %v", original.result, original.err)
+			}
+			if len(first.users) != 1 || len(first.users[0]) != 1 || first.users[0][0].UserID != f.targetAccount {
+				t.Fatalf("COULD_NOT_LOOK: the original offer pinned %v, want the recipient's account alone", first.users)
+			}
+			t.Run("a committed offer is recognized", func(t *testing.T) {
+				var seen *handoffRecognitionAttempt
+				got := handoffOfferRecognitionChallenge(t, f, cmd, func(a *handoffRecognitionAttempt) { seen = a },
+					nil, nil, 2, 1)
+				got.result.Replayed = false
+				if got.result != original.result {
+					t.Fatalf("the recognized receipt %+v differs from the original %+v", got.result, original.result)
+				}
+				// The recognition runs inside the fenced attempt, so its authority
+				// lock pins the recipient's account at the version the offer read.
+				if len(seen.users) != 2 || len(seen.users[1]) != 1 || seen.users[1][0] != first.users[0][0] {
+					t.Fatalf("the authority locks pinned %v, want the recipient's %v in both", seen.users, first.users[0])
+				}
+			})
+			t.Run("an offer that never committed is not created by its recognition", func(t *testing.T) {
+				handoffOfferRecognitionChallenge(t, f, fenced(model.NewID().String()), nil, nil,
+					ErrCommunicationEvidenceUnknown, 2, 0)
+			})
+			t.Run("a second real collision ends the one attempt", func(t *testing.T) {
+				handoffOfferRecognitionChallenge(t, f, cmd, func(a *handoffRecognitionAttempt) {
+					gate := a.before
+					a.before = func(n int, ctx context.Context) error {
+						if n == 2 {
+							handoffRecognitionTouch(t, f.handoffRecognitionFixture)
+						}
+						return gate(n, ctx)
+					}
+				}, nil, ErrCommunicationEvidenceUnknown, 2, 1)
+			})
+			for _, tc := range []struct {
+				name string
+				lost error
+			}{
+				{"an uncertain recognition commit returns no result", fmt.Errorf("%w: simulated", store.ErrCommitOutcomeUnknown)},
+				{"a lost recognition outcome returns no result", errors.New("simulated committed result loss")},
+			} {
+				t.Run(tc.name, func(t *testing.T) {
+					handoffOfferRecognitionChallenge(t, f, cmd, func(a *handoffRecognitionAttempt) {
+						a.after = func(n int, err error) error {
+							if n == 2 && err == nil {
+								return tc.lost
+							}
+							return err
+						}
+					}, nil, tc.lost, 2, 1)
+				})
+			}
 		})
 	}
 }

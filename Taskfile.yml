@@ -2274,6 +2274,7 @@ tasks:
           bash scripts/test-private-leg.sh || exit $?
           bash scripts/test-release-ota-channel.sh || exit $?
           bash scripts/test-release-workspace-e2e.sh || exit $?
+          bash scripts/test-release-snapshot-checksum.sh || exit $?
           bash scripts/test-release-security-producer.sh || exit $?
           bash scripts/test-release-security-sig-guard.sh || exit $?
           bash scripts/test-release-finalize-stable.sh || exit $?
@@ -2458,6 +2459,9 @@ tasks:
       may be removed. No Docker daemon, network or build is used by this leg.
     cmds:
       - bash scripts/check-compose-ready.sh
+      # The Dockerfile toolchain gate rides this leg because mainline-ci's control-plane job
+      # already runs it; the gate reads the same Dockerfiles and needs no Docker either.
+      - task: lint:dockerfile-node-toolchain
 
   lint:compose-ready:selftest:
     desc: >-
@@ -2473,6 +2477,25 @@ tasks:
       owner, Compose version and effective-config refusals. No Docker or network is used.
     cmds:
       - bash scripts/test-compose-ready.sh
+
+  lint:dockerfile-node-toolchain:
+    desc: >-
+      No Dockerfile stage on Node.js 25 or later (or on a base the gate cannot resolve) runs
+      corepack, pnpm or yarn before installing it in that stage, ONBUILD RUN triggers included
+      (judged on the stage's final state), and no stage installs corepack, pnpm or yarn without
+      an exact version: `corepack pnpm@…`, `corepack use` and `corepack prepare` name one, and
+      `corepack up` never does. Node.js stopped bundling corepack in version 25; the web stages
+      of Dockerfile, Dockerfile.fips and Dockerfile.stig moved to node:26 and kept a bare
+      `corepack enable`, which a build answers with "corepack: not found", exit 127, and no
+      workflow built those files. pnpm's version stays web/package.json's packageManager. The
+      corpus is every Dockerfile* at the repository root; comments are not code. Declared
+      limits: build-arg overrides, installers other than npm, npx and corepack, CMD and
+      ENTRYPOINT. Three answers: CLEAN, VIOLATION naming file and line (exit 1), COULD NOT LOOK
+      (exit 2, also for a file with no FROM or an error of the gate itself). Its battery runs
+      first. Reads files only: no Docker, no network.
+    cmds:
+      - bash scripts/test-dockerfile-node-toolchain.sh
+      - bash scripts/check-dockerfile-node-toolchain.sh
 
   lint:compose-postgres-bootstrap:
     desc: >-
@@ -2522,6 +2545,28 @@ tasks:
     cmds:
       - bash scripts/test-uninstall-migration.sh
       - bash scripts/test-nfpm-openrc.sh
+
+  lint:package-upgrade-scripts:
+    desc: >-
+      PKG-L1 script-level matrix: runs the shipped nFPM maintainer scripts (and the
+      ccf7ea20 copies for the old side) in Debian, RPM and APK call order with recording
+      stubs. new->new keeps enabled/disabled/masked x active/inactive; old->new measures
+      the old prerm's disable as a defect with the named recovery; removal and purge keep
+      the ccf7ea20 effects; the format contract refuses by name; the appliance never
+      starts. Exit 2 means it could not look, never a pass.
+    cmds:
+      - bash scripts/test-package-upgrade-scripts.sh
+      - bash scripts/test-package-upgrade-matrix.sh --selftest-static
+
+  test:package-upgrade-matrix:
+    desc: >-
+      PKG-L1 built-archive matrix, HOSTED: goreleaser builds the ccf7ea20-script packages
+      at 1.0.0 and the tree's at 1.0.0 and 2.0.0; real dpkg, rpm and apk run new->new,
+      old->new, removal, purge and appliance cells in network-none containers with
+      recording service stubs. Exit 0 every cell holds, 1 a measured cell failed, 2 a
+      tool, image, build or container could not be observed.
+    cmds:
+      - bash scripts/test-package-upgrade-matrix.sh
 
   lint:nfpm-apk-postinstall-runtime:
     desc: >-

@@ -5,8 +5,12 @@
 package governance_test
 
 import (
+	"context"
 	"net/http"
 	"testing"
+
+	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/core/store"
 )
 
 // whoamiGrant returns the calling principal's grant for tenant as whoami reports it.
@@ -108,21 +112,22 @@ func TestWhoamiSetIsPerGrantNotPerPrincipal(t *testing.T) {
 	acme := h.createOrg(admin, "acme")
 	globex := h.createOrg(admin, "globex")
 
-	// One user, viewer in one tenant and admin in the other.
-	r := h.do("POST", "/v1/users", admin, map[string]any{"email": "two@acme.io", "password": "memberpass1"}, nil)
+	// One user, viewer in one tenant and admin in the other. The viewer grant is
+	// made with the account; the admin one is seeded through the store, as a
+	// membership that predates the consent rule.
+	r := h.do("POST", "/v1/users", admin, map[string]any{
+		"email": "two@acme.io", "password": "memberpass1", "tenant": acme.String(), "role": "viewer",
+	}, nil)
 	if r.code != http.StatusCreated {
 		t.Fatalf("create user = %d %s", r.code, r.raw)
 	}
 	uid := r.body["id"].(string)
-	for _, g := range []struct {
-		tenant string
-		role   string
-	}{{acme.String(), "viewer"}, {globex.String(), "admin"}} {
-		if r := h.do("POST", "/v1/memberships", admin, map[string]any{
-			"user_id": uid, "tenant": g.tenant, "role": g.role,
-		}, nil); r.code != http.StatusCreated {
-			t.Fatalf("grant %s in %s = %d %s", g.role, g.tenant, r.code, r.raw)
-		}
+	ctx := context.Background()
+	if err := h.st.AuthMutate(ctx, func(as store.AuthScope) error {
+		_, err := as.Memberships().Create(ctx, model.Membership{UserID: model.ID(uid), TargetTenantID: globex, Role: "admin"})
+		return err
+	}); err != nil {
+		t.Fatalf("seed admin in %s: %v", globex, err)
 	}
 	r = h.do("POST", "/v1/auth/login", "", map[string]any{"email": "two@acme.io", "password": "memberpass1"}, nil)
 	if r.code != http.StatusOK {

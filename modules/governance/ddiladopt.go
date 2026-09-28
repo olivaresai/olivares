@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 )
@@ -30,6 +31,9 @@ type PolicyAdoption struct {
 	// per-tenant override; zero clears it so the deployment default applies.
 	MaxStaleness time.Duration
 	Actor        string
+	// Standing is the port the adoption reads the standing of the accounts the
+	// snapshot names through; nil reads the store's own auth partition.
+	Standing auth.StandingReader
 }
 
 type AdoptReport struct {
@@ -54,13 +58,35 @@ func AdoptBundlePolicy(ctx context.Context, st store.Store, tenant model.TenantI
 		RefreshedAt: in.BundleCreatedAt, MaxStaleness: in.MaxStaleness,
 		AdoptedRevision: in.Revision, AdoptedCreatedAt: in.BundleCreatedAt,
 	}
+	// An adopted snapshot that names accounts is a fenced write, like a publish:
+	// the named accounts' standing is read first and pinned with the epoch. The
+	// caller passes its standing port; an import that has none reads the store's
+	// own auth partition through an authenticator over the same store, which
+	// holds nothing but that store.
+	standing := in.Standing
+	if standing == nil {
+		standing = auth.NewAuthenticator(st, nil)
+	}
+	subjects, serr := policySubjects(ctx, standing, string(in.Snapshot))
+	if serr != nil {
+		return AdoptReport{}, serr
+	}
 	for attempt := 0; attempt < maxDecisionRetries; attempt++ {
 		var report AdoptReport
+		refs, ferr := auth.FenceSubjects(ctx, standing, tenant, subjects)
+		if ferr != nil {
+			return AdoptReport{}, ferr
+		}
 		err := st.Mutate(ctx, tenant, func(sc store.Scope) error {
 			// Pin the one canonical authorization generation before reading any durable
 			// policy input. Every epoch-aware authored/managed/adopted writer serializes
 			// through this exact row, so the union classified below cannot cross snapshots.
-			if err := lockPolicyAuthorizationEpoch(ctx, sc); err != nil {
+			if len(refs) > 0 {
+				if _, err := auth.PinFence(ctx, sc, auth.FenceAuthorization, refs); err != nil {
+					return err
+				}
+			}
+			if err := lockOrCheckPolicyAuthorizationEpoch(ctx, sc, len(refs) > 0); err != nil {
 				return err
 			}
 

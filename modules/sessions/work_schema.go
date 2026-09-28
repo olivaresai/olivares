@@ -190,7 +190,7 @@ var hiddenWorkspaceLineage = model.WorkspaceLineageSpec{
 }
 
 func workFields(extra ...model.FieldSpec) []model.FieldSpec {
-	return append([]model.FieldSpec{{Name: colWorkWorkspaceID, Kind: model.KindUUID}}, extra...)
+	return append([]model.FieldSpec{{Name: colWorkWorkspaceID, Kind: model.KindUUID, Principal: pdeclNoneWorkspaceID}}, extra...)
 }
 
 func workIndexes(name string, extra ...model.IndexSpec) []model.IndexSpec {
@@ -208,26 +208,26 @@ func (m *Module) registerWorkSchema(reg store.ExtensionRegistry) error {
 		{
 			Kind: workItemKind, Table: workItemTable, RetainOnTenantDrop: true, WorkspaceLineage: hiddenWorkspaceLineage,
 			Fields: workFields(
-				model.FieldSpec{Name: colWorkKind, Kind: model.KindText},
-				model.FieldSpec{Name: colWorkTitle, Kind: model.KindText},
-				model.FieldSpec{Name: colWorkBrief, Kind: model.KindText},
-				model.FieldSpec{Name: colWorkBriefHash, Kind: model.KindBytes},
-				model.FieldSpec{Name: colWorkContextRefs, Kind: model.KindJSON},
-				model.FieldSpec{Name: colWorkStatus, Kind: model.KindText},
-				model.FieldSpec{Name: colWorkPriority, Kind: model.KindText},
-				model.FieldSpec{Name: colWorkOwnerKind, Kind: model.KindText},
-				model.FieldSpec{Name: colWorkOwnerRef, Kind: model.KindText},
+				model.FieldSpec{Name: colWorkKind, Kind: model.KindText, Principal: model.None("a work kind, a bounded vocabulary token: work_state.go:329, work_read.go:152")},
+				model.FieldSpec{Name: colWorkTitle, Kind: model.KindText, Principal: model.None("a work title, bounded prose returned to readers only: work_state.go:330, work_read.go:152")},
+				model.FieldSpec{Name: colWorkBrief, Kind: model.KindText, Principal: model.None("the work brief, bounded prose returned to readers only: work_state.go:331, work_read.go:152")},
+				model.FieldSpec{Name: colWorkBriefHash, Kind: model.KindBytes, Principal: model.None("a SHA-256 of the brief, shown as hex: work_mutation.go:119, work_read.go:153")},
+				model.FieldSpec{Name: colWorkContextRefs, Kind: model.KindJSON, Principal: model.None("open context references {kind, ref, hash}: a bounded token kind and bounded text ref, validated for shape only and returned verbatim, never resolved to an account: work_state.go:197-216, work_read.go:153")},
+				model.FieldSpec{Name: colWorkStatus, Kind: model.KindText, Principal: model.None("a work status, a closed set: work_state.go:26, work_read.go:154")},
+				model.FieldSpec{Name: colWorkPriority, Kind: model.KindText, Principal: model.None("a work priority, a closed set: work_state.go:28, work_state.go:332")},
+				model.FieldSpec{Name: colWorkOwnerKind, Kind: model.KindText, Principal: model.None("a work owner kind, a closed set of user, agent and session: work_state.go:29, work_state.go:333")},
+				model.FieldSpec{Name: colWorkOwnerRef, Kind: model.KindText, Principal: model.KindRef(colWorkOwnerKind, model.ClassObligation)},
 				model.FieldSpec{Name: colWorkOwnerEpoch, Kind: model.KindInt},
-				model.FieldSpec{Name: colWorkProvKind, Kind: model.KindText},
-				model.FieldSpec{Name: colWorkProvRef, Kind: model.KindText},
-				model.FieldSpec{Name: colWorkProvHash, Kind: model.KindBytes, Nullable: true},
-				model.FieldSpec{Name: colWorkParentID, Kind: model.KindUUID, Nullable: true},
-				model.FieldSpec{Name: colWorkSupersedesID, Kind: model.KindUUID, Nullable: true},
+				model.FieldSpec{Name: colWorkProvKind, Kind: model.KindText, Principal: model.None("a provenance kind, a closed set: work_state.go:30, work_state.go:335")},
+				model.FieldSpec{Name: colWorkProvRef, Kind: model.KindText, Principal: pdeclWorkProvenanceRef},
+				model.FieldSpec{Name: colWorkProvHash, Kind: model.KindBytes, Nullable: true, Principal: model.None("an optional caller-supplied SHA-256 of the provenance, decoded as 32 bytes: work_state.go:126-135, work_state.go:343")},
+				model.FieldSpec{Name: colWorkParentID, Kind: model.KindUUID, Nullable: true, Principal: model.None("the id of the parent work item: work_read.go:157")},
+				model.FieldSpec{Name: colWorkSupersedesID, Kind: model.KindUUID, Nullable: true, Principal: model.None("the id of the work item this one supersedes: work_read.go:158")},
 				model.FieldSpec{Name: colWorkAcceptanceRevision, Kind: model.KindInt},
-				model.FieldSpec{Name: colWorkBlockedCode, Kind: model.KindText, Nullable: true},
-				model.FieldSpec{Name: colWorkBlockedReason, Kind: model.KindText, Nullable: true},
-				model.FieldSpec{Name: colWorkTerminalCode, Kind: model.KindText, Nullable: true},
-				model.FieldSpec{Name: colWorkTerminalReason, Kind: model.KindText, Nullable: true},
+				model.FieldSpec{Name: colWorkBlockedCode, Kind: model.KindText, Nullable: true, Principal: model.None("a bounded block code token: work_state.go:426, work_mutation.go:236, work_mutation.go:331")},
+				model.FieldSpec{Name: colWorkBlockedReason, Kind: model.KindText, Nullable: true, Principal: model.None("bounded block reason prose returned to readers only: work_state.go:427, work_read.go:159")},
+				model.FieldSpec{Name: colWorkTerminalCode, Kind: model.KindText, Nullable: true, Principal: model.None("a bounded terminal code token: work_state.go:426, work_mutation.go:246-253")},
+				model.FieldSpec{Name: colWorkTerminalReason, Kind: model.KindText, Nullable: true, Principal: model.None("bounded terminal reason prose returned to readers only: work_state.go:427, work_read.go:160")},
 				model.FieldSpec{Name: colWorkDueAt, Kind: model.KindTimestamp, Nullable: true},
 				model.FieldSpec{Name: colWorkReadyAt, Kind: model.KindTimestamp, Nullable: true},
 				model.FieldSpec{Name: colWorkStartedAt, Kind: model.KindTimestamp, Nullable: true},
@@ -249,14 +249,14 @@ func (m *Module) registerWorkSchema(reg store.ExtensionRegistry) error {
 		{
 			Kind: workDependencyKind, Table: workDependencyTable, RetainOnTenantDrop: true, WorkspaceLineage: hiddenWorkspaceLineage,
 			Fields: workFields(
-				model.FieldSpec{Name: colWorkItemID, Kind: model.KindUUID},
-				model.FieldSpec{Name: colDepDependsOnID, Kind: model.KindUUID},
-				model.FieldSpec{Name: colDepRelation, Kind: model.KindText},
+				model.FieldSpec{Name: colWorkItemID, Kind: model.KindUUID, Principal: pdeclNoneWorkItemID},
+				model.FieldSpec{Name: colDepDependsOnID, Kind: model.KindUUID, Principal: model.None("the id of the work item this one depends on: work_state.go:442-443, work_mutation.go:314")},
+				model.FieldSpec{Name: colDepRelation, Kind: model.KindText, Principal: model.None("a dependency relation, always blocks: work_mutation.go:296, work_mutation.go:314")},
 				model.FieldSpec{Name: colDepActive, Kind: model.KindBool},
-				model.FieldSpec{Name: colDepAddedByKind, Kind: model.KindText},
-				model.FieldSpec{Name: colDepAddedByRef, Kind: model.KindText},
-				model.FieldSpec{Name: colDepRemovedByKind, Kind: model.KindText, Nullable: true},
-				model.FieldSpec{Name: colDepRemovedByRef, Kind: model.KindText, Nullable: true},
+				model.FieldSpec{Name: colDepAddedByKind, Kind: model.KindText, Principal: pdeclNoneWorkActorKind},
+				model.FieldSpec{Name: colDepAddedByRef, Kind: model.KindText, Principal: model.KindRef(colDepAddedByKind, model.ClassEvidence)},
+				model.FieldSpec{Name: colDepRemovedByKind, Kind: model.KindText, Nullable: true, Principal: pdeclNoneWorkActorKind},
+				model.FieldSpec{Name: colDepRemovedByRef, Kind: model.KindText, Nullable: true, Principal: model.KindRef(colDepRemovedByKind, model.ClassEvidence)},
 				model.FieldSpec{Name: colDepRemovedAt, Kind: model.KindTimestamp, Nullable: true},
 			),
 			Indexes: workIndexes("sessions_work_dependency_workspace",
@@ -268,18 +268,18 @@ func (m *Module) registerWorkSchema(reg store.ExtensionRegistry) error {
 		{
 			Kind: workAcceptanceKind, Table: workAcceptanceTable, RetainOnTenantDrop: true, WorkspaceLineage: hiddenWorkspaceLineage,
 			Fields: workFields(
-				model.FieldSpec{Name: colWorkItemID, Kind: model.KindUUID},
-				model.FieldSpec{Name: colAccKey, Kind: model.KindText},
+				model.FieldSpec{Name: colWorkItemID, Kind: model.KindUUID, Principal: pdeclNoneWorkItemID},
+				model.FieldSpec{Name: colAccKey, Kind: model.KindText, Principal: model.None("an acceptance criterion key, a bounded vocabulary token: work_state.go:226")},
 				model.FieldSpec{Name: colAccOrdinal, Kind: model.KindInt},
-				model.FieldSpec{Name: colAccStatement, Kind: model.KindText},
+				model.FieldSpec{Name: colAccStatement, Kind: model.KindText, Principal: model.None("acceptance criterion prose returned to readers only: work_state.go:228, work_read.go:197-221")},
 				model.FieldSpec{Name: colAccRequired, Kind: model.KindBool},
-				model.FieldSpec{Name: colAccState, Kind: model.KindText},
-				model.FieldSpec{Name: colAccEvidenceRef, Kind: model.KindText, Nullable: true},
-				model.FieldSpec{Name: colAccEvidenceHash, Kind: model.KindBytes, Nullable: true},
-				model.FieldSpec{Name: colAccVerifiedByKind, Kind: model.KindText, Nullable: true},
-				model.FieldSpec{Name: colAccVerifiedByRef, Kind: model.KindText, Nullable: true},
+				model.FieldSpec{Name: colAccState, Kind: model.KindText, Principal: model.None("an acceptance state, a closed set: work_state.go:31, work_state.go:253")},
+				model.FieldSpec{Name: colAccEvidenceRef, Kind: model.KindText, Nullable: true, Principal: model.None("a bounded reference to verification evidence, returned to readers only and never resolved to an account: work_state.go:259, work_mutation.go:458")},
+				model.FieldSpec{Name: colAccEvidenceHash, Kind: model.KindBytes, Nullable: true, Principal: model.None("a caller-supplied SHA-256 of the verification evidence: work_state.go:263, work_mutation.go:459-463")},
+				model.FieldSpec{Name: colAccVerifiedByKind, Kind: model.KindText, Nullable: true, Principal: pdeclNoneWorkActorKind},
+				model.FieldSpec{Name: colAccVerifiedByRef, Kind: model.KindText, Nullable: true, Principal: model.KindRef(colAccVerifiedByKind, model.ClassEvidence)},
 				model.FieldSpec{Name: colAccVerifiedAt, Kind: model.KindTimestamp, Nullable: true},
-				model.FieldSpec{Name: colAccWaiverDecisionID, Kind: model.KindUUID, Nullable: true},
+				model.FieldSpec{Name: colAccWaiverDecisionID, Kind: model.KindUUID, Nullable: true, Principal: model.None("the id of the work decision that waived the criterion: work_state.go:267-268, work_mutation.go:465")},
 			),
 			Indexes: workIndexes("sessions_work_acceptance_workspace",
 				model.IndexSpec{Name: "sessions_work_acceptance_uniq", Columns: []string{model.ColTenantID, colWorkItemID, colAccKey}, Unique: true},
@@ -290,21 +290,21 @@ func (m *Module) registerWorkSchema(reg store.ExtensionRegistry) error {
 		{
 			Kind: workDecisionKind, Table: workDecisionTable, AppendOnly: true, WorkspaceLineage: hiddenWorkspaceLineage,
 			Fields: workFields(
-				model.FieldSpec{Name: colWorkItemID, Kind: model.KindUUID},
-				model.FieldSpec{Name: colDecisionKey, Kind: model.KindText},
+				model.FieldSpec{Name: colWorkItemID, Kind: model.KindUUID, Principal: pdeclNoneWorkItemID},
+				model.FieldSpec{Name: colDecisionKey, Kind: model.KindText, Principal: pdeclNoneDecisionKey},
 				model.FieldSpec{Name: colDecisionSeq, Kind: model.KindInt},
-				model.FieldSpec{Name: colDecisionSubjectKind, Kind: model.KindText},
-				model.FieldSpec{Name: colDecisionSubjectRef, Kind: model.KindText},
-				model.FieldSpec{Name: colDecisionOperation, Kind: model.KindText},
-				model.FieldSpec{Name: colDecisionStatement, Kind: model.KindText},
-				model.FieldSpec{Name: colDecisionRationale, Kind: model.KindText},
-				model.FieldSpec{Name: colDecisionByKind, Kind: model.KindText},
-				model.FieldSpec{Name: colDecisionByRef, Kind: model.KindText},
-				model.FieldSpec{Name: colDecisionAuthority, Kind: model.KindText},
-				model.FieldSpec{Name: colDecisionSupersedesID, Kind: model.KindUUID, Nullable: true},
-				model.FieldSpec{Name: colDecisionRevokesID, Kind: model.KindUUID, Nullable: true},
+				model.FieldSpec{Name: colDecisionSubjectKind, Kind: model.KindText, Principal: model.None("a decision subject kind, bounded text; a communication decision copies its request owner kind: work_state.go:516, communication_decision_apply.go:994")},
+				model.FieldSpec{Name: colDecisionSubjectRef, Kind: model.KindText, Principal: model.KindRef(colDecisionSubjectKind, model.ClassEvidence)},
+				model.FieldSpec{Name: colDecisionOperation, Kind: model.KindText, Principal: model.None("a decision operation, a closed set: work_state.go:32, work_mutation.go:524")},
+				model.FieldSpec{Name: colDecisionStatement, Kind: model.KindText, Principal: model.None("decision prose returned to readers only: work_state.go:509, work_read.go:197-221")},
+				model.FieldSpec{Name: colDecisionRationale, Kind: model.KindText, Principal: model.None("decision prose returned to readers only: work_state.go:510, work_read.go:197-221")},
+				model.FieldSpec{Name: colDecisionByKind, Kind: model.KindText, Principal: pdeclNoneWorkActorKind},
+				model.FieldSpec{Name: colDecisionByRef, Kind: model.KindText, Principal: model.KindRef(colDecisionByKind, model.ClassEvidence)},
+				model.FieldSpec{Name: colDecisionAuthority, Kind: model.KindText, Principal: model.None("a bounded reference to the authority a decision was taken under, recorded and hashed but never resolved to an account: work_state.go:508, work_mutation.go:530")},
+				model.FieldSpec{Name: colDecisionSupersedesID, Kind: model.KindUUID, Nullable: true, Principal: model.None("the id of the earlier decision of the same key this one supersedes: work_mutation.go:531, work_mutation.go:548")},
+				model.FieldSpec{Name: colDecisionRevokesID, Kind: model.KindUUID, Nullable: true, Principal: model.None("the id of the earlier decision of the same key this one revokes: work_mutation.go:531, work_mutation.go:548")},
 				model.FieldSpec{Name: colDecisionEffectiveAt, Kind: model.KindTimestamp},
-				model.FieldSpec{Name: colDecisionHash, Kind: model.KindBytes},
+				model.FieldSpec{Name: colDecisionHash, Kind: model.KindBytes, Principal: model.None("a SHA-256 of the canonical decision document: work_mutation.go:533, work_mutation.go:549")},
 			),
 			Indexes: workIndexes("sessions_work_decision_workspace",
 				model.IndexSpec{Name: "sessions_work_decision_uniq", Columns: []string{model.ColTenantID, colWorkItemID, colDecisionKey, colDecisionSeq}, Unique: true},
@@ -315,29 +315,29 @@ func (m *Module) registerWorkSchema(reg store.ExtensionRegistry) error {
 		{
 			Kind: workDecisionHeadKind, Table: workDecisionHeadTable, RetainOnTenantDrop: true, WorkspaceLineage: hiddenWorkspaceLineage,
 			Fields: workFields(
-				model.FieldSpec{Name: colWorkItemID, Kind: model.KindUUID},
-				model.FieldSpec{Name: colDecisionKey, Kind: model.KindText},
-				model.FieldSpec{Name: colDecisionCurrentID, Kind: model.KindUUID},
+				model.FieldSpec{Name: colWorkItemID, Kind: model.KindUUID, Principal: pdeclNoneWorkItemID},
+				model.FieldSpec{Name: colDecisionKey, Kind: model.KindText, Principal: pdeclNoneDecisionKey},
+				model.FieldSpec{Name: colDecisionCurrentID, Kind: model.KindUUID, Principal: model.None("the id of the decision currently in effect for the key: work_mutation.go:561, work_mutation.go:510")},
 				model.FieldSpec{Name: colDecisionCurrentSeq, Kind: model.KindInt},
-				model.FieldSpec{Name: colDecisionHeadState, Kind: model.KindText},
-				model.FieldSpec{Name: colDecisionHeadHash, Kind: model.KindBytes},
+				model.FieldSpec{Name: colDecisionHeadState, Kind: model.KindText, Principal: model.None("a decision head state, effective or revoked: work_mutation.go:554-557")},
+				model.FieldSpec{Name: colDecisionHeadHash, Kind: model.KindBytes, Principal: model.None("the hash of the decision currently in effect: work_mutation.go:563, work_mutation.go:567")},
 			),
 			Indexes: workIndexes("sessions_work_decision_head_workspace", model.IndexSpec{Name: "sessions_work_decision_head_uniq", Columns: []string{model.ColTenantID, colWorkItemID, colDecisionKey}, Unique: true}),
 		},
 		{
 			Kind: workLeaseKind, Table: workLeaseTable, RetainOnTenantDrop: true, WorkspaceLineage: hiddenWorkspaceLineage,
 			Fields: workFields(
-				model.FieldSpec{Name: colWorkItemID, Kind: model.KindUUID},
-				model.FieldSpec{Name: colLeaseHolderSID, Kind: model.KindText, Nullable: true},
-				model.FieldSpec{Name: colLeaseHolderRunRef, Kind: model.KindText, Nullable: true},
-				model.FieldSpec{Name: colLeaseHolderAgentRef, Kind: model.KindText, Nullable: true},
+				model.FieldSpec{Name: colWorkItemID, Kind: model.KindUUID, Principal: pdeclNoneWorkItemID},
+				model.FieldSpec{Name: colLeaseHolderSID, Kind: model.KindText, Nullable: true, Principal: pdeclNoneSID},
+				model.FieldSpec{Name: colLeaseHolderRunRef, Kind: model.KindText, Nullable: true, Principal: model.None("the run reference (or a protocol attempt label) of the lease holder, compared as part of the holder key: work_lease.go:89, work_lease.go:143-144, communication_binding_service.go:1020")},
+				model.FieldSpec{Name: colLeaseHolderAgentRef, Kind: model.KindText, Nullable: true, Principal: model.None("the agent identity string of the lease holder, compared as part of the holder key and never an account: work_lease.go:89, work_lease.go:143-144")},
 				model.FieldSpec{Name: colLeaseFence, Kind: model.KindInt},
-				model.FieldSpec{Name: colLeaseState, Kind: model.KindText},
+				model.FieldSpec{Name: colLeaseState, Kind: model.KindText, Principal: model.None("a work lease state, a closed set: work_lease.go:46-50, work_lease.go:90")},
 				model.FieldSpec{Name: colLeaseAcquiredAt, Kind: model.KindTimestamp, Nullable: true},
 				model.FieldSpec{Name: colLeaseRenewedAt, Kind: model.KindTimestamp, Nullable: true},
 				model.FieldSpec{Name: colLeaseExpiresAt, Kind: model.KindTimestamp, Nullable: true},
 				model.FieldSpec{Name: colLeaseEndedAt, Kind: model.KindTimestamp, Nullable: true},
-				model.FieldSpec{Name: colLeaseEndReason, Kind: model.KindText, Nullable: true},
+				model.FieldSpec{Name: colLeaseEndReason, Kind: model.KindText, Nullable: true, Principal: model.None("operator-authored end text or a fixed end code, carried to events only as a hash: work_mutation.go:656-661, work_lease.go:147")},
 				model.FieldSpec{Name: colLeaseRenewalCount, Kind: model.KindInt},
 			),
 			Indexes: workIndexes("sessions_work_lease_workspace",
@@ -349,19 +349,19 @@ func (m *Module) registerWorkSchema(reg store.ExtensionRegistry) error {
 		{
 			Kind: workCommandKind, Table: workCommandTable, AppendOnly: true, WorkspaceLineage: hiddenWorkspaceLineage,
 			Fields: workFields(
-				model.FieldSpec{Name: colCommandID, Kind: model.KindUUID},
-				model.FieldSpec{Name: colCommandActorFP, Kind: model.KindBytes},
-				model.FieldSpec{Name: colCommandScope, Kind: model.KindText},
-				model.FieldSpec{Name: colCommandIdempotency, Kind: model.KindBytes},
-				model.FieldSpec{Name: colCommandRequestHash, Kind: model.KindBytes},
-				model.FieldSpec{Name: colCommandPlanHash, Kind: model.KindBytes},
-				model.FieldSpec{Name: colCommandResultKind, Kind: model.KindText},
-				model.FieldSpec{Name: colCommandResultID, Kind: model.KindUUID, Nullable: true},
+				model.FieldSpec{Name: colCommandID, Kind: model.KindUUID, Principal: model.None("the id of a work command receipt: work_service.go:1874, work_service.go:1997-2003")},
+				model.FieldSpec{Name: colCommandActorFP, Kind: model.KindBytes, Principal: model.None("an unkeyed SHA-256 of the caller's actor kind, ref and actor string, used only as an idempotency namespace key and compared for equality: work_service.go:1980, work_service.go:2003")},
+				model.FieldSpec{Name: colCommandScope, Kind: model.KindText, Principal: model.None("a command scope label, a command name and a work item id: work_service.go:1973-1979")},
+				model.FieldSpec{Name: colCommandIdempotency, Kind: model.KindBytes, Principal: model.None("a SHA-256 of the caller's idempotency key: work_service.go:1981")},
+				model.FieldSpec{Name: colCommandRequestHash, Kind: model.KindBytes, Principal: model.None("a SHA-256 of the canonical command request: work_service.go:1989-1993")},
+				model.FieldSpec{Name: colCommandPlanHash, Kind: model.KindBytes, Principal: model.None("the hash of the command plan: work_service.go:1876, work_outbox.go:394")},
+				model.FieldSpec{Name: colCommandResultKind, Kind: model.KindText, Principal: model.None("the entity kind of the command result: work_service.go:1877, work_outbox.go:395")},
+				model.FieldSpec{Name: colCommandResultID, Kind: model.KindUUID, Nullable: true, Principal: model.None("the id of the command's result row: work_service.go:1878, work_outbox.go:395")},
 				model.FieldSpec{Name: colCommandHTTPStatus, Kind: model.KindInt},
-				model.FieldSpec{Name: colCommandResponse, Kind: model.KindJSON},
-				model.FieldSpec{Name: colCommandResponseHash, Kind: model.KindBytes},
+				model.FieldSpec{Name: colCommandResponse, Kind: model.KindJSON, Principal: model.None("a closed command result projection of verdicts, codes, ids and hashes with no principal field, from one of two writers: work_model.go:67-82, work_model.go:89-108, work_service.go:1860, work_outbox.go:381")},
+				model.FieldSpec{Name: colCommandResponseHash, Kind: model.KindBytes, Principal: model.None("a SHA-256 of the stored response: work_service.go:1880, work_outbox.go:397")},
 				model.FieldSpec{Name: colCommandAuditSeq, Kind: model.KindInt},
-				model.FieldSpec{Name: colCommandAuditHash, Kind: model.KindBytes},
+				model.FieldSpec{Name: colCommandAuditHash, Kind: model.KindBytes, Principal: model.None("the hash of the audit event the command committed with: work_service.go:1881, work_outbox.go:551")},
 				model.FieldSpec{Name: colCommandCompletedAt, Kind: model.KindTimestamp},
 			),
 			Indexes: workIndexes("sessions_work_command_workspace",
@@ -372,19 +372,19 @@ func (m *Module) registerWorkSchema(reg store.ExtensionRegistry) error {
 		{
 			Kind: workEventKind, Table: workEventTable, AppendOnly: true, WorkspaceLineage: hiddenWorkspaceLineage,
 			Fields: workFields(
-				model.FieldSpec{Name: colEventID, Kind: model.KindUUID},
-				model.FieldSpec{Name: colEventAggregateKind, Kind: model.KindText},
-				model.FieldSpec{Name: colEventAggregateID, Kind: model.KindUUID},
+				model.FieldSpec{Name: colEventID, Kind: model.KindUUID, Principal: model.None("the id of a work event: work_mutation.go:749, work_outbox_policy.go:236")},
+				model.FieldSpec{Name: colEventAggregateKind, Kind: model.KindText, Principal: model.None("the entity kind of the event's aggregate, a work item or a communication entity: work_mutation.go:750, work_outbox_policy.go:236")},
+				model.FieldSpec{Name: colEventAggregateID, Kind: model.KindUUID, Principal: model.None("the id of the event's aggregate row: work_mutation.go:750, work_outbox_policy.go:237")},
 				model.FieldSpec{Name: colEventSeq, Kind: model.KindInt},
-				model.FieldSpec{Name: colEventType, Kind: model.KindText},
-				model.FieldSpec{Name: colEventActorKind, Kind: model.KindText},
-				model.FieldSpec{Name: colEventActorRef, Kind: model.KindText},
+				model.FieldSpec{Name: colEventType, Kind: model.KindText, Principal: model.None("an event type name, classified only into an event family: work_state.go:661, work_outbox_policy.go:233-239")},
+				model.FieldSpec{Name: colEventActorKind, Kind: model.KindText, Principal: pdeclNoneWorkActorKind},
+				model.FieldSpec{Name: colEventActorRef, Kind: model.KindText, Principal: model.KindRef(colEventActorKind, model.ClassEvidence)},
 				model.FieldSpec{Name: colEventOccurredAt, Kind: model.KindTimestamp},
-				model.FieldSpec{Name: colEventPayload, Kind: model.KindJSON},
-				model.FieldSpec{Name: colEventPayloadHash, Kind: model.KindBytes},
-				model.FieldSpec{Name: colEventCommandID, Kind: model.KindUUID},
+				model.FieldSpec{Name: colEventPayload, Kind: model.KindJSON, Principal: pdeclWorkEventPayload},
+				model.FieldSpec{Name: colEventPayloadHash, Kind: model.KindBytes, Principal: model.None("a SHA-256 of the event payload, compared with it on read: work_mutation.go:753, work_outbox.go:897")},
+				model.FieldSpec{Name: colEventCommandID, Kind: model.KindUUID, Principal: model.None("the id of the command receipt the event committed with: work_mutation.go:754, communication_ack_apply.go:1741")},
 				model.FieldSpec{Name: colEventAuditSeq, Kind: model.KindInt},
-				model.FieldSpec{Name: colEventAuditHash, Kind: model.KindBytes},
+				model.FieldSpec{Name: colEventAuditHash, Kind: model.KindBytes, Principal: model.None("the hash of the audit event the event committed with: work_mutation.go:754, work_service.go:2045")},
 			),
 			Indexes: workIndexes("sessions_work_event_workspace",
 				model.IndexSpec{Name: "sessions_work_event_id_uniq", Columns: []string{model.ColTenantID, colEventID}, Unique: true},
@@ -396,14 +396,14 @@ func (m *Module) registerWorkSchema(reg store.ExtensionRegistry) error {
 		{
 			Kind: workOutboxKind, Table: workOutboxTable, RetainOnTenantDrop: true, WorkspaceLineage: hiddenWorkspaceLineage,
 			Fields: workFields(
-				model.FieldSpec{Name: colOutboxEventID, Kind: model.KindUUID},
-				model.FieldSpec{Name: colOutboxState, Kind: model.KindText},
+				model.FieldSpec{Name: colOutboxEventID, Kind: model.KindUUID, Principal: model.None("the id of the work event the outbox row publishes: work_mutation.go:764, work_outbox_policy.go:236")},
+				model.FieldSpec{Name: colOutboxState, Kind: model.KindText, Principal: model.None("an outbox state, a closed set written from this module's constants: work_outbox.go:362, work_outbox.go:683, work_outbox.go:1003-1009")},
 				model.FieldSpec{Name: colOutboxAttempts, Kind: model.KindInt},
 				model.FieldSpec{Name: colOutboxNextAttemptAt, Kind: model.KindTimestamp},
-				model.FieldSpec{Name: colOutboxClaimOwner, Kind: model.KindText, Nullable: true},
+				model.FieldSpec{Name: colOutboxClaimOwner, Kind: model.KindText, Nullable: true, Principal: model.None("the pump's fixed claim label: work_outbox.go:685")},
 				model.FieldSpec{Name: colOutboxClaimUntil, Kind: model.KindTimestamp, Nullable: true},
 				model.FieldSpec{Name: colOutboxPublishedAt, Kind: model.KindTimestamp, Nullable: true},
-				model.FieldSpec{Name: colOutboxLastOutcome, Kind: model.KindText, Nullable: true},
+				model.FieldSpec{Name: colOutboxLastOutcome, Kind: model.KindText, Nullable: true, Principal: model.None("a fixed delivery outcome token: work_outbox.go:364, work_outbox.go:1003-1009, work_outbox.go:1026-1027")},
 			),
 			Indexes: workIndexes("sessions_work_outbox_workspace",
 				model.IndexSpec{Name: "sessions_work_outbox_event_uniq", Columns: []string{model.ColTenantID, colOutboxEventID}, Unique: true},
@@ -413,11 +413,11 @@ func (m *Module) registerWorkSchema(reg store.ExtensionRegistry) error {
 		{
 			Kind: workGuardKind, Table: workGuardTable, RetainOnTenantDrop: true, WorkspaceLineage: hiddenWorkspaceLineage,
 			Fields: workFields(
-				model.FieldSpec{Name: colGuardKind, Kind: model.KindText},
+				model.FieldSpec{Name: colGuardKind, Kind: model.KindText, Principal: model.None("a work guard kind, a closed set of two: work_mutation.go:350, work_lease.go:262")},
 				model.FieldSpec{Name: colGuardEpoch, Kind: model.KindInt},
 				model.FieldSpec{Name: colGuardLastDBTime, Kind: model.KindTimestamp, Nullable: true},
-				model.FieldSpec{Name: colGuardRebaseDecision, Kind: model.KindUUID, Nullable: true},
-				model.FieldSpec{Name: colGuardRebaseEvidence, Kind: model.KindText, Nullable: true},
+				model.FieldSpec{Name: colGuardRebaseDecision, Kind: model.KindUUID, Nullable: true, Principal: model.None("the id of the decision that authorized a lease clock rebase: work_lease.go:278")},
+				model.FieldSpec{Name: colGuardRebaseEvidence, Kind: model.KindText, Nullable: true, Principal: model.None("a bounded reference to the evidence of a clock rebase, never resolved to an account: work_state.go:579, work_lease.go:278")},
 			),
 			Indexes: workIndexes("sessions_work_guard_workspace", model.IndexSpec{Name: "sessions_work_guard_uniq", Columns: []string{model.ColTenantID, colWorkWorkspaceID, colGuardKind}, Unique: true}),
 		},
@@ -603,3 +603,28 @@ func workSchemaInvariants() map[store.Engine][]store.SchemaTrigger {
 	)
 	return map[store.Engine][]store.SchemaTrigger{store.EnginePostgres: pg, store.EngineSQLite: sqlite}
 }
+
+// Principal declarations of the durable-work descriptors, and of the lineage
+// and work-item columns the communication descriptors share with them. The
+// (kind, ref) actor and owner pairs of this kernel spell an account as kind
+// "user" with a bare account id (work_api.go:586-587, work_state.go:317), which
+// is the (kind, ref) encoding. A shared declaration cites lines that hold for
+// every column using it.
+var (
+	pdeclNoneWorkspaceID   = model.None("the core workspace id of the row's hidden lineage, never an account: work_schema.go:188-190, core/model/descriptor.go:118-120")
+	pdeclNoneWorkItemID    = model.None("the id of a work item, validated as a canonical id and used only to join rows to that item, never an account: work_read.go:202-203, communication_state.go:1597, communication_state.go:2802, communication_state.go:3182, communication_binding_service.go:583, communication_protocol_interrupt.go:826")
+	pdeclNoneWorkActorKind = model.None("a work actor kind (user, agent, session or system), a closed set: work_api.go:580-625, work_lease.go:1045, communication_state.go:147-149")
+	pdeclNoneDecisionKey   = model.None("a decision key, a bounded vocabulary token: work_state.go:507, work_mutation.go:561")
+
+	// pdeclWorkProvenanceRef is caller-supplied text naming who or what
+	// originated the work (work_state.go:336); for a human provenance it may be
+	// a person's alias in any spelling, so it is matched against every alias as
+	// evidence. It is only returned to readers (work_read.go:156).
+	pdeclWorkProvenanceRef = model.Scan(model.ClassEvidence)
+
+	// pdeclWorkEventPayload is an event payload whose shape depends on the event
+	// type and on which writer appended it (work_mutation.go:632-661 among
+	// others); it can carry session, lease and participant references, so it is
+	// matched against every alias as evidence of what happened.
+	pdeclWorkEventPayload = model.Scan(model.ClassEvidence)
+)

@@ -1,34 +1,72 @@
 {
-  "title": "Paramètres",
-  "subtitle": "Gérez votre compte et l’apparence de la console.",
-  "tabs": {
-    "profile": "Profil",
-    "appearance": "Apparence",
-    "about": "À propos"
+  "title": "Réglages",
+  "restoreAll": "Rétablir toutes les valeurs",
+  "search": "Rechercher dans les réglages",
+  "changedReset": "Modifié · réinitialiser",
+  "noMatches": "Aucun réglage ne correspond.",
+  "groups": {
+    "you": "Vous",
+    "work": "Travail",
+    "installation": "Cette installation"
   },
-  "profile": {
-    "title": "Profil",
-    "email": "Email",
-    "displayName": "Nom affiché",
-    "role": "Rôle dans cette organisation",
-    "memberships": "Organisations",
-    "actor": "Principal"
+  "nav": {
+    "general": "Général",
+    "notifications": "Notifications",
+    "keyboard": "Clavier",
+    "sessionDefaults": "Valeurs de session",
+    "aiTools": "Outils d’IA",
+    "workspaces": "Espaces de travail",
+    "deploy": "Déploiement et mises à jour",
+    "signIn": "Connexion et sécurité",
+    "setup": "Installation",
+    "about": "À propos",
+    "sections": "Sections des réglages"
   },
-  "appearance": {
-    "title": "Apparence",
+  "general": {
+    "title": "Général",
+    "scope": "Vos préférences. Elles vous suivent dans chaque espace de travail de cette installation.",
     "theme": "Thème",
-    "themeHint": "Choisissez clair, sombre, ou suivez votre système.",
-    "density": "Densité du tableau",
-    "densityHint": "Le mode compact affiche plus de lignes ; le mode confortable est plus aéré.",
+    "themeHint": "Sombre, sauf si vous choisissez clair ou de suivre le système.",
+    "density": "Densité",
+    "densityHint": "Compact affiche plus de lignes ; confortable se lit plus facilement.",
     "language": "Langue",
-    "languageHint": "La langue de l’interface de la console."
+    "languageHint": "English, Español, Deutsch, Français, 日本語, Русский, 中文.",
+    "time": "Heure",
+    "timeHint": "Les heures s’affichent dans votre fuseau ({{zone}}). Les enregistrements et les exports restent en UTC.",
+    "clock24": "24 heures",
+    "clock12": "12 heures",
+    "startPage": "Page de départ",
+    "startPageHint": "Ce qui s’ouvre à la connexion. Valeur par défaut : Accueil.",
+    "confirmStop": "Confirmer avant d’arrêter une session",
+    "confirmStopHint": "Demander une fois avant qu’Arrêter ne termine une session encore au travail.",
+    "reduceMotion": "Réduire les animations",
+    "reduceMotionHint": "Remplace le mouvement par des fondus. Activé quand le système le demande."
+  },
+  "unavailable": {
+    "notifications": "Les préférences de notification ne sont pas encore enregistrées sur cette installation.",
+    "sessionDefaults": "Les valeurs de session ne sont pas encore enregistrées sur cette installation.",
+    "signIn": "La politique de connexion ne s’édite pas encore sur cet écran."
+  },
+  "keyboard": {
+    "title": "Clavier",
+    "scope": "Les touches auxquelles cette installation répond. Elles sont les mêmes pour tout le monde."
   },
   "about": {
     "title": "À propos",
+    "scope": "Cette installation et le principal connecté.",
     "version": "Version",
     "engine": "Moteur de stockage",
     "license": "État de la licence",
-    "licensee": "Sous licence pour",
-    "none": "Aucun"
+    "licensee": "Concédée à",
+    "none": "Aucun",
+    "displayName": "Nom affiché",
+    "actor": "Principal",
+    "role": "Rôle dans cette organisation",
+    "memberships": "Organisations"
+  },
+  "stopConfirm": {
+    "title": "Arrêter cette session ?",
+    "description": "Arrêter termine une session qui travaille encore.",
+    "confirm": "Arrêter la session"
   }
 }

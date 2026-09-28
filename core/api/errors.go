@@ -251,6 +251,29 @@ func statusFor(err error) (int, string) {
 		// code so the console can route the operator to the step-up ceremony
 		// instead of a generic authz denial.
 		return http.StatusForbidden, "step_up_required"
+	case errors.Is(err, auth.ErrForeignDomain):
+		// The address's domain is claimed by another organization's identity
+		// provider. Checked before the address is looked up, so it reveals
+		// configuration, never an account.
+		return http.StatusConflict, "domain_claimed_elsewhere"
+	case errors.Is(err, auth.ErrNotTenantGoverned):
+		return http.StatusForbidden, "not_tenant_governed"
+	case errors.Is(err, auth.ErrRetirementPending):
+		return http.StatusConflict, "retirement_pending"
+	case errors.Is(err, auth.ErrInviteDeliveryUnavailable):
+		return http.StatusConflict, "invite_delivery_unavailable"
+	case errors.Is(err, auth.ErrRecoveryRequired):
+		return http.StatusConflict, "recovery_required"
+	case errors.Is(err, auth.ErrSubjectRetirementActive):
+		return http.StatusConflict, "subject_retirement_active"
+	case errors.Is(err, auth.ErrSubjectErasing):
+		return http.StatusConflict, "subject_erasing"
+	case errors.Is(err, auth.ErrSubjectErased):
+		return http.StatusConflict, "subject_erased"
+	case errors.Is(err, auth.ErrSessionScopeMismatch):
+		// A session scoped to one tenant cannot change the account's
+		// authenticators: they are account-wide.
+		return http.StatusForbidden, "session_scope_mismatch"
 	case errors.Is(err, auth.ErrWebAuthnVerification):
 		// a WebAuthn/PIV ceremony failed verification. 403 (not 401: the
 		// SESSION is still valid — only the elevation was refused).
@@ -476,6 +499,12 @@ func humanisedCode(code string) string {
 // the engine had made ON PURPOSE, and a deliberate deny-closed answer was logged
 // at ERROR next to real faults, which is how operators learn to ignore the log.
 func (s *Server) writeError(w http.ResponseWriter, r *http.Request, err error) {
+	if errors.Is(err, auth.ErrConsentRequired) {
+		// Not an error: the one answer for an existing account that is not a
+		// member, identical on every route.
+		writeConsentRequired(w)
+		return
+	}
 	status, code := statusFor(err)
 	msg := err.Error()
 	switch {

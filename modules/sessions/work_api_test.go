@@ -151,22 +151,15 @@ func workAPIRoleToken(t *testing.T, h *harness, admin string, tenant model.Tenan
 func workAPIRoleTokenIn(t *testing.T, h *harness, admin string, tenant model.TenantID, role, email string, workspace model.ID) string {
 	t.Helper()
 	const password = "work-api-pass1"
-	created := h.doJSON(http.MethodPost, "/v1/users", admin, map[string]any{
-		"email": email, "password": password,
-	}, nil)
-	if created.code != http.StatusCreated {
-		t.Fatalf("create %s user = %d %s", role, created.code, created.raw)
-	}
-	uid, _ := created.body["id"].(string)
-	membership := map[string]any{
-		"user_id": uid, "tenant": tenant.String(), "role": role,
+	user := map[string]any{
+		"email": email, "password": password, "tenant": tenant.String(), "role": role,
 	}
 	if !workspace.IsZero() {
-		membership["workspace_id"] = workspace.String()
+		user["workspace_id"] = workspace.String()
 	}
-	granted := h.doJSON(http.MethodPost, "/v1/memberships", admin, membership, nil)
-	if granted.code != http.StatusCreated {
-		t.Fatalf("grant %s = %d %s", role, granted.code, granted.raw)
+	created := h.doJSON(http.MethodPost, "/v1/users", admin, user, nil)
+	if created.code != http.StatusCreated {
+		t.Fatalf("create %s user = %d %s", role, created.code, created.raw)
 	}
 	login := h.doJSON(http.MethodPost, "/v1/auth/login", "", map[string]any{
 		"email": email, "password": password,

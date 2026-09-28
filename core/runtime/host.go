@@ -164,6 +164,22 @@ type busSink struct {
 var _ sdk.Sink = (*busSink)(nil)
 
 func (s *busSink) Emit(ctx context.Context, obs model.Observation) error {
+	// Remote Push has no registered run authority. Preserve ordinary members,
+	// suppress control frames, and never forward their proposed authority.
+	switch o := obs.(type) {
+	case model.InventoryCollectionStart, *model.InventoryCollectionStart, model.InventoryCollectionReport, *model.InventoryCollectionReport:
+		return nil
+	case model.InventoryCollectionMember:
+		obs = o.Edge
+	case *model.InventoryCollectionMember:
+		if o == nil {
+			return errCollectionProtocol
+		}
+		obs = o.Edge
+	}
+	return s.emit(ctx, obs, nil)
+}
+func (s *busSink) emit(ctx context.Context, obs model.Observation, stamp func(*event.Event) error) error {
 	f, finding, err := snapshotFinding(obs)
 	if err != nil {
 		return err
@@ -198,6 +214,15 @@ func (s *busSink) Emit(ctx context.Context, obs model.Observation) error {
 		return fmt.Errorf("runtime: observation kind %q has no event type mapping", obs.ObservationType())
 	}
 	e.ID = uuid.NewString()
+	if edge, ok := e.Payload.(model.EdgeObservation); ok {
+		edge.Labels = cloneInventoryLabels(edge.Labels)
+		e.Payload = edge
+	}
+	if stamp != nil {
+		if err := stamp(&e); err != nil {
+			return err
+		}
+	}
 	return s.bus.Publish(ctx, e)
 }
 
@@ -259,4 +284,15 @@ func notificationFromEvent(e event.Event) sdk.Notification {
 		}
 	}
 	return n
+}
+
+func cloneInventoryLabels(in map[string]string) map[string]string {
+	if in == nil {
+		return nil
+	}
+	out := make(map[string]string, len(in))
+	for k, v := range in {
+		out[k] = v
+	}
+	return out
 }

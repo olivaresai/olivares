@@ -58,7 +58,7 @@
     "regressed": "Regressed · drift {{drift}}",
     "noRegression": "None",
     "empty": "No runs in range.",
-    "emptyHint": "Every eval run in the selected range is listed here with its score and its duration. Widen the range, or start a run.",
+    "emptyHint": "Every eval run in the selected range is listed here with its score. Widen the range, or start a run.",
     "overN": "over {{n}}",
     "notScored": "not scored — no verdict",
     "noBaseline": "no baseline — nothing compared"
@@ -118,7 +118,7 @@
   },
   "drift": {
     "title": "Drift — {{subject}}",
-    "description": "Score over time against the suite pass threshold; a sustained decline is degradation.",
+    "description": "Score over time against the suite pass threshold. Regression is a point-score comparison with one baseline run, which may use another suite version, model or scorer, and the comparison does not report which changed. After a suite version change, pin a baseline.",
     "score": "Score",
     "threshold": "Pass threshold",
     "pickerTitle": "Subject",

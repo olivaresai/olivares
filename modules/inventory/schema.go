@@ -93,6 +93,77 @@ const (
 	colOccurrence    = "occurrence_count"
 )
 
+// Principal declarations of the module's text, JSON and UUID columns
+// (core/model/principal_decl.go). Every None cites the writer or reader lines
+// that show the value names no account.
+var (
+	// pdeclObservedRef is a connector's natural reference for an observed entity.
+	// For an identity origin it is the source system's own reference for a person
+	// or credential (materialize.go:77-79), so it is matched against every account
+	// alias as evidence of what was observed; no reader grants anything from it.
+	pdeclObservedRef = model.Scan(model.ClassEvidence)
+	// pdeclEntityID is the id of the core entity a catalog entry overlays; for the
+	// identity kind it is a row of the identity roster (entities.go:77-88).
+	pdeclEntityID = model.Ref(model.EncodeIdentity, model.ClassEvidence)
+
+	// Values that name no account.
+	pdeclNoneEntityKind     = model.None("an entity-kind label the materializer sets from the module's kind constants: materialize.go:54-66, materialize.go:114, materialize.go:291")
+	pdeclNoneStatus         = model.None("the catalog liveness state, active or stale: catalog.go:58, catalog.go:323")
+	pdeclNoneSignal         = model.None("a signal-source label naming the collector class: sdk/model/enums.go:44-47, materialize.go:34-37, materialize.go:283")
+	pdeclNoneHost           = model.None("the host an edge was observed on; no producer supplies one yet: refs.go:79-83")
+	pdeclNoneCursor         = model.None("the store's opaque keyset cursor, stored and handed back unchanged: catalog.go:306-313, catalog.go:330")
+	pdeclNoneReceiptKey     = model.None("a digest of the delivering event id, used as the replay key: provenance.go:121-126, provenance.go:134")
+	pdeclNoneEventID        = model.None("the bus event id, compared only for replay identity: provenance.go:140, provenance.go:154")
+	pdeclNoneFactsHash      = model.None("a SHA-256 digest of the stored facts text: provenance.go:119, provenance.go:142, provenance_read.go:374")
+	pdeclNoneReceiptID      = model.None("the id of this module's own observation receipt row: provenance.go:187, provenance.go:217")
+	pdeclNoneObservationKey = model.None("a digest of the source-qualified native reference: provenance.go:176-185, provenance_read.go:478")
+	pdeclNoneSourceID       = model.None("the persistent id of a configured ingestion source's roster row: cmd/olivares/reconcile.go:112, provenance.go:175")
+	pdeclNoneInstant        = model.None("a canonical instant text: provenance.go:72-77, provenance_read.go:466")
+
+	// JSON string sets of signal sources and hosts (catalog.go:59-60, catalog.go:398-408).
+	pdeclSignalSources = model.Nested([]string(nil), model.ClassEvidence, model.Leaf("[]", pdeclNoneSignal))
+	pdeclHosts         = model.Nested([]string(nil), model.ClassEvidence, model.Leaf("[]", pdeclNoneHost))
+
+	// pdeclFacts is the projected observation a receipt or a conflicting
+	// redelivery stores (provenance.go:115, provenance.go:155, provenance.go:217).
+	pdeclFacts = model.Nested(inventoryFactsV1{}, model.ClassEvidence,
+		model.Leaf("type", model.None("the first-party observation type, one of two: provenance_read.go:383-394")),
+		model.Leaf("source_label", model.None("the ingestion instance label, which identifies no user: sdk/event/event.go:76-78")),
+		model.Leaf("registration_state", model.None("a closed registration state: provenance.go:86-92, provenance_read.go:395-404")),
+		model.Leaf("registration.BindingRef", model.None("an approved provider-binding reference stamped by the host: modules/sessions/provider_source_admission.go:50")),
+		model.Leaf("registration.SourceID", pdeclNoneSourceID),
+		model.Leaf("registration.EnvironmentRef", model.None("the persistent execution-environment id of the node that applied the registration: cmd/olivares/reconcile.go:112")),
+		model.Leaf("envelope_occurred_at", pdeclNoneInstant),
+		model.Leaf("edge.OriginKind", model.None("the origin kind label the materializer switches on: materialize.go:54-68")),
+		model.Leaf("edge.OriginRef", pdeclObservedRef),
+		model.Leaf("edge.ResourceKind", model.None("the resource kind label the materializer switches on: materialize.go:86-89")),
+		model.Leaf("edge.ResourceRef", pdeclObservedRef),
+		model.Leaf("edge.ToolRef", model.None("a tool or operation name, materialized as a Tool: materialize.go:259-264")),
+		model.Leaf("edge.Mode", model.None("a closed access mode: sdk/model/enums.go:35-42")),
+		model.Leaf("edge.Signal", pdeclNoneSignal),
+		model.Leaf("edge.Confidence", model.None("a closed confidence level: sdk/model/enums.go:140-146")),
+		model.Leaf("edge.OccurredAt", pdeclNoneInstant),
+		model.Leaf("cost.ProviderRef", model.None("a provider name, materialized as a Provider: materialize.go:288")),
+		model.Leaf("cost.ModelRef", model.None("a model name, materialized as a Model: materialize.go:296")),
+		model.Leaf("cost.Gateway", model.None("the deployment surface label a model call was served through: sdk/model/enums.go:200-206")),
+		model.Leaf("cost.OccurredAt", pdeclNoneInstant),
+	)
+
+	// pdeclMemberFacts is one committed member of a receipt (provenance.go:169, provenance.go:189).
+	pdeclMemberFacts = model.Nested(observationMember{}, model.ClassEvidence,
+		model.Leaf("kind", pdeclNoneEntityKind),
+		model.Leaf("catalog_entity_id", pdeclEntityID),
+		model.Leaf("native.namespace", model.None("a kind or gateway namespace label: provenance.go:277, materialize.go:73-76, materialize.go:291")),
+		model.Leaf("native.parent", model.None("the MCP server, origin agent or provider the entity sits under: provenance.go:284, provenance.go:290, provenance.go:298, provenance.go:302, materialize.go:300")),
+		model.Leaf("native.ref", pdeclObservedRef),
+		model.Leaf("Name", pdeclObservedRef),
+		model.Leaf("Ref", pdeclObservedRef),
+		model.Leaf("Signal", pdeclNoneSignal),
+		model.Leaf("Host", pdeclNoneHost),
+		model.Leaf("occurred_at", pdeclNoneInstant),
+	)
+)
+
 // RegisterSchema declares the module's owned catalog-entry entity. It satisfies
 // the engine-side runtime.SchemaProvider seam (structural, so the module need
 // not import the runtime package) and is called once, at store-construction
@@ -111,13 +182,13 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Kind:  catalogEntryKind,
 		Table: catalogEntryTable,
 		Fields: []model.FieldSpec{
-			{Name: colEntityKind, Kind: model.KindText, Indexed: true},
-			{Name: colEntityID, Kind: model.KindUUID},
-			{Name: colName, Kind: model.KindText},
-			{Name: colRef, Kind: model.KindText, Nullable: true},
-			{Name: colStatus, Kind: model.KindText, Indexed: true},
-			{Name: colSignalSources, Kind: model.KindJSON, Nullable: true},
-			{Name: colHosts, Kind: model.KindJSON, Nullable: true},
+			{Name: colEntityKind, Kind: model.KindText, Indexed: true, Principal: pdeclNoneEntityKind},
+			{Name: colEntityID, Kind: model.KindUUID, Principal: pdeclEntityID},
+			{Name: colName, Kind: model.KindText, Principal: pdeclObservedRef},
+			{Name: colRef, Kind: model.KindText, Nullable: true, Principal: pdeclObservedRef},
+			{Name: colStatus, Kind: model.KindText, Indexed: true, Principal: pdeclNoneStatus},
+			{Name: colSignalSources, Kind: model.KindJSON, Nullable: true, Principal: pdeclSignalSources},
+			{Name: colHosts, Kind: model.KindJSON, Nullable: true, Principal: pdeclHosts},
 			{Name: colFirstSeen, Kind: model.KindTimestamp},
 			{Name: colLastSeen, Kind: model.KindTimestamp, Indexed: true},
 			// occurred_at is the instant the SOURCE says the fact happened, as the source
@@ -128,7 +199,7 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 			//
 			// NULLABLE IS LOAD-BEARING, not a style choice: sqlstore reconciles an existing
 			// table by ALTER TABLE ADD COLUMN only for nullable fields and REFUSES a
-			// non-nullable one (core/internal/store/sqlstore/schema.go:683-688), so this
+			// non-nullable one (core/internal/store/sqlstore/schema.go:688-693), so this
 			// FieldSpec IS the additive migration for deployments that already have the table.
 			{Name: colOccurredAt, Kind: model.KindTimestamp, Nullable: true},
 			{Name: colOccurrence, Kind: model.KindInt},
@@ -147,7 +218,10 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 	if err := registerFreshnessSweepSchema(reg); err != nil {
 		return err
 	}
-	return registerProvenanceSchema(reg)
+	if err := registerProvenanceSchema(reg); err != nil {
+		return err
+	}
+	return registerCoverageSchema(reg)
 }
 
 // registerFreshnessSweepSchema declares the sweep's durable progress.
@@ -166,7 +240,7 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 //
 // Every field is nullable on purpose. It is what lets the store's strictly
 // additive reconciler bring an existing deployment forward (a non-nullable
-// column would be refused, core/internal/store/sqlstore/schema.go:683-688), and
+// column would be refused, core/internal/store/sqlstore/schema.go:688-693), and
 // it is what lets the row be created lazily and empty on a tenant's first turn
 // instead of demanding a backfill over the whole directory.
 func registerFreshnessSweepSchema(reg store.ExtensionRegistry) error {
@@ -175,7 +249,7 @@ func registerFreshnessSweepSchema(reg store.ExtensionRegistry) error {
 		Table: freshnessSweepTable,
 		Fields: []model.FieldSpec{
 			{Name: colCycleCutoffAt, Kind: model.KindTimestamp, Nullable: true},
-			{Name: colCatalogCursor, Kind: model.KindText, Nullable: true},
+			{Name: colCatalogCursor, Kind: model.KindText, Nullable: true, Principal: pdeclNoneCursor},
 			{Name: colLastCompletedCutoffAt, Kind: model.KindTimestamp, Nullable: true},
 		},
 		Indexes: []model.IndexSpec{{
@@ -193,23 +267,24 @@ func registerFreshnessSweepSchema(reg store.ExtensionRegistry) error {
 func registerProvenanceSchema(reg store.ExtensionRegistry) error {
 	for _, d := range []model.EntityDescriptor{
 		{Kind: observationReceiptKind, Table: "inventory_observation_receipt", Fields: []model.FieldSpec{
-			{Name: colReceiptKey, Kind: model.KindText},
-			{Name: colEventID, Kind: model.KindText, Nullable: true},
-			{Name: colFactsHash, Kind: model.KindText},
-			{Name: colFacts, Kind: model.KindJSON},
+			{Name: colReceiptKey, Kind: model.KindText, Principal: pdeclNoneReceiptKey},
+			{Name: colEventID, Kind: model.KindText, Nullable: true, Principal: pdeclNoneEventID},
+			{Name: colFactsHash, Kind: model.KindText, Principal: pdeclNoneFactsHash},
+			{Name: colFacts, Kind: model.KindJSON, Principal: pdeclFacts},
 			{Name: colFirstSeen, Kind: model.KindTimestamp},
 			{Name: colLastSeen, Kind: model.KindTimestamp},
 			{Name: colDeliveries, Kind: model.KindInt},
 			{Name: colMemberCount, Kind: model.KindInt},
+			{Name: colCollectionLink, Kind: model.KindJSON, Nullable: true, Principal: pdeclCollectionLink},
 		}, Indexes: []model.IndexSpec{{Name: "inventory_receipt_uniq", Columns: []string{model.ColTenantID, colReceiptKey}, Unique: true}}},
 		{Kind: observationMemberKind, Table: "inventory_observation_member", Fields: []model.FieldSpec{
-			{Name: colReceiptID, Kind: model.KindUUID, Indexed: true},
+			{Name: colReceiptID, Kind: model.KindUUID, Indexed: true, Principal: pdeclNoneReceiptID},
 			{Name: colMemberOrdinal, Kind: model.KindInt},
-			{Name: colObservationKey, Kind: model.KindText, Nullable: true, Indexed: true},
-			{Name: colSourceID, Kind: model.KindText, Nullable: true, Indexed: true},
-			{Name: colEntityKind, Kind: model.KindText},
-			{Name: colEntityID, Kind: model.KindUUID},
-			{Name: colFacts, Kind: model.KindJSON},
+			{Name: colObservationKey, Kind: model.KindText, Nullable: true, Indexed: true, Principal: pdeclNoneObservationKey},
+			{Name: colSourceID, Kind: model.KindText, Nullable: true, Indexed: true, Principal: pdeclNoneSourceID},
+			{Name: colEntityKind, Kind: model.KindText, Principal: pdeclNoneEntityKind},
+			{Name: colEntityID, Kind: model.KindUUID, Principal: pdeclEntityID},
+			{Name: colFacts, Kind: model.KindJSON, Principal: pdeclMemberFacts},
 		}, Indexes: []model.IndexSpec{
 			{Name: "inventory_member_uniq", Columns: []string{model.ColTenantID, colReceiptID, colMemberOrdinal}, Unique: true},
 			// C3 read index: the observation history of ONE entity is a DISTINCT
@@ -222,9 +297,9 @@ func registerProvenanceSchema(reg store.ExtensionRegistry) error {
 			{Name: "inventory_member_entity_receipt", Columns: []string{model.ColTenantID, colEntityKind, colEntityID, colReceiptID}},
 		}},
 		{Kind: observationConflictKind, Table: "inventory_observation_conflict", Fields: []model.FieldSpec{
-			{Name: colReceiptID, Kind: model.KindUUID},
-			{Name: colFactsHash, Kind: model.KindText},
-			{Name: colFacts, Kind: model.KindJSON},
+			{Name: colReceiptID, Kind: model.KindUUID, Principal: pdeclNoneReceiptID},
+			{Name: colFactsHash, Kind: model.KindText, Principal: pdeclNoneFactsHash},
+			{Name: colFacts, Kind: model.KindJSON, Principal: pdeclFacts},
 			{Name: colFirstSeen, Kind: model.KindTimestamp},
 			{Name: colLastSeen, Kind: model.KindTimestamp},
 			{Name: colDeliveries, Kind: model.KindInt},

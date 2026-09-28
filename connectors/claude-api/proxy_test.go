@@ -723,9 +723,7 @@ func TestProxyAuditEventCarriesInboundReqBytes(t *testing.T) {
 		if ev.RespBytes <= 0 || ev.RespBytes > ceiling {
 			t.Fatalf("audit RespBytes = %d, want 1..%d", ev.RespBytes, ceiling)
 		}
-		if dec.finalized {
-			t.Fatal("ceiling path must not Finalize (pre-existing; observer-only fix)")
-		}
+		requireLedgerInbound(t, dec, inboundStreamJSON, true, false)
 	})
 
 	t.Run("BufferedStreamUpstreamError", func(t *testing.T) {

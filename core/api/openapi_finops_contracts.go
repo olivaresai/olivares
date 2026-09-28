@@ -70,6 +70,15 @@ var finopsOpenAPIContracts = map[string]finopsOpenAPIContract{
 	http.MethodPost + " /statements/generate": {
 		schema: finopsGenerateStatementsSchema,
 	},
+	http.MethodPost + " /admission/reserve": {
+		schema: finopsAdmissionReserveSchema,
+	},
+	http.MethodPost + " /admission/commit": {
+		schema: finopsAdmissionCommitSchema,
+	},
+	http.MethodPost + " /admission/release": {
+		schema: finopsAdmissionReleaseSchema,
+	},
 }
 
 // finopsRequestBody returns the complete OpenAPI 3.1 requestBody for a known
@@ -89,9 +98,10 @@ func finopsRequestBody(r moduleRoute) (map[string]any, bool) {
 }
 
 // finopsRequestBodyDeclarationFor classifies every FinOps mutation whose body
-// behavior is known at this seam. The four DELETE handlers below never read
-// r.Body; keeping them in the producer makes that fact available to the central
-// OpenAPI disposition adapter instead of leaving it only in a test fixture.
+// behavior is known at this seam. The four DELETE handlers and the admission
+// reconciliation job below never read r.Body; keeping them in the producer makes
+// that fact available to the central OpenAPI disposition adapter instead of
+// leaving it only in a test fixture.
 func finopsRequestBodyDeclarationFor(r moduleRoute) (finopsRequestBodyDeclaration, bool) {
 	if r.ns != "finops" {
 		return finopsRequestBodyDeclaration{}, false
@@ -104,7 +114,9 @@ func finopsRequestBodyDeclarationFor(r moduleRoute) (finopsRequestBodyDeclaratio
 	case http.MethodDelete + " /budgets/{id}",
 		http.MethodDelete + " /cost-centers/{id}",
 		http.MethodDelete + " /cost-centers/{id}/mappings/{mid}",
-		http.MethodDelete + " /model-rates/{id}":
+		http.MethodDelete + " /model-rates/{id}",
+		// The job takes its whole subject from the authenticated tenant.
+		http.MethodPost + " /admission/reconcile":
 		return finopsRequestBodyDeclaration{kind: finopsBodyless}, true
 	default:
 		return finopsRequestBodyDeclaration{}, false
@@ -329,6 +341,86 @@ func finopsOutcomeIngestSchema() map[string]any {
 		oaObj("required", oaEnum("occurred_at")),
 	}
 	return schema
+}
+
+// finopsAdmissionScopeSchema is the closed set Reserve accepts; any other scope is
+// refused with 400 and holds nothing.
+func finopsAdmissionScopeSchema() map[string]any {
+	return oaObj(
+		"type", "string",
+		"enum", oaEnum("session_launch", "model_gateway", "scheduled_job"),
+	)
+}
+
+// finopsSpendDimsSchema projects finops.SpendDims, the provider-neutral attribution
+// an enforcing budget matches on. Every member is optional: a request that names
+// none is still held against the global budgets of the tenant.
+func finopsSpendDimsSchema() map[string]any {
+	properties := finopsStrings(
+		"provider_ref", "model_ref", "agent_ref", "session_ref", "team", "project",
+		"workspace_ref", "api_key_ref", "service_tier", "context_window",
+		"inference_geo", "gateway", "cost_type", "identity_ref", "routine_ref",
+		"cost_center_ref",
+	)
+	properties["user_group_refs"] = oaObj("type", "array", "items", oaObj("type", "string"))
+	properties["agent_group_refs"] = oaObj("type", "array", "items", oaObj("type", "string"))
+	return finopsObjectSchema(properties)
+}
+
+func finopsAdmissionReserveSchema() map[string]any {
+	return finopsObjectSchema(oaObj(
+		"scope", finopsAdmissionScopeSchema(),
+		"dims", finopsSpendDimsSchema(),
+		"actor_ref", oaObj(
+			"type", "string",
+			"description", "When set, the spend limits of that actor are held as well as the budgets.",
+		),
+		"groups", oaObj(
+			"type", "array",
+			"items", oaObj("type", "string"),
+			"description", "Directory group ids used to resolve the actor's spend limits.",
+		),
+		"estimate_micro_usd", oaObj(
+			"type", "integer", "format", "int64", "minimum", 0,
+			"description", "The amount to hold. Zero holds nothing and returns no handle, but a cap already past its limit still refuses it.",
+		),
+		"idempotency_key", oaObj(
+			"type", "string", "minLength", 1, "maxLength", 256,
+			"description", "Bound to the tenant, the scope and the payload. A retry with the same key and payload inside the replay window is answered with the hold the first call took; the same key with another payload is refused with 409.",
+		),
+		"unreachable", oaObj(
+			"type", "string",
+			"enum", oaEnum("", "deny", "allow"),
+			"default", "deny",
+			"description", "What a request answers when its admission cannot be established. Omitted, empty and unknown values mean deny. Allow admits with no hold.",
+		),
+	), "scope", "idempotency_key")
+}
+
+// finopsAdmissionCommitSchema and its release sibling carry the one handle Reserve
+// answers with, and publish no required list: Commit and Release answer an absent or
+// empty handle as a no-op, because an admission that held nothing has no hold to
+// settle.
+func finopsAdmissionCommitSchema() map[string]any {
+	return finopsObjectSchema(oaObj(
+		"handle", oaObj(
+			"type", "string",
+			"description", "The handle Reserve answered with. An empty handle settles nothing.",
+		),
+		"actual_micro_usd", oaObj(
+			"type", "integer", "format", "int64", "minimum", 0,
+			"description", "The measured cost. Ingest the spend first, so the ceiling never under-counts during settlement. A repeat with the same amount is answered as the first commit was; another amount after a commit is refused with 409.",
+		),
+	))
+}
+
+func finopsAdmissionReleaseSchema() map[string]any {
+	return finopsObjectSchema(oaObj(
+		"handle", oaObj(
+			"type", "string",
+			"description", "The handle Reserve answered with. An empty handle releases nothing, and a committed hold stays committed.",
+		),
+	))
 }
 
 // These are response DTOs, not mutation inputs. Decimal money is a STRING: neither

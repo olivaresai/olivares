@@ -69,6 +69,40 @@ type User struct {
 	// stamped on first federated login and never overwritten thereafter. Uniquely
 	// indexed (NULLs distinct, so local users coexist), non-secret, never a credential.
 	SsoSubject string
+	// CredentialCustody names who established the account's account-wide
+	// credentials. The engine writes it at creation and in the deployment's own
+	// ceremonies; no tenant API writes it. The empty value is legacy: every row that
+	// existed before custody was recorded, of unknown origin.
+	CredentialCustody CredentialCustody
+	// CustodyTenantID is the tenant whose authority created the account, set only
+	// with CustodyTenant.
+	CustodyTenantID TenantID
+}
+
+// CredentialCustody names who established an account's account-wide credentials.
+type CredentialCustody string
+
+const (
+	// CustodyLegacy is an account of unknown origin, recorded before custody was.
+	CustodyLegacy CredentialCustody = ""
+	// CustodyTenant is an account created under one tenant's authority: its
+	// onboarding, its directory provisioning, or a first sign-in through its own
+	// identity provider.
+	CustodyTenant CredentialCustody = "tenant"
+	// CustodyDeployment is an account the deployment itself created.
+	CustodyDeployment CredentialCustody = "deployment"
+	// CustodyHolder is an account whose credentials its holder established through
+	// a proof no administrator holds.
+	CustodyHolder CredentialCustody = "holder"
+)
+
+// CustodyScope is the tenant a sign-in of this account may act in, or the zero
+// tenant when its sessions have account scope.
+func (u User) CustodyScope() TenantID {
+	if u.CredentialCustody == CustodyTenant {
+		return u.CustodyTenantID
+	}
+	return ""
 }
 
 // Membership binds a User to a business tenant with a role. It lives in the
@@ -217,6 +251,11 @@ type AuthSession struct {
 	// degrades back to AAL1 (the step-up freshness window, 800-63B-4 AAL3
 	// reauthentication target). Nil for a never-elevated session.
 	AALExpiresAt *Timestamp
+	// TenantScope confines the session to one tenant. A session minted under a
+	// tenant's authority (that tenant's identity provider, or any sign-in of an
+	// account that tenant created) carries it and acts nowhere else; the zero value
+	// is account scope. A scoped session's token carries the prefix "olvt".
+	TenantScope TenantID
 }
 
 // WebAuthnCredential is a registered FIDO2/WebAuthn authenticator for a user
@@ -321,4 +360,115 @@ type APIToken struct {
 	// SessionFence is the exact live Claim generation for SessionRef. Zero on
 	// every token not minted by the communication-session issuer.
 	SessionFence int64
+}
+
+// ExclusionKind distinguishes a whole-account exclusion from one tenant from the
+// exclusion of one session.
+type ExclusionKind string
+
+const (
+	// ExclusionOffboard excludes the account from the tenant. The row is also the
+	// account's retirement record in that tenant.
+	ExclusionOffboard ExclusionKind = "offboard"
+	// ExclusionSession excludes one account-scope session from the tenant.
+	ExclusionSession ExclusionKind = "session"
+)
+
+// RetirementState is where the retirement of an account from a tenant stands.
+type RetirementState string
+
+const (
+	// RetirementRetiring is an offboard whose module steps have not all run clean.
+	RetirementRetiring RetirementState = "retiring"
+	// RetirementBlocked is a retirement a module step found references it may not
+	// remove; the tenant resolves them and the retirement resumes.
+	RetirementBlocked RetirementState = "blocked"
+	// RetirementRetired is a retirement every declared module proved clean at an
+	// authorization epoch of the tenant.
+	RetirementRetired RetirementState = "retired"
+	// RetirementLifted is a retired account the tenant re-admitted. The exclusion
+	// no longer applies; the retirement epoch remains the account's floor there.
+	RetirementLifted RetirementState = "lifted"
+)
+
+// TenantExclusion excludes an account, or one of its sessions, from one tenant:
+// the authorizer refuses that principal there before any grant is evaluated. An
+// offboard exclusion is also the account's retirement record in the tenant. It
+// lives in the system tenant; the excluding tenant is TargetTenantID.
+type TenantExclusion struct {
+	BaseFields
+	// UserID is the excluded account.
+	UserID ID
+	// TargetTenantID is the tenant the account is excluded from.
+	TargetTenantID TenantID
+	// SessionID names the one excluded session, for ExclusionSession.
+	SessionID ID
+	// Kind is ExclusionOffboard or ExclusionSession.
+	Kind ExclusionKind
+	// CreatedBy is the actor that wrote the exclusion.
+	CreatedBy string
+	// RetirementGeneration counts the offboards of this account from this tenant;
+	// a re-admission and a new offboard start the next generation.
+	RetirementGeneration int64
+	// RetirementState is where the retirement stands.
+	RetirementState RetirementState
+	// RetiredEpoch is the tenant's authorization epoch at which every declared
+	// module was proved clean; once lifted it is the account's floor in the tenant.
+	RetiredEpoch *int64
+	// BlockingRefs lists, by id only, the stored rows that block the retirement.
+	BlockingRefs string
+	// ModuleResults is the JSON record of each declared module's step: its state,
+	// the fact version it ran at and the ids it found.
+	ModuleResults string
+	// Attempts counts the retirement passes that ran.
+	Attempts int64
+	// NextAttemptAt is when the retirement pump retries.
+	NextAttemptAt *Timestamp
+}
+
+// InForce reports whether the exclusion refuses the account in its tenant.
+func (e TenantExclusion) InForce() bool {
+	return e.Kind != ExclusionOffboard || e.RetirementState != RetirementLifted
+}
+
+// AccountOffer is a pending offer to an existing account: to join a tenant, or
+// to complete a deployment recovery. It binds the account, its address, the
+// target tenant and role, the account's authority version and the claim state of
+// the address's domain at issue. Only the secret's hash is stored.
+type AccountOffer struct {
+	BaseFields
+	// Kind is "join" or "recovery".
+	Kind string
+	// UserID is the account the offer is for.
+	UserID ID
+	// Email is the normalized address the offer was issued to.
+	Email string
+	// TargetTenantID is the tenant the offer joins.
+	TargetTenantID TenantID
+	// Role is the role the join grants.
+	Role string
+	// AuthorityVersion is the account's authority version at issue.
+	AuthorityVersion int64
+	// ClaimTenantID is the tenant whose identity provider claimed the domain at
+	// issue, if any.
+	ClaimTenantID TenantID
+	// TrustedTenantID is the claiming tenant the target tenant explicitly trusted.
+	TrustedTenantID TenantID
+	// Selector is the public lookup key of the offer's secret.
+	Selector string
+	// SecretHash is SHA-256 of the offer's secret.
+	SecretHash []byte
+	// ExpiresAt bounds the offer.
+	ExpiresAt Timestamp
+	// AcceptedAt is set once the offer is consumed.
+	AcceptedAt *Timestamp
+	// VoidedAt is set when the offer is voided.
+	VoidedAt *Timestamp
+	// VoidReason says why it was voided.
+	VoidReason string
+	// CreatedBy is the actor that issued the offer.
+	CreatedBy string
+	// Reason and EvidenceRef record a deployment recovery's justification.
+	Reason      string
+	EvidenceRef string
 }

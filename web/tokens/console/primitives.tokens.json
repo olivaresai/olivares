@@ -1,0 +1,297 @@
+{
+  "$description": "Console primitives, identical in light and dark, emitted by tokens/build.mjs into the @theme inline block (fonts, radii, motion curves, the type ladder, the shell geometry and the neutral graphite ramp) and into the density and motion blocks of src/styles/tokens.css.",
+  "graphite": {
+    "$type": "color",
+    "graphite-50": {
+      "$value": "#fafafa"
+    },
+    "graphite-100": {
+      "$value": "#f3f3f4"
+    },
+    "graphite-200": {
+      "$value": "#e4e4e6"
+    },
+    "graphite-300": {
+      "$value": "#c9c9cd"
+    },
+    "graphite-400": {
+      "$value": "#9c9ca3"
+    },
+    "graphite-500": {
+      "$value": "#71717a"
+    },
+    "graphite-600": {
+      "$value": "#52525a"
+    },
+    "graphite-700": {
+      "$value": "#3f3f45"
+    },
+    "graphite-800": {
+      "$value": "#2e2e32"
+    },
+    "graphite-900": {
+      "$value": "#232327"
+    },
+    "graphite-950": {
+      "$value": "#1b1b1e"
+    }
+  },
+  "font": {
+    "$type": "fontFamily",
+    "$description": "Self-hosted faces (src/styles/fonts.css): Geist Variable for the interface, JetBrains Mono 400 and 500 for code, commands, paths and identifiers. Geist has no CJK glyphs, so the stack falls back to the system CJK face.",
+    "font-sans": {
+      "$value": "'Geist', system-ui, -apple-system, 'Segoe UI', 'Noto Sans CJK SC', 'PingFang SC',\n    'Microsoft YaHei', 'Yu Gothic', sans-serif"
+    },
+    "font-mono": {
+      "$value": "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas,\n    'Liberation Mono', monospace"
+    },
+    "font-display": {
+      "$value": "{font.font-sans}",
+      "$description": "Display text uses the interface face: weight carries the hierarchy, not a second family."
+    }
+  },
+  "radius": {
+    "$type": "dimension",
+    "$description": "Radii: 7 px controls, 10 px cards, 14 px sheet, composer and panels. The design names (ctl, card, panel) and the step names the components use today (md, lg, xl) are the same values; sm stays for small inner marks.",
+    "radius-ctl": {
+      "$value": "0.4375rem"
+    },
+    "radius-card": {
+      "$value": "0.625rem"
+    },
+    "radius-panel": {
+      "$value": "0.875rem"
+    },
+    "radius-sm": {
+      "$value": "0.25rem"
+    },
+    "radius-md": {
+      "$value": "{radius.radius-ctl}"
+    },
+    "radius-lg": {
+      "$value": "{radius.radius-card}"
+    },
+    "radius-xl": {
+      "$value": "{radius.radius-panel}"
+    }
+  },
+  "motion": {
+    "$description": "Motion: 120 ms hover and press, 180 ms panels, 240 ms sheets and the palette, one easing curve. Only transform and opacity animate. The durations live in the motion block and fall to 0 under reduced motion.",
+    "ease-out": {
+      "$type": "cubicBezier",
+      "$value": "cubic-bezier(0.2, 0.8, 0.2, 1)"
+    },
+    "ease-in": {
+      "$type": "cubicBezier",
+      "$value": "cubic-bezier(0.4, 0, 1, 1)"
+    },
+    "animate-pulse-live": {
+      "$type": "duration",
+      "$value": "pulse-live 2s ease-in-out infinite"
+    },
+    "default-transition-duration": {
+      "$type": "duration",
+      "$value": "var(--duration-fast)",
+      "$description": "Every transition utility inherits the hover-and-press duration, so reduced motion reaches it through one variable."
+    },
+    "default-transition-timing-function": {
+      "$type": "cubicBezier",
+      "$value": "{motion.ease-out}"
+    }
+  },
+  "type": {
+    "$type": "dimension",
+    "$description": "The type ladder. Tailwind reads `--text-<step>` with its `--line-height`, `--letter-spacing` and `--font-weight` sub-keys, so one utility carries all four decisions. Each step the components use takes the design value of the role it serves: display-lg is the design's display (30/36), display (figures) and title (page title) are title-l (22/28), heading is title (16/22), body is body (14/20), caption is small (13/18), overline is micro (12/16, the minimum size of any text). hero (40/44), body-l (15/24), mono (13/20) and mono-s (12/18) are added as the design names them.",
+    "text-hero": {
+      "$value": "2.5rem"
+    },
+    "text-hero--line-height": {
+      "$value": "2.75rem"
+    },
+    "text-hero--letter-spacing": {
+      "$value": "-0.035em"
+    },
+    "text-hero--font-weight": {
+      "$value": "600"
+    },
+    "text-display-lg": {
+      "$value": "1.875rem"
+    },
+    "text-display-lg--line-height": {
+      "$value": "2.25rem"
+    },
+    "text-display-lg--letter-spacing": {
+      "$value": "-0.03em"
+    },
+    "text-display-lg--font-weight": {
+      "$value": "600"
+    },
+    "text-display": {
+      "$value": "1.375rem"
+    },
+    "text-display--line-height": {
+      "$value": "1.75rem"
+    },
+    "text-display--letter-spacing": {
+      "$value": "-0.02em"
+    },
+    "text-display--font-weight": {
+      "$value": "600"
+    },
+    "text-title": {
+      "$value": "1.375rem"
+    },
+    "text-title--line-height": {
+      "$value": "1.75rem"
+    },
+    "text-title--letter-spacing": {
+      "$value": "-0.02em"
+    },
+    "text-title--font-weight": {
+      "$value": "600"
+    },
+    "text-heading": {
+      "$value": "1rem"
+    },
+    "text-heading--line-height": {
+      "$value": "1.375rem"
+    },
+    "text-heading--letter-spacing": {
+      "$value": "-0.01em"
+    },
+    "text-heading--font-weight": {
+      "$value": "600"
+    },
+    "text-body-l": {
+      "$value": "0.9375rem"
+    },
+    "text-body-l--line-height": {
+      "$value": "1.5rem"
+    },
+    "text-body": {
+      "$value": "0.875rem"
+    },
+    "text-body--line-height": {
+      "$value": "1.25rem"
+    },
+    "text-caption": {
+      "$value": "0.8125rem"
+    },
+    "text-caption--line-height": {
+      "$value": "1.125rem"
+    },
+    "text-overline": {
+      "$value": "0.75rem"
+    },
+    "text-overline--line-height": {
+      "$value": "1rem"
+    },
+    "text-overline--font-weight": {
+      "$value": "500"
+    },
+    "text-mono": {
+      "$value": "0.8125rem"
+    },
+    "text-mono--line-height": {
+      "$value": "1.25rem"
+    },
+    "text-mono-s": {
+      "$value": "0.75rem"
+    },
+    "text-mono-s--line-height": {
+      "$value": "1.125rem"
+    }
+  },
+  "layout": {
+    "$description": "The authenticated shell's geometry, named rather than bracketed: the page container width, the header height, the rail and inspector widths, and the two row heights of the current shell (a management table row and a work list row).",
+    "$type": "dimension",
+    "container-page": {
+      "$value": "90rem"
+    },
+    "console-header-height": {
+      "$value": "3rem"
+    },
+    "console-rail-width": {
+      "$value": "16rem"
+    },
+    "console-inspector-width": {
+      "$value": "20rem"
+    },
+    "console-row-height": {
+      "$value": "2.25rem"
+    },
+    "console-list-row-height": {
+      "$value": "2.5rem"
+    }
+  },
+  "density": {
+    "$type": "dimension",
+    "$description": "Density changes spacing only; type sizes do not change. Comfortable is the default; compact is the operator setting (html[data-density=\"compact\"]).",
+    "comfortable": {
+      "density-row-list": {
+        "$value": "3.25rem",
+        "$description": "List row, 52 px."
+      },
+      "density-row-table": {
+        "$value": "2.75rem",
+        "$description": "Table row, 44 px."
+      },
+      "density-control": {
+        "$value": "2rem",
+        "$description": "Control height, 32 px."
+      }
+    },
+    "compact": {
+      "density-row-list": {
+        "$value": "2.5rem",
+        "$description": "List row, 40 px."
+      },
+      "density-row-table": {
+        "$value": "2.25rem",
+        "$description": "Table row, 36 px."
+      },
+      "density-control": {
+        "$value": "1.75rem",
+        "$description": "Control height, 28 px."
+      }
+    }
+  },
+  "pace": {
+    "$type": "duration",
+    "$description": "Motion durations and the entrance distance. Under prefers-reduced-motion or the Reduce motion setting (html[data-motion=\"reduce\"]) every one is 0, so movement stops.",
+    "full": {
+      "duration-fast": {
+        "$value": "120ms",
+        "$description": "Hover and press."
+      },
+      "duration-panel": {
+        "$value": "180ms",
+        "$description": "Panels."
+      },
+      "duration-sheet": {
+        "$value": "240ms",
+        "$description": "Sheets and the command palette."
+      },
+      "motion-shift": {
+        "$type": "dimension",
+        "$value": "0.375rem",
+        "$description": "How far an entering element travels while it fades in."
+      }
+    },
+    "reduced": {
+      "duration-fast": {
+        "$value": "0ms"
+      },
+      "duration-panel": {
+        "$value": "0ms"
+      },
+      "duration-sheet": {
+        "$value": "0ms"
+      },
+      "motion-shift": {
+        "$type": "dimension",
+        "$value": "0px"
+      }
+    }
+  }
+}

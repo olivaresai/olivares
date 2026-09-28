@@ -6,6 +6,7 @@ package evals
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"sort"
 	"strconv"
@@ -41,18 +42,22 @@ const (
 // persistence). detailHash is the one-way hash of output|expected|reason; label is a
 // short clamped+scrubbed UI hint — never the raw output.
 type caseResult struct {
-	caseKey    string
-	scorer     string
-	outcome    string
-	score      float64
-	passed     bool
-	detailHash string
-	label      string
+	observedModel   string
+	protocolUnknown bool
+	cached          bool
+	caseKey         string
+	scorer          string
+	outcome         string
+	score           float64
+	passed          bool
+	detailHash      string
+	label           string
 }
 
 // runAggregate is the computed outcome of a run before it is persisted.
 type runAggregate struct {
 	total, passed, failed, errors, skipped int
+	judgeUnavailable                       int // actual built-in errNoJudge skips, never inferred from an ID or prose
 	score, passRate                        float64
 	status                                 string
 	cases                                  []caseResult
@@ -84,6 +89,7 @@ func (m *Module) executeRun(ctx context.Context, tenant model.TenantID, suite su
 			ModelRef: suite.JudgeModel, Config: c.Metadata,
 		})
 		cr := caseResult{
+			observedModel: res.ObservedModel, protocolUnknown: res.ProtocolUnknown, cached: res.Cached,
 			caseKey: c.CaseKey, scorer: scorer.ID(), outcome: res.Outcome, score: res.Score, passed: res.Passed,
 			detailHash: hashHex(output + "|" + c.Expected + "|" + res.Reason), label: clamp(scrub(res.Reason), maxLabelLen),
 		}
@@ -96,6 +102,9 @@ func (m *Module) executeRun(ctx context.Context, tenant model.TenantID, suite su
 			scoreSum += res.Score
 		case outcomeSkipped:
 			agg.skipped++
+			if res.judgeUnavailable {
+				agg.judgeUnavailable++
+			}
 		default: // error
 			agg.errors++
 		}
@@ -126,6 +135,8 @@ func runStatus(agg runAggregate) string {
 
 // runSubject identifies what a run evaluated.
 type runSubject struct {
+	comparison  ComparisonRequest
+	plan        *comparisonPlan
 	suiteRef    string
 	suiteVer    int64
 	subjectKind string
@@ -143,12 +154,14 @@ type runSubject struct {
 func (m *Module) persistRun(ctx context.Context, sc store.Scope, suite suiteDTO, subj runSubject, agg runAggregate) (runDTO, regressionInfo, error) {
 	now := m.clock.Now()
 
-	// Resolve the baseline and compute drift BEFORE writing the run, so the run row
-	// records its own baseline_ref/regressed/drift.
-	reg, err := m.resolveRegression(ctx, sc, suite, subj, agg)
+	if subj.plan == nil {
+		return runDTO{}, regressionInfo{}, fmt.Errorf("evals: comparison was not prepared")
+	}
+	comparison, err := subj.plan.complete(agg)
 	if err != nil {
 		return runDTO{}, regressionInfo{}, err
 	}
+	reg := regressionInfo{baselineRef: comparison.BaselineRef, baselineScore: comparison.BaselineScore, drift: comparison.Drift, regressed: comparison.Regressed, comparison: comparison}
 
 	runRepo, err := sc.Ext(runKind)
 	if err != nil {
@@ -163,7 +176,7 @@ func (m *Module) persistRun(ctx context.Context, sc store.Scope, suite suiteDTO,
 		colRegressed: reg.regressed, colDrift: reg.drift,
 		colStartedAt: now.String(), colFinishedAt: now.String(), colLaunchedBy: subj.launchedBy,
 	}
-	if reg.baselineRef != "" {
+	if _, valid := idParam(reg.baselineRef); valid {
 		rec[colBaselineRef] = reg.baselineRef
 	}
 	runRec, err := runRepo.Create(ctx, rec)
@@ -171,6 +184,9 @@ func (m *Module) persistRun(ctx context.Context, sc store.Scope, suite suiteDTO,
 		return runDTO{}, regressionInfo{}, err
 	}
 	runID := model.ID(runRec.String(model.ColID))
+	if err := persistComparison(ctx, sc, runID.String(), now.String(), subj.plan.key, comparison); err != nil {
+		return runDTO{}, regressionInfo{}, err
+	}
 
 	resRepo, err := sc.Ext(resultKind)
 	if err != nil {
@@ -224,6 +240,7 @@ func (m *Module) persistRun(ctx context.Context, sc store.Scope, suite suiteDTO,
 	}
 
 	out := toRunDTO(runRec)
+	out.Comparison = comparison
 	out.Cases = caseDTOsOf(agg.cases)
 	out.ScoreCI = scoreCIOf(agg.cases) // per-case scores are in hand here
 	return out, reg, nil
@@ -247,96 +264,12 @@ func scrub(s string) string {
 type regressionInfo struct {
 	baselineRef   string
 	baselineScore float64
+	comparison    ComparisonEvidence
 	drift         float64 // baseline.score - run.score
 	regressed     bool
 	severity      sdkmodel.Severity
 	runRef        string
 	subjectRef    string
-}
-
-// resolveRegression resolves the baseline (explicit ref → pinned baseline → latest
-// prior completed run for the same suite+subject[+variant]) and reports whether the
-// run regressed beyond the suite's regression_threshold. A degraded/all-skipped run
-// is never flagged (it was not actually scored).
-func (m *Module) resolveRegression(ctx context.Context, sc store.Scope, suite suiteDTO, subj runSubject, agg runAggregate) (regressionInfo, error) {
-	if agg.passed+agg.failed == 0 || suite.RegThreshold <= 0 {
-		return regressionInfo{baselineRef: subj.baselineRef}, nil
-	}
-	baselineRef, baselineScore, found, err := m.baselineScore(ctx, sc, suite.ID, subj)
-	if err != nil {
-		return regressionInfo{}, err
-	}
-	if !found {
-		return regressionInfo{baselineRef: baselineRef}, nil
-	}
-	drift := baselineScore - agg.score
-	return regressionInfo{
-		baselineRef: baselineRef, baselineScore: baselineScore, drift: drift,
-		regressed: drift > suite.RegThreshold,
-	}, nil
-}
-
-// baselineScore resolves the baseline run's score for a subject. Precedence: an
-// explicit baseline_ref on the run → a pinned evals_baseline → the latest prior
-// completed evals_run for the same (suite, subject_ref[, variant]).
-func (m *Module) baselineScore(ctx context.Context, sc store.Scope, suiteID string, subj runSubject) (ref string, score float64, found bool, err error) {
-	runRepo, err := sc.Ext(runKind)
-	if err != nil {
-		return "", 0, false, err
-	}
-	// 1) Explicit baseline_ref on the run.
-	if subj.baselineRef != "" {
-		if id, ok := idParam(subj.baselineRef); ok {
-			rec, gerr := runRepo.Get(ctx, id)
-			if gerr != nil {
-				if isNotFound(gerr) {
-					return subj.baselineRef, 0, false, nil
-				}
-				return "", 0, false, gerr
-			}
-			return rec.String(model.ColID), rec.Float(colScore), true, nil
-		}
-	}
-	// 2) A pinned baseline for (suite, subject).
-	baseRepo, err := sc.Ext(baseKind)
-	if err != nil {
-		return "", 0, false, err
-	}
-	pins, err := listAll(ctx, baseRepo, eq(colSuiteRef, suiteID), eq(colSubjectRef, subj.subjectRef))
-	if err != nil {
-		return "", 0, false, err
-	}
-	if len(pins) > 0 {
-		pinnedRun := pins[0].String(colBaseRunRef)
-		if id, ok := idParam(pinnedRun); ok {
-			rec, gerr := runRepo.Get(ctx, id)
-			if gerr == nil {
-				return rec.String(model.ColID), rec.Float(colScore), true, nil
-			}
-			if !isNotFound(gerr) {
-				return "", 0, false, gerr
-			}
-		}
-	}
-	// 3) The latest prior completed run for (suite, subject[, variant]).
-	filters := []model.Filter{eq(colSuiteRef, suiteID), eq(colSubjectRef, subj.subjectRef), eq(colRunStatus, "completed")}
-	if subj.variant != "" {
-		filters = append(filters, eq(colVariant, subj.variant))
-	}
-	prior, err := listAll(ctx, runRepo, filters...)
-	if err != nil {
-		return "", 0, false, err
-	}
-	var latest model.Record
-	for _, rec := range prior {
-		if latest == nil || rec.String(colStartedAt) > latest.String(colStartedAt) {
-			latest = rec
-		}
-	}
-	if latest == nil {
-		return "", 0, false, nil
-	}
-	return latest.String(model.ColID), latest.Float(colScore), true, nil
 }
 
 // regressionSeverity grades a regression by the magnitude of the drop.
@@ -381,22 +314,23 @@ type ciDTO struct {
 }
 
 type runDTO struct {
-	ID           string  `json:"id"`
-	SuiteRef     string  `json:"suite_ref"`
-	SuiteVersion int64   `json:"suite_version"`
-	SubjectKind  string  `json:"subject_kind"`
-	SubjectRef   string  `json:"subject_ref"`
-	ModelRef     string  `json:"model_ref,omitempty"`
-	Variant      string  `json:"prompt_variant,omitempty"`
-	Scorer       string  `json:"scorer"`
-	Status       string  `json:"status"`
-	Total        int64   `json:"total"`
-	Passed       int64   `json:"passed"`
-	Failed       int64   `json:"failed"`
-	Errors       int64   `json:"errors"`
-	Skipped      int64   `json:"skipped"`
-	Score        float64 `json:"score"`
-	PassRate     float64 `json:"pass_rate"`
+	Comparison   ComparisonEvidence `json:"comparison"`
+	ID           string             `json:"id"`
+	SuiteRef     string             `json:"suite_ref"`
+	SuiteVersion int64              `json:"suite_version"`
+	SubjectKind  string             `json:"subject_kind"`
+	SubjectRef   string             `json:"subject_ref"`
+	ModelRef     string             `json:"model_ref,omitempty"`
+	Variant      string             `json:"prompt_variant,omitempty"`
+	Scorer       string             `json:"scorer"`
+	Status       string             `json:"status"`
+	Total        int64              `json:"total"`
+	Passed       int64              `json:"passed"`
+	Failed       int64              `json:"failed"`
+	Errors       int64              `json:"errors"`
+	Skipped      int64              `json:"skipped"`
+	Score        float64            `json:"score"`
+	PassRate     float64            `json:"pass_rate"`
 	// NScored is the denominator (passed+failed) behind score/pass_rate — reported
 	// so a reader can weigh the aggregate (n=2 and n=200 are different claims).
 	NScored int64 `json:"n_scored"`
@@ -496,13 +430,14 @@ func caseDTOsOf(cases []caseResult) []caseScoreDTO {
 // ---- launch handler --------------------------------------------------------------
 
 type launchRunRequest struct {
-	SuiteRef    string            `json:"suite_ref"`
-	SubjectKind string            `json:"subject_kind,omitempty"`
-	SubjectRef  string            `json:"subject_ref,omitempty"`
-	ModelRef    string            `json:"model_ref,omitempty"`
-	Variant     string            `json:"prompt_variant,omitempty"`
-	BaselineRef string            `json:"baseline_ref,omitempty"`
-	Outputs     map[string]string `json:"outputs"`
+	Comparison  *ComparisonRequest `json:"comparison,omitempty"`
+	SuiteRef    string             `json:"suite_ref"`
+	SubjectKind string             `json:"subject_kind,omitempty"`
+	SubjectRef  string             `json:"subject_ref,omitempty"`
+	ModelRef    string             `json:"model_ref,omitempty"`
+	Variant     string             `json:"prompt_variant,omitempty"`
+	BaselineRef string             `json:"baseline_ref,omitempty"`
+	Outputs     map[string]string  `json:"outputs"`
 }
 
 // handleLaunchRun scores a set of candidate outputs against a suite SYNCHRONOUSLY
@@ -521,6 +456,11 @@ func (m *Module) handleLaunchRun(w http.ResponseWriter, r *http.Request, mc api.
 	if !decodeJSON(w, r, &req) {
 		return
 	}
+	comparison, valid := normalizeComparison(req.Comparison, req.BaselineRef)
+	if !valid {
+		writeJSON(w, http.StatusBadRequest, errorBody("invalid comparison or baseline_ref"))
+		return
+	}
 	suiteID, ok := idParam(req.SuiteRef)
 	if !ok {
 		writeJSON(w, http.StatusBadRequest, errorBody("suite_ref is required"))
@@ -533,10 +473,16 @@ func (m *Module) handleLaunchRun(w http.ResponseWriter, r *http.Request, mc api.
 
 	var suite suiteDTO
 	var cases []caseDTO
+	var subj runSubject
 	found := false
 	err := mc.Data.View(r.Context(), func(sc store.Scope) error {
 		s, cs, ok, lerr := loadSuiteAndCases(r.Context(), sc, suiteID)
 		suite, cases, found = s, cs, ok
+		if lerr != nil || !ok {
+			return lerr
+		}
+		subj = runSubject{suiteRef: suiteID.String(), suiteVer: s.SuiteVersion, subjectKind: firstNonEmpty(req.SubjectKind, s.SubjectKind), subjectRef: req.SubjectRef, modelRef: req.ModelRef, variant: req.Variant, baselineRef: req.BaselineRef, launchedBy: mc.Principal.Actor(), comparison: comparison}
+		subj.plan, lerr = m.prepareComparison(r.Context(), sc, s, subj, cs, cs, m.scorerByID(s.Scorer), "", 0)
 		return lerr
 	})
 	if err != nil {
@@ -548,11 +494,6 @@ func (m *Module) handleLaunchRun(w http.ResponseWriter, r *http.Request, mc api.
 		return
 	}
 
-	subj := runSubject{
-		suiteRef: suiteID.String(), suiteVer: suite.SuiteVersion,
-		subjectKind: firstNonEmpty(req.SubjectKind, suite.SubjectKind), subjectRef: req.SubjectRef,
-		modelRef: req.ModelRef, variant: req.Variant, baselineRef: req.BaselineRef, launchedBy: mc.Principal.Actor(),
-	}
 	agg := m.executeRun(r.Context(), mc.Tenant, suite, cases, clampOutputs(req.Outputs), m.scorerByID(suite.Scorer))
 
 	var out runDTO
@@ -646,7 +587,12 @@ func (m *Module) handleListRuns(w http.ResponseWriter, r *http.Request, mc api.M
 			return err
 		}
 		for _, rec := range recs {
-			out.Items = append(out.Items, toRunDTO(rec))
+			dto := toRunDTO(rec)
+			dto.Comparison, err = readComparison(r.Context(), sc, dto.ID)
+			if err != nil {
+				return err
+			}
+			out.Items = append(out.Items, dto)
 		}
 		out.Cursor, out.HasMore = page.Cursor, page.HasMore
 		return nil
@@ -680,6 +626,10 @@ func (m *Module) handleGetRun(w http.ResponseWriter, r *http.Request, mc api.Mod
 			return err
 		}
 		out = toRunDTO(rec)
+		out.Comparison, err = readComparison(r.Context(), sc, out.ID)
+		if err != nil {
+			return err
+		}
 		found = true
 		resRepo, err := sc.Ext(resultKind)
 		if err != nil {

@@ -75,6 +75,19 @@
       "throttle": "Limitar",
       "block": "Bloquear"
     },
+    "admission": {
+      "holds": "Filas activas del libro mayor: {{n}}",
+      "drift": "El libro mayor se ha desviado de lo que liquidaron sus llamantes",
+      "outstanding": {
+        "corrupt": "Filas de admisión que no superan su comprobación de integridad: {{n}}",
+        "unresolved": "Escrituras de recuperación aún sin decidir: {{n}}",
+        "undecodable": "Filas cuya lista de retenciones debidas no se puede decodificar: {{n}}",
+        "owed_remaining": "Retenciones aún debidas: {{n}}",
+        "frontier_blocked": "Retenciones que bloquea el ciclo de vida de intentos: {{n}}",
+        "legacy_pending": "Reclamaciones que dejó una versión anterior: {{n}}",
+        "legacy_owes_release": "Liberaciones que debe una versión anterior: {{n}}"
+      }
+    },
     "dialog": {
       "title": "Nuevo presupuesto",
       "name": "Nombre",

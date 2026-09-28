@@ -7,11 +7,8 @@ import '@/security/zod-jitless'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { RouterProvider } from '@tanstack/react-router'
-// Self-hosted variable fonts — bundled by Vite and served from the same origin
-// (no CDN; air-gap-ready, CSP-clean).
-import '@fontsource-variable/inter'
-import '@fontsource-variable/jetbrains-mono'
-import '@fontsource-variable/space-grotesk'
+// Tokens, the self-hosted faces (styles/fonts.css) and the base layer; Vite bundles the
+// font files and serves them from the same origin (no CDN; air-gap-ready, CSP-clean).
 import './index.css'
 import '@/lib/i18n' // initialize i18next (side-effect) before the first render
 import { Providers } from '@/app/providers'

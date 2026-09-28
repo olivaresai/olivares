@@ -34,9 +34,12 @@ func TestSessionIssuanceCensus(t *testing.T) {
 		"auth/authenticator.go:mintSessionTx->AuthSession":                  {"TestInviteLoginPolicyRefusal", "TestInviteLoginPolicyAllowedAndNil"},
 		"auth/authenticator.go:mintSessionTx->Sessions.Create":              {"TestInviteLoginPolicyRefusal", "TestInviteLoginPolicyAllowedAndNil"},
 		"auth/authenticator.go:mintSessionTx->NewCredential(PrefixSession)": {"TestInviteLoginPolicyRefusal", "TestInviteLoginPolicyAllowedAndNil"},
+		// A session a tenant's provider mints is scoped to that tenant.
+		"auth/authenticator.go:mintSessionTx->NewCredential(PrefixScopedSession)": {"TestATenantProviderSessionCarriesOnlyItsTenant"},
 		// Refresh rotates an existing admitted credential; it is not a new login
 		// (docs/LOGIN-ENFORCEMENT-OPERATIONS.md, Existing sessions are unaffected).
-		"auth/authenticator.go:RefreshSession->NewCredential(PrefixSession)": {"TestLoginComponentAbsent_ExistingSessionsKeepRefreshAndRevoke"},
+		"auth/authenticator.go:RefreshSession->NewCredential(PrefixSession)":       {"TestLoginComponentAbsent_ExistingSessionsKeepRefreshAndRevoke"},
+		"auth/authenticator.go:RefreshSession->NewCredential(PrefixScopedSession)": {"TestAScopedSessionRefreshKeepsItsScope"},
 		// Store decoding constructs the typed value of an already persisted row.
 		"internal/store/sqlstore/authcatalog.go:authSessionCodec->AuthSession": {"TestInviteLoginPolicyAllowedAndNil"},
 	}
@@ -104,8 +107,14 @@ func TestSessionIssuanceCensus(t *testing.T) {
 						}
 					}
 					if fn, ok := n.Fun.(*ast.Ident); ok && fn.Name == "NewCredential" && len(n.Args) == 1 {
-						if arg, ok := n.Args[0].(*ast.Ident); ok && arg.Name == "PrefixSession" {
-							kind = "NewCredential(PrefixSession)"
+						arg, ok := n.Args[0].(*ast.Ident)
+						switch {
+						case !ok || !strings.HasPrefix(arg.Name, "Prefix"):
+							// A computed prefix hides whether the credential is a session.
+							t.Errorf("credential minted with a computed prefix at %s: name the prefix constant at the call",
+								fset.Position(node.Pos()))
+						case arg.Name == "PrefixSession" || arg.Name == "PrefixScopedSession":
+							kind = "NewCredential(" + arg.Name + ")"
 						}
 					}
 					if fn, ok := n.Fun.(*ast.Ident); ok && fn.Name == "new" && len(n.Args) == 1 {

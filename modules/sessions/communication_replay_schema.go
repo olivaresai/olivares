@@ -31,13 +31,13 @@ func (m *Module) registerProtocolReplayGuardSchema(reg store.ExtensionRegistry) 
 		Kind: protocolReplayGuardKind, Table: protocolReplayGuardTable,
 		AppendOnly: true, WorkspaceLineage: hiddenWorkspaceLineage,
 		Fields: communicationFields(
-			model.FieldSpec{Name: colReplayProtocol, Kind: model.KindText},
-			model.FieldSpec{Name: colReplayPeerAuthority, Kind: model.KindText},
-			model.FieldSpec{Name: colReplayKind, Kind: model.KindText},
-			model.FieldSpec{Name: colReplayHash, Kind: model.KindBytes},
+			model.FieldSpec{Name: colReplayProtocol, Kind: model.KindText, Principal: pdeclNoneBindingProtocol},
+			model.FieldSpec{Name: colReplayPeerAuthority, Kind: model.KindText, Principal: pdeclNonePeerAuthority},
+			model.FieldSpec{Name: colReplayKind, Kind: model.KindText, Principal: model.None("a replay identifier kind, a closed set: communication_replay_service.go:26-28, communication_replay_service.go:91-94")},
+			model.FieldSpec{Name: colReplayHash, Kind: model.KindBytes, Principal: pdeclNoneReplayHash},
 			model.FieldSpec{Name: colReplayFirstSeenAt, Kind: model.KindTimestamp},
 			model.FieldSpec{Name: colReplayExpiresAt, Kind: model.KindTimestamp},
-			model.FieldSpec{Name: colReplayBindingID, Kind: model.KindUUID, Nullable: true},
+			model.FieldSpec{Name: colReplayBindingID, Kind: model.KindUUID, Nullable: true, Principal: model.None("the id of the protocol binding the guarded mutation settled: communication_replay_service.go:285")},
 		),
 		Indexes: communicationIndexes(
 			"sessions_communication_replay_guard_workspace",
@@ -60,3 +60,9 @@ func (m *Module) registerProtocolReplayGuardSchema(reg store.ExtensionRegistry) 
 		),
 	})
 }
+
+// Principal declarations of the replay guard. The provider's replay identifier
+// is kept only as a domain-bound digest.
+var (
+	pdeclNoneReplayHash = model.None("a domain-bound SHA-256 of the provider's replay identifier; the raw identifier is never stored: communication_replay_service.go:116-120, communication_replay_service.go:282")
+)

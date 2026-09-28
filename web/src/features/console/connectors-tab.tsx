@@ -46,6 +46,7 @@ import {
   SourceModeBadge,
   type NormalizedSourceMode,
 } from '@/features/shared'
+import { SourceCompareControl } from '@/features/source-diff/source-diff-view'
 import { ApiError } from '@/lib/api/errors'
 import { useAuth } from '@/lib/auth/context'
 import {
@@ -250,6 +251,7 @@ export function ConnectorsTab() {
 }
 
 function ConnectorsTabBody({ scope }: { scope: string }) {
+  const { can } = useAuth()
   const { t } = useTranslation(['console', 'common', 'shared'])
   const queryClient = useQueryClient()
   // Minted once per mount, and this mount is the only thing that will ever read it.
@@ -569,6 +571,10 @@ function ConnectorsTabBody({ scope }: { scope: string }) {
                       </td>
                       <td className="text-right">
                         <div className="flex justify-end gap-1">
+                          <SourceCompareControl
+                            source={s}
+                            allowed={can('system:admin')}
+                          />
                           <Button
                             variant="ghost"
                             size="sm"

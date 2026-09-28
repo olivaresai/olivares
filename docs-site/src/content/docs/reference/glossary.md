@@ -280,9 +280,11 @@ See [push to SIEM](/how-to/cookbook/push-to-siem/).
 
 ### SLI / SLO
 
-The published service levels: availability via `/readyz`, request success,
-API and ingest latency p99 — with single-node and HA tiers stated
-separately and honestly.
+An **SLI** measures service behavior, such as availability via `/readyz`, request
+success or API and ingest latency p99. An **SLO** sets a target for an SLI over a
+stated window, such as 28 days. Published single-node and HA objectives remain
+targets; observed attainment needs measurements for that deployment and window.
+A contractual service promise is a separate, explicit commitment.
 See [monitoring](/how-to/monitor-with-prometheus/).
 
 ### Source
@@ -296,5 +298,6 @@ See [connect a source](/how-to/connect-a-source/).
 
 The enforcement check every governed actuation makes against the
 [kill switch](#kill-switch) state — checked before any other gate, failing
-**closed** (the inverse of the budget check, which fails open: a broken
-meter must not cause an outage, but a broken stop check must).
+**closed**: a stop check that cannot be read refuses the action. The budget
+admission of the engine's gates also refuses when it cannot read its ledger;
+only session launch applies its own configurable availability posture.

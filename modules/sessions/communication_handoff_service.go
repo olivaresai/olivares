@@ -288,7 +288,26 @@ func (m *Module) offerHandoffWithAuthority(
 	return m.offerHandoffWithCurrentAuthority(ctx, scope, ref, cmd, false)
 }
 
+// offerHandoffWithCurrentAuthority materializes the offer. The Handoff names its
+// source owner and its target, so it is a fenced write: both accounts' standing
+// is read first and the transaction's authority lock pins their versions.
 func (m *Module) offerHandoffWithCurrentAuthority(
+	ctx context.Context,
+	scope DirectoryScopeRef,
+	ref auth.PrincipalRef,
+	cmd HandoffOfferCommand,
+	requireReadiness bool,
+) (HandoffOfferResult, error) {
+	var result HandoffOfferResult
+	err := m.fencedCommunicationCommand(ctx, func(ctx context.Context) error {
+		var err error
+		result, err = m.offerHandoffAttempt(ctx, scope, ref, cmd, requireReadiness)
+		return err
+	})
+	return result, err
+}
+
+func (m *Module) offerHandoffAttempt(
 	ctx context.Context,
 	scope DirectoryScopeRef,
 	ref auth.PrincipalRef,
@@ -319,6 +338,10 @@ func (m *Module) offerHandoffWithCurrentAuthority(
 	if err != nil {
 		return HandoffOfferResult{}, err
 	}
+	parties := append(actorAccounts(normalized.actor), recipientAccounts(prepared.delivery.Recipient)...)
+	if err := m.fenceCommunicationAccounts(ctx, scope.TenantID, parties); err != nil {
+		return HandoffOfferResult{}, err
+	}
 	return m.applyHandoffOffer(
 		ctx, question, bound, inspected, identity, window, claims, normalized, ids, prepared,
 	)
@@ -346,7 +369,27 @@ func (m *Module) respondHandoffWithAuthority(
 	return m.respondHandoffWithCurrentAuthority(ctx, scope, ref, handoffID, cmd, false)
 }
 
+// respondHandoffWithCurrentAuthority applies the target's response. An accept
+// makes the target the WorkItem's owner, so it is a fenced write: the target's
+// standing is read first and the transaction's authority lock pins its version.
 func (m *Module) respondHandoffWithCurrentAuthority(
+	ctx context.Context,
+	scope DirectoryScopeRef,
+	ref auth.PrincipalRef,
+	handoffID model.ID,
+	cmd HandoffResponseCommand,
+	requireReadiness bool,
+) (HandoffResponseResult, error) {
+	var result HandoffResponseResult
+	err := m.fencedCommunicationCommand(ctx, func(ctx context.Context) error {
+		var err error
+		result, err = m.respondHandoffAttempt(ctx, scope, ref, handoffID, cmd, requireReadiness)
+		return err
+	})
+	return result, err
+}
+
+func (m *Module) respondHandoffAttempt(
 	ctx context.Context,
 	scope DirectoryScopeRef,
 	ref auth.PrincipalRef,
@@ -376,6 +419,11 @@ func (m *Module) respondHandoffWithCurrentAuthority(
 	prepared, err := m.prepareHandoffResponseContent(ctx, normalized)
 	if err != nil {
 		return HandoffResponseResult{}, err
+	}
+	if normalized.command.Transition == HandoffAccept {
+		if err := m.fenceCommunicationAccounts(ctx, scope.TenantID, actorAccounts(normalized.actor)); err != nil {
+			return HandoffResponseResult{}, err
+		}
 	}
 	result, err := m.applyHandoffResponse(
 		ctx, question, bound, inspected, identity, window, claims, normalized,

@@ -1,6 +1,6 @@
 ---
 title: "Explanation"
-description: "Understanding-oriented overview of Olivares AI: how it integrates, manages and secures enterprise AI one ground truth: Claude Code at the deepest level, Codex and Grok Build alongside — its modular architecture across 30 modules, the read-first access map, and the open-core model."
+description: "Understanding-oriented overview of Olivares AI: how it integrates, manages and secures enterprise AI one ground truth: Claude Code at the deepest level, Codex and Grok Build alongside — its modular architecture across 31 modules, the read-first access map, and the open-core model."
 ---
 
 This section is understanding-oriented. It explains *why* Olivares AI is shaped the
@@ -28,7 +28,7 @@ embedded and served from the same origin as the API. The architecture is a
 platform, not a single tool: a **core engine** provides the shared subsystems —
 ingest and an in-process event bus, the connector SDK, the module runtime, a
 multi-tenant data model, the REST/gRPC API, authentication and authorization, and
-the append-only audit ledger — and every capability is one of **30 modules** that
+the append-only audit ledger — and every capability is one of **31 modules** that
 hangs off those subsystems without re-architecting the core. **Connectors** feed
 the engine from the outside through a stable SDK; a connector never imports from
 the core, which keeps the licensing boundary clean.
@@ -36,7 +36,7 @@ the core, which keeps the licensing boundary clean.
 The default store is SQLite (pure-Go) for single-node and air-gapped use, moving
 to Postgres with row-level security for multi-tenant and scale. The event bus is
 in-process by default; NATS is an optional distributed binding, not a
-requirement. The platform ships **30 modules** today, each at its own honest
+requirement. The platform ships **31 modules** today, each at its own honest
 maturity — most live and wired end-to-end, some partial or opt-in — across nine
 capability areas; own-model registry and fine-tuning is a **planned capability**,
 not a shipped module.

@@ -50,5 +50,5 @@ build tag et ne fait pas partie du runtime community.
   source de posture et de preuves de conformité.
 - [Coûts et AI FinOps](/fr/reference/modules/xi-finops/) — la surface de dépenses
   faisant autorité.
-- [Catalogue des modules](/fr/reference/modules/overview/) — les 30 modules
+- [Catalogue des modules](/fr/reference/modules/overview/) — les 31 modules
   câblés et leur maturité déclarée avec honnêteté.

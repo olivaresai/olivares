@@ -3023,6 +3023,51 @@ export class Client extends ClientCore {
   }
 
   /**
+   * POST /v1/m/finops/admission/commit — Settles a hold with the cost the effect actually incurred, returning whatever headroom the estimate held beyond it.
+   *
+   * Stability: beta.
+   */
+  postV1MFinopsAdmissionCommit(body: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.doJsonRequired("POST", "/v1/m/finops/admission/commit", "/v1/m/finops/admission/commit", body, opts);
+  }
+
+  /**
+   * POST /v1/m/finops/admission/reconcile — Runs admission recovery, sweeps holds that expired unsettled, compares what remains against the commits and releases its callers made, and files a posture finding when the ledger drifted.
+   *
+   * Stability: beta.
+   */
+  postV1MFinopsAdmissionReconcile(opts?: RequestOptions): Promise<Json> {
+    return this.do("POST", "/v1/m/finops/admission/reconcile", "/v1/m/finops/admission/reconcile", undefined, opts);
+  }
+
+  /**
+   * GET /v1/m/finops/admission/reconciliation — Reports the reservation ledger against its commits and releases, and what recovery left outstanding: holds still owed, claims and releases an earlier build left, undecided recovery writes, and admission rows that fail their integrity check.
+   *
+   * Stability: beta.
+   */
+  getV1MFinopsAdmissionReconciliation(opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/m/finops/admission/reconciliation", "/v1/m/finops/admission/reconciliation", undefined, opts);
+  }
+
+  /**
+   * POST /v1/m/finops/admission/release — Returns an unused hold to its budget when the effect did not happen, so an abandoned reservation stops withholding headroom from the next caller.
+   *
+   * Stability: beta.
+   */
+  postV1MFinopsAdmissionRelease(body: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.doJsonRequired("POST", "/v1/m/finops/admission/release", "/v1/m/finops/admission/release", body, opts);
+  }
+
+  /**
+   * POST /v1/m/finops/admission/reserve — Holds the estimated spend of a billable effect against every enforcing budget that scopes the request, and against the named actor's spend limits, under one handle.
+   *
+   * Stability: beta.
+   */
+  postV1MFinopsAdmissionReserve(body: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.doJsonRequired("POST", "/v1/m/finops/admission/reserve", "/v1/m/finops/admission/reserve", body, opts);
+  }
+
+  /**
    * GET /v1/m/finops/alerts — finops module route (requires finops:budget:read)
    *
    * Stability: beta.
@@ -3398,6 +3443,123 @@ export class Client extends ClientCore {
    */
   getV1MFinopsValueSummary(opts?: RequestOptions): Promise<Json> {
     return this.do("GET", "/v1/m/finops/value/summary", "/v1/m/finops/value/summary", undefined, opts);
+  }
+
+  /**
+   * GET /v1/m/gitpublish/intents — Lists the publication intents of one target, named by ?target_id, with what each requested, what the host was last observed to hold and its current state.
+   *
+   * Stability: beta.
+   */
+  getV1MGitpublishIntents(opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/m/gitpublish/intents", "/v1/m/gitpublish/intents", undefined, opts);
+  }
+
+  /**
+   * GET /v1/m/gitpublish/intents/{id} — Returns one publication intent: what it requested, what the host was last observed to hold, whether the host acknowledged the request, and its state.
+   *
+   * Stability: beta.
+   */
+  getV1MGitpublishIntentsById(id: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/m/gitpublish/intents/{id}", `/v1/m/gitpublish/intents/${encodeURIComponent(id)}`, undefined, opts);
+  }
+
+  /**
+   * POST /v1/m/gitpublish/intents/{id}/abandon — Records that an administrator takes responsibility for an unresolved publication intent, with a bounded reason.
+   *
+   * Stability: beta.
+   */
+  postV1MGitpublishIntentsByIdAbandon(id: string, body: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.doJsonRequired("POST", "/v1/m/gitpublish/intents/{id}/abandon", `/v1/m/gitpublish/intents/${encodeURIComponent(id)}/abandon`, body, opts);
+  }
+
+  /**
+   * GET /v1/m/gitpublish/intents/{id}/observations — Lists every observation recorded for one publication intent: each host read, dispatcher outcome and refusal, with its attempt, result and time.
+   *
+   * Stability: beta.
+   */
+  getV1MGitpublishIntentsByIdObservations(id: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/m/gitpublish/intents/{id}/observations", `/v1/m/gitpublish/intents/${encodeURIComponent(id)}/observations`, undefined, opts);
+  }
+
+  /**
+   * POST /v1/m/gitpublish/intents/{id}/reconcile — Reads the host again for one publication intent and records what it observed.
+   *
+   * Stability: beta.
+   */
+  postV1MGitpublishIntentsByIdReconcile(id: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("POST", "/v1/m/gitpublish/intents/{id}/reconcile", `/v1/m/gitpublish/intents/${encodeURIComponent(id)}/reconcile`, undefined, opts);
+  }
+
+  /**
+   * GET /v1/m/gitpublish/targets — Lists the publication targets the caller can read, without their credential and repository binding ids.
+   *
+   * Stability: beta.
+   */
+  getV1MGitpublishTargets(opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/m/gitpublish/targets", "/v1/m/gitpublish/targets", undefined, opts);
+  }
+
+  /**
+   * POST /v1/m/gitpublish/targets — Records a publication target in a workspace: an approved credential binding, an approved repository binding, the branch prefix pushes must stay under and the allowed merge bases.
+   *
+   * Stability: beta.
+   */
+  postV1MGitpublishTargets(body: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.doJsonRequired("POST", "/v1/m/gitpublish/targets", "/v1/m/gitpublish/targets", body, opts);
+  }
+
+  /**
+   * GET /v1/m/gitpublish/targets/{id} — Returns one publication target.
+   *
+   * Stability: beta.
+   */
+  getV1MGitpublishTargetsById(id: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/m/gitpublish/targets/{id}", `/v1/m/gitpublish/targets/${encodeURIComponent(id)}`, undefined, opts);
+  }
+
+  /**
+   * PUT /v1/m/gitpublish/targets/{id} — Replaces a publication target's bindings, push prefix and merge bases under optimistic concurrency, refusing a stale expected_version.
+   *
+   * Stability: beta.
+   */
+  putV1MGitpublishTargetsById(id: string, body: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.doJsonRequired("PUT", "/v1/m/gitpublish/targets/{id}", `/v1/m/gitpublish/targets/${encodeURIComponent(id)}`, body, opts);
+  }
+
+  /**
+   * DELETE /v1/m/gitpublish/targets/{id} — Deletes a publication target that no dispatching, uncertain or abandoned intent still holds.
+   *
+   * Stability: beta.
+   */
+  deleteV1MGitpublishTargetsById(id: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("DELETE", "/v1/m/gitpublish/targets/{id}", `/v1/m/gitpublish/targets/${encodeURIComponent(id)}`, undefined, opts);
+  }
+
+  /**
+   * POST /v1/m/gitpublish/targets/{id}/merges — Merges one pull request only while its head is still the reviewed expected_head, and returns the publication intent with the merge commit and tree it recorded.
+   *
+   * Stability: beta.
+   */
+  postV1MGitpublishTargetsByIdMerges(id: string, body: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.doJsonRequired("POST", "/v1/m/gitpublish/targets/{id}/merges", `/v1/m/gitpublish/targets/${encodeURIComponent(id)}/merges`, body, opts);
+  }
+
+  /**
+   * POST /v1/m/gitpublish/targets/{id}/pull-requests — Opens a pull request from a branch under the target's push prefix into an allowed merge base, or adopts the matching open one, and returns the publication intent with its receipt.
+   *
+   * Stability: beta.
+   */
+  postV1MGitpublishTargetsByIdPullRequests(id: string, body: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.doJsonRequired("POST", "/v1/m/gitpublish/targets/{id}/pull-requests", `/v1/m/gitpublish/targets/${encodeURIComponent(id)}/pull-requests`, body, opts);
+  }
+
+  /**
+   * POST /v1/m/gitpublish/targets/{id}/pushes — Pushes one exact commit to a branch under the target's push prefix, leased on the branch's expected current value, and returns the publication intent with its receipt.
+   *
+   * Stability: beta.
+   */
+  postV1MGitpublishTargetsByIdPushes(id: string, body: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.doJsonRequired("POST", "/v1/m/gitpublish/targets/{id}/pushes", `/v1/m/gitpublish/targets/${encodeURIComponent(id)}/pushes`, body, opts);
   }
 
   /**
@@ -4454,6 +4616,15 @@ export class Client extends ClientCore {
   }
 
   /**
+   * GET /v1/m/inventory/collections — Returns the collection coverage of one opened source registration, selected by ?source_id, ?source_revision and ?environment_ref: the current run's result, and the last qualified run when its scope has one.
+   *
+   * Stability: beta.
+   */
+  getV1MInventoryCollections(opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/m/inventory/collections", "/v1/m/inventory/collections", undefined, opts);
+  }
+
+  /**
    * GET /v1/m/inventory/entities — Lists catalog entries, optionally filtered by kind and status, paginated by the default id keyset cursor.
    *
    * Stability: beta.
@@ -5111,7 +5282,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * GET /v1/m/models/features — Returns the capability matrix: per API feature, which declared families support it.
+   * GET /v1/m/models/features — Returns the capability matrix: per API feature, which declared families declare it, and the matrix is not a gateway invocation guarantee.
    *
    * Stability: beta.
    */
@@ -5954,6 +6125,15 @@ export class Client extends ClientCore {
    */
   getV1MOrchestrationWorkflowsByIdRunsByRun(id: string, run: string, opts?: RequestOptions): Promise<Json> {
     return this.do("GET", "/v1/m/orchestration/workflows/{id}/runs/{run}", `/v1/m/orchestration/workflows/${encodeURIComponent(id)}/runs/${encodeURIComponent(run)}`, undefined, opts);
+  }
+
+  /**
+   * POST /v1/m/orchestration/workflows/{id}/runs/{run}/reauthorize — Continues a run paused for reauthentication: it binds the caller's own fresh credential as the run's successor binding and resumes the paused steps.
+   *
+   * Stability: beta.
+   */
+  postV1MOrchestrationWorkflowsByIdRunsByRunReauthorize(id: string, run: string, body: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.doJsonRequired("POST", "/v1/m/orchestration/workflows/{id}/runs/{run}/reauthorize", `/v1/m/orchestration/workflows/${encodeURIComponent(id)}/runs/${encodeURIComponent(run)}/reauthorize`, body, opts);
   }
 
   /**

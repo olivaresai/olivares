@@ -36,6 +36,13 @@ import (
 // without a real model. It exercises the same Score→verdict mapping as production.
 type fakeJudge struct{}
 
+func (fakeJudge) JudgingProtocol(modelRef string) (ScoringProtocol, bool) {
+	if modelRef == "" {
+		modelRef = "fixture-default"
+	}
+	return ScoringProtocol{Implementation: "test/fakeJudge", Version: "1", Provider: "fixture", Model: modelRef, ConfigDigest: hashHex("substring-criterion-v1")}, true
+}
+
 func (fakeJudge) Judge(_ context.Context, _ model.TenantID, req JudgeRequest) (JudgeVerdict, error) {
 	if req.Criterion != "" && strings.Contains(req.Output, req.Criterion) {
 		return JudgeVerdict{Score: 1.0, Passed: true, Reason: "output satisfied the criterion"}, nil
@@ -57,6 +64,11 @@ type harness struct {
 // llm_judge skipped); a non-nil judge is wired via WithJudge. Extra options (e.g.
 // WithSessionSource) are applied after it.
 func newHarness(t *testing.T, judge Judge, extra ...Option) *harness {
+	return newComparisonHarness(t, judge, nil, extra...)
+}
+
+// newComparisonHarness optionally decorates the real store at its public seam.
+func newComparisonHarness(t *testing.T, judge Judge, decorate func(store.Store) store.Store, extra ...Option) *harness {
 	t.Helper()
 	auth.SetTestHashParams(auth.TestArgonMemKiB, auth.TestArgonTime, auth.TestArgonThreads)
 	ctx := context.Background()
@@ -72,6 +84,9 @@ func newHarness(t *testing.T, judge Judge, extra ...Option) *harness {
 	st, err := engine.Open(ctx, store.Config{Engine: store.EngineSQLite, DSN: ":memory:", Debug: true}, mod.RegisterSchema)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if decorate != nil {
+		st = decorate(st)
 	}
 	h.st = st
 	t.Cleanup(func() { _ = st.Close() })
@@ -175,13 +190,9 @@ func (h *harness) createOrg(token, slug string) model.TenantID {
 
 func (h *harness) roleToken(admin string, tenant model.TenantID, email, role string) string {
 	h.t.Helper()
-	r := h.do("POST", "/v1/users", admin, map[string]any{"email": email, "password": "memberpass1"}, nil)
+	r := h.do("POST", "/v1/users", admin, map[string]any{"email": email, "password": "memberpass1", "tenant": tenant.String(), "role": role}, nil)
 	if r.code != http.StatusCreated {
 		h.t.Fatalf("create user = %d %s", r.code, r.raw)
-	}
-	uid := r.body["id"].(string)
-	if r := h.do("POST", "/v1/memberships", admin, map[string]any{"user_id": uid, "tenant": tenant.String(), "role": role}, nil); r.code != http.StatusCreated {
-		h.t.Fatalf("grant = %d %s", r.code, r.raw)
 	}
 	r = h.do("POST", "/v1/auth/login", "", map[string]any{"email": email, "password": "memberpass1"}, nil)
 	if r.code != http.StatusOK {

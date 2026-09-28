@@ -2,31 +2,23 @@
 /* SPDX-License-Identifier: AGPL-3.0-only */
 
 /*
- * Olivares Operations Console — design tokens (brand-aligned, dark-first).
+ * Olivares AI console — base layer.
  *
- * A self-hosted security control plane in the final Olivares brand (brandv4): the
- * matte-black #28282B / off-white #FAFAF9 neutral pair, the single brand orange
- * (#F08000 dark / #B45500 light), Space Grotesk + Inter + JetBrains Mono — so the
- * console and the marketing site read as one engineered identity. Restraint is the
- * trust mechanism: the orange is the brand accent (intent only — primary action,
- * active nav, focus, links); RISK/WRITE ride the distinct semantic hues; access-
- * graph CONFIDENCE rides a third cool axis (teal attributed vs slate approximate)
- * so uncertainty never reads as alarm.
- *
- * Both themes are AA+. The token values (the :root/.dark CSS-var blocks + the
- * Tailwind `@theme inline` mapping) are GENERATED from a standard DTCG source
- * (web/tokens/*.tokens.json) via Style Dictionary into ./styles/tokens.css
- * (ADM-CORE-04) — no longer hand-authored here. Edit the .tokens.json sources and
- * run `pnpm tokens`; never edit ./styles/tokens.css by hand. Tokens are CSS
- * variables switched by the `.dark` class on <html> (applied pre-paint by the
- * bootstrap in index.html) and exposed to Tailwind via `@theme inline` so utilities
- * re-resolve per theme at runtime. This file keeps only the hand-authored base
- * layer, keyframes and print rules below.
+ * The design tokens (the light :root and .dark blocks, the Tailwind `@theme inline`
+ * mapping, density and motion) are GENERATED from the DTCG sources in web/tokens/ into
+ * ./styles/tokens.css — edit the .tokens.json sources and run `pnpm tokens`; never edit
+ * ./styles/tokens.css by hand. The self-hosted faces are declared in ./styles/fonts.css.
+ * Themes switch by the `.dark` class on <html> (applied before first paint by the
+ * bootstrap in index.html); density and reduced motion switch by `data-density` and
+ * `data-motion` on <html> (set by the preferences store). This file keeps only the
+ * hand-authored base layer, keyframes and print rules.
  */
 @import 'tailwindcss';
 /* Generated design tokens (DTCG → Style Dictionary). DO NOT edit the output;
  * edit web/tokens/*.tokens.json and run `pnpm tokens` (CI: `pnpm tokens:check`). */
 @import './styles/tokens.css';
+/* Geist Variable and JetBrains Mono 400/500, self-hosted (SIL OFL 1.1). */
+@import './styles/fonts.css';
 
 /* ⛔ THE DTCG SOURCES ARE NOT A TEMPLATE, AND TAILWIND WAS READING THEM AS ONE.
  * Tailwind 4 auto-detects its content sources, so `tokens/primitives.tokens.json` was
@@ -61,14 +53,11 @@
     background-color: var(--background);
     color: var(--foreground);
     font-family: var(--font-sans);
-    /* 14px operator-density base; root stays 16px for rem math. */
-    font-size: 0.875rem;
-    line-height: 1.375rem;
-    /* Disambiguate 0/O and 1/l/I in ids/ports/hashes (Inter character variants). */
-    font-feature-settings:
-      'cv05' 1,
-      'ss01' 1,
-      'cv01' 1;
+    /* The body step of the ladder (14/20); the root stays 16px for rem math. */
+    font-size: var(--text-body);
+    line-height: var(--text-body--line-height);
+    /* Geist's first stylistic set, as the approved design renders it. */
+    font-feature-settings: 'ss01' 1;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
@@ -81,30 +70,6 @@
   pre {
     font-family: var(--font-mono);
     font-feature-settings: 'zero' 1;
-  }
-
-  /* ⛔ THE INTER CHARACTER VARIANTS ABOVE ARE INTER'S, AND EVERY FACE INHERITED THEM.
-   * `font-feature-settings` on `body` is declared for the reason its own comment gives
-   * — disambiguating 0/O and 1/l/I in ids, ports and hashes — and it names Inter while
-   * doing it. But the property INHERITS, so `cv05`, `ss01` and `cv01` were also being
-   * asked of Space Grotesk, where those tags index a different set of alternates (or
-   * none), and of any other family a component reaches for. The monospace rule above
-   * already escaped it by declaring its own value; the display face did not.
-   *
-   * A stat numeral was measured painting with OVERLAPPING glyphs,
-   * `Sessions 11` and `Needs attention 1`, reproduced in two independent captures at
-   * 390 px — on elements carrying `font-display text-display tabular-nums`, which is
-   * precisely the combination of a variable display face with an inherited feature set
-   * meant for another family plus a `tnum` request. Resetting the inherited set for the
-   * display face removes that cause.
-   *
-   * HONEST LABEL: this is the most likely cause and it is NOT a confirmed reproduction.
-   * The review's own reviewer checklist asks whether it reproduces outside Chromium at
-   * deviceScaleFactor 2, and this container has no second engine to ask. What is
-   * claimed is that the display face no longer inherits a feature set declared for
-   * Inter — which is true by construction, and a defect on its own terms. */
-  .font-display {
-    font-feature-settings: normal;
   }
 
   /* Focus: a ring, never a glow. Components opt out with `outline-none` and draw
@@ -160,6 +125,9 @@
     background-clip: padding-box;
   }
 
+  /* Reduced motion — the operating system's preference and the console's own setting
+   * (`data-motion="reduce"` on <html>) stop movement alike. The motion tokens fall to 0
+   * in both cases as well (styles/tokens.css). */
   @media (prefers-reduced-motion: reduce) {
     *,
     ::before,
@@ -169,6 +137,14 @@
       transition-duration: 0.01ms !important;
       scroll-behavior: auto !important;
     }
+  }
+  [data-motion='reduce'] *,
+  [data-motion='reduce'] ::before,
+  [data-motion='reduce'] ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
 
@@ -191,7 +167,7 @@
 @keyframes enter {
   from {
     opacity: 0;
-    transform: translateY(6px);
+    transform: translateY(var(--motion-shift));
   }
   to {
     opacity: 1;
@@ -200,7 +176,10 @@
 }
 @media (prefers-reduced-motion: no-preference) {
   .animate-enter {
-    animation: enter 240ms var(--ease-out) both;
+    animation: enter var(--duration-sheet) var(--ease-out) both;
+  }
+  [data-motion='reduce'] .animate-enter {
+    animation: none;
   }
 }
 

@@ -12,6 +12,8 @@ import (
 	"github.com/olivaresai/olivares/connectors/modelrouter"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
+
+	mp "github.com/olivaresai/olivares/connectors/modelprovider"
 )
 
 // seedEstate enriches a representative spread of models so the router has a real
@@ -130,5 +132,84 @@ func TestRoutingNoCandidate(t *testing.T) {
 	})
 	if !errors.Is(err, modelrouter.ErrNoCandidate) {
 		t.Errorf("err = %v, want ErrNoCandidate", err)
+	}
+}
+
+// TestBuildCatalog_NilReferencePriceUsesOperatorCost is M3: a reference row
+// whose Pricing is nil must keep the operator per-token cost, with Source
+// operator. A reference that has a list price keeps that price.
+func TestBuildCatalog_NilReferencePriceUsesOperatorCost(t *testing.T) {
+	_, st, tenant := newMod(t)
+	ctx := context.Background()
+	type row struct {
+		provider, ref string
+		in, out       int64
+	}
+	rows := []row{
+		{"deepseek", "deepseek-flash", 17, 19},
+		{"kimi", "kimi-for-coding", 23, 29},
+		{"anthropic", "claude-opus-4-8", 99, 99},
+		{"deepseek", "deepseek-v4-pro", -50, 10},
+	}
+	if err := st.Mutate(ctx, tenant, func(sc store.Scope) error {
+		pids := map[string]model.ID{}
+		for _, row := range rows {
+			pid, ok := pids[row.provider]
+			if !ok {
+				p, err := sc.Providers().Create(ctx, model.Provider{Name: row.provider, Kind: row.provider, Status: model.StatusActive})
+				if err != nil {
+					return err
+				}
+				pid = p.ID
+				pids[row.provider] = pid
+			}
+			md, err := sc.Models().Create(ctx, model.Model{Name: row.ref, ProviderID: pid, Status: model.StatusActive})
+			if err != nil {
+				return err
+			}
+			md.InputCostMicroUSD = row.in
+			md.OutputCostMicroUSD = row.out
+			if _, err := sc.Models().Update(ctx, md); err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	var cat mp.Catalog
+	if err := st.View(ctx, tenant, func(sc store.Scope) error {
+		var err error
+		cat, err = buildCatalog(ctx, sc)
+		return err
+	}); err != nil {
+		t.Fatalf("buildCatalog: %v", err)
+	}
+	byRef := make(map[string]mp.Model, len(cat.Models))
+	for _, mm := range cat.Models {
+		byRef[mm.Ref] = mm
+	}
+	for _, row := range rows[:2] {
+		mm, ok := byRef[row.ref]
+		if !ok {
+			t.Fatalf("catalog missing %s", row.ref)
+		}
+		if mm.Pricing == nil {
+			t.Fatalf("%s pricing is nil; operator cost %d/%d must be kept when the reference price is nil", row.ref, row.in, row.out)
+		}
+		if mm.Pricing.Source != mp.PricingOperator {
+			t.Fatalf("%s source = %q, want operator", row.ref, mm.Pricing.Source)
+		}
+		if mm.Pricing.InputPerMTokUSD != float64(row.in) || mm.Pricing.OutputPerMTokUSD != float64(row.out) || mm.Pricing.Currency != "USD" {
+			t.Fatalf("%s price = %+v, want operator %d/%d USD", row.ref, mm.Pricing, row.in, row.out)
+		}
+	}
+	opus, ok := byRef["claude-opus-4-8"]
+	if !ok || opus.Pricing == nil || opus.Pricing.Source != mp.PricingList || opus.Pricing.InputPerMTokUSD != 5 || opus.Pricing.OutputPerMTokUSD != 25 {
+		t.Fatalf("priced reference must keep list 5/25, got ok=%v pricing=%+v", ok, opus.Pricing)
+	}
+	mixed, ok := byRef["deepseek-v4-pro"]
+	if !ok || mixed.Pricing != nil {
+		t.Fatalf("mixed-sign operator cost must not be a price, got ok=%v pricing=%+v", ok, mixed.Pricing)
 	}
 }

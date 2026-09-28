@@ -145,10 +145,10 @@ StatefulSet の更新バリアを満たしません）。`/livez` は 200 のま
 
 ## 3. Active-passive HA
 
-Postgres を共有ストアとして、複数のレプリカを実行します。1 つが leader に選出され
-（Postgres のアドバイザリロック）、standby は `/readyz` に `503 {"status":"standby"}`
-で応答するため、Service は leader にのみルーティングし、leader が失われると
-standby が自動的に引き継ぎます。
+Postgres を共有ストアとして、複数のレプリカを実行します。Postgres のアドバイザリロックで
+1 つが leader に選出され、standby は `/readyz` に `503 {"status":"standby"}` を返すため、
+Service は leader にルーティングします。ロックが利用可能になると、standby を自動選出できます。
+この選出機能だけでは、あらゆる障害下で安全にフェイルオーバーできることの検証にはなりません。
 
 構造的に必須なものが 2 つあり、チャートは **その両方を強制** します（ガードが
 警告ではなくハード障害としてレンダリングされることを検証済みです）:
@@ -169,10 +169,11 @@ helm install olivares deploy/helm/olivares \
   --set core.auditSigningKeySecret=olivares-audit-key
 ```
 
-標準の HA サイズは 3 または 5 レプリカの active-passive です。このシングルライター
-設計は意図的なものです（製品の一貫性モデルに合致します）。
-[本番運用準備の数値](/how-to/monitor-with-prometheus/)が、それが支える可用性ティアを
-記載しています。
+標準の HA サイズは 3 または 5 レプリカの active-passive です。シングルライター設計は
+製品の一貫性モデルに合致します。[本番運用準備の数値](/how-to/monitor-with-prometheus/) は運用目標であり、このトポロジーの実測可用性ではありません。
+既存の epoch とフェンシングのチェックは特定の経路を保護しますが、すべての書き込みや外部への
+作用を網羅する証拠にはなりません。HA サービスレベルの達成を主張する前に、トランザクションの
+フェンシングとフェイルオーバー動作を検証し、対象デプロイメントの復旧証拠を揃える必要があります。
 
 ## 4. スケジュールされた暗号化バックアップ
 
@@ -194,7 +195,7 @@ Postgres ではチャートは `postgres.adminDsnKey` なしでのレンダリ�
 `FORCE ROW LEVEL SECURITY` の下で中断します。したがってアプリケーションの DSN に
 配線された `CronJob` は毎回失敗し、バックアップがまったく残らない状態になります。
 
-デフォルト: 6 時間ごと（`backup.schedule` で RPO を設定）、14 日間のローカル保持、
+デフォルト: 6 時間ごと（`backup.schedule` はバックアップ間隔の設定であり、実測 RPO ではありません）、14 日間のローカル保持、
 専用の保存先 PVC。**保存先をオフサイトにミラーし、KEK をバンドルとは別に保管してください**
 — 同一クラスタ内のバックアップは災害復旧ではありません。`olivares dr verify` で
 リストアの訓練をしてください。完全な手順は

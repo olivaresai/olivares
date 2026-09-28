@@ -1,0 +1,244 @@
+{
+  "title": "Publication Git",
+  "subtitle": "Poussez des commits, ouvrez des pull requests et fusionnez via des cibles de publication approuvées.",
+  "notice": "Chaque demande est vérifiée par rapport aux liaisons approuvées de la cible et à votre autorité au moment où vous l’envoyez. Un résultat incertain sur l’hôte n’est jamais renvoyé : réconciliez-le pour lire l’hôte.",
+  "actions": {
+    "refresh": "Actualiser",
+    "newTarget": "Nouvelle cible",
+    "open": "Ouvrir",
+    "edit": "Modifier",
+    "delete": "Supprimer",
+    "cancel": "Annuler",
+    "close": "Fermer",
+    "push": "Pousser",
+    "pull_request": "Ouvrir une pull request",
+    "merge": "Fusionner",
+    "reconcile": "Réconcilier",
+    "abandon": "Abandonner"
+  },
+  "columns": {
+    "target": "Cible",
+    "workspace": "Espace de travail",
+    "pushPrefix": "Préfixe de push",
+    "mergeBases": "Bases de fusion",
+    "version": "Version",
+    "actions": "Actions"
+  },
+  "targets": {
+    "title": "Cibles de publication",
+    "description": "Chaque cible lie un identifiant et un dépôt approuvés à un préfixe de push et aux branches dans lesquelles elle peut fusionner.",
+    "empty": "Aucune cible de publication",
+    "emptyAdmin": "Sélectionnez un espace de travail et créez une cible à partir d’une liaison d’identifiant et d’une liaison de dépôt approuvées.",
+    "emptyReader": "Les cibles sont créées par un administrateur de cibles. Les cibles que vous pouvez lire sont listées ici.",
+    "open": "Ouvrir la cible {{id}}"
+  },
+  "target": {
+    "title": "Cible {{id}}",
+    "description": "La liaison par laquelle cette cible publie, l’autorité requise par chaque action et les intentions qu’elle détient.",
+    "binding": "Liaison",
+    "credentialBinding": "Liaison d’identifiant",
+    "repositoryBinding": "Liaison de dépôt",
+    "withheld": "Visible uniquement par les administrateurs de cibles",
+    "noMergeBases": "Aucune",
+    "bindingHint": "Les push restent sous le préfixe de push, et les pull requests et fusions ne vont que vers les bases de fusion. Le moteur vérifie que les deux liaisons sont approuvées dans l’espace de travail à chaque envoi de demande.",
+    "actions": "Actions",
+    "administration": "Administration de la cible",
+    "notHeld": "Permission non détenue",
+    "created": "Cible de publication créée",
+    "updated": "Cible de publication mise à jour",
+    "deleted": "Cible de publication supprimée",
+    "deleteTitle": "Supprimer la cible {{id}} ?",
+    "deleteDescription": "Le moteur refuse de supprimer une cible qu’une intention en cours d’envoi, incertaine ou abandonnée détient encore."
+  },
+  "targetForm": {
+    "createTitle": "Nouvelle cible de publication",
+    "editTitle": "Modifier la cible {{id}}",
+    "description": "Liez un identifiant et un dépôt approuvés aux branches que cette cible peut publier.",
+    "credentialHint": "L’ID d’une liaison d’identifiant approuvée dans cet espace de travail. La console ne voit jamais son secret.",
+    "repositoryHint": "L’ID d’une liaison de dépôt approuvée dans cet espace de travail. Son propriétaire doit faire partie de ceux qu’autorise la liaison d’identifiant.",
+    "keepBinding": "Laissez vide pour conserver la liaison actuelle.",
+    "prefixHint": "Les push doivent rester sous ce préfixe de branche. Il se termine par une barre oblique et ne peut pas couvrir une base de fusion.",
+    "prefixSlash": "Le préfixe de push doit se terminer par une barre oblique.",
+    "basesHint": "Les branches que les pull requests et les fusions peuvent cibler, une par ligne. 16 au maximum.",
+    "create": "Créer la cible",
+    "save": "Enregistrer les modifications"
+  },
+  "effects": {
+    "push": "Push",
+    "pull_request": "Pull request",
+    "merge": "Fusion"
+  },
+  "authority": {
+    "requires": "Requiert {{permission}}",
+    "requiresAal3": "Requiert {{permission}} et une élévation à AAL3"
+  },
+  "publish": {
+    "push": {
+      "title": "Pousser un commit",
+      "description": "Pousse un commit précis vers une branche sous {{prefix}}, à condition que la branche soit toujours sur le commit actuel attendu.",
+      "submit": "Demander le push"
+    },
+    "pull_request": {
+      "title": "Ouvrir une pull request",
+      "description": "Ouvre une pull request depuis une branche sous {{prefix}} vers une base de fusion, ou adopte celle qui est déjà ouverte et correspond.",
+      "submit": "Demander la pull request"
+    },
+    "merge": {
+      "title": "Fusionner une pull request",
+      "description": "Fusionne une pull request uniquement tant que son head est toujours le commit revu.",
+      "submit": "Demander la fusion"
+    }
+  },
+  "fields": {
+    "ref": "Réf. de branche",
+    "refHint": "Une réf. complète sous le préfixe de push, par exemple refs/heads/{{prefix}}change.",
+    "expectedOld": "Commit actuel attendu",
+    "expectedOldHint": "Facultatif. Le push est conditionné à cette valeur ; laissez vide pour une nouvelle branche.",
+    "commit": "Commit",
+    "tree": "Arbre",
+    "treeHint": "L’ID de l’arbre du commit. Le moteur refuse le push si le dépôt géré contient un arbre différent.",
+    "headRef": "Branche head",
+    "headRefHint": "Une branche sous {{prefix}}.",
+    "base": "Branche de base",
+    "title": "Titre",
+    "body": "Description",
+    "draft": "Ouvrir en brouillon",
+    "number": "Numéro de pull request",
+    "expectedHead": "Commit head revu",
+    "expectedHeadHint": "La fusion n’a lieu que tant que le head de la pull request est ce commit.",
+    "method": "Méthode de fusion",
+    "acknowledgeIntent": "Prendre acte d’une intention abandonnée",
+    "acknowledgeIntentHint": "Facultatif. L’ID d’une intention abandonnée qui détient cette portée. L’indiquer requiert l’administration de la cible avec AAL3.",
+    "operationId": "ID d’opération",
+    "operationIdHint": "Soumettre à nouveau cette même demande avec cet ID retourne l’intention enregistrée. Aucun second envoi n’a lieu."
+  },
+  "methods": {
+    "merge": "Commit de fusion",
+    "squash": "Squash",
+    "rebase": "Rebase"
+  },
+  "states": {
+    "dispatching": "Envoi en cours",
+    "applied": "Appliquée",
+    "adopted": "Adoptée",
+    "rejected": "Rejetée par l’hôte",
+    "not_dispatched": "Non envoyée",
+    "uncertain": "Incertaine",
+    "abandoned": "Abandonnée"
+  },
+  "receipts": {
+    "caused": "Cette demande a causé l’effet sur l’hôte.",
+    "existing_effect": "Un effet correspondant existait déjà sur l’hôte et a été adopté.",
+    "none": "Aucun effet sur l’hôte n’est attribué à cette demande."
+  },
+  "outcome": {
+    "toast": "Réponse du moteur : {{state}}",
+    "settled": {
+      "title": "Le résultat de la demande est définitif"
+    },
+    "uncertain": {
+      "title": "Le résultat sur l’hôte est incertain",
+      "body": "La demande a été envoyée, mais son résultat sur l’hôte n’est pas confirmé. Elle a peut-être pris effet. Ne la renvoyez pas : la réconciliation lit l’hôte et enregistre ce qu’elle observe."
+    },
+    "rejected": {
+      "title": "L’hôte a rejeté la demande",
+      "body": "L’hôte a refusé l’effet. L’intention enregistre ce refus."
+    },
+    "refused": {
+      "title": "Le moteur a refusé la demande",
+      "code": "Code de refus :"
+    },
+    "unknown": {
+      "title": "La réponse du moteur n’est pas arrivée",
+      "body": "La demande a peut-être été enregistrée. Ouvrez les intentions de cette cible pour le vérifier, et réconciliez-la à cet endroit si elle est incertaine."
+    }
+  },
+  "refusals": {
+    "authority_expired": "La vérification d’autorité ne s’est pas terminée à temps ; la demande n’a donc pas été exécutée.",
+    "authority_unavailable": "Le moteur n’a pas pu statuer sur cette demande ; elle n’a donc pas été exécutée.",
+    "base_not_allowed": "La branche de base ne fait pas partie des bases de fusion de cette cible.",
+    "binding_not_approved": "Une liaison d’identifiant ou une liaison de dépôt n’est pas approuvée dans cet espace de travail.",
+    "content_mismatch": "Le commit ou l’arbre ne correspond pas au contenu du dépôt géré.",
+    "default_branch_refused": "La branche est la branche par défaut du dépôt, et la publication vers celle-ci est refusée.",
+    "dispatch_deadline_passed": "L’échéance d’envoi est passée avant que la demande soit envoyée. Rien n’a été envoyé.",
+    "field_not_accepted": "La demande contenait un champ que cette route n’accepte pas.",
+    "forbidden": "Votre autorité actuelle ne permet pas cette action sur cette cible.",
+    "head_mismatch": "Le head de la pull request n’est plus le commit revu.",
+    "host_credential_refused": "L’hôte Git a refusé l’identifiant de la liaison ou sa portée. Rien n’a été envoyé.",
+    "host_unavailable": "L’hôte Git est injoignable. Rien n’a été envoyé.",
+    "intent_settled": "Le résultat de l’intention est déjà définitif ; elle ne peut donc pas être abandonnée.",
+    "invalid_request": "La demande est incomplète ou mal formée. Vérifiez les noms de branche et les ID de commit.",
+    "lookup_incomplete": "L’état actuel de l’hôte n’a pas pu être lu entièrement ; rien n’a donc été envoyé.",
+    "not_found": "La cible ou l’intention n’existe pas, ou vous ne pouvez pas la voir.",
+    "not_mergeable": "L’hôte indique que la pull request ne peut pas être fusionnée.",
+    "operation_conflict": "Cet ID d’opération a déjà été utilisé pour une autre demande.",
+    "protected_branch_refused": "La branche est protégée sur l’hôte, et la publication vers celle-ci est refusée.",
+    "push_prefix_overlaps_base": "Le préfixe de push permettrait à un push d’atteindre une base de fusion.",
+    "ref_not_allowed": "La branche n’est pas sous le préfixe de push de cette cible.",
+    "repository_outside_binding": "Le dépôt n’appartient pas aux propriétaires qu’autorise la liaison d’identifiant.",
+    "runtime_credential_refused": "L’identifiant de runtime d’une session ne peut pas publier. Agissez avec votre propre identifiant.",
+    "scoped_grant_required": "Cette action nécessite un octroi à portée limitée sur cette cible.",
+    "stale_lease": "La branche n’est plus sur le commit actuel attendu.",
+    "step_up_required": "Cette action nécessite une élévation à AAL3. Effectuez l’élévation lorsqu’elle vous est demandée.",
+    "subject_mismatch": "Cet ID d’opération appartient à une demande faite par un autre sujet.",
+    "target_changed": "La cible a changé après l’admission de la demande. Rien n’a été envoyé.",
+    "target_in_use": "Une intention en cours d’envoi, incertaine ou abandonnée détient encore cette cible.",
+    "unresolved_intent": "Une intention non résolue détient déjà cette branche, cette pull request ou cette fusion.",
+    "unsupported_requirement": "L’hôte ne peut pas honorer cette exigence, par exemple une fusion par rebase sur GitLab.",
+    "version_conflict": "La cible a changé depuis que vous l’avez ouverte. Rouvrez-la pour voir la version actuelle.",
+    "workflow_change_refused": "Le commit modifie des fichiers de workflow CI, que cette cible refuse de publier.",
+    "unknown": "Le moteur a refusé la demande avec un code que cette console ne décrit pas."
+  },
+  "intents": {
+    "title": "Intentions",
+    "empty": "Aucune intention de publication n’est enregistrée pour cette cible.",
+    "open": "Ouvrir l’intention {{id}}"
+  },
+  "intent": {
+    "title": "Intention {{id}}",
+    "description": "Ce qui a été demandé, ce qui a été observé en dernier sur l’hôte et si l’hôte a accusé réception de la demande sont enregistrés séparément.",
+    "state": "État",
+    "effect": "Effet",
+    "receipt": "Reçu",
+    "operationId": "ID d’opération",
+    "attempt": "Tentative",
+    "targetVersion": "Version de la cible",
+    "reason": "Motif",
+    "authorizedBy": "Prise en charge par",
+    "dispatchDeadline": "Échéance d’envoi",
+    "releaseFailure": "Échec de libération de l’identifiant",
+    "requested": "Demandé",
+    "observed": "Observé sur l’hôte",
+    "notObserved": "L’hôte n’a pas été observé pour cette intention.",
+    "present": "Présent",
+    "sha": "Commit sur l’hôte",
+    "headSha": "Commit head",
+    "merged": "Fusionnée",
+    "mergeCommit": "Commit de fusion",
+    "mergeTree": "Arbre de fusion",
+    "contentMatch": "Le head correspond au commit demandé",
+    "source": "Source",
+    "at": "Horodatage",
+    "acknowledged": "Accusé de réception de l’hôte",
+    "acknowledgedValue": "Accusé reçu",
+    "status": "Statut de l’hôte",
+    "requestId": "ID de requête de l’hôte",
+    "acknowledgedHint": "Un accusé de réception est la réponse de succès de l’hôte à cette demande. Ce n’est pas une observation de l’effet.",
+    "yes": "Oui",
+    "no": "Non",
+    "observations": "Observations",
+    "observationsEmpty": "Aucune observation n’est enregistrée pour cette intention.",
+    "obs": {
+      "at": "Horodatage",
+      "attempt": "Tentative",
+      "source": "Source",
+      "result": "Résultat",
+      "host": "Objet, statut et requête de l’hôte"
+    },
+    "abandonedNote": "Un administrateur a pris la responsabilité de cette intention. Cela ne prouve rien sur l’hôte. Sa portée reste détenue jusqu’à ce qu’une nouvelle demande désigne cette intention sous Prendre acte d’une intention abandonnée.",
+    "abandoned": "Intention abandonnée",
+    "abandonTitle": "Abandonner l’intention {{id}} ?",
+    "abandonDescription": "Abandonner enregistre que vous prenez la responsabilité de cette intention non résolue. Cela ne modifie ni ne lit l’hôte, et la portée reste détenue jusqu’à ce qu’une nouvelle demande prenne acte de cette intention.",
+    "abandonReason": "Motif (256 caractères au maximum)"
+  }
+}

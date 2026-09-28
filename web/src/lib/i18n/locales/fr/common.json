@@ -89,7 +89,18 @@
     "results": "Résultats",
     "searchResults": "Résultats dans vos données",
     "searchTruncated": "Il existe d’autres correspondances — affinez la recherche.",
-    "searchDegraded": "Certaines sources n’ont pas pu être interrogées — cette liste est incomplète."
+    "searchDegraded": "Certaines sources n’ont pas pu être interrogées — cette liste est incomplète.",
+    "deniedReason": "Nécessite {{permission}}.",
+    "deniedHelp": "Demandez à un administrateur qui peut l’accorder.",
+    "noTargetReason": "Nécessite une organisation dans laquelle l’exécuter.",
+    "noTargetHelp": "Sélectionnez une organisation, puis réessayez.",
+    "goTo": "Aller à",
+    "recentSessions": "Sessions récentes",
+    "settingsGroup": "Réglages",
+    "scope": "dans {{name}}",
+    "footerMove": "déplacer",
+    "footerOpen": "ouvrir",
+    "footerCommands": "commandes seulement"
   },
   "status": {
     "active": "Actif",
@@ -259,5 +270,53 @@
     "problems_other": "{{count}} raccourcis n’ont pas pu être lus et ne se déclenchent pas : {{commands}}",
     "problems_many": "{{count}} raccourcis n’ont pas pu être lus et ne se déclenchent pas : {{commands}}",
     "navRailNote": "La barre est un seul arrêt de tabulation. Ces touches agissent quand elle a le focus."
+  },
+  "ui": {
+    "status": {
+      "working": "En cours",
+      "needsYou": "Vous attend",
+      "done": "Terminé",
+      "failed": "Échec",
+      "paused": "En pause",
+      "idle": "Non démarré"
+    },
+    "state": {
+      "loading": "Chargement…",
+      "filtered": {
+        "hidden_one": "Les filtres masquent {{count}} élément.",
+        "hidden_many": "Les filtres masquent {{count}} éléments.",
+        "hidden_other": "Les filtres masquent {{count}} éléments.",
+        "clear": "Effacer les filtres"
+      },
+      "error": {
+        "title": "Impossible de joindre le moteur.",
+        "description": "La liste n’est pas vide. Elle n’a pas pu être lue.",
+        "retry": "Réessayer",
+        "diagnostics": "Ouvrir le diagnostic",
+        "request": "Requête {{id}} · {{time}}",
+        "requestId": "Requête {{id}}"
+      },
+      "stale": {
+        "message": "Résultats de <0>{{lastGood}}</0>. L’actualisation de {{failedAt}} a échoué.",
+        "retry": "Réessayer"
+      },
+      "noAccess": {
+        "title": "Vous ne pouvez pas ouvrir ceci",
+        "description": "Votre rôle ne l’inclut pas. Rien d’autre n’est affiché à ce sujet."
+      },
+      "unknown": {
+        "title": "La requête a été envoyée, la réponse a été perdue.",
+        "description": "Vérification de la même requête auprès du moteur. Ne la renvoyez pas.",
+        "checking": "Requête {{id}} · vérification depuis {{elapsed}}",
+        "retry": "Renvoyer",
+        "retryReason": "Disponible quand le moteur confirme que rien n’a démarré."
+      }
+    },
+    "codeLine": {
+      "label": "La même chose dans un terminal",
+      "copy": "Copier la commande",
+      "copied": "Copié",
+      "copyFailed": "Copie impossible. Sélectionnez la commande et copiez-la."
+    }
   }
 }

@@ -39,8 +39,9 @@ the load-bearing ones:
 
 ## SLO targets (published, honest)
 
-The single-node targets — what the default topology actually supports — and
-the HA tier:
+Operating targets for single-node and HA deployments, not measured topology
+outcomes or customer commitments. Qualify the exact deployment and workload before
+claiming attainment; `deploy/support-matrix.md` records the qualification status:
 
 | SLI | Single node | HA tier (Postgres) |
 |---|---|---|
@@ -50,11 +51,11 @@ the HA tier:
 | Ingest latency p99 | **< 250 ms** | < 150 ms |
 | Ingest success | **99.9%** | 99.95% |
 
-The honesty in the numbers: a single writer on one node cannot promise three
-nines of availability, so the docs do not — 99.5% (≈ 3h 39m budget per
-28 days) is the single-node truth, and the 99.9% tier is earned by the
-[HA topology](/tutorials/getting-started/kubernetes/#3-active-passive-ha),
-not by optimism.
+Over 28 days, a 99.5% availability target allows **201.6 minutes
+(3h 21m 36s)** of unavailability; 99.9% allows **40.32 minutes**.
+Deploying the [HA topology](/tutorials/getting-started/kubernetes/#3-active-passive-ha) does not by itself achieve either percentage.
+Measure availability over the stated window and retain the deployment's fault and
+recovery evidence. These objectives are not a contractual availability promise.
 
 ## Load the shipped alert rules
 
@@ -66,6 +67,11 @@ availability fires (`OlivaresIngestP99High`, `OlivaresApiLatencyP99High`,
 (`OlivaresEventBusSaturated` at >90% queue for 10m), bridge health
 (`OlivaresEventBusBridgeDropping`, `OlivaresEventBusBridgeDisconnected`) and
 ledger freshness (`OlivaresAuditCheckpointStale` at age > 2h).
+
+The burn-rate recipe uses a 30-day reference period; the availability targets
+above use 28 days. Keep the alert rates and windows distinct from that period:
+14.4× for 1h, 6× for 6h and 1× for 3d consume about 2.14%, 5.36% and 10.71%
+of a 28-day budget, respectively. The shipped alert values are unchanged.
 
 ```yaml
 # prometheus.yml

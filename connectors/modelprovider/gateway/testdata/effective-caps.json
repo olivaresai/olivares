@@ -1,0 +1,12 @@
+{
+  "route": "gateway",
+  "catalog": [
+    "streaming",
+    "tool_use",
+    "vision",
+    "structured_outputs",
+    "extended_thinking",
+    "pdf"
+  ],
+  "effective": ["streaming"]
+}

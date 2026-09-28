@@ -40,6 +40,7 @@ import { CcStateBadge } from '@/features/sessions/cc-state-badge'
 import { liveRowKey } from '@/features/sessions/provenance'
 import { SESSION_PARAM } from '@/features/sessions/session-address'
 import type { LiveDTO } from '@/features/sessions/types'
+import { WorkClause } from '@/features/sessions/work-clause'
 import { workFacts } from '@/features/sessions/work-facts'
 import { RelTime } from '@/features/shared/rel-time'
 import { formatDuration, formatMicroUsd } from '@/lib/format'
@@ -84,23 +85,33 @@ function WorkRow({ session }: { session: LiveDTO }) {
           without `min-w-0` its own text sets a floor and pushes the age off the edge —
           the failure measured on four tables.
 
-          THE FACTS ARE NOT DROPPED. They follow the sentence on the same line, in the
-          muted register, and they truncate with it; nothing the engine reported is
-          removed, and a fact it did not report is still left out rather than zeroed. */}
+          THE FACTS ARE NOT DROPPED. They follow the sentence in the muted register;
+          nothing the engine reported is removed, and a fact it did not report is still
+          left out rather than zeroed.
+
+          ⛔ AND THE SENTENCE WRAPS; IT DOES NOT CUT. The list-row height is the row's
+          least height, not its only one: at 1280 px in German the sentence was 817 px in
+          an 810 px box and cut itself, with the rest only on a hover title. The state
+          badge and the age stay whole beside it. */}
       <Link
         to={'/sessions' as never}
         search={{ [SESSION_PARAM]: liveRowKey(session) } as never}
         data-testid="home-recent-row"
         title={fullTitle}
         aria-label={t('recent.open', { what: name })}
-        className="flex h-[var(--console-list-row-height)] min-w-0 items-center gap-2 px-3 outline-none transition-colors hover:bg-muted focus-visible:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+        className="flex min-h-[var(--console-list-row-height)] min-w-0 items-center gap-2 px-3 py-1.5 outline-none transition-colors hover:bg-muted focus-visible:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
       >
-        <CcStateBadge state={session.cc_state} />
+        <CcStateBadge
+          state={session.cc_state}
+          className="shrink-0 whitespace-nowrap"
+        />
         <span
-          className="min-w-0 flex-1 truncate text-body text-foreground"
-          title={fullTitle}
+          data-slot="recent-row-sentence"
+          className="min-w-0 flex-1 text-body text-foreground [overflow-wrap:anywhere]"
         >
-          <span>{name}</span>
+          <span>
+            <WorkClause text={name} live={session} />
+          </span>
           {shortId ? (
             <span className="text-muted-foreground"> {shortId}</span>
           ) : null}
@@ -113,7 +124,7 @@ function WorkRow({ session }: { session: LiveDTO }) {
         </span>
         <RelTime
           ts={session.last_event_at}
-          className="shrink-0 text-caption text-muted-foreground"
+          className="shrink-0 whitespace-nowrap text-caption text-muted-foreground"
         />
       </Link>
     </li>

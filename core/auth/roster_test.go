@@ -24,28 +24,17 @@ func TestTenantRosterEnrichesAndIsolates(t *testing.T) {
 	globex := provisionTenant(t, st, "globex")
 
 	// acme: an editor and a viewer.
-	ed, err := a.CreateUser(ctx, super, auth.NewUser{Email: "ed@acme.com", DisplayName: "Ed", Password: "dev-password-1"})
+	ed, err := a.CreateUser(ctx, super, auth.NewUser{Email: "ed@acme.com", DisplayName: "Ed", Password: "dev-password-1", Tenant: acme, Role: auth.RoleEditor})
 	if err != nil {
 		t.Fatalf("create ed: %v", err)
 	}
-	if _, err := a.GrantMembership(ctx, super, ed.ID, acme, auth.RoleEditor, model.ID("")); err != nil {
-		t.Fatalf("grant ed: %v", err)
-	}
-	vw, err := a.CreateUser(ctx, super, auth.NewUser{Email: "vw@acme.com", DisplayName: "Vi", Password: "dev-password-1"})
-	if err != nil {
+	if _, err := a.CreateUser(ctx, super, auth.NewUser{Email: "vw@acme.com", DisplayName: "Vi", Password: "dev-password-1", Tenant: acme, Role: auth.RoleViewer}); err != nil {
 		t.Fatalf("create vw: %v", err)
-	}
-	if _, err := a.GrantMembership(ctx, super, vw.ID, acme, auth.RoleViewer, model.ID("")); err != nil {
-		t.Fatalf("grant vw: %v", err)
 	}
 
 	// globex: an owner that must never surface in acme's roster.
-	ow, err := a.CreateUser(ctx, super, auth.NewUser{Email: "ow@globex.com", DisplayName: "Ow", Password: "dev-password-1"})
-	if err != nil {
+	if _, err := a.CreateUser(ctx, super, auth.NewUser{Email: "ow@globex.com", DisplayName: "Ow", Password: "dev-password-1", Tenant: globex, Role: auth.RoleOwner}); err != nil {
 		t.Fatalf("create ow: %v", err)
-	}
-	if _, err := a.GrantMembership(ctx, super, ow.ID, globex, auth.RoleOwner, model.ID("")); err != nil {
-		t.Fatalf("grant ow: %v", err)
 	}
 
 	// A directory group in acme with ed as its only member.

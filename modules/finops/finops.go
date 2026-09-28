@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/olivaresai/olivares/core/api"
+	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/sdk"
 	"github.com/olivaresai/olivares/sdk/event"
@@ -30,6 +31,9 @@ type Module struct {
 	host  sdk.Host
 	data  api.ModuleData
 	clock model.Clock
+	// standing is the port the spend-limit writer, which runs outside a request,
+	// reads a named account's standing through (auth.StandingConsumer).
+	standing auth.StandingReader
 
 	mu     sync.Mutex
 	cancel func() // bus unsubscribe
@@ -45,6 +49,12 @@ type Module struct {
 	// nothing — a default adapter here would be an operational authority this cut
 	// has not built, wearing the interface of one that was.
 	attemptVerifier AttemptEvidenceVerifier
+
+	// legacyStop is the operator's statement of when every writer of the earlier
+	// admission build stopped. It is set ONCE through WithLegacyWriterStop and never
+	// changed at runtime. The zero value states nothing, and under it recovery retires
+	// no claim those writers staged.
+	legacyStop LegacyWriterStop
 }
 
 // Option configures the module at construction. Options are applied before the
@@ -57,6 +67,14 @@ type Option func(*Module)
 // module.
 func WithAttemptEvidenceVerifier(v AttemptEvidenceVerifier) Option {
 	return func(m *Module) { m.attemptVerifier = v }
+}
+
+// WithLegacyWriterStop fixes the operator's statement of when every writer of the
+// earlier admission build stopped (ParseLegacyWriterStop). Like the verifier, it is
+// supplied only here: there is no setter, route or command that changes it, so every
+// recovery pass of the module reads the same statement.
+func WithLegacyWriterStop(stop LegacyWriterStop) Option {
+	return func(m *Module) { m.legacyStop = stop }
 }
 
 // Compile-time proof the module satisfies the SDK lifecycle, the engine-side

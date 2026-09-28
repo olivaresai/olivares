@@ -260,3 +260,20 @@ func TestResolveInferenceAndEmbedder(t *testing.T) {
 		t.Errorf("resolveEmbedder = %+v ok=%v", emb, ok)
 	}
 }
+
+func TestClaudeJudgeAdapterDeclaredProtocolAndObservedModel(t *testing.T) {
+	env := map[string]string{"ANTHROPIC_API_KEY": "fixture-key", "ANTHROPIC_DEFAULT_OPUS_MODEL": "declared-model"}
+	doer := cannedDoer{body: `{"id":"fixture","model":"different-observed-model","content":[{"type":"text","text":"{\"score\":1,\"passed\":true,\"reason\":\"ok\"}"}]}`}
+	ci := loadClaudeInference(func(k string) string { return env[k] }, doer, discardLog())
+	if ci.judge == nil {
+		t.Fatal("fixture adapter did not wire")
+	}
+	p, ok := ci.judge.JudgingProtocol("")
+	if !ok || p.Model != "declared-model" || p.ConfigDigest == "" {
+		t.Fatalf("configured effective model absent: %+v %v", p, ok)
+	}
+	v, err := ci.judge.Judge(context.Background(), model.TenantID("fixture"), evals.JudgeRequest{Output: "answer", Criterion: "correct"})
+	if err != nil || v.ObservedModel != "different-observed-model" {
+		t.Fatalf("contradictory response was discarded: %+v %v", v, err)
+	}
+}

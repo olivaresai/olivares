@@ -997,7 +997,7 @@ func bridgeGuardEditionPredecessor(
 		if derr != nil {
 			return false, derr
 		}
-		if delta != guardDeltaCommunication && delta != guardDeltaProtocol {
+		if !guardEditionModuleDelta(delta) {
 			continue
 		}
 		predecessorHistory, perr := verifyGuardEditionHistory(ctx, mdb, dia, edge.From)
@@ -1404,7 +1404,7 @@ func transitionGuardEditionAfterModules(
 	if err != nil {
 		return history, err
 	}
-	// THE SEAM'S OWN BOUNDARY. It may cross the two module deltas and nothing else: the
+	// THE SEAM'S OWN BOUNDARY. It may cross the named module deltas and nothing else: the
 	// directory relations are core v7's and the access-evidence relations are core v9's,
 	// each created inside its own migration transaction. A transition committed here for
 	// either would activate an edition whose objects this code never made — and on the
@@ -1414,7 +1414,7 @@ func transitionGuardEditionAfterModules(
 	if err != nil {
 		return history, err
 	}
-	if delta != guardDeltaCommunication && delta != guardDeltaProtocol {
+	if !guardEditionModuleDelta(delta) {
 		return history, fmt.Errorf("%w: the post-module seam cannot cross the %s edge %d -> %d; that delta belongs to a core migration",
 			ErrGuardManifestNoEdge, delta, edge.From.CodeEpoch, edge.To.CodeEpoch)
 	}

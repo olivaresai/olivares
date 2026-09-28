@@ -7,6 +7,7 @@ package sqlstore
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/olivaresai/olivares/core/model"
@@ -35,6 +36,31 @@ var _ store.PolicySnapshotRepository = (*policyRepo)(nil)
 
 func newPolicyRepo(g *genericRepo) store.Repository[model.Policy] {
 	return &policyRepo{typedRepo: &typedRepo[model.Policy]{g: g, codec: policyCodec}}
+}
+
+// Create refuses a policy whose kind no linked module registered. The policy
+// spec's declaration reads the same registry, so every stored spec has a
+// declared shape.
+func (r *policyRepo) Create(ctx context.Context, p model.Policy) (model.Policy, error) {
+	if err := registeredPolicyKind(p.Kind); err != nil {
+		return model.Policy{}, err
+	}
+	return r.typedRepo.Create(ctx, p)
+}
+
+// Update refuses a policy whose kind no linked module registered.
+func (r *policyRepo) Update(ctx context.Context, p model.Policy) (model.Policy, error) {
+	if err := registeredPolicyKind(p.Kind); err != nil {
+		return model.Policy{}, err
+	}
+	return r.typedRepo.Update(ctx, p)
+}
+
+func registeredPolicyKind(kind string) error {
+	if _, ok := model.PolicyKinds.Variant(kind); !ok {
+		return fmt.Errorf("sqlstore: policy kind %q: %w", kind, model.ErrUnknownKind)
+	}
+	return nil
 }
 
 func (r *policyRepo) GetPolicySnapshot(

@@ -179,8 +179,32 @@ grep -q 'group: release-${{ github.event_name ==' "$R" && grep -q 'cancel-in-pro
 check "both phases share one same-tag concurrency group" "publication is serialized too" $?
 grep -q 'release-build-context.json' "$ROOT/.goreleaser.yaml"
 check "the build context is declared in the goreleaser recipe" "checksummed and uploaded" $?
-[ "$(grep -c 'glob: release-build-context.json' "$ROOT/.goreleaser.yaml")" -eq 2 ]
-check "and in BOTH extra_files declarations" "neither implies the other in v2.17.0" $?
+# PER BLOCK, NOT A GLOBAL COUNT. `checksum.extra_files` puts the file's digest inside the signed checksums.txt and
+# `release.extra_files` uploads the file; neither implies the other in v2.17.0, so each block is read on its own and
+# each must declare it exactly once. The checksum declaration is the snapshot-guarded form: a real release renders the
+# literal name and still stops when the file is missing, a snapshot renders nothing and GoReleaser skips the empty glob
+# (scripts/test-release-snapshot-checksum.sh pins that boundary). The upload declaration stays literal, since the
+# release pipe never runs for a snapshot. The previous `grep -c 'glob: <name>' -eq 2` held only while both were
+# literal: it went red on the guarded form (40/1 at 63850f92) with neither declaration missing, and it could not
+# say WHICH block had lost the file.
+gr_extra_globs() { # gr_extra_globs <top-level key> — that block's extra_files globs, comments dropped, one per line
+	awk -v k="$1:" '
+		$0 == k { on = 1; next }
+		on && /^[a-z_]+:/ { exit }
+		on && /^[[:space:]]*#/ { next }
+		on && /^  extra_files:[[:space:]]*$/ { ef = 1; next }
+		on && ef && /^  [a-z_]+:/ { ef = 0 }
+		on && ef && /^    - glob:/ { sub(/^    - glob:[[:space:]]*/, ""); print }
+	' "$ROOT/.goreleaser.yaml"
+}
+# `grep -c` reads its whole input, so no producer is cut short (the SIGPIPE note at the top of this file).
+_bc_guarded="'{{ if not .IsSnapshot }}release-build-context.json{{ end }}'"
+_ck_g="$(gr_extra_globs checksum | grep -cxF "$_bc_guarded")"
+_ck_l="$(gr_extra_globs checksum | grep -cxF 'release-build-context.json')"
+_rl_l="$(gr_extra_globs release | grep -cxF 'release-build-context.json')"
+_rl_g="$(gr_extra_globs release | grep -cxF "$_bc_guarded")"
+if [ "$_ck_g" -eq 1 ] && [ "$_ck_l" -eq 0 ] && [ "$_rl_l" -eq 1 ] && [ "$_rl_g" -eq 0 ]; then _bc=0; else _bc=1; fi
+check "and in BOTH extra_files declarations" "checksum: ${_ck_g} guarded, ${_ck_l} literal; release: ${_rl_l} literal, ${_rl_g} guarded" "$_bc"
 
 # --- release.yml: promotion aliases through the digest-asserting script ----------------
 job promote-latest "$R" | grep 'scripts/alias-image-digest.sh' >/dev/null

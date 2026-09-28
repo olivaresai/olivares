@@ -89,6 +89,11 @@ type Config struct {
 	// semantic-conventions-genai/c321d7e/docs/gen-ai/README.md). This knob is
 	// Olivares-specific pending upstream guidance.
 	GenAICompat bool
+	// ProviderBaggageAllowlist declares non-secret control values that may leave
+	// through AnthropicHTTPClient. Empty denies baggage; trace context continues.
+	// This does not authorize provider execution or apply to other transports.
+	ProviderBaggageAllowlist []ProviderBaggageRule
+	providerBaggageRejection string // bounded parse reason retained for New's diagnostic
 }
 
 // FromEnv resolves the trace Config from the environment. It honors the product's
@@ -125,6 +130,9 @@ func FromEnv(version string) Config {
 		cfg.ServiceName = v
 	}
 	cfg.GenAICompat = truthy(os.Getenv("OLIVARES_OTEL_GENAI_COMPAT"))
+	cfg.ProviderBaggageAllowlist, cfg.providerBaggageRejection = parseProviderBaggage(
+		os.Getenv("OLIVARES_OTEL_PROVIDER_BAGGAGE_ALLOWLIST"),
+	)
 	// Enabled when explicitly turned on, or implicitly when an endpoint is configured.
 	cfg.Enabled = truthy(os.Getenv("OLIVARES_OTEL_ENABLED")) || cfg.Endpoint != ""
 	return cfg

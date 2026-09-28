@@ -135,11 +135,11 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Kind:  SavedViewKind,
 		Table: savedViewTable,
 		Fields: []model.FieldSpec{
-			{Name: colFeature, Kind: model.KindText, Indexed: true},
-			{Name: colName, Kind: model.KindText},
-			{Name: colDesc, Kind: model.KindText, Nullable: true},
-			{Name: colParams, Kind: model.KindText},
-			{Name: colOwner, Kind: model.KindText, Indexed: true},
+			{Name: colFeature, Kind: model.KindText, Indexed: true, Principal: model.None("a console feature slug validated against a fixed pattern: consoleviews.go:84, consoleviews.go:207")},
+			{Name: colName, Kind: model.KindText, Principal: model.None("a user-chosen view label and natural key, only rendered and compared for duplicates: consoleviews.go:189, consoleviews.go:333")},
+			{Name: colDesc, Kind: model.KindText, Nullable: true, Principal: model.None("user-written prose, only rendered: consoleviews.go:190")},
+			{Name: colParams, Kind: model.KindText, Principal: model.Scan(model.ClassEvidence)},
+			{Name: colOwner, Kind: model.KindText, Indexed: true, Principal: model.Ref(model.EncodeUserRef, model.ClassEvidence)},
 			{Name: colShared, Kind: model.KindBool, Indexed: true},
 		},
 		Indexes: []model.IndexSpec{{

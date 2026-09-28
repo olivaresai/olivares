@@ -59,6 +59,23 @@ func joinedApplyPostcommitClaim(workspace model.ID, kind ProtocolReplayKind, rep
 	}
 }
 
+// joinedApplyPostcommitPlan declares what a joined baseCreateCommand reads:
+// its user owner's standing and participant, which a prepared replay reads
+// before its owning transaction opens.
+func joinedApplyPostcommitPlan(t *testing.T, f workFixture) ProtocolReplayPlan {
+	t.Helper()
+	owner, err := model.ParseID(f.principal.ActorRef)
+	if err != nil {
+		t.Fatalf("parse the work owner: %v", err)
+	}
+	return ProtocolReplayPlan{
+		Accounts: []model.ID{owner},
+		Participants: []ProtocolReplayParticipant{{
+			WorkspaceID: f.workspace, Kind: "user", Ref: f.principal.ActorRef,
+		}},
+	}
+}
+
 func setJoinedApplyPostcommitOutboxAttempts(t *testing.T, f workFixture, eventID model.ID, attempts int64) {
 	t.Helper()
 	row := outboxRowForTest(t, f, eventID)
@@ -88,8 +105,8 @@ func TestJoinedApplyPostcommitDrainCollector(t *testing.T) {
 		defer cancel()
 		start := time.Now()
 		var created CommandResult
-		result, err := f.m.ApplyProtocolReplay(ctx, f.tenant,
-			joinedApplyPostcommitClaim(f.workspace, ProtocolReplayJTI, "japc-commit-"+model.NewID().String()),
+		result, err := f.m.ApplyPreparedProtocolReplay(ctx, f.tenant,
+			joinedApplyPostcommitClaim(f.workspace, ProtocolReplayJTI, "japc-commit-"+model.NewID().String()), joinedApplyPostcommitPlan(t, f),
 			func(joinedCtx context.Context) (ProtocolReplaySettlement, error) {
 				var applyErr error
 				created, applyErr = f.m.Apply(joinedCtx, f.tenant, f.principal, baseCreateCommand(f, "japc commit"))
@@ -121,8 +138,8 @@ func TestJoinedApplyPostcommitDrainCollector(t *testing.T) {
 		probe := &joinedApplyPostcommitProbeSink{st: f.st, tenant: f.tenant}
 		f.m.UseWorkEventSink(probe)
 		injected := errors.New("japc callback refusal")
-		_, err := f.m.ApplyProtocolReplay(context.Background(), f.tenant,
-			joinedApplyPostcommitClaim(f.workspace, ProtocolReplayJTI, "japc-rollback-"+model.NewID().String()),
+		_, err := f.m.ApplyPreparedProtocolReplay(context.Background(), f.tenant,
+			joinedApplyPostcommitClaim(f.workspace, ProtocolReplayJTI, "japc-rollback-"+model.NewID().String()), joinedApplyPostcommitPlan(t, f),
 			func(joinedCtx context.Context) (ProtocolReplaySettlement, error) {
 				created, applyErr := f.m.Apply(joinedCtx, f.tenant, f.principal, baseCreateCommand(f, "japc rollback"))
 				if applyErr != nil || created.EventID.IsZero() {
@@ -493,8 +510,8 @@ func TestJoinedApplyPostcommitDrainCollector(t *testing.T) {
 		sink := &recordingWorkSink{err: errors.New("eventing unavailable")}
 		f.m.UseWorkEventSink(sink)
 		var created CommandResult
-		result, err := f.m.ApplyProtocolReplay(context.Background(), f.tenant,
-			joinedApplyPostcommitClaim(f.workspace, ProtocolReplayJTI, "japc-sinkfail-"+model.NewID().String()),
+		result, err := f.m.ApplyPreparedProtocolReplay(context.Background(), f.tenant,
+			joinedApplyPostcommitClaim(f.workspace, ProtocolReplayJTI, "japc-sinkfail-"+model.NewID().String()), joinedApplyPostcommitPlan(t, f),
 			func(joinedCtx context.Context) (ProtocolReplaySettlement, error) {
 				var applyErr error
 				created, applyErr = f.m.Apply(joinedCtx, f.tenant, f.principal, baseCreateCommand(f, "japc sink fail"))
@@ -520,8 +537,8 @@ func TestJoinedApplyPostcommitDrainCollector(t *testing.T) {
 		sink := &joinedApplyPostcommitCancelSink{cancel: cancel}
 		f.m.UseWorkEventSink(sink)
 		var created CommandResult
-		result, err := f.m.ApplyProtocolReplay(ctx, f.tenant,
-			joinedApplyPostcommitClaim(f.workspace, ProtocolReplayJTI, "japc-cancel-"+model.NewID().String()),
+		result, err := f.m.ApplyPreparedProtocolReplay(ctx, f.tenant,
+			joinedApplyPostcommitClaim(f.workspace, ProtocolReplayJTI, "japc-cancel-"+model.NewID().String()), joinedApplyPostcommitPlan(t, f),
 			func(joinedCtx context.Context) (ProtocolReplaySettlement, error) {
 				var applyErr error
 				created, applyErr = f.m.Apply(joinedCtx, f.tenant, f.principal, baseCreateCommand(f, "japc cancel"))
@@ -588,6 +605,7 @@ func newJoinedApplyPostcommitPeerModule(t *testing.T, f workFixture) *Module {
 	t.Helper()
 	peer := New(WithWorkIdentityResolver(allowWorkIdentity{}), WithWorkContentGuard(allowWorkContent{}))
 	peer.UseData(api.NewModuleData(f.st))
+	bindStoreStanding(peer, f.st)
 	return peer
 }
 

@@ -5,15 +5,19 @@ import { SettingsVisit } from '@/features/navigation/permitted-visit'
 import { PersonalNavigationProvider } from '@/features/navigation/personal-navigation'
 import { Navigate, Outlet, useRouterState } from '@tanstack/react-router'
 import { useRef, useState } from 'react'
-import { useTranslation } from 'react-i18next'
 import { PageActionsProvider } from '@/components/ui/page-actions'
 import { Spinner } from '@/components/ui/spinner'
 import { useAuth } from '@/lib/auth/context'
+import { usePreferencesStore } from '@/stores/preferences'
+import { AppFrame } from './app-frame'
+import { AppSidebar } from './app-sidebar'
 import { BrandMark } from './brand'
 import { CommandMenu } from './command-menu'
 import { GlobalShortcuts } from './shortcuts'
 import { RouteFrame } from './page-frames'
-import { MobileNav, Sidebar } from './sidebar'
+import { PhoneBar } from './phone-bar'
+import { SidePanelProvider } from './side-panel'
+import { AreasSheet } from './sidebar'
 import { TenantGate } from './tenant-gate'
 import { Topbar } from './topbar'
 
@@ -32,14 +36,15 @@ function Splash() {
  * AppLayout is the authenticated shell and the auth GUARD for everything under it:
  * while the principal loads it shows a splash; if there is no session it redirects
  * to /login (the api client's onUnauthorized clears an expired session, which lands
- * here). Authenticated, it renders rail + header + the routed content, plus the
- * always-mounted ⌘K palette.
+ * here). Authenticated, it renders the frame (app-frame.tsx): the sidebar, the sheet with
+ * its top bar and the routed work, the phone bar below 761 px, plus the always-mounted
+ * ⌘K palette and the "All areas" sheet.
  *
- * THE SHELL CONTRACT:
+ * THE SHELL CONTRACT (redesign §3.2):
  *
- *   rail 16rem │ header 48px: breadcrumb · palette · account
- *              ├──────────────────────────────────────────────
- *              │ work — the whole remaining viewport
+ *   sidebar 272 px │ top bar 52 px: breadcrumb · page state · page actions · panels
+ *                  ├──────────────────────────────────────────────────────────────
+ *                  │ work — the whole remaining sheet [+ the side panel a page declares]
  *
  * ⛔ THE SHELL HAS NO ACTION BAR, AND REMOVING IT IS THE POINT OF THIS LANE.
  *    Until 2026-09-18 a `ShellLauncher` sat below `main` on every authenticated route:
@@ -72,12 +77,19 @@ function Splash() {
  */
 export function AppLayout() {
   const { status } = useAuth()
-  const { t } = useTranslation('common')
   // The frame is a function of the ROUTE, resolved here and not declared by each view:
   // how the viewport is divided is the shell's decision (page-frames.tsx).
   const pathname = useRouterState({ select: (s) => s.location.pathname })
-  const [mobileNavOpen, setMobileNavOpen] = useState(false)
-  const menuButtonRef = useRef<HTMLButtonElement>(null)
+  const sidebarHidden = usePreferencesStore((s) => s.sidebarCollapsed)
+  const [areasOpen, setAreasOpen] = useState(false)
+  const areasReturnRef = useRef<HTMLElement | null>(null)
+  const openAreas = () => {
+    areasReturnRef.current =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null
+    setAreasOpen(true)
+  }
 
   if (status === 'loading') return <Splash />
   if (status === 'anonymous' || status === 'error')
@@ -85,58 +97,40 @@ export function AppLayout() {
 
   return (
     <PersonalNavigationProvider>
-      <div className="flex h-svh overflow-hidden bg-background print:h-auto print:overflow-visible">
-        {/* WCAG 2.4.1 Bypass Blocks: a skip link lets keyboard users jump past the
-          sidebar nav straight to the routed content on every page. */}
-        <a
-          href="#main-content"
-          onClick={() => {
-            document.getElementById('main-content')?.focus()
-          }}
-          className="sr-only z-50 rounded-md bg-accent px-3 py-2 text-body font-medium text-accent-foreground outline-none focus-visible:not-sr-only focus-visible:absolute focus-visible:left-2 focus-visible:top-2 focus-visible:ring-2 focus-visible:ring-ring"
+      <SidePanelProvider>
+        <AppFrame
+          sidebarHidden={sidebarHidden}
+          sidebar={<AppSidebar areasOpen={areasOpen} onOpenAreas={openAreas} />}
+          topbar={<Topbar />}
+          phoneBar={<PhoneBar onMore={openAreas} />}
+          overlays={
+            <>
+              <AreasSheet
+                open={areasOpen}
+                onOpenChange={setAreasOpen}
+                returnFocusTo={areasReturnRef}
+              />
+              <CommandMenu />
+              <GlobalShortcuts />
+            </>
+          }
         >
-          {t('a11y.skipToContent')}
-        </a>
-        <Sidebar />
-        <MobileNav
-          open={mobileNavOpen}
-          onOpenChange={setMobileNavOpen}
-          returnFocusTo={menuButtonRef}
-        />
-        <div className="flex min-w-0 flex-1 flex-col">
-          <Topbar
-            onMenuClick={() => setMobileNavOpen(true)}
-            menuButtonRef={menuButtonRef}
-          />
-          {/* THE WORK REGION. `min-h-0` is load-bearing and not tidiness: without it a
-              flex child refuses to shrink below its content, so a route that wants to
-              scroll INSIDE itself would instead grow the shell and scroll the page.
-              `flex flex-col` so the frame the route picks can be `flex-1`.
-              No padding and no max-width here — see the note above. */}
-          <main
-            id="main-content"
-            tabIndex={-1}
-            className="flex min-h-0 flex-1 flex-col overflow-hidden outline-none print:overflow-visible"
-          >
-            {/* No active tenant ⇒ the routed view is never mounted, so it cannot
-                fire the tenant-scoped reads the engine would answer with 400
-                "tenant required". See TenantGate. */}
-            {/* One host per page for the verb a TABBED screen declares from
-                inside its active tab. It wraps the routed content, so the header and
-                the tab that fills its primary-action slot share it. */}
-            <PageActionsProvider>
-              <RouteFrame pathname={pathname}>
-                <TenantGate>
-                  <Outlet />
-                  <SettingsVisit />
-                </TenantGate>
-              </RouteFrame>
-            </PageActionsProvider>
-          </main>
-        </div>
-        <CommandMenu />
-        <GlobalShortcuts />
-      </div>
+          {/* No active tenant ⇒ the routed view is never mounted, so it cannot
+              fire the tenant-scoped reads the engine would answer with 400
+              "tenant required". See TenantGate. */}
+          {/* One host per page for the verb a TABBED screen declares from
+              inside its active tab. It wraps the routed content, so the header and
+              the tab that fills its primary-action slot share it. */}
+          <PageActionsProvider>
+            <RouteFrame pathname={pathname}>
+              <TenantGate>
+                <Outlet />
+                <SettingsVisit />
+              </TenantGate>
+            </RouteFrame>
+          </PageActionsProvider>
+        </AppFrame>
+      </SidePanelProvider>
     </PersonalNavigationProvider>
   )
 }

@@ -1,5 +1,5 @@
 ---
-title: "Copia de seguridad y restauración (DR que se demuestra a sí misma)"
+title: "Copia de seguridad y restauración"
 description: >-
   Copias de seguridad cifradas y seguras para la continuidad del ledger con
   olivares dr: bundles programados para SQLite y Postgres, la restauración que
@@ -11,8 +11,11 @@ La copia de seguridad de un control plane tiene un trabajo más difícil que la 
 debe volver con su **ledger con alteraciones detectables demostrablemente intacto**. `olivares dr`
 está construido en torno a ese requisito — cada bundle registra las puntas de cadena
 por tenant, la restauración **falla con código distinto de cero si el ledger restaurado
-no es seguro para la continuidad**, y el subcomando de simulacro demuestra que un bundle
-es restaurable sin tocar producción.
+no es seguro para la continuidad**, y `dr drill` comprueba la continuidad del
+ledger del backup a la restauración sobre un ledger sintético en un directorio
+temporal e imprime el RTO medido. No comprueba concesiones, la custodia de
+claves ni los efectos posteriores al punto de restauración, y no toca un
+directorio de datos de producción.
 
 El bundle se cifra bajo una **KEK que tú proporcionas** — una passphrase derivada con
 Argon2id (`--passphrase-file`) o una clave en bruto de 32 bytes de tu KMS
@@ -56,9 +59,14 @@ Dos interruptores de honestidad que conviene conocer:
 [perfil de backup](/es/tutorials/getting-started/docker-compose/#3-copias-de-seguridad-dr-cifradas-el-perfil-backup),
 el chart de Helm un
 [CronJob](/es/tutorials/getting-started/kubernetes/#4-copias-de-seguridad-cifradas-programadas);
-en bare metal, programa con cron el comando de arriba. Tu calendario **es** tu RPO:
+en bare metal, programa con cron el comando de arriba. Las cifras de la tabla
+son objetivos. En los niveles con cron, el RPO objetivo es el intervalo de
+cron. `dr drill` mide el RTO de SQLite sobre un ledger sintético (restauración,
+arranque y verificación). No mide el RPO y no mide una restauración de
+Postgres. Los RTO de SQLite medidos, con su número de eventos y el host, están
+en `docs/DR-RUNBOOK.md`; no son los objetivos de esta tabla.
 
-| Nivel | Mecanismo | RPO | RTO |
+| Nivel | Mecanismo | RPO objetivo | RTO objetivo |
 |---|---|---|---|
 | SQLite | `dr backup` con cron | el intervalo de cron | < 15 min |
 | Postgres lógico | `pg-dump.sh` con cron | el intervalo de cron | < 30 min |
@@ -70,9 +78,12 @@ viaja con su passphrase no está cifrado en ningún sentido que importe.
 
 ## Simulacro — antes de necesitarlo
 
-`dr verify` demuestra que un bundle es restaurable **sin tocar tu directorio de datos**
-(SQLite: verificación completa de la cadena en un directorio temporal; sale con código
-distinto de cero si no es seguro):
+`dr verify` comprueba un bundle **sin tocar tu directorio de datos**. En SQLite
+lo restaura en un directorio temporal y verifica la continuidad del ledger, y
+sale con código distinto de cero si esa comprobación falla. En Postgres
+comprueba el digest del bundle y que las claves se descifran. La verificación
+completa de la cadena de un bundle Postgres necesita una restauración sobre un
+Postgres temporal. Ejecuta la comprobación con:
 
 ```bash
 olivares dr verify --in /backups/olivares-dr-<ts>.drbundle \

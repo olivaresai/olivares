@@ -43,7 +43,7 @@ remote collector). Configure the listener with the `OLIVARES_*` variables in the
 
 <!-- BEGIN GENERATED olivares-grpc-reference — regenerate with `bash scripts/check-guide-docs.sh --write`; do not edit by hand -->
 
-The engine and the plugin host register **28 rpc** across **7 services**. The tables below
+The engine and the plugin host register **29 rpc** across **7 services**. The tables below
 are read from the generated registration tables the servers hand to gRPC, so a method that
 is listed here is a method a client can call.
 
@@ -115,13 +115,14 @@ Defined in `olivaresv1/v1.proto`; 4 rpc.
 
 ### `olivares.sdk.v1.SourceService`
 
-Defined in `olivaresv1/v1.proto`; 4 rpc.
+Defined in `olivaresv1/v1.proto`; 5 rpc.
 
 | Method | Full method | Kind | Request | Response | What it does |
 |---|---|---|---|---|---|
 | `Close` | `/olivares.sdk.v1.SourceService/Close` | unary | `Empty` | `Empty` | Ends the session opened by Open and releases whatever the connector held for it. |
 | `Describe` | `/olivares.sdk.v1.SourceService/Describe` | unary | `Empty` | `DescribeResponse` | Returns the connector's descriptor: its identity, its configuration fields and the capabilities it advertises. |
 | `Gather` | `/olivares.sdk.v1.SourceService/Gather` | server-streaming | `Empty` | `Observation` (stream) | Streams observations to the host, which lifts each onto the event bus. The stream ends when a batch run completes or the host cancels it. |
+| `GatherInventory` | `/olivares.sdk.v1.SourceService/GatherInventory` | server-streaming | `GatherInventoryRequest` | `Observation` (stream) | Streams the connector's inventory observations for the negotiated inventory-coverage-v1 capability only; any other capability is refused, and a canceled stream never reports success. |
 | `Open` | `/olivares.sdk.v1.SourceService/Open` | unary | `OpenRequest` | `Empty` | Starts a session with the configuration the host supplies, before any observation is gathered. |
 
 <!-- END GENERATED olivares-grpc-reference -->

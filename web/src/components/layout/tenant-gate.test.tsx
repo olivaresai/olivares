@@ -317,9 +317,9 @@ describe('TenantGate — zero organizations', () => {
 
     renderShell()
 
-    // The real settings page rendered — not the first-organization gate.
+    // The default General section of settings rendered, not the organization gate.
     expect(
-      await screen.findByRole('heading', { name: /settings/i }),
+      await screen.findByRole('heading', { level: 1, name: 'General' }),
     ).toBeInTheDocument()
     expect(
       screen.queryByRole('button', { name: /create organization/i }),

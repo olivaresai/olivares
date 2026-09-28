@@ -19,6 +19,8 @@ type mcpTaskBudgetChecker struct {
 	chk  finops.BudgetCheck
 	err  error
 	dims finops.SpendDims
+	// reqs records every admission request the gate built.
+	reqs []finops.AdmissionRequest
 }
 
 func (c *mcpTaskBudgetChecker) CheckBudget(_ context.Context, _ model.TenantID, dims finops.SpendDims) (finops.BudgetCheck, error) {
@@ -32,6 +34,17 @@ func (c *mcpTaskBudgetChecker) CheckBudget(_ context.Context, _ model.TenantID, 
 func (c *mcpTaskBudgetChecker) CheckSpendLimit(context.Context, model.TenantID, string, []string) (finops.SpendLimitCheck, error) {
 	return finops.SpendLimitCheck{Allowed: true}, nil
 }
+
+func (c *mcpTaskBudgetChecker) Reserve(_ context.Context, _ model.TenantID, req finops.AdmissionRequest) (finops.Reservation, error) {
+	c.dims = req.Dims
+	c.reqs = append(c.reqs, req)
+	return fakeAdmissionReserve(c.chk, c.err, req)
+}
+
+func (c *mcpTaskBudgetChecker) Commit(context.Context, model.TenantID, string, int64) error {
+	return nil
+}
+func (c *mcpTaskBudgetChecker) Release(context.Context, model.TenantID, string) error { return nil }
 
 func TestMCPTaskGateBudgetAdapter(t *testing.T) {
 	ctx := context.Background()
@@ -48,6 +61,16 @@ func TestMCPTaskGateBudgetAdapter(t *testing.T) {
 			checker.dims.Gateway != "mcp" || checker.dims.CostType != "task" {
 			t.Fatalf("budget dims not forwarded correctly: %+v", checker.dims)
 		}
+		// A durable task's cost is accounted as it runs, so the gate asks admission under the
+		// task's own key, holds nothing it could not settle, and never admits blind.
+		if len(checker.reqs) != 1 {
+			t.Fatalf("admission asked %d time(s), want exactly 1", len(checker.reqs))
+		}
+		if req := checker.reqs[0]; req.IdempotencyKey != "mcp_task/task-1" || req.EstimateMicroUSD != 0 ||
+			req.Unreachable != finops.UnreachableDeny || req.Scope != finops.AdmissionScopeScheduledJob {
+			t.Fatalf("admission request = key %q estimate %d unreachable %q scope %q, want mcp_task/task-1, 0, deny, scheduled_job",
+				req.IdempotencyKey, req.EstimateMicroUSD, req.Unreachable, req.Scope)
+		}
 	})
 
 	t.Run("block and throttle map status", func(t *testing.T) {
@@ -63,11 +86,23 @@ func TestMCPTaskGateBudgetAdapter(t *testing.T) {
 		}
 	})
 
-	t.Run("checker error fails open", func(t *testing.T) {
+	// Admission refuses a key whose row failed its integrity check in every posture; the
+	// task gate shows it as a 503 with that reason, not as a budget cap reached.
+	t.Run("integrity refusal is a 503", func(t *testing.T) {
+		checker := &mcpTaskBudgetChecker{chk: finops.BudgetCheck{
+			Allowed: false, Action: "block", Reason: finops.ReasonAdmissionIntegrity,
+		}}
+		dec, err := (mcpTaskGate{fin: checker, tenant: tenant}).AuthorizeTask(ctx, intent)
+		if err != nil || dec.Allow || dec.DeniedStatus != http.StatusServiceUnavailable || dec.Reason != finops.ReasonAdmissionIntegrity {
+			t.Fatalf("integrity decision = %+v err=%v, want 503 %q", dec, err, finops.ReasonAdmissionIntegrity)
+		}
+	})
+
+	t.Run("unreachable ledger fails closed", func(t *testing.T) {
 		checker := &mcpTaskBudgetChecker{err: errors.New("finops unavailable")}
 		dec, err := (mcpTaskGate{fin: checker, tenant: tenant}).AuthorizeTask(ctx, intent)
-		if err != nil || !dec.Allow {
-			t.Fatalf("budget checker errors must fail open, got %+v err=%v", dec, err)
+		if err != nil || dec.Allow || dec.DeniedStatus != http.StatusServiceUnavailable {
+			t.Fatalf("an unreachable ledger must deny the task 503, got %+v err=%v", dec, err)
 		}
 	})
 }

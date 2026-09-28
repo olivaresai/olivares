@@ -58,6 +58,7 @@ import { addressOf, type EvidenceBlock } from './session-address'
 import { SessionConversation } from './session-conversation'
 import { SessionEvidence } from './session-evidence'
 import type { SessionResolution } from './use-session-resolution'
+import { WorkClause } from './work-clause'
 import { workFacts } from './work-facts'
 import './i18n'
 
@@ -207,7 +208,9 @@ export function SessionNarrative({
               the one rung `workLine` says is not a description of anything. The pane
               says what it knows instead; the heading above already carries the tail. */}
           {line && line.from !== 'untitled' ? (
-            <p className="text-body text-foreground">{line.text}</p>
+            <p className="text-body text-foreground">
+              <WorkClause text={line.text} live={live} />
+            </p>
           ) : (
             <p className="text-caption text-muted-foreground">
               {t('narrative.noObjective')}

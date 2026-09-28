@@ -395,9 +395,30 @@ func TestSCIMMembershipGuardAuthorizedLifecycle(t *testing.T) {
 		t.Run(string(engine), func(t *testing.T) {
 			f := newSCIMGuardFixture(t, engine)
 			a := auth.NewAuthenticator(f.raw, nil)
+			// A tenant's disable and DELETE are the scoped offboard: the membership,
+			// the tenant's group rows and its token trees go; the account's global
+			// status, its account-scope session and its credentials stay.
+			onlyOtherGroups := func(t *testing.T, groups []model.UserGroupMember) {
+				t.Helper()
+				if len(groups) != 1 {
+					t.Fatalf("group rows = %d, want only the other tenant's", len(groups))
+				}
+				for _, g := range groups {
+					if err := f.raw.AuthView(f.ctx, func(as store.AuthScope) error {
+						group, err := as.Groups().Get(f.ctx, g.GroupID)
+						if err == nil && group.TargetTenantID != f.other {
+							t.Error("remaining group belongs to departed tenant")
+						}
+						return err
+					}); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
 			for _, method := range []string{"update", "set"} {
 				t.Run(method, func(t *testing.T) {
-					u := f.seed(t, true, true)
+					// This tenant alone governs the account, so it may write its attributes.
+					u := f.seed(t, true, false)
 					if err := scimGuardWrite(f.ctx, a, f, u.ID, method, true); err != nil {
 						t.Fatal(err)
 					}
@@ -409,25 +430,22 @@ func TestSCIMMembershipGuardAuthorizedLifecycle(t *testing.T) {
 						t.Fatal(err)
 					}
 					disabled := f.state(t, u.ID)
-					if disabled.user.Status != model.StatusInactive || !reflect.DeepEqual(before.members, disabled.members) || !reflect.DeepEqual(before.groups, disabled.groups) || !reflect.DeepEqual(before.credentials, disabled.credentials) {
-						t.Fatal("disable must preserve membership, groups and registered credentials")
+					if disabled.user.Status != model.StatusActive || len(disabled.members) != 0 || !reflect.DeepEqual(before.sessions, disabled.sessions) || !reflect.DeepEqual(before.credentials, disabled.credentials) {
+						t.Fatal("disable must remove only this tenant's membership and keep the account, its session and its credentials")
 					}
-					for _, s := range disabled.sessions {
-						if !s.Revoked {
-							t.Fatal("disable retained a live session")
-						}
-					}
+					onlyOtherGroups(t, disabled.groups)
 					for _, tok := range disabled.tokens {
 						if tok.Revoked != (tok.BoundTenantID == f.tenant) {
 							t.Fatal("disable revoked the wrong tenant's token tree")
 						}
 					}
-					if err := scimGuardWrite(f.ctx, a, f, u.ID, method, true); err != nil {
-						t.Fatal(err)
+					// The offboarded account is no longer this tenant's resource: a later
+					// activation finds no member and restores nothing.
+					if err := scimGuardWrite(f.ctx, a, f, u.ID, method, true); !errors.Is(err, store.ErrNotFound) {
+						t.Fatalf("activation after the offboard = %v; want ErrNotFound", err)
 					}
-					after := f.state(t, u.ID)
-					if after.user.Status != model.StatusActive || !reflect.DeepEqual(disabled.sessions, after.sessions) || !reflect.DeepEqual(disabled.tokens, after.tokens) {
-						t.Fatal("reactivation must restore status without reviving revoked credentials")
+					if after := f.state(t, u.ID); !reflect.DeepEqual(disabled, after) {
+						t.Fatal("activation after the offboard changed account, credentials, membership, groups, authority or audit")
 					}
 				})
 			}
@@ -443,44 +461,28 @@ func TestSCIMMembershipGuardAuthorizedLifecycle(t *testing.T) {
 						t.Fatal(err)
 					}
 					after := f.state(t, u.ID)
-					if (after.user.Status == model.StatusActive) != otherMember {
-						t.Fatal("deprovision orphan status is wrong")
+					if after.user.Status != model.StatusActive {
+						t.Fatal("deprovision changed the account's global status")
 					}
 					for _, m := range after.members {
 						if m.TargetTenantID != f.other {
 							t.Fatal("departed membership survived")
 						}
 					}
-					if (len(after.members) == 1) != otherMember || len(after.groups) != 1 {
-						t.Fatal("deprovision removed or retained the wrong membership/group")
+					if (len(after.members) == 1) != otherMember {
+						t.Fatal("deprovision removed or retained the wrong membership")
 					}
-					for _, g := range after.groups {
-						if err := f.raw.AuthView(f.ctx, func(as store.AuthScope) error {
-							group, err := as.Groups().Get(f.ctx, g.GroupID)
-							if err == nil && group.TargetTenantID != f.other {
-								t.Error("remaining group belongs to departed tenant")
-							}
-							return err
-						}); err != nil {
-							t.Fatal(err)
-						}
-					}
-					for _, s := range after.sessions {
-						if s.Revoked == otherMember {
-							t.Fatal("deprovision revoked the wrong sessions")
-						}
+					onlyOtherGroups(t, after.groups)
+					if !reflect.DeepEqual(before.sessions, after.sessions) {
+						t.Fatal("deprovision revoked the account-scope session")
 					}
 					for _, tok := range after.tokens {
 						if tok.Revoked != (tok.BoundTenantID == f.tenant) {
 							t.Fatal("deprovision changed the wrong tenant token tree")
 						}
 					}
-					if otherMember {
-						if !reflect.DeepEqual(before.credentials, after.credentials) || before.authority != after.authority {
-							t.Fatal("non-orphan departure changed global credentials/authority")
-						}
-					} else if len(after.credentials) != 0 {
-						t.Fatal("orphan retained WebAuthn credentials")
+					if !reflect.DeepEqual(before.credentials, after.credentials) {
+						t.Fatal("deprovision changed the account's credentials")
 					}
 					if err := a.SCIMDeprovisionUser(f.ctx, f.actor, f.tenant, u.ID); err != nil {
 						t.Fatal(err)

@@ -158,13 +158,9 @@ func (h *harness) tenantToken(admin string, tenant model.TenantID, email string)
 // ingest:write).
 func (h *harness) tenantTokenRole(admin string, tenant model.TenantID, email, role string) string {
 	h.t.Helper()
-	cr := h.do("POST", "/v1/users", admin, map[string]any{"email": email, "password": "memberpass1"}, nil)
+	cr := h.do("POST", "/v1/users", admin, map[string]any{"email": email, "password": "memberpass1", "tenant": tenant.String(), "role": role}, nil)
 	if cr.code != http.StatusCreated {
 		h.t.Fatalf("create user %s = %d %s", email, cr.code, cr.raw)
-	}
-	uid := cr.body["id"].(string)
-	if g := h.do("POST", "/v1/memberships", admin, map[string]any{"user_id": uid, "tenant": tenant.String(), "role": role}, nil); g.code != http.StatusCreated {
-		h.t.Fatalf("grant %s = %d %s", email, g.code, g.raw)
 	}
 	lr := h.do("POST", "/v1/auth/login", "", map[string]any{"email": email, "password": "memberpass1"}, nil)
 	if lr.code != http.StatusOK {
@@ -177,15 +173,19 @@ func (h *harness) tenantTokenRole(admin string, tenant model.TenantID, email, ro
 // its session token (so p.Tenants() has >1 entry — the multi-membership keying path).
 func (h *harness) tenantTokenMulti(admin, email string, tenants ...model.TenantID) string {
 	h.t.Helper()
-	cr := h.do("POST", "/v1/users", admin, map[string]any{"email": email, "password": "memberpass1"}, nil)
+	body := map[string]any{"email": email, "password": "memberpass1"}
+	if len(tenants) > 0 {
+		body["tenant"], body["role"] = tenants[0].String(), auth.RoleEditor
+	}
+	cr := h.do("POST", "/v1/users", admin, body, nil)
 	if cr.code != http.StatusCreated {
 		h.t.Fatalf("create user %s = %d %s", email, cr.code, cr.raw)
 	}
-	uid := cr.body["id"].(string)
-	for _, tn := range tenants {
-		if g := h.do("POST", "/v1/memberships", admin, map[string]any{"user_id": uid, "tenant": tn.String(), "role": auth.RoleEditor}, nil); g.code != http.StatusCreated {
-			h.t.Fatalf("grant %s in %s = %d %s", email, tn, g.code, g.raw)
-		}
+	// The further memberships are setup: they are seeded through the store, as
+	// memberships that predate the consent rule.
+	uid := model.ID(cr.body["id"].(string))
+	for i := 1; i < len(tenants); i++ {
+		h.seedMembership(uid, tenants[i], auth.RoleEditor)
 	}
 	lr := h.do("POST", "/v1/auth/login", "", map[string]any{"email": email, "password": "memberpass1"}, nil)
 	if lr.code != http.StatusOK {

@@ -13,10 +13,13 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/olivaresai/olivares/connectors/modelprovider/gateway"
 	"github.com/olivaresai/olivares/connectors/modelrouter"
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
+
+	mp "github.com/olivaresai/olivares/connectors/modelprovider"
 )
 
 // This file closes the "routing resolves but never executes" seam:
@@ -76,6 +79,102 @@ func (unwiredExecutor) Execute(context.Context, ExecuteRequest) (ExecuteResult, 
 
 // defaultExecuteMaxTokens bounds an execute call that does not set max_tokens.
 const defaultExecuteMaxTokens = 1024
+
+// gatewayRouteGaps returns required capability names RouteGateway cannot
+// invoke. Streaming is the only flag Effective keeps. The names come from
+// the policy, never from the request body.
+func gatewayRouteGaps(required []string) []string {
+	caps := make([]mp.Capability, 0, len(required))
+	for _, c := range required {
+		if c == "" {
+			continue
+		}
+		caps = append(caps, mp.Capability(c))
+	}
+	if len(caps) == 0 {
+		return nil
+	}
+	effective := gateway.Effective(caps, gateway.RouteGateway)
+	have := make(map[mp.Capability]struct{}, len(effective))
+	for _, c := range effective {
+		have[c] = struct{}{}
+	}
+	var missing []string
+	seen := make(map[string]struct{}, len(caps))
+	for _, c := range caps {
+		if _, ok := have[c]; ok {
+			continue
+		}
+		name := string(c)
+		if _, dup := seen[name]; dup {
+			continue
+		}
+		seen[name] = struct{}{}
+		missing = append(missing, name)
+	}
+	return missing
+}
+
+// textExecutionRefuses reports whether the legacy text executor must not send.
+// An empty requirement does not refuse. The Chat profile branch returns
+// before this is consulted, unless the profile itself is on the gateway route.
+func textExecutionRefuses(required []string) bool {
+	return len(gatewayRouteGaps(required)) > 0
+}
+
+// chatTextGaps returns required capability names the Chat text transport
+// cannot carry. That transport sends one user string with stream false, so
+// every catalog flag is a gap. Names come from the policy, not the request.
+func chatTextGaps(required []string) []string {
+	var missing []string
+	seen := make(map[string]struct{}, len(required))
+	for _, c := range required {
+		name := strings.TrimSpace(c)
+		if name == "" {
+			continue
+		}
+		if _, dup := seen[name]; dup {
+			continue
+		}
+		seen[name] = struct{}{}
+		missing = append(missing, name)
+	}
+	return missing
+}
+
+// chatTextRefuses reports whether a pinned Chat profile must not call Chat.
+// An empty requirement does not refuse: the text send itself is allowed.
+func chatTextRefuses(required []string) bool {
+	return len(chatTextGaps(required)) > 0
+}
+
+// chatTextNote names the required capabilities the Chat text path cannot
+// invoke. It carries no prompt, endpoint, or credential.
+func chatTextNote(required []string) string {
+	missing := chatTextGaps(required)
+	if len(missing) == 0 {
+		return "not invocable on the Chat text path"
+	}
+	verb := "is"
+	if len(missing) != 1 {
+		verb = "are"
+	}
+	return strings.Join(missing, ", ") + " " + verb + " not invocable on the Chat text path"
+}
+
+// notInvocableNote names the required capabilities the gateway route cannot
+// invoke. It carries no prompt, endpoint, or credential.
+func notInvocableNote(required []string) string {
+	missing := gatewayRouteGaps(required)
+	if len(missing) == 0 {
+		return "not invocable on the gateway route"
+	}
+	verb := "is"
+	if len(missing) != 1 {
+		verb = "are"
+	}
+	return strings.Join(missing, ", ") + " " + verb + " not invocable on the gateway route"
+}
 
 // executeRequestDTO is the POST /execute body: the prompt to run through the resolved
 // model and a token bound. Minimal by design — a single user turn; the governed
@@ -218,6 +317,17 @@ func (m *Module) handleExecuteRouting(w http.ResponseWriter, r *http.Request, mc
 			writeExecutionProfileError(w, unsupportedExecutionOperation())
 			return
 		}
+		// A Chat profile pinned on the gateway endpoint cannot invoke a
+		// non-streaming flag. Refuse here, before Chat, with the capability
+		// named. This is not a target-binding mismatch.
+		if spec.GatewayEndpoint != "" && textExecutionRefuses(spec.RequiredCapabilities) {
+			writeJSON(w, http.StatusUnprocessableEntity, executeResponseDTO{Decision: decisionDTO{
+				Resolved: false, Policy: dec.Policy,
+				Reason:    notInvocableNote(spec.RequiredCapabilities),
+				Fallbacks: []targetDTO{}, Chain: []targetDTO{},
+			}})
+			return
+		}
 		if !dec.Resolved || !executionProfileMatchesTarget(profile, dec.Primary) {
 			writeExecutionProfileError(w, profileBindingMismatch())
 			return
@@ -320,6 +430,16 @@ func (m *Module) handleExecuteRouting(w http.ResponseWriter, r *http.Request, mc
 	// port refuses with the same 503 C2A returned, before any policy, inspector, secret or
 	// transport I/O.
 	if spec.hasExecutionProfile() {
+		// The text transport cannot carry a required capability. Refuse
+		// before ExecuteChat. Requests with no required flag still enter.
+		if chatTextRefuses(spec.RequiredCapabilities) {
+			writeJSON(w, http.StatusUnprocessableEntity, executeResponseDTO{Decision: decisionDTO{
+				Resolved: false, Policy: dec.Policy,
+				Reason:    chatTextNote(spec.RequiredCapabilities),
+				Fallbacks: []targetDTO{}, Chain: []targetDTO{},
+			}})
+			return
+		}
 		m.executeChatProfile(w, r, mc, in, dec, profile, id, policyVersion, specDigest)
 		return
 	}
@@ -331,6 +451,20 @@ func (m *Module) handleExecuteRouting(w http.ResponseWriter, r *http.Request, mc
 	// authenticated actor, so this can never widen access).
 	if status, denied := m.budgetDeniesRoute(r, mc, &dec, in.SessionRef); denied {
 		writeJSON(w, status, executeResponseDTO{Decision: dec})
+		return
+	}
+
+	// Refuse a capability this text send cannot carry. The Chat branch has
+	// already returned. The decision stays the catalog selection. The reason
+	// names the capability and does not echo the request.
+	if textExecutionRefuses(spec.RequiredCapabilities) {
+		note := notInvocableNote(spec.RequiredCapabilities)
+		if dec.Reason == "" {
+			dec.Reason = note
+		} else {
+			dec.Reason += "; " + note
+		}
+		writeJSON(w, http.StatusNotImplemented, executeResponseDTO{Decision: dec})
 		return
 	}
 

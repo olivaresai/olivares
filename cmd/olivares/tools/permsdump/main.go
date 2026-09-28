@@ -127,6 +127,12 @@ func (r recordingRegistrar) HandleEntity(method, pattern string, perm auth.Permi
 	*r.out = append(*r.out, Route{Method: method, Pattern: pattern, Perm: string(perm)})
 }
 
+// HandleSealed records the permission of a governed route. Its authority seal
+// changes how a request is admitted, not the permission declared by the module.
+func (r recordingRegistrar) HandleSealed(method, pattern string, perm auth.Permission, _ api.SealedRoute, h api.ModuleHandler) {
+	r.Handle(method, pattern, perm, h)
+}
+
 func main() {
 	out := flag.String("o", "", "write to this file instead of stdout")
 	flag.Parse()

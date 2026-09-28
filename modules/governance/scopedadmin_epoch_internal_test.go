@@ -29,6 +29,10 @@ type managedEpochFixture struct {
 	st     store.Store
 	tenant model.TenantID
 	actor  auth.Principal
+	// standing is the request's standing port. Grant and policy writers read the
+	// standing of every account they name through it before their transaction,
+	// and a request with no port refuses them.
+	standing auth.StandingReader
 }
 
 func newManagedEpochFixture(t *testing.T) *managedEpochFixture {
@@ -53,10 +57,11 @@ func newManagedEpochFixture(t *testing.T) *managedEpochFixture {
 		t.Fatal(err)
 	}
 	return &managedEpochFixture{
-		m:      m,
-		st:     st,
-		tenant: tenant,
-		actor:  auth.Principal{Kind: auth.KindUser, UserID: model.NewID(), Superadmin: true},
+		m:        m,
+		st:       st,
+		tenant:   tenant,
+		actor:    auth.Principal{Kind: auth.KindUser, UserID: model.NewID(), Superadmin: true},
+		standing: auth.NewAuthenticator(st, nil),
 	}
 }
 
@@ -328,7 +333,7 @@ func (f *managedEpochFixture) scopedData(wrap func(store.Scope) store.Scope) *ma
 }
 
 func (f *managedEpochFixture) moduleContext(data api.ScopedData) api.ModuleContext {
-	return api.ModuleContext{Tenant: f.tenant, Principal: f.actor, Data: data}
+	return api.ModuleContext{Tenant: f.tenant, Principal: f.actor, Data: data, Standing: f.standing}
 }
 
 func managedEpochRequest(t *testing.T, method, path string, body any, param, value string) *http.Request {

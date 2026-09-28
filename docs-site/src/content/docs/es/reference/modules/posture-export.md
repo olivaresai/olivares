@@ -64,4 +64,4 @@ etiqueta como autoritativa.
 - [Honestidad y límites](/es/start/honesty-and-limits/) — por qué esto es una
   proyección, no un push verificado.
 - [Catálogo de módulos](/es/reference/modules/overview/) — dónde se sitúa la
-  exportación de postura entre los 30 módulos entregados.
+  exportación de postura entre los 31 módulos entregados.

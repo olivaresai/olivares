@@ -50,11 +50,11 @@ func routeRevisionDescriptor() model.EntityDescriptor {
 		Table:      routeRevisionTable,
 		AppendOnly: true,
 		Fields: []model.FieldSpec{
-			{Name: colRevSubject, Kind: model.KindText, Indexed: true},
-			{Name: colRevOp, Kind: model.KindText},
-			{Name: colRevSnapshot, Kind: model.KindText},
-			{Name: colRevActor, Kind: model.KindText},
-			{Name: colRevActorK, Kind: model.KindText},
+			{Name: colRevSubject, Kind: model.KindText, Indexed: true, Principal: pdeclNoneRouteID},
+			{Name: colRevOp, Kind: model.KindText, Principal: model.None("a revision operation, a closed set: revisions.go:40-43, route.go:124")},
+			{Name: colRevSnapshot, Kind: model.KindText, Principal: pdeclRouteSnapshot},
+			{Name: colRevActor, Kind: model.KindText, Principal: pdeclActorRef},
+			{Name: colRevActorK, Kind: model.KindText, Principal: pdeclNoneActorKind},
 		},
 	}
 }

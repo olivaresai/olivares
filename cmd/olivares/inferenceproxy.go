@@ -202,8 +202,8 @@ func loadInferenceProxyConfig(_ *slog.Logger) (inferenceProxyConfig, error) {
 
 // inferenceProxyDecider is the GOVERNED brain: authenticate → kill-switch → residency →
 // model-access → context-policy → DLP → egress → firewall → computer-use → ceilings →
-// count_tokens sizing → budget → record. Every security edge is deny-closed; only the
-// budget gate is fail-open (the posture). The sizing pre-flight is the ONLY
+// count_tokens sizing → budget → record. Every security edge is deny-closed and so is the
+// budget gate, whose hold Finalize settles. The sizing pre-flight is the ONLY
 // pre-forward upstream egress and deliberately runs AFTER every phase-one gate:
 // a prompt denied by the local content/security gates is never exfiltrated through the
 // token-count side channel. Denies that decide on or after the sizing itself —
@@ -252,7 +252,7 @@ type inferenceProxyDecider struct {
 	// inspector is the OPTIONAL commercial content firewall (P1; contentinspectorgate.go).
 	// nil in the default AGPL build (wire_noenterprise.go) ⇒ no deep inspection, behavior
 	// UNCHANGED. When present it runs AFTER the deny-closed security gates and BEFORE the
-	// fail-open budget gate on a request, and after response DLP in Finalize; it may DENY a
+	// budget gate on a request, and after response DLP in Finalize; it may DENY a
 	// request or WITHHOLD a buffered response, never force an Allow nor bypass a prior gate.
 	inspector contentInspector
 	// computerUse is the OPTIONAL computer-use governance gate (computerusegate.go).
@@ -303,6 +303,14 @@ type proxySession struct {
 	// accepted binding of its MCP declaration or absence, checked after the later gates,
 	// before every count_tokens and before the freeze. nil without an egress gate.
 	mcp *claudeapi.MCPEgressSnapshot
+	// admissionHandle is the hold the budget step (6) took for this call. Finalize settles
+	// it: committed at the measured cost, or released when the upstream call failed. A
+	// later step that refuses the call releases it at once. Empty when the budget gate is
+	// off or the admission holds nothing.
+	admissionHandle string
+	// batchHolds are the holds of every entry of an admitted batch, carried on its batch
+	// session so FinalizeBatch settles them all.
+	batchHolds []string
 }
 
 // Authorize runs the PRE-forward governed gate chain for one /v1/messages call, then the
@@ -315,6 +323,18 @@ func (d *inferenceProxyDecider) Authorize(ctx context.Context, req claudeapi.Mes
 	if !ok {
 		return deny.decision
 	}
+	dec := d.freezeAndRecord(ctx, sess, gov)
+	if !dec.Allow {
+		// The chain took the call's hold, and a step after it refused the call: the effect
+		// never runs, so the hold goes back now instead of withholding until it expires.
+		d.releaseAdmission(ctx, sess)
+	}
+	return dec
+}
+
+// freezeAndRecord is Authorize after the gate chain allowed: the freeze of the governed
+// request and, for a recording-mandating tenant, the recording reservation.
+func (d *inferenceProxyDecider) freezeAndRecord(ctx context.Context, sess *proxySession, gov claudeapi.MessageRequest) claudeapi.ProxyDecision {
 	// FREEZE the governed request into the opaque forward artifact (F3): the exact bytes
 	// the proxy will send upstream, serialized ONCE. The EffectiveRequestDigest is over these
 	// bytes, so the authorized decision and the ledger anchor commit to precisely what runs —
@@ -410,6 +430,9 @@ func (d *inferenceProxyDecider) AuthorizeBatch(ctx context.Context, requests []c
 	// clean (same deny-closed semantics: any entry's window/budget deny kills the batch).
 	for i := range governed {
 		if deny, ok := d.runSizingAndBudget(ctx, governed[i].Params, id, sessions[i]); !ok {
+			// The entries before this one took their holds, and the submission is refused
+			// whole: none of them runs, so each of those holds goes back now.
+			d.releaseAdmissions(ctx, sessions[:i])
 			return claudeapi.ProxyBatchDecision{
 				Allow:     false,
 				Status:    deny.decision.Status,
@@ -419,6 +442,20 @@ func (d *inferenceProxyDecider) AuthorizeBatch(ctx context.Context, requests []c
 			}
 		}
 	}
+	dec := d.freezeAndRecordBatch(ctx, requests, governed, sessions)
+	if !dec.Allow {
+		// Every entry took its hold, and a step after the budget refused the submission:
+		// nothing runs, so every hold goes back now.
+		d.releaseAdmissions(ctx, sessions)
+	}
+	return dec
+}
+
+// freezeAndRecordBatch is AuthorizeBatch after every entry passed the gate chain: the
+// per-entry binding checks, the freeze of the governed submission and, for a
+// recording-mandating tenant, the recording reservation. On allow the batch session
+// carries every entry's hold for FinalizeBatch.
+func (d *inferenceProxyDecider) freezeAndRecordBatch(ctx context.Context, requests, governed []claudeapi.BatchRequest, sessions []*proxySession) claudeapi.ProxyBatchDecision {
 	// Keep the first entry's resolved session for the single batch-level ledger anchor.
 	batchSess := sessions[0]
 	// Each entry must still carry ITS OWN accepted MCP binding (never entry 0's).
@@ -459,12 +496,18 @@ func (d *inferenceProxyDecider) AuthorizeBatch(ctx context.Context, requests []c
 			}
 		}
 	}
+	for _, sess := range sessions {
+		if sess.admissionHandle != "" {
+			batchSess.batchHolds = append(batchSess.batchHolds, sess.admissionHandle)
+		}
+	}
 	return claudeapi.ProxyBatchDecision{Allow: true, Requests: governed, Prepared: prepared, Session: batchSess}
 }
 
-// FinalizeBatch anchors the batch submission outcome to the ledger (best-effort + loud). A
-// batch CREATE response carries no model output, so there is no response DLP / cost
-// reconciliation — the per-entry request-side chain already governed each entry.
+// FinalizeBatch settles the hold of every entry (settleBatch) and anchors the batch
+// submission outcome to the ledger (best-effort + loud). A batch CREATE response carries no
+// model output, so there is no response DLP / cost reconciliation — the per-entry
+// request-side chain already governed each entry.
 func (d *inferenceProxyDecider) FinalizeBatch(ctx context.Context, sessAny any, out claudeapi.ProxyBatchForwardResult) {
 	sess, _ := sessAny.(*proxySession)
 	if sess == nil {
@@ -474,7 +517,22 @@ func (d *inferenceProxyDecider) FinalizeBatch(ctx context.Context, sessAny any, 
 	if out.UpstreamErr {
 		decision = "upstream-error"
 	}
+	d.settleBatch(ctx, sess, out.UpstreamErr)
 	d.anchorBatchOutcome(ctx, sess, out, decision)
+}
+
+// settleBatch settles the hold of every entry of a batch submission. A submission the
+// upstream refused ran nothing, so each hold is released. An accepted one has no cost yet:
+// its results are billed when their cost is ingested, and the ingested cost is what the
+// budgets count from then on, so each hold is committed at zero.
+func (d *inferenceProxyDecider) settleBatch(ctx context.Context, sess *proxySession, upstreamErr bool) {
+	for _, h := range sess.batchHolds {
+		if upstreamErr {
+			d.releaseHold(ctx, sess.tenant, h)
+		} else {
+			d.commitHold(ctx, sess.tenant, h, 0)
+		}
+	}
 }
 
 // --- F2: the post-identity seam (resolvedIdentity + runGates) --------------------
@@ -680,9 +738,9 @@ func (d *inferenceProxyDecider) authorizeChain(ctx context.Context, req claudeap
 // composes the two phases: runLocalGates (kill-switch → circuit-breaker →
 // normalize → residency → model-access → context-policy → DLP → server-tool egress →
 // content firewall → computer-use → request ceilings → forwardability re-validate, all
-// LOCAL) and then runSizingAndBudget (count_tokens sizing + fail-open budget). Order is
-// load-bearing twice over: every security gate (deny-closed) runs BEFORE the budget gate
-// (fail-open), so a FinOps outage can never bypass a security deny (the precedent);
+// LOCAL) and then runSizingAndBudget (count_tokens sizing + budget hold). Order is
+// load-bearing twice over: every security gate (deny-closed) runs BEFORE the budget gate,
+// so a request a security gate refuses never takes a hold (the precedent);
 // and every LOCAL gate runs BEFORE the sizing pre-flight, so a denied prompt is never
 // egressed to the provider through the count_tokens side channel. On allow it
 // returns the resolved session (requestRef unset) and the GOVERNED request (egress/
@@ -896,7 +954,7 @@ func (d *inferenceProxyDecider) runLocalGates(ctx context.Context, req claudeapi
 	//     tool or MCP origin and validates+clamps allowed_domains/blocked_domains/max_uses
 	//     against the tenant's egress grant, rewriting the forwarded request. It is a SECURITY
 	//     gate, so it runs here — after the other deny-closed gates (it cannot bypass them)
-	//     and BEFORE the fail-open budget gate. nil ⇒ the default AGPL build: observe-only,
+	//     and BEFORE the budget gate. nil ⇒ the default AGPL build: observe-only,
 	//     unchanged, no MCP capture. With a gate, governEgress captures the MCP declaration (or
 	//     its absence) once and returns the governed request with its accepted binding; the
 	//     snapshot rides on the session for the checks after the later gates.
@@ -913,7 +971,7 @@ func (d *inferenceProxyDecider) runLocalGates(ctx context.Context, req claudeapi
 	//     of the request content — prompt-injection over the untrusted channels the model
 	//     ingests, plus exfiltration signals — that the PEP and the core DLP do not do. It is a
 	//     SECURITY gate, so it runs here: after the other deny-closed gates (it cannot bypass
-	//     them) and BEFORE the fail-open budget gate. nil ⇒ the default AGPL build (no deep
+	//     them) and BEFORE the budget gate. nil ⇒ the default AGPL build (no deep
 	//     inspection, unchanged). ActorRef is the (empty) proxy sessionRef — agent-scoped
 	//     policies need the NHI binding; tenant/global policies govern raw-token traffic.
 	if d.inspector != nil {
@@ -1010,7 +1068,7 @@ func (d *inferenceProxyDecider) runLocalGates(ctx context.Context, req claudeapi
 }
 
 // runSizingAndBudget is the SECOND phase of the gate chain: the count_tokens
-// sizing pre-flight (5g) and the fail-open budget admission (6). It runs ONLY after
+// sizing pre-flight (5g) and the budget admission hold (6). It runs ONLY after
 // runLocalGates cleared the request — the sizing POST is the single pre-forward upstream
 // egress in the proxy (it carries system, messages, tools and MCP servers), so no
 // PHASE-ONE (content/security) deny may ever be preceded by it. The denies decided HERE
@@ -1058,32 +1116,91 @@ func (d *inferenceProxyDecider) runSizingAndBudget(ctx context.Context, req clau
 		}
 	}
 
-	// 6. Budget admission, FAIL-OPEN — the deliberate exception, AFTER every
-	//    security gate. A read error never blocks inference; only a firm cap denies (block
-	//    ⇒ 402, throttle ⇒ 429), money-free (docs/SECURITY-HARDENING.md).
+	// 6. Budget admission: the call's estimate is HELD before the forward. It
+	//    runs AFTER every security gate, the MCP egress gate (5b) included, and after the
+	//    sizing pre-flight, so a request any of them refuses takes no hold. A firm budget or
+	//    seat cap denies (block ⇒ 402, throttle ⇒ 429), money-free; a ledger that cannot be
+	//    written denies too (fail-closed, 503). The hold rides on the session: Finalize
+	//    settles it, and a later step that refuses the call gives it back.
 	if pol.GateBudget {
 		dims := d.spendDims(req, sessionRef)
 		dims.UserGroupRefs = principal.GroupsIn(tenant)
 		// The snapshot's sessionRef IS principal.AgentIdentity (newResolvedIdentity keeps
 		// them in lockstep) — consumed via the seam so every gate sees the SAME binding.
 		dims.AgentRef = sessionRef
-		if bc, berr := d.budget.CheckBudget(ctx, tenant, dims); berr == nil && !bc.Allowed {
-			code, class := gateCodeBudget, sdk.FailurePolicyDeny
-			status, errType, reason := http.StatusPaymentRequired, "billing_error", "budget limit reached"
-			if strings.EqualFold(bc.Action, "throttle") {
-				code, status, errType, reason = gateCodeBudgetThrottle, http.StatusTooManyRequests, "rate_limit_error", "budget throttle in effect"
-			}
-			res := gateDeny(code, class, status, errType, reason)
-			res.decision.Headers = noRetryHeader()
-			return res, false
+		res, err := d.budget.Reserve(ctx, tenant, finops.AdmissionRequest{
+			Scope:            finops.AdmissionScopeModelGateway,
+			Dims:             dims,
+			ActorRef:         actor,
+			Groups:           principal.GroupsIn(tenant),
+			EstimateMicroUSD: proxyAdmissionEstimate(req),
+			IdempotencyKey:   proxyAdmissionKey(),
+			Unreachable:      engineReserveUnreachable,
+		})
+		if err != nil || !res.Allowed {
+			return budgetDeny(res, err), false
 		}
-		if sc, serr := d.budget.CheckSpendLimit(ctx, tenant, actor, principal.GroupsIn(tenant)); serr == nil && !sc.Allowed {
-			res := gateDeny(gateCodeSpendLimit, sdk.FailurePolicyDeny, http.StatusPaymentRequired, "billing_error", "spend limit reached")
-			res.decision.Headers = noRetryHeader()
-			return res, false
-		}
+		sess.admissionHandle = res.Handle
 	}
 	return gateResult{}, true
+}
+
+// budgetDeny maps an admission that did not admit the call to the proxy's refusal. A
+// ledger the admission could not establish, or a key it refused as corrupt, is a 503 and a
+// reservation fault: no hold could be taken, and no policy refused the call. A per-seat
+// spend limit and a pooled budget are told apart, as the apps-gateway contract publishes
+// them, and a throttling budget is a 429. Every refusal is money-free and tells the client
+// not to retry.
+func budgetDeny(res finops.Reservation, err error) gateResult {
+	var out gateResult
+	switch {
+	case err != nil || res.Reason == finops.ReasonStoreUnreachable:
+		out = gateDeny(gateCodeBudget, sdk.FailureReservationFault, http.StatusServiceUnavailable, "api_error", finops.ReasonStoreUnreachable)
+	case res.Reason == finops.ReasonAdmissionIntegrity:
+		out = gateDeny(gateCodeBudget, sdk.FailureReservationFault, http.StatusServiceUnavailable, "api_error", finops.ReasonAdmissionIntegrity)
+	case res.SpendLimit:
+		out = gateDeny(gateCodeSpendLimit, sdk.FailurePolicyDeny, http.StatusPaymentRequired, "billing_error", "spend limit reached")
+	case strings.EqualFold(res.Action, "throttle"):
+		out = gateDeny(gateCodeBudgetThrottle, sdk.FailurePolicyDeny, http.StatusTooManyRequests, "rate_limit_error", "budget throttle in effect")
+	default:
+		out = gateDeny(gateCodeBudget, sdk.FailurePolicyDeny, http.StatusPaymentRequired, "billing_error", "budget limit reached")
+	}
+	out.decision.Headers = noRetryHeader()
+	return out
+}
+
+// Bounds of the amount one proxied call holds.
+const (
+	// proxyEstimateFloorMicroUSD is held by every call, whatever it asks for.
+	proxyEstimateFloorMicroUSD int64 = 10_000
+	// proxyEstimatePerOutputTokenMicroUSD is held for each output token the call may produce.
+	proxyEstimatePerOutputTokenMicroUSD int64 = 10
+	// proxyEstimateMaxOutputTokens caps the tokens counted, so an absurd max_tokens holds a
+	// large amount instead of one that wraps.
+	proxyEstimateMaxOutputTokens int64 = 1 << 40
+)
+
+// proxyAdmissionEstimate is the amount a call holds while it runs: a floor, plus a price for
+// each output token its max_tokens allows. Finalize replaces it with the measured cost.
+func proxyAdmissionEstimate(req claudeapi.MessageRequest) int64 {
+	n := int64(req.MaxTokens)
+	if n <= 0 {
+		return proxyEstimateFloorMicroUSD
+	}
+	if n > proxyEstimateMaxOutputTokens {
+		n = proxyEstimateMaxOutputTokens
+	}
+	return proxyEstimateFloorMicroUSD + n*proxyEstimatePerOutputTokenMicroUSD
+}
+
+// proxyAdmissionKey is a fresh admission key for one call. The client sends no idempotency
+// key, and the proxy cannot tell a retry from a second call with the same bytes, so it
+// claims neither: every call asks the ledger its own question. A key derived from the
+// request would present two identical calls as one, and the second would be answered with
+// the first one's hold. The admission row's payload hash still binds the key to the
+// request it admitted.
+func proxyAdmissionKey() string {
+	return finops.AdmissionScopeModelGateway + "/" + newRequestRef()
 }
 
 // gateDeny builds a semantic deny: the legacy transport presentation plus the stable
@@ -1106,8 +1223,9 @@ func chainDenyWithHeaders(code gateCode, class sdk.FailureClass, status int, err
 }
 
 // Finalize runs the POST-forward steps: response DLP (block only in buffer mode), the
-// post-hoc residency proof (detective), cost reconciliation (fail-open) and the ledger
-// outcome anchor (best-effort + loud, or already-mandated).
+// post-hoc residency proof (detective), cost reconciliation (fail-open), the settlement of
+// the call's admission hold (committed at the measured cost, or released on an upstream
+// error) and the ledger outcome anchor (best-effort + loud, or already-mandated).
 func (d *inferenceProxyDecider) Finalize(ctx context.Context, sessAny any, out claudeapi.ProxyForwardResult) claudeapi.ProxyResponseVerdict {
 	sess, _ := sessAny.(*proxySession)
 	if sess == nil {
@@ -1177,7 +1295,15 @@ func (d *inferenceProxyDecider) Finalize(ctx context.Context, sessAny any, out c
 	// Cost reconciliation (fail-open): reuse the connector's billing logic (refusal not
 	// billed, per-attempt fallback, advisor split) and publish the per-request CostSample +
 	// forensic findings on the bus, so the NEXT request's budget admission is tight.
-	d.reconcileCost(ctx, sess, out)
+	actual := d.reconcileCost(ctx, sess, out)
+
+	// Settle the call's hold, once its cost is published: committed at the measured cost,
+	// or released when the upstream call failed, since no cost of it is ingested.
+	if out.UpstreamErr {
+		d.releaseAdmission(ctx, sess)
+	} else {
+		d.commitHold(ctx, sess.tenant, sess.admissionHandle, actual)
+	}
 
 	// Ledger outcome anchor (the I/O fingerprint record).
 	decision := "allow"
@@ -1241,20 +1367,61 @@ func (d *inferenceProxyDecider) spendDims(req claudeapi.MessageRequest, sessionR
 	}
 }
 
-// reconcileCost publishes the per-request cost sample(s) + forensic finding(s) on the bus.
-func (d *inferenceProxyDecider) reconcileCost(ctx context.Context, sess *proxySession, out claudeapi.ProxyForwardResult) {
-	if d.bus == nil || out.UpstreamErr {
-		return
+// reconcileCost publishes the per-request cost sample(s) + forensic finding(s) on the bus
+// and returns the call's measured cost: the sum of its samples.
+func (d *inferenceProxyDecider) reconcileCost(ctx context.Context, sess *proxySession, out claudeapi.ProxyForwardResult) int64 {
+	if d.inf == nil || out.UpstreamErr {
+		return 0
 	}
 	samples, findings := d.inf.RuntimeObservations(out.Response, sess.sessionRef, d.clock(), false)
+	var actual int64
 	for _, s := range samples {
 		if s.Actor == "" {
 			s.Actor = sess.actor
 		}
+		actual += s.CostMicroUSD
 		d.publish(ctx, sess.tenant, s)
 	}
 	for _, f := range findings {
 		d.publish(ctx, sess.tenant, f)
+	}
+	return actual
+}
+
+// releaseAdmission gives back the call's hold: the call never ran, or its upstream call
+// failed and no cost of it is ingested.
+func (d *inferenceProxyDecider) releaseAdmission(ctx context.Context, sess *proxySession) {
+	d.releaseHold(ctx, sess.tenant, sess.admissionHandle)
+}
+
+// releaseAdmissions gives back the hold of each session.
+func (d *inferenceProxyDecider) releaseAdmissions(ctx context.Context, sessions []*proxySession) {
+	for _, sess := range sessions {
+		d.releaseAdmission(ctx, sess)
+	}
+}
+
+// commitHold records that the effect of hold h ran, at actual. The call has already run,
+// so a failure has nothing left to refuse: it is logged, and the hold lapses at its
+// expiry. It runs even when the caller's context is done: the settlement is bookkeeping
+// of what already happened, and a client that disconnects does not undo it.
+func (d *inferenceProxyDecider) commitHold(ctx context.Context, tenant model.TenantID, h string, actual int64) {
+	if d.budget == nil || h == "" {
+		return
+	}
+	if err := d.budget.Commit(context.WithoutCancel(ctx), tenant, h, actual); err != nil && d.log != nil {
+		d.log.Warn("inference-proxy: admission commit failed; the hold lapses at its expiry", "err", err)
+	}
+}
+
+// releaseHold returns the headroom of hold h. A failure is logged, and the hold lapses at
+// its expiry. Like commitHold, it runs even when the caller's context is done.
+func (d *inferenceProxyDecider) releaseHold(ctx context.Context, tenant model.TenantID, h string) {
+	if d.budget == nil || h == "" {
+		return
+	}
+	if err := d.budget.Release(context.WithoutCancel(ctx), tenant, h); err != nil && d.log != nil {
+		d.log.Warn("inference-proxy: admission release failed; the hold lapses at its expiry", "err", err)
 	}
 }
 

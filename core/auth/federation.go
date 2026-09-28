@@ -8,6 +8,8 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
 // ErrSSONotConfigured is returned by the default (NoFederation) provider when no
@@ -114,6 +116,63 @@ func (i FederatedIdentity) QualifiedSubject() string {
 		return ""
 	}
 	return issuer + ssoSubjectSep + subject
+}
+
+// QualifiedKey is an issuer-qualified subject key: the issuer, U+001F, then the
+// subject. Correlation compares these keys exactly; it never trims them.
+type QualifiedKey string
+
+// ErrOwnerUnkeyable refuses an issuer or subject that cannot form a qualified key.
+var ErrOwnerUnkeyable = errors.New("auth: the issuer or subject cannot form a qualified key")
+
+// OwnerUnkeyableError names why a part cannot form a qualified key: empty,
+// control or whitespace.
+type OwnerUnkeyableError struct {
+	Reason string
+}
+
+func (e OwnerUnkeyableError) Error() string { return ErrOwnerUnkeyable.Error() + ": " + e.Reason }
+
+// Unwrap makes errors.Is(err, ErrOwnerUnkeyable) hold.
+func (e OwnerUnkeyableError) Unwrap() error { return ErrOwnerUnkeyable }
+
+// QualifiedSubjectKey returns the qualified key of subject at issuer. It trims
+// nothing. It refuses an empty part; a part with a C0 control character or DEL
+// anywhere, U+001F included; and a part with leading or trailing Unicode
+// whitespace. A canonical pair gives the same key QualifiedSubject stores.
+func QualifiedSubjectKey(issuer, subject string) (QualifiedKey, error) {
+	for _, part := range []string{issuer, subject} {
+		if reason := unkeyablePart(part); reason != "" {
+			return "", OwnerUnkeyableError{Reason: reason}
+		}
+	}
+	return QualifiedKey(issuer + ssoSubjectSep + subject), nil
+}
+
+// The reasons of an OwnerUnkeyableError. Each is a wire code,
+// owner_unkeyable:<reason>, and none is retryable.
+const (
+	UnkeyableEmpty      = "empty"
+	UnkeyableControl    = "control"
+	UnkeyableWhitespace = "whitespace"
+)
+
+// unkeyablePart returns why part cannot form a qualified key, or "".
+func unkeyablePart(part string) string {
+	if part == "" {
+		return UnkeyableEmpty
+	}
+	for _, r := range part {
+		if r < 0x20 || r == 0x7f {
+			return UnkeyableControl
+		}
+	}
+	first, _ := utf8.DecodeRuneInString(part)
+	last, _ := utf8.DecodeLastRuneInString(part)
+	if unicode.IsSpace(first) || unicode.IsSpace(last) {
+		return UnkeyableWhitespace
+	}
+	return ""
 }
 
 // Federation is the SSO seam. The open-core single-IdP OIDC (go-oidc) / SAML

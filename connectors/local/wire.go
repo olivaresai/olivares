@@ -31,11 +31,30 @@ type ollamaLoadedModel struct {
 	ExpiresAt string `json:"expires_at"`
 }
 
-// ollamaModel is one installed Ollama model.
+// ollamaModel is one installed Ollama model. Digest is part of the documented
+// tag object and is intentionally not mapped: modelprovider.Model has no field
+// for it.
 type ollamaModel struct {
 	Name       string `json:"name"`
 	Model      string `json:"model"`
 	ModifiedAt string `json:"modified_at"`
+}
+
+// ollamaShowResponse is POST {ollama}/api/show. Capabilities is a pointer so a
+// missing or null field stays unknown rather than an empty set. ModelInfo is
+// the documented metadata object; the show example carries context length as
+// "{architecture}.context_length".
+// https://docs.ollama.com/api-reference/show-model-details
+type ollamaShowResponse struct {
+	Capabilities *[]string       `json:"capabilities"`
+	Thinking     *ollamaThinking `json:"thinking"`
+	ModelInfo    map[string]any  `json:"model_info"`
+}
+
+// ollamaThinking is the show "thinking" object. Values are booleans or strings.
+// A value list of only false means the model does not support thinking.
+type ollamaThinking struct {
+	Values []ollamaThinkValue `json:"values"`
 }
 
 // vllmModelsResponse is GET {vllm}/v1/models — the OpenAI-compatible model list.

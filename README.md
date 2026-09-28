@@ -33,13 +33,13 @@ Claude Code is integrated at the deepest level (the `PreToolUse`/`PostToolUse` h
 <br><sub><b>The access map</b> — what each agent reads and writes across your estate, permitted against observed.</sub>
 </div>
 
-- **See it.** Inventory of every discovered agent, session, model, MCP server, tool and identity; a read/write **access map** with a Permitted-vs-Observed **drift** view; live sessions, the orchestration graph, health and SLA. What it cannot see is marked `unknown`, never guessed.
+- **See it.** Inventory of the agents, sessions, models, MCP servers, tools and identities that connectors observed; a read/write **access map** with a Permitted-vs-Observed **drift** view; live sessions, the orchestration graph, health and SLA. Access it cannot classify is marked `unknown`, never guessed. A resource no connector observed does not appear, and that absence is not proof the resource does not exist.
 - **Run the work.** Durable work items with ownership, dependencies, acceptance criteria and decisions; fenced leases, so two agents cannot hold the same work at once; sessions of Claude Code, Codex and Grok launched, attached to, interrupted and stopped from the console; delegation to authorized peers over A2A.
 - **Govern and enforce it.** A Cedar authorization engine and **four deny-closed enforcement points** — the Claude Code hook, an inline `/v1/messages` inference proxy, an MCP `tools/call` gate and an A2A delegation gate — so an unauthorized action is blocked, held for two-person approval or rewritten before it runs. Budgets that deny or throttle spend, break-glass with dual control, and an estate **kill-switch** that fails closed.
 - **Feed it, governed.** Content sources (SharePoint, Confluence, Google Drive, Notion, Salesforce, Snowflake, S3, Azure AI Search, SAP OData, PostgreSQL, a root-confined filesystem) into governed retrieval, clearance enforced deny-closed at retrieval time.
 - **Prove it.** A hash-chained, Ed25519-signed audit ledger; sealed evidence mapped to **26 framework catalogs** (EU AI Act, NIST AI RMF, ISO 42001, SOC 2, ISO 27001, GDPR…) — self-assessed control families, not certifications; SIEM/ITSM push (CEF/LEEF/syslog/OTLP/OCSF); WebAuthn/FIDO2, PIV/CAC, SSO, SCIM, BYOK/CMEK and verified right-to-erasure, configured per deployment.
 
-**30 modules**, one console, **158 integrations** — counts derived from code and enforced on every push by [`scripts/check-public-counts.sh`](scripts/check-public-counts.sh); the breakdown is in [`connectors/README.md`](connectors/README.md), every module with its maturity in the [modules catalog](docs-site/src/content/docs/reference/modules/overview.md).
+**31 modules**, one console, **159 integrations** — counts derived from code and enforced on every push by [`scripts/check-public-counts.sh`](scripts/check-public-counts.sh); the breakdown is in [`connectors/README.md`](connectors/README.md), every module with its maturity in the [modules catalog](docs-site/src/content/docs/reference/modules/overview.md).
 
 ## Install
 

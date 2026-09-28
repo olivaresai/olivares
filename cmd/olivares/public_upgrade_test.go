@@ -101,6 +101,10 @@ func TestPublicV268SQLiteUpgradesToTheAccessEvidenceEdition(t *testing.T) {
 		}
 	}
 	rowsBefore := sqliteRowCensus(t, db)
+	guardInventoryBefore := sqliteStringColumn(t, db,
+		"SELECT kind || ':' || relation_name FROM olivares_guard_inventory_events ORDER BY 1")
+	guardReceiptsBefore := sqliteStringColumn(t, db,
+		"SELECT hex(receipt_id) FROM olivares_guard_receipts ORDER BY 1")
 	// The module axes are read as identities and versions rather than as row counts, so the
 	// comparisons below also reject a substitution that preserves the count.
 	moduleTablesBefore := sqliteModuleTableIdentities(t, db)
@@ -150,15 +154,45 @@ func TestPublicV268SQLiteUpgradesToTheAccessEvidenceEdition(t *testing.T) {
 	//
 	// The exemption list is short and each entry is a durable record this upgrade is
 	// supposed to append to: the migration tracker gains every core migration between the
-	// published fixture's ceiling and this build's supported version, the inventory gains
-	// the four access-evidence activations, and the receipt ledger gains the one edition
-	// seal. Everything else — 200-odd relations of real data — must be equal, and a
+	// published fixture's ceiling and this build's supported version. The inventory gains
+	// DA's four access-evidence activations and the independent DE and DG module activations.
+	// Each of those three edition transitions adds its own seal. Everything else must be equal; a
 	// blanket "counts may grow" would have hidden exactly what this test is for.
 	//
-	// None of the five allowances is a written constant. The two module allowances are each
-	// the difference between the fresh target and the published prestate, so neither is taken
-	// from the database under test.
+	// The guard allowances come from the named additions below, not the observed totals.
+	// The two module allowances are the difference between the fresh target and the published
+	// prestate, so neither is taken from the database under test.
 	rowsAfter := sqliteRowCensus(t, db)
+	guardAdditions := append(slices.Clone(accessEvidenceFixtureRelations),
+		"evals_comparison", "gitpublish_observation")
+	guardInventoryTarget := slices.Clone(guardInventoryBefore)
+	for _, table := range guardAdditions {
+		guardInventoryTarget = append(guardInventoryTarget, "activate:"+table)
+	}
+	sort.Strings(guardInventoryTarget)
+	guardInventoryAfter := sqliteStringColumn(t, db,
+		"SELECT kind || ':' || relation_name FROM olivares_guard_inventory_events ORDER BY 1")
+	guardAppend, err := upgradedAxisAppend("guard activations",
+		guardInventoryBefore, guardInventoryAfter, guardInventoryTarget)
+	if err != nil {
+		t.Fatal(err)
+	}
+	guardReceiptsAfter := sqliteStringColumn(t, db,
+		"SELECT hex(receipt_id) FROM olivares_guard_receipts ORDER BY 1")
+	if missing := missingFrom(guardReceiptsBefore, guardReceiptsAfter); len(missing) != 0 {
+		t.Fatalf("the upgrade removed or replaced historical guard receipts: %v", missing)
+	}
+	// DA must precede both module deltas. DE and DG may be applied in either order;
+	// their seals must name one complete path, rather than merely add three rows.
+	guardSeals := sqliteStringColumn(t, db,
+		"SELECT attempt_id FROM olivares_guard_receipts WHERE epoch > 4 ORDER BY epoch")
+	guardSealPaths := [][]string{
+		{"edition-4-to-7", "edition-7-to-10", "edition-10-to-16"},
+		{"edition-4-to-7", "edition-7-to-13", "edition-13-to-16"},
+	}
+	if !slices.ContainsFunc(guardSealPaths, func(path []string) bool { return slices.Equal(guardSeals, path) }) {
+		t.Fatalf("the upgrade recorded edition seals %v, want one of %v", guardSeals, guardSealPaths)
+	}
 	moduleTablesAfter := sqliteModuleTableIdentities(t, db)
 	sessionsMigrationsAfter := sqliteSessionsMigrationVersions(t, db)
 	moduleAppend, err := upgradedAxisAppend("applied_module_tables",
@@ -173,8 +207,8 @@ func TestPublicV268SQLiteUpgradesToTheAccessEvidenceEdition(t *testing.T) {
 	}
 	appended := map[string]int{
 		"schema_migrations_core":          len(supported) - len(before),
-		"olivares_guard_inventory_events": len(accessEvidenceFixtureRelations),
-		"olivares_guard_receipts":         1,
+		"olivares_guard_inventory_events": guardAppend,
+		"olivares_guard_receipts":         len(guardSealPaths[0]),
 		// The module relations this build adds since v26.8.0, counted from the prestate and
 		// the fresh registry. Mutable module relations do not enter the guard manifest, so
 		// their arrival must not change the base census; the manifest comparison in
@@ -235,8 +269,14 @@ func TestPublicV268SQLiteUpgradesToTheAccessEvidenceEdition(t *testing.T) {
 	if err := reopened.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if got := sqliteRowCensus(t, db); len(got) != len(rowsAfter) {
-		t.Fatalf("reopening changed the relation count %d -> %d", len(rowsAfter), len(got))
+	rowsReopened := sqliteRowCensus(t, db)
+	if len(rowsReopened) != len(rowsAfter) {
+		t.Fatalf("reopening changed the relation count %d -> %d", len(rowsAfter), len(rowsReopened))
+	}
+	for table, want := range rowsAfter {
+		if got, ok := rowsReopened[table]; !ok || got != want {
+			t.Fatalf("reopening changed %s from %d rows to %d (present: %t)", table, want, got, ok)
+		}
 	}
 	t.Logf("PUBLIC_V268_UPGRADE|versions_before=%v|versions_after=%v|relations=%d"+
 		"|module_tables=%d->%d|module_tables_fresh=%d|module_append=%d"+
@@ -246,6 +286,28 @@ func TestPublicV268SQLiteUpgradesToTheAccessEvidenceEdition(t *testing.T) {
 		len(moduleTablesBefore), len(moduleTablesAfter), len(fresh.moduleTables), moduleAppend,
 		len(sessionsMigrationsBefore), len(sessionsMigrationsAfter), len(fresh.sessionsMigrations),
 		sessionsAppend, newModuleTables)
+}
+
+// sqliteStringColumn reads a fixed, ordered identity query without hiding duplicate rows.
+func sqliteStringColumn(t *testing.T, db *sql.DB, query string) []string {
+	t.Helper()
+	rows, err := db.QueryContext(context.Background(), query)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close() //nolint:errcheck // read-only census
+	var out []string
+	for rows.Next() {
+		var value string
+		if err := rows.Scan(&value); err != nil {
+			t.Fatal(err)
+		}
+		out = append(out, value)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	return out
 }
 
 // openProductStoreForFixture opens a store with the EXACT callback cmd/olivares hands

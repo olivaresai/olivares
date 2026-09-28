@@ -192,12 +192,11 @@ func bootContentFirewallStatusEstate(t *testing.T) contentFirewallStatusEstate {
 	if err != nil {
 		t.Fatalf("issue viewer token: %v", err)
 	}
-	user, err := eng.authr.CreateUser(ctx, super, auth.NewUser{Email: "other@firewall-status.test", DisplayName: "Other", Password: "other-pass-12345"})
-	if err != nil {
+	if _, err := eng.authr.CreateUser(ctx, super, auth.NewUser{
+		Email: "other@firewall-status.test", DisplayName: "Other", Password: "other-pass-12345",
+		Tenant: other, Role: auth.RoleViewer,
+	}); err != nil {
 		t.Fatalf("create other user: %v", err)
-	}
-	if _, err := eng.authr.GrantMembership(ctx, super, user.ID, other, auth.RoleViewer, model.ID("")); err != nil {
-		t.Fatalf("grant other membership: %v", err)
 	}
 	otherSession, _, err := eng.authr.Login(ctx, "other@firewall-status.test", "other-pass-12345", "127.0.0.1")
 	if err != nil {

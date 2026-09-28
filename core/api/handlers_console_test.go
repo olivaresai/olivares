@@ -223,8 +223,13 @@ func TestOnboardPasswordMode(t *testing.T) {
 	}
 }
 
-func TestOnboardInviteMode(t *testing.T) {
-	h := newHarness(t)
+// TestOnboardInviteModeMailsTheTokenOnly: an invitation's redemption token
+// reaches only the invitation mailer, which builds the link itself; the
+// onboarding response carries the invitation's id, expiry and delivery state,
+// never the token or a link, whatever host the request names.
+func TestOnboardInviteModeMailsTheTokenOnly(t *testing.T) {
+	mail := &capturingInviteSender{}
+	h := newHarnessOpts(t, func(o *api.Options) { o.InviteSender = mail })
 	admin := h.adminLogin()
 	tenant := h.createOrg(admin, "acme")
 	h.elevate(admin)
@@ -235,13 +240,25 @@ func TestOnboardInviteMode(t *testing.T) {
 		t.Fatalf("invite onboard = %d %s", r.code, r.raw)
 	}
 	inv := r.body["invite"].(map[string]any)
-	token := inv["token"].(string)
-	if token == "" {
-		t.Fatalf("invite token must be returned show-once; %v", inv)
+	if _, ok := inv["token"]; ok {
+		t.Fatalf("the invite response must not carry the token; %v", inv)
 	}
-	acceptURL, _ := inv["accept_url"].(string)
-	if !strings.Contains(acceptURL, "/accept-invite#token="+token) || strings.Contains(acceptURL, "?token=") {
-		t.Fatalf("invite accept_url must keep the bearer out of HTTP query logs: %q", acceptURL)
+	if _, ok := inv["accept_url"]; ok {
+		t.Fatalf("the invite response must not carry the accept link; %v", inv)
+	}
+	if inv["delivery"] != "sent" {
+		t.Fatalf("invite delivery = %v, want sent; %v", inv["delivery"], inv)
+	}
+	sent := mail.all()
+	if len(sent) != 1 || sent[0].email != "invitee@acme.io" {
+		t.Fatalf("mailed invitations = %+v, want one to the invitee", sent)
+	}
+	token := sent[0].token()
+	if token == "" {
+		t.Fatalf("the mailed invitation must carry the token; %+v", sent[0])
+	}
+	if strings.Contains(r.raw, token) {
+		t.Fatalf("the invite response carries the token: %s", r.raw)
 	}
 
 	// It appears in the pending list (no token material).
@@ -755,14 +772,11 @@ func TestMembershipCeilingExistingRole(t *testing.T) {
 	tenant := h.createOrg(admin, "acme")
 
 	// Create a user and make them an OWNER (via superadmin).
-	cr := h.do("POST", "/v1/users", admin, map[string]any{"email": "boss@acme.io", "password": "bosspass1234"}, nil)
+	cr := h.do("POST", "/v1/users", admin, map[string]any{"email": "boss@acme.io", "password": "bosspass1234", "tenant": tenant.String(), "role": auth.RoleOwner}, nil)
 	if cr.code != http.StatusCreated {
 		t.Fatalf("create user = %d %s", cr.code, cr.raw)
 	}
 	uid := cr.body["id"].(string)
-	if g := h.do("POST", "/v1/memberships", admin, map[string]any{"user_id": uid, "tenant": tenant.String(), "role": auth.RoleOwner}, nil); g.code != http.StatusCreated {
-		t.Fatalf("grant owner = %d %s", g.code, g.raw)
-	}
 
 	// A tenant ADMIN tries to demote the OWNER to editor → 403 (ceiling on the
 	// target's current owner role).
@@ -778,13 +792,9 @@ func TestMembershipCeilingExistingRole(t *testing.T) {
 // session token.
 func (h *harness) mkMember(admin, email, pass, role string, tenant model.TenantID) string {
 	h.t.Helper()
-	cr := h.do("POST", "/v1/users", admin, map[string]any{"email": email, "password": pass}, nil)
+	cr := h.do("POST", "/v1/users", admin, map[string]any{"email": email, "password": pass, "tenant": tenant.String(), "role": role}, nil)
 	if cr.code != http.StatusCreated {
 		h.t.Fatalf("create user %s = %d %s", email, cr.code, cr.raw)
-	}
-	uid := cr.body["id"].(string)
-	if g := h.do("POST", "/v1/memberships", admin, map[string]any{"user_id": uid, "tenant": tenant.String(), "role": role}, nil); g.code != http.StatusCreated {
-		h.t.Fatalf("grant %s = %d %s", email, g.code, g.raw)
 	}
 	lr := h.do("POST", "/v1/auth/login", "", map[string]any{"email": email, "password": pass}, nil)
 	if lr.code != http.StatusOK {

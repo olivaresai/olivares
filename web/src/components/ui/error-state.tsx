@@ -1,16 +1,17 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import { AlertTriangle, ShieldOff } from 'lucide-react'
+import { RefreshCw, Shield, TriangleAlert } from 'lucide-react'
 import type { HTMLAttributes, ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 import { Button } from './button'
+import { StateBanner } from './state-block'
 
 /**
  * ErrorState — the GENUINE-failure state for a panel that could not load: a
- * network drop, a 5xx, a timeout. Accented with `text-danger` and offers a
- * `Retry` affordance. Reserve this for real errors the operator can act on —
+ * network drop, a 5xx, a timeout. A banner on the failure fill (the state set's Error
+ * look, shared with StateBlock) with the request id under it and a `Retry` affordance. Reserve this for real errors the operator can act on —
  * an empty list is an EmptyState, and a 403 / insufficient permission is a
  * ForbiddenState (which must NOT look like an error). Title/description default to
  * localized copy; callers pass context-specific (already-translated) overrides.
@@ -19,7 +20,7 @@ export interface ErrorStateProps extends Omit<
   HTMLAttributes<HTMLDivElement>,
   'title'
 > {
-  /** Override the default lucide AlertTriangle. Rendered in danger color. */
+  /** Override the default lucide TriangleAlert. Rendered in the failure color. */
   icon?: ReactNode
   title?: ReactNode
   description?: ReactNode
@@ -53,32 +54,34 @@ export function ErrorState({
     <div
       role="alert"
       className={cn(
-        'flex flex-col items-center justify-center gap-3 px-6 py-12 text-center',
+        'mx-auto flex w-full max-w-md flex-col gap-2.5 px-4 py-8',
         className,
       )}
       {...props}
     >
-      <div className="flex size-10 items-center justify-center rounded-lg bg-danger-soft text-danger [&_svg]:size-5 [&_svg]:shrink-0">
-        {icon ?? <AlertTriangle />}
-      </div>
-      <div className="flex flex-col items-center gap-1.5">
-        <p className="text-body font-medium text-foreground">
+      <StateBanner tone="bad" icon={icon ?? <TriangleAlert />}>
+        <p className="m-0 font-semibold">
           {title ?? t('errors:serverError.title')}
         </p>
-        <p className="max-w-sm text-body text-muted-foreground">
+        <p className="m-0 text-text-2">
           {description ?? t('errors:serverError.description')}
         </p>
-      </div>
+      </StateBanner>
       {requestId ? (
-        <p className="text-caption text-muted-foreground">
+        <p className="m-0 text-caption text-text-3">
           {t('errors:requestId')}:{' '}
-          <span className="font-mono select-all">{requestId}</span>
+          <span className="font-mono text-mono-s text-text-2 select-all">
+            {requestId}
+          </span>
         </p>
       ) : null}
       {retry ? (
-        <Button variant="secondary" size="sm" onClick={retry} className="mt-1">
-          {t('common:actions.retry')}
-        </Button>
+        <div>
+          <Button variant="secondary" size="sm" onClick={retry}>
+            <RefreshCw aria-hidden="true" />
+            {t('common:actions.retry')}
+          </Button>
+        </div>
       ) : null}
     </div>
   )
@@ -96,7 +99,7 @@ export interface ForbiddenStateProps extends Omit<
   HTMLAttributes<HTMLDivElement>,
   'title'
 > {
-  /** Override the default lucide ShieldOff. Rendered muted, never danger. */
+  /** Override the default lucide Shield. Rendered in the third tone, never danger. */
   icon?: ReactNode
   title?: ReactNode
   description?: ReactNode
@@ -117,19 +120,23 @@ export function ForbiddenState({
       // so it is announced when it replaces a spinner, matching EmptyState.
       role="status"
       className={cn(
-        'flex flex-col items-center justify-center gap-3 px-6 py-12 text-center',
+        'flex flex-col items-center justify-center gap-2.5 px-6 py-12 text-center',
         className,
       )}
       {...props}
     >
-      <div className="flex size-10 items-center justify-center rounded-lg bg-muted text-muted-foreground [&_svg]:size-5 [&_svg]:shrink-0">
-        {icon ?? <ShieldOff />}
-      </div>
+      <span
+        data-slot="state-icon"
+        aria-hidden="true"
+        className="flex text-text-3 [&_svg]:size-5 [&_svg]:shrink-0"
+      >
+        {icon ?? <Shield />}
+      </span>
       <div className="flex flex-col items-center gap-1.5">
-        <p className="text-body font-medium text-foreground">
+        <p className="m-0 text-heading text-text">
           {title ?? t('forbidden.title')}
         </p>
-        <p className="max-w-sm text-body text-muted-foreground">
+        <p className="m-0 max-w-sm text-caption text-text-2">
           {description ?? t('forbidden.description')}
         </p>
       </div>

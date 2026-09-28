@@ -52,23 +52,24 @@ const (
 // enterprise engine ever writes to them; the community artifact carries the tables and
 // leaves them empty, exactly like the tool-pin table.
 func registerCircuitBreakerSchema(reg store.ExtensionRegistry) error {
+	rule := circuitBreakerDeclarations()
 	if err := reg.Register(model.EntityDescriptor{
 		Kind:  cbRuleKind,
 		Table: cbRuleTable,
 		Fields: []model.FieldSpec{
-			{Name: "name", Kind: model.KindText, Indexed: true},
+			{Name: "name", Kind: model.KindText, Indexed: true, Principal: rule.Config},
 			{Name: "enabled", Kind: model.KindBool, Indexed: true},
-			{Name: "agent_tier", Kind: model.KindText, Nullable: true},
-			{Name: "trigger_kind", Kind: model.KindText},
-			{Name: "match_kinds", Kind: model.KindText, Nullable: true},
-			{Name: "min_severity", Kind: model.KindText},
+			{Name: "agent_tier", Kind: model.KindText, Nullable: true, Principal: rule.Tier},
+			{Name: "trigger_kind", Kind: model.KindText, Principal: rule.Config},
+			{Name: "match_kinds", Kind: model.KindText, Nullable: true, Principal: rule.Config},
+			{Name: "min_severity", Kind: model.KindText, Principal: rule.Config},
 			{Name: "threshold", Kind: model.KindInt},
 			{Name: "window_seconds", Kind: model.KindInt},
-			{Name: "response", Kind: model.KindText},
+			{Name: "response", Kind: model.KindText, Principal: rule.Config},
 			{Name: "cooldown_seconds", Kind: model.KindInt, Nullable: true},
 			{Name: "escalation_trips", Kind: model.KindInt, Nullable: true},
-			{Name: "created_by", Kind: model.KindText},
-			{Name: "note", Kind: model.KindText, Nullable: true},
+			{Name: "created_by", Kind: model.KindText, Principal: rule.Author},
+			{Name: "note", Kind: model.KindText, Nullable: true, Principal: rule.Config},
 		},
 		Indexes: []model.IndexSpec{{
 			Name:    "governance_cb_rule_uniq",
@@ -82,15 +83,19 @@ func registerCircuitBreakerSchema(reg store.ExtensionRegistry) error {
 		Kind:  cbStateKind,
 		Table: cbStateTable,
 		Fields: []model.FieldSpec{
-			{Name: "rule_id", Kind: model.KindUUID, Indexed: true},
-			{Name: "agent_ref", Kind: model.KindText, Indexed: true},
-			{Name: "state", Kind: model.KindText, Indexed: true},
+			{Name: "rule_id", Kind: model.KindUUID, Indexed: true,
+				Principal: model.None("the rule that tripped, surfaced as the state's rule reference: cmd/olivares/circuitbreaker.go:23")},
+			{Name: "agent_ref", Kind: model.KindText, Indexed: true,
+				Principal: model.None("the agent the breaker state is kept for, resolved as an agent: cmd/olivares/circuitbreakergate.go:23, modules/governance/agentrisk.go:513")},
+			{Name: "state", Kind: model.KindText, Indexed: true,
+				Principal: model.None("closed, open or half_open: cmd/olivares/circuitbreaker.go:22, cmd/olivares/circuitbreakergate.go:27")},
 			{Name: "trip_count", Kind: model.KindInt},
 			{Name: "current_count", Kind: model.KindInt},
 			{Name: "window_start", Kind: model.KindTimestamp, Nullable: true},
 			{Name: "tripped_at", Kind: model.KindTimestamp, Nullable: true},
 			{Name: "resets_at", Kind: model.KindTimestamp, Nullable: true},
-			{Name: "killswitch_id", Kind: model.KindUUID, Nullable: true},
+			{Name: "killswitch_id", Kind: model.KindUUID, Nullable: true,
+				Principal: model.None("the kill switch a breaker escalated to: modules/governance/killswitch.go:69")},
 		},
 		Indexes: []model.IndexSpec{{
 			Name:    "governance_cb_state_uniq",
@@ -98,6 +103,18 @@ func registerCircuitBreakerSchema(reg store.ExtensionRegistry) error {
 			Unique:  true,
 		}},
 	})
+}
+
+// circuitBreakerRuleDecls declares what the breaker rule table's text columns
+// say about principals. The edition that links the rules' writer and readers
+// supplies them (circuitBreakerDeclarations), so no edition declares another's.
+type circuitBreakerRuleDecls struct {
+	// Config declares the rule's label, match configuration, response and note.
+	Config *model.ColumnDecl
+	// Tier declares the agent risk tier a rule is scoped to.
+	Tier *model.ColumnDecl
+	// Author declares who created the rule.
+	Author *model.ColumnDecl
 }
 
 // agentTierReader is the narrow slice of the governance module the breaker consults to

@@ -7,10 +7,25 @@
 package localinstall
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"syscall"
 )
+
+// openRecord opens an install record without following a link at its name and
+// without waiting on a FIFO put there: O_NONBLOCK returns at once for a FIFO, which
+// Load then refuses as not a regular file.
+func openRecord(name string) (*os.File, error) {
+	f, err := os.OpenFile(name, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+	if errors.Is(err, syscall.ELOOP) || errors.Is(err, syscall.EMLINK) {
+		return nil, fmt.Errorf("local install manifest must be a regular file, not a link: %s", name)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("read local install manifest: %w", err)
+	}
+	return f, nil
+}
 
 func validateManifestOwner(info os.FileInfo, mode string) error {
 	stat, ok := info.Sys().(*syscall.Stat_t)

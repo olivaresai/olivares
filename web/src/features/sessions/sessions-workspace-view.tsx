@@ -79,6 +79,7 @@ import { WorkSurface } from './work-surface'
 import type { SessionTarget } from './session-target'
 import type { CcState, LiveDTO } from './types'
 import './i18n'
+import { ActionName } from './action-name'
 
 const LIVE_LIMIT = 200
 const RUNS_LIMIT = 200
@@ -1207,9 +1208,7 @@ function Inner({
         cell: ({ row }) => {
           const v = row.original.live?.current_action
           return v ? (
-            <span className="truncate text-foreground" title={v}>
-              {v}
-            </span>
+            <ActionName value={v} className="block truncate" />
           ) : (
             <span className="text-muted-foreground">—</span>
           )

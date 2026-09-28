@@ -58,7 +58,7 @@
     "regressed": "Regresión · deriva {{drift}}",
     "noRegression": "Ninguna",
     "empty": "No hay ejecuciones en el rango.",
-    "emptyHint": "Aquí se lista cada ejecución de evaluación del intervalo seleccionado, con su puntuación y su duración. Amplía el intervalo o inicia una ejecución.",
+    "emptyHint": "Aquí se lista cada ejecución de evaluación del intervalo seleccionado, con su puntuación. Amplía el intervalo o inicia una ejecución.",
     "overN": "sobre {{n}}",
     "notScored": "sin puntuar: no hay veredicto",
     "noBaseline": "sin línea base: no se comparó nada"
@@ -118,7 +118,7 @@
   },
   "drift": {
     "title": "Deriva — {{subject}}",
-    "description": "Puntuación en el tiempo frente al umbral de aprobación de la suite; un descenso sostenido es degradación.",
+    "description": "Puntuación en el tiempo frente al umbral de aprobación de la suite. Una regresión es una comparación de puntuación puntual con una ejecución de baseline, que puede usar otra versión de suite, otro modelo u otro scorer, y la comparación no informa cuál cambió. Tras un cambio de versión de suite, fija una baseline.",
     "score": "Puntuación",
     "threshold": "Umbral de aprobación",
     "pickerTitle": "Sujeto",

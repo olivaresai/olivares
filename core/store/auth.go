@@ -154,6 +154,51 @@ type AuthScope interface {
 	// issue/revoke, membership change) are recorded with the real actor in the
 	// same transaction as the change.
 	Audit() AuditLog
+
+	// TenantExclusions are the exclusions of accounts, and of single sessions,
+	// from one tenant. An offboard exclusion is also the account's retirement
+	// record in that tenant. Writes are directory-tracked: each one bumps the
+	// excluding tenant's directory epoch.
+	TenantExclusions() Repository[model.TenantExclusion]
+	// AccountOffers are pending offers to existing accounts: to join a tenant or
+	// to complete a deployment recovery.
+	AccountOffers() Repository[model.AccountOffer]
+}
+
+// AuthCredentialBindingScope is the optional custody capability of the auth
+// partition for durable credential bindings. It is kept apart from AuthScope,
+// like AuthPrincipalEvidenceScope, so a store decorator or test fake that does
+// not provide it compiles and its callers fail closed.
+type AuthCredentialBindingScope interface {
+	CredentialBindings() CredentialBindingStore
+}
+
+// CredentialBindingStore is the NARROW credential-binding surface. A binding's
+// subject and credential are immutable, so there is no generic Update or
+// Delete: the only post-create mutation is Supersede, which records a
+// successor once.
+type CredentialBindingStore interface {
+	// Get returns the binding, or ErrNotFound if it is absent.
+	Get(ctx context.Context, id model.ID) (model.CredentialBinding, error)
+	// Current returns the bindings of one subject that no successor has
+	// superseded: at most two rows, whatever the subject's history holds. One is
+	// the custody invariant; two report its breach to the caller.
+	Current(
+		ctx context.Context, target model.TenantID, kind string, ref model.ID,
+	) ([]model.CredentialBinding, error)
+	// AtGeneration returns the subject's binding for one generation, or
+	// ErrNotFound.
+	AtGeneration(
+		ctx context.Context, target model.TenantID, kind string, ref model.ID, generation int64,
+	) (model.CredentialBinding, error)
+	// Create inserts v under exactly v.ID. A second row for the same subject and
+	// generation is ErrConflict.
+	Create(ctx context.Context, v model.CredentialBinding) (model.CredentialBinding, error)
+	// Supersede records successor on current, which must be the stored row at
+	// its stored version and not yet superseded; otherwise ErrConflict.
+	Supersede(
+		ctx context.Context, current model.CredentialBinding, successor model.ID, at model.Timestamp,
+	) (model.CredentialBinding, error)
 }
 
 // PDPClaimReader is the READ-ONLY decision-claim surface exposed on AuthScope.

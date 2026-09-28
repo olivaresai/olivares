@@ -43,4 +43,5 @@
 /olivares.sdk.v1.SourceService/Close	Ends the session opened by Open and releases whatever the connector held for it.
 /olivares.sdk.v1.SourceService/Describe	Returns the connector's descriptor: its identity, its configuration fields and the capabilities it advertises.
 /olivares.sdk.v1.SourceService/Gather	Streams observations to the host, which lifts each onto the event bus. The stream ends when a batch run completes or the host cancels it.
+/olivares.sdk.v1.SourceService/GatherInventory	Streams the connector's inventory observations for the negotiated inventory-coverage-v1 capability only; any other capability is refused, and a canceled stream never reports success.
 /olivares.sdk.v1.SourceService/Open	Starts a session with the configuration the host supplies, before any observation is gathered.

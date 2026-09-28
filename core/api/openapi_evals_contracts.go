@@ -117,6 +117,13 @@ func evalsAddCaseSchema() map[string]any {
 	), "case_key")
 }
 
+func evalsComparisonSchema() map[string]any {
+	return evalsClosedObject(oaObj(
+		"version", oaObj("type", "integer", "enum", []any{1}),
+		"mode", oaObj("type", "string", "enum", oaEnum("same_candidate", "candidate_change"), "description", "candidate_change requires an explicit baseline_ref and declared candidate identities."),
+	), "version", "mode")
+}
+
 func evalsLaunchRunSchema() map[string]any {
 	return evalsClosedObject(oaObj(
 		"suite_ref", oaObj("type", "string", "minLength", 1),
@@ -125,6 +132,7 @@ func evalsLaunchRunSchema() map[string]any {
 		"model_ref", oaObj("type", "string"),
 		"prompt_variant", oaObj("type", "string"),
 		"baseline_ref", oaObj("type", "string"),
+		"comparison", evalsComparisonSchema(),
 		"outputs", evalsStringMapSchema(),
 	), "suite_ref", "outputs")
 }
@@ -132,6 +140,9 @@ func evalsLaunchRunSchema() map[string]any {
 func evalsABSchema() map[string]any {
 	variant := evalsClosedObject(oaObj(
 		"label", oaObj("type", "string"),
+		"model_ref", oaObj("type", "string"),
+		"baseline_ref", oaObj("type", "string"),
+		"comparison", evalsComparisonSchema(),
 		"outputs", evalsStringMapSchema(),
 	), "outputs")
 	return evalsClosedObject(oaObj(
@@ -199,7 +210,10 @@ func evalsGateSchema() map[string]any {
 		"suite_ref", oaObj("type", "string", "minLength", 1),
 		"subject_kind", oaObj("type", "string"),
 		"subject_ref", oaObj("type", "string"),
+		"model_ref", oaObj("type", "string"),
+		"prompt_variant", oaObj("type", "string"),
 		"baseline_ref", oaObj("type", "string"),
+		"comparison", evalsComparisonSchema(),
 		"outputs", evalsStringMapSchema(),
 		"seed", oaObj("type", "string"),
 		"sample_size", oaObj("type", "integer"),

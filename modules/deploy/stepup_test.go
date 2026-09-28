@@ -24,12 +24,9 @@ func TestApplyRequiresStepUp(t *testing.T) {
 	defID := h.createDef(elevated, tid, "billing-agent", agentSpec("img:1", "agent:billing"))
 
 	// A plain password session with the same admin role, NO step-up.
-	r := h.do("POST", "/v1/users", root, map[string]any{"email": "aal1@acme.io", "password": "memberpass1"}, nil)
+	r := h.do("POST", "/v1/users", root, map[string]any{"email": "aal1@acme.io", "password": "memberpass1", "tenant": tid.String(), "role": "admin"}, nil)
 	if r.code != http.StatusCreated {
 		t.Fatalf("create user = %d %s", r.code, r.raw)
-	}
-	if rr := h.do("POST", "/v1/memberships", root, map[string]any{"user_id": r.body["id"].(string), "tenant": tid.String(), "role": "admin"}, nil); rr.code != http.StatusCreated {
-		t.Fatalf("grant = %d %s", rr.code, rr.raw)
 	}
 	r = h.do("POST", "/v1/auth/login", "", map[string]any{"email": "aal1@acme.io", "password": "memberpass1"}, nil)
 	if r.code != http.StatusOK {

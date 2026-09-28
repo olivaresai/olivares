@@ -217,17 +217,17 @@ func (m *Module) registerProviderRecordSchema(reg store.ExtensionRegistry) error
 		Kind:  providerRecordKind,
 		Table: providerRecordTable,
 		Fields: []model.FieldSpec{
-			{Name: colPRRef, Kind: model.KindText},
-			{Name: colPRKind, Kind: model.KindText, Indexed: true},
-			{Name: colPRDisplayName, Kind: model.KindText},
-			{Name: colPRBaseURL, Kind: model.KindText, Nullable: true},
-			{Name: colPRSecretRef, Kind: model.KindText},
-			{Name: colPRKeyHint, Kind: model.KindText, Nullable: true},
-			{Name: colPRState, Kind: model.KindText, Indexed: true},
-			{Name: colPRNameSlot, Kind: model.KindText},
-			{Name: colPRModels, Kind: model.KindJSON, Nullable: true},
-			{Name: colPRProbeState, Kind: model.KindText, Nullable: true},
-			{Name: colPRProbeDetail, Kind: model.KindText, Nullable: true},
+			{Name: colPRRef, Kind: model.KindText, Principal: pdeclNoneProviderRecordRef},
+			{Name: colPRKind, Kind: model.KindText, Indexed: true, Principal: model.None("a provider credential kind, a closed set: provider_record.go:247-260, provider_record.go:444")},
+			{Name: colPRDisplayName, Kind: model.KindText, Principal: model.None("an operator-chosen provider name, bounded and shown only: provider_record.go:266-279, provider_record.go:445")},
+			{Name: colPRBaseURL, Kind: model.KindText, Nullable: true, Principal: model.None("an optional https endpoint URL that may not carry userinfo: provider_record.go:286-295, provider_record.go:446")},
+			{Name: colPRSecretRef, Kind: model.KindText, Principal: model.None("a sealed-secret locator returned by the vault, never a value or an account: provider_record.go:60-63, provider_record.go:447")},
+			{Name: colPRKeyHint, Kind: model.KindText, Nullable: true, Principal: model.None("the last four characters of a registered key, never usable alone: provider_record.go:347-352, provider_record.go:448")},
+			{Name: colPRState, Kind: model.KindText, Indexed: true, Principal: model.None("a record lifecycle state, a closed set: provider_record.go:84-88, provider_record.go:449")},
+			{Name: colPRNameSlot, Kind: model.KindText, Principal: model.None("the uniqueness key of a live record built from its kind and folded name, or a revoked marker: provider_record.go:355-359")},
+			{Name: colPRModels, Kind: model.KindJSON, Nullable: true, Principal: pdeclProviderRecordModels},
+			{Name: colPRProbeState, Kind: model.KindText, Nullable: true, Principal: model.None("a probe outcome, a closed set: provider_record.go:111-117, provider_record.go:847")},
+			{Name: colPRProbeDetail, Kind: model.KindText, Nullable: true, Principal: model.None("one bounded sentence about the last probe, shown only: provider_record.go:71-73, provider_record.go:848")},
 			{Name: colPRProbeLatency, Kind: model.KindInt, Nullable: true},
 			{Name: colPRProbedAt, Kind: model.KindTimestamp, Nullable: true},
 			{Name: colPRRevokedAt, Kind: model.KindTimestamp, Nullable: true},
@@ -861,3 +861,14 @@ func (m *Module) recordProbeOutcome(
 	}
 	return out, nil
 }
+
+// Principal declarations of the provider-record descriptor. A record is a named
+// credential locator; no column names an account.
+var (
+	// pdeclProviderRecordModels is the model list the probe writer marshals as a
+	// JSON array of strings (provider_record.go:831-836) and the reader decodes
+	// back (provider_record.go:459-464).
+	pdeclProviderRecordModels = model.Nested([]string{}, model.ClassEvidence,
+		model.Leaf("[]", model.None("a model id the provider listed on the last probe: provider_record.go:831-836, provider_record.go:459-464")),
+	)
+)

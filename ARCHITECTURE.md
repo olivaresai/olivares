@@ -2,7 +2,7 @@
 
 > This is the architecture overview for contributors and operators. The deeper rationale, alternatives and per-module detail live in the [documentation site](docs-site/).
 
-Olivares AI is a **modular platform** (the Grafana / Backstage / Kubernetes control-plane pattern): one core, plus modules, plus connectors. The core is designed so any of the 30 modules can plug in without re-architecting the rest. The differentiating access map (R/RW) is *one module*, not the product.
+Olivares AI is a **modular platform** (the Grafana / Backstage / Kubernetes control-plane pattern): one core, plus modules, plus connectors. The core is designed so any of the 31 modules can plug in without re-architecting the rest. The differentiating access map (R/RW) is *one module*, not the product.
 
 ## Topology
 
@@ -20,7 +20,7 @@ The shared core subsystems that everything else depends on:
 | Ingest + event bus | Receives OTLP / connector input, normalizes it, and distributes events so modules react without coupling to each other. |
 | Connector SDK | Stable `SourceConnector` (gather) / `OutputConnector` (notify) / `Module` interfaces; the breadth moat. Apache-2.0. |
 | Module runtime | Loads and runs modules: in-process compiled modules plus out-of-process plugins via `hashicorp/go-plugin` (gRPC). A new module adds nothing to the core. |
-| General data model | Multi-tenant entities and relationships (every row carries `tenant_id`); one schema serving all 30 modules. |
+| General data model | Multi-tenant entities and relationships (every row carries `tenant_id`); one schema serving all 31 modules. |
 | API + manage-as-code | All functionality over REST + gRPC; a Terraform provider (module XIX). The CLI and web speak the same API. |
 | AuthN/Z + multi-tenancy | RBAC/ABAC, orgs/tenants, isolation enforced from the model via Postgres row-level security. |
 | Audit + integrity | Append-only, hash-chained evidence ledger; cross-cutting, not optional. |

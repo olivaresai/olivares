@@ -216,6 +216,10 @@ type Module struct {
 	// provisions per-tenant write credentials and governance gates.
 	agentCoreExports   map[model.TenantID]agentCoreExportTarget
 	agentCoreProviders []AgentCoreExportProvider
+
+	// standing is the standing port of the fenced writers that run outside a
+	// request (fence.go). Nil refuses every such write that names an account.
+	standing auth.StandingReader
 }
 
 // Compile-time proof the module satisfies the SDK lifecycle, the engine-side

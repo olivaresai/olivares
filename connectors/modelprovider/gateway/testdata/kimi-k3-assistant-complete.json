@@ -1,0 +1,12 @@
+{
+  "role": "assistant",
+  "reasoning_content": "I'll start by listing five numbers: 473, 921, 235, 215, 222, and I'll tell you the first three.",
+  "content": "473, 921, 235",
+  "tool_calls": [
+    {
+      "id": "call_preserved",
+      "type": "function",
+      "function": {"name": "lookup", "arguments": "{}"}
+    }
+  ]
+}

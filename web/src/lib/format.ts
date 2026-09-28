@@ -9,7 +9,13 @@
 // own the math, ARCHITECTURE.md). Everything degrades to an em-dash for null/undefined so
 // a missing-but-honest value never reads as "$0".
 
+import { useClientSettings } from '@/features/settings/preferences'
 import { currentLanguage } from './i18n'
+
+/** Display hour cycle. Records and exports do not call this. */
+function displayHourCycle(): 'h12' | 'h23' {
+  return useClientSettings.getState().clock === '12' ? 'h12' : 'h23'
+}
 
 const DASH = '—'
 
@@ -140,6 +146,7 @@ export function formatDateTime(
   return new Intl.DateTimeFormat(locale, {
     dateStyle: 'medium',
     timeStyle: 'short',
+    hourCycle: displayHourCycle(),
   }).format(d)
 }
 

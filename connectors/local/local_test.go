@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -20,11 +21,14 @@ import (
 
 type fixtureDoer struct {
 	t    *testing.T
+	mu   sync.Mutex
 	reqs []*http.Request
 }
 
 func (d *fixtureDoer) Do(req *http.Request) (*http.Response, error) {
+	d.mu.Lock()
 	d.reqs = append(d.reqs, req)
+	d.mu.Unlock()
 	var file string
 	switch req.URL.Path {
 	case "/api/tags":
@@ -35,14 +39,20 @@ func (d *fixtureDoer) Do(req *http.Request) (*http.Response, error) {
 		file = "ollama_ps.json"
 	case "/metrics":
 		file = "vllm_metrics.txt"
+	case "/api/show":
+		_, _ = io.Copy(io.Discard, req.Body)
+		file = "ollama_show_completion.json"
 	default:
-		d.t.Fatalf("unexpected path %q", req.URL.Path)
+		// Errorf, not Fatalf: show reads run outside the test goroutine.
+		d.t.Errorf("unexpected path %q", req.URL.Path)
+		return textResponse(http.StatusNotFound, `{}`), nil
 	}
 	body, err := os.ReadFile(filepath.Join("testdata", file))
 	if err != nil {
-		d.t.Fatalf("read fixture %s: %v", file, err)
+		d.t.Errorf("read fixture %s: %v", file, err)
+		return textResponse(http.StatusInternalServerError, `{}`), nil
 	}
-	return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(string(body))), Header: make(http.Header)}, nil
+	return textResponse(http.StatusOK, string(body)), nil
 }
 
 type captureSink struct{ obs []model.Observation }

@@ -18,6 +18,7 @@ description: "Olivares AI control plane 经过验证的配置接口面：serve �
 | 标志 | 默认值 | 用途 |
 | --- | --- | --- |
 | `--listen` | `:8443` | HTTP 监听地址（REST API + 内嵌 Web UI）。 |
+| `--login-trusted-proxies` | `$OLIVARES_LOGIN_TRUSTED_PROXIES`，否则为空 | 仅用于密码登录限流的可信代理 CIDR。显式传入空的标志值会清除环境变量的设置；网络策略、会话和审计仍使用传输连接的对端。 |
 | `--grpc-listen` | `:8444` | gRPC 监听地址（control-plane / 采集器摄取 API）。 |
 | `--data-dir` | `$OLIVARES_DATA_DIR`、已存在的 `./olivares-data` 安装，否则 `$XDG_DATA_HOME/olivares` 或 `~/.local/share/olivares` | 数据目录：审计签名密钥、TLS 材料，以及（对 SQLite 而言）存储文件。 |
 | `--engine` | `sqlite` | 存储引擎：`sqlite` 或 `postgres`。 |
@@ -81,17 +82,21 @@ TLS 默认开启。在未提供 `--tls-cert`/`--tls-key` 时，引擎会在任�
 
 一道接缝（seam）背后坐着两个适配器：一个**内嵌 Cedar** 求值器（主要的纯 Go 路径）与一个 **OPA-over-HTTP** 适配器。运营方选择其中一个引擎；两者都只能收紧、绝不能放宽内置 RBAC 已经做出的决策。
 
-:::note[一个糟糕的策略绝不会让该平面失去治理]
-如果 `OLIVARES_PDP_ENGINE` 选定了一个引擎但其配置无效 —— 一个不可读的 Cedar 文件、一个格式错误的 OPA 目标 —— 引擎会**仅禁用该外部 PDP**，保持原生 ABAC 引擎与 RBAC 继续执行，并大声地记录日志。一个损坏的策略文件绝不会悄然让请求失去治理，也绝不会使 control plane 崩溃。
+:::note[无效的外部 PDP 配置会阻止模块集构建]
+如果 `OLIVARES_PDP_ENGINE` 显式选择了外部引擎，但其配置无效，则无法构建模块集。构建模块集的命令（包括 `serve`）会报告配置错误，而不会悄然退回到仅使用原生授权。请修正配置。显式设置 `none` 表示有意选择不使用只能收紧权限的外部层，原生 ABAC 和 RBAC 仍然生效；这不是自动回退，也不能代替必须执行的外部策略。
+
+选择器未设置、为空或为 `none` 时仍然有效，并使用原生授权。对于 `cedar`，策略文件名是可选的：`OLIVARES_PDP_CEDAR_FILE` 未设置或为空，或者指向可读取的空文件时，都会形成有效的空叠加层。构建 OPA 适配器不会发送网络请求，也不会确认其端点是否可达。
 :::
 
 关于 deny-by-default（默认拒绝）模型、查看访问图谱（access graph）的特权性质，以及每一次授权读取如何被审计，参见 [安全模型](/zh/explanation/security/security-model/)。
+
+将 `OLIVARES_OTEL_PROVIDER_BAGGAGE_ALLOWLIST` 设置为规则的 JSON 数组，每条规则包含 `origin`、`key` 和 `values` 字段。每条规则只允许其声明的 HTTP(S) 源、baggage 键和非秘密值的精确匹配。限制为 16 KiB JSON、32 条规则、每条规则 8 个值；键和值各为 1–64 个 ASCII 字节。`traceparent` 和 `tracestate` 的延续独立于此策略，目的地授权也独立于此策略。
 
 <!-- BEGIN GENERATED olivares-env-reference — regenerate with `bash scripts/check-config-env-docs.sh --write`; do not edit by hand -->
 
 ### 完整变量参考
 
-下表由产品自身源码生成：290 个变量与 17 个运行时构造的 family，覆盖 engine、CLI、Kubernetes operator、Terraform provider 与 connector。每次变更都会从这些源码重新生成并校验，因此不会落后于二进制文件。
+下表由产品自身源码生成：296 个变量与 17 个运行时构造的 family，覆盖 engine、CLI、Kubernetes operator、Terraform provider 与 connector。每次变更都会从这些源码重新生成并校验，因此不会落后于二进制文件。
 
 **必需**表示读取该变量的功能没有它就无法启动；大多数变量是可选的，即使一个也未设置，引擎仍会运行。
 
@@ -207,6 +212,7 @@ TLS 默认开启。在未提供 `--tls-cert`/`--tls-key` 时，引擎会在任�
 | `OLIVARES_EVENTING_SECRET_KEY` | No | — | Key that encrypts eventing subscription signing secrets at rest. |
 | `OLIVARES_EXECUTION_ENVIRONMENT_ID` | No | — | Explicit execution-environment reference for this node, read at boot by cmd/olivares/providerprofiles.go. Unset, the engine generates one identity once into `execution-environment-id` in the data directory (0600, atomic exclusive create) and reuses it; set, the value must be 1..256 printable bytes with no whitespace, colon or vertical bar, and a malformed value refuses boot instead of degrading in silence. It is REQUIRED on a topology with only shared state and no node-local data directory: there, without it, profiled session launches stay deny-closed. |
 | `OLIVARES_EXTRA_ARGS` | No | — | Extra `serve` arguments appended by the packaged service unit, for operators who configure the daemon through an environment file. |
+| `OLIVARES_FINOPS_ADMISSION_LEGACY_WRITERS_STOPPED_AT` | No | — | Instant every writer of the earlier FinOps admission build stopped, as an RFC 3339 time in UTC ending in `Z`. Read once at startup. Recovery retires a claim those writers left, but only once five minutes have passed since this instant and only while no row they left is dated later; empty, the default, or text that is not such an instant retires none. |
 | `OLIVARES_GROK_HOOK_ACCOUNT` | No | — | Account the Grok Build hook client reports. |
 | `OLIVARES_GROK_HOOK_AGENT` | No | — | Agent identity the Grok Build hook client reports. |
 | `OLIVARES_GROK_HOOK_ORG` | No | — | Organization the Grok Build hook client reports. |
@@ -230,6 +236,7 @@ TLS 默认开启。在未提供 `--tls-cert`/`--tls-key` 时，引擎会在任�
 | `OLIVARES_INFERENCE_PROXY_CONFIG` | No | — | Path to the JSON configuration of the governed inference proxy. |
 | `OLIVARES_INGEST_TOKEN` | No | — | Bearer token the collector ingest endpoint requires from telemetry senders. |
 | `OLIVARES_INSECURE` | No | — | Set to `1` to let the CLI talk to a plaintext or untrusted-TLS endpoint. Local development only. |
+| `OLIVARES_INVITE_MAIL_DESTINATION` | No | — | Name of the email destination in the notification file, scoped to no tenant, that invitations are mailed through. Without it, and without a declared console address, invite mode is unavailable. |
 | `OLIVARES_KEY_CUSTODY` | No | — | Custody posture required of the audit signing key: whether a raw on-disk key is accepted or a wrapped one is demanded. |
 | `OLIVARES_KEY_WRAP_AWS_KEY_ID` | No | — | Key identifier in AWS KMS. Used by the backend that wraps the signing keys. |
 | `OLIVARES_KEY_WRAP_AWS_REGION` | No | — | Region of the AWS KMS key. Used by the backend that wraps the signing keys. |
@@ -258,6 +265,7 @@ TLS 默认开启。在未提供 `--tls-cert`/`--tls-key` 时，引擎会在任�
 | `OLIVARES_LICENSE_PUBKEY` | No | — | Public key the engine verifies the license signature against. |
 | `OLIVARES_LIVEINGEST_INSPECT_OBSERVED_REFS` | No | — | Set to `1` to make live ingest inspect observed references, which costs more per event. |
 | `OLIVARES_LOGIN_ENFORCEMENT` | No | — | 登录强制（require-SSO 与登录 IP 允许列表）的应急开关（break-glass），而非文件路径。所有构建在引擎启动时都会读取它；更改需重启后生效。`off`、`0`、`false`、`no` 或 `disabled`，不区分大小写并忽略前后空白，即选择运维方的应急开关；未设置或任何其他值时，强制将遵循通过控制台保存的 posture。链接了强制组件的构建随即停止应用该 posture，无论保存的是什么，并记录一条警告。未链接该组件的构建同样记录这一有意的选择：当本部署已有强制历史且已配置 posture 时，引擎会跳过本应发出的启动拒绝，并在节点提升时追加一条持久的运维方恢复事件。 |
+| `OLIVARES_LOGIN_TRUSTED_PROXIES` | No | — | 以逗号分隔的 IPv4/IPv6 代理 CIDR；仅在确定密码登录限流所用的地址时，信任这些代理提供的 X-Forwarded-For。空值表示不信任任何代理。--login-trusted-proxies 标志优先，包括显式指定的空值。无效的 CIDR 或空的列表项会导致拒绝启动。仅在启动时读取一次；策略、会话和审计仍使用传输连接的对端。每个请求的 8192 字节和 64 个条目限制见 docs/SECURITY-HARDENING.md。 |
 | `OLIVARES_LOG_LEVEL` | No | — | Minimum log level the engine emits: `debug`, `info`, `warn` or `error`. |
 | `OLIVARES_MCP_TASK_KILLSWITCH_SWEEP` | No | — | How often a running MCP task is re-checked against the kill switch, as a Go duration. |
 | `OLIVARES_METRICS_ALLOWED_CIDRS` | No | — | Comma-separated CIDR ranges allowed to scrape the metrics endpoint. |
@@ -284,8 +292,10 @@ TLS 默认开启。在未提供 `--tls-cert`/`--tls-key` 时，引擎会在任�
 | `OLIVARES_OTEL_GENAI_COMPAT` | No | — | Set to a true value to also emit the generative-AI semantic-convention attributes on spans. |
 | `OLIVARES_OTEL_INSECURE` | No | — | Set to a true value to export traces over plaintext. Local development only. |
 | `OLIVARES_OTEL_PROTOCOL` | No | — | OTLP protocol used for export. Falls back to the standard `OTEL_EXPORTER_OTLP_PROTOCOL`. |
+| `OLIVARES_OTEL_PROVIDER_BAGGAGE_ALLOWLIST` | No | `[]` | JSON array of exact HTTP(S) origin, baggage key and non-secret control values allowed through the mounted AnthropicHTTPClient; empty denies baggage. Invalid policy reports a bounded reason once at construction and suppresses baggage without blocking inference. |
 | `OLIVARES_OTEL_SAMPLE_RATIO` | No | — | Fraction of traces sampled, between 0 and 1. |
 | `OLIVARES_OTEL_SERVICE_NAME` | No | — | Service name reported on exported traces. |
+| `OLIVARES_PDF_RENDER_TIMEOUT` | No | `30s` | Chromium 单次渲染 PDF 报告的最长允许时间，以带单位的正 Go duration 指定。报告附加组件在每次渲染时读取；若值不是正时长，则在启动 Chromium 之前拒绝该值并指出变量名。如果较慢的主机无法在默认时限内完成结构渲染，可增大此值。 |
 | `OLIVARES_PDP_CEDAR_FILE` | No | — | Path to the Cedar policy file, for the `cedar` decision point. |
 | `OLIVARES_PDP_ENGINE` | No | — | External policy decision point to add on top of the native engine: `cedar`, `opa` or `none`. |
 | `OLIVARES_PDP_OPA_PATH` | No | — | Decision path queried under the Open Policy Agent endpoint. |
@@ -339,6 +349,7 @@ TLS 默认开启。在未提供 `--tls-cert`/`--tls-key` 时，引擎会在任�
 | `OLIVARES_SECRET_STORE_KEY` | No | — | Key that encrypts operator secrets held in the store. |
 | `OLIVARES_SERVERTOOL_EGRESS_CONFIG` | No | — | 内联代理中提供商服务器工具（网页搜索、网页抓取、代码执行）的出站（egress）门控的 JSON 授权（grants）文件路径。仅由使用 `enterprise` 和 `addon_airs` 构建标签编译的构建读取。未设置时这些工具保持仅观察模式；文件无法读取或解析时，会拒绝每个已识别的出站服务器工具，直到修复该文件并重启引擎为止。 |
 | `OLIVARES_SERVER_URL` | No | — | Base URL of the control plane the CLI talks to, when `--server` is not given. |
+| `OLIVARES_SESSIONS_AGENT_LINK_LISTEN` | No | — | 代理连接的监听地址，格式为 `host:port`：基于此源码树构建的版本为其节点代理提供的双向 TLS 端点。在启动时读取；默认值为空，表示不启用监听器。Community 构建不会读取此变量。 |
 | `OLIVARES_SESSIONS_MANAGED_STOP_ADMISSION_TIMEOUT` | No | `10s` | 接纳受管理的 Stop 请求所允许的最长时间，使用带单位的正 Go duration 表示。启动时读取；无效值或非正值会阻止启动。不限制进程终止过程的耗时。 |
 | `OLIVARES_SESSION_BUDGET_AVAILABILITY` | No | — | Whether session budget enforcement is required, and what happens when the budget service cannot answer. |
 | `OLIVARES_SESSION_CONTEXT_AVAILABILITY` | No | — | Whether session context governance is required, and what happens when the context service cannot answer. |

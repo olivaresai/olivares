@@ -118,6 +118,14 @@ type referenceModel struct {
 	// ReplacementRef is the published successor model id (empty if none named). It
 	// is non-sensitive and actionable, so a lifecycle deny may surface it.
 	ReplacementRef string
+	// exactOnly means Prefix matches the whole model ref and nothing longer.
+	// A family prefix must not answer for that ID, and this ID must not answer
+	// for a longer neighbor that has no row of its own.
+	exactOnly bool
+	// datedSnapshotOnly means a longer ref matches only when the suffix after
+	// Prefix is a snapshot date (YYYYMMDD or YYYY-MM-DD). Any other longer
+	// ref stays unknown and does not fall through to a shorter prefix.
+	datedSnapshotOnly bool
 }
 
 // claudeServiceTiers is the confirmed Claude billing-tier set (Anthropic Usage &
@@ -158,9 +166,21 @@ var (
 		mp.CapStreaming, mp.CapToolUse, mp.CapVision, mp.CapStructuredOutputs,
 		mp.CapPromptCaching, mp.CapBatch, mp.CapFiles,
 	}
+	// capsGPT6 omits the files API. The GPT-6 model pages list streaming,
+	// function calling, image input, structured outputs, prompt caching, and batch.
+	capsGPT6 = []mp.Capability{
+		mp.CapStreaming, mp.CapToolUse, mp.CapVision, mp.CapStructuredOutputs,
+		mp.CapPromptCaching, mp.CapBatch,
+	}
 	capsGemini = []mp.Capability{
 		mp.CapStreaming, mp.CapToolUse, mp.CapVision, mp.CapPDF,
 		mp.CapStructuredOutputs, mp.CapContextManagement,
+	}
+	capsDeepSeek = []mp.Capability{
+		mp.CapStreaming, mp.CapToolUse, mp.CapStructuredOutputs, mp.CapExtendedThinking,
+	}
+	capsDeepSeekFlash = []mp.Capability{
+		mp.CapStreaming, mp.CapToolUse, mp.CapStructuredOutputs, mp.CapExtendedThinking, mp.CapVision,
 	}
 	capsGLM = []mp.Capability{
 		mp.CapStreaming, mp.CapToolUse, mp.CapStructuredOutputs,
@@ -169,6 +189,14 @@ var (
 	capsGLMVision = []mp.Capability{
 		mp.CapStreaming, mp.CapToolUse, mp.CapStructuredOutputs,
 		mp.CapPromptCaching, mp.CapExtendedThinking, mp.CapVision,
+	}
+	// capsClaudeListed is what the 2026-09-27 models overview states for the
+	// current lineup: vision, tool use, and adaptive or extended thinking, plus
+	// prompt caching and batch from the pricing page. Flags the overview does
+	// not state are omitted.
+	capsClaudeListed = []mp.Capability{
+		mp.CapStreaming, mp.CapToolUse, mp.CapVision,
+		mp.CapPromptCaching, mp.CapBatch, mp.CapExtendedThinking,
 	}
 )
 
@@ -221,6 +249,19 @@ var referenceTable = []referenceModel{
 		Modality: "vision", Pricing: priceListAsOf("2026-08-27", 5, 25, 6.25, 10, 0.50),
 		ServiceTierEligibility: claudeServiceTiers, DataResidency: claudeDataResidency,
 		USInferenceBurndownMult: 1.1, RetentionClass: retentionZDREligible,
+	},
+	{
+		// Claude Opus 5.5. $4/$20 and a $0.20 cache hit, 1M context, 128K output.
+		// Observed 2026-09-27. Retention is not stated on that page, so it stays
+		// unverified. The prefix is longer than claude-opus-5.
+		// Claude 4.6 and later: inference_geo "us" is 1.1x and "global" is the
+		// default. Retrieved 2026-09-27T06:27:58Z from
+		// platform.claude.com/docs/en/about-claude/pricing (HTTP 200).
+		Family: "claude-opus-5", Prefix: "claude-opus-5-5", ProviderRef: mp.ProviderAnthropic,
+		Capabilities: capsClaudeListed, ContextWindow: 1_000_000, MaxOutputTokens: 128_000,
+		Modality: "vision", Pricing: priceListAsOf("2026-09-27", 4, 20, 5, 8, 0.20),
+		DataResidency: claudeDataResidency, USInferenceBurndownMult: 1.1,
+		datedSnapshotOnly: true,
 	},
 	{
 		// Deprecated Opus 4.0 / 4.1 keep the higher tier ($15/$75); longer prefixes
@@ -315,6 +356,16 @@ var referenceTable = []referenceModel{
 		ServiceTierEligibility: claudeServiceTiers, RetentionClass: retentionZDREligible,
 	},
 	{
+		// Dated Haiku 4.5 API ID. The overview says the alias claude-haiku-4-5
+		// points at this snapshot, so the governance class already recorded for
+		// the alias is the same model's. Price re-read 2026-09-27.
+		Family: "claude-haiku", Prefix: "claude-haiku-4-5-20251001", ProviderRef: mp.ProviderAnthropic,
+		Capabilities: capsClaudeHaiku, ContextWindow: 200000, MaxOutputTokens: 64000,
+		Modality: "vision", Pricing: priceListAsOf("2026-09-27", 1, 5, 1.25, 2, 0.10),
+		ServiceTierEligibility: claudeServiceTiers, RetentionClass: retentionZDREligible,
+		exactOnly: true, datedSnapshotOnly: true,
+	},
+	{
 		// Claude Fable 5 (GA 2026-06-09): $10/$50, cache write $12.50 (5m) / $20 (1h),
 		// cache read $1 — verified, Anthropic pricing page, governance AsOf. 1M-token
 		// context at STANDARD pricing (no long-context premium), 128K max output.
@@ -327,6 +378,18 @@ var referenceTable = []referenceModel{
 		ServiceTierEligibility: claudeServiceTiers, DataResidency: claudeDataResidency,
 		USInferenceBurndownMult: 1.1,
 		RetentionClass:          retentionCovered, RetentionDays: 30,
+	},
+	{
+		// Claude Fable 5.1. Base 10/50 with a $0.25 cache hit, not Fable 5's $1.
+		// Observed 2026-09-27. Covered-model retention is not restated for 5.1
+		// on the pages read here, so retention stays unverified.
+		// Same residency sentence as Opus 5.5: 4.6 and later, retrieved
+		// 2026-09-27T06:27:58Z from platform.claude.com/docs/en/about-claude/pricing.
+		Family: "claude-fable", Prefix: "claude-fable-5-1", ProviderRef: mp.ProviderAnthropic,
+		Capabilities: capsClaudeListed, ContextWindow: 1_000_000, MaxOutputTokens: 128_000,
+		Modality: "vision", Pricing: priceListAsOf("2026-09-27", 10, 50, 12.50, 20, 0.25),
+		DataResidency: claudeDataResidency, USInferenceBurndownMult: 1.1,
+		datedSnapshotOnly: true,
 	},
 	{
 		// Claude Mythos 5 (2026-06-09): Fable 5 capabilities WITHOUT safety
@@ -416,9 +479,37 @@ var referenceTable = []referenceModel{
 		Modality: "vision", Pricing: priceList(2.5, 10, 0, 0, 1.25),
 	},
 	{
+		Family: "gpt-6-astra", Prefix: "gpt-6-astra", ProviderRef: mp.ProviderOpenAI,
+		Capabilities: capsGPT6, ContextWindow: 1_050_000, MaxOutputTokens: 128_000,
+		Modality: "vision", Pricing: priceListAsOf("2026-09-27", 10, 50, 12.5, 0, 1),
+		datedSnapshotOnly: true,
+	},
+	{
+		Family: "gpt-6-sol", Prefix: "gpt-6-sol", ProviderRef: mp.ProviderOpenAI,
+		Capabilities: capsGPT6, ContextWindow: 1_050_000, MaxOutputTokens: 128_000,
+		Modality: "vision", Pricing: priceListAsOf("2026-09-27", 2, 10, 2.5, 0, 0.2),
+		datedSnapshotOnly: true,
+	},
+	{
+		Family: "gpt-6-luna", Prefix: "gpt-6-luna", ProviderRef: mp.ProviderOpenAI,
+		Capabilities: capsGPT6, ContextWindow: 1_050_000, MaxOutputTokens: 128_000,
+		Modality: "vision", Pricing: priceListAsOf("2026-09-27", 0.10, 0.50, 0.125, 0, 0.01),
+		datedSnapshotOnly: true,
+	},
+	{
 		Family: "o1", Prefix: "o1", ProviderRef: mp.ProviderOpenAI,
 		Capabilities: capsOpenAI, ContextWindow: 200000, MaxOutputTokens: 100000,
 		Modality: "text", Pricing: priceList(15, 60, 0, 0, 7.5),
+	},
+	{
+		// grok-4.7 base tier. The ≥200k tier ($4/$1/$12) and the $0.50 cached
+		// price are on docs.x.ai/developers/pricing, retrieved 2026-09-27T06:33:24Z.
+		// The higher tier is not a second field. exactOnly so grok-4.7-fast does not match.
+		Family: "grok-4.7", Prefix: "grok-4.7", ProviderRef: mp.ProviderXAI,
+		Capabilities:  []mp.Capability{mp.CapToolUse, mp.CapVision, mp.CapExtendedThinking},
+		ContextWindow: 500_000, Modality: "vision",
+		Pricing:   priceListAsOf("2026-09-27", 2, 6, 0, 0, 0.50),
+		exactOnly: true,
 	},
 	{
 		Family: "gemini-2.0-flash", Prefix: "gemini-2.0-flash", ProviderRef: mp.ProviderGoogle,
@@ -435,12 +526,60 @@ var referenceTable = []referenceModel{
 		Capabilities: capsGemini, ContextWindow: 2000000, MaxOutputTokens: 8192,
 		Modality: "vision", Pricing: priceList(1.25, 5, 0, 0, 0),
 	},
+	{
+		// deepseek-flash serves DeepSeek-V4.1-Flash. The price is a peak and
+		// off-peak tariff, so Pricing stays nil. exactOnly: a dated neighbor
+		// is not this row. Observed 2026-09-27.
+		Family: "deepseek-flash", Prefix: "deepseek-flash", ProviderRef: mp.ProviderDeepSeek,
+		Capabilities: capsDeepSeekFlash, ContextWindow: 1_000_000, MaxOutputTokens: 384_000,
+		Modality: "vision", Pricing: nil, exactOnly: true,
+	},
+	{
+		// deepseek-v4-pro serves DeepSeek-V4-Pro-0813 and has no vision.
+		Family: "deepseek-v4-pro", Prefix: "deepseek-v4-pro", ProviderRef: mp.ProviderDeepSeek,
+		Capabilities: capsDeepSeek, ContextWindow: 1_000_000, MaxOutputTokens: 384_000,
+		Modality: "text", Pricing: nil, exactOnly: true,
+	},
+	{
+		// Legacy IDs are still accepted and are served by deepseek-flash.
+		// No retirement date is published.
+		Family: "deepseek-v4-flash", Prefix: "deepseek-v4-flash", ProviderRef: mp.ProviderDeepSeek,
+		Capabilities: capsDeepSeekFlash, ContextWindow: 1_000_000, MaxOutputTokens: 384_000,
+		Modality: "vision", Pricing: nil, ReplacementRef: "deepseek-flash", exactOnly: true,
+	},
+	{
+		Family: "deepseek-v4-flash-vision-exp", Prefix: "deepseek-v4-flash-vision-exp", ProviderRef: mp.ProviderDeepSeek,
+		Capabilities: capsDeepSeekFlash, ContextWindow: 1_000_000, MaxOutputTokens: 384_000,
+		Modality: "vision", Pricing: nil, ReplacementRef: "deepseek-flash", exactOnly: true,
+	},
 	// The thirteen GLM figures below were re-verified LIVE against
 	// docs.z.ai/guides/overview/pricing on 2026-08-27T01:07Z by the planner, and all
 	// thirteen held at the values they had carried since 2026-07-08 - so the stamp
 	// moves and the numbers do not. The owner of that check is named on purpose:
 	// an unowned stamp is how the Sonnet 5 list price stayed 1.5x high for 55 days.
 	// Staleness is age x provider volatility, not age alone.
+	{
+		// GLM-5.3 is text-only, 1M context, 128K output. Reasoning cannot be
+		// disabled. Observed 2026-09-27. Longer than any glm-5 prefix.
+		Family: "glm-5.3", Prefix: "glm-5.3", ProviderRef: mp.ProviderGLM,
+		Capabilities: capsGLM, ContextWindow: 1_000_000, MaxOutputTokens: 128_000,
+		Modality: "text", Pricing: priceListAsOf("2026-09-27", 1.40, 4.40, 0, 0, 0.26),
+		datedSnapshotOnly: true,
+	},
+	{
+		// GLM-5.3-Flash is multimodal. It must not inherit the glm-5.3 text row.
+		Family: "glm-5.3-flash", Prefix: "glm-5.3-flash", ProviderRef: mp.ProviderGLM,
+		Capabilities: capsGLMVision, ContextWindow: 1_000_000, MaxOutputTokens: 128_000,
+		Modality: "vision", Pricing: priceListAsOf("2026-09-27", 0.15, 0.50, 0, 0, 0.03),
+		datedSnapshotOnly: true,
+	},
+	{
+		// GLM-5.3-FlashX. API access only; not in the GLM Coding Plan.
+		Family: "glm-5.3-flashx", Prefix: "glm-5.3-flashx", ProviderRef: mp.ProviderGLM,
+		Capabilities: capsGLMVision, ContextWindow: 1_000_000, MaxOutputTokens: 128_000,
+		Modality: "vision", Pricing: priceListAsOf("2026-09-27", 0.37, 1.25, 0, 0, 0.075),
+		datedSnapshotOnly: true,
+	},
 	{
 		Family: "glm-5.2", Prefix: "glm-5.2", ProviderRef: mp.ProviderGLM,
 		Capabilities: capsGLM, ContextWindow: 1_000_000,
@@ -529,15 +668,65 @@ func lookupReference(modelRef string) (referenceModel, bool) {
 	if ref == "" {
 		return referenceModel{}, false
 	}
+	if m, ok := mp.ExactCompatibleModel(ref); ok {
+		return referenceFromCompatible(m), true
+	}
+	for _, e := range referenceTable {
+		if ref == e.Prefix {
+			return e, true
+		}
+	}
+	bestDated := -1
+	for i, e := range referenceTable {
+		if !e.datedSnapshotOnly {
+			continue
+		}
+		if len(ref) > len(e.Prefix) && strings.HasPrefix(ref, e.Prefix+"-") {
+			if bestDated < 0 || len(e.Prefix) > len(referenceTable[bestDated].Prefix) {
+				bestDated = i
+			}
+		}
+	}
+	if bestDated >= 0 {
+		e := referenceTable[bestDated]
+		if mp.SnapshotDateSuffix(ref, e.Prefix) {
+			return e, true
+		}
+		return referenceModel{}, false
+	}
 	best := -1
 	var match referenceModel
 	for _, e := range referenceTable {
+		if e.exactOnly || e.datedSnapshotOnly {
+			continue
+		}
 		if strings.HasPrefix(ref, e.Prefix) && len(e.Prefix) > best {
 			best = len(e.Prefix)
 			match = e
 		}
 	}
 	return match, best >= 0
+}
+
+// referenceFromCompatible copies an exact openai_compatible metadata row into
+// the governance reference. Modality stays text: the generic gateway cannot
+// send the vision input the provider documents.
+func referenceFromCompatible(m mp.Model) referenceModel {
+	out := referenceModel{
+		Family:          m.Ref,
+		Prefix:          m.Ref,
+		ProviderRef:     m.ProviderRef,
+		Capabilities:    append([]mp.Capability(nil), m.Capabilities...),
+		ContextWindow:   m.ContextWindow,
+		MaxOutputTokens: m.MaxOutputTokens,
+		Modality:        "text",
+		exactOnly:       true,
+	}
+	if m.Pricing != nil {
+		p := *m.Pricing
+		out.Pricing = &p
+	}
+	return out
 }
 
 // MaxCoveredRetentionDays reports the provider-forced retention floor declared

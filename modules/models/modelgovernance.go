@@ -120,11 +120,11 @@ func registerModelGovernanceSchema(reg store.ExtensionRegistry) error {
 		{
 			Kind: modelGroupKind, Table: modelGroupTable,
 			Fields: []model.FieldSpec{
-				{Name: colMGName, Kind: model.KindText, Indexed: true},
-				{Name: colMGMembers, Kind: model.KindJSON, Nullable: true},
-				{Name: colMGFamilies, Kind: model.KindJSON, Nullable: true},
-				{Name: colMGTiers, Kind: model.KindJSON, Nullable: true},
-				{Name: colMGDesc, Kind: model.KindText, Nullable: true},
+				{Name: colMGName, Kind: model.KindText, Indexed: true, Principal: model.None("a model-group name required at modelgovernance.go:194-197, read only as a group key at modelaccessgate.go:428, modelaccessgate.go:468")},
+				{Name: colMGMembers, Kind: model.KindJSON, Nullable: true, Principal: model.Nested([]string(nil), model.ClassEvidence, model.Leaf("[]", model.None("a model ref matched only against model refs at modelaccessgate.go:494-498")))},
+				{Name: colMGFamilies, Kind: model.KindJSON, Nullable: true, Principal: model.Nested([]string(nil), model.ClassEvidence, model.Leaf("[]", model.None("a catalog family name matched only at modelaccessgate.go:506")))},
+				{Name: colMGTiers, Kind: model.KindJSON, Nullable: true, Principal: model.Nested([]string(nil), model.ClassEvidence, model.Leaf("[]", model.None("an access-tier name matched only at modelaccessgate.go:509")))},
+				{Name: colMGDesc, Kind: model.KindText, Nullable: true, Principal: model.None("operator prose only rendered at modelgovernance.go:225")},
 			},
 			// One group name per tenant.
 			Indexes: []model.IndexSpec{{Name: "models_model_group_uniq", Columns: []string{model.ColTenantID, colMGName}, Unique: true}},
@@ -132,16 +132,16 @@ func registerModelGovernanceSchema(reg store.ExtensionRegistry) error {
 		{
 			Kind: modelAccessKind, Table: modelAccessTable,
 			Fields: []model.FieldSpec{
-				{Name: colMASubjectKind, Kind: model.KindText, Indexed: true},
-				{Name: colMASubjectRef, Kind: model.KindText, Indexed: true},
-				{Name: colMATargetKind, Kind: model.KindText},
-				{Name: colMATargetRef, Kind: model.KindText, Indexed: true},
-				{Name: colMAWorkspace, Kind: model.KindText, Nullable: true},
-				{Name: colMASurfaces, Kind: model.KindJSON, Nullable: true},
-				{Name: colMABudgetRef, Kind: model.KindText, Nullable: true},
-				{Name: colMADesc, Kind: model.KindText, Nullable: true},
+				{Name: colMASubjectKind, Kind: model.KindText, Indexed: true, Principal: model.None("closed set refused otherwise at modelgovernance.go:434-437")},
+				{Name: colMASubjectRef, Kind: model.KindText, Indexed: true, Principal: pdeclModelAccessSubject},
+				{Name: colMATargetKind, Kind: model.KindText, Principal: model.None("closed set refused otherwise at modelgovernance.go:442-445")},
+				{Name: colMATargetRef, Kind: model.KindText, Indexed: true, Principal: model.None("a model ref or model-group name validated at modelgovernance.go:509-516, matched only against models at modelaccessgate.go:463-472")},
+				{Name: colMAWorkspace, Kind: model.KindText, Nullable: true, Principal: model.None("a workspace slug validated at modelgovernance.go:518-525, compared only with the actor workspace at modelaccessgate.go:518-523")},
+				{Name: colMASurfaces, Kind: model.KindJSON, Nullable: true, Principal: model.Nested([]string(nil), model.ClassEvidence, model.Leaf("[]", model.None("closed gateway vocabulary refused otherwise at modelgovernance.go:461-470, matched at modelaccessgate.go:529-537")))},
+				{Name: colMABudgetRef, Kind: model.KindText, Nullable: true, Principal: model.None("a budget reference kept as metadata and never read by the decision (modelaccessgate.go:13-15), only rendered at modelgovernance.go:489")},
+				{Name: colMADesc, Kind: model.KindText, Nullable: true, Principal: model.None("operator prose only rendered at modelgovernance.go:489")},
 				// Appended last (expand-only): Allow/forbid effect, nullable.
-				{Name: colMAEffect, Kind: model.KindText, Nullable: true},
+				{Name: colMAEffect, Kind: model.KindText, Nullable: true, Principal: model.None("closed set refused otherwise at modelgovernance.go:454-460")},
 			},
 			// One grant per (subject, target, workspace) — re-asserting the same tuple is
 			// a 409, not a duplicate row. workspace_ref "" is the tenant-wide grant.
@@ -587,7 +587,7 @@ func (m *Module) handleCreateModelAccess(w http.ResponseWriter, r *http.Request,
 		out modelAccessDTO
 		bad string
 	)
-	err := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
+	err := fencedWrite(r, mc, in, func(sc store.Scope) error {
 		if isBad, msg, verr := validateGrantRefs(r, sc, in); verr != nil {
 			return verr
 		} else if isBad {
@@ -605,6 +605,9 @@ func (m *Module) handleCreateModelAccess(w http.ResponseWriter, r *http.Request,
 		out = toModelAccessDTO(rec)
 		return auditOwned(r.Context(), sc, mc, modelAccessKind, "create", model.ID(rec.String(model.ColID)))
 	})
+	if writeFenceRefusal(w, err) {
+		return
+	}
 	if err != nil {
 		writeStoreError(w, err)
 		return
@@ -634,7 +637,7 @@ func (m *Module) handleUpdateModelAccess(w http.ResponseWriter, r *http.Request,
 		out modelAccessDTO
 		bad string
 	)
-	err := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
+	err := fencedWrite(r, mc, in, func(sc store.Scope) error {
 		if isBad, msg, verr := validateGrantRefs(r, sc, in); verr != nil {
 			return verr
 		} else if isBad {
@@ -659,6 +662,9 @@ func (m *Module) handleUpdateModelAccess(w http.ResponseWriter, r *http.Request,
 		out = toModelAccessDTO(rec)
 		return auditOwned(r.Context(), sc, mc, modelAccessKind, "update", id)
 	})
+	if writeFenceRefusal(w, err) {
+		return
+	}
 	if err != nil {
 		writeStoreError(w, err)
 		return

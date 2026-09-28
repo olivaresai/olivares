@@ -55,6 +55,10 @@ func (m *Module) handleStreamRun(w http.ResponseWriter, r *http.Request, mc api.
 			return gerr
 		}
 		run = toRunDTO(rec)
+		run.Comparison, err = readComparison(r.Context(), sc, run.ID)
+		if err != nil {
+			return err
+		}
 		found = true
 		resRepo, err := sc.Ext(resultKind)
 		if err != nil {

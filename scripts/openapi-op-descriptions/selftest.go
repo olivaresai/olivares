@@ -462,6 +462,35 @@ func selfCases() []selfCase {
 						`reg.Handle("GET", "/things", "demo:thing:read", m.handleGetThing)`, 1)
 			})
 		}},
+		// ---- the governed doors a module reaches by type assertion -------------
+		// core/api's recording registrar answers HandleSealed and HandlePolicy, so the
+		// beta document publishes a route mounted through either. A gate that reads
+		// only Handle and HandleEntity would never see it, and would stop at the
+		// document-and-routes-disagree guard instead of naming the handler.
+		{name: "sealed-route-documented-and-regenerated", want: exitClean, mutate: func(root string) error {
+			if err := addGovernedRoute(root, "HandleSealed", "handleDeleteThing deletes one demo thing and every record that names it."); err != nil {
+				return err
+			}
+			return seal(root)
+		}},
+		{name: "sealed-route-handler-has-no-doc", want: exitDrift, wantErr: "handleDeleteThing", mutate: func(root string) error {
+			if err := addGovernedRoute(root, "HandleSealed", ""); err != nil {
+				return err
+			}
+			return publishDeleteThing(root)
+		}},
+		{name: "policy-route-handler-has-no-doc", want: exitDrift, wantErr: "handleDeleteThing", mutate: func(root string) error {
+			if err := addGovernedRoute(root, "HandlePolicy", ""); err != nil {
+				return err
+			}
+			return publishDeleteThing(root)
+		}},
+		{name: "sealed-route-registered-outside-apiroutes", want: exitCannotSee, wantErr: "HandleSealed", mutate: func(root string) error {
+			return edit(root, "modules/demo/demo.go", func(s string) string {
+				return s + "\nfunc (m *Module) governedRoutes(door governedDoor) {\n" +
+					"\tdoor.HandleSealed(\"DELETE\", \"/things/{id}\", \"demo:thing:admin\", demoSeal, m.handleGetThing)\n}\n"
+			})
+		}},
 		{name: "namespace-is-unreadable", want: exitCannotSee, mutate: func(root string) error {
 			return edit(root, "modules/demo/demo.go", func(s string) string {
 				return strings.Replace(s, `const Namespace = "demo"`, `var namespaces = map[int]string{}`, 1)
@@ -479,6 +508,33 @@ func addRoute(root string) error {
 				`	reg.Handle("GET", "/things/{id}",`, 1)
 		return s + "\n// handleListWidgets lists the demo widgets recorded in the tenant scope.\n" +
 			"func (m *Module) handleListWidgets(w, r, mc int) {}\n"
+	})
+}
+
+// addGovernedRoute mounts DELETE /things/{id} through a governed door the way a
+// module does: on a registrar found by type assertion on the RouteRegistrar, never
+// on the RouteRegistrar itself. doc is the handler's doc comment, "" for none.
+func addGovernedRoute(root, door, doc string) error {
+	return edit(root, "modules/demo/demo.go", func(s string) string {
+		last := "\treg.Handle(\"GET\", \"/things/{id}\", \"demo:thing:read\", m.handleGetThing)\n"
+		s = strings.Replace(s, last, last+
+			"\tgoverned, ok := reg.(governedDoor)\n\tif !ok {\n\t\treturn\n\t}\n"+
+			"\tgoverned."+door+"(\"DELETE\", \"/things/{id}\", \"demo:thing:admin\", demoSeal, m.handleDeleteThing)\n", 1)
+		if doc != "" {
+			s += "\n// " + doc
+		}
+		return s + "\nfunc (m *Module) handleDeleteThing(w, r, mc int) {}\n"
+	})
+}
+
+// publishDeleteThing puts DELETE /things/{id} in the beta document, as the
+// reflector does for a route mounted through any door, without regenerating the
+// table.
+func publishDeleteThing(root string) error {
+	return editSpec(root, betaSpecRel, func(doc map[string]any) {
+		paths, _ := doc["paths"].(map[string]any)
+		item, _ := paths["/v1/m/demo/things/{id}"].(map[string]any)
+		item["delete"] = map[string]any{"summary": "demo module route"}
 	})
 }
 

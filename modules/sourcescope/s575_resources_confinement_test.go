@@ -27,15 +27,11 @@ import (
 // confinedUserAt creates a user whose membership is confined to ws and returns its token.
 func (h *harness) confinedUserAt(admin string, tenant model.TenantID, email string, ws model.ID) string {
 	h.t.Helper()
-	r := h.do("POST", "/v1/users", admin, map[string]any{"email": email, "password": "memberpass1"}, nil)
+	r := h.do("POST", "/v1/users", admin, map[string]any{
+		"email": email, "password": "memberpass1", "tenant": tenant.String(), "role": "admin", "workspace_id": ws.String(),
+	}, nil)
 	if r.code != http.StatusCreated {
 		h.t.Fatalf("create user %s = %d %s", email, r.code, r.raw)
-	}
-	uid, _ := r.body["id"].(string)
-	if r := h.do("POST", "/v1/memberships", admin, map[string]any{
-		"user_id": uid, "tenant": tenant.String(), "role": "admin", "workspace_id": ws.String(),
-	}, nil); r.code != http.StatusCreated {
-		h.t.Fatalf("grant confined %s = %d %s", email, r.code, r.raw)
 	}
 	r = h.do("POST", "/v1/auth/login", "", map[string]any{"email": email, "password": "memberpass1"}, nil)
 	if r.code != http.StatusOK {

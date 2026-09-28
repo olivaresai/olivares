@@ -29,7 +29,7 @@ func TestBootWiresExactCommunicationRequestAuthoritySourcesOnly(t *testing.T) {
 	}
 
 	var authrAssignments, authzAssignments []*ast.AssignStmt
-	var bindCalls, runtimeStarts, compositionBinds, leaderRuns []*ast.CallExpr
+	var bindCalls, runtimeStarts, compositionBinds, leaderRuns, binderCalls []*ast.CallExpr
 	forbidden := map[string]bool{}
 	ast.Inspect(boot.Body, func(node ast.Node) bool {
 		switch value := node.(type) {
@@ -50,6 +50,8 @@ func TestBootWiresExactCommunicationRequestAuthoritySourcesOnly(t *testing.T) {
 			switch communicationBootSelectorPath(value.Fun) {
 			case "set.sessions.UseCommunicationRequestAuthority":
 				bindCalls = append(bindCalls, value)
+			case "set.orchestration.UseWorkflowCredentialBinder":
+				binderCalls = append(binderCalls, value)
 			case "rt.Start":
 				runtimeStarts = append(runtimeStarts, value)
 			case "bindCommunicationComposition":
@@ -99,6 +101,36 @@ func TestBootWiresExactCommunicationRequestAuthoritySourcesOnly(t *testing.T) {
 	if len(runtimeStarts) != 1 || bindCalls[0].End() >= runtimeStarts[0].Pos() {
 		t.Fatalf("authority bind/runtime start order = binds %#v starts %#v",
 			bindCalls, runtimeStarts)
+	}
+	// CM-10: the exact-credential composition is admitted positively. The one
+	// orchestration credential binder is the serving Authenticator itself, bound
+	// once after it exists and before the runtime starts, under a nil guard; the
+	// identity-only ports below stay forbidden.
+	if len(binderCalls) != 1 || len(binderCalls[0].Args) != 1 ||
+		!communicationBootIdentifier(binderCalls[0].Args[0], "authr") ||
+		binderCalls[0].Pos() <= authrAssignments[0].End() ||
+		binderCalls[0].End() >= runtimeStarts[0].Pos() {
+		t.Fatalf("workflow credential binder calls = %#v", binderCalls)
+	}
+	guardedBinders := 0
+	for _, statement := range boot.Body.List {
+		conditional, ok := statement.(*ast.IfStmt)
+		if !ok || !communicationBootOrchestrationNonNil(conditional.Cond) {
+			continue
+		}
+		for _, guarded := range conditional.Body.List {
+			expression, ok := guarded.(*ast.ExprStmt)
+			if !ok {
+				continue
+			}
+			call, ok := expression.X.(*ast.CallExpr)
+			if ok && communicationBootSelectorPath(call.Fun) == "set.orchestration.UseWorkflowCredentialBinder" {
+				guardedBinders++
+			}
+		}
+	}
+	if guardedBinders != 1 {
+		t.Fatalf("workflow credential binders under the orchestration guard = %d, want one", guardedBinders)
 	}
 
 	directBinds, guardedCompositionBinds := 0, 0
@@ -207,6 +239,13 @@ func communicationBootAuthorizerAssignment(assignment *ast.AssignStmt) bool {
 	}
 	scopedGrants, ok := communicationBootCall(scopedOption.Args[0], "set.gov.ScopedGrants", 0)
 	return ok && scopedGrants != nil
+}
+
+func communicationBootOrchestrationNonNil(expression ast.Expr) bool {
+	comparison, ok := expression.(*ast.BinaryExpr)
+	return ok && comparison.Op == token.NEQ &&
+		communicationBootSelectorPath(comparison.X) == "set.orchestration" &&
+		communicationBootIdentifier(comparison.Y, "nil")
 }
 
 func communicationBootSessionsNonNil(expression ast.Expr) bool {

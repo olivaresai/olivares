@@ -122,12 +122,12 @@ func newDelegEnv(t *testing.T) delegEnv {
 
 	admin := delegMember(t, ctx, a, super, tenant, "admin@acme.test", auth.RoleAdmin)
 
-	su, err := a.CreateUser(ctx, super, auth.NewUser{Email: "subject@acme.test", DisplayName: "Subject", Password: "subject-password-1"})
+	su, err := a.CreateUser(ctx, super, auth.NewUser{
+		Email: "subject@acme.test", DisplayName: "Subject", Password: "subject-password-1",
+		Tenant: tenant, Role: auth.RoleEditor,
+	})
 	if err != nil {
 		t.Fatalf("create subject: %v", err)
-	}
-	if _, err := a.GrantMembership(ctx, super, su.ID, tenant, auth.RoleEditor, model.ID("")); err != nil {
-		t.Fatalf("grant subject membership: %v", err)
 	}
 	subjectSession, subjSess, err := a.Login(ctx, "subject@acme.test", "subject-password-1", "127.0.0.1")
 	if err != nil {
@@ -175,12 +175,11 @@ func newDelegEnv(t *testing.T) delegEnv {
 
 func delegMember(t *testing.T, ctx context.Context, a *auth.Authenticator, super auth.Principal, tenant model.TenantID, email, role string) auth.Principal {
 	t.Helper()
-	u, err := a.CreateUser(ctx, super, auth.NewUser{Email: email, DisplayName: role, Password: "member-password-1"})
-	if err != nil {
+	if _, err := a.CreateUser(ctx, super, auth.NewUser{
+		Email: email, DisplayName: role, Password: "member-password-1",
+		Tenant: tenant, Role: role,
+	}); err != nil {
 		t.Fatalf("create %s: %v", role, err)
-	}
-	if _, err := a.GrantMembership(ctx, super, u.ID, tenant, role, model.ID("")); err != nil {
-		t.Fatalf("grant %s: %v", role, err)
 	}
 	session, _, err := a.Login(ctx, email, "member-password-1", "127.0.0.1")
 	if err != nil {

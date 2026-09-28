@@ -102,6 +102,19 @@ func (s *Source) handleWebhook(sink sdk.Sink) http.HandlerFunc {
 				}
 			}
 
+		case "Pipeline Hook", "Job Hook":
+			sample, ok, err := parseGitLabEvidence(eventType, body)
+			if err != nil {
+				http.Error(w, "bad payload", http.StatusBadRequest)
+				return
+			}
+			if ok {
+				if err := sink.Emit(r.Context(), sample); err != nil {
+					http.Error(w, "emit error", http.StatusInternalServerError)
+					return
+				}
+			}
+
 		default:
 			// Unknown events are accepted but ignored.
 		}

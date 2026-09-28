@@ -46,8 +46,8 @@ Das vollständige käuferseitige Paket befindet sich im Repository unter
   Wiederholungstests), Geltungsbereich und ein Behebungsworkflow, der mit dem in
   `SECURITY.md` veröffentlichten CVE-Behebungszielen verdrahtet ist.
 - **Referenzarchitektur** — Bereitstellungstopologien (Single-Node, HA
-  Active-Passive, Multi-Region, air-gapped), Trust Zones, gemessene
-  Dimensionierungs-Baselines, RPO/RTO-Stufen und die
+  Active-Passive, Multi-Region, air-gapped), Trust Zones, datierte Messungen zur
+  Dimensionierung mit Workload-Grenzen, Planungsannahmen, RPO/RTO-Ziele und die
   IdP-/SIEM-/ITSM-/KMS-Integrationsfläche.
 - **EU-Beschaffungsartefakte** — eine Vorlage für die technische Dokumentation
   gemäß Anhang IV des EU AI Act, befüllt aus Live-Nachweisen, sowie ein
@@ -84,9 +84,14 @@ eigenen Bereitstellung überprüfen.
   Profile), Model Cards und der Regulierungskalender sind allesamt
   API-Antworten, keine PDFs — das Produkt behandelt Compliance-Daten und
   -Zuordnungen als versionsfixierte Daten.
-- **Betriebliche Aussagen:** SLOs, Dimensionierungs- und RPO/RTO-Zahlen in der
-  Referenzarchitektur sind auf gemessene, im Repository festgeschriebene
-  Baselines zurückführbar.
+- **Betriebliche Aussagen:** Betriebsziele, abgegrenzte historische Messungen und
+  Kundenzusagen sind getrennt zu betrachten. SLO- und RPO/RTO-Ziele sind keine
+  gemessenen Baselines; Dimensionierungsmessungen gelten nur für die dokumentierte
+  Last und Plattform. Die gemessenen SQLite-Wiederherstellungszeiten qualifizieren
+  weder PostgreSQL-Recovery noch einen vollständigen Wiederaufbau mit Schlüsseln,
+  Berechtigungen und dem Abgleich externer Auswirkungen. Qualifizierungsstand,
+  Herkunft und Grenzen stehen in `deploy/support-matrix.md`,
+  `docs/17-PRODUCTION-READINESS-SLO.md` und `docs/SIZING-AND-CAPACITY.md`.
 
 ## Support und Barrierefreiheit
 

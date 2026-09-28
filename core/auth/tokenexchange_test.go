@@ -33,18 +33,10 @@ func newExchangeFixture(t *testing.T) exchangeFixture {
 	super := mustSuperadmin(t, ctx, a)
 	tenant := provisionTenant(t, st, "acme")
 
-	editor, err := a.CreateUser(ctx, super, auth.NewUser{Email: "editor@acme.com", Password: "editor-pass-1"})
-	if err != nil {
+	if _, err := a.CreateUser(ctx, super, auth.NewUser{Email: "editor@acme.com", Password: "editor-pass-1", Tenant: tenant, Role: auth.RoleEditor}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := a.GrantMembership(ctx, super, editor.ID, tenant, auth.RoleEditor, model.ID("")); err != nil {
-		t.Fatal(err)
-	}
-	adminU, err := a.CreateUser(ctx, super, auth.NewUser{Email: "admin@acme.com", Password: "admin-pass-1"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := a.GrantMembership(ctx, super, adminU.ID, tenant, auth.RoleAdmin, model.ID("")); err != nil {
+	if _, err := a.CreateUser(ctx, super, auth.NewUser{Email: "admin@acme.com", Password: "admin-pass-1", Tenant: tenant, Role: auth.RoleAdmin}); err != nil {
 		t.Fatal(err)
 	}
 

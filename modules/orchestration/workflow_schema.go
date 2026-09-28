@@ -77,6 +77,7 @@ const (
 	colWrSessionRunRef     = "actor_session_run_ref"
 	colWrSessionFence      = "actor_session_fence"
 	colWrPurposeRestricted = "actor_purpose_restricted"
+	colWrCredentialBinding = "actor_credential_binding" // opaque core/auth handle; never projected
 	colWrStartedAt         = "started_at"
 	colWrFinished          = "finished_at"
 )
@@ -88,6 +89,14 @@ const (
 	runStatusFailed    = "failed"
 )
 
+// A run's initiator, as its actor ref and as its bare account id. The run
+// creation fences what they name and the retirement step reads them (fence.go,
+// retirement.go).
+var (
+	pdeclRunActor        = model.Ref(model.EncodeUserRef, model.ClassAuthority)
+	pdeclRunUserIdentity = model.Ref(model.EncodeUserID, model.ClassAuthority)
+)
+
 // registerWorkflowSchema declares the three entities; called from
 // RegisterSchema so the engine creates the tables with tenant isolation and the
 // append-only guard on the revision ledger.
@@ -96,12 +105,14 @@ func registerWorkflowSchema(reg store.ExtensionRegistry) error {
 		Kind:  workflowKind,
 		Table: workflowTable,
 		Fields: []model.FieldSpec{
-			{Name: colWfName, Kind: model.KindText, Indexed: true},
-			{Name: colWfDesc, Kind: model.KindText, Nullable: true},
+			{Name: colWfName, Kind: model.KindText, Indexed: true, Principal: pdeclNoneName},
+			{Name: colWfDesc, Kind: model.KindText, Nullable: true, Principal: pdeclNoneWorkflowText},
 			{Name: colWfEnabled, Kind: model.KindBool, Indexed: true},
-			{Name: colWfSteps, Kind: model.KindJSON},
-			{Name: colWfOwnerA, Kind: model.KindText},
-			{Name: colWfOwnerK, Kind: model.KindText},
+			{Name: colWfSteps, Kind: model.KindJSON, Principal: workflowStepsDecl},
+			// The declaring caller's actor ref (workflow.go:320); a run acts for its
+			// own initiator, never for this owner.
+			{Name: colWfOwnerA, Kind: model.KindText, Principal: model.Ref(model.EncodeUserRef, model.ClassEvidence)},
+			{Name: colWfOwnerK, Kind: model.KindText, Principal: pdeclNoneActorKind},
 		},
 		Indexes: []model.IndexSpec{{
 			Name:    "orchestration_workflow_uniq",
@@ -117,11 +128,13 @@ func registerWorkflowSchema(reg store.ExtensionRegistry) error {
 		Table:      wfRevisionTable,
 		AppendOnly: true,
 		Fields: []model.FieldSpec{
-			{Name: colWfRevSubject, Kind: model.KindText, Indexed: true},
-			{Name: colWfRevOp, Kind: model.KindText},
-			{Name: colWfRevSnapshot, Kind: model.KindText},
-			{Name: colWfRevActor, Kind: model.KindText},
-			{Name: colWfRevActorK, Kind: model.KindText},
+			{Name: colWfRevSubject, Kind: model.KindText, Indexed: true, Principal: pdeclNoneRevisionOf},
+			{Name: colWfRevOp, Kind: model.KindText, Principal: pdeclNoneRevisionOp},
+			// A past workflow detail, steps included. History: it acts again only
+			// through the restore, which re-validates the graph (workflow.go:655-678).
+			{Name: colWfRevSnapshot, Kind: model.KindText, Principal: model.Scan(model.ClassEvidence)},
+			{Name: colWfRevActor, Kind: model.KindText, Principal: pdeclActorEvidence},
+			{Name: colWfRevActorK, Kind: model.KindText, Principal: pdeclNoneActorKind},
 		},
 	}); err != nil {
 		return err
@@ -131,22 +144,28 @@ func registerWorkflowSchema(reg store.ExtensionRegistry) error {
 		Kind:  wfRunKind,
 		Table: wfRunTable,
 		Fields: []model.FieldSpec{
-			{Name: colWrWorkflow, Kind: model.KindUUID, Indexed: true},
-			{Name: colWrRootWork, Kind: model.KindUUID, Nullable: true, Indexed: true},
-			{Name: colWrStatus, Kind: model.KindText, Indexed: true},
-			{Name: colWrPlanHash, Kind: model.KindText},
-			{Name: colWrApproval, Kind: model.KindText, Nullable: true},
-			{Name: colWrPaused, Kind: model.KindText, Nullable: true},
-			{Name: colWrSteps, Kind: model.KindJSON},
-			{Name: colWrActor, Kind: model.KindText},
-			{Name: colWrActorKind, Kind: model.KindText},
+			{Name: colWrWorkflow, Kind: model.KindUUID, Indexed: true, Principal: pdeclNoneRunState},
+			{Name: colWrRootWork, Kind: model.KindUUID, Nullable: true, Indexed: true, Principal: pdeclNoneRunState},
+			{Name: colWrStatus, Kind: model.KindText, Indexed: true, Principal: pdeclNoneRunState},
+			{Name: colWrPlanHash, Kind: model.KindText, Principal: pdeclNoneRunState},
+			{Name: colWrApproval, Kind: model.KindText, Nullable: true, Principal: pdeclNoneRunState},
+			{Name: colWrPaused, Kind: model.KindText, Nullable: true, Principal: pdeclNoneRunState},
+			{Name: colWrSteps, Kind: model.KindJSON, Principal: runStepsDecl},
+			// The initiator every step of the run acts for: its actor ref and its
+			// account id are replayed into each step's actor (workflow_work_run.go:18-28).
+			{Name: colWrActor, Kind: model.KindText, Principal: pdeclRunActor},
+			{Name: colWrActorKind, Kind: model.KindText, Principal: pdeclNoneRunCaller},
 			{Name: colWrActorAdmin, Kind: model.KindBool, Nullable: true},
-			{Name: colWrUserIdentity, Kind: model.KindUUID, Nullable: true},
-			{Name: colWrAgentIdentity, Kind: model.KindText, Nullable: true},
-			{Name: colWrSessionIdentity, Kind: model.KindText, Nullable: true},
-			{Name: colWrSessionRunRef, Kind: model.KindText, Nullable: true},
+			{Name: colWrUserIdentity, Kind: model.KindUUID, Nullable: true, Principal: pdeclRunUserIdentity},
+			{Name: colWrAgentIdentity, Kind: model.KindText, Nullable: true, Principal: pdeclNoneRunCaller},
+			{Name: colWrSessionIdentity, Kind: model.KindText, Nullable: true, Principal: pdeclNoneRunCaller},
+			{Name: colWrSessionRunRef, Kind: model.KindText, Nullable: true, Principal: pdeclNoneRunCaller},
 			{Name: colWrSessionFence, Kind: model.KindInt, Nullable: true},
 			{Name: colWrPurposeRestricted, Kind: model.KindBool, Nullable: true},
+			// The opaque handle of the run's credential binding. Only core/auth
+			// resolves it, and only for this run's own subject; it names no account.
+			{Name: colWrCredentialBinding, Kind: model.KindText, Nullable: true, Principal: model.None(
+				"an opaque credential-binding handle, parsed as such: modules/orchestration/workflow_work_run.go:19")},
 			{Name: colWrStartedAt, Kind: model.KindTimestamp},
 			{Name: colWrFinished, Kind: model.KindTimestamp, Nullable: true},
 		},

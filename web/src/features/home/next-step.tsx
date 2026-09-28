@@ -54,12 +54,17 @@ export function NextStep() {
       >
         {t('next.title')}
       </h2>
-      {/* ONE LINE PER VERB. Three 96 px cards — a 36 px icon chip beside a
+      {/* ONE FLOW PER VERB. Three 96 px cards — a 36 px icon chip beside a
           heading and a wrapping description — were 96 px of the front door spent on
-          three links. One line each, 44 px, same three verbs, same three destinations,
-          same permissions: the description follows the title in the muted register and
-          truncates with it. The verb is what an operator reads; its explanation is
-          what they read if the verb was not enough. */}
+          three links. Now each is one flow of text, same three verbs, same three
+          destinations, same permissions: the description follows the verb in the muted
+          register. The verb is what an operator reads; its explanation is what they read
+          if the verb was not enough.
+
+          ⛔ AND THE FLOW WRAPS; IT DOES NOT CUT. These are actions, and an action's label
+          is read whole: on one line, German showed 251 px of an 867 px label and left
+          the rest on a hover title that no keyboard or touch user can open. Where the
+          language is short the link is still one line; where it is long it grows. */}
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
         {offered.map(({ step, view }) => {
           const Icon = view!.icon
@@ -72,7 +77,7 @@ export function NextStep() {
               to={view!.path as never}
               data-testid={`home-next-step-${step.id}`}
               title={full}
-              className="group flex min-w-0 items-center gap-2 rounded-lg border border-border bg-surface px-3 py-2.5 outline-none transition hover:border-accent-line hover:bg-elevated focus-visible:ring-2 focus-visible:ring-ring"
+              className="group flex min-w-0 items-start gap-2 rounded-lg border border-border bg-surface px-3 py-2.5 outline-none transition hover:border-accent-line hover:bg-elevated focus-visible:ring-2 focus-visible:ring-ring"
             >
               {/* ⛔ THE ICON IS MUTED, AND IT WAS THE ACCENT. The bar spends the one
                   orange on three things only — selection, the primary action, and
@@ -81,9 +86,12 @@ export function NextStep() {
                   anything, which is what an independent review measured here. */}
               <Icon
                 aria-hidden
-                className="size-4 shrink-0 text-muted-foreground"
+                className="mt-0.5 size-4 shrink-0 text-muted-foreground"
               />
-              <span className="min-w-0 flex-1 truncate text-body" title={full}>
+              <span
+                data-slot="next-step-label"
+                className="min-w-0 flex-1 text-body [overflow-wrap:anywhere]"
+              >
                 <span className="font-medium text-foreground">
                   {t(`next.${step.id}.title`)}
                 </span>
@@ -94,7 +102,7 @@ export function NextStep() {
               </span>
               <ArrowRight
                 aria-hidden
-                className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5"
+                className="mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5"
               />
             </Link>
           )

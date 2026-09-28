@@ -18,6 +18,7 @@ description: "Olivares AI コントロールプレーンの検証済み設定サ
 | フラグ | デフォルト | 目的 |
 | --- | --- | --- |
 | `--listen` | `:8443` | HTTP リッスンアドレス（REST API + 組み込み Web UI）。 |
+| `--login-trusted-proxies` | `$OLIVARES_LOGIN_TRUSTED_PROXIES`、未設定なら空 | パスワードログインの試行回数制限に限って信頼するプロキシの CIDR。フラグに明示的な空の値を指定すると環境変数の値を無効にします。ネットワークポリシー、セッション、監査では引き続きトランスポート接続の相手を使用します。 |
 | `--grpc-listen` | `:8444` | gRPC リッスンアドレス（コントロールプレーン / コレクタインジェスト API）。 |
 | `--data-dir` | `$OLIVARES_DATA_DIR`、既存の `./olivares-data` インストール、なければ `$XDG_DATA_HOME/olivares` または `~/.local/share/olivares` | データディレクトリ：監査署名鍵、TLS 素材、そして（SQLite の場合）ストアファイル。 |
 | `--engine` | `sqlite` | ストアエンジン：`sqlite` または `postgres`。 |
@@ -81,17 +82,21 @@ TLS はデフォルトでオンです。`--tls-cert`/`--tls-key` が供給され
 
 1 つの継ぎ目（seam）の背後に 2 つのアダプタが座っています：**組み込み Cedar** 評価器（プライマリの、純 Go のパス）と、**OPA-over-HTTP** アダプタです。オペレータは 1 つのエンジンを選びます。どちらも、組み込み RBAC がすでに行った決定を、制限することはできても決して広げることはできません。
 
-:::note[不正なポリシーがプレーンを非統治にすることは決してない]
-`OLIVARES_PDP_ENGINE` がエンジンを選択しているがその設定が無効な場合 — 読み取り不能な Cedar ファイル、不正な形式の OPA ターゲット — エンジンは **外部 PDP のみを無効化** し、ネイティブ ABAC エンジンと RBAC の強制を維持し、声高にログを記録します。壊れたポリシーファイルが、リクエストを黙って非統治のままにしたり、コントロールプレーンをクラッシュさせたりすることは決してありません。
+:::note[外部 PDP の設定が無効な場合はモジュール群を構築できません]
+`OLIVARES_PDP_ENGINE` で外部エンジンを明示的に選択し、その設定が無効な場合、モジュール群を構築できません。`serve` を含む、モジュール群を構築するコマンドは、黙ってネイティブ認可のみに切り替えるのではなく、設定エラーを報告します。設定を修正してください。明示的な `none` は、制限を追加することしかできない外部レイヤーを使用せず、ネイティブ ABAC と RBAC による強制を維持して動作するという意図的な選択です。自動的なフォールバックでも、必須の外部ポリシーの代替でもありません。
+
+セレクターが未設定、空、または `none` の場合は引き続き有効で、ネイティブ認可を使用します。`cedar` ではポリシーファイル名は省略可能です。`OLIVARES_PDP_CEDAR_FILE` が未設定または空の場合や、読み取り可能な空のファイルを指定した場合は、有効な空のオーバーレイになります。OPA アダプタの構築時にはネットワークリクエストを送信せず、エンドポイントへの到達可能性も確認しません。
 :::
 
 deny-by-default モデル、アクセスグラフの閲覧が持つ特権的な性質、そしてすべての認可読み取りがどのように監査されるかについては、[セキュリティモデル](/ja/explanation/security/security-model/) を参照してください。
+
+`OLIVARES_OTEL_PROVIDER_BAGGAGE_ALLOWLIST` には、`origin`、`key`、`values` フィールドを持つルールの JSON 配列を設定します。各ルールは、指定した HTTP(S) オリジン、baggage キー、秘密情報を含まない値との完全一致のみを許可します。上限は JSON 16 KiB、32 ルール、各ルール 8 値で、キーと値はそれぞれ 1～64 ASCII バイトです。`traceparent` と `tracestate` の継続はこのポリシーとは別であり、宛先の認可も別です。
 
 <!-- BEGIN GENERATED olivares-env-reference — regenerate with `bash scripts/check-config-env-docs.sh --write`; do not edit by hand -->
 
 ### Complete variable reference
 
-The table below is generated from the product's own sources: 290 variables and 17 runtime-constructed families, covering the engine, the CLI, the Kubernetes operator, the Terraform provider and the connectors. It is regenerated and checked against those sources on every change, so it does not fall behind the binary.
+The table below is generated from the product's own sources: 296 variables and 17 runtime-constructed families, covering the engine, the CLI, the Kubernetes operator, the Terraform provider and the connectors. It is regenerated and checked against those sources on every change, so it does not fall behind the binary.
 
 **Required** means the feature that reads the variable does not start without it; most variables are optional and the engine runs with none of them set.
 
@@ -207,6 +212,7 @@ The table below is generated from the product's own sources: 290 variables and 1
 | `OLIVARES_EVENTING_SECRET_KEY` | No | — | Key that encrypts eventing subscription signing secrets at rest. |
 | `OLIVARES_EXECUTION_ENVIRONMENT_ID` | No | — | Explicit execution-environment reference for this node, read at boot by cmd/olivares/providerprofiles.go. Unset, the engine generates one identity once into `execution-environment-id` in the data directory (0600, atomic exclusive create) and reuses it; set, the value must be 1..256 printable bytes with no whitespace, colon or vertical bar, and a malformed value refuses boot instead of degrading in silence. It is REQUIRED on a topology with only shared state and no node-local data directory: there, without it, profiled session launches stay deny-closed. |
 | `OLIVARES_EXTRA_ARGS` | No | — | Extra `serve` arguments appended by the packaged service unit, for operators who configure the daemon through an environment file. |
+| `OLIVARES_FINOPS_ADMISSION_LEGACY_WRITERS_STOPPED_AT` | No | — | Instant every writer of the earlier FinOps admission build stopped, as an RFC 3339 time in UTC ending in `Z`. Read once at startup. Recovery retires a claim those writers left, but only once five minutes have passed since this instant and only while no row they left is dated later; empty, the default, or text that is not such an instant retires none. |
 | `OLIVARES_GROK_HOOK_ACCOUNT` | No | — | Account the Grok Build hook client reports. |
 | `OLIVARES_GROK_HOOK_AGENT` | No | — | Agent identity the Grok Build hook client reports. |
 | `OLIVARES_GROK_HOOK_ORG` | No | — | Organization the Grok Build hook client reports. |
@@ -230,6 +236,7 @@ The table below is generated from the product's own sources: 290 variables and 1
 | `OLIVARES_INFERENCE_PROXY_CONFIG` | No | — | Path to the JSON configuration of the governed inference proxy. |
 | `OLIVARES_INGEST_TOKEN` | No | — | Bearer token the collector ingest endpoint requires from telemetry senders. |
 | `OLIVARES_INSECURE` | No | — | Set to `1` to let the CLI talk to a plaintext or untrusted-TLS endpoint. Local development only. |
+| `OLIVARES_INVITE_MAIL_DESTINATION` | No | — | Name of the email destination in the notification file, scoped to no tenant, that invitations are mailed through. Without it, and without a declared console address, invite mode is unavailable. |
 | `OLIVARES_KEY_CUSTODY` | No | — | Custody posture required of the audit signing key: whether a raw on-disk key is accepted or a wrapped one is demanded. |
 | `OLIVARES_KEY_WRAP_AWS_KEY_ID` | No | — | Key identifier in AWS KMS. Used by the backend that wraps the signing keys. |
 | `OLIVARES_KEY_WRAP_AWS_REGION` | No | — | Region of the AWS KMS key. Used by the backend that wraps the signing keys. |
@@ -258,6 +265,7 @@ The table below is generated from the product's own sources: 290 variables and 1
 | `OLIVARES_LICENSE_PUBKEY` | No | — | Public key the engine verifies the license signature against. |
 | `OLIVARES_LIVEINGEST_INSPECT_OBSERVED_REFS` | No | — | Set to `1` to make live ingest inspect observed references, which costs more per event. |
 | `OLIVARES_LOGIN_ENFORCEMENT` | No | — | ログイン強制（require-SSO とログイン用 IP 許可リスト）のブレークグラス・スイッチであり、ファイルパスではありません。エンジン起動時にすべてのビルドが読み取り、変更は再起動後に反映されます。`off`、`0`、`false`、`no`、`disabled` は、大文字小文字を問わず、前後の空白も無視して運用者のブレークグラスを選択します。未設定またはその他の値の場合、強制はコンソールから保存されたポスチャに従います。強制コンポーネントをリンクしたビルドは、保存内容にかかわらずそのポスチャの適用を停止し、警告を記録します。リンクしていないビルドも同じ意図的な選択を記録します。すなわち、この配備に強制の履歴と設定済みのポスチャがある場合に本来行う起動拒否を省略し、ノードの昇格時に永続的な運用者リカバリ・イベントを追記します。 |
+| `OLIVARES_LOGIN_TRUSTED_PROXIES` | No | — | パスワードログインの試行回数制限に使用するアドレスに限り、X-Forwarded-For による指定を信頼する IPv4/IPv6 プロキシの CIDR をカンマで区切った一覧。空の場合はどのプロキシも信頼しません。--login-trusted-proxies フラグが優先され、明示的な空の値も優先されます。無効な CIDR または空のリスト要素があると起動を拒否します。起動時に一度だけ読み込まれ、ポリシー、セッション、監査では引き続きトランスポート接続の相手を使用します。リクエストの上限である 8192 バイトと 64 エントリについては docs/SECURITY-HARDENING.md を参照してください。 |
 | `OLIVARES_LOG_LEVEL` | No | — | Minimum log level the engine emits: `debug`, `info`, `warn` or `error`. |
 | `OLIVARES_MCP_TASK_KILLSWITCH_SWEEP` | No | — | How often a running MCP task is re-checked against the kill switch, as a Go duration. |
 | `OLIVARES_METRICS_ALLOWED_CIDRS` | No | — | Comma-separated CIDR ranges allowed to scrape the metrics endpoint. |
@@ -284,8 +292,10 @@ The table below is generated from the product's own sources: 290 variables and 1
 | `OLIVARES_OTEL_GENAI_COMPAT` | No | — | Set to a true value to also emit the generative-AI semantic-convention attributes on spans. |
 | `OLIVARES_OTEL_INSECURE` | No | — | Set to a true value to export traces over plaintext. Local development only. |
 | `OLIVARES_OTEL_PROTOCOL` | No | — | OTLP protocol used for export. Falls back to the standard `OTEL_EXPORTER_OTLP_PROTOCOL`. |
+| `OLIVARES_OTEL_PROVIDER_BAGGAGE_ALLOWLIST` | No | `[]` | JSON array of exact HTTP(S) origin, baggage key and non-secret control values allowed through the mounted AnthropicHTTPClient; empty denies baggage. Invalid policy reports a bounded reason once at construction and suppresses baggage without blocking inference. |
 | `OLIVARES_OTEL_SAMPLE_RATIO` | No | — | Fraction of traces sampled, between 0 and 1. |
 | `OLIVARES_OTEL_SERVICE_NAME` | No | — | Service name reported on exported traces. |
+| `OLIVARES_PDF_RENDER_TIMEOUT` | No | `30s` | Chromium による PDF レポートの 1 回のレンダリングに許可する最大時間。単位付きの正の Go duration で指定します。レポート用アドオンがレンダリングごとに読み込み、正の duration でない値は Chromium の起動前に変数名を示して拒否されます。低速なホストで構造的なレンダリングがデフォルトの制限時間内に終わらない場合は、この値を増やしてください。 |
 | `OLIVARES_PDP_CEDAR_FILE` | No | — | Path to the Cedar policy file, for the `cedar` decision point. |
 | `OLIVARES_PDP_ENGINE` | No | — | External policy decision point to add on top of the native engine: `cedar`, `opa` or `none`. |
 | `OLIVARES_PDP_OPA_PATH` | No | — | Decision path queried under the Open Policy Agent endpoint. |
@@ -339,6 +349,7 @@ The table below is generated from the product's own sources: 290 variables and 1
 | `OLIVARES_SECRET_STORE_KEY` | No | — | Key that encrypts operator secrets held in the store. |
 | `OLIVARES_SERVERTOOL_EGRESS_CONFIG` | No | — | インラインプロキシ内のプロバイダーのサーバーツール（Web 検索、Web フェッチ、コード実行）に対する egress ゲートの JSON 許可（grants）ファイルへのパス。`enterprise` と `addon_airs` のビルドタグ付きでコンパイルされたビルドだけが読み取ります。未設定の場合、それらのツールは観測のみのままです。ファイルを読み取れない場合や解析できない場合は、ファイルを修正してエンジンを再起動するまで、認識されたすべての egress サーバーツールを拒否します。 |
 | `OLIVARES_SERVER_URL` | No | — | Base URL of the control plane the CLI talks to, when `--server` is not given. |
+| `OLIVARES_SESSIONS_AGENT_LINK_LISTEN` | No | — | エージェントリンクの待ち受けアドレス。`host:port` 形式で、このソースツリーを基にしたエディションがノードエージェントに提供する相互 TLS エンドポイントです。起動時に読み込まれ、デフォルトの空の値ではリスナーを開きません。Community ビルドはこの変数を読み込みません。 |
 | `OLIVARES_SESSIONS_MANAGED_STOP_ADMISSION_TIMEOUT` | No | `10s` | 管理対象の Stop リクエストを受け付けるまでの最大時間。単位付きの正の Go duration で指定します。起動時に読み取られ、無効な値または正でない値は起動を阻止します。プロセス終了処理の時間は制限しません。 |
 | `OLIVARES_SESSION_BUDGET_AVAILABILITY` | No | — | Whether session budget enforcement is required, and what happens when the budget service cannot answer. |
 | `OLIVARES_SESSION_CONTEXT_AVAILABILITY` | No | — | Whether session context governance is required, and what happens when the context service cannot answer. |

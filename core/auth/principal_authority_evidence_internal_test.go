@@ -1191,7 +1191,7 @@ func deterministicPrincipalAuthoritySealFixture(t *testing.T) Principal {
 
 func TestPrincipalAuthoritySealGoldenCanonicalOrderAndValidShapeMutations(t *testing.T) {
 	baseline := deterministicPrincipalAuthoritySealFixture(t)
-	const wantGolden = "80c3e8220c64124c9e4c47bc26ce6174a970911012f790d6ba00311bedff61ba"
+	const wantGolden = "fb18dbd39d83089e8d934af6bdbddc81f909da56306476a2ce56b209c7afee16"
 	if got := hex.EncodeToString(baseline.evidence.seal[:]); got != wantGolden {
 		t.Fatalf("authority seal golden = %s, want %s", got, wantGolden)
 	}
@@ -1241,6 +1241,13 @@ func TestPrincipalAuthoritySealGoldenCanonicalOrderAndValidShapeMutations(t *tes
 		{name: "fresh until", mutate: func(p *Principal) {
 			p.evidence.freshUntil = p.evidence.freshUntil.Add(-time.Second)
 		}},
+		{name: "tenant exclusion", mutate: func(p *Principal) {
+			p.excluded = map[model.TenantID]struct{}{model.TenantID(otherWorkspace): {}}
+		}},
+		{name: "session scope", mutate: func(p *Principal) { p.sessionScope = tenant }},
+		{name: "retirement floor", mutate: func(p *Principal) {
+			p.floors = map[model.TenantID]int64{tenant: 5}
+		}},
 	}
 	for _, test := range mutations {
 		t.Run(test.name, func(t *testing.T) {
@@ -1256,16 +1263,62 @@ func TestPrincipalAuthoritySealGoldenCanonicalOrderAndValidShapeMutations(t *tes
 	}
 }
 
+// TestPrincipalAuthoritySealCoversStandingValues seals a principal whose
+// standing is not empty and shows the seal binds each value, not only its
+// presence: a floor changed under the same tenant, one excluded tenant swapped
+// for another and a cleared session scope each break it.
+func TestPrincipalAuthoritySealCoversStandingValues(t *testing.T) {
+	baseline := deterministicPrincipalAuthoritySealFixture(t)
+	tenant := baseline.evidence.tenant
+	excludedA := model.TenantID("99999999-9999-7999-8999-999999999999")
+	excludedB := model.TenantID("aaaaaaaa-aaaa-7aaa-8aaa-aaaaaaaaaaaa")
+	standing := cloneEvidencePrincipal(baseline)
+	standing.excluded = map[model.TenantID]struct{}{excludedA: {}}
+	standing.sessionScope = tenant
+	standing.floors = map[model.TenantID]int64{tenant: 5}
+	seal, err := computePrincipalAuthoritySeal(standing)
+	if err != nil {
+		t.Fatalf("compute the standing authority seal: %v", err)
+	}
+	standing.evidence.seal = seal
+	const wantGolden = "f54b6180ed9421b324d94570648c12b8699f38a30cb6dc3529cbd3bbe7f6e545"
+	if got := hex.EncodeToString(seal[:]); got != wantGolden {
+		t.Fatalf("standing authority seal golden = %s, want %s", got, wantGolden)
+	}
+	for _, test := range []struct {
+		name   string
+		mutate func(*Principal)
+	}{
+		{name: "floor value", mutate: func(p *Principal) { p.floors = map[model.TenantID]int64{tenant: 6} }},
+		{name: "excluded tenant swapped", mutate: func(p *Principal) {
+			p.excluded = map[model.TenantID]struct{}{excludedB: {}}
+		}},
+		{name: "session scope cleared", mutate: func(p *Principal) { p.sessionScope = "" }},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			candidate := cloneEvidencePrincipal(standing)
+			test.mutate(&candidate)
+			if !validPrincipalAuthorityShape(candidate) {
+				t.Fatal("mutation unexpectedly left the closed principal shape")
+			}
+			if validPrincipalAuthoritySeal(candidate) {
+				t.Fatal("a changed standing value retained the old seal")
+			}
+		})
+	}
+}
+
 func TestPrincipalAuthoritySealProtocolInventoryAndSemanticCanonicalization(t *testing.T) {
 	wantPrincipalFields := []string{
 		"Kind", "UserID", "CredID", "Superadmin", "DisplayName", "AAL", "AMR",
 		"AgentIdentity", "SessionIdentity", "SessionWorkspaceID", "SessionRunRef", "SessionFence",
 		"grants", "groups", "audiences", "actAs", "confined", "restricted",
 		"localVia", "localSubject", "localMeta", "localSystem", "credentialRef", "evidence",
+		"excluded", "sessionScope", "floors",
 	}
 	principalType := reflect.TypeOf(Principal{})
 	if principalType.NumField() != len(wantPrincipalFields) {
-		t.Fatalf("Principal field count = %d, want sealed v2 inventory %d; review and version the seal",
+		t.Fatalf("Principal field count = %d, want sealed v3 inventory %d; review and version the seal",
 			principalType.NumField(), len(wantPrincipalFields))
 	}
 	for i, want := range wantPrincipalFields {

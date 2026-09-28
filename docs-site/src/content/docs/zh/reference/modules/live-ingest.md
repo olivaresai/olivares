@@ -1,7 +1,7 @@
 ---
 title: "Live-ingest——进程内观察生产者"
 description: >-
-  30 个模块之一："实时旁路（live-tap）"生产者，发布进程外连接器无法发射的侦测事件。
+  31 个模块之一："实时旁路（live-tap）"生产者，发布进程外连接器无法发射的侦测事件。
   默认拒绝（deny-closed）且最小数据：它不搬运任何原始内容，且它所拥有的每一个观察侧都是
   如实留空而非伪装。部分实现——它需主动启用且受环境变量门控。
 ---
@@ -66,7 +66,7 @@ Live-ingest（`modules/liveingest`）是 30 个已接入模块之一——它是
   `voice.telemetry.observed` 那一半的消费者。
 - [模块 II——实时运行与会话](/zh/reference/modules/ii-sessions/)——它直接从自身已消费的信号中派生
   出自己的 `goal` / `agent_ref` / `summary`，而非经由 live-ingest 事件。
-- [模块目录](/zh/reference/modules/overview/)——30 个模块，以及本进程内生产者所支撑的诚实的
+- [模块目录](/zh/reference/modules/overview/)——31 个模块，以及本进程内生产者所支撑的诚实的
   治理/观察 vs 执行（Govern/Observe-vs-Actuate）拆分。
 - [架构概览](/zh/explanation/architecture/overview/)——进程内模块与进程外连接器所处的位置。
 - [诚实与边界](/zh/start/honesty-and-limits/)——为何留空的那些侧是声明出来的，而非伪装的。

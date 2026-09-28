@@ -194,6 +194,10 @@ type ModuleContext struct {
 	// Data is PINNED to Tenant: a route handler can only ever touch the single
 	// tenant the request was authorized for — it cannot pass another tenant id.
 	Data ScopedData
+	// Standing is the port a fenced writer reads a referenced account's standing
+	// through before it stores a reference that lets the account act in the tenant
+	// or binds it to a duty there (auth.FencedWrite).
+	Standing auth.StandingReader
 }
 
 // ScopedData is the tenant-PINNED data handle a module ROUTE handler receives. It

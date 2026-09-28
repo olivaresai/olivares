@@ -36,10 +36,11 @@ Konfiguration; es ist eine Beschreibung und **keine Garantie**.
 
 ## Eine Fähigkeit: die Read/Write-Zugriffskarte
 
-Zu diesen Fähigkeiten gehört die **R/RW-Zugriffskarte**. Für jeden Ursprung (einen
-Agenten, eine nicht-menschliche Identität, eine Session) baut sie eine Kante zu
-jeder Ressource, die er berührt, klassifiziert als **read**, **write**,
-**read-write** oder **unknown**, und markiert mit:
+Zu diesen Fähigkeiten gehört die **R/RW-Zugriffskarte**. Für jeden Ursprung, den
+eine Quelle beobachtet hat (einen Agenten, eine nicht-menschliche Identität, eine
+Session), baut sie eine Kante zu jeder Ressource, die dieses Signal als berührt
+zeigt, klassifiziert als **read**, **write**, **read-write** oder **unknown**,
+und markiert mit:
 
 - **woher das Signal kam** (`SignalSource`) — OpenTelemetry von einem kooperativen
   Agenten, eine Postgres-pgAudit-READ/WRITE-Klassifizierung, ein
@@ -69,7 +70,7 @@ Modus `unknown` — das Produkt erfindet niemals eine Klassifizierung.
 Die Zugriffskarte ist eine Fähigkeit unter vielen. Das Produkt ist eine **modulare
 Plattform** (im Geiste von Grafana oder Backstage): eine Engine plus Module plus
 Connectors, so entworfen, dass sich jedes Modul anbinden lässt, ohne den Rest neu
-zu architektieren. Es liefert **30 Module** — Inventar und Live-Sessions, die
+zu architektieren. Es liefert **31 Module** — Inventar und Live-Sessions, die
 R/RW-Karte, Agenten-Orchestrierung (A2A, in Entwicklung), MCP- und Skill-Management, Identität und
 nicht-menschliche Identität, Deployment, Wissen und Kontext, Security und
 Guardrails, Modell- und Provider-Management, Cost/FinOps, Evals und eine
@@ -77,7 +78,7 @@ Test-Sandbox, Red-Teaming, Compliance und Belege, einen internen Katalog,
 Output-Integrationen und SIEM-Push, Voice/Realtime und Health/SLA — plus
 Plattform-Fähigkeiten, die nicht zu den 30 gezählt werden (seine eigene API und
 Manage-as-Code, Mandantenfähigkeit, Executive-Dashboards) — über
-**158 Integrationen** hinweg (eine Zahl, die von `scripts/check-public-counts.sh` aus dem
+**159 Integrationen** hinweg (eine Zahl, die von `scripts/check-public-counts.sh` aus dem
 Code gemessen wird). Einige wenige Fähigkeiten sind pre-v1 oder
 deny-closed-Nahtstellen, bis sie bereitgestellt sind; die Dokumentation ist
 explizit darüber, welche.

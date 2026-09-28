@@ -279,6 +279,7 @@ func newWorkFixture(t *testing.T, dsn string, config func(*store.Config)) workFi
 		t.Fatal(err)
 	}
 	m.UseData(api.NewModuleData(st))
+	bindStoreStanding(m, st)
 	return workFixture{
 		m: m, st: st, tenant: tenant, workspace: workspace,
 		principal: WorkPrincipal{ActorKind: model.ActorUser, ActorRef: model.NewID().String(), Actor: "user:" + model.NewID().String(), Admin: true},
@@ -1126,6 +1127,7 @@ func TestWorkPersistsAcrossRestart(t *testing.T) {
 	}
 	defer st2.Close()
 	m2.UseData(api.NewModuleData(st2))
+	bindStoreStanding(m2, st2)
 	snapshot, err := m2.Get(context.Background(), f.tenant, f.principal, created.ResultID)
 	if err != nil || snapshot.Item.Title != "restart" || snapshot.Item.OwnerRef != f.principal.ActorRef ||
 		snapshot.Item.Status != "active" || snapshot.Item.BriefHash != hexHash(hashBytes([]byte(snapshot.Item.BriefMD))) ||

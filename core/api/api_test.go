@@ -280,13 +280,9 @@ func TestSystemDropOrgNonSuperadminForbidden(t *testing.T) {
 	admin := h.adminLogin()
 	tenant := h.createOrg(admin, "acme")
 
-	cr := h.do("POST", "/v1/users", admin, map[string]any{"email": "owner@acme.io", "password": "tenantowner1"}, nil)
+	cr := h.do("POST", "/v1/users", admin, map[string]any{"email": "owner@acme.io", "password": "tenantowner1", "tenant": tenant.String(), "role": auth.RoleOwner}, nil)
 	if cr.code != http.StatusCreated {
 		t.Fatalf("create user = %d %s", cr.code, cr.raw)
-	}
-	uid := cr.body["id"].(string)
-	if g := h.do("POST", "/v1/memberships", admin, map[string]any{"user_id": uid, "tenant": tenant.String(), "role": auth.RoleOwner}, nil); g.code != http.StatusCreated {
-		t.Fatalf("grant = %d %s", g.code, g.raw)
 	}
 	lr := h.do("POST", "/v1/auth/login", "", map[string]any{"email": "owner@acme.io", "password": "tenantowner1"}, nil)
 	if lr.code != http.StatusOK {
@@ -317,7 +313,7 @@ func TestSystemDropOrgRejectsSystemTenant(t *testing.T) {
 func TestSystemAuditReadSuperadminOnly(t *testing.T) {
 	h := newHarness(t)
 	admin := h.adminLogin()
-	tenant := h.createOrg(admin, "acme") // tenant id for the membership grant below
+	tenant := h.createOrg(admin, "acme") // tenant the member created below joins
 
 	// Superadmin reads the system chain and sees the real auth-partition events that
 	// land there via AuthMutate — setup creates the superadmin and login mints a
@@ -346,13 +342,9 @@ func TestSystemAuditReadSuperadminOnly(t *testing.T) {
 
 	// A tenant-bound principal — even one holding audit:read in its own tenant — is
 	// denied the system ledger (deny-closed; superadmin-only).
-	cr := h.do("POST", "/v1/users", admin, map[string]any{"email": "ed@acme.io", "password": "memberpass1"}, nil)
+	cr := h.do("POST", "/v1/users", admin, map[string]any{"email": "ed@acme.io", "password": "memberpass1", "tenant": tenant.String(), "role": auth.RoleEditor}, nil)
 	if cr.code != http.StatusCreated {
 		t.Fatalf("create user = %d %s", cr.code, cr.raw)
-	}
-	uid := cr.body["id"].(string)
-	if g := h.do("POST", "/v1/memberships", admin, map[string]any{"user_id": uid, "tenant": tenant.String(), "role": auth.RoleEditor}, nil); g.code != http.StatusCreated {
-		t.Fatalf("grant = %d %s", g.code, g.raw)
 	}
 	lr := h.do("POST", "/v1/auth/login", "", map[string]any{"email": "ed@acme.io", "password": "memberpass1"}, nil)
 	bound := lr.body["token"].(string)
@@ -523,14 +515,9 @@ func TestAuthzAndMultiTenantIsolation(t *testing.T) {
 
 	// Create an editor on A and a viewer on A.
 	mkUser := func(email, pass, role string, tenant model.TenantID) string {
-		r := h.do("POST", "/v1/users", admin, map[string]any{"email": email, "password": pass}, nil)
+		r := h.do("POST", "/v1/users", admin, map[string]any{"email": email, "password": pass, "tenant": tenant.String(), "role": role}, nil)
 		if r.code != http.StatusCreated {
 			t.Fatalf("create user %s = %d %s", email, r.code, r.raw)
-		}
-		uid := r.body["id"].(string)
-		r = h.do("POST", "/v1/memberships", admin, map[string]any{"user_id": uid, "tenant": tenant.String(), "role": role}, nil)
-		if r.code != http.StatusCreated {
-			t.Fatalf("grant %s = %d %s", email, r.code, r.raw)
 		}
 		lr := h.do("POST", "/v1/auth/login", "", map[string]any{"email": email, "password": pass}, nil)
 		if lr.code != http.StatusOK {

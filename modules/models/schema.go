@@ -56,14 +56,14 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Kind:  keyRefKind,
 		Table: keyRefTable,
 		Fields: []model.FieldSpec{
-			{Name: colProviderRef, Kind: model.KindText, Indexed: true},
-			{Name: colRefKind, Kind: model.KindText, Indexed: true},
-			{Name: colExtID, Kind: model.KindText},
-			{Name: colKeyName, Kind: model.KindText},
-			{Name: colWorkspaceRef, Kind: model.KindText, Nullable: true},
-			{Name: colKeyStatus, Kind: model.KindText, Indexed: true},
-			{Name: colHint, Kind: model.KindText, Nullable: true},
-			{Name: colOwnerRef, Kind: model.KindText, Nullable: true},
+			{Name: colProviderRef, Kind: model.KindText, Indexed: true, Principal: model.None("the provider the reference belongs to, never an account: required at keys.go:50-53, only filtered and rendered at keys.go:91, keys.go:109-110")},
+			{Name: colRefKind, Kind: model.KindText, Indexed: true, Principal: model.None("closed set refused otherwise at keys.go:45-49")},
+			{Name: colExtID, Kind: model.KindText, Principal: model.None("the provider's own id of the key or workspace, required at keys.go:54-57, only rendered at keys.go:92")},
+			{Name: colKeyName, Kind: model.KindText, Principal: model.None("a display label only rendered at keys.go:93")},
+			{Name: colWorkspaceRef, Kind: model.KindText, Nullable: true, Principal: model.None("the provider-side workspace handle, not a core workspace (core/model/descriptor.go:144-146), only rendered at keys.go:94")},
+			{Name: colKeyStatus, Kind: model.KindText, Indexed: true, Principal: model.None("a lifecycle label defaulted at keys.go:61-63, only filtered and rendered at keys.go:95, keys.go:112-113")},
+			{Name: colHint, Kind: model.KindText, Nullable: true, Principal: model.None("a masked credential partial bounded at keys.go:58-60, only rendered at keys.go:96")},
+			{Name: colOwnerRef, Kind: model.KindText, Nullable: true, Principal: model.Scan(model.ClassEvidence)},
 			{Name: colCreatedAt, Kind: model.KindTimestamp, Nullable: true},
 		},
 		Indexes: []model.IndexSpec{{
@@ -117,3 +117,19 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 	// on which surface), enforced deny-closed in the routing select/execute chain.
 	return registerModelGovernanceSchema(reg)
 }
+
+// Principal declarations shared by columns of more than one descriptor in this
+// package. Each None reason cites every writer it covers.
+var (
+	// pdeclActorEvidence is a column its writer fills with the acting
+	// principal's audit-actor string ("user:<id>" or "token:<id>").
+	pdeclActorEvidence = model.Ref(model.EncodeUserRef, model.ClassEvidence)
+
+	// The columns below are shared by the two sealed BOM record kinds.
+	pdeclNoneSealSerial = model.None("a urn:uuid serial the seal writer generates at aibom.go:134, agentartifacts.go:306")
+	pdeclNoneSealHash   = model.None("a sha256 hex of the canonical BOM computed at aibom.go:388-401, written at aibom.go:553, agentartifacts.go:418")
+	pdeclNoneSealSpec   = model.None("the BOM spec version constant set at aibom.go:133, agentartifacts.go:305")
+	pdeclNoneSealLedger = model.None("the hex audit-chain head hash written at aibom.go:546, agentartifacts.go:411")
+	pdeclNoneSealScope  = model.None("a fixed disclaimer constant written at aibom.go:555, agentartifacts.go:420")
+	pdeclNoneSealGenAt  = model.None("a timestamp the seal writer formats at aibom.go:556, agentartifacts.go:421")
+)

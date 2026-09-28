@@ -565,9 +565,12 @@ describe('classifyFailure — seven answers, never two', () => {
     [api(400, 'invalid_request'), 'invalid'],
     [api(429, 'rate_limited'), 'rate_limited'],
     [new NetworkError('down'), 'ambiguous'],
-    [new DOMException('x', 'AbortError'), 'aborted'],
   ])('%o → %s', (err, kind) => {
     expect(classifyFailure(err).kind).toBe(kind)
+  })
+  it('classifies an AbortError DOMException as aborted', () => {
+    const err = new DOMException('x', 'AbortError')
+    expect(classifyFailure(err).kind).toBe('aborted')
   })
   it("does not show the client's placeholder code as the engine's", () => {
     // The served engine's bare store conflict for a stale Ack (measured 2026-09-06):

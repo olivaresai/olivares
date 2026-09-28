@@ -266,6 +266,48 @@ func workflowCommunicationResultFromReceipt(
 	}, nil
 }
 
+// advanceProtocolBindingsForWorkEvent keeps each current protocol binding of
+// a WorkItem in step with the item's event stream. A binding's lifecycle
+// update must advance its event sequence by exactly one from the item's, so a
+// Message event appended to a bound WorkItem, such as a protocol reply, an
+// interrupt or an input response, also advances every non-terminal binding
+// that stood at the item's previous sequence. Without it the binding's next
+// observation, cancellation or settlement is refused by the store.
+func advanceProtocolBindingsForWorkEvent(
+	ctx context.Context,
+	tx *communicationTx,
+	sc store.Scope,
+	workItemID model.ID,
+	previousSeq, eventSeq int64,
+	eventID, commandID model.ID,
+) error {
+	repo, err := sc.Ext(protocolBindingKind)
+	if err != nil {
+		return err
+	}
+	rows, err := listAll(ctx, repo, model.Filter{Column: colWorkItemID, Op: model.OpEq, Value: workItemID.String()})
+	if err != nil {
+		return err
+	}
+	for _, row := range rows {
+		stored, err := decodeProtocolBinding(row)
+		if err != nil {
+			return err
+		}
+		if stored.Terminal || stored.LastEventSeq != previousSeq {
+			continue
+		}
+		stored.LastCommandID, stored.LastEventID, stored.LastEventSeq = commandID, eventID, eventSeq
+		if _, err := runCommunicationBoundAuthorityEffect(
+			tx.boundAuthorityState,
+			func() (model.Record, error) { return repo.Update(ctx, encodeProtocolBinding(stored)) },
+		); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (m *Module) applyWorkflowCommunicationMessage(
 	ctx context.Context,
 	preflight workflowCommunicationPreflight,
@@ -287,6 +329,25 @@ func (m *Module) applyWorkflowCommunicationMessage(
 	err = m.mutateMessageLifecycle(
 		ctx, preflight.direct.Scope, authority,
 		func(tx *communicationTx, sc store.Scope) error {
+			// Inside a prepared replay this publish's evidence was read before
+			// the owning transaction opened. A directory epoch that moved since
+			// is a move of that evidence, which the owning replay prepares
+			// again for; it is decided before the authority lock, whose conflict
+			// on the moved epoch would otherwise answer as a claim's.
+			if prepared, joined := joinedPreparedReplay(ctx, preflight.direct.Scope.TenantID); joined &&
+				prepared != nil && prepared.evidence != nil {
+				epoch, err := tx.directorySnapshotReader().ReadDirectoryEpoch(ctx)
+				if err != nil {
+					return communicationError(
+						ErrCommunicationEvidenceUnknown, "directory epoch is unavailable in mutation",
+					)
+				}
+				if epoch.Version != preflight.direct.Snapshot.Epoch {
+					return communicationError(
+						ErrCommunicationSnapshotStale, "directory epoch changed after preparation",
+					)
+				}
+			}
 			if err := tx.lockAuthoritySnapshot(ctx, facts); err != nil {
 				return err
 			}
@@ -422,6 +483,11 @@ func (m *Module) applyWorkflowCommunicationMessage(
 				colEventPayloadHash: hashBytes(eventPayload), colEventCommandID: ids.Command.String(),
 				colEventAuditSeq: audit.Seq, colEventAuditHash: append([]byte(nil), audit.Hash...),
 			}); err != nil {
+				return err
+			}
+			if err := advanceProtocolBindingsForWorkEvent(
+				ctx, tx, sc, preflight.workItemID, workItem.Int(colWorkLastEventSeq), eventSeq, ids.Event, ids.Command,
+			); err != nil {
 				return err
 			}
 			if _, err = tx.create(ctx, workOutboxKind, model.Record{

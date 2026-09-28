@@ -87,6 +87,13 @@ func (a *Authenticator) ResolvePrincipalScope(
 		if err != nil || !validPrincipalDirectoryEpochFact(tenant, before) {
 			return principalEvidenceUnavailable("directory generation before reconstruction", err)
 		}
+		// A reference read from a credential binding holds only while that
+		// binding is current, proved here at the epoch just read.
+		if ref.binding.bound() {
+			if err := verifyCredentialBindingProof(ctx, as, ref, tenant); err != nil {
+				return err
+			}
+		}
 
 		var material principalEvidenceMaterial
 		switch ref.kind {
@@ -140,6 +147,7 @@ func (a *Authenticator) ResolvePrincipalScope(
 			return principalEvidenceUnavailable("credential window is not finite and future", nil)
 		}
 		principal = principal.withCredentialRef(ref.version)
+		principal.credentialRef.binding = ref.binding
 		principal.evidence = principalEvidenceProvenance{
 			tenant:         tenant,
 			ref:            ref,
@@ -274,6 +282,18 @@ func resolveSessionEvidenceMaterial(
 	if _, admitted := grants[tenant]; !admitted {
 		return principalEvidenceMaterial{}, principalEvidenceUnavailable("session user lacks a direct tenant membership", nil)
 	}
+	// A session scoped to another tenant, or an account (or session) excluded
+	// from this one, is not evidence here whatever the membership rows say.
+	if !session.TenantScope.IsZero() && session.TenantScope != tenant {
+		return principalEvidenceMaterial{}, principalEvidenceUnavailable("session is scoped to another tenant", nil)
+	}
+	standing, err := loadStanding(ctx, as, user.ID, session.ID)
+	if err != nil {
+		return principalEvidenceMaterial{}, principalEvidenceUnavailable("read tenant exclusions", err)
+	}
+	if _, excluded := standing.excluded[tenant]; excluded {
+		return principalEvidenceMaterial{}, principalEvidenceUnavailable("session user is excluded from the tenant", nil)
+	}
 	principal := newPrincipal(
 		KindUser,
 		user.ID,
@@ -282,7 +302,10 @@ func resolveSessionEvidenceMaterial(
 		user.DisplayName,
 		grants,
 		groups,
-	).withConfinements(confined)
+	).withConfinements(confined).withStanding(standing)
+	if !session.TenantScope.IsZero() {
+		principal = principal.withSessionScope(tenant)
+	}
 	return principalEvidenceMaterial{
 		principal:        principal,
 		credentialExpiry: &session.ExpiresAt,
@@ -340,6 +363,16 @@ func resolveTokenEvidenceMaterial(
 		)
 		if principalEvidenceAgentOBOToken(token) {
 			principal = principal.WithAgentIdentity(token.AgentRef)
+		}
+		if !token.UserID.IsZero() {
+			standing, err := loadStanding(ctx, as, token.UserID, "")
+			if err != nil {
+				return principalEvidenceMaterial{}, principalEvidenceUnavailable("read tenant exclusions", err)
+			}
+			if _, excluded := standing.excluded[tenant]; excluded {
+				return principalEvidenceMaterial{}, principalEvidenceUnavailable("token owner is excluded from the tenant", nil)
+			}
+			principal = principal.withStanding(standing)
 		}
 	case WorkSessionCredentialPurpose:
 		if token.BoundTenantID != tenant {

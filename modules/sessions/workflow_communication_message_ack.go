@@ -7,7 +7,6 @@ package sessions
 import (
 	"context"
 	"fmt"
-	"sync/atomic"
 
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
@@ -79,7 +78,7 @@ func (m *Module) AcknowledgeWorkflowMessage(
 		bindCtx context.Context,
 		question communicationAuthorityQuestion,
 	) (communicationRequestAuthority, error) {
-		return m.bindWorkflowCommunicationOperationAuthority(bindCtx, principal, question)
+		return m.bindWorkflowCommunicationOperationAuthority(bindCtx, cmd.Actor, principal, question)
 	}
 	result, err := m.acknowledgeDirectNoticeDeliveryWithAuthorityBinder(
 		ctx, target.ref, cmd.DeliveryID,
@@ -157,42 +156,24 @@ func (m *Module) validateWorkflowMessageAckLineage(
 	return messageID, err
 }
 
+// bindWorkflowCommunicationOperationAuthority binds the Ack authority from the
+// actor's run credential binding through the exact pair; the returned authority
+// is consumed by the Ack's own transaction. The identity-only operation port is
+// not consulted, so an actor without a binding (the protocol paths) is refused.
 func (m *Module) bindWorkflowCommunicationOperationAuthority(
 	ctx context.Context,
+	actor WorkflowCommunicationActor,
 	principal CommunicationPrincipal,
 	question communicationAuthorityQuestion,
 ) (communicationRequestAuthority, error) {
-	if ctx == nil || question.validate() != nil ||
-		!communicationPortBound(m.communicationOperationAuthorizer) {
+	if ctx == nil || question.validate() != nil {
 		return communicationRequestAuthority{}, communicationError(
 			ErrCommunicationEvidenceUnknown, "workflow communication operation authority is unavailable",
 		)
 	}
-	deadline, ok := ctx.Deadline()
-	if !ok || deadline.IsZero() {
+	if deadline, ok := ctx.Deadline(); !ok || deadline.IsZero() {
 		return communicationRequestAuthority{}, communicationError(
 			ErrCommunicationEvidenceUnknown, "workflow communication authority requires a finite deadline",
-		)
-	}
-	witness, err := m.communicationOperationAuthorizer.AuthorizeEntityOperation(
-		ctx, principal, question.entity, question.operation,
-	)
-	if err != nil || ValidateReadWitness(witness) != nil || witness.Outcome != ReadAllow ||
-		witness.Entity != question.entity || witness.Operation != question.operation ||
-		witness.Principal != principal {
-		return communicationRequestAuthority{}, communicationError(
-			ErrCommunicationEvidenceUnknown, "workflow communication operation authority is unavailable",
-		)
-	}
-	// The operation authorizer proves an upper bound for freshness. The private
-	// workflow binder may conservatively narrow that proof to its shorter request
-	// lifetime, but must never seal authority that survives the request context.
-	if witness.FreshUntil.After(deadline) {
-		witness.FreshUntil = deadline
-	}
-	if ValidateReadWitness(witness) != nil {
-		return communicationRequestAuthority{}, communicationError(
-			ErrCommunicationEvidenceUnknown, "workflow communication operation authority is unavailable",
 		)
 	}
 	if err := ValidateCommunicationPrincipalForScope(principal, DirectoryScopeRef{
@@ -200,60 +181,5 @@ func (m *Module) bindWorkflowCommunicationOperationAuthority(
 	}); err != nil {
 		return communicationRequestAuthority{}, err
 	}
-
-	consumed := &atomic.Bool{}
-	sealedQuestion := question
-	sealedBindingID := &communicationRequestAuthorityBindingID{marker: 1}
-	sealedSnapshot := communicationRequestAuthoritySnapshot{
-		facts:      append([]store.AuthorizationFactRef(nil), witness.Facts...),
-		observedAt: witness.ObservedAt, freshUntil: witness.FreshUntil,
-		bindingID: sealedBindingID,
-	}
-	sealedContext := communicationRequestAuthorityContext{
-		question: question, principal: principal, bindingID: sealedBindingID,
-	}
-	sealedWitness := cloneCommunicationRequestAuthorityWitness(witness)
-	return communicationRequestAuthority{access: func(
-		access communicationRequestAuthorityAccess,
-		expected communicationAuthorityQuestion,
-		claims CommunicationClaimAuthoritySnapshot,
-	) (communicationRequestAuthorityAccessResult, error) {
-		if expected.validate() != nil || expected != sealedQuestion {
-			return communicationRequestAuthorityAccessResult{}, communicationError(
-				ErrCommunicationEvidenceUnknown, "workflow communication authority binding is malformed",
-			)
-		}
-		switch access {
-		case communicationRequestAuthorityInspect:
-			return communicationRequestAuthorityAccessResult{inspection: communicationRequestAuthorityInspection{
-				question: sealedContext.question, principal: sealedContext.principal,
-				bindingID: sealedContext.bindingID,
-			}}, nil
-		case communicationRequestAuthorityConsume:
-			if err := requireCommunicationSessionClaim(sealedContext.principal, claims); err != nil {
-				return communicationRequestAuthorityAccessResult{}, err
-			}
-		default:
-			return communicationRequestAuthorityAccessResult{}, communicationError(
-				ErrCommunicationEvidenceUnknown, "workflow communication authority access is malformed",
-			)
-		}
-		if !consumed.CompareAndSwap(false, true) {
-			return communicationRequestAuthorityAccessResult{}, communicationError(
-				ErrCommunicationEvidenceUnknown, "workflow communication authority was already consumed",
-			)
-		}
-		return communicationRequestAuthorityAccessResult{
-			snapshot: communicationRequestAuthoritySnapshot{
-				facts:      append([]store.AuthorizationFactRef(nil), sealedSnapshot.facts...),
-				observedAt: sealedSnapshot.observedAt, freshUntil: sealedSnapshot.freshUntil,
-				bindingID: sealedSnapshot.bindingID,
-			},
-			context: communicationRequestAuthorityContext{
-				question: sealedContext.question, principal: sealedContext.principal,
-				bindingID: sealedContext.bindingID,
-				witness:   cloneCommunicationRequestAuthorityWitness(sealedWitness),
-			},
-		}, nil
-	}}, nil
+	return m.bindWorkflowCredentialAuthority(ctx, actor, principal, question)
 }

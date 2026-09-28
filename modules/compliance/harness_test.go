@@ -623,13 +623,9 @@ func (h *harness) createOrg(token, slug string) model.TenantID {
 
 func (h *harness) roleToken(admin string, tenant model.TenantID, email, role string) string {
 	h.t.Helper()
-	r := h.do("POST", "/v1/users", admin, map[string]any{"email": email, "password": "memberpass1"}, nil)
+	r := h.do("POST", "/v1/users", admin, map[string]any{"email": email, "password": "memberpass1", "tenant": tenant.String(), "role": role}, nil)
 	if r.code != http.StatusCreated {
 		h.t.Fatalf("create user = %d %s", r.code, r.raw)
-	}
-	uid := r.body["id"].(string)
-	if r := h.do("POST", "/v1/memberships", admin, map[string]any{"user_id": uid, "tenant": tenant.String(), "role": role}, nil); r.code != http.StatusCreated {
-		h.t.Fatalf("grant = %d %s", r.code, r.raw)
 	}
 	r = h.do("POST", "/v1/auth/login", "", map[string]any{"email": email, "password": "memberpass1"}, nil)
 	if r.code != http.StatusOK {
@@ -737,13 +733,21 @@ func (h *harness) seedDeployment(tenant model.TenantID) {
 	})
 }
 
+// fixturePolicyKind is the policy kind seedIdentityPolicy stores; the policy
+// writer refuses an unregistered kind.
+const fixturePolicyKind = "rbac"
+
+func init() {
+	model.MustRegisterPolicyKind(fixturePolicyKind, model.None("a fixture policy kind no reader resolves: harness_test.go:737"))
+}
+
 func (h *harness) seedIdentityPolicy(tenant model.TenantID) {
 	h.t.Helper()
 	h.mutate(tenant, func(sc store.Scope) error {
 		if _, err := sc.Identities().Create(context.Background(), model.Identity{Name: "svc", Kind: "iam_principal", Provider: "aws"}); err != nil {
 			return err
 		}
-		_, err := sc.Policies().Create(context.Background(), model.Policy{Name: "p", Kind: "rbac", Enabled: true})
+		_, err := sc.Policies().Create(context.Background(), model.Policy{Name: "p", Kind: fixturePolicyKind, Enabled: true})
 		return err
 	})
 }

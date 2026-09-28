@@ -91,6 +91,7 @@ func openProfileModule(t *testing.T, be profileBackend, register func(store.Exte
 		t.Fatalf("open %s: %v", be.name, err)
 	}
 	m.UseData(api.NewModuleData(st))
+	bindStoreStanding(m, st)
 	stopModuleAtCleanup(t, m)
 	return m, st
 }

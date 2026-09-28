@@ -20,6 +20,14 @@ type countingJudge struct {
 	calls int
 }
 
+func (c *countingJudge) JudgingProtocol(modelRef string) (ScoringProtocol, bool) {
+	p, ok := c.inner.(JudgeProtocol)
+	if !ok {
+		return ScoringProtocol{}, false
+	}
+	return p.JudgingProtocol(modelRef)
+}
+
 func (c *countingJudge) Judge(ctx context.Context, tenant model.TenantID, req JudgeRequest) (JudgeVerdict, error) {
 	c.calls++
 	return c.inner.Judge(ctx, tenant, req)

@@ -4,7 +4,8 @@ description: >-
   KI-Ausgaben aus dem Kosten-Stream verbuchen, sie nach jeder
   Attributionsdimension aufschlüsseln, die Periode prognostizieren und Budgets
   durchsetzen, die die Ausgabe an der Obergrenze verweigern — money-free auf der
-  Leitung, opt-in und fail-open. Was es tut und seine Grenzen.
+  Leitung, opt-in und verweigernd, wenn das Ledger nicht lesbar ist. Was es tut
+  und seine Grenzen.
 ---
 
 Modul XI ist die **Kosten- / FinOps**-Schicht für KI: Es verbucht, was die Modell- und
@@ -73,13 +74,20 @@ USD, kein Budget-Name auf der read-only Route). Ein hartes `block` verweigert mi
 Ledger geschrieben und auditiert. Siehe [Steuern und freigeben](/de/how-to/govern-and-approve/).
 
 :::caution[Ehrliche Grenzen]
-- **Durchsetzung ist opt-in, nicht standardmäßig deny-closed.** Ohne durchsetzendes Budget,
-  das eine Anfrage scoped, wird niemals etwas verweigert — diese Abwesenheit ist der
-  Normalzustand, kein Sicherheitsloch. Nur ein Budget, das *definitiv* an seinem Limit ist,
-  verweigert. Dies ist bewusst und das Gegenteil der deny-closed Haltung des Freigabe-Gates.
-- **Das Gate fällt offen aus.** Ein FinOps-Lesefehler legt niemals eine laufende Aktion lahm —
-  ein freigegebenes fire/open schreitet fort und der Router löst auf. Der dauerhafte Backstop
-  ist das beim Ingest emittierte Budget-Cap-Finding, nicht das Pre-Flight-Gate.
+- **Durchsetzung ist opt-in, nicht standardmäßig deny-closed.** Solange FinOps sein Ledger
+  lesen kann, wird eine Anfrage, die kein durchsetzendes Budget scoped, niemals verweigert —
+  diese Abwesenheit ist der Normalzustand, kein Sicherheitsloch. Ein Budget verweigert nur,
+  wenn es *definitiv* an seinem Limit ist. Dies ist bewusst und das Gegenteil der
+  deny-closed Haltung des Freigabe-Gates.
+- **Ein Ledger, das das Gate nicht lesen kann, verweigert.** Kann FinOps sein Budget-Ledger
+  nicht lesen oder schreiben, lässt sich die Zulassung nicht herstellen, und die Ausgabe wird
+  verweigert: Ein Orchestrierungs-fire, ein Voice-open, eine Modell-Route, ein Lauf des
+  Evals-Gates und ein dauerhafter MCP-Task werden abgelehnt, und der Inferenz-Proxy antwortet
+  mit **HTTP 503**. Der Session-Start wendet seine eigene Verfügbarkeitshaltung an
+  (`OLIVARES_SESSION_BUDGET_AVAILABILITY`): Ist sie nicht gesetzt, startet die Session in der
+  Community-Edition und wird in der Enterprise-Edition mit **HTTP 503** abgelehnt; der Fehler
+  wird in beiden Fällen protokolliert. Das beim Ingest emittierte Budget-Cap-Finding hält
+  weiterhin Ausgaben fest, die eine Obergrenze erreicht haben.
 - **Der Router setzt nur die Scopes durch, die er vor der Ausführung kennt** (global / Provider
   / Modell); feinere Scopes (Agent, Session, Team, Projekt) werden an den fire/open-Nähten und
   am Modell-Gateway durchgesetzt, nicht bei der Route-Auflösung.

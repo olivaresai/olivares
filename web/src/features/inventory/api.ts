@@ -9,7 +9,14 @@ import {
 import { ApiError } from '@/lib/api/errors'
 import type { ListResponse } from '@/lib/api/types'
 import type { paths } from '@/lib/api/openapi.gen'
-import type { CatalogEntry, EntityDetail, InventorySummary } from './types'
+import type {
+  CatalogEntry,
+  CollectionPage,
+  EntityDetail,
+  InventorySummary,
+} from './types'
+
+const BASE = '/v1/m/inventory'
 
 /**
  * Inventory endpoints (module I) — under /v1/m/inventory/, gated by
@@ -32,9 +39,11 @@ import type { CatalogEntry, EntityDetail, InventorySummary } from './types'
  * and every query is keyed by tenant only. Anything else would re-fetch on a
  * selector change and pretend a different set came back.
  *
- * Detail and history reconstruct `{tenant, signal}` (and history's closed query)
- * instead of spreading a wide options object, so `anonymous`, extra headers or a
- * caller query cannot ride through a TypeScript-shaped variable.
+ * Detail, history and collection coverage reconstruct `{tenant, signal}` (and
+ * their closed queries) instead of spreading a wide options object, so `anonymous`,
+ * extra headers or a caller query cannot ride through a TypeScript-shaped variable.
+ * Collection coverage (GET /collections, same permission) is keyed by tenant and
+ * the three registration selectors, which the operator supplies.
  */
 export interface EntityListParams {
   kind?: string
@@ -125,6 +134,60 @@ function assertObservationPage(
   return page as ObservationPage
 }
 
+/** The three selectors of ONE opened source registration, as the runtime opened it:
+ *  the roster row's persistent id, the revision it applied, and the execution
+ *  environment that applied it. The engine resolves no roster from them; an older
+ *  selection reads that historical selection, not the current one. */
+export interface CollectionSelection {
+  source_id: string
+  source_revision: number
+  environment_ref: string
+}
+
+/**
+ * Local page guard. The contract publishes exactly one head per selection — an
+ * unmatched one comes back as `unknown`, not as an empty list — so a 200 without
+ * exactly one item carrying a `current` object, or without a boolean `has_more`,
+ * is an error and never an answer of "no coverage".
+ */
+function assertCollectionPage(page: unknown): CollectionPage {
+  if (page === null || typeof page !== 'object' || Array.isArray(page)) {
+    throw new ApiError(
+      200,
+      'invalid_response',
+      'The collection page is not an object.',
+    )
+  }
+  const body = page as Record<string, unknown>
+  if (!Array.isArray(body.items) || body.items.length !== 1) {
+    throw new ApiError(
+      200,
+      'invalid_response',
+      'The collection page does not hold exactly one item.',
+    )
+  }
+  const item: unknown = body.items[0]
+  const current =
+    item !== null && typeof item === 'object'
+      ? (item as Record<string, unknown>).current
+      : undefined
+  if (current === null || typeof current !== 'object') {
+    throw new ApiError(
+      200,
+      'invalid_response',
+      'The collection item has no current result.',
+    )
+  }
+  if (body.has_more !== true && body.has_more !== false) {
+    throw new ApiError(
+      200,
+      'invalid_response',
+      'The collection page is missing a boolean has_more.',
+    )
+  }
+  return page as CollectionPage
+}
+
 export const inventoryApi = {
   /** The estate summary takes NO options: the route reads no request filter
    *  (modules/inventory/api.go:123). The optional `workspace_id` this wrapper used
@@ -160,6 +223,23 @@ export const inventoryApi = {
       })
       .then((page) => assertObservationPage(page, cursor))
   },
+  /** Collection coverage of one opened registration. The query is rebuilt from the
+   *  three named selectors, so a wider object cannot add a parameter. */
+  collections: async (
+    selection: CollectionSelection,
+    opts: InventoryReadOptions,
+  ) =>
+    assertCollectionPage(
+      await http.get<CollectionPage>(`${BASE}/collections`, {
+        tenant: opts.tenant,
+        signal: opts.signal,
+        query: {
+          source_id: selection.source_id,
+          source_revision: selection.source_revision,
+          environment_ref: selection.environment_ref,
+        },
+      }),
+    ),
 }
 
 /** Query keys: tenant-scoped, on purpose without a workspace segment — the
@@ -181,5 +261,16 @@ export const inventoryKeys = {
       kind,
       id,
       { limit: OBSERVATION_PAGE_LIMIT },
+    ] as const,
+  collections: (tenant: string | null, selection: CollectionSelection) =>
+    [
+      'inventory',
+      tenant,
+      'collections',
+      {
+        source_id: selection.source_id,
+        source_revision: selection.source_revision,
+        environment_ref: selection.environment_ref,
+      },
     ] as const,
 }

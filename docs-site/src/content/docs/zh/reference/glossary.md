@@ -11,7 +11,7 @@ description: >-
 
 模块 III 的图，包含**发起方**（agent、identity、session）与它们所触及的 **resource**，每条 edge
 都按 [mode](#mode) 分类，并标注其[signal source](#signal-source信号源)、[归因](#attribution归因置信度)
-与[覆盖层级](#coverage-tier覆盖层级)。一项关键的差异化能力——30 个模块之一，而非整个产品。见
+与[覆盖层级](#coverage-tier覆盖层级)。一项关键的差异化能力——31 个模块之一，而非整个产品。见
 [什么是 Olivares AI？](/zh/start/what-is-olivares-ai/)。
 
 ### 作动状态：`v1` / `on-demand` / `seam`
@@ -227,8 +227,10 @@ access map 作差的两半：**permitted** edge 来自已声明的 grant 与策�
 
 ### SLI / SLO
 
-已发布的服务水平：经 `/readyz` 的可用性、请求成功率、API 与摄取延迟 p99——单节点与 HA 层级分开且
-诚实陈述。见 [监控](/zh/how-to/monitor-with-prometheus/)。
+**SLI** 是对服务行为的测量指标，例如经 `/readyz` 测得的可用性、请求成功率，或 API 与
+摄取延迟 p99。**SLO** 则为某个 SLI 设定明确窗口内的目标，例如 28 天。公开的单节点与 HA
+数值仍是目标；是否实际达到目标，需要该部署在该窗口内的测量来证明。合同中的服务保证是另行
+明确约定的承诺。参见[监控](/zh/how-to/monitor-with-prometheus/)。
 
 ### Source
 
@@ -238,5 +240,5 @@ minimal-data 词汇、Apache-2.0，绝不导入核心。见 [connect a source](/
 ### Stop gate（停止门控）
 
 每项受治理作动针对 [kill switch](#kill-switch终止开关) 状态所做的执行检查——在任何其他门控之前检查，
-fail **closed**（与预算检查相反，后者 fail open：一个坏掉的计量器不应导致宕机，但一个坏掉的停止
-检查必须如此）。
+fail **closed**：无法读取的停止检查会拒绝该作动。引擎各门控的预算准入在无法读取其账本时同样会拒绝；
+只有会话启动采用它自己可配置的可用性姿态。

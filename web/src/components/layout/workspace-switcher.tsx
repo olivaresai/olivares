@@ -21,7 +21,40 @@ import { useWorkspaceStore } from '@/stores/workspace'
 /** El máximo que el repositorio genérico acepta (`maxLimit`, sqlstore/generic.go:29). */
 const WORKSPACE_PAGE = 1000
 
-export function WorkspaceSwitcher({ className }: { className?: string } = {}) {
+/** The workspace card of the sidebar (redesign §3.2): the initial on an accent tile, the
+ * name, and the slug beneath it. It is shown even with one workspace, as a plain card,
+ * because it names the scope every journey below it operates on. */
+function WorkspaceCardFace({ name, detail }: { name: string; detail: string }) {
+  return (
+    <>
+      <span
+        aria-hidden
+        className="grid size-7 shrink-0 place-items-center rounded-lg bg-accent-soft text-[13px] leading-none font-bold text-accent-text"
+      >
+        {name.trim().charAt(0).toUpperCase() || '·'}
+      </span>
+      <span className="flex min-w-0 flex-1 flex-col text-left">
+        <span
+          className="truncate text-body font-semibold text-text"
+          title={name}
+        >
+          {name}
+        </span>
+        <span className="truncate text-caption text-text-3" title={detail}>
+          {detail}
+        </span>
+      </span>
+    </>
+  )
+}
+
+const CARD_CLASS =
+  'flex w-full min-w-0 items-center gap-2.5 rounded-card border border-line bg-surface p-2 outline-none'
+
+export function WorkspaceSwitcher({
+  className,
+  variant = 'row',
+}: { className?: string; variant?: 'row' | 'card' } = {}) {
   const { t } = useTranslation(['nav', 'common'])
   const { activeTenant } = useAuth()
   const { activeWorkspace, setActiveWorkspace } = useWorkspaceStore()
@@ -42,7 +75,18 @@ export function WorkspaceSwitcher({ className }: { className?: string } = {}) {
   })
 
   const workspaces = data?.items ?? []
-  if (workspaces.length <= 1) return null
+  if (workspaces.length <= 1) {
+    if (variant !== 'card') return null
+    const only = workspaces[0]
+    return (
+      <div data-slot="workspace-card" className={cn(CARD_CLASS, className)}>
+        <WorkspaceCardFace
+          name={only?.name ?? t('nav:workspace.all')}
+          detail={only?.slug ?? t('nav:workspace.allHint')}
+        />
+      </div>
+    )
+  }
 
   const incompleta = data?.has_more === true
   const active = workspaces.find((w) => w.id === activeWorkspace)
@@ -58,24 +102,47 @@ export function WorkspaceSwitcher({ className }: { className?: string } = {}) {
       ? t('nav:workspace.unresolved')
       : t('nav:workspace.all')
 
+  const detail = active
+    ? active.slug
+    : t('nav:shell.workspaceCount', { count: workspaces.length })
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        {/* `min-w-0 shrink`: the topbar truncates this label rather than letting it
-            push the theme/account controls off the bar; the full name stays the
-            accessible name and is offered as a tooltip. */}
-        <Button
-          variant="ghost"
-          size="base"
-          className={cn('min-w-24 max-w-[14rem] shrink gap-1.5', className)}
-          title={label}
-        >
-          <Layers className="size-4 text-muted-foreground" />
-          <span className="min-w-0 flex-1 truncate text-left" title={label}>
-            {label}
-          </span>
-          <ChevronsUpDown className="size-3.5 shrink-0 text-muted-foreground" />
-        </Button>
+        {variant === 'card' ? (
+          <button
+            type="button"
+            data-slot="workspace-card"
+            aria-label={t('nav:shell.workspaceSwitch', { name: label })}
+            className={cn(
+              CARD_CLASS,
+              'cursor-pointer hover:bg-hover focus-visible:ring-2 focus-visible:ring-focus',
+              className,
+            )}
+          >
+            <WorkspaceCardFace name={label} detail={detail} />
+            <ChevronsUpDown
+              aria-hidden
+              className="size-3.5 shrink-0 text-text-3"
+            />
+          </button>
+        ) : (
+          // `min-w-0 shrink`: a narrow host truncates this label rather than letting it
+          // push its neighbours out; the full name stays the accessible name and is
+          // offered as a tooltip.
+          <Button
+            variant="ghost"
+            size="base"
+            className={cn('min-w-24 max-w-[14rem] shrink gap-1.5', className)}
+            title={label}
+          >
+            <Layers className="size-4 text-muted-foreground" />
+            <span className="min-w-0 flex-1 truncate text-left" title={label}>
+              {label}
+            </span>
+            <ChevronsUpDown className="size-3.5 shrink-0 text-muted-foreground" />
+          </Button>
+        )}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="min-w-56">
         <DropdownMenuLabel>{t('nav:workspace.switch')}</DropdownMenuLabel>

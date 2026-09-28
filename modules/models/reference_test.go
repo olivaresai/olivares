@@ -180,6 +180,15 @@ func TestOpus5ResolvesToItsOwnStampedEntry(t *testing.T) {
 //
 // This is the same shape as the Sonnet 5 list price that sat 1.5x high for 55
 // days: a figure with nothing comparing it to anything.
+func accessLabelPrefix(prefix string) bool {
+	switch prefix {
+	case "claude-fable-5-1", "claude-opus-5-5", "claude-haiku-4-5-20251001":
+		return true
+	default:
+		return false
+	}
+}
+
 func TestRowsSharingAFamilyDeclareTheSameMoneyAndTheSameDates(t *testing.T) {
 	byFamily := map[string][]referenceModel{}
 	for _, e := range referenceTable {
@@ -195,6 +204,12 @@ func TestRowsSharingAFamilyDeclareTheSameMoneyAndTheSameDates(t *testing.T) {
 		for _, other := range rows[1:] {
 			if first.Prefix == other.Prefix {
 				t.Errorf("%s: two rows share the prefix %q — the longest-prefix match is a strict >, so the second is unreachable", fam, first.Prefix)
+			}
+			// A current ID can keep an older access-family label without copying
+			// that label's tariff. The dual-prefix guard below is for two spellings
+			// of one tariff (alias and dated id), not for that label.
+			if accessLabelPrefix(first.Prefix) || accessLabelPrefix(other.Prefix) {
+				continue
 			}
 			switch {
 			case (first.Pricing == nil) != (other.Pricing == nil):

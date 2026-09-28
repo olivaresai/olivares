@@ -27,7 +27,7 @@ Grenze wird in CI durchgesetzt (ein Connector darf niemals die Engine importiere
 | Pfad | Lizenz | Was es ist |
 |---|---|---|
 | `core/` | **AGPL-3.0-only** | die Engine: Ingest, Event-Bus, Datenmodell, Modul-Runtime, API, Authz, Audit |
-| `modules/` | **AGPL-3.0-only** | die 30 Module (Inventar, die R/RW-Map, FinOps, Evals, Guardrails, …) |
+| `modules/` | **AGPL-3.0-only** | die 31 Module (Inventar, die R/RW-Map, FinOps, Evals, Guardrails, …) |
 | `web/` | **AGPL-3.0-only** | die React-Oberfläche |
 | `sdk/` | **Apache-2.0** | die Connector-/Modul-Schnittstellen, der gRPC-Kontrakt und die gemeinsamen Typen |
 | `connectors/` | **Apache-2.0** | die Connectors (Claude, OpenAI, pgAudit, eBPF, Cloud, Slack, SIEM, …) |

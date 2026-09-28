@@ -144,6 +144,7 @@ func TestProtocolReplayGuardSurvivesRestartAndRollsBackAtomically(t *testing.T) 
 	}
 	t.Cleanup(func() { _ = st.Close() })
 	restarted.UseData(api.NewModuleData(st))
+	bindStoreStanding(restarted, st)
 	replayed, err := restarted.ApplyProtocolReplay(
 		context.Background(), fixture.tenant, claim,
 		func(context.Context) (ProtocolReplaySettlement, error) {
@@ -227,39 +228,25 @@ func TestProtocolReplayGuardMessageSettlementRollsBackWithGuard(t *testing.T) {
 		ReplayID: "interrupt-jti-1", ExpiresAt: time.Now().UTC().Add(time.Hour),
 		ExpectedBindingID: binding.ID,
 	}
+	// CM-10: recording the interrupt is an A2A path. Settled or rolled back, it
+	// is refused while its publish is prepared, before its transaction: no
+	// Message, interrupt or guard row exists.
 	injected := errors.New("injected after message settlement")
-	_, err := fixture.m.ApplyProtocolReplay(
-		context.Background(), fixture.tenant, claim,
-		func(ctx context.Context) (ProtocolReplaySettlement, error) {
-			if _, err := fixture.m.RecordProtocolInterrupt(ctx, fixture.tenant, command); err != nil {
-				return ProtocolReplaySettlement{}, err
-			}
-			return ProtocolReplaySettlement{BindingID: binding.ID}, injected
-		},
-	)
-	if !errors.Is(err, injected) {
-		t.Fatalf("message rollback error = %v, want injected", err)
+	for _, settle := range []error{injected, nil} {
+		_, err := fixture.m.ApplyPreparedProtocolReplay(
+			context.Background(), fixture.tenant, claim, protocolInterruptPlanForTest(command),
+			func(ctx context.Context) (ProtocolReplaySettlement, error) {
+				if _, err := fixture.m.RecordProtocolInterrupt(ctx, fixture.tenant, command); err != nil {
+					return ProtocolReplaySettlement{}, err
+				}
+				return ProtocolReplaySettlement{BindingID: binding.ID}, settle
+			},
+		)
+		requireA2ARefused(t, err, "protocol interrupt")
 	}
 	for _, kind := range []model.Kind{messageKind, protocolInterruptKind, protocolReplayGuardKind} {
 		if rows := communicationRowsForTest(t, fixture.directNoticeFixture, kind); len(rows) != 0 {
-			t.Fatalf("%s rows after rollback = %d, want 0", kind, len(rows))
-		}
-	}
-	result, err := fixture.m.ApplyProtocolReplay(
-		context.Background(), fixture.tenant, claim,
-		func(ctx context.Context) (ProtocolReplaySettlement, error) {
-			if _, err := fixture.m.RecordProtocolInterrupt(ctx, fixture.tenant, command); err != nil {
-				return ProtocolReplaySettlement{}, err
-			}
-			return ProtocolReplaySettlement{BindingID: binding.ID}, nil
-		},
-	)
-	if err != nil || result.Replayed || result.Guard.BindingID != binding.ID {
-		t.Fatalf("message retry = %#v, err=%v", result, err)
-	}
-	for _, kind := range []model.Kind{messageKind, protocolInterruptKind, protocolReplayGuardKind} {
-		if rows := communicationRowsForTest(t, fixture.directNoticeFixture, kind); len(rows) != 1 {
-			t.Fatalf("%s rows after retry = %d, want 1", kind, len(rows))
+			t.Fatalf("%s rows after the refusal = %d, want 0", kind, len(rows))
 		}
 	}
 }

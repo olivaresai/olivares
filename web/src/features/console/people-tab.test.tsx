@@ -191,7 +191,7 @@ describe('PeopleTab members roster', () => {
     expect(await screen.findByRole('alert')).toBeInTheDocument()
   })
 
-  it('renders role, groups and status, then disables a member through SCIM', async () => {
+  it('renders role, groups and status, then removes a member from the organization', async () => {
     api.listMembers.mockResolvedValue({ items: [member], has_more: false })
     api.setMemberActive.mockResolvedValue({})
     const user = userEvent.setup()
@@ -206,19 +206,51 @@ describe('PeopleTab members roster', () => {
     expect(screen.getByText('SSO only')).toBeInTheDocument()
 
     await user.click(
-      screen.getByRole('switch', { name: /disable ada@acme\.io/i }),
+      screen.getByRole('switch', {
+        name: /remove ada@acme\.io from the organization/i,
+      }),
     )
     const dialog = await screen.findByRole('dialog', {
-      name: /disable member/i,
+      name: /remove from organization/i,
     })
     expect(
       within(dialog).getByText(/provisioned by an IdP/i),
     ).toBeInTheDocument()
-    await user.click(within(dialog).getByRole('button', { name: /^disable$/i }))
+    await user.click(within(dialog).getByRole('button', { name: /^remove$/i }))
 
     await waitFor(() =>
       expect(api.setMemberActive).toHaveBeenCalledWith('u1', false),
     )
+  })
+
+  it('offers no enable for a member the deployment suspended, only its removal', async () => {
+    api.listMembers.mockResolvedValue({
+      items: [{ ...member, status: 'inactive' }],
+      has_more: false,
+    })
+    api.setMemberActive.mockResolvedValue({})
+    const user = userEvent.setup()
+    wrap(<PeopleTab />)
+
+    expect(await screen.findByText('ada@acme.io')).toBeInTheDocument()
+    expect(screen.getByText(/suspended by the deployment/i)).toBeInTheDocument()
+    expect(screen.queryByRole('switch')).not.toBeInTheDocument()
+    expect(screen.queryByText(/^enable$/i)).not.toBeInTheDocument()
+
+    await user.click(
+      screen.getByRole('button', {
+        name: /remove ada@acme\.io from the organization/i,
+      }),
+    )
+    const dialog = await screen.findByRole('dialog', {
+      name: /remove from organization/i,
+    })
+    await user.click(within(dialog).getByRole('button', { name: /^remove$/i }))
+
+    await waitFor(() =>
+      expect(api.setMemberActive).toHaveBeenCalledWith('u1', false),
+    )
+    expect(api.setMemberActive).not.toHaveBeenCalledWith('u1', true)
   })
 })
 

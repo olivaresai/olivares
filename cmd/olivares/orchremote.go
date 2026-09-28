@@ -473,12 +473,17 @@ func (e *orchRemoteExecutor) Start(
 		if commandErr != nil {
 			return orchestration.RemoteWorkResult{}, commandErr
 		}
-		replay, replayErr := e.store.ApplyProtocolReplay(ctx, tenant, sessions.ProtocolReplayClaim{
+		// The reply's directory evidence is read before the replay transaction
+		// opens; its projection inside consumes it.
+		plan := sessions.ProtocolReplayPlan{Publishes: []sessions.ProtocolReplayPublish{
+			sessions.ProtocolReplyPublish(replyCommand.Route, replyCommand.Flow),
+		}}
+		replay, replayErr := e.store.ApplyPreparedProtocolReplay(ctx, tenant, sessions.ProtocolReplayClaim{
 			WorkspaceID: request.Plan.WorkspaceID, Protocol: sessions.BindingProtocolA2A,
 			PeerAuthority: prepared.target.authority, Kind: sessions.ProtocolReplayMessageID,
 			ReplayID: remote.MessageID, ExpiresAt: e.now().UTC().Add(24 * time.Hour),
 			ExpectedBindingID: reserved.ID,
-		}, func(joined context.Context) (sessions.ProtocolReplaySettlement, error) {
+		}, plan, func(joined context.Context) (sessions.ProtocolReplaySettlement, error) {
 			var mutationErr error
 			settled, mutationErr = e.store.SettleProtocolBinding(joined, tenant, settlement)
 			if mutationErr != nil {

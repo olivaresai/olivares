@@ -42,10 +42,12 @@ import (
 type guardEditionDelta uint8
 
 const (
-	guardDeltaDirectory      guardEditionDelta = 1 << iota // D2, core directory tombstones
-	guardDeltaCommunication                                // DF, Slice F sessions evidence
-	guardDeltaProtocol                                     // DK, K5 sessions replay/subscription
-	guardDeltaAccessEvidence                               // DA, core access-evidence records
+	guardDeltaDirectory            guardEditionDelta = 1 << iota // D2, core directory tombstones
+	guardDeltaCommunication                                      // DF, Slice F sessions evidence
+	guardDeltaProtocol                                           // DK, K5 sessions replay/subscription
+	guardDeltaAccessEvidence                                     // DA, core access-evidence records
+	guardDeltaEvaluationComparison                               // DE, evaluation comparison evidence
+	guardDeltaGitPublication                                     // DG, Git publication observations
 )
 
 // guardEditionMembership is the set of deltas a node carries above its base census.
@@ -68,6 +70,7 @@ func (m guardEditionMembership) without(d guardEditionDelta) guardEditionMembers
 // a future delta cannot silently reorder an existing message.
 var guardEditionDeltaOrder = [...]guardEditionDelta{
 	guardDeltaDirectory, guardDeltaCommunication, guardDeltaProtocol, guardDeltaAccessEvidence,
+	guardDeltaEvaluationComparison, guardDeltaGitPublication,
 }
 
 func (d guardEditionDelta) String() string {
@@ -80,6 +83,10 @@ func (d guardEditionDelta) String() string {
 		return "DK/protocol"
 	case guardDeltaAccessEvidence:
 		return "DA/access-evidence"
+	case guardDeltaEvaluationComparison:
+		return "DE/evaluation-comparison"
+	case guardDeltaGitPublication:
+		return "DG/git-publication"
 	default:
 		return "unknown-delta"
 	}
@@ -110,8 +117,23 @@ func guardEditionDeltaTables(d guardEditionDelta) []string {
 		return guardEpoch4ProtocolTables[:]
 	case guardDeltaAccessEvidence:
 		return guardAccessEvidenceTables[:]
+	case guardDeltaEvaluationComparison:
+		return []string{"evals_comparison"}
+	case guardDeltaGitPublication:
+		return []string{"gitpublish_observation"}
 	default:
 		return nil
+	}
+}
+
+// guardEditionModuleDelta identifies deltas whose objects exist after module schema
+// installation. Core directory and access-evidence transitions keep their own migrations.
+func guardEditionModuleDelta(d guardEditionDelta) bool {
+	switch d {
+	case guardDeltaCommunication, guardDeltaProtocol, guardDeltaEvaluationComparison, guardDeltaGitPublication:
+		return true
+	default:
+		return false
 	}
 }
 
@@ -135,7 +157,10 @@ func guardEditionDeltaOf(table string) (guardEditionDelta, bool) {
 // not the directory relations core has carried since v7.
 //
 // Epochs 1-4 are the historical chain, unchanged. 5, 6 and 7 are the access-evidence
-// editions over each of the three shapes a deployed database can be in.
+// editions over each of the three shapes a deployed database can be in. Editions
+// 8-10 add evaluation comparisons, 11-13 add Git publication observations, and
+// 14-16 carry both independent module deltas. These new modules require DA; the
+// historical nodes and their canonical manifests remain unchanged.
 var guardEditionNodes = []struct {
 	Epoch      int64
 	Membership guardEditionMembership
@@ -147,6 +172,15 @@ var guardEditionNodes = []struct {
 	{5, guardEditionMembership(guardDeltaDirectory | guardDeltaAccessEvidence)},
 	{6, guardEditionMembership(guardDeltaDirectory | guardDeltaCommunication | guardDeltaAccessEvidence)},
 	{7, guardEditionMembership(guardDeltaDirectory | guardDeltaCommunication | guardDeltaProtocol | guardDeltaAccessEvidence)},
+	{8, guardEditionMembership(guardDeltaDirectory | guardDeltaAccessEvidence | guardDeltaEvaluationComparison)},
+	{9, guardEditionMembership(guardDeltaDirectory | guardDeltaCommunication | guardDeltaAccessEvidence | guardDeltaEvaluationComparison)},
+	{10, guardEditionMembership(guardDeltaDirectory | guardDeltaCommunication | guardDeltaProtocol | guardDeltaAccessEvidence | guardDeltaEvaluationComparison)},
+	{11, guardEditionMembership(guardDeltaDirectory | guardDeltaAccessEvidence | guardDeltaGitPublication)},
+	{12, guardEditionMembership(guardDeltaDirectory | guardDeltaCommunication | guardDeltaAccessEvidence | guardDeltaGitPublication)},
+	{13, guardEditionMembership(guardDeltaDirectory | guardDeltaCommunication | guardDeltaProtocol | guardDeltaAccessEvidence | guardDeltaGitPublication)},
+	{14, guardEditionMembership(guardDeltaDirectory | guardDeltaAccessEvidence | guardDeltaEvaluationComparison | guardDeltaGitPublication)},
+	{15, guardEditionMembership(guardDeltaDirectory | guardDeltaCommunication | guardDeltaAccessEvidence | guardDeltaEvaluationComparison | guardDeltaGitPublication)},
+	{16, guardEditionMembership(guardDeltaDirectory | guardDeltaCommunication | guardDeltaProtocol | guardDeltaAccessEvidence | guardDeltaEvaluationComparison | guardDeltaGitPublication)},
 }
 
 func guardEditionMembershipForEpoch(epoch int64) (guardEditionMembership, bool) {
@@ -202,7 +236,7 @@ type guardEditionNode struct {
 // the current census minus a subset of its own deltas.
 type guardEditionGraph struct {
 	// Base is the sorted base census B: every append-only relation left after
-	// subtracting D2, DF, DK and DA.
+	// subtracting every named delta the edition carries.
 	Base []string
 	// BaseSHA256 is BID. It is an in-memory comparison aid — "are these two nodes the
 	// same product profile?" — and never replaces a stored manifest digest.

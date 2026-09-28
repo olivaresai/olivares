@@ -24,14 +24,12 @@ import (
 // approver in the dual-control flow).
 func (h *harness) tokenFor(admin string, tenant model.TenantID, email, role string) string {
 	h.t.Helper()
-	r := h.do("POST", "/v1/users", admin, map[string]any{"email": email, "password": "memberpass1"}, nil)
-	if r.code != http.StatusCreated {
-		h.t.Fatalf("create user %s = %d %s", email, r.code, r.raw)
-	}
+	user := map[string]any{"email": email, "password": "memberpass1"}
 	if role != "" {
-		if m := h.do("POST", "/v1/memberships", admin, map[string]any{"user_id": r.body["id"], "tenant": tenant.String(), "role": role}, nil); m.code != http.StatusCreated {
-			h.t.Fatalf("grant membership = %d %s", m.code, m.raw)
-		}
+		user["tenant"], user["role"] = tenant.String(), role
+	}
+	if r := h.do("POST", "/v1/users", admin, user, nil); r.code != http.StatusCreated {
+		h.t.Fatalf("create user %s = %d %s", email, r.code, r.raw)
 	}
 	lr := h.do("POST", "/v1/auth/login", "", map[string]any{"email": email, "password": "memberpass1"}, nil)
 	if lr.code != http.StatusOK {

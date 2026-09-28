@@ -39,8 +39,10 @@ les plus déterminantes :
 
 ## Cibles SLO (publiées, honnêtes)
 
-Les cibles single-node — ce que la topologie par défaut prend réellement en charge — et
-le palier HA :
+Objectifs d'exploitation pour les déploiements à nœud unique et HA, et non
+résultats mesurés d'une topologie ou engagements envers le client. Qualifiez le
+déploiement et la charge précis avant d'affirmer leur atteinte ;
+`deploy/support-matrix.md` consigne le statut de qualification :
 
 | SLI | Single node | Palier HA (Postgres) |
 |---|---|---|
@@ -50,11 +52,12 @@ le palier HA :
 | Latence d'ingestion p99 | **< 250 ms** | < 150 ms |
 | Succès d'ingestion | **99,9 %** | 99,95 % |
 
-L'honnêteté dans les chiffres : un writer unique sur un seul nœud ne peut pas promettre trois
-neuf de disponibilité, donc la documentation ne le fait pas — 99,5 % (≈ 3 h 39 min de budget par
-28 jours) est la vérité single-node, et le palier 99,9 % se gagne par la
-[topologie HA](/fr/tutorials/getting-started/kubernetes/#3-ha-active-passive),
-non par l'optimisme.
+Sur 28 jours, une cible de disponibilité de 99,5 % autorise **201,6 minutes
+(3 h 21 min 36 s)** d'indisponibilité ; 99,9 % autorise **40,32 minutes**.
+Déployer la [topologie HA](/fr/tutorials/getting-started/kubernetes/#3-ha-active-passive) ne permet pas, à lui seul, d'atteindre ces pourcentages.
+Mesurez la disponibilité sur la fenêtre indiquée et conservez les preuves de
+pannes et de reprise du déploiement. Ces objectifs ne constituent pas une
+promesse contractuelle de disponibilité.
 
 ## Charger les règles d'alerte livrées
 
@@ -66,6 +69,12 @@ disponibilité (`OlivaresIngestP99High`, `OlivaresApiLatencyP99High`,
 (`OlivaresEventBusSaturated` à >90 % de file pendant 10 min), de santé du pont
 (`OlivaresEventBusBridgeDropping`, `OlivaresEventBusBridgeDisconnected`) et
 de fraîcheur du ledger (`OlivaresAuditCheckpointStale` à un âge > 2 h).
+
+La recette de burn-rate utilise une période de référence de 30 jours ; les
+cibles de disponibilité ci-dessus portent sur 28 jours. Distinguez les taux et
+fenêtres d'alerte de cette période : 14,4× pendant 1 h, 6× pendant 6 h et 1×
+pendant 3 jours consomment environ 2,14 %, 5,36 % et 10,71 % d'un budget de
+28 jours, respectivement. Les valeurs des alertes livrées restent inchangées.
 
 ```yaml
 # prometheus.yml

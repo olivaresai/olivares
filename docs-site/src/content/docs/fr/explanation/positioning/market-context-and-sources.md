@@ -88,5 +88,6 @@ chaque page de positionnement ici.
   27001/42001 sont en **état de préparation (readiness)**, pas des certificats — voir
   le dossier de confiance et d'achat fourni avec les sources).
 - Pas de benchmarks inventés, de revendications de débit ni de chiffres de précision.
-  Les chiffres de capacité ne proviennent que du harnais de benchmark reproductible,
-  avec la provenance matérielle.
+  Les chiffres de capacité ne proviennent que du harnais de benchmark, qui enregistre
+  le commit, la version de Go, le CPU, la mémoire et le système de fichiers. Le motif
+  d'arrivée, l'échauffement et le profil de déploiement ne sont pas enregistrés.

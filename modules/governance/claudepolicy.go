@@ -241,14 +241,11 @@ func driftToDTO(f sdkmodel.FindingReport) policyDriftDTO {
 	}
 }
 
-// validSurface reports whether s is one of the four managed-* authoring surfaces.
+// validSurface reports whether s is a managed-* authoring surface of the
+// revision store's registry.
 func validSurface(s string) bool {
-	switch s {
-	case surfaceManagedSettings, surfaceHooks, surfaceManagedMCP, surfaceSandbox:
-		return true
-	default:
-		return false
-	}
+	e, ok := surfaces.base(s)
+	return ok && e.family == surfaceFamilyManaged
 }
 
 // surfaceOf resolves + validates the {surface} path param, writing a 400 on an
@@ -370,9 +367,28 @@ func (c *PolicyConsole) handlePublish(w http.ResponseWriter, r *http.Request, mc
 		return
 	}
 
+	// A managed document is untyped: every account it names, by id, credential
+	// or email, is fenced before the publish, under the tenant's directory fact.
+	subjects, serr := policySubjects(r.Context(), mc.Standing, in.Content)
+	if serr != nil {
+		writeStoreError(w, serr)
+		return
+	}
 	var revision int64
 	for attempt := 0; attempt < maxDecisionRetries; attempt++ {
+		refs, ferr := auth.FenceSubjects(r.Context(), mc.Standing, mc.Tenant, subjects)
+		if ferr != nil {
+			if !writeFenceRefusal(w, ferr) {
+				writeStoreError(w, ferr)
+			}
+			return
+		}
 		err := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
+			if len(refs) > 0 {
+				if _, err := auth.PinFence(r.Context(), sc, auth.FenceDirectory, refs); err != nil {
+					return err
+				}
+			}
 			num, id, aerr := appendRevision(r.Context(), sc, surface, in.Content, mc.Principal.Actor(), true, false, in.Note)
 			if aerr != nil {
 				return aerr

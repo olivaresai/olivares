@@ -58,7 +58,7 @@
     "regressed": "Regressiert · Abweichung {{drift}}",
     "noRegression": "Keine",
     "empty": "Keine Läufe im Bereich.",
-    "emptyHint": "Jeder Auswertungslauf im gewählten Zeitraum wird hier mit Ergebnis und Dauer aufgeführt. Erweitern Sie den Zeitraum oder starten Sie einen Lauf.",
+    "emptyHint": "Jeder Auswertungslauf im gewählten Zeitraum wird hier mit seinem Ergebnis aufgeführt. Erweitern Sie den Zeitraum oder starten Sie einen Lauf.",
     "overN": "von {{n}}",
     "notScored": "not scored — no verdict",
     "noBaseline": "no baseline — nothing compared"
@@ -118,7 +118,7 @@
   },
   "drift": {
     "title": "Abweichung — {{subject}}",
-    "description": "Bewertung im Zeitverlauf gegen die Bestehensschwelle der Suite; ein anhaltender Rückgang ist eine Beeinträchtigung.",
+    "description": "Bewertung im Zeitverlauf gegen die Bestehensschwelle der Suite. Eine Regression ist ein Punktvergleich mit einem Baseline-Lauf, der eine andere Suite-Version, ein anderes Modell oder einen anderen Scorer verwenden kann, und der Vergleich meldet nicht, was sich geändert hat. Nach einem Wechsel der Suite-Version pinnen Sie eine Baseline.",
     "score": "Bewertung",
     "threshold": "Bestehensschwelle",
     "pickerTitle": "Subjekt",

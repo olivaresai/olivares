@@ -682,6 +682,19 @@ func newCommunicationTxWithAuthority(
 	if !ok {
 		return nil, communicationTransactionUnavailable("audit append lock", nil)
 	}
+	// A command that names accounts takes its one authority lock through the
+	// directory authority barrier, which pins the accounts' authority versions
+	// with the same complete fact set (account_fence.go).
+	fence := communicationFenceFrom(ctx)
+	var fencedAuthority store.DirectoryAuthoritySnapshotLocker
+	var fencedUsers []store.UserAuthorityFactRef
+	if fence != nil && len(fence.refs) != 0 {
+		fencedAuthority, ok = sc.(store.DirectoryAuthoritySnapshotLocker)
+		if !ok {
+			return nil, communicationTransactionUnavailable("directory authority barrier", nil)
+		}
+		fencedUsers = append([]store.UserAuthorityFactRef(nil), fence.refs...)
+	}
 
 	now, err := clock.TransactionNow(ctx)
 	if err != nil {
@@ -750,7 +763,17 @@ func newCommunicationTxWithAuthority(
 		if err != nil {
 			return err
 		}
-		if err = authority.LockAuthoritySnapshot(ctx, complete); err != nil {
+		if fencedAuthority != nil {
+			err = fencedAuthority.LockDirectoryAuthoritySnapshot(ctx, store.AuthoritySnapshotBundle{
+				Facts: complete, UserAuthorities: fencedUsers,
+			})
+			if errors.Is(err, store.ErrConflict) {
+				fence.moved.Store(true)
+			}
+		} else {
+			err = authority.LockAuthoritySnapshot(ctx, complete)
+		}
+		if err != nil {
 			if len(requestFacts) != 0 || len(claimFacts) != 0 {
 				binding := "request"
 				if len(claimFacts) != 0 {

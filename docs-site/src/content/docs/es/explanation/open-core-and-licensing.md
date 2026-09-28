@@ -27,7 +27,7 @@ frontera se aplica en CI (un conector nunca puede importar el motor):
 | Ruta | Licencia | Qué es |
 |---|---|---|
 | `core/` | **AGPL-3.0-only** | el motor: ingesta, bus de eventos, modelo de datos, runtime de módulos, API, authz, auditoría |
-| `modules/` | **AGPL-3.0-only** | los 30 módulos (inventario, el mapa R/RW, FinOps, evals, guardrails, …) |
+| `modules/` | **AGPL-3.0-only** | los 31 módulos (inventario, el mapa R/RW, FinOps, evals, guardrails, …) |
 | `web/` | **AGPL-3.0-only** | la interfaz React |
 | `sdk/` | **Apache-2.0** | las interfaces de conector/módulo, el contrato gRPC y los tipos compartidos |
 | `connectors/` | **Apache-2.0** | los conectores (Claude, OpenAI, pgAudit, eBPF, cloud, Slack, SIEM, …) |

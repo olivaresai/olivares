@@ -1,0 +1,11 @@
+// SPDX-FileCopyrightText: 2026 Olivares.AI
+// SPDX-License-Identifier: AGPL-3.0-only
+// Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+
+//go:build !race
+
+package sessions
+
+// raceDetectorEnabled reports whether this test binary was built with the race
+// detector. It is a property of the build, never of the environment.
+const raceDetectorEnabled = false

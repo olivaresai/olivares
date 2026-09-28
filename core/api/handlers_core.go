@@ -258,19 +258,101 @@ func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	var in createUserInput
+	var in createUserRequest
 	if err := decodeJSON(w, r, &in); err != nil {
 		s.badRequest(w, r, "invalid JSON body")
 		return
 	}
-	u, err := s.authr.CreateUser(r.Context(), p, auth.NewUser{
+	nu := auth.NewUser{
 		Email: in.Email, DisplayName: in.DisplayName, Password: in.Password, Superadmin: in.Superadmin,
-	})
+	}
+	if strings.TrimSpace(in.Tenant) != "" {
+		tenant, err := model.ParseTenantID(in.Tenant)
+		if err != nil || tenant.IsZero() || tenant.IsSystem() {
+			s.badRequest(w, r, "valid tenant required")
+			return
+		}
+		workspaceID, ok := s.grantWorkspace(w, r, tenant, in.WorkspaceID)
+		if !ok {
+			return
+		}
+		nu.Tenant, nu.Role, nu.WorkspaceID = tenant, in.Role, workspaceID
+	}
+	u, m, err := s.authr.CreateUserWithMembership(r.Context(), p, nu)
 	if err != nil {
 		s.writeError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, toUserDTO(u))
+	out := createdUserDTO{UserDTO: toUserDTO(u)}
+	if !m.ID.IsZero() {
+		out.Membership = membershipBody(m)
+	}
+	writeJSON(w, http.StatusCreated, out)
+}
+
+// createUserRequest is the POST /v1/users payload: the account, and optionally
+// its first membership, granted in the same transaction. An existing account is
+// never joined to a tenant afterwards without its holder's consent.
+type createUserRequest struct {
+	createUserInput
+	Tenant      string `json:"tenant"`
+	Role        string `json:"role"`
+	WorkspaceID string `json:"workspace_id"`
+}
+
+// createdUserDTO is the POST /v1/users answer: the account and, when one was
+// requested, its first membership.
+type createdUserDTO struct {
+	UserDTO
+	Membership map[string]any `json:"membership,omitempty"`
+}
+
+// membershipBody is the JSON shape of a granted membership.
+func membershipBody(m model.Membership) map[string]any {
+	body := map[string]any{
+		"id": m.ID.String(), "user_id": m.UserID.String(), "tenant": m.TargetTenantID.String(), "role": m.Role,
+	}
+	if !m.WorkspaceID.IsZero() {
+		body["workspace_id"] = m.WorkspaceID.String()
+	}
+	return body
+}
+
+// writeConsentRequired is the one answer every tenant write that names an
+// existing account which is not a member gives, whoever asks and whatever the
+// account's state: 202 and nothing written.
+func writeConsentRequired(w http.ResponseWriter) {
+	writeJSON(w, http.StatusAccepted, map[string]any{"status": "consent_required"})
+}
+
+// grantWorkspace validates an optional workspace confinement for a grant in
+// tenant: it must name a real workspace there (the membership lives in the
+// system tenant with no cross-tenant key, so the check is here, deny-closed
+// against a typo that would silently confine to nothing).
+func (s *Server) grantWorkspace(w http.ResponseWriter, r *http.Request, tenant model.TenantID, raw string) (model.ID, bool) {
+	workspaceID := strings.TrimSpace(raw)
+	if workspaceID == "" {
+		return "", true
+	}
+	bad := false
+	if verr := s.st.View(r.Context(), tenant, func(sc store.Scope) error {
+		if _, gerr := sc.Workspaces().Get(r.Context(), model.ID(workspaceID)); gerr != nil {
+			if errors.Is(gerr, store.ErrNotFound) {
+				bad = true
+				return nil
+			}
+			return gerr
+		}
+		return nil
+	}); verr != nil {
+		s.writeError(w, r, verr)
+		return "", false
+	}
+	if bad {
+		s.badRequest(w, r, "workspace_id names no workspace in the granted tenant")
+		return "", false
+	}
+	return model.ID(workspaceID), true
 }
 
 // handleListSuperadmins lists every superadmin account with its active/inactive
@@ -504,42 +586,21 @@ func (s *Server) handleGrantMembership(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, r, errForbidden)
 		return
 	}
-	// an OPTIONAL workspace confinement. Validate it names a real workspace in the
-	// GRANTED tenant (the membership lives in the system tenant with no cross-tenant FK, so
-	// the check is here, deny-closed against a typo that would silently confine to nothing).
-	workspaceID := strings.TrimSpace(in.WorkspaceID)
-	if workspaceID != "" {
-		bad := false
-		if verr := s.st.View(r.Context(), tenant, func(sc store.Scope) error {
-			if _, gerr := sc.Workspaces().Get(r.Context(), model.ID(workspaceID)); gerr != nil {
-				if errors.Is(gerr, store.ErrNotFound) {
-					bad = true
-					return nil
-				}
-				return gerr
-			}
-			return nil
-		}); verr != nil {
-			s.writeError(w, r, verr)
-			return
-		}
-		if bad {
-			s.badRequest(w, r, "workspace_id names no workspace in the granted tenant")
-			return
-		}
+	// an OPTIONAL workspace confinement, validated in the GRANTED tenant.
+	workspaceID, ok := s.grantWorkspace(w, r, tenant, in.WorkspaceID)
+	if !ok {
+		return
 	}
-	m, err := s.authr.GrantMembership(r.Context(), p, model.ID(in.UserID), tenant, in.Role, model.ID(workspaceID))
+	m, err := s.authr.GrantMembership(r.Context(), p, model.ID(in.UserID), tenant, in.Role, workspaceID)
+	if errors.Is(err, auth.ErrConsentRequired) {
+		writeConsentRequired(w)
+		return
+	}
 	if err != nil {
 		s.writeError(w, r, err)
 		return
 	}
-	body := map[string]any{
-		"id": m.ID.String(), "user_id": m.UserID.String(), "tenant": m.TargetTenantID.String(), "role": m.Role,
-	}
-	if !m.WorkspaceID.IsZero() {
-		body["workspace_id"] = m.WorkspaceID.String()
-	}
-	writeJSON(w, http.StatusCreated, body)
+	writeJSON(w, http.StatusCreated, membershipBody(m))
 }
 
 // --- System: tenant provisioning (superadmin) --------------------------------

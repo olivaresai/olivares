@@ -345,6 +345,10 @@ func TestCommunicationSchemaRegistersNamespaceOnce(t *testing.T) {
 			// so the accepted-state lease-effect rule can change without touching
 			// the shared function the other communication triggers are pinned to.
 			"0024_work_handoff_vacant_transfer.sql",
+			// The ChannelRoute and DecisionRequest guards move to a reserved
+			// copy of the shared validator whose two 256-character token bounds
+			// are within PostgreSQL's regular-expression repetition limit.
+			"0025_communication_token_bounds.sql",
 		},
 		"sqlite": communicationSQLiteMigrationNames(),
 	}
@@ -879,6 +883,7 @@ func TestCommunicationWorkEventDualAggregateAcrossBackends(t *testing.T) {
 			}
 			t.Cleanup(func() { _ = reopened.Close() })
 			reopenedModule.UseData(api.NewModuleData(reopened))
+			bindStoreStanding(reopenedModule, reopened)
 			sink := &recordingWorkSink{}
 			reopenedModule.UseWorkEventSink(sink)
 			if err := reopenedModule.DrainWorkOutbox(context.Background(), fixture.tenant, 10); err != nil {
@@ -1248,6 +1253,7 @@ func TestCommunicationCausalArcHashPersistenceAcrossBackends(t *testing.T) {
 			}
 			t.Cleanup(func() { _ = reopened.Close() })
 			reopenedModule.UseData(api.NewModuleData(reopened))
+			bindStoreStanding(reopenedModule, reopened)
 			if err := reopenedModule.data.View(ctx, fixture.tenant, func(sc store.Scope) error {
 				repo, err := sc.Ext(messageAudienceRecipientKind)
 				if err != nil {
@@ -1594,6 +1600,7 @@ func TestCommunicationDispatchRouteAndReconcileDurabilityAcrossBackends(t *testi
 			}
 			t.Cleanup(func() { _ = reopened.Close() })
 			reopenedModule.UseData(api.NewModuleData(reopened))
+			bindStoreStanding(reopenedModule, reopened)
 			if err := reopenedModule.data.View(ctx, fixture.tenant, func(sc store.Scope) error {
 				repo, err := sc.Ext(deliveryDispatchKind)
 				if err != nil {
@@ -2310,9 +2317,16 @@ func communicationAssertPostgresCommandFunctionPosture(t *testing.T, dsn string)
 	// added 0024 swept ./modules/sessions/ with the PostgreSQL environment unset.
 	// Its own report had already MEASURED eighteen. A count in a test is the same
 	// kind of claim as a count in a comment — it ages, and only a run says so.
+	//
+	// SIXTEEN since 0025, which moves the ChannelRoute and DecisionRequest guards
+	// to the v25 copy of the shared validator: exactly those two call it.
 	if got := communicationPostgresFunctionCallerCount(t, dsn,
-		"olivares_sessions_communication_validate"); got != 18 {
-		t.Fatalf("old shared communication validator callers = %d, want 18 unchanged callers", got)
+		"olivares_sessions_communication_validate"); got != 16 {
+		t.Fatalf("old shared communication validator callers = %d, want 16 unchanged callers", got)
+	}
+	if got := communicationPostgresFunctionCallerCount(t, dsn,
+		"olivares_sessions_communication_validate_v25"); got != 2 {
+		t.Fatalf("v25 communication validator callers = %d, want ChannelRoute and DecisionRequest", got)
 	}
 	if got := communicationPostgresFunctionCallerCount(t, dsn,
 		"olivares_sessions_communication_command_validate_v18"); got != 1 {
@@ -3278,6 +3292,7 @@ func communicationOpenFixtureWithClock(
 		t.Fatalf("create %s tenant: %v", backend.name, err)
 	}
 	m.UseData(api.NewModuleData(st))
+	bindStoreStanding(m, st)
 	m.UseCommunicationGuardReconciliationData(
 		NewCommunicationGuardReconciliationData(api.NewModuleData(st)),
 	)
@@ -4234,8 +4249,19 @@ func makeProtocolInterruptRecipientWriter(t *testing.T, fixture workflowCommunic
 			grant.Subject != (CommunicationSubjectRef{Kind: SubjectUser, Ref: fixture.target.Ref}) {
 			continue
 		}
+		// The successor grant names the recipient's account, so the transaction
+		// pins it first, as a fenced command's authority lock does.
+		ctx, err := communicationFencedContext(
+			context.Background(), fixture.st, fixture.tenant, userSubjectAccounts(grant.Subject)...,
+		)
+		if err != nil {
+			t.Fatalf("read the protocol interrupt recipient's standing: %v", err)
+		}
 		if err := fixture.m.mutateCommunication(
-			context.Background(), fixture.scope, func(tx *communicationTx) error {
+			ctx, fixture.scope, func(tx *communicationTx) error {
+				if fenceErr := lockCommunicationFence(ctx, tx); fenceErr != nil {
+					return fenceErr
+				}
 				locked, lockErr := tx.lockRecord(context.Background(), channelGrantKind, grant.ID)
 				if lockErr != nil {
 					return lockErr
@@ -4312,151 +4338,14 @@ func TestProtocolInterruptMessageAckResponseRecoversAndReplays(t *testing.T) {
 			KeyDigest: requestKey, ContentDigest: requestContent,
 		}},
 	}
-	created, err := fixture.m.RecordProtocolInterrupt(context.Background(), fixture.tenant, command)
-	if err != nil {
-		t.Fatalf("record protocol interrupt: %v", err)
+	// CM-10: recording the interrupt is an A2A path. It is refused before any
+	// write, first delivery and redelivery alike, so there is no Message to
+	// acknowledge, no response to recover and nothing to replay.
+	before := a2aRowCounts(t, fixture.directNoticeFixture)
+	for attempt := 0; attempt < 2; attempt++ {
+		_, err := fixture.m.RecordProtocolInterrupt(context.Background(), fixture.tenant, command)
+		requireA2ARefused(t, err, "record protocol interrupt")
 	}
-	if len(created.Messages) != 1 || created.Messages[0].KeyDigest != requestKey ||
-		created.Messages[0].MessageID.IsZero() || created.Messages[0].DeliveryID.IsZero() ||
-		created.Messages[0].Replayed {
-		t.Fatalf("protocol interrupt result = %+v", created)
-	}
-	replayed, err := fixture.m.RecordProtocolInterrupt(context.Background(), fixture.tenant, command)
-	if err != nil || len(replayed.Messages) != 1 || !replayed.Messages[0].Replayed ||
-		replayed.Messages[0].MessageID != created.Messages[0].MessageID ||
-		replayed.Messages[0].DeliveryID != created.Messages[0].DeliveryID {
-		t.Fatalf("protocol interrupt replay = %+v, %v", replayed, err)
-	}
-
-	responseDigest := strings.Repeat("c", sha256.Size*2)
-	operationID, effectDigest := "operation:protocol-input", strings.Repeat("d", sha256.Size*2)
-	_, routeHash, err := route.normalize()
-	if err != nil {
-		t.Fatalf("normalize protocol interrupt route: %v", err)
-	}
-	link, err := fixture.m.loadProtocolInterruptLink(
-		context.Background(), fixture.tenant, binding, route, routeHash, requestKey,
-	)
-	if err != nil {
-		t.Fatalf("load protocol interrupt link: %v", err)
-	}
-	responseHash, _ := parseProtocolInterruptDigest(responseDigest, "response content digest")
-	operationHash := protocolInterruptOpaqueHash("protocol-input-response-operation-v1", operationID)
-	effectHash := protocolInterruptOpaqueHash("protocol-input-response-effect-v1", effectDigest)
-	if _, err := fixture.m.claimProtocolInputResponse(
-		context.Background(), fixture.tenant, link, link.RouteHash,
-		responseHash, operationHash, effectHash,
-	); err != nil {
-		t.Fatalf("seed interrupted response claim: %v", err)
-	}
-
-	response := ProtocolInputResponseCommand{
-		BindingID: binding.ID, Generation: binding.Generation, Route: route,
-		OperationID: operationID, EffectDigest: effectDigest,
-		Responses: []ProtocolInputResponseRef{{
-			KeyDigest: requestKey, ResponseDigest: responseDigest,
-		}},
-	}
-	prepared, err := fixture.m.PrepareProtocolInputResponses(
-		context.Background(), fixture.tenant, response,
-	)
-	if err != nil {
-		t.Fatalf("prepare protocol input response after claimed-stop: %v", err)
-	}
-	if len(prepared.Responses) != 1 || prepared.Responses[0].AckID.IsZero() ||
-		prepared.Responses[0].ResponseMessageID.IsZero() || prepared.Responses[0].Replayed {
-		t.Fatalf("prepared protocol input response = %+v", prepared)
-	}
-	ackRecord := workflowCommunicationRecord(
-		t, fixture, messageAckKind, prepared.Responses[0].AckID,
-	)
-	ack, err := messageAckFromRecord(ackRecord)
-	if err != nil || ack.DeliveryID != created.Messages[0].DeliveryID ||
-		ack.Actor != (CommunicationActorRef{Kind: ActorUser, Ref: recipientID.String()}) || ack.Late {
-		t.Fatalf("protocol input MessageAck = %+v, %v", ack, err)
-	}
-	requestDeliveryRecord := workflowCommunicationRecord(
-		t, fixture, messageDeliveryKind, created.Messages[0].DeliveryID,
-	)
-	requestDelivery, err := messageDeliveryFromRecord(requestDeliveryRecord)
-	if err != nil || requestDelivery.State != DeliveryAcknowledged ||
-		requestDelivery.AckID != prepared.Responses[0].AckID {
-		t.Fatalf("acknowledged protocol input Delivery = %+v, %v", requestDelivery, err)
-	}
-	responseMessageRecord := workflowCommunicationRecord(
-		t, fixture, messageKind, prepared.Responses[0].ResponseMessageID,
-	)
-	responseMessage, err := messageFromRecord(responseMessageRecord, 0)
-	if err != nil || responseMessage.Kind != MessageWorkTask ||
-		responseMessage.WorkItemID != fixture.workID || responseMessage.ChannelID != fixture.channel.ID ||
-		responseMessage.Sender != (CommunicationActorRef{Kind: ActorUser, Ref: recipientID.String()}) {
-		t.Fatalf("protocol input response Message = %+v, %v", responseMessage, err)
-	}
-	var ackReceipt, responseReceipt CommunicationCommandReceipt
-	for _, row := range communicationRowsForTest(
-		t, fixture.directNoticeFixture, communicationCommandKind,
-	) {
-		receipt, decodeErr := communicationCommandReceiptFromRecord(row)
-		if decodeErr != nil {
-			t.Fatalf("decode protocol input command receipt: %v", decodeErr)
-		}
-		switch {
-		case receipt.ResultKind == string(messageAckKind) &&
-			receipt.ResultID == prepared.Responses[0].AckID:
-			ackReceipt = receipt
-		case receipt.ResultKind == string(messageKind) &&
-			receipt.ResultID == prepared.Responses[0].ResponseMessageID:
-			responseReceipt = receipt
-		}
-	}
-	if ackReceipt.ID.IsZero() || responseReceipt.ID.IsZero() {
-		t.Fatalf("protocol input Ack/response receipts = %+v / %+v", ackReceipt, responseReceipt)
-	}
-	ackEvent := workflowCommunicationRecord(t, fixture, workEventKind, ackReceipt.EventID)
-	responseEvent := workflowCommunicationRecord(t, fixture, workEventKind, responseReceipt.EventID)
-	if ackEvent.String(colEventAggregateKind) != string(workItemKind) ||
-		ackEvent.String(colEventAggregateID) != fixture.workID.String() ||
-		ackEvent.String(colEventType) != communicationMessageAcknowledged ||
-		responseEvent.String(colEventAggregateKind) != string(workItemKind) ||
-		responseEvent.String(colEventAggregateID) != fixture.workID.String() ||
-		responseEvent.String(colEventType) != workflowWorkTaskEventType ||
-		ackEvent.Int(colEventSeq)+1 != responseEvent.Int(colEventSeq) {
-		t.Fatalf("protocol input Ack/response causal Events = %+v / %+v", ackEvent, responseEvent)
-	}
-	completed, err := fixture.m.loadProtocolInterruptLink(
-		context.Background(), fixture.tenant, binding, route, link.RouteHash, requestKey,
-	)
-	if err != nil || completed.State != protocolInterruptResponded ||
-		completed.AckID != prepared.Responses[0].AckID ||
-		completed.ResponseMessageID != prepared.Responses[0].ResponseMessageID ||
-		completed.ResponseDeliveryID.IsZero() {
-		t.Fatalf("completed protocol interrupt link = %+v, %v", completed, err)
-	}
-	responseDeliveryRecord := workflowCommunicationRecord(
-		t, fixture, messageDeliveryKind, completed.ResponseDeliveryID,
-	)
-	responseDelivery, err := messageDeliveryFromRecord(responseDeliveryRecord)
-	if err != nil || responseDelivery.MessageID != completed.ResponseMessageID ||
-		responseDelivery.Recipient != (RecipientRef{
-			Kind: RecipientUser, Ref: fixture.sender.String(),
-		}) {
-		t.Fatalf("protocol input reverse response Delivery = %+v, %v", responseDelivery, err)
-	}
-	exactReplay, err := fixture.m.PrepareProtocolInputResponses(
-		context.Background(), fixture.tenant, response,
-	)
-	if err != nil || len(exactReplay.Responses) != 1 || !exactReplay.Responses[0].Replayed ||
-		exactReplay.Responses[0].AckID != prepared.Responses[0].AckID ||
-		exactReplay.Responses[0].ResponseMessageID != prepared.Responses[0].ResponseMessageID {
-		t.Fatalf("protocol input response replay = %+v, %v", exactReplay, err)
-	}
-	conflict := response
-	conflict.Responses = []ProtocolInputResponseRef{{
-		KeyDigest: requestKey, ResponseDigest: strings.Repeat("e", sha256.Size*2),
-	}}
-	if _, err := fixture.m.PrepareProtocolInputResponses(
-		context.Background(), fixture.tenant, conflict,
-	); !errors.Is(err, ErrInvalidCommunicationTransition) {
-		t.Fatalf("conflicting protocol input response = %v, want invalid transition", err)
-	}
+	requireA2ANoRows(t, fixture.directNoticeFixture, before, "a refused protocol interrupt")
+	requireA2ABindingUnchanged(t, fixture, binding)
 }

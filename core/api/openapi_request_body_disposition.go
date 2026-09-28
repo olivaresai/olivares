@@ -203,6 +203,16 @@ func moduleRequestBodyDispositionFor(r moduleRoute) moduleRequestBodyDisposition
 			return moduleRequestBodyUnclassified
 		}
 	}
+	if decl, ok := gitpublishRequestBodyDeclarationFor(r); ok {
+		switch decl.kind {
+		case gitpublishBodyful:
+			return moduleRequestBodySchemaPublished
+		case gitpublishBodyless:
+			return moduleRequestBodyBodyless
+		default:
+			return moduleRequestBodyUnclassified
+		}
+	}
 	if decl, ok := sourceScopeRequestBodyDeclarationFor(r); ok {
 		switch decl.kind {
 		case sourceScopeBodyful:

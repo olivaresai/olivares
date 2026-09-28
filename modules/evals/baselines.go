@@ -59,6 +59,7 @@ func (m *Module) handlePinBaseline(w http.ResponseWriter, r *http.Request, mc ap
 
 	var out baselineDTO
 	notFound := false
+	refusal := ""
 	err := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
 		// The pinned run must exist (and belong to this tenant — the Scope pins it).
 		runRepo, err := sc.Ext(runKind)
@@ -72,11 +73,45 @@ func (m *Module) handlePinBaseline(w http.ResponseWriter, r *http.Request, mc ap
 			}
 			return gerr
 		}
+		receipt, _, err := loadComparison(r.Context(), sc, runID.String())
+		if err != nil {
+			return err
+		}
+		if receipt == nil || !receipt.Known {
+			refusal = "baseline_evidence_unknown"
+			return nil
+		}
+		if !receipt.Complete {
+			refusal = "baseline_incomplete"
+			return nil
+		}
+		if receipt.Identity.Suite != suiteID.String() || receipt.Identity.Candidate.Subject != subjectRef {
+			refusal = "baseline_identity_mismatch"
+			return nil
+		}
+		suite, cases, found, err := loadSuiteAndCases(r.Context(), sc, suiteID)
+		if err != nil {
+			return err
+		}
+		if !found {
+			refusal = "baseline_identity_mismatch"
+			return nil
+		}
+		subj := runSubject{subjectKind: receipt.Identity.SubjectKind, subjectRef: subjectRef, modelRef: receipt.Identity.Candidate.Model, variant: receipt.Identity.Candidate.Variant}
+		identity, known, err := captureIdentity(sc.Tenant().String(), suite, subj, cases, cases, m.scorerByID(suite.Scorer), "", 0)
+		if err != nil {
+			return err
+		}
+		identity.Selected = receipt.Identity.Selected
+		if !known || suite.SubjectKind != receipt.Identity.SubjectKind || !compatibleIdentity(identity, receipt.Identity, "same_candidate") {
+			refusal = "baseline_identity_mismatch"
+			return nil
+		}
 		baseRepo, err := sc.Ext(baseKind)
 		if err != nil {
 			return err
 		}
-		existing, err := listAll(r.Context(), baseRepo, eq(colSuiteRef, suiteID.String()), eq(colSubjectRef, subjectRef))
+		existing, _, err := baseRepo.List(r.Context(), model.Query{Filters: []model.Filter{eq(colSuiteRef, suiteID.String()), eq(colSubjectRef, subjectRef)}, Limit: 1})
 		if err != nil {
 			return err
 		}
@@ -109,6 +144,10 @@ func (m *Module) handlePinBaseline(w http.ResponseWriter, r *http.Request, mc ap
 	})
 	if err != nil {
 		writeStoreError(w, err)
+		return
+	}
+	if refusal != "" {
+		writeJSON(w, http.StatusConflict, errorBody(refusal))
 		return
 	}
 	if notFound {

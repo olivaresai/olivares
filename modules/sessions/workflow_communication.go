@@ -7,12 +7,14 @@ package sessions
 import (
 	"context"
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 
+	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 )
@@ -32,10 +34,21 @@ const (
 // already validated request kind rather than introducing a second wire value.
 const MessageWorkTask MessageKind = MessageRequest
 
+// ErrWorkflowReauthenticationRequired means a workflow effect was refused,
+// before any mutation, because the run's credential binding is missing,
+// invalid, superseded, or pins a credential revision that is no longer
+// current. The run needs its owning reauthorization; a policy denial is
+// ErrCommunicationForbidden instead.
+var ErrWorkflowReauthenticationRequired = errors.New("workflow communication requires reauthentication")
+
 // WorkflowCommunicationActor is reconstructed only from the immutable
 // workflow-run initiator snapshot. AuditKind/AuditRef retain attribution while
 // the remaining fields retain server-authored NHI/session dimensions. A
 // workflow config has no field from which this value can be constructed.
+//
+// CredentialBinding and CredentialSubject are the run's opaque core/auth
+// binding and the run id it binds. Every effect resolves them to the exact
+// credential that started the run; an actor without them has no authority.
 type WorkflowCommunicationActor struct {
 	AuditKind         string
 	AuditRef          string
@@ -44,6 +57,8 @@ type WorkflowCommunicationActor struct {
 	SessionRunRef     string
 	SessionFence      int64
 	PurposeRestricted bool
+	CredentialBinding auth.CredentialBinding
+	CredentialSubject model.ID
 }
 
 type WorkflowWorkTaskCommand struct {
@@ -261,6 +276,55 @@ func (m *Module) workflowCommunicationScope(
 	return result, nil
 }
 
+// workflowCommunicationChannelScope is workflowCommunicationScope for a
+// prepared publish: it reads the Channel alone, in the route's workspace,
+// because the publish's WorkItem may be created inside the owning transaction.
+// The WorkItem's workspace is checked against it when the publish locks the
+// WorkItem there.
+func (m *Module) workflowCommunicationChannelScope(
+	ctx context.Context,
+	tenant model.TenantID,
+	workspaceID, channelID model.ID,
+) (workflowCommunicationScope, error) {
+	if tenant.IsZero() || tenant.IsSystem() || workspaceID.IsZero() ||
+		!validCanonicalCommunicationID(channelID) {
+		return workflowCommunicationScope{}, communicationError(
+			ErrInvalidCommunicationModel, "workflow communication target is invalid",
+		)
+	}
+	var result workflowCommunicationScope
+	err := m.communicationData(tenant).View(ctx, func(sc store.Scope) error {
+		channels, err := sc.Ext(channelKind)
+		if err != nil {
+			return err
+		}
+		channelRecord, err := channels.Get(ctx, channelID)
+		if err != nil {
+			return err
+		}
+		channel, err := channelFromRecord(channelRecord)
+		if err != nil {
+			return err
+		}
+		if channel.TenantID != tenant || channel.WorkspaceID != workspaceID ||
+			channel.State != ChannelActive || channel.ContentProtection != ContentProtectionStorage {
+			return communicationError(
+				ErrInvalidCommunicationTransition,
+				"workflow WorkItem and Channel do not share one active storage-protected workspace",
+			)
+		}
+		result = workflowCommunicationScope{
+			ref:     DirectoryScopeRef{TenantID: tenant, WorkspaceID: workspaceID},
+			channel: channel,
+		}
+		return nil
+	})
+	if err != nil {
+		return workflowCommunicationScope{}, normalizeMessageDerivedError(err)
+	}
+	return result, nil
+}
+
 func workflowCommunicationSelector(recipient RecipientRef, required bool, wake WakePolicy) (AudienceSelector, error) {
 	selector, err := messageDerivedSelector(recipient, required, wake)
 	if err != nil {
@@ -307,6 +371,31 @@ func (m *Module) prepareWorkflowCommunicationPublishSource(
 	if err != nil {
 		return workflowCommunicationPreflight{}, err
 	}
+	return m.prepareWorkflowCommunicationPublishTarget(
+		ctx, tenant, target, actor, workItemID, channelID, recipient, content, urgency,
+		ackDueAt, idempotencyKey, kind, commandScope, sourceKind, sourceEvent,
+	)
+}
+
+// prepareWorkflowCommunicationPublishTarget is the publish preparation after
+// its target is read. A prepared replay runs it before its transaction with a
+// target read from the channel alone, recording its evidence.
+func (m *Module) prepareWorkflowCommunicationPublishTarget(
+	ctx context.Context,
+	tenant model.TenantID,
+	target workflowCommunicationScope,
+	actor WorkflowCommunicationActor,
+	workItemID, channelID model.ID,
+	recipient RecipientRef,
+	content MessageContent,
+	urgency MessageUrgency,
+	ackDueAt *time.Time,
+	idempotencyKey string,
+	kind MessageKind,
+	commandScope string,
+	sourceKind ChannelRouteSourceKind,
+	sourceEvent string,
+) (workflowCommunicationPreflight, error) {
 	principal, err := workflowCommunicationUserPrincipal(actor, target.ref)
 	if err != nil {
 		return workflowCommunicationPreflight{}, err
@@ -383,21 +472,29 @@ func (m *Module) prepareWorkflowCommunicationPublishSource(
 	if err != nil {
 		return workflowCommunicationPreflight{}, err
 	}
-	if !communicationPortBound(m.communicationOperationAuthorizer) {
-		return workflowCommunicationPreflight{}, communicationError(
-			ErrCommunicationEvidenceUnknown, "workflow communication C5 operation authorizer is unavailable",
-		)
-	}
-	entity := EntityRef{
-		TenantID: tenant, WorkspaceID: target.ref.WorkspaceID, Kind: channelKind, ID: channelID,
-	}
-	core, err := m.communicationOperationAuthorizer.AuthorizeEntityOperation(
-		ctx, principal, entity, CommunicationMessageSend,
+	// The send authority is the run's exact bound credential under the current
+	// composed policy, never the identity-only operation port.
+	ports := m.communicationEvidencePorts(ctx, tenant, true)
+	question, err := newCommunicationAuthorityQuestion(
+		target.ref, channelKind, channelID, CommunicationMessageSend,
 	)
-	if err != nil || ValidateReadWitness(core) != nil || core.Outcome != ReadAllow ||
+	if err != nil {
+		return workflowCommunicationPreflight{}, err
+	}
+	bound, err := m.bindWorkflowCredentialAuthority(ctx, actor, principal, question)
+	if err != nil {
+		return workflowCommunicationPreflight{}, err
+	}
+	_, boundContext, err := bound.transactionSnapshot(question, CommunicationClaimAuthoritySnapshot{})
+	if err != nil {
+		return workflowCommunicationPreflight{}, err
+	}
+	entity := question.entity
+	core := boundContext.witness
+	if ValidateReadWitness(core) != nil || core.Outcome != ReadAllow ||
 		core.Entity != entity || core.Operation != CommunicationMessageSend || core.Principal != principal {
 		return workflowCommunicationPreflight{}, communicationError(
-			ErrCommunicationEvidenceUnknown, "workflow communication C5 send authority is unavailable",
+			ErrCommunicationEvidenceUnknown, "workflow communication send authority is unavailable",
 		)
 	}
 	identity, err := m.preflightDirectNoticeReaderIdentity(ctx, target.ref, principal, func(at time.Time) bool {
@@ -424,6 +521,7 @@ func (m *Module) prepareWorkflowCommunicationPublishSource(
 		ProtectionGeneration: preflight.Channel.ProtectionGeneration,
 		RequestedAt:          requestedAt, Selectors: []AudienceSelector{selector},
 	}
+	audienceRequest.RequestedAt = ports.audienceRequestedAt(audienceRequest)
 	if err := ValidatePublicationAudienceRequest(audienceRequest); err != nil {
 		return workflowCommunicationPreflight{}, err
 	}
@@ -432,7 +530,7 @@ func (m *Module) prepareWorkflowCommunicationPublishSource(
 			ErrCommunicationEvidenceUnknown, "workflow communication audience attestor is unavailable",
 		)
 	}
-	snapshot, attestation, err := m.communicationAudienceAttestor.AttestPublicationAudience(
+	snapshot, attestation, err := ports.attestor.AttestPublicationAudience(
 		ctx, cloneDirectNoticePublicationAudienceRequest(audienceRequest),
 	)
 	if err != nil {

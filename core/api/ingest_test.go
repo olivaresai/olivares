@@ -70,13 +70,9 @@ func TestGRPCIngestPush(t *testing.T) {
 	tenant := h.createOrg(admin, "acme")
 
 	mkUser := func(email, pass, role string) string {
-		r := h.do("POST", "/v1/users", admin, map[string]any{"email": email, "password": pass}, nil)
+		r := h.do("POST", "/v1/users", admin, map[string]any{"email": email, "password": pass, "tenant": tenant.String(), "role": role}, nil)
 		if r.code != http.StatusCreated {
 			t.Fatalf("create user %s = %d %s", email, r.code, r.raw)
-		}
-		uid := r.body["id"].(string)
-		if r := h.do("POST", "/v1/memberships", admin, map[string]any{"user_id": uid, "tenant": tenant.String(), "role": role}, nil); r.code != http.StatusCreated {
-			t.Fatalf("grant %s = %d %s", email, r.code, r.raw)
 		}
 		lr := h.do("POST", "/v1/auth/login", "", map[string]any{"email": email, "password": pass}, nil)
 		if lr.code != http.StatusOK {
@@ -227,13 +223,9 @@ func TestIngestSLIMetrics(t *testing.T) {
 	tenant := h.createOrg(admin, "sli")
 
 	// An ingest:write principal (admin-tier on the tenant).
-	cr := h.do("POST", "/v1/users", admin, map[string]any{"email": "sli@acme.com", "password": "ingestpass123"}, nil)
+	cr := h.do("POST", "/v1/users", admin, map[string]any{"email": "sli@acme.com", "password": "ingestpass123", "tenant": tenant.String(), "role": auth.RoleAdmin}, nil)
 	if cr.code != http.StatusCreated {
 		t.Fatalf("create user = %d %s", cr.code, cr.raw)
-	}
-	uid := cr.body["id"].(string)
-	if r := h.do("POST", "/v1/memberships", admin, map[string]any{"user_id": uid, "tenant": tenant.String(), "role": auth.RoleAdmin}, nil); r.code != http.StatusCreated {
-		t.Fatalf("grant = %d %s", r.code, r.raw)
 	}
 	lr := h.do("POST", "/v1/auth/login", "", map[string]any{"email": "sli@acme.com", "password": "ingestpass123"}, nil)
 	if lr.code != http.StatusOK {

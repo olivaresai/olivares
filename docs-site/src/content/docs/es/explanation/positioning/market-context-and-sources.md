@@ -85,5 +85,6 @@ de aquí.
   **readiness**, no certificados — ver el paquete de confianza y procurement que se incluye
   con el código fuente).
 - Sin benchmarks inventados, afirmaciones de throughput ni números de precisión. Las cifras
-  de capacidad provienen únicamente del harness de benchmark reproducible, con procedencia
-  de hardware.
+  de capacidad provienen únicamente del harness de benchmark, que registra el commit, la
+  versión de Go, la CPU, la memoria y el sistema de ficheros. No registra el patrón de
+  llegada, el calentamiento ni el perfil de despliegue.

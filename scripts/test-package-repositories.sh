@@ -28,7 +28,17 @@ done
 scratch="$(mktemp -d "${TMPDIR:-}/dist24-06.XXXXXX")"
 runner_like_tmp=""
 unicode_tmp=""
+# The renderer and the verifier place a gpg home in TMPDIR, and gpg-agent's socket path must
+# fit sun_path (108 bytes). A caller's TMPDIR may be long, so both run with a short one.
+short_tmp="$(mktemp -d /tmp/g.XXXXXX)" || {
+	printf '%s\n' 'test-package-repositories: NO HE PODIDO MIRAR — cannot create a short TMPDIR under /tmp' >&2
+	exit 2
+}
 cleanup() {
+	case "$short_tmp" in
+	/tmp/g.*) gpgconf --kill all >/dev/null 2>&1 || true; rm -rf -- "$short_tmp" ;;
+	*) printf 'test-package-repositories: refusing unsafe cleanup: %s\n' "$short_tmp" >&2 ;;
+	esac
 	for external_tmp in "$runner_like_tmp" "$unicode_tmp"; do
 		[[ -n "$external_tmp" ]] || continue
 		case "$external_tmp" in
@@ -71,6 +81,11 @@ render() {
 	local assets="$2"
 	local channel="$3"
 	local out="$4"
+	# The renderer renames its output out of TMPDIR, so it writes inside the short TMPDIR and
+	# the result then moves to OUT.
+	local staged="$short_tmp/render-out"
+	rm -rf -- "$staged"
+	TMPDIR="$short_tmp" \
 	OLIVARES_PACKAGE_REPO_TEST_ONLY=1 \
 	OLIVARES_PACKAGE_REPO_KEY_DESCRIPTOR_FILE="$key_dir/descriptor.json" \
 	OLIVARES_PACKAGE_REPO_OPENPGP_SECRET_KEY_FILE="$key_dir/openpgp-secret.asc" \
@@ -82,7 +97,8 @@ render() {
 		--channel "$channel" \
 		--source-date-epoch "$epoch" \
 		--valid-until-epoch "$valid_until" \
-		--out "$out"
+		--out "$staged" || return $?
+	mv -- "$staged" "$out"
 }
 
 verify() {
@@ -90,7 +106,7 @@ verify() {
 	local assets="$2"
 	local channel="$3"
 	local repository="$4"
-	python3 "$repo_root/scripts/verify-package-repositories.py" \
+	TMPDIR="$short_tmp" python3 "$repo_root/scripts/verify-package-repositories.py" \
 		--repo-root "$repository" \
 		--checksums "$assets/checksums.txt" \
 		--artifact-dir "$assets" \

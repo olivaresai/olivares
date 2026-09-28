@@ -407,6 +407,49 @@ export interface ReconciliationResponse {
   truncated: boolean
 }
 
+// --- admission reconciliation (GET /admission/reconciliation) ----------------
+
+/** The state of the operator's stop of the earlier admission writers when the report
+ *  was read (OLIVARES_FINOPS_ADMISSION_LEGACY_WRITERS_STOPPED_AT). */
+export type AdmissionLegacyStop =
+  | 'absent'
+  | 'invalid'
+  | 'future'
+  | 'contradicted'
+  | 'waiting'
+  | 'usable'
+
+/** GET /admission/reconciliation: the admission holds against their commits and
+ *  releases, the drift, and what recovery left outstanding. This route only reads, so
+ *  `swept_expired` is 0 and `finding_ref` is absent: sweeping and filing the finding
+ *  belong to the job, `POST /admission/reconcile`, which needs budget write. A lapsed
+ *  hold the job has not swept yet counts here as `active_lapsed`. */
+export interface AdmissionReconciliation {
+  swept_expired: number
+  active: number
+  committed: number
+  released: number
+  expired_unsettled: number
+  active_lapsed: number
+  idempotency_orphans: number
+  pending_retired: number
+  owed_released: number
+  owed_cleared: number
+  owed_remaining: number
+  legacy_pending: number
+  legacy_retired: number
+  legacy_owes_release: number
+  legacy_stop: AdmissionLegacyStop
+  unresolved: number
+  undecodable: number
+  undecodable_cleared: number
+  frontier_blocked: number
+  corrupt: number
+  drift: boolean
+  finding_ref?: string
+  note?: string
+}
+
 // --- multi-agent allocation (GET /spend/allocation) --------------------------
 
 /** One resource an agent's cost was allocated to (allocation.go:allocationResourceDTO). */

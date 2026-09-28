@@ -148,6 +148,23 @@
     "paused": "已暂停：{{reason}}",
     "timeline": "步骤时间线",
     "graph": "只读运行图",
+    "reauthorize": {
+      "title": "等待重新认证",
+      "explanation": "此运行已暂停，直到其发起者使用当前有效、且权限不超过启动时所用凭据的凭据继续运行。",
+      "planHash": "需重新批准的计划哈希",
+      "button": "重新授权运行",
+      "confirmTitle": "重新授权此运行？",
+      "confirmDescription": "您当前的凭据将成为此运行的凭据，其暂停的步骤将继续执行。该凭据必须属于运行的发起者，且权限不得超过运行启动时所用的凭据。",
+      "confirmPlan": "您将重新批准此计划哈希",
+      "confirm": "重新授权",
+      "done": "运行已重新授权",
+      "forbidden": "此凭据无法继续该运行。请使用运行发起者当前有效、且权限不超过启动时所用凭据的凭据，或启动新的运行。",
+      "conflict": "该运行未在等待重新认证、其计划哈希不匹配，或另一项重新授权正在进行。请刷新运行；若仍处于暂停状态，请重试。",
+      "notFound": "在此工作流中未找到该运行。",
+      "unavailable": "由于凭据绑定不可用，运行未重新授权。请重试。",
+      "failed": "无法重新授权该运行。",
+      "refresh": "刷新运行"
+    },
     "status": {
       "running": "运行中",
       "completed": "已完成",
@@ -163,6 +180,7 @@
       "done": "已完成",
       "gate_passed": "已通过关卡",
       "blocked": "已阻止",
+      "reauthentication_required": "需要重新认证",
       "budget_blocked": "因预算受阻",
       "skipped": "已跳过"
     }

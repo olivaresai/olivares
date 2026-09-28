@@ -1,0 +1,244 @@
+{
+  "title": "Git 发布",
+  "subtitle": "通过已批准的发布目标推送提交、创建拉取请求并执行合并。",
+  "notice": "每个请求都会在您发送时，根据目标已批准的绑定和您当时的权限进行检查。主机上结果不确定的请求绝不会再次发送：请对其执行核对以读取主机。",
+  "actions": {
+    "refresh": "刷新",
+    "newTarget": "新建目标",
+    "open": "打开",
+    "edit": "编辑",
+    "delete": "删除",
+    "cancel": "取消",
+    "close": "关闭",
+    "push": "推送",
+    "pull_request": "创建拉取请求",
+    "merge": "合并",
+    "reconcile": "核对",
+    "abandon": "放弃"
+  },
+  "columns": {
+    "target": "目标",
+    "workspace": "工作区",
+    "pushPrefix": "推送前缀",
+    "mergeBases": "合并基础分支",
+    "version": "版本",
+    "actions": "操作"
+  },
+  "targets": {
+    "title": "发布目标",
+    "description": "每个目标将一个已批准的凭据和仓库绑定到一个推送前缀，以及它可以合并进入的分支。",
+    "empty": "没有发布目标",
+    "emptyAdmin": "请选择一个工作区，并基于已批准的凭据绑定和仓库绑定创建目标。",
+    "emptyReader": "目标由目标管理员创建。您可以读取的目标会列在这里。",
+    "open": "打开目标 {{id}}"
+  },
+  "target": {
+    "title": "目标 {{id}}",
+    "description": "此目标用于发布的绑定、每项操作所需的权限，以及它所持有的意图。",
+    "binding": "绑定",
+    "credentialBinding": "凭据绑定",
+    "repositoryBinding": "仓库绑定",
+    "withheld": "仅向目标管理员显示",
+    "noMergeBases": "无",
+    "bindingHint": "推送只能位于推送前缀之下，拉取请求和合并只能进入合并基础分支。每次发送请求时，引擎都会检查这两个绑定在工作区中是否已获批准。",
+    "actions": "操作",
+    "administration": "目标管理",
+    "notHeld": "未持有此权限",
+    "created": "已创建发布目标",
+    "updated": "已更新发布目标",
+    "deleted": "已删除发布目标",
+    "deleteTitle": "删除目标 {{id}}？",
+    "deleteDescription": "如果仍有处于派发中、不确定或已放弃状态的意图持有该目标，引擎将拒绝删除它。"
+  },
+  "targetForm": {
+    "createTitle": "新建发布目标",
+    "editTitle": "编辑目标 {{id}}",
+    "description": "将已批准的凭据和仓库绑定到此目标可以发布的分支。",
+    "credentialHint": "在此工作区中已获批准的凭据绑定的 ID。控制台永远看不到其密钥。",
+    "repositoryHint": "在此工作区中已获批准的仓库绑定的 ID。其所有者必须是该凭据绑定所允许的所有者之一。",
+    "keepBinding": "留空以保留当前绑定。",
+    "prefixHint": "推送必须位于此分支前缀之下。前缀以斜杠结尾，且不得覆盖任何合并基础分支。",
+    "prefixSlash": "推送前缀必须以斜杠结尾。",
+    "basesHint": "拉取请求和合并可以指向的分支，每行一个，最多 16 个。",
+    "create": "创建目标",
+    "save": "保存更改"
+  },
+  "effects": {
+    "push": "推送",
+    "pull_request": "拉取请求",
+    "merge": "合并"
+  },
+  "authority": {
+    "requires": "需要 {{permission}}",
+    "requiresAal3": "需要 {{permission}}，并提升至 AAL3"
+  },
+  "publish": {
+    "push": {
+      "title": "推送提交",
+      "description": "将一个确切的提交推送到 {{prefix}} 下的分支，前提是该分支仍处于预期的当前提交。",
+      "submit": "请求推送"
+    },
+    "pull_request": {
+      "title": "创建拉取请求",
+      "description": "从 {{prefix}} 下的分支向某个合并基础分支创建拉取请求，或采用已打开的匹配拉取请求。",
+      "submit": "请求创建拉取请求"
+    },
+    "merge": {
+      "title": "合并拉取请求",
+      "description": "仅当拉取请求的 head 仍为已审查的提交时，才合并该拉取请求。",
+      "submit": "请求合并"
+    }
+  },
+  "fields": {
+    "ref": "分支引用",
+    "refHint": "推送前缀下的完整引用，例如 refs/heads/{{prefix}}change。",
+    "expectedOld": "预期的当前提交",
+    "expectedOldHint": "可选。推送以此值为前提条件；新分支请留空。",
+    "commit": "提交",
+    "tree": "树",
+    "treeHint": "该提交的树 ID。如果受管仓库中的树与之不同，引擎将拒绝推送。",
+    "headRef": "Head 分支",
+    "headRefHint": "{{prefix}} 下的分支。",
+    "base": "基础分支",
+    "title": "标题",
+    "body": "描述",
+    "draft": "以草稿形式创建",
+    "number": "拉取请求编号",
+    "expectedHead": "已审查的 head 提交",
+    "expectedHeadHint": "仅当拉取请求的 head 为此提交时才会执行合并。",
+    "method": "合并方式",
+    "acknowledgeIntent": "承认已放弃的意图",
+    "acknowledgeIntentHint": "可选。持有此作用域的已放弃意图的 ID。指定它需要具备 AAL3 下的目标管理权限。",
+    "operationId": "操作 ID",
+    "operationIdHint": "使用此 ID 再次发送同一请求会返回已记录的意图，不会进行第二次派发。"
+  },
+  "methods": {
+    "merge": "合并提交",
+    "squash": "压缩合并",
+    "rebase": "变基"
+  },
+  "states": {
+    "dispatching": "派发中",
+    "applied": "已应用",
+    "adopted": "已采用",
+    "rejected": "被主机拒绝",
+    "not_dispatched": "未派发",
+    "uncertain": "不确定",
+    "abandoned": "已放弃"
+  },
+  "receipts": {
+    "caused": "此请求在主机上产生了该效果。",
+    "existing_effect": "主机上已存在匹配的效果，并已被采用。",
+    "none": "主机上没有任何效果归因于此请求。"
+  },
+  "outcome": {
+    "toast": "引擎的答复：{{state}}",
+    "settled": {
+      "title": "请求结果已确定"
+    },
+    "uncertain": {
+      "title": "主机上的结果不确定",
+      "body": "请求已派发，但其在主机上的结果尚未得到证实，可能已经生效。请勿再次发送：核对会读取主机并记录观测到的内容。"
+    },
+    "rejected": {
+      "title": "主机拒绝了请求",
+      "body": "主机拒绝了该效果。意图记录了此次拒绝。"
+    },
+    "refused": {
+      "title": "引擎拒绝了请求",
+      "code": "拒绝代码："
+    },
+    "unknown": {
+      "title": "未收到引擎的答复",
+      "body": "请求可能已被记录。请打开此目标的意图查看是否如此；如果其结果不确定，请在那里执行核对。"
+    }
+  },
+  "refusals": {
+    "authority_expired": "权限检查未能及时完成，因此未执行该请求。",
+    "authority_unavailable": "引擎无法对此请求作出判定，因此未执行该请求。",
+    "base_not_allowed": "该基础分支不是此目标的合并基础分支之一。",
+    "binding_not_approved": "凭据绑定或仓库绑定未在此工作区中获得批准。",
+    "content_mismatch": "提交或树与受管仓库中的内容不匹配。",
+    "default_branch_refused": "该分支是仓库的默认分支，拒绝向其发布。",
+    "dispatch_deadline_passed": "在请求发送之前，派发截止时间已过。未派发任何内容。",
+    "field_not_accepted": "请求包含此路由不接受的字段。",
+    "forbidden": "您当前的权限不允许对此目标执行此操作。",
+    "head_mismatch": "拉取请求的 head 已不再是已审查的提交。",
+    "host_credential_refused": "Git 主机拒绝了该绑定的凭据或其作用域。未派发任何内容。",
+    "host_unavailable": "无法连接到 Git 主机。未派发任何内容。",
+    "intent_settled": "该意图的结果已确定，因此无法放弃。",
+    "invalid_request": "请求不完整或格式错误。请检查分支名称和提交 ID。",
+    "lookup_incomplete": "无法完整读取主机的当前状态，因此未派发任何内容。",
+    "not_found": "目标或意图不存在，或者您无权查看。",
+    "not_mergeable": "主机报告该拉取请求无法合并。",
+    "operation_conflict": "此操作 ID 已被用于另一个不同的请求。",
+    "protected_branch_refused": "该分支在主机上受保护，拒绝向其发布。",
+    "push_prefix_overlaps_base": "该推送前缀会使推送落到合并基础分支上。",
+    "ref_not_allowed": "该分支不在此目标的推送前缀之下。",
+    "repository_outside_binding": "该仓库不属于凭据绑定所允许的所有者。",
+    "runtime_credential_refused": "会话的运行时凭据无法用于发布。请使用您自己的凭据操作。",
+    "scoped_grant_required": "此操作需要针对此目标的作用域授权。",
+    "stale_lease": "该分支已不再处于预期的当前提交。",
+    "step_up_required": "此操作需要提升至 AAL3。请在出现提示时完成提升。",
+    "subject_mismatch": "此操作 ID 属于另一主体发出的请求。",
+    "target_changed": "请求被受理后目标发生了变化。未派发任何内容。",
+    "target_in_use": "仍有处于派发中、不确定或已放弃状态的意图持有此目标。",
+    "unresolved_intent": "已有未解决的意图持有此分支、拉取请求或合并。",
+    "unsupported_requirement": "主机无法满足此要求，例如在 GitLab 上进行变基合并。",
+    "version_conflict": "自您打开以来，目标已发生变化。请重新打开以查看当前版本。",
+    "workflow_change_refused": "该提交修改了 CI 工作流文件，此目标拒绝发布此类提交。",
+    "unknown": "引擎以本控制台无法描述的代码拒绝了请求。"
+  },
+  "intents": {
+    "title": "意图",
+    "empty": "此目标没有记录任何发布意图。",
+    "open": "打开意图 {{id}}"
+  },
+  "intent": {
+    "title": "意图 {{id}}",
+    "description": "所请求的内容、最近一次在主机上观测到的状态，以及主机是否应答了该请求，均分别记录。",
+    "state": "状态",
+    "effect": "效果",
+    "receipt": "回执",
+    "operationId": "操作 ID",
+    "attempt": "尝试",
+    "targetVersion": "目标版本",
+    "reason": "原因",
+    "authorizedBy": "承担者",
+    "dispatchDeadline": "派发截止时间",
+    "releaseFailure": "凭据释放失败",
+    "requested": "请求内容",
+    "observed": "主机上的观测",
+    "notObserved": "尚未针对此意图观测主机。",
+    "present": "存在",
+    "sha": "主机上的提交",
+    "headSha": "Head 提交",
+    "merged": "已合并",
+    "mergeCommit": "合并提交",
+    "mergeTree": "合并树",
+    "contentMatch": "Head 与请求的提交一致",
+    "source": "来源",
+    "at": "时间",
+    "acknowledged": "主机应答",
+    "acknowledgedValue": "已应答",
+    "status": "主机状态",
+    "requestId": "主机请求 ID",
+    "acknowledgedHint": "应答是主机对此请求的成功响应，并非对效果的观测。",
+    "yes": "是",
+    "no": "否",
+    "observations": "观测记录",
+    "observationsEmpty": "此意图没有记录任何观测。",
+    "obs": {
+      "at": "时间",
+      "attempt": "尝试",
+      "source": "来源",
+      "result": "结果",
+      "host": "主机对象、状态和请求"
+    },
+    "abandonedNote": "一名管理员已为此意图承担责任。这并不能证明主机上的任何情况。在新的请求通过“承认已放弃的意图”指明此意图之前，其作用域将一直被占用。",
+    "abandoned": "意图已放弃",
+    "abandonTitle": "放弃意图 {{id}}？",
+    "abandonDescription": "放弃会记录由您为这个未解决的意图承担责任。它不会更改或读取主机，并且在新的请求承认此意图之前，作用域将一直被占用。",
+    "abandonReason": "原因（最多 256 个字符）"
+  }
+}

@@ -73,6 +73,12 @@ var classifiedWriters = map[string]string{
 	"handleCreateAssignment": "classifyAssignmentCreate",
 	"handleUpdateAssignment": "classifyAssignmentUpdate",
 	"handleDeleteAssignment": "classifyAssignmentDelete",
+	// The retirement step deletes the user-tree bindings that name a removed account,
+	// as that account's own delete would. It consults the delete classifier and
+	// records a relaxing verdict, such as a source left unconfined, on the delete's
+	// audit event instead of waiting for a second principal: the tenant has already
+	// decided the removal the step carries out.
+	"retireUserBindings": "classifyDelete",
 }
 
 // applyPosture is the one governed writer exempt from the "must call ITS classifier" rule:

@@ -122,17 +122,6 @@ func TestSCIMUserLifecycle(t *testing.T) {
 		t.Errorf("get = %d active=%v", got.code, got.body["active"])
 	}
 
-	// --- mover: PATCH active=false disables but keeps the resource retrievable ---
-	patch := h.scim("PATCH", base+"/Users/"+id, tok,
-		`{"schemas":["urn:ietf:params:scim:api:messages:2.0:PatchOp"],"Operations":[{"op":"replace","path":"active","value":false}]}`)
-	if patch.code != http.StatusOK || patch.body["active"] != false {
-		t.Errorf("patch active=false = %d active=%v", patch.code, patch.body["active"])
-	}
-	after := h.scim("GET", base+"/Users/"+id, tok, "")
-	if after.code != http.StatusOK || after.body["active"] != false {
-		t.Errorf("post-disable get = %d active=%v, want 200 active:false", after.code, after.body["active"])
-	}
-
 	// --- PATCH remove without path -> 400 noTarget ---
 	noTarget := h.scim("PATCH", base+"/Users/"+id, tok,
 		`{"schemas":["urn:ietf:params:scim:api:messages:2.0:PatchOp"],"Operations":[{"op":"remove"}]}`)
@@ -140,12 +129,29 @@ func TestSCIMUserLifecycle(t *testing.T) {
 		t.Errorf("remove no path = %d scimType=%v, want 400 noTarget", noTarget.code, noTarget.body["scimType"])
 	}
 
+	// --- PATCH active=false offboards the account from this tenant: the answer
+	// shows the resource inactive once, and the tenant no longer holds it ---
+	patch := h.scim("PATCH", base+"/Users/"+id, tok,
+		`{"schemas":["urn:ietf:params:scim:api:messages:2.0:PatchOp"],"Operations":[{"op":"replace","path":"active","value":false}]}`)
+	if patch.code != http.StatusOK || patch.body["active"] != false {
+		t.Errorf("patch active=false = %d active=%v", patch.code, patch.body["active"])
+	}
+	after := h.scim("GET", base+"/Users/"+id, tok, "")
+	if after.code != http.StatusNotFound {
+		t.Errorf("post-disable get = %d, want 404 (removed from the tenant)", after.code)
+	}
+
 	// --- leaver: DELETE removes; subsequent GET -> 404 ---
-	del := h.scim("DELETE", base+"/Users/"+id, tok, "")
+	leaver := h.scim("POST", base+"/Users", tok, `{"userName":"leaver@acme.com","active":true}`)
+	if leaver.code != http.StatusCreated {
+		t.Fatalf("create leaver = %d %s", leaver.code, leaver.raw)
+	}
+	leaverID, _ := leaver.body["id"].(string)
+	del := h.scim("DELETE", base+"/Users/"+leaverID, tok, "")
 	if del.code != http.StatusNoContent {
 		t.Fatalf("delete = %d %s", del.code, del.raw)
 	}
-	gone := h.scim("GET", base+"/Users/"+id, tok, "")
+	gone := h.scim("GET", base+"/Users/"+leaverID, tok, "")
 	if gone.code != http.StatusNotFound {
 		t.Errorf("get after delete = %d, want 404", gone.code)
 	}

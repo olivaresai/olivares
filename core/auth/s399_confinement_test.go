@@ -26,14 +26,13 @@ func TestMembershipWorkspaceConfinementOnPrincipal(t *testing.T) {
 	tenant := provisionTenant(t, st, "acme")
 	ws := model.ID("ws-alpha") // loadGrants reads the stored id verbatim; existence is validated at the API layer
 
-	u, err := a.CreateUser(ctx, admin, auth.NewUser{Email: "c@acme.com", DisplayName: "C", Password: "dev-password-1"})
+	// Create the user with a membership CONFINED to ws.
+	u, err := a.CreateUser(ctx, admin, auth.NewUser{
+		Email: "c@acme.com", DisplayName: "C", Password: "dev-password-1",
+		Tenant: tenant, Role: auth.RoleAdmin, WorkspaceID: ws,
+	})
 	if err != nil {
 		t.Fatalf("create user: %v", err)
-	}
-
-	// Grant a membership CONFINED to ws.
-	if _, err := a.GrantMembership(ctx, admin, u.ID, tenant, auth.RoleAdmin, ws); err != nil {
-		t.Fatalf("grant confined: %v", err)
 	}
 
 	// The live session principal is confined to ws.
@@ -85,12 +84,9 @@ func TestTenantWideMembershipIsNotConfined(t *testing.T) {
 	admin := mustSuperadmin(t, ctx, a)
 	tenant := provisionTenant(t, st, "acme")
 
-	u, err := a.CreateUser(ctx, admin, auth.NewUser{Email: "w@acme.com", DisplayName: "W", Password: "dev-password-1"})
+	u, err := a.CreateUser(ctx, admin, auth.NewUser{Email: "w@acme.com", DisplayName: "W", Password: "dev-password-1", Tenant: tenant, Role: auth.RoleEditor})
 	if err != nil {
 		t.Fatalf("create user: %v", err)
-	}
-	if _, err := a.GrantMembership(ctx, admin, u.ID, tenant, auth.RoleEditor, model.ID("")); err != nil {
-		t.Fatalf("grant: %v", err)
 	}
 	p, found, err := a.PrincipalForUser(ctx, u.ID.String(), auth.AAL3)
 	if err != nil || !found {
@@ -111,12 +107,12 @@ func TestConfinedPrincipalCannotIssueToken(t *testing.T) {
 	admin := mustSuperadmin(t, ctx, a)
 	tenant := provisionTenant(t, st, "acme")
 
-	u, err := a.CreateUser(ctx, admin, auth.NewUser{Email: "t@acme.com", DisplayName: "T", Password: "dev-password-1"})
+	u, err := a.CreateUser(ctx, admin, auth.NewUser{
+		Email: "t@acme.com", DisplayName: "T", Password: "dev-password-1",
+		Tenant: tenant, Role: auth.RoleAdmin, WorkspaceID: model.ID("ws-alpha"),
+	})
 	if err != nil {
 		t.Fatalf("create user: %v", err)
-	}
-	if _, err := a.GrantMembership(ctx, admin, u.ID, tenant, auth.RoleAdmin, model.ID("ws-alpha")); err != nil {
-		t.Fatalf("grant confined: %v", err)
 	}
 	confined, _, _ := a.PrincipalForUser(ctx, u.ID.String(), auth.AAL3)
 	if _, _, err := a.IssueToken(ctx, confined, auth.TokenSpec{BoundTenant: tenant, Role: auth.RoleAdmin}); !errors.Is(err, auth.ErrWorkspaceConfined) {
@@ -143,10 +139,22 @@ func TestConfinedActorCannotWidenMembership(t *testing.T) {
 	admin := mustSuperadmin(t, ctx, a)
 	tenant := provisionTenant(t, st, "acme")
 
-	u, _ := a.CreateUser(ctx, admin, auth.NewUser{Email: "actor@acme.com", DisplayName: "A", Password: "dev-password-1"})
-	target, _ := a.CreateUser(ctx, admin, auth.NewUser{Email: "target@acme.com", DisplayName: "Tg", Password: "dev-password-1"})
-	if _, err := a.GrantMembership(ctx, admin, u.ID, tenant, auth.RoleAdmin, model.ID("ws-alpha")); err != nil {
-		t.Fatalf("grant confined admin: %v", err)
+	u, err := a.CreateUser(ctx, admin, auth.NewUser{
+		Email: "actor@acme.com", DisplayName: "A", Password: "dev-password-1",
+		Tenant: tenant, Role: auth.RoleAdmin, WorkspaceID: model.ID("ws-alpha"),
+	})
+	if err != nil {
+		t.Fatalf("create confined admin: %v", err)
+	}
+	// The target is already a member, confined to the actor's workspace: a grant
+	// never joins an account that is not a member, so each grant below is a
+	// re-grant of that membership.
+	target, err := a.CreateUser(ctx, admin, auth.NewUser{
+		Email: "target@acme.com", DisplayName: "Tg", Password: "dev-password-1",
+		Tenant: tenant, Role: auth.RoleViewer, WorkspaceID: model.ID("ws-alpha"),
+	})
+	if err != nil {
+		t.Fatalf("create confined target: %v", err)
 	}
 	confined, _, _ := a.PrincipalForUser(ctx, u.ID.String(), auth.AAL3)
 

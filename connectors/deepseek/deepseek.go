@@ -259,7 +259,15 @@ func (s *Source) fetchModels(ctx context.Context) ([]modelprovider.Model, error)
 			CapabilitySource: "live",
 			CreatedAt:        unixTime(c.Created),
 		}
-		if f, ok := familyFor(c.ID); ok {
+		if e, ok := exactTariffFor(c.ID); ok {
+			// The tariff is not one list price, so Pricing stays nil. Limits,
+			// capabilities, deprecation and served-by still travel with the ID.
+			m.Capabilities = append([]modelprovider.Capability(nil), e.capabilities...)
+			m.ContextWindow = e.context
+			m.MaxOutputTokens = e.maxOutput
+			m.Deprecated = e.deprecated
+			m.Retirements = append([]modelprovider.ModelRetirement(nil), e.retirements...)
+		} else if f, ok := familyFor(c.ID); ok {
 			pc := f.pricing
 			m.Pricing = &pc
 			m.Capabilities = append([]modelprovider.Capability(nil), f.capabilities...)

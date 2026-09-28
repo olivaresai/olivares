@@ -77,9 +77,16 @@ type runtimeObservationSink interface {
 // the top-level + advisor cost lines and the thinking/advisor/refusal findings to
 // the bus through costSink, fail-open.
 type claudeJudgeAdapter struct {
-	inf      *claudeapi.Inference
-	costSink runtimeObservationSink // nil until late-bound; emission is fail-open
-	log      *slog.Logger
+	protocolContext claudeapi.JudgeProtocolContext
+	inf             *claudeapi.Inference
+	costSink        runtimeObservationSink // nil until late-bound; emission is fail-open
+	log             *slog.Logger
+}
+
+// JudgingProtocol exposes the effective declared protocol without invoking a model.
+func (a *claudeJudgeAdapter) JudgingProtocol(modelRef string) (evals.ScoringProtocol, bool) {
+	p, ok := a.inf.DescribeJudge(modelRef, a.protocolContext)
+	return evals.ScoringProtocol{Implementation: p.Implementation, Version: p.Version, Provider: p.Provider, Model: p.Model, ConfigDigest: p.ConfigDigest}, ok
 }
 
 func (a *claudeJudgeAdapter) Judge(ctx context.Context, tenant model.TenantID, req evals.JudgeRequest) (evals.JudgeVerdict, error) {
@@ -95,9 +102,9 @@ func (a *claudeJudgeAdapter) Judge(ctx context.Context, tenant model.TenantID, r
 	// billed. Fail-open: a publish/transport hiccup never changes the eval outcome.
 	a.emitRuntime(ctx, tenant, resp)
 	if err != nil {
-		return evals.JudgeVerdict{}, err
+		return evals.JudgeVerdict{ObservedModel: resp.Model}, err
 	}
-	return evals.JudgeVerdict{Score: res.Score, Passed: res.Passed, Reason: res.Reason}, nil
+	return evals.JudgeVerdict{Score: res.Score, Passed: res.Passed, Reason: res.Reason, ObservedModel: resp.Model}, nil
 }
 
 // JudgePair implements evals.PairJudge over the SAME inference client/credential as
@@ -436,7 +443,7 @@ func loadClaudeInference(getenv func(string) string, inferenceDoer modelprovider
 	default:
 		cfg.Doer = inferenceDoer // OBS-03: trace-instrument the engine→Claude hop
 		inf := claudeapi.NewInference(cfg)
-		ci.judge = &claudeJudgeAdapter{inf: inf, log: log}
+		ci.judge = &claudeJudgeAdapter{inf: inf, log: log, protocolContext: claudeapi.NewJudgeProtocolContext(cfg)}
 		ci.recSummarizer = &recordingSummarizerAdapter{inf: inf, log: log}
 		log.Info("evals: wired Claude-backed llm_judge (Messages API)", "gateway", string(cfg.Gateway), "judge_model_default", cfg.DefaultModel)
 	}

@@ -169,6 +169,11 @@ func dropLoginCapabilityForHistoricalFixture(t *testing.T, db *sql.DB, dia diale
 }
 
 func rewindLoginCapabilityForHistoricalFixture(ctx context.Context, db *sql.DB, dia dialect.Dialect) error {
+	// A pre-v13 database is pre-v14 as well. Forget the v14 record first, newest
+	// first, or the reconstructed history keeps a version its predecessor never ran.
+	if err := rewindConsentCustodyForHistoricalFixture(ctx, db, dia); err != nil {
+		return err
+	}
 	present, tracked, err := inspectLoginCapabilityHistoricalFixtureHalves(ctx, db, dia)
 	if err != nil {
 		return fmt.Errorf("rewind core v%d: %w", coreLoginCapabilityMigrationVersion, err)
@@ -196,6 +201,22 @@ func rewindLoginCapabilityForHistoricalFixture(ctx context.Context, db *sql.DB, 
 	}
 }
 
+// rewindConsentCustodyForHistoricalFixture removes core v14's tracking row and
+// every later one. v14 and the record-only versions after it (v15, credential
+// bindings) execute no statement: the relations and columns they record are
+// additive, and every boot's reconcile creates them after the migrations run, so
+// a pre-v14 database reopened by this build gains them the same way. Their rows
+// are their whole versioned footprint, and removing the later ones too keeps the
+// reconstructed history an ordered prefix of the plan. A caller that already
+// stands pre-v14 continues.
+func rewindConsentCustodyForHistoricalFixture(ctx context.Context, db *sql.DB, dia dialect.Dialect) error {
+	if _, err := db.ExecContext(ctx, dia.Rebind(
+		"DELETE FROM "+coreTrackingRelation(dia)+" WHERE version >= ?"), coreConsentCustodyMigrationVersion); err != nil {
+		return fmt.Errorf("rewind core v%d: delete tracking row: %w", coreConsentCustodyMigrationVersion, err)
+	}
+	return nil
+}
+
 func inspectLoginCapabilityHistoricalFixtureHalves(
 	ctx context.Context,
 	q dialect.Querier,
@@ -217,6 +238,14 @@ func loginCapabilityHistoricalPredecessorAbsence(
 	q dialect.Querier,
 	dia dialect.Dialect,
 ) error {
+	consent, err := coreVersionIsTracked(ctx, q, dia, coreConsentCustodyMigrationVersion)
+	if err != nil {
+		return fmt.Errorf("reconstructed predecessor: read the v%d tracking row: %w",
+			coreConsentCustodyMigrationVersion, err)
+	}
+	if consent {
+		return fmt.Errorf("reconstructed predecessor: v%d is still tracked", coreConsentCustodyMigrationVersion)
+	}
 	present, tracked, err := inspectLoginCapabilityHistoricalFixtureHalves(ctx, q, dia)
 	if err != nil {
 		return fmt.Errorf("reconstructed predecessor: inspect v%d: %w",

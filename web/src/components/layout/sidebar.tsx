@@ -2,12 +2,15 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// THE SIDEBAR (N1) — Overview, then the nine areas, then the pinned Settings utility.
+// THE AREA DIRECTORY (N1) — Overview, then the nine areas, then the pinned Settings
+// utility. Since the v26.10 frame it is the "All areas" sheet: the sidebar itself
+// (app-sidebar.tsx) holds the journeys and the sessions, and opens this directory from its
+// "All areas" entry; the phone bar opens it from "More".
 //
 // Every list here is a projection of features/navigation/model.ts over the single
-// FEATURE_VIEWS registry: the expanded sidebar, the icon rail and the mobile drawer render
-// the SAME areas, sections and leaves for the same principal, and the filter searches the
-// SAME index the ⌘K palette does. Nothing in this file names a route.
+// FEATURE_VIEWS registry: the same areas, sections and leaves for the same principal, and
+// the filter searches the SAME index the ⌘K palette does. Nothing in this file names a
+// route.
 //
 // Shape of an area row: a LINK to the area's directory page (`/areas/<id>`) and, beside it,
 // a separate BUTTON that expands or folds the area's modules. Two controls, because they do
@@ -28,20 +31,16 @@
 // "admin" (Provider profiles before Administration). Without a query the canonical grouped
 // order returns untouched, and the fold preference is neither read nor written by a query.
 //
-// IDS ARE INSTANCE-SCOPED (R2, independent review F2). The desktop sidebar stays mounted
-// (CSS-hidden below `lg`) while the drawer mounts a second SidebarBody, and the rail's
-// flyouts render a third set of section groups. Every `aria-controls` / `aria-labelledby`
-// target therefore carries this instance's `useId()` prefix, so each control names the
-// panel or heading it actually renders and `getElementById` can only resolve to that one.
+// IDS ARE INSTANCE-SCOPED (R2, independent review F2). More than one directory can be
+// mounted at once (a test mounts the bare tree beside the sheet). Every `aria-controls` /
+// `aria-labelledby` target therefore carries this instance's `useId()` prefix, so each
+// control names the panel or heading it actually renders.
 import { Link, useRouterState } from '@tanstack/react-router'
 import type { LucideIcon } from 'lucide-react'
 import {
-  ArrowRight,
   ChevronDown,
   ChevronsDownUp,
   ChevronsUpDown,
-  PanelLeftClose,
-  PanelLeftOpen,
   Search,
   Star,
   X,
@@ -56,12 +55,6 @@ import {
 } from 'react'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
-import { Button } from '@/components/ui/button'
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import {
   Sheet,
@@ -69,18 +62,12 @@ import {
   SheetDescription,
   SheetTitle,
 } from '@/components/ui/sheet'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip'
 import { useViewAccess } from '@/features/navigation/authorization'
 import { NAV_AREAS, type AreaId, type NavArea } from '@/features/registry'
 import {
   SETTINGS_UTILITY,
   activeAreaId as activeAreaOf,
   areaLabel,
-  areaQuestion,
   authorizedEntries,
   authorizedSections,
   buildNavSearchIndex,
@@ -97,7 +84,6 @@ import { railKey, type RailRow } from '@/features/navigation/rail-keys'
 import { usePersonalNavigation } from '@/features/navigation/personal-navigation'
 import { personalLink } from '@/features/navigation/personal-navigation-store'
 import { isAreaOpen, usePreferencesStore } from '@/stores/preferences'
-import { BrandMark, Wordmark } from './brand'
 import { PersonalNavigation } from './personal-navigation'
 import { TenantSwitcher } from './tenant-switcher'
 import { WorkspaceSwitcher } from './workspace-switcher'
@@ -122,7 +108,6 @@ interface NavItemProps {
   /** `Area › Section` (or the "Area" tag) under the label — ranked results only. */
   context?: string
   exact?: boolean
-  collapsed?: boolean
   onNavigate?: () => void
   className?: string
   /** 0 for a top-level row, 1 for a leaf inside an area. Read by the rail keyboard. */
@@ -151,7 +136,6 @@ function NavItem({
   label,
   context,
   exact,
-  collapsed,
   onNavigate,
   className,
   depth = 0,
@@ -166,22 +150,21 @@ function NavItem({
       // only sets data-status, so set aria-current explicitly when active).
       activeProps={{ 'aria-current': 'page' }}
       onClick={onNavigate}
-      aria-label={collapsed ? label : undefined}
       // The rail is ONE tab stop with a roving tabindex (see `useRailKeyboard`), so every
       // row starts untabbable and the hook promotes exactly one.
       tabIndex={-1}
       data-nav-row=""
       data-depth={depth}
       data-pin-id={pinId}
-      className={cn(ROW_CLASS, collapsed && 'justify-center px-0', className)}
+      className={cn(ROW_CLASS, className)}
     >
       <Icon />
-      {!collapsed && !context && (
+      {!context && (
         <span className="min-w-0 break-words" title={label}>
           {label}
         </span>
       )}
-      {!collapsed && context && (
+      {context && (
         <span className="flex min-w-0 flex-col">
           <span className="break-words" title={label}>
             {label}
@@ -196,14 +179,6 @@ function NavItem({
       )}
     </Link>
   )
-  if (collapsed) {
-    return (
-      <Tooltip>
-        <TooltipTrigger asChild>{link}</TooltipTrigger>
-        <TooltipContent side="right">{label}</TooltipContent>
-      </Tooltip>
-    )
-  }
   if (!pinId) return link
   return (
     <span
@@ -456,13 +431,7 @@ function useRankedMatches(
   )
 }
 
-function SidebarBody({
-  collapsed = false,
-  onNavigate,
-}: {
-  collapsed?: boolean
-  onNavigate?: () => void
-}) {
+function SidebarBody({ onNavigate }: { onNavigate?: () => void }) {
   const { t } = useTranslation('nav')
   // ⛔ ONE projection, shared with the palette, the shortcuts and the nine directories.
   //    `useAuth().can` is no longer read here: a view whose authority is a registered
@@ -507,10 +476,6 @@ function SidebarBody({
     onFold: (id) => setAreaOpen(id as AreaId, false),
   })
 
-  // The rail's flyouts: one open at a time, closed by navigating from inside it.
-  const [flyout, setFlyout] = useState<AreaId | null>(null)
-  const closeFlyout = () => setFlyout(null)
-
   const visibleIds = areas.map((a) => a.area.id)
   const allOpen =
     visibleIds.length > 0 &&
@@ -525,13 +490,8 @@ function SidebarBody({
       onKeyDown={onRailKeyDown}
       className="flex h-full flex-col"
     >
-      <div
-        className={cn(
-          'flex h-[var(--console-header-height)] shrink-0 items-center border-b border-border',
-          collapsed ? 'justify-center px-0' : 'px-3',
-        )}
-      >
-        {collapsed ? <BrandMark className="text-foreground" /> : <Wordmark />}
+      <div className="flex h-12 shrink-0 items-center border-b border-border px-4">
+        <h2 className="text-heading text-foreground">{t('shell.allAreas')}</h2>
       </div>
 
       {/* THE SCOPE, AND IT IS THE RAIL'S CAPTION AND NOT THE PAGE'S.
@@ -545,61 +505,56 @@ function SidebarBody({
           with the navigation they scope, and the drawer trigger is the first control in
           the header.
 
-          The icon rail has no room for a 14 rem label — the same reason the filter
-          field is not rendered there — and both switchers return `null` when there is
-          nothing to choose, so a single-membership deployment spends no pixels here. */}
-      {!collapsed && (
-        <div
-          data-slot="rail-scope"
-          className="flex shrink-0 flex-col gap-0.5 border-b border-border p-1.5"
-        >
-          <TenantSwitcher className="w-full max-w-none justify-start" />
-          <WorkspaceSwitcher className="w-full max-w-none justify-start" />
-        </div>
-      )}
+          Both switchers return `null` when there is nothing to choose, so a
+          single-membership deployment spends no pixels here. From 761 px the sidebar
+          carries the same scope above the journeys, so this copy shows on the phone
+          only, where this directory is the "More" sheet. */}
+      <div
+        data-slot="rail-scope"
+        className="flex shrink-0 flex-col gap-0.5 border-b border-border p-1.5 empty:hidden min-[761px]:hidden"
+      >
+        <TenantSwitcher className="w-full max-w-none justify-start" />
+        <WorkspaceSwitcher className="w-full max-w-none justify-start" />
+      </div>
 
-      {/* The icon rail has no room for a field, and hiding matches behind a tooltip
-          would be worse than not offering search at all. */}
-      {!collapsed && (
-        <div className="shrink-0 border-b border-border p-2">
-          <div className="relative">
-            <Search
-              aria-hidden="true"
-              className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground"
-            />
-            <input
-              id={searchId}
-              type="search"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={(e) => e.key === 'Escape' && setQuery('')}
-              placeholder={t('filter.placeholder')}
-              aria-label={t('filter.label')}
-              className="h-8 w-full rounded-md border border-border bg-background pr-7 pl-8 text-body outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-search-cancel-button]:appearance-none"
-            />
-            {filtering && (
-              <button
-                type="button"
-                onClick={() => {
-                  setQuery('')
-                  // Clearing unmounts this button, so focus would fall to <body> and a
-                  // keyboard user would have to tab back in from the top of the page.
-                  document.getElementById(searchId)?.focus()
-                }}
-                aria-label={t('filter.clear')}
-                className="absolute top-1/2 right-1.5 -translate-y-1/2 rounded p-1 text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <X aria-hidden="true" className="size-3.5" />
-              </button>
-            )}
-          </div>
-          {/* Announce the count to assistive tech: a sighted user sees the list shrink,
-              a screen-reader user gets nothing unless we say it (WCAG 4.1.3). */}
-          <div aria-live="polite" className="sr-only">
-            {filtering ? t('filter.results', { n: hits }) : ''}
-          </div>
+      <div className="shrink-0 border-b border-border p-2">
+        <div className="relative">
+          <Search
+            aria-hidden="true"
+            className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground"
+          />
+          <input
+            id={searchId}
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => e.key === 'Escape' && setQuery('')}
+            placeholder={t('filter.placeholder')}
+            aria-label={t('filter.label')}
+            className="h-8 w-full rounded-md border border-ctl-border bg-background pr-7 pl-8 text-body outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-search-cancel-button]:appearance-none"
+          />
+          {filtering && (
+            <button
+              type="button"
+              onClick={() => {
+                setQuery('')
+                // Clearing unmounts this button, so focus would fall to <body> and a
+                // keyboard user would have to tab back in from the top of the page.
+                document.getElementById(searchId)?.focus()
+              }}
+              aria-label={t('filter.clear')}
+              className="absolute top-1/2 right-1.5 -translate-y-1/2 rounded p-1 text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <X aria-hidden="true" className="size-3.5" />
+            </button>
+          )}
         </div>
-      )}
+        {/* Announce the count to assistive tech: a sighted user sees the list shrink,
+              a screen-reader user gets nothing unless we say it (WCAG 4.1.3). */}
+        <div aria-live="polite" className="sr-only">
+          {filtering ? t('filter.results', { n: hits }) : ''}
+        </div>
+      </div>
 
       {/* ⛔ EL BORDE DE ABAJO, y el defecto es de LECTURA, no de layout. Medido a
           1440x900: el area de scroll y el pie `Settings` NO se solapan (solape = 0
@@ -627,7 +582,7 @@ function SidebarBody({
           aria-keyshortcuts="p"
           className="flex flex-col gap-1 p-2 pb-6 [contain:inline-size]"
         >
-          {filtering && !collapsed && (
+          {filtering && (
             // The ranked projection: every authorized match, in the shared ranking's
             // order, with its area/section context. Native links, `aria-current` on the
             // current page, and the same permissions as the grouped tree; the fold
@@ -660,17 +615,14 @@ function SidebarBody({
               icon={homeIcon}
               label={homeLabel}
               exact
-              collapsed={collapsed}
               onNavigate={onNavigate}
               pinId="home"
             />
           )}
 
-          {!filtering && (
-            <PersonalNavigation collapsed={collapsed} onNavigate={onNavigate} />
-          )}
+          {!filtering && <PersonalNavigation onNavigate={onNavigate} />}
 
-          {!filtering && !collapsed && areas.length > 0 && (
+          {!filtering && areas.length > 0 && (
             <div className="mt-1 flex items-center justify-between px-2.5 pb-0.5">
               <span className="text-overline text-muted-foreground uppercase">
                 {t('directory.areas')}
@@ -694,79 +646,11 @@ function SidebarBody({
             </div>
           )}
 
-          {(!filtering || collapsed) &&
+          {!filtering &&
             areas.map(({ area, sections }) => {
               const label = areaLabel(t, area.id)
               const isBranch = activeAreaId === area.id
               const Icon = area.icon
-
-              if (collapsed) {
-                // The rail shows AREAS, not fifty icons. The trigger is a real button that
-                // opens the area's modules in a flyout — reachable by keyboard and by touch,
-                // never hover-only — and the flyout's first entry is the directory link.
-                return (
-                  <Popover
-                    key={area.id}
-                    open={flyout === area.id}
-                    onOpenChange={(open) => setFlyout(open ? area.id : null)}
-                  >
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <PopoverTrigger asChild>
-                          <button
-                            type="button"
-                            aria-label={t('directory.modulesOf', {
-                              area: label,
-                            })}
-                            data-status={isBranch ? 'active' : undefined}
-                            data-branch={isBranch ? 'active' : undefined}
-                            className={cn(
-                              ROW_CLASS,
-                              'w-full justify-center px-0',
-                            )}
-                          >
-                            <Icon />
-                          </button>
-                        </PopoverTrigger>
-                      </TooltipTrigger>
-                      <TooltipContent side="right">{label}</TooltipContent>
-                    </Tooltip>
-                    <PopoverContent
-                      side="right"
-                      align="start"
-                      className="w-64 p-2"
-                      aria-label={t('directory.modulesOf', { area: label })}
-                    >
-                      <Link
-                        to={area.path as never}
-                        activeOptions={{ exact: true }}
-                        activeProps={{ 'aria-current': 'page' }}
-                        onClick={closeFlyout}
-                        className={cn(ROW_CLASS, 'font-medium text-foreground')}
-                      >
-                        <Icon />
-                        <span className="min-w-0 flex-1 truncate" title={label}>
-                          {label}
-                        </span>
-                        <ArrowRight
-                          aria-hidden="true"
-                          className="size-3.5 text-muted-foreground"
-                        />
-                      </Link>
-                      <p className="px-2.5 pb-1 text-caption text-muted-foreground">
-                        {areaQuestion(t, area.id)}
-                      </p>
-                      <AreaSections
-                        area={area}
-                        sections={sections}
-                        idPrefix={`${uid}flyout-`}
-                        onNavigate={closeFlyout}
-                        dense
-                      />
-                    </PopoverContent>
-                  </Popover>
-                )
-              }
 
               const open = isAreaOpen(expansion, area.id, activeAreaId)
               const panelId = `${uid}nav-area-${area.id}`
@@ -857,7 +741,6 @@ function SidebarBody({
             to={SETTINGS_UTILITY.path}
             icon={SETTINGS_UTILITY.icon}
             label={settingsLabel}
-            collapsed={collapsed}
             onNavigate={onNavigate}
             pinId={SETTINGS_UTILITY.id}
           />
@@ -867,38 +750,30 @@ function SidebarBody({
   )
 }
 
-/** The persistent desktop sidebar (≥ lg). Collapses to an icon rail with flyouts. */
-export function Sidebar() {
+/**
+ * The directory of the nine areas, as a region of its own: the filter, the areas with
+ * their modules, the pins and Settings. The "All areas" sheet renders it; a test renders
+ * it bare.
+ */
+export function AreasTree({ onNavigate }: { onNavigate?: () => void }) {
   const { t } = useTranslation('common')
-  const collapsed = usePreferencesStore((s) => s.sidebarCollapsed)
-  const toggle = usePreferencesStore((s) => s.toggleSidebar)
   return (
-    <aside
-      aria-label={t('a11y.primarySidebar')}
-      className={cn(
-        'relative hidden shrink-0 flex-col border-r border-border bg-surface lg:flex print:hidden',
-        collapsed ? 'w-14' : 'w-60',
-      )}
+    <div
+      role="region"
+      aria-label={t('a11y.mainNavigation')}
+      data-slot="areas-tree"
+      className="flex h-full min-h-0 flex-col"
     >
-      <SidebarBody collapsed={collapsed} />
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        onClick={toggle}
-        aria-expanded={!collapsed}
-        aria-label={
-          collapsed ? t('actions.expandSidebar') : t('actions.collapseSidebar')
-        }
-        className="absolute -right-3 top-3 z-10 rounded-full border border-border bg-surface text-muted-foreground shadow-sm"
-      >
-        {collapsed ? <PanelLeftOpen /> : <PanelLeftClose />}
-      </Button>
-    </aside>
+      <SidebarBody onNavigate={onNavigate} />
+    </div>
   )
 }
 
-/** The mobile off-canvas navigation (< lg), opened from the topbar menu button. */
-export function MobileNav({
+/**
+ * ALL AREAS, as a sheet from the left: opened by the sidebar's "All areas" entry and by
+ * the phone bar's "More". Every registry destination the journeys do not name is here.
+ */
+export function AreasSheet({
   open,
   onOpenChange,
   returnFocusTo,
@@ -906,7 +781,7 @@ export function MobileNav({
   open: boolean
   onOpenChange: (open: boolean) => void
   /**
-   * The control that opened the drawer; closing gives focus back to it. The sheet
+   * The control that opened the sheet; closing gives focus back to it. The sheet
    * primitive's own restore left focus on <body> on the built console (measured
    * 2026-09-06, keyboard and pointer paths), so the drawer restores it explicitly.
    */
@@ -939,11 +814,9 @@ export function MobileNav({
           }
         }}
       >
-        {/* Name the drawer for what it IS — navigation — not the "Overview" group
-            label / "Search…" that previously misled the SR announcement. */}
-        <SheetTitle className="sr-only">
-          {t('common:a11y.mainNavigation')}
-        </SheetTitle>
+        {/* Name the sheet for what it IS — the directory of the areas — not the
+            "Overview" group label / "Search…" that misled the announcement. */}
+        <SheetTitle className="sr-only">{t('nav:shell.allAreas')}</SheetTitle>
         <SheetDescription className="sr-only">
           {t('common:commandPalette.placeholder')}
         </SheetDescription>

@@ -129,7 +129,7 @@ output contract は、バイナリが実際に出力する文字列であるた�
 
 ## Complete command reference
 
-This section is generated from the command tree of the community (AGPL) build of the `olivares` binary at this commit. It covers 837 command nodes — the root command and 836 subcommands, of which 183 are groups that carry subcommands and 9 are hidden diagnostics — together with the 2887 flags they declare. It is regenerated from the binary rather than kept by hand, so a command or flag added without a documentation change fails the push gate.
+This section is generated from the command tree of the community (AGPL) build of the `olivares` binary at this commit. It covers 845 command nodes — the root command and 844 subcommands, of which 184 are groups that carry subcommands and 9 are hidden diagnostics — together with the 2899 flags they declare. It is regenerated from the binary rather than kept by hand, so a command or flag added without a documentation change fails the push gate.
 
 Nothing here is a stability promise: see [Stability](#stability) below for what may still change.
 
@@ -161,7 +161,7 @@ Command groups declare further flags that their own subcommands inherit. A flag 
 
 ### Command index
 
-All 837 commands, in alphabetical order.
+All 845 commands, in alphabetical order.
 
 | Command | Summary |
 |---|---|
@@ -368,7 +368,7 @@ All 837 commands, in alphabetical order.
 | [`olivares doctor`](#command-olivares-doctor) | Diagnose this host installation without printing secrets |
 | [`olivares dr`](#command-olivares-dr) | Disaster recovery: ledger-continuity-safe backup and restore |
 | [`olivares dr backup`](#command-olivares-dr-backup) | Write a ledger-continuity-safe DR bundle |
-| [`olivares dr drill`](#command-olivares-dr-drill) | Full DR round-trip drill (backup→destroy→restore→verify) with a measured RTO |
+| [`olivares dr drill`](#command-olivares-dr-drill) | Drill synthetic-ledger continuity and print measured RTO |
 | [`olivares dr inspect`](#command-olivares-dr-inspect) | Print a DR bundle's manifest (no KEK needed; no secrets shown) |
 | [`olivares dr ls`](#command-olivares-dr-ls) | List DR bundles (local, or --offsite for the S3/R2 mirror) |
 | [`olivares dr pull`](#command-olivares-dr-pull) | Download a DR bundle from the offsite S3/R2 target |
@@ -404,6 +404,12 @@ All 837 commands, in alphabetical order.
 | [`olivares findings`](#command-olivares-findings) | Export governed security findings |
 | [`olivares findings export`](#command-olivares-findings-export) | Export all matching findings as SARIF 2.1.0 |
 | [`olivares finops`](#command-olivares-finops) | Report AI spend and value, and govern budgets, rates and cost centers |
+| [`olivares finops admission`](#command-olivares-finops-admission) | Reserve spend before an effect, settle it, and reconcile the holds |
+| [`olivares finops admission commit`](#command-olivares-finops-admission-commit) | Commit a hold at its measured cost |
+| [`olivares finops admission reconcile`](#command-olivares-finops-admission-reconcile) | Run admission recovery and file a finding on drift |
+| [`olivares finops admission reconciliation`](#command-olivares-finops-admission-reconciliation) | Read the holds against their settlements |
+| [`olivares finops admission release`](#command-olivares-finops-admission-release) | Release a hold whose effect did not run |
+| [`olivares finops admission reserve`](#command-olivares-finops-admission-reserve) | Reserve estimated spend before an effect |
 | [`olivares finops alerts`](#command-olivares-finops-alerts) | List budget threshold alerts |
 | [`olivares finops budgets`](#command-olivares-finops-budgets) | Govern spend budgets and read their status |
 | [`olivares finops budgets create`](#command-olivares-finops-budgets-create) | Create a budget |
@@ -626,7 +632,9 @@ All 837 commands, in alphabetical order.
 | [`olivares license`](#command-olivares-license) | Manage commercial licenses (install/uninstall/status + keygen/sign/verify; offline Ed25519, never a feature gate) |
 | [`olivares license connect`](#command-olivares-license-connect) | Bind this deployment to its purchase with an owner-approved key, and refresh, rotate, recover or deactivate it |
 | [`olivares license connect abandon`](#command-olivares-license-connect-abandon) | Discard the pending connect operation of this data directory |
+| [`olivares license connect apt-refresh`](#command-olivares-license-connect-apt-refresh) | Obtain this cycle's APT download credential by proof of possession and hand it to the appliance helper |
 | [`olivares license connect deactivate`](#command-olivares-license-connect-deactivate) | Deactivate a deployment by proof of possession, or with the owner's approval |
+| [`olivares license connect dnf-refresh`](#command-olivares-license-connect-dnf-refresh) | Obtain this cycle's DNF download credential by proof of possession and hand it to the appliance helper |
 | [`olivares license connect reactivate`](#command-olivares-license-connect-reactivate) | Reactivate an explicitly deactivated deployment with a new key and the owner's approval |
 | [`olivares license connect recover`](#command-olivares-license-connect-recover) | Bind a new key to an existing deployment whose key is lost, with the owner's approval |
 | [`olivares license connect refresh`](#command-olivares-license-connect-refresh) | Refresh the installed credential and download token by proof of possession |
@@ -4037,7 +4045,7 @@ olivares dr backup
 
 #### Command: olivares dr drill
 
-Full DR round-trip drill (backup→destroy→restore→verify) with a measured RTO
+Drill synthetic-ledger continuity and print measured RTO
 
 ```
 olivares dr drill
@@ -4187,8 +4195,10 @@ olivares evals gate
 | `--baseline` | `string` | — | explicit baseline run id (default: pinned baseline or latest prior run) |
 | `--ca-cert` | `string` | — | PEM CA bundle used to verify the control plane |
 | `--check-id` | `string` | — | re-check an existing gate id (after a governed override) |
+| `--comparison-mode` | `string` | `same_candidate` | comparison v1: same_candidate or candidate_change (requires --baseline) |
 | `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed dev planes only) |
 | `--json` | `bool` | `false` | deprecated alias for -o json |
+| `--model` | `string` | — | declared candidate model (distinct from the suite judge) |
 | `--outputs` | `string` | — | JSON file mapping case_key → candidate output ('-' = stdin) |
 | `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate |
 | `--sample-size` | `int` | `0` | judge at most N cases (deterministic subset; 0 = all) |
@@ -4200,6 +4210,7 @@ olivares evals gate
 | `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT) |
 | `--timeout` | `duration` | `10m0s` | request timeout (a judged gate can take a while) |
 | `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN) |
+| `--variant` | `string` | — | declared candidate prompt variant |
 
 #### Command: olivares evals label
 
@@ -4642,6 +4653,72 @@ olivares finops
 | `--timeout` | `duration` | `10s` | **inherited**. request timeout |
 | `--token` | `string` | — | **inherited**. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
 | `--token-file` | `string` | — | **inherited**. read the API bearer token from a file, or - for stdin |
+
+#### Command: olivares finops admission
+
+Reserve spend before an effect, settle it, and reconcile the holds
+
+```
+olivares finops admission
+```
+
+Declares no flags of its own; it takes those of [`olivares finops`](#command-olivares-finops) and the root command.
+
+#### Command: olivares finops admission commit
+
+Commit a hold at its measured cost
+
+```
+olivares finops admission commit
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--data` | `string` | — | request document: inline JSON, @FILE, or - for stdin |
+
+#### Command: olivares finops admission reconcile
+
+Run admission recovery and file a finding on drift
+
+```
+olivares finops admission reconcile
+```
+
+Declares no flags of its own; it takes those of [`olivares finops admission`](#command-olivares-finops-admission) and the root command.
+
+#### Command: olivares finops admission reconciliation
+
+Read the holds against their settlements
+
+```
+olivares finops admission reconciliation
+```
+
+Declares no flags of its own; it takes those of [`olivares finops admission`](#command-olivares-finops-admission) and the root command.
+
+#### Command: olivares finops admission release
+
+Release a hold whose effect did not run
+
+```
+olivares finops admission release
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--data` | `string` | — | request document: inline JSON, @FILE, or - for stdin |
+
+#### Command: olivares finops admission reserve
+
+Reserve estimated spend before an effect
+
+```
+olivares finops admission reserve
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--data` | `string` | — | request document: inline JSON, @FILE, or - for stdin |
 
 #### Command: olivares finops alerts
 
@@ -7529,6 +7606,19 @@ olivares license connect abandon
 | `--timeout` | `duration` | `1m0s` | overall network timeout |
 | `-y`, `--yes` | `bool` | `false` | proceed without the confirmation prompt (required in a non-interactive session) |
 
+#### Command: olivares license connect apt-refresh
+
+Obtain this cycle's APT download credential by proof of possession and hand it to the appliance helper
+
+```
+olivares license connect apt-refresh
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--cycle` | `string` | — | the appliance helper's cycle: exactly 32 lowercase hexadecimal characters |
+| `--data-dir` | `string` | — | data directory that holds this deployment's connected identity (default $OLIVARES_DATA_DIR, an existing ./olivares-data, else $XDG_DATA_HOME/olivares or ~/.local/share/olivares) |
+
 #### Command: olivares license connect deactivate
 
 Deactivate a deployment by proof of possession, or with the owner's approval
@@ -7547,6 +7637,19 @@ olivares license connect deactivate
 | `--owner-approval` | `bool` | `false` | request the owner's approval instead of proving possession of the bound key |
 | `--timeout` | `duration` | `1m0s` | overall network timeout |
 | `-y`, `--yes` | `bool` | `false` | proceed without the confirmation prompt (required in a non-interactive session) |
+
+#### Command: olivares license connect dnf-refresh
+
+Obtain this cycle's DNF download credential by proof of possession and hand it to the appliance helper
+
+```
+olivares license connect dnf-refresh
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--cycle` | `string` | — | the appliance helper's cycle: exactly 32 lowercase hexadecimal characters |
+| `--data-dir` | `string` | — | data directory that holds this deployment's connected identity (default $OLIVARES_DATA_DIR, an existing ./olivares-data, else $XDG_DATA_HOME/olivares or ~/.local/share/olivares) |
 
 #### Command: olivares license connect reactivate
 
@@ -12338,8 +12441,10 @@ olivares users create
 |---|---|---|---|
 | `--display-name` | `string` | — | human name shown in the console and audit ledger |
 | `--email` | `string` | — | email address that identifies the account (required) |
+| `--member-of` | `string` | — | grant the account its first membership in this tenant, in the same transaction |
 | `--password` | `string` | — | initial password (prefer --password-file: this form is visible in the process table) |
 | `--password-file` | `string` | — | read the initial password from a file, or - for stdin |
+| `--role` | `string` | `viewer` | role of the first membership: viewer, editor, admin or owner (with --member-of) |
 | `--superadmin` | `bool` | `false` | create the account as a cross-tenant superadmin (the engine accepts this only from a superadmin) |
 
 #### Command: olivares users disable

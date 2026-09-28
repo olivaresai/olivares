@@ -209,9 +209,19 @@ fi
 comprobar "el señuelo SIN mutar sale limpio (si no, mide el señuelo)" 0 "$base_rc"
 
 # ── 7 · y mutado, el gate tiene que decir HALLAZGO ─────────────────────────────────────
-sed -i 's/\b158 integrations\b/157 integrations/' "$ARBOL/README.md" || exit 2
-grep -q '157 integrations' "$ARBOL/README.md" || {
-	echo "test-public-counts-verdicts: ⛔ NO HE PODIDO MIRAR: el señuelo no quedó mutado" >&2
+# La cifra que se muta es la que el README declara hoy, no un literal: un literal caduca con
+# el primer módulo o conector nuevo y deja la celda midiendo nada ("no quedó mutado").
+# Uno menos cae dentro del vecindario ±8 que el gate prohíbe, así que tiene que ser HALLAZGO.
+real_readme="$(sha256sum < "$RAIZ/README.md")"
+n="$(grep -oE '(^|[^0-9])[0-9]+ integrations' "$ARBOL/README.md" | head -1 | grep -oE '[0-9]+')"
+[ -n "$n" ] || {
+	echo "test-public-counts-verdicts: ⛔ NO HE PODIDO MIRAR: el README del señuelo no declara integraciones" >&2
+	exit 2
+}
+m=$((n - 1))
+sed -i "s/\b$n integrations\b/$m integrations/" "$ARBOL/README.md" || exit 2
+grep -q "\b$m integrations\b" "$ARBOL/README.md" || {
+	echo "test-public-counts-verdicts: ⛔ NO HE PODIDO MIRAR: el señuelo no quedó mutado ($n → $m)" >&2
 	exit 2
 }
 bash "$ARBOL/scripts/check-public-counts.sh" >"$BANCO/7.log" 2>&1
@@ -221,7 +231,7 @@ comprobar "una cifra pública equivocada sigue siendo un HALLAZGO" 1 "$?"
 # Es la celda que responde por el arreglo entero, y además cubre un riesgo NUEVO que el
 # hardlink introduce: si el gate escribiera EN SITIO sobre un fichero enlazado, corrompería el
 # original. Si alguien reintroduce la mutación en el árbol, o el gate escribe, esto se pone rojo.
-if grep -q '157 integrations' "$RAIZ/README.md" 2>/dev/null; then
+if [ "$(sha256sum < "$RAIZ/README.md")" != "$real_readme" ]; then
 	printf '  FALLA %-56s\n' "el árbol real quedó MUTADO" >&2
 	fallan=$((fallan + 1))
 else

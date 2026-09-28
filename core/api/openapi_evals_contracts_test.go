@@ -90,13 +90,13 @@ func TestEvalsRequestBodiesMatchHandlerDTOs(t *testing.T) {
 	}{
 		{"/suites", []string{"criterion", "description", "judge_model", "name", "pass_threshold", "regression_threshold", "scorer", "subject_kind", "suite_version"}, []string{"name", "scorer", "subject_kind"}},
 		{"/suites/{id}/cases", []string{"case_key", "expected", "input", "metadata", "weight"}, []string{"case_key"}},
-		{"/runs", []string{"baseline_ref", "model_ref", "outputs", "prompt_variant", "subject_kind", "subject_ref", "suite_ref"}, []string{"outputs", "suite_ref"}},
+		{"/runs", []string{"baseline_ref", "comparison", "model_ref", "outputs", "prompt_variant", "subject_kind", "subject_ref", "suite_ref"}, []string{"outputs", "suite_ref"}},
 		{"/ab", []string{"a", "b", "pairwise", "subject_kind", "subject_ref", "suite_ref"}, []string{"a", "b", "suite_ref"}},
 		{"/monitor", []string{"limit", "subject_kind", "subject_ref", "suite"}, nil},
 		{"/baselines", []string{"run_ref", "subject_ref", "suite_ref"}, []string{"run_ref", "suite_ref"}},
 		{"/calibration/items", []string{"items", "set_name"}, []string{"items"}},
 		{"/calibration/run", []string{"judge_model", "kappa_floor", "set_name", "target"}, nil},
-		{"/gate", []string{"baseline_ref", "outputs", "sample_size", "seed", "subject_kind", "subject_ref", "suite_ref"}, []string{"outputs", "suite_ref"}},
+		{"/gate", []string{"baseline_ref", "comparison", "model_ref", "outputs", "prompt_variant", "sample_size", "seed", "subject_kind", "subject_ref", "suite_ref"}, []string{"outputs", "suite_ref"}},
 		{"/gate/{id}/override", []string{"reason"}, []string{"reason"}},
 	}
 
@@ -202,4 +202,43 @@ func evalsSortedMapKeys(m map[string]any) []string {
 	}
 	sort.Strings(keys)
 	return keys
+}
+
+func TestEvalsComparisonRequestContracts(t *testing.T) {
+	t.Parallel()
+	check := func(t *testing.T, parent map[string]any) {
+		t.Helper()
+		comparison := parent["properties"].(map[string]any)["comparison"].(map[string]any)
+		if comparison["additionalProperties"] != false {
+			t.Fatal("comparison must be closed")
+		}
+		if got := comparison["required"]; !reflect.DeepEqual(got, []string{"version", "mode"}) {
+			t.Fatalf("comparison required = %#v", got)
+		}
+		props := comparison["properties"].(map[string]any)
+		if got := evalsSortedMapKeys(props); !reflect.DeepEqual(got, []string{"mode", "version"}) {
+			t.Fatalf("comparison properties = %v", got)
+		}
+		if got := props["version"].(map[string]any)["enum"]; !reflect.DeepEqual(got, []any{1}) {
+			t.Fatalf("comparison versions = %#v", got)
+		}
+		if got := props["mode"].(map[string]any)["enum"]; !reflect.DeepEqual(got, oaEnum("same_candidate", "candidate_change")) {
+			t.Fatalf("comparison modes = %#v", got)
+		}
+	}
+	for _, pattern := range []string{"/runs", "/gate"} {
+		t.Run(pattern, func(t *testing.T) {
+			body, _ := evalsRequestBody(moduleRoute{ns: "evals", method: http.MethodPost, pattern: pattern})
+			check(t, evalsSchemaFromBody(t, body))
+		})
+	}
+	body, _ := evalsRequestBody(moduleRoute{ns: "evals", method: http.MethodPost, pattern: "/ab"})
+	props := evalsSchemaFromBody(t, body)["properties"].(map[string]any)
+	for _, name := range []string{"a", "b"} {
+		variant := props[name].(map[string]any)
+		if got := evalsSortedMapKeys(variant["properties"].(map[string]any)); !reflect.DeepEqual(got, []string{"baseline_ref", "comparison", "label", "model_ref", "outputs"}) {
+			t.Fatalf("variant %s properties = %v", name, got)
+		}
+		check(t, variant)
+	}
 }

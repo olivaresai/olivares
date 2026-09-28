@@ -280,7 +280,9 @@ describe('the row opens the SESSION, not the room', () => {
 })
 
 describe('RecentWork — names, not ids', () => {
-  it('the truncated sentence carries the full text on title=', () => {
+  it('the sentence is painted whole, and the row carries it on title= too', () => {
+    // The sentence wraps now (recent-work.wrap.test.tsx): nothing is cut, and the row
+    // keeps the whole sentence, reference and facts on its own title.
     renderIntel(
       <RecentWork
         sessions={[row({ summary: 'Filed PR #7723' })]}
@@ -288,10 +290,10 @@ describe('RecentWork — names, not ids', () => {
         canStartSession
       />,
     )
-    const truncated = screen
-      .getByTestId('home-recent-row')
-      .querySelector('.truncate')
-    expect(truncated?.getAttribute('title')).toMatch(/Filed PR #7723/)
+    const rowEl = screen.getByTestId('home-recent-row')
+    expect(rowEl.querySelector('.truncate')).toBeNull()
+    expect(rowEl).toHaveTextContent(/Filed PR #7723/)
+    expect(rowEl.getAttribute('title')).toMatch(/Filed PR #7723/)
   })
 
   it('paints Untitled session, never sess-* as the row name', () => {

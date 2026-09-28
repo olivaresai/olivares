@@ -74,6 +74,7 @@ func newFinOpsCmd() *cobra.Command {
 		newFinOpsRecommendationsCmd(c),
 		newFinOpsTeamSummaryCmd(c),
 		newFinOpsComparisonCmd(c),
+		newFinOpsAdmissionCmd(c),
 	)
 	return cmd
 }
@@ -752,4 +753,82 @@ func newFinOpsComparisonCmd(c modelstackClient) *cobra.Command {
 			modelstackFilterSpec{Flag: "window-days", Query: "window_days", Usage: "days of history to compare over"},
 			modelstackFilterSpec{Flag: "forecast-period", Query: "forecast_period", Usage: "period to project the saving over"}),
 	})
+}
+
+// --- admission ---------------------------------------------------------------
+
+// newFinOpsAdmissionCmd wires the admission routes: reserve before a billable effect,
+// settle the one handle the reserve answered with, and read or run the reconciliation.
+func newFinOpsAdmissionCmd(c modelstackClient) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "admission",
+		Short: "Reserve spend before an effect, settle it, and reconcile the holds",
+		Long: "Reserve estimated spend before a billable effect and receive one handle, then settle\n" +
+			"that handle: commit the measured cost, or release the hold when the effect did not run.\n" +
+			"A retry with the same idempotency key and payload is answered with the same handle, and\n" +
+			"a commit that arrives after a release or an expiry still records the cost. A budget\n" +
+			"store that cannot be read refuses the reserve unless the request sets\n" +
+			"\"unreachable\": \"allow\".",
+		Example: `  olivares finops admission reserve --data @reserve.json -o json
+  olivares finops admission commit --data '{"handle":"<handle>","actual_micro_usd":1500000}'
+  olivares finops admission reconciliation -o json`,
+		Args: cobra.NoArgs,
+	}
+	cmd.AddCommand(
+		newModelstackWriteCmd(c, modelstackWriteSpec{
+			Use:   "reserve",
+			Short: "Reserve estimated spend before an effect",
+			Long: "Hold the estimate against every enforcing budget that scopes the request, and against\n" +
+				"the named actor's spend limits, under one handle. A refusal exits non-zero with the\n" +
+				"status: 402 for a cap that blocks or an activation frontier, 429 for a cap that\n" +
+				"throttles, 503 when the admission cannot be established, 409 when the idempotency key\n" +
+				"was used with another payload, and 500 when the key's admission row fails its\n" +
+				"integrity check.",
+			Example: `  olivares finops admission reserve --data @reserve.json -o json`,
+			Method:  http.MethodPost,
+			Target:  modelstackTarget{Collection: "/admission/reserve"},
+			Body:    modelstackBodyRequired,
+		}),
+		newModelstackWriteCmd(c, modelstackWriteSpec{
+			Use:   "commit",
+			Short: "Commit a hold at its measured cost",
+			Long: "Settle a hold after the effect ran, at its measured cost. Ingest the spend first. The\n" +
+				"same amount again is answered as the first commit was. 409 refuses another amount, a\n" +
+				"hold whose admission is still a claim, and a hold whose money the attempt lifecycle\n" +
+				"owns; 500 answers a hold whose admission row fails its integrity check, and the same\n" +
+				"call succeeds once the row is repaired.",
+			Example: `  olivares finops admission commit --data '{"handle":"<handle>","actual_micro_usd":1500000}'`,
+			Method:  http.MethodPost,
+			Target:  modelstackTarget{Collection: "/admission/commit"},
+			Body:    modelstackBodyRequired,
+		}),
+		newModelstackWriteCmd(c, modelstackWriteSpec{
+			Use:     "release",
+			Short:   "Release a hold whose effect did not run",
+			Long:    "Return the headroom of a hold whose effect did not run. A committed hold stays committed.",
+			Example: `  olivares finops admission release --data '{"handle":"<handle>"}'`,
+			Method:  http.MethodPost,
+			Target:  modelstackTarget{Collection: "/admission/release"},
+			Body:    modelstackBodyRequired,
+		}),
+		newModelstackGetCmd(c, modelstackGetSpec{
+			Use:   "reconciliation",
+			Short: "Read the holds against their settlements",
+			Long: "Report the holds against their commits and releases, the drift, and what recovery left\n" +
+				"outstanding. It only reads: nothing is recovered, swept or filed.",
+			Example: `  olivares finops admission reconciliation -o json`,
+			Target:  modelstackTarget{Collection: "/admission/reconciliation"},
+		}),
+		newModelstackWriteCmd(c, modelstackWriteSpec{
+			Use:   "reconcile",
+			Short: "Run admission recovery and file a finding on drift",
+			Long: "Run admission recovery, sweep the holds that expired unsettled, and file a posture\n" +
+				"finding when the ledger drifted. The engine runs the same job every five minutes.",
+			Example: `  olivares finops admission reconcile -o json`,
+			Method:  http.MethodPost,
+			Target:  modelstackTarget{Collection: "/admission/reconcile"},
+			Body:    modelstackBodyNone,
+		}),
+	)
+	return cmd
 }

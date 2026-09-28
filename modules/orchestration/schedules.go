@@ -435,9 +435,18 @@ func (m *Module) handleCreateSchedule(w http.ResponseWriter, r *http.Request, mc
 		}
 	}
 
+	// The declaring principal becomes the owner every later fire is accountable
+	// to, so the create is a fenced write over the accounts the owner columns name.
+	owner := model.Record{colOwnerActor: mc.Principal.Actor()}
+	setIf(owner, colOwnerUserRef, scope.UserRef)
+	subjects, err := countedSubjects(owner, scheduleCountedColumns)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
 	var dto scheduleDTO
 	var capDenial *routineDenial
-	err := m.withAdmissionFence(r.Context(), mc, len(pol.ActiveCaps) > 0, func(sc store.Scope) error {
+	err = m.withAdmissionFence(r.Context(), mc, len(pol.ActiveCaps) > 0, subjects, func(sc store.Scope) error {
 		// The cap is checked INSIDE the fenced transaction that inserts, so a
 		// concurrent admitter cannot slip past the same count. It runs BEFORE
 		// the approval is spent: a declaration refused for capacity must not
@@ -487,6 +496,9 @@ func (m *Module) handleCreateSchedule(w http.ResponseWriter, r *http.Request, mc
 			activationMeta(pol, in.ApprovalRef, map[string]any{
 				"name": dto.Name, "subject_ref": dto.SubjectRef, "trigger_kind": dto.TriggerKind}))
 	})
+	if writeFenceRefusal(w, err) {
+		return
+	}
 	if err != nil {
 		writeStoreError(w, err)
 		return
@@ -719,7 +731,7 @@ func (m *Module) handlePatchSchedule(w http.ResponseWriter, r *http.Request, mc 
 	// Every path that can change the ACTIVE population takes the admission
 	// fence — including a deactivation, which RELEASES capacity and so must not
 	// interleave with an admission that is counting.
-	err := m.withAdmissionFence(r.Context(), mc, len(pol.ActiveCaps) > 0, func(sc store.Scope) error {
+	err := m.withAdmissionFence(r.Context(), mc, len(pol.ActiveCaps) > 0, nil, func(sc store.Scope) error {
 		repo, err := sc.Ext(scheduleKind)
 		if err != nil {
 			return err
@@ -1335,7 +1347,7 @@ func (m *Module) firePhaseDecide(w http.ResponseWriter, r *http.Request, mc api.
 		return
 	} else if !claimed && pol.MinIntervalSec > 0 {
 		var rd *routineDenial
-		if ferr := m.withAdmissionFence(r.Context(), mc, true, func(sc store.Scope) error {
+		if ferr := m.withAdmissionFence(r.Context(), mc, true, nil, func(sc store.Scope) error {
 			d, e := m.reserveFireSlot(r.Context(), sc, pol, sched)
 			rd = d
 			return e
@@ -1510,9 +1522,9 @@ func (m *Module) writeFireReplay(w http.ResponseWriter, op model.Record, planHas
 // caller must return: an enforcing budget (action=throttle|block) that scopes this
 // subject is at its cap. The denial is recorded in the append-only ledger as a
 // distinct op_status (budget_blocked|budget_throttled) and audited (docs/SECURITY-HARDENING.md:
-// minimal data — refs + action, never a USD figure). It FAILS OPEN: a budget-gate
-// error never blocks an approved fire (the finops_budget_cap finding is the backstop),
-// consistent with finops.CheckBudget's documented contract.
+// minimal data — refs + action, never a USD figure). The engine's gate reports a
+// ledger it cannot read as a block (store unreachable), which denies the fire; the
+// error branch below only covers a gate implementation that returns an error.
 func (m *Module) budgetBlocksFire(w http.ResponseWriter, r *http.Request, mc api.ModuleContext, id model.ID, subjectKind, subjectRef, planHash, approvalRef string, gateStatus GateStatus) bool {
 	dims := BudgetDims{RoutineRef: id.String()}
 	if subjectKind == nodeAgent {
@@ -1520,7 +1532,7 @@ func (m *Module) budgetBlocksFire(w http.ResponseWriter, r *http.Request, mc api
 	}
 	verdict, err := m.budgetGate.Check(r.Context(), mc.Tenant, dims)
 	if err != nil {
-		// Fail open: a FinOps outage must not take down an approved fire.
+		// Only a gate that returns an error lands here; the engine's reports a block.
 		m.errorf("orchestration: budget gate error; failing open (approved fire proceeds)", "schedule", id.String(), "err", err)
 		return false
 	}

@@ -16873,13 +16873,35 @@ export interface paths {
         content: {
           'application/json': {
             a: {
+              baseline_ref?: string
+              comparison?: {
+                /**
+                 * @description candidate_change requires an explicit baseline_ref and declared candidate identities.
+                 * @enum {string}
+                 */
+                mode: 'same_candidate' | 'candidate_change'
+                /** @enum {integer} */
+                version: 1
+              }
               label?: string
+              model_ref?: string
               outputs: {
                 [key: string]: string
               }
             }
             b: {
+              baseline_ref?: string
+              comparison?: {
+                /**
+                 * @description candidate_change requires an explicit baseline_ref and declared candidate identities.
+                 * @enum {string}
+                 */
+                mode: 'same_candidate' | 'candidate_change'
+                /** @enum {integer} */
+                version: 1
+              }
               label?: string
+              model_ref?: string
               outputs: {
                 [key: string]: string
               }
@@ -17567,9 +17589,20 @@ export interface paths {
         content: {
           'application/json': {
             baseline_ref?: string
+            comparison?: {
+              /**
+               * @description candidate_change requires an explicit baseline_ref and declared candidate identities.
+               * @enum {string}
+               */
+              mode: 'same_candidate' | 'candidate_change'
+              /** @enum {integer} */
+              version: 1
+            }
+            model_ref?: string
             outputs: {
               [key: string]: string
             }
+            prompt_variant?: string
             sample_size?: number
             seed?: string
             subject_kind?: string
@@ -18066,6 +18099,15 @@ export interface paths {
         content: {
           'application/json': {
             baseline_ref?: string
+            comparison?: {
+              /**
+               * @description candidate_change requires an explicit baseline_ref and declared candidate identities.
+               * @enum {string}
+               */
+              mode: 'same_candidate' | 'candidate_change'
+              /** @enum {integer} */
+              version: 1
+            }
             model_ref?: string
             outputs: {
               [key: string]: string
@@ -21003,6 +21045,549 @@ export interface paths {
         cookie?: never
       }
       requestBody?: never
+      responses: {
+        /** @description OK */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description bad request */
+        400: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description unauthenticated */
+        401: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description not found */
+        404: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description conflict / setup required */
+        409: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description rate limited */
+        429: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+      }
+    }
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/v1/m/finops/admission/commit': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Settles a hold with the cost the effect actually incurred, returning whatever headroom the estimate held beyond it.
+     * @description Settles a hold with the cost the effect actually incurred, returning whatever headroom the estimate held beyond it.
+     */
+    post: {
+      parameters: {
+        query?: never
+        header?: {
+          /** @description Target tenant id; required when the principal can act in more than one tenant. */
+          'X-Olivares-Tenant'?: string
+        }
+        path?: never
+        cookie?: never
+      }
+      requestBody: {
+        content: {
+          'application/json': {
+            /**
+             * Format: int64
+             * @description The measured cost. Ingest the spend first, so the ceiling never under-counts during settlement. A repeat with the same amount is answered as the first commit was; another amount after a commit is refused with 409.
+             */
+            actual_micro_usd?: number
+            /** @description The handle Reserve answered with. An empty handle settles nothing. */
+            handle?: string
+          }
+        }
+      }
+      responses: {
+        /** @description OK */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description bad request */
+        400: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description unauthenticated */
+        401: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description not found */
+        404: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description conflict / setup required */
+        409: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description rate limited */
+        429: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+      }
+    }
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/v1/m/finops/admission/reconcile': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Runs admission recovery, sweeps holds that expired unsettled, compares what remains against the commits and releases its callers made, and files a posture finding when the ledger drifted.
+     * @description Runs admission recovery, sweeps holds that expired unsettled, compares what remains against the commits and releases its callers made, and files a posture finding when the ledger drifted.
+     */
+    post: {
+      parameters: {
+        query?: never
+        header?: {
+          /** @description Target tenant id; required when the principal can act in more than one tenant. */
+          'X-Olivares-Tenant'?: string
+        }
+        path?: never
+        cookie?: never
+      }
+      requestBody?: never
+      responses: {
+        /** @description OK */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description bad request */
+        400: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description unauthenticated */
+        401: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description not found */
+        404: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description conflict / setup required */
+        409: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description rate limited */
+        429: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+      }
+    }
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/v1/m/finops/admission/reconciliation': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Reports the reservation ledger against its commits and releases, and what recovery left outstanding: holds still owed, claims and releases an earlier build left, undecided recovery writes, and admission rows that fail their integrity check.
+     * @description Reports the reservation ledger against its commits and releases, and what recovery left outstanding: holds still owed, claims and releases an earlier build left, undecided recovery writes, and admission rows that fail their integrity check.
+     */
+    get: {
+      parameters: {
+        query?: never
+        header?: {
+          /** @description Target tenant id; required when the principal can act in more than one tenant. */
+          'X-Olivares-Tenant'?: string
+        }
+        path?: never
+        cookie?: never
+      }
+      requestBody?: never
+      responses: {
+        /** @description OK */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description bad request */
+        400: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description unauthenticated */
+        401: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description not found */
+        404: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description conflict / setup required */
+        409: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description rate limited */
+        429: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+      }
+    }
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/v1/m/finops/admission/release': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Returns an unused hold to its budget when the effect did not happen, so an abandoned reservation stops withholding headroom from the next caller.
+     * @description Returns an unused hold to its budget when the effect did not happen, so an abandoned reservation stops withholding headroom from the next caller.
+     */
+    post: {
+      parameters: {
+        query?: never
+        header?: {
+          /** @description Target tenant id; required when the principal can act in more than one tenant. */
+          'X-Olivares-Tenant'?: string
+        }
+        path?: never
+        cookie?: never
+      }
+      requestBody: {
+        content: {
+          'application/json': {
+            /** @description The handle Reserve answered with. An empty handle releases nothing, and a committed hold stays committed. */
+            handle?: string
+          }
+        }
+      }
+      responses: {
+        /** @description OK */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description bad request */
+        400: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description unauthenticated */
+        401: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description not found */
+        404: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description conflict / setup required */
+        409: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description rate limited */
+        429: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+      }
+    }
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/v1/m/finops/admission/reserve': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Holds the estimated spend of a billable effect against every enforcing budget that scopes the request, and against the named actor's spend limits, under one handle.
+     * @description Holds the estimated spend of a billable effect against every enforcing budget that scopes the request, and against the named actor's spend limits, under one handle.
+     */
+    post: {
+      parameters: {
+        query?: never
+        header?: {
+          /** @description Target tenant id; required when the principal can act in more than one tenant. */
+          'X-Olivares-Tenant'?: string
+        }
+        path?: never
+        cookie?: never
+      }
+      requestBody: {
+        content: {
+          'application/json': {
+            /** @description When set, the spend limits of that actor are held as well as the budgets. */
+            actor_ref?: string
+            dims?: {
+              agent_group_refs?: string[]
+              agent_ref?: string
+              api_key_ref?: string
+              context_window?: string
+              cost_center_ref?: string
+              cost_type?: string
+              gateway?: string
+              identity_ref?: string
+              inference_geo?: string
+              model_ref?: string
+              project?: string
+              provider_ref?: string
+              routine_ref?: string
+              service_tier?: string
+              session_ref?: string
+              team?: string
+              user_group_refs?: string[]
+              workspace_ref?: string
+            }
+            /**
+             * Format: int64
+             * @description The amount to hold. Zero holds nothing and returns no handle, but a cap already past its limit still refuses it.
+             */
+            estimate_micro_usd?: number
+            /** @description Directory group ids used to resolve the actor's spend limits. */
+            groups?: string[]
+            /** @description Bound to the tenant, the scope and the payload. A retry with the same key and payload inside the replay window is answered with the hold the first call took; the same key with another payload is refused with 409. */
+            idempotency_key: string
+            /** @enum {string} */
+            scope: 'session_launch' | 'model_gateway' | 'scheduled_job'
+            /**
+             * @description What a request answers when its admission cannot be established. Omitted, empty and unknown values mean deny. Allow admits with no hold.
+             * @default deny
+             * @enum {string}
+             */
+            unreachable?: '' | 'deny' | 'allow'
+          }
+        }
+      }
       responses: {
         /** @description OK */
         200: {
@@ -25551,6 +26136,1330 @@ export interface paths {
     }
     put?: never
     post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/v1/m/gitpublish/intents': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Lists the publication intents of one target, named by ?target_id, with what each requested, what the host was last observed to hold and its current state.
+     * @description Lists the publication intents of one target, named by ?target_id, with what each requested, what the host was last observed to hold and its current state.
+     */
+    get: {
+      parameters: {
+        query?: never
+        header?: {
+          /** @description Target tenant id; required when the principal can act in more than one tenant. */
+          'X-Olivares-Tenant'?: string
+        }
+        path?: never
+        cookie?: never
+      }
+      requestBody?: never
+      responses: {
+        /** @description OK */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description bad request */
+        400: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description unauthenticated */
+        401: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description not found */
+        404: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description conflict / setup required */
+        409: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description rate limited */
+        429: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+      }
+    }
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/v1/m/gitpublish/intents/{id}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Returns one publication intent: what it requested, what the host was last observed to hold, whether the host acknowledged the request, and its state.
+     * @description Returns one publication intent: what it requested, what the host was last observed to hold, whether the host acknowledged the request, and its state.
+     */
+    get: {
+      parameters: {
+        query?: never
+        header?: {
+          /** @description Target tenant id; required when the principal can act in more than one tenant. */
+          'X-Olivares-Tenant'?: string
+        }
+        path: {
+          /** @description Path parameter id. */
+          id: string
+        }
+        cookie?: never
+      }
+      requestBody?: never
+      responses: {
+        /** @description OK */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description bad request */
+        400: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description unauthenticated */
+        401: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description not found */
+        404: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description conflict / setup required */
+        409: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description rate limited */
+        429: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+      }
+    }
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/v1/m/gitpublish/intents/{id}/abandon': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Records that an administrator takes responsibility for an unresolved publication intent, with a bounded reason.
+     * @description Records that an administrator takes responsibility for an unresolved publication intent, with a bounded reason.
+     */
+    post: {
+      parameters: {
+        query?: never
+        header?: {
+          /** @description Target tenant id; required when the principal can act in more than one tenant. */
+          'X-Olivares-Tenant'?: string
+        }
+        path: {
+          /** @description Path parameter id. */
+          id: string
+        }
+        cookie?: never
+      }
+      /** @description The handler decodes one strict JSON document, bounded at 1 MiB; an unknown field is field_not_accepted. */
+      requestBody: {
+        content: {
+          'application/json': {
+            reason?: string
+          }
+        }
+      }
+      responses: {
+        /** @description OK */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description bad request */
+        400: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description unauthenticated */
+        401: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description not found */
+        404: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description conflict / setup required */
+        409: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description rate limited */
+        429: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+      }
+    }
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/v1/m/gitpublish/intents/{id}/observations': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Lists every observation recorded for one publication intent: each host read, dispatcher outcome and refusal, with its attempt, result and time.
+     * @description Lists every observation recorded for one publication intent: each host read, dispatcher outcome and refusal, with its attempt, result and time.
+     */
+    get: {
+      parameters: {
+        query?: never
+        header?: {
+          /** @description Target tenant id; required when the principal can act in more than one tenant. */
+          'X-Olivares-Tenant'?: string
+        }
+        path: {
+          /** @description Path parameter id. */
+          id: string
+        }
+        cookie?: never
+      }
+      requestBody?: never
+      responses: {
+        /** @description OK */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description bad request */
+        400: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description unauthenticated */
+        401: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description not found */
+        404: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description conflict / setup required */
+        409: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description rate limited */
+        429: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+      }
+    }
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/v1/m/gitpublish/intents/{id}/reconcile': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Reads the host again for one publication intent and records what it observed.
+     * @description Reads the host again for one publication intent and records what it observed.
+     */
+    post: {
+      parameters: {
+        query?: never
+        header?: {
+          /** @description Target tenant id; required when the principal can act in more than one tenant. */
+          'X-Olivares-Tenant'?: string
+        }
+        path: {
+          /** @description Path parameter id. */
+          id: string
+        }
+        cookie?: never
+      }
+      requestBody?: never
+      responses: {
+        /** @description OK */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description bad request */
+        400: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description unauthenticated */
+        401: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description not found */
+        404: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description conflict / setup required */
+        409: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description rate limited */
+        429: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+      }
+    }
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/v1/m/gitpublish/targets': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Lists the publication targets the caller can read, without their credential and repository binding ids.
+     * @description Lists the publication targets the caller can read, without their credential and repository binding ids.
+     */
+    get: {
+      parameters: {
+        query?: never
+        header?: {
+          /** @description Target tenant id; required when the principal can act in more than one tenant. */
+          'X-Olivares-Tenant'?: string
+        }
+        path?: never
+        cookie?: never
+      }
+      requestBody?: never
+      responses: {
+        /** @description OK */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description bad request */
+        400: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description unauthenticated */
+        401: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description not found */
+        404: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description conflict / setup required */
+        409: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description rate limited */
+        429: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+      }
+    }
+    put?: never
+    /**
+     * Records a publication target in a workspace: an approved credential binding, an approved repository binding, the branch prefix pushes must stay under and the allowed merge bases.
+     * @description Records a publication target in a workspace: an approved credential binding, an approved repository binding, the branch prefix pushes must stay under and the allowed merge bases.
+     */
+    post: {
+      parameters: {
+        query?: never
+        header?: {
+          /** @description Target tenant id; required when the principal can act in more than one tenant. */
+          'X-Olivares-Tenant'?: string
+        }
+        path?: never
+        cookie?: never
+      }
+      /** @description The handler decodes one strict JSON document, bounded at 1 MiB; an unknown field is field_not_accepted. */
+      requestBody: {
+        content: {
+          'application/json': {
+            /** @description An approved credential binding in the caller's permitted scope; never a secret reference. */
+            credential_binding_id: string
+            merge_bases?: string[]
+            /** @description Branch prefix ending in '/'; pushes and pull-request heads must be under it. */
+            push_prefix: string
+            /** @description An approved server repository binding; never a path. */
+            repository_binding_id: string
+            /** @description The workspace the target belongs to. */
+            workspace_id: string
+          }
+        }
+      }
+      responses: {
+        /** @description OK */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description bad request */
+        400: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description unauthenticated */
+        401: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description not found */
+        404: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description conflict / setup required */
+        409: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description rate limited */
+        429: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+      }
+    }
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/v1/m/gitpublish/targets/{id}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Returns one publication target.
+     * @description Returns one publication target. Its credential and repository binding ids are included only for a caller who holds target administration on it.
+     */
+    get: {
+      parameters: {
+        query?: never
+        header?: {
+          /** @description Target tenant id; required when the principal can act in more than one tenant. */
+          'X-Olivares-Tenant'?: string
+        }
+        path: {
+          /** @description Path parameter id. */
+          id: string
+        }
+        cookie?: never
+      }
+      requestBody?: never
+      responses: {
+        /** @description OK */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description bad request */
+        400: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description unauthenticated */
+        401: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description not found */
+        404: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description conflict / setup required */
+        409: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description rate limited */
+        429: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+      }
+    }
+    /**
+     * Replaces a publication target's bindings, push prefix and merge bases under optimistic concurrency, refusing a stale expected_version.
+     * @description Replaces a publication target's bindings, push prefix and merge bases under optimistic concurrency, refusing a stale expected_version.
+     */
+    put: {
+      parameters: {
+        query?: never
+        header?: {
+          /** @description Target tenant id; required when the principal can act in more than one tenant. */
+          'X-Olivares-Tenant'?: string
+        }
+        path: {
+          /** @description Path parameter id. */
+          id: string
+        }
+        cookie?: never
+      }
+      /** @description The handler decodes one strict JSON document, bounded at 1 MiB; an unknown field is field_not_accepted. */
+      requestBody: {
+        content: {
+          'application/json': {
+            /** @description An approved credential binding in the caller's permitted scope; never a secret reference. */
+            credential_binding_id?: string
+            /** @description Optimistic concurrency: the version read. */
+            expected_version: number
+            merge_bases?: string[]
+            /** @description Branch prefix ending in '/'; pushes and pull-request heads must be under it. */
+            push_prefix: string
+            /** @description An approved server repository binding; never a path. */
+            repository_binding_id?: string
+          }
+        }
+      }
+      responses: {
+        /** @description OK */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description bad request */
+        400: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description unauthenticated */
+        401: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description not found */
+        404: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description conflict / setup required */
+        409: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description rate limited */
+        429: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+      }
+    }
+    post?: never
+    /**
+     * Deletes a publication target that no dispatching, uncertain or abandoned intent still holds.
+     * @description Deletes a publication target that no dispatching, uncertain or abandoned intent still holds.
+     */
+    delete: {
+      parameters: {
+        query?: never
+        header?: {
+          /** @description Target tenant id; required when the principal can act in more than one tenant. */
+          'X-Olivares-Tenant'?: string
+        }
+        path: {
+          /** @description Path parameter id. */
+          id: string
+        }
+        cookie?: never
+      }
+      requestBody?: never
+      responses: {
+        /** @description OK */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description bad request */
+        400: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description unauthenticated */
+        401: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description not found */
+        404: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description conflict / setup required */
+        409: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description rate limited */
+        429: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+      }
+    }
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/v1/m/gitpublish/targets/{id}/merges': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Merges one pull request only while its head is still the reviewed expected_head, and returns the publication intent with the merge commit and tree it recorded.
+     * @description Merges one pull request only while its head is still the reviewed expected_head, and returns the publication intent with the merge commit and tree it recorded.
+     */
+    post: {
+      parameters: {
+        query?: never
+        header?: {
+          /** @description Target tenant id; required when the principal can act in more than one tenant. */
+          'X-Olivares-Tenant'?: string
+        }
+        path: {
+          /** @description Path parameter id. */
+          id: string
+        }
+        cookie?: never
+      }
+      /** @description The handler decodes one strict JSON document, bounded at 1 MiB; an unknown field is field_not_accepted. */
+      requestBody: {
+        content: {
+          'application/json': {
+            acknowledge_intent?: string
+            /** @description Unsupported: refused with unsupported_requirement. */
+            expected_base?: string
+            /** @description The reviewed source head; the host refuses the merge if the head differs. */
+            expected_head: string
+            /** @description Unsupported: refused with unsupported_requirement. */
+            expected_result_tree?: string
+            /**
+             * @description rebase is refused as unsupported_requirement on a GitLab target.
+             * @enum {string}
+             */
+            method: 'merge' | 'squash' | 'rebase'
+            number: number
+            /** @description Client idempotency key. */
+            operation_id: string
+          }
+        }
+      }
+      responses: {
+        /** @description OK */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description bad request */
+        400: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description unauthenticated */
+        401: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description not found */
+        404: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description conflict / setup required */
+        409: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description rate limited */
+        429: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+      }
+    }
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/v1/m/gitpublish/targets/{id}/pull-requests': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Opens a pull request from a branch under the target's push prefix into an allowed merge base, or adopts the matching open one, and returns the publication intent with its receipt.
+     * @description Opens a pull request from a branch under the target's push prefix into an allowed merge base, or adopts the matching open one, and returns the publication intent with its receipt.
+     */
+    post: {
+      parameters: {
+        query?: never
+        header?: {
+          /** @description Target tenant id; required when the principal can act in more than one tenant. */
+          'X-Olivares-Tenant'?: string
+        }
+        path: {
+          /** @description Path parameter id. */
+          id: string
+        }
+        cookie?: never
+      }
+      /** @description The handler decodes one strict JSON document, bounded at 1 MiB; an unknown field is field_not_accepted. */
+      requestBody: {
+        content: {
+          'application/json': {
+            acknowledge_intent?: string
+            /** @description An allowed merge base. */
+            base: string
+            body?: string
+            /** @description The requested head commit, recorded beside the observed one. */
+            commit: string
+            draft?: boolean
+            /** @description Source branch under push_prefix; the host binds branches, not SHAs. */
+            head_ref: string
+            /** @description Client idempotency key. */
+            operation_id: string
+            title: string
+          }
+        }
+      }
+      responses: {
+        /** @description OK */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description bad request */
+        400: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description unauthenticated */
+        401: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description not found */
+        404: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description conflict / setup required */
+        409: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description rate limited */
+        429: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+      }
+    }
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/v1/m/gitpublish/targets/{id}/pushes': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Pushes one exact commit to a branch under the target's push prefix, leased on the branch's expected current value, and returns the publication intent with its receipt.
+     * @description Pushes one exact commit to a branch under the target's push prefix, leased on the branch's expected current value, and returns the publication intent with its receipt.
+     */
+    post: {
+      parameters: {
+        query?: never
+        header?: {
+          /** @description Target tenant id; required when the principal can act in more than one tenant. */
+          'X-Olivares-Tenant'?: string
+        }
+        path: {
+          /** @description Path parameter id. */
+          id: string
+        }
+        cookie?: never
+      }
+      /** @description The handler decodes one strict JSON document, bounded at 1 MiB; an unknown field is field_not_accepted. */
+      requestBody: {
+        content: {
+          'application/json': {
+            /** @description Names an abandoned intent of the same scope this request knowingly proceeds past; requires target admin at AAL3. */
+            acknowledge_intent?: string
+            /** @description The exact commit. */
+            commit: string
+            /** @description The lease: the ref's expected current value; empty requires the ref to be absent. */
+            expected_old?: string
+            /** @description Client idempotency key. */
+            operation_id: string
+            /** @description A branch under push_prefix. A merge base, the host's default branch and any branch the host reports as protected are refused; tags are refused. */
+            ref: string
+            /** @description The commit's tree, checked in the server repository. */
+            tree: string
+          }
+        }
+      }
+      responses: {
+        /** @description OK */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description bad request */
+        400: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description unauthenticated */
+        401: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description not found */
+        404: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description conflict / setup required */
+        409: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description rate limited */
+        429: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+      }
+    }
     delete?: never
     options?: never
     head?: never
@@ -37155,6 +39064,268 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/v1/m/inventory/collections': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Returns the collection coverage of one opened source registration, selected by ?source_id, ?source_revision and ?environment_ref: the current run's result, and the last qualified run when its scope has one.
+     * @description Returns the collection coverage of one opened source registration, selected by ?source_id, ?source_revision and ?environment_ref: the current run's result, and the last qualified run when its scope has one.
+     */
+    get: {
+      parameters: {
+        query: {
+          /** @description Source ID from the caller's CURRENT opened registration; nonempty, at most 128 bytes. An old selector reads that historical selection, not the current roster. */
+          source_id: string
+          /** @description Positive signed 64-bit revision from the same CURRENT opened registration; missing or invalid selectors return 400. */
+          source_revision: number
+          /** @description Environment from the same CURRENT opened registration; nonempty, at most 128 bytes. Unmatched selection returns unknown coverage. */
+          environment_ref: string
+        }
+        header?: {
+          /** @description Target tenant id; required when the principal can act in more than one tenant. */
+          'X-Olivares-Tenant'?: string
+        }
+        path?: never
+        cookie?: never
+      }
+      requestBody?: never
+      responses: {
+        /** @description Collection evidence for the caller-selected CURRENT opened registration. An unmatched selection returns unknown, never inherited completeness. Current enumeration and projection are separate from historical last_qualified_success for the exact scope. Complete describes this query over its observed interval, not a global snapshot or provider authorization. Empty completion does not delete resources. */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': {
+              /** @description Optional list-envelope continuation cursor; this exact source selection has at most one head. */
+              cursor?: string
+              /** @description List-envelope continuation flag, not evidence of collection completeness. */
+              has_more: boolean
+              items: {
+                current: {
+                  /** Format: int64 */
+                  admitted_count: number
+                  /** Format: int64 */
+                  committed_count: number
+                  /** @enum {string} */
+                  coverage:
+                    | 'complete'
+                    | 'partial'
+                    | 'unavailable'
+                    | 'unsupported'
+                    | 'unknown'
+                  environment_ref: string
+                  /** Format: int64 */
+                  expected_count: number
+                  /** @enum {string} */
+                  family?: 'azure.resource'
+                  /** @description SHA-256 fingerprint of the versioned query scope. */
+                  fulfilled_scope?: string
+                  /**
+                   * Format: date-time
+                   * @description Host closure after Gather returns.
+                   */
+                  host_finished_at?: string
+                  /** @description Host start as an RFC3339 timestamp; empty when the selected registration has no run. */
+                  host_started_at: string
+                  /**
+                   * Format: date-time
+                   * @description Producer-declared enumeration end.
+                   */
+                  producer_finished_at?: string
+                  /**
+                   * Format: date-time
+                   * @description Producer-declared enumeration start.
+                   */
+                  producer_started_at?: string
+                  /**
+                   * @description Queued members are pending until their receipt/materialization commits; enumeration alone cannot qualify them.
+                   * @enum {string}
+                   */
+                  projection: 'pending' | 'committed' | 'failed'
+                  /**
+                   * Format: date-time
+                   * @description Inventory qualification after all expected members commit.
+                   */
+                  qualified_at?: string
+                  /** @enum {string} */
+                  reason:
+                    | ''
+                    | 'exhausted'
+                    | 'page_limit'
+                    | 'repeated_cursor'
+                    | 'invalid_response'
+                    | 'scope_unproven'
+                    | 'scope_mismatch'
+                    | 'provider_error'
+                    | 'offline'
+                    | 'disabled'
+                    | 'member_limit'
+                    | 'missing_report'
+                    | 'protocol_error'
+                    | 'gather_error'
+                    | 'canceled'
+                    | 'sink_error'
+                    | 'persistence_rejected'
+                    | 'commit_outcome_unknown'
+                    | 'persistence_canceled'
+                    | 'persistence_unavailable'
+                    | 'persistence_error'
+                  /** @enum {string} */
+                  rejection_reason?:
+                    | 'terminal_conflict'
+                    | 'linkage_conflict'
+                    | 'member_conflict'
+                    | 'receipt_conflict'
+                  /** @description SHA-256 fingerprint of the versioned query scope. */
+                  requested_scope?: string
+                  /** @description Host run ID; empty when the selected registration has no run. */
+                  run_id: string
+                  /**
+                   * Format: int64
+                   * @description Durable source order; zero when no run exists.
+                   */
+                  run_order: number
+                  /** @enum {string} */
+                  scope_contract?: 'azure-resource-graph/2022-10-01/id-v1'
+                  source_id: string
+                  /** Format: int64 */
+                  source_revision: number
+                }
+                /** @description Immutable historical qualification for this exact registration and scope; absent until one run qualifies. Later rejection evidence does not rewrite this receipt. */
+                last_qualified_success?: {
+                  environment_ref: string
+                  /** Format: int64 */
+                  expected_count: number
+                  /** @enum {string} */
+                  family: 'azure.resource'
+                  /** @description SHA-256 fingerprint of the versioned query scope. */
+                  fulfilled_scope: string
+                  /**
+                   * Format: date-time
+                   * @description Host closure after Gather returns.
+                   */
+                  host_finished_at: string
+                  /**
+                   * Format: date-time
+                   * @description Host run start, separate from producer observation time.
+                   */
+                  host_started_at: string
+                  /**
+                   * Format: date-time
+                   * @description Producer-declared enumeration end.
+                   */
+                  producer_finished_at: string
+                  /**
+                   * Format: date-time
+                   * @description Producer-declared enumeration start.
+                   */
+                  producer_started_at: string
+                  /**
+                   * Format: date-time
+                   * @description Inventory qualification after all expected members commit.
+                   */
+                  qualified_at: string
+                  /** @description SHA-256 fingerprint of the versioned query scope. */
+                  requested_scope: string
+                  /** @description Host-owned collection run ID. */
+                  run_id: string
+                  /** @enum {string} */
+                  scope_contract: 'azure-resource-graph/2022-10-01/id-v1'
+                  source_id: string
+                  /** Format: int64 */
+                  source_revision: number
+                }
+              }[]
+            }
+          }
+        }
+        /** @description bad request */
+        400: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description unauthenticated */
+        401: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description not found */
+        404: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description conflict / setup required */
+        409: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description tenant service suspended or not in service */
+        423: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description rate limited */
+        429: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description stored collection evidence or store read failed; the generic error body contains no backend detail */
+        500: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+      }
+    }
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/v1/m/inventory/entities': {
     parameters: {
       query?: never
@@ -44459,8 +46630,8 @@ export interface paths {
       cookie?: never
     }
     /**
-     * Returns the capability matrix: per API feature, which declared families support it.
-     * @description Returns the capability matrix: per API feature, which declared families support it.
+     * Returns the capability matrix: per API feature, which declared families declare it, and the matrix is not a gateway invocation guarantee.
+     * @description Returns the capability matrix: per API feature, which declared families declare it, and the matrix is not a gateway invocation guarantee.
      */
     get: {
       parameters: {
@@ -54135,6 +56306,114 @@ export interface paths {
     }
     put?: never
     post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/v1/m/orchestration/workflows/{id}/runs/{run}/reauthorize': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Continues a run paused for reauthentication: it binds the caller's own fresh credential as the run's successor binding and resumes the paused steps.
+     * @description Continues a run paused for reauthentication: it binds the caller's own fresh credential as the run's successor binding and resumes the paused steps.
+     */
+    post: {
+      parameters: {
+        query?: never
+        header?: {
+          /** @description Target tenant id; required when the principal can act in more than one tenant. */
+          'X-Olivares-Tenant'?: string
+        }
+        path: {
+          /** @description Path parameter id. */
+          id: string
+          /** @description Path parameter run. */
+          run: string
+        }
+        cookie?: never
+      }
+      requestBody: {
+        content: {
+          'application/json': {
+            /** @description The plan hash the operator reviewed; the run is reauthorized only against this plan. */
+            plan_hash: string
+          }
+        }
+      }
+      responses: {
+        /** @description OK */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description bad request */
+        400: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description unauthenticated */
+        401: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description not found */
+        404: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description conflict / setup required */
+        409: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description rate limited */
+        429: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+      }
+    }
     delete?: never
     options?: never
     head?: never
@@ -78986,8 +81265,14 @@ export interface components {
       email: string
       /** Format: password */
       password: string
+      /** @description The role granted in tenant */
+      role?: string
       /** @default false */
       superadmin: boolean
+      /** @description Optional tenant granted role in the create transaction */
+      tenant?: string
+      /** @description Optional workspace the membership is confined to */
+      workspace_id?: string
     }
     CreateWorkspaceInput: {
       name: string
@@ -78995,6 +81280,28 @@ export interface components {
         [key: string]: unknown
       }
       slug: string
+    }
+    CreatedUser: {
+      /** Format: date-time */
+      created_at: string
+      display_name?: string
+      /** Format: email */
+      email: string
+      /** Format: uuid */
+      id: string
+      is_superadmin: boolean
+      /** @description The first membership, granted in the create transaction when tenant was given */
+      membership?: {
+        /** Format: uuid */
+        id?: string
+        role?: string
+        tenant?: string
+        /** Format: uuid */
+        user_id?: string
+        workspace_id?: string
+      }
+      /** @enum {string} */
+      status: 'active' | 'inactive'
     }
     EffectiveConfigEntry: {
       key: string
@@ -83357,6 +85664,18 @@ export interface operations {
           }
         }
       }
+      /** @description Consent required: the account exists and is not a member of the tenant; nothing was written */
+      202: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': {
+            /** @enum {string} */
+            status: 'consent_required'
+          }
+        }
+      }
       /** @description Bad request */
       400: {
         headers: {
@@ -84532,7 +86851,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['User']
+          'application/json': components['schemas']['CreatedUser']
         }
       }
       /** @description Bad request */

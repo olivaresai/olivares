@@ -90,9 +90,10 @@ type SweepScopeSource interface {
 // connector observation stream and exposes the catalog and staleness
 // over the API.
 type Module struct {
-	log   *slog.Logger
-	data  api.ModuleData
-	clock model.Clock
+	collectionCoverage bool
+	log                *slog.Logger
+	data               api.ModuleData
+	clock              model.Clock
 
 	staleAfter    time.Duration
 	sweepInterval time.Duration

@@ -1308,6 +1308,13 @@ func (e *scopedEngine) Scoped(ctx context.Context, req auth.Request) (auth.Scope
 	}
 	switch {
 	case decision == cedar.Allow:
+		if !scopedGrantAboveFloor(req.Principal, req.Tenant, state.generation) {
+			// The snapshot predates the tenant's last retirement of this account: a
+			// grant it still names may be one the retirement removed. Abstain; RBAC
+			// and the current membership decide.
+			e.logEffect(req, "grant-below-retirement-floor")
+			return auth.ScopedDecision{Effect: auth.EffectAbstain, Reason: "cedar: scoped grant snapshot predates the account's re-admission"}, nil
+		}
 		if e.grantExpiredState(state, loaded, now) {
 			// ADR-0024 Q1: offline, past policy_max_staleness, a positive grant expires
 			// deny-closed. Return ABSTAIN (not a hard deny) so the request falls back to
@@ -1327,6 +1334,14 @@ func (e *scopedEngine) Scoped(ctx context.Context, req auth.Request) (auth.Scope
 	default:
 		return auth.ScopedDecision{Effect: auth.EffectAbstain, Reason: "cedar: no grant matched"}, nil
 	}
+}
+
+// scopedGrantAboveFloor reports whether a positive grant from a snapshot at
+// generation may authorize p in tenant: never when the tenant retired p's
+// account at a later authorization epoch than the snapshot's.
+func scopedGrantAboveFloor(p auth.Principal, tenant model.TenantID, generation store.AuthorizationFactRef) bool {
+	floor, ok := p.RetirementFloor(tenant)
+	return !ok || generation.Version >= floor
 }
 
 // Evaluate is the restrict-view of the SAME authored policy for the hooks PEP: a

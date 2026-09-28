@@ -71,15 +71,15 @@ func (m *Module) registerWorkspaceSchema(reg store.ExtensionRegistry) error {
 		Kind:  workspaceKind,
 		Table: workspaceTable,
 		Fields: []model.FieldSpec{
-			{Name: colWsRef, Kind: model.KindText},
-			{Name: colWsName, Kind: model.KindText, Nullable: true},
-			{Name: colWsRootPath, Kind: model.KindText},
-			{Name: colWsMountMode, Kind: model.KindText},
-			{Name: colWsContainerTgt, Kind: model.KindText, Nullable: true},
-			{Name: colWsAllowSubpaths, Kind: model.KindJSON, Nullable: true},
+			{Name: colWsRef, Kind: model.KindText, Principal: model.None("an opaque workspace registry id (a UUID) minted by this module: workspace.go:82, workspace_dto.go:27")},
+			{Name: colWsName, Kind: model.KindText, Nullable: true, Principal: model.None("an operator-chosen workspace label, shown only: workspace_dto.go:28")},
+			{Name: colWsRootPath, Kind: model.KindText, Principal: model.None("the canonical host root path of the workspace: workspace.go:73, workspace_dto.go:29")},
+			{Name: colWsMountMode, Kind: model.KindText, Principal: model.None("a mount mode, a closed set: workspace.go:545, workspace_schema.go:41-42")},
+			{Name: colWsContainerTgt, Kind: model.KindText, Nullable: true, Principal: model.None("an absolute in-container mount path: workspace.go:554-558, workspace_dto.go:31")},
+			{Name: colWsAllowSubpaths, Kind: model.KindJSON, Nullable: true, Principal: pdeclWorkspaceSubpaths},
 			{Name: colWsMaxReadBytes, Kind: model.KindInt, Nullable: true},
-			{Name: colWsDLPMode, Kind: model.KindText},
-			{Name: colWsState, Kind: model.KindText, Indexed: true},
+			{Name: colWsDLPMode, Kind: model.KindText, Principal: model.None("a DLP read posture, a closed set: workspace.go:551, workspace_schema.go:47-49")},
+			{Name: colWsState, Kind: model.KindText, Indexed: true, Principal: model.None("a workspace state, a closed set: workspace_schema.go:54-55, workspace.go:199")},
 		},
 		Indexes: []model.IndexSpec{{
 			Name:    "sessions_workspace_ref_uniq",
@@ -88,3 +88,14 @@ func (m *Module) registerWorkspaceSchema(reg store.ExtensionRegistry) error {
 		}},
 	})
 }
+
+// Principal declarations of the host-workspace registry. A workspace row names
+// a directory, never a principal.
+var (
+	// pdeclWorkspaceSubpaths is the allowlist the writer marshals as a JSON
+	// array of strings (workspace.go:660-675) and the reader decodes back
+	// (workspace.go:678-688).
+	pdeclWorkspaceSubpaths = model.Nested([]string{}, model.ClassEvidence,
+		model.Leaf("[]", model.None("a relative subpath of the workspace root: workspace.go:660-675, workspace.go:678-688")),
+	)
+)

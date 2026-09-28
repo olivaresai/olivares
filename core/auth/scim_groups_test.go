@@ -20,14 +20,13 @@ import (
 // principal (re-login after changing grants — principals are snapshots).
 func mustMember(t *testing.T, ctx context.Context, a *auth.Authenticator, super auth.Principal, tenant model.TenantID, email, role string) (model.ID, auth.Principal) {
 	t.Helper()
-	u, err := a.CreateUser(ctx, super, auth.NewUser{Email: email, Password: "password-123"})
+	in := auth.NewUser{Email: email, Password: "password-123"}
+	if role != "" {
+		in.Tenant, in.Role = tenant, role
+	}
+	u, err := a.CreateUser(ctx, super, in)
 	if err != nil {
 		t.Fatalf("create %s: %v", email, err)
-	}
-	if role != "" {
-		if _, err := a.GrantMembership(ctx, super, u.ID, tenant, role, model.ID("")); err != nil {
-			t.Fatalf("grant %s: %v", email, err)
-		}
 	}
 	return u.ID, loginPrincipal(t, ctx, a, email)
 }
@@ -366,9 +365,7 @@ func TestSCIMDeprovisionCleansGroupRows(t *testing.T) {
 	other := provisionTenant(t, st, "other")
 
 	uid, _ := mustMember(t, ctx, a, super, tenant, "leaver@acme.com", auth.RoleViewer)
-	if _, err := a.GrantMembership(ctx, super, uid, other, auth.RoleViewer, model.ID("")); err != nil {
-		t.Fatal(err)
-	}
+	joinThroughStore(t, st, uid, other)
 	g, err := a.SCIMCreateGroup(ctx, super, tenant, auth.SCIMGroupInput{
 		DisplayName: "Admins", ExternalID: "adm-1", Members: []model.ID{uid},
 	})
@@ -403,11 +400,15 @@ func TestSCIMDeprovisionCleansGroupRows(t *testing.T) {
 	if gotOther, err := a.SCIMGetGroup(ctx, other, og.Group.ID); err != nil || len(gotOther.Members) != 1 {
 		t.Errorf("other tenant's roster after deprovision = (%+v, %v), want 1 member", gotOther.Members, err)
 	}
-	// Re-joining grants exactly the new membership's role — no resurrection.
-	if _, err := a.GrantMembership(ctx, super, uid, tenant, auth.RoleViewer, model.ID("")); err != nil {
-		t.Fatal(err)
+	// A grant never re-joins an account that is not a member: it answers
+	// ErrConsentRequired and writes nothing, so nothing is resurrected.
+	if _, err := a.GrantMembership(ctx, super, uid, tenant, auth.RoleViewer, model.ID("")); !errors.Is(err, auth.ErrConsentRequired) {
+		t.Fatalf("re-join grant err = %v, want ErrConsentRequired", err)
 	}
-	if r, _ := loginPrincipal(t, ctx, a, "leaver@acme.com").RoleIn(tenant); r != auth.RoleViewer {
-		t.Errorf("post-rejoin role = %q, want viewer (no stale re-elevation)", r)
+	if _, err := a.SCIMGetMember(ctx, tenant, uid); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("member after the refused re-join = %v, want ErrNotFound (nothing written)", err)
+	}
+	if r, ok := loginPrincipal(t, ctx, a, "leaver@acme.com").RoleIn(tenant); ok {
+		t.Errorf("role after the refused re-join = %q, want none (no stale re-elevation)", r)
 	}
 }

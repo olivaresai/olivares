@@ -4,18 +4,16 @@
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { LogOut, Moon, Play, Search, Sun } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   CommandDialog,
-  CommandEmpty,
   CommandGroup,
   CommandInput,
   CommandItem,
   CommandList,
-  CommandSeparator,
 } from '@/components/ui/command'
-import { usePersonalNavigation } from '@/features/navigation/personal-navigation'
+import { Kbd } from '@/components/ui/kbd'
 import {
   dispatchable,
   useCommandActionAuthority,
@@ -34,10 +32,52 @@ import {
   buildNavSearchIndex,
   fold,
   rankNavMatches,
+  viewById,
   type NavSearchEntry,
 } from '@/features/navigation/model'
+import { KEYBINDINGS, NAV_LEADER, NAV_SEQUENCES } from '@/lib/keybindings/table'
 import { useCommandStore } from '@/stores/command'
 import { useThemeStore } from '@/stores/theme'
+import { useWorkspaceStore } from '@/stores/workspace'
+import { useSessionRail } from './use-session-rail'
+
+/** The characters the operator typed, without a leading ">" command limit. */
+function matchQueryOf(query: string): { commandOnly: boolean; text: string } {
+  const raw = query.trim()
+  const commandOnly = raw.startsWith('>')
+  return {
+    commandOnly,
+    text: (commandOnly ? raw.slice(1) : raw).trim(),
+  }
+}
+
+/** Mark the first occurrence of the query. The mark is accent text, not a highlight fill. */
+function markMatch(label: string, query: string): ReactNode {
+  const needle = query.trim()
+  if (!needle) return label
+  const at = label.toLocaleLowerCase().indexOf(needle.toLocaleLowerCase())
+  if (at < 0) return label
+  return (
+    <>
+      {label.slice(0, at)}
+      <mark className="bg-transparent font-semibold text-accent-text">
+        {label.slice(at, at + needle.length)}
+      </mark>
+      {label.slice(at + needle.length)}
+    </>
+  )
+}
+
+function KeyHint({ keys }: { keys: readonly string[] }) {
+  if (keys.length === 0) return null
+  return (
+    <span className="ml-auto flex shrink-0 items-center gap-1">
+      {keys.map((key) => (
+        <Kbd key={key}>{key}</Kbd>
+      ))}
+    </span>
+  )
+}
 
 /** Minimum query length before the federated search fires. */
 const SEARCH_MIN_CHARS = 2
@@ -89,6 +129,7 @@ export function CommandMenu() {
       title={t('common:commandPalette.placeholder')}
       description={t('common:commandPalette.navigation')}
       shouldFilter={false}
+      className="top-[88px] w-[min(660px,calc(100%-2rem))] max-w-none sm:top-[88px] sm:max-w-[660px]"
       onCloseAutoFocus={(e) => {
         const el = useCommandStore.getState().opener
         if (el && el.isConnected) {
@@ -112,17 +153,21 @@ function PaletteBody() {
   const { navigable } = useViewAccess()
   // The verbs' own authority, which is NOT the view's (see features/navigation/command-actions).
   const { authorized: mayRun, capture } = useCommandActionAuthority()
-  const personal = usePersonalNavigation()
   const setTheme = useThemeStore((s) => s.setTheme)
+  const workspaceName = useWorkspaceStore((s) => s.activeWorkspaceName)
+  const rail = useSessionRail()
   const [query, setQuery] = useState('')
   const [debounced, setDebounced] = useState('')
+  const { commandOnly, text: matchQuery } = matchQueryOf(query)
 
   useEffect(() => {
     const id = window.setTimeout(() => setDebounced(query), SEARCH_DEBOUNCE_MS)
     return () => window.clearTimeout(id)
   }, [query])
 
-  const term = debounced.trim()
+  const term = matchQueryOf(debounced).commandOnly
+    ? ''
+    : matchQueryOf(debounced).text
   const searchQ = useQuery({
     queryKey: searchKeys.query(activeTenant, term),
     queryFn: () => searchConsole(term),
@@ -156,33 +201,27 @@ function PaletteBody() {
     [index, navigable],
   )
   const ranked = useMemo(
-    () => rankNavMatches(authorized, query),
-    [authorized, query],
+    () => rankNavMatches(authorized, matchQuery),
+    [authorized, matchQuery],
   )
-  const querying = query.trim().length > 0
-  // Without a query the palette is a table of contents: the areas, then every module.
-  // With one it is a single list in rank order, areas interleaved and tagged, because
-  // splitting a ranked list into two groups would put a weak area hit above an exact
-  // module hit and the ranking the sidebar shares would stop meaning anything.
-  const favoriteHits = querying
+  // Areas and modules stay in ONE ranked list. Splitting them would put a weak area
+  // hit above an exact module hit. Settings is its own group, after Go to.
+  const goToHits = commandOnly
     ? []
-    : (personal?.favorites ?? []).flatMap((link) => {
-        const entry = ranked.find((e) => e.id === link.id && e.kind !== 'area')
-        return entry ? [entry] : []
-      })
-  const recentHits = querying
+    : ranked.filter((e) => e.kind === 'area' || e.kind === 'view')
+  const settingsHits = commandOnly
     ? []
-    : (personal?.recents ?? []).flatMap((link) => {
-        const entry = ranked.find((e) => e.id === link.id && e.kind !== 'area')
-        return entry ? [entry] : []
-      })
-  const areaHits = querying ? [] : ranked.filter((e) => e.kind === 'area')
-  const navHits = querying ? ranked : ranked.filter((e) => e.kind !== 'area')
+    : ranked.filter((e) => e.kind === 'settings')
 
-  // The non-navigation entries (actions, theme, sign-out) follow a plain folded-substring
-  // rule against their own label: they are not modules and have no area to rank by.
-  const needle = fold(query.trim())
+  const needle = fold(matchQuery)
   const shows = (label: string) => !needle || fold(label).includes(needle)
+  const recentSessions = commandOnly
+    ? []
+    : rail.groups
+        .flatMap((group) => group.rows)
+        .filter((row) => row.kind === 'session')
+        .filter((row) => shows(row.title ?? row.reference))
+        .slice(0, 8)
 
   const searchHits = searchQ.data?.results ?? []
 
@@ -206,6 +245,12 @@ function PaletteBody() {
    * disambiguates (two doors into one screen) while the description elaborates; when
    * the line has to be cut, the disambiguation is what must survive.
    */
+  const goKeys = (e: NavSearchEntry): string[] => {
+    if (e.kind !== 'view') return []
+    const seq = NAV_SEQUENCES.find((s) => s.featureId === e.id)
+    if (!seq) return []
+    return [NAV_LEADER.toUpperCase(), seq.key.toUpperCase()]
+  }
   const renderNav = (e: NavSearchEntry) => {
     const Icon = e.icon
     const context = e.kind === 'area' ? t('nav:directory.area') : e.context
@@ -218,7 +263,7 @@ function PaletteBody() {
         <Icon />
         <span className="flex min-w-0 flex-1 flex-col">
           <span className="truncate" data-slot="palette-name">
-            {e.label}
+            {markMatch(e.label, matchQuery)}
           </span>
           {context || e.description ? (
             <span
@@ -232,42 +277,47 @@ function PaletteBody() {
             </span>
           ) : null}
         </span>
+        <KeyHint keys={goKeys(e)} />
       </CommandItem>
     )
   }
 
-  // A VERB IS OFFERED BY ITS OWN PERMISSION, NEVER BY THE PAGE'S. `views` is already
-  // filtered by `navigable` — the parent's read authority, which stays required because a
-  // verb that lands on a page this principal cannot open is no better than a dead end —
-  // and each action is then filtered by `authorized`: its declared mutation permission and
-  // an established tenant to write in. Until 2026-09-11 the second filter did not exist,
-  // and `notify:route:read` alone bought "New alert route" (spec04 §1).
+  // A verb stays visible when this principal can open its page but cannot run it.
+  // Hiding it made the refusal a blank list. The page gate stays: a verb for a page
+  // this principal cannot open has nowhere to land. The write is its own check.
+  const refusal = (permission: string) => {
+    if (!activeTenant) {
+      return {
+        reason: t('common:commandPalette.noTargetReason'),
+        help: t('common:commandPalette.noTargetHelp'),
+      }
+    }
+    if (!can(permission)) {
+      return {
+        reason: t('common:commandPalette.deniedReason', { permission }),
+        help: t('common:commandPalette.deniedHelp'),
+      }
+    }
+    return null
+  }
   const actionItems = views
     .filter((v) => v.commandActions?.length)
     .flatMap((v) =>
       (v.commandActions ?? []).map((action) => {
-        if (!mayRun(action)) return null
         const label = t(`nav:commandActions.${v.id}.${action.id}`, {
           defaultValue: '',
         })
         if (!label || !shows(label)) return null
+        const blocked = refusal(action.permission)
         return (
           <CommandItem
             key={`${v.id}:${action.id}`}
             value={`action:${v.id}:${action.id} ${label}`}
+            disabled={blocked !== null}
             onSelect={() => {
-              // RE-ASKED AT SELECTION, against the identity that is live in this
-              // handler: the list was built in an earlier render, and a movement between
-              // that render and this keystroke must not dispatch. With no established
-              // context — or none with a tenant to write in — there is nothing to bind the
-              // command to, so nothing is queued and nothing is navigated to: an
-              // unbindable command would either be unusable or, if the match were relaxed
-              // to compensate, consumable by whoever arrived next.
-              //
-              // AND THE PALETTE STAYS OPEN. Closing it would spend the operator's ⌘K on
-              // nothing and hide the correction: this path is reached by a movement, and
-              // the movement re-renders the list without the verb. Leaving them where they
-              // are, in front of a list that fixes itself, is the smaller surprise.
+              // Re-asked at selection. A grant or a tenant that moved between the
+              // render and this keystroke must not dispatch, and the palette stays
+              // open so the list can correct itself.
               const context = capture()
               if (!mayRun(action) || !dispatchable(context)) return
               useCommandStore
@@ -277,7 +327,19 @@ function PaletteBody() {
             }}
           >
             <v.icon />
-            {label}
+            <span className="flex min-w-0 flex-1 flex-col">
+              <span className="truncate" data-slot="palette-name">
+                {markMatch(label, matchQuery)}
+              </span>
+              {blocked ? (
+                <span
+                  className="truncate text-caption leading-4 text-muted-foreground"
+                  data-slot="palette-context"
+                >
+                  {blocked.reason} {blocked.help}
+                </span>
+              ) : null}
+            </span>
           </CommandItem>
         )
       }),
@@ -302,8 +364,15 @@ function PaletteBody() {
    * have to invent the one field that must be chosen.
    */
   const startSessionLabel = t('common:commandPalette.startSession')
-  const showStartSession =
-    can('sessions:run:write') && !!activeTenant && shows(startSessionLabel)
+  const showStartSession = shows(startSessionLabel)
+  const startBlocked = refusal('sessions:run:write')
+  const sessionsPath = viewById('sessions')?.path
+  const startKeys = (
+    KEYBINDINGS.find((rule) => rule.command === 'session.new')?.keys ?? ''
+  )
+    .split('+')
+    .filter(Boolean)
+    .map((part) => (part.toLowerCase() === 'mod' ? '⌘' : part.toUpperCase()))
 
   const lightLabel = t('common:theme.light')
   const darkLabel = t('common:theme.dark')
@@ -318,108 +387,45 @@ function PaletteBody() {
     showLight ||
     showDark ||
     showSignOut
+  const visibleSearch = commandOnly
+    ? []
+    : searchHits.filter((hit) => {
+        const featureId = SEARCH_KIND_FEATURE[hit.kind]
+        const route = SEARCH_KIND_ROUTES[hit.kind]
+        const view = views.find((v) => v.id === featureId)
+        return !!route && !(featureId && !view)
+      })
+  const anyListed =
+    visibleSearch.length > 0 ||
+    anyAction ||
+    goToHits.length > 0 ||
+    recentSessions.length > 0 ||
+    settingsHits.length > 0
 
   return (
     <>
-      <CommandInput
-        placeholder={t('common:commandPalette.placeholder')}
-        value={query}
-        onValueChange={setQuery}
-      />
+      <div className="relative">
+        <CommandInput
+          placeholder={t('common:commandPalette.placeholder')}
+          value={query}
+          onValueChange={setQuery}
+          className={workspaceName ? 'pr-40' : 'pr-14'}
+        />
+        <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center gap-2">
+          {workspaceName ? (
+            <span className="rounded-md bg-accent-soft px-1.5 py-0.5 text-caption text-accent-text">
+              {t('common:commandPalette.scope', { name: workspaceName })}
+            </span>
+          ) : null}
+          <Kbd>Esc</Kbd>
+        </span>
+      </div>
       <CommandList label={t('common:commandPalette.results')}>
-        <CommandEmpty>{t('common:commandPalette.empty')}</CommandEmpty>
-
-        {searchHits.length > 0 ? (
-          <>
-            <CommandGroup heading={t('common:commandPalette.searchResults')}>
-              {searchHits.map((hit) => {
-                const featureId = SEARCH_KIND_FEATURE[hit.kind]
-                const route = SEARCH_KIND_ROUTES[hit.kind]
-                const view = views.find((v) => v.id === featureId)
-                const Icon = view?.icon ?? Search
-                if (!route || (featureId && !view)) return null
-                return (
-                  <CommandItem
-                    key={`${hit.kind}:${hit.id}`}
-                    value={`search ${hit.kind} ${hit.id} ${hit.name}`}
-                    keywords={[query]}
-                    onSelect={() => go(route)}
-                  >
-                    <Icon />
-                    {/* Same rule as `renderNav`: the entity's own name owns line one
-                        and the module it lives in goes below it. */}
-                    <span className="flex min-w-0 flex-1 flex-col">
-                      <span className="truncate" data-slot="palette-name">
-                        {hit.name}
-                      </span>
-                      <span
-                        className="truncate text-caption leading-4 text-muted-foreground"
-                        data-slot="palette-context"
-                      >
-                        {featureId ? t(`nav:items.${featureId}`) : hit.kind}
-                        {hit.detail ? ` · ${hit.detail}` : ''}
-                      </span>
-                    </span>
-                  </CommandItem>
-                )
-              })}
-            </CommandGroup>
-            {searchQ.data?.truncated ? (
-              <p className="px-3 pb-1 text-caption text-muted-foreground">
-                {t('common:commandPalette.searchTruncated')}
-              </p>
-            ) : null}
-            <CommandSeparator />
-          </>
-        ) : null}
-
-        {/* A DEGRADED SEARCH IS NOT A TRUNCATED ONE, AND IT RENDERS OUTSIDE THE HITS BLOCK.
-            Truncated means "narrow your query"; degraded means a source failed and this list
-            is missing whatever it held.
-
-            It sits here, not inside `searchHits.length > 0`, because of where it was first
-            put — and the adversarial contrast of 2026-08-06 caught that placement the same
-            day. Nested under the hits, the warning appeared only when something ELSE had
-            matched, so the one case that matters most was silent: when the failed provider
-            was the only one that would have matched, `{results: [], degraded: true}` drew
-            the ordinary "no results" screen. An incomplete list presented as an empty one is
-            precisely the defect the flag was added to remove, surviving in the UI after the
-            API had been fixed.
-
-            Destructive tone rather than muted: it is a failure, not a hint. */}
-        {searchQ.data?.degraded ? (
-          <p className="px-3 pb-2 pt-1 text-caption text-destructive">
-            {t('common:commandPalette.searchDegraded')}
-          </p>
-        ) : null}
-
-        {favoriteHits.length > 0 ? (
-          <CommandGroup heading={t('nav:personal.favorites')}>
-            {favoriteHits.map((e) =>
-              renderNav({ ...e, id: `favorite:${e.id}` }),
-            )}
-          </CommandGroup>
-        ) : null}
-
-        {recentHits.length > 0 ? (
-          <CommandGroup heading={t('nav:personal.recents')}>
-            {recentHits.map((e) => renderNav({ ...e, id: `recent:${e.id}` }))}
-          </CommandGroup>
-        ) : null}
-
-        {areaHits.length > 0 ? (
-          <CommandGroup heading={t('nav:directory.areas')}>
-            {areaHits.map(renderNav)}
-          </CommandGroup>
-        ) : null}
-
-        {navHits.length > 0 ? (
-          <CommandGroup heading={t('common:commandPalette.navigation')}>
-            {navHits.map(renderNav)}
-          </CommandGroup>
-        ) : null}
-
-        {anyAction ? <CommandSeparator /> : null}
+        {anyListed ? null : (
+          <CommandItem disabled value="empty:none">
+            {t('common:commandPalette.empty')}
+          </CommandItem>
+        )}
 
         {anyAction ? (
           <CommandGroup heading={t('common:commandPalette.actions')}>
@@ -427,10 +433,27 @@ function PaletteBody() {
               <CommandItem
                 value={`session:start ${startSessionLabel}`}
                 data-testid="palette-start-session"
-                onSelect={() => go('/sessions')}
+                disabled={startBlocked !== null || !sessionsPath}
+                onSelect={() => {
+                  if (startBlocked || !sessionsPath) return
+                  go(sessionsPath)
+                }}
               >
                 <Play />
-                {startSessionLabel}
+                <span className="flex min-w-0 flex-1 flex-col">
+                  <span className="truncate" data-slot="palette-name">
+                    {markMatch(startSessionLabel, matchQuery)}
+                  </span>
+                  <span
+                    className="truncate text-caption leading-4 text-muted-foreground"
+                    data-slot="palette-context"
+                  >
+                    {startBlocked
+                      ? `${startBlocked.reason} ${startBlocked.help}`
+                      : t('nav:items.sessions')}
+                  </span>
+                </span>
+                <KeyHint keys={startKeys} />
               </CommandItem>
             ) : null}
             {actionItems}
@@ -443,7 +466,9 @@ function PaletteBody() {
                 }}
               >
                 <Sun />
-                {lightLabel}
+                <span className="truncate" data-slot="palette-name">
+                  {markMatch(lightLabel, matchQuery)}
+                </span>
               </CommandItem>
             ) : null}
             {showDark ? (
@@ -455,7 +480,9 @@ function PaletteBody() {
                 }}
               >
                 <Moon />
-                {darkLabel}
+                <span className="truncate" data-slot="palette-name">
+                  {markMatch(darkLabel, matchQuery)}
+                </span>
               </CommandItem>
             ) : null}
             {showSignOut ? (
@@ -467,12 +494,129 @@ function PaletteBody() {
                 }}
               >
                 <LogOut />
-                {signOutLabel}
+                <span className="truncate" data-slot="palette-name">
+                  {markMatch(signOutLabel, matchQuery)}
+                </span>
               </CommandItem>
             ) : null}
           </CommandGroup>
         ) : null}
+
+        {goToHits.length > 0 ? (
+          <CommandGroup heading={t('common:commandPalette.goTo')}>
+            {goToHits.map(renderNav)}
+          </CommandGroup>
+        ) : null}
+
+        {recentSessions.length > 0 ? (
+          <CommandGroup heading={t('common:commandPalette.recentSessions')}>
+            {recentSessions.map((row) => {
+              const title = row.title ?? row.reference
+              const state =
+                row.state === 'need'
+                  ? t('common:ui.status.needsYou')
+                  : row.state === 'live'
+                    ? t('common:ui.status.working')
+                    : row.state === 'ended'
+                      ? t('common:ui.status.done')
+                      : t('common:ui.status.idle')
+              return (
+                <CommandItem
+                  key={row.key}
+                  value={`recent-session:${row.key} ${title}`}
+                  onSelect={() => {
+                    setOpen(false)
+                    void navigate({
+                      to: row.to as never,
+                      search: row.search as never,
+                    })
+                  }}
+                >
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <span className="truncate" data-slot="palette-name">
+                      {markMatch(title, matchQuery)}
+                    </span>
+                    <span
+                      className="truncate text-caption leading-4 text-muted-foreground"
+                      data-slot="palette-context"
+                    >
+                      {[row.meta, state].filter(Boolean).join(' · ')}
+                    </span>
+                  </span>
+                </CommandItem>
+              )
+            })}
+          </CommandGroup>
+        ) : null}
+
+        {settingsHits.length > 0 ? (
+          <CommandGroup heading={t('common:commandPalette.settingsGroup')}>
+            {settingsHits.map(renderNav)}
+          </CommandGroup>
+        ) : null}
+
+        {visibleSearch.length > 0 ? (
+          <CommandGroup heading={t('common:commandPalette.searchResults')}>
+            {visibleSearch.map((hit) => {
+              const featureId = SEARCH_KIND_FEATURE[hit.kind]
+              const route = SEARCH_KIND_ROUTES[hit.kind]
+              const view = views.find((v) => v.id === featureId)
+              const Icon = view?.icon ?? Search
+              if (!route) return null
+              return (
+                <CommandItem
+                  key={`${hit.kind}:${hit.id}`}
+                  value={`search ${hit.kind} ${hit.id} ${hit.name}`}
+                  keywords={[matchQuery]}
+                  onSelect={() => go(route)}
+                >
+                  <Icon />
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <span className="truncate" data-slot="palette-name">
+                      {markMatch(hit.name, matchQuery)}
+                    </span>
+                    <span
+                      className="truncate text-caption leading-4 text-muted-foreground"
+                      data-slot="palette-context"
+                    >
+                      {featureId ? t(`nav:items.${featureId}`) : hit.kind}
+                      {hit.detail ? ` · ${hit.detail}` : ''}
+                    </span>
+                  </span>
+                </CommandItem>
+              )
+            })}
+          </CommandGroup>
+        ) : null}
       </CommandList>
+      {searchQ.data?.truncated ? (
+        <p className="px-3 py-1 text-caption text-muted-foreground">
+          {t('common:commandPalette.searchTruncated')}
+        </p>
+      ) : null}
+      {searchQ.data?.degraded ? (
+        <p className="px-3 py-1 text-caption text-destructive">
+          {t('common:commandPalette.searchDegraded')}
+        </p>
+      ) : null}
+      <div
+        data-slot="palette-footer"
+        className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border px-3 py-2 text-caption text-muted-foreground"
+      >
+        <span className="inline-flex items-center gap-1">
+          <Kbd>↑</Kbd>
+          <Kbd>↓</Kbd>
+          {t('common:commandPalette.footerMove')}
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <Kbd>↵</Kbd>
+          {t('common:commandPalette.footerOpen')}
+        </span>
+        <span className="ml-auto inline-flex items-center gap-1">
+          <Kbd>&gt;</Kbd>
+          {t('common:commandPalette.footerCommands')}
+        </span>
+      </div>
     </>
   )
 }

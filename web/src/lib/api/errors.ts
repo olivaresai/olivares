@@ -28,6 +28,8 @@ export class ApiError extends Error {
    * caller could only see "some request failed" and would report a human's
    * REJECTION as the operator lacking permission. */
   readonly body: unknown
+  /** Retry-After from the failing response, when the host sent one. */
+  readonly retryAfter?: string
 
   constructor(
     status: number,
@@ -36,6 +38,7 @@ export class ApiError extends Error {
     requestId?: string,
     details: Record<string, unknown> = {},
     body?: unknown,
+    retryAfter?: string,
   ) {
     super(message)
     this.name = 'ApiError'
@@ -44,6 +47,7 @@ export class ApiError extends Error {
     this.requestId = requestId
     this.details = details
     this.body = body
+    this.retryAfter = retryAfter
   }
 
   /** detailString reads one structured detail as a non-empty string, or

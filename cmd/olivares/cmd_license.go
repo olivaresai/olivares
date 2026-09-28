@@ -18,6 +18,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/olivaresai/olivares/core/license"
+	"github.com/olivaresai/olivares/core/license/aptrefresh"
 	"github.com/olivaresai/olivares/core/release"
 	"github.com/olivaresai/olivares/core/secure"
 )
@@ -76,6 +77,12 @@ func licenseInstallCmd() *cobra.Command {
 			blob := strings.TrimSpace(string(raw))
 			if blob == "" {
 				return fmt.Errorf("the license is empty")
+			}
+			// QD-4: a download credential is not a license. It is refused before any trust is read or
+			// anything is written, --force included, and the refusal does not echo it.
+			if strings.HasPrefix(blob, aptrefresh.CredentialPrefix) {
+				return fmt.Errorf("refusing to install: this is a download credential (%s…), not a license; it serves only the appliance's "+
+					"package downloads, which `olivares license connect apt-refresh` or `dnf-refresh` obtains, and the installed license is unchanged", aptrefresh.CredentialPrefix)
 			}
 			dir := dataDir
 			if dir == "" {

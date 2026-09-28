@@ -444,7 +444,8 @@ func (m *Module) dispatchWorkMutation(w http.ResponseWriter, r *http.Request, mc
 			writeJSON(w, http.StatusOK, plan)
 		}
 	case ModeApply:
-		result, err := m.applyWithData(r.Context(), mc.Data, mc.Tenant, principal, cmd)
+		ctx := withRequestStanding(r.Context(), mc.Standing)
+		result, err := m.applyWithData(ctx, mc.Data, mc.Tenant, principal, cmd)
 		if err != nil {
 			writeWorkError(w, err)
 			return
@@ -602,7 +603,7 @@ func workPrincipalFromAuth(p auth.Principal, tenant model.TenantID) (WorkPrincip
 		// `constraint failed: olivares: invalid sessions communication event
 		// vocabulary, payload or evidence hash (1811)`. Es decir: la mitad de sesión
 		// del lease es INALCANZABLE, que es exactamente la asimetría que
-		// `principalIsWorkOwner` (work_service.go:1074-1082) ya nombró y cerró en el
+		// `principalIsWorkOwner` (work_service.go:1075-1083) ya nombró y cerró en el
 		// otro sitio donde un WorkItem pregunta quién es su dueño. Esta es la mitad
 		// que quedó viva, y aquí no hay una prueba que leer: hay una columna con un
 		// vocabulario cerrado.
@@ -653,6 +654,9 @@ func workPrincipalFromAuth(p auth.Principal, tenant model.TenantID) (WorkPrincip
 // still internal_error: honest about the refusal, honest that the work layer has
 // no name for it yet. Naming them is left declared, not done.
 func writeWorkError(w http.ResponseWriter, err error) {
+	if writeAccountFenceRefusal(w, err) {
+		return
+	}
 	err = classifyWorkStoreError(err)
 	status, code, verdict := http.StatusInternalServerError, "internal_error", VerdictUnknown
 	// ⛔ `field` SE PERDIA AQUI, y con el la mitad del arreglo. `validate` y `plan` salen por

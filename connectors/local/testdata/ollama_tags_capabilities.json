@@ -1,0 +1,24 @@
+{
+  "models": [
+    {
+      "name": "fixture-tools:1b",
+      "model": "fixture-tools:1b",
+      "digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    {
+      "name": "fixture-vision:1b",
+      "model": "fixture-vision:1b",
+      "digest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    },
+    {
+      "name": "fixture-nothink:1b",
+      "model": "fixture-nothink:1b",
+      "digest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+    },
+    {
+      "name": "fixture-embed:1b",
+      "model": "fixture-embed:1b",
+      "digest": "1111111111111111111111111111111111111111111111111111111111111111"
+    }
+  ]
+}

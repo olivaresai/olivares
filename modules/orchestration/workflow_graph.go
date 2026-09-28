@@ -7,6 +7,7 @@ package orchestration
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"regexp"
 	"sort"
 	"strings"
@@ -60,28 +61,105 @@ const (
 	stepRemoteCancel  = "remote-cancel"
 )
 
-var validStepKinds = map[string]bool{
-	stepScheduleFire:   true,
-	stepEventingEmit:   true,
-	stepNotifyTest:     true,
-	stepWait:           true,
-	stepApprovalGate:   true,
-	stepWorkCreate:     true,
-	stepWorkAssign:     true,
-	stepWorkClaim:      true,
-	stepSessionLaunch:  true,
-	stepWorkMessage:    true,
-	stepWorkWaitAck:    true,
-	stepWorkHandoff:    true,
-	stepWorkTransition: true,
-	stepWorkCancel:     true,
-	stepWorkReconcile:  true,
-	stepRemotePlan:     true,
-	stepRemoteTest:     true,
-	stepRemoteStart:    true,
-	stepRemoteObserve:  true,
-	stepRemoteCancel:   true,
+// stepConfigs is the closed set of step kinds the workflow writer accepts,
+// with each kind's config type and what its leaves say about principals.
+// validateGraph and canonicalStepConfig refuse a kind it lacks, and
+// canonicalStepConfig decodes a config into the type its entry names; the
+// declaration of a workflow's stored steps reads the same table.
+var stepConfigs = stepKindTable{
+	stepScheduleFire: model.Nested(scheduleFireConfig{}, model.ClassEvidence, model.Leaf("schedule_id", stepLeafID)),
+	stepEventingEmit: model.Nested(eventingEmitConfig{}, model.ClassEvidence, model.Leaf("label", stepLeafText)),
+	stepNotifyTest:   model.Nested(notifyTestConfig{}, model.ClassEvidence, model.Leaf("route_id", stepLeafID)),
+	stepWait:         model.Nested(waitConfig{}, model.ClassEvidence),
+	stepApprovalGate: model.Nested(approvalGateConfig{}, model.ClassEvidence, model.Leaf("reason", stepLeafText)),
+	stepWorkCreate: model.Nested(workCreateConfig{}, model.ClassObligation, stepParticipantLeaves,
+		model.Leaf("workspace_id", stepLeafID), model.Leaf("work_kind", stepLeafSlug),
+		model.Leaf("title", stepLeafText), model.Leaf("brief_md", stepLeafText), model.Leaf("brief_ref", stepLeafText),
+		model.Leaf("priority", stepLeafClosed), model.Leaf("criteria[].key", stepLeafSlug),
+		model.Leaf("criteria[].statement", stepLeafText), model.Leaf("provenance.kind", stepLeafClosed),
+		model.Leaf("provenance.ref", model.Scan(model.ClassEvidence)), model.Leaf("provenance.hash", stepLeafHash),
+		model.Leaf("due_at", stepLeafTime)),
+	stepWorkAssign: model.Nested(workAssignConfig{}, model.ClassObligation, stepParticipantLeaves,
+		model.Leaf("work_item_id", stepLeafID), model.Leaf("work_item_step_ref", stepLeafSlug),
+		model.Leaf("channel_id", stepLeafID), model.Leaf("context", stepLeafText), model.Leaf("context_ref", stepLeafText),
+		model.Leaf("ack_deadline", stepLeafTime)),
+	stepWorkClaim: model.Nested(workClaimConfig{}, model.ClassEvidence,
+		model.Leaf("work_item_id", stepLeafID), model.Leaf("work_item_step_ref", stepLeafSlug),
+		model.Leaf("sid", model.None("a runtime session id, bounded by validWorkText: workflow_graph.go:627"))),
+	stepSessionLaunch: model.Nested(sessionLaunchConfig{}, model.ClassEvidence,
+		model.Leaf("work_item_id", stepLeafID), model.Leaf("work_item_step_ref", stepLeafSlug),
+		model.Leaf("fence_step_ref", stepLeafSlug), model.Leaf("runtime_profile_ref", stepLeafExternal),
+		model.Leaf("attempt_kind", stepLeafSlug)),
+	stepWorkMessage: model.Nested(workMessageConfig{}, model.ClassObligation, stepParticipantLeaves,
+		model.Leaf("work_item_id", stepLeafID), model.Leaf("work_item_step_ref", stepLeafSlug),
+		model.Leaf("channel_id", stepLeafID), model.Leaf("body", stepLeafText), model.Leaf("body_ref", stepLeafText),
+		model.Leaf("ack_due_at", stepLeafTime), model.Leaf("urgency", stepLeafClosed)),
+	stepWorkWaitAck: model.Nested(workWaitAckConfig{}, model.ClassEvidence,
+		model.Leaf("target_kind", stepLeafClosed), model.Leaf("target_id", stepLeafID),
+		model.Leaf("target_step_ref", stepLeafSlug), model.Leaf("deadline", stepLeafTime)),
+	stepWorkHandoff: model.Nested(workHandoffConfig{}, model.ClassObligation, stepParticipantLeaves,
+		model.Leaf("work_item_id", stepLeafID), model.Leaf("work_item_step_ref", stepLeafSlug),
+		model.Leaf("channel_id", stepLeafID), model.Leaf("context", stepLeafText), model.Leaf("context_ref", stepLeafText),
+		model.Leaf("ack_deadline", stepLeafTime)),
+	stepWorkTransition: model.Nested(workTransitionConfig{}, model.ClassEvidence,
+		model.Leaf("work_item_id", stepLeafID), model.Leaf("work_item_step_ref", stepLeafSlug),
+		model.Leaf("target_state", stepLeafClosed), model.Leaf("evidence_ref", stepLeafText), model.Leaf("reason", stepLeafText)),
+	stepWorkCancel: model.Nested(workCancelConfig{}, model.ClassEvidence,
+		model.Leaf("work_item_id", stepLeafID), model.Leaf("work_item_step_ref", stepLeafSlug),
+		model.Leaf("binding_id", stepLeafID), model.Leaf("reason", stepLeafText)),
+	stepWorkReconcile: model.Nested(workReconcileConfig{}, model.ClassEvidence, model.Leaf("binding_id", stepLeafID)),
+	stepRemotePlan: model.Nested(remotePlanConfig{}, model.ClassEvidence,
+		model.Leaf("workspace_id", stepLeafID), model.Leaf("work_item_id", stepLeafID),
+		model.Leaf("work_item_step_ref", stepLeafSlug), model.Leaf("binding_spec_id", stepLeafID),
+		model.Leaf("protocol", stepLeafClosed), model.Leaf("protocol_version", stepLeafExternal),
+		model.Leaf("authority", stepLeafExternal), model.Leaf("agent_ref", stepLeafExternal),
+		model.Leaf("skill", stepLeafExternal), model.Leaf("scope", stepLeafExternal), model.Leaf("brief_hash", stepLeafHash)),
+	stepRemoteTest:    model.Nested(remoteTestConfig{}, model.ClassEvidence, model.Leaf("plan_step_ref", stepLeafSlug)),
+	stepRemoteStart:   model.Nested(remoteStartConfig{}, model.ClassEvidence, model.Leaf("plan_step_ref", stepLeafSlug)),
+	stepRemoteObserve: model.Nested(remoteBindingConfig{}, model.ClassEvidence, model.Leaf("binding_id", stepLeafID), model.Leaf("binding_step_ref", stepLeafSlug)),
+	stepRemoteCancel: model.Nested(remoteCancelConfig{}, model.ClassEvidence,
+		model.Leaf("binding_id", stepLeafID), model.Leaf("binding_step_ref", stepLeafSlug),
+		model.Leaf("work_item_id", stepLeafID), model.Leaf("work_item_step_ref", stepLeafSlug), model.Leaf("reason", stepLeafText)),
 }
+
+// stepKindTable maps a step kind to the declaration of its config.
+type stepKindTable map[string]*model.ColumnDecl
+
+// Kinds implements model.KindTable.
+func (t stepKindTable) Kinds() []string {
+	out := make([]string, 0, len(t))
+	for kind := range t {
+		out = append(out, kind)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// Variant implements model.KindTable.
+func (t stepKindTable) Variant(kind string) (*model.ColumnDecl, bool) {
+	decl, ok := t[kind]
+	return decl, ok && decl != nil
+}
+
+var _ model.KindTable = stepKindTable{}
+
+// Why a step-config leaf names no principal; each cites its validator.
+var (
+	stepLeafID       = model.None("an id of a non-principal row, parsed by canonicalConfigID: workflow_graph.go:373")
+	stepLeafSlug     = model.None("a step ref or slug, matched by stepRefPattern: workflow_graph.go:183")
+	stepLeafText     = model.None("operator text, bounded by validWorkText and rendered only: workflow_graph.go:378")
+	stepLeafClosed   = model.None("a closed value set checked by the step validator: workflow_graph.go:358-368,669,685,781")
+	stepLeafTime     = model.None("a canonical timestamp, parsed by canonicalTimestamp: workflow_graph.go:417")
+	stepLeafHash     = model.None("a content digest bounded and compared for integrity: workflow_graph.go:566,784")
+	stepLeafExternal = model.None("a remote peer, skill or runtime profile, never an account: workflow_graph.go:781-784")
+)
+
+// stepParticipantLeaves classifies a work participant wherever a config holds
+// one: its ref names an account when its kind is user.
+var stepParticipantLeaves = model.TypeLeaves(workParticipantConfig{},
+	model.Leaf("kind", model.None("a closed participant kind: workflow_graph.go:358")),
+	model.Leaf("ref", model.KindRef("kind", "")),
+)
 
 // Graph bounds. Fan-in/fan-out caps keep a graph reviewable by the human who
 // approves its plan (an unbounded star is a rubber stamp, not a review);
@@ -381,6 +459,19 @@ type stepDTO struct {
 	DependsOn []string        `json:"depends_on"`
 }
 
+// workflowStepsDecl declares a workflow's stored steps: each step's config is
+// the variant its kind selects from stepConfigs.
+var workflowStepsDecl = model.Nested([]stepDTO(nil), model.ClassObligation,
+	model.Leaf("[].ref", stepLeafSlug),
+	model.Leaf("[].kind", stepLeafKind),
+	model.Leaf("[].config", model.Union("kind", stepConfigs)),
+	model.Leaf("[].depends_on[]", stepLeafSlug),
+)
+
+// stepLeafKind is a stored step kind, which the writer accepts only from
+// stepConfigs.
+var stepLeafKind = model.None("a step kind, refused unless stepConfigs has it: workflow_graph.go:878")
+
 // graphError is a structured validation failure: which step (empty for a
 // whole-graph failure) and why. The editor surfaces it verbatim next to the
 // offending node.
@@ -414,56 +505,43 @@ func canonicalStepConfig(kind string, raw json.RawMessage) (json.RawMessage, *gr
 		}
 		return nil
 	}
-	switch kind {
-	case stepScheduleFire:
-		var c scheduleFireConfig
-		if ge := strict(&c); ge != nil {
-			return nil, ge
-		}
+	// The kind's entry in the table is the decoder: it names the Go type the
+	// config decodes into, and the census reads the same entry, so the type the
+	// writer validates and the type whose leaves are classified are one object.
+	entry, known := stepConfigs[kind]
+	if !known || entry == nil || entry.Type == nil {
+		return nil, &graphError{Message: "unknown step kind " + kind}
+	}
+	decoded := reflect.New(entry.Type).Interface()
+	if ge := strict(decoded); ge != nil {
+		return nil, ge
+	}
+	switch c := decoded.(type) {
+	case *scheduleFireConfig:
 		if strings.TrimSpace(c.ScheduleID) == "" {
 			return nil, &graphError{Message: "schedule-fire requires config.schedule_id"}
 		}
 		return mustJSON(c), nil
-	case stepEventingEmit:
-		var c eventingEmitConfig
-		if ge := strict(&c); ge != nil {
-			return nil, ge
-		}
+	case *eventingEmitConfig:
 		if strings.TrimSpace(c.Label) == "" {
 			return nil, &graphError{Message: "eventing-emit requires config.label"}
 		}
 		c.Label = clamp(c.Label, maxEmitLabelLen)
 		return mustJSON(c), nil
-	case stepNotifyTest:
-		var c notifyTestConfig
-		if ge := strict(&c); ge != nil {
-			return nil, ge
-		}
+	case *notifyTestConfig:
 		if strings.TrimSpace(c.RouteID) == "" {
 			return nil, &graphError{Message: "notify-test requires config.route_id"}
 		}
 		return mustJSON(c), nil
-	case stepWait:
-		var c waitConfig
-		if ge := strict(&c); ge != nil {
-			return nil, ge
-		}
+	case *waitConfig:
 		if c.Seconds < 1 || c.Seconds > maxWaitSeconds {
 			return nil, &graphError{Message: fmt.Sprintf("wait requires config.seconds between 1 and %d", maxWaitSeconds)}
 		}
 		return mustJSON(c), nil
-	case stepApprovalGate:
-		var c approvalGateConfig
-		if ge := strict(&c); ge != nil {
-			return nil, ge
-		}
+	case *approvalGateConfig:
 		c.Reason = clamp(c.Reason, maxGateReasonLen)
 		return mustJSON(c), nil
-	case stepWorkCreate:
-		var c workCreateConfig
-		if ge := strict(&c); ge != nil {
-			return nil, ge
-		}
+	case *workCreateConfig:
 		var ok bool
 		if c.WorkspaceID, ok = canonicalConfigID(c.WorkspaceID); !ok {
 			return nil, &graphError{Message: "work-create requires a valid config.workspace_id"}
@@ -511,11 +589,7 @@ func canonicalStepConfig(kind string, raw json.RawMessage) (json.RawMessage, *gr
 			return nil, &graphError{Message: "work-create requires at least one required criterion"}
 		}
 		return mustJSON(c), nil
-	case stepWorkAssign:
-		var c workAssignConfig
-		if ge := strict(&c); ge != nil {
-			return nil, ge
-		}
+	case *workAssignConfig:
 		var ok bool
 		if !canonicalWorkItemSelector(&c.WorkItemID, &c.WorkItemStepRef) || c.ExpectedOwnerEpoch < 1 {
 			return nil, &graphError{Message: "work-assign requires a work selector and positive expected_owner_epoch"}
@@ -538,22 +612,14 @@ func canonicalStepConfig(kind string, raw json.RawMessage) (json.RawMessage, *gr
 			return nil, &graphError{Message: "work-assign handoff fields require require_ack=true"}
 		}
 		return mustJSON(c), nil
-	case stepWorkClaim:
-		var c workClaimConfig
-		if ge := strict(&c); ge != nil {
-			return nil, ge
-		}
+	case *workClaimConfig:
 		c.SID = strings.TrimSpace(c.SID)
 		if !canonicalWorkItemSelector(&c.WorkItemID, &c.WorkItemStepRef) ||
 			!validWorkText(c.SID, maxWorkRefLen) || c.TTLSeconds < 1 || c.TTLSeconds > maxWorkTTL {
 			return nil, &graphError{Message: fmt.Sprintf("work-claim requires a work selector, sid and ttl_seconds between 1 and %d", maxWorkTTL)}
 		}
 		return mustJSON(c), nil
-	case stepSessionLaunch:
-		var c sessionLaunchConfig
-		if ge := strict(&c); ge != nil {
-			return nil, ge
-		}
+	case *sessionLaunchConfig:
 		c.RuntimeProfileRef = strings.TrimSpace(c.RuntimeProfileRef)
 		c.AttemptKind = strings.TrimSpace(c.AttemptKind)
 		c.FenceStepRef = strings.TrimSpace(c.FenceStepRef)
@@ -568,11 +634,7 @@ func canonicalStepConfig(kind string, raw json.RawMessage) (json.RawMessage, *gr
 			return nil, &graphError{Message: "session-launch requires a work selector, optional single fence precondition, runtime_profile_ref and attempt_kind"}
 		}
 		return mustJSON(c), nil
-	case stepWorkMessage:
-		var c workMessageConfig
-		if ge := strict(&c); ge != nil {
-			return nil, ge
-		}
+	case *workMessageConfig:
 		var ok bool
 		if !canonicalWorkItemSelector(&c.WorkItemID, &c.WorkItemStepRef) {
 			return nil, &graphError{Message: "work-message requires a valid work selector"}
@@ -594,11 +656,7 @@ func canonicalStepConfig(kind string, raw json.RawMessage) (json.RawMessage, *gr
 			return nil, &graphError{Message: "work-message config.ack_due_at must be canonical"}
 		}
 		return mustJSON(c), nil
-	case stepWorkWaitAck:
-		var c workWaitAckConfig
-		if ge := strict(&c); ge != nil {
-			return nil, ge
-		}
+	case *workWaitAckConfig:
 		var ok bool
 		c.TargetKind, c.TargetStepRef = strings.TrimSpace(c.TargetKind), strings.TrimSpace(c.TargetStepRef)
 		if (c.TargetID == "") == (c.TargetStepRef == "") ||
@@ -615,11 +673,7 @@ func canonicalStepConfig(kind string, raw json.RawMessage) (json.RawMessage, *gr
 			return nil, &graphError{Message: "work-wait-ack requires canonical config.deadline"}
 		}
 		return mustJSON(c), nil
-	case stepWorkHandoff:
-		var c workHandoffConfig
-		if ge := strict(&c); ge != nil {
-			return nil, ge
-		}
+	case *workHandoffConfig:
 		var ok bool
 		if !canonicalWorkItemSelector(&c.WorkItemID, &c.WorkItemStepRef) {
 			return nil, &graphError{Message: "work-handoff requires a valid work selector"}
@@ -640,11 +694,7 @@ func canonicalStepConfig(kind string, raw json.RawMessage) (json.RawMessage, *gr
 			return nil, &graphError{Message: "work-handoff requires canonical config.ack_deadline"}
 		}
 		return mustJSON(c), nil
-	case stepWorkTransition:
-		var c workTransitionConfig
-		if ge := strict(&c); ge != nil {
-			return nil, ge
-		}
+	case *workTransitionConfig:
 		c.TargetState, c.EvidenceRef, c.Reason = strings.TrimSpace(c.TargetState), strings.TrimSpace(c.EvidenceRef), strings.TrimSpace(c.Reason)
 		if !canonicalWorkItemSelector(&c.WorkItemID, &c.WorkItemStepRef) || !workTransitionStates[c.TargetState] ||
 			(c.EvidenceRef != "" && !validWorkText(c.EvidenceRef, maxWorkRefLen)) ||
@@ -653,11 +703,7 @@ func canonicalStepConfig(kind string, raw json.RawMessage) (json.RawMessage, *gr
 			return nil, &graphError{Message: "invalid config for kind work-transition"}
 		}
 		return mustJSON(c), nil
-	case stepWorkCancel:
-		var c workCancelConfig
-		if ge := strict(&c); ge != nil {
-			return nil, ge
-		}
+	case *workCancelConfig:
 		var ok bool
 		c.Reason = strings.TrimSpace(c.Reason)
 		if !canonicalWorkItemSelector(&c.WorkItemID, &c.WorkItemStepRef) || !validWorkText(c.Reason, maxWorkTextLen) {
@@ -669,21 +715,13 @@ func canonicalStepConfig(kind string, raw json.RawMessage) (json.RawMessage, *gr
 			}
 		}
 		return mustJSON(c), nil
-	case stepWorkReconcile:
-		var c workReconcileConfig
-		if ge := strict(&c); ge != nil {
-			return nil, ge
-		}
+	case *workReconcileConfig:
 		var ok bool
 		if c.BindingID, ok = canonicalConfigID(c.BindingID); !ok {
 			return nil, &graphError{Message: "work-reconcile requires a valid config.binding_id"}
 		}
 		return mustJSON(c), nil
-	case stepRemotePlan:
-		var c remotePlanConfig
-		if ge := strict(&c); ge != nil {
-			return nil, ge
-		}
+	case *remotePlanConfig:
 		var ok bool
 		if c.WorkspaceID, ok = canonicalConfigID(c.WorkspaceID); !ok ||
 			!canonicalWorkItemSelector(&c.WorkItemID, &c.WorkItemStepRef) {
@@ -707,40 +745,24 @@ func canonicalStepConfig(kind string, raw json.RawMessage) (json.RawMessage, *gr
 			return nil, &graphError{Message: "remote-plan requires a pinned protocol, peer, work tuple and content revisions"}
 		}
 		return mustJSON(c), nil
-	case stepRemoteTest:
-		var c remoteTestConfig
-		if ge := strict(&c); ge != nil {
-			return nil, ge
-		}
+	case *remoteTestConfig:
 		c.PlanStepRef = strings.TrimSpace(c.PlanStepRef)
 		if !stepRefPattern.MatchString(c.PlanStepRef) {
 			return nil, &graphError{Message: "remote-test requires config.plan_step_ref"}
 		}
 		return mustJSON(c), nil
-	case stepRemoteStart:
-		var c remoteStartConfig
-		if ge := strict(&c); ge != nil {
-			return nil, ge
-		}
+	case *remoteStartConfig:
 		c.PlanStepRef = strings.TrimSpace(c.PlanStepRef)
 		if !stepRefPattern.MatchString(c.PlanStepRef) {
 			return nil, &graphError{Message: "remote-start requires config.plan_step_ref"}
 		}
 		return mustJSON(c), nil
-	case stepRemoteObserve:
-		var c remoteBindingConfig
-		if ge := strict(&c); ge != nil {
-			return nil, ge
-		}
+	case *remoteBindingConfig:
 		if !canonicalBindingSelector(&c.BindingID, &c.BindingStepRef) {
 			return nil, &graphError{Message: "remote-observe requires exactly one binding_id or binding_step_ref"}
 		}
 		return mustJSON(c), nil
-	case stepRemoteCancel:
-		var c remoteCancelConfig
-		if ge := strict(&c); ge != nil {
-			return nil, ge
-		}
+	case *remoteCancelConfig:
 		c.Reason = strings.TrimSpace(c.Reason)
 		if !canonicalBindingSelector(&c.BindingID, &c.BindingStepRef) ||
 			!canonicalWorkItemSelector(&c.WorkItemID, &c.WorkItemStepRef) ||
@@ -783,7 +805,7 @@ func validateGraph(steps []stepDTO, maxSteps int) ([]stepDTO, *graphError) {
 		if _, dup := byRef[s.Ref]; dup {
 			return nil, &graphError{StepRef: s.Ref, Message: "duplicate step ref"}
 		}
-		if !validStepKinds[s.Kind] {
+		if _, known := stepConfigs[s.Kind]; !known {
 			return nil, &graphError{StepRef: s.Ref, Message: "unknown step kind " + s.Kind}
 		}
 		cfg, ge := canonicalStepConfig(s.Kind, s.Config)

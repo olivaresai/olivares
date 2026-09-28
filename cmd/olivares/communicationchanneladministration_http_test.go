@@ -1205,7 +1205,13 @@ func seedChannelGrantHistory(
 	generations int,
 ) (model.ID, []model.ID) {
 	t.Helper()
-	subject := model.NewID()
+	return seedChannelGrantHistoryForSubject(t, eng, tenant, workspace, channelID, actor, model.NewID(), generations)
+}
+
+func seedChannelGrantHistoryForSubject(
+	t *testing.T, eng *engine, tenant model.TenantID, workspace, channelID, actor, subject model.ID, generations int,
+) (model.ID, []model.ID) {
+	t.Helper()
 	seeded := make([]model.ID, 0, generations)
 	if err := eng.store.Mutate(context.Background(), tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext("sessions.channel_grant")

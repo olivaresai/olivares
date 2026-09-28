@@ -78,6 +78,15 @@ type c3HTTP struct {
 
 func newC3HTTP(t *testing.T, m *Module, st store.Store) *c3HTTP {
 	t.Helper()
+	ctx := context.Background()
+	// Match the server bootstrap before creating users or organizations, so
+	// a later reopen can verify the durable directory's SYSTEM witness.
+	if err := st.System(ctx, func(sys store.SystemScope) error {
+		_, err := sys.EnsureSystemTenant(ctx)
+		return err
+	}); err != nil {
+		t.Fatalf("initialize SYSTEM tenant: %v", err)
+	}
 	_, priv, err := ed25519.GenerateKey(nil)
 	if err != nil {
 		t.Fatal(err)
@@ -156,16 +165,13 @@ func (h *c3HTTP) createOrg(admin, slug string) model.TenantID {
 // ws is set) and returns its session token.
 func (h *c3HTTP) memberToken(admin string, tenant model.TenantID, email, role string, ws model.ID) string {
 	h.t.Helper()
-	r := h.do("POST", "/v1/users", admin, map[string]any{"email": email, "password": "memberpass1"}, "")
+	user := map[string]any{"email": email, "password": "memberpass1", "tenant": tenant.String(), "role": role}
+	if !ws.IsZero() {
+		user["workspace_id"] = ws.String()
+	}
+	r := h.do("POST", "/v1/users", admin, user, "")
 	if r.code != http.StatusCreated {
 		h.t.Fatalf("create user %s = %d %s", email, r.code, r.raw)
-	}
-	grant := map[string]any{"user_id": r.body["id"], "tenant": tenant.String(), "role": role}
-	if !ws.IsZero() {
-		grant["workspace_id"] = ws.String()
-	}
-	if r := h.do("POST", "/v1/memberships", admin, grant, ""); r.code != http.StatusCreated {
-		h.t.Fatalf("grant %s = %d %s", email, r.code, r.raw)
 	}
 	r = h.do("POST", "/v1/auth/login", "", map[string]any{"email": email, "password": "memberpass1"}, "")
 	if r.code != http.StatusOK {

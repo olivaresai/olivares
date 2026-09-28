@@ -19,6 +19,7 @@ import (
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/runtime"
 	"github.com/olivaresai/olivares/core/store"
+	"github.com/olivaresai/olivares/modules/evals"
 	"github.com/olivaresai/olivares/modules/finops"
 	"github.com/olivaresai/olivares/modules/models"
 	"github.com/olivaresai/olivares/modules/orchestration"
@@ -30,9 +31,9 @@ import (
 
 // TestBudgetGatesEnforceAgainstRealFinOps drives the three composition-root budget
 // adapters (orch/voice/models) against a REAL finops.Module — proving the cross-module
-// contract (finops.SpendDims in, finops.BudgetCheck mapped out) that the per-module
+// contract (finops.SpendDims in, the admission's answer mapped out) that the per-module
 // fakes cannot: that an enforcing budget at its cap, accrued through the live cost
-// ingestion path, actually denies through CheckBudget, with the budget id/action mapped
+// ingestion path, actually denies through admission, with the budget id/action mapped
 // onto each module's own decision and the dims forwarded so a scoped budget matches.
 func TestBudgetGatesEnforceAgainstRealFinOps(t *testing.T) {
 	ctx := context.Background()
@@ -153,8 +154,9 @@ func TestBudgetGatesEnforceAgainstRealFinOps(t *testing.T) {
 	}
 }
 
-// stubChecker is a budgetChecker that always returns the given check and error, so the
-// adapter fail-open branch (a FinOps error must map to ALLOW, never DENY) can be tested.
+// stubChecker is a budgetChecker that always answers with the given check and error, so the
+// adapters' deny-closed branch (a ledger that cannot be read must map to DENY, never ALLOW)
+// can be tested. Its Reserve answers as the module does.
 type stubChecker struct {
 	chk finops.BudgetCheck
 	err error
@@ -168,27 +170,99 @@ func (s stubChecker) CheckSpendLimit(context.Context, model.TenantID, string, []
 	return finops.SpendLimitCheck{Allowed: true}, nil
 }
 
-// TestBudgetGateAdaptersFailOpenOnError proves all three composition-root adapters map a
-// FinOps error to ALLOW (fail-open), even when the (ignored) check says DENY — a FinOps
-// outage must never take down actuation.
-func TestBudgetGateAdaptersFailOpenOnError(t *testing.T) {
-	ctx := context.Background()
-	boom := stubChecker{chk: finops.BudgetCheck{Allowed: false, Action: "block", BudgetID: "x"}, err: errSyntheticOutage}
+func (s stubChecker) Reserve(_ context.Context, _ model.TenantID, req finops.AdmissionRequest) (finops.Reservation, error) {
+	return fakeAdmissionReserve(s.chk, s.err, req)
+}
 
-	if d, err := (orchBudgetGate{fin: boom}).Check(ctx, "t", orchestration.BudgetDims{}); err != nil || !d.Allowed {
-		t.Fatalf("orch adapter must fail OPEN on a checker error, got %+v err=%v", d, err)
+func (s stubChecker) Commit(context.Context, model.TenantID, string, int64) error { return nil }
+func (s stubChecker) Release(context.Context, model.TenantID, string) error       { return nil }
+
+// TestBudgetGateAdaptersFailClosedOnError proves the four composition-root adapters map a
+// ledger that cannot be read to DENY (fail-closed): an outage is not permission. Each
+// refusal is the module's own, money-free.
+func TestBudgetGateAdaptersFailClosedOnError(t *testing.T) {
+	ctx := context.Background()
+	boom := stubChecker{chk: finops.BudgetCheck{Allowed: true}, err: errSyntheticOutage}
+
+	if d, err := (orchBudgetGate{fin: boom}).Check(ctx, "t", orchestration.BudgetDims{}); err != nil || d.Allowed || d.Action != "block" {
+		t.Fatalf("orch adapter must fail CLOSED on an unreadable ledger, got %+v err=%v", d, err)
 	}
-	if d, err := (voiceBudgetGate{fin: boom}).Check(ctx, "t", voice.BudgetDims{}); err != nil || !d.Allowed {
-		t.Fatalf("voice adapter must fail OPEN on a checker error, got %+v err=%v", d, err)
+	if d, err := (voiceBudgetGate{fin: boom}).Check(ctx, "t", voice.BudgetDims{}); err != nil || d.Allowed || d.Action != "block" {
+		t.Fatalf("voice adapter must fail CLOSED on an unreadable ledger, got %+v err=%v", d, err)
 	}
-	if d, err := (modelsBudgetGate{fin: boom}).Check(ctx, "t", models.BudgetDims{}); err != nil || !d.Allowed {
-		t.Fatalf("models adapter must fail OPEN on a checker error, got %+v err=%v", d, err)
+	if d, err := (modelsBudgetGate{fin: boom}).Check(ctx, "t", models.BudgetDims{}); err != nil || d.Allowed || d.Action != "block" {
+		t.Fatalf("models adapter must fail CLOSED on an unreadable ledger, got %+v err=%v", d, err)
+	}
+	eg := &evalsBudgetGate{}
+	eg.bind(boom)
+	if d, err := eg.Check(ctx, "t", evalsBudgetDims()); err != nil || d.Allowed || d.Action != "block" {
+		t.Fatalf("evals adapter must fail CLOSED on an unreadable ledger, got %+v err=%v", d, err)
 	}
 
 	// And when the checker SUCCEEDS with a deny, the adapter maps it through unchanged.
 	deny := stubChecker{chk: finops.BudgetCheck{Allowed: false, Action: "throttle", BudgetID: "b9", Reason: "r"}}
 	if d, _ := (orchBudgetGate{fin: deny}).Check(ctx, "t", orchestration.BudgetDims{}); d.Allowed || d.Action != "throttle" || d.BudgetRef != "b9" {
 		t.Fatalf("orch adapter must map a successful deny through, got %+v", d)
+	}
+}
+
+// recordingChecker records every admission request an adapter builds and admits it.
+type recordingChecker struct {
+	stubChecker
+	reqs []finops.AdmissionRequest
+}
+
+func (r *recordingChecker) Reserve(ctx context.Context, tenant model.TenantID, req finops.AdmissionRequest) (finops.Reservation, error) {
+	r.reqs = append(r.reqs, req)
+	return r.stubChecker.Reserve(ctx, tenant, req)
+}
+
+// evalsBudgetDims is an evals regression-gate dimension set.
+func evalsBudgetDims() evals.BudgetDims { return evals.BudgetDims{JudgeModelRef: "judge-model"} }
+
+// TestBudgetGatesHoldNothingUnderAFreshKey pins the request every engine YES/NO gate sends
+// admission. None of these seams ever learns what its effect cost, so none can commit or
+// release: each asks under a key of its own for every call, holds nothing, and never
+// admits a call it could not establish. A second call of the same seam is a new question,
+// never a replay of the first.
+func TestBudgetGatesHoldNothingUnderAFreshKey(t *testing.T) {
+	ctx := context.Background()
+	rec := &recordingChecker{stubChecker: stubChecker{chk: finops.BudgetCheck{Allowed: true}}}
+	eg := &evalsBudgetGate{}
+	eg.bind(rec)
+	for i := 0; i < 2; i++ {
+		if d, err := (orchBudgetGate{fin: rec}).Check(ctx, "t", orchestration.BudgetDims{AgentRef: "a"}); err != nil || !d.Allowed {
+			t.Fatalf("orch: %+v err=%v", d, err)
+		}
+		if d, err := (voiceBudgetGate{fin: rec}).Check(ctx, "t", voice.BudgetDims{AgentRef: "a"}); err != nil || !d.Allowed {
+			t.Fatalf("voice: %+v err=%v", d, err)
+		}
+		if d, err := (modelsBudgetGate{fin: rec}).Check(ctx, "t", models.BudgetDims{ModelRef: "m"}); err != nil || !d.Allowed {
+			t.Fatalf("models: %+v err=%v", d, err)
+		}
+		if d, err := eg.Check(ctx, "t", evalsBudgetDims()); err != nil || !d.Allowed {
+			t.Fatalf("evals: %+v err=%v", d, err)
+		}
+	}
+	if len(rec.reqs) != 8 {
+		t.Fatalf("admission was asked %d time(s) for 8 gate calls", len(rec.reqs))
+	}
+	prefixes := []string{"scheduled_job/", "voice_open/", "model_route/", "evals_judge/"}
+	seen := map[string]bool{}
+	for i, req := range rec.reqs {
+		if req.EstimateMicroUSD != 0 {
+			t.Errorf("call %d holds %d µUSD: a seam that never learns its cost must hold nothing", i, req.EstimateMicroUSD)
+		}
+		if req.Unreachable != finops.UnreachableDeny {
+			t.Errorf("call %d carries posture %q, want deny", i, req.Unreachable)
+		}
+		if want := prefixes[i%len(prefixes)]; !strings.HasPrefix(req.IdempotencyKey, want) {
+			t.Errorf("call %d key = %q, want the %q prefix", i, req.IdempotencyKey, want)
+		}
+		if seen[req.IdempotencyKey] {
+			t.Errorf("call %d reused key %q: two calls presented themselves as one", i, req.IdempotencyKey)
+		}
+		seen[req.IdempotencyKey] = true
 	}
 }
 

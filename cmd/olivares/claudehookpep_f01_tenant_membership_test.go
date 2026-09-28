@@ -32,7 +32,7 @@ import (
 func TestHookPEP_F01_DeclaredTenantRequiresMembership(t *testing.T) {
 	h := newHarness(t)
 
-	// firmAgentToken grants membership to tenant A ONLY (createApprover: POST /v1/memberships
+	// firmAgentToken grants membership to tenant A ONLY (createApprover: POST /v1/users
 	// with tenant=h.tenantA). This principal is NOT a member of tenant B.
 	tok := h.firmAgentToken(t, "agent-a@f01.test")
 

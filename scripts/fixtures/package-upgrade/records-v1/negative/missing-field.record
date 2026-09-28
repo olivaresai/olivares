@@ -1,0 +1,12 @@
+schema=olivares.pkg-deconfigured/v1
+boot=3f2b8c1e-9a4d-4e6f-8b7a-1c2d3e4f5a6b
+pid=4242
+ppid=4200
+ppid_start=123400
+batch=none
+maintscript=prerm
+format=deb
+old=unknown
+new=unknown
+contract=upgrade-dispatch-v1
+active=active

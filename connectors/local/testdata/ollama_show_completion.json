@@ -1,0 +1,7 @@
+{
+  "capabilities": ["completion", "insert", "image"],
+  "parameters": "num_ctx 512",
+  "model_info": {
+    "llama.context_length": 2048
+  }
+}

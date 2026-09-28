@@ -1,0 +1,14 @@
+schema=olivares.pkg-upgrade-state/v2
+boot=3f2b8c1e-9a4d-4e6f-8b7a-1c2d3e4f5a6b
+pid=4242
+pid_start=123456
+ppid=4200
+ppid_start=123400
+batch=none
+maintscript=prerm
+format=deb
+old=26.10.0
+new=26.10.1
+contract=upgrade-dispatch-v1
+enabled=enabled
+active=active

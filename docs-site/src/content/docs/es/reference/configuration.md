@@ -12,8 +12,7 @@ El motor se configura mediante flags y variables de entorno, no mediante un fich
 configuración inabarcable. Todas las variables que lee se enumeran más abajo, generadas
 a partir de las propias fuentes. Los secretos que cablean fuentes reales permanecen en
 ficheros en poder del operador referenciados por variable de entorno — nunca en el
-almacén. Los valores por defecto se eligen para fallar cerrado: TLS activado, sin credenciales por defecto y un token de un solo uso. Los enlaces son el comodín dual-stack (`:8443`, `:8444`): esto es un servidor, y el enlace nunca fue lo que lo hacía seguro. TLS
-activado, sin credenciales por defecto.
+almacén. Los valores por defecto se eligen para fallar cerrado: TLS activado, sin credenciales por defecto y un token de un solo uso. Los enlaces son el comodín dual-stack (`:8443`, `:8444`): esto es un servidor, y el enlace nunca fue lo que lo hacía seguro.
 :::
 
 ## El subcomando `serve`
@@ -23,6 +22,7 @@ activado, sin credenciales por defecto.
 | Flag | Por defecto | Propósito |
 | --- | --- | --- |
 | `--listen` | `:8443` | Dirección de escucha HTTP (API REST + interfaz web embebida). |
+| `--login-trusted-proxies` | `$OLIVARES_LOGIN_TRUSTED_PROXIES`, o vacío | CIDR de proxies de confianza solo para la limitación de intentos de inicio de sesión con contraseña. Un valor explícitamente vacío del flag anula la variable de entorno; la política de red, la sesión y la auditoría conservan el par de transporte. |
 | `--grpc-listen` | `:8444` | Dirección de escucha gRPC (API de control-plane / ingesta de colector). |
 | `--data-dir` | `$OLIVARES_DATA_DIR`, una instalación existente en `./olivares-data`, si no `$XDG_DATA_HOME/olivares` o `~/.local/share/olivares` | Directorio de datos: clave de firma de auditoría, material TLS y (para SQLite) el fichero del almacén. |
 | `--engine` | `sqlite` | Motor de almacén: `sqlite` o `postgres`. |
@@ -88,17 +88,21 @@ El policy decision point de autorización se selecciona en la raíz de composici
 
 Dos adaptadores se sientan detrás de una misma costura (seam): un evaluador **Cedar embebido** (el camino primario, en Go puro) y un adaptador **OPA-sobre-HTTP**. El operador elige un motor; ambos solo pueden restringir, nunca ampliar, la decisión que el RBAC integrado ya tomó.
 
-:::note[Una política mala nunca desgobierna el plano]
-Si `OLIVARES_PDP_ENGINE` selecciona un motor pero su configuración es inválida — un fichero Cedar ilegible, un objetivo OPA malformado — el motor **desactiva solo el PDP externo**, mantiene el motor ABAC nativo y el RBAC aplicando, y registra con fuerza. Un fichero de política roto nunca deja en silencio las peticiones sin gobernar ni hace caer el control plane.
+:::note[Una configuración inválida del PDP externo impide construir el conjunto de módulos]
+Si `OLIVARES_PDP_ENGINE` selecciona explícitamente un motor externo cuya configuración es inválida, no se puede construir el conjunto de módulos. Los comandos que lo construyen, incluido `serve`, notifican un error de configuración en lugar de volver silenciosamente a la autorización exclusivamente nativa. Corrige la configuración. Un `none` explícito elige deliberadamente operar sin la capa externa que solo puede restringir, mientras ABAC nativo y RBAC siguen aplicándose; no es una recuperación automática ni sustituye a una política externa obligatoria.
+
+Un selector sin definir o vacío, o `none`, sigue siendo válido y usa la autorización nativa. Con `cedar`, el nombre del fichero de política es opcional: `OLIVARES_PDP_CEDAR_FILE` sin definir o vacío, o un fichero legible y vacío, proporciona una superposición vacía válida. Construir el adaptador OPA no envía ninguna solicitud de red ni comprueba que su endpoint sea accesible.
 :::
 
 Para el modelo deny-by-default, la naturaleza privilegiada de ver el grafo de acceso, y cómo se audita cada lectura de autorización, consulta [el modelo de seguridad](/es/explanation/security/security-model/).
+
+Configura `OLIVARES_OTEL_PROVIDER_BAGGAGE_ALLOWLIST` como un array JSON de reglas con los campos `origin`, `key` y `values`. Cada regla permite únicamente el origen HTTP(S), la clave de baggage y los valores no secretos exactos que declara. Los límites son 16 KiB de JSON, 32 reglas, ocho valores por regla y entre 1 y 64 bytes ASCII por clave o valor. La continuación de `traceparent` y `tracestate` es independiente de esta política, y la autorización del destino también lo es.
 
 <!-- BEGIN GENERATED olivares-env-reference — regenerate with `bash scripts/check-config-env-docs.sh --write`; do not edit by hand -->
 
 ### Complete variable reference
 
-The table below is generated from the product's own sources: 290 variables and 17 runtime-constructed families, covering the engine, the CLI, the Kubernetes operator, the Terraform provider and the connectors. It is regenerated and checked against those sources on every change, so it does not fall behind the binary.
+The table below is generated from the product's own sources: 296 variables and 17 runtime-constructed families, covering the engine, the CLI, the Kubernetes operator, the Terraform provider and the connectors. It is regenerated and checked against those sources on every change, so it does not fall behind the binary.
 
 **Required** means the feature that reads the variable does not start without it; most variables are optional and the engine runs with none of them set.
 
@@ -214,6 +218,7 @@ The table below is generated from the product's own sources: 290 variables and 1
 | `OLIVARES_EVENTING_SECRET_KEY` | No | — | Key that encrypts eventing subscription signing secrets at rest. |
 | `OLIVARES_EXECUTION_ENVIRONMENT_ID` | No | — | Explicit execution-environment reference for this node, read at boot by cmd/olivares/providerprofiles.go. Unset, the engine generates one identity once into `execution-environment-id` in the data directory (0600, atomic exclusive create) and reuses it; set, the value must be 1..256 printable bytes with no whitespace, colon or vertical bar, and a malformed value refuses boot instead of degrading in silence. It is REQUIRED on a topology with only shared state and no node-local data directory: there, without it, profiled session launches stay deny-closed. |
 | `OLIVARES_EXTRA_ARGS` | No | — | Extra `serve` arguments appended by the packaged service unit, for operators who configure the daemon through an environment file. |
+| `OLIVARES_FINOPS_ADMISSION_LEGACY_WRITERS_STOPPED_AT` | No | — | Instant every writer of the earlier FinOps admission build stopped, as an RFC 3339 time in UTC ending in `Z`. Read once at startup. Recovery retires a claim those writers left, but only once five minutes have passed since this instant and only while no row they left is dated later; empty, the default, or text that is not such an instant retires none. |
 | `OLIVARES_GROK_HOOK_ACCOUNT` | No | — | Account the Grok Build hook client reports. |
 | `OLIVARES_GROK_HOOK_AGENT` | No | — | Agent identity the Grok Build hook client reports. |
 | `OLIVARES_GROK_HOOK_ORG` | No | — | Organization the Grok Build hook client reports. |
@@ -237,6 +242,7 @@ The table below is generated from the product's own sources: 290 variables and 1
 | `OLIVARES_INFERENCE_PROXY_CONFIG` | No | — | Path to the JSON configuration of the governed inference proxy. |
 | `OLIVARES_INGEST_TOKEN` | No | — | Bearer token the collector ingest endpoint requires from telemetry senders. |
 | `OLIVARES_INSECURE` | No | — | Set to `1` to let the CLI talk to a plaintext or untrusted-TLS endpoint. Local development only. |
+| `OLIVARES_INVITE_MAIL_DESTINATION` | No | — | Name of the email destination in the notification file, scoped to no tenant, that invitations are mailed through. Without it, and without a declared console address, invite mode is unavailable. |
 | `OLIVARES_KEY_CUSTODY` | No | — | Custody posture required of the audit signing key: whether a raw on-disk key is accepted or a wrapped one is demanded. |
 | `OLIVARES_KEY_WRAP_AWS_KEY_ID` | No | — | Key identifier in AWS KMS. Used by the backend that wraps the signing keys. |
 | `OLIVARES_KEY_WRAP_AWS_REGION` | No | — | Region of the AWS KMS key. Used by the backend that wraps the signing keys. |
@@ -265,6 +271,7 @@ The table below is generated from the product's own sources: 290 variables and 1
 | `OLIVARES_LICENSE_PUBKEY` | No | — | Public key the engine verifies the license signature against. |
 | `OLIVARES_LIVEINGEST_INSPECT_OBSERVED_REFS` | No | — | Set to `1` to make live ingest inspect observed references, which costs more per event. |
 | `OLIVARES_LOGIN_ENFORCEMENT` | No | — | Interruptor de break-glass, no una ruta de archivo, para el enforcement del inicio de sesión (require-SSO y la lista de IP permitidas para el inicio de sesión). Lo lee cualquier build al arrancar el motor; un cambio surte efecto tras un reinicio. `off`, `0`, `false`, `no` o `disabled`, con cualquier combinación de mayúsculas y minúsculas y sin tener en cuenta los espacios circundantes, selecciona el break-glass del operador; sin definir o con cualquier otro valor, el enforcement sigue la posture almacenada desde la consola. Un build que enlaza el componente de enforcement deja entonces de aplicar esa posture, sea cual sea la almacenada, y registra un aviso. Un build que no lo enlaza deja constancia de la misma selección deliberada: el motor omite el rechazo de arranque que haría en otro caso cuando este despliegue tiene historial de enforcement y una posture configurada, y añade un evento duradero de recuperación del operador al promover el nodo. |
+| `OLIVARES_LOGIN_TRUSTED_PROXIES` | No | — | CIDR de proxies IPv4/IPv6 separados por comas, de confianza para proporcionar mediante X-Forwarded-For la dirección usada únicamente por la limitación de intentos de inicio de sesión con contraseña. Vacío no confía en ningún proxy. El flag --login-trusted-proxies tiene prioridad, incluso con un valor explícitamente vacío. Los CIDR no válidos o las entradas vacías de la lista impiden el arranque. Se lee una vez al arrancar; la política, la sesión y la auditoría conservan el par de transporte. Consulta docs/SECURITY-HARDENING.md para los límites de 8192 bytes y 64 entradas por solicitud. |
 | `OLIVARES_LOG_LEVEL` | No | — | Minimum log level the engine emits: `debug`, `info`, `warn` or `error`. |
 | `OLIVARES_MCP_TASK_KILLSWITCH_SWEEP` | No | — | How often a running MCP task is re-checked against the kill switch, as a Go duration. |
 | `OLIVARES_METRICS_ALLOWED_CIDRS` | No | — | Comma-separated CIDR ranges allowed to scrape the metrics endpoint. |
@@ -291,8 +298,10 @@ The table below is generated from the product's own sources: 290 variables and 1
 | `OLIVARES_OTEL_GENAI_COMPAT` | No | — | Set to a true value to also emit the generative-AI semantic-convention attributes on spans. |
 | `OLIVARES_OTEL_INSECURE` | No | — | Set to a true value to export traces over plaintext. Local development only. |
 | `OLIVARES_OTEL_PROTOCOL` | No | — | OTLP protocol used for export. Falls back to the standard `OTEL_EXPORTER_OTLP_PROTOCOL`. |
+| `OLIVARES_OTEL_PROVIDER_BAGGAGE_ALLOWLIST` | No | `[]` | JSON array of exact HTTP(S) origin, baggage key and non-secret control values allowed through the mounted AnthropicHTTPClient; empty denies baggage. Invalid policy reports a bounded reason once at construction and suppresses baggage without blocking inference. |
 | `OLIVARES_OTEL_SAMPLE_RATIO` | No | — | Fraction of traces sampled, between 0 and 1. |
 | `OLIVARES_OTEL_SERVICE_NAME` | No | — | Service name reported on exported traces. |
+| `OLIVARES_PDF_RENDER_TIMEOUT` | No | `30s` | Tiempo máximo que puede tardar un renderizado de Chromium de un informe PDF, como duración de Go positiva con unidades. El complemento de informes lo lee en cada renderizado; un valor que no sea una duración positiva se rechaza indicando el nombre de la variable antes de iniciar Chromium. Auméntalo en hosts lentos donde un renderizado estructural supere el límite predeterminado. |
 | `OLIVARES_PDP_CEDAR_FILE` | No | — | Path to the Cedar policy file, for the `cedar` decision point. |
 | `OLIVARES_PDP_ENGINE` | No | — | External policy decision point to add on top of the native engine: `cedar`, `opa` or `none`. |
 | `OLIVARES_PDP_OPA_PATH` | No | — | Decision path queried under the Open Policy Agent endpoint. |
@@ -346,6 +355,7 @@ The table below is generated from the product's own sources: 290 variables and 1
 | `OLIVARES_SECRET_STORE_KEY` | No | — | Key that encrypts operator secrets held in the store. |
 | `OLIVARES_SERVERTOOL_EGRESS_CONFIG` | No | — | Ruta al archivo JSON de concesiones (grants) del gate de egress para las herramientas de servidor del proveedor (búsqueda web, obtención web, ejecución de código) en el proxy inline. Solo la leen los builds compilados con las etiquetas `enterprise` y `addon_airs`. Si no se define, esas herramientas siguen en modo de solo observación; un archivo ilegible o que no se puede analizar deniega toda herramienta de servidor de egress reconocida hasta que se corrija el archivo y se reinicie el motor. |
 | `OLIVARES_SERVER_URL` | No | — | Base URL of the control plane the CLI talks to, when `--server` is not given. |
+| `OLIVARES_SESSIONS_AGENT_LINK_LISTEN` | No | — | Dirección de escucha del enlace de agentes, en formato `host:port`: el endpoint con TLS mutuo que una edición basada en este árbol de fuentes ofrece a sus agentes de nodo. Se lee al arrancar; vacío, el valor predeterminado, significa que no se abre ningún listener. La compilación Community no lee esta variable. |
 | `OLIVARES_SESSIONS_MANAGED_STOP_ADMISSION_TIMEOUT` | No | `10s` | Tiempo máximo para admitir una solicitud de Stop gestionado, expresado como una duración positiva de Go con unidades. Se lee al arrancar; un valor inválido o no positivo impide el arranque. No limita el tiempo de finalización del proceso. |
 | `OLIVARES_SESSION_BUDGET_AVAILABILITY` | No | — | Whether session budget enforcement is required, and what happens when the budget service cannot answer. |
 | `OLIVARES_SESSION_CONTEXT_AVAILABILITY` | No | — | Whether session context governance is required, and what happens when the context service cannot answer. |

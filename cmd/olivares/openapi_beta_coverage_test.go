@@ -74,9 +74,11 @@ func TestBetaOpenAPICoversEveryMountedModuleRoute(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+	authr := auth.NewAuthenticator(st, nil)
 	srv, err := api.New(api.Options{
-		Store: st, Authenticator: auth.NewAuthenticator(st, nil), Authorizer: auth.NewAuthorizer(nil),
-		Signer: signer, SetupToken: secure.NewSetupToken(filepath.Join(t.TempDir(), "setup.token")),
+		Store: st, Authenticator: authr, Authorizer: auth.NewAuthorizer(nil),
+		PrincipalEvidenceProducer: authr,
+		Signer:                    signer, SetupToken: secure.NewSetupToken(filepath.Join(t.TempDir(), "setup.token")),
 		Logger: log, Version: "test", Modules: set.all,
 	})
 	if err != nil {

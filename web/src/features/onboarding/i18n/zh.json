@@ -44,6 +44,7 @@
       "invite": "邀请",
       "inviteAnother": "再邀请一位",
       "invited": "已邀请 {{email}}。",
+      "consentRequired": "{{email}} 已有账户；只有在持有人同意后才会加入。",
       "or": "或",
       "ssoCta": "连接 SSO",
       "password": "密码",

@@ -434,14 +434,14 @@ func (m *Module) openPhaseDecide(w http.ResponseWriter, r *http.Request, mc api.
 // (agent, model, provider) is at its cap. The denial is recorded in the append-only
 // ledger as a distinct op_status (budget_blocked|budget_throttled) and audited
 // (docs/SECURITY-HARDENING.md: minimal data — refs + action, never audio/transcript or a USD figure).
-// It FAILS OPEN: a budget-gate error never blocks an approved open (the
-// finops_budget_cap finding is the backstop), per finops.CheckBudget's contract.
+// The engine's gate reports a ledger it cannot read as a block (store unreachable),
+// which denies the open; the error branch only covers a gate that returns an error.
 func (m *Module) budgetBlocksOpen(w http.ResponseWriter, r *http.Request, mc api.ModuleContext, in openRequest, policyRef, planHash string, gateStatus GateStatus) bool {
 	verdict, err := m.budgetGate.Check(r.Context(), mc.Tenant, BudgetDims{
 		AgentRef: in.AgentRef, SessionRef: in.SessionRef, ModelRef: in.ModelRef, ProviderRef: in.ProviderRef,
 	})
 	if err != nil {
-		// Fail open: a FinOps outage must not take down an approved open.
+		// Only a gate that returns an error lands here; the engine's reports a block.
 		m.errorf("voice: budget gate error; failing open (approved open proceeds)", "session", in.SessionRef, "err", err)
 		return false
 	}

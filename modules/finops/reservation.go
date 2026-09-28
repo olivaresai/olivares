@@ -366,6 +366,30 @@ func (m *Module) ReserveBudget(ctx context.Context, tenant model.TenantID, dims 
 		return BudgetReservation{}, fmt.Errorf("finops: reservation estimate must not be negative")
 	}
 	now := m.clock.Now().Time()
+	targets, truncated, err := m.budgetTargets(ctx, tenant, dims, now)
+	if err != nil {
+		// The census this admission binds, or an identity or group resolution it needs,
+		// could not be read, and the frontier has not been consulted either — this
+		// attempt has confirmed nothing.
+		return frontierRefusal(frontierReasonFor(nil)), storeErr(err)
+	}
+	if truncated {
+		// Explicit deny, never a silent allow and never an error the caller's fail-open
+		// contract would turn into one — exactly what CheckBudget does with the same fact.
+		return BudgetReservation{
+			Allowed: false, Action: "block",
+			Reason: "budget set truncated at scan cap; enforced fail-closed",
+		}, nil
+	}
+	return m.reserve(ctx, tenant, targets, estimateMicroUSD, now)
+}
+
+// budgetTargets reads, before any write transaction, the enforcing budgets that scope
+// dims, and turns each into a reservation target at now. truncated says the budget
+// set could not be read whole, which a caller answers with a refusal. An error is a
+// read that failed and has decided nothing. ReserveBudget and the admission's create
+// build their budget phase here, so the two bind the same budgets.
+func (m *Module) budgetTargets(ctx context.Context, tenant model.TenantID, dims SpendDims, now time.Time) ([]reservationTarget, bool, error) {
 	attr := attributionFromDims(dims)
 
 	// EVERY page, and a truncation is a DENY — the same enumeration CheckBudget does.
@@ -385,17 +409,10 @@ func (m *Module) ReserveBudget(ctx context.Context, tenant model.TenantID, dims 
 		budgets, truncated, lerr = listAllBudgets(ctx, sc)
 		return lerr
 	}); err != nil {
-		// The census this admission binds could not be read, and the frontier has not
-		// been consulted either — this attempt has confirmed nothing.
-		return frontierRefusal(frontierReasonFor(nil)), storeErr(err)
+		return nil, false, err
 	}
 	if truncated {
-		// Explicit deny, never a silent allow and never an error the caller's fail-open
-		// contract would turn into one — exactly what CheckBudget does with the same fact.
-		return BudgetReservation{
-			Allowed: false, Action: "block",
-			Reason: "budget set truncated at scan cap; enforced fail-closed",
-		}, nil
+		return nil, true, nil
 	}
 
 	// Resolve the firm identity once, only when an enforcing identity budget exists
@@ -405,7 +422,7 @@ func (m *Module) ReserveBudget(ctx context.Context, tenant model.TenantID, dims 
 		if err := m.data.View(ctx, tenant, func(sc store.Scope) error {
 			return resolveIdentity(ctx, sc, &attr)
 		}); err != nil {
-			return frontierRefusal(frontierReasonFor(nil)), storeErr(err)
+			return nil, false, err
 		}
 	}
 
@@ -417,7 +434,7 @@ func (m *Module) ReserveBudget(ctx context.Context, tenant model.TenantID, dims 
 		if err := m.data.View(ctx, tenant, func(sc store.Scope) error {
 			return resolveAgentGroups(ctx, sc, &attr)
 		}); err != nil {
-			return frontierRefusal(frontierReasonFor(nil)), storeErr(err)
+			return nil, false, err
 		}
 	}
 	// And the user-group memberships the fan-out aggregates over. The lookup is built
@@ -468,7 +485,7 @@ func (m *Module) ReserveBudget(ctx context.Context, tenant model.TenantID, dims 
 			failClosed: isGroupDimension(spec.Dimension) && spec.FailClosed,
 		})
 	}
-	return m.reserve(ctx, tenant, targets, estimateMicroUSD, now)
+	return targets, false, nil
 }
 
 // ReserveSpendLimit is the per-seat analog of ReserveBudget: it atomically
@@ -494,13 +511,24 @@ func (m *Module) ReserveSpendLimit(ctx context.Context, tenant model.TenantID, a
 		return BudgetReservation{}, fmt.Errorf("finops: reservation estimate must not be negative")
 	}
 	now := m.clock.Now().Time()
+	targets, err := m.spendLimitTargets(ctx, tenant, actorRef, groups, now)
+	if err != nil {
+		return frontierRefusal(frontierReasonFor(nil)), storeErr(err)
+	}
+	return m.reserve(ctx, tenant, targets, estimateMicroUSD, now)
+}
+
+// spendLimitTargets reads, before any write transaction, the spend limits that
+// govern actorRef and turns each period's resolved cap into a target at now, keyed by
+// the actor. An error is a read that failed and has decided nothing.
+func (m *Module) spendLimitTargets(ctx context.Context, tenant model.TenantID, actorRef string, groups []string, now time.Time) ([]reservationTarget, error) {
 	var policies []model.Policy
 	if err := m.data.View(ctx, tenant, func(sc store.Scope) error {
 		var lerr error
 		policies, lerr = listSpendLimitPolicies(ctx, sc)
 		return lerr
 	}); err != nil {
-		return frontierRefusal(frontierReasonFor(nil)), storeErr(err)
+		return nil, err
 	}
 	var targets []reservationTarget
 	for _, period := range []string{"daily", "weekly", "monthly"} {
@@ -521,7 +549,7 @@ func (m *Module) ReserveSpendLimit(ctx context.Context, tenant model.TenantID, a
 			},
 		})
 	}
-	return m.reserve(ctx, tenant, targets, estimateMicroUSD, now)
+	return targets, nil
 }
 
 // reserve runs the atomic multi-target reservation with the optimistic-concurrency
@@ -549,8 +577,9 @@ func (m *Module) reserve(ctx context.Context, tenant model.TenantID, targets []r
 		}
 		return BudgetReservation{Allowed: true}, nil
 	}
-	handle := model.NewID()
-	expires := now.Add(reservationTTL)
+	// One identity for every attempt of this call: a retry after a lost seq race
+	// reserves the same money again, under the same handle, not new money.
+	handle := newHoldID()
 	var lastErr error
 	// guardErr records a frontier refusal established inside the attempt, so the
 	// outcome switch can tell it from an ordinary read failure without inspecting
@@ -578,16 +607,16 @@ func (m *Module) reserve(ctx context.Context, tenant model.TenantID, targets []r
 		// It is reset with result at the top of the attempt, never carried across one.
 		decided := false
 		err := m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
-			result = BudgetReservation{Allowed: true, Handle: handle.String(), EstimateMicroUSD: estimate}
+			result = BudgetReservation{Allowed: true, EstimateMicroUSD: estimate}
 			decided = false
 			guardErr = nil
 			confirmedInactive = false
 			// Serialize this tenant's FinOps writers for the rest of the attempt,
-			// BEFORE the first decisive read (the seq probe below), and under the SAME
-			// key the alert writer and the cost ingestion take — so the seq probe and
-			// the reserved sum are authoritative for this attempt, and the ingestion
-			// that later records the ACTUAL spend cannot interleave with the
-			// reservation it settles against.
+			// BEFORE the first decisive read (reserveInScope's seq probe), and under
+			// the SAME key the alert writer and the cost ingestion take — so the seq
+			// probe and the reserved sum are authoritative for this attempt, and the
+			// ingestion that later records the ACTUAL spend cannot interleave with
+			// the reservation it settles against.
 			//
 			// It does NOT replace the monotonic seq or the OCC retry below, and it is
 			// not credited with the exactly-M-1 admission: that proof is the UNIQUE
@@ -612,160 +641,9 @@ func (m *Module) reserve(ctx context.Context, tenant model.TenantID, targets []r
 			// From here — and only from here — this attempt knows the tenant carries no
 			// frontier, so the legacy postures below are the adjudicated ones again.
 			confirmedInactive = true
-			repo, err := sc.Ext(budgetReservationKind)
-			if err != nil {
-				return err
-			}
-			denied := false
-			// One pass per target, insert-as-we-go: a later target's denial rolls the
-			// whole transaction back (errReservationDenied), discarding any row already
-			// inserted for an earlier target — so a multi-budget reserve is all-or-nothing
-			// without a pre-pass. We still visit EVERY target so block can outrank throttle.
-			for _, tg := range targets {
-				// deny records this target's refusal with the same precedence the
-				// no-headroom path has always used (first denial wins; a block outranks
-				// a throttle already recorded) and marks the transaction for rollback.
-				deny := func(reason string, spend, reserved int64) {
-					denied = true
-					decided = true
-					// An enforcing target with no configured action refuses as a BLOCK —
-					// the default the fail-closed group branch has always applied, now
-					// applied wherever a refusal is recorded, and to the precedence test
-					// as well as to the reported action: an action that reads as a block
-					// but does not outrank a throttle would be a block in name only.
-					// (A budget cannot reach here with an empty action: fillDefaults maps
-					// "" to alert and alert-only budgets never become targets. It is the
-					// defensive default, kept because it is the declared one.)
-					action := tg.action
-					if action == "" {
-						action = "block"
-					}
-					if result.Allowed || (action == "block" && result.Action == "throttle") {
-						result = BudgetReservation{
-							Allowed: false, Action: action, BudgetID: tg.policyID.String(), BudgetName: tg.name,
-							SpendMicroUSD: spend, ReservedMicroUSD: reserved, LimitMicroUSD: tg.ceiling,
-							EstimateMicroUSD: estimate, Reason: reason,
-						}
-					}
-				}
-				// ORDERING INVARIANT: read the max seq BEFORE the reserved sum, and
-				// insert with THAT seq. A successful INSERT (no seq collision) proves the
-				// seq we read was the true committed max, hence the sum — read strictly
-				// later — saw every prior reservation (seq is monotonic per bucket).
-				// Reversing the two reads reopens the race on Postgres READ COMMITTED: a
-				// stale sum paired with a fresh, non-colliding seq would over-admit.
-				maxSeq, seqIssue, err := maxReservationSeq(ctx, repo, tg.policyID, tg.scopeKey, tg.periodStart)
-				if err != nil {
-					return err
-				}
-				// The seq is not a counter, it is the token that serializes concurrent
-				// reservers: a successful INSERT at max+1 is the PROOF that nobody
-				// committed under this read. max+1 past math.MaxInt64 wraps to
-				// math.MinInt64 — a value that collides with nothing, so the insert
-				// succeeds and the proof silently stops being one. That is an inability
-				// to reserve, so it denies; it is not a smaller ceiling, and it must not
-				// leave as an error the seam converts into an admission.
-				nextSeq := addInt64(maxSeq, 1)
-				if seqIssue != "" || !nextSeq.OK {
-					reason := seqIssue
-					if reason == "" {
-						reason = "sequence space exhausted"
-					}
-					deny(fmt.Sprintf("budget %q cannot be reserved: %s; denied fail-closed", tg.name, reason), 0, 0)
-					continue
-				}
-				agg, err := tg.spend(ctx, sc)
-				if err != nil {
-					if !tg.failClosed {
-						return err
-					}
-					// The operator declared fail-closed for this group. Record the deny the
-					// same way a no-headroom target does, so the transaction rolls back and
-					// the caller gets a refusal instead of an error it would fail open on.
-					//
-					// It goes through deny() and CONTINUES, and both halves are the fix: it
-					// used to assign result directly and return the sentinel on the spot, so
-					// (1) this target's throttle overwrote a block another budget had already
-					// established, and (2) every later target went unevaluated — a stronger
-					// block further down the list could not be found because the evaluation
-					// was already over. CheckBudget's equivalent branch has always recorded
-					// through its precedence guard and carried on, so the two admission paths
-					// answered the same three policies differently. Same refusal, same reason,
-					// same rollback; the precedence and the decided bookkeeping are what is
-					// new. The spend aggregate failed, so there are no spend/reserved figures
-					// to report and none are invented.
-					deny("group budget check failed (fail-closed)", 0, 0)
-					continue // keep evaluating: a later block must still be able to outrank
-				}
-				// The VERSION-AWARE reader: the legacy branch this ledger has always
-				// had, plus the v1 obligations of held attempt parents, over the
-				// target's real window. An imported hold counts here — that is the
-				// whole point of importing it — and it does so without a TTL.
-				reserved, err := heldReservedForWindow(ctx, sc, tg.policyID, tg.scopeKey,
-					tg.periodStart, tg.periodEnd, tg.hasBounds, now)
-				if err != nil {
-					return err
-				}
-				// A reserved total that could not be established is not a lower ceiling:
-				// the ledger read stopped short (page cap, a page claiming more rows
-				// without a usable cursor) or a row is malformed, so how much headroom is
-				// held is simply unknown. Deny, the same way a truncated aggregate does.
-				if !reserved.established() {
-					deny(fmt.Sprintf("budget %q reserved total could not be established (%s); reservation denied fail-closed", tg.name, reserved.Incomplete), agg.Cost, 0)
-					continue // do not reserve this target; keep going for block>throttle
-				}
-				effective := sumInt64(agg.Cost, tg.staticReserved, reserved.MicroUSD)
-				// The ceiling comparison is where the wrap used to pay: unchecked,
-				// effective+estimate past math.MaxInt64 lands negative, compares below
-				// any ceiling, and admits the LARGEST possible request. An arithmetic
-				// result the ledger cannot represent is not an amount, so it is never
-				// presented as one (no saturation) — it denies.
-				ceilingSum := checkedSum{}
-				if effective.OK {
-					ceilingSum = addInt64(effective.Value, estimate)
-				}
-				// A truncated spend aggregate is a lower bound: fail closed (deny), the
-				// same posture CheckBudget takes on truncation.
-				if agg.Truncated || !effective.OK || !ceilingSum.OK || ceilingSum.Value > tg.ceiling {
-					reason := fmt.Sprintf("budget %q %s cap reached (%s): no headroom to reserve %d µUSD", tg.name, tg.action, tg.period, estimate)
-					switch {
-					case agg.Truncated:
-						reason = fmt.Sprintf("budget %q aggregate truncated at scan cap; reservation denied fail-closed", tg.name)
-					case !effective.OK || !ceilingSum.OK:
-						reason = fmt.Sprintf("budget %q effective consumption plus estimate is not representable; reservation denied fail-closed", tg.name)
-					}
-					deny(reason, agg.Cost, reserved.MicroUSD)
-					continue // do not reserve this target; keep going for block>throttle
-				}
-				if denied {
-					// An earlier target already denied — the whole reservation rolls
-					// back at the end. Skip the insert: a spurious seq conflict on a
-					// doomed target must not retry a decided denial into the fail-open
-					// admit under contention (adversarial review finding).
-					continue
-				}
-				rec := model.Record{
-					colResvPolicyRef:   tg.policyID.String(),
-					colResvPolicyKind:  tg.policyKind,
-					colResvDimension:   tg.dimension,
-					colResvScopeKey:    tg.scopeKey,
-					colResvPeriod:      tg.period,
-					colResvPeriodStart: model.NewTimestamp(tg.periodStart).String(),
-					colResvSeq:         nextSeq.Value,
-					colResvAmount:      estimate,
-					colResvActual:      int64(0),
-					colResvState:       resvStateActive,
-					colResvHandle:      handle.String(),
-					colResvExpiresAt:   model.NewTimestamp(expires).String(),
-				}
-				if _, err := repo.Create(ctx, rec); err != nil {
-					return err // ErrConflict on the seq UNIQUE index → retry the whole tx
-				}
-			}
-			if denied {
-				return errReservationDenied // roll back: no partial reservation persists
-			}
-			return nil
+			out, err := reserveInScope(ctx, sc, targets, estimate, now, handle)
+			result, decided = out.result, out.decided
+			return err
 		})
 		switch {
 		case guardErr != nil:
@@ -795,9 +673,14 @@ func (m *Module) reserve(ctx context.Context, tenant model.TenantID, targets []r
 			// This is not "deny on any outage": with nothing decided, the cases below
 			// keep their declared postures untouched.
 			return result, nil
+		case errors.Is(err, errSeqRace):
+			// Lost the seq race; re-read committed state and retry. The exhausted answer
+			// keeps wrapping store.ErrConflict, as documented on maxReserveRetries.
+			lastErr = fmt.Errorf("%w: %w", store.ErrConflict, err)
+			continue
 		case errors.Is(err, store.ErrConflict):
 			lastErr = err
-			continue // lost the seq race; re-read committed state and retry
+			continue // a read lost a race; re-read committed state and retry
 		case err != nil:
 			return BudgetReservation{Allowed: true}, err // read error → caller fails open
 		default:
@@ -808,6 +691,228 @@ func (m *Module) reserve(ctx context.Context, tenant model.TenantID, targets []r
 		return frontierRefusal(frontierReasonFor(nil)), storeErr(lastErr)
 	}
 	return BudgetReservation{Allowed: true}, fmt.Errorf("finops: reservation retries exhausted: %w", lastErr)
+}
+
+// errSeqRace is the one failure of a create that is worth repeating as it stands: an
+// insert lost the seq race to a reserver that committed the same seq first. The whole
+// transaction is retried against the committed state, at the same identity.
+var errSeqRace = errors.New("finops: reservation lost the seq race")
+
+// errHoldIdentityRequired refuses a reserve that would insert rows under no hold
+// identity: money that no identity names cannot be found, so it cannot be settled.
+var errHoldIdentityRequired = errors.New("finops: a hold with an amount needs a hold identity")
+
+// reserveOutcome is what one reserveInScope call decided.
+type reserveOutcome struct {
+	// result is the verdict: allowed, with Handle set to the caller's identity when a
+	// row was inserted; allowed with no handle when nothing was held; or the binding
+	// refusal, block outranking throttle.
+	result BudgetReservation
+	// decided says a refusal was established, whatever error arrived after it.
+	decided bool
+	// inserted counts the ledger rows inserted under the caller's identity.
+	inserted int
+}
+
+// reserveInScope evaluates targets and inserts one active ledger row per target under
+// h, inside the CALLER's transaction. It is reserve without its own Mutate: reserve
+// calls it once per attempt, and an admission's create calls it once per phase — the
+// budgets, then the spend limits — in one transaction.
+//
+// The caller has taken the writer lock and read the activation frontier in this
+// transaction. now is the caller's one instant: every row expires at now plus the
+// TTL, so two phases given one now share one expiry. h is the caller's identity, and
+// this function never mints one; a hold with an amount and targets needs one, and
+// without it the reserve is errHoldIdentityRequired and inserts nothing.
+//
+// An estimate of zero HOLDS NOTHING: every target is still read and judged, so a cap
+// already past its limit still refuses, but no row is inserted and no handle issued.
+//
+// A refusal returns errReservationDenied once every target was visited, so block can
+// outrank throttle; the caller returns it from its callback and the whole transaction
+// rolls back, rows of earlier targets and earlier phases included. An insert that loses
+// the seq race returns errSeqRace. Any other failure comes back as the store gave it,
+// with decided telling a refusal established before it from an undecided outage.
+func reserveInScope(ctx context.Context, sc store.Scope, targets []reservationTarget, estimate int64, now time.Time, h holdID) (reserveOutcome, error) {
+	out := reserveOutcome{result: BudgetReservation{Allowed: true, EstimateMicroUSD: estimate}}
+	if estimate < 0 {
+		return out, fmt.Errorf("finops: reservation estimate must not be negative")
+	}
+	holds := estimate > 0
+	if holds && len(targets) > 0 && h.isZero() {
+		return out, errHoldIdentityRequired
+	}
+	expires := now.Add(reservationTTL)
+	repo, err := sc.Ext(budgetReservationKind)
+	if err != nil {
+		return out, err
+	}
+	denied := false
+	// One pass per target, insert-as-we-go: a later target's denial rolls the
+	// whole transaction back (errReservationDenied), discarding any row already
+	// inserted for an earlier target — so a multi-budget reserve is all-or-nothing
+	// without a pre-pass. We still visit EVERY target so block can outrank throttle.
+	for _, tg := range targets {
+		// deny records this target's refusal with the same precedence the
+		// no-headroom path has always used (first denial wins; a block outranks
+		// a throttle already recorded) and marks the transaction for rollback.
+		deny := func(reason string, spend, reserved int64) {
+			denied = true
+			out.decided = true
+			// An enforcing target with no configured action refuses as a BLOCK —
+			// the default the fail-closed group branch has always applied, now
+			// applied wherever a refusal is recorded, and to the precedence test
+			// as well as to the reported action: an action that reads as a block
+			// but does not outrank a throttle would be a block in name only.
+			// (A budget cannot reach here with an empty action: fillDefaults maps
+			// "" to alert and alert-only budgets never become targets. It is the
+			// defensive default, kept because it is the declared one.)
+			action := tg.action
+			if action == "" {
+				action = "block"
+			}
+			if out.result.Allowed || (action == "block" && out.result.Action == "throttle") {
+				out.result = BudgetReservation{
+					Allowed: false, Action: action, BudgetID: tg.policyID.String(), BudgetName: tg.name,
+					SpendMicroUSD: spend, ReservedMicroUSD: reserved, LimitMicroUSD: tg.ceiling,
+					EstimateMicroUSD: estimate, Reason: reason,
+				}
+			}
+		}
+		// ORDERING INVARIANT: read the max seq BEFORE the reserved sum, and
+		// insert with THAT seq. A successful INSERT (no seq collision) proves the
+		// seq we read was the true committed max, hence the sum — read strictly
+		// later — saw every prior reservation (seq is monotonic per bucket).
+		// Reversing the two reads reopens the race on Postgres READ COMMITTED: a
+		// stale sum paired with a fresh, non-colliding seq would over-admit.
+		maxSeq, seqIssue, err := maxReservationSeq(ctx, repo, tg.policyID, tg.scopeKey, tg.periodStart)
+		if err != nil {
+			return out, err
+		}
+		// The seq is not a counter, it is the token that serializes concurrent
+		// reservers: a successful INSERT at max+1 is the PROOF that nobody
+		// committed under this read. max+1 past math.MaxInt64 wraps to
+		// math.MinInt64 — a value that collides with nothing, so the insert
+		// succeeds and the proof silently stops being one. That is an inability
+		// to reserve, so it denies; it is not a smaller ceiling, and it must not
+		// leave as an error the seam converts into an admission.
+		nextSeq := addInt64(maxSeq, 1)
+		if seqIssue != "" || !nextSeq.OK {
+			reason := seqIssue
+			if reason == "" {
+				reason = "sequence space exhausted"
+			}
+			deny(fmt.Sprintf("budget %q cannot be reserved: %s; denied fail-closed", tg.name, reason), 0, 0)
+			continue
+		}
+		agg, err := tg.spend(ctx, sc)
+		if err != nil {
+			if !tg.failClosed {
+				return out, err
+			}
+			// The operator declared fail-closed for this group. Record the deny the
+			// same way a no-headroom target does, so the transaction rolls back and
+			// the caller gets a refusal instead of an error it would fail open on.
+			//
+			// It goes through deny() and CONTINUES, and both halves are the fix: it
+			// used to assign result directly and return the sentinel on the spot, so
+			// (1) this target's throttle overwrote a block another budget had already
+			// established, and (2) every later target went unevaluated — a stronger
+			// block further down the list could not be found because the evaluation
+			// was already over. CheckBudget's equivalent branch has always recorded
+			// through its precedence guard and carried on, so the two admission paths
+			// answered the same three policies differently. Same refusal, same reason,
+			// same rollback; the precedence and the decided bookkeeping are what is
+			// new. The spend aggregate failed, so there are no spend/reserved figures
+			// to report and none are invented.
+			deny("group budget check failed (fail-closed)", 0, 0)
+			continue // keep evaluating: a later block must still be able to outrank
+		}
+		// The VERSION-AWARE reader: the legacy branch this ledger has always
+		// had, plus the v1 obligations of held attempt parents, over the
+		// target's real window. An imported hold counts here — that is the
+		// whole point of importing it — and it does so without a TTL.
+		reserved, err := heldReservedForWindow(ctx, sc, tg.policyID, tg.scopeKey,
+			tg.periodStart, tg.periodEnd, tg.hasBounds, now)
+		if err != nil {
+			return out, err
+		}
+		// A reserved total that could not be established is not a lower ceiling:
+		// the ledger read stopped short (page cap, a page claiming more rows
+		// without a usable cursor) or a row is malformed, so how much headroom is
+		// held is simply unknown. Deny, the same way a truncated aggregate does.
+		if !reserved.established() {
+			deny(fmt.Sprintf("budget %q reserved total could not be established (%s); reservation denied fail-closed", tg.name, reserved.Incomplete), agg.Cost, 0)
+			continue // do not reserve this target; keep going for block>throttle
+		}
+		effective := sumInt64(agg.Cost, tg.staticReserved, reserved.MicroUSD)
+		// The ceiling comparison is where the wrap used to pay: unchecked,
+		// effective+estimate past math.MaxInt64 lands negative, compares below
+		// any ceiling, and admits the LARGEST possible request. An arithmetic
+		// result the ledger cannot represent is not an amount, so it is never
+		// presented as one (no saturation) — it denies.
+		ceilingSum := checkedSum{}
+		if effective.OK {
+			ceilingSum = addInt64(effective.Value, estimate)
+		}
+		// A truncated spend aggregate is a lower bound: fail closed (deny), the
+		// same posture CheckBudget takes on truncation.
+		if agg.Truncated || !effective.OK || !ceilingSum.OK || ceilingSum.Value > tg.ceiling {
+			reason := fmt.Sprintf("budget %q %s cap reached (%s): no headroom to reserve %d µUSD", tg.name, tg.action, tg.period, estimate)
+			switch {
+			case agg.Truncated:
+				reason = fmt.Sprintf("budget %q aggregate truncated at scan cap; reservation denied fail-closed", tg.name)
+			case !effective.OK || !ceilingSum.OK:
+				reason = fmt.Sprintf("budget %q effective consumption plus estimate is not representable; reservation denied fail-closed", tg.name)
+			}
+			deny(reason, agg.Cost, reserved.MicroUSD)
+			continue // do not reserve this target; keep going for block>throttle
+		}
+		if denied {
+			// An earlier target already denied — the whole reservation rolls
+			// back at the end. Skip the insert: a spurious seq conflict on a
+			// doomed target must not retry a decided denial into the fail-open
+			// admit under contention (adversarial review finding).
+			continue
+		}
+		if !holds {
+			// A RESERVATION OF ZERO HOLDS NOTHING. The target was read and judged
+			// exactly as it would have been for an amount; there is simply no row to
+			// write, and no handle to issue for it.
+			continue
+		}
+		rec := model.Record{
+			colResvPolicyRef:   tg.policyID.String(),
+			colResvPolicyKind:  tg.policyKind,
+			colResvDimension:   tg.dimension,
+			colResvScopeKey:    tg.scopeKey,
+			colResvPeriod:      tg.period,
+			colResvPeriodStart: model.NewTimestamp(tg.periodStart).String(),
+			colResvSeq:         nextSeq.Value,
+			colResvAmount:      estimate,
+			colResvActual:      int64(0),
+			colResvState:       resvStateActive,
+			colResvHandle:      h.String(),
+			colResvExpiresAt:   model.NewTimestamp(expires).String(),
+		}
+		if _, err := repo.Create(ctx, rec); err != nil {
+			if errors.Is(err, store.ErrConflict) {
+				// The seq UNIQUE index: a concurrent reserver committed this seq first.
+				// Typed, and NOT wrapping store.ErrConflict, so no caller can take it
+				// for the version conflict of a moved fence.
+				return out, fmt.Errorf("%w: policy %s seq %d", errSeqRace, tg.policyID, nextSeq.Value)
+			}
+			return out, err
+		}
+		out.inserted++
+	}
+	if denied {
+		return out, errReservationDenied // the caller rolls back: no partial reservation persists
+	}
+	if out.inserted > 0 {
+		out.result.Handle = h.String()
+	}
+	return out, nil
 }
 
 // CommitReservation settles a reservation after the actuation completed: every

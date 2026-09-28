@@ -14,6 +14,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -1069,18 +1070,69 @@ func insertChannelGrantRow(
 	record model.Record,
 ) model.ID {
 	t.Helper()
+	ctx := context.Background()
+	// The row names accounts, so the write pins their authority under the tenant's
+	// directory barrier, as a fenced writer does; the store refuses a row naming an
+	// account whose authority the transaction did not pin.
+	var refs []store.UserAuthorityFactRef
+	if err := eng.store.AuthView(ctx, func(as store.AuthScope) error {
+		reader, ok := as.(store.AuthUserAuthorityEvidenceScope)
+		if !ok {
+			return fmt.Errorf("the auth scope exposes no authority reader")
+		}
+		for _, user := range channelGrantRowAccounts(record) {
+			ref, err := reader.ReadUserAuthorityFact(ctx, user)
+			if err != nil {
+				return err
+			}
+			refs = append(refs, ref)
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("read the authority of the accounts a ChannelGrant row names: %v", err)
+	}
 	id := model.NewID()
-	if err := eng.store.Mutate(context.Background(), tenant, func(sc store.Scope) error {
+	if err := eng.store.Mutate(ctx, tenant, func(sc store.Scope) error {
+		fact, err := directoryEpochFact(ctx, sc)
+		if err != nil {
+			return err
+		}
+		locker, ok := sc.(store.DirectoryAuthoritySnapshotLocker)
+		if !ok {
+			return fmt.Errorf("the scope exposes no directory authority barrier")
+		}
+		if err := locker.LockDirectoryAuthoritySnapshot(ctx, store.AuthoritySnapshotBundle{
+			Facts: []store.AuthorizationFactRef{fact}, UserAuthorities: refs,
+		}); err != nil {
+			return err
+		}
 		repo, err := sc.Ext("sessions.channel_grant")
 		if err != nil {
 			return err
 		}
-		_, err = repo.CreateWithID(context.Background(), id, record)
+		_, err = repo.CreateWithID(ctx, id, record)
 		return err
 	}); err != nil {
 		t.Fatalf("insert ChannelGrant row: %v", err)
 	}
 	return id
+}
+
+// channelGrantRowAccounts returns the accounts a ChannelGrant row names: its
+// subject, its grantor and its revoker, each when its kind is user.
+func channelGrantRowAccounts(record model.Record) []model.ID {
+	var users []model.ID
+	for _, pair := range [][2]string{
+		{"subject_kind", "subject_ref"}, {"granted_by_kind", "granted_by_ref"}, {"revoked_by_kind", "revoked_by_ref"},
+	} {
+		if record.String(pair[0]) != "user" {
+			continue
+		}
+		if id, err := model.ParseID(record.String(pair[1])); err == nil && !slices.Contains(users, id) {
+			users = append(users, id)
+		}
+	}
+	return users
 }
 
 // TestCommunicationChannelWriterRefusesAmbiguousAdminClosureHTTP proves the
@@ -1177,9 +1229,30 @@ func TestCommunicationChannelWriterRefusesDuplicateGenerationHTTP(t *testing.T) 
 
 	channel := estate.createChannel(t, workspace, "duplicate-generation", []map[string]any{ownerAll})
 	// Three generations, the last one revoked, so the "already active" refusal
-	// cannot mask the one being measured.
-	subject, seeded := seedChannelGrantHistory(t, eng, tenant, workspace,
-		channel.Channel.ID, owner.id, 3)
+	// cannot mask the one being measured. Unlike the synthetic history-size fixture,
+	// this subject is a real account: the typed fixture writer pins its authority.
+	subject := estate.viewer.id
+	var seeded []model.ID
+	for generation := int64(1); generation <= 3; generation++ {
+		record := model.Record{
+			"workspace_id": workspace.String(), "channel_id": channel.Channel.ID.String(),
+			"subject_kind": "user", "subject_ref": subject.String(),
+			"generation": generation,
+			"can_read":   true, "can_write": false, "can_admin": false,
+			"state":           "revoked",
+			"granted_by_kind": "user", "granted_by_ref": owner.id.String(),
+			"revoked_by_kind": "user", "revoked_by_ref": owner.id.String(),
+		}
+		if generation == 3 {
+			record["state"] = "active"
+			delete(record, "revoked_by_kind")
+			delete(record, "revoked_by_ref")
+		}
+		if len(seeded) != 0 {
+			record["supersedes_id"] = seeded[len(seeded)-1].String()
+		}
+		seeded = append(seeded, insertChannelGrantRow(t, eng, tenant, record))
+	}
 	revokeSeededHead(t, eng, tenant, seeded[len(seeded)-1], owner.id)
 
 	sheet := estate.sheetPage(t, owner.token, channel.Channel.ID, wsQuery+"&state=all&limit=50")
@@ -1230,7 +1303,7 @@ func TestCommunicationChannelWriterRefusesDuplicateGenerationHTTP(t *testing.T) 
 	// A DIFFERENT subject on the same Channel is unaffected: the ambiguity is the
 	// subject's, and it is not read on anyone else's behalf.
 	healthy := estate.grant(t, owner.token, channel.Channel.ID, map[string]any{
-		"subject":  channelAdministrationSubject("user", model.NewID()),
+		"subject":  channelAdministrationSubject("user", estate.editor.id),
 		"can_read": true, "can_write": false, "can_admin": false,
 	}, current.ETag)
 	if healthy.status != http.StatusOK {

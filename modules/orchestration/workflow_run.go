@@ -86,14 +86,26 @@ const (
 	stepStatusRemoteCancelRequested = "remote_cancel_requested"
 	stepStatusRemoteCanceled        = "remote_canceled"
 	stepStatusBlocked               = "blocked" // gate denied (rejected/expired/no gate)
-	stepStatusBudget                = "budget_blocked"
-	stepStatusFailed                = "failed"
-	stepStatusSkipped               = "skipped"
+	// stepStatusReauthRequired holds a communication step whose effect was
+	// refused, before any mutation, because the run's credential binding no
+	// longer resolves to a current credential. It is neither OK nor terminal:
+	// the step resumes, with its unchanged attempt semantic, only after the
+	// owning reauthorize operation publishes a successor binding.
+	stepStatusReauthRequired = "reauthentication_required"
+	stepStatusBudget         = "budget_blocked"
+	stepStatusFailed         = "failed"
+	stepStatusSkipped        = "skipped"
 )
 
 // executingTimeout bounds a claimed step whose advancer died mid-flight: after
 // it, the step is FAILED (not retried) — the at-most-once posture.
 const executingTimeout = 5 * time.Minute
+
+// pausedReauthRequired is the run pause that only the reauthorize operation
+// clears (workflow_reauthorize.go). Unlike the kill-switch pause it is a gate:
+// while it or any reauthentication_required step stands, the runner claims,
+// polls and sweeps nothing.
+const pausedReauthRequired = "reauthentication_required"
 
 // resolveTimeout bounds the detached resolve/evidence write of pass C. It is
 // generous relative to a local store write and far below executingTimeout, so a
@@ -209,7 +221,48 @@ type runStepState struct {
 	// route from a SINGLE read that also delivers (hole c1). Empty for
 	// non-notify steps.
 	RouteFp string `json:"route_fp,omitempty"`
+	// ReauthResume is, for a reauthentication_required step, the status it
+	// resumes into once the run is reauthorized: pending for a refused claim,
+	// waiting_ack for a refused acknowledgement poll.
+	ReauthResume string `json:"reauth_resume,omitempty"`
 }
+
+// runStepsDecl declares a run's step snapshot: the approved configs, frozen at
+// run creation, and the lineage the executor records. The configs select their
+// variant from stepConfigs as a workflow's steps do.
+var runStepsDecl = model.Nested([]runStepState(nil), model.ClassObligation,
+	model.Leaf("[].ref", stepLeafSlug), model.Leaf("[].kind", stepLeafKind),
+	model.Leaf("[].config", model.Union("kind", stepConfigs)), model.Leaf("[].depends_on[]", stepLeafSlug),
+	model.Leaf("[].status", runLeafClosed), model.Leaf("[].work_item_id", runLeafLineage),
+	model.Leaf("[].command_id", runLeafLineage), model.Leaf("[].output_kind", runLeafClosed),
+	model.Leaf("[].output_id", runLeafLineage), model.Leaf("[].attempt_semantic", runLeafClosed),
+	model.Leaf("[].remote_outcome", runLeafRemote), model.Leaf("[].remote_code", runLeafRemote),
+	model.Leaf("[].remote_observed_at", runLeafRemote), model.Leaf("[].remote_plan_hash", runLeafRemote),
+	model.Leaf("[].remote_approval_ref", runLeafRemote), model.Leaf("[].remote_binding_id", runLeafRemote),
+	model.Leaf("[].remote_binding_spec_id", runLeafRemote), model.Leaf("[].remote_attempt_id", runLeafRemote),
+	model.Leaf("[].remote_synthetic_sid", runLeafRemote), model.Leaf("[].remote_result_kind", runLeafRemote),
+	model.Leaf("[].remote_task_id", runLeafRemote), model.Leaf("[].remote_context_id", runLeafRemote),
+	model.Leaf("[].remote_message_id", runLeafRemote), model.Leaf("[].remote_state", runLeafRemote),
+	model.Leaf("[].remote_revision", runLeafRemote), model.Leaf("[].remote_wire_hash", runLeafRemote),
+	model.Leaf("[].remote_detail_hash", runLeafRemote), model.Leaf("[].remote_command_id", runLeafRemote),
+	model.Leaf("[].remote_event_id", runLeafRemote), model.Leaf("[].remote_work_state", runLeafRemote),
+	model.Leaf("[].waiting_target_kind", stepLeafClosed), model.Leaf("[].waiting_target_id", stepLeafID),
+	model.Leaf("[].waiting_deadline", stepLeafTime), model.Leaf("[].detail", runLeafDetail),
+	model.Leaf("[].approval_ref", runLeafLineage), model.Leaf("[].dispatch_ref", runLeafLineage),
+	model.Leaf("[].not_before", runLeafLineage), model.Leaf("[].at", runLeafLineage),
+	model.Leaf("[].bind_profile", runLeafBinding), model.Leaf("[].approved_target", runLeafBinding),
+	model.Leaf("[].mac_key_id", runLeafBinding), model.Leaf("[].generation", runLeafBinding),
+	model.Leaf("[].route_fp", runLeafBinding), model.Leaf("[].reauth_resume", runLeafClosed),
+)
+
+// Why a run step's recorded lineage names no principal; each cites its writer.
+var (
+	runLeafClosed  = model.None("a closed status, output or attempt value set by the executor: workflow_run.go:65,754")
+	runLeafLineage = model.None("an id, timestamp or ref of the run's own work, recorded by the executor: workflow_run.go:1508-1512,1556-1567")
+	runLeafRemote  = model.None("the remote protocol's bounded projection, ids, hashes and verdicts only: workflow_run.go:1515-1537")
+	runLeafDetail  = model.None("an operator-facing status line, clamped and rendered only: workflow_run.go:1558")
+	runLeafBinding = model.None("an opaque target-binding fingerprint and key id: workflow_run.go:782-783")
+)
 
 // stepBinding is the approved target binding of one acting step.
 type stepBinding struct {
@@ -745,11 +798,66 @@ func (m *Module) runPhaseDecide(w http.ResponseWriter, r *http.Request, mc api.M
 		bindProfile: bindingProfileV1, targetFp: planHash, auditTarget: id,
 	}
 	runDigest := m.effectDigest(runSpec)
+	// The run id is assigned here so the run can be bound to the exact credential
+	// that starts it before its row exists. core/auth keeps the binding; the run
+	// row keeps only the opaque handle, written in the same create.
+	//
+	// A start whose approval already claimed its run operation is a recognized
+	// replay: it can only answer the replay below, so it binds nothing. A start
+	// that binds and then creates no run — a fence refusal, a store error,
+	// dropped evidence, or a concurrent start that claimed the approval after
+	// this probe — leaves one binding row naming a run id that never exists.
+	// core/auth keeps it in the system partition like every binding and never
+	// deletes it in this version. No handle to it was stored or returned, and
+	// resolving it needs that handle, so it confers nothing.
+	runID := model.NewID()
+	replayRecognized, perr := m.runStartClaimed(r.Context(), mc, approvalRef)
+	if perr != nil {
+		writeStoreError(w, perr)
+		return
+	}
+	var binding auth.CredentialBinding
+	if !replayRecognized {
+		var bindErr error
+		binding, bindErr = m.bindRunCredential(r.Context(), mc, runID)
+		if bindErr != nil {
+			m.errorf("orchestration: the run's credential binding is unavailable; run not started",
+				"workflow", id.String(), "err", bindErr)
+			writeJSON(w, http.StatusServiceUnavailable, runPhaseResponse{
+				Op: opRun, OpStatus: opStatusBlocked, PlanHash: planHash, ApprovalRef: approvalRef,
+				GateStatus: decision.Status, Detail: "credential binding is unavailable; run not started, retry",
+			})
+			return
+		}
+	}
+	runRec := model.Record{
+		colWrWorkflow: id.String(), colWrStatus: runStatusRunning, colWrPlanHash: planHash,
+		colWrRootWork: nullableRunRef(rootWorkID),
+		colWrApproval: approvalRef, colWrSteps: encodeRunSteps(runSteps),
+		colWrActor: mc.Principal.Actor(), colWrActorKind: mc.Principal.ActorKind(),
+		colWrActorAdmin:        workflowWorkAdmin(mc.Principal, mc.Tenant),
+		colWrUserIdentity:      nullableRunID(mc.Principal.UserID),
+		colWrAgentIdentity:     nullableRunRef(mc.Principal.AgentIdentity),
+		colWrSessionIdentity:   nullableRunRef(mc.Principal.SessionIdentity),
+		colWrSessionRunRef:     nullableRunRef(mc.Principal.SessionRunRef),
+		colWrSessionFence:      nullableRunInt(mc.Principal.SessionFence),
+		colWrPurposeRestricted: nullableRunBool(mc.Principal.IsPurposeRestricted()),
+		colWrCredentialBinding: nullableRunRef(binding.StorageValue()),
+		colWrStartedAt:         now,
+	}
+	// The run acts for its initiator and binds every participant its frozen steps
+	// name, so creating it is a fenced write: those accounts' standing is read
+	// first and pinned before the run operation's claim appends its evidence.
+	subjects, serr := countedSubjects(runRec, runCountedColumns)
+	if serr != nil {
+		writeStoreError(w, serr)
+		return
+	}
 	var runClaimTx operationClaim
 	var runAppendDropped bool
-	var runID model.ID
 	replayed := false
-	mutErr := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
+	mutate := func(fn func(store.Scope) error) error { return mc.Data.Mutate(r.Context(), fn) }
+	mutErr := auth.FencedWrite(r.Context(), mc.Standing, mc.Tenant, subjects, auth.FenceDirectory, mutate, func(sc store.Scope, _ bool) error {
 		var e error
 		runClaimTx, runAppendDropped, _, e = m.claimOperationInTx(r.Context(), sc, mc, runSpec, runDigest)
 		if e != nil {
@@ -762,28 +870,22 @@ func (m *Module) runPhaseDecide(w http.ResponseWriter, r *http.Request, mc api.M
 			replayed = true
 			return nil
 		}
+		if replayRecognized {
+			// The probe saw the approval's claim and this transaction does not:
+			// never create a run from a start recognized as a replay.
+			return store.ErrConflict
+		}
 		repo, err := sc.Ext(wfRunKind)
 		if err != nil {
 			return err
 		}
-		created, err := repo.Create(r.Context(), model.Record{
-			colWrWorkflow: id.String(), colWrStatus: runStatusRunning, colWrPlanHash: planHash,
-			colWrRootWork: nullableRunRef(rootWorkID),
-			colWrApproval: approvalRef, colWrSteps: encodeRunSteps(runSteps),
-			colWrActor: mc.Principal.Actor(), colWrActorKind: mc.Principal.ActorKind(),
-			colWrActorAdmin:        workflowWorkAdmin(mc.Principal, mc.Tenant),
-			colWrUserIdentity:      nullableRunID(mc.Principal.UserID),
-			colWrAgentIdentity:     nullableRunRef(mc.Principal.AgentIdentity),
-			colWrSessionIdentity:   nullableRunRef(mc.Principal.SessionIdentity),
-			colWrSessionRunRef:     nullableRunRef(mc.Principal.SessionRunRef),
-			colWrSessionFence:      nullableRunInt(mc.Principal.SessionFence),
-			colWrPurposeRestricted: nullableRunBool(mc.Principal.IsPurposeRestricted()),
-			colWrStartedAt:         now,
-		})
+		created, err := repo.CreateWithID(r.Context(), runID, runRec)
 		if err != nil {
 			return err
 		}
-		runID = model.ID(created.String(model.ColID))
+		if model.ID(created.String(model.ColID)) != runID {
+			return fmt.Errorf("orchestration: run was created under another id")
+		}
 		// Settle the run operation to dispatched (the run was created) in this same
 		// transaction — anchor + effect commit together (local mutation).
 		if err := m.settleOperation(r.Context(), sc, &runClaimTx, opStateDispatched, obStateDispatched, "", "run "+runID.String()); err != nil {
@@ -805,6 +907,9 @@ func (m *Module) runPhaseDecide(w http.ResponseWriter, r *http.Request, mc api.M
 		return auditEvent(r.Context(), sc, mc, "orchestration.workflow.run", workflowKind, id,
 			map[string]any{"plan_hash": planHash, "approval_ref": approvalRef, "run": runID.String()})
 	})
+	if writeFenceRefusal(w, mutErr) {
+		return
+	}
 	switch {
 	case errors.Is(mutErr, errOperationReplay):
 		// Same approval bound to a DIFFERENT plan digest ⇒ sdk.FailureReplay.
@@ -875,6 +980,52 @@ func (m *Module) runPhaseDecide(w http.ResponseWriter, r *http.Request, mc api.M
 		Op: opRun, OpStatus: opStatusDispatched, PlanHash: planHash, ApprovalRef: approvalRef,
 		GateStatus: decision.Status, Detail: "run started", Run: &out,
 	})
+}
+
+// runStartClaimed reports, reading only, whether approvalRef already claimed
+// its run operation, which makes this start a replay.
+func (m *Module) runStartClaimed(ctx context.Context, mc api.ModuleContext, approvalRef string) (bool, error) {
+	var claimed bool
+	err := mc.Data.View(ctx, func(sc store.Scope) error {
+		repo, err := sc.Ext(operationKind)
+		if err != nil {
+			return err
+		}
+		_, claimed, err = findOne(ctx, repo, eq(colOpApprovalRef, approvalRef))
+		return err
+	})
+	return claimed, err
+}
+
+// bindRunCredential binds the pre-assigned run to the exact credential of the
+// phase-2 caller through core/auth. core/auth reads only the credential's
+// private reference and its own rows; the account named here is compared with
+// them, never trusted. A caller that cannot be bound (no credential reference,
+// not admitted to the tenant, or no binder wired) starts the run without a
+// binding: the run gets no positive authority, and its first communication
+// effect pauses it. Nothing then proves the authority it started with, so it
+// cannot be reauthorized (auth.ErrCredentialBindingUnproven); its owner starts
+// a new run.
+//
+// Only core/auth's invalid-provenance refusal starts a run unbound. Any other
+// failure — an outage, a cancellation, a timeout — is returned: the run does
+// not start, so an operational fault never silently yields an unbound run.
+func (m *Module) bindRunCredential(ctx context.Context, mc api.ModuleContext, runID model.ID) (auth.CredentialBinding, error) {
+	if m.credentialBinder == nil {
+		return auth.CredentialBinding{}, nil
+	}
+	binding, err := m.credentialBinder.BindCredential(ctx, mc.Principal, auth.CredentialBindingSubject{
+		Tenant: mc.Tenant, Kind: auth.CredentialBindingWorkflowRun, Ref: runID, User: mc.Principal.UserID,
+	})
+	switch {
+	case errors.Is(err, auth.ErrCredentialBindingInvalid):
+		m.errorf("orchestration: workflow run starts without a credential binding; its communication steps require reauthorization",
+			"run", runID.String())
+		return auth.CredentialBinding{}, nil
+	case err != nil:
+		return auth.CredentialBinding{}, err
+	}
+	return binding, nil
 }
 
 // reportUngovernedRun surfaces a run attempted with no approval gate wired —
@@ -1087,6 +1238,39 @@ type runOutcome struct {
 	gateStatus                  GateStatus
 	ledger                      bool   // append an opRunStep evidence row
 	ledgerOp                    string // op_status for the ledger row
+	// reauthResume and pauseReauth mark a communication effect refused because
+	// the run's credential binding no longer authorizes it: the step waits in
+	// reauthentication_required and the run is gated until reauthorized.
+	reauthResume string
+	pauseReauth  bool
+}
+
+// runStepConsumesBinding reports whether a step's effect is authorized by the
+// run's credential binding: the communication steps.
+func runStepConsumesBinding(s runStepState) bool {
+	switch s.Kind {
+	case stepWorkMessage, stepWorkHandoff, stepWorkWaitAck:
+		return true
+	case stepWorkAssign:
+		var cfg workAssignConfig
+		return json.Unmarshal(s.Config, &cfg) == nil && cfg.RequireAck
+	}
+	return false
+}
+
+// runReauthenticationGated reports whether the run waits for its owning
+// reauthorize operation. Either marker gates it, so a lost pause reason cannot
+// reopen a run whose step still waits, and a restart reads both from the row.
+func runReauthenticationGated(rec model.Record, steps []runStepState) bool {
+	if rec.String(colWrPaused) == pausedReauthRequired {
+		return true
+	}
+	for _, s := range steps {
+		if s.Status == stepStatusReauthRequired {
+			return true
+		}
+	}
+	return false
 }
 
 // advanceRunOnce performs one claim → act → resolve cycle. progressed reports
@@ -1112,6 +1296,12 @@ func (m *Module) advanceRunOnce(ctx context.Context, mc api.ModuleContext, runID
 		steps, err := decodeRunSteps(rec.String(colWrSteps))
 		if err != nil {
 			return err
+		}
+		// A run waiting for reauthorization claims, polls and sweeps nothing:
+		// no effect may start, and no in-flight or uncertain step is recovered
+		// into new work, until the reauthorize operation publishes a successor.
+		if runReauthenticationGated(rec, steps) {
+			return nil
 		}
 		byRef := map[string]*runStepState{}
 		for i := range steps {
@@ -1257,11 +1447,27 @@ func (m *Module) advanceRunOnce(ctx context.Context, mc api.ModuleContext, runID
 		}
 		now := m.clock.Now().String()
 		dirty := false
+		pauseReauth := false
+		// A reauthorization published while this pass was acting replaced the
+		// run's binding. An acknowledgement poll observed under the old binding
+		// is dropped and repeated under the new one; a claimed effect cannot
+		// span a reauthorization, which refuses while any claim is live.
+		bindingChanged := rec.String(colWrCredentialBinding) != run.String(colWrCredentialBinding)
 		for i := range steps {
 			s := &steps[i]
 			for _, o := range outcomes {
 				if o.ref != s.Ref {
 					continue
+				}
+				if bindingChanged && runStepConsumesBinding(*s) {
+					// Under a superseded binding an acknowledgement observation is
+					// repeated, and a refusal, failure or reauthentication is not an
+					// outcome of the successor: it neither fails nor re-gates it. A
+					// successful effect committed before the supersession, because
+					// the supersession refuses any later commit; it is kept.
+					if o.fromStatus == stepStatusWaitingAck || !stepOK(o.status) {
+						continue
+					}
 				}
 				if s.Status != o.fromStatus {
 					// A LATE outcome: the step left the status we claimed it in
@@ -1338,6 +1544,10 @@ func (m *Module) advanceRunOnce(ctx context.Context, mc api.ModuleContext, runID
 				setString(&s.WaitingTargetID, o.waitingTargetID)
 				setInt(&s.WaitingAfterEventSeq, o.waitingAfterEventSeq)
 				setString(&s.WaitingDeadline, o.waitingDeadline)
+				setString(&s.ReauthResume, o.reauthResume)
+				if o.pauseReauth {
+					pauseReauth = true
+				}
 				statusChanged := s.Status != o.status
 				if !statusChanged && !metadataChanged {
 					continue
@@ -1370,7 +1580,25 @@ func (m *Module) advanceRunOnce(ctx context.Context, mc api.ModuleContext, runID
 		// concurrent freeze may have stamped it after our gate check, and wiping
 		// it unconditionally would hide a live kill switch behind a stale
 		// outcome. A still-frozen run re-stamps on the next tick regardless.
-		if progressed && rec.String(colWrPaused) != "" {
+		//
+		// The reauthentication pause is never cleared here: only the reauthorize
+		// operation clears it. A reauthentication outcome of this pass sets it,
+		// with one durable ledger row the first time.
+		switch {
+		case pauseReauth:
+			if rec.String(colWrPaused) != pausedReauthRequired {
+				rec[colWrPaused] = pausedReauthRequired
+				dirty = true
+				if err := m.recordDecision(ctx, sc, decisionRow{
+					subjectKind: "workflow", subjectRef: rec.String(colWrWorkflow), op: opRunStep,
+					planHash: rec.String(colWrPlanHash), approvalRef: rec.String(colWrApproval),
+					opStatus: opStatusBlocked, actor: rec.String(colWrActor), actorKind: rec.String(colWrActorKind),
+					result: "run " + runID.String() + " paused: " + pausedReauthRequired,
+				}); err != nil {
+					return err
+				}
+			}
+		case progressed && rec.String(colWrPaused) != "" && rec.String(colWrPaused) != pausedReauthRequired:
 			rec[colWrPaused] = nil
 			dirty = true
 		}
@@ -1433,6 +1661,11 @@ func (m *Module) freezeRun(ctx context.Context, mc api.ModuleContext, runID mode
 			if reverted[steps[i].Ref] && steps[i].Status == stepStatusExecuting {
 				steps[i].Status = stepStatusPending
 			}
+		}
+		// A reauthentication pause outranks a kill-switch freeze: overwriting it
+		// would let the stop's later lift reopen a run nobody reauthorized.
+		if rec.String(colWrPaused) == pausedReauthRequired {
+			reason = pausedReauthRequired
 		}
 		alreadyFrozen := rec.String(colWrPaused) == reason
 		rec[colWrSteps] = encodeRunSteps(steps)
@@ -1727,7 +1960,7 @@ func (m *Module) executeScheduleFire(ctx context.Context, mc api.ModuleContext, 
 		return out
 	} else if !stepReplay && pol.MinIntervalSec > 0 {
 		var rd *routineDenial
-		if ferr := m.withAdmissionFence(ctx, mc, true, func(sc store.Scope) error {
+		if ferr := m.withAdmissionFence(ctx, mc, true, nil, func(sc store.Scope) error {
 			d, e := m.reserveFireSlot(ctx, sc, pol, sched)
 			rd = d
 			return e

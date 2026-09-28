@@ -34,10 +34,10 @@ propiedad de la arquitectura y de tu configuración; es una descripción, **no u
 
 ## Una capacidad: el mapa de acceso de lectura/escritura
 
-Entre esas capacidades está el **mapa de acceso L/RW**. Para cada origen (un agente, una
-identidad no humana, una sesión) construye una arista hacia
-cada recurso que toca, clasificada como **lectura**, **escritura**, **lectura-escritura** o
-**desconocido**, y etiquetada con:
+Entre esas capacidades está el **mapa de acceso L/RW**. Para cada origen que una
+fuente observó (un agente, una identidad no humana, una sesión) construye una
+arista hacia cada recurso que esa señal muestra que toca, clasificada como
+**lectura**, **escritura**, **lectura-escritura** o **desconocido**, y etiquetada con:
 
 - **de dónde vino la señal** (`SignalSource`) — OpenTelemetry desde un
   agente cooperativo, una clasificación READ/WRITE de pgAudit de Postgres, un registro de
@@ -65,14 +65,14 @@ lectura/escritura, el modo es `unknown` — el producto nunca fabrica una clasif
 
 El mapa de acceso es una capacidad entre muchas. El producto es una **plataforma modular**
 (en el espíritu de Grafana o Backstage): un motor más módulos más conectores, diseñada para
-que cualquier módulo se acople sin rearquitecturar el resto. Incluye **30 módulos** —
+que cualquier módulo se acople sin rearquitecturar el resto. Incluye **31 módulos** —
 inventario y sesiones en vivo, el mapa L/RW, orquestación de agentes (A2A, en desarrollo), gestión de MCP y
 de skills, identidad e identidad no humana, despliegue, conocimiento y contexto, seguridad y
 guardrails, gestión de modelos y proveedores, coste/FinOps, evals y un sandbox de pruebas,
 red-teaming, cumplimiento y evidencia, un catálogo interno, integraciones de salida y push a
 SIEM, voz/tiempo real, y salud/SLA — más capacidades de plataforma no contadas entre los
 30 (su propia API y manage-as-code, multi-tenancy, cuadros de mando ejecutivos) — a
-través de **158 integraciones** (un recuento medido
+través de **159 integraciones** (un recuento medido
 desde el código por `scripts/check-public-counts.sh`). Unas pocas capacidades son pre-v1 o seams
 deny-closed hasta que se aprovisionan; los docs son explícitos sobre cuáles.
 

@@ -19,6 +19,7 @@ import (
 	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
 	"github.com/olivaresai/olivares/core/license"
 	"github.com/olivaresai/olivares/core/license/connectv1"
+	"github.com/olivaresai/olivares/core/license/dnfrefresh"
 )
 
 // license_connect.go is the connected client's operation engine (connect-v1 contract §6, Root
@@ -27,6 +28,8 @@ import (
 //
 //	bind        request (bind_pending) ──approved replay──▶ complete (bind)
 //	refresh     refresh
+//	apt-refresh apt-refresh: a download credential for one cycle's handoff (license_connect_apt.go)
+//	dnf-refresh dnf-refresh: a download credential for one cycle's handoff (license_connect_dnf.go)
 //	rotate      rotate-key with the old-key proof and the new-key proof
 //	recover     request (proposed key) ──approved replay──▶ recover on rotate-key
 //	reactivate  request (proposed key) ──approved replay──▶ reactivate on rotate-key
@@ -49,6 +52,10 @@ func connectStep(boundary string) {
 	}
 }
 
+// connectNoticeOut receives the one-line notices an operation prints beside its report. It is a
+// variable so tests can read it.
+var connectNoticeOut io.Writer = os.Stderr
+
 // connectTransitionDone is the reported status of each completed key transition.
 var connectTransitionDone = map[string]string{"rotate": "rotated", "recover": "recovered", "reactivate": "reactivated"}
 
@@ -61,6 +68,8 @@ type connectRun struct {
 	licenseExplicit string
 	getenv          func(string) string
 	now             func() time.Time
+	// superseded is the download refresh this run dropped before its own step (requirePendingIntent).
+	superseded *connectPendingOp
 }
 
 // connectNoRightError reports a verified credential that confers no current right.
@@ -309,10 +318,45 @@ func (r *connectRun) requirePendingIntent(intent string) error {
 	if c := r.st.Completion; c != nil && c.Intent != intent {
 		return exitcode.New(exitcode.Conflict, fmt.Errorf("a verified %s is recorded in this data directory: re-run `olivares license connect %s` to complete it", c.Intent, connectTransitionCommand(c.Intent)))
 	}
+	if p := r.st.Pending; p != nil && dnfrefresh.Supersedes(p.Intent, intent) {
+		if err := r.supersedeDownloadRefresh(intent); err != nil {
+			return err
+		}
+	}
 	if r.st.Pending != nil && r.st.Pending.Intent != intent {
 		return exitcode.New(exitcode.Conflict, fmt.Errorf("a %s operation is pending in this data directory: re-run its command to finish it, or `olivares license connect abandon` to discard it", r.st.Pending.Intent))
 	}
 	return nil
+}
+
+// supersedeDownloadRefresh drops a pending apt-refresh or dnf-refresh so that the operation intent can
+// start. A kept download refresh never blocks another operation, and the two download refreshes replace
+// each other. The drop is saved to state.json before anything else happens, and reported beside the
+// operation's own report and as a notice. It loses nothing: the helper's next cycle starts a new refresh.
+// The reverse does not hold: another pending operation still makes the download refresh answer
+// pending_other_operation.
+func (r *connectRun) supersedeDownloadRefresh(intent string) error {
+	p := r.st.Pending
+	r.st.Pending = nil
+	if err := r.store.saveState(r.st); err != nil {
+		r.st.Pending = p
+		return fmt.Errorf("drop the pending %s operation before the %s (nothing was sent): %w", p.Intent, intent, err)
+	}
+	r.superseded = p
+	fmt.Fprintf(connectNoticeOut, "connect: superseded the pending %s operation (%d attempt(s) since %s) so that %s can start; "+
+		"the appliance helper's next cycle starts a new one\n", p.Intent, p.Attempts, p.CreatedAt, connectIntentCommand(intent))
+	return nil
+}
+
+// connectIntentCommand is the command an operation intent belongs to.
+func connectIntentCommand(intent string) string {
+	switch intent {
+	case "bind":
+		return "start"
+	case "delete":
+		return "deactivate"
+	}
+	return connectTransitionCommand(intent)
 }
 
 // connectTransitionCommand is the command that completes a key transition intent.
@@ -356,6 +400,9 @@ func (r *connectRun) report(status string) connectReport {
 	}
 	if c := r.st.Completion; c != nil {
 		out["completion"] = map[string]any{"intent": c.Intent, "deployment_id": c.DeploymentID, "pop_kid": c.PopKID, "binding_epoch": c.BindingEpoch, "verified_at": c.VerifiedAt}
+	}
+	if s := r.superseded; s != nil {
+		out["superseded"] = map[string]any{"intent": s.Intent, "attempts": s.Attempts, "created_at": s.CreatedAt}
 	}
 	if l := r.st.Last; l != nil {
 		last := map[string]any{"phase": l.Phase, "credential_serial": l.CredentialSerial, "credential_sha256": l.CredentialSHA256, "at": l.At}
@@ -764,6 +811,15 @@ func (r *connectRun) approvedRotation(ctx context.Context, intent, deploymentID 
 // ---- delete -----------------------------------------------------------------------------
 
 func (r *connectRun) deactivate(ctx context.Context, deploymentID string, bindingEpoch int64, ownerApproval bool, evidence func() (string, error)) (connectReport, error) {
+	// The command confirms a deactivation only when no step is pending, so with a pending download
+	// refresh it did not ask. That refresh is superseded now; the deactivation waits for a run that confirms it.
+	if p := r.st.Pending; p != nil && dnfrefresh.Supersedes(p.Intent, "delete") {
+		if err := r.supersedeDownloadRefresh("delete"); err != nil {
+			return nil, err
+		}
+		return nil, exitcode.New(exitcode.Usage, fmt.Errorf("the pending %s operation was superseded and nothing was deactivated: "+
+			"run the same command again to confirm the deactivation", p.Intent))
+	}
 	if err := r.requirePendingIntent("delete"); err != nil {
 		return nil, err
 	}

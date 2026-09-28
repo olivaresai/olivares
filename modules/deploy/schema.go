@@ -86,6 +86,41 @@ const (
 	colOccurredAt  = "occurred_at"  // when the op ran
 )
 
+// Principal declarations shared by the descriptors below: what a stored column
+// says about principals, with the reader lines that show it.
+var (
+	// The owning definition row id of a revision, wiring or operation row.
+	pdeclNoneDefinitionRef = model.None("the owning deploy.definition row id, written from that row's own id: definitions.go:576, wiring.go:103, lifecycle.go:680")
+	// The deployed agent or MCP server, never an account.
+	pdeclNoneSubjectRef = model.None("the deployed agent or MCP server reference (subject_kind is refused unless agent or mcp_server: definitions.go:101), resolved against the agent roster by external id or name (cmd/olivares/deployidentity.go:189) and used as the kill-switch agent dimension (lifecycle.go:603); wiring.go:128 copies it into agent_ref")
+	// A content fingerprint of the canonical desired spec.
+	pdeclNoneSpecHash = model.None("hex SHA-256 of the canonical desired spec: spec.go:161, helpers.go:203")
+	// A source-control reference, refused when it carries a credential.
+	pdeclNoneSourceRef = model.None("a GitOps source reference, refused when it looks like a credential and otherwise only rendered: definitions.go:114, definitions.go:66, definitions.go:467")
+	// A pointer into a secret store, never a secret and never a principal.
+	pdeclNoneSecretRef = model.None("a secret-store reference <scheme>:<locator> from a closed scheme allow-list: helpers.go:260, helpers.go:284")
+	// The enterprise resource a wiring connects to.
+	pdeclNoneResource = model.None("the kind or natural reference of the enterprise resource a wiring reaches, published only as the edge resource: spec.go:50, wiring.go:144")
+	// The permitted access mode of a wiring.
+	pdeclNoneMode = model.None("an access mode from the closed set read|write|readwrite: spec.go:138")
+	// A compute request key or value of the desired spec.
+	pdeclNoneSpecResources = model.None("a compute request key or value such as cpu or mem, refused when it looks like a credential: spec.go:87")
+	// The typed desired spec: decoded into deploySpec and re-serialized from it.
+	pdeclRevisionSpec = model.Nested(deploySpec{}, model.ClassEvidence,
+		model.Leaf("image", model.None("a container image or artifact reference, refused when it looks like a credential and handed to the executor: spec.go:77, lifecycle.go:116")),
+		model.Leaf("command", model.None("an entrypoint override, refused when it looks like a credential and handed to the executor: spec.go:77, lifecycle.go:116")),
+		model.Leaf("resources{key}", pdeclNoneSpecResources),
+		model.Leaf("resources{}", pdeclNoneSpecResources),
+		model.Leaf("env_refs[].name", model.None("an environment variable name, refused when it looks like a credential: spec.go:98")),
+		model.Leaf("env_refs[].secret_ref", pdeclNoneSecretRef),
+		model.Leaf("wirings[].resource_kind", pdeclNoneResource),
+		model.Leaf("wirings[].resource_ref", pdeclNoneResource),
+		model.Leaf("wirings[].mode", pdeclNoneMode),
+		model.Leaf("wirings[].secret_ref", pdeclNoneSecretRef),
+		model.Leaf("identity.identity_ref", model.None("the directory reference of the non-human identity the agent runs as, handed to the binder (wiring.go:76), whose governance endpoint refuses to bind a human identity: modules/governance/identity.go:188")),
+	)
+)
+
 // RegisterSchema declares the module's four owned entities. It satisfies the
 // engine-side runtime.SchemaProvider seam (structural — no runtime import) and is
 // called once, at store construction, before any Scope exists (S02 §7 /):
@@ -108,18 +143,18 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Kind:  definitionKind,
 		Table: definitionTable,
 		Fields: []model.FieldSpec{
-			{Name: colSubjectKind, Kind: model.KindText, Indexed: true},
-			{Name: colSubjectRef, Kind: model.KindText, Indexed: true},
-			{Name: colDefName, Kind: model.KindText, Indexed: true},
-			{Name: colEnvironment, Kind: model.KindText, Indexed: true},
-			{Name: colTarget, Kind: model.KindText},
-			{Name: colRuntime, Kind: model.KindText},
-			{Name: colDesiredStatus, Kind: model.KindText, Indexed: true},
+			{Name: colSubjectKind, Kind: model.KindText, Indexed: true, Principal: model.None("closed set agent|mcp_server: definitions.go:101")},
+			{Name: colSubjectRef, Kind: model.KindText, Indexed: true, Principal: pdeclNoneSubjectRef},
+			{Name: colDefName, Kind: model.KindText, Indexed: true, Principal: model.None("the logical deployment name, rendered and used as the approval subject label: definitions.go:63, lifecycle.go:122")},
+			{Name: colEnvironment, Kind: model.KindText, Indexed: true, Principal: model.None("an environment label handed to the executor and used as a list filter: lifecycle.go:115, definitions.go:265")},
+			{Name: colTarget, Kind: model.KindText, Principal: model.None("an infrastructure target reference handed to the executor, refused when it looks like a credential: lifecycle.go:114, definitions.go:114")},
+			{Name: colRuntime, Kind: model.KindText, Principal: model.None("the executor runtime kind handed to the executor: lifecycle.go:114")},
+			{Name: colDesiredStatus, Kind: model.KindText, Indexed: true, Principal: model.None("closed set active|retired: definitions.go:28, definitions.go:29")},
 			{Name: colCurrentVer, Kind: model.KindInt},
 			{Name: colAppliedVer, Kind: model.KindInt},
-			{Name: colSpecHash, Kind: model.KindText, Nullable: true},
-			{Name: colSourceRef, Kind: model.KindText, Nullable: true},
-			{Name: colDeploymentID, Kind: model.KindUUID, Nullable: true},
+			{Name: colSpecHash, Kind: model.KindText, Nullable: true, Principal: pdeclNoneSpecHash},
+			{Name: colSourceRef, Kind: model.KindText, Nullable: true, Principal: pdeclNoneSourceRef},
+			{Name: colDeploymentID, Kind: model.KindUUID, Nullable: true, Principal: model.None("the linked core Deployment row id, read back only through the deployment repository: lifecycle.go:651, definitions.go:325")},
 		},
 		Indexes: []model.IndexSpec{{
 			// One definition per (name, environment). The unique index leads with
@@ -137,13 +172,13 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Table:      revisionTable,
 		AppendOnly: true, // immutable spec history — the reversible source of truth (docs/SECURITY-HARDENING.md)
 		Fields: []model.FieldSpec{
-			{Name: colDefinitionRef, Kind: model.KindUUID, Indexed: true},
+			{Name: colDefinitionRef, Kind: model.KindUUID, Indexed: true, Principal: pdeclNoneDefinitionRef},
 			{Name: colRevNum, Kind: model.KindInt, Indexed: true},
-			{Name: colSpec, Kind: model.KindJSON},
-			{Name: colSpecHash, Kind: model.KindText},
-			{Name: colSourceRef, Kind: model.KindText, Nullable: true},
-			{Name: colNote, Kind: model.KindText, Nullable: true},
-			{Name: colCreatedByCol, Kind: model.KindText},
+			{Name: colSpec, Kind: model.KindJSON, Principal: pdeclRevisionSpec},
+			{Name: colSpecHash, Kind: model.KindText, Principal: pdeclNoneSpecHash},
+			{Name: colSourceRef, Kind: model.KindText, Nullable: true, Principal: pdeclNoneSourceRef},
+			{Name: colNote, Kind: model.KindText, Nullable: true, Principal: model.None("a bounded operator note, only rendered: definitions.go:181, definitions.go:468")},
+			{Name: colCreatedByCol, Kind: model.KindText, Principal: model.Ref(model.EncodeUserRef, model.ClassEvidence)},
 		},
 		Indexes: []model.IndexSpec{{
 			// One revision row per (definition, version): monotone, gap-free history.
@@ -159,15 +194,15 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Kind:  wiringKind,
 		Table: wiringTable,
 		Fields: []model.FieldSpec{
-			{Name: colDefinitionRef, Kind: model.KindUUID, Indexed: true},
-			{Name: colAgentRef, Kind: model.KindText, Indexed: true},
-			{Name: colIdentityRef, Kind: model.KindText, Nullable: true},
-			{Name: colResourceKind, Kind: model.KindText, Indexed: true},
-			{Name: colResourceRef, Kind: model.KindText, Indexed: true},
-			{Name: colMode, Kind: model.KindText},
-			{Name: colSecretRef, Kind: model.KindText, Nullable: true},
-			{Name: colWiringStatus, Kind: model.KindText, Indexed: true},
-			{Name: colAttribution, Kind: model.KindText},
+			{Name: colDefinitionRef, Kind: model.KindUUID, Indexed: true, Principal: pdeclNoneDefinitionRef},
+			{Name: colAgentRef, Kind: model.KindText, Indexed: true, Principal: pdeclNoneSubjectRef},
+			{Name: colIdentityRef, Kind: model.KindText, Nullable: true, Principal: model.None("the bound identity's external id (modules/governance/identity.go:132), which the governance endpoint refuses for a human identity (modules/governance/identity.go:188), else the declared identity or agent subject ref (wiring.go:74, wiring.go:79); only rendered: wiring.go:223")},
+			{Name: colResourceKind, Kind: model.KindText, Indexed: true, Principal: pdeclNoneResource},
+			{Name: colResourceRef, Kind: model.KindText, Indexed: true, Principal: pdeclNoneResource},
+			{Name: colMode, Kind: model.KindText, Principal: pdeclNoneMode},
+			{Name: colSecretRef, Kind: model.KindText, Nullable: true, Principal: pdeclNoneSecretRef},
+			{Name: colWiringStatus, Kind: model.KindText, Indexed: true, Principal: model.None("closed set declared|applied|revoked: wiring.go:21, wiring.go:23")},
+			{Name: colAttribution, Kind: model.KindText, Principal: model.None("closed set firm|degraded: wiring.go:30, wiring.go:31")},
 			{Name: colRevNum, Kind: model.KindInt},
 		},
 		Indexes: []model.IndexSpec{{
@@ -186,16 +221,16 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Table:      operationTable,
 		AppendOnly: true, // immutable change-management evidence (docs/SECURITY-HARDENING.md consumes it)
 		Fields: []model.FieldSpec{
-			{Name: colDefinitionRef, Kind: model.KindUUID, Indexed: true},
-			{Name: colOp, Kind: model.KindText, Indexed: true},
+			{Name: colDefinitionRef, Kind: model.KindUUID, Indexed: true, Principal: pdeclNoneDefinitionRef},
+			{Name: colOp, Kind: model.KindText, Indexed: true, Principal: model.None("closed set plan|apply|verify|retire: lifecycle.go:21, lifecycle.go:24")},
 			{Name: colFromVersion, Kind: model.KindInt},
 			{Name: colToVersion, Kind: model.KindInt},
-			{Name: colPlanHash, Kind: model.KindText, Nullable: true, Indexed: true},
-			{Name: colApprovalRef, Kind: model.KindText, Nullable: true},
-			{Name: colGateStatus, Kind: model.KindText},
-			{Name: colOpStatus, Kind: model.KindText, Indexed: true},
-			{Name: colActor, Kind: model.KindText},
-			{Name: colResult, Kind: model.KindText, Nullable: true},
+			{Name: colPlanHash, Kind: model.KindText, Nullable: true, Indexed: true, Principal: model.None("a hex SHA-256 binding an approval to one transition, compared only as a hash: helpers.go:210, lifecycle.go:314")},
+			{Name: colApprovalRef, Kind: model.KindText, Nullable: true, Principal: model.None("a governance approval reference (approval id, no-gate or break-glass handle) resolved only as an approval: cmd/olivares/approvalbridge.go:379, cmd/olivares/approvalbridge.go:382, cmd/olivares/approvalbridge.go:646; the stored copy is only rendered: operations.go:39")},
+			{Name: colGateStatus, Kind: model.KindText, Principal: model.None("a gate decision from the closed GateStatus set (ports.go:31, ports.go:42) the governance adapter maps into: cmd/olivares/approvalbridge.go:943")},
+			{Name: colOpStatus, Kind: model.KindText, Indexed: true, Principal: model.None("closed set of operation outcomes: lifecycle.go:29, lifecycle.go:36")},
+			{Name: colActor, Kind: model.KindText, Principal: model.Ref(model.EncodeUserRef, model.ClassEvidence)},
+			{Name: colResult, Kind: model.KindText, Nullable: true, Principal: model.None("a bounded outcome summary, only rendered: lifecycle.go:676, operations.go:40")},
 			{Name: colOccurredAt, Kind: model.KindTimestamp, Indexed: true},
 		},
 	})

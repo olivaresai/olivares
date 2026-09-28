@@ -7,7 +7,7 @@ description: >-
   Claude-API-only boundary; it never carries cost.
 ---
 
-Claude Code adoption (`modules/claudeadoption`) is one of the 30 modules. It is a
+Claude Code adoption (`modules/claudeadoption`) is one of the 31 modules. It is a
 pure **read-model of how much Claude Code is being used, and how much of what it
 proposes developers keep** — the adoption/ROI question the Claude-centric estate
 asks, served alongside the [FinOps](/zh/reference/modules/xi-finops/) cost surface
@@ -73,5 +73,5 @@ via custom roles.
   surface this module sits beside.
 - [Events reference](/zh/reference/events/) — the `metric.sampled` signal it
   consumes.
-- [Modules catalog](/zh/reference/modules/overview/) — the 30 modules and their
+- [Modules catalog](/zh/reference/modules/overview/) — the 31 modules and their
   honest maturity.

@@ -29,15 +29,12 @@ func (h *harness) createApprover(t *testing.T, email string) (userID, token stri
 	var u struct {
 		ID string `json:"id"`
 	}
+	// The account and its first membership are created in one transaction.
 	if code := h.reqInto("POST", "/v1/users", h.adminToken, "", map[string]any{
 		"email": email, "password": "approver-pw-123456",
+		"tenant": h.tenantA, "role": "admin",
 	}, &u); code != http.StatusCreated || u.ID == "" {
 		t.Fatalf("create user = %d id=%q", code, u.ID)
-	}
-	if code, body := h.req("POST", "/v1/memberships", h.adminToken, "", map[string]any{
-		"user_id": u.ID, "tenant": h.tenantA, "role": "admin",
-	}); code != http.StatusCreated {
-		t.Fatalf("grant membership = %d: %s", code, body)
 	}
 	var login struct {
 		Token string `json:"token"`

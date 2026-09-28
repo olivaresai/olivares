@@ -14,7 +14,8 @@
   },
   "tabs": {
     "catalog": "Catalogue",
-    "topology": "Topologie"
+    "topology": "Topologie",
+    "coverage": "Couverture de collecte"
   },
   "facets": {
     "allKinds": "Tous les types",
@@ -121,6 +122,84 @@
       "title": "Aucune entité du parc découverte",
       "description": "Les entités apparaissent lorsque les observations des connecteurs signalent des agents, des sessions, des identités, des capacités MCP, des modèles, des fournisseurs ou des ressources.",
       "action": "Ouvrir les capacités"
+    }
+  },
+  "coverage": {
+    "title": "Couverture de collecte",
+    "intro": "Lit les preuves de collecte d’un enregistrement de source ouvert. Saisissez les sélecteurs de l’enregistrement que le runtime a actuellement ouvert : un sélecteur ancien lit cette sélection historique, pas le registre actuel.",
+    "form": {
+      "legend": "Sélecteurs de l’enregistrement de source",
+      "sourceId": "Identifiant de source",
+      "sourceIdHint": "L’identifiant persistant de la ligne du registre des sources, pas son nom.",
+      "sourceRevision": "Révision de source",
+      "sourceRevisionHint": "La révision du registre que le runtime a ouverte pour cet enregistrement.",
+      "environmentRef": "Référence d’environnement",
+      "environmentRefHint": "L’environnement d’exécution qui a appliqué l’enregistrement.",
+      "submit": "Lire la couverture",
+      "required": "Saisissez une valeur.",
+      "tooLong": "Utilisez au plus {{max}} octets.",
+      "revisionInvalid": "Saisissez un nombre entier positif."
+    },
+    "idle": "Saisissez un identifiant de source, une révision de source et une référence d’environnement pour lire la couverture de collecte. Rien n’est lu tant que les trois ne sont pas valides.",
+    "loading": "Lecture de la couverture de collecte",
+    "refresh": "Relire",
+    "scopeNote": "La couverture décrit cet enregistrement et sa requête sur l’intervalle observé. Ce n’est ni un instantané global du parc ni une autorisation du fournisseur. Une complétion vide ne supprime aucune ressource.",
+    "hasMore": "La réponse signale d’autres pages. C’est un indicateur de continuation de la liste, pas une preuve que la collecte est complète. Cette sélection a au plus une tête.",
+    "unknownNote": "Inconnue signifie que les preuves stockées n’établissent pas la couverture de cette sélection. Une sélection sans correspondance se lit comme inconnue, jamais comme aucune ni comme une complétude héritée.",
+    "values": {
+      "complete": "Complète",
+      "partial": "Partielle",
+      "unavailable": "Indisponible",
+      "unsupported": "Non prise en charge",
+      "unknown": "Inconnue"
+    },
+    "projections": {
+      "pending": "En attente",
+      "committed": "Validée",
+      "failed": "Échouée"
+    },
+    "current": {
+      "title": "Preuves de collecte actuelles",
+      "coverage": "Couverture",
+      "reason": "Motif",
+      "reasonNone": "Aucun motif enregistré",
+      "projection": "Projection",
+      "projectionHint": "Les membres en file restent en attente jusqu’à la validation de leur reçu. L’énumération seule ne les qualifie pas.",
+      "runId": "Identifiant d’exécution",
+      "runOrder": "Ordre d’exécution",
+      "admitted": "Membres admis",
+      "committed": "Membres validés",
+      "expected": "Membres attendus",
+      "expectedOpen": "Non enregistré tant que l’hôte n’a pas clôturé l’exécution.",
+      "rejection": "Motif de rejet",
+      "noRun": "Aucune exécution de collecte n’est enregistrée pour cette sélection. Une couverture inconnue n’est pas zéro : elle ne dit pas si la source détient des ressources.",
+      "emptyComplete": "Cette exécution s’est terminée sans membre. Une complétion vide ne supprime aucune ressource du catalogue."
+    },
+    "lastQualified": {
+      "title": "Dernier succès qualifié",
+      "note": "Qualification historique pour cet enregistrement et cette portée exacts. Elle est distincte de l’énumération actuelle, et des preuves de rejet ultérieures ne la réécrivent pas.",
+      "absent": "Aucun succès qualifié n’est signalé pour cet enregistrement et cette portée. Il est absent tant qu’aucune exécution n’est qualifiée, et son absence ne dit rien de l’exécution actuelle."
+    },
+    "fields": {
+      "sourceId": "Identifiant de source",
+      "sourceRevision": "Révision de source",
+      "environmentRef": "Référence d’environnement",
+      "scopeContract": "Contrat de portée",
+      "family": "Famille",
+      "requestedScope": "Empreinte de la portée demandée",
+      "fulfilledScope": "Empreinte de la portée satisfaite",
+      "hostStarted": "Début de l’exécution sur l’hôte",
+      "hostFinished": "Clôture de l’exécution sur l’hôte",
+      "producerStarted": "Début de l’énumération du producteur",
+      "producerFinished": "Fin de l’énumération du producteur",
+      "qualified": "Qualifiée le",
+      "notRecorded": "Non enregistré"
+    },
+    "error": {
+      "invalidTitle": "Sélection refusée",
+      "invalid": "Le moteur a refusé cette sélection. L’identifiant de source et la référence d’environnement doivent être non vides et d’au plus 128 octets, et la révision de source doit être un nombre entier positif.",
+      "suspendedTitle": "Service du locataire suspendu",
+      "suspended": "Le service de ce locataire est suspendu ou hors service, la couverture de collecte ne peut donc pas être lue."
     }
   }
 }

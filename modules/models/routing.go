@@ -176,19 +176,34 @@ func buildCatalog(ctx context.Context, sc store.Scope) (mp.Catalog, error) {
 			if mm.ProviderRef == "" {
 				mm.ProviderRef = ref.ProviderRef
 			}
-		} else if md.InputCostMicroUSD > 0 || md.OutputCostMicroUSD > 0 {
-			// No declared family: use the operator-set per-token cost as a coarse
-			// blended price so the cost policy can still order it (Source=operator,
-			// honest about its provenance).
-			mm.Pricing = &mp.ModelPricing{
-				InputPerMTokUSD:  float64(md.InputCostMicroUSD),
-				OutputPerMTokUSD: float64(md.OutputCostMicroUSD),
-				Currency:         "USD", Source: mp.PricingOperator,
+			// A matching reference with no verified price must not drop an
+			// operator-set per-token cost. Source stays operator.
+			if ref.Pricing == nil {
+				if p := operatorPricing(md); p != nil {
+					mm.Pricing = p
+				}
 			}
+		} else if p := operatorPricing(md); p != nil {
+			mm.Pricing = p
 		}
 		cat.Models = append(cat.Models, mm)
 	}
 	return cat, nil
+}
+
+// operatorPricing is the operator-set per-token cost as a coarse blended price
+// so the cost policy can still order the model. Source is operator. Either
+// cost being non-positive, including a mixed-sign pair, is not a price: the
+// model stays unpriced and sorts last.
+func operatorPricing(md model.Model) *mp.ModelPricing {
+	if md.InputCostMicroUSD <= 0 || md.OutputCostMicroUSD <= 0 {
+		return nil
+	}
+	return &mp.ModelPricing{
+		InputPerMTokUSD:  float64(md.InputCostMicroUSD),
+		OutputPerMTokUSD: float64(md.OutputCostMicroUSD),
+		Currency:         "USD", Source: mp.PricingOperator,
+	}
 }
 
 // --- Policy.Spec scalar helpers (JSON-typed values) --------------------------

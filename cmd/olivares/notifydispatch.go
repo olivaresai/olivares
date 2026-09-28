@@ -9,6 +9,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -475,6 +476,59 @@ func (d *connectorDispatcher) Deliver(ctx context.Context, tenant model.TenantID
 	if !ok || !allowed {
 		return notify.ErrUnknownDestination
 	}
+	return conn.Notify(ctx, n)
+}
+
+// errSystemDestinationAddressable refuses a deployment message through a
+// destination some tenant may address.
+var errSystemDestinationAddressable = errors.New("notify: a deployment message needs a destination the operator scoped to no tenant")
+
+// systemDestination reports whether the operator provisioned destination for the
+// deployment alone: its boot spec says `"tenants": []` and its live scope still
+// admits no tenant. A list of tenant ids that were all malformed is not the same
+// statement and does not qualify.
+func (d *connectorDispatcher) systemDestination(destination string) bool {
+	declared := false
+	for _, spec := range d.specs {
+		if spec.Name == destination {
+			declared = spec.Tenants != nil && len(spec.Tenants) == 0
+		}
+	}
+	if !declared {
+		return false
+	}
+	d.mu.RLock()
+	scope, scoped := d.tenantScope[destination]
+	d.mu.RUnlock()
+	return scoped && len(scope) == 0
+}
+
+// DeliverSystem delivers one of the deployment's own messages (an invitation) to
+// exactly one recipient, through a destination the operator scoped to no tenant.
+// It calls the connector directly: no tenant route, rule or outbox sees the
+// message, so no tenant can list, redirect or replay it. The recipient comes
+// from the caller alone and replaces any in the message.
+func (d *connectorDispatcher) DeliverSystem(ctx context.Context, destination, recipient string, n sdk.Notification) error {
+	recipient = strings.TrimSpace(recipient)
+	if recipient == "" || strings.ContainsAny(recipient, ",; \t\r\n<>") || strings.Count(recipient, "@") != 1 {
+		return errors.New("notify: a deployment message needs exactly one recipient address")
+	}
+	if !d.systemDestination(destination) {
+		return errSystemDestinationAddressable
+	}
+	d.mu.RLock()
+	conn, ok := d.conns[destination]
+	d.mu.RUnlock()
+	if !ok {
+		return notify.ErrUnknownDestination
+	}
+	fields := make(map[string]string, len(n.Fields)+1)
+	for k, v := range n.Fields {
+		fields[k] = v
+	}
+	fields["to"] = recipient
+	n.Fields = fields
+	n.Tenant = ""
 	return conn.Notify(ctx, n)
 }
 

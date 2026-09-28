@@ -44,6 +44,7 @@
       "invite": "Inviter",
       "inviteAnother": "En inviter un autre",
       "invited": "{{email}} invité.",
+      "consentRequired": "{{email}} a déjà un compte ; il ne rejoint l'organisation que si son titulaire y consent.",
       "or": "ou",
       "ssoCta": "Connecter le SSO",
       "password": "Mot de passe",

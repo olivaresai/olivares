@@ -9,6 +9,7 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"hash"
 	"log/slog"
 	"net/http"
@@ -40,7 +41,7 @@ import (
 //     orch/voice/deploy adapters in killswitchgate.go). Checked FIRST in the module's
 //     preflight (stop > break-glass) and again, continuously, by the module's active
 //     termination sweep so a stop also PARA running sessions, not only IMPEDE new ones.
-//   - LaunchGate → the budget pre-flight (deny 402/429 at the cap) + the
+//   - LaunchGate → the budget admission (deny 402/429 at the cap) + the
 //     CRITICAL-launch HITL (privileged launches need two-person approval) + the
 //     PEP env provisioning (so the launched session's managed PreToolUse hook reaches
 //     the governed PEP) + the per-run I/O-recording decision.
@@ -141,6 +142,11 @@ func (p availabilityPosture) String() string {
 // fail-closed on the enterprise edition (evidence-grade availability) and fail-open elsewhere
 // (preserve the community default). An invalid value is fail-closed + LOUD (a typo must never
 // silently weaken the gate — the same stance as the audit-spool mode loader).
+//
+// This is the posture of the session LAUNCH GATE over a control it cannot READ. It is not,
+// and must never become, the posture FinOps admission answers with when it cannot reserve:
+// that one is engineReserveUnreachable (budgetgate.go), deny for every in-process caller,
+// because a hold the engine could not write is not headroom it may hand out.
 func resolveAvailabilityPosture(raw, edition string, log *slog.Logger) availabilityPosture {
 	switch strings.ToLower(strings.TrimSpace(raw)) {
 	case "fail-open":
@@ -206,7 +212,7 @@ func (g sessionStopGate) Check(ctx context.Context, tenant model.TenantID, dims 
 // by the module BEFORE this gate (stop > break-glass), so a stopped estate denies
 // before any approval is opened.
 type sessionLaunchGate struct {
-	fin             budgetChecker          // Budget pre-flight (nil ⇒ no budget gate)
+	fin             budgetChecker          // Budget admission (nil ⇒ no budget gate)
 	bridge          hookApprovalOpener     // HITL (nil ⇒ a CRITICAL launch is denied)
 	pep             *sessionPEPProvisioner // PEP env (nil ⇒ no env ⇒ deny-closed per-tool)
 	contextPolicy   contextPolicyResolver  // Context/compaction launch policy (nil ⇒ no context policy)
@@ -228,30 +234,138 @@ type sessionLaunchGate struct {
 
 var _ sessions.LaunchGate = (*sessionLaunchGate)(nil)
 
+// launchAdmissionFailed is the class the launch record gives an admission error that is
+// not a store fault: admission could not answer the request, and the ledger is not the
+// reason.
+const launchAdmissionFailed = "admission failed"
+
+// recordBudgetFailure is the ONE record a launch leaves when the budget control did not
+// answer: the ledger was unreachable (reason ReasonStoreUnreachable), or admission itself
+// failed (reason launchAdmissionFailed). Both postures write it, at ERROR, because the
+// interesting half is the quiet one: a fail-open launch starts a session with no cap
+// enforcing anything, and nothing else in the engine says so.
+//
+// outcome is what the gate DID (launched / refused); without it the two postures are
+// indistinguishable in a log search, which is exactly the question an operator arrives
+// with. cause is nil when admission answered with a refusal rather than an error: there is
+// no error to report, and an empty err field would suggest one was lost.
+func (g *sessionLaunchGate) recordBudgetFailure(outcome, reason string, cause error) {
+	if g.log == nil {
+		return
+	}
+	args := []any{"posture", g.budgetPosture.String(), "outcome", outcome, "reason", reason}
+	if cause != nil {
+		args = append(args, "err", cause)
+	}
+	g.log.Error("session launch-gate: budget check failed", args...)
+}
+
+// admissionUnreachable reports whether admission's answer is the ledger being unreachable:
+// the deny-closed refusal it answers with, or an error that is a store fault. It is the
+// one outcome the availability posture decides.
+func admissionUnreachable(res finops.Reservation, err error) bool {
+	if err != nil {
+		return errors.Is(err, store.ErrStoreUnavailable)
+	}
+	return !res.Allowed && res.Reason == finops.ReasonStoreUnreachable
+}
+
+// budgetUnavailable answers a launch whose ledger admission could not reach, by the
+// configured posture: fail-closed refuses it, fail-open launches it. Either way the launch
+// is recorded. ok is false when the launch is refused.
+func (g *sessionLaunchGate) budgetUnavailable(cause error) (sessions.LaunchDecision, bool) {
+	if g.budgetPosture == availabilityFailClosed {
+		g.recordBudgetFailure("refused", finops.ReasonStoreUnreachable, cause)
+		return sessions.LaunchDecision{
+			Allowed:      false,
+			Reason:       "session budget control unavailable (deny-closed)",
+			DeniedStatus: http.StatusServiceUnavailable,
+		}, false
+	}
+	g.recordBudgetFailure("launched", finops.ReasonStoreUnreachable, cause)
+	return sessions.LaunchDecision{}, true
+}
+
+// launchAdmissionDomain separates the digest of a launch's dimensions from every other
+// digest the engine takes.
+const launchAdmissionDomain = "olivares.session.launch.admission.v1"
+
+// launchAdmission is the admission request of a launch. Its key is the run reference and a
+// digest of the dimensions the request carries, so the resume of a run with the same
+// dimensions asks the question its launch asked and is answered afresh, while a resume
+// whose dimensions changed (another agent identity, another model) asks a new question
+// under a key of its own rather than conflicting with the launch. A launch without a run
+// reference gets a fresh key.
+func launchAdmission(intent sessions.LaunchIntent) finops.AdmissionRequest {
+	dims := finops.SpendDims{
+		AgentRef: intent.AgentRef, SessionRef: intent.RunRef, ModelRef: intent.Model,
+		// The session's workspace is its FinOps WorkspaceRef dimension, so a
+		// workspace-scoped enforcing budget also caps the launch. Admission resolves the
+		// firm identity itself from AgentRef when an identity budget exists.
+		WorkspaceRef: intent.WorkspaceRef,
+	}
+	key := model.NewID().String()
+	if run := strings.TrimSpace(intent.RunRef); run != "" {
+		key = run + "/" + launchDimsDigest(dims)
+	}
+	return finops.AdmissionRequest{
+		Scope: finops.AdmissionScopeSessionLaunch,
+		Dims:  dims,
+		// A launch never learns what the session goes on to spend: that arrives later, per
+		// request, on the bus. It has nothing to commit or release, so it holds nothing
+		// (engineGateNoEstimate, budgetgate.go).
+		EstimateMicroUSD: engineGateNoEstimate,
+		IdempotencyKey:   "session_launch/" + key,
+		// Admission's own rule, NOT this gate's posture: an unreachable ledger never yields
+		// a hold. The posture decides what the LAUNCH does with the refusal.
+		Unreachable: engineReserveUnreachable,
+	}
+}
+
+// launchDimsDigest is the hex SHA-256 of every dimension launchAdmission sets, each
+// length-prefixed so no two sets of dimensions share an encoding.
+func launchDimsDigest(dims finops.SpendDims) string {
+	h := sha256.New()
+	writeLenPrefixed(h, []byte(launchAdmissionDomain))
+	for _, v := range []string{dims.AgentRef, dims.SessionRef, dims.ModelRef, dims.WorkspaceRef} {
+		writeLenPrefixed(h, []byte(v))
+	}
+	return hex.EncodeToString(h.Sum(nil))
+}
+
 func (g *sessionLaunchGate) Authorize(ctx context.Context, tenant model.TenantID, intent sessions.LaunchIntent) (sessions.LaunchDecision, error) {
-	// 1. Budget pre-flight. A read error follows the configured availability
-	//    posture; a definitive cap always denies with 402 (block) / 429 (throttle) so
-	//    a session/identity at its limit does not start.
+	// 1. Budget admission. A definitive cap always denies with 402 (block) / 429
+	//    (throttle) so a session/identity at its limit does not start. A ledger that
+	//    cannot be read answers deny, and the configured availability posture decides
+	//    what the launch does with that; any other failure of admission refuses it.
 	if g.fin != nil {
-		chk, err := g.fin.CheckBudget(ctx, tenant, finops.SpendDims{
-			AgentRef: intent.AgentRef, SessionRef: intent.RunRef, ModelRef: intent.Model,
-			// The session's workspace is its FinOps WorkspaceRef dimension, so a
-			// workspace-scoped enforcing budget also caps the launch. CheckBudget resolves
-			// the firm identity itself from AgentRef when an identity budget exists.
-			WorkspaceRef: intent.WorkspaceRef,
-		})
+		chk, err := g.fin.Reserve(ctx, tenant, launchAdmission(intent))
 		switch {
+		case admissionUnreachable(chk, err):
+			// Admission could not reach the ledger. It answers that with a refusal and a
+			// nil error, so the record is written here; the outcome field tells the two
+			// postures apart.
+			if dec, ok := g.budgetUnavailable(err); !ok {
+				return dec, nil
+			}
 		case err != nil:
-			if g.log != nil {
-				g.log.Error("session launch-gate: budget check failed", "posture", g.budgetPosture.String(), "err", err)
-			}
-			if g.budgetPosture == availabilityFailClosed {
-				return sessions.LaunchDecision{
-					Allowed:      false,
-					Reason:       "session budget control unavailable (deny-closed)",
-					DeniedStatus: http.StatusServiceUnavailable,
-				}, nil
-			}
+			// Admission could not answer the request at all. That is not a ledger it
+			// could not reach, so the posture does not apply: the launch is refused.
+			g.recordBudgetFailure("refused", launchAdmissionFailed, err)
+			return sessions.LaunchDecision{
+				Allowed:      false,
+				Reason:       "session budget admission failed (deny-closed)",
+				DeniedStatus: http.StatusServiceUnavailable,
+			}, nil
+		case !chk.Allowed && chk.Reason == finops.ReasonAdmissionIntegrity:
+			// Admission refuses a key whose row failed its integrity check in every
+			// posture: the ledger answered, so the posture has nothing to decide, and the
+			// refusal is not a budget cap.
+			return sessions.LaunchDecision{
+				Allowed:      false,
+				Reason:       finops.ReasonAdmissionIntegrity,
+				DeniedStatus: http.StatusServiceUnavailable,
+			}, nil
 		case !chk.Allowed:
 			return sessions.LaunchDecision{
 				Allowed:      false,

@@ -1,34 +1,72 @@
 {
   "title": "Settings",
-  "subtitle": "Manage your account and how the console looks.",
-  "tabs": {
-    "profile": "Profile",
-    "appearance": "Appearance",
-    "about": "About"
+  "restoreAll": "Restore all defaults",
+  "search": "Search settings",
+  "changedReset": "Changed · reset",
+  "noMatches": "No setting matches.",
+  "groups": {
+    "you": "You",
+    "work": "Work",
+    "installation": "This installation"
   },
-  "profile": {
-    "title": "Profile",
-    "email": "Email",
-    "displayName": "Display name",
-    "role": "Role in this organization",
-    "memberships": "Organizations",
-    "actor": "Principal"
+  "nav": {
+    "general": "General",
+    "notifications": "Notifications",
+    "keyboard": "Keyboard",
+    "sessionDefaults": "Session defaults",
+    "aiTools": "AI tools",
+    "workspaces": "Workspaces",
+    "deploy": "Deploy and updates",
+    "signIn": "Sign-in and security",
+    "setup": "Setup",
+    "about": "About",
+    "sections": "Settings sections"
   },
-  "appearance": {
-    "title": "Appearance",
+  "general": {
+    "title": "General",
+    "scope": "Your own preferences. They follow you to every workspace on this installation.",
     "theme": "Theme",
-    "themeHint": "Choose light, dark, or follow your system.",
-    "density": "Table density",
-    "densityHint": "Compact fits more rows; comfortable is roomier.",
+    "themeHint": "Dark unless you choose light, or follow the system.",
+    "density": "Density",
+    "densityHint": "Compact shows more rows; comfortable is easier to read.",
     "language": "Language",
-    "languageHint": "The console interface language."
+    "languageHint": "English, Español, Deutsch, Français, 日本語, Русский, 中文.",
+    "time": "Time",
+    "timeHint": "Times show in your zone ({{zone}}). Records and exports stay in UTC.",
+    "clock24": "24-hour",
+    "clock12": "12-hour",
+    "startPage": "Start page",
+    "startPageHint": "What opens when you sign in. Default: Home.",
+    "confirmStop": "Confirm before stopping a session",
+    "confirmStopHint": "Ask once before Stop ends a session that is still working.",
+    "reduceMotion": "Reduce motion",
+    "reduceMotionHint": "Replace movement with fades. On when your system asks for it."
+  },
+  "unavailable": {
+    "notifications": "Notification preferences are not stored on this installation yet.",
+    "sessionDefaults": "Session defaults are not stored on this installation yet.",
+    "signIn": "Sign-in policy is not edited from this screen yet."
+  },
+  "keyboard": {
+    "title": "Keyboard",
+    "scope": "The keys this installation answers. They are the same for everyone."
   },
   "about": {
     "title": "About",
+    "scope": "This installation and the principal signed in.",
     "version": "Version",
     "engine": "Store engine",
     "license": "License status",
     "licensee": "Licensed to",
-    "none": "None"
+    "none": "None",
+    "displayName": "Display name",
+    "actor": "Principal",
+    "role": "Role in this organization",
+    "memberships": "Organizations"
+  },
+  "stopConfirm": {
+    "title": "Stop this session?",
+    "description": "Stop ends a session that is still working.",
+    "confirm": "Stop the session"
   }
 }

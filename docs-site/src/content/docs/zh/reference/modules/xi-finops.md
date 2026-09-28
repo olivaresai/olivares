@@ -2,7 +2,7 @@
 title: "模块 XI — 成本与 AI FinOps"
 description: >-
   从成本流核算 AI 开销，按任意归因维度切分，预测当期，并以在上限处拒绝该项消费的方式
-  强制执行预算——传输协议中不含金额、opt-in 且 fail-open。它做什么，以及它的局限。
+  强制执行预算——传输协议中不含金额、opt-in，且在无法读取账本时拒绝。它做什么，以及它的局限。
 ---
 
 模块 XI 是面向 AI 的**成本 / FinOps** 层：它核算模型与提供方 connector（连接器）所报告的内容，
@@ -52,12 +52,14 @@ FinOps 从[事件总线](/zh/reference/events/)**消费** `cost.sampled`，并**
 仅追加的 ledger 并被审计。见[治理与审批](/zh/how-to/govern-and-approve/)。
 
 :::caution[诚实的局限]
-- **强制执行是 opt-in（选择加入）的，默认不是 deny-closed。** 在没有任何强制执行预算覆盖某个请求时，
-  绝不会有任何东西被拒绝——这种缺失是正常状态，而非一处安全漏洞。只有一个*确定地*处于其限额处的预算
+- **强制执行是 opt-in（选择加入）的，默认不是 deny-closed。** 只要 FinOps 能读取其账本，在没有任何强制执行预算
+  覆盖某个请求时，绝不会有任何东西被拒绝——这种缺失是正常状态，而非一处安全漏洞。预算只有在*确定地*处于其限额处时
   才会拒绝。这是刻意为之的，与审批门控 deny-closed 的姿态相反。
-- **该门控 fail open（失败即放行）。** 一次 FinOps 读取错误绝不会击垮一个进行中的操作——一个已批准的
-  fire/open 会继续进行，路由器会完成 resolve。持久的兜底是摄取时发出的预算上限 finding，而非这道
-  飞行前（pre-flight）门控。
+- **门控无法读取账本时会拒绝。** 当 FinOps 无法读取或写入其预算账本时，准入无法建立，该项消费会被拒绝：编排的
+  fire、语音的 open、模型路由、evals 门的一次运行以及持久的 MCP 任务都会被拒绝，推理代理返回 **HTTP 503**。
+  会话启动采用它自己的可用性姿态（`OLIVARES_SESSION_BUDGET_AVAILABILITY`）：未设置时，会话在 Community 版会启动，
+  在 Enterprise 版会以 **HTTP 503** 被拒绝，两种情况下该故障都会被记录。摄取时发出的预算上限 finding 仍会记录
+  已达到上限的开销。
 - **路由器只强制执行它在执行前已知的范围**（global / provider / model）；更细的范围（agent、session、
   team、project）在 fire/open 接缝与模型网关处强制执行，而非在路由解析处。
 - **FinOps 进行核算；它不开账单。** 它记录 connector 所报告的内容——`billed`（已计费）对比 `estimated`

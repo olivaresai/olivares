@@ -17,6 +17,7 @@ import (
 
 	"github.com/olivaresai/olivares/connectors/identitysource"
 	"github.com/olivaresai/olivares/core/api"
+	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 	sdkmodel "github.com/olivaresai/olivares/sdk/model"
@@ -184,7 +185,15 @@ func (m *Module) handleSetNHIOwnership(w http.ResponseWriter, r *http.Request, m
 		return
 	}
 	var clientErr string
-	err := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
+	// The owner and sponsor are fenced references: the accounts that carry their
+	// external ids are read for standing first, before the row is even looked up.
+	subjects, rerr := auth.ResolveExternalIDs(r.Context(), mc.Standing, []string{in.OwnerRef, in.SponsorRef})
+	if rerr != nil {
+		writeStoreError(w, rerr)
+		return
+	}
+	mutate := func(fn func(store.Scope) error) error { return mc.Data.Mutate(r.Context(), fn) }
+	err := auth.FencedWrite(r.Context(), mc.Standing, mc.Tenant, subjects, auth.FenceDirectory, mutate, func(sc store.Scope, _ bool) error {
 		for _, ref := range []string{in.OwnerRef, in.SponsorRef} {
 			if ref == "" {
 				continue
@@ -244,6 +253,9 @@ func (m *Module) handleSetNHIOwnership(w http.ResponseWriter, r *http.Request, m
 			"identity_ref": ref, "owner_set": in.OwnerRef != "", "sponsor_set": in.SponsorRef != "",
 		})
 	})
+	if writeFenceRefusal(w, err) {
+		return
+	}
 	if clientErr != "" {
 		writeJSON(w, http.StatusBadRequest, errorBody(clientErr))
 		return

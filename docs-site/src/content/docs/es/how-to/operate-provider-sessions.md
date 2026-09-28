@@ -31,7 +31,7 @@ Complétalas antes de un lanzamiento. Un elemento que falta es una denegación,
 no un respaldo.
 
 1. Olivares AI está instalado y existe el primer administrador.
-   Consulta [Tu primera hora](/how-to/first-hour/) para el token de
+   Consulta [Tu primera hora](/es/how-to/first-hour/) para el token de
    configuración y el muro AAL3 de passkey. Crear orígenes y las operaciones
    privilegiadas de sesión exigen AAL3 (`core/api/middleware.go` `requireAAL3`).
 2. La CLI oficial del proveedor ya está instalada en **este nodo**. El perfil
@@ -61,7 +61,7 @@ registro; esta página no añade más afirmaciones sobre OpenCode.
 Los lanzamientos de Claude siguen necesitando una fuente de credencial de
 inferencia (`OLIVARES_SESSION_RUNTIME_WIF` o
 `OLIVARES_SESSION_RUNTIME_TOKEN_FILE`). Consulta
-[Tu primera hora §3](/how-to/first-hour/#3-iniciar-una-sesión-de-claude-code-desde-la-consola).
+[Tu primera hora §3](/es/how-to/first-hour/#3-iniciar-una-sesión-de-claude-code-desde-la-consola).
 Codex y Grok usan solo el `auth_source` AUTORIZADO del perfil:
 `provider_account_home` o `managed_injection`, sin respaldo entre ellos y sin
 valor predeterminado (`CHANGELOG.md` `[26.9.0]`; `ProviderProfileDTO.auth_source`).
@@ -186,7 +186,7 @@ recibo confirmado del proveedor.
 
 ## Relacionado
 
-- [Tu primera hora](/how-to/first-hour/) — token de configuración, AAL3, fuente de credencial Claude.
+- [Tu primera hora](/es/how-to/first-hour/) — token de configuración, AAL3, fuente de credencial Claude.
 - [Ejecutar Claude Code con Olivares](/how-to/run-claude-code-with-olivares/) — topologías de co-despliegue.
 - [Integrar Codex](/how-to/integrations/codex/) / [Integrar Grok Build](/how-to/integrations/grok/) — conector y hook PEP.
 - [API de runtime de sesión](/reference/session-runtime-api/) — listar, adjuntar, input, stop; PTY Community y corte de edición.

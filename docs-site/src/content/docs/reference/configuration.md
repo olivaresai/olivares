@@ -82,17 +82,21 @@ The authorization policy decision point is selected at the composition root by e
 
 Two adapters sit behind one seam: an **embedded Cedar** evaluator (the primary, pure-Go path) and an **OPA-over-HTTP** adapter. The operator chooses one engine; both can only restrict, never widen, the decision the built-in RBAC already made.
 
-:::note[A bad policy never un-governs the plane]
-If `OLIVARES_PDP_ENGINE` selects an engine but its configuration is invalid — an unreadable Cedar file, a malformed OPA target — the engine **disables only the external PDP**, keeps the native ABAC engine and RBAC enforcing, and logs loudly. A broken policy file never silently leaves requests un-governed and never crashes the control plane.
+:::note[Invalid external-PDP configuration blocks module construction]
+If `OLIVARES_PDP_ENGINE` explicitly selects an external engine but its configuration is invalid, the module set cannot be constructed. Commands that construct it, including `serve`, report a configuration error instead of silently falling back to native-only authorization. Correct the configuration. An explicit `none` intentionally selects operation without the external restrict-only layer, with native ABAC and RBAC still enforcing; it is not an automatic fallback or a substitute for a required external policy.
+
+An unset or blank selector, or `none`, remains valid and uses native authorization. With `cedar`, the policy filename is optional: an unset or blank `OLIVARES_PDP_CEDAR_FILE`, or a readable empty file, provides a valid empty overlay. Constructing the OPA adapter sends no network request and does not establish that its endpoint is reachable.
 :::
 
 For the deny-by-default model, the privileged nature of viewing the access graph, and how every authorization read is audited, see [the security model](/explanation/security/security-model/).
+
+Set `OLIVARES_OTEL_PROVIDER_BAGGAGE_ALLOWLIST` to a JSON array of rules with `origin`, `key` and `values` fields. Each rule permits only the exact HTTP(S) origin, baggage key and non-secret values it names. Limits are 16 KiB of JSON, 32 rules, eight values per rule and 1–64 ASCII bytes per key or value. Continuation of `traceparent` and `tracestate` is separate from this policy, and destination authorization is also separate.
 
 <!-- BEGIN GENERATED olivares-env-reference — regenerate with `bash scripts/check-config-env-docs.sh --write`; do not edit by hand -->
 
 ### Complete variable reference
 
-The table below is generated from the product's own sources: 293 variables and 17 runtime-constructed families, covering the engine, the CLI, the Kubernetes operator, the Terraform provider and the connectors. It is regenerated and checked against those sources on every change, so it does not fall behind the binary.
+The table below is generated from the product's own sources: 297 variables and 17 runtime-constructed families, covering the engine, the CLI, the Kubernetes operator, the Terraform provider and the connectors. It is regenerated and checked against those sources on every change, so it does not fall behind the binary.
 
 **Required** means the feature that reads the variable does not start without it; most variables are optional and the engine runs with none of them set.
 
@@ -208,6 +212,8 @@ The table below is generated from the product's own sources: 293 variables and 1
 | `OLIVARES_EVENTING_SECRET_KEY` | No | — | Key that encrypts eventing subscription signing secrets at rest. |
 | `OLIVARES_EXECUTION_ENVIRONMENT_ID` | No | — | Explicit execution-environment reference for this node, read at boot by cmd/olivares/providerprofiles.go. Unset, the engine generates one identity once into `execution-environment-id` in the data directory (0600, atomic exclusive create) and reuses it; set, the value must be 1..256 printable bytes with no whitespace, colon or vertical bar, and a malformed value refuses boot instead of degrading in silence. It is REQUIRED on a topology with only shared state and no node-local data directory: there, without it, profiled session launches stay deny-closed. |
 | `OLIVARES_EXTRA_ARGS` | No | — | Extra `serve` arguments appended by the packaged service unit, for operators who configure the daemon through an environment file. |
+| `OLIVARES_FINOPS_ADMISSION_LEGACY_WRITERS_STOPPED_AT` | No | — | Instant every writer of the earlier FinOps admission build stopped, as an RFC 3339 time in UTC ending in `Z`. Read once at startup. Recovery retires a claim those writers left, but only once five minutes have passed since this instant and only while no row they left is dated later; empty, the default, or text that is not such an instant retires none. |
+| `OLIVARES_GITPUBLISH_SWEEP_INTERVAL` | No | `1m` | How often the Git publication sweep settles stale dispatches and re-observes uncertain publications, as a Go duration. `0` disables it. |
 | `OLIVARES_GROK_HOOK_ACCOUNT` | No | — | Account the Grok Build hook client reports. |
 | `OLIVARES_GROK_HOOK_AGENT` | No | — | Agent identity the Grok Build hook client reports. |
 | `OLIVARES_GROK_HOOK_ORG` | No | — | Organization the Grok Build hook client reports. |
@@ -231,6 +237,7 @@ The table below is generated from the product's own sources: 293 variables and 1
 | `OLIVARES_INFERENCE_PROXY_CONFIG` | No | — | Path to the JSON configuration of the governed inference proxy. |
 | `OLIVARES_INGEST_TOKEN` | No | — | Bearer token the collector ingest endpoint requires from telemetry senders. |
 | `OLIVARES_INSECURE` | No | — | Set to `1` to let the CLI talk to a plaintext or untrusted-TLS endpoint. Local development only. |
+| `OLIVARES_INVITE_MAIL_DESTINATION` | No | — | Name of the email destination in the notification file, scoped to no tenant, that invitations are mailed through. Without it, and without a declared console address, invite mode is unavailable. |
 | `OLIVARES_KEY_CUSTODY` | No | — | Custody posture required of the audit signing key: whether a raw on-disk key is accepted or a wrapped one is demanded. |
 | `OLIVARES_KEY_WRAP_AWS_KEY_ID` | No | — | Key identifier in AWS KMS. Used by the backend that wraps the signing keys. |
 | `OLIVARES_KEY_WRAP_AWS_REGION` | No | — | Region of the AWS KMS key. Used by the backend that wraps the signing keys. |
@@ -286,6 +293,7 @@ The table below is generated from the product's own sources: 293 variables and 1
 | `OLIVARES_OTEL_GENAI_COMPAT` | No | — | Set to a true value to also emit the generative-AI semantic-convention attributes on spans. |
 | `OLIVARES_OTEL_INSECURE` | No | — | Set to a true value to export traces over plaintext. Local development only. |
 | `OLIVARES_OTEL_PROTOCOL` | No | — | OTLP protocol used for export. Falls back to the standard `OTEL_EXPORTER_OTLP_PROTOCOL`. |
+| `OLIVARES_OTEL_PROVIDER_BAGGAGE_ALLOWLIST` | No | `[]` | JSON array of exact HTTP(S) origin, baggage key and non-secret control values allowed through the mounted AnthropicHTTPClient; empty denies baggage. Invalid policy reports a bounded reason once at construction and suppresses baggage without blocking inference. |
 | `OLIVARES_OTEL_SAMPLE_RATIO` | No | — | Fraction of traces sampled, between 0 and 1. |
 | `OLIVARES_OTEL_SERVICE_NAME` | No | — | Service name reported on exported traces. |
 | `OLIVARES_PDF_RENDER_TIMEOUT` | No | `30s` | Maximum time one Chromium render of a PDF report may take, as a positive Go duration with units. Read by the reporting add-on for each render; a value that is not a positive duration is refused by name before Chromium is started. Raise it on slow hosts where a structural render does not fit the default. |

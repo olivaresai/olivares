@@ -122,7 +122,7 @@ while IFS= read -r row || [ -n "$row" ]; do
 		case "$name" in
 		*.spdx.sbom.json | *.cdx.sbom.json) kind=sbom ;;
 		*.tar.gz) kind=archive ;;
-		*.deb | *.rpm | *.apk) kind=package ;;
+		*.deb | *.rpm | *.apk | *.pkg.tar.zst) kind=package ;;
 		*) kind=other ;;
 		esac
 		;;

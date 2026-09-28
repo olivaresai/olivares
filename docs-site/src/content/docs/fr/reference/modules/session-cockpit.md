@@ -11,7 +11,7 @@ Le binaire Community enregistre un descripteur de disponibilité pour l'espace
 de noms API `session-cockpit`. Cet espace de noms a actuellement **zéro
 gestionnaire** et **aucun cockpit interactif**. Les requêtes sous
 `/v1/m/session-cockpit` reçoivent **404 par absence**. Le descripteur n'est
-pas l'un des 30 modules produit du catalogue.
+pas l'un des 31 modules produit du catalogue.
 
 ## Disponibilité actuelle
 

@@ -112,37 +112,37 @@ func registerAttemptSchema(reg store.ExtensionRegistry) error {
 		Table: attemptTable,
 		Fields: []model.FieldSpec{
 			{Name: colAttemptContractVersion, Kind: model.KindInt},
-			{Name: colAttemptRef, Kind: model.KindText},
-			{Name: colAttemptRequestRef, Kind: model.KindText},
-			{Name: colAttemptHandle, Kind: model.KindUUID},
-			{Name: colAttemptPhase, Kind: model.KindText},
-			{Name: colAttemptBindingDigest, Kind: model.KindText},
-			{Name: colAttemptBinding, Kind: model.KindJSON},
-			{Name: colAttemptTargets, Kind: model.KindJSON},
-			{Name: colAttemptResvDigest, Kind: model.KindText},
+			{Name: colAttemptRef, Kind: model.KindText, Principal: pdeclNoneAttemptRef},
+			{Name: colAttemptRequestRef, Kind: model.KindText, Principal: pdeclNoneAttemptRef},
+			{Name: colAttemptHandle, Kind: model.KindUUID, Principal: pdeclNoneAttemptID},
+			{Name: colAttemptPhase, Kind: model.KindText, Principal: pdeclNoneAttemptState},
+			{Name: colAttemptBindingDigest, Kind: model.KindText, Principal: pdeclNoneAttemptDigest},
+			{Name: colAttemptBinding, Kind: model.KindJSON, Principal: pdeclAttemptBinding},
+			{Name: colAttemptTargets, Kind: model.KindJSON, Principal: pdeclAttemptTargets},
+			{Name: colAttemptResvDigest, Kind: model.KindText, Principal: pdeclNoneAttemptDigest},
 			// Everything below is a LATER phase's field. Declared now, NULL now: the
 			// additive reconciliation can add a nullable column to a populated table
 			// and cannot add a NOT NULL one, so declaring the complete shape here is
 			// what keeps the settlement cut from needing a hand-authored migration
 			// over money-bearing rows.
-			{Name: colAttemptEffectDigest, Kind: model.KindText, Nullable: true},
-			{Name: colAttemptDispatchRef, Kind: model.KindText, Nullable: true},
+			{Name: colAttemptEffectDigest, Kind: model.KindText, Nullable: true, Principal: pdeclNoneAttemptDigest},
+			{Name: colAttemptDispatchRef, Kind: model.KindText, Nullable: true, Principal: pdeclNoneAttemptLater},
 			{Name: colAttemptAccountingAt, Kind: model.KindTimestamp, Nullable: true},
 			{Name: colAttemptDispatchMarked, Kind: model.KindTimestamp, Nullable: true},
 			{Name: colAttemptReviewAfter, Kind: model.KindTimestamp},
 			{Name: colAttemptSettledAt, Kind: model.KindTimestamp, Nullable: true},
-			{Name: colAttemptOwnerRef, Kind: model.KindText},
+			{Name: colAttemptOwnerRef, Kind: model.KindText, Principal: pdeclNoneAttemptOwner},
 			{Name: colAttemptOwnerEpoch, Kind: model.KindInt},
-			{Name: colAttemptOutcome, Kind: model.KindJSON, Nullable: true},
-			{Name: colAttemptOutcomeDigest, Kind: model.KindText, Nullable: true},
-			{Name: colAttemptSettlementDgst, Kind: model.KindText, Nullable: true},
-			{Name: colAttemptSampleKey, Kind: model.KindText, Nullable: true},
-			{Name: colAttemptSampleID, Kind: model.KindUUID, Nullable: true},
-			{Name: colAttemptCostRecordID, Kind: model.KindUUID, Nullable: true},
-			{Name: colAttemptPublication, Kind: model.KindText},
-			{Name: colAttemptResolutionEvid, Kind: model.KindJSON, Nullable: true},
-			{Name: colAttemptLegacyHandles, Kind: model.KindJSON, Nullable: true},
-			{Name: colAttemptAccountingBasis, Kind: model.KindJSON},
+			{Name: colAttemptOutcome, Kind: model.KindJSON, Nullable: true, Principal: pdeclNoneAttemptLater},
+			{Name: colAttemptOutcomeDigest, Kind: model.KindText, Nullable: true, Principal: pdeclNoneAttemptDigest},
+			{Name: colAttemptSettlementDgst, Kind: model.KindText, Nullable: true, Principal: pdeclNoneAttemptDigest},
+			{Name: colAttemptSampleKey, Kind: model.KindText, Nullable: true, Principal: pdeclNoneAttemptLater},
+			{Name: colAttemptSampleID, Kind: model.KindUUID, Nullable: true, Principal: pdeclNoneAttemptID},
+			{Name: colAttemptCostRecordID, Kind: model.KindUUID, Nullable: true, Principal: pdeclNoneAttemptID},
+			{Name: colAttemptPublication, Kind: model.KindText, Principal: pdeclNoneAttemptState},
+			{Name: colAttemptResolutionEvid, Kind: model.KindJSON, Nullable: true, Principal: pdeclNoneAttemptLater},
+			{Name: colAttemptLegacyHandles, Kind: model.KindJSON, Nullable: true, Principal: pdeclAttemptLegacy},
+			{Name: colAttemptAccountingBasis, Kind: model.KindJSON, Principal: pdeclAttemptBasis},
 		},
 		Indexes: []model.IndexSpec{
 			{
@@ -172,11 +172,11 @@ func registerAttemptSchema(reg store.ExtensionRegistry) error {
 		Kind:  lifecycleScopeKind,
 		Table: lifecycleScopeTable,
 		Fields: []model.FieldSpec{
-			{Name: colScopeState, Kind: model.KindText},
+			{Name: colScopeState, Kind: model.KindText, Principal: pdeclNoneScopeState},
 			{Name: colScopeFrontierAt, Kind: model.KindTimestamp},
 			{Name: colScopeActivated, Kind: model.KindTimestamp, Nullable: true},
-			{Name: colScopeFrontier, Kind: model.KindJSON},
-			{Name: colScopeActivation, Kind: model.KindJSON, Nullable: true},
+			{Name: colScopeFrontier, Kind: model.KindJSON, Principal: pdeclScopeFrontier},
+			{Name: colScopeActivation, Kind: model.KindJSON, Nullable: true, Principal: pdeclNoneScopeActivation},
 		},
 		Indexes: []model.IndexSpec{{
 			// EXACTLY ONE per tenant. The uniqueness is the whole mechanism: a second
@@ -187,6 +187,91 @@ func registerAttemptSchema(reg store.ExtensionRegistry) error {
 		}},
 	})
 }
+
+// What the attempt and lifecycle-scope columns say about principals. A None
+// reason cites the reader or validator lines that show its value names no
+// account.
+var (
+	pdeclNoneAttemptID       = model.None("a row id parsed and checked by the attempt reader: attempt_reconcile.go:1034-1041, attempt_reconcile.go:1161-1174")
+	pdeclNoneAttemptState    = model.None("a closed phase or publication state checked by the attempt reader: attempt_types.go:75-83, attempt_reconcile.go:1042-1046, attempt_reconcile.go:1115-1122")
+	pdeclNoneAttemptDigest   = model.None("a 64-hex digest checked by validDigest and compared for integrity: attempt_types.go:343-357, attempt_reconcile.go:1055-1062, attempt_reconcile.go:1140-1160")
+	pdeclNoneAttemptLater    = model.None("a later phase's value that no writer here sets; the reader only tests it for presence: attempt_schema.go:13-15, attempt_reconcile.go:1205, attempt_reconcile.go:1253-1258")
+	pdeclNoneAttemptOwner    = model.None("an opaque recovery-owner label, bounded text the verified actor never comes from: attempt.go:57, attempt_types.go:959-962")
+	pdeclNoneScopeState      = model.None("quiescing or active, checked by the scope reader: attempt_reconcile.go:194-197")
+	pdeclNoneScopeActivation = model.None("a later cut's value that no writer sets and the scope reader never reads: attempt_schema.go:13-15, attempt_reconcile.go:190-260")
+	pdeclNoneEvidenceRef     = model.None("an evidence reference's kind, opaque locator or digest, shape-checked only: attempt_types.go:475-516")
+	pdeclNoneBindingField    = model.None("a status, attempt reference, entity id, route, adapter, estimate or digest field of a binding, checked for shape or against its entity rows only: attempt.go:281-283, attempt.go:319-344, attempt.go:360-373, attempt.go:382-423")
+	pdeclNoneBindingCaller   = model.None("the subject's actor kind, credential, workspace, agent or session identity, checked as bounded text or ids and never resolved to an account: attempt.go:320-335, attempt.go:348-355")
+	pdeclNoneAttribution     = model.None("an attribution dimension name, fact state or not-applicable rule, from closed sets or bounded text: attempt_types.go:128-133, attempt.go:286-317")
+	pdeclNoneTarget          = model.None("a child id, policy id, kind, dimension, period, bound, action or digest the target planner sets: attempt.go:132, attempt.go:494-498, attempt.go:558-561")
+	pdeclNoneImportCopy      = model.None("a digest, id, instant or reservation cell of the immutable import snapshot, compared for integrity only: attempt_reconcile.go:1175-1195, attempt_reconcile.go:1239")
+	pdeclNoneBasisKind       = model.None("a closed accounting-basis kind: attempt_types.go:100-104, attempt_reconcile.go:1229-1238")
+	pdeclNoneFrontier        = model.None("a digest, instant or handle of the frontier census, recomputed by the scope reader: attempt_reconcile.go:206-246, attempt_reconcile.go:2055")
+
+	// pdeclEvidenceRefLeaves classifies every evidence reference, wherever a
+	// document holds one.
+	pdeclEvidenceRefLeaves = model.TypeLeaves(jsonEvidenceRef{}, pdeclLeaves(pdeclNoneEvidenceRef, "kind", "ref", "digest")...)
+
+	// pdeclAttemptBinding declares an attempt's binding. Its subject is the
+	// principal the attempt is admitted for: actor_ref is "user:<id>" or
+	// "token:<id>", and user_id is the bare account id of a user actor
+	// (attempt.go:345-350). The attribution values select which budgets and seat
+	// limits apply to the attempt (attempt.go:485, attempt.go:536-538), so they
+	// only narrow.
+	pdeclAttemptBinding = model.Nested(jsonBinding{}, model.ClassAuthority, append(append(append(
+		pdeclLeaves(pdeclNoneBindingField, "status", "request_ref", "predecessor_ref",
+			"entities.provider_id", "entities.model_id", "entities.session_id", "entities.agent_id",
+			"destination.profile_ref", "destination.profile_revision", "destination.provider_ref",
+			"destination.model_ref", "destination.action", "destination.protocol", "destination.adapter_id",
+			"destination.adapter_version", "destination.surface", "destination.inference_geo",
+			"destination.credential_audience", "destination.auth_scheme", "destination.endpoint_digest",
+			"destination.transport_digest", "destination.policy_id", "destination.policy_spec_digest",
+			"destination.proxy_policy_digest", "destination.prepared_digest",
+			"estimate.method", "estimate.revision", "estimate.price_digest"),
+		pdeclLeaves(pdeclNoneBindingCaller, "subject.actor_kind", "subject.credential_id",
+			"subject.agent_identity", "subject.session_identity", "subject.session_workspace_id",
+			"subject.session_run_ref", "subject.untrusted_session_ref")...),
+		pdeclLeaves(pdeclNoneAttribution, "attribution{key}", "attribution{}.state",
+			"attribution{}.not_applicable_rule")...),
+		model.Leaf("subject.actor_ref", model.Ref(model.EncodeUserRef, "")),
+		model.Leaf("subject.user_id", model.Ref(model.EncodeUserID, "")),
+		model.Leaf("attribution{}.values[]", model.Scan(model.ClassRestrict)),
+		pdeclEvidenceRefLeaves)...)
+
+	// pdeclAttemptTargets declares an attempt's target set. A seat-limit
+	// target's scope key is the subject's actor_ref, and an actor-dimension
+	// budget key must equal it (attempt.go:341, attempt.go:485, attempt.go:559).
+	pdeclAttemptTargets = model.Nested([]jsonTarget(nil), model.ClassAuthority, append(
+		pdeclLeaves(pdeclNoneTarget, "[].child_id", "[].policy_id", "[].policy_kind", "[].dimension",
+			"[].period", "[].policy_spec_digest", "[].period_start", "[].period_end", "[].action"),
+		model.Leaf("[].scope_key", model.Ref(model.EncodeUserRef, "")),
+		pdeclEvidenceRefLeaves)...)
+
+	// pdeclAttemptLegacy declares the immutable original of an imported hold. Its
+	// child rows copy the reservation cells, including the scope key.
+	pdeclAttemptLegacy = model.Nested([]jsonImportSnapshot(nil), model.ClassEvidence, append(
+		pdeclLeaves(pdeclNoneImportCopy, "[].request_digest", "[].group_digest", "[].import_digest",
+			"[].original_request.handle", "[].original_request.accounting_at",
+			"[].original_request.children[].id", "[].original_request.review_after",
+			"[].original_children[].id", "[].original_children[].policy_ref",
+			"[].original_children[].policy_kind", "[].original_children[].dimension",
+			"[].original_children[].period", "[].original_children[].period_start",
+			"[].original_children[].state", "[].original_children[].handle",
+			"[].original_children[].expires_at", "[].original_children[].settled_at"),
+		model.Leaf("[].original_request.owner_ref", pdeclNoneAttemptOwner),
+		model.Leaf("[].original_children[].dim_key", pdeclBudgetKeyEvidence),
+		pdeclEvidenceRefLeaves)...)
+
+	// pdeclAttemptBasis declares what an attempt's accounting instant means.
+	pdeclAttemptBasis = model.Nested(jsonAccountingBasis{}, model.ClassEvidence,
+		model.Leaf("kind", pdeclNoneBasisKind), pdeclEvidenceRefLeaves)
+
+	// pdeclScopeFrontier declares the durable activation census.
+	pdeclScopeFrontier = model.Nested(jsonFrontier{}, model.ClassEvidence, append(
+		pdeclLeaves(pdeclNoneFrontier, "frontier_digest", "frontier_at", "pending_groups[].handle",
+			"pending_groups[].group_digest", "pending_group_digest", "historical_terminal_digest"),
+		pdeclEvidenceRefLeaves)...)
+)
 
 // -----------------------------------------------------------------------------
 // The explicit JSON codec

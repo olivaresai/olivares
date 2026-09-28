@@ -84,6 +84,9 @@ type contextWindowEntry struct {
 	defaultEffort string
 	// effortLevels are the supported effort tiers in API order (VERIFIED 2026-06-27).
 	effortLevels []string
+	// datedSnapshotOnly accepts the exact prefix or a YYYYMMDD / YYYY-MM-DD
+	// snapshot suffix. Any other longer ID stays unknown.
+	datedSnapshotOnly bool
 }
 
 // contextWindowSchedule is the declared, verified-only per-surface context-window
@@ -104,6 +107,12 @@ var effortNoXHigh = []string{"low", "medium", "high", "max"}
 const effortDefault = "high"
 
 var contextWindowSchedule = []contextWindowEntry{
+	// Opus 5.5 — 1M standard. Default effort is medium, not the high default of
+	// earlier Opus models. Observed 2026-09-27. No per-surface cap is published.
+	{prefix: "claude-opus-5-5", standard: 1_000_000, defaultEffort: "medium", effortLevels: effortAll5, datedSnapshotOnly: true},
+	// Fable 5.1 — 1M standard, default effort high, all five levels. The longer
+	// prefix keeps this off Claude Fable 5. Observed 2026-09-27.
+	{prefix: "claude-fable-5-1", standard: 1_000_000, defaultEffort: effortDefault, effortLevels: effortAll5, datedSnapshotOnly: true},
 	// Opus 4.8 — THE verified divergence: 1M standard, 200K on Foundry. The newest Opus
 	// is the only current model Foundry caps; Opus 4.7/4.6 get the full 1M there.
 	// Effort: all 5 levels incl. xhigh (VERIFIED 2026-06-27).
@@ -143,8 +152,34 @@ var contextWindowSchedule = []contextWindowEntry{
 // coarse family window, never an invented one).
 func contextWindowEntryFor(modelID string) (contextWindowEntry, bool) {
 	id := strings.TrimSpace(modelID)
+	for _, e := range contextWindowSchedule {
+		if id == e.prefix {
+			return e, true
+		}
+	}
+	bestDated := -1
+	for i, e := range contextWindowSchedule {
+		if !e.datedSnapshotOnly {
+			continue
+		}
+		if len(id) > len(e.prefix) && strings.HasPrefix(id, e.prefix+"-") {
+			if bestDated < 0 || len(e.prefix) > len(contextWindowSchedule[bestDated].prefix) {
+				bestDated = i
+			}
+		}
+	}
+	if bestDated >= 0 {
+		e := contextWindowSchedule[bestDated]
+		if modelprovider.SnapshotDateSuffix(id, e.prefix) {
+			return e, true
+		}
+		return contextWindowEntry{}, false
+	}
 	best := -1
 	for i, e := range contextWindowSchedule {
+		if e.datedSnapshotOnly {
+			continue
+		}
 		if strings.HasPrefix(id, e.prefix) {
 			if best < 0 || len(e.prefix) > len(contextWindowSchedule[best].prefix) {
 				best = i
@@ -358,10 +393,16 @@ const (
 type outputBetaModel struct {
 	prefix string
 	asOf   string
+	// datedSnapshotOnly accepts the exact prefix or a YYYYMMDD / YYYY-MM-DD
+	// snapshot suffix. Any other longer ID stays unknown.
+	datedSnapshotOnly bool
 }
 
 // outputBetaModels are the model prefixes that support the 300k output beta.
 var outputBetaModels = []outputBetaModel{
+	// Opus 5.5 is named on the models overview (2026-09-27) as a Message Batches
+	// 300k output model with the same beta header. Fable 5.1 is not in that list.
+	{prefix: "claude-opus-5-5", asOf: "2026-09-27", datedSnapshotOnly: true},
 	{prefix: "claude-opus-4-8", asOf: outputBetaAsOf},
 	{prefix: "claude-opus-4-7", asOf: outputBetaAsOf},
 	{prefix: "claude-opus-4-6", asOf: outputBetaAsOf},
@@ -384,6 +425,19 @@ func SurfaceMaxOutputsFor(modelID string) []modelprovider.SurfaceMaxOutput {
 	id := strings.TrimSpace(modelID)
 	asOf := ""
 	for _, m := range outputBetaModels {
+		if id == m.prefix {
+			asOf = m.asOf
+			break
+		}
+		if m.datedSnapshotOnly {
+			if len(id) > len(m.prefix) && strings.HasPrefix(id, m.prefix+"-") {
+				if modelprovider.SnapshotDateSuffix(id, m.prefix) {
+					asOf = m.asOf
+				}
+				break
+			}
+			continue
+		}
 		if strings.HasPrefix(id, m.prefix) {
 			asOf = m.asOf
 			break

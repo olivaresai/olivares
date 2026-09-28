@@ -93,9 +93,9 @@
     "selectPrompt": "选择一条追踪以查看其 span 瀑布图。",
     "selectPromptHint": "从列表中选择一条链路，即可查看它产生的所有 span 及其耗时与错误。",
     "exportBtn": "导出 OTLP",
-    "exportTitle": "下载兼容 OTLP 的 JSON，适用于 Jaeger / Tempo / Datadog",
+    "exportTitle": "将此追踪下载为 OTLP/JSON。未对具名后端做过测试。",
     "legend": "参与者图例",
-    "liveNote": "账本关联读取模型：各行源自审计账本事件上加盖的 W3C 追踪 ID（遍历窗口：最近 20,000 条事件）。条形为按引擎 span ID 分组的「账本事件」窗口——引擎不存储 OTel span；完整的 span 存于运维方的 OTLP 收集器中。",
+    "liveNote": "账本关联读取模型：各行源自审计账本事件上加盖的 W3C 追踪 ID（遍历窗口：最近 20,000 条事件）。条形为按引擎 span ID 分组的「账本事件」窗口——引擎不存储 OTel span；导出的 span 受采样率约束，且没有丢失计数，位于运维方的 OTLP 收集器中。",
     "columns": {
       "trace": "追踪",
       "started": "开始时间",

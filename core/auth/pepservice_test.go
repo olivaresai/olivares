@@ -73,14 +73,11 @@ func pepMemberPrincipal(
 	email, role string,
 ) auth.Principal {
 	t.Helper()
-	u, err := a.CreateUser(ctx, super, auth.NewUser{
+	if _, err := a.CreateUser(ctx, super, auth.NewUser{
 		Email: email, DisplayName: role, Password: "pep-member-password-1",
-	})
-	if err != nil {
+		Tenant: tenant, Role: role,
+	}); err != nil {
 		t.Fatalf("create %s member: %v", role, err)
-	}
-	if _, err := a.GrantMembership(ctx, super, u.ID, tenant, role, model.ID("")); err != nil {
-		t.Fatalf("grant %s member: %v", role, err)
 	}
 	session, _, err := a.Login(ctx, email, "pep-member-password-1", "127.0.0.1")
 	if err != nil {

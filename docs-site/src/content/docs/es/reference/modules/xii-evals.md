@@ -40,8 +40,14 @@ persiste tres cosas: evidencia por caso append-only, un agregado de ejecución m
 `SubjectID`, `Score`, `Passed`, `OccurredAt`, `Metrics`) que compliance (XIII) y la UI leen
 **sin conocer las propias tablas de XII**. Las ejecuciones se ejecutan de forma síncrona; el
 stream SSE de una ejecución *reproduce la ejecución persistida* (frames por caso, luego un
-resumen), no actúa. Una regresión frente a una baseline establece `regressed` y escribe un
-**`Finding`** del núcleo (`Kind = eval_regression`), emitido en best-effort en el bus como
+resumen), no actúa. Una regresión es una comparación de puntuación puntual con una ejecución de baseline.
+Cuando la caída de `score` supera el `regression_threshold` de la suite, la ejecución
+establece `regressed` y escribe un **`Finding`** del núcleo (`Kind = eval_regression`).
+Esa comparación no tiene intervalo. La baseline automática es la última ejecución
+completada de la misma suite y el mismo sujeto, y de la misma variante cuando hay una.
+Esa ejecución puede usar otra versión de suite, otro modelo u otro scorer, y la
+comparación no informa cuál cambió. Tras un cambio de versión de suite, pasa una
+baseline explícita o fija una (`POST /baselines`). El hallazgo se emite en best-effort en el bus como
 [`finding.reported`](/es/reference/events/) para que los módulos de entrega
 (salud/notificaciones) lo enruten. Del lado de lectura, los **scorecards** agregan
 pass-rate, score medio y tendencia por sujeto y se exportan como CSV/JSON.
@@ -79,13 +85,19 @@ cuando ambos órdenes coinciden**, e informa de la tasa medida de `position_cons
 La **puerta de regresión** (`POST /gate`, CLI `evals gate`) convierte todo esto en un
 veredicto bloqueante de CI: una regresión frente a la baseline, un pass-rate por debajo del
 umbral de la suite, o un **juez sin calibrar** hacen fallar la puerta (exit 1); una
-credencial de juez ausente degrada a un *warn declarado*, nunca a un pase silencioso. El
-coste del juez en CI se controla con una muestra determinista y sembrada de casos, una caché
-de veredictos clavada en contenido + pin del modelo del juez + versión del prompt, y un
-pre-flight de presupuesto FinOps que se niega a gastar más allá de un tope. La única salida
+credencial de juez ausente degrada a un *warn declarado*, nunca a un pase silencioso. La semilla de la puerta elige los casos de la muestra; no hace
+determinista a un modelo
+remoto. Un acierto de la caché de veredictos, con clave de contenido, pin del modelo del
+juez y versión del prompt, devuelve el veredicto guardado. Un fallo, y cualquier
+ejecución ordinaria de `llm_judge` fuera de esta puerta, vuelve a llamar al juez remoto
+y puede diferir. El pre-flight de FinOps corre solo en esta puerta. Cuando no se aplica a
+las llamadas al juez ningún presupuesto de FinOps que bloquee o limite, la puerta permite
+el gasto. Cuando no se puede leer el almacén de presupuestos, la puerta rechaza el gasto
+y falla con `budget_blocked`. Un presupuesto que bloquea o limita detiene el gasto. La única salida
 de una puerta fallida es el **override gobernado** — de nivel admin, con motivo escrito,
 auditado — que cambia el veredicto *efectivo* que CI re-comprueba, nunca el registrado. Cada
-tasa reportada se entrega con su denominador y su intervalo al 95 %; consulta
+tasa reportada se entrega con su denominador y su intervalo al 95 %; la comparación de
+regresión, no. Consulta
 `docs/EVAL-METHODOLOGY.md` en el repositorio para la metodología completa y las fuentes.
 
 :::caution[Límites honestos]

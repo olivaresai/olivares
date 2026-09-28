@@ -46,6 +46,7 @@ import { CcStateBadge } from './cc-state-badge'
 import { RunStateBadge } from '@/features/agentops/run-state-badge'
 import { primaryRun, sessionNaming, type UnifiedSession } from './provenance'
 import { addressOf } from './session-address'
+import { WorkClause } from './work-clause'
 import { groupSessions, railOrder, WORK_GROUPS } from './session-groups'
 
 export interface WorkRailProps {
@@ -118,22 +119,26 @@ function RailRow({
       data-testid="rail-row"
       data-address={address}
       onClick={() => onOpen(session)}
-      /* ⛔ ONE LINE, 36 px, AND IT WAS 92 (measured on the seeded estate at
-         1440 and at 390 — the same 92 px at both, six rows of it). The row stacked a
-         name, then a state badge with an elapsed time and a relative time, then the
-         observed clause: three lines and 20 px of padding for one session, in a 256 px
-         rail whose whole job is to let an operator FIND the session they want among
-         the ones that are running.
+      /* ⛔ TWO SHORT LINES, AND IT WAS 92 px OF THREE (measured on the seeded estate at
+         1440 and at 390). The row stacked a name, then a state badge with an elapsed
+         time and a relative time, then the observed clause, in a 256 px rail whose
+         whole job is to let an operator FIND the session they want.
+
+         ⛔ AND ONE LINE CUT ALL THREE. In German at 1280 px the state badge took 146 px
+         and the relative time 85, so the name got 0 px and the badge and the time were
+         cut too, with the rest on a hover title no keyboard or touch user can open. The
+         state and the time now share the first line, each whole; the name has the
+         second line to itself and wraps rather than cutting. The reading order stays
+         state, name, time: only the painting order puts the time beside the state.
 
          WHAT MOVED, because nothing is dropped: the elapsed duration and the observed
          clause are in this row's `title` — one hover — and both are painted in full,
-         permanently, by the narrative pane this row opens, which is two panes to the
-         right of it. The TABLE tab keeps them as columns. What stays on the line is
-         what an operator picks a row BY: its state, its name, and how long ago it last
-         did anything. */
+         permanently, by the narrative pane this row opens. The TABLE tab keeps them as
+         columns. What stays on the row is what an operator picks a row BY: its state,
+         its name, and how long ago it last did anything. */
       title={rowTitle}
       className={cn(
-        'group relative flex min-h-9 cursor-pointer items-center gap-1.5 border-l-2 px-3 py-1.5 outline-none transition-colors',
+        'group relative flex min-h-9 cursor-pointer flex-wrap items-center gap-x-1.5 gap-y-0.5 border-l-2 px-3 py-1.5 outline-none transition-colors',
         selected
           ? 'border-l-accent bg-accent-soft'
           : 'border-l-transparent hover:bg-muted',
@@ -160,20 +165,27 @@ function RailRow({
           <span className="sr-only">{t('rail.pinnedMark')}</span>{' '}
         </>
       ) : null}
-      {session.live ? (
-        <CcStateBadge
-          state={session.live.cc_state}
-          className="min-w-0 truncate"
-        />
-      ) : run ? (
-        <RunStateBadge state={run.state} className="min-w-0 truncate" />
+      {session.live || run ? (
+        <span
+          data-slot="rail-row-state"
+          className="inline-flex shrink-0 whitespace-nowrap"
+        >
+          {session.live ? (
+            <CcStateBadge
+              state={session.live.cc_state}
+              className="whitespace-nowrap"
+            />
+          ) : run ? (
+            <RunStateBadge state={run.state} className="whitespace-nowrap" />
+          ) : null}
+        </span>
       ) : null}{' '}
       <span
         data-testid="rail-row-name"
         title={nameTitle}
-        className="min-w-0 flex-1 truncate text-body font-medium text-foreground"
+        className="order-2 min-w-0 basis-full text-body font-medium text-foreground [overflow-wrap:anywhere]"
       >
-        {naming.name}
+        <WorkClause text={naming.name} live={session.live} />
         {naming.shortId ? (
           <span className="font-mono text-caption text-muted-foreground">
             {' '}
@@ -184,7 +196,7 @@ function RailRow({
       {session.lastActivityMs > 0 ? (
         <RelTimeLabel
           ts={new Date(session.lastActivityMs).toISOString()}
-          className="min-w-0 truncate text-caption text-muted-foreground"
+          className="order-1 ml-auto shrink-0 whitespace-nowrap text-caption text-muted-foreground"
         />
       ) : null}
     </div>

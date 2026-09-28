@@ -239,13 +239,9 @@ func (h *harness) createOrg(token, slug string) model.TenantID {
 // roleToken creates a user with role of tenant and returns its session token.
 func (h *harness) roleToken(admin string, tenant model.TenantID, email, role string) string {
 	h.t.Helper()
-	r := h.do("POST", "/v1/users", admin, map[string]any{"email": email, "password": "memberpass1"}, nil)
+	r := h.do("POST", "/v1/users", admin, map[string]any{"email": email, "password": "memberpass1", "tenant": tenant.String(), "role": role}, nil)
 	if r.code != http.StatusCreated {
 		h.t.Fatalf("create user = %d %s", r.code, r.raw)
-	}
-	uid := r.body["id"].(string)
-	if r := h.do("POST", "/v1/memberships", admin, map[string]any{"user_id": uid, "tenant": tenant.String(), "role": role}, nil); r.code != http.StatusCreated {
-		h.t.Fatalf("grant = %d %s", r.code, r.raw)
 	}
 	r = h.do("POST", "/v1/auth/login", "", map[string]any{"email": email, "password": "memberpass1"}, nil)
 	if r.code != http.StatusOK {

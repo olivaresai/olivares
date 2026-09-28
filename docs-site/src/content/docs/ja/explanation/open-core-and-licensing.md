@@ -16,7 +16,7 @@ Olivares AI は**オープンコア**です。**完全な製品**は GNU Affero 
 | パス | ライセンス | 内容 |
 |---|---|---|
 | `core/` | **AGPL-3.0-only** | エンジン: 取り込み、イベントバス、データモデル、モジュールランタイム、API、認可、監査 |
-| `modules/` | **AGPL-3.0-only** | 30 個のモジュール（インベントリ、R/RW マップ、FinOps、評価、ガードレール、…） |
+| `modules/` | **AGPL-3.0-only** | 31 個のモジュール（インベントリ、R/RW マップ、FinOps、評価、ガードレール、…） |
 | `web/` | **AGPL-3.0-only** | React 製 UI |
 | `sdk/` | **Apache-2.0** | コネクタ／モジュールのインターフェース、gRPC 契約、共有型 |
 | `connectors/` | **Apache-2.0** | コネクタ（Claude、OpenAI、pgAudit、eBPF、クラウド、Slack、SIEM、…） |

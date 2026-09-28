@@ -120,33 +120,34 @@ func RuntimeEnvPath(config string) string {
 	return filepath.Join(filepath.Dir(config), RuntimeEnvName)
 }
 
+// manifestOpenHook runs immediately before Load opens the record. Tests set it to
+// change what stands at the name after any earlier check; production leaves it empty.
+var manifestOpenHook = func(string) {}
+
 // Load reads one strict v2 manifest. A symlink is never accepted as an
 // ownership record: replacing it could redirect a privileged purge. Live
 // removal additionally requires an owner appropriate to the declared mode;
 // offline roots set requireTrustedOwner=false because they cannot preserve the
 // host uid namespace and cannot mutate host accounts or paths.
 func Load(name string, requireTrustedOwner bool) (*Manifest, error) {
-	info, err := os.Lstat(name)
+	// The record's directory belongs to the service account, which can change what
+	// stands at the name between any check and an open. So there is one open, which
+	// neither follows a link nor waits on a FIFO, and every check reads the opened file.
+	manifestOpenHook(name)
+	f, err := openRecord(name)
 	if err != nil {
-		return nil, fmt.Errorf("read local install manifest: %w", err)
-	}
-	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
-		return nil, fmt.Errorf("local install manifest must be a regular file, not a link: %s", name)
-	}
-	if info.Size() > maxManifestSize {
-		return nil, fmt.Errorf("local install manifest is larger than %d bytes", maxManifestSize)
-	}
-	f, err := os.Open(name)
-	if err != nil {
-		return nil, fmt.Errorf("read local install manifest: %w", err)
+		return nil, err
 	}
 	defer func() { _ = f.Close() }()
 	openedInfo, err := f.Stat()
 	if err != nil {
 		return nil, fmt.Errorf("measure opened local install manifest: %w", err)
 	}
-	if !os.SameFile(info, openedInfo) {
-		return nil, fmt.Errorf("local install manifest changed while it was being opened")
+	if !openedInfo.Mode().IsRegular() {
+		return nil, fmt.Errorf("local install manifest must be a regular file, not a link: %s", name)
+	}
+	if openedInfo.Size() > maxManifestSize {
+		return nil, fmt.Errorf("local install manifest is larger than %d bytes", maxManifestSize)
 	}
 	dec := json.NewDecoder(io.LimitReader(f, maxManifestSize+1))
 	dec.DisallowUnknownFields()

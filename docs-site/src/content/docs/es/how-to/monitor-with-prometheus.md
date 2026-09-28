@@ -40,8 +40,9 @@ las que soportan el peso:
 
 ## Objetivos de SLO (publicados, honestos)
 
-Los objetivos de nodo único —lo que la topología por defecto soporta realmente— y
-el nivel HA:
+Objetivos operativos para despliegues de nodo único y HA, no resultados medidos
+de una topología ni compromisos con el cliente. Cualifica el despliegue y la carga
+concretos antes de afirmar que se cumplen; `deploy/support-matrix.md` registra su estado:
 
 | SLI | Nodo único | Nivel HA (Postgres) |
 |---|---|---|
@@ -51,11 +52,12 @@ el nivel HA:
 | Latencia p99 de ingesta | **< 250 ms** | < 150 ms |
 | Éxito de ingesta | **99,9 %** | 99,95 % |
 
-La honestidad de las cifras: un único escritor en un solo nodo no puede prometer tres
-nueves de disponibilidad, así que la documentación no lo hace —99,5 % (≈ 3h 39m de
-presupuesto cada 28 días) es la verdad de nodo único, y el nivel del 99,9 % se gana con la
-[topología HA](/es/tutorials/getting-started/kubernetes/#3-ha-activo-pasivo),
-no con optimismo.
+En 28 días, un objetivo de disponibilidad del 99,5 % permite **201,6 minutos
+(3h 21m 36s)** de indisponibilidad; el 99,9 % permite **40,32 minutos**.
+Desplegar la [topología HA](/es/tutorials/getting-started/kubernetes/#3-ha-activo-pasivo) no logra por sí solo ninguno de esos porcentajes.
+Mide la disponibilidad durante la ventana indicada y conserva la evidencia de
+fallos y recuperación del despliegue. Estos objetivos no son una promesa
+contractual de disponibilidad.
 
 ## Cargar las reglas de alerta incluidas
 
@@ -67,6 +69,12 @@ disponibilidad (`OlivaresIngestP99High`, `OlivaresApiLatencyP99High`,
 (`OlivaresEventBusSaturated` a >90 % de cola durante 10m), salud del puente
 (`OlivaresEventBusBridgeDropping`, `OlivaresEventBusBridgeDisconnected`) y
 frescura del ledger (`OlivaresAuditCheckpointStale` con edad > 2h).
+
+La receta de burn-rate usa un periodo de referencia de 30 días; los objetivos de
+disponibilidad anteriores usan 28 días. Distingue las tasas y ventanas de alerta
+de ese periodo: 14,4× durante 1h, 6× durante 6h y 1× durante 3 días consumen
+aproximadamente el 2,14 %, el 5,36 % y el 10,71 % de un presupuesto de 28 días,
+respectivamente. Los valores de las alertas incluidas no cambian.
 
 ```yaml
 # prometheus.yml

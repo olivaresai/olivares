@@ -245,6 +245,9 @@ type VerifiedDelegation struct {
 	capabilityVersion     int
 	retried               bool
 	storedVerdictJSON     string
+	// floor is the tenant's retirement floor for the subject, when it has one:
+	// a grant snapshot older than it does not authorize the subject.
+	floor *int64
 }
 
 // DecisionID returns the server-minted decision id every later phase must match.
@@ -571,7 +574,7 @@ func (a *Authenticator) VerifyAndClaimDelegation(ctx context.Context, pep PEPIde
 			return err
 		}
 		// 8. Subject revalidation (effective = current ∩ mint ceiling), deny-closed.
-		effRole, effGroups, err := a.revalidateSubject(ctx, as, handle, pep.Tenant())
+		effRole, effGroups, floor, err := a.revalidateSubject(ctx, as, handle, pep.Tenant())
 		if err != nil {
 			return err
 		}
@@ -611,6 +614,7 @@ func (a *Authenticator) VerifyAndClaimDelegation(ctx context.Context, pep PEPIde
 			subjectCredID:         handle.SourceCredID,
 			effectiveRole:         effRole,
 			effectiveGroups:       effGroups,
+			floor:                 floor,
 			actAs:                 handle.ActAsUserID,
 			agentRef:              handle.AgentRef,
 			pepServiceID:          pep.ServiceID(),
@@ -670,29 +674,36 @@ func (a *Authenticator) VerifyAndClaimDelegation(ctx context.Context, pep PEPIde
 
 // revalidateSubject resolves the subject's CURRENT authority and intersects it
 // with the mint-time ceiling, deny-closed at every step: the source credential
-// must still be live; the subject user must be active; the tenant relationship
-// (a session's membership or a token's bound grant) must still exist; a NEW
-// workspace confinement invalidates; and an agent binding re-runs the lifecycle
-// checker. It returns the effective role (lower of current and mint) and the
-// effective groups (current ∩ mint closure). Every invalidation returns
-// ErrDelegationInvalid; only raw store errors propagate.
-func (a *Authenticator) revalidateSubject(ctx context.Context, as store.AuthScope, handle model.DelegationHandle, tenant model.TenantID) (string, []string, error) {
+// must still be live, and a scoped source session must be scoped to the tenant;
+// the subject user must be active; the tenant must not exclude the account, nor
+// the source session; the tenant relationship (a session's membership or a
+// token's bound grant) must still exist; a NEW workspace confinement
+// invalidates; and an agent binding re-runs the lifecycle checker. It returns the
+// effective role (lower of current and mint), the effective groups (current ∩
+// mint closure) and the tenant's retirement floor for the subject, if any. Every
+// invalidation returns ErrDelegationInvalid; only raw store errors propagate.
+func (a *Authenticator) revalidateSubject(ctx context.Context, as store.AuthScope, handle model.DelegationHandle, tenant model.TenantID) (string, []string, *int64, error) {
 	now := a.clock.Now()
 
 	var tokenRole string
 	isToken := false
+	var session model.ID
 	switch handle.SourceCredKind {
 	case "user":
 		s, err := as.Sessions().Get(ctx, handle.SourceCredID)
 		if err != nil {
 			if errors.Is(err, store.ErrNotFound) {
-				return "", nil, ErrDelegationInvalid
+				return "", nil, nil, ErrDelegationInvalid
 			}
-			return "", nil, err
+			return "", nil, nil, err
 		}
 		if s.Revoked || s.ExpiresAt.Before(now) || s.UserID != handle.SubjectUserID {
-			return "", nil, ErrDelegationInvalid
+			return "", nil, nil, ErrDelegationInvalid
 		}
+		if !s.TenantScope.IsZero() && s.TenantScope != tenant {
+			return "", nil, nil, ErrDelegationInvalid // scoped to another tenant
+		}
+		session = s.ID
 	case "token":
 		// A token source revalidates ONLY the token credential itself; it does NOT
 		// re-check tenant membership or workspace confinement. This is deliberate and
@@ -704,34 +715,47 @@ func (a *Authenticator) revalidateSubject(ctx context.Context, as store.AuthScop
 		t, err := as.Tokens().Get(ctx, handle.SourceCredID)
 		if err != nil {
 			if errors.Is(err, store.ErrNotFound) {
-				return "", nil, ErrDelegationInvalid
+				return "", nil, nil, ErrDelegationInvalid
 			}
-			return "", nil, err
+			return "", nil, nil, err
 		}
 		if t.Revoked || t.Purpose != "" || t.IsSuperadmin || t.UserID != handle.SubjectUserID {
-			return "", nil, ErrDelegationInvalid
+			return "", nil, nil, ErrDelegationInvalid
 		}
 		if t.ExpiresAt != nil && t.ExpiresAt.Before(now) {
-			return "", nil, ErrDelegationInvalid
+			return "", nil, nil, ErrDelegationInvalid
 		}
 		if t.BoundTenantID != tenant || !IsRole(t.Role) {
-			return "", nil, ErrDelegationInvalid
+			return "", nil, nil, ErrDelegationInvalid
 		}
 		tokenRole = t.Role
 		isToken = true
 	default:
-		return "", nil, ErrDelegationInvalid
+		return "", nil, nil, ErrDelegationInvalid
 	}
 
 	u, err := as.Users().Get(ctx, handle.SubjectUserID)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
-			return "", nil, ErrDelegationInvalid
+			return "", nil, nil, ErrDelegationInvalid
 		}
-		return "", nil, err
+		return "", nil, nil, err
 	}
 	if u.Status != model.StatusActive {
-		return "", nil, ErrDelegationInvalid
+		return "", nil, nil, ErrDelegationInvalid
+	}
+	// The tenant's exclusions of the account, or of the source session alone,
+	// refuse the handle exactly as they refuse the source credential itself.
+	standing, err := loadStanding(ctx, as, handle.SubjectUserID, session)
+	if err != nil {
+		return "", nil, nil, err
+	}
+	if _, excluded := standing.excluded[tenant]; excluded {
+		return "", nil, nil, ErrDelegationInvalid
+	}
+	var floor *int64
+	if f, ok := standing.floors[tenant]; ok {
+		floor = &f
 	}
 
 	var curRole string
@@ -741,14 +765,14 @@ func (a *Authenticator) revalidateSubject(ctx context.Context, as store.AuthScop
 	} else {
 		grants, groupsByTenant, confined, err := loadGrants(ctx, as, handle.SubjectUserID)
 		if err != nil {
-			return "", nil, err
+			return "", nil, nil, err
 		}
 		role, member := grants[tenant]
 		if !member {
-			return "", nil, ErrDelegationInvalid // membership removed
+			return "", nil, nil, ErrDelegationInvalid // membership removed
 		}
 		if ws, isConfined := confined[tenant]; isConfined && !ws.IsZero() {
-			return "", nil, ErrDelegationInvalid // newly confined
+			return "", nil, nil, ErrDelegationInvalid // newly confined
 		}
 		curRole = role
 		curGroups = groupsByTenant[tenant]
@@ -756,10 +780,10 @@ func (a *Authenticator) revalidateSubject(ctx context.Context, as store.AuthScop
 
 	if handle.AgentRef != "" {
 		if a.agentChecker == nil {
-			return "", nil, ErrDelegationInvalid
+			return "", nil, nil, ErrDelegationInvalid
 		}
 		if err := a.agentChecker.CheckAgentForExchange(ctx, tenant, handle.AgentRef, u.ExternalID); err != nil {
-			return "", nil, ErrDelegationInvalid
+			return "", nil, nil, ErrDelegationInvalid
 		}
 	}
 
@@ -768,7 +792,7 @@ func (a *Authenticator) revalidateSubject(ctx context.Context, as store.AuthScop
 	if !isToken {
 		effGroups = intersectStrings(curGroups, handle.MintGroups)
 	}
-	return effRole, effGroups, nil
+	return effRole, effGroups, floor, nil
 }
 
 // FinalizeDecisionClaim transitions a pending claim to final, binding the
@@ -1036,6 +1060,9 @@ func droppedAgainstStored(declared, storedEffective map[string]bool) map[string]
 //     token principal carries no directory groups — least privilege, exactly as
 //     authToken builds it; a token-source mint captured an empty group closure).
 //   - Superadmin is always false (mint refuses superadmin subjects — invariant #2).
+//   - The tenant's retirement floor for the subject travels with it, so a grant
+//     snapshot older than the floor does not authorize it; an exclusion of the
+//     subject or of its source session already refused the claim.
 //   - AAL 0 and AMR nil: a delegated handle carries NO human assurance (like an
 //     API token), so any step-up gate treats it as not elevated (fail-closed).
 //   - The stored, revalidated agent_ref binds through WithAgentIdentity (the only
@@ -1058,6 +1085,9 @@ func PrincipalForDelegation(v VerifiedDelegation) Principal {
 		groups = map[model.TenantID][]string{v.tenant: v.effectiveGroups}
 	}
 	p := newPrincipal(kind, v.subjectUserID, v.subjectCredID, false, "", grants, groups)
+	if v.floor != nil {
+		p = p.withStanding(accountStanding{floors: map[model.TenantID]int64{v.tenant: *v.floor}})
+	}
 	p.AAL = 0
 	p.AMR = nil
 	if !v.actAs.IsZero() {

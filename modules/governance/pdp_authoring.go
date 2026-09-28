@@ -584,16 +584,14 @@ type pdpActivePolicy struct {
 
 var errPdpRevisionNotFound = errors.New("pdp revision not found")
 
-// normEngine validates and normalizes the engine selector.
+// normEngine validates and normalizes the engine selector: an engine surface
+// of the revision store's registry.
 func normEngine(e string) (string, bool) {
-	switch strings.ToLower(strings.TrimSpace(e)) {
-	case surfaceCedar:
-		return surfaceCedar, true
-	case surfaceOPA:
-		return surfaceOPA, true
-	default:
-		return "", false
+	name := strings.ToLower(strings.TrimSpace(e))
+	if entry, ok := surfaces.base(name); ok && entry.engine {
+		return entry.name, true
 	}
+	return "", false
 }
 
 // buildAuthRequest maps a frontend example request onto the engine's auth.Request.
@@ -1196,6 +1194,35 @@ func (m *Module) handlePdpRollback(w http.ResponseWriter, r *http.Request, mc ap
 		committedState      scopedTenantState
 		rollbackNoop        bool
 	)
+	// Re-activating a Cedar revision that names accounts is a fenced write: the
+	// revision is immutable, so its named accounts are read before the
+	// transaction and pinned with the epoch inside it.
+	var refs []store.UserAuthorityFactRef
+	if engine == surfaceCedar {
+		var content string
+		if verr := mc.Data.View(r.Context(), func(sc store.Scope) error {
+			target, found, err := getRevision(r.Context(), sc, engine, in.Revision)
+			if found {
+				content = target.Content
+			}
+			return err
+		}); verr != nil {
+			writeStoreError(w, verr)
+			return
+		}
+		subjects, serr := policySubjects(r.Context(), mc.Standing, content)
+		if serr != nil {
+			writeStoreError(w, serr)
+			return
+		}
+		var ferr error
+		if refs, ferr = auth.FenceSubjects(r.Context(), mc.Standing, mc.Tenant, subjects); ferr != nil {
+			if !writeFenceRefusal(w, ferr) {
+				writeStoreError(w, ferr)
+			}
+			return
+		}
+	}
 	err := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
 		var lockedGeneration store.AuthorizationFactRef
 		if engine == surfaceCedar {
@@ -1203,7 +1230,7 @@ func (m *Module) handlePdpRollback(w http.ResponseWriter, r *http.Request, mc ap
 			// reads. Every migrated Cedar writer shares it, so this rollback cannot
 			// classify a union across authority snapshots.
 			var lockErr error
-			lockedGeneration, lockErr = lockPolicyAuthorizationEpochWitness(r.Context(), sc)
+			lockedGeneration, lockErr = pinPolicyAuthorizationEpochWitness(r.Context(), sc, refs)
 			if lockErr != nil {
 				return lockErr
 			}
@@ -1408,6 +1435,17 @@ func (m *Module) handlePdpPublish(w http.ResponseWriter, r *http.Request, mc api
 	// answers contradicted each other. Selecting on publish makes "which Rego revision
 	// is current" answerable, without claiming this process enforces it.
 	enforced := engine == surfaceCedar
+	// A Cedar permit that names an account, or one of its credentials, is a
+	// fenced write: every named account's standing is read first and pinned with
+	// the epoch below.
+	var subjects []model.ID
+	if enforced {
+		var serr error
+		if subjects, serr = policySubjects(r.Context(), mc.Standing, in.Source); serr != nil {
+			writeStoreError(w, serr)
+			return
+		}
+	}
 	var (
 		revision       int64
 		committedState scopedTenantState
@@ -1418,6 +1456,13 @@ func (m *Module) handlePdpPublish(w http.ResponseWriter, r *http.Request, mc api
 			candidateGeneration store.AuthorizationFactRef
 			candidateState      scopedTenantState
 		)
+		refs, ferr := auth.FenceSubjects(r.Context(), mc.Standing, mc.Tenant, subjects)
+		if ferr != nil {
+			if !writeFenceRefusal(w, ferr) {
+				writeStoreError(w, ferr)
+			}
+			return
+		}
 		err := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
 			var (
 				inputs           cedarMutationInputs
@@ -1429,7 +1474,9 @@ func (m *Module) handlePdpPublish(w http.ResponseWriter, r *http.Request, mc api
 				// Lock before ALL managed/adopted/freshness reads. A publish with the
 				// same source bytes is still a new authored selection, so it always
 				// takes this path and advances the durable authorization generation.
-				if lockedGeneration, err = lockPolicyAuthorizationEpochWitness(r.Context(), sc); err != nil {
+				// A fenced publish takes the same epoch through the directory
+				// authority barrier, with the named accounts' authority versions.
+				if lockedGeneration, err = pinPolicyAuthorizationEpochWitness(r.Context(), sc, refs); err != nil {
 					return err
 				}
 				if inputs, err = readCedarMutationInputs(r.Context(), sc); err != nil {

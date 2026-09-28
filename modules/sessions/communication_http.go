@@ -18,6 +18,9 @@ import (
 // store.ErrConflict (including idempotency rebind) continues through
 // writeStoreError as 409.
 func writeCommunicationError(w http.ResponseWriter, err error) {
+	if writeAccountFenceRefusal(w, err) {
+		return
+	}
 	status, code, verdict, ok := communicationHTTPDisposition(err)
 	if !ok {
 		writeStoreError(w, err)

@@ -4,13 +4,11 @@
 //
 // THE ROUTE MAP PIN AND THE MODEL'S CONTRACT (N1).
 //
-// Root ratified one placement per route (an internal design note (not shipped)
-// ROUTE-MAP.md), extended by k3-i3-console-construction/CONSTRUCTION-3.md §4 for Handoffs.
-// The table below pins those decisions so the registry cannot drift
+// The table below pins one placement per route so the registry cannot drift
 // from it silently: moving a view to another area, renaming a section or forgetting a new
 // entry's place turns this file red with the id in the message. Structural facts the shell
 // relies on — every leaf placed, every area non-empty, one detail per parent, the utility's
-// place — and the behaviours the proposal's §3 and §9 name (breadcrumbs, union visibility,
+// place — and the navigation behaviours (breadcrumbs, union visibility,
 // ranking, the fold) are pinned beside it.
 import { readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
@@ -82,6 +80,7 @@ const RATIFIED: Record<string, [AreaId, string] | 'root'> = {
   agentcoreExport: ['security-identity', 'boundaries'],
   residency: ['security-identity', 'boundaries'],
   deploy: ['deployment', 'deployments'],
+  gitPublication: ['deployment', 'deployments'],
   health: ['observation', 'operations'],
   observability: ['observation', 'operations'],
   dashboards: ['observation', 'operations'],
@@ -97,6 +96,7 @@ const RATIFIED: Record<string, [AreaId, string] | 'root'> = {
   reporting: ['observation', 'evaluation-evidence'],
   attestation: ['observation', 'evaluation-evidence'],
   console: ['system', 'administration'],
+  sourceDiff: ['system', 'administration'],
   tenants: ['system', 'administration'],
   onboarding: ['system', 'maintenance'],
   backups: ['system', 'maintenance'],

@@ -10,10 +10,10 @@
 # systemctl are recording stubs. Missing docker or the pinned image is exit 2
 # (cannot examine), never a skip and never a green.
 #
-# IMAGE PIN — Alpine 3.22.5 as Docker Official Image library/alpine, digest from
-# the publisher's registry tag API on 2026-09-07 (see IMAGE-PROVENANCE in the
-# implementation assessment). Index digest is the run target so the engine
-# selects the native platform; QEMU is not used.
+# IMAGE PIN — Alpine 3.24.2, Docker Official Image library/alpine.
+# The run target is the index digest so the engine selects the platform.
+# Digests read 2026-09-27 from the Docker Hub tag API and the registry
+# manifest. The GitCommit is the official-images v3.24 entry. QEMU is not used.
 set -euo pipefail
 
 _olivares_git_env="$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" && pwd)/lib/git-env.sh"
@@ -29,15 +29,15 @@ export LC_ALL
 export GOMAXPROCS="${GOMAXPROCS:-2}"
 export GOFLAGS="${GOFLAGS:--p=2}"
 
-# docker.io/library/alpine:3.22.5 == alpine:3.22 (official-images library/alpine).
-ALPINE_VERSION=3.22.5
-ALPINE_INDEX_DIGEST='sha256:14358309a308569c32bdc37e2e0e9694be33a9d99e68afb0f5ff33cc1f695dce'
-ALPINE_AMD64_DIGEST='sha256:7c8cb692ae09657cbc4a3f3cbd0e8d5a2690ba38386aaaf252dbb060bf5eb2e6'
-ALPINE_ARM64_DIGEST='sha256:2c9d26f410d032d5b1525aa8a873e238b05b90c4ae8618743d4311f0cc827e37'
+# Alpine 3.24.2. ALPINE_IMAGE is the index digest, never a tag.
+ALPINE_VERSION=3.24.2
+ALPINE_INDEX_DIGEST='sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6'
+ALPINE_AMD64_DIGEST='sha256:d56c381f961d307a21b3ca004cf1e3910f106644aefb1f43e654c8a56c4fd395'
+ALPINE_ARM64_DIGEST='sha256:260479a1cfaf304c4c20da7f8405d3ce313513dcd534bb743257bdd2fe0f3e2d'
 ALPINE_IMAGE="docker.io/library/alpine@${ALPINE_INDEX_DIGEST}"
-ALPINE_SOURCE_URL='https://hub.docker.com/v2/repositories/library/alpine/tags/3.22.5'
+ALPINE_SOURCE_URL='https://hub.docker.com/v2/repositories/library/alpine/tags/3.24.2'
 ALPINE_GITREPO='https://github.com/alpinelinux/docker-alpine.git'
-ALPINE_GITCOMMIT='aff8a4cfde38012a59285f21c8820777acd6033b'
+ALPINE_GITCOMMIT='1c744e2d49059e51b063a11a6e3e18c9ccf04ab8'
 ALPINE_OFFICIAL_IMAGES='https://github.com/docker-library/official-images/blob/master/library/alpine'
 ALPINE_RELEASES='https://alpinelinux.org/releases/'
 CONTAINER_PREFIX='olivares-apk-pi'
@@ -293,6 +293,38 @@ selftest_export_controls() {
 	printf '%s\n' 'ok - export: a failed export reports failure and leaves no evidence copy or staging residue'
 }
 
+# Alpine 3.24.2 pin identity. These literals are the official tag's index,
+# per-architecture digests, Hub tag URL and official-images GitCommit.
+selftest_primary_alpine_pin() {
+	local nfail=0
+	pin_eq() {
+		local label=$1 got=$2 want=$3
+		if [[ "$got" == "$want" ]]; then
+			printf 'ok - APK runtime pin %s is the Alpine 3.24.2 value\n' "$label"
+		else
+			printf 'not ok - APK runtime pin %s is not the Alpine 3.24.2 value\n' "$label" >&2
+			nfail=$((nfail + 1))
+		fi
+	}
+	pin_eq version "$ALPINE_VERSION" "3.24.2"
+	pin_eq index "$ALPINE_INDEX_DIGEST" "sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6"
+	pin_eq amd64 "$ALPINE_AMD64_DIGEST" "sha256:d56c381f961d307a21b3ca004cf1e3910f106644aefb1f43e654c8a56c4fd395"
+	pin_eq arm64 "$ALPINE_ARM64_DIGEST" "sha256:260479a1cfaf304c4c20da7f8405d3ce313513dcd534bb743257bdd2fe0f3e2d"
+	pin_eq source-url "$ALPINE_SOURCE_URL" "https://hub.docker.com/v2/repositories/library/alpine/tags/3.24.2"
+	pin_eq gitrepo "$ALPINE_GITREPO" "https://github.com/alpinelinux/docker-alpine.git"
+	pin_eq gitcommit "$ALPINE_GITCOMMIT" "1c744e2d49059e51b063a11a6e3e18c9ccf04ab8"
+	pin_eq official-images "$ALPINE_OFFICIAL_IMAGES" "https://github.com/docker-library/official-images/blob/master/library/alpine"
+	pin_eq image "$ALPINE_IMAGE" "docker.io/library/alpine@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6"
+	case "$ALPINE_IMAGE" in
+	docker.io/library/alpine@sha256:*) ;;
+	*)
+		printf 'not ok - APK runtime image is a floating tag\n' >&2
+		nfail=$((nfail + 1))
+		;;
+	esac
+	[[ "$nfail" -eq 0 ]] || fail "Alpine 3.24.2 runtime pin cells ($nfail)"
+}
+
 selftest_static() {
 	local tmp call_line def_line host
 	host="$root/scripts/nfpm-apk-postinstall-runtime.sh"
@@ -311,7 +343,7 @@ selftest_static() {
 		fail "Alpine amd64 digest is not sha256:hex64"
 	[[ "$ALPINE_ARM64_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] ||
 		fail "Alpine arm64 digest is not sha256:hex64"
-	[[ "$ALPINE_VERSION" == 3.22.5 ]] || fail "Alpine version pin drifted: $ALPINE_VERSION"
+	[[ "$ALPINE_VERSION" == 3.24.2 ]] || fail "Alpine version pin drifted: $ALPINE_VERSION"
 	[[ "$ALPINE_IMAGE" == "docker.io/library/alpine@${ALPINE_INDEX_DIGEST}" ]] ||
 		fail "Alpine image ref is not the digest-pinned official library/alpine index"
 	[[ "$ALPINE_IMAGE" != *latest* ]] || fail "image ref must not use :latest"
@@ -409,8 +441,10 @@ PY
 		fail "N1 staging wrote different bytes than the assignment-mutant inserter"
 
 	selftest_judge_controls "$tmp"
-	printf '%s\n' 'ok - static selftests (pin, isolation flags, exact-line mutant inserter, N1 case staging, inner.sh syntax, evidence export, judge controls)'
 	trap - RETURN
+	rm -rf -- "$tmp"
+	selftest_primary_alpine_pin
+	printf '%s\n' 'ok - static selftests (pin, isolation flags, exact-line mutant inserter, N1 case staging, inner.sh syntax, evidence export, judge controls, Alpine 3.24.2 pin)'
 }
 
 # --- shared packaging helpers (copied in semantics from test-nfpm-openrc.sh) ------

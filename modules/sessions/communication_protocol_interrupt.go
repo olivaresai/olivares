@@ -14,6 +14,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 )
@@ -352,7 +353,12 @@ func (m *Module) persistProtocolInterruptLink(
 	}
 	var result protocolInterruptLink
 	replayed := false
-	err = m.communicationData(tenant).Mutate(ctx, func(sc store.Scope) error {
+	// The link makes its recipient a required party of the remote request: a
+	// fenced write whose transaction pins the recipient's authority version
+	// with the tenant's directory fact before anything else.
+	mutate := func(fn func(store.Scope) error) error { return m.communicationData(tenant).Mutate(ctx, fn) }
+	write := func(sc store.Scope, _ bool) error {
+		replayed = false
 		repo, err := sc.Ext(protocolInterruptKind)
 		if err != nil {
 			return err
@@ -377,7 +383,20 @@ func (m *Module) persistProtocolInterruptLink(
 		}
 		result, err = protocolInterruptLinkFromRecord(created)
 		return err
-	})
+	}
+	// Inside a prepared replay the owning transaction read the recipient's
+	// standing before it opened and pinned it as its first lock, so the link
+	// writes under that pin rather than reading standing beside it.
+	covered, err := joinedFence(ctx, tenant, []model.ID{route.RecipientUserID})
+	if err != nil {
+		return protocolInterruptLink{}, false, err
+	}
+	if covered {
+		err = mutate(func(sc store.Scope) error { return write(sc, true) })
+	} else {
+		err = auth.FencedWrite(ctx, m.standingFor(ctx), tenant, []model.ID{route.RecipientUserID},
+			auth.FenceDirectory, mutate, write)
+	}
 	if errors.Is(err, store.ErrConflict) {
 		current, reloadErr := m.readProtocolInterruptLink(ctx, tenant, id)
 		if reloadErr != nil {

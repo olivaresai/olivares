@@ -65,6 +65,31 @@ const (
 	colUpdatedAt   = "set_at"       // when the posture was set ("updated_at" is a reserved base column)
 )
 
+// Principal declarations of the module's text and UUID columns
+// (core/model/principal_decl.go). Every None cites the writer or reader lines
+// that show the value names no account.
+var (
+	// pdeclActor is the audit-actor string of the operator who opened, linked or
+	// set a row, recorded as evidence (forensic.go:140, forensic.go:338, guardrail.go:455).
+	pdeclActor = model.Ref(model.EncodeUserRef, model.ClassEvidence)
+	// pdeclOperatorRef is an operator-entered reference. A case subject is matched
+	// against ledger actors, targets and metadata and may be an identity-roster id
+	// (forensic.go:542, enrich.go:42-58); an anomaly carries no id of its own
+	// (anomaly.go:415-426), so a link reference may be an anomaly's subject. It is
+	// evidence of what was investigated; no reader grants anything from it.
+	pdeclOperatorRef = model.Scan(model.ClassEvidence)
+
+	// Values that name no account.
+	pdeclNoneProse       = model.None("bounded operator prose, stored and rendered only: forensic.go:55-57, forensic.go:283-284")
+	pdeclNoneCaseStatus  = model.None("a closed case lifecycle state: forensic.go:31, forensic.go:214")
+	pdeclNoneSeverity    = model.None("a core severity value, validated before write: forensic.go:119, forensic.go:218, guardrail.go:422")
+	pdeclNoneSubjectKind = model.None("a subject-kind label that the only reader compares with fixed kinds: forensic.go:137, enrich.go:48-58")
+	pdeclNoneIntegrity   = model.None("the ledger verifier's first break reason: forensic.go:659-663")
+	pdeclNoneCaseRef     = model.None("the id of this module's own case row: forensic.go:337")
+	pdeclNoneLinkKind    = model.None("a closed link kind: forensic.go:34, forensic.go:308")
+	pdeclNoneClass       = model.None("a guardrail class name or the wildcard, matched only against guardrail classes: guardrail.go:308-310")
+)
+
 // RegisterSchema declares the module's three owned entities. It satisfies the
 // engine-side runtime.SchemaProvider seam (structural — no runtime import) and is
 // called once, at store construction, before any Scope exists: the engine creates
@@ -85,15 +110,15 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Kind:  caseKind,
 		Table: caseTable,
 		Fields: []model.FieldSpec{
-			{Name: colTitle, Kind: model.KindText},
-			{Name: colStatus, Kind: model.KindText, Indexed: true},
-			{Name: colSeverity, Kind: model.KindText, Indexed: true},
-			{Name: colSubjectKind, Kind: model.KindText, Indexed: true},
-			{Name: colSubjectRef, Kind: model.KindText, Indexed: true},
-			{Name: colSummary, Kind: model.KindText, Nullable: true},
-			{Name: colOpenedBy, Kind: model.KindText},
+			{Name: colTitle, Kind: model.KindText, Principal: pdeclNoneProse},
+			{Name: colStatus, Kind: model.KindText, Indexed: true, Principal: pdeclNoneCaseStatus},
+			{Name: colSeverity, Kind: model.KindText, Indexed: true, Principal: pdeclNoneSeverity},
+			{Name: colSubjectKind, Kind: model.KindText, Indexed: true, Principal: pdeclNoneSubjectKind},
+			{Name: colSubjectRef, Kind: model.KindText, Indexed: true, Principal: pdeclOperatorRef},
+			{Name: colSummary, Kind: model.KindText, Nullable: true, Principal: pdeclNoneProse},
+			{Name: colOpenedBy, Kind: model.KindText, Principal: pdeclActor},
 			{Name: colIntegrityOK, Kind: model.KindBool},
-			{Name: colIntegrityReason, Kind: model.KindText, Nullable: true},
+			{Name: colIntegrityReason, Kind: model.KindText, Nullable: true, Principal: pdeclNoneIntegrity},
 			{Name: colAttestedSeq, Kind: model.KindInt},
 			{Name: colOpenedAt, Kind: model.KindTimestamp, Indexed: true},
 			{Name: colClosedAt, Kind: model.KindTimestamp, Nullable: true},
@@ -107,11 +132,11 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Table:      caseLinkTable,
 		AppendOnly: true, // immutable chain of custody (docs/SECURITY-HARDENING.md)
 		Fields: []model.FieldSpec{
-			{Name: colCaseRef, Kind: model.KindUUID, Indexed: true},
-			{Name: colLinkKind, Kind: model.KindText, Indexed: true},
-			{Name: colLinkRef, Kind: model.KindText, Indexed: true},
-			{Name: colNote, Kind: model.KindText, Nullable: true},
-			{Name: colLinkedBy, Kind: model.KindText},
+			{Name: colCaseRef, Kind: model.KindUUID, Indexed: true, Principal: pdeclNoneCaseRef},
+			{Name: colLinkKind, Kind: model.KindText, Indexed: true, Principal: pdeclNoneLinkKind},
+			{Name: colLinkRef, Kind: model.KindText, Indexed: true, Principal: pdeclOperatorRef},
+			{Name: colNote, Kind: model.KindText, Nullable: true, Principal: pdeclNoneProse},
+			{Name: colLinkedBy, Kind: model.KindText, Principal: pdeclActor},
 			{Name: colLinkedAt, Kind: model.KindTimestamp, Indexed: true},
 		},
 	}); err != nil {
@@ -122,11 +147,11 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Kind:  enforcementKind,
 		Table: enforcementTable,
 		Fields: []model.FieldSpec{
-			{Name: colClass, Kind: model.KindText, Indexed: true},
+			{Name: colClass, Kind: model.KindText, Indexed: true, Principal: pdeclNoneClass},
 			{Name: colEnabled, Kind: model.KindBool},
-			{Name: colMinSeverity, Kind: model.KindText},
+			{Name: colMinSeverity, Kind: model.KindText, Principal: pdeclNoneSeverity},
 			{Name: colGoverned, Kind: model.KindBool},
-			{Name: colSetBy, Kind: model.KindText},
+			{Name: colSetBy, Kind: model.KindText, Principal: pdeclActor},
 			{Name: colUpdatedAt, Kind: model.KindTimestamp},
 		},
 		Indexes: []model.IndexSpec{{

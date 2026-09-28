@@ -33,6 +33,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -54,11 +55,21 @@ const responseBufferCeilingReason = "response withheld: exceeded governed inspec
 
 var errResponseBufferCeiling = errors.New(responseBufferCeilingReason)
 
+const invalidBatchBodyReason = "request body is not a valid Message Batches request"
+
 // maxBatchRequestBody bounds an inbound /v1/messages/batches body at Anthropic's documented
 // per-batch ceiling (256 MB) so a VALID large batch is forwarded, not silently truncated —
 // but still bounded, so a hostile caller cannot exhaust memory. A body over the cap is
 // rejected with a clear 413 (not a misleading 400 from a truncated parse).
 const maxBatchRequestBody = 256 << 20 // 256 MiB (Anthropic's batch ceiling)
+
+// maxBatchEntries caps the entries of one /v1/messages/batches submission at Anthropic's
+// documented per-batch limit, 100,000 requests or 256 MB, whichever is reached first
+// (https://platform.claude.com/docs/en/build-with-claude/batch-processing). The entries are
+// counted before they are decoded and before the decider runs, so a batch the upstream would
+// refuse takes no decode or admission work. It is deliberately not configurable: a higher
+// value only admits batches the upstream refuses.
+const maxBatchEntries = 100_000
 
 // messagesProxyPath / batchesProxyPath are the paths the proxy serves: the synchronous
 // Messages contract and the asynchronous Message Batches submit (both governed by the SAME
@@ -82,7 +93,9 @@ type ProxyDecider interface {
 	// anchor) over the accumulated response and the I/O fingerprints. It may BLOCK the
 	// response — but a Block verdict only takes effect when the decision asked the
 	// connector to BUFFER (ProxyDecision.BufferResponse); a streamed-through response
-	// cannot be un-sent (the verdict is then a detective finding only).
+	// cannot be un-sent (the verdict is then a detective finding only). The connector calls
+	// it once for every forward that ran, including one whose response it then refuses to
+	// relay (the inspection buffer ceiling, an encode failure).
 	Finalize(ctx context.Context, sess any, out ProxyForwardResult) ProxyResponseVerdict
 
 	// AuthorizeBatch runs the governed gate chain over a POST /v1/messages/batches
@@ -186,10 +199,20 @@ type ProxyDecision struct {
 
 // ProxyForwardResult is the post-forward outcome the connector hands Finalize.
 type ProxyForwardResult struct {
-	// Response is the accumulated model response (zero on an upstream error).
+	// Response is the accumulated model response. It is zero on an upstream error the proxy
+	// relays (relayUpstreamError: a blocking call, or a buffered stream that failed before or
+	// during its answer). It is partial when a passthrough stream failed mid-way, or when the
+	// connector abandoned a buffered stream at the inspection buffer ceiling.
 	Response MessageResponse
 	// ReqSHA/ReqBytes fingerprint the INBOUND request body (what the caller submitted and
-	// the request DLP inspected); RespSHA/RespBytes fingerprint the response body relayed.
+	// the request DLP inspected). RespSHA/RespBytes fingerprint the response body the
+	// connector relays, or holds for Finalize to judge before relaying it (a body Finalize
+	// then blocks keeps the fingerprint its verdict was taken over); on a passthrough stream
+	// that fails mid-way they cover the events already relayed. They are empty when the
+	// connector refuses a response on its own (the inspection buffer ceiling, an encode
+	// failure): the caller never receives those bytes. On an upstream error the proxy relays
+	// (relayUpstreamError), RespSHA fingerprints the error text the proxy observed and
+	// RespBytes is 0.
 	ReqSHA    []byte
 	ReqBytes  int64
 	RespSHA   []byte
@@ -201,8 +224,13 @@ type ProxyForwardResult struct {
 	EffectiveSHA []byte
 	// Streamed reports whether the response was an SSE stream.
 	Streamed bool
-	// UpstreamStatus is the HTTP status the upstream returned (0 when the call did not
-	// complete); UpstreamErr is set on an upstream/transport failure.
+	// UpstreamStatus is the HTTP status the upstream answered with. On an upstream error the
+	// proxy relays (relayUpstreamError) it is the error's status, or 502 for a transport
+	// failure; only a passthrough stream that fails reports 0, because the proxy has already
+	// begun its own 200 stream to the caller. UpstreamErr is set on an upstream/transport
+	// failure. A call that ran and that the connector then withheld (a stream abandoned at the
+	// inspection buffer ceiling, a response it could not encode) is not one: it reports the
+	// upstream's 200, no UpstreamErr and its Response, so the call's cost is measured.
 	UpstreamStatus int
 	UpstreamErr    bool
 }
@@ -245,6 +273,13 @@ type MessagesProxy struct {
 	decider ProxyDecider
 	auditor ProxyAuditor
 	now     func() time.Time
+	// encodeResponse renders a blocking response for relay; nil means json.Marshal. A
+	// response decoded from the upstream always re-encodes, so only a test sets it, to
+	// reach the encode-failure exit.
+	encodeResponse func(any) ([]byte, error)
+	// decodeBatch decodes a batch body into its entries; nil means json.Unmarshal. Only a
+	// test sets it, to count the full decodes a batch submission causes.
+	decodeBatch func([]byte, any) error
 }
 
 var _ http.Handler = (*MessagesProxy)(nil)
@@ -363,13 +398,43 @@ func (p *MessagesProxy) serveBatch(w http.ResponseWriter, r *http.Request) {
 	reqSHA := sha256.Sum256(body)
 	reqBytes := int64(len(body))
 
+	// Check the body and count its entries before decoding them. A body that is not valid
+	// JSON is refused with the 400 here, so its refusal does not rest on how the decoder reads
+	// an invalid body. A valid body is scanned without decoding anything: an over-limit batch
+	// is refused with the 413, and a body whose top level the scan cannot read as an object
+	// with the 400. None of them reaches the full decode or the decider (no admission, ledger
+	// row or forward).
+	if !json.Valid(body) {
+		p.writeError(w, http.StatusBadRequest, "invalid_request_error", invalidBatchBodyReason)
+		return
+	}
+	largest, ok := scanBatchEntries(body, maxBatchEntries+1)
+	if !ok {
+		p.writeError(w, http.StatusBadRequest, "invalid_request_error", invalidBatchBodyReason)
+		return
+	}
+	if largest > maxBatchEntries {
+		p.refuseOverEntryLimit(w, largest)
+		return
+	}
+	decode := json.Unmarshal
+	if p.decodeBatch != nil {
+		decode = p.decodeBatch
+	}
 	var env batchEnvelope
-	if jerr := json.Unmarshal(body, &env); jerr != nil {
-		p.writeError(w, http.StatusBadRequest, "invalid_request_error", "request body is not a valid Message Batches request")
+	if jerr := decode(body, &env); jerr != nil {
+		p.writeError(w, http.StatusBadRequest, "invalid_request_error", invalidBatchBodyReason)
 		return
 	}
 	if len(env.Requests) == 0 {
 		p.writeError(w, http.StatusBadRequest, "invalid_request_error", "batch contains no requests")
+		return
+	}
+	// The decode binds Requests only to an array that is a direct value of the top-level
+	// object, and the scan above refused any such array over the limit, so this check does not
+	// fire; it keeps the limit a guarantee for admission that does not rest on the scan.
+	if n := len(env.Requests); n > maxBatchEntries {
+		p.refuseOverEntryLimit(w, n)
 		return
 	}
 
@@ -407,6 +472,86 @@ func (p *MessagesProxy) serveBatch(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(raw)
+}
+
+// scanBatchEntries counts the entries of every array that is a direct value of the top-level
+// object in body, whatever its key, and returns the largest count. It stops as soon as one
+// count reaches stop. It decodes and holds nothing: it reads the bytes once, tracking only the
+// nesting depth and the string and escape state, so it allocates nothing whatever the size of
+// a value. Nested arrays are not counted, and each occurrence of a repeated key is an array of
+// its own. The decode binds Requests only to one of these arrays, so the largest count bounds
+// the entries it can decode, with no key compare to keep in step with encoding/json. body
+// must already have passed json.Valid. ok is false when its top level is not an object or the
+// bytes are not consistent with valid JSON; the caller refuses such a body (fail closed).
+func scanBatchEntries(body []byte, stop int) (largest int, ok bool) {
+	i := skipJSONSpace(body, 0)
+	if i == len(body) || body[i] != '{' {
+		return 0, false
+	}
+	depth := 0
+	inString, escaped := false, false
+	inTopArray := false // inside an array that is a direct value of the top-level object
+	count := 0
+	for ; i < len(body); i++ {
+		c := body[i]
+		if inString {
+			switch {
+			case escaped:
+				escaped = false
+			case c == '\\':
+				escaped = true
+			case c == '"':
+				inString = false
+			}
+			continue
+		}
+		switch c {
+		case '"':
+			inString = true
+		case '{', '[':
+			depth++
+			if depth == 2 && c == '[' {
+				inTopArray, count = true, 0
+				if j := skipJSONSpace(body, i+1); j < len(body) && body[j] != ']' {
+					count = 1
+				}
+			}
+		case ',':
+			if depth == 2 && inTopArray {
+				count++
+			}
+		case '}', ']':
+			if depth == 2 {
+				inTopArray = false
+			}
+			depth--
+			if depth == 0 {
+				return largest, true
+			}
+		}
+		if count > largest {
+			largest = count
+			if largest >= stop {
+				return largest, true
+			}
+		}
+	}
+	return 0, false // the top-level object never closed
+}
+
+// skipJSONSpace returns the index of the first byte at or after i that is not JSON whitespace.
+func skipJSONSpace(b []byte, i int) int {
+	for i < len(b) && (b[i] == ' ' || b[i] == '\t' || b[i] == '\n' || b[i] == '\r') {
+		i++
+	}
+	return i
+}
+
+// refuseOverEntryLimit answers a batch over maxBatchEntries with a 413 that names the limit
+// and the count reached, never the body.
+func (p *MessagesProxy) refuseOverEntryLimit(w http.ResponseWriter, counted int) {
+	p.writeError(w, http.StatusRequestEntityTooLarge, "invalid_request_error",
+		fmt.Sprintf("batch contains at least %d requests; the limit is %d requests per batch", counted, maxBatchEntries))
 }
 
 // forwardBatch submits the governed batch upstream: the FROZEN prepared envelope when the
@@ -500,8 +645,18 @@ func (p *MessagesProxy) forwardBlocking(w http.ResponseWriter, r *http.Request, 
 		p.relayUpstreamError(w, r, dec, reqSHA, effSHA, reqBytes, err, false)
 		return
 	}
-	out, merr := json.Marshal(resp)
+	encode := json.Marshal
+	if p.encodeResponse != nil {
+		encode = p.encodeResponse
+	}
+	out, merr := encode(resp)
 	if merr != nil {
+		// The upstream call completed: settle it with its response, the source of its
+		// measured cost, then refuse. Nothing was relayed, so there is no response fingerprint.
+		_ = p.finalize(r.Context(), dec, ProxyForwardResult{
+			Response: resp, ReqSHA: reqSHA, ReqBytes: reqBytes, EffectiveSHA: effSHA,
+			UpstreamStatus: http.StatusOK,
+		})
 		p.writeError(w, http.StatusBadGateway, "api_error", "could not encode upstream response")
 		return
 	}
@@ -559,6 +714,14 @@ func (p *MessagesProxy) forwardStream(w http.ResponseWriter, r *http.Request, de
 		}
 		resp, effSHA, err := p.forwardMessage(r.Context(), dec, true, onEvent)
 		if errors.Is(err, errResponseBufferCeiling) {
+			// The upstream answered 200 and streamed until the proxy abandoned the stream: settle
+			// the call as one that ran and was withheld, with the partial response whose usage
+			// measures its cost, then refuse. The caller never receives the bytes held before the
+			// ceiling, so the outcome carries no response fingerprint.
+			_ = p.finalize(r.Context(), dec, ProxyForwardResult{
+				Response: resp, ReqSHA: reqSHA, ReqBytes: reqBytes, EffectiveSHA: effSHA,
+				Streamed: true, UpstreamStatus: http.StatusOK,
+			})
 			p.audit(r.Context(), ProxyAuditEvent{Decision: "blocked-response", Reason: responseBufferCeilingReason, Model: resp.Model, Streamed: true, ReqBytes: reqBytes, RespBytes: respBytes})
 			p.writeError(w, http.StatusForbidden, "permission_error", responseBufferCeilingReason)
 			return

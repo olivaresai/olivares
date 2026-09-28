@@ -109,6 +109,9 @@ func nextRevisionNumber(ctx context.Context, sc store.Scope, surface string) (in
 // if the audit append fails, the whole publish rolls back). A store.ErrConflict from
 // the unique index means a concurrent publish won the number — the caller retries.
 func appendRevision(ctx context.Context, sc store.Scope, surface, content, author string, validated, active bool, note string) (int64, model.ID, error) {
+	if !surfaces.accepts(surface) {
+		return 0, "", fmt.Errorf("governance: revision surface %q: %w", surface, model.ErrUnknownKind)
+	}
 	num, err := nextRevisionNumber(ctx, sc, surface)
 	if err != nil {
 		return 0, "", err
@@ -182,6 +185,9 @@ func activateRevision(ctx context.Context, sc store.Scope, surface string, targe
 // activeRevisionNumber returns the revision selected by the newest append-only
 // activation record. Repositories created before have no activation stream, so
 // the highest legacy active=true policy row remains the backward-compatible fallback.
+// A surface nothing activates selects by that fallback alone: a stored activation of
+// it was restored or written past the writer, and is refused as a row of a kind no
+// registry knows rather than obeyed.
 func activeRevisionNumber(ctx context.Context, sc store.Scope, surface string) (int64, bool, error) {
 	repo, err := sc.Ext(revisionKind)
 	if err != nil {
@@ -190,6 +196,9 @@ func activeRevisionNumber(ctx context.Context, sc store.Scope, surface string) (
 	markers, err := listAll(ctx, repo, eq(colRevSurface, activationSurface(surface)))
 	if err != nil {
 		return 0, false, err
+	}
+	if len(markers) != 0 && !surfaces.accepts(activationSurface(surface)) {
+		return 0, false, fmt.Errorf("%w: %q", model.ErrUnknownKind, activationSurface(surface))
 	}
 	var newest model.Record
 	var newestNumber int64
@@ -309,3 +318,104 @@ func latestActiveSelection(ctx context.Context, sc store.Scope, surface string) 
 	}
 	return revision.Content, revision.Revision, true, nil
 }
+
+// surfaceEntry is one base surface the revision store accepts: its family,
+// whether an activation stream may be derived from it, whether the policy
+// editor selects it as an engine, and what its content says about principals.
+type surfaceEntry struct {
+	name        string
+	family      string
+	activatable bool
+	engine      bool
+	content     *model.ColumnDecl
+}
+
+// Surface families.
+const (
+	surfaceFamilyManaged = "managed"
+	surfaceFamilyCedar   = "cedar"
+	surfaceFamilyOPA     = "opa"
+)
+
+// surfaceRegistry is the closed set of surfaces appendRevision accepts: every
+// base surface, and the activation stream of each activatable one. The census
+// declaration of a revision's content reads the same object, so a surface the
+// writer accepts and a surface the census classifies can never differ.
+type surfaceRegistry struct {
+	entries []surfaceEntry
+}
+
+// surfaces is the revision store's surface registry. Managed-settings files and
+// Cedar permits are matched against every alias of an account because their
+// positions are not typed; OPA content is a deny overlay and only restricts.
+// Only the policy editor's engines are activated (activateRevision), so only
+// they have an activation stream; the managed projection and the adopted
+// snapshot are selected by their newest active revision.
+var surfaces = surfaceRegistry{entries: []surfaceEntry{
+	{name: surfaceManagedSettings, family: surfaceFamilyManaged, content: model.Scan(model.ClassAuthority)},
+	{name: surfaceHooks, family: surfaceFamilyManaged, content: model.Scan(model.ClassAuthority)},
+	{name: surfaceManagedMCP, family: surfaceFamilyManaged, content: model.Scan(model.ClassAuthority)},
+	{name: surfaceSandbox, family: surfaceFamilyManaged, content: model.Scan(model.ClassAuthority)},
+	{name: surfaceCedar, family: surfaceFamilyCedar, activatable: true, engine: true, content: model.Scan(model.ClassAuthority)},
+	{name: surfaceOPA, family: surfaceFamilyOPA, activatable: true, engine: true, content: model.Scan(model.ClassRestrict)},
+	{name: surfaceCedarManaged, family: surfaceFamilyCedar, content: model.Scan(model.ClassAuthority)},
+	{name: surfaceCedarDDIL, family: surfaceFamilyCedar, content: model.Scan(model.ClassAuthority)},
+}}
+
+// activationContent is what an activation record stores: the number of the
+// revision it selects.
+var activationContent = model.None("an activation record holds the selected revision number: revision.go:171-183")
+
+// revisionContentDecl declares a revision's content: the variant its surface
+// selects from the registry appendRevision refuses any other surface by.
+var revisionContentDecl = model.Union(colRevSurface, surfaces)
+
+// base returns the base surface named name.
+func (r surfaceRegistry) base(name string) (surfaceEntry, bool) {
+	for _, e := range r.entries {
+		if e.name == name {
+			return e, true
+		}
+	}
+	return surfaceEntry{}, false
+}
+
+// accepts reports whether the revision store may hold surface: a base surface,
+// or the activation stream of an activatable one.
+func (r surfaceRegistry) accepts(surface string) bool {
+	if _, ok := r.base(surface); ok {
+		return true
+	}
+	if name, ok := strings.CutSuffix(surface, activationSurfaceSuffix); ok {
+		e, found := r.base(name)
+		return found && e.activatable
+	}
+	return false
+}
+
+// Kinds implements model.KindTable: every base surface and every derived
+// activation stream, sorted.
+func (r surfaceRegistry) Kinds() []string {
+	out := make([]string, 0, len(r.entries)+2)
+	for _, e := range r.entries {
+		out = append(out, e.name)
+		if e.activatable {
+			out = append(out, activationSurface(e.name))
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// Variant implements model.KindTable.
+func (r surfaceRegistry) Variant(kind string) (*model.ColumnDecl, bool) {
+	if e, ok := r.base(kind); ok {
+		return e.content, true
+	}
+	if r.accepts(kind) {
+		return activationContent, true
+	}
+	return nil, false
+}
+
+var _ model.KindTable = surfaces

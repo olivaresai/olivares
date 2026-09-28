@@ -228,6 +228,7 @@ type handoffRecognitionAttempt struct {
 	mutations    int
 	deadline     time.Time
 	facts        [][]store.AuthorizationFactRef
+	users        [][]store.UserAuthorityFactRef
 	lockErrors   []error
 	keys         []string
 	keyAttempts  []int
@@ -315,6 +316,17 @@ func (s *handoffRecognitionScope) LockAuthoritySnapshot(ctx context.Context, fac
 }
 func (s *handoffRecognitionScope) LockAuthoritySnapshotBundle(ctx context.Context, bundle store.AuthoritySnapshotBundle) error {
 	return s.recordAuthority(bundle.Facts, s.AuthoritySnapshotBundleLocker.LockAuthoritySnapshotBundle(ctx, bundle))
+}
+
+// LockDirectoryAuthoritySnapshot forwards a fenced command's authority lock to
+// the estate's own barrier and records the account versions it pins.
+func (s *handoffRecognitionScope) LockDirectoryAuthoritySnapshot(ctx context.Context, bundle store.AuthoritySnapshotBundle) error {
+	s.attempt.users = append(s.attempt.users, append([]store.UserAuthorityFactRef(nil), bundle.UserAuthorities...))
+	barrier, ok := s.Scope.(store.DirectoryAuthoritySnapshotLocker)
+	if !ok {
+		return s.recordAuthority(bundle.Facts, errors.New("the estate's scope has no directory authority barrier"))
+	}
+	return s.recordAuthority(bundle.Facts, barrier.LockDirectoryAuthoritySnapshot(ctx, bundle))
 }
 func (s *handoffRecognitionScope) Ext(kind model.Kind) (store.GenericRepo, error) {
 	repo, err := s.Scope.Ext(kind)

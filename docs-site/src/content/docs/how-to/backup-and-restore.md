@@ -1,5 +1,5 @@
 ---
-title: "Back up and restore (DR that proves itself)"
+title: "Back up and restore"
 description: >-
   Encrypted, ledger-continuity-safe backups with olivares dr: scheduled
   bundles for SQLite and Postgres, the restore that verifies the chain, the
@@ -10,8 +10,11 @@ description: >-
 A control plane's backup has a harder job than most: it must come back with
 its **tamper-evident ledger provably intact**. `olivares dr` is built
 around that requirement — every bundle records per-tenant chain tips, restore
-**fails non-zero if the restored ledger is not continuity-safe**, and the
-drill subcommand proves a bundle restorable without touching production.
+**fails non-zero if the restored ledger is not continuity-safe**, and
+`dr drill` checks backup-to-restore ledger continuity on a synthetic ledger
+in a scratch directory and prints the measured RTO. It does not check grants,
+key custody or effects after the restore point, and it does not touch a
+production data directory.
 
 The bundle is encrypted under a **KEK you provide** — an Argon2id-derived
 passphrase (`--passphrase-file`) or a raw 32-byte key from your KMS
@@ -54,9 +57,14 @@ Two honesty switches worth knowing:
 [backup profile](/tutorials/getting-started/docker-compose/#3-encrypted-dr-backups-the-backup-profile),
 the Helm chart a
 [CronJob](/tutorials/getting-started/kubernetes/#4-scheduled-encrypted-backups);
-on bare metal, cron the command above. Your schedule **is** your RPO:
+on bare metal, cron the command above. The figures in the table are
+targets. For the cron tiers, the RPO target is the cron interval. `dr drill`
+measures SQLite RTO on a synthetic ledger (restore, boot and verify). It does
+not measure RPO, and it does not measure a Postgres restore. The measured
+SQLite RTO values, with their event counts and the host they were taken on,
+are in `docs/DR-RUNBOOK.md`; they are not the targets in this table.
 
-| Tier | Mechanism | RPO | RTO |
+| Tier | Mechanism | Target RPO | Target RTO |
 |---|---|---|---|
 | SQLite | `dr backup` on cron | the cron interval | < 15 min |
 | Postgres logical | `pg-dump.sh` on cron | the cron interval | < 30 min |
@@ -68,8 +76,11 @@ with its passphrase is not encrypted in any sense that matters.
 
 ## Drill — before you need it
 
-`dr verify` proves a bundle restorable **without touching your data dir**
-(SQLite: full chain verification in a scratch dir; exits non-zero if unsafe):
+`dr verify` checks a bundle **without touching your data directory**.
+On SQLite it restores into a scratch directory and verifies ledger continuity,
+and exits non-zero when that check fails. On Postgres it checks the bundle
+digest and that the keys decrypt. Full chain verification for a Postgres
+bundle needs a restore onto a scratch Postgres. Run the check with:
 
 ```bash
 olivares dr verify --in /backups/olivares-dr-<ts>.drbundle \

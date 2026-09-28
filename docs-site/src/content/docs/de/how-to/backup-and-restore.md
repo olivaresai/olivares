@@ -1,5 +1,5 @@
 ---
-title: "Sichern und wiederherstellen (DR, die sich selbst beweist)"
+title: "Sichern und wiederherstellen"
 description: >-
   Verschlüsselte, ledger-kontinuitätssichere Backups mit olivares dr: geplante
   Bundles für SQLite und Postgres, die Wiederherstellung, die die Kette
@@ -13,8 +13,11 @@ muss mit seinem **manipulationserkennbaren Ledger nachweislich intakt**
 zurückkehren. `olivares dr` ist um diese Anforderung herum gebaut — jedes Bundle
 zeichnet pro-Tenant-Kettenspitzen auf, die Wiederherstellung **schlägt mit
 ungleich null fehl, wenn das wiederhergestellte Ledger nicht
-kontinuitätssicher ist**, und der Drill-Unterbefehl beweist, dass ein Bundle
-wiederherstellbar ist, ohne die Produktion zu berühren.
+kontinuitätssicher ist**, und `dr drill` prüft die Ledger-Kontinuität von
+Sicherung zu Wiederherstellung an einem synthetischen Ledger in einem
+Scratch-Verzeichnis und gibt die gemessene RTO aus. Er prüft keine
+Berechtigungen, keine Schlüsselverwahrung und keine Wirkungen nach dem
+Wiederherstellungspunkt, und er berührt kein Produktions-Datenverzeichnis.
 
 Das Bundle wird unter einem **KEK verschlüsselt, den Sie bereitstellen** — einer
 Argon2id-abgeleiteten Passphrase (`--passphrase-file`) oder einem rohen 32-Byte-
@@ -61,9 +64,14 @@ Zwei Ehrlichkeitsschalter, die man kennen sollte:
 [Backup-Profil](/de/tutorials/getting-started/docker-compose/#3-verschlüsselte-dr-backups-das-backup-profil),
 das Helm-Chart einen
 [CronJob](/de/tutorials/getting-started/kubernetes/#4-geplante-verschlüsselte-backups);
-auf Bare Metal cronen Sie den obigen Befehl. Ihr Zeitplan **ist** Ihr RPO:
+auf Bare Metal cronen Sie den obigen Befehl. Die Zahlen in der Tabelle sind
+Ziele. Für die Cron-Stufen ist das RPO-Ziel das Cron-Intervall. `dr drill`
+misst die SQLite-RTO an einem synthetischen Ledger (Wiederherstellung, Start
+und Prüfung). Er misst kein RPO und keine Postgres-Wiederherstellung. Die
+gemessenen SQLite-RTO-Werte, mit Ereigniszahl und Host, stehen in
+`docs/DR-RUNBOOK.md`; sie sind nicht die Ziele dieser Tabelle.
 
-| Stufe | Mechanismus | RPO | RTO |
+| Stufe | Mechanismus | Ziel-RPO | Ziel-RTO |
 |---|---|---|---|
 | SQLite | `dr backup` per cron | das cron-Intervall | < 15 Min |
 | Postgres logisch | `pg-dump.sh` per cron | das cron-Intervall | < 30 Min |
@@ -76,9 +84,12 @@ verschlüsselt.
 
 ## Drill — bevor Sie ihn brauchen
 
-`dr verify` beweist, dass ein Bundle wiederherstellbar ist, **ohne Ihr
-Data-Dir zu berühren** (SQLite: vollständige Kettenverifizierung in einem
-Scratch-Verzeichnis; beendet mit ungleich null, falls unsicher):
+`dr verify` prüft ein Bundle, **ohne Ihr Data-Dir zu berühren**. Unter SQLite
+stellt es in einem Scratch-Verzeichnis wieder her und prüft die
+Ledger-Kontinuität; bei einem Fehlschlag endet es ungleich null. Unter
+Postgres prüft es den Bundle-Digest und die Entschlüsselung der Schlüssel.
+Die volle Kettenprüfung eines Postgres-Bundles braucht eine Wiederherstellung
+auf ein Scratch-Postgres. Führen Sie die Prüfung so aus:
 
 ```bash
 olivares dr verify --in /backups/olivares-dr-<ts>.drbundle \

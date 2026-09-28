@@ -33,7 +33,13 @@ type registry struct {
 	// The engine classifies them once, before it creates any module table.
 	rollout               []store.RolloutControl
 	workspaceInitializers []store.WorkspaceInitializer
-	closed                bool
+	// readers maps each counted column (kind.column) to the declared modules
+	// whose retirement step reads it (store.CompositionReaderRegistry).
+	readers map[string][]string
+	// contributions are the editions' declared contributions to the census
+	// (store.CompositionContributionRegistry).
+	contributions []store.CompositionContribution
+	closed        bool
 }
 
 // moduleMig is a module's migration filesystem mounted under its namespace.
@@ -525,6 +531,93 @@ func descriptorHasColumn(d model.EntityDescriptor, name string) bool {
 		}
 	}
 	return false
+}
+
+// DeclareCompositionReader implements store.CompositionReaderRegistry.
+func (r *registry) DeclareCompositionReader(module string, columns []string) error {
+	if r.closed {
+		return fmt.Errorf("%w: composition reader %q declared after the registry closed", store.ErrInvalidDescriptor, module)
+	}
+	if module == "" || len(columns) == 0 {
+		return fmt.Errorf("%w: a composition reader needs a module and the columns it reads", store.ErrInvalidDescriptor)
+	}
+	if r.readers == nil {
+		r.readers = make(map[string][]string)
+	}
+	for _, c := range columns {
+		r.readers[c] = append(r.readers[c], module)
+	}
+	return nil
+}
+
+var _ store.CompositionReaderRegistry = (*registry)(nil)
+
+// declareAuthPartitionReaders declares, under store.AuthPartitionReader, every
+// counted column of the auth partition's own descriptors, read from their
+// declarations. It runs before the composition registers anything.
+func (r *registry) declareAuthPartitionReaders() error {
+	var cols []string
+	for _, d := range authDescriptors() {
+		for _, c := range d.CountedColumns() {
+			cols = append(cols, string(d.Kind)+"."+c)
+		}
+	}
+	if len(cols) == 0 {
+		return nil
+	}
+	return r.DeclareCompositionReader(store.AuthPartitionReader, cols)
+}
+
+// readersByModule returns the declared readers as module → sorted columns.
+func (r *registry) readersByModule() map[string][]string {
+	out := make(map[string][]string)
+	for col, modules := range r.readers {
+		for _, m := range modules {
+			out[m] = append(out[m], col)
+		}
+	}
+	for m := range out {
+		sort.Strings(out[m])
+	}
+	return out
+}
+
+// DeclareCompositionContribution implements store.CompositionContributionRegistry.
+func (r *registry) DeclareCompositionContribution(c store.CompositionContribution) error {
+	if r.closed {
+		return fmt.Errorf("%w: composition contribution %q declared after the registry closed", store.ErrInvalidDescriptor, c.Edition)
+	}
+	if c.Edition == "" {
+		return fmt.Errorf("%w: a composition contribution needs its edition's name", store.ErrInvalidDescriptor)
+	}
+	for _, m := range c.Modules {
+		if m == "" {
+			return fmt.Errorf("%w: the %s contribution names an empty module", store.ErrInvalidDescriptor, c.Edition)
+		}
+	}
+	for _, d := range c.OutsideStores {
+		if d.Kind == "" {
+			return fmt.Errorf("%w: the %s contribution declares an outside store with no kind", store.ErrInvalidDescriptor, c.Edition)
+		}
+	}
+	cp := c
+	cp.Modules = append([]string(nil), c.Modules...)
+	cp.OutsideStores = append([]model.EntityDescriptor(nil), c.OutsideStores...)
+	r.contributions = append(r.contributions, cp)
+	return nil
+}
+
+var _ store.CompositionContributionRegistry = (*registry)(nil)
+
+// compositionContributions returns a copy of the declared contributions.
+func (r *registry) compositionContributions() []store.CompositionContribution {
+	out := make([]store.CompositionContribution, len(r.contributions))
+	for i, c := range r.contributions {
+		out[i] = c
+		out[i].Modules = append([]string(nil), c.Modules...)
+		out[i].OutsideStores = append([]model.EntityDescriptor(nil), c.OutsideStores...)
+	}
+	return out
 }
 
 // descriptors returns all registered descriptors in registration order.

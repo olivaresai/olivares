@@ -167,9 +167,17 @@ export type WorkflowRunStepStatus =
   | 'done'
   | 'gate_passed'
   | 'blocked'
+  // Refused before any effect because the run's credential no longer resolves;
+  // resumes only after the run is reauthorized.
+  | 'reauthentication_required'
   | 'budget_blocked'
   | 'failed'
   | 'skipped'
+
+/** The pause only the reauthorize operation clears. Other pause reasons (the
+ * kill switch) stay open strings. */
+export type WorkflowRunPausedReason =
+  'reauthentication_required' | (string & {})
 
 export interface WorkflowRunStep {
   ref: string
@@ -189,7 +197,7 @@ export interface WorkflowRun {
   status: WorkflowRunStatus
   plan_hash: string
   approval_ref?: string
-  paused_reason?: string
+  paused_reason?: WorkflowRunPausedReason
   actor: string
   actor_kind?: string
   started_at: string
@@ -212,6 +220,22 @@ export interface RunWorkflowResponse {
   requires_approval?: boolean
   detail?: string
   run?: WorkflowRun
+}
+
+export interface ReauthorizeRunResponse {
+  detail: string
+  run?: WorkflowRun
+}
+
+/** A running run waits for its owning reauthorization while either marker
+ * stands: the pause reason or any step in reauthentication_required
+ * (runReauthenticationGated, modules/orchestration/workflow_run.go). */
+export function isReauthenticationGated(run: WorkflowRun): boolean {
+  return (
+    run.status === 'running' &&
+    (run.paused_reason === 'reauthentication_required' ||
+      run.steps.some((step) => step.status === 'reauthentication_required'))
+  )
 }
 
 export interface WorkflowScheduleOption {

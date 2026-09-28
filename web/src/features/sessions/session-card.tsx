@@ -66,6 +66,8 @@ import type { SessionResolution } from './use-session-resolution'
 import { SessionTimeline } from './timeline'
 import type { Attribution, LiveDTO } from './types'
 import './i18n'
+import { ActionName } from './action-name'
+import { WorkClause } from './work-clause'
 
 export type { SessionTarget } from './session-target'
 
@@ -206,7 +208,7 @@ function CardBody({
               .filter((part, i, all) => part && all.indexOf(part) === i)
               .join(' · ')}
           >
-            {naming.name}
+            <WorkClause text={naming.name} live={session.live} />
             {naming.shortId ? (
               <span className="font-mono text-caption text-muted-foreground">
                 {' '}
@@ -818,7 +820,11 @@ function Observed({ live, lang }: { live: LiveDTO; lang: string }) {
           {live.model_ref || '—'}
         </KvRow>
         <KvRow label={t('detail.action')} align="start">
-          {live.current_action || '—'}
+          {live.current_action ? (
+            <ActionName value={live.current_action} />
+          ) : (
+            '—'
+          )}
         </KvRow>
         <KvRow label={t('detail.resource')} mono align="start">
           {live.current_resource || '—'}

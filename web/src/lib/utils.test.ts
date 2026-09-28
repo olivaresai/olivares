@@ -67,7 +67,7 @@ describe('cn and the type scale', () => {
     // defect again, on the new step. The token file is the authority.
     const tokens = JSON.parse(
       readFileSync(
-        resolve(__dirname, '../../tokens/primitives.tokens.json'),
+        resolve(__dirname, '../../tokens/console/primitives.tokens.json'),
         'utf8',
       ),
     ) as { type: Record<string, unknown> }

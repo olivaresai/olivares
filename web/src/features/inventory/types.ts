@@ -64,3 +64,107 @@ export interface EntityDetail {
   entry: CatalogEntry
   detail?: Record<string, unknown>
 }
+
+// Collection coverage — a mirror of GET /v1/m/inventory/collections as published in
+// core/api/openapi_inventory_contracts.go (DTOs in modules/inventory/coverage_read.go).
+// Coverage describes ONE opened registration's versioned query over its observed
+// interval: not a global estate snapshot, not a provider authorization.
+
+/** Coverage of the current run. `unknown` is also the answer for a selection with no
+ *  stored report — it is never "none" and never inherited completeness. */
+export type CollectionCoverage =
+  'complete' | 'partial' | 'unavailable' | 'unsupported' | 'unknown'
+
+export type CollectionReason =
+  | ''
+  | 'exhausted'
+  | 'page_limit'
+  | 'repeated_cursor'
+  | 'invalid_response'
+  | 'scope_unproven'
+  | 'scope_mismatch'
+  | 'provider_error'
+  | 'offline'
+  | 'disabled'
+  | 'member_limit'
+  | 'missing_report'
+  | 'protocol_error'
+  | 'gather_error'
+  | 'canceled'
+  | 'sink_error'
+  | 'persistence_rejected'
+  | 'commit_outcome_unknown'
+  | 'persistence_canceled'
+  | 'persistence_unavailable'
+  | 'persistence_error'
+
+/** Queued members stay `pending` until their receipt commits; enumeration alone
+ *  cannot qualify them. */
+export type CollectionProjection = 'pending' | 'committed' | 'failed'
+
+export type CollectionRejection =
+  | 'terminal_conflict'
+  | 'linkage_conflict'
+  | 'member_conflict'
+  | 'receipt_conflict'
+
+/** The current run of the selected registration. With no run, `run_id` and
+ *  `host_started_at` are empty, `run_order` and the counts are zero defaults, and
+ *  coverage is `unknown` with reason `missing_report`. Instants are RFC3339. */
+export interface CollectionResult {
+  run_id: string
+  source_id: string
+  source_revision: number
+  environment_ref: string
+  run_order: number
+  scope_contract?: 'azure-resource-graph/2022-10-01/id-v1'
+  family?: 'azure.resource'
+  /** SHA-256 fingerprints of the versioned query scope. */
+  requested_scope?: string
+  fulfilled_scope?: string
+  coverage: CollectionCoverage
+  reason: CollectionReason
+  projection: CollectionProjection
+  admitted_count: number
+  committed_count: number
+  expected_count: number
+  host_started_at: string
+  host_finished_at?: string
+  producer_started_at?: string
+  producer_finished_at?: string
+  qualified_at?: string
+  rejection_reason?: CollectionRejection
+}
+
+/** Immutable historical qualification for this exact registration and scope. Later
+ *  rejection evidence on the current run does not rewrite it. */
+export interface CollectionQualifiedSuccess {
+  run_id: string
+  source_id: string
+  source_revision: number
+  environment_ref: string
+  scope_contract: 'azure-resource-graph/2022-10-01/id-v1'
+  family: 'azure.resource'
+  requested_scope: string
+  fulfilled_scope: string
+  expected_count: number
+  qualified_at: string
+  host_started_at: string
+  host_finished_at: string
+  producer_started_at: string
+  producer_finished_at: string
+}
+
+/** One head: the current run and, absent until a run qualifies, the last success. */
+export interface CollectionEvidence {
+  current: CollectionResult
+  last_qualified_success?: CollectionQualifiedSuccess
+}
+
+/** 200 page. `items` holds exactly one head for the selection; `has_more` is the
+ *  list-envelope continuation flag, not evidence of collection completeness. */
+export interface CollectionPage {
+  items: CollectionEvidence[]
+  cursor?: string
+  has_more: boolean
+}

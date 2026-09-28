@@ -28,6 +28,7 @@ import { toast } from '@/components/ui/toaster'
 import { sessionNameLadder } from '@/features/home/work-line'
 import { RelTimeLabel } from '@/features/shared'
 import { NamedRef } from '@/features/shared/named-ref'
+import { useClientSettings } from '@/features/settings/preferences'
 import { ApiError } from '@/lib/api/errors'
 import { useAuth } from '@/lib/auth/context'
 import { cn } from '@/lib/utils'
@@ -144,9 +145,13 @@ export function RunDetailSheet({
   )
 
   function RunActions({ run }: { run: RunDTO }) {
+    const { t: tSettings } = useTranslation('settings')
     const canWrite = can('sessions:run:write')
     const canAdmin = can('sessions:run:admin')
-    const [confirm, setConfirm] = useState<null | 'cleanup' | 'delete'>(null)
+    const confirmStop = useClientSettings((s) => s.confirmStop)
+    const [confirm, setConfirm] = useState<
+      null | 'cleanup' | 'delete' | 'stop'
+    >(null)
 
     const invalidate = () =>
       qc.invalidateQueries({ queryKey: agentOpsKeys.all(activeTenant) })
@@ -155,7 +160,10 @@ export function RunDetailSheet({
 
     const stop = useMutation({
       mutationFn: () => agentOpsApi.stop(run.run_ref),
-      onSuccess: () => invalidate(),
+      onSuccess: () => {
+        setConfirm(null)
+        invalidate()
+      },
       onError: onErr,
     })
     const resume = useMutation({
@@ -196,7 +204,7 @@ export function RunDetailSheet({
           <Button
             variant="secondary"
             size="sm"
-            onClick={() => stop.mutate()}
+            onClick={() => (confirmStop ? setConfirm('stop') : stop.mutate())}
             disabled={stop.isPending}
           >
             <Square className="size-3.5" />
@@ -235,6 +243,15 @@ export function RunDetailSheet({
           </Button>
         )}
 
+        <ConfirmDialog
+          open={confirm === 'stop'}
+          onOpenChange={(o) => !o && setConfirm(null)}
+          title={tSettings('stopConfirm.title')}
+          description={tSettings('stopConfirm.description')}
+          confirmLabel={tSettings('stopConfirm.confirm')}
+          pending={stop.isPending}
+          onConfirm={() => stop.mutate()}
+        />
         <ConfirmDialog
           open={confirm === 'cleanup'}
           onOpenChange={(o) => !o && setConfirm(null)}

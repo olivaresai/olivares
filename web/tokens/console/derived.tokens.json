@@ -1,0 +1,18 @@
+{
+  "$description": "Console status hairlines, mixed at runtime from the theme's own status color with color-mix(); emitted in the :root block only. They reference var(--success) and var(--surface) literally, so one definition resolves in BOTH themes: the browser mixes against whatever the cascade resolves under .dark. Decorative: they reinforce a label and never carry a state alone.",
+  "derived": {
+    "$type": "color",
+    "success-line": {
+      "$value": "color-mix(in oklab, var(--success) 32%, var(--surface))"
+    },
+    "warning-line": {
+      "$value": "color-mix(in oklab, var(--warning) 32%, var(--surface))"
+    },
+    "danger-line": {
+      "$value": "color-mix(in oklab, var(--danger) 32%, var(--surface))"
+    },
+    "info-line": {
+      "$value": "color-mix(in oklab, var(--info) 32%, var(--surface))"
+    }
+  }
+}

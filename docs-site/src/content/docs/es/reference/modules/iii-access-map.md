@@ -1,15 +1,16 @@
 ---
 title: "Módulo III — el access map de lectura/escritura"
 description: >-
-  Una capacidad diferenciada clave: un access map de lectura/escritura de cada
-  edge origen→recurso, con el diff Permitido-vs-Observado (least-privilege drift).
-  Cómo se construyen, clasifican y se confía en los edges, y cuáles son los límites.
+  Una capacidad diferenciada clave: un access map de lectura/escritura de los
+  edges origen→recurso que los conectores observaron, con el diff
+  Permitido-vs-Observado (least-privilege drift). Cómo se construyen, clasifican
+  y se confía en los edges, y cuáles son los límites.
 ---
 
 El módulo III es el **access map de lectura/escritura**: qué origen (agente,
 identidad, sesión) toca qué recurso, clasificado como lectura o lectura-escritura, y
 el **diff Permitido-vs-Observado** que aflora el least-privilege drift. Es una de las
-capacidades más útiles y diferenciadas del producto — uno de los 30 módulos, no el
+capacidades más útiles y diferenciadas del producto — uno de los 31 módulos, no el
 producto entero. Esta página es la referencia de lo que el mapa es y de cómo leerlo
 honestamente.
 

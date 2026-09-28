@@ -85,6 +85,18 @@ func a2aInboundSpecForTest(
 	}
 }
 
+// ApplyPreparedProtocolReplay records the replay as ApplyProtocolReplay does:
+// the plan's preparation reads the kernel's stores, which this double has none of.
+func (k *recordingA2AInboundKernel) ApplyPreparedProtocolReplay(
+	ctx context.Context,
+	tenant model.TenantID,
+	claim sessions.ProtocolReplayClaim,
+	_ sessions.ProtocolReplayPlan,
+	mutation sessions.ProtocolReplayMutation,
+) (sessions.ProtocolReplayResult, error) {
+	return k.ApplyProtocolReplay(ctx, tenant, claim, mutation)
+}
+
 func (k *recordingA2AInboundKernel) ApplyProtocolReplay(
 	ctx context.Context,
 	tenant model.TenantID,

@@ -33,13 +33,13 @@ Claude Code は最も深いレベルで統合されています（`PreToolUse`/`
 <br><sub><b>アクセスマップ</b> — 各エージェントが estate 全体で何を読み書きするか。許可対観察。</sub>
 </div>
 
-- **見る。** 発見されたすべてのエージェント、セッション、モデル、MCP サーバー、ツール、アイデンティティのインベントリ。読み書き **アクセスマップ** と Permitted-vs-Observed の **ドリフト** ビュー。ライブセッション、オーケストレーショングラフ、ヘルス、SLA。見えないものは推測せず、`unknown` として示します。
+- **見る。** コネクタが観察したエージェント、セッション、モデル、MCP サーバー、ツール、アイデンティティのインベントリ。読み書き **アクセスマップ** と Permitted-vs-Observed の **ドリフト** ビュー。ライブセッション、オーケストレーショングラフ、ヘルス、SLA。分類できないアクセスは推測せず、`unknown` として示します。どのコネクタも観察していないリソースは表示されず、その不在はそのリソースが存在しない証明ではありません。
 - **作業を実行する。** 所有権、依存関係、受け入れ条件、意思決定を持つ永続的な作業項目。囲い込みリースにより、2 つのエージェントが同じ作業を同時に保持することはできません。Claude Code、Codex、Grok のセッションをコンソールから起動、接続、中断、停止。A2A を介して認可済みピアへ委譲します。
 - **統治して強制する。** Cedar 認可エンジンと **4つの deny-closed エンフォースメントポイント** — Claude Code フック、インライン `/v1/messages` 推論プロキシ、MCP `tools/call` ゲート、A2A 委譲ゲート — により、未認可のアクションは実行前にブロックされるか、2 人承認のために保留されるか、書き換えられます。支出を拒否またはスロットルする予算、二重統制の break-glass、fail closed する estate **kill-switch**。
 - **統治して供給する。** コンテンツソース（SharePoint、Confluence、Google Drive、Notion、Salesforce、Snowflake、S3、Azure AI Search、SAP OData、PostgreSQL、ルートに閉じ込められたファイルシステム）をガバナンス下の検索へ。検索時にクリアランスが deny-closed で強制されます。
 - **証明する。** ハッシュチェーン化され、Ed25519 で署名された監査台帳。**26 のフレームワークカタログ**（EU AI Act、NIST AI RMF、ISO 42001、SOC 2、ISO 27001、GDPR…）にマッピングされた封印済みの証拠 — 自己評価によるコントロールファミリーであり、認証ではありません。SIEM/ITSM プッシュ（CEF/LEEF/syslog/OTLP/OCSF）。WebAuthn/FIDO2、PIV/CAC、SSO、SCIM、BYOK/CMEK、検証済みの消去権。いずれもデプロイごとに構成されます。
 
-**30 のモジュール**、1 つのコンソール、**158 の統合** — コードから導出され、プッシュのたびに [`scripts/check-public-counts.sh`](scripts/check-public-counts.sh) で強制されるカウントです。内訳は [`connectors/README.md`](connectors/README.md)、各モジュールの成熟度は[モジュールカタログ](docs-site/src/content/docs/reference/modules/overview.md)にあります。
+**31 のモジュール**、1 つのコンソール、**159 の統合** — コードから導出され、プッシュのたびに [`scripts/check-public-counts.sh`](scripts/check-public-counts.sh) で強制されるカウントです。内訳は [`connectors/README.md`](connectors/README.md)、各モジュールの成熟度は[モジュールカタログ](docs-site/src/content/docs/reference/modules/overview.md)にあります。
 
 ## インストール
 

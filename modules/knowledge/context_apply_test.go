@@ -188,16 +188,15 @@ func seedContextPolicies(t *testing.T, h *harness, tenant model.TenantID, seeds 
 
 func contextPrincipalWithGroups(t *testing.T, h *harness, admin string, tenant model.TenantID, email, role string, groupNames ...string) (auth.Principal, []string) {
 	t.Helper()
-	ur := h.do("POST", "/v1/users", admin, map[string]any{"email": email, "password": "memberpass1"}, nil)
+	user := map[string]any{"email": email, "password": "memberpass1"}
+	if role != "" {
+		user["tenant"], user["role"] = tenant.String(), role
+	}
+	ur := h.do("POST", "/v1/users", admin, user, nil)
 	if ur.code != http.StatusCreated {
 		t.Fatalf("create user %s = %d %s", email, ur.code, ur.raw)
 	}
 	uid := ur.body["id"].(string)
-	if role != "" {
-		if r := h.do("POST", "/v1/memberships", admin, map[string]any{"user_id": uid, "tenant": tenant.String(), "role": role}, nil); r.code != http.StatusCreated {
-			t.Fatalf("grant membership = %d %s", r.code, r.raw)
-		}
-	}
 
 	var groupIDs []string
 	if len(groupNames) > 0 {

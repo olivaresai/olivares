@@ -25,7 +25,7 @@ boundary is enforced in CI (a connector may never import the engine):
 | Path | License | What it is |
 |---|---|---|
 | `core/` | **AGPL-3.0-only** | the engine: ingest, event bus, data model, module runtime, API, authz, audit |
-| `modules/` | **AGPL-3.0-only** | the 30 modules (inventory, the R/RW map, FinOps, evals, guardrails, …) |
+| `modules/` | **AGPL-3.0-only** | the 31 modules (inventory, the R/RW map, FinOps, evals, guardrails, …) |
 | `web/` | **AGPL-3.0-only** | the React UI |
 | `sdk/` | **Apache-2.0** | the connector/module interfaces, the gRPC contract and the shared types |
 | `connectors/` | **Apache-2.0** | the connectors (Claude, OpenAI, pgAudit, eBPF, cloud, Slack, SIEM, …) |

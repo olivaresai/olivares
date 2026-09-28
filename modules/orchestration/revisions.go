@@ -51,11 +51,11 @@ func schedRevisionDescriptor() model.EntityDescriptor {
 		Table:      schedRevisionTable,
 		AppendOnly: true,
 		Fields: []model.FieldSpec{
-			{Name: colRevSubject, Kind: model.KindText, Indexed: true},
-			{Name: colRevOp, Kind: model.KindText},
-			{Name: colRevSnapshot, Kind: model.KindText},
-			{Name: colRevActor, Kind: model.KindText},
-			{Name: colRevActorK, Kind: model.KindText},
+			{Name: colRevSubject, Kind: model.KindText, Indexed: true, Principal: pdeclNoneRevisionOf},
+			{Name: colRevOp, Kind: model.KindText, Principal: pdeclNoneRevisionOp},
+			{Name: colRevSnapshot, Kind: model.KindText, Principal: pdeclScheduleSnapshot},
+			{Name: colRevActor, Kind: model.KindText, Principal: pdeclActorEvidence},
+			{Name: colRevActorK, Kind: model.KindText, Principal: pdeclNoneActorKind},
 		},
 	}
 }
@@ -220,7 +220,7 @@ func (m *Module) handleRestoreSchedule(w http.ResponseWriter, r *http.Request, m
 	badCombo := false
 	var capDenial *routineDenial
 	raced := false
-	err := m.withAdmissionFence(r.Context(), mc, len(pol.ActiveCaps) > 0, func(sc store.Scope) error {
+	err := m.withAdmissionFence(r.Context(), mc, len(pol.ActiveCaps) > 0, nil, func(sc store.Scope) error {
 		repo, err := sc.Ext(scheduleKind)
 		if err != nil {
 			return err

@@ -1,5 +1,5 @@
 {
-  "$description": "Theme-independent primitives surfaced to Tailwind 4 via @theme inline: the neutral graphite ramp (for surfaces/wells and the access-graph neutrals beyond the semantic tokens), self-hosted font stacks, instrument-grade radii, the fast/mechanical motion curves, the OPERATOR TYPE SCALE and the page container width. Identical in light and dark. Re-derived to a near-neutral cool gray (brandv4 neutrals #28282b / #fafaf9) so the warm-graphite tint no longer survives in graphs/dots. Emitted into the @theme inline{} block by tokens/build.mjs (ADM-CORE-04).",
+  "$description": "Theme-independent primitives surfaced to Tailwind 4 via @theme inline: the neutral graphite ramp (for surfaces/wells and the access-graph neutrals beyond the semantic tokens), self-hosted font stacks, instrument-grade radii, the fast/mechanical motion curves, the OPERATOR TYPE SCALE and the page container width. Identical in light and dark. Re-derived to a near-neutral cool gray (brandv4 neutrals #28282b / #fafaf9) so the warm-graphite tint no longer survives in graphs/dots. The brand source read by the transactional emails, the documentation site, the release diagrams and the website parity check; the console's own v26.10 visual system is generated from tokens/console/ instead.",
   "graphite": {
     "$type": "color",
     "graphite-50": {

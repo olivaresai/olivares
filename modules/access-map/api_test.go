@@ -142,13 +142,9 @@ func (h *harness) editorToken(admin string, tenant model.TenantID, email string)
 // memberToken creates a user, grants it role in tenant, and logs it in.
 func (h *harness) memberToken(admin string, tenant model.TenantID, email, role string) string {
 	h.t.Helper()
-	r := h.post("/v1/users", admin, map[string]any{"email": email, "password": "memberpass1"})
+	r := h.post("/v1/users", admin, map[string]any{"email": email, "password": "memberpass1", "tenant": tenant.String(), "role": role})
 	if r.code != http.StatusCreated {
 		h.t.Fatalf("create user = %d %s", r.code, r.raw)
-	}
-	uid := r.body["id"].(string)
-	if r := h.post("/v1/memberships", admin, map[string]any{"user_id": uid, "tenant": tenant.String(), "role": role}); r.code != http.StatusCreated {
-		h.t.Fatalf("grant = %d %s", r.code, r.raw)
 	}
 	r = h.post("/v1/auth/login", "", map[string]any{"email": email, "password": "memberpass1"})
 	if r.code != http.StatusOK {

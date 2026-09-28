@@ -196,30 +196,39 @@ describe('Tabs — every tab is reachable and activatable by keyboard', () => {
 })
 
 describe('Tabs — overflow affordance', () => {
-  it('reports the edge that hides tabs and shows a pointer button only there', () => {
+  it('reports the edge that hides tabs and enables the pointer button toward it', () => {
     render(<Strip />)
     const list = screen.getByRole('tablist')
     expect(shell()).toHaveAttribute('data-overflow', 'none')
     expect(scrollButtons()).toHaveLength(0)
 
+    // While the strip overflows both buttons keep their places (so a press never changes
+    // the strip's width: tabs.scroll-button.test.tsx); only the one toward a hidden edge is
+    // enabled.
+    const enabled = () =>
+      scrollButtons()
+        .filter((b) => !b.disabled)
+        .map((b) => b.dataset.direction)
     layout(list, { scrollWidth: 1100, clientWidth: 600 })
     list.scrollLeft = 0
     fireEvent.scroll(list)
     expect(shell()).toHaveAttribute('data-overflow', 'end')
-    expect(scrollButtons().map((b) => b.dataset.direction)).toEqual(['end'])
-
-    list.scrollLeft = 200
-    fireEvent.scroll(list)
-    expect(shell()).toHaveAttribute('data-overflow', 'both')
     expect(scrollButtons().map((b) => b.dataset.direction)).toEqual([
       'start',
       'end',
     ])
+    expect(enabled()).toEqual(['end'])
+
+    list.scrollLeft = 200
+    fireEvent.scroll(list)
+    expect(shell()).toHaveAttribute('data-overflow', 'both')
+    expect(enabled()).toEqual(['start', 'end'])
 
     list.scrollLeft = 500
     fireEvent.scroll(list)
     expect(shell()).toHaveAttribute('data-overflow', 'start')
-    expect(scrollButtons().map((b) => b.dataset.direction)).toEqual(['start'])
+    expect(scrollButtons()).toHaveLength(2)
+    expect(enabled()).toEqual(['start'])
 
     layout(list, { scrollWidth: 600, clientWidth: 600 })
     fireEvent.scroll(list)
@@ -233,7 +242,11 @@ describe('Tabs — overflow affordance', () => {
     layout(list, { scrollWidth: 1100, clientWidth: 600 })
     list.scrollLeft = 0
     fireEvent.scroll(list)
-    const [end] = scrollButtons()
+    const byDirection = (d: string) =>
+      scrollButtons().find(
+        (b) => b.dataset.direction === d,
+      ) as HTMLButtonElement
+    const end = byDirection('end')
     expect(end).toHaveAttribute('aria-hidden', 'true')
     expect(end).toHaveAttribute('tabindex', '-1')
     fireEvent.click(end)
@@ -241,8 +254,8 @@ describe('Tabs — overflow affordance', () => {
     // the button takes the instant path; a browser animates it).
     expect(list.scrollLeft).toBe(360)
     fireEvent.scroll(list)
-    const [start] = scrollButtons()
-    expect(start.dataset.direction).toBe('start')
+    const start = byDirection('start')
+    expect(start).not.toBeDisabled()
     fireEvent.click(start)
     expect(list.scrollLeft).toBe(0)
   })

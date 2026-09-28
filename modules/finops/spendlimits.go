@@ -284,7 +284,7 @@ func (m *Module) SpendLimitUpsert(ctx context.Context, tenant model.TenantID, in
 	}
 	var out SpendLimit
 	created := false
-	err = m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+	err = m.fencedMutate(ctx, tenant, spendLimitSubjects(spec), func(sc store.Scope) error {
 		matches, err := findSpendLimitPolicies(ctx, sc, spec)
 		if err != nil {
 			return err

@@ -1,7 +1,7 @@
 ---
 title: "Live-ingest — the in-process observe producer"
 description: >-
-  One of the 30 modules: the "live-tap" producer that publishes the detective
+  One of the 31 modules: the "live-tap" producer that publishes the detective
   events an out-of-process connector cannot emit. Deny-closed and minimal-data: it
   moves no raw content, and every observe half it owns is honestly empty rather than
   faked. Partial — it is opt-in and env-gated.
@@ -81,7 +81,7 @@ fabricates no telemetry until a backend feeds it.
 - [Module II — live operation & sessions](/reference/modules/ii-sessions/) — derives its
   own `goal` / `agent_ref` / `summary` directly from signals it already consumes, rather
   than via a live-ingest event.
-- [Modules catalog](/reference/modules/overview/) — the 30 modules and the honest
+- [Modules catalog](/reference/modules/overview/) — the 31 modules and the honest
   Govern/Observe-vs-Actuate split this in-process producer backs.
 - [Architecture overview](/explanation/architecture/overview/) — where in-process
   modules and out-of-process connectors sit.

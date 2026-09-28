@@ -305,6 +305,28 @@ func observationToPB(obs model.Observation) (*pb.Observation, error) {
 	// Accept value or pointer DTOs: the DTOs use value receivers, so a pointer
 	// also satisfies Observation, and a connector may legitimately Emit either.
 	switch o := obs.(type) {
+	case model.InventoryCollectionStart:
+		return &pb.Observation{Payload: &pb.Observation_CollectionStart{CollectionStart: &pb.InventoryCollectionStart{Scope: &pb.InventoryScope{Contract: o.Scope.Contract, Family: o.Scope.Family, Selectors: append([]string(nil), o.Scope.Selectors...)}, ObservedAt: tsToPB(o.ObservedAt)}}}, nil
+	case *model.InventoryCollectionStart:
+		if o == nil {
+			return nil, fmt.Errorf("plugin: nil inventory start")
+		}
+		return observationToPB(*o)
+	case model.InventoryCollectionMember:
+		return &pb.Observation{Payload: &pb.Observation_CollectionMember{CollectionMember: &pb.InventoryCollectionMember{Edge: edgeToPB(o.Edge)}}}, nil
+	case *model.InventoryCollectionMember:
+		if o == nil {
+			return nil, fmt.Errorf("plugin: nil inventory member")
+		}
+		return observationToPB(*o)
+	case model.InventoryCollectionReport:
+		return &pb.Observation{Payload: &pb.Observation_CollectionReport{CollectionReport: &pb.InventoryCollectionReport{State: o.State, Reason: o.Reason, RequestedScope: o.RequestedScope, FulfilledScope: o.FulfilledScope, Count: o.Count, ObservedUntil: tsToPB(o.ObservedUntil)}}}, nil
+	case *model.InventoryCollectionReport:
+		if o == nil {
+			return nil, fmt.Errorf("plugin: nil inventory report")
+		}
+		return observationToPB(*o)
+
 	case model.EdgeObservation:
 		return &pb.Observation{Payload: &pb.Observation_Edge{Edge: edgeToPB(o)}}, nil
 	case *model.EdgeObservation:
@@ -330,6 +352,24 @@ func observationToPB(obs model.Observation) (*pb.Observation, error) {
 // An empty/unknown oneof is a contract error.
 func observationFromPB(o *pb.Observation) (model.Observation, error) {
 	switch p := o.GetPayload().(type) {
+	case *pb.Observation_CollectionStart:
+		v := p.CollectionStart
+		if v == nil || v.Scope == nil {
+			return nil, fmt.Errorf("plugin: invalid inventory start")
+		}
+		return model.InventoryCollectionStart{Scope: model.InventoryScope{Contract: v.Scope.Contract, Family: v.Scope.Family, Selectors: append([]string(nil), v.Scope.Selectors...)}, ObservedAt: tsFromPB(v.ObservedAt)}, nil
+	case *pb.Observation_CollectionMember:
+		if p.CollectionMember == nil || p.CollectionMember.Edge == nil {
+			return nil, fmt.Errorf("plugin: invalid inventory member")
+		}
+		return model.InventoryCollectionMember{Edge: edgeFromPB(p.CollectionMember.Edge)}, nil
+	case *pb.Observation_CollectionReport:
+		v := p.CollectionReport
+		if v == nil {
+			return nil, fmt.Errorf("plugin: invalid inventory report")
+		}
+		return model.InventoryCollectionReport{State: v.State, Reason: v.Reason, RequestedScope: v.RequestedScope, FulfilledScope: v.FulfilledScope, Count: v.Count, ObservedUntil: tsFromPB(v.ObservedUntil)}, nil
+
 	case *pb.Observation_Edge:
 		return edgeFromPB(p.Edge), nil
 	case *pb.Observation_Cost:

@@ -36,6 +36,10 @@ func newWorkflowCommunicationFixtureFromDirect(
 	fixture directNoticeFixture,
 ) workflowCommunicationFixture {
 	t.Helper()
+	// The workflow Handoff and the protocol interrupt name accounts, so each
+	// reads their standing before its transaction; the estate binds the store's
+	// own authenticator as that port.
+	fixture.m.UseStanding(auth.NewAuthenticator(fixture.st, nil))
 	ctx := context.Background()
 	targetUser, err := fixture.authr.OnboardMember(
 		ctx, fixture.authUser, fixture.tenant, auth.OnboardInput{
@@ -106,8 +110,8 @@ func newWorkflowCommunicationFixtureFromDirect(
 	if err != nil {
 		t.Fatalf("encode workflow target grant: %v", err)
 	}
-	if _, err := communicationCreateWithID(
-		ctx, fixture.m, fixture.tenant, channelGrantKind, grantID, grantRecord,
+	if _, err := communicationCreateFencedWithID(
+		ctx, fixture.m, fixture.st, fixture.tenant, channelGrantKind, grantID, grantRecord, targetUser.User.ID,
 	); err != nil {
 		t.Fatalf("create workflow target grant: %v", err)
 	}
@@ -116,8 +120,8 @@ func newWorkflowCommunicationFixtureFromDirect(
 	work[colWorkOwnerKind] = string(RecipientUser)
 	work[colWorkOwnerRef] = fixture.sender.String()
 	work[colWorkLastEventSeq] = int64(1)
-	if _, err := communicationCreateWithID(
-		ctx, fixture.m, fixture.tenant, workItemKind, workID, work,
+	if _, err := communicationCreateFencedWithID(
+		ctx, fixture.m, fixture.st, fixture.tenant, workItemKind, workID, work, fixture.sender,
 	); err != nil {
 		t.Fatalf("create workflow WorkItem: %v", err)
 	}
@@ -182,20 +186,32 @@ func workflowCommunicationRecord(
 	return nil
 }
 
+// workflowSQLiteBackend is the SQLite estate the workflow tests bind a run in.
+func workflowSQLiteBackend(t *testing.T, name string) communicationSchemaBackend {
+	return communicationSchemaBackend{
+		name: "sqlite", engineName: store.EngineSQLite, dsn: t.TempDir() + "/" + name + ".db",
+	}
+}
+
+// Each workflow test runs a bound run's actor through the production
+// composition (workflow_communication_binding_test.go): the real Authenticator
+// resolves the run's credential binding and the governance-composed Authorizer
+// decides. The identity-only operation port is counted and must stay unused.
 func TestWorkflowWorkTaskPersistsAndReplaysWithDurableCursor(t *testing.T) {
 	t.Parallel()
 
-	fixture := newWorkflowCommunicationFixture(t, false)
+	f := newWorkflowBindingFixture(t, workflowSQLiteBackend(t, "work-task"), false)
+	fixture := f.workflowCommunicationFixture
 	ctx := context.Background()
 	cmd := WorkflowWorkTaskCommand{
-		Actor: fixture.actor, WorkItemID: fixture.workID, ChannelID: fixture.channel.ID,
+		Actor: f.bound, WorkItemID: fixture.workID, ChannelID: fixture.channel.ID,
 		Recipient: fixture.target,
 		Content: MessageContent{Subject: "Continue K4", Blocks: []MessageContentBlock{{
 			Type: ContentBlockText, Format: TextPlain, Text: "Apply the next owned work step.",
 		}}},
 		IdempotencyKey: "workflow-task:" + model.NewID().String(),
 	}
-	result, err := fixture.m.SendWorkflowWorkTask(ctx, fixture.tenant, cmd)
+	result, err := f.send(ctx, cmd)
 	if err != nil {
 		t.Fatalf("send workflow WorkTask: %v", err)
 	}
@@ -220,7 +236,7 @@ func TestWorkflowWorkTaskPersistsAndReplaysWithDurableCursor(t *testing.T) {
 		event.String(colEventType) != workflowWorkTaskEventType {
 		t.Fatalf("workflow WorkTask Event = %+v", event)
 	}
-	replayed, err := fixture.m.SendWorkflowWorkTask(ctx, fixture.tenant, cmd)
+	replayed, err := f.send(ctx, cmd)
 	if err != nil {
 		t.Fatalf("replay workflow WorkTask: %v", err)
 	}
@@ -229,8 +245,8 @@ func TestWorkflowWorkTaskPersistsAndReplaysWithDurableCursor(t *testing.T) {
 		replayed.EventSeq != result.EventSeq {
 		t.Fatalf("workflow WorkTask replay = %+v, want %+v", replayed, result)
 	}
-	observation, err := fixture.m.ObserveWorkflowAck(ctx, fixture.tenant, WorkflowAckQuery{
-		Actor: fixture.actor, TargetKind: WorkflowAckTargetMessage, TargetID: result.MessageID,
+	observation, err := f.observe(ctx, WorkflowAckQuery{
+		Actor: f.bound, TargetKind: WorkflowAckTargetMessage, TargetID: result.MessageID,
 	})
 	if err != nil {
 		t.Fatalf("observe workflow WorkTask: %v", err)
@@ -239,8 +255,8 @@ func TestWorkflowWorkTaskPersistsAndReplaysWithDurableCursor(t *testing.T) {
 		observation.EventSeq != result.EventSeq || observation.Detail != "message_available" {
 		t.Fatalf("workflow WorkTask observation = %+v", observation)
 	}
-	consumed, err := fixture.m.ObserveWorkflowAck(ctx, fixture.tenant, WorkflowAckQuery{
-		Actor: fixture.actor, TargetKind: WorkflowAckTargetMessage,
+	consumed, err := f.observe(ctx, WorkflowAckQuery{
+		Actor: f.bound, TargetKind: WorkflowAckTargetMessage,
 		TargetID: result.MessageID, AfterEventSeq: result.EventSeq,
 	})
 	if err != nil {
@@ -249,22 +265,24 @@ func TestWorkflowWorkTaskPersistsAndReplaysWithDurableCursor(t *testing.T) {
 	if consumed.Status != WorkflowAckPending || consumed.EventID != "" || consumed.EventSeq != 0 {
 		t.Fatalf("consumed workflow WorkTask observation = %+v", consumed)
 	}
+	f.requireLegacyUnused()
 }
 
 func TestWorkflowHandoffUsesExactCarrierAndOffer(t *testing.T) {
 	t.Parallel()
 
-	fixture := newWorkflowCommunicationFixture(t, true)
+	f := newWorkflowBindingFixture(t, workflowSQLiteBackend(t, "handoff"), true)
+	fixture := f.workflowCommunicationFixture
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	t.Cleanup(cancel)
 	cmd := WorkflowHandoffCommand{
-		Actor: fixture.actor, WorkItemID: fixture.workID, ChannelID: fixture.channel.ID,
+		Actor: f.bound, WorkItemID: fixture.workID, ChannelID: fixture.channel.ID,
 		Target:      fixture.target,
 		Content:     HandoffContent{Summary: "Transfer K4 work", NextAction: "Continue the owned step"},
 		AckDeadline: fixture.now.Add(4 * time.Minute), ExpectedOwnerEpoch: 1,
 		IdempotencyKey: "workflow-handoff:" + model.NewID().String(),
 	}
-	result, err := fixture.m.OfferWorkflowHandoff(ctx, fixture.tenant, cmd)
+	result, err := f.offer(ctx, cmd)
 	if err != nil {
 		t.Fatalf("offer workflow Handoff: %v", err)
 	}
@@ -293,7 +311,7 @@ func TestWorkflowHandoffUsesExactCarrierAndOffer(t *testing.T) {
 		handoff.ContextEventSeq != 2 {
 		t.Fatalf("stored workflow Handoff = %+v", handoff)
 	}
-	replayed, err := fixture.m.OfferWorkflowHandoff(ctx, fixture.tenant, cmd)
+	replayed, err := f.offer(ctx, cmd)
 	if err != nil {
 		t.Fatalf("replay workflow Handoff: %v", err)
 	}
@@ -302,8 +320,8 @@ func TestWorkflowHandoffUsesExactCarrierAndOffer(t *testing.T) {
 		replayed.EventSeq != result.EventSeq {
 		t.Fatalf("workflow Handoff replay = %+v, want %+v", replayed, result)
 	}
-	observation, err := fixture.m.ObserveWorkflowAck(ctx, fixture.tenant, WorkflowAckQuery{
-		Actor: fixture.actor, TargetKind: WorkflowAckTargetHandoff, TargetID: result.HandoffID,
+	observation, err := f.observe(ctx, WorkflowAckQuery{
+		Actor: f.bound, TargetKind: WorkflowAckTargetHandoff, TargetID: result.HandoffID,
 	})
 	if err != nil {
 		t.Fatalf("observe workflow Handoff: %v", err)
@@ -312,6 +330,9 @@ func TestWorkflowHandoffUsesExactCarrierAndOffer(t *testing.T) {
 		observation.EventSeq != result.EventSeq || observation.Detail != "handoff_offered" {
 		t.Fatalf("workflow Handoff observation = %+v", observation)
 	}
+	// The target answers through the exact K3 seam under the same composed
+	// policy, so it needs a role that grants the response: it becomes an editor.
+	f.setTargetRole(auth.RoleEditor)
 	response, err := fixture.m.respondHandoffWithAuthority(
 		ctx, fixture.scope, fixture.targetRef, result.HandoffID,
 		HandoffResponseCommand{
@@ -326,8 +347,8 @@ func TestWorkflowHandoffUsesExactCarrierAndOffer(t *testing.T) {
 		response.EventID.IsZero() || response.OwnerEpoch != 2 {
 		t.Fatalf("workflow Handoff response = %+v", response)
 	}
-	accepted, err := fixture.m.ObserveWorkflowAck(ctx, fixture.tenant, WorkflowAckQuery{
-		Actor: fixture.actor, TargetKind: WorkflowAckTargetHandoff,
+	accepted, err := f.observe(ctx, WorkflowAckQuery{
+		Actor: f.bound, TargetKind: WorkflowAckTargetHandoff,
 		TargetID: result.HandoffID, AfterEventSeq: result.EventSeq,
 	})
 	if err != nil {
@@ -338,15 +359,17 @@ func TestWorkflowHandoffUsesExactCarrierAndOffer(t *testing.T) {
 		accepted.Detail != "handoff_accepted" {
 		t.Fatalf("accepted workflow Handoff observation = %+v", accepted)
 	}
+	f.requireLegacyUnused()
 }
 
 func TestWorkflowHandoffRejectsOwnerEpochBeforeCarrier(t *testing.T) {
 	t.Parallel()
 
-	fixture := newWorkflowCommunicationFixture(t, true)
+	f := newWorkflowBindingFixture(t, workflowSQLiteBackend(t, "stale-owner"), true)
+	fixture := f.workflowCommunicationFixture
 	beforeMessages := len(communicationRowsForTest(t, fixture.directNoticeFixture, messageKind))
-	_, err := fixture.m.OfferWorkflowHandoff(context.Background(), fixture.tenant, WorkflowHandoffCommand{
-		Actor: fixture.actor, WorkItemID: fixture.workID, ChannelID: fixture.channel.ID,
+	_, err := f.offer(context.Background(), WorkflowHandoffCommand{
+		Actor: f.bound, WorkItemID: fixture.workID, ChannelID: fixture.channel.ID,
 		Target:      fixture.target,
 		Content:     HandoffContent{Summary: "Stale transfer", NextAction: "Must not be offered"},
 		AckDeadline: fixture.now.Add(4 * time.Minute), ExpectedOwnerEpoch: 2,
@@ -359,4 +382,5 @@ func TestWorkflowHandoffRejectsOwnerEpochBeforeCarrier(t *testing.T) {
 		len(communicationRowsForTest(t, fixture.directNoticeFixture, handoffKind)) != 0 {
 		t.Fatal("stale workflow Handoff persisted a carrier or aggregate")
 	}
+	f.requireLegacyUnused()
 }

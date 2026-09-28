@@ -64,6 +64,11 @@ func errorBody(msg string) map[string]any {
 	return map[string]any{"error": map[string]string{"message": msg}}
 }
 
+// errorBodyCode is the error envelope with a stable machine code.
+func errorBodyCode(code, msg string) map[string]any {
+	return map[string]any{"error": map[string]string{"code": code, "message": msg}}
+}
+
 // writeStoreError maps a store error to an HTTP status. THE MAPPING ITSELF IS NOT
 // HERE: it is api.StoreErrorStatus (core/api/moduleerrors.go), which derives the
 // status from the same statusFor that answers core/api's own routes. This module

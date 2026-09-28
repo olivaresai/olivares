@@ -89,7 +89,18 @@
     "results": "Resultados",
     "searchResults": "Resultados en tus datos",
     "searchTruncated": "Hay más coincidencias — afina la búsqueda.",
-    "searchDegraded": "Algunas fuentes no se han podido consultar — esta lista está incompleta."
+    "searchDegraded": "Algunas fuentes no se han podido consultar — esta lista está incompleta.",
+    "deniedReason": "Necesita {{permission}}.",
+    "deniedHelp": "Pida a un administrador que pueda concederlo.",
+    "noTargetReason": "Necesita una organización en la que ejecutarse.",
+    "noTargetHelp": "Seleccione una organización y vuelva a intentarlo.",
+    "goTo": "Ir a",
+    "recentSessions": "Sesiones recientes",
+    "settingsGroup": "Ajustes",
+    "scope": "en {{name}}",
+    "footerMove": "mover",
+    "footerOpen": "abrir",
+    "footerCommands": "solo comandos"
   },
   "status": {
     "active": "Activo",
@@ -259,5 +270,53 @@
     "problems_other": "No se han podido leer {{count}} atajos y no funcionan: {{commands}}",
     "problems_many": "No se han podido leer {{count}} atajos y no funcionan: {{commands}}",
     "navRailNote": "La barra es una sola parada de tabulación. Estas teclas funcionan cuando tiene el foco."
+  },
+  "ui": {
+    "status": {
+      "working": "Trabajando",
+      "needsYou": "Te necesita",
+      "done": "Hecho",
+      "failed": "Falló",
+      "paused": "En pausa",
+      "idle": "Sin empezar"
+    },
+    "state": {
+      "loading": "Cargando…",
+      "filtered": {
+        "hidden_one": "Los filtros ocultan {{count}} elemento.",
+        "hidden_many": "Los filtros ocultan {{count}} elementos.",
+        "hidden_other": "Los filtros ocultan {{count}} elementos.",
+        "clear": "Quitar filtros"
+      },
+      "error": {
+        "title": "No se pudo contactar con el motor.",
+        "description": "La lista no está vacía. No se pudo leer.",
+        "retry": "Reintentar",
+        "diagnostics": "Abrir diagnóstico",
+        "request": "Solicitud {{id}} · {{time}}",
+        "requestId": "Solicitud {{id}}"
+      },
+      "stale": {
+        "message": "Se muestran los resultados de las <0>{{lastGood}}</0>. La actualización de las {{failedAt}} falló.",
+        "retry": "Reintentar"
+      },
+      "noAccess": {
+        "title": "No puedes abrir esto",
+        "description": "Tu rol no lo incluye. No se muestra nada más sobre ello."
+      },
+      "unknown": {
+        "title": "La solicitud se envió y la respuesta se perdió.",
+        "description": "Comprobando la misma solicitud con el motor. No la envíes otra vez.",
+        "checking": "Solicitud {{id}} · comprobando desde hace {{elapsed}}",
+        "retry": "Enviar otra vez",
+        "retryReason": "Disponible cuando el motor confirme que no se inició nada."
+      }
+    },
+    "codeLine": {
+      "label": "Lo mismo en un terminal",
+      "copy": "Copiar comando",
+      "copied": "Copiado",
+      "copyFailed": "No se pudo copiar. Selecciona el comando y cópialo."
+    }
   }
 }

@@ -293,8 +293,8 @@ func TestABRegressionEmittedOnBus(t *testing.T) {
 	// Baseline A/B: both variants correct (1.0); no prior ⇒ no regression delivered.
 	base := h.do("POST", "/v1/m/evals/ab", admin, map[string]any{
 		"suite_ref": suiteID, "subject_ref": "p",
-		"a": map[string]any{"label": "v1", "outputs": map[string]any{"c1": "a", "c2": "b"}},
-		"b": map[string]any{"label": "v2", "outputs": map[string]any{"c1": "a", "c2": "b"}},
+		"a": map[string]any{"label": "v1", "model_ref": "fixture-model", "outputs": map[string]any{"c1": "a", "c2": "b"}},
+		"b": map[string]any{"label": "v2", "model_ref": "fixture-model", "outputs": map[string]any{"c1": "a", "c2": "b"}},
 	}, tenantHdr(tenant))
 	if base.code != http.StatusOK {
 		t.Fatalf("baseline ab = %d %s", base.code, base.raw)
@@ -307,8 +307,8 @@ func TestABRegressionEmittedOnBus(t *testing.T) {
 	// Worse A/B, same labels+subject ⇒ each variant regresses vs its prior run.
 	cand := h.do("POST", "/v1/m/evals/ab", admin, map[string]any{
 		"suite_ref": suiteID, "subject_ref": "p",
-		"a": map[string]any{"label": "v1", "outputs": map[string]any{"c1": "wrong", "c2": "wrong"}},
-		"b": map[string]any{"label": "v2", "outputs": map[string]any{"c1": "wrong", "c2": "wrong"}},
+		"a": map[string]any{"label": "v1", "model_ref": "fixture-model", "outputs": map[string]any{"c1": "wrong", "c2": "wrong"}},
+		"b": map[string]any{"label": "v2", "model_ref": "fixture-model", "outputs": map[string]any{"c1": "wrong", "c2": "wrong"}},
 	}, tenantHdr(tenant))
 	if cand.code != http.StatusOK {
 		t.Fatalf("candidate ab = %d %s", cand.code, cand.raw)

@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 )
@@ -152,6 +153,48 @@ func lockPolicyAuthorizationEpoch(ctx context.Context, sc store.Scope) error {
 		return policyAuthorizationEpochUnavailable("authorization epoch is exhausted", nil)
 	}
 	return nil
+}
+
+// lockOrCheckPolicyAuthorizationEpoch is lockPolicyAuthorizationEpoch for a writer
+// that may already have pinned the epoch with the directory authority barrier
+// (fenced): then the epoch is locked already, and only its exhaustion is checked.
+func lockOrCheckPolicyAuthorizationEpoch(ctx context.Context, sc store.Scope, fenced bool) error {
+	if !fenced {
+		return lockPolicyAuthorizationEpoch(ctx, sc)
+	}
+	epochs, ok := sc.(store.AuthorizationEpochReader)
+	if !ok {
+		return policyAuthorizationEpochUnavailable("scope lacks authorization epoch capability", nil)
+	}
+	current, err := epochs.ReadAuthorizationEpoch(ctx)
+	if err != nil {
+		return policyAuthorizationEpochUnavailable("read the pinned authorization epoch", err)
+	}
+	if !validPolicyAuthorizationEpochFact(sc.Tenant(), current) {
+		return policyAuthorizationEpochUnavailable("the pinned authorization epoch is not exact for the tenant", nil)
+	}
+	if current.Version == math.MaxInt64 {
+		return policyAuthorizationEpochUnavailable("authorization epoch is exhausted", nil)
+	}
+	return nil
+}
+
+// pinPolicyAuthorizationEpochWitness is lockPolicyAuthorizationEpochWitness for a
+// fenced writer: with refs it takes the epoch through the directory authority
+// barrier, pinned with the named accounts' authority versions, and checks the same
+// exactness; without refs it is lockPolicyAuthorizationEpochWitness.
+func pinPolicyAuthorizationEpochWitness(ctx context.Context, sc store.Scope, refs []store.UserAuthorityFactRef) (store.AuthorizationFactRef, error) {
+	if len(refs) == 0 {
+		return lockPolicyAuthorizationEpochWitness(ctx, sc)
+	}
+	pinned, err := auth.PinFence(ctx, sc, auth.FenceAuthorization, refs)
+	if err != nil {
+		return store.AuthorizationFactRef{}, err
+	}
+	if !validPolicyAuthorizationEpochFact(sc.Tenant(), pinned) {
+		return store.AuthorizationFactRef{}, policyAuthorizationEpochUnavailable("the pinned authorization epoch is not exact for the tenant", nil)
+	}
+	return pinned, nil
 }
 
 // lockPolicyAuthorizationEpochWitness reads and locks the exact canonical fact, then

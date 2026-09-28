@@ -27,6 +27,7 @@ func TestOrchestrationRequestBodyCensus(t *testing.T) {
 		{http.MethodPost, "/workflows/{id}/restore", orchestrationBodyful, true},
 		{http.MethodPost, "/workflows/{id}/dry-run", orchestrationBodyless, false},
 		{http.MethodPost, "/workflows/{id}/run", orchestrationBodyful, false},
+		{http.MethodPost, "/workflows/{id}/runs/{run}/reauthorize", orchestrationBodyful, true},
 	}
 	counts := map[orchestrationRequestBodyKind]int{}
 	for _, test := range tests {
@@ -44,7 +45,7 @@ func TestOrchestrationRequestBodyCensus(t *testing.T) {
 		}
 		counts[test.kind]++
 	}
-	want := map[orchestrationRequestBodyKind]int{orchestrationBodyful: 9, orchestrationBodyless: 1}
+	want := map[orchestrationRequestBodyKind]int{orchestrationBodyful: 10, orchestrationBodyless: 1}
 	if !reflect.DeepEqual(counts, want) {
 		t.Fatalf("census = %#v, want %#v", counts, want)
 	}
@@ -76,5 +77,27 @@ func TestOrchestrationSchemasMatchStrictHandlerContracts(t *testing.T) {
 			t.Fatalf("duplicate step kind %q", kind)
 		}
 		seen[kind] = true
+	}
+}
+
+// The reauthorize handler decodes one strict JSON document with a required,
+// non-empty plan_hash (modules/orchestration/workflow_reauthorize.go), so the
+// published schema is a closed object that requires it.
+func TestOrchestrationReauthorizeSchemaMatchesStrictHandler(t *testing.T) {
+	t.Parallel()
+	route := moduleRoute{ns: "orchestration", method: http.MethodPost, pattern: "/workflows/{id}/runs/{run}/reauthorize"}
+	if got := moduleRequestBodyDispositionFor(route); got != moduleRequestBodySchemaPublished {
+		t.Fatalf("disposition = %q, want %q", got, moduleRequestBodySchemaPublished)
+	}
+	schema := orchestrationReauthorizeSchema()
+	if schema["additionalProperties"] != false {
+		t.Fatal("reauthorize decoder rejects unknown fields")
+	}
+	if got := capabilitiesSortedStrings(schema["required"]); !reflect.DeepEqual(got, []string{"plan_hash"}) {
+		t.Fatalf("reauthorize required = %v, want [plan_hash]", got)
+	}
+	planHash := schema["properties"].(map[string]any)["plan_hash"].(map[string]any)
+	if planHash["type"] != "string" || planHash["minLength"] != 1 {
+		t.Fatalf("plan_hash = %#v, want a non-empty string", planHash)
 	}
 }

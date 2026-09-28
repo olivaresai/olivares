@@ -383,7 +383,7 @@ func TestPricingFor_FamilyPrefix(t *testing.T) {
 		{"claude-opus-4-8", 5, true},  // current Opus = $5 (not the deprecated $15)
 		{"claude-opus-4-1", 15, true}, // deprecated Opus 4.1 keeps $15
 		{"claude-opus-4-0", 15, true}, // deprecated Opus 4.0 keeps $15
-		{"claude-sonnet-5", 3, true},  // Sonnet 5 keeps the durable Sonnet $3/$15 list price
+		{"claude-sonnet-5", 2, true},  // Sonnet 5 standard list price is $2/$10
 		{"claude-sonnet-4-6", 3, true},
 		{"claude-haiku-4-5", 1, true},             // current Haiku 4.5 = $1 (not retired $0.80)
 		{"claude-3-5-haiku-20241022", 0.80, true}, // retired Haiku 3.5 keeps $0.80
@@ -412,10 +412,10 @@ func TestPricingFor_Sonnet5(t *testing.T) {
 	if ctxWin != 1_000_000 || maxOut != 128_000 {
 		t.Fatalf("sonnet-5 window/output = %d/%d, want 1M/128K", ctxWin, maxOut)
 	}
-	if p.InputPerMTokUSD != 3 || p.OutputPerMTokUSD != 15 ||
-		p.CacheWritePerMTokUSD != 3.75 || p.CacheWrite1hPerMTokUSD != 6 ||
-		p.CacheReadPerMTokUSD != 0.30 || p.AsOf != "2026-07-03" {
-		t.Fatalf("sonnet-5 pricing = %+v, want 3/15 + cache 3.75/6/0.30 as of 2026-07-03", p)
+	if p.InputPerMTokUSD != 2 || p.OutputPerMTokUSD != 10 ||
+		p.CacheWritePerMTokUSD != 2.50 || p.CacheWrite1hPerMTokUSD != 4 ||
+		p.CacheReadPerMTokUSD != 0.20 || p.AsOf != "2026-09-27" {
+		t.Fatalf("sonnet-5 pricing = %+v, want 2/10 + cache 2.50/4/0.20 as of 2026-09-27", p)
 	}
 }
 

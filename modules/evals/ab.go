@@ -28,8 +28,11 @@ import (
 // the block is a DECLARED skip, never a fabricated winner.
 
 type abVariantInput struct {
-	Label   string            `json:"label"`
-	Outputs map[string]string `json:"outputs"`
+	ModelRef    string             `json:"model_ref,omitempty"`
+	BaselineRef string             `json:"baseline_ref,omitempty"`
+	Comparison  *ComparisonRequest `json:"comparison,omitempty"`
+	Label       string             `json:"label"`
+	Outputs     map[string]string  `json:"outputs"`
 }
 
 type abRequest struct {
@@ -44,10 +47,11 @@ type abRequest struct {
 }
 
 type abVariantResult struct {
-	Label    string  `json:"label"`
-	RunRef   string  `json:"run_ref"`
-	Score    float64 `json:"score"`
-	PassRate float64 `json:"pass_rate"`
+	Comparison ComparisonEvidence `json:"comparison"`
+	Label      string             `json:"label"`
+	RunRef     string             `json:"run_ref"`
+	Score      float64            `json:"score"`
+	PassRate   float64            `json:"pass_rate"`
 }
 
 // abPairwiseDTO is the judged-comparison block. Mode is "judged" or "skipped"
@@ -84,6 +88,12 @@ func (m *Module) handleAB(w http.ResponseWriter, r *http.Request, mc api.ModuleC
 	if !decodeJSON(w, r, &req) {
 		return
 	}
+	comparisonA, validA := normalizeComparison(req.A.Comparison, req.A.BaselineRef)
+	comparisonB, validB := normalizeComparison(req.B.Comparison, req.B.BaselineRef)
+	if !validA || !validB {
+		writeJSON(w, http.StatusBadRequest, errorBody("invalid comparison or baseline_ref"))
+		return
+	}
 	suiteID, ok := idParam(req.SuiteRef)
 	if !ok {
 		writeJSON(w, http.StatusBadRequest, errorBody("suite_ref is required"))
@@ -98,10 +108,21 @@ func (m *Module) handleAB(w http.ResponseWriter, r *http.Request, mc api.ModuleC
 
 	var suite suiteDTO
 	var cases []caseDTO
+	var subjA, subjB runSubject
 	found := false
 	err := mc.Data.View(r.Context(), func(sc store.Scope) error {
 		s, cs, ok, lerr := loadSuiteAndCases(r.Context(), sc, suiteID)
 		suite, cases, found = s, cs, ok
+		if lerr != nil || !ok {
+			return lerr
+		}
+		subjA = runSubject{suiteRef: suiteID.String(), suiteVer: s.SuiteVersion, subjectKind: firstNonEmpty(req.SubjectKind, s.SubjectKind), subjectRef: req.SubjectRef, modelRef: req.A.ModelRef, variant: labelA, baselineRef: req.A.BaselineRef, launchedBy: mc.Principal.Actor(), comparison: comparisonA}
+		subjB = runSubject{suiteRef: suiteID.String(), suiteVer: s.SuiteVersion, subjectKind: firstNonEmpty(req.SubjectKind, s.SubjectKind), subjectRef: req.SubjectRef, modelRef: req.B.ModelRef, variant: labelB, baselineRef: req.B.BaselineRef, launchedBy: mc.Principal.Actor(), comparison: comparisonB}
+		subjA.plan, lerr = m.prepareComparison(r.Context(), sc, s, subjA, cs, cs, m.scorerByID(s.Scorer), "", 0)
+		if lerr != nil {
+			return lerr
+		}
+		subjB.plan, lerr = m.prepareComparison(r.Context(), sc, s, subjB, cs, cs, m.scorerByID(s.Scorer), "", 0)
 		return lerr
 	})
 	if err != nil {
@@ -128,11 +149,11 @@ func (m *Module) handleAB(w http.ResponseWriter, r *http.Request, mc api.ModuleC
 	var regA, regB regressionInfo
 	err = mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
 		var rerr error
-		resA, regA, rerr = m.persistVariant(r.Context(), mc, sc, suite, suiteID, req.SubjectKind, req.SubjectRef, labelA, aggA)
+		resA, regA, rerr = m.persistVariant(r.Context(), mc, sc, suite, subjA, labelA, aggA)
 		if rerr != nil {
 			return rerr
 		}
-		resB, regB, rerr = m.persistVariant(r.Context(), mc, sc, suite, suiteID, req.SubjectKind, req.SubjectRef, labelB, aggB)
+		resB, regB, rerr = m.persistVariant(r.Context(), mc, sc, suite, subjB, labelB, aggB)
 		return rerr
 	})
 	if err != nil {
@@ -162,22 +183,17 @@ func (m *Module) handleAB(w http.ResponseWriter, r *http.Request, mc api.ModuleC
 
 // persistVariant persists one already-scored variant run (in the open transaction)
 // and self-audits the launch.
-func (m *Module) persistVariant(ctx context.Context, mc api.ModuleContext, sc store.Scope, suite suiteDTO, suiteID model.ID, subjectKind, subjectRef, label string, agg runAggregate) (abVariantResult, regressionInfo, error) {
-	subj := runSubject{
-		suiteRef: suiteID.String(), suiteVer: suite.SuiteVersion,
-		subjectKind: firstNonEmpty(subjectKind, suite.SubjectKind), subjectRef: subjectRef,
-		variant: label, launchedBy: mc.Principal.Actor(),
-	}
+func (m *Module) persistVariant(ctx context.Context, mc api.ModuleContext, sc store.Scope, suite suiteDTO, subj runSubject, label string, agg runAggregate) (abVariantResult, regressionInfo, error) {
 	dto, reg, err := m.persistRun(ctx, sc, suite, subj, agg)
 	if err != nil {
 		return abVariantResult{}, regressionInfo{}, err
 	}
 	if err := auditEvent(ctx, sc, mc, "evals.ab.score", runKind, model.ID(dto.ID), map[string]any{
-		"suite_ref": suiteID.String(), "variant": label, "score": agg.score, "pass_rate": agg.passRate,
+		"suite_ref": subj.suiteRef, "variant": label, "score": agg.score, "pass_rate": agg.passRate,
 	}); err != nil {
 		return abVariantResult{}, regressionInfo{}, err
 	}
-	return abVariantResult{Label: label, RunRef: dto.ID, Score: agg.score, PassRate: agg.passRate}, reg, nil
+	return abVariantResult{Comparison: dto.Comparison, Label: label, RunRef: dto.ID, Score: agg.score, PassRate: agg.passRate}, reg, nil
 }
 
 // judgePairwise runs the order-swapped judged comparison over every case both

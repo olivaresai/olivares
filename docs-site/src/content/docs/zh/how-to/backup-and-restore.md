@@ -1,5 +1,5 @@
 ---
-title: "备份与恢复（能自证的灾备）"
+title: "备份与恢复"
 description: >-
   使用 olivares dr 进行加密的、账本连续性安全的备份：面向 SQLite 与 Postgres
   的定时捆绑包、会验证账本链的恢复、无需触及生产环境即可运行的演练——以及决定
@@ -8,8 +8,9 @@ description: >-
 
 控制平面的备份比大多数备份的任务更艰巨：它必须带着其**可证明完好无损、篡改可检测的
 账本**回来。`olivares dr` 正是围绕这一要求构建的——每个捆绑包都记录每个租户的
-链尖，恢复在**所恢复的账本不具备连续性安全时以非零状态失败**，而演练子命令则
-在不触及生产环境的情况下证明一个捆绑包可恢复。
+链尖，恢复在**所恢复的账本不具备连续性安全时以非零状态失败**。`dr drill`
+在临时目录里的合成账本上检查从备份到恢复的账本连续性，并打印测得的 RTO。
+它不检查授权、密钥保管，也不检查恢复点之后的效果，并且不触及生产数据目录。
 
 捆绑包在**由你提供的 KEK** 下加密——一个 Argon2id 派生的口令
 （`--passphrase-file`）或一个来自你的 KMS 的原始 32 字节密钥
@@ -50,9 +51,12 @@ PITR 配置（`deploy/postgres/backup/pitr-setup.md`）配对使用；包装脚�
 [备份 profile](/zh/tutorials/getting-started/docker-compose/#3-加密的-dr-备份backup-profile)，
 Helm chart 提供了一个
 [CronJob](/zh/tutorials/getting-started/kubernetes/#4-定时加密备份)；
-在裸机上，把上面的命令放进 cron。你的调度间隔**就是**你的 RPO：
+在裸机上，把上面的命令放进 cron。表中的数字是目标。对于 cron 分级，RPO
+目标就是 cron 间隔。`dr drill` 在合成账本上测量 SQLite 的 RTO（恢复、启动
+与校验）。它不测量 RPO，也不测量 Postgres 恢复。测得的 SQLite RTO 连同
+事件数量和主机记在 `docs/DR-RUNBOOK.md`；它们不是本表中的目标。
 
-| 分级 | 机制 | RPO | RTO |
+| 分级 | 机制 | 目标 RPO | 目标 RTO |
 |---|---|---|---|
 | SQLite | cron 上的 `dr backup` | cron 间隔 | < 15 分钟 |
 | Postgres 逻辑备份 | cron 上的 `pg-dump.sh` | cron 间隔 | < 30 分钟 |
@@ -63,8 +67,10 @@ Helm chart 提供了一个
 
 ## 演练——在你需要它之前
 
-`dr verify` 在**不触及你的数据目录**的情况下证明一个捆绑包可恢复（SQLite：在
-临时目录中进行完整链验证；若不安全则以非零状态退出）：
+`dr verify` 在**不触及你的数据目录**的情况下检查捆绑包。对 SQLite，它在
+临时目录中恢复并校验账本连续性，该检查失败时以非零状态退出。对 Postgres，
+它检查捆绑包摘要以及密钥能否解密。Postgres 捆绑包的完整链校验需要恢复到
+一个临时 Postgres。用下面的命令运行检查：
 
 ```bash
 olivares dr verify --in /backups/olivares-dr-<ts>.drbundle \

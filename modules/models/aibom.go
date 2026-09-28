@@ -423,16 +423,16 @@ func registerAIBOMSchema(reg store.ExtensionRegistry) error {
 	return reg.Register(model.EntityDescriptor{
 		Kind: aibomKind, Table: aibomTable, AppendOnly: true,
 		Fields: []model.FieldSpec{
-			{Name: colAIOwned, Kind: model.KindText, Indexed: true},
-			{Name: colAISerial, Kind: model.KindText},
-			{Name: colAIContentHsh, Kind: model.KindText, Indexed: true},
-			{Name: colAISpecVer, Kind: model.KindText},
+			{Name: colAIOwned, Kind: model.KindText, Indexed: true, Principal: model.None("the owned-model id written at aibom.go:553, filtered at aibom.go:574-575")},
+			{Name: colAISerial, Kind: model.KindText, Principal: pdeclNoneSealSerial},
+			{Name: colAIContentHsh, Kind: model.KindText, Indexed: true, Principal: pdeclNoneSealHash},
+			{Name: colAISpecVer, Kind: model.KindText, Principal: pdeclNoneSealSpec},
 			{Name: colAICompCount, Kind: model.KindInt},
 			{Name: colAILedgerSeq, Kind: model.KindInt},
-			{Name: colAILedgerHash, Kind: model.KindText, Nullable: true},
-			{Name: colAIScopeNote, Kind: model.KindText, Nullable: true},
-			{Name: colAIGenBy, Kind: model.KindText, Nullable: true},
-			{Name: colAIGenAt, Kind: model.KindText, Nullable: true},
+			{Name: colAILedgerHash, Kind: model.KindText, Nullable: true, Principal: pdeclNoneSealLedger},
+			{Name: colAIScopeNote, Kind: model.KindText, Nullable: true, Principal: pdeclNoneSealScope},
+			{Name: colAIGenBy, Kind: model.KindText, Nullable: true, Principal: pdeclActorEvidence},
+			{Name: colAIGenAt, Kind: model.KindText, Nullable: true, Principal: pdeclNoneSealGenAt},
 		},
 	})
 }

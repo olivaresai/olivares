@@ -101,6 +101,40 @@ func (l BoundedReadLimits) Validate() error {
 // workspace-confined reader denies them: policies carry no workspace lineage.
 func (o BoundedReadOptions) PolicyReadAllowed() bool { return o.boundary == nil }
 
+// AccessEvidenceReadAllowed reports whether access-evidence reads are
+// permitted. A workspace-confined reader denies them, like the confined Scope's
+// access-evidence store: access evidence carries no workspace lineage.
+func (o BoundedReadOptions) AccessEvidenceReadAllowed() bool { return o.boundary == nil }
+
+// BoundedColumn is one requested column of a projection. MaxBytes is the
+// explicit admission bound of a variable column's driver representation
+// (text, JSON, timestamp, UUID or bytes) and must lie in 1..MaxCellBytes. A
+// fixed-width column (integer, float or bool) takes 0. There is no default.
+type BoundedColumn struct {
+	Name     string
+	MaxBytes uint64
+}
+
+// BoundedProjection requests named columns of one registry extension kind.
+// Query carries the filters and, for ProjectBounded, the page Limit and
+// Cursor; ProjectBoundedOne requires Limit 0 and no Cursor. Sort and
+// IncludeDeleted are refused. The id column is always returned and is never
+// listed; deleted_at cannot be projected.
+type BoundedProjection struct {
+	Kind    model.Kind
+	Query   model.Query
+	Columns []BoundedColumn
+}
+
+// PolicyArtifactBounds are the explicit admission bounds of one bounded
+// policy-artifact read: ContentBytes bounds the stored JSON content column and
+// MetadataBytes bounds every other variable column read. Both must lie in
+// 1..MaxCellBytes. They bound driver representation, not logical content.
+type PolicyArtifactBounds struct {
+	ContentBytes  uint64
+	MetadataBytes uint64
+}
+
 // ExtensionConstraint returns the forced lineage filter for a registry-derived
 // descriptor. confined=false means no boundary applies. A confined reader over
 // a descriptor that declares no lineage receives ErrWorkspaceLineageRequired.
@@ -121,11 +155,30 @@ func (o BoundedReadOptions) ExtensionConstraint(
 // BoundedReader reads complete records within its limits. It is valid only
 // for the lifetime of the Scope that created it, and its owner must use that
 // Scope sequentially.
+//
+// ProjectBounded and ProjectBoundedOne read only the requested columns under
+// their own bounds; the returned Record holds id and exactly those columns.
+// ProjectBoundedOne decides absence (ErrNotFound) and ambiguity
+// (ErrBoundedReadMetadata) from at most two selected keys, before any row is
+// locked, inspected or loaded. GetPolicyArtifact reads one access-evidence
+// artifact's integrity columns under its bounds and decodes it only after the
+// complete row is admitted.
+//
+// In a PostgreSQL Mutate transaction every read, ProjectBoundedOne and
+// GetPolicyArtifact included, locks its selected row FOR UPDATE before
+// measuring it. That lock needs the UPDATE privilege, which an application role
+// separate from the schema owner does not hold on an append-only table such as
+// the policy artifacts, so such a read is expected to fail with insufficient
+// privilege, ending the reader and aborting the caller's transaction. A caller
+// reads an append-only kind through a reader of a View transaction.
 type BoundedReader interface {
 	GetPolicySnapshot(context.Context, model.ID) (PolicySnapshot, error)
 	ListPolicySnapshots(context.Context, model.Query) ([]PolicySnapshot, model.Page, error)
 	GetExtension(context.Context, model.Kind, model.ID) (model.Record, error)
 	ListExtensions(context.Context, model.Kind, model.Query) ([]model.Record, model.Page, error)
+	ProjectBounded(context.Context, BoundedProjection) ([]model.Record, model.Page, error)
+	ProjectBoundedOne(context.Context, BoundedProjection) (model.Record, error)
+	GetPolicyArtifact(context.Context, model.ID, PolicyArtifactBounds) (model.PolicyArtifact, error)
 	Usage() BoundedReadUsage
 }
 

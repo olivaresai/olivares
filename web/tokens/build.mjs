@@ -2,19 +2,25 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// ADM-CORE-04 — brandv4 design tokens: DTCG (2025.10) -> Style Dictionary
-// -> src/styles/tokens.css. The .tokens.json files under tokens/ are the SINGLE
-// SOURCE OF TRUTH for the design tokens that used to hand-author directly in
-// index.css. This pipeline regenerates the :root{} / .dark{} CSS-var blocks and
-// the Tailwind 4 @theme inline{} block from those sources, byte-equivalently to
-// the identity (copper #f08000, the confidence teal/slate axis, both AA+
-// themes). Run `pnpm tokens` to regenerate; `pnpm tokens:check` fails CI if the
-// committed output drifts from the sources (the openapi:check pattern).
+// Console design tokens: DTCG (2025.10) -> Style Dictionary -> src/styles/tokens.css.
+// The .tokens.json files under tokens/console/ are the SINGLE SOURCE OF TRUTH for the
+// console's v26.10 visual system. This pipeline writes the :root{} (light) and .dark{}
+// CSS-variable blocks, the Tailwind 4 @theme inline{} block, and the density and motion
+// blocks from those sources. Run `pnpm tokens` to regenerate; `pnpm tokens:check` fails CI
+// if the committed output drifts from the sources.
 //
-// Style Dictionary is the standard, interoperable pipeline (the .tokens source can
-// be shared with the public web + brand). We use it to PARSE + RESOLVE the DTCG
-// sources, then emit with full control over ordering/format so the output stays
-// byte-stable and readable. Node >=22, ESM (style-dictionary@5 is ESM-only).
+// TWO LAYERS, ON PURPOSE. The files directly under tokens/ are the BRAND source that the
+// transactional emails, the documentation site, the release diagrams and the website
+// parity check read; this generator does not read them, so a console redesign cannot
+// restyle an email or break the website's parity check by accident, and a brand change
+// reaches the console only through a deliberate edit of tokens/console/.
+//
+// Style Dictionary PARSES and RESOLVES the DTCG sources; this file emits them with full
+// control over ordering and format so the output stays byte-stable and readable. An
+// authored value is emitted verbatim (hex, rgba(), color-mix(), multi-layer shadow, font
+// stack); a DTCG alias (`{palette.canvas}`) is emitted as the value it resolves to, so a
+// role name and the palette token it stands for can never hold two values.
+// Node >=22, ESM (style-dictionary@5 is ESM-only).
 import StyleDictionary from 'style-dictionary'
 import { writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -32,7 +38,10 @@ StyleDictionary.registerTransform({
   transform: (token) => token.path[token.path.length - 1],
 })
 
-/** Build one source set into an ordered [{name, value}] list (verbatim values). */
+/** A value authored as a DTCG alias, e.g. `{palette.canvas}`. */
+const isAlias = (v) => typeof v === 'string' && /^\{[^{}]+\}$/.test(v.trim())
+
+/** Build one source set into an ordered [{name, value, path}] list. */
 async function load(sources) {
   let captured = []
   StyleDictionary.registerFormat({
@@ -42,8 +51,12 @@ async function load(sources) {
         name: t.name,
         // original.$value is the authored DTCG value, emitted verbatim (hex,
         // rgba(), color-mix(...), multi-layer shadow, font stack) with no
-        // lossy color/size transform — exact identity preservation.
-        value: t.original?.$value ?? t.$value ?? t.value,
+        // lossy color/size transform — exact identity preservation. An alias is
+        // the one exception: it is emitted as the value Style Dictionary resolved.
+        value: isAlias(t.original?.$value)
+          ? t.$value
+          : (t.original?.$value ?? t.$value ?? t.value),
+        path: t.path,
       }))
       return '' // we capture in-memory; no file written by this format
     },
@@ -99,10 +112,47 @@ function block(selector, entries, sections) {
   return lines.join('\n')
 }
 
-// --- ordered emit plan (mirrors the index.css structure for readability) ---
+// --- ordered emit plan (the reading order of the generated file) ---
+// The v26.10 palette, under the names the design gives it.
+const PALETTE_NEUTRALS = [
+  'frame',
+  'canvas',
+  'surface',
+  'raised',
+  'hover',
+  'active',
+  'line',
+  'line-strong',
+  'ctl-border',
+  'scrim',
+]
+const PALETTE_TEXT = ['text', 'text-2', 'text-3']
+const PALETTE_ACCENT = [
+  'accent',
+  'on-accent',
+  'accent-text',
+  'accent-soft',
+  'accent-line',
+  'accent-border',
+  'focus',
+]
+const PALETTE_STATUS = [
+  'ok',
+  'ok-soft',
+  'warn',
+  'warn-soft',
+  'bad',
+  'bad-soft',
+  'info',
+  'info-soft',
+  'diff-add',
+  'diff-del',
+]
+// Depth and atmosphere: plain variables, not Tailwind colors.
+const PALETTE_DEPTH = ['shadow-pop', 'shadow-card', 'ember']
+// The role names the components use, each an alias of a palette token or a measured value.
 const SURFACES = [
   'background',
-  'surface',
   'elevated',
   'overlay',
   'muted',
@@ -113,39 +163,27 @@ const SURFACES = [
   'ring',
 ]
 const ACCENT = [
-  'accent',
   'accent-foreground',
   'accent-hover',
   'accent-active',
-  'accent-text',
-  'accent-soft',
   'accent-soft-foreground',
-  'accent-line',
 ]
 const SEMANTIC = [
   'success',
   'warning',
   'danger',
-  'info',
   'danger-solid',
   'danger-solid-foreground',
+  'success-soft',
+  'warning-soft',
+  'danger-soft',
 ]
 const CONFIDENCE = ['confidence-attributed', 'confidence-approximate']
 const ELEV = ['elev-xs', 'elev-sm', 'elev-md', 'elev-lg', 'elev-xl']
-const DERIVED = [
-  'success-soft',
-  'success-line',
-  'warning-soft',
-  'warning-line',
-  'danger-soft',
-  'danger-line',
-  'info-soft',
-  'info-line',
-]
-// Kept OUT of DERIVED: the *-line tokens are resting container hairlines that only
-// ever reinforce a label, and the AT gate waives them as advisory. This one is the
-// SOLE identifier of the selected/active state on the session-viewer rows, so it is
-// held to SC 1.4.11 (>=3:1) and gated as a blocking pair. Different duty, own name.
+// Hairlines mixed at runtime from the theme's status color; emitted in :root only.
+const DERIVED = ['success-line', 'warning-line', 'danger-line', 'info-line']
+// The SOLE identifier of the selected/active state on the session-viewer rows, so it is
+// held to SC 1.4.11 (>=3:1): the palette's accent-border under the role name.
 const SELECTION = ['accent-strong']
 const GRAPHITE = [
   'graphite-50',
@@ -161,24 +199,33 @@ const GRAPHITE = [
   'graphite-950',
 ]
 const FONTS = ['font-sans', 'font-mono', 'font-display']
-const RADII = ['radius-sm', 'radius-md', 'radius-lg', 'radius-xl']
-const MOTION = ['ease-out', 'ease-in', 'animate-pulse-live']
-// The operator type scale. Emitted as Tailwind 4 `--text-<name>` entries WITH
-// their `--line-height` / `--letter-spacing` / `--font-weight` sub-keys, so one
-// utility (`text-title`) carries all four decisions instead of four utilities that
-// drift apart. Ordered largest-first: the emit plan is the reading order of the file.
+const RADII = [
+  'radius-ctl',
+  'radius-card',
+  'radius-panel',
+  'radius-sm',
+  'radius-md',
+  'radius-lg',
+  'radius-xl',
+]
+// The type ladder. Emitted as Tailwind 4 `--text-<name>` entries WITH their
+// `--line-height` / `--letter-spacing` / `--font-weight` sub-keys, so one utility
+// (`text-title`) carries all four decisions. Ordered largest-first.
 const TYPE_STEPS = [
+  'hero',
   'display-lg',
   'display',
   'title',
   'heading',
+  'body-l',
   'body',
   'caption',
   'overline',
+  'mono',
+  'mono-s',
 ]
 const TYPE_SUBKEYS = ['line-height', 'letter-spacing', 'font-weight']
-// The shell's geometry, named instead of bracketed: the content width, and the C1
-// pixel budgets (header height, rail and inspector widths, the two row heights).
+// The shell's geometry, named instead of bracketed.
 const LAYOUT = [
   'container-page',
   'console-header-height',
@@ -194,61 +241,107 @@ const MOTION_DEFAULTS = [
   'default-transition-duration',
   'default-transition-timing-function',
 ]
+// Density and pace: plain variables switched by an attribute on <html> (and, for pace,
+// by the reduced-motion media query), emitted outside @theme.
+const DENSITY = ['density-row-list', 'density-row-table', 'density-control']
+const PACE = [
+  'duration-fast',
+  'duration-panel',
+  'duration-sheet',
+  'motion-shift',
+]
 
-const light = await load(['theme.light.tokens.json', 'derived.tokens.json'])
-const dark = await load(['theme.dark.tokens.json'])
-const prim = await load(['primitives.tokens.json'])
+const light = await load([
+  'console/theme.light.tokens.json',
+  'console/derived.tokens.json',
+])
+const dark = await load(['console/theme.dark.tokens.json'])
+const primAll = await load(['console/primitives.tokens.json'])
+// Density and pace carry one value per variant under the same leaf name; they are read
+// by their group path and emitted in their own blocks, never through the @theme map.
+const variantGroups = new Set(['density', 'pace'])
+const prim = primAll.filter((e) => !variantGroups.has(e.path[0]))
+function variant(group, name) {
+  const entries = primAll.filter(
+    (e) => e.path[0] === group && e.path[1] === name,
+  )
+  if (entries.length === 0) throw new Error(`no ${group}.${name} tokens`)
+  return entries
+}
 
-const rootBlock = block(':root', light, [
-  { comment: 'Surfaces & text — LIGHT', names: SURFACES },
-  { comment: 'Brand accent (single orange) — LIGHT', names: ACCENT },
+const PALETTE = [
+  { comment: 'Palette — neutrals', names: PALETTE_NEUTRALS },
+  { comment: 'Palette — text', names: PALETTE_TEXT },
+  { comment: 'Palette — the brand orange, by role', names: PALETTE_ACCENT },
+  { comment: 'Palette — status and diff', names: PALETTE_STATUS },
+  { comment: 'Palette — depth and atmosphere', names: PALETTE_DEPTH },
+]
+const ROLES = [
+  { comment: 'Roles — surfaces and text', names: SURFACES },
+  { comment: 'Roles — the orange', names: ACCENT },
+  { comment: 'Roles — status', names: SEMANTIC },
   {
-    comment: 'Semantics — LIGHT (text/solid; soft fill + line derived below)',
-    names: SEMANTIC,
-  },
-  {
-    comment: 'Access-graph confidence (orthogonal cool axis) — LIGHT',
+    comment: 'Roles — access-graph confidence (a cool axis apart from status)',
     names: CONFIDENCE,
   },
+  { comment: 'Roles — elevation', names: ELEV },
   {
-    comment: 'Elevation — LIGHT (depth from layered surfaces + hairlines)',
-    names: ELEV,
-  },
-  {
-    comment:
-      'Semantic soft fills + lines — derived from the (theme-switched) hue',
-    names: DERIVED,
-  },
-  {
-    comment:
-      'Selection/active indicator — accent held at >=3:1 vs surface & background (SC 1.4.11)',
+    comment: 'Roles — selection indicator, >=3:1 on its neighbours (SC 1.4.11)',
     names: SELECTION,
+  },
+]
+
+const rootBlock = block(':root', light, [
+  ...PALETTE.map((s) => ({ ...s, comment: `${s.comment} — LIGHT` })),
+  ...ROLES,
+  {
+    comment: 'Status hairlines, mixed at runtime from the theme status color',
+    names: DERIVED,
   },
 ])
 
 const darkBlock = block('.dark', dark, [
-  {
-    comment: 'Surfaces & text — DARK (primary operator surface)',
-    names: SURFACES,
-  },
-  { comment: 'Brand accent — DARK', names: ACCENT },
-  // El indicador de selección se emite también en OSCURO desde el 2026-08-18: `derived` sólo se
-  // carga en el bloque claro, así que fijar el claro a un hex explícito habría dejado al oscuro sin
-  // definición. El valor de aquí es el `color-mix` que el oscuro YA resolvía por herencia, de modo
-  // que el tema oscuro —hoy en cero bloqueantes— no cambia.
-  { comment: 'Selection/active indicator — DARK', names: SELECTION },
-  { comment: 'Semantics — DARK', names: SEMANTIC },
-  { comment: 'Confidence — DARK', names: CONFIDENCE },
-  {
-    comment:
-      'Elevation — DARK (borders + inset top highlight carry the lit edge)',
-    names: ELEV,
-  },
+  ...PALETTE.map((s) => ({ ...s, comment: `${s.comment} — DARK` })),
+  ...ROLES,
 ])
+
+const comfortableBlock = block(
+  ":root, [data-density='comfortable']",
+  variant('density', 'comfortable'),
+  [{ comment: 'Density — comfortable (the default)', names: DENSITY }],
+)
+// Its own :root block, after the two themes: the first :root of the file stays the
+// light theme, and this one sits before the two blocks that stop movement.
+const motionBlock = block(':root', variant('pace', 'full'), [
+  { comment: 'Motion — durations and entrance distance', names: PACE },
+])
+const compactBlock = block(
+  "[data-density='compact']",
+  variant('density', 'compact'),
+  [
+    {
+      comment: 'Density — compact (spacing only; type does not change)',
+      names: DENSITY,
+    },
+  ],
+)
+const reduced = variant('pace', 'reduced')
+const reducedSections = [
+  { comment: 'Reduced motion — movement stops', names: PACE },
+]
+const reducedMediaBlock = block(':root', reduced, reducedSections)
+  .split('\n')
+  .map((l) => `  ${l}`)
+  .join('\n')
+const reducedBlock = block("[data-motion='reduce']", reduced, reducedSections)
 
 // @theme inline maps the theme-switched CSS vars to Tailwind 4 color utilities
 // (re-resolved per theme at runtime), plus the theme-independent primitives.
 const themeColorNames = [
+  ...PALETTE_NEUTRALS,
+  ...PALETTE_TEXT,
+  ...PALETTE_ACCENT,
+  ...PALETTE_STATUS,
   ...SURFACES,
   ...ACCENT,
   ...SEMANTIC,
@@ -258,9 +351,7 @@ const themeColorNames = [
 ]
 const primMap = new Map(prim.map((e) => [e.name, e.value]))
 const themeLines = ['@theme inline {']
-themeLines.push(
-  '  /* Surfaces, accent, semantics & confidence — mapped to the theme vars */',
-)
+themeLines.push('  /* Palette and roles — mapped to the theme vars */')
 for (const name of themeColorNames)
   themeLines.push(`  --color-${name}: var(--${name});`)
 themeLines.push('')
@@ -270,20 +361,18 @@ themeLines.push(
 for (const name of GRAPHITE)
   themeLines.push(`  --color-${name}: ${primMap.get(name)};`)
 themeLines.push('')
-themeLines.push(
-  '  /* Typography (all self-hosted via @fontsource-variable in main.tsx) */',
-)
+themeLines.push('  /* Typography — self-hosted in src/styles/fonts.css */')
 for (const name of FONTS)
   themeLines.push(`  --${name}:\n    ${primMap.get(name)};`)
 themeLines.push('')
-themeLines.push('  /* Radii — tight/instrument-grade */')
+themeLines.push('  /* Radii — controls, cards, panels */')
 for (const name of RADII) themeLines.push(`  --${name}: ${primMap.get(name)};`)
 themeLines.push('')
 themeLines.push('  /* Elevation (theme-switched via --elev-*) */')
 for (const name of ELEV)
   themeLines.push(`  --shadow-${name.replace('elev-', '')}: var(--${name});`)
 themeLines.push('')
-themeLines.push('  /* Motion — fast, mechanical, no bounce */')
+themeLines.push('  /* Motion — one easing curve, no bounce */')
 themeLines.push(`  --ease-out: ${primMap.get('ease-out')};`)
 themeLines.push(`  --ease-in: ${primMap.get('ease-in')};`)
 themeLines.push(`  --animate-pulse-live: ${primMap.get('animate-pulse-live')};`)
@@ -297,7 +386,7 @@ for (const name of MOTION_DEFAULTS) {
 }
 themeLines.push('')
 themeLines.push(
-  '  /* Operator type scale — size + leading + tracking + weight per step */',
+  '  /* Type ladder — size + leading + tracking + weight per step */',
 )
 for (const step of TYPE_STEPS) {
   const base = `text-${step}`
@@ -326,25 +415,27 @@ const header = `/* SPDX-FileCopyrightText: 2026 Olivares.AI */
 /* SPDX-License-Identifier: AGPL-3.0-only */
 
 /*
- * Olivares Operations Console — design tokens (brand-aligned, dark-first).
+ * Olivares AI console — design tokens (v26.10 visual system).
  *
- * GENERATED FILE — DO NOT EDIT. Source of truth: web/tokens/*.tokens.json (DTCG
- * 2025.10). Regenerate with \`pnpm tokens\`; \`pnpm tokens:check\` guards drift in CI.
- * The :root{} / .dark{} CSS-var blocks and the Tailwind 4 @theme inline{} block
- * below are emitted from the final Olivares brand identity (brandv4, 2026-06-10): brand neutrals #28282b / #fafaf9, the single brand orange #f08000 — the FILL
- * (--accent) in BOTH themes, deepened to #b45500 only where it is TEXT on the light
- * canvas (--accent-text) — and the attributed/approximate confidence
- * axis. Every TEXT pair is AA or better in both themes; the light accent FILL against
- * the canvas is deliberately below the 3:1 non-text threshold (2.58:1), because the
- * brand orange cannot reach it there — a declared trade-off, not an oversight. The tokens are not hand-authored (ADM-CORE-04): they are generated from a
- * standard, interoperable DTCG source via Style Dictionary.
+ * GENERATED FILE — DO NOT EDIT. Source of truth: web/tokens/console/*.tokens.json
+ * (DTCG 2025.10). Regenerate with \`pnpm tokens\`; \`pnpm tokens:check\` guards drift in CI.
+ * Blocks, in order: the LIGHT theme (:root), the DARK theme (.dark), the Tailwind 4
+ * @theme inline mapping, density (comfortable by default, compact by attribute) and
+ * motion (stopped under prefers-reduced-motion and under the Reduce motion setting).
+ * Each theme holds the palette — four layered neutrals, three text tones, the single
+ * brand orange #f08000 by role, status colors with soft fills — and the role names the
+ * components use, each resolved from the palette. Every text token is at least 4.5:1 and
+ * every control boundary, focus ring and selection border at least 3:1 on every surface
+ * of its theme (src/styles/tokens.test.ts measures the 372 pairs).
  */
 `
 
 writeFileSync(
   OUT,
-  `${header}\n${rootBlock}\n\n${darkBlock}\n\n${themeLines.join('\n')}\n`,
+  `${header}\n${rootBlock}\n\n${darkBlock}\n\n${themeLines.join('\n')}\n\n` +
+    `${comfortableBlock}\n\n${compactBlock}\n\n${motionBlock}\n\n` +
+    `@media (prefers-reduced-motion: reduce) {\n${reducedMediaBlock}\n}\n\n${reducedBlock}\n`,
 )
 console.log(
-  `tokens.css written (${light.length} light, ${dark.length} dark, ${prim.length} primitives)`,
+  `tokens.css written (${light.length} light, ${dark.length} dark, ${primAll.length} primitives)`,
 )

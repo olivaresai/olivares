@@ -1,34 +1,72 @@
 {
   "title": "Einstellungen",
-  "subtitle": "Verwalten Sie Ihr Konto und das Erscheinungsbild der Konsole.",
-  "tabs": {
-    "profile": "Profil",
-    "appearance": "Erscheinungsbild",
-    "about": "Info"
+  "restoreAll": "Alle Standards wiederherstellen",
+  "search": "Einstellungen suchen",
+  "changedReset": "Geändert · zurücksetzen",
+  "noMatches": "Keine Einstellung passt.",
+  "groups": {
+    "you": "Sie",
+    "work": "Arbeit",
+    "installation": "Diese Installation"
   },
-  "profile": {
-    "title": "Profil",
-    "email": "E-Mail",
-    "displayName": "Anzeigename",
-    "role": "Rolle in dieser Organisation",
-    "memberships": "Organisationen",
-    "actor": "Principal"
+  "nav": {
+    "general": "Allgemein",
+    "notifications": "Benachrichtigungen",
+    "keyboard": "Tastatur",
+    "sessionDefaults": "Sitzungsstandards",
+    "aiTools": "KI-Werkzeuge",
+    "workspaces": "Arbeitsbereiche",
+    "deploy": "Bereitstellung und Updates",
+    "signIn": "Anmeldung und Sicherheit",
+    "setup": "Einrichtung",
+    "about": "Info",
+    "sections": "Einstellungsbereiche"
   },
-  "appearance": {
-    "title": "Erscheinungsbild",
-    "theme": "Design",
-    "themeHint": "Wählen Sie hell, dunkel oder folgen Sie Ihrem System.",
-    "density": "Tabellendichte",
-    "densityHint": "Kompakt zeigt mehr Zeilen; komfortabel ist großzügiger.",
+  "general": {
+    "title": "Allgemein",
+    "scope": "Ihre eigenen Einstellungen. Sie gelten in jedem Arbeitsbereich dieser Installation.",
+    "theme": "Thema",
+    "themeHint": "Dunkel, außer Sie wählen Hell oder folgen dem System.",
+    "density": "Dichte",
+    "densityHint": "Kompakt zeigt mehr Zeilen; bequem lässt sich leichter lesen.",
     "language": "Sprache",
-    "languageHint": "Die Sprache der Konsolenoberfläche."
+    "languageHint": "English, Español, Deutsch, Français, 日本語, Русский, 中文.",
+    "time": "Uhrzeit",
+    "timeHint": "Zeiten erscheinen in Ihrer Zone ({{zone}}). Aufzeichnungen und Exporte bleiben in UTC.",
+    "clock24": "24 Stunden",
+    "clock12": "12 Stunden",
+    "startPage": "Startseite",
+    "startPageHint": "Was sich nach der Anmeldung öffnet. Standard: Start.",
+    "confirmStop": "Vor dem Beenden einer Sitzung bestätigen",
+    "confirmStopHint": "Einmal fragen, bevor Stopp eine noch laufende Sitzung beendet.",
+    "reduceMotion": "Bewegung reduzieren",
+    "reduceMotionHint": "Ersetzt Bewegung durch Überblendungen. An, wenn das System es verlangt."
+  },
+  "unavailable": {
+    "notifications": "Benachrichtigungen werden in dieser Installation noch nicht gespeichert.",
+    "sessionDefaults": "Sitzungsstandards werden in dieser Installation noch nicht gespeichert.",
+    "signIn": "Die Anmelderichtlinie wird auf diesem Bildschirm noch nicht bearbeitet."
+  },
+  "keyboard": {
+    "title": "Tastatur",
+    "scope": "Die Tasten, die diese Installation beantwortet. Sie gelten für alle gleich."
   },
   "about": {
     "title": "Info",
+    "scope": "Diese Installation und der angemeldete Prinzipal.",
     "version": "Version",
     "engine": "Speicher-Engine",
     "license": "Lizenzstatus",
     "licensee": "Lizenziert für",
-    "none": "Keine"
+    "none": "Keine",
+    "displayName": "Anzeigename",
+    "actor": "Prinzipal",
+    "role": "Rolle in dieser Organisation",
+    "memberships": "Organisationen"
+  },
+  "stopConfirm": {
+    "title": "Diese Sitzung beenden?",
+    "description": "Beenden schließt eine Sitzung, die noch arbeitet.",
+    "confirm": "Sitzung beenden"
   }
 }

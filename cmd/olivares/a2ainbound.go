@@ -241,17 +241,21 @@ func (r *a2aInboundRouter) RouteInboundA2A(
 		return a2a.InboundResult{}, &a2a.InboundRouteError{Code: -32005, Message: "verified replay identity is missing"}
 	}
 	var projected a2a.InboundResult
-	replay, err := r.kernel.ApplyProtocolReplay(ctx, route.tenant, sessions.ProtocolReplayClaim{
+	messageClaim := sessions.ProtocolReplayClaim{
+		WorkspaceID: route.workspace, Protocol: sessions.BindingProtocolA2A,
+		PeerAuthority: message.PeerAuthority, Kind: sessions.ProtocolReplayMessageID,
+		ReplayID: message.MessageID, ExpiresAt: message.ReplayExpiresAt,
+	}
+	replay, err := r.kernel.ApplyPreparedProtocolReplay(ctx, route.tenant, sessions.ProtocolReplayClaim{
 		WorkspaceID: route.workspace, Protocol: sessions.BindingProtocolA2A,
 		PeerAuthority: message.PeerAuthority, Kind: sessions.ProtocolReplayJTI,
 		ReplayID: message.ReplayID, ExpiresAt: message.ReplayExpiresAt,
-	}, func(joinedCtx context.Context) (sessions.ProtocolReplaySettlement, error) {
+	}, inboundA2AReplayPlan(route, messageClaim), func(joinedCtx context.Context) (sessions.ProtocolReplaySettlement, error) {
+		// The message identity's replay stays a plain joined call: the owning
+		// plan declares its claim, so a settled message only reloads.
 		messageReplay, err := r.kernel.ApplyProtocolReplay(
-			joinedCtx, route.tenant, sessions.ProtocolReplayClaim{
-				WorkspaceID: route.workspace, Protocol: sessions.BindingProtocolA2A,
-				PeerAuthority: message.PeerAuthority, Kind: sessions.ProtocolReplayMessageID,
-				ReplayID: message.MessageID, ExpiresAt: message.ReplayExpiresAt,
-			}, func(messageCtx context.Context) (sessions.ProtocolReplaySettlement, error) {
+			joinedCtx, route.tenant, messageClaim,
+			func(messageCtx context.Context) (sessions.ProtocolReplaySettlement, error) {
 				return r.routeInboundA2AMessage(messageCtx, route, message, projection)
 			})
 		if err != nil {
@@ -427,12 +431,15 @@ func (r *a2aInboundRouter) withInboundA2ATaskReplay(
 	mutation func(context.Context, sessions.ProtocolBinding) (a2a.InboundResult, error),
 ) (a2a.InboundResult, error) {
 	var projected a2a.InboundResult
-	replay, err := r.kernel.ApplyProtocolReplay(ctx, route.tenant, sessions.ProtocolReplayClaim{
+	// A task operation names no account, resolves no owner and publishes
+	// nothing, so its plan is empty: any such read inside the transaction
+	// refuses instead of opening a store view beside it.
+	replay, err := r.kernel.ApplyPreparedProtocolReplay(ctx, route.tenant, sessions.ProtocolReplayClaim{
 		WorkspaceID: route.workspace, Protocol: sessions.BindingProtocolA2A,
 		PeerAuthority: request.PeerAuthority, Kind: sessions.ProtocolReplayJTI,
 		ReplayID: request.ReplayID, ExpiresAt: request.ReplayExpiresAt,
 		ExpectedBindingID: bindingID,
-	}, func(joinedCtx context.Context) (sessions.ProtocolReplaySettlement, error) {
+	}, sessions.ProtocolReplayPlan{}, func(joinedCtx context.Context) (sessions.ProtocolReplaySettlement, error) {
 		current, err := r.kernel.GetProtocolBinding(
 			joinedCtx, route.tenant, sessions.ProtocolBindingRef{ID: bindingID},
 		)
@@ -480,6 +487,30 @@ func (r *a2aInboundRouter) projectInboundA2ATask(
 		ResultKind: "task", TaskID: binding.ExternalID,
 		ContextID: binding.ContextID, State: state,
 	}, nil
+}
+
+// inboundA2AReplayPlan declares what routing one inbound message reads: the
+// route owner's standing when it is an account, the owner as a participant,
+// and the reply's directory evidence, all before the replay transaction opens.
+func inboundA2AReplayPlan(
+	route parsedA2AInboundRoute,
+	messageClaim sessions.ProtocolReplayClaim,
+) sessions.ProtocolReplayPlan {
+	plan := sessions.ProtocolReplayPlan{
+		Nested: []sessions.ProtocolReplayClaim{messageClaim},
+		Participants: []sessions.ProtocolReplayParticipant{{
+			WorkspaceID: route.workspace, Kind: route.ownerKind, Ref: route.ownerRef,
+		}},
+		Publishes: []sessions.ProtocolReplayPublish{
+			sessions.ProtocolReplyPublish(route.message, sessions.ProtocolReplyFlowInbound),
+		},
+	}
+	if route.ownerKind == "user" {
+		if owner, err := model.ParseID(route.ownerRef); err == nil && !owner.IsZero() {
+			plan.Accounts = []model.ID{owner}
+		}
+	}
+	return plan
 }
 
 func (r *a2aInboundRouter) routeInboundA2AMessage(
@@ -786,6 +817,9 @@ func projectWorkStateToA2A(item sessions.WorkItem) a2a.TaskState {
 }
 
 func normalizeInboundA2AError(err error) error {
+	if errors.Is(err, sessions.ErrProtocolReplayAuthorityMoved) {
+		return &a2a.InboundRouteError{Code: -32007, Message: "durable work temporarily unavailable"}
+	}
 	if errors.Is(err, sessions.ErrProtocolBindingConflict) ||
 		errors.Is(err, sessions.ErrProtocolReplayConflict) {
 		return &a2a.InboundRouteError{Code: -32006, Message: "message id conflicts with durable work"}

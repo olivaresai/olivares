@@ -150,6 +150,23 @@
     "paused": "En pausa: {{reason}}",
     "timeline": "Cronología de pasos",
     "graph": "Grafo de ejecución de solo lectura",
+    "reauthorize": {
+      "title": "En espera de reautenticación",
+      "explanation": "Esta ejecución está en pausa hasta que su iniciador la continúe con una credencial vigente que no sea más amplia que aquella con la que empezó.",
+      "planHash": "Hash del plan que vuelves a aprobar",
+      "button": "Reautorizar ejecución",
+      "confirmTitle": "¿Reautorizar esta ejecución?",
+      "confirmDescription": "Tu credencial actual pasa a ser la credencial de la ejecución y sus pasos en pausa se reanudan. Debe ser una credencial del iniciador de la ejecución y no más amplia que aquella con la que empezó.",
+      "confirmPlan": "Vuelves a aprobar este hash del plan",
+      "confirm": "Reautorizar",
+      "done": "Ejecución reautorizada",
+      "forbidden": "Esta credencial no puede continuar la ejecución. Usa una credencial vigente del iniciador de la ejecución que no sea más amplia que aquella con la que empezó, o inicia una ejecución nueva.",
+      "conflict": "La ejecución no está esperando reautenticación, su hash del plan no coincide o hay otra reautorización en curso. Actualiza la ejecución y vuelve a intentarlo si sigue en pausa.",
+      "notFound": "No se encontró la ejecución en este flujo.",
+      "unavailable": "La ejecución no se reautorizó porque la vinculación de credenciales no está disponible. Vuelve a intentarlo.",
+      "failed": "No se pudo reautorizar la ejecución.",
+      "refresh": "Actualizar ejecución"
+    },
     "status": {
       "running": "En ejecución",
       "completed": "Completada",
@@ -165,6 +182,7 @@
       "done": "Finalizado",
       "gate_passed": "Puerta superada",
       "blocked": "Bloqueado",
+      "reauthentication_required": "Reautenticación necesaria",
       "budget_blocked": "Bloqueado por presupuesto",
       "skipped": "Omitido"
     }

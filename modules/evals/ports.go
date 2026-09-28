@@ -42,6 +42,12 @@ type JudgeRequest struct {
 // JudgeVerdict is the model's judgement: a 0..1 score, a pass flag and a short,
 // non-sensitive reason.
 type JudgeVerdict struct {
+	// ObservedModel is the actual provider response model, when available.
+	ObservedModel string
+	// ProtocolUnknown marks cached scores without a retained protocol receipt.
+	ProtocolUnknown bool
+	// Cached means this verdict came from the retained verdict cache.
+	Cached bool
 	Score  float64
 	Passed bool
 	Reason string

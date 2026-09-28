@@ -11,7 +11,7 @@
 //.
 //
 // Inventory (signal "azure"). A Bearer-authorized Resource Graph projection query
-// (Resources | project id, subscriptionId) across the scoped subscriptions, plus
+// (Resources | project id, subscriptionId | order by id asc) across the scoped subscriptions, plus
 // the tenant→subscription mapping, emits only TOPOLOGY edges (tenant⊳subscription,
 // subscription⊳resource) whose refs name the discovered resources; the
 // consumer materializes entities from those refs. These are containment, not an
@@ -51,6 +51,10 @@
 // Authentication is the OAuth2 client-credentials flow (tenant + client id +
 // client secret) or a pre-issued ARM token (managed identity / ADC). With a
 // MISSING or PARTIAL credential the connector is offline: Open succeeds and
-// Gather emits nothing. It issues no write/create/delete call and touches no
-// secret, key or payload.
+// Gather reports unavailable coverage and emits no resource edges. Explicit
+// subscriptions may qualify the versioned inventory query after exhaustion;
+// auto-discovered scope remains unknown. Activity and RAI are outside that
+// collection. Inventory collection reports record the query scope and observation
+// interval. It issues no write/create/delete call and touches no secret, key or
+// payload.
 package azureactivity

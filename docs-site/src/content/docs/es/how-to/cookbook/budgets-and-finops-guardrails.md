@@ -107,10 +107,13 @@ El resumen de valor incluye el **riesgo de cancelación** — consumo sin result
 
 ## Notas
 
-- **Fail-open, deliberadamente:** si la propia comprobación del presupuesto falla
-  (un fallo de lectura de FinOps), la inferencia se permite en lugar de
-  bloquearse en silencio — un medidor roto no debe convertirse en una caída del
-  servicio. El fallo se registra y es visible.
+- **Se deniega cuando no se puede leer el libro mayor:** si la admisión del
+  presupuesto no se puede establecer (FinOps no puede leer su libro mayor), el
+  proxy de inferencia rechaza la llamada con **503**, la razón
+  `budget store unreachable (deny-closed)` y `x-should-retry: false`, en lugar
+  de dejar pasar gasto sin medir. Entre los gates propios del motor, solo el
+  lanzamiento de sesión conserva una postura configurable para este caso
+  (`OLIVARES_SESSION_BUDGET_AVAILABILITY`).
 - La capacidad reservada (`reserved_micro_usd`) cuenta hacia el límite, de modo
   que un presupuesto no puede esquivarse reservando por adelantado.
 - `cost_type` deliberadamente **no** es una dimensión de presupuesto — las líneas

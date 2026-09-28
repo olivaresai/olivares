@@ -40,8 +40,9 @@ die tragenden:
 
 ## SLO-Ziele (veröffentlicht, ehrlich)
 
-Die Single-Node-Ziele — was die Standard-Topologie tatsächlich leistet — und
-die HA-Stufe:
+Betriebsziele für Single-Node- und HA-Bereitstellungen, keine gemessenen Ergebnisse
+der Topologie oder Kundenzusagen. Bevor Sie die Zielerreichung behaupten, qualifizieren
+Sie die konkrete Bereitstellung und Last; `deploy/support-matrix.md` dokumentiert den Stand:
 
 | SLI | Single Node | HA-Stufe (Postgres) |
 |---|---|---|
@@ -51,11 +52,12 @@ die HA-Stufe:
 | Ingest-Latenz p99 | **< 250 ms** | < 150 ms |
 | Ingest-Erfolg | **99,9 %** | 99,95 % |
 
-Die Ehrlichkeit in den Zahlen: Ein einzelner Writer auf einem Node kann keine drei
-Neunen Verfügbarkeit zusagen, also tun es die Docs nicht — 99,5 % (≈ 3 h 39 m Budget pro
-28 Tage) ist die Single-Node-Wahrheit, und die 99,9-%-Stufe verdient man sich durch die
-[HA-Topologie](/de/tutorials/getting-started/kubernetes/#3-active-passive-ha),
-nicht durch Optimismus.
+Über 28 Tage erlaubt ein Verfügbarkeitsziel von 99,5 % **201,6 Minuten
+(3 h 21 min 36 s)** Ausfallzeit; bei 99,9 % sind es **40,32 Minuten**.
+Die Bereitstellung der [HA-Topologie](/de/tutorials/getting-started/kubernetes/#3-active-passive-ha) allein erreicht keinen dieser Werte.
+Messen Sie die Verfügbarkeit über das angegebene Zeitfenster und bewahren Sie
+Nachweise zu Fehlerfällen und Wiederherstellung der konkreten Bereitstellung auf.
+Diese Ziele sind keine vertragliche Verfügbarkeitszusage.
 
 ## Die mitgelieferten Alert-Regeln laden
 
@@ -67,6 +69,12 @@ Verfügbarkeits-Auslöser (`OlivaresIngestP99High`, `OlivaresApiLatencyP99High`,
 (`OlivaresEventBusSaturated` bei >90 % Queue für 10 m), Bridge-Gesundheit
 (`OlivaresEventBusBridgeDropping`, `OlivaresEventBusBridgeDisconnected`) und
 Ledger-Frische (`OlivaresAuditCheckpointStale` bei Alter > 2 h).
+
+Das Burn-Rate-Rezept verwendet einen Referenzzeitraum von 30 Tagen; die obigen
+Verfügbarkeitsziele gelten für 28 Tage. Unterscheiden Sie Alert-Raten und
+Auswertefenster von diesem Zeitraum: 14,4× über 1 h, 6× über 6 h und 1× über 3 Tage
+verbrauchen rund 2,14 %, 5,36 % beziehungsweise 10,71 % eines 28-Tage-Budgets.
+Die mitgelieferten Alert-Werte bleiben unverändert.
 
 ```yaml
 # prometheus.yml

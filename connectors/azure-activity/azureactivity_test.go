@@ -35,6 +35,8 @@ func (c *capturingSink) Emit(_ context.Context, obs model.Observation) error {
 	switch o := obs.(type) {
 	case model.EdgeObservation:
 		c.edges = append(c.edges, o)
+	case model.InventoryCollectionMember:
+		c.edges = append(c.edges, o.Edge)
 	case model.FindingReport:
 		c.findings = append(c.findings, o)
 	}
@@ -123,7 +125,7 @@ func writeJSON(w http.ResponseWriter, body string) {
 	_, _ = w.Write([]byte(body))
 }
 
-const defaultRGData = `{"data":[
+const defaultRGData = `{"count":2,"totalRecords":2,"resultTruncated":"false","data":[
 {"id":"/subscriptions/sub-1/resourceGroups/rg1/providers/Microsoft.Compute/virtualMachines/VM-PROD","subscriptionId":"sub-1"},
 {"id":"/subscriptions/sub-2/resourceGroups/rg2/providers/Microsoft.Storage/storageAccounts/STG","subscriptionId":"sub-2"}
 ]}`

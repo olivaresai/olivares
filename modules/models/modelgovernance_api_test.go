@@ -261,14 +261,11 @@ func TestExecuteModelAccessUserSubject(t *testing.T) {
 	admin := h.adminLogin()
 	tenant := h.createOrg(admin, "acme")
 	// A non-superadmin user with role admin (admin-tier needed to execute); capture its id.
-	ru := h.do("POST", "/v1/users", admin, map[string]any{"email": "u@x.io", "password": "memberpass1"}, nil)
+	ru := h.do("POST", "/v1/users", admin, map[string]any{"email": "u@x.io", "password": "memberpass1", "tenant": tenant.String(), "role": "admin"}, nil)
 	if ru.code != http.StatusCreated {
 		t.Fatalf("create user = %d %s", ru.code, ru.raw)
 	}
 	uid := ru.body["id"].(string)
-	if r := h.do("POST", "/v1/memberships", admin, map[string]any{"user_id": uid, "tenant": tenant.String(), "role": "admin"}, nil); r.code != http.StatusCreated {
-		t.Fatalf("membership = %d %s", r.code, r.raw)
-	}
 	utok := h.do("POST", "/v1/auth/login", "", map[string]any{"email": "u@x.io", "password": "memberpass1"}, nil).body["token"].(string)
 	seedModel(t, h, tenant, "anthropic", "claude-opus-4-8")
 	policy := createRoutingPolicy(t, h, admin, tenant)

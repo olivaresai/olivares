@@ -39,8 +39,14 @@ core **`EvalResult`** — the canonical artifact (`Suite`, `SubjectKind`, `Subje
 `Score`, `Passed`, `OccurredAt`, `Metrics`) that compliance (XIII) and the UI read
 **without knowing XII's own tables**. Runs execute synchronously; the SSE stream on a
 run *replays the persisted run* (per-case frames, then a summary), it does not actuate.
-A regression against a baseline sets `regressed` and writes a core **`Finding`**
-(`Kind = eval_regression`), best-effort emitted on the bus as
+A regression is a point-score comparison with one baseline run. When the score
+drop exceeds the suite's `regression_threshold`, the run sets `regressed` and
+writes a core **`Finding`** (`Kind = eval_regression`). That comparison has no
+interval. The automatic baseline is the latest completed run for the same suite
+and subject, and for the same variant when one is set. That run may use another
+suite version, model or scorer, and the comparison does not report which
+changed. After a suite version change, pass an explicit baseline or pin one
+(`POST /baselines`). The finding is best-effort emitted on the bus as
 [`finding.reported`](/reference/events/) for delivery modules (health/notifications) to
 route. On the read side, **scorecards** aggregate pass-rate, mean score and trend per
 subject and export as CSV/JSON.
@@ -77,13 +83,19 @@ agree**, and reports the measured `position_consistency` rate.
 The **regression gate** (`POST /gate`, CLI `evals gate`) turns all of this into a
 blocking CI verdict: a regression vs baseline, a pass-rate below the suite threshold, or
 an **uncalibrated judge** fails the gate (exit 1); a missing judge credential degrades
-to a *declared* warn, never a silent pass. Judge cost in CI is controlled by a
-deterministic seeded case sample, a verdict cache keyed by content + judge-model pin +
-prompt version, and a FinOps budget pre-flight that refuses to spend past a cap. The
-only escape from a failed gate is the **governed override** — admin-tier, written
-reason, audited — which changes the *effective* verdict CI re-checks, never the
-recorded one. Every reported rate ships with its denominator and 95% interval; see
-`docs/EVAL-METHODOLOGY.md` in the repository for the full methodology and sources.
+to a *declared* warn, never a silent pass. The gate's seed selects the sampled
+cases; it does not make a remote model deterministic. A verdict-cache hit, keyed
+by content, judge-model pin and prompt version, returns the stored verdict. A
+miss, and any ordinary `llm_judge` run outside this gate, calls the remote judge
+again and may differ. The FinOps pre-flight runs on this gate only. When no
+FinOps budget that blocks or throttles applies to the judge calls, the gate
+allows the spend. When the budget store cannot be read, the gate refuses the
+spend and fails with `budget_blocked`. A budget that blocks or throttles stops
+the spend. The only escape from a failed gate is the
+**governed override** — admin-tier, written reason, audited — which changes the
+*effective* verdict CI re-checks, never the recorded one. Every reported rate
+ships with its denominator and 95% interval; the regression comparison does not.
+See `docs/EVAL-METHODOLOGY.md` in the repository for the full methodology and sources.
 
 :::caution[Honest limits]
 - **`llm_judge` is fail-closed, never a false pass.** Model invocation is a declared

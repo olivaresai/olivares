@@ -93,9 +93,9 @@
     "selectPrompt": "Sélectionnez une trace pour voir sa cascade de spans.",
     "selectPromptHint": "Choisissez une trace dans la liste pour voir chacune de ses spans, avec ses temps et ses erreurs.",
     "exportBtn": "Exporter OTLP",
-    "exportTitle": "Télécharger le JSON compatible OTLP pour Jaeger / Tempo / Datadog",
+    "exportTitle": "Télécharger cette trace au format OTLP/JSON. Non testé avec un backend nommé.",
     "legend": "Légende des acteurs",
-    "liveNote": "Modèle de lecture par corrélation au registre : les lignes sont dérivées des identifiants de trace W3C apposés sur les événements du registre d’audit (fenêtre de parcours : 20 000 derniers événements). Les barres sont des fenêtres d’ÉVÉNEMENTS DU REGISTRE regroupées par identifiant de span du moteur — le moteur ne stocke aucun span OTel ; les spans complets résident dans le collecteur OTLP de l’opérateur.",
+    "liveNote": "Modèle de lecture par corrélation au registre : les lignes sont dérivées des identifiants de trace W3C apposés sur les événements du registre d’audit (fenêtre de parcours : 20 000 derniers événements). Les barres sont des fenêtres d’ÉVÉNEMENTS DU REGISTRE regroupées par identifiant de span du moteur — le moteur ne stocke aucun span OTel ; les spans exportés, soumis au taux d’échantillonnage et sans décompte de perte, se trouvent dans le collecteur OTLP de l’opérateur.",
     "columns": {
       "trace": "Trace",
       "started": "Démarrée",

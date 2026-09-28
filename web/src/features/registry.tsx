@@ -42,6 +42,8 @@ import {
   Fingerprint,
   FlaskConical,
   Gauge,
+  GitBranchPlus,
+  GitCompare,
   Globe,
   Handshake,
   HeartPulse,
@@ -126,8 +128,14 @@ const IdentityView = lazy(() => import('./identity/identity-view'))
 // Control console (FASE X): user onboarding, SSO/IdP, workspaces &
 // agent-groups, scoped admin — the configure surface hang panels off.
 const ConsoleView = lazy(() => import('./console/console-view'))
+const SourceDiffView = lazy(() => import('./source-diff/source-diff-view'))
 const DeployView = lazy(() => import('./deploy/deploy-view'))
 const KnowledgeView = lazy(() => import('./knowledge/knowledge-view'))
+// Governed Git publication (modules/gitpublish): approved targets, the push / pull request /
+// merge intents with their receipts, and reconcile — never a resend — for an uncertain one.
+const GitPublicationView = lazy(() =>
+  import('./gitpublish').then((m) => ({ default: m.GitPublicationView })),
+)
 // Estate kill switch console (one-click emergency stop, dual-control
 // re-enable, forced post-review, evidence pack, guardian containment rules).
 const KillswitchView = lazy(() => import('./killswitch/killswitch-view'))
@@ -593,6 +601,9 @@ export const PRODUCT_NOUNS: readonly ProductNoun[] = [
       'catalog',
       'inventory',
       'platforms',
+      // Git publication binds an approved credential and repository to a Git host: the
+      // connection to GitHub or GitLab is the object it manages, under the same hub.
+      'gitPublication',
     ],
   },
   {
@@ -681,8 +692,7 @@ export function nounsForView(viewId: string): NounId[] {
 /**
  * THE NINE AREAS (N1, 2026-09-06) — the navigational structure the console is BROWSED by.
  *
- * Ratified by root (an internal design note (not shipped)) over the
- * proposal's ROUTE-MAP: every published route keeps its path, permission, component, actions,
+ * Every published route keeps its path, permission, component, actions,
  * shortcuts, docs link, nouns and Saved Views namespace, and is additionally placed in exactly
  * ONE area and ONE section of it. The areas are a structure for finding things, never a
  * capability ceiling: a future capability adds a section or an area when a journey justifies
@@ -1117,6 +1127,20 @@ export const FEATURE_VIEWS: FeatureView[] = [
     element: lazyView(ConsoleView),
   },
   {
+    id: 'sourceDiff',
+    path: '/console/sources/diff',
+    navigation: {
+      kind: 'feature',
+      areaId: 'system',
+      sectionId: 'administration',
+    },
+    helpHref: '/reference/console',
+    hub: 'govern',
+    icon: GitCompare,
+    permission: 'system:admin',
+    element: lazyView(SourceDiffView),
+  },
+  {
     id: 'capabilities',
     path: '/capabilities',
     navigation: {
@@ -1359,6 +1383,20 @@ export const FEATURE_VIEWS: FeatureView[] = [
     icon: Rocket,
     permission: 'deploy:deployment:read',
     element: lazyView(DeployView),
+  },
+  {
+    id: 'gitPublication',
+    path: '/git-publication',
+    navigation: {
+      kind: 'feature',
+      areaId: 'deployment',
+      sectionId: 'deployments',
+    },
+    helpHref: '/reference/modules/gitpublish',
+    hub: 'connect',
+    icon: GitBranchPlus,
+    permission: 'gitpublish:target:read',
+    element: lazyView(GitPublicationView),
   },
   {
     id: 'knowledge',

@@ -155,6 +155,7 @@ func terminalEvidenceUpgradeCase(t *testing.T, cfg store.Config) {
 	}
 	defer st2.Close() //nolint:errcheck
 	fresh.UseData(api.NewModuleData(st2))
+	bindStoreStanding(fresh, st2)
 
 	after := listRunEvents(t, st2, tenant, runRef)
 	if len(after) != len(before) {
@@ -252,6 +253,7 @@ func TestTerminalEvidenceFreshPostgresP1SchemaWritesAndReads(t *testing.T) {
 		t.Fatalf("bootstrap: %v", err)
 	}
 	m.UseData(api.NewModuleData(st))
+	bindStoreStanding(m, st)
 	terminalEvidenceWriteAndRead(t, m, st, tenant)
 	m.Stop(ctx) //nolint:errcheck
 }

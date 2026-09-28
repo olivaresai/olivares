@@ -32,7 +32,7 @@ mirror or `--bundle` installs from a carried bundle.
 └───────────────┬────────────────────────────────────────────────────────┘
                 │ OTLP/gRPC over mTLS (push)
 ┌─ Zone B — Control plane (the engine) ──────────────────────────────────┐
-│  olivares binary ×N (HA): core + 30 modules + embedded web UI          │
+│  olivares binary ×N (HA): core + 31 modules + embedded web UI          │
 │  store: SQLite (single-node) │ Postgres + RLS FORCE (HA/scale)         │
 │  audit ledger: append-only, hash-chained, Ed25519 per-event signatures │
 └───────┬───────────────────────────────┬────────────────────────────────┘

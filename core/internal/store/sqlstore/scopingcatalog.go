@@ -28,10 +28,13 @@ var workspaceDescriptor = model.EntityDescriptor{
 	Kind:  "core.workspace",
 	Table: "workspaces",
 	Fields: []model.FieldSpec{
-		field("name", model.KindText, false),
-		indexedField("slug", model.KindText, false),
-		field("status", model.KindText, false),
-		field("settings", model.KindJSON, true),
+		pdecl(field("name", model.KindText, false),
+			model.None("the workspace's display name: core/model/scoping.go:38")),
+		pdecl(indexedField("slug", model.KindText, false),
+			model.None("a tenant-unique URL-safe workspace handle: core/model/scoping.go:40")),
+		pdecl(field("status", model.KindText, false), pdeclNoneLifecycle),
+		pdecl(field("settings", model.KindJSON, true),
+			model.None("free-form, non-sensitive workspace configuration: core/model/scoping.go:49")),
 	},
 	// Slug is unique per tenant: it is the stable handle, and the reserved
 	// "default" slug must resolve to exactly one row per tenant (the index is the
@@ -68,12 +71,16 @@ var agentGroupDescriptor = model.EntityDescriptor{
 	Table: "agent_groups",
 	Fields: []model.FieldSpec{
 		// workspace_id NULL means the tenant's default workspace (back-compat).
-		indexedField("workspace_id", model.KindUUID, true),
-		field("name", model.KindText, false),
-		indexedField("slug", model.KindText, false),
-		field("description", model.KindText, true),
-		field("status", model.KindText, false),
-		field("metadata", model.KindJSON, true),
+		pdecl(indexedField("workspace_id", model.KindUUID, true), pdeclNoneWorkspaceLineage),
+		pdecl(field("name", model.KindText, false),
+			model.None("the agent group's display name: core/model/scoping.go:73")),
+		pdecl(indexedField("slug", model.KindText, false),
+			model.None("a tenant-unique URL-safe agent-group handle: core/model/scoping.go:75")),
+		pdecl(field("description", model.KindText, true),
+			model.None("a short, non-sensitive description: core/model/scoping.go:78")),
+		pdecl(field("status", model.KindText, false), pdeclNoneLifecycle),
+		pdecl(field("metadata", model.KindJSON, true),
+			model.None("free-form, non-sensitive context: core/model/scoping.go:82")),
 	},
 	// Slug is unique per tenant (a single namespace across workspaces): a group is
 	// a tenant-level handle that may be workspace-scoped, not a per-workspace name.
@@ -114,8 +121,10 @@ var agentGroupMemberDescriptor = model.EntityDescriptor{
 	Kind:  "core.agent_group_member",
 	Table: "agent_group_members",
 	Fields: []model.FieldSpec{
-		indexedField("group_id", model.KindUUID, false),
-		indexedField("agent_id", model.KindUUID, false),
+		pdecl(indexedField("group_id", model.KindUUID, false),
+			model.None("the agent group row the membership belongs to: core/model/scoping.go:92")),
+		pdecl(indexedField("agent_id", model.KindUUID, false),
+			model.None("the member agent row, never an account: core/model/scoping.go:94")),
 	},
 	// One row per (group, agent); enumerated by group_id (roster) and agent_id
 	// (an agent's groups — the access-engine expansion fold).

@@ -17,7 +17,6 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/metric"
-	"go.opentelemetry.io/otel/propagation"
 	oteltrace "go.opentelemetry.io/otel/trace"
 )
 
@@ -138,7 +137,8 @@ func (u AnthropicUsage) OTelInputTokens() int64 {
 // traceparent the service mesh observes) and (2) emits an OTel GenAI span +
 // client metrics for Anthropic Messages calls. The returned client satisfies the
 // connectors' Doer interface, so the composition root injects it as the inference
-// client's transport. base nil uses http.DefaultTransport.
+// client's transport. Baggage is denied unless its origin/key/value is declared
+// in Config.ProviderBaggageAllowlist. base nil uses http.DefaultTransport.
 func (p *Provider) AnthropicHTTPClient(base http.RoundTripper) *http.Client {
 	if base == nil {
 		base = http.DefaultTransport
@@ -153,11 +153,12 @@ type genAITransport struct {
 }
 
 func (t *genAITransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	// Body inspection and propagation must not replace caller-owned request fields.
+	req = req.Clone(req.Context())
 	// Non-Messages request (e.g. the WIF /v1/oauth/token exchange, or any other
 	// Anthropic call): propagate the trace context and pass through, no gen_ai span.
 	if !isAnthropicMessages(req) || !t.p.enabled {
-		t.p.propagator.Inject(req.Context(), propagation.HeaderCarrier(req.Header))
-		return t.base.RoundTrip(req)
+		return t.base.RoundTrip(t.p.providerRequest(req.Context(), req))
 	}
 
 	reqMeta := readRequestMetadata(req)
@@ -186,8 +187,7 @@ func (t *genAITransport) RoundTrip(req *http.Request) (*http.Response, error) {
 
 	// Inject AFTER starting the span so the traceparent carries THIS client span —
 	// the same hop identity the mesh (Envoy/Hubble) sees on the engine→Claude leg.
-	req = req.WithContext(ctx)
-	t.p.propagator.Inject(ctx, propagation.HeaderCarrier(req.Header))
+	req = t.p.providerRequest(ctx, req)
 
 	start := time.Now()
 	resp, err := t.base.RoundTrip(req)

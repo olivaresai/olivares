@@ -93,6 +93,54 @@ const (
 // cfgKey is the constant colCfgKey value (one config row per tenant).
 const cfgKey = "default"
 
+// Principal declarations of the module's text, JSON and UUID columns
+// (core/model/principal_decl.go). Every None cites the writer or reader lines
+// that show the value names no account.
+var (
+	// pdeclActor is the audit-actor string of the calling principal, recorded as
+	// evidence (recorder.go:299, recorder.go:404, handlers.go:1262).
+	pdeclActor = model.Ref(model.EncodeUserRef, model.ClassEvidence)
+	// pdeclUserID is a bare account id: the recorded principal's stable user id or
+	// the user a delegated credential acts for (recorder.go:299, recorder.go:394-397,
+	// recorder.go:404, core/auth/principal.go:247-252).
+	pdeclUserID = model.Ref(model.EncodeUserID, model.ClassEvidence)
+	// pdeclSummary is derived prose generated from a transcript that names the
+	// session subject and every frame's actor (handlers.go:1106-1113), so it may
+	// repeat an account reference.
+	pdeclSummary = model.Scan(model.ClassEvidence)
+
+	// Values that name no account.
+	pdeclNoneSubjectKind = model.None("the recorded principal's kind, user or token: recorder.go:299, core/auth/principal.go:17-22")
+	pdeclNoneActorKind   = model.None("the audit actor kind, a closed set: recorder.go:404, core/auth/principal.go:242-251")
+	pdeclNoneCred        = model.None("the caller's own credential anchor, compared only with the caller's credential: recorder.go:286-288, recorder.go:551")
+	pdeclNoneStatus      = model.None("the session lifecycle state, active or sealed: recording.go:78-79, recorder.go:487")
+	pdeclNoneHash        = model.None("a hex SHA-256 chain hash or request-body digest: recorder.go:398-401, recorder.go:419, recorder.go:444")
+	pdeclNoneSealReason  = model.None("a closed seal reason: recording.go:84-88, recorder.go:489")
+	pdeclNoneConsentMode = model.None("how consent was satisfied, auto, notice or required: recorder.go:278-283, handlers.go:211")
+	pdeclNoneGrant       = model.None("the id of the bound break-glass grant row, joined on by the review seal: recorder.go:568, recorder.go:613")
+	pdeclNoneSummaryMeta = model.None("a fixed derivation stamp of flag, generation time, source label, frame count and chain tip: handlers.go:1071-1073")
+	pdeclNoneRetention   = model.None("a constant retention tag: recording.go:93, recorder.go:304")
+	pdeclNoneOpenGuard   = model.None("a constant sentinel while active, NULL once sealed: recorder.go:305, recorder.go:491")
+	pdeclNoneSessionID   = model.None("the id of this module's own recording session row: recorder.go:413")
+	pdeclNoneRoute       = model.None("the route's module namespace, HTTP method, route pattern or required permission: recorder.go:405, core/api/recording.go:118-119")
+	pdeclNoneQueryKeys   = model.None("redacted query parameter names; values are never captured: recorder.go:406, redact.go:84-107")
+	pdeclNoneOutcome     = model.None("a closed outcome classification of the HTTP status: recorder.go:451-461")
+	pdeclNoneCfgKey      = model.None("the constant one-row-per-tenant key: recorder.go:75, handlers.go:1255")
+	pdeclNoneConsent     = model.None("the tenant consent policy, notice or required: handlers.go:1208, recorder.go:119")
+
+	// pdeclParams is the redacted route-parameter map (recorder.go:406, chain.go:101-111).
+	// Route parameters are identifiers and may name an account on an account route;
+	// email-shaped values are redacted before they persist (redact.go:31).
+	pdeclParams = model.Nested(map[string]string(nil), model.ClassEvidence,
+		model.Leaf("{key}", model.None("a route parameter name taken from the matched route: core/api/recording.go:122-136")),
+		model.Leaf("{}", model.Scan(model.ClassEvidence)),
+	)
+	// pdeclNamespaces is the JSON list of recorded module namespaces (handlers.go:1244).
+	pdeclNamespaces = model.Nested([]string(nil), model.ClassEvidence,
+		model.Leaf("[]", model.None("a mounted module namespace, validated before write: handlers.go:1228, handlers.go:1244")),
+	)
+)
+
 // RegisterSchema declares the module's owned entities (engine-side
 // runtime.SchemaProvider seam; the engine creates the tables and attaches the
 // tenant + append-only guards). Minimal data (docs/SECURITY-HARDENING.md): no column can hold a
@@ -106,28 +154,28 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Kind:  sessionKind,
 		Table: sessionTable,
 		Fields: []model.FieldSpec{
-			{Name: colSubject, Kind: model.KindText, Indexed: true},
-			{Name: colSubjectKind, Kind: model.KindText},
-			{Name: colSubjectUser, Kind: model.KindText, Nullable: true, Indexed: true},
-			{Name: colCred, Kind: model.KindText, Indexed: true},
-			{Name: colStatus, Kind: model.KindText, Indexed: true},
+			{Name: colSubject, Kind: model.KindText, Indexed: true, Principal: pdeclActor},
+			{Name: colSubjectKind, Kind: model.KindText, Principal: pdeclNoneSubjectKind},
+			{Name: colSubjectUser, Kind: model.KindText, Nullable: true, Indexed: true, Principal: pdeclUserID},
+			{Name: colCred, Kind: model.KindText, Indexed: true, Principal: pdeclNoneCred},
+			{Name: colStatus, Kind: model.KindText, Indexed: true, Principal: pdeclNoneStatus},
 			{Name: colOpenedAt, Kind: model.KindTimestamp},
 			{Name: colLastAt, Kind: model.KindTimestamp, Indexed: true},
 			{Name: colReserved, Kind: model.KindInt},
 			{Name: colWritten, Kind: model.KindInt},
-			{Name: colTipHash, Kind: model.KindText},
+			{Name: colTipHash, Kind: model.KindText, Principal: pdeclNoneHash},
 			{Name: colOpenSeq, Kind: model.KindInt},
 			{Name: colAnchorSeq, Kind: model.KindInt},
 			{Name: colSealSeq, Kind: model.KindInt},
 			{Name: colSealedAt, Kind: model.KindTimestamp, Nullable: true},
-			{Name: colSealReason, Kind: model.KindText, Nullable: true},
+			{Name: colSealReason, Kind: model.KindText, Nullable: true, Principal: pdeclNoneSealReason},
 			{Name: colConsentAt, Kind: model.KindTimestamp, Nullable: true},
-			{Name: colConsentMode, Kind: model.KindText},
-			{Name: colBGGrant, Kind: model.KindText, Nullable: true, Indexed: true},
-			{Name: colSummary, Kind: model.KindText, Nullable: true},
-			{Name: colSummaryMeta, Kind: model.KindJSON, Nullable: true},
-			{Name: colRetention, Kind: model.KindText},
-			{Name: colOpenGuard, Kind: model.KindText, Nullable: true},
+			{Name: colConsentMode, Kind: model.KindText, Principal: pdeclNoneConsentMode},
+			{Name: colBGGrant, Kind: model.KindText, Nullable: true, Indexed: true, Principal: pdeclNoneGrant},
+			{Name: colSummary, Kind: model.KindText, Nullable: true, Principal: pdeclSummary},
+			{Name: colSummaryMeta, Kind: model.KindJSON, Nullable: true, Principal: pdeclNoneSummaryMeta},
+			{Name: colRetention, Kind: model.KindText, Principal: pdeclNoneRetention},
+			{Name: colOpenGuard, Kind: model.KindText, Nullable: true, Principal: pdeclNoneOpenGuard},
 		},
 		Indexes: []model.IndexSpec{{
 			// At most one ACTIVE recording session per credential. Leads with
@@ -145,26 +193,26 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Table:      frameTable,
 		AppendOnly: true, // immutable evidence: frames are never updated or deleted here
 		Fields: []model.FieldSpec{
-			{Name: colFrSession, Kind: model.KindUUID, Indexed: true},
+			{Name: colFrSession, Kind: model.KindUUID, Indexed: true, Principal: pdeclNoneSessionID},
 			{Name: colFrIdx, Kind: model.KindInt},
 			{Name: colFrAt, Kind: model.KindTimestamp},
-			{Name: colFrActor, Kind: model.KindText},
-			{Name: colFrActorKind, Kind: model.KindText},
-			{Name: colFrActorUser, Kind: model.KindText, Nullable: true},
-			{Name: colFrActAs, Kind: model.KindText, Nullable: true},
-			{Name: colFrNamespace, Kind: model.KindText, Indexed: true},
-			{Name: colFrMethod, Kind: model.KindText},
-			{Name: colFrPattern, Kind: model.KindText},
-			{Name: colFrPerm, Kind: model.KindText},
-			{Name: colFrParams, Kind: model.KindJSON, Nullable: true},
-			{Name: colFrQueryKeys, Kind: model.KindText, Nullable: true},
+			{Name: colFrActor, Kind: model.KindText, Principal: pdeclActor},
+			{Name: colFrActorKind, Kind: model.KindText, Principal: pdeclNoneActorKind},
+			{Name: colFrActorUser, Kind: model.KindText, Nullable: true, Principal: pdeclUserID},
+			{Name: colFrActAs, Kind: model.KindText, Nullable: true, Principal: pdeclUserID},
+			{Name: colFrNamespace, Kind: model.KindText, Indexed: true, Principal: pdeclNoneRoute},
+			{Name: colFrMethod, Kind: model.KindText, Principal: pdeclNoneRoute},
+			{Name: colFrPattern, Kind: model.KindText, Principal: pdeclNoneRoute},
+			{Name: colFrPerm, Kind: model.KindText, Principal: pdeclNoneRoute},
+			{Name: colFrParams, Kind: model.KindJSON, Nullable: true, Principal: pdeclParams},
+			{Name: colFrQueryKeys, Kind: model.KindText, Nullable: true, Principal: pdeclNoneQueryKeys},
 			{Name: colFrStatus, Kind: model.KindInt},
-			{Name: colFrOutcome, Kind: model.KindText},
-			{Name: colFrBodySHA, Kind: model.KindText, Nullable: true},
+			{Name: colFrOutcome, Kind: model.KindText, Principal: pdeclNoneOutcome},
+			{Name: colFrBodySHA, Kind: model.KindText, Nullable: true, Principal: pdeclNoneHash},
 			{Name: colFrBodyBytes, Kind: model.KindInt},
 			{Name: colFrDurMS, Kind: model.KindInt},
-			{Name: colFrPrevHash, Kind: model.KindText},
-			{Name: colFrHash, Kind: model.KindText},
+			{Name: colFrPrevHash, Kind: model.KindText, Principal: pdeclNoneHash},
+			{Name: colFrHash, Kind: model.KindText, Principal: pdeclNoneHash},
 			{Name: colFrAnchorSeq, Kind: model.KindInt},
 		},
 		Indexes: []model.IndexSpec{{
@@ -183,13 +231,13 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Kind:  configKind,
 		Table: configTable,
 		Fields: []model.FieldSpec{
-			{Name: colCfgKey, Kind: model.KindText},
-			{Name: colCfgNS, Kind: model.KindJSON},
-			{Name: colCfgConsent, Kind: model.KindText},
+			{Name: colCfgKey, Kind: model.KindText, Principal: pdeclNoneCfgKey},
+			{Name: colCfgNS, Kind: model.KindJSON, Principal: pdeclNamespaces},
+			{Name: colCfgConsent, Kind: model.KindText, Principal: pdeclNoneConsent},
 			{Name: colCfgIdleSecs, Kind: model.KindInt},
 			{Name: colCfgRetention, Kind: model.KindInt},
 			{Name: colCfgAI, Kind: model.KindBool},
-			{Name: colCfgUpdatedBy, Kind: model.KindText},
+			{Name: colCfgUpdatedBy, Kind: model.KindText, Principal: pdeclActor},
 		},
 		Indexes: []model.IndexSpec{{
 			Name:    "recording_config_uniq",

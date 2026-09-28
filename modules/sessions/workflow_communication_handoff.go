@@ -94,9 +94,20 @@ func (m *Module) OfferWorkflowHandoff(
 	if err != nil {
 		return WorkflowHandoffResult{}, workflowCommunicationError("prepare handoff", err)
 	}
-	result, err := m.applyWorkflowHandoffAggregate(
-		ctx, carrier, normalized, ids, prepared, cmd.ExpectedOwnerEpoch,
-	)
+	// The Handoff names its source owner and its target: a fenced write whose
+	// transaction pins both accounts' authority versions in its authority lock.
+	parties := append(actorAccounts(normalized.actor), recipientAccounts(prepared.delivery.Recipient)...)
+	var result WorkflowHandoffResult
+	err = m.fencedCommunicationCommand(ctx, func(ctx context.Context) error {
+		if err := m.fenceCommunicationAccounts(ctx, tenant, parties); err != nil {
+			return err
+		}
+		var err error
+		result, err = m.applyWorkflowHandoffAggregate(
+			ctx, carrier, normalized, ids, prepared, cmd.ExpectedOwnerEpoch,
+		)
+		return err
+	})
 	if err != nil {
 		return WorkflowHandoffResult{}, workflowCommunicationError("offer handoff", err)
 	}

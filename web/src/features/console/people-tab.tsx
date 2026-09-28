@@ -5,8 +5,8 @@ import { useQuery } from '@tanstack/react-query'
 
 import { currentLanguage } from '@/lib/i18n'
 import {
-  Copy,
   Plus,
+  Send,
   ShieldCheck,
   ShieldOff,
   Trash2,
@@ -39,7 +39,6 @@ import {
 } from '@/components/ui/select'
 import { Spinner } from '@/components/ui/spinner'
 import { Switch } from '@/components/ui/switch'
-import { toast } from '@/components/ui/toaster'
 import { AAL, RequireAssurance } from '@/features/identity/assurance'
 import { ListTruncationBadge } from '@/features/_intel'
 import { useAuth } from '@/lib/auth/context'
@@ -47,8 +46,11 @@ import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
 import {
   consoleApi,
   consoleKeys,
+  isConsentRequired,
   type InviteDTO,
+  type InviteHandle,
   type OnboardedUser,
+  type OnboardResponse,
   type OnboardResult,
   type RosterMemberDTO,
 } from './api'
@@ -96,17 +98,22 @@ export function PeopleTab() {
     onDone: () => setRevoke(null),
   })
 
-  const memberToggleMutation = usePrivilegedMutation<
-    { member: RosterMemberDTO; active: boolean },
-    unknown
-  >({
-    mutationFn: ({ member, active }) =>
-      consoleApi.setMemberActive(member.user_id, active),
+  // A resend mails the invitee a new link; the console never sees it.
+  const resendMutation = usePrivilegedMutation<string, InviteHandle>({
+    mutationFn: (id) => consoleApi.resendInvite(id),
+    invalidateKeys: () => [consoleKeys.invites(activeTenant)],
+    successMessage: (data) =>
+      data.delivery === 'sent'
+        ? t('console:people.resent')
+        : t('console:people.resendFailed'),
+  })
+
+  // A tenant can only remove a member. Nothing here re-activates an account:
+  // its global status belongs to the deployment.
+  const memberToggleMutation = usePrivilegedMutation<RosterMemberDTO, unknown>({
+    mutationFn: (member) => consoleApi.setMemberActive(member.user_id, false),
     invalidateKeys: () => [consoleKeys.members(activeTenant)],
-    successMessage: (_data, vars) =>
-      vars.active
-        ? t('console:members.enabled')
-        : t('console:members.disabled'),
+    successMessage: t('console:members.disabled'),
     onDone: () => setMemberToggle(null),
   })
 
@@ -125,7 +132,6 @@ export function PeopleTab() {
   const items = invites.data?.items ?? []
   const roster = members.data?.items ?? []
   const supers = superadmins.data?.items ?? []
-  const selectedMemberNextActive = memberToggle?.status !== 'active'
 
   return (
     <div className="flex flex-col gap-6 pt-4">
@@ -289,14 +295,25 @@ export function PeopleTab() {
                       </td>
                       <td className="text-right">
                         {canOnboard && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setRevoke(inv)}
-                          >
-                            <Trash2 />
-                            {t('console:people.revoke')}
-                          </Button>
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              disabled={resendMutation.isPending}
+                              onClick={() => resendMutation.mutate(inv.id)}
+                            >
+                              <Send />
+                              {t('console:people.resend')}
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setRevoke(inv)}
+                            >
+                              <Trash2 />
+                              {t('console:people.revoke')}
+                            </Button>
+                          </>
                         )}
                       </td>
                     </tr>
@@ -399,31 +416,14 @@ export function PeopleTab() {
           <ConfirmDialog
             open
             onOpenChange={(open) => !open && setMemberToggle(null)}
-            title={
-              selectedMemberNextActive
-                ? t('console:members.enableTitle')
-                : t('console:members.disableTitle')
-            }
-            description={
-              selectedMemberNextActive
-                ? t('console:members.enableBody', { email: memberToggle.email })
-                : t('console:members.disableBody', {
-                    email: memberToggle.email,
-                  })
-            }
-            confirmLabel={
-              selectedMemberNextActive
-                ? t('console:members.enable')
-                : t('console:members.disable')
-            }
-            tone={selectedMemberNextActive ? 'default' : 'danger'}
+            title={t('console:members.disableTitle')}
+            description={t('console:members.disableBody', {
+              email: memberToggle.email,
+            })}
+            confirmLabel={t('console:members.disable')}
+            tone="danger"
             pending={memberToggleMutation.isPending}
-            onConfirm={() =>
-              memberToggleMutation.mutate({
-                member: memberToggle,
-                active: selectedMemberNextActive,
-              })
-            }
+            onConfirm={() => memberToggleMutation.mutate(memberToggle)}
           >
             {memberToggle.sso_only || memberToggle.external_id ? (
               <p>{t('console:members.idpManagedConfirm')}</p>
@@ -535,20 +535,32 @@ function RosterMemberRow({
         </Badge>
       </td>
       <td className="text-right">
-        {canManage ? (
+        {canManage && active ? (
           <Switch
-            checked={active}
+            checked
             onCheckedChange={() => onToggle(member)}
-            aria-label={
-              active
-                ? t('console:members.toggleDisableLabel', {
-                    email: member.email,
-                  })
-                : t('console:members.toggleEnableLabel', {
-                    email: member.email,
-                  })
-            }
+            aria-label={t('console:members.toggleDisableLabel', {
+              email: member.email,
+            })}
           />
+        ) : canManage ? (
+          // An account the deployment suspended cannot be re-activated by an
+          // organization; removing it is the one thing this organization can do.
+          <div className="flex items-center justify-end gap-2">
+            <span className="text-caption text-muted-foreground">
+              {t('console:members.suspendedHint')}
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onToggle(member)}
+              aria-label={t('console:members.toggleDisableLabel', {
+                email: member.email,
+              })}
+            >
+              {t('console:members.disable')}
+            </Button>
+          </div>
         ) : (
           <span className="text-muted-foreground">-</span>
         )}
@@ -572,8 +584,9 @@ function OnboardForm({ onClose }: { onClose: () => void }) {
   const [mode, setMode] = useState<'password' | 'invite'>('password')
   const [password, setPassword] = useState('')
   const [invite, setInvite] = useState<OnboardResult['invite'] | null>(null)
+  const [consent, setConsent] = useState(false)
 
-  const mutation = usePrivilegedMutation<void, OnboardResult>({
+  const mutation = usePrivilegedMutation<void, OnboardResponse>({
     mutationFn: () =>
       consoleApi.onboard({
         email: email.trim(),
@@ -583,10 +596,15 @@ function OnboardForm({ onClose }: { onClose: () => void }) {
         password: mode === 'password' ? password : undefined,
       }),
     invalidateKeys: () => [consoleKeys.invites(activeTenant)],
-    successMessage: t('console:onboard.created'),
+    successMessage: (data) =>
+      isConsentRequired(data)
+        ? t('console:onboard.consentRequiredToast')
+        : t('console:onboard.created'),
     onDone: (data) => {
-      // Invite mode shows the show-once link in place; password mode just closes.
-      if (data.invite) setInvite(data.invite)
+      // An existing account is never added here: it joins only by its holder's
+      // consent. An invitation is mailed to the invitee; its link never comes back.
+      if (isConsentRequired(data)) setConsent(true)
+      else if (data.invite) setInvite(data.invite)
       else onClose()
     },
   })
@@ -594,28 +612,33 @@ function OnboardForm({ onClose }: { onClose: () => void }) {
   const valid =
     email.includes('@') && (mode === 'invite' || password.length >= 8)
 
+  if (consent) {
+    return (
+      <>
+        <DialogHeader>
+          <DialogTitle>{t('console:onboard.consentRequiredTitle')}</DialogTitle>
+          <DialogDescription>
+            {t('console:onboard.consentRequiredBody', { email })}
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button onClick={onClose}>{t('console:onboard.done')}</Button>
+        </DialogFooter>
+      </>
+    )
+  }
+
   if (invite) {
     return (
       <>
         <DialogHeader>
           <DialogTitle>{t('console:onboard.inviteCreatedTitle')}</DialogTitle>
           <DialogDescription>
-            {t('console:onboard.inviteCreatedBody', { email })}
+            {invite.delivery === 'sent'
+              ? t('console:onboard.inviteSentBody', { email })
+              : t('console:onboard.inviteFailedBody', { email })}
           </DialogDescription>
         </DialogHeader>
-        <div className="flex items-center gap-2">
-          <Input readOnly value={invite.accept_url} mono />
-          <Button
-            variant="secondary"
-            onClick={() => {
-              void navigator.clipboard?.writeText(invite.accept_url)
-              toast.success(t('console:onboard.copied'))
-            }}
-          >
-            <Copy />
-            {t('console:onboard.copyLink')}
-          </Button>
-        </div>
         <DialogFooter>
           <Button onClick={onClose}>{t('console:onboard.done')}</Button>
         </DialogFooter>

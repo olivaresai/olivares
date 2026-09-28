@@ -134,15 +134,18 @@ var errGateFailed = fmt.Errorf("gate failed")
 
 func newEvalsGateCmd() *cobra.Command {
 	var (
-		cfg         evalsClientConfig
-		suite       string
-		subject     string
-		subjectKind string
-		baseline    string
-		outputsPath string
-		seed        string
-		sampleSize  int
-		checkID     string
+		cfg            evalsClientConfig
+		suite          string
+		subject        string
+		subjectKind    string
+		baseline       string
+		modelRef       string
+		variant        string
+		comparisonMode string
+		outputsPath    string
+		seed           string
+		sampleSize     int
+		checkID        string
 	)
 	cmd := &cobra.Command{
 		Use:   "gate",
@@ -181,6 +184,7 @@ func newEvalsGateCmd() *cobra.Command {
 				reqBody := map[string]any{
 					"suite_ref": suite, "subject_kind": subjectKind, "subject_ref": subject,
 					"baseline_ref": baseline, "outputs": outputs, "seed": seed, "sample_size": sampleSize,
+					"model_ref": modelRef, "prompt_variant": variant, "comparison": map[string]any{"version": 1, "mode": comparisonMode},
 				}
 				status, body, err = cfg.do(ctx, "POST", "/v1/m/evals/gate", reqBody)
 			}
@@ -191,6 +195,11 @@ func newEvalsGateCmd() *cobra.Command {
 				return fmt.Errorf("running the evals gate: %s", describeAPIRefusal(status, body))
 			}
 			var gate struct {
+				Comparison struct {
+					Status string `json:"status"`
+					Reason string `json:"reason"`
+					Mode   string `json:"mode"`
+				} `json:"comparison"`
 				ID               string   `json:"id"`
 				Verdict          string   `json:"verdict"`
 				EffectiveVerdict string   `json:"effective_verdict"`
@@ -208,6 +217,11 @@ func newEvalsGateCmd() *cobra.Command {
 					gate.ID, gate.Verdict, gate.EffectiveVerdict, gate.Sampled, gate.TotalCases, gate.CacheHits,
 					strings.Join(gate.Reasons, ",")); err != nil {
 					return err
+				}
+				if gate.Comparison.Status != "" {
+					if _, err := fmt.Fprintf(out, "comparison=%s reason=%s mode=%s\n", gate.Comparison.Status, gate.Comparison.Reason, gate.Comparison.Mode); err != nil {
+						return err
+					}
 				}
 				switch gate.EffectiveVerdict {
 				case "pass":
@@ -240,6 +254,9 @@ func newEvalsGateCmd() *cobra.Command {
 	cmd.Flags().StringVar(&suite, "suite", "", "suite id to gate against")
 	cmd.Flags().StringVar(&subject, "subject", "", "subject ref (e.g. the agent/model under test)")
 	cmd.Flags().StringVar(&subjectKind, "subject-kind", "", "subject kind (defaults to the suite's)")
+	cmd.Flags().StringVar(&comparisonMode, "comparison-mode", "same_candidate", "comparison v1: same_candidate or candidate_change (requires --baseline)")
+	cmd.Flags().StringVar(&modelRef, "model", "", "declared candidate model (distinct from the suite judge)")
+	cmd.Flags().StringVar(&variant, "variant", "", "declared candidate prompt variant")
 	cmd.Flags().StringVar(&baseline, "baseline", "", "explicit baseline run id (default: pinned baseline or latest prior run)")
 	cmd.Flags().StringVar(&outputsPath, "outputs", "", "JSON file mapping case_key → candidate output ('-' = stdin)")
 	cmd.Flags().StringVar(&seed, "seed", "", "deterministic sample seed (default: derived from the suite version)")
