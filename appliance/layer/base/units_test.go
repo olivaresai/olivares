@@ -88,6 +88,32 @@ var debianCloudInit = map[string]unitFile{
 	},
 }
 
+// Fedora 44's cloud-init 26.1 units as its package installs them: meson copies upstream's
+// systemd/cloud-final.service, cloud-config.service and cloud-init.target unchanged (Fedora's one
+// patch touches the local, main and network templates only), and the generator the package
+// ships creates the same multi-user.target.wants/cloud-init.target link. cloud-final still
+// names apt-daily.service, which no Fedora package ships, so that edge orders nothing there.
+var fedoraCloudInit = map[string]unitFile{
+	"cloud-final.service": {
+		"After":    {"network-online.target", "time-sync.target", "cloud-config.service", "rc-local.service", "multi-user.target"},
+		"Before":   {"apt-daily.service"},
+		"Wants":    {"network-online.target", "cloud-config.service"},
+		"WantedBy": {"cloud-init.target"},
+	},
+	"cloud-config.service": {
+		"After":    {"network-online.target", "cloud-config.target"},
+		"Wants":    {"network-online.target", "cloud-config.target"},
+		"WantedBy": {"cloud-init.target"},
+	},
+	"cloud-init.target": {
+		"After":    {"multi-user.target"},
+		"WantedBy": {"multi-user.target"},
+	},
+}
+
+// cloudInitFamilies are the families whose cloud-init the first-boot unit is ordered against.
+var cloudInitFamilies = map[string]map[string]unitFile{"debian-13": debianCloudInit, "fedora-44": fedoraCloudInit}
+
 // orderingGraph returns "a starts before b" edges for the units, with the default dependency
 // exactly as systemd.target(5) states it: a target that wants a unit is ordered after it
 // unless that unit sets DefaultDependencies=no. Our units are judged on this graph only.
@@ -139,27 +165,29 @@ func TestUnits_FirstBootJobGraphHasNoOrderingCycleWithCloudInit(t *testing.T) {
 	firstBoot, _ := readUnit(t, firstBootUnitPath)
 	readiness, _ := readUnit(t, readinessUnitPath)
 	product, _ := readUnit(t, productUnitPath)
-	units := map[string]unitFile{
-		"olivares-appliance-firstboot.service": firstBoot,
-		"olivares-appliance-readiness.service": readiness,
-		// Enabled by start-services once first boot has run: its [Install] section applies.
-		"olivares.service":  product,
-		"multi-user.target": {},
-	}
-	for name, u := range debianCloudInit {
-		units[name] = u
-	}
-	graph := orderingGraph(units)
-	for _, ours := range []string{"olivares-appliance-firstboot.service", "olivares-appliance-readiness.service", "olivares.service"} {
-		if onCycle(graph, ours) {
-			t.Fatalf("%s is on an ordering cycle; systemd would delete a start job at every boot", ours)
+	for family, cloudInit := range cloudInitFamilies {
+		units := map[string]unitFile{
+			"olivares-appliance-firstboot.service": firstBoot,
+			"olivares-appliance-readiness.service": readiness,
+			// Enabled by start-services once first boot has run: its [Install] section applies.
+			"olivares.service":  product,
+			"multi-user.target": {},
 		}
-	}
-	if !graph["cloud-final.service"]["olivares-appliance-firstboot.service"] {
-		t.Fatal("first boot does not wait for cloud-init's final stage")
-	}
-	if graph["olivares-appliance-firstboot.service"]["multi-user.target"] {
-		t.Fatal("multi-user.target waits for first boot, which waits for cloud-final, which follows multi-user.target")
+		for name, u := range cloudInit {
+			units[name] = u
+		}
+		graph := orderingGraph(units)
+		for _, ours := range []string{"olivares-appliance-firstboot.service", "olivares-appliance-readiness.service", "olivares.service"} {
+			if onCycle(graph, ours) {
+				t.Fatalf("%s: %s is on an ordering cycle; systemd would delete a start job at every boot", family, ours)
+			}
+		}
+		if !graph["cloud-final.service"]["olivares-appliance-firstboot.service"] {
+			t.Fatalf("%s: first boot does not wait for cloud-init's final stage", family)
+		}
+		if graph["olivares-appliance-firstboot.service"]["multi-user.target"] {
+			t.Fatalf("%s: multi-user.target waits for first boot, which waits for cloud-final, which follows multi-user.target", family)
+		}
 	}
 	// Without default dependencies the unit restates the ones systemd.service(5) lists.
 	if dd, _ := firstBoot.last("DefaultDependencies"); dd == "no" {
@@ -219,10 +247,12 @@ func TestUnits_CarryTheProductHardeningByLastValueOrStateWhy(t *testing.T) {
 				t.Fatalf("%s: %s=%q (present %v), the product's %q, and no stated reason", path, key, got, present, want)
 			}
 		}
-		// Both paths may be missing: the stage that needs one then records its refusal, where a
+		// Every path may be missing: the stage that needs one then records its refusal, where a
 		// missing required path would stop the unit before first boot could record anything.
-		if got, _ := unit.last("ReadWritePaths"); got != "-/etc/olivares -/etc/systemd/system/olivares.service.d" {
-			t.Fatalf("%s: ReadWritePaths=%q: the product configuration and its drop-in directory, each prefixed '-'", path, got)
+		want := "-/etc/olivares -/etc/systemd/system/olivares.service.d -/etc/olivares-portal -/etc/cloud/cloud.cfg.d"
+		if got, _ := unit.last("ReadWritePaths"); got != want {
+			t.Fatalf("%s: ReadWritePaths=%q: the product configuration, its drop-in directory and the Appliance "+
+				"Console's selection directory, each prefixed '-'", path, got)
 		}
 		// apply's context (appliance-firstboot's applyTimeout, 10 minutes) ends before systemd's.
 		if got, _ := unit.last("TimeoutStartSec"); got != "15min" {

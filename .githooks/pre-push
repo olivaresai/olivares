@@ -589,7 +589,7 @@ echo "pre-push:   cli-render + cli-render:selftest +"
 echo "pre-push:   watchdog-unpublished-work + gate-lock-order + client-callers + client-callers-selftest + kms-backends +"
 echo "pre-push:   release-version + launch-image-refs + screenshot-coverage + launch-placeholders + launch-counts + cloud-availability-claims + video-scene-anchors + docs-honesty +"
 echo "pre-push:   commerce + commerce-entity-fks + commerce-entity-fks:selftest + security-txt + cosign-pins + release-mechanics + installer-matrix + installer-matrix:selftest + package-repos + package-repos:selftest + package-publish + package-publish:selftest +"
-echo "pre-push:   ensure-shellcheck:selftest + actions + pg-env + json-decoders + error-mappers + build-bin-parity + web-e2e-boot +"
+echo "pre-push:   ensure-shellcheck:selftest + ci-task-install:selftest + actions + pg-env + json-decoders + error-mappers + build-bin-parity + web-e2e-boot +"
 echo "pre-push:   session-duplicates + sigpipe-booleans:selftest + spdx:awk-selftest + ci:run-skipped-steps:selftest + claim-lector:selftest + npm-vuln-gate + status-ref + ci-ports + cra-pack + decision-index +"
 echo "pre-push:   decision-index:selftest + taskfile-shape + taskfile-shape:selftest + taskfile-graph + taskfile-executable + taskfile-executable:selftest +"
 echo "pre-push:   phone-home-claims + phone-home-claims:selftest + classify-allowlist + classify-allowlist:selftest + docsite-versions + docsite-versions:selftest +"
@@ -1535,6 +1535,7 @@ task lint:package-publish:selftest
 # parsed these files — GitHub is their only interpreter, and an invalid job-level
 # `${{ runner.temp }}` reached main and made every push an instant startup failure.
 task lint:ensure-shellcheck:selftest
+task lint:ci-task-install:selftest
 task lint:actions
 # The Postgres gate wiring must keep BOTH branches working — above all the one this
 # machine cannot exercise, where no server is present and the run must still say which

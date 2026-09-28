@@ -19,7 +19,7 @@
 # name runs its seed corpus exactly as the unpartitioned run does.
 #
 # Run mode — the argv is the command, and it runs from ./modules:
-#   scripts/sessions-race-partition.sh go test -race -count=1 -timeout 150m
+#   scripts/sessions-race-partition.sh go test -race -count=1 -timeout 180m
 #     no selector  -> ./sessions with NO -run: byte for byte the complete original package run
 #     selector set -> `-v -p 1 -run '^(A|B|...)$' ./sessions`
 #

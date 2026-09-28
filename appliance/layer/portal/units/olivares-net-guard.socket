@@ -1,0 +1,18 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+
+[Unit]
+Description=Network guard local API
+Requires=olivares-network-runtime.service
+After=olivares-network-runtime.service
+
+[Socket]
+ListenStream=/run/olivares-net-guard-api/guard.sock
+SocketUser=root
+SocketGroup=olivares-portal
+SocketMode=0660
+DirectoryMode=0755
+Accept=no
+
+[Install]
+WantedBy=sockets.target

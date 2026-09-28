@@ -1,0 +1,211 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# appliance-image — the hosted fixture of the appliance image recipe: it builds the server
+# edition for amd64 on its shipping base, Fedora 44, and then boots what it built.
+#
+# The product and layer are RPMs, signed with their repodata through D's S3 scripts
+# (scripts/rpm-payload-sign.py, scripts/render-rpm-repodata.py; S3 is composed before this
+# recipe) with a throwaway key made by S3's test-only generator. The build reads that signed
+# repository with both checks and names the key with --qualification-key, so the run is a
+# qualification and never a release. No real key or credential is read.
+#
+# The one job measures the prerequisite with --retain-builder and consumes its exact
+# immutable image and explicit accelerator before any image work. It retains all receipts
+# and always attempts exact-ID release. A separate standalone preflight is not admission.
+# TCG initialization is not a measured guest boot budget; every boot assertion remains.
+# No release, registry or object-store publication occurs here.
+name: appliance-image
+
+on:
+  workflow_dispatch:
+    inputs:
+      firmware:
+        description: Redistributable non-free firmware in the image, or a 100% free image
+        type: choice
+        options: [nonfree, free]
+        default: nonfree
+      accelerator:
+        # Required and without a default, as the Taskfile and attempt.py require it: a choice
+        # list would preselect one. attempt.py refuses anything but kvm or tcg before any work.
+        description: kvm or tcg, typed explicitly; must match the same-job prerequisite trial
+        type: string
+        required: true
+      version:
+        description: Version stamped on the development packages and the OVF envelope
+        type: string
+        default: 0.0.0-dev
+
+permissions:
+  contents: read
+
+concurrency:
+  group: appliance-image-${{ github.ref }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+
+jobs:
+  image:
+    # Hosted on purpose: build.sh runs the builder as a PRIVILEGED container with the host's
+    # /dev shared, which must never run on a runner that shares a host with other builds, so
+    # this job stays on a disposable GitHub-hosted VM and no step reads a secret.
+    # One disposable VM owns preflight, retained builder, recipe and all guest cases.
+    # Declared inner ceilings: preflight 25m, build 90m, formats 3x10m, boot 95m, NoCloud 22.5m,
+    # inside the 290m attempt step. The step ceilings sum to 346m (10+5+5+20+10+290+5+1), so the
+    # job ceiling is 347m, under the hosted 360m limit. These are declared ceilings, not measured
+    # TCG performance; the attempt records each phase's times and sampled disk instead.
+    runs-on: ubuntu-latest
+    timeout-minutes: 347
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.work
+          cache: true
+          cache-dependency-path: go.work.sum
+      - name: install the host tools before qualifying this host
+        timeout-minutes: 10
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends qemu-system-x86 qemu-utils ovmf xorriso jq python3-yaml \
+            rpm createrepo-c gnupg openssl
+      - name: prerequisite and consumer inert controls
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          /usr/bin/python3 -m unittest discover -s appliance/test/runner -p 'test_*.py' -v
+          /usr/bin/python3 appliance/test/test_recipe_composition.py -v
+          bash appliance/test/battery-selftest.sh "$RUNNER_TEMP/selftest"
+      - name: the recipe shape gate
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          go test -count=1 -timeout 120s ./appliance/images/...
+      - name: build the appliance binaries and development Community binary
+        timeout-minutes: 20
+        run: |
+          set -euo pipefail
+          CGO_ENABLED=0 go build -trimpath -o bin/appliance-firstboot ./appliance/cmd/appliance-firstboot
+          CGO_ENABLED=0 go build -trimpath -o bin/appliance-answers ./appliance/cmd/appliance-answers
+          CGO_ENABLED=0 go build -trimpath -o bin/olivares ./cmd/olivares
+      - name: package, sign and deliver the layer and development Community product as RPMs
+        timeout-minutes: 10
+        env:
+          VERSION: ${{ inputs.version }}
+          ARCH: amd64
+        run: |
+          set -euo pipefail
+          export GOBIN="$RUNNER_TEMP/gopath/bin"
+          go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.47.0
+          repo="$GITHUB_WORKSPACE/dist/rpm"
+          mkdir -p "$repo"
+          "$GOBIN/nfpm" package --config packaging/nfpm/olivares-appliance-base.yaml \
+            --packager rpm --target "$repo/"
+          "$GOBIN/nfpm" package --config appliance/images/kiwi/product-dev.nfpm.yaml \
+            --packager rpm --target "$repo/"
+          # A throwaway key, test-only by S3's own latch; its secret half stays in this job's temp.
+          export OLIVARES_PACKAGE_REPO_TEST_ONLY=1
+          key="$RUNNER_TEMP/package-repository-test-key"
+          bash scripts/generate-package-repository-test-key.sh "$key"
+          export OLIVARES_PACKAGE_REPO_KEY_DESCRIPTOR_FILE="$key/descriptor.json"
+          export OLIVARES_PACKAGE_REPO_OPENPGP_SECRET_KEY_FILE="$key/openpgp-secret.asc"
+          rpms=()
+          for rpm in "$repo"/*.rpm; do rpms+=(--rpm "$rpm"); done
+          python3 scripts/rpm-payload-sign.py "${rpms[@]}"
+          python3 scripts/render-rpm-repodata.py render --repo "$repo"
+          python3 appliance/images/kiwi/write_delivery.py --package-dir "$repo" --key-file "$key/openpgp-public.asc"
+          echo "QUALIFICATION_KEY=$(jq -r .openpgp_fingerprint "$key/descriptor.json")" >> "$GITHUB_ENV"
+      - name: qualify, admit, build, assemble and boot with one builder
+        timeout-minutes: 290
+        env:
+          FIRMWARE: ${{ inputs.firmware }}
+          ACCELERATOR: ${{ inputs.accelerator }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          /usr/bin/python3 appliance/images/kiwi/attempt.py \
+            --evidence "$RUNNER_TEMP/appliance-image-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" \
+            --accelerator "$ACCELERATOR" --firmware "$FIRMWARE" \
+            --base fedora44 --package-dir "$GITHUB_WORKSPACE/dist/rpm" \
+            --qualification-key "$QUALIFICATION_KEY" --target-dir "$GITHUB_WORKSPACE/dist/appliance"
+      - name: always retire the builder owned by this job
+        if: always()
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          /usr/bin/python3 appliance/images/kiwi/attempt.py \
+            --evidence "$RUNNER_TEMP/appliance-image-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" --release-only
+      # The images are evidence when the job fails too: a boot that fails is diagnosed from the disk
+      # it booted, its partition table, ESP and boot configuration. They are kept only while the
+      # three together stay under this budget, about twice what they weighed (1,447,028,736 bytes
+      # in hosted run 36259628735), and not when the job failed before any image existed.
+      - name: measure the image artifacts against their upload budget
+        id: image-budget
+        if: always()
+        timeout-minutes: 1
+        env:
+          BUDGET_BYTES: '3221225472'
+        run: |
+          set -euo pipefail
+          total=0
+          present=0
+          for file in dist/appliance/olivares-appliance-server-amd64.iso \
+                      dist/appliance/olivares-appliance-server-amd64.qcow2 \
+                      dist/appliance/olivares-appliance-server-amd64.ova; do
+            if [ -f "$file" ]; then
+              present=$((present + 1))
+              total=$((total + $(stat -c %s "$file")))
+            fi
+          done
+          upload=false
+          if [ "$present" -gt 0 ] && [ "$total" -le "$BUDGET_BYTES" ]; then
+            upload=true
+          fi
+          echo "image artifacts: $present of 3, $total bytes, budget $BUDGET_BYTES bytes, upload $upload"
+          echo "upload=$upload" >> "$GITHUB_OUTPUT"
+      # The three files formats.json declares, by name: KIWI's installer medium stays in the same
+      # directory beside the declared ISO, and a pattern would keep it as a fourth file.
+      - name: retain image artifacts without publishing
+        if: always() && steps.image-budget.outputs.upload == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: appliance-image-artifacts-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            dist/appliance/olivares-appliance-server-amd64.iso
+            dist/appliance/olivares-appliance-server-amd64.qcow2
+            dist/appliance/olivares-appliance-server-amd64.ova
+          retention-days: 7
+          if-no-files-found: warn
+          compression-level: 0
+      # Text evidence only. The streamed phase logs are capped by attempt.py (first 16 MiB plus
+      # last 256 KiB). Guest serial, console and probe logs and qemu.stderr have no byte cap: they
+      # are bounded only by each guest's timeout and retained whole. No total byte budget is
+      # declared. Guest disks, firmware variable stores and overlays stay on the disposable VM.
+      - name: retain qualification, release, manifest and guest evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: appliance-image-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/appliance-image-${{ github.run_id }}-${{ github.run_attempt }}/**/*.json
+            ${{ runner.temp }}/appliance-image-${{ github.run_id }}-${{ github.run_attempt }}/**/*.jsonl
+            ${{ runner.temp }}/appliance-image-${{ github.run_id }}-${{ github.run_attempt }}/**/*.log
+            ${{ runner.temp }}/appliance-image-${{ github.run_id }}-${{ github.run_attempt }}/**/*.txt
+            ${{ runner.temp }}/appliance-image-${{ github.run_id }}-${{ github.run_attempt }}/**/SHA256SUMS
+            ${{ runner.temp }}/appliance-image-${{ github.run_id }}-${{ github.run_attempt }}/**/seconds
+            ${{ runner.temp }}/appliance-image-${{ github.run_id }}-${{ github.run_attempt }}/**/qemu.cmd
+            ${{ runner.temp }}/appliance-image-${{ github.run_id }}-${{ github.run_attempt }}/**/qemu.stderr
+            ${{ runner.temp }}/appliance-image-${{ github.run_id }}-${{ github.run_attempt }}/**/ready
+            ${{ runner.temp }}/appliance-image-${{ github.run_id }}-${{ github.run_attempt }}/**/product.active
+            dist/appliance/*.json
+          retention-days: 7
+          if-no-files-found: warn

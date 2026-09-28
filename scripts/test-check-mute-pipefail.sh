@@ -516,6 +516,81 @@ else
 		|| malo "el mutante de la cuenta no reproduce la burla: rc=$rc (esperado 0) — $(head -c 160 "$T/err")"
 fi
 
+# A quoted status expansion preserves the same value as the existing raw form.
+R26="$(arbol quoted-status)"
+cat > "$R26/scripts/capture.sh" <<'EOF_QUOTED_STATUS'
+#!/usr/bin/env bash
+set -euo pipefail
+count="$(grep -c x "$input")" || result="$?"
+[ "${count:-0}" = "0" ] || fail "unexpected count: $count"
+EOF_QUOTED_STATUS
+git -C "$R26" add -A
+printf '# empty\n' > "$R26/ci/mute-pipefail-baseline.txt"
+rc="$(correr "$R26")"
+if [ "$rc" = 0 ]; then
+	paso "quoted exit-status capture protects the outer assignment"
+else
+	malo "quoted exit-status capture: rc=$rc, expected 0 — $(head -c 200 "$T/err")"
+fi
+
+# The extra spelling grants no exemption to an incomplete value or quoted text.
+quoted_status_case() {
+	local name="$1" expected="$2" assignment="$3" fixture got
+	fixture="$(arbol "quoted-$name")"
+	sembrar "$fixture" capture.sh "#!/usr/bin/env bash
+set -euo pipefail
+$assignment
+[ \"\${count:-0}\" = 0 ] || fail \"unexpected count: \$count\"
+"
+	printf '# empty\n' > "$fixture/ci/mute-pipefail-baseline.txt"
+	got="$(correr "$fixture")"
+	if [ "$got" = "$expected" ] && { [ "$expected" = 0 ] || command grep -q "variable \`count\`" "$T/err"; }; then
+		paso "quoted status $name: rc=$got"
+	else
+		malo "quoted status $name: rc=$got, expected $expected — $(head -c 200 "$T/err")"
+	fi
+}
+# These literals are scanner input; this shell must not expand their expressions.
+# shellcheck disable=SC2016
+{
+	quoted_status_case continued 0 'count=$(grep -c x "$input") \
+	  || result="$?" # captured'
+	quoted_status_case suffix 1 'count="$(grep -c x "$input")" || result="$?"suffix'
+	quoted_status_case hash_suffix 1 'count="$(grep -c x "$input")" || result="$?"#suffix'
+	quoted_status_case extra_value 1 'count="$(grep -c x "$input")" || result="$? extra"'
+	quoted_status_case escaped 1 'count="$(grep -c x "$input")" || result="\$?"'
+	quoted_status_case literal 1 'count="$(grep -c x "$input")" || result='"'"'$?'"'"''
+	quoted_status_case incomplete 1 'count="$(grep -c x "$input")" || result="$?'
+	quoted_status_case comment 1 'count="$(grep -c x "$input")" # || result="$?"'
+	quoted_status_case argument 1 'count="$(grep -c '"'"'|| result="$?"'"'"' "$input")"'
+}
+
+# Bash, separately from the scanner, must deliver the producer status to its owner.
+cat > "$T/quoted-runtime.sh" <<'EOF_QUOTED_RUNTIME'
+#!/usr/bin/env bash
+set -euo pipefail
+produce() { printf '%s\n' x; return 7; }
+result=0
+count="$(produce | grep -c x)" || result="$?"
+printf 'OWNER status=%s count=%s\n' "$result" "$count" >&2
+[ "$result" -le 1 ] || exit 2
+EOF_QUOTED_RUNTIME
+rc=0
+bash "$T/quoted-runtime.sh" >"$T/runtime.out" 2>"$T/runtime.err" || rc=$?
+if [ "$rc" = 2 ] && command grep -Fxq 'OWNER status=7 count=1' "$T/runtime.err"; then
+	paso "Bash quoted capture preserves producer status and reaches its owner"
+else
+	malo "Bash quoted capture: rc=$rc — $(head -c 200 "$T/runtime.err")"
+fi
+sed 's/ || result="\$?"//' "$T/quoted-runtime.sh" > "$T/quoted-unguarded.sh"
+rc=0
+bash "$T/quoted-unguarded.sh" >"$T/runtime.out" 2>"$T/runtime.err" || rc=$?
+if [ "$rc" = 7 ] && [ ! -s "$T/runtime.err" ]; then
+	paso "Bash unguarded control exits before the diagnostic owner"
+else
+	malo "Bash unguarded control: rc=$rc — $(head -c 200 "$T/runtime.err")"
+fi
+
 # ── 14 · LOCALE: el gate no hereda la colacion de quien lo lanza ──────────────
 # Medido el 2026-09-05: bajo LC_ALL=es_ES.UTF-8 `comm` avisaba «not in sorted order» sobre listas
 # ordenadas en C. Se corre bajo un locale instalado distinto de C, si hay alguno; si no lo hay

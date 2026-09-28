@@ -106,7 +106,7 @@ TOKEN="$(curl -sf -X POST "http://127.0.0.1:$PORT/v1/auth/login" \
   -H 'Content-Type: application/json' \
   -d '{"email":"demo@olivares.local","password":"olivares-demo-estate"}' \
   | python3 -c 'import sys,json;print(json.load(sys.stdin)["token"])')"
-TENANT="$(curl -sf "http://127.0.0.1:$PORT/v1/system/orgs" -H "Authorization: Bearer $TOKEN" \
+TENANT="$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf "http://127.0.0.1:$PORT/v1/system/orgs" -H @- \
   | python3 -c 'import sys,json;[print(o["tenant_id"]) for o in json.load(sys.stdin)["items"] if o["slug"]=="demo"]')"
 [ -n "$TENANT" ] || { echo "launch-state-captures: ⛔ NO HE PODIDO MIRAR: sin tenant demo" >&2; cat "$DATA/engine.log" >&2; exit 2; }
 echo "==> Tenant demo: $TENANT"

@@ -10,7 +10,7 @@ import (
 	"testing"
 )
 
-func TestStageMachine_ReconcileReappliesTheAnswerStagesUntilTheProductMayHaveStarted(t *testing.T) {
+func TestStageMachine_ReconcileReappliesAnswersOnlyBeforeHostHandoff(t *testing.T) {
 	in := answersFixture(t, "olivares.example.test")
 	corrected := answersFixture(t, "corrected.example.test")
 	crashAfter := func(stage Stage) (string, *fakeHost) {
@@ -23,8 +23,8 @@ func TestStageMachine_ReconcileReappliesTheAnswerStagesUntilTheProductMayHaveSta
 		return dir, h
 	}
 
-	// Before the product starts, the stages that depend on the answers apply again.
-	dir, h := crashAfter(StageProductConfig)
+	// Before host ownership is handed over, the stages that depend on the answers apply again.
+	dir, h := crashAfter(StageHostSettings)
 	rec, err := newMachine(dir, h, &corrected, h.seams()).Reconcile()
 	if err != nil || rec.State != Pending || rec.Digest != "" || len(rec.Completed) != 1 || rec.Completed[0].Stage != StageIdentity {
 		t.Fatalf("reconcile: %+v %v", rec, err)
@@ -33,23 +33,14 @@ func TestStageMachine_ReconcileReappliesTheAnswerStagesUntilTheProductMayHaveSta
 	if err != nil || rec.State != Ready || rec.Digest != corrected.Digest {
 		t.Fatalf("run after reconcile: %+v %v", rec, err)
 	}
-	if h.applies[StageIdentity] != 1 || h.applies[StageHostSettings] != 2 || h.applies[StageProductConfig] != 2 {
+	if h.applies[StageIdentity] != 1 || h.applies[StageHostSettings] != 2 || h.applies[StageProductConfig] != 1 {
 		t.Fatalf("applies after reconcile: %v", h.applies)
 	}
 
-	// A recorded effect the host no longer matches refuses at its stage; reconcile applies it again.
-	dir, h = crashAfter(StageStorage)
-	h.effects[StageProductConfig] = "edited by hand"
-	rec, err = newMachine(dir, h, &in, h.seams()).Run(context.Background())
-	if err != nil || rec.State != Refused || rec.Stage != StageProductConfig {
-		t.Fatalf("drifted configuration: %+v %v", rec, err)
-	}
-	if _, err := newMachine(dir, h, &in, h.seams()).Reconcile(); err != nil {
-		t.Fatalf("reconcile after drift: %v", err)
-	}
-	rec, err = newMachine(dir, h, &in, h.seams()).Run(context.Background())
-	if err != nil || rec.State != Ready || h.applies[StageProductConfig] != 2 || h.applies[StageIdentity] != 1 {
-		t.Fatalf("run after reconciling drift: %+v %v %v", rec, err, h.applies)
+	// A completed handoff refuses reconciliation even before the product starts.
+	dir, h = crashAfter(StageHostHandoff)
+	if _, err := newMachine(dir, h, &in, h.seams()).Reconcile(); err == nil {
+		t.Fatal("reconciled after handoff")
 	}
 
 	// Once the product may have started, reconcile refuses and changes nothing.

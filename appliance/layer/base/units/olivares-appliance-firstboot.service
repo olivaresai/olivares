@@ -8,7 +8,7 @@
 # atomically in /var/lib/olivares-appliance/state.json; a restart compares instead of
 # repeating. Once first boot is ready the unit is skipped. It never prints a setup token.
 #
-# Ordering. Debian 13's cloud-final.service and cloud-init.target are ordered after
+# Ordering. Upstream cloud-init's cloud-final.service and cloud-init.target are ordered after
 # multi-user.target, and a target is ordered after every unit it wants unless that unit sets
 # DefaultDependencies=no (systemd.target(5)). This unit is wanted by multi-user.target and
 # waits for cloud-final.service, so it sets DefaultDependencies=no: multi-user.target does not
@@ -19,7 +19,7 @@
 # readiness unit it pulls in measures the product after the product starts. Without cloud-init
 # the ordering on cloud-final.service is inert and verify-host-settings refuses.
 [Unit]
-Description=Olivares appliance first boot
+Description=Olivares Server first boot
 Documentation=https://github.com/olivaresai/olivares/tree/main/appliance
 DefaultDependencies=no
 Requires=sysinit.target
@@ -44,10 +44,13 @@ TimeoutStartSec=15min
 # except where a line below says why first boot needs a different one.
 NoNewPrivileges=true
 ProtectSystem=strict
-# Writable: the product configuration the product's generator writes, and the drop-in directory.
-# Both may be missing ("-"): the stage that needs one then records its refusal, where a missing
-# required path would stop the unit before first boot could record anything.
-ReadWritePaths=-/etc/olivares -/etc/systemd/system/olivares.service.d
+# Writable: the product configuration the product's generator writes, the drop-in directory, and
+# the Appliance Console's directory, where generate-product-config publishes the console's
+# selection (the base package's postinstall creates it). Each may be missing ("-"): the stage that
+# needs one then records its refusal, where a missing required path would stop the unit before
+# first boot could record anything.
+# The verified handoff writes only its cloud-init ownership drop-in.
+ReadWritePaths=-/etc/olivares -/etc/systemd/system/olivares.service.d -/etc/olivares-portal -/etc/cloud/cloud.cfg.d
 # ProtectHome: read-only, not true: verify-host-settings reads the authorized SSH keys in /home and /root.
 ProtectHome=read-only
 PrivateTmp=true

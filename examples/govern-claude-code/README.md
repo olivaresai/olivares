@@ -42,7 +42,7 @@ curl -sf -X POST localhost:8443/v1/setup \
   -d '{"token":"olst_…","email":"admin@local","password":"correct-horse-battery-staple"}'
 TOKEN=$(curl -sf -X POST localhost:8443/v1/auth/login \
   -d '{"email":"admin@local","password":"correct-horse-battery-staple"}' | jq -r .token)
-TENANT=$(curl -sf -X POST localhost:8443/v1/system/orgs -H "Authorization: Bearer $TOKEN" \
+TENANT=$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf -X POST localhost:8443/v1/system/orgs -H @- \
   -d '{"name":"Production","slug":"prod"}' | jq -r .tenant_id)
 ```
 
@@ -93,8 +93,8 @@ POST a hook payload to the PEP exactly as `olivares claude-hook` would. The
 response is the Claude Code decision the agent enforces:
 
 ```sh
-post() { curl -sf -X POST localhost:8447/ \
-  -H "Authorization: Bearer $TOKEN" -H "X-Olivares-Hook-Tenant: $TENANT" \
+post() { printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf -X POST localhost:8447/ -H @- \
+  -H "X-Olivares-Hook-Tenant: $TENANT" \
   -d "{\"hook_event_name\":\"PreToolUse\",\"tool_name\":\"$1\",\"tool_input\":$2}" | jq .hookSpecificOutput; }
 
 post Read     '{"file_path":"/repo/README.md"}'      # permissionDecision: "allow"

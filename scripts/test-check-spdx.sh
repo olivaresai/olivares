@@ -225,6 +225,18 @@ expect_rc "F5  an extension with no rule is UNCLASSIFIED and the gate refuses to
 	"$R" "$GATE" 2 "UNCLASSIFIED web/thing.vue"
 expect_says "F5b and the message names the extension, not just the file" "$R" "$GATE" "Extensions: .vue"
 
+# The DNF template is source, while unrelated template formats remain unknown.
+R="$(mkrepo dnf-template)" || exit 2
+mkdir -p "$R/packaging/repositories"
+hdr_file "$R/packaging/repositories/dnf-repo.template" AGPL-3.0-only
+expect_silent "F5c the licensed DNF template is recognized" "$R" "$GATE" "UNCLASSIFIED"
+printf '[repo]\n' >"$R/packaging/repositories/dnf-repo.template"
+expect_says "F5d the DNF template requires its source header" "$R" "$GATE" "MISSING  packaging/repositories/dnf-repo.template"
+hdr_file "$R/packaging/repositories/dnf-repo.template" Apache-2.0
+expect_says "F5e the DNF template requires the packaging license" "$R" "$GATE" "MISMATCH packaging/repositories/dnf-repo.template"
+hdr_file "$R/packaging/repositories/other.template" AGPL-3.0-only
+expect_says "F5f another template format stays unknown" "$R" "$GATE" "UNCLASSIFIED packaging/repositories/other.template"
+
 # ------------------------------------------- F6 extension-less files: a CONTENT test
 R="$(mkrepo shebang)" || exit 2
 mkdir -p "$R/.githooks"

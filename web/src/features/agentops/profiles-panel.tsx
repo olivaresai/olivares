@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { ProviderAccent } from './provider-accent'
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import {
   Eye,
@@ -463,6 +464,7 @@ function ProfilesTable({
             >
               <td title={profile.profile_ref}>
                 <RowOpenButton onOpen={() => onOpen(profile)}>
+                  <ProviderAccent accent={profile.accent} />
                   <NamedRef
                     className="font-medium text-foreground"
                     name={profile.display_name}
@@ -521,7 +523,7 @@ function ProfilesTable({
   )
 }
 
-function ProfileListError({
+export function ProfileListError({
   error,
   onRetry,
 }: {
@@ -578,7 +580,7 @@ function EnvironmentCell({ profile }: { profile: ProviderProfileDTO }) {
   )
 }
 
-function StateBadge({ state }: { state: string }) {
+export function StateBadge({ state }: { state: string }) {
   const { t } = useTranslation('agentops')
   const variant =
     state === 'active' ? 'success' : state === 'retired' ? 'danger' : 'neutral'
@@ -740,6 +742,7 @@ function ProfileSheetBody({ initial }: { initial: ProviderProfileDTO }) {
       <SheetHeader>
         <SheetTitle className="flex items-center gap-2">
           <Fingerprint className="size-4 text-accent-text" />
+          <ProviderAccent accent={profile.accent} />
           <span className="truncate">
             {profile.display_name || profile.profile_ref}
           </span>

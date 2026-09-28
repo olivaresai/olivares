@@ -312,7 +312,11 @@ func retirementBlockers(ctx context.Context, sc store.Scope, user model.ID) ([]s
 			[]model.Filter{{Column: colBindingTerminal, Op: model.OpEq, Value: false}},
 			func(rec model.Record) bool { return !rec.Bool(colBindingTerminal) }},
 	}
-	var blocking, unknown []string
+	unknown, err := providerAccountRetirementUnknowns(ctx, sc)
+	if err != nil {
+		return nil, nil, err
+	}
+	var blocking []string
 	listed := make(map[string]bool)
 	unknownKinds := make(map[model.Kind]bool)
 	for _, scan := range scans {

@@ -1,0 +1,32 @@
+{
+  "id": "host.status",
+  "module": "host",
+  "verb": "status",
+  "title": "Host operation status",
+  "category": "Status",
+  "input_schema": {
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+  },
+  "preconditions": [
+    "Local admission or an authorized web session"
+  ],
+  "consequence": "Read operation status; no host setting changes.",
+  "confirmation": "none",
+  "modes": [
+    "product-up",
+    "product-down-repair",
+    "unavailable"
+  ],
+  "act_verb": "",
+  "audience": "",
+  "equivalent_command": "olivares-appliance host status --plan",
+  "output_schema": "hostop-v1.schema.json",
+  "surfaces": [
+    "web",
+    "cli",
+    "tui"
+  ]
+}

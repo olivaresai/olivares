@@ -20,9 +20,10 @@ import (
 	"github.com/olivaresai/olivares/appliance/answers"
 	"github.com/olivaresai/olivares/appliance/answers/carriers"
 	"github.com/olivaresai/olivares/appliance/layer/base"
+	firewallstage "github.com/olivaresai/olivares/appliance/layer/firewall/firstboot"
 )
 
-const usage = "usage: appliance-firstboot apply | status | reconcile | plan | check-template ROOT"
+const usage = "usage: appliance-firstboot apply | status | reconcile | plan | hand-over-host-settings | check-template ROOT"
 
 // applyTimeout ends a run before the units' TimeoutStartSec=15min, so a slow run records why
 // it stopped instead of being killed.
@@ -34,6 +35,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 	switch {
 	case len(args) == 1 && args[0] == "apply":
 		return apply(stdout, stderr)
+	case len(args) == 1 && args[0] == "hand-over-host-settings":
+		return handOverHostSettings(base.Store{Dir: base.StateDir}, base.HostSettingsHandoff{Host: base.Host{Root: "/"}}, stdout, stderr)
 	case len(args) == 1 && args[0] == "status":
 		return status(stdout, stderr)
 	case len(args) == 1 && args[0] == "reconcile":
@@ -97,10 +100,11 @@ func apply(stdout, stderr io.Writer) int {
 		Seams: base.Seams{
 			Identity:      base.OSIdentity{Host: host},
 			HostSettings:  base.CloudInitHost{Host: host},
+			HostHandoff:   base.HostSettingsHandoff{Host: host},
 			ProductConfig: base.ProductConfig{Host: host},
 			Storage:       base.Storage{Host: host},
 			SetupDelivery: base.RefusingSetupDelivery{},
-			Firewall:      base.UnmeasuredFirewall{},
+			Firewall:      firewallstage.New(carriers.ExecRunner),
 			StartServices: base.ProductService{Host: host},
 			Readiness:     base.ProductReadiness{Host: host, Poll: 2 * time.Second},
 		},
@@ -162,7 +166,7 @@ func reconcile(stdout, stderr io.Writer) int {
 		return 2
 	}
 	defer unlock()
-	code, line := reconcileOutcome((&base.Machine{Store: store, Log: stdout}).Reconcile())
+	code, line := reconcileOutcome((&base.Machine{Store: store, Log: stdout, Seams: base.Seams{HostHandoff: base.HostSettingsHandoff{Host: base.Host{Root: "/"}}}}).Reconcile())
 	out := stdout
 	if code != 0 {
 		out = stderr
@@ -231,4 +235,26 @@ func checkTemplate(root string, stdout, stderr io.Writer) int {
 	}
 	_, _ = fmt.Fprintln(stdout, "clean template: no instance identity")
 	return 0
+}
+
+// handOverHostSettings is also used by postinstall; it runs only the verified handoff.
+func handOverHostSettings(store base.Store, step base.HostSettingsHandoff, stdout, stderr io.Writer) int {
+	unlock, err := store.Lock()
+	if err != nil {
+		fmt.Fprintln(stderr, "host handoff cannot take its lock")
+		return 2
+	}
+	defer unlock()
+	_, err = base.HandOverHostSettings(context.Background(), store, step)
+	if err == nil {
+		fmt.Fprintln(stdout, "host settings handed over to appliance")
+		return 0
+	}
+	var outcome *base.Outcome
+	if errors.As(err, &outcome) || refusedRecord(err) {
+		fmt.Fprintln(stderr, "host handoff refused:", err)
+		return 1
+	}
+	fmt.Fprintln(stderr, "host handoff could not be recorded")
+	return 2
 }

@@ -78,8 +78,14 @@ export function useAuthBoundary(): AuthBoundary {
   // entries are still in the cache and an old request may still be in flight: they
   // are cancelled (the abort reaches the network through the reads' signals) and
   // removed, so a late answer has nowhere to land and no stale row waits for a
-  // return to that boundary. Only this plane's own entries for that one boundary
-  // are touched — no other tenant, feature or query.
+  // return to that boundary. The same goes for the MutationCache: a mutation keyed
+  // under the old scope (a submitted adoption, with its profile reference and name)
+  // is removed too. TanStack never collects a pending mutation on its own, and
+  // keeps a settled one for its gcTime after its last observer leaves, so without
+  // this its variables would outlive the boundary that submitted them. A request
+  // already sent is not recalled: its answer reaches a retired owner, which reports
+  // nothing. Only this plane's own entries for that one boundary are touched — no
+  // other tenant, feature, query or mutation.
   const previous = useRef<{ tenant: string | null; epoch: number } | null>(null)
   useEffect(() => {
     const prev = previous.current
@@ -87,11 +93,32 @@ export function useAuthBoundary(): AuthBoundary {
       const scope = agentOpsKeys.boundaryScope(prev.tenant, prev.epoch)
       void queryClient.cancelQueries({ queryKey: scope })
       queryClient.removeQueries({ queryKey: scope })
+      const mutations = queryClient.getMutationCache()
+      for (const mutation of mutations.findAll({ mutationKey: scope })) {
+        mutations.remove(mutation)
+      }
     }
     previous.current = { tenant: boundary.tenant, epoch: boundary.epoch }
   }, [boundary, queryClient])
 
   return boundary
+}
+
+/**
+ * AuthBoundaryCustody — the cleanup above, mounted ONCE by the application shell for the
+ * whole page load. A provider-room component observes only the boundary moves that happen
+ * while it is mounted, and the room is unmounted by its tab or its route guard long before
+ * a principal signs out, a credential rotates or a tenant changes elsewhere in the console.
+ * This instance observes every move, so what a retired boundary left under its scope — a
+ * list, a point read, a submitted adoption's profile reference and its adopt mutation's
+ * variables — leaves the query and mutation caches AT the move,
+ * whether or not a provider screen is open: a terminal 401 followed by another sign-in, a
+ * same-session rotation, a tenant switch and its round trip included. It renders nothing,
+ * makes no request and starts no timer.
+ */
+export function AuthBoundaryCustody(): null {
+  useAuthBoundary()
+  return null
 }
 
 /**

@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -59,7 +60,7 @@ func (h *fakeHost) Measure(context.Context, Input) (Measurement, error) {
 
 func (h *fakeHost) seams() Seams {
 	return Seams{
-		Identity: fakeStep{h, StageIdentity}, HostSettings: fakeStep{h, StageHostSettings},
+		Identity: fakeStep{h, StageIdentity}, HostSettings: fakeStep{h, StageHostSettings}, HostHandoff: fakeStep{h, StageHostHandoff},
 		ProductConfig: fakeStep{h, StageProductConfig}, Storage: fakeStep{h, StageStorage},
 		SetupDelivery: fakeStep{h, StageSetupDelivery}, Firewall: fakeStep{h, StageFirewall},
 		StartServices: fakeStep{h, StageStartServices}, Readiness: h,
@@ -158,6 +159,12 @@ func TestStageMachine_PersistsEachCompletedStageAtomicallyAndComparesOnRestart(t
 		if _, err := first.Run(context.Background()); !errors.Is(err, errCrashed) {
 			t.Fatalf("first run: %v", err)
 		}
+		before, found, err := first.Store.Load()
+		if err != nil || !found || lastCompleted(before) != StageStorage {
+			t.Fatalf("initial history: %+v found=%v err=%v", before, found, err)
+		}
+		appliedBefore := maps.Clone(h.applies)
+		completedBefore := slices.Clone(before.Completed)
 		changed := answersFixture(t, "changed.example.test")
 		rec, err := newMachine(dir, h, &changed, h.seams()).Run(context.Background())
 		if err != nil || rec.State != Refused || rec.Stage != StageValidate || !strings.Contains(rec.Reason, string(StageStorage)) {
@@ -166,8 +173,9 @@ func TestStageMachine_PersistsEachCompletedStageAtomicallyAndComparesOnRestart(t
 		if strings.Contains(rec.Reason, "changed.example.test") || rec.Digest != in.Digest {
 			t.Fatalf("refusal must keep the recorded digest and quote no value: %+v", rec)
 		}
-		if h.applies[StageSetupDelivery] != 0 || len(rec.Completed) != 4 {
-			t.Fatalf("effects after the refusal: %v, completed %v", h.applies, rec.Completed)
+		if !maps.Equal(h.applies, appliedBefore) || !slices.Equal(rec.Completed, completedBefore) {
+			t.Fatalf("effects changed across refusal: applies %v -> %v, completed %v -> %v",
+				appliedBefore, h.applies, completedBefore, rec.Completed)
 		}
 		if readyMarker(dir) {
 			t.Fatal("a refused first boot wrote the ready marker")

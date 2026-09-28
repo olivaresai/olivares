@@ -36,6 +36,7 @@ cannot(){ printf 'NO HE PODIDO MIRAR: %s\n' "$1"; exit 2; }
 command -v python3 >/dev/null 2>&1 || cannot "sin python3 no puedo leer el YAML"
 PEEK="$ROOT/scripts/lib/ci-yaml-peek.py"
 [ -r "$PEEK" ] || cannot "falta scripts/lib/ci-yaml-peek.py, que es como leo estos YAML"
+python3 "$ROOT/scripts/test-ci-yaml-peek.py" || cannot "CI reader regression suite failed"
 # ⛔ SIN PyYAML A PROPOSITO. Este guion corre como paso de mainline-ci, y ese job vive en un
 # runner AUTOALOJADO (hetzner/srv17), no en una imagen de GitHub. Medido el 2026-08-30 sobre el
 # arbol entero: de todos los `run:` de todos los workflows, UNO usa python y solo importa
@@ -49,9 +50,12 @@ guard_block() {
   python3 "$PEEK" task-cmd "$1" web:codegen 'node_modules/.bin'
 }
 
-# Imprime la expresion `if:` del paso con ese id dentro del job control-plane.
+# Read the condition wherever the step is defined; differing copies are ambiguous.
 step_if() {
-  python3 "$PEEK" step-field "$1" control-plane "$2" if
+  python3 "$PEEK" step-field-anyjob "$1" "$2" if
+}
+step_jobs() {
+  python3 "$PEEK" step-jobs "$1" "$2"
 }
 
 # Arbol de mentira con los binarios que se le pidan en web/node_modules/.bin.
@@ -133,6 +137,19 @@ case "$IF_CONS" in
   *) no "el consumidor perdio steps.tools al corregirlo: $IF_CONS" ;;
 esac
 
+# Step outputs are visible only within the job that produced them.
+J_PROV=$(step_jobs "$WF" openapi-web-deps) || cannot "cannot locate openapi-web-deps jobs"
+J_CONS=$(step_jobs "$WF" openapi-check) || cannot "cannot locate openapi-check jobs"
+orphan=""
+for job in $J_CONS; do
+  printf '%s\n' "$J_PROV" | command grep -Fxq -- "$job" || orphan="$orphan $job"
+done
+if [ -z "$orphan" ]; then
+  ok "OpenAPI consumers share their job with openapi-web-deps"
+else
+  no "OpenAPI consumers lack openapi-web-deps in their own job:$orphan"
+fi
+
 # ---------------------------------------------------------------- 3. mutantes
 
 mut_check() { # <etiqueta> <fichero-mutado> <TF|WF>
@@ -145,7 +162,9 @@ mut_check() { # <etiqueta> <fichero-mutado> <TF|WF>
     if [ "$rc2" != 1 ]; then printf 'MUERTO %s (la guarda mutada deja de cortar)\n' "$label"; return 0; fi
     printf 'SOBREVIVE %s\n' "$label"; return 1
   else
-    local p c; p=$(step_if "$f" openapi-web-deps 2>/dev/null); c=$(step_if "$f" openapi-check 2>/dev/null)
+    local p c
+    p=$(step_if "$f" openapi-web-deps) || { printf 'COULD NOT LOOK: %s provider\n' "$label" >&2; return 2; }
+    c=$(step_if "$f" openapi-check) || { printf 'COULD NOT LOOK: %s consumer\n' "$label" >&2; return 2; }
     case "$p" in *steps.node.outcome*steps.pnpm.outcome*) ;; *) printf 'MUERTO %s (proveedor)\n' "$label"; return 0;; esac
     case "$c" in *steps.openapi-web-deps.outcome*) ;; *) printf 'MUERTO %s (consumidor)\n' "$label"; return 0;; esac
     printf 'SOBREVIVE %s\n' "$label"; return 1
@@ -180,22 +199,67 @@ else no "M2: no distingo una guarda muda de una que nombra (rc $rc)"; fi
 G=$G_KEEP
 
 # M3 — el proveedor se queda sin `if:` (el estado de ayer).
-python3 - "$WF" "$M_WF" <<'PY'
-import sys, re
-s = open(sys.argv[1], encoding='utf-8').read()
-s = s.replace("""        if: ${{ !cancelled() && steps.node.outcome == 'success' && steps.pnpm.outcome == 'success' }}
-        timeout-minutes: 10""", "        timeout-minutes: 10", 1)
-open(sys.argv[2], 'w', encoding='utf-8').write(s)
+python3 - "$WF" "$M_WF" <<'PY' || cannot "M3 did not remove exactly one guard per provider"
+import sys
+lines = open(sys.argv[1], encoding='utf-8').read().splitlines(keepends=True)
+remove = []
+copies = 0
+for start, line in enumerate(lines):
+    if not line.startswith('      - '):
+        continue
+    end = start + 1
+    while end < len(lines):
+        following = lines[end]
+        if following.strip() and not following.lstrip().startswith('#'):
+            indent = len(following) - len(following.lstrip(' '))
+            if indent <= 6:
+                break
+        end += 1
+    block = ['        ' + line[8:], *lines[start + 1:end]]
+    if not any(value.strip() == 'id: openapi-web-deps' for value in block):
+        continue
+    guards = [start + offset for offset, value in enumerate(block) if value.startswith('        if:')]
+    if len(guards) != 1:
+        raise SystemExit('M3 requires one guard per provider step')
+    copies += 1
+    remove.extend(guards)
+if not copies or len(remove) != copies:
+    raise SystemExit('M3 did not find every provider guard')
+open(sys.argv[2], 'w', encoding='utf-8').writelines(value for index, value in enumerate(lines) if index not in remove)
+print(f'M3 removed {len(remove)} guards from {copies} provider copies')
 PY
 if mut_check "M3 proveedor sin guarda" "$M_WF" WF; then ok "M3: el mutante muere"; else no "M3 SOBREVIVE"; fi
 
 # M4 — el consumidor vuelve al predicado de vuln-gate (el defecto exacto que se cura).
-python3 - "$WF" "$M_WF" <<'PY'
+python3 - "$WF" "$M_WF" <<'PY' || cannot "M4 did not change every consumer guard"
 import sys
-s = open(sys.argv[1], encoding='utf-8').read()
-s = s.replace("!cancelled() && steps.tools.outcome == 'success' && steps.openapi-web-deps.outcome == 'success'",
-              "!cancelled() && steps.tools.outcome == 'success'", 1)
-open(sys.argv[2], 'w', encoding='utf-8').write(s)
+lines = open(sys.argv[1], encoding='utf-8').read().splitlines(keepends=True)
+old = "!cancelled() && steps.tools.outcome == 'success' && steps.openapi-web-deps.outcome == 'success'"
+new = "!cancelled() && steps.tools.outcome == 'success'"
+copies = 0
+for start, line in enumerate(lines):
+    if not line.startswith('      - '):
+        continue
+    end = start + 1
+    while end < len(lines):
+        following = lines[end]
+        if following.strip() and not following.lstrip().startswith('#'):
+            if len(following) - len(following.lstrip(' ')) <= 6:
+                break
+        end += 1
+    block = ['        ' + line[8:], *lines[start + 1:end]]
+    if not any(value.strip() == 'id: openapi-check' for value in block):
+        continue
+    guards = [start + offset for offset, value in enumerate(block)
+              if value.startswith('        if:') and value.count(old) == 1]
+    if len(guards) != 1:
+        raise SystemExit('M4 requires the expected guard in each consumer step')
+    lines[guards[0]] = lines[guards[0]].replace(old, new)
+    copies += 1
+if not copies:
+    raise SystemExit('M4 found no consumers')
+open(sys.argv[2], 'w', encoding='utf-8').writelines(lines)
+print(f'M4 changed {copies} consumer guards')
 PY
 if mut_check "M4 consumidor con el predicado de vuln-gate" "$M_WF" WF; then ok "M4: el mutante muere"; else no "M4 SOBREVIVE"; fi
 

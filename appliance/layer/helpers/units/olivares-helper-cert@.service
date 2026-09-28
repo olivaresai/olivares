@@ -1,0 +1,50 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# One connection to the certificate helper, started by olivares-helper-cert.socket with the
+# connection as standard input and output. The helper takes no argument and no path. It runs as
+# root with no capability: the portal's TLS directory and the files in it are root's, so their
+# owner writes them. Its writable places are two, both named here and nowhere else:
+# /etc/olivares-portal, the portal's TLS directory (ConfigurationDirectory=, mode 0755, where it
+# replaces tls.crt and tls.key under fixed names), and its state directory,
+# /var/lib/olivares-portal-cert (StateDirectory=, mode 0700), which holds its spool key and the
+# key store a key reference resolves in. It opens no network socket: the portal's addresses come
+# from NetworkManager over the system bus, and its origin from the kernel's host name.
+[Unit]
+Description=Appliance certificate helper (one connection)
+Documentation=https://github.com/olivaresai/olivares
+
+[Service]
+ExecStart=/usr/libexec/olivares/olivares-portal-cert
+User=root
+StandardInput=socket
+StandardOutput=socket
+StandardError=journal
+RuntimeMaxSec=30
+StateDirectory=olivares-portal-cert
+StateDirectoryMode=0700
+ConfigurationDirectory=olivares-portal
+ConfigurationDirectoryMode=0755
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+PrivateNetwork=yes
+RestrictAddressFamilies=AF_UNIX
+IPAddressDeny=any
+ProtectClock=yes
+ProtectHostname=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+RestrictNamespaces=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+AmbientCapabilities=
+UMask=0077

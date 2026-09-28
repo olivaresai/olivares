@@ -65,6 +65,10 @@ type RefEncoding string
 const (
 	// EncodeUserID is a bare account id.
 	EncodeUserID RefEncoding = "user-id"
+	// EncodeCredentialID is a canonical bare session or token id in a column
+	// Ref. Its account is resolved by the writer, never by the model's user-id
+	// extractor. Nested leaves and Union variants are not supported.
+	EncodeCredentialID RefEncoding = "credential-id"
 	// EncodeUserRef is "user:<account id>", or "token:<credential id>", which
 	// names the account the credential belongs to (CountedCredentialIDs).
 	EncodeUserRef RefEncoding = "user-ref"
@@ -82,7 +86,7 @@ const (
 // Valid reports whether e is a known encoding.
 func (e RefEncoding) Valid() bool {
 	switch e {
-	case EncodeUserID, EncodeUserRef, EncodeKindRef, EncodeEmail, EncodeExternalID, EncodeIdentity:
+	case EncodeUserID, EncodeCredentialID, EncodeUserRef, EncodeKindRef, EncodeEmail, EncodeExternalID, EncodeIdentity:
 		return true
 	}
 	return false
@@ -368,6 +372,9 @@ func validateDecl(where string, c *ColumnDecl, leaf bool, hasSibling func(string
 		if !c.Encoding.Valid() {
 			out = append(out, fmt.Errorf("%s: Ref has no valid encoding", where))
 		}
+		if leaf && c.Encoding == EncodeCredentialID {
+			out = append(out, fmt.Errorf("%s: credential-id requires a column Ref, not a nested leaf", where))
+		}
 		if !(leaf && c.Class == "") && !c.Class.Valid() {
 			out = append(out, fmt.Errorf("%s: Ref has no class", where))
 		}
@@ -409,6 +416,10 @@ func validateDecl(where string, c *ColumnDecl, leaf bool, hasSibling func(string
 			}
 			if v.Form == FormUnion {
 				out = append(out, fmt.Errorf("%s: kind %q selects another Union", where, k))
+				continue
+			}
+			if v.Form == FormRef && v.Encoding == EncodeCredentialID {
+				out = append(out, fmt.Errorf("%s: kind %q selects credential-id, which requires a column Ref", where, k))
 				continue
 			}
 			out = append(out, validateDecl(where+"<"+k+">", v, false, nil)...)
@@ -624,15 +635,20 @@ func jsonFieldName(f reflect.StructField) (string, bool) {
 // UserIDs returns the account ids the value of column in rec names under c, in
 // the encodings the write seam resolves by itself: a bare id, "user:<id>", a
 // (kind, ref) pair whose kind is "user", and those encodings at any leaf of a
-// Nested or Union value. A value that is not a canonical id cannot name an
-// account and yields nothing. A Union value whose kind the table lacks is
-// ErrUnknownKind.
+// Nested or Union value. A credential-id Ref yields no user and errors on a
+// non-null value that is not a canonical nonzero credential id. The other Ref
+// encodings yield nothing for an invalid id. A Union value whose kind the
+// table lacks is ErrUnknownKind.
 func (c *ColumnDecl) UserIDs(rec Record, column string) ([]ID, error) {
 	if c == nil {
 		return nil, nil
 	}
 	switch c.Form {
 	case FormRef:
+		if c.Encoding == EncodeCredentialID {
+			_, err := credentialReferenceID(rec[column])
+			return nil, err
+		}
 		return refUserIDs(c, rec[column], func(sibling string) string { return rec.String(sibling) }), nil
 	case FormNested:
 		raw, ok := jsonBytes(rec[column])
@@ -659,26 +675,56 @@ func (c *ColumnDecl) UserIDs(rec Record, column string) ([]ID, error) {
 // nothing, and a Nested value with no counted leaf is not decoded at all. It is
 // what the write seam reads.
 func (c *ColumnDecl) CountedUserIDs(rec Record, column string) ([]ID, error) {
+	// Credential refs name no user directly, but malformed counted refs must
+	// refuse the retirement reading before it can report an empty match set.
+	if c != nil && c.Form == FormRef && c.Encoding == EncodeCredentialID && c.Class.Counted() {
+		return c.UserIDs(rec, column)
+	}
 	return countedDecl(c).UserIDs(rec, column)
 }
 
 // CountedCredentialIDs returns the credential ids the value of column in rec
-// names under the counted view of c: a counted Ref in the EncodeUserRef encoding
-// whose value is "token:<credential id>". Such a value names the account the
-// credential belongs to, which only the auth partition can tell: the write seam
-// cannot resolve it, so its writer fences the credential's account, and a
-// retirement step matches it against the account's credentials.
+// names under the counted view of c: a counted Ref holding a bare credential id
+// (EncodeCredentialID), or "token:<credential id>" (EncodeUserRef). It names the
+// account the credential belongs to, which only the auth partition can tell:
+// the write seam cannot resolve it, so its writer fences the credential's
+// account, and a retirement step matches it against the account's credentials.
+// Malformed bare credential refs yield nothing here; CountedUserIDs supplies
+// their decoding error before the retirement reader attempts matching.
 func (c *ColumnDecl) CountedCredentialIDs(rec Record, column string) []ID {
-	d := countedDecl(c)
-	if d == nil || d.Form != FormRef || d.Encoding != EncodeUserRef {
+	if c == nil || c.Form != FormRef || !c.Class.Counted() {
 		return nil
 	}
-	if rest, ok := strings.CutPrefix(rec.String(column), "token:"); ok {
-		if id, err := ParseID(rest); err == nil && !id.IsZero() {
+	switch c.Encoding {
+	case EncodeCredentialID:
+		if id, err := credentialReferenceID(rec[column]); err == nil && !id.IsZero() {
 			return []ID{id}
+		}
+	case EncodeUserRef:
+		if rest, ok := strings.CutPrefix(rec.String(column), "token:"); ok {
+			if id, err := ParseID(rest); err == nil && !id.IsZero() {
+				return []ID{id}
+			}
 		}
 	}
 	return nil
+}
+
+// credentialReferenceID permits SQL NULL, but never normalizes a stored alias
+// into a credential. ParseID itself accepts UUID spellings beyond the canonical
+// bytes stored by authenticated principals.
+func credentialReferenceID(value any) (ID, error) {
+	if value == nil {
+		return "", nil
+	}
+	raw, ok := value.(string)
+	if ok {
+		id, err := ParseID(raw)
+		if err == nil && !id.IsZero() && id.String() == raw {
+			return id, nil
+		}
+	}
+	return "", errors.New("credential-id reference is not a canonical nonzero UUID")
 }
 
 // countedCache memoizes the counted-only view of each declaration: the

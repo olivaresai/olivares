@@ -46,6 +46,8 @@ type Record struct {
 	// read from Applying@start-services or a completed start-services, never from a refusal
 	// recorded at start-services, and the next save writes it.
 	ProductMayHaveStarted bool `json:"product_may_have_started,omitempty"`
+	// HostSettingsOwner is additive in v1 and never cleared by reconciliation.
+	HostSettingsOwner string `json:"host_settings_owner,omitempty"`
 }
 
 // Completed is one stage whose effect was applied and persisted.

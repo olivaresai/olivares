@@ -972,7 +972,7 @@ FAST_LINTS=(
 	lint:watchdog-unpublished-work lint:gate-lock-order lint:client-callers lint:client-callers-selftest lint:kms-backends
 	lint:release-version lint:launch-image-refs lint:screenshot-coverage lint:launch-placeholders lint:launch-counts lint:cloud-availability-claims lint:video-scene-anchors lint:docs-honesty
 	lint:commerce lint:commerce-entity-fks lint:commerce-entity-fks:selftest lint:security-txt lint:cosign-pins lint:release-mechanics lint:installer-matrix lint:installer-matrix:selftest lint:package-repos lint:package-repos:selftest lint:package-publish lint:package-publish:selftest
-	lint:ensure-shellcheck:selftest 
+	lint:ensure-shellcheck:selftest lint:ci-task-install:selftest
 	lint:actions lint:pg-env lint:json-decoders lint:error-mappers lint:build-bin-parity lint:web-e2e-boot
 	lint:session-duplicates
 	# Las tres baterias que cableo al carril rapido: sus gates llegaron con banco propio y

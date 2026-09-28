@@ -51,20 +51,13 @@ jobs:
           cache: true
           cache-dependency-path: go.work.sum
 
-      # A self-hosted runner is not assumed to ship Task. GOBIN is explicit because a
-      # persistent runner's service environment can carry its own GOBIN, which would
-      # place the binary outside this job's PATH without failing the install.
+      # Use the verified release installer and its following-step PATH check.
+      # Keep this version explicit so the readiness contract detects default drift.
       - name: install go-task (pinned)
         timeout-minutes: 10
-        run: |
-          set -euo pipefail
-          export GOBIN="$RUNNER_TEMP/gopath/bin"
-          echo "GOBIN=$GOBIN" >> "$GITHUB_ENV"
-          echo "$GOBIN" >> "$GITHUB_PATH"
-          export PATH="$GOBIN:$PATH"
-          go install github.com/go-task/task/v3/cmd/task@v3.51.1
-          command -v task || { echo "::error::go install reported OK and task is not on PATH"; exit 1; }
-
+        uses: ./.github/actions/olivares-tool-cache
+        with:
+          task_version: "3.51.1"
       - name: hermetic readiness contract and always-yes mutant
         timeout-minutes: 3
         env:

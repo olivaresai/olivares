@@ -258,7 +258,7 @@ if [[ -n "$non_regular" ]]; then
 fi
 mapfile -d '' files < <(find "$tree" -type f -print0 | sort -z)
 [[ "${#files[@]}" -gt 0 ]] || blind 'publish tree contains zero files'
-declare -a relatives=() content_files=() root_files=()
+declare -a relatives=() content_files=() root_files=() pointer_files=()
 for file in "${files[@]}"; do
 	rel="${file#"$tree"/}"
 	[[ "$rel" != "$file" && "$rel" != /* && "$rel" != *..* && "$rel" =~ ^[A-Za-z0-9._/+~-]+$ ]] || \
@@ -271,6 +271,10 @@ for file in "${files[@]}"; do
 		*/apk/*/APKINDEX.tar.gz | */repository-manifest.json | */repository-manifest.json.asc | \
 		*/pacman/*/olivares.db | */pacman/*/olivares.db.sig | */pacman/*/olivares.files | */pacman/*/olivares.files.sig)
 		root_files+=("$rel") ;;
+	# S3's rpm delivery.json and checksums.txt name the rpms and the signed repomd,
+	# so they are promoted after both, last.
+	*/rpm/*/delivery.json | */rpm/*/checksums.txt)
+		pointer_files+=("$rel") ;;
 	*) content_files+=("$rel") ;;
 	esac
 done
@@ -481,6 +485,7 @@ promote_one() {
 
 for rel in "${content_files[@]}"; do promote_one "$rel"; done
 for rel in "${root_files[@]}"; do promote_one "$rel"; done
+for rel in "${pointer_files[@]}"; do promote_one "$rel"; done
 promote_one .inventory.sha256 "$inventory"
 promoting=0
 trap - ERR

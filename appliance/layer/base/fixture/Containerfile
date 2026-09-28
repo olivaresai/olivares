@@ -13,7 +13,7 @@
 FROM debian:13@sha256:9cc080028c43b27d2074d63a5f9caf7166d731494965616c1a6d2827a004585c
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \
- && apt-get install -y --no-install-recommends systemd systemd-sysv dbus cloud-init openssh-server \
+ && apt-get install -y --no-install-recommends systemd systemd-sysv dbus cloud-init openssh-server network-manager polkitd udisks2 udisks2-lvm2 lvm2 iproute2 \
  && rm -rf /var/lib/apt/lists/*
 # A template carries no instance identity: no SSH host key and an empty machine ID.
 RUN rm -f /etc/ssh/ssh_host_* && : > /etc/machine-id

@@ -117,6 +117,46 @@ run_gate() {
 	RC=$?
 }
 
+# A -v value is decoded before awk compiles its dynamic regular expression.
+fixture_assignment() {
+	grep -F -- '-v FIXTURE=' "$1"
+}
+
+fixture_is_dialect_safe() {
+	local line
+	line="$(fixture_assignment "$1")" || return 1
+	[ "$(printf '%s\n' "$line" | wc -l)" -eq 1 ] || return 1
+	printf '%s' "$line" | grep -Fq '[(]' || return 1
+	printf '%s' "$line" | grep -Fq '\(' && return 1
+	return 0
+}
+
+# Return an installed implementation distinct from the default awk.
+resolve_second_awk() {
+	local def candidate resolved
+	def="$(command -v awk)" || return 1
+	for candidate in mawk gawk busybox; do
+		resolved="$(command -v "$candidate" 2>/dev/null)" || continue
+		[ "$resolved" -ef "$def" ] && continue
+		if [ "$candidate" = busybox ]; then
+			"$resolved" awk 'BEGIN { exit 0 }' </dev/null >/dev/null 2>&1 || continue
+		else
+			"$resolved" 'BEGIN { exit 0 }' </dev/null >/dev/null 2>&1 || continue
+		fi
+		printf '%s' "$resolved"
+		return 0
+	done
+	return 1
+}
+
+run_gate_with_awk() {
+	local tree="$1" awkbin="$2" wrap="$WORK/awkwrap"
+	mkdir -p "$wrap"
+	ln -sfn "$awkbin" "$wrap/awk"
+	LAST="$(PATH="$wrap:$PATH" bash "$GATE" "$tree" 2>&1)"
+	RC=$?
+}
+
 # The label is carried so a reader can find a row by name in the SOURCE from a failure line.
 # It is printed by `ko` and not by `ok`: a passing row needs no pointer back to its code, and
 # a failing one is exactly where the reader has to land. (Until 2026-09-16 the label was
@@ -904,9 +944,46 @@ else
 	fi
 fi
 
+# The literal parenthesis must survive both -v decoding and regex compilation.
+row "FIXTURE is a dialect-safe dynamic regex"
+if fixture_is_dialect_safe "$GATE"; then
+	ok "FIXTURE uses [(] without a backslash-parenthesis"
+else
+	ko "FIXTURE depends on the awk dialect" "$(fixture_assignment "$GATE")"
+fi
+
+row "mutant: FIXTURE backslash-parenthesis"
+mutant_dialect="$WORK/mutant-dialect.sh"
+sed '/-v FIXTURE=/s/\[(]/\\(/' "$GATE" > "$mutant_dialect"
+if cmp -s "$mutant_dialect" "$GATE"; then
+	ko "MUTATION DID NOT APPLY: dialect" "$(fixture_assignment "$GATE")"
+elif fixture_is_dialect_safe "$mutant_dialect"; then
+	ko "the dialect mutation was not detected" "$(fixture_assignment "$mutant_dialect")"
+else
+	ok "the regression rejects the restored backslash-parenthesis"
+fi
+
+row "second awk checks the fixture"
+SECOND="$(resolve_second_awk || true)"
+if [ -z "$SECOND" ]; then
+	skipped "no second awk implementation distinct from $(command -v awk)"
+else
+	run_gate_with_awk "$WORK/c1" "$SECOND"
+	if [ "$RC" != 1 ] || ! printf '%s' "$LAST" | grep -q 'TestClassItself'; then
+		ko "under $SECOND the class was not refused and named (rc=$RC)" "$LAST"
+	else
+		run_gate_with_awk "$WORK/c2" "$SECOND"
+		if [ "$RC" = 0 ]; then
+			ok "under $SECOND the class is refused and its remedy passes"
+		else
+			ko "under $SECOND the remedy was refused (rc=$RC)" "$LAST"
+		fi
+	fi
+fi
+
 echo
 printf 'test-check-test-budget-placement: %d passed, %d failed, %d skipped, %d row(s)\n' \
 	"$PASS" "$FAIL" "$SKIPPED" "$ROW"
-[ "$SKIPPED" -eq 0 ] || printf 'test-check-test-budget-placement: %d row(s) did not run under uid %s; see DENIES_UNREADABLE\n' "$SKIPPED" "$(id -u)" >&2
+[ "$SKIPPED" -eq 0 ] || printf 'test-check-test-budget-placement: %d row(s) did not run under uid %s; see DENIES_UNREADABLE and the second awk check\n' "$SKIPPED" "$(id -u)" >&2
 [ "$FAIL" -eq 0 ] || exit 1
 exit 0

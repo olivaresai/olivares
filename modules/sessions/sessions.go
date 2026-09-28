@@ -72,6 +72,12 @@ type Module struct {
 	// providerSources is the B1 composition port behind source→profile bindings.
 	// Nil is deny-closed: no roster row can be validated, so nothing binds.
 	providerSources ProviderSourceResolver
+	// accountsRoot is the directory this node creates provider account homes
+	// under, late-bound by the composition root (provider_account_home.go).
+	// Empty is deny-closed: the home-creation verb refuses and names the missing
+	// wiring, because a directory nobody configured is a directory nobody meant.
+	accountsRoot          string
+	accountHomeCheckpoint func(string) error
 
 	// K3 communication ports are late-bound after Store.Open and core/auth
 	// composition. Nil readiness ports are meaningful OFF witnesses and the

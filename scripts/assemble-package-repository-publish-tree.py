@@ -14,6 +14,10 @@ import shutil
 import sys
 
 
+RPM_DELIVERY_SCHEMA = "olivares.ai/rpm-delivery/v1"
+RPM_ARCHES = ["aarch64", "x86_64"]
+
+
 class ContractError(Exception):
     pass
 
@@ -78,6 +82,32 @@ def copy_directory(source: Path, target: Path) -> None:
             copy_regular(Path(directory) / name, destination / name)
 
 
+def require_s3_rpm(rendered: Path, channel: str, fingerprint: str) -> None:
+    """The published rpm trees are S3's: repomd.xml.asc and delivery.json per arch.
+
+    The unsigned render_rpm layout (Packages/, no delivery.json) is refused, so
+    it cannot become the published rpm repository.
+    """
+    rpm_root = rendered / channel / "rpm"
+    arches = sorted(path.name for path in rpm_root.iterdir()) if rpm_root.is_dir() else []
+    if arches != RPM_ARCHES:
+        raise ContractError(f"{channel} rpm trees are not exactly {', '.join(RPM_ARCHES)}")
+    for arch in arches:
+        tree = rpm_root / arch
+        if (tree / "Packages").exists():
+            raise ContractError(f"{channel}/rpm/{arch} is the unsigned rpm render, not S3's signed tree")
+        regular(tree / "repodata" / "repomd.xml", f"{channel}/rpm/{arch} repomd.xml")
+        regular(tree / "repodata" / "repomd.xml.asc", f"{channel}/rpm/{arch} repomd.xml.asc")
+        delivery = exact_json(tree / "delivery.json")
+        packages = delivery.get("packages")
+        if delivery.get("schema") != RPM_DELIVERY_SCHEMA or delivery.get("key_fingerprint") != fingerprint:
+            raise ContractError(f"{channel}/rpm/{arch} delivery.json is not S3's for the repository key")
+        if not isinstance(packages, list) or not packages:
+            raise ContractError(f"{channel}/rpm/{arch} delivery.json names no package")
+        for package in packages:
+            regular(tree / str(dict(package).get("file", "")), f"{channel}/rpm/{arch} delivered rpm")
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--stable", required=True, type=Path)
@@ -109,6 +139,9 @@ def main() -> int:
         if (args.stable / "security").exists() or (args.security / "stable").exists():
             raise ContractError("a rendered tree contains the other channel")
 
+        fingerprint = str(dict(stable_manifest.get("keys", {})).get("openpgp_fingerprint", ""))
+        require_s3_rpm(args.stable, "stable", fingerprint)
+        require_s3_rpm(args.security, "security", fingerprint)
         apk_name = str(dict(stable_manifest.get("keys", {})).get("apk_public_key_name", ""))
         if not apk_name.endswith(".rsa.pub") or "/" in apk_name or "\\" in apk_name:
             raise ContractError("repository manifest carries an unsafe APK key name")

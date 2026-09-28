@@ -74,13 +74,13 @@ LOGIN="$(curl -sf -X POST "http://127.0.0.1:$PORT/v1/auth/login" \
 TOKEN="$(python3 -c 'import sys,json;print(json.load(sys.stdin).get("token",""))' <<<"$LOGIN")"
 [ -n "$TOKEN" ] || { echo "demo login failed"; cat "$DATA/engine.log" >&2; exit 1; }
 
-ORGS="$(curl -sf "http://127.0.0.1:$PORT/v1/system/orgs" -H "Authorization: Bearer $TOKEN")"
+ORGS="$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf "http://127.0.0.1:$PORT/v1/system/orgs" -H @-)"
 TENANT="$(python3 -c 'import sys,json;[print(o["tenant_id"]) for o in json.load(sys.stdin).get("items",[]) if o.get("slug")=="demo"]' <<<"$ORGS")"
 [ -n "$TENANT" ] || { echo "could not resolve demo tenant"; exit 1; }
 echo "==> demo tenant $TENANT"
 
-PROFILE="$(curl -sf -X POST "http://127.0.0.1:$PORT/v1/m/sessions/provider-profiles" \
-  -H "Authorization: Bearer $TOKEN" \
+PROFILE="$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf -X POST "http://127.0.0.1:$PORT/v1/m/sessions/provider-profiles" \
+  -H @- \
   -H "X-Olivares-Tenant: $TENANT" \
   -H 'Content-Type: application/json' \
   -d "{\"driver\":\"claude\",\"config_home\":\"$DATA/claude-config\",\"user_home\":\"$DATA/claude-home\",\"display_name\":\"Fixture Claude\"}")"
