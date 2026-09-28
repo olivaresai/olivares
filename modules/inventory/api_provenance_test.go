@@ -78,6 +78,15 @@ type c3HTTP struct {
 
 func newC3HTTP(t *testing.T, m *Module, st store.Store) *c3HTTP {
 	t.Helper()
+	ctx := context.Background()
+	// Match the server bootstrap before creating users or organizations, so
+	// a later reopen can verify the durable directory's SYSTEM witness.
+	if err := st.System(ctx, func(sys store.SystemScope) error {
+		_, err := sys.EnsureSystemTenant(ctx)
+		return err
+	}); err != nil {
+		t.Fatalf("initialize SYSTEM tenant: %v", err)
+	}
 	_, priv, err := ed25519.GenerateKey(nil)
 	if err != nil {
 		t.Fatal(err)

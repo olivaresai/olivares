@@ -52,6 +52,21 @@ type workflowBindingFixture struct {
 	bound   WorkflowCommunicationActor
 }
 
+// workflowBindingTestClock keeps the fixture's time source explicit. Its
+// audience attestor copies RequestedAt into the attested observation window.
+type workflowBindingTestClock struct {
+	source model.Clock
+	engine store.Engine
+}
+
+func (c workflowBindingTestClock) Now() model.Timestamp {
+	now := c.source.Now()
+	if c.engine == store.EngineSQLite {
+		return model.NewTimestamp(now.Time().Truncate(time.Millisecond))
+	}
+	return now
+}
+
 func newWorkflowBindingFixture(
 	t *testing.T,
 	backend communicationSchemaBackend,
@@ -73,14 +88,13 @@ func newWorkflowBindingFixture(
 	wf.m.UseCommunicationRequestAuthority(
 		wf.authr, auth.NewAuthorizer(gov.RequestEvaluator(), auth.WithScopedGrants(gov.ScopedGrants())),
 	)
-	// The composed Authorizer observes database time. The fixture's historical
-	// test clock and directory fakes would place every reader observation before
-	// it, so they follow real time here.
-	// Database time is the engine's wall clock (millisecond precision on
-	// SQLite), and the composed Authorizer observes it. The module reads real
-	// time, and the directory fakes observe one second earlier, so no local
-	// observation can land after the transaction that consumes it.
-	wf.m.clock = model.SystemClock{}
+	// The composed Authorizer observes database time. Keep the fixture clock
+	// advancing, but floor SQLite samples to its transaction clock precision:
+	// the fake attestor copies RequestedAt into its snapshot, and nanoseconds
+	// within the same database tick would otherwise look like future evidence.
+	// PostgreSQL keeps the original clock. Directory fakes observe one second
+	// earlier; authorization and mutation freshness checks remain unchanged.
+	wf.m.clock = workflowBindingTestClock{source: model.SystemClock{}, engine: backend.engineName}
 	legacy := &countingLegacyOperationAuthorizer{next: wf.m.communicationOperationAuthorizer}
 	wf.m.communicationOperationAuthorizer = legacy
 	f := &workflowBindingFixture{
