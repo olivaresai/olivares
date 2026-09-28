@@ -412,12 +412,7 @@ export interface ReconciliationResponse {
 /** The state of the operator's stop of the earlier admission writers when the report
  *  was read (OLIVARES_FINOPS_ADMISSION_LEGACY_WRITERS_STOPPED_AT). */
 export type AdmissionLegacyStop =
-  | 'absent'
-  | 'invalid'
-  | 'future'
-  | 'contradicted'
-  | 'waiting'
-  | 'usable'
+  'absent' | 'invalid' | 'future' | 'contradicted' | 'waiting' | 'usable'
 
 /** GET /admission/reconciliation: the admission holds against their commits and
  *  releases, the drift, and what recovery left outstanding. This route only reads, so

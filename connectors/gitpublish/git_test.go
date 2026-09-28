@@ -255,6 +255,52 @@ func TestPushSchemeMustBeAdmitted(t *testing.T) {
 	}
 }
 
+func TestPushRejectsUnsupportedTransportBeforeGit(t *testing.T) {
+	f := newGitFixture(t)
+	shim := filepath.Join(t.TempDir(), "git")
+	if err := os.WriteFile(shim, []byte("#!/bin/sh\nprintf invoked > \"$HOME/git-invoked\"\nexit 97\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	x, err := NewExecutor(shim, f.x.home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name, scheme, url string
+	}{
+		{"external command", "ext", "ext::/usr/bin/true"},
+		{"custom helper", "custom", "custom://example.test/repo"},
+		{"unencrypted HTTP", "http", "http://example.test/repo"},
+		{"SSH", "ssh", "ssh://example.test/repo"},
+		{"HTTPS helper syntax", "https", "https::example.test/repo"},
+		{"file helper syntax", "file", "file::/tmp/repo"},
+		{"file SCP syntax", "file", "file:/tmp/repo"},
+		{"HTTPS without host", "https", "https:///repo"},
+		{"file without absolute path", "file", "file://repo"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := f.req("refs/heads/main", f.base)
+			r.Scheme, r.URL = tc.scheme, tc.url
+			if _, err := x.Push(context.Background(), r); !errors.Is(err, ErrDestination) {
+				t.Fatalf("err = %v, want ErrDestination", err)
+			}
+			if _, err := os.Stat(filepath.Join(f.x.home, "git-invoked")); !errors.Is(err, os.ErrNotExist) {
+				t.Fatalf("git invocation marker: %v, want no subprocess", err)
+			}
+		})
+	}
+	// A supported HTTPS URL reaches Git's managed-config check. The sentinel
+	// exits there, so this positive validation control makes no network call.
+	r := f.req("refs/heads/main", f.base)
+	r.Scheme, r.URL = "https", "https://example.test/repo.git"
+	if _, err := x.Push(context.Background(), r); !errors.Is(err, ErrRepositoryConfig) {
+		t.Fatalf("supported HTTPS: err = %v, want sentinel config failure", err)
+	}
+	if _, err := os.Stat(filepath.Join(f.x.home, "git-invoked")); err != nil {
+		t.Fatalf("supported HTTPS did not invoke git: %v", err)
+	}
+}
+
 func TestWorkflowFileChangeDetected(t *testing.T) {
 	f := newGitFixture(t)
 	changed, err := f.x.WorkflowsChanged(context.Background(), f.server, f.base, f.commit)

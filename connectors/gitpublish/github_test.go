@@ -16,6 +16,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -317,9 +318,12 @@ func TestOpenChangesIncompleteLookup(t *testing.T) {
 
 func TestCreateAndMergeClassification(t *testing.T) {
 	_, key := testKey(t)
+	var mu sync.Mutex
 	status := 0
 	var mergeBodies []map[string]any
 	d := newFake(t, func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
 		if r.Method == http.MethodPut {
 			b, _ := io.ReadAll(r.Body)
 			var m map[string]any
@@ -349,7 +353,9 @@ func TestCreateAndMergeClassification(t *testing.T) {
 		class  Class
 		reason string
 	}{{201, Applied, ""}, {422, Rejected, "validation_failed"}, {403, Rejected, "forbidden"}, {502, Ambiguous, "server_error"}, {429, Ambiguous, "rate_limited"}, {0, Ambiguous, "transport"}} {
+		mu.Lock()
 		status = c.status
+		mu.Unlock()
 		_, res := g.CreateChange(ctx, tok, ChangeSpec{Head: "olivares/x", Base: "main", Title: "t"})
 		if res.Class != c.class || res.Reason != c.reason {
 			t.Fatalf("create %d: %+v, want %v %s", c.status, res, c.class, c.reason)
@@ -360,7 +366,9 @@ func TestCreateAndMergeClassification(t *testing.T) {
 		class  Class
 		reason string
 	}{{200, Applied, ""}, {409, Rejected, "head_mismatch"}, {405, Rejected, "not_mergeable"}, {500, Ambiguous, "server_error"}, {0, Ambiguous, "transport"}} {
+		mu.Lock()
 		status = c.status
+		mu.Unlock()
 		_, res := g.MergeChange(ctx, tok, 9, "c1", "merge")
 		if res.Class != c.class || res.Reason != c.reason {
 			t.Fatalf("merge %d: %+v, want %v %s", c.status, res, c.class, c.reason)
@@ -369,6 +377,8 @@ func TestCreateAndMergeClassification(t *testing.T) {
 			t.Fatalf("merge %d: request id not kept: %+v", c.status, res.Host)
 		}
 	}
+	mu.Lock()
+	defer mu.Unlock()
 	if len(mergeBodies) == 0 {
 		t.Fatal("no merge request reached the host")
 	}

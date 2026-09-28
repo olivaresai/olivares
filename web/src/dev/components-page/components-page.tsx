@@ -254,7 +254,7 @@ function PrimitivesBoard({ d }: { d: DemoText }) {
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="primary" onClick={noop}>
             {d.buttons.primary}
-            <Kbd className="border-[rgba(26,18,6,.25)] bg-[rgba(26,18,6,.12)] text-on-accent">
+            <Kbd className="border-[rgba(26,18,6,.25)] bg-accent-active text-on-accent">
               N
             </Kbd>
           </Button>

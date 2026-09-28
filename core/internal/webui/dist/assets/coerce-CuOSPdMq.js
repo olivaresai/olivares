@@ -1,1 +1,0 @@
-import{Cr as e,fr as t}from"./index-iUlGbB1K.js";function n(n){return e(t,n)}export{n as t};
