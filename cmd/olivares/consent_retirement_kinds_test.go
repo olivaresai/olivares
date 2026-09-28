@@ -790,6 +790,7 @@ func TestAStoredActivationNoWriterDerivesIsUnknown(t *testing.T) {
 // the token, and blocks the account's retirement like one the account owns
 // itself, until the tenant deletes it.
 func TestATokenOwnedSubscriptionBlocksReadmissionUntilResolved(t *testing.T) {
+	t.Setenv(eventingAllowLoopbackEnv, "1")
 	collector := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))

@@ -6,6 +6,7 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"strings"
@@ -137,15 +138,9 @@ func (a *channelGrantAfterReplyAttestation) hasFired() bool {
 	return a.fired
 }
 
-// T7, a channel grant N=1 (M2): a grant to another member raises the
-// channel's ACL revision after the inbound reply's preparation read its
-// evidence and before the owning transaction. The reply's evidence then no
-// longer matches its read, which the owning replay counts as a move: it
-// prepares once more and commits, reading the owner's standing once per
-// attempt. A construction that refreshed the evidence inside the owning
-// transaction would call the store's own resolver there, which on SQLite
-// waits on the transaction's connection past the bound.
-func TestAJoinedInboundReplayPreparesAgainAfterAChannelGrant(t *testing.T) {
+// Missing credential authority stops before publication audience attestation.
+// Installing a legacy C5 port cannot make the channel-grant hook reachable.
+func TestAJoinedInboundWithoutCredentialCannotReachChannelGrantAttestation(t *testing.T) {
 	for _, engineName := range []string{"sqlite", "postgres"} {
 		t.Run(engineName, func(t *testing.T) {
 			r := bootRealStoreInbound(t, engineName, "channel-grant")
@@ -169,47 +164,53 @@ func TestAJoinedInboundReplayPreparesAgainAfterAChannelGrant(t *testing.T) {
 			}}
 			r.sm.UseCommunicationPublicationAudienceAttestor(hook)
 
-			result, elapsed, err := r.route(r.message("channel-grant"))
-			if !hook.hasFired() {
-				t.Fatal("the hook never granted the channel: the case would not test a move")
+			before, protocol := communicationHTTPTestEffects(t, r.e.eng, r.e.tT), a2aProtocolRows(t, r.e)
+			_, elapsed, err := r.route(r.message("channel-grant"))
+			requireA2ACredentialHold(t, err, elapsed)
+			if hook.hasFired() {
+				t.Fatal("unbound protocol reached publication attestation")
 			}
-			if err != nil || elapsed >= joinedReplayKernelBound {
-				t.Fatalf("inbound message answered %v after %s, want it committed within %s after one move",
-					err, elapsed.Round(time.Millisecond), joinedReplayKernelBound)
-			}
-			if result.ResultKind != "task" || result.TaskID == "" {
-				t.Fatalf("inbound result = %+v, want the routed task", result)
-			}
-			if count := standing.count(); count != 2 {
-				t.Fatalf("the owner's standing was read %d times, want 2: one per attempt of the owning replay", count)
-			}
+			requireA2ANoEffects(t, r.e, before, protocol)
 		})
 	}
 }
 
-// T5, the RecordReply case (m5): with the Community composition's C5 hold in
-// place, a push reply on an existing task binding meets that hold within the
-// bound and before its replay writes anything, on each engine: the same
-// delivery sent again is refused the same way, not answered as a replay.
-func TestAPushReplyMeetsTheC5HoldWithinTheBound(t *testing.T) {
+// The reply fixture creates its durable task through the work and binding APIs.
+// It does not depend on the inbound protocol effect that is deliberately refused.
+func TestAPushReplyWithoutCredentialIsRefusedWithinTheBound(t *testing.T) {
 	for _, engineName := range []string{"sqlite", "postgres"} {
 		t.Run(engineName, func(t *testing.T) {
 			r := bootRealStoreInbound(t, engineName, "push-reply")
 			g := r.e.comm
-			message := r.message("push-reply")
-			task, elapsed, err := r.route(message)
-			if err != nil || task.TaskID == "" {
-				t.Fatalf("seed the task binding: inbound message answered %+v, %v after %s", task, err, elapsed)
+			work := createVacantHandoffWork(t, g.handoffs, g.sender, "user", g.control.id.String(), "A2A reply fixture")
+			ownerDigest := sha256.Sum256([]byte("user\x00" + g.control.id.String()))
+			binding, err := r.sm.ReserveProtocolBinding(context.Background(), r.e.tT, sessions.ProtocolBindingReservation{
+				WorkspaceID: g.handoffs.workspace, BindingSpecID: r.kernel.spec.ID,
+				BindingSpecGeneration: r.kernel.spec.Generation, ExpectedDirection: sessions.BindingInbound,
+				WorkItemID: work.id, DispatchKey: "push-reply-fixture", ExpectedExternalKind: "task", Generation: 1,
+				OwnerKind: "user", OwnerRef: g.control.id.String(), OwnerDigest: ownerDigest[:], OwnerEpoch: 1,
+			})
+			if err != nil {
+				t.Fatalf("reserve reply fixture: %v", err)
 			}
-			// The Community composition again: no C5 operation authorizer.
+			binding, err = r.sm.SettleProtocolBinding(context.Background(), r.e.tT, sessions.ProtocolBindingSettlement{
+				BindingID: binding.ID, Generation: binding.Generation, ExpectedVersion: binding.Version,
+				DispatchKey: "push-reply-fixture", ResultKind: sessions.ProtocolBindingResultTask,
+				ExternalID: binding.ID.String(), ContextID: "push-reply-context", LocalState: "active", RemoteState: "submitted",
+				Verdict: sessions.ProtocolObservationClean, Code: "fixture_accepted", Observed: true, DetailHash: ownerDigest[:],
+			})
+			if err != nil {
+				t.Fatalf("settle reply fixture: %v", err)
+			}
 			r.sm.UseCommunicationCoreEntityOperationAuthorizer(nil)
+			before, protocol := communicationHTTPTestEffects(t, r.e.eng, r.e.tT), a2aProtocolRows(t, r.e)
 			settlement := &a2aPushSettlement{store: r.sm, routes: map[string]parsedA2APushRoute{
 				r.peer: {tenant: r.e.tT, workspace: g.handoffs.workspace, interrupt: sessions.ProtocolInterruptRoute{
 					ChannelID: g.handoffs.channelID, SenderUserID: g.sender.id, RecipientUserID: g.control.id,
 				}},
 			}}
 			reply := a2a.ReplyEvent{
-				Kind: a2a.ReplyEventMessage, TaskID: task.TaskID, ContextID: message.ContextID,
+				Kind: a2a.ReplyEventMessage, TaskID: binding.ExternalID, ContextID: binding.ContextID,
 				MessageID: "push-reply-remote-message",
 				Parts: []a2a.MessageResultPart{{
 					Kind: "text", Text: "The remote result.", Digest: strings.Repeat("c", 64),
@@ -217,17 +218,14 @@ func TestAPushReplyMeetsTheC5HoldWithinTheBound(t *testing.T) {
 				Digest: strings.Repeat("d", 64), Sender: r.peer,
 				ReplayID: "push-reply-jti", ReplayExpiresAt: time.Now().UTC().Add(time.Hour),
 			}
-			for _, delivery := range []string{"first", "again"} {
+			for range []string{"first", "again"} {
 				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 				started := time.Now()
 				err := settlement.RecordReply(ctx, reply)
 				elapsed := time.Since(started)
 				cancel()
-				if !errors.Is(err, sessions.ErrCommunicationEvidenceUnknown) ||
-					!strings.Contains(fmt.Sprint(err), c5Hold) || elapsed >= joinedReplayKernelBound {
-					t.Fatalf("%s push reply answered %v after %s, want %q within %s",
-						delivery, err, elapsed.Round(time.Millisecond), c5Hold, joinedReplayKernelBound)
-				}
+				requireA2ACredentialHold(t, err, elapsed)
+				requireA2ANoEffects(t, r.e, before, protocol)
 			}
 		})
 	}

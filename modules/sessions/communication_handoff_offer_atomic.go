@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"errors"
 	"time"
 
 	"github.com/olivaresai/olivares/core/auth"
@@ -75,10 +76,6 @@ func (m *Module) offerWorkItemHandoffAttempt(
 ) (HandoffOfferResult, error) {
 	admission, prepared, err := m.prepareWorkItemHandoffOffer(ctx, scope, ref, cmd, handoffOfferApply)
 	if err != nil {
-		return HandoffOfferResult{}, err
-	}
-	parties := append(actorAccounts(admission.normalized.actor), recipientAccounts(admission.target)...)
-	if err := m.fenceCommunicationAccounts(ctx, scope.TenantID, parties); err != nil {
 		return HandoffOfferResult{}, err
 	}
 	result, err := m.applyAtomicWorkItemHandoffOffer(ctx, admission, prepared, handoffOfferApply)
@@ -166,6 +163,13 @@ func (m *Module) prepareWorkItemHandoffOffer(
 	if err != nil {
 		return workItemHandoffOfferAdmission{}, handoffOfferPrepared{}, err
 	}
+	// Resolve account standing before audience evidence. An offboarded target
+	// has a definitive refusal, not unavailable publication evidence. The
+	// transaction still pins these exact versions before writing anything.
+	parties := append(actorAccounts(actor), recipientAccounts(cmd.Recipient)...)
+	if err := m.fenceCommunicationAccounts(ctx, scope.TenantID, parties); err != nil {
+		return workItemHandoffOfferAdmission{}, handoffOfferPrepared{}, err
+	}
 	ids, err := stableWorkItemHandoffIDs(cmd.IdempotencyKey)
 	if err != nil {
 		return workItemHandoffOfferAdmission{}, handoffOfferPrepared{}, err
@@ -197,6 +201,15 @@ func (m *Module) prepareWorkItemHandoffOffer(
 		actorFingerprint, idempotencyHash, directRequestDigest, ids.publish,
 	)
 	if err != nil {
+		// Retirement can start after the first standing read and before audience
+		// resolution, without reaching the atomic lock that detects a moved fact.
+		// A fresh refusal explains that case. A still-live account never turns
+		// missing audience evidence into permission to publish.
+		if errors.Is(err, ErrCommunicationEvidenceUnknown) {
+			if _, standingErr := auth.FenceSubjects(ctx, m.standingFor(ctx), scope.TenantID, parties); standingErr != nil {
+				return workItemHandoffOfferAdmission{}, handoffOfferPrepared{}, standingErr
+			}
+		}
 		return workItemHandoffOfferAdmission{}, handoffOfferPrepared{}, err
 	}
 	exact := HandoffOfferCommand{

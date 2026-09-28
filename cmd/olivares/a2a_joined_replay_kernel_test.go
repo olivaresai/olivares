@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -16,6 +17,7 @@ import (
 
 	a2a "github.com/olivaresai/olivares/connectors/a2a"
 	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/modules/sessions"
 )
 
@@ -24,15 +26,55 @@ import (
 // transaction's connection would take the delivery's whole context instead.
 const joinedReplayKernelBound = 2 * time.Second
 
-// c5Hold is the refusal every workflow publish answers while the Community
-// composition binds no C5 operation authorizer.
-const c5Hold = "C5 operation authorizer is unavailable"
+// A protocol actor has no durable run credential binding. Neither a user id
+// nor the legacy C5 operation port may manufacture that authority.
+const a2aCredentialHold = "the run's credential binding does not resolve"
 
-// T5: on the production composition, which binds no C5 operation authorizer,
-// a push interrupt meets that hold within the bound and before its replay
-// writes anything: the same delivery sent again is refused the same way, not
-// answered as a replay. O2 does not lift the hold; it answers it promptly.
-func TestAPushInterruptMeetsTheC5HoldWithinTheBound(t *testing.T) {
+func requireA2ACredentialHold(t *testing.T, err error, elapsed time.Duration) {
+	t.Helper()
+	if !errors.Is(err, sessions.ErrWorkflowReauthenticationRequired) ||
+		!strings.Contains(fmt.Sprint(err), a2aCredentialHold) || elapsed >= joinedReplayKernelBound {
+		t.Fatalf("A2A answered %v after %s, want credential refusal within %s", err, elapsed, joinedReplayKernelBound)
+	}
+}
+
+// Include protocol carriers and replay guards as well as communication effects:
+// a refusal must neither mutate a binding nor consume a provider delivery.
+func a2aProtocolRows(t *testing.T, e *consentEstate) map[model.Kind][]model.Record {
+	t.Helper()
+	rows := make(map[model.Kind][]model.Record)
+	if err := e.eng.store.View(context.Background(), e.tT, func(sc store.Scope) error {
+		for _, kind := range []model.Kind{"sessions.communication_binding", "sessions.communication_replay_guard", "sessions.protocol_interrupt"} {
+			repo, err := sc.Ext(kind)
+			if err != nil {
+				return err
+			}
+			r, page, err := repo.List(context.Background(), model.Query{Limit: 1000})
+			if err != nil {
+				return err
+			}
+			if page.HasMore {
+				return fmt.Errorf("protocol census exceeds bound: %s", kind)
+			}
+			rows[kind] = r
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return rows
+}
+
+func requireA2ANoEffects(t *testing.T, e *consentEstate, before communicationHTTPTestEffectCounts, protocol map[model.Kind][]model.Record) {
+	t.Helper()
+	assertCommunicationHTTPTestNoEffects(t, e.eng, e.tT, before, "refused A2A")
+	if after := a2aProtocolRows(t, e); !reflect.DeepEqual(after, protocol) {
+		t.Fatalf("refused A2A changed protocol rows: before=%v after=%v", protocol, after)
+	}
+}
+
+// The same interrupt must be refused promptly on both attempts; no replay is consumed.
+func TestAPushInterruptWithoutCredentialIsRefusedWithinTheBound(t *testing.T) {
 	for _, engineName := range []string{"sqlite", "postgres"} {
 		t.Run(engineName, func(t *testing.T) {
 			e := bootMessagingEstate(t, engineName)
@@ -43,22 +85,20 @@ func TestAPushInterruptMeetsTheC5HoldWithinTheBound(t *testing.T) {
 					ChannelID: g.handoffs.channelID, SenderUserID: g.sender.id, RecipientUserID: g.control.id,
 				}},
 			}}
+			before, protocol := communicationHTTPTestEffects(t, e.eng, e.tT), a2aProtocolRows(t, e)
 			for _, state := range []a2a.TaskState{a2a.TaskStateInputReq, a2a.TaskStateAuthRequired} {
 				update := a2a.TaskUpdate{
 					TaskID: "push-task-" + string(state), ContextID: "push-context", State: state, Interrupt: true,
 					Sender: peer, ReplayID: "push-jti-" + string(state), ReplayExpiresAt: time.Now().UTC().Add(time.Hour),
 				}
-				for _, delivery := range []string{"first", "again"} {
+				for range []string{"first", "again"} {
 					ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 					started := time.Now()
 					err := settlement.Record(ctx, update)
 					elapsed := time.Since(started)
 					cancel()
-					if !errors.Is(err, sessions.ErrCommunicationEvidenceUnknown) ||
-						!strings.Contains(fmt.Sprint(err), c5Hold) || elapsed >= joinedReplayKernelBound {
-						t.Fatalf("%s delivery of %s answered %v after %s, want %q within %s",
-							delivery, state, err, elapsed.Round(time.Millisecond), c5Hold, joinedReplayKernelBound)
-					}
+					requireA2ACredentialHold(t, err, elapsed)
+					requireA2ANoEffects(t, e, before, protocol)
 				}
 			}
 		})
@@ -107,12 +147,8 @@ func (k *joinedReplayKernel) ApplyPreparedProtocolReplay(
 	return result, err
 }
 
-// T6: on the production composition, an inbound A2A message meets the C5 hold
-// within the bound, for a user-owned and an agent-owned route. The peer sees
-// -32005; the sessions answer names the hold, and no work command ran, so the
-// owner's resolution and the reply's evidence were read before the owning
-// transaction rather than inside it.
-func TestAnInboundMessageMeetsTheC5HoldBeforeAnyWork(t *testing.T) {
+// User and agent routes without a credential stop before any work command.
+func TestAnInboundMessageWithoutCredentialIsRefusedBeforeAnyWork(t *testing.T) {
 	e := bootMessagingEstate(t, "sqlite")
 	g := e.comm
 	for _, owner := range []struct{ kind, ref string }{
@@ -150,21 +186,16 @@ func TestAnInboundMessageMeetsTheC5HoldBeforeAnyWork(t *testing.T) {
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
+			before, protocol := communicationHTTPTestEffects(t, e.eng, e.tT), a2aProtocolRows(t, e)
 			started := time.Now()
 			_, err = router.RouteInboundA2A(ctx, message)
 			elapsed := time.Since(started)
-			var routed *a2a.InboundRouteError
-			if !errors.As(err, &routed) || routed.Code != -32005 || elapsed >= joinedReplayKernelBound {
-				t.Fatalf("inbound message answered %v after %s, want -32005 within %s",
-					err, elapsed.Round(time.Millisecond), joinedReplayKernelBound)
-			}
+			requireA2ACredentialHold(t, err, elapsed)
+			requireA2ANoEffects(t, e, before, protocol)
 			kernel.mu.Lock()
 			applies, replayErr := kernel.applies, kernel.replayErr
 			kernel.mu.Unlock()
-			if !errors.Is(replayErr, sessions.ErrCommunicationEvidenceUnknown) ||
-				!strings.Contains(fmt.Sprint(replayErr), c5Hold) {
-				t.Fatalf("the prepared replay answered %v, want %q", replayErr, c5Hold)
-			}
+			requireA2ACredentialHold(t, replayErr, elapsed)
 			if applies != 0 {
 				t.Fatalf("the kernel ran %d work commands, want none before the hold answers", applies)
 			}

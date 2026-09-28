@@ -1230,8 +1230,8 @@ func TestCommunicationChannelWriterRefusesDuplicateGenerationHTTP(t *testing.T) 
 	channel := estate.createChannel(t, workspace, "duplicate-generation", []map[string]any{ownerAll})
 	// Three generations, the last one revoked, so the "already active" refusal
 	// cannot mask the one being measured.
-	subject, seeded := seedChannelGrantHistory(t, eng, tenant, workspace,
-		channel.Channel.ID, owner.id, 3)
+	subject, seeded := seedChannelGrantHistoryForSubject(t, eng, tenant, workspace,
+		channel.Channel.ID, owner.id, estate.viewer.id, 3)
 	revokeSeededHead(t, eng, tenant, seeded[len(seeded)-1], owner.id)
 
 	sheet := estate.sheetPage(t, owner.token, channel.Channel.ID, wsQuery+"&state=all&limit=50")

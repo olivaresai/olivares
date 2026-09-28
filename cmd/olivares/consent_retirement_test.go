@@ -232,6 +232,7 @@ func (e *consentEstate) rowsMentioning(tenant model.TenantID, kind model.Kind, c
 // barrier and is refused, and a retirement pass that read the record before a
 // lift conflicts and removes nothing granted after the lift.
 func TestADelayedCleanupCannotRemoveANewGrantAndAConcurrentWriterCannotBypassTheBarrier(t *testing.T) {
+	t.Setenv(eventingAllowLoopbackEnv, "1")
 	collector := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))

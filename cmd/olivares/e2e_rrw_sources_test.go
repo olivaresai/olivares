@@ -93,7 +93,8 @@ func newSourcesHarness(t *testing.T, mkSources func(tenant string) []sourceSpec)
 	setupTok := secure.NewSetupToken(filepath.Join(dir, "setup.token"))
 	apiSrv, err := api.New(api.Options{
 		Store: st, Authenticator: authr, Authorizer: authz, Signer: signer,
-		SetupToken: setupTok, Logger: log, Version: "e2e-rrw", Modules: set.all,
+		PrincipalEvidenceProducer: authr,
+		SetupToken:                setupTok, Logger: log, Version: "e2e-rrw", Modules: set.all,
 	})
 	if err != nil {
 		t.Fatalf("api.New: %v", err)

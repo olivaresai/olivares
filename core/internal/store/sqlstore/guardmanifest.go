@@ -65,7 +65,9 @@ const guardManifestFormat int64 = 1
 // guardManifestEditionEdges derives every exact compiled predecessor of an edition, and
 // each edge is a complete, nonempty, exactly-named delta between two manifests built
 // from the same base census. Every other older digest is refused.
-const guardCodeEpoch int64 = 7
+// Editions 8-16 add the independent evaluation and Git publication module deltas
+// over the current core/session shapes, preserving historical editions 1-7.
+const guardCodeEpoch int64 = 16
 
 // The following constants are the complete relation delta authorized by the 1 -> 2 edge.
 //
@@ -563,7 +565,7 @@ func guardManifestEpochForCensus(tables []string) (int64, error) {
 	// edition that reached epoch 2 or later without it is refused by completeness
 	// rather than silently demoted to the base edition.
 	membership = membership.with(guardDeltaDirectory)
-	for _, d := range []guardEditionDelta{guardDeltaCommunication, guardDeltaProtocol, guardDeltaAccessEvidence} {
+	for _, d := range guardEditionDeltaOrder {
 		if complete[d] {
 			membership = membership.with(d)
 		}

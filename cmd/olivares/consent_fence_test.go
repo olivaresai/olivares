@@ -493,6 +493,7 @@ func interleaveWithRemovals(t *testing.T, e *consentEstate, writers []fenceWrite
 	scimT, scimB := e.scimToken(e.tT), e.scimToken(e.tB)
 	failures := make(chan string, 256)
 	var wg sync.WaitGroup
+	var concurrent []func()
 	for i := 0; i < 4; i++ {
 		label := fmt.Sprintf("interleave-%d", i)
 		var s fenceSubject
@@ -543,13 +544,16 @@ func interleaveWithRemovals(t *testing.T, e *consentEstate, writers []fenceWrite
 			}
 			continue
 		}
-		for _, op := range ops {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				op()
-			}()
-		}
+		concurrent = append(concurrent, ops...)
+	}
+	// Preparation reads channel authority too. Finish it before racing the
+	// writers, so an unrelated setup read cannot fail midway through the race.
+	for _, op := range concurrent {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			op()
+		}()
 	}
 	wg.Wait()
 	close(failures)

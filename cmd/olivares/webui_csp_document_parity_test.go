@@ -63,20 +63,38 @@ func TestCSPCoversEveryFetchTheShippedDocumentLinks(t *testing.T) {
 		"apple-touch-icon": "img-src",
 		"mask-icon":        "img-src",
 	}
-	rels := regexp.MustCompile(`<link[^>]*\brel="([^"]+)"`).FindAllStringSubmatch(html, -1)
-	if len(rels) == 0 {
+	links := regexp.MustCompile(`<link\b[^>]*>`).FindAllString(html, -1)
+	relAttr := regexp.MustCompile(`\brel="([^"]+)"`)
+	asAttr := regexp.MustCompile(`\bas="([^"]+)"`)
+	if len(links) == 0 {
 		t.Fatalf("NO HE PODIDO MIRAR: no <link rel=...> in the shipped index.html; " +
 			"either the document changed shape or this regexp stopped matching it")
 	}
 	seen := map[string]bool{}
-	for _, m := range rels {
+	for _, link := range links {
+		m := relAttr.FindStringSubmatch(link)
+		if len(m) != 2 {
+			t.Errorf("link has no recognized rel attribute: %s", link)
+			continue
+		}
 		for _, rel := range strings.Fields(m[1]) {
 			rel = strings.ToLower(rel)
-			if seen[rel] {
+			key := rel
+			directive, known := governs[rel]
+			if rel == "preload" {
+				destination := ""
+				if a := asAttr.FindStringSubmatch(link); len(a) == 2 {
+					destination = strings.ToLower(a[1])
+				}
+				key += ":" + destination
+				// Font preloads use font-src, regardless of attribute order.
+				// Other destinations require their own explicit classification.
+				directive, known = "font-src", destination == "font"
+			}
+			if seen[key] {
 				continue
 			}
-			seen[rel] = true
-			directive, known := governs[rel]
+			seen[key] = true
 			if !known {
 				t.Errorf(`the document links rel=%q and this test does not know which directive `+
 					`governs it. Decide it deliberately and add it here -- an unknown fetch kind `+

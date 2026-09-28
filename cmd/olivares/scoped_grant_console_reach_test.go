@@ -65,6 +65,10 @@ func (r entityReachRecorder) HandleEntity(method, pattern string, perm auth.Perm
 	})
 }
 
+func (r entityReachRecorder) HandleSealed(method, pattern string, perm auth.Permission, _ api.SealedRoute, h api.ModuleHandler) {
+	r.Handle(method, pattern, perm, h)
+}
+
 // moduleScopeTreeReach is the set of MODULE permissions a workspace/agent-group/folder
 // grant can authorize: those on a route that resolves the entity's stored workspace. A
 // route whose EntityRef declares no WorkspaceColumn carries no lineage, so no tree grant
@@ -102,7 +106,11 @@ func (r entityReachRecorder) HandleEntity(method, pattern string, perm auth.Perm
 // K1 moved the entity/collection ratio 5/659 -> 18/677; K2 moved it to 25/685; K5 moves it to
 // 30/694. K3 messaging moves it to 41/708. The premise the bound rests on — entity routes remain
 // the rare case — is still asserted by the test rather than trusted from this dated measurement.
+// Git publication keeps target reads inside their stored workspace. The console
+// entry still consumes a flat permission set: a workspace-only grant may hide it.
+// Preserve confinement rather than widening that read to tenant-wide authority.
 var moduleScopeTreeReach = []string{
+	"gitpublish:target:read",
 	"sessions:channel:admin",
 	"sessions:channel:read",
 	"sessions:decision:admin",

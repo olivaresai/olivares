@@ -67,8 +67,8 @@ func TestLicenseInstall_RefusesAptDownloadCredential(t *testing.T) {
 			if err == nil {
 				t.Fatalf("license install %v accepted a download credential:\n%s", args, out)
 			}
-			if !strings.Contains(err.Error(), "APT download credential") {
-				t.Errorf("license install %v: the refusal must name the APT download credential, got: %v", args, err)
+			if !strings.Contains(err.Error(), "download credential") || !strings.Contains(err.Error(), "oad1.") {
+				t.Errorf("license install %v: the refusal must name the download credential and its format, got: %v", args, err)
 			}
 			if strings.Contains(out, payload) || strings.Contains(err.Error(), payload) {
 				t.Errorf("license install %v echoed the credential", args)
