@@ -10,6 +10,7 @@ import argparse
 import filecmp
 import gzip
 import hashlib
+import importlib.util
 import io
 import json
 import os
@@ -397,6 +398,89 @@ def verify_rpm(
         verify_byte_identity(repo_file, package.source_path, f"RPM package {asset_name}")
 
 
+def rpm_body(path: Path, label: str) -> bytes:
+    """Bytes after the lead and padded signature header, by S3's own rule."""
+    spec = importlib.util.spec_from_file_location("rpm_payload_sign", Path(__file__).with_name("rpm-payload-sign.py"))
+    if spec is None or spec.loader is None:
+        blind("S3 rpm-payload-sign.py is not beside this verifier")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    try:
+        return module.rpm_body(path.read_bytes(), path.name)
+    except SystemExit:
+        fail(f"{label} is not an rpm with a lead and a signature header")
+
+
+def verify_rpm_s3(
+    root: Path,
+    channel: str,
+    expected: dict[str, Package],
+    records: list[dict[str, object]],
+    pgp: OpenPGPVerifier,
+    openpgp_key: Path,
+    files: set[str],
+) -> None:
+    """Check S3's signed rpm-md trees; each rpm keeps its release payload."""
+    rpm_records = {str(record["asset"]): record for record in records}
+    if len(rpm_records) != 2:
+        fail("repository manifest does not contain exactly two rpm records")
+    s3_verifier = Path(__file__).with_name("render-rpm-repodata.py")
+    for asset_name, record in sorted(rpm_records.items()):
+        package = expected[asset_name]
+        arch_root = root / channel / "rpm" / package.arch
+        if not arch_root.is_dir() or arch_root.is_symlink():
+            fail(f"S3 rpm tree is missing for {package.arch}")
+        checked = subprocess.run(
+            [
+                sys.executable, str(s3_verifier), "verify-delivery", "--repo", str(arch_root),
+                "--fingerprint", pgp.fingerprint, "--public-key", str(openpgp_key),
+                "--expect-package", package.name,
+            ],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+        if checked.returncode != 0:
+            detail = (checked.stderr or b"").decode("utf-8", "replace").strip()[-2000:]
+            if checked.returncode == 1:
+                fail(f"S3 verify-delivery refused {channel}/rpm/{package.arch}: {detail}")
+            blind(f"S3 verify-delivery could not check {channel}/rpm/{package.arch}: {detail}")
+        delivery = json.loads((arch_root / "delivery.json").read_text(encoding="utf-8"))
+        entry = delivery["packages"][0]
+        served = safe_repo_file(root, str(record["repo_path"]), "S3 rpm package")
+        if (
+            len(delivery["packages"]) != 1
+            or f"{channel}/rpm/{package.arch}/{entry['file']}" != record["repo_path"]
+            or entry["sha256"] != record["sha256"]
+            or digest_file(served) != record["sha256"]
+            or served.stat().st_size != record["size"]
+        ):
+            fail(f"repository manifest does not describe the S3 rpm for {asset_name}")
+        if rpm_body(served, f"S3 rpm {asset_name}") != rpm_body(package.source_path, f"release asset {asset_name}"):
+            fail(f"S3 rpm {asset_name} does not carry the payload of its authenticated release asset")
+        # The arch tree is exactly S3's declared delivery set: the rpms that
+        # delivery.json names, every repomd location, repomd.xml and its
+        # signature, delivery.json and checksums.txt. Anything else is refused.
+        try:
+            repomd = ET.fromstring((arch_root / "repodata" / "repomd.xml").read_bytes())
+        except (OSError, ET.ParseError) as exc:
+            fail(f"S3 repomd.xml is unreadable for {package.arch}: {exc}")
+        declared = {"delivery.json", "checksums.txt", "repodata/repomd.xml", "repodata/repomd.xml.asc"}
+        declared |= {
+            str(location.get("href"))
+            for location in repomd.findall("repo:data/repo:location", {"repo": RPM_REPO_NS})
+        }
+        declared |= {str(item["file"]) for item in delivery["packages"]}
+        present = {path.relative_to(arch_root).as_posix() for path in arch_root.rglob("*") if not path.is_dir()}
+        if present != declared:
+            fail(
+                f"S3 {channel}/rpm/{package.arch} is not exactly its delivery set; "
+                f"unexpected={sorted(present - declared)}, missing={sorted(declared - present)}"
+            )
+        files.update(f"{channel}/rpm/{package.arch}/{relative}" for relative in declared)
+
+
 def parse_apk_index(text: str) -> list[dict[str, str]]:
     entries: list[dict[str, str]] = []
     for raw in re.split(r"\n\s*\n", text.strip()):
@@ -507,6 +591,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--channel", required=True, choices=("stable", "security"))
     parser.add_argument("--openpgp-key", required=True, type=Path)
     parser.add_argument("--apk-key", required=True, type=Path)
+    parser.add_argument(
+        "--rpm-s3",
+        action="store_true",
+        help="the rpm trees come from S3's signed path (render-package-repositories.py --rpm-tree)",
+    )
     return parser.parse_args()
 
 
@@ -604,12 +693,15 @@ def main() -> int:
                 expected_record_version = (
                     f"{package.version}-{package.release}" if fmt == "rpm" else package.version
                 )
+                # An S3 rpm is re-signed, so its digest and size are the served
+                # file's; verify_rpm_s3 binds it to the release payload.
+                release_bytes = fmt == "rpm" and args.rpm_s3
                 if (
                     record["asset_arch"] != package.asset_arch
                     or record["internal_arch"] != package.arch
                     or record["version"] != expected_record_version
-                    or record["sha256"] != package.sha256
-                    or record["size"] != package.size
+                    or (not release_bytes and record["sha256"] != package.sha256)
+                    or (not release_bytes and record["size"] != package.size)
                     or not str(record["repo_path"]).startswith(f"{args.channel}/{fmt}/")
                 ):
                     fail(f"repository manifest metadata differs for {asset}")
@@ -623,7 +715,12 @@ def main() -> int:
                 published_apk.relative_to(args.repo_root).as_posix(),
             }
             verify_apt(args.repo_root, args.channel, expected, by_format["apt"], pgp, scratch, files)
-            verify_rpm(args.repo_root, args.channel, expected, by_format["rpm"], pgp, files)
+            if args.rpm_s3:
+                verify_rpm_s3(
+                    args.repo_root, args.channel, expected, by_format["rpm"], pgp, args.openpgp_key, files
+                )
+            else:
+                verify_rpm(args.repo_root, args.channel, expected, by_format["rpm"], pgp, files)
             verify_apk(
                 args.repo_root,
                 args.channel,
@@ -645,10 +742,13 @@ def main() -> int:
                     "repository file inventory differs; "
                     f"unexpected={sorted(actual - files)}, missing={sorted(files - actual)}"
                 )
-        print(
-            f"verify-package-repositories: OK — {args.channel}, apt/rpm/apk signatures valid, "
-            "6 repository packages byte-identical to release assets"
+        rpm_note = (
+            "apt/apk packages byte-identical to release assets; rpm trees pass S3 verify-delivery and carry "
+            "their release payload (rpm header signatures are checked with the pinned key by S3's publish step)"
+            if args.rpm_s3
+            else "6 repository packages byte-identical to release assets"
         )
+        print(f"verify-package-repositories: OK — {args.channel}, apt/rpm/apk signatures valid, {rpm_note}")
         return 0
     except ContractError as exc:
         print(f"verify-package-repositories: HALLAZGO — {exc}", file=sys.stderr)

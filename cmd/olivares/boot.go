@@ -43,6 +43,7 @@ import (
 	"github.com/olivaresai/olivares/modules/knowledge"
 	securitymodule "github.com/olivaresai/olivares/modules/security"
 	"github.com/olivaresai/olivares/modules/sessions"
+	"github.com/olivaresai/olivares/modules/sessions/accounthome"
 	"github.com/olivaresai/olivares/sdk"
 )
 
@@ -1700,7 +1701,10 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	// Live edition ports are bound only after the real Store, sessions data and
 	// request authorizer exist, before api.New installs any of their routes.
 	editionResources, err := editionBindModuleDependencies(ctx, editionConfigFrom(cfg), set.all,
-		EditionDependencies{Store: st, Sessions: set.sessions, Rows: api.NewReadRowAuthorizationPort(authz, authr)}, log)
+		EditionDependencies{
+			Store: st, Sessions: set.sessions,
+			Rows: api.NewReadRowAuthorizationPort(authz, authr), Mutations: authz,
+		}, log)
 	if err != nil {
 		_ = st.Close()
 		return nil, fmt.Errorf("bind edition module dependencies: %w", err)
@@ -1874,6 +1878,17 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	}
 	if set.sessions != nil {
 		set.sessions.UseExecutionEnvironmentRef(executionEnvRef)
+		// Where this node keeps the provider account homes it creates. The module
+		// holds no data directory and may import nothing from here, so the root is
+		// resolved once and handed over; a deployment that keeps the homes outside
+		// the data directory supplies its own root to the same seam. Unresolvable
+		// leaves the seam empty, and creating an account home stays deny-closed.
+		if accountsRoot, arErr := accounthome.Root(cfg.DataDir, ""); arErr == nil {
+			set.sessions.UseAccountsRoot(accountsRoot)
+		} else {
+			log.Warn("sessions: no accounts root on this node; creating a provider account home is deny-closed",
+				"error", arErr.Error())
+		}
 		set.sessions.UseProviderSourceResolver(&providerSourceResolver{
 			store: sourceStore, sr: sourceReconcilerSvc, authz: authz, env: executionEnvRef,
 		})

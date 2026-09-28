@@ -113,7 +113,7 @@ TOKEN="$(curl -sf -X POST "$BASE/v1/auth/login" -H 'Content-Type: application/js
   -d '{"email":"admin@local","password":"correct-horse-battery-staple"}' \
   | python3 -c 'import sys,json;print(json.load(sys.stdin)["token"])')"
 [ -n "$TOKEN" ] || fail "login returned no token"
-TENANT="$(curl -sf -X POST "$BASE/v1/system/orgs" -H "Authorization: Bearer $TOKEN" \
+TENANT="$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf -X POST "$BASE/v1/system/orgs" -H @- \
   -H 'Content-Type: application/json' -d '{"name":"First hour","slug":"first-hour"}' \
   | python3 -c 'import sys,json;print(json.load(sys.stdin)["tenant_id"])')"
 [ -n "$TENANT" ] || fail "could not create the first-hour tenant"
@@ -123,14 +123,14 @@ note "tenant: $TENANT"
 # 2. Register ONE coding agent in the control-plane inventory.
 # ---------------------------------------------------------------------------
 note "register coding agent in inventory (POST /v1/agents)"
-AGENT_JSON="$(curl -sf -X POST "$BASE/v1/agents" \
-  -H "Authorization: Bearer $TOKEN" -H "X-Olivares-Tenant: $TENANT" \
+AGENT_JSON="$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf -X POST "$BASE/v1/agents" \
+  -H @- -H "X-Olivares-Tenant: $TENANT" \
   -H 'Content-Type: application/json' \
   -d '{"name":"claude-code-local","kind":"claude-code"}')"
 AGENT_ID="$(printf '%s' "$AGENT_JSON" | python3 -c 'import sys,json;print(json.load(sys.stdin)["id"])')"
 [ -n "$AGENT_ID" ] || fail "POST /v1/agents returned no id: $AGENT_JSON"
-LISTED="$(curl -sf "$BASE/v1/agents" \
-  -H "Authorization: Bearer $TOKEN" -H "X-Olivares-Tenant: $TENANT")"
+LISTED="$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf "$BASE/v1/agents" \
+  -H @- -H "X-Olivares-Tenant: $TENANT")"
 printf '%s' "$LISTED" | python3 -c "
 import sys, json
 body = json.load(sys.stdin)
@@ -207,8 +207,8 @@ assert_eq "Bash → deny" "$(hook_decision Bash '{"command":"rm -rf /"}')" "deny
 note "read evidence rows GET /v1/audit?action=hook.tool"
 audit_actions() {
   local prefix="$1"
-  curl -sf "$BASE/v1/audit?action=$prefix&limit=100" \
-    -H "Authorization: Bearer $TOKEN" -H "X-Olivares-Tenant: $TENANT" \
+  printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf "$BASE/v1/audit?action=$prefix&limit=100" \
+    -H @- -H "X-Olivares-Tenant: $TENANT" \
     | python3 -c '
 import sys, json
 body = json.load(sys.stdin)

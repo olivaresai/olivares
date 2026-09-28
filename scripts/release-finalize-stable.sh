@@ -1337,7 +1337,64 @@ for probe in '.id|tostring:'"$RELEASE_ID" '.tag_name:'"$RELEASE_TAG" '.draft|tos
 	[ "$got" = "$want" ] ||
 		refuse "the release changed while it was being verified: ${expr} is '${got}', expected '${want}'"
 done
-_say "identity and inventory unchanged since admission; publishing release id ${RELEASE_ID}"
+_say "identity and inventory unchanged since admission"
+
+# --- latest publication guard: begin ----------------------------------------------------
+# This fresh read detects an observed backward move. It is not a compare-and-swap
+# against another publisher; credential custody must still exclude concurrent writes.
+if [ "$MAKE_LATEST" = "true" ]; then
+	set +e
+	gh_api --include "repos/${REPOSITORY}/releases/latest" >"$WORK/latest-before.http" 2>"$WORK/latest-before.err"
+	latest_rc=$?
+	set -e
+	IFS= read -r latest_status <"$WORK/latest-before.http" ||
+		blind "the latest-release response has no HTTP status"
+	[[ "$latest_status" =~ ^HTTP/[0-9.]+[[:space:]]+([0-9]{3})([[:space:]]|$) ]] ||
+		blind "the latest-release response has an unreadable HTTP status"
+	latest_status="${BASH_REMATCH[1]}"
+	if [ "$latest_rc" -eq 0 ] && [ "$latest_status" = "200" ]; then
+		sed '1,/^[[:space:]]*$/d' "$WORK/latest-before.http" >"$WORK/latest-before.json"
+		"$JQ_BIN" -s -e 'length == 1 and (.[0] |
+			type == "object" and .draft == false and .prerelease == false and
+			(.id | type == "number" and . > 0 and . == floor) and
+			(.tag_name | type == "string" and test("\\Av(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\z")))' \
+			"$WORK/latest-before.json" >/dev/null 2>&1 ||
+			blind "latest does not identify an ordinary published release with a usable version"
+		latest_tag="$("$JQ_BIN" -r '.tag_name' "$WORK/latest-before.json")"
+		# Length and decimal digits preserve numeric order without integer overflow or
+		# floating-point rounding. The version grammar excludes leading zeroes.
+		# shellcheck disable=SC2016 # These variables belong to jq.
+		"$JQ_BIN" -en --arg candidate "$RELEASE_TAG" --arg origin "$latest_tag" '
+			def version: ltrimstr("v") | split(".") | map([length, .]);
+			($candidate | version) > ($origin | version)' >/dev/null ||
+			refuse "${RELEASE_TAG} is not a strict successor of latest ${latest_tag}"
+		_say "latest ${latest_tag} precedes candidate ${RELEASE_TAG}"
+	elif [ "$latest_rc" -ne 0 ] && [ "$latest_status" = "404" ]; then
+		# Absence of the pointer is not absence of releases. Read every page afresh.
+		set +e
+		gh_api --paginate "repos/${REPOSITORY}/releases?per_page=100" \
+			>"$WORK/latest-origin-list.json" 2>"$WORK/latest-origin-list.err"
+		latest_list_rc=$?
+		set -e
+		[ "$latest_list_rc" -eq 0 ] || blind "could not establish the first stable publication"
+		"$JQ_BIN" -s -e 'length > 0 and all(.[];
+			type == "array" and all(.[]; type == "object" and
+			(.draft | type == "boolean") and (.prerelease | type == "boolean")))' \
+			"$WORK/latest-origin-list.json" >/dev/null 2>&1 ||
+			blind "the first-publication release inventory is incomplete or unreadable"
+		"$JQ_BIN" -s -e 'all(.[][]; .draft or .prerelease)' \
+			"$WORK/latest-origin-list.json" >/dev/null ||
+			blind "latest is absent but an ordinary published release exists"
+		_say "first stable publication: no ordinary published release exists"
+	else
+		blind "could not read latest before publication (HTTP ${latest_status}, gh exit ${latest_rc})"
+	fi
+else
+	_say "make_latest=${MAKE_LATEST}: the profile does not explicitly assign latest"
+fi
+# --- latest publication guard: end ------------------------------------------------------
+
+_say "publishing release id ${RELEASE_ID}"
 
 # ⛔ ONLY draft AND make_latest, ONLY BY THE RETAINED ID. Re-resolving the tag here would
 # hand the mutation to whatever the tag names NOW; the id is the thing this script verified.

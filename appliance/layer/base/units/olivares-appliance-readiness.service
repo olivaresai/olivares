@@ -7,7 +7,7 @@
 # becomes ready only when the product's own readiness endpoint, its store and its identity files
 # pass. Until then the record says pending. It is wanted by no target, so no target waits for it.
 [Unit]
-Description=Olivares appliance first-boot readiness
+Description=Olivares Server first-boot readiness
 Documentation=https://github.com/olivaresai/olivares/tree/main/appliance
 After=olivares.service olivares-appliance-firstboot.service
 ConditionPathExists=!/var/lib/olivares-appliance/ready
@@ -25,10 +25,13 @@ TimeoutStartSec=15min
 # except where a line below says why first boot needs a different one.
 NoNewPrivileges=true
 ProtectSystem=strict
-# Writable: the product configuration the product's generator writes, and the drop-in directory.
-# Both may be missing ("-"): the stage that needs one then records its refusal, where a missing
-# required path would stop the unit before first boot could record anything.
-ReadWritePaths=-/etc/olivares -/etc/systemd/system/olivares.service.d
+# Writable: the product configuration the product's generator writes, the drop-in directory, and
+# the Appliance Console's directory, where generate-product-config publishes the console's
+# selection (the base package's postinstall creates it). Each may be missing ("-"): the stage that
+# needs one then records its refusal, where a missing required path would stop the unit before
+# first boot could record anything.
+# The verified handoff writes only its cloud-init ownership drop-in.
+ReadWritePaths=-/etc/olivares -/etc/systemd/system/olivares.service.d -/etc/olivares-portal -/etc/cloud/cloud.cfg.d
 # ProtectHome: read-only, not true: verify-host-settings reads the authorized SSH keys in /home and /root.
 ProtectHome=read-only
 PrivateTmp=true

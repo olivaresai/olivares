@@ -11,6 +11,7 @@ import (
 	"io"
 	"reflect"
 	"strconv"
+	"strings"
 	"unicode/utf8"
 )
 
@@ -51,12 +52,28 @@ func readDocument(r io.Reader) (document, error) {
 	return d, nil
 }
 
-// decodeValue derives the structural schema from the private document types. All fields
-// are required. Reading tokens avoids encoding/json's last-duplicate-wins behavior and
-// keeps unknown field names and parser diagnostics out of user-visible errors.
+// schemaField returns a field's JSON name and whether a document may omit it.
+func schemaField(field reflect.StructField) (name string, optional bool) {
+	name, option, _ := strings.Cut(field.Tag.Get("json"), ",")
+	return name, option == "omitempty"
+}
+
+// decodeValue derives the structural schema from the private document types. Fields are
+// required unless tagged omitempty; an optional field is a pointer or a slice, so absence
+// stays distinguishable from a zero value. Reading tokens avoids encoding/json's
+// last-duplicate-wins behavior and keeps unknown field names and parser diagnostics out
+// of user-visible errors.
 func decodeValue(d *json.Decoder, target reflect.Value, path string, depth int) error {
 	if depth > 8 {
 		return invalid(path, "nesting exceeds 8 levels")
+	}
+	if target.Kind() == reflect.Pointer {
+		value := reflect.New(target.Type().Elem())
+		if err := decodeValue(d, value.Elem(), path, depth); err != nil {
+			return err
+		}
+		target.Set(value)
+		return nil
 	}
 	token, err := d.Token()
 	if err != nil {
@@ -69,6 +86,12 @@ func decodeValue(d *json.Decoder, target reflect.Value, path string, depth int) 
 			return invalid(path, "expected string")
 		}
 		target.SetString(value)
+	case reflect.Bool:
+		value, ok := token.(bool)
+		if !ok {
+			return invalid(path, "expected boolean")
+		}
+		target.SetBool(value)
 	case reflect.Struct:
 		if token != json.Delim('{') {
 			return invalid(path, "expected object")
@@ -76,7 +99,8 @@ func decodeValue(d *json.Decoder, target reflect.Value, path string, depth int) 
 		typ := target.Type()
 		fields := make(map[string]int, typ.NumField())
 		for i := 0; i < typ.NumField(); i++ {
-			fields[typ.Field(i).Tag.Get("json")] = i
+			name, _ := schemaField(typ.Field(i))
+			fields[name] = i
 		}
 		seen := make(map[string]bool, len(fields))
 		for d.More() {
@@ -104,8 +128,8 @@ func decodeValue(d *json.Decoder, target reflect.Value, path string, depth int) 
 			return invalid(path, "invalid object ending")
 		}
 		for i := 0; i < typ.NumField(); i++ {
-			name := typ.Field(i).Tag.Get("json")
-			if !seen[name] {
+			name, optional := schemaField(typ.Field(i))
+			if !seen[name] && !optional {
 				return invalid(path+"."+name, "required field is missing")
 			}
 		}

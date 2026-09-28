@@ -7,6 +7,7 @@ package main
 import (
 	"context"
 	"github.com/olivaresai/olivares/core/api"
+	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/modules/sessions"
 	"io"
@@ -122,12 +123,22 @@ func editionConfigFrom(cfg bootConfig) EditionConfig {
 	return EditionConfig{DataDir: cfg.DataDir}
 }
 
+// EditionMutationAuthorizer exposes the existing request authorizer's mutation
+// evidence producer. Callers need a live deadline, an authenticated principal and
+// the exact request; the returned evidence still requires AuthorityFor and the
+// complete authority bundle barrier on the mutation's own transaction.
+type EditionMutationAuthorizer interface {
+	AuthorizeRouteMutation(context.Context, auth.Request) (auth.RouteMutationAuthorization, error)
+}
+
 // EditionDependencies contains existing engine capabilities, never a private engine
 // or a second configuration source. Boot binds these after store/auth composition.
 type EditionDependencies struct {
 	Store    store.Store
 	Sessions sessions.SessionIdentityReader
 	Rows     api.RowAuthorizationPort
+	// Mutations is required by mutation consumers; absence must refuse, never use Rows.
+	Mutations EditionMutationAuthorizer
 }
 
 func closeEditionResources(resources []io.Closer, log *slog.Logger) {

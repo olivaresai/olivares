@@ -60,7 +60,7 @@ command -v python3 >/dev/null 2>&1 || { echo "check-deployed-config-drift: ⛔ N
 API=https://api.cloudflare.com/client/v4
 CUENTA="${CLOUDFLARE_ACCOUNT_ID:-}"
 if [ -z "$CUENTA" ]; then
-	CUENTA="$(curl -sS --max-time 30 -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "$API/accounts" 2>/dev/null | python3 -c '
+	CUENTA="$(printf 'Authorization: Bearer %s\n' "$CLOUDFLARE_API_TOKEN" | curl -sS --max-time 30 -H @- "$API/accounts" 2>/dev/null | python3 -c '
 import json,sys
 try: d=json.load(sys.stdin)
 except Exception: sys.exit(0)
@@ -78,7 +78,7 @@ fi
 # prudencia y es un defecto.
 TMPD="$(mktemp -d "${TMPDIR:-/tmp}/drift.XXXXXX" 2>/dev/null)" || { echo "check-deployed-config-drift: ⛔ NO HE PODIDO MIRAR: sin directorio temporal." >&2; exit 2; }
 trap 'rm -rf "$TMPD"' EXIT
-curl -sS --max-time 45 -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+printf 'Authorization: Bearer %s\n' "$CLOUDFLARE_API_TOKEN" | curl -sS --max-time 45 -H @- \
 	"$API/accounts/$CUENTA/workers/scripts/$SCRIPT/settings" >"$TMPD/settings.json" 2>/dev/null
 
 salida="$(python3 - "$CFG" "$ENVKEY" "$TMPD/settings.json" <<'PY' 2>/dev/null

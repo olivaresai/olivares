@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { ProviderAccent } from './provider-accent'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AlertTriangle } from 'lucide-react'
 import { useMemo, useState, type FormEvent } from 'react'
@@ -421,7 +422,13 @@ export function RunCreateDialog({
                       {t('create.profileNone')}
                     </SelectItem>
                     {profiles.map((p) => (
-                      <SelectItem key={p.profile_ref} value={p.profile_ref}>
+                      <SelectItem
+                        key={p.profile_ref}
+                        value={p.profile_ref}
+                        aria-description={p.profile_ref}
+                        title={p.profile_ref}
+                      >
+                        <ProviderAccent accent={p.accent} />
                         {p.display_name || p.profile_ref} · {p.driver}
                         {!p.operable && ` — ${t('create.profileNotOperable')}`}
                       </SelectItem>

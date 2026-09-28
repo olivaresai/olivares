@@ -296,33 +296,7 @@ jobs:
           cache: ${{ runner.environment == 'github-hosted' }}
           cache-dependency-path: go.work.sum
       - name: install go-task (pinned)
-        run: |
-          # ⛔ TRES PARTES, NO UNA — la doctrina vive en mainline-ci.yml:642-646 desde el 08-18 y
-          # llevaba ONCE DIAS sin propagarse. La cobro `export-check` el 2026-08-29 en
-          # `ci-runner-3`: el paso «install go-task» salio **success** y el siguiente murio con
-          # `task: command not found`, exit 127; el job midio 1 de 14 pasos y el fail-closed del
-          # propio instrumento quedo SALTADO (corrida 33278242758, curada por r26 en #2149).
-          #
-          #   GOBIN explicito .... `go install` honra un GOBIN del entorno POR ENCIMA de
-          #                        $GOPATH/bin. En un runner auto-alojado PERSISTENTE ese GOBIN
-          #                        puede venir del servicio, y entonces el binario aterriza fuera
-          #                        del PATH que el job acaba de componer — **sin fallar**, porque
-          #                        instalar si instalo.
-          #   su bin al PATH ..... para el paso siguiente (GITHUB_PATH) y para ESTE (export PATH).
-          #   la GUARDA .......... «instalar no es alcanzar». Convierte «instalado e inalcanzable»
-          #                        en un rojo NOMBRADO aqui, en vez de un 127 opaco mas adelante
-          #                        que manda a investigar el PATH en vez de la instalacion.
-          #
-          # ⚠ Y la causa esta CONFIRMADA por una medida que no estaba en el diagnostico original:
-          # en esa corrida los dos jobs corrieron en maquinas DISTINTAS — el que fallo en
-          # `ci-runner-3`, el que paso en `srv17`— con los MISMOS pasos. No era el orden de los
-          # pasos: era el entorno del runner, que es exactamente lo que GOBIN explicito neutraliza.
-          export GOBIN="$RUNNER_TEMP/gopath/bin"
-          echo "GOBIN=$GOBIN" >> "$GITHUB_ENV"
-          echo "$GOBIN" >> "$GITHUB_PATH"
-          export PATH="$GOBIN:$PATH"
-          go install github.com/go-task/task/v3/cmd/task@v3.51.1
-          command -v task || { echo "::error::go install dijo OK y task no esta en PATH (GOBIN=$GOBIN, PATH=$PATH)"; exit 1; }
+        uses: ./.github/actions/olivares-tool-cache
       - name: provision postgres roles (least-privilege app role + BYPASSRLS admin)
         env:
           PGPASSWORD: postgres

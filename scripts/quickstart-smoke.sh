@@ -92,7 +92,7 @@ wait_health() {
 }
 
 # graph_field FIELD: prints a python-computed scalar over /graph (TOKEN+TENANT in env).
-api_get() { curl -sf "$BASE$1" -H "Authorization: Bearer $TOKEN" -H "X-Olivares-Tenant: $TENANT"; }
+api_get() { printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf "$BASE$1" -H @- -H "X-Olivares-Tenant: $TENANT"; }
 
 if [ ! -x "$BIN" ]; then
   note "building $BIN (the quickstart's 'task build')"
@@ -118,7 +118,7 @@ TOKEN="$(curl -sf -X POST "$BASE/v1/auth/login" \
   -d '{"email":"demo@olivares.local","password":"olivares-demo-estate"}' \
   | python3 -c 'import sys,json;print(json.load(sys.stdin)["token"])')"
 [ -n "$TOKEN" ] || fail "demo login returned no token"
-TENANT="$(curl -sf "$BASE/v1/system/orgs" -H "Authorization: Bearer $TOKEN" \
+TENANT="$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf "$BASE/v1/system/orgs" -H @- \
   | python3 -c 'import sys,json;[print(o["tenant_id"]) for o in json.load(sys.stdin)["items"] if o["slug"]=="demo"]')"
 [ -n "$TENANT" ] || fail "could not resolve the demo tenant"
 note "demo tenant: $TENANT"
@@ -261,7 +261,7 @@ TOKEN="$(curl -sf -X POST "$BASE/v1/auth/login" -H 'Content-Type: application/js
   -d '{"email":"admin@local","password":"correct-horse-battery-staple"}' \
   | python3 -c 'import sys,json;print(json.load(sys.stdin)["token"])')"
 [ -n "$TOKEN" ] || fail "real login returned no token"
-TENANT="$(curl -sf -X POST "$BASE/v1/system/orgs" -H "Authorization: Bearer $TOKEN" \
+TENANT="$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf -X POST "$BASE/v1/system/orgs" -H @- \
   -H 'Content-Type: application/json' -d '{"name":"Production","slug":"prod"}' \
   | python3 -c 'import sys,json;print(json.load(sys.stdin)["tenant_id"])')"
 [ -n "$TENANT" ] || fail "could not create the production tenant"

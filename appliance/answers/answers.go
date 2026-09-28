@@ -12,24 +12,25 @@ import (
 	"io"
 )
 
+// Fields tagged omitempty are optional: a document may omit them, and a plan omits
+// what its document omitted. Every other field is required.
 type document struct {
 	SchemaVersion string  `json:"schema_version"`
 	Source        string  `json:"source"`
 	Host          host    `json:"host"`
 	Product       product `json:"product"`
+	Portal        *portal `json:"portal,omitempty"`
 }
 
 type host struct {
-	Owner             string        `json:"owner"`
-	Hostname          string        `json:"hostname"`
-	Network           network       `json:"network"`
-	Time              clockSettings `json:"time"`
-	SSHAuthorizedKeys []string      `json:"ssh_authorized_keys"`
+	Owner                string        `json:"owner"`
+	Hostname             string        `json:"hostname"`
+	Network              Network       `json:"network"`
+	Time                 clockSettings `json:"time"`
+	SSHAuthorizedKeys    []string      `json:"ssh_authorized_keys"`
+	ManagementInterfaces []string      `json:"management_interfaces,omitempty"`
 }
 
-type network struct {
-	Mode string `json:"mode"`
-}
 type clockSettings struct {
 	Timezone string   `json:"timezone"`
 	Servers  []string `json:"servers"`
@@ -39,6 +40,13 @@ type product struct {
 	PublicConsoleURL string `json:"public_console_url"`
 	UpdateChannel    string `json:"update_channel"`
 	NodeRole         string `json:"node_role"`
+}
+
+// portal selects the Appliance Console's exposure. It names existing interfaces and
+// changes no host setting.
+type portal struct {
+	Enabled *bool   `json:"enabled,omitempty"`
+	Listen  *string `json:"listen,omitempty"`
 }
 
 type operation struct {

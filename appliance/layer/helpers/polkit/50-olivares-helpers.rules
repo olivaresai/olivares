@@ -1,0 +1,31 @@
+// SPDX-FileCopyrightText: 2026 Olivares.AI
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// The Appliance Console's account and the support-bundle helper's account hold no right of the
+// service manager, the login manager, the disk manager or the package manager. Every privileged
+// act leaves the console through a closed helper, which admits its invoker from the connection;
+// none leaves through polkit. So a compromised console cannot reboot, power off, start or stop a
+// unit, mount, format or install anything by asking polkit, whatever a later rule or a default
+// policy would grant. This rule answers only for those two accounts and only for those four
+// managers' actions, and says no; every other decision is left to the rules after it.
+//
+// Installed as /usr/share/polkit-1/rules.d/50-olivares-helpers.rules. polkit reads the rules in
+// file-name order and the first rule that answers decides.
+polkit.addRule(function (action, subject) {
+    var accounts = ["olivares-portal", "olivares-support-bundle"];
+    var managers = [
+        "org.freedesktop.systemd1.",
+        "org.freedesktop.login1.",
+        "org.freedesktop.udisks2.",
+        "org.freedesktop.packagekit."
+    ];
+    if (accounts.indexOf(subject.user) < 0) {
+        return polkit.Result.NOT_HANDLED;
+    }
+    for (var i = 0; i < managers.length; i++) {
+        if (action.id.indexOf(managers[i]) === 0) {
+            return polkit.Result.NO;
+        }
+    }
+    return polkit.Result.NOT_HANDLED;
+});

@@ -1,0 +1,789 @@
+{
+  "architecture": {
+    "deb": "amd64",
+    "uname_machine": "x86_64"
+  },
+  "base_image": {
+    "digest_basis": "The index digest is the one the accepted appliance base fixture already pins. The amd64 child manifest was read from the registry on 2026-09-22T14:02:23Z.",
+    "index_digest": "sha256:9cc080028c43b27d2074d63a5f9caf7166d731494965616c1a6d2827a004585c",
+    "manifest_digest_amd64": "sha256:d5ce19d4736f0ebbacd686d1040271a5aeb0cc920f5990c1bfae1717627f0674",
+    "reference": "debian:13",
+    "registry": "registry-1.docker.io/library/debian"
+  },
+  "budget": {
+    "basis": "Declared, not measured. KIWI documents a minimum of 15 GB recommended free space for the build root, caches and resulting images; the minutes are a declared ceiling below the documented job ceiling. The peak disk and elapsed time of a real build stay unmeasured until the first recipe attempt records them, and this figure must be replaced by that measurement.",
+    "declared_build_bytes": 15000000000,
+    "declared_build_minutes": 90,
+    "measured": false
+  },
+  "distribution": {
+    "archive": "https://deb.debian.org/debian",
+    "basis_note": "All OS roots and transitive candidates are constrained to this authenticated single snapshot index plus the immutable base. No live archive is configured.",
+    "codename": "trixie",
+    "id": "debian",
+    "inrelease_sha256": "0584fba32e13e0ab8285fb16c27adea1ec03a73669c18702821094fd6ca86675",
+    "packages_sha256": "4f2c68d67001d595fbd343f6dbad44468953a51c4d9dec3a4803249f6e295940",
+    "packages_xz_bytes": 9678380,
+    "packages_xz_sha256": "7778d3e3f303b7ddb8ce0fe7c8d57473a076c6bf2e8f241f75421d2396352498",
+    "release_date": "Sat, 12 Sep 2026 07:55:41 UTC",
+    "snapshot_basis": "https://snapshot.debian.org/archive/debian/20260922T000000Z/",
+    "suite": "stable",
+    "system_packages": {
+      "apt": {
+        "Depends": "base-passwd (>= 3.6.1) | adduser, sqv (>= 1.3.0), libapt-pkg7.0 (>= 3.0.3), debian-archive-keyring, libc6 (>= 2.38), libgcc-s1 (>= 3.0), libseccomp2 (>= 2.4.2), libssl3t64 (>= 3.0.0), libstdc++6 (>= 13.1), libsystemd0",
+        "Filename": "pool/main/a/apt/apt_3.0.3_amd64.deb",
+        "Package": "apt",
+        "SHA256": "55e341fbe92d7502c98faf1b3c235393ea0744db119cf2173603e965b658aef4",
+        "Version": "3.0.3"
+      },
+      "bash": {
+        "Depends": "base-files (>= 2.1.12), debianutils (>= 5.6-0.1)",
+        "Filename": "pool/main/b/bash/bash_5.2.37-2+b10_amd64.deb",
+        "Package": "bash",
+        "SHA256": "2fd7b04f1b7caa29c4e683f5216e6af354a41e3cdcf6e75394d7cda680f9ab82",
+        "Version": "5.2.37-2+b10"
+      },
+      "btrfs-progs": {
+        "Depends": "libblkid1 (>= 2.17.2), libc6 (>= 2.38), libcom-err2 (>= 1.43.9), libext2fs2t64 (>= 1.42), liblzo2-2 (>= 2.02), libreiserfscore0t64 (>= 1:3.6.27), libudev1 (>= 183), libuuid1 (>= 2.16), libzstd1 (>= 1.5.5), zlib1g (>= 1:1.2.0)",
+        "Filename": "pool/main/b/btrfs-progs/btrfs-progs_6.14-1_amd64.deb",
+        "Package": "btrfs-progs",
+        "SHA256": "ae3ab86d467b8b765ea1ea3e264c11a07a6f8a73e6b3df665c787d45b9b3491f",
+        "Version": "6.14-1"
+      },
+      "ca-certificates": {
+        "Depends": "openssl (>= 1.1.1), debconf (>= 0.5) | debconf-2.0",
+        "Filename": "pool/main/c/ca-certificates/ca-certificates_20250419_all.deb",
+        "Package": "ca-certificates",
+        "SHA256": "ef590f89563aa4b46c8260d49d1cea0fc1b181d19e8df3782694706adf05c184",
+        "Version": "20250419"
+      },
+      "cpio": {
+        "Depends": "libc6 (>= 2.38)",
+        "Filename": "pool/main/c/cpio/cpio_2.15+dfsg-2_amd64.deb",
+        "Package": "cpio",
+        "SHA256": "d8faece250bcf72e91ac15a5fef198be173af18c9f48bae257e7ee937fbc6cdc",
+        "Version": "2.15+dfsg-2"
+      },
+      "cryptsetup": {
+        "Depends": "cryptsetup-bin (>= 2:2.7.2-1), dmsetup, debconf (>= 0.5) | debconf-2.0, libc6 (>= 2.34)",
+        "Filename": "pool/main/c/cryptsetup/cryptsetup_2.7.5-2_amd64.deb",
+        "Package": "cryptsetup",
+        "SHA256": "916ff5b1336f67dbaf763039529c3a0e10d2b839ef11463cde13a405ba49bcd4",
+        "Version": "2:2.7.5-2"
+      },
+      "curl": {
+        "Depends": "libc6 (>= 2.34), libcurl4t64 (= 8.14.1-2+deb13u5), zlib1g (>= 1:1.1.4)",
+        "Filename": "pool/main/c/curl/curl_8.14.1-2+deb13u5_amd64.deb",
+        "Package": "curl",
+        "SHA256": "ebb7e0cbe30ad23bce0d28a848ccfeb9b73b82817eb4fe12fa20d2845f62dc73",
+        "Version": "8.14.1-2+deb13u5"
+      },
+      "dosfstools": {
+        "Depends": "libc6 (>= 2.38)",
+        "Filename": "pool/main/d/dosfstools/dosfstools_4.2-1.2_amd64.deb",
+        "Package": "dosfstools",
+        "SHA256": "628551496a02e80eee83054b9c696b06ba8177159bf0afe9a5b4ab2fb94b1b41",
+        "Version": "4.2-1.2"
+      },
+      "dpkg": {
+        "Depends": "tar (>= 1.28-1)",
+        "Filename": "pool/main/d/dpkg/dpkg_1.22.22_amd64.deb",
+        "Package": "dpkg",
+        "SHA256": "3e800c6d75e8e709007ed1c356e5fa8509a75c1694fb0a1183709abc9cfdc1f3",
+        "Version": "1.22.22"
+      },
+      "dpkg-dev": {
+        "Depends": "perl:any, libdpkg-perl (= 1.22.22), tar (>= 1.28-1), bzip2, xz-utils (>= 5.4.0), patch (>= 2.7), make, binutils",
+        "Filename": "pool/main/d/dpkg/dpkg-dev_1.22.22_all.deb",
+        "Package": "dpkg-dev",
+        "SHA256": "6d4020421740a70e1fb9c41b07f8bb8306d93aef6fea1a8ce11a1f839921f414",
+        "Version": "1.22.22"
+      },
+      "e2fsprogs": {
+        "Depends": "logsave",
+        "Filename": "pool/main/e/e2fsprogs/e2fsprogs_1.47.2-3+b12_amd64.deb",
+        "Package": "e2fsprogs",
+        "SHA256": "e9e638eb3e22b5f14d01ce0b28aa512a5a22fcc0e70d1c733444579b67ea236b",
+        "Version": "1.47.2-3+b12"
+      },
+      "erofs-utils": {
+        "Depends": "libc6 (>= 2.38), libdeflate0 (>= 1.0), liblz4-1 (>= 1.9.1), liblzma5 (>= 5.4.0), libselinux1 (>= 3.1~), libuuid1 (>= 2.16), libxxhash0 (>= 0.6.5), libzstd1 (>= 1.5.5), zlib1g (>= 1:1.1.4)",
+        "Filename": "pool/main/e/erofs-utils/erofs-utils_1.8.6-1_amd64.deb",
+        "Package": "erofs-utils",
+        "SHA256": "81042b8c0c3eb63699aa7d0763dceedc675a747d9f5cfebf914b4160233f411e",
+        "Version": "1.8.6-1"
+      },
+      "file": {
+        "Depends": "libc6 (>= 2.38), libmagic1t64 (= 1:5.46-5)",
+        "Filename": "pool/main/f/file/file_5.46-5_amd64.deb",
+        "Package": "file",
+        "SHA256": "5b980b02a7d91aab9cb50c65ac7e059678a36d36ed626ec52506442f4501a1a7",
+        "Version": "1:5.46-5"
+      },
+      "gdisk": {
+        "Depends": "libc6 (>= 2.38), libgcc-s1 (>= 3.0), libncursesw6 (>= 6), libpopt0 (>= 1.14), libstdc++6 (>= 13.1), libtinfo6 (>= 6), libuuid1 (>= 2.16)",
+        "Filename": "pool/main/g/gdisk/gdisk_1.0.10-2_amd64.deb",
+        "Package": "gdisk",
+        "SHA256": "a64944b38e8477bf23b9a0ffb6fc653c8847facb1f851864b1a5c40a931456d2",
+        "Version": "1.0.10-2"
+      },
+      "gnupg": {
+        "Depends": "dirmngr (<< 2.4.7-21+deb13u1.1~), dirmngr (>= 2.4.7-21+deb13u1), gnupg-l10n (= 2.4.7-21+deb13u1), gpg (<< 2.4.7-21+deb13u1.1~), gpg (>= 2.4.7-21+deb13u1), gpg-agent (<< 2.4.7-21+deb13u1.1~), gpg-agent (>= 2.4.7-21+deb13u1), gpgsm (<< 2.4.7-21+deb13u1.1~), gpgsm (>= 2.4.7-21+deb13u1)",
+        "Filename": "pool/main/g/gnupg2/gnupg_2.4.7-21+deb13u1_all.deb",
+        "Package": "gnupg",
+        "SHA256": "e68f0fd24a7a62f1112ae3e442564e134f21040492f11d1aefa7b18de93ebf6e",
+        "Version": "2.4.7-21+deb13u1"
+      },
+      "grub-efi-amd64-bin": {
+        "Depends": "grub-common (= 2.12-9+deb13u2), grub-efi-amd64-unsigned",
+        "Filename": "pool/main/g/grub2/grub-efi-amd64-bin_2.12-9+deb13u2_amd64.deb",
+        "Package": "grub-efi-amd64-bin",
+        "SHA256": "d486d62c83aa197f83c1dd0560ffd96d91c896f4d58485164eb7e1623e7bfde2",
+        "Version": "2.12-9+deb13u2"
+      },
+      "grub-pc-bin": {
+        "Depends": "libc6 (>= 2.38), libdevmapper1.02.1 (>= 2:1.02.197), grub-common (= 2.12-9+deb13u2)",
+        "Filename": "pool/main/g/grub2/grub-pc-bin_2.12-9+deb13u2_amd64.deb",
+        "Package": "grub-pc-bin",
+        "SHA256": "ebeaa7a12f6a96127dec15d2a64a6d3d8278b9a8bc5531185d990e1c97a4728d",
+        "Version": "2.12-9+deb13u2"
+      },
+      "isolinux": {
+        "Depends": null,
+        "Filename": "pool/main/s/syslinux/isolinux_6.04~git20190206.bf6db5b4+dfsg1-3.1_all.deb",
+        "Package": "isolinux",
+        "SHA256": "d96fefb9b4d563e791346b5d8dee93880891b138326807e3a98bf029f01ea25c",
+        "Version": "3:6.04~git20190206.bf6db5b4+dfsg1-3.1"
+      },
+      "isomd5sum": {
+        "Depends": "libc6 (>= 2.38), libpopt0 (>= 1.14)",
+        "Filename": "pool/main/i/isomd5sum/isomd5sum_1.2.3-5+b8_amd64.deb",
+        "Package": "isomd5sum",
+        "SHA256": "283f22de739640639851204deea21bc88d95ed82ab29c3db1726a6bbb3a3709a",
+        "Version": "1:1.2.3-5+b8"
+      },
+      "kpartx": {
+        "Depends": "dmsetup (>= 2:1.02.196-1~), udev, libc6 (>= 2.34), libdevmapper1.02.1 (>= 2:1.02.197)",
+        "Filename": "pool/main/m/multipath-tools/kpartx_0.11.1-2_amd64.deb",
+        "Package": "kpartx",
+        "SHA256": "14e36804daf23b27a6df74c2438f109dc09e5a338c6aab31b649d3e4c3961907",
+        "Version": "0.11.1-2"
+      },
+      "lsof": {
+        "Depends": "liblsof0 (= 4.99.4+dfsg-2), libc6 (>= 2.34), libselinux1 (>= 3.1~), libtirpc3t64 (>= 1.0.2)",
+        "Filename": "pool/main/l/lsof/lsof_4.99.4+dfsg-2_amd64.deb",
+        "Package": "lsof",
+        "SHA256": "76ca9b82da6d5dabd66609937675768a593c20c5e544171a2d9544060a1780b7",
+        "Version": "4.99.4+dfsg-2"
+      },
+      "lvm2": {
+        "Depends": "libaio1t64 (>= 0.3.93), libblkid1 (>= 2.24.2), libc6 (>= 2.38), libdevmapper-event1.02.1 (>= 2:1.02.74), libedit2 (>= 2.11-20080614-0), libselinux1 (>= 3.1~), libsystemd0 (>= 233), libudev1 (>= 183), dmsetup (>= 2:1.02.205-2~), dmeventd (>= 2:1.02.205-2~)",
+        "Filename": "pool/main/l/lvm2/lvm2_2.03.31-2_amd64.deb",
+        "Package": "lvm2",
+        "SHA256": "a6a130eae69ec2ede92b2bf4bfab35208a5340c2c3e2dcb4453bf8fbf742d0a6",
+        "Version": "2.03.31-2"
+      },
+      "mdadm": {
+        "Depends": "udev, debconf (>= 0.5) | debconf-2.0, libc6 (>= 2.38), libudev1 (>= 183)",
+        "Filename": "pool/main/m/mdadm/mdadm_4.4-11_amd64.deb",
+        "Package": "mdadm",
+        "SHA256": "6b659c6c053d7b069924a1b254c17dfb11980f4035198b7e30161fe5f0d8f6b9",
+        "Version": "4.4-11"
+      },
+      "mtools": {
+        "Depends": "libc6 (>= 2.38)",
+        "Filename": "pool/main/m/mtools/mtools_4.0.48-1_amd64.deb",
+        "Package": "mtools",
+        "SHA256": "e7069109ce49f5a450caeca681e454f24dc412f9fdb289cde54e115162203760",
+        "Version": "4.0.48-1"
+      },
+      "openssl": {
+        "Depends": "libc6 (>= 2.34), libssl3t64 (>= 3.5.0)",
+        "Filename": "pool/main/o/openssl/openssl_3.5.7-1~deb13u2_amd64.deb",
+        "Package": "openssl",
+        "SHA256": "4ff006f431d8c2e69fa736885a3b6e779f2448535f69dbde821d9f0ff87ad8ea",
+        "Version": "3.5.7-1~deb13u2"
+      },
+      "python3": {
+        "Depends": "python3.13 (>= 3.13.5-1~), libpython3-stdlib (= 3.13.5-1)",
+        "Filename": "pool/main/p/python3-defaults/python3_3.13.5-1_amd64.deb",
+        "Package": "python3",
+        "SHA256": "c1388174dc7140e6c19a6dd39f8a0dcb38a835cd66c65644e0dded43d5223cb0",
+        "Version": "3.13.5-1"
+      },
+      "python3-packaging": {
+        "Depends": "python3:any",
+        "Filename": "pool/main/p/python-packaging/python3-packaging_25.0-1_all.deb",
+        "Package": "python3-packaging",
+        "SHA256": "d70c8469f6e9c6105e1ebcd3ebdc963f11dadbeddd89d2d1a2a3cb1c97d2ecbc",
+        "Version": "25.0-1"
+      },
+      "python3-pip": {
+        "Depends": "ca-certificates, python3-wheel, python3:any",
+        "Filename": "pool/main/p/python-pip/python3-pip_25.1.1+dfsg-1_all.deb",
+        "Package": "python3-pip",
+        "SHA256": "065695050e5fe10f162201a5bbe8759837427c76c95b5fe57b0701bcd6070c56",
+        "Version": "25.1.1+dfsg-1"
+      },
+      "python3-venv": {
+        "Depends": "python3.13-venv (>= 3.13.5-1~), python3 (= 3.13.5-1)",
+        "Filename": "pool/main/p/python3-defaults/python3-venv_3.13.5-1_amd64.deb",
+        "Package": "python3-venv",
+        "SHA256": "744ea5038e645ed22299e1bca47f76169b5665dd640df3492bdd1e21eba6cb76",
+        "Version": "3.13.5-1"
+      },
+      "qemu-utils": {
+        "Depends": "libaio1t64 (>= 0.3.93), libc6 (>= 2.38), libfuse3-4 (>= 3.17.2), libglib2.0-0t64 (>= 2.78.0), libgmp10 (>= 2:6.3.0+dfsg), libgnutls30t64 (>= 3.8.2), libhogweed6t64, libnettle8t64 (>= 3.9~), libnuma1 (>= 2.0.11), libselinux1 (>= 3.1~), liburing2 (>= 2.3), libzstd1 (>= 1.5.5), zlib1g (>= 1:1.1.4)",
+        "Filename": "pool/main/q/qemu/qemu-utils_10.0.13+ds-0+deb13u1_amd64.deb",
+        "Package": "qemu-utils",
+        "SHA256": "6d31339b1630153fe7c5f8a51426b8fa6ce35731aeb015a84f2d333c4e4dca30",
+        "Version": "1:10.0.13+ds-0+deb13u1"
+      },
+      "rsync": {
+        "Depends": "libacl1 (>= 2.2.23), libc6 (>= 2.38), liblz4-1 (>= 0.0~r130), libpopt0 (>= 1.14), libssl3t64 (>= 3.0.0), libxxhash0 (>= 0.8.0), libzstd1 (>= 1.5.5), zlib1g (>= 1:1.1.4)",
+        "Filename": "pool/main/r/rsync/rsync_3.4.1+ds1-5+deb13u4_amd64.deb",
+        "Package": "rsync",
+        "SHA256": "8aa122f6ba8d2ff112c72bb9814ee096ee516f0213b36b98bbe79c83c92fb226",
+        "Version": "3.4.1+ds1-5+deb13u4"
+      },
+      "screen": {
+        "Depends": "libc6 (>= 2.38), libcrypt1 (>= 1:4.1.0), libpam0g (>= 0.99.7.1), libtinfo6 (>= 6), debianutils (>= 5.3-1~)",
+        "Filename": "pool/main/s/screen/screen_4.9.1-3_amd64.deb",
+        "Package": "screen",
+        "SHA256": "c573c3d28581690a716d98c805b93f83bac05b69c54c620b649bfabd032ead12",
+        "Version": "4.9.1-3"
+      },
+      "sed": {
+        "Depends": null,
+        "Filename": "pool/main/s/sed/sed_4.9-2+deb13u1_amd64.deb",
+        "Package": "sed",
+        "SHA256": "7071270ed4f6adda55bc4f926347fb847bacaffbdee3dff917bc6006ed7e3775",
+        "Version": "4.9-2+deb13u1"
+      },
+      "squashfs-tools": {
+        "Depends": "libc6 (>= 2.34), liblz4-1 (>= 0.0~r130), liblzma5 (>= 5.1.1alpha+20120614), liblzo2-2 (>= 2.02), libzstd1 (>= 1.5.2), zlib1g (>= 1:1.1.4)",
+        "Filename": "pool/main/s/squashfs-tools/squashfs-tools_4.6.1-1_amd64.deb",
+        "Package": "squashfs-tools",
+        "SHA256": "0e185122f5858132bbc709e26228ba28cf7f0c41f6ed26e3f55f518f2a53b59d",
+        "Version": "1:4.6.1-1"
+      },
+      "syslinux": {
+        "Depends": "libc6 (>= 2.34), mtools",
+        "Filename": "pool/main/s/syslinux/syslinux_6.04~git20190206.bf6db5b4+dfsg1-3.1_amd64.deb",
+        "Package": "syslinux",
+        "SHA256": "f76753bd1bcd22f4f324aa48c6fc17e5be0dabf229ffc0868f7f7b51e5aa4d50",
+        "Version": "3:6.04~git20190206.bf6db5b4+dfsg1-3.1"
+      },
+      "tar": {
+        "Depends": null,
+        "Filename": "pool/main/t/tar/tar_1.35+dfsg-3.1_amd64.deb",
+        "Package": "tar",
+        "SHA256": "214c02e1aa291076a3147b8a4c4cae02fadf4c67df629186e3e313726faef1de",
+        "Version": "1.35+dfsg-3.1"
+      },
+      "util-linux": {
+        "Depends": null,
+        "Filename": "pool/main/u/util-linux/util-linux_2.41.5-0+deb13u1_amd64.deb",
+        "Package": "util-linux",
+        "SHA256": "7d5b1176cc3d8cc6b290b3ec17af458f362d9200845f30da22057a8198744430",
+        "Version": "2.41.5-0+deb13u1"
+      },
+      "xfsprogs": {
+        "Depends": "libblkid1 (>= 2.17.2), libc6 (>= 2.38), libdevmapper1.02.1 (>= 2:1.02.197), libedit2 (>= 2.11-20080614-0), libicu76 (>= 76.1-1~), libinih1 (>= 53), liburcu8t64 (>= 0.13.0), libuuid1 (>= 2.16), python3-dbus, python3:any",
+        "Filename": "pool/main/x/xfsprogs/xfsprogs_6.13.0-2+deb13u1_amd64.deb",
+        "Package": "xfsprogs",
+        "SHA256": "79e00160bfc45d25a46d2709edd364afb41723d9b96713de8f6c80b6a17f2d74",
+        "Version": "6.13.0-2+deb13u1"
+      },
+      "xorriso": {
+        "Depends": "libc6 (>= 2.34), libisoburn1t64 (= 1.5.6-1.2+b1)",
+        "Filename": "pool/main/libi/libisoburn/xorriso_1.5.6-1.2+b1_amd64.deb",
+        "Package": "xorriso",
+        "SHA256": "9ee40b0f45479283c1c69e5d914f69c44051c61b6efb3f86994238a62ceddd1a",
+        "Version": "1.5.6-1.2+b1"
+      }
+    },
+    "version": "13.7"
+  },
+  "id": "appliance-image-toolchain-debian13-amd64",
+  "invocation": {
+    "container_runtime": "docker",
+    "containerfile": "appliance/images/toolchain/Containerfile",
+    "image_tag": "olivares-appliance-image-toolchain:debian13-kiwi-11.0.4",
+    "invocation_note": "A container build of a disk image is privileged: the documented route starts the runtime through sudo, shares host device nodes for loop devices and adds the capabilities above. Non-privileged builds are not possible in container mode, so this toolchain runs only on a disposable runner that shares no host with another build.",
+    "required_capabilities": [
+      "SYS_ADMIN",
+      "MKNOD",
+      "AUDIT_WRITE",
+      "AUDIT_CONTROL"
+    ],
+    "shares_host_dev": true,
+    "version_command": [
+      "kiwi-ng",
+      "--version"
+    ]
+  },
+  "probe": {
+    "accelerator_preference": [
+      "kvm",
+      "tcg"
+    ],
+    "container_timeout_seconds": 300,
+    "loop_image_bytes": 67108864,
+    "probe_note": "The probe allocates only the small image above and starts one machine that never leaves prelaunch. It proves accelerator initialization, a toolchain that starts and reports its version, and loop and mount privilege. It proves no guest boot and no image output.",
+    "qemu_binary": "qemu-system-x86_64",
+    "qemu_machine": "q35",
+    "qemu_timeout_seconds": 30,
+    "required_qmp_status": "prelaunch"
+  },
+  "purpose": "The exact build toolchain an appliance server image recipe runs, and the prerequisite it proves on a disposable hosted runner before a recipe attempt. This lock builds no image and boots no guest.",
+  "recorded_at": "2026-09-22T18:58:06Z",
+  "resolution": {
+    "qualification": "Source metadata closure only; hosted artifacts, ABI, CLI and required data files must pass before eligibility.",
+    "rejected_route": "OBS python3-kiwi 11.0.4-1.1 requires typer >=0.19.0; signed Debian snapshot supplies 0.15.2-1.",
+    "unresolved": []
+  },
+  "runner": {
+    "documented_memory_bytes": 16000000000,
+    "documented_note": "Published runner figures are decimal GB. Actual free bytes, processor and memory values are measured; no capacity conclusion follows from the label.",
+    "documented_ssd_bytes": 14000000000,
+    "documented_vcpu": 4,
+    "job_ceiling_minutes": 360,
+    "labels": [
+      "ubuntu-latest"
+    ]
+  },
+  "schema": "olivares-appliance-image-toolchain-lock/v1",
+  "toolchain": {
+    "boxed_plugin": {
+      "reason": "The boxed plugin fetches and updates its box images from the Virtualization:Appliances:SelfContained project at run time, which is an implicit latest this lock refuses, and its default mode requires KVM, which a standard hosted runner does not document. This lock uses the documented container route instead: the build host is the same distribution as the target image, which the build host constraints describe as the most compatible case.",
+      "used": false,
+      "version": null
+    },
+    "dracut_modules_dir": "/usr/share/kiwi/dracut/modules.d",
+    "kiwi": {
+      "filename": "kiwi-11.0.4.tar.gz",
+      "package": "kiwi",
+      "package_version": "11.0.4",
+      "sha256": "e217c3d11f73e24ac4a8759fa17b5d13faaf935d527ca7a07374d6a84793926d",
+      "upstream_version": "11.0.4"
+    },
+    "python": {
+      "extras": [],
+      "implementation": "CPython",
+      "packages": [
+        {
+          "metadata_sha256": "2350d441079da7694bbd9dcaa13cc96ce3b0f76c9ce21811be607a88a4258040",
+          "name": "kiwi",
+          "purpose": "runtime",
+          "release_metadata_url": "https://pypi.org/pypi/kiwi/11.0.4/json",
+          "requires_dist": [
+            "PyYAML>=5.4.0",
+            "anymarkup-core>=0.8.0; extra == \"markup\"",
+            "lxml>=4.6.0",
+            "requests>=2.25.0",
+            "simplejson>=3.17.0",
+            "solv; extra == \"libsolv\"",
+            "toml; extra == \"markup\"",
+            "typer>=0.19.0",
+            "xmltodict>=0.12.0; extra == \"markup\""
+          ],
+          "requires_python": "<4.0,>=3.9",
+          "retained_metadata_file": "kiwi-11.0.4.txt",
+          "selected_artifact": {
+            "filename": "kiwi-11.0.4.tar.gz",
+            "requires_python": "<4.0,>=3.9",
+            "sha256": "e217c3d11f73e24ac4a8759fa17b5d13faaf935d527ca7a07374d6a84793926d",
+            "url": "https://files.pythonhosted.org/packages/8f/32/d8db72c71b2e8da8bb1b4b6b57052a8c63fe4e605e131a7be192392eb436/kiwi-11.0.4.tar.gz",
+            "yanked": false
+          },
+          "version": "11.0.4"
+        },
+        {
+          "metadata_sha256": "328d4740118efd9d51f6a5fce06ec4732a7cbd27bd2dd82db42961666e76b822",
+          "name": "typer",
+          "purpose": "runtime",
+          "release_metadata_url": "https://pypi.org/pypi/typer/0.19.0/json",
+          "requires_dist": [
+            "click>=8.0.0",
+            "typing-extensions>=3.7.4.3",
+            "shellingham>=1.3.0",
+            "rich>=10.11.0"
+          ],
+          "requires_python": ">=3.7",
+          "retained_metadata_file": "typer-0.19.0.txt",
+          "selected_artifact": {
+            "filename": "typer-0.19.0-py3-none-any.whl",
+            "requires_python": ">=3.7",
+            "sha256": "3c6abeb8f01b97b9be84b8dd134956b4c15a3eef0e11382c537dc083886f908f",
+            "url": "https://files.pythonhosted.org/packages/30/5c/3e5e443718ca54ab01a746ceaaea9575af312a4e456426406002994e7c43/typer-0.19.0-py3-none-any.whl",
+            "yanked": false
+          },
+          "version": "0.19.0"
+        },
+        {
+          "metadata_sha256": "d0c463a86ed24144dd112fd1fe43b7c208e52c7d3903c2f51c84acfb5b10c749",
+          "name": "PyYAML",
+          "purpose": "runtime",
+          "release_metadata_url": "https://pypi.org/pypi/PyYAML/6.0.3/json",
+          "requires_dist": [],
+          "requires_python": ">=3.8",
+          "retained_metadata_file": "pypi-PyYAML.txt",
+          "selected_artifact": {
+            "filename": "pyyaml-6.0.3-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl",
+            "requires_python": ">=3.8",
+            "sha256": "0f29edc409a6392443abf94b9cf89ce99889a1dd5376d94316ae5145dfedd5d6",
+            "url": "https://files.pythonhosted.org/packages/74/27/e5b8f34d02d9995b80abcef563ea1f8b56d20134d8f4e5e81733b1feceb2/pyyaml-6.0.3-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl",
+            "yanked": false
+          },
+          "version": "6.0.3"
+        },
+        {
+          "metadata_sha256": "30dda8543e22202de5603da9e688a856cec2169ea89bce5a38a5f11705029adf",
+          "name": "lxml",
+          "purpose": "runtime",
+          "release_metadata_url": "https://pypi.org/pypi/lxml/6.1.3/json",
+          "requires_dist": [
+            "cssselect>=0.7; extra == \"cssselect\"",
+            "html5lib; extra == \"html5\"",
+            "BeautifulSoup4; extra == \"htmlsoup\"",
+            "lxml_html_clean; extra == \"html-clean\""
+          ],
+          "requires_python": ">=3.8",
+          "retained_metadata_file": "pypi-lxml.txt",
+          "selected_artifact": {
+            "filename": "lxml-6.1.3-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl",
+            "requires_python": ">=3.8",
+            "sha256": "b477912f42c5c33405a10c759d22f80cf5af043ae02d95b9d8e5e5bc555739ed",
+            "url": "https://files.pythonhosted.org/packages/ab/8d/8a7b91df0b54d09d25f5f44885d6b3e0a6d6643a8c070191580318d20c42/lxml-6.1.3-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl",
+            "yanked": false
+          },
+          "version": "6.1.3"
+        },
+        {
+          "metadata_sha256": "bcfc6a202592e4e90f5a28ff002694eaa7c58ba741b76077f432b8bee1480111",
+          "name": "requests",
+          "purpose": "runtime",
+          "release_metadata_url": "https://pypi.org/pypi/requests/2.34.2/json",
+          "requires_dist": [
+            "charset_normalizer<4,>=2",
+            "idna<4,>=2.5",
+            "urllib3<3,>=1.26",
+            "certifi>=2023.5.7",
+            "PySocks!=1.5.7,>=1.5.6; extra == \"socks\"",
+            "chardet<8,>=3.0.2; extra == \"use-chardet-on-py3\""
+          ],
+          "requires_python": ">=3.10",
+          "retained_metadata_file": "pypi-requests.txt",
+          "selected_artifact": {
+            "filename": "requests-2.34.2-py3-none-any.whl",
+            "requires_python": ">=3.10",
+            "sha256": "2a0d60c172f83ac6ab31e4554906c0f3b3588d37b5cb939b1c061f4907e278e0",
+            "url": "https://files.pythonhosted.org/packages/a0/f4/c67b0b3f1b9245e8d266f0f112c500d50e5b4e83cb6f3b71b6528104182a/requests-2.34.2-py3-none-any.whl",
+            "yanked": false
+          },
+          "version": "2.34.2"
+        },
+        {
+          "metadata_sha256": "c9dbec728d996c06d89e60d5f4899272c59e1e7808cc85390a4df5fd9ce24474",
+          "name": "simplejson",
+          "purpose": "runtime",
+          "release_metadata_url": "https://pypi.org/pypi/simplejson/4.1.2/json",
+          "requires_dist": [],
+          "requires_python": "!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,!=3.4.*,!=3.5.*,!=3.6.*,!=3.7.*,>=2.7",
+          "retained_metadata_file": "pypi-simplejson.txt",
+          "selected_artifact": {
+            "filename": "simplejson-4.1.2-py3-none-any.whl",
+            "requires_python": "!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,!=3.4.*,!=3.5.*,!=3.6.*,!=3.7.*,>=2.7",
+            "sha256": "93f95f6769f37f4c3763666950b23bf9b9230b60bf1d718845e92db2ebcbf32d",
+            "url": "https://files.pythonhosted.org/packages/95/e2/7f47df8fbd3d9c35902b76c242e21759a27d6e8c030c901c4f0ad93dd10b/simplejson-4.1.2-py3-none-any.whl",
+            "yanked": false
+          },
+          "version": "4.1.2"
+        },
+        {
+          "metadata_sha256": "b10ffc8a5a9025eefe4fd243cd90c54724f6c372d9eface5b4648577bc479039",
+          "name": "click",
+          "purpose": "runtime",
+          "release_metadata_url": "https://pypi.org/pypi/click/8.5.0/json",
+          "requires_dist": [],
+          "requires_python": ">=3.10",
+          "retained_metadata_file": "pypi-click.txt",
+          "selected_artifact": {
+            "filename": "click-8.5.0-py3-none-any.whl",
+            "requires_python": ">=3.10",
+            "sha256": "255bc9599cf7748b4b1a446ccc735421bd08a2ae529a8b88597d3de5664ee360",
+            "url": "https://files.pythonhosted.org/packages/58/50/6c0d534c5f134586a8e1ba4e330569e32f057e33372ae556463212fb4cd3/click-8.5.0-py3-none-any.whl",
+            "yanked": false
+          },
+          "version": "8.5.0"
+        },
+        {
+          "metadata_sha256": "2e567d7ca1b1c70a8e8f23b7204a8bd51b0bacd39e2fe53b33b153cff255ac68",
+          "name": "typing-extensions",
+          "purpose": "runtime",
+          "release_metadata_url": "https://pypi.org/pypi/typing-extensions/4.16.0/json",
+          "requires_dist": [],
+          "requires_python": ">=3.9",
+          "retained_metadata_file": "pypi-typing-extensions.txt",
+          "selected_artifact": {
+            "filename": "typing_extensions-4.16.0-py3-none-any.whl",
+            "requires_python": ">=3.9",
+            "sha256": "481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8",
+            "url": "https://files.pythonhosted.org/packages/49/d3/b8441a820a491ddfc024b0b0cf0393375b75ea13866d9c66727e54c2fc80/typing_extensions-4.16.0-py3-none-any.whl",
+            "yanked": false
+          },
+          "version": "4.16.0"
+        },
+        {
+          "metadata_sha256": "a2178161e3d48f7e3b87be78a12bc8152143d2130b9dff7bb285291e936a6ef7",
+          "name": "shellingham",
+          "purpose": "runtime",
+          "release_metadata_url": "https://pypi.org/pypi/shellingham/1.5.4/json",
+          "requires_dist": [],
+          "requires_python": ">=3.7",
+          "retained_metadata_file": "pypi-shellingham.txt",
+          "selected_artifact": {
+            "filename": "shellingham-1.5.4-py2.py3-none-any.whl",
+            "requires_python": ">=3.7",
+            "sha256": "7ecfff8f2fd72616f7481040475a65b2bf8af90a56c89140852d1120324e8686",
+            "url": "https://files.pythonhosted.org/packages/e0/f9/0595336914c5619e5f28a1fb793285925a8cd4b432c9da0a987836c7f822/shellingham-1.5.4-py2.py3-none-any.whl",
+            "yanked": false
+          },
+          "version": "1.5.4"
+        },
+        {
+          "metadata_sha256": "f1746d8854449e5787bc506d4f15f3d84bed1dea878a1b5ba171bc3793a0e1bb",
+          "name": "rich",
+          "purpose": "runtime",
+          "release_metadata_url": "https://pypi.org/pypi/rich/15.0.0/json",
+          "requires_dist": [
+            "ipywidgets<9,>=7.5.1; extra == \"jupyter\"",
+            "markdown-it-py>=2.2.0",
+            "pygments<3.0.0,>=2.13.0"
+          ],
+          "requires_python": ">=3.9.0",
+          "retained_metadata_file": "pypi-rich.txt",
+          "selected_artifact": {
+            "filename": "rich-15.0.0-py3-none-any.whl",
+            "requires_python": ">=3.9.0",
+            "sha256": "33bd4ef74232fb73fe9279a257718407f169c09b78a87ad3d296f548e27de0bb",
+            "url": "https://files.pythonhosted.org/packages/82/3b/64d4899d73f91ba49a8c18a8ff3f0ea8f1c1d75481760df8c68ef5235bf5/rich-15.0.0-py3-none-any.whl",
+            "yanked": false
+          },
+          "version": "15.0.0"
+        },
+        {
+          "metadata_sha256": "e253a5f40b3258ff3310ddce6b40e6b5a7852f404261c2cffa6d969d8c014e07",
+          "name": "charset-normalizer",
+          "purpose": "runtime",
+          "release_metadata_url": "https://pypi.org/pypi/charset-normalizer/3.5.1/json",
+          "requires_dist": [],
+          "requires_python": ">=3.7",
+          "retained_metadata_file": "pypi-charset-normalizer.txt",
+          "selected_artifact": {
+            "filename": "charset_normalizer-3.5.1-py3-none-any.whl",
+            "requires_python": ">=3.7",
+            "sha256": "6df0ec430f9a831772c23ca5a224cba36517a58a84bb32c32bb59a9fa67c47f6",
+            "url": "https://files.pythonhosted.org/packages/cc/61/d01fc49b8dea277640b55a9e15960dbca9fdc8c9fde18e572d39c59f4019/charset_normalizer-3.5.1-py3-none-any.whl",
+            "yanked": false
+          },
+          "version": "3.5.1"
+        },
+        {
+          "metadata_sha256": "724599748057193c3fa6f98e11c76d7acc14a7b0d005bc2a506fc8e2ec41c117",
+          "name": "idna",
+          "purpose": "runtime",
+          "release_metadata_url": "https://pypi.org/pypi/idna/3.20/json",
+          "requires_dist": [
+            "ruff>=0.16.0; extra == \"all\"",
+            "mypy>=1.11.2; extra == \"all\"",
+            "ty>=0.0.37; extra == \"all\"",
+            "pytest>=8.3.2; extra == \"all\"",
+            "hypothesis>=6.141.1; extra == \"all\"",
+            "coverage>=7.10.0; extra == \"all\""
+          ],
+          "requires_python": ">=3.9",
+          "retained_metadata_file": "pypi-idna.txt",
+          "selected_artifact": {
+            "filename": "idna-3.20-py3-none-any.whl",
+            "requires_python": ">=3.9",
+            "sha256": "ab7ae7122974553370f0bdb919e1a960b2cd1bc1ef0276416d896db81c14582c",
+            "url": "https://files.pythonhosted.org/packages/58/a2/bb081bab032533a855d44de1d56f8e8426114ff1ba5d1f07a438a0a654f8/idna-3.20-py3-none-any.whl",
+            "yanked": false
+          },
+          "version": "3.20"
+        },
+        {
+          "metadata_sha256": "fe033abdf4e116777f2062304b5442660092498d27f55f0ff6968f86d064bb5c",
+          "name": "urllib3",
+          "purpose": "runtime",
+          "release_metadata_url": "https://pypi.org/pypi/urllib3/2.8.0/json",
+          "requires_dist": [
+            "brotli>=1.2.0; platform_python_implementation == \"CPython\" and extra == \"brotli\"",
+            "brotlicffi>=1.2.0.0; platform_python_implementation != \"CPython\" and extra == \"brotli\"",
+            "h2<5,>=4; extra == \"h2\"",
+            "pysocks!=1.5.7,<2.0,>=1.5.6; extra == \"socks\"",
+            "backports-zstd>=1.0.0; python_version < \"3.14\" and extra == \"zstd\""
+          ],
+          "requires_python": ">=3.10",
+          "retained_metadata_file": "pypi-urllib3.txt",
+          "selected_artifact": {
+            "filename": "urllib3-2.8.0-py3-none-any.whl",
+            "requires_python": ">=3.10",
+            "sha256": "0cf3cae568d36aa9576b28dfb35f11328f1cb974ca7647d9475ebb86c75ac6e3",
+            "url": "https://files.pythonhosted.org/packages/92/9d/c4e665119135114480843e7ab388fa94d8480650450e6f8e26b70d323a4c/urllib3-2.8.0-py3-none-any.whl",
+            "yanked": false
+          },
+          "version": "2.8.0"
+        },
+        {
+          "metadata_sha256": "3b94efeb879dddf7172a6ab03cd53b68e76f046c11893249d6c17e99a0293a3c",
+          "name": "certifi",
+          "purpose": "runtime",
+          "release_metadata_url": "https://pypi.org/pypi/certifi/2026.7.22/json",
+          "requires_dist": [],
+          "requires_python": ">=3.7",
+          "retained_metadata_file": "pypi-certifi.txt",
+          "selected_artifact": {
+            "filename": "certifi-2026.7.22-py3-none-any.whl",
+            "requires_python": ">=3.7",
+            "sha256": "62f22742b58a1a33014a2b6b706588a8d7e2a88ae7bd1a6ebe8c992928483775",
+            "url": "https://files.pythonhosted.org/packages/0b/a7/71ac2cff56fec219ed242bb11b8efb69fcc4bec75db06fb7bfe35de520e6/certifi-2026.7.22-py3-none-any.whl",
+            "yanked": false
+          },
+          "version": "2026.7.22"
+        },
+        {
+          "metadata_sha256": "093d54bb83e6c89afa23d4a62bc054a390b94888729f1589c0c0d2e1950db1b8",
+          "name": "markdown-it-py",
+          "purpose": "runtime",
+          "release_metadata_url": "https://pypi.org/pypi/markdown-it-py/4.2.0/json",
+          "requires_dist": [
+            "mdurl~=0.1",
+            "psutil; extra == \"benchmarking\"",
+            "pytest; extra == \"benchmarking\"",
+            "pytest-benchmark; extra == \"benchmarking\"",
+            "commonmark~=0.9; extra == \"compare\"",
+            "markdown~=3.4; extra == \"compare\"",
+            "mistletoe~=1.0; extra == \"compare\"",
+            "mistune~=3.0; extra == \"compare\"",
+            "panflute~=2.3; extra == \"compare\"",
+            "markdown-it-pyrs; extra == \"compare\"",
+            "linkify-it-py<3,>=1; extra == \"linkify\"",
+            "mdit-py-plugins>=0.5.0; extra == \"plugins\"",
+            "gprof2dot; extra == \"profiling\"",
+            "mdit-py-plugins>=0.5.0; extra == \"rtd\"",
+            "myst-parser; extra == \"rtd\"",
+            "pyyaml; extra == \"rtd\"",
+            "sphinx; extra == \"rtd\"",
+            "sphinx-copybutton; extra == \"rtd\"",
+            "sphinx-design; extra == \"rtd\"",
+            "sphinx-book-theme~=1.0; extra == \"rtd\"",
+            "jupyter_sphinx; extra == \"rtd\"",
+            "ipykernel; extra == \"rtd\"",
+            "coverage; extra == \"testing\"",
+            "pytest; extra == \"testing\"",
+            "pytest-cov; extra == \"testing\"",
+            "pytest-regressions; extra == \"testing\"",
+            "pytest-timeout; extra == \"testing\"",
+            "requests; extra == \"testing\""
+          ],
+          "requires_python": ">=3.10",
+          "retained_metadata_file": "pypi-markdown-it-py.txt",
+          "selected_artifact": {
+            "filename": "markdown_it_py-4.2.0-py3-none-any.whl",
+            "requires_python": ">=3.10",
+            "sha256": "9f7ebbcd14fe59494226453aed97c1070d83f8d24b6fc3a3bcf9a38092641c4a",
+            "url": "https://files.pythonhosted.org/packages/b3/81/4da04ced5a082363ecfa159c010d200ecbd959ae410c10c0264a38cac0f5/markdown_it_py-4.2.0-py3-none-any.whl",
+            "yanked": false
+          },
+          "version": "4.2.0"
+        },
+        {
+          "metadata_sha256": "d48c0f74c08c450aeabfd5e90fc93b01ec127074c0f3e22cfe74a968c4299771",
+          "name": "Pygments",
+          "purpose": "runtime",
+          "release_metadata_url": "https://pypi.org/pypi/pygments/2.21.0/json",
+          "requires_dist": [
+            "colorama>=0.4.6; extra == \"windows-terminal\""
+          ],
+          "requires_python": ">=3.9",
+          "retained_metadata_file": "pypi-pygments.txt",
+          "selected_artifact": {
+            "filename": "pygments-2.21.0-py3-none-any.whl",
+            "requires_python": ">=3.9",
+            "sha256": "2363c69b61c4a97c838da3b130dcd6468f4848992b21a82f2a63ec34377137d9",
+            "url": "https://files.pythonhosted.org/packages/71/46/17f022dd3e953bf20a04a028a21ec746d942f8d2af30fa0f124fa0e6a684/pygments-2.21.0-py3-none-any.whl",
+            "yanked": false
+          },
+          "version": "2.21.0"
+        },
+        {
+          "metadata_sha256": "94e52e3e2762e1f295ad5fca55265aa255c1f6b859f6efb67dbab77cb438f57d",
+          "name": "mdurl",
+          "purpose": "runtime",
+          "release_metadata_url": "https://pypi.org/pypi/mdurl/0.1.2/json",
+          "requires_dist": [],
+          "requires_python": ">=3.7",
+          "retained_metadata_file": "pypi-mdurl.txt",
+          "selected_artifact": {
+            "filename": "mdurl-0.1.2-py3-none-any.whl",
+            "requires_python": ">=3.7",
+            "sha256": "84008a41e51615a49fc9966191ff91509e3c40b939176e643fd50a5c2196b8f8",
+            "url": "https://files.pythonhosted.org/packages/b3/38/89ba8ad64ae25be8de66a6d463314cf1eb366222074cfda9ee839c56a4b4/mdurl-0.1.2-py3-none-any.whl",
+            "yanked": false
+          },
+          "version": "0.1.2"
+        },
+        {
+          "metadata_sha256": "fe8de672becd4c00b8562dca56cafa72e1f207a86f195538e50d5cc2d0459e3b",
+          "name": "poetry-core",
+          "purpose": "build-backend",
+          "release_metadata_url": "https://pypi.org/pypi/poetry-core/2.5.0/json",
+          "requires_dist": [],
+          "requires_python": "<4.0,>=3.10",
+          "retained_metadata_file": "pypi-poetry-core.txt",
+          "selected_artifact": {
+            "filename": "poetry_core-2.5.0-py3-none-any.whl",
+            "requires_python": "<4.0,>=3.10",
+            "sha256": "98ee465b66f7e14bb9fbe68fb5e00d0cff184f036993ec94610ae4b5612f3add",
+            "url": "https://files.pythonhosted.org/packages/b7/25/7ed0a2ea4fe12f7fd0394387b5debbcd6fdbd06e5ac9daab96ba11471da8/poetry_core-2.5.0-py3-none-any.whl",
+            "yanked": false
+          },
+          "version": "2.5.0"
+        }
+      ],
+      "version": "3.13"
+    },
+    "required_files": [
+      "/usr/lib/grub/x86_64-efi/modinfo.sh",
+      "/usr/lib/grub/i386-pc/modinfo.sh",
+      "/usr/lib/ISOLINUX/isolinux.bin",
+      "/usr/share/kiwi/dracut/modules.d/55kiwi-dump/module-setup.sh",
+      "/usr/share/kiwi/dracut/modules.d/59kiwi-dump-reboot/module-setup.sh",
+      "/usr/share/kiwi/dracut/modules.d/59kiwi-lib/module-setup.sh"
+    ],
+    "required_programs": [
+      "kiwi-ng",
+      "qemu-img",
+      "mkfs.ext4",
+      "mkfs.vfat",
+      "xorriso",
+      "grub-mkimage",
+      "kpartx",
+      "losetup",
+      "rsync",
+      "cpio",
+      "mksquashfs",
+      "bash",
+      "python3",
+      "mkdir",
+      "cp",
+      "tar",
+      "gzip",
+      "dpkg-scanpackages"
+    ],
+    "route": "isolated-venv-offline-wheel"
+  }
+}

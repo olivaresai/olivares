@@ -21,22 +21,123 @@
   "vendor": "Olivares.AI",
   "homepage": "https://olivares.ai",
   "license": "AGPL-3.0-only",
-  "recommends": ["olivares", "cloud-init", "openssh-server"],
+  "recommends": [
+    "olivares",
+    "cloud-init",
+    "openssh-server"
+  ],
   "contents": [
-    {"src": "bin/appliance-firstboot", "dst": "/usr/bin/appliance-firstboot", "file_info": {"mode": 493}},
-    {"src": "bin/appliance-answers", "dst": "/usr/bin/appliance-answers", "file_info": {"mode": 493}},
-    {"src": "appliance/layer/base/units/olivares-appliance-firstboot.service", "dst": "/usr/lib/systemd/system/olivares-appliance-firstboot.service", "file_info": {"mode": 420}},
-    {"src": "appliance/layer/base/units/olivares-appliance-readiness.service", "dst": "/usr/lib/systemd/system/olivares-appliance-readiness.service", "file_info": {"mode": 420}},
-    {"src": "appliance/layer/base/units/tty1-banner.txt", "dst": "/etc/issue.d/olivares-appliance.issue", "type": "config|noreplace", "file_info": {"mode": 420}},
-    {"dst": "/var/lib/olivares-appliance", "type": "dir", "file_info": {"mode": 448}},
-    {"dst": "/etc/systemd/system/olivares.service.d", "type": "dir", "file_info": {"mode": 493}},
-    {"src": "LICENSE", "dst": "/usr/share/doc/olivares-appliance-base/LICENSE", "file_info": {"mode": 420}},
-    {"src": "NOTICE", "dst": "/usr/share/doc/olivares-appliance-base/NOTICE", "file_info": {"mode": 420}},
-    {"src": "DISCLAIMER.md", "dst": "/usr/share/doc/olivares-appliance-base/DISCLAIMER.md", "file_info": {"mode": 420}}
+    {
+      "src": "bin/appliance-firstboot",
+      "dst": "/usr/bin/appliance-firstboot",
+      "file_info": {
+        "mode": 493
+      }
+    },
+    {
+      "src": "bin/appliance-answers",
+      "dst": "/usr/bin/appliance-answers",
+      "file_info": {
+        "mode": 493
+      }
+    },
+    {
+      "src": "appliance/layer/base/units/olivares-appliance-firstboot.service",
+      "dst": "/usr/lib/systemd/system/olivares-appliance-firstboot.service",
+      "file_info": {
+        "mode": 420
+      }
+    },
+    {
+      "src": "appliance/layer/base/units/olivares-appliance-readiness.service",
+      "dst": "/usr/lib/systemd/system/olivares-appliance-readiness.service",
+      "file_info": {
+        "mode": 420
+      }
+    },
+    {
+      "src": "appliance/layer/base/units/tty1-banner.txt",
+      "dst": "/etc/issue.d/olivares-appliance.issue",
+      "type": "config|noreplace",
+      "file_info": {
+        "mode": 420
+      }
+    },
+    {
+      "dst": "/var/lib/olivares-appliance",
+      "type": "dir",
+      "file_info": {
+        "mode": 448
+      }
+    },
+    {
+      "dst": "/etc/systemd/system/olivares.service.d",
+      "type": "dir",
+      "file_info": {
+        "mode": 493
+      }
+    },
+    {
+      "src": "LICENSE",
+      "dst": "/usr/share/doc/olivares-appliance-base/LICENSE",
+      "file_info": {
+        "mode": 420
+      }
+    },
+    {
+      "src": "NOTICE",
+      "dst": "/usr/share/doc/olivares-appliance-base/NOTICE",
+      "file_info": {
+        "mode": 420
+      }
+    },
+    {
+      "src": "DISCLAIMER.md",
+      "dst": "/usr/share/doc/olivares-appliance-base/DISCLAIMER.md",
+      "file_info": {
+        "mode": 420
+      }
+    },
+    {
+      "src": "appliance/layer/base/config/99-olivares-renderer.conf",
+      "dst": "/etc/cloud/cloud.cfg.d/99-olivares-renderer.cfg",
+      "type": "config|noreplace",
+      "file_info": {
+        "mode": 420
+      }
+    },
+    {
+      "src": "appliance/layer/base/config/10-olivares.conf",
+      "dst": "/etc/NetworkManager/conf.d/10-olivares.conf",
+      "type": "config|noreplace",
+      "file_info": {
+        "mode": 420
+      }
+    }
   ],
   "scripts": {
     "postinstall": "appliance/layer/base/package/postinstall.sh",
     "preremove": "appliance/layer/base/package/preremove.sh",
     "postremove": "appliance/layer/base/package/postremove.sh"
+  },
+  "overrides": {
+    "rpm": {
+      "depends": [
+        "NetworkManager",
+        "polkit",
+        "udisks2",
+        "udisks2-lvm2",
+        "lvm2"
+      ]
+    },
+    "deb": {
+      "depends": [
+        "network-manager",
+        "polkitd",
+        "udisks2",
+        "udisks2-lvm2",
+        "lvm2"
+      ]
+    }
   }
 }

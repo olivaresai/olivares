@@ -40,7 +40,9 @@ func providerProfilePermissions() []auth.Permission {
 	}
 	// The provider-RECORD tiers travel with the profile tiers because they are
 	// declared as one plane, and a role that can administer profiles is not thereby
-	// allowed to register credentials — the tiers stay independent.
+	// allowed to register credentials — the tiers stay independent. The ACCOUNT
+	// tiers travel here for the same reason and stay independent in the same way.
+	out = append(out, providerAccountPermissions()...)
 	return append(out, providerRecordPermissions()...)
 }
 
@@ -65,6 +67,7 @@ func (m *Module) providerProfileRoutes(reg api.RouteRegistrar) {
 	reg.Handle("GET", "/provider-source-bindings/{ref}", permProfileBindingRead, m.handleGetBinding)
 	reg.Handle("POST", "/provider-source-bindings/{ref}/revoke", permProfileBindingAdmin, m.handleRevokeBinding)
 	m.providerRecordRoutes(reg)
+	m.providerAccountRoutes(reg)
 }
 
 // providerProfileDTO is the NORMAL view of a profile: references and labels.
@@ -75,6 +78,7 @@ type providerProfileDTO struct {
 	Driver         string `json:"driver"`
 	EnvironmentRef string `json:"environment_ref"`
 	DisplayName    string `json:"display_name,omitempty"`
+	Accent         string `json:"accent,omitempty"`
 	State          string `json:"state"`
 	// LocalEnvironment reports whether the profile belongs to THIS node's
 	// execution environment; a foreign profile is shown as such and never
@@ -200,7 +204,7 @@ func (m *Module) toProfileDTO(p ProviderProfile) providerProfileDTO {
 	local := m.rt.environmentRef != "" && p.EnvironmentRef == m.rt.environmentRef
 	return providerProfileDTO{
 		ProfileRef: p.Ref, Driver: p.Driver, EnvironmentRef: p.EnvironmentRef,
-		DisplayName: p.DisplayName, State: p.State, AuthSource: p.AuthSource,
+		DisplayName: p.DisplayName, Accent: p.Accent, State: p.State, AuthSource: p.AuthSource,
 		ProviderRecordRef:     p.ProviderRecordRef,
 		SessionTools:          p.SessionTools,
 		SessionToolsDeclared:  p.SessionToolsDeclared,

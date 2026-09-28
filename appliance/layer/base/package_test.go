@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -181,6 +182,60 @@ func TestPackage_ShipsTheDropInDirectoryRecommendsSSHAndKeepsEnablementAcrossRei
 	}
 }
 
+func TestPackage_VisibleHostNameIsOlivaresServer(t *testing.T) {
+	banner := readRepo(t, "appliance/layer/base/units/tty1-banner.txt")
+	if first := strings.SplitN(banner, "\n", 2)[0]; first != `Olivares Server \n` {
+		t.Fatalf("banner starts with %q, want Olivares Server and the host name", first)
+	}
+	for path, want := range map[string]string{
+		firstBootUnitPath: "Olivares Server first boot",
+		readinessUnitPath: "Olivares Server first-boot readiness",
+	} {
+		unit := parseUnit(readRepo(t, path))
+		if got := unit["Description"]; len(got) != 1 || got[0] != want {
+			t.Errorf("%s descriptions %q, want %q", path, got, want)
+		}
+	}
+}
+
+// The maintainer scripts run under dpkg's action words and rpm's instance counts alike: the
+// harness beside them drives each through installation, upgrade, removal and reinstallation
+// under both conventions and both /bin/sh the targets use.
+func TestPackage_MaintainerScriptsBehaveAlikeUnderDpkgAndRpmArguments(t *testing.T) {
+	out, err := exec.Command("bash", "package/maintainer-scripts-test.sh").CombinedOutput()
+	if err != nil {
+		t.Fatalf("the maintainer scripts do not hold under both conventions: %v\n%s", err, out)
+	}
+}
+
+// The base package is built for both of its targets from the one manifest: rpm for the Fedora
+// image, deb for Debian as an installation target.
+func TestPackage_TheBaseTaskBuildsAnRpmAndADebFromTheOneManifest(t *testing.T) {
+	_, task, ok := strings.Cut(readRepo(t, "Taskfile.yml"), "\n  appliance:package:base:\n")
+	if !ok {
+		t.Fatal("Taskfile.yml has no appliance:package:base task")
+	}
+	if end := strings.Index(task, "\n\n"); end >= 0 {
+		task = task[:end]
+	}
+	for _, packager := range []string{"rpm", "deb"} {
+		want := "--config packaging/nfpm/olivares-appliance-base.yaml --packager " + packager +
+			" --target dist/olivares-appliance-base." + packager
+		if strings.Count(task, want) != 1 {
+			t.Errorf("appliance:package:base does not build the %s once: want %q in\n%s", packager, want, task)
+		}
+	}
+}
+
+// The appliance-a1 workflow runs the fixture for both families, each with its own package format
+// and tools: the harness beside the fixture reads the workflow's two jobs and its pinned actions.
+func TestFixture_TheWorkflowRunsTheDebAndTheRpmLegs(t *testing.T) {
+	out, err := exec.Command("bash", "fixture/workflow-legs-test.sh").CombinedOutput()
+	if err != nil {
+		t.Fatalf("appliance-a1 does not run both legs as designed: %v\n%s", err, out)
+	}
+}
+
 func TestFixture_BaseImageIsPinnedByDigest(t *testing.T) {
 	for _, line := range strings.Split(readRepo(t, "appliance/layer/base/fixture/Containerfile"), "\n") {
 		if strings.HasPrefix(line, "FROM ") {
@@ -191,4 +246,62 @@ func TestFixture_BaseImageIsPinnedByDigest(t *testing.T) {
 		}
 	}
 	t.Fatal("no FROM line")
+}
+
+// Each fixture family builds from its own image, pinned by digest, and installs with its own
+// package tools: Debian 13 with apt-get and dpkg, Fedora 44 with dnf and rpm. Neither runs the
+// other's.
+func TestFixture_EachFamilyIsPinnedByDigestAndUsesOnlyItsOwnPackageTools(t *testing.T) {
+	for _, family := range []struct {
+		file, from   string
+		own, foreign []string
+	}{
+		{"Containerfile", `^FROM debian:13@sha256:[0-9a-f]{64}$`, []string{"apt-get install", "dpkg -i "}, []string{"dnf", "rpm "}},
+		{"fedora/Containerfile", `^FROM fedora:44@sha256:[0-9a-f]{64}$`, []string{"dnf -y", "rpm -i "}, []string{"apt-get", "dpkg"}},
+	} {
+		var froms, instructions []string
+		for _, line := range strings.Split(readRepo(t, "appliance/layer/base/fixture/"+family.file), "\n") {
+			if strings.HasPrefix(line, "#") {
+				continue
+			}
+			if strings.HasPrefix(line, "FROM ") {
+				froms = append(froms, line)
+			}
+			instructions = append(instructions, line)
+		}
+		if len(froms) != 1 || !regexp.MustCompile(family.from).MatchString(froms[0]) {
+			t.Errorf("%s: FROM lines %q, want one matching %s", family.file, froms, family.from)
+		}
+		text := strings.Join(instructions, "\n")
+		for _, tool := range family.own {
+			if !strings.Contains(text, tool) {
+				t.Errorf("%s does not use %q", family.file, tool)
+			}
+		}
+		for _, tool := range family.foreign {
+			if strings.Contains(text, tool) {
+				t.Errorf("%s runs %q, the other family's tool", family.file, tool)
+			}
+		}
+	}
+}
+
+// The battery removes the base package with the booted family's own tool, chosen by the
+// container's /etc/os-release: dpkg on Debian, rpm on Fedora. Nowhere else does it remove it.
+func TestFixture_TheBatteryRemovesTheBasePackageWithTheFamilysOwnTool(t *testing.T) {
+	battery := readRepo(t, "appliance/layer/base/fixture/firstboot-battery.sh")
+	_, body, ok := strings.Cut(battery, "\nremove_base() {\n")
+	if !ok {
+		t.Fatal("the battery has no remove_base function")
+	}
+	body, _, _ = strings.Cut(body, "\n}\n")
+	for _, want := range []string{"/etc/os-release", "debian)", "dpkg --remove olivares-appliance-base", "fedora)",
+		"rpm --erase olivares-appliance-base"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("remove_base lacks %q", want)
+		}
+	}
+	if strings.Count(battery, "dpkg --remove") != 1 || strings.Count(battery, "rpm --erase") != 1 {
+		t.Error("the battery removes the base package outside remove_base")
+	}
 }

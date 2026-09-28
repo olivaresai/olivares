@@ -7,9 +7,10 @@
 //
 // Each case builds a throwaway console under TMPDIR — a real tsconfig, the REAL
 // rbac.ts copied in (so can() behaves exactly as it does in production), fixture
-// views, and a stub `cmd/olivares/tools/permsdump` that prints a fixed inventory.
-// The guard is then run unmodified, through its real code path including the Go
-// invocation. Nothing outside the temp dir is touched, and no test-only bypass is
+// views, and an isolated Node executable that simulates the inventory command.
+// The guard runs unmodified, including its exact `go run ./tools/permsdump` argv.
+// This tests that boundary and its protocol, not the real Go inventory producer.
+// Nothing outside the temp dir is touched, and no test-only bypass is
 // added to the guard to make this possible: a check with a back door for its own
 // battery has a back door.
 //
@@ -253,27 +254,17 @@ function makeRepo(
   write('web/src/lib/auth/context.tsx', context)
   for (const [rel, body] of Object.entries(files)) write(rel, body)
 
-  // The stub engine — a real Go program, invoked exactly as the production one is, so
-  // the guard's Go half runs through its real code path.
+  // Only this fixture's child PATH sees the boundary stub. Production still runs Go.
   if (!noGoModule) write('cmd/olivares/go.mod', 'module olivares-selftest-stub\n\ngo 1.26.5\n')
-  write(
-    'cmd/olivares/tools/permsdump/main.go',
-    brokenEngine
-      ? `package main
-
-import "os"
-
-func main() { os.Stderr.WriteString("permsdump: simulated failure\\n"); os.Exit(3) }
-`
-      : `package main
-
-import "fmt"
-
-func main() {
-	fmt.Print(${JSON.stringify(badInventoryJson ? 'this is not json' : JSON.stringify(inventory))})
+  write('fixture-bin/go', `#!${process.execPath}
+if (JSON.stringify(process.argv.slice(2)) !== '["run","./tools/permsdump"]') {
+  process.stderr.write('unexpected inventory argv\\n'); process.exit(4)
 }
-`,
-  )
+${brokenEngine
+    ? "process.stderr.write('permsdump: simulated failure\\n'); process.exit(3)"
+    : `process.stdout.write(${JSON.stringify(badInventoryJson ? 'this is not json' : JSON.stringify(inventory))})`}
+`)
+  fs.chmodSync(path.join(root, 'fixture-bin', 'go'), 0o755)
   return root
 }
 
@@ -310,6 +301,7 @@ function run(root, opts = {}) {
     env: {
       ...process.env,
       OLIVARES_CONSOLE_PERMS_REPO: root,
+      PATH: path.join(root, 'fixture-bin') + path.delimiter + process.env.PATH,
       // Isolated module lookup: a host NODE_PATH must not supply a compiler
       // the fixture deliberately omitted.
       NODE_PATH: '',
@@ -404,6 +396,351 @@ export function View() {
 ${body}
 }
 `
+
+// Producer/consumer regressions from the mainline census. No product source is
+// reshaped for the checker; these fixtures retain the authority and forwarding forms.
+const AUTHORITY = `type Effect = 'push' | 'pull_request' | 'merge'
+type Action = Effect | 'target' | 'abandon' | 'reconcile_push' | 'reconcile_pull_request' | 'reconcile_merge'
+interface Authority { permission: string; aal3: boolean }
+const EFFECTS: Record<Effect, Authority> = {
+  push: { permission: 'gitpublish:push:write', aal3: false },
+  pull_request: { permission: 'gitpublish:pull_request:write', aal3: false },
+  merge: { permission: 'gitpublish:merge:admin', aal3: true },
+}
+const TARGET: Authority = { permission: 'gitpublish:target:admin', aal3: true }
+export function authority(action: Action): Authority {
+  switch (action) {
+    case 'target': case 'abandon': return TARGET
+    case 'reconcile_push': return { ...EFFECTS.push, aal3: false }
+    case 'reconcile_pull_request': return { ...EFFECTS.pull_request, aal3: false }
+    case 'reconcile_merge': return { ...EFFECTS.merge, aal3: false }
+    default: return EFFECTS[action]
+  }
+}
+export function reconcile(effect: Effect): Action { return \`reconcile_\${effect}\` as Action }
+export function intentActions(effect: Effect, allowed: (permission: string) => boolean) {
+  return allowed(authority(reconcile(effect)).permission) && allowed(authority('abandon').permission)
+}
+`
+const AUTHORITY_INVENTORY = {
+  ...INVENTORY,
+  modules: [{ namespace: 'gitpublish', routes: ['push:write', 'pull_request:write', 'merge:admin', 'target:admin'].map(
+    (action) => ({ method: 'POST', pattern: `/${action}`, permission: `gitpublish:${action}` }),
+  ) }],
+  declared: {
+    ...INVENTORY.declared,
+    ...Object.fromEntries(['push:write', 'pull_request:write', 'merge:admin', 'target:admin'].map(
+      (action) => [`gitpublish:${action}`, { forms: ['route:gitpublish'], grants: {
+        viewer: false, editor: action.endsWith(':write'), admin: true, owner: true,
+      } }],
+    )),
+  },
+}
+function dispatchCases() {
+  checkExit(
+    'finite authority plus renamed delegated RBAC covers all four route permissions',
+    makeRepo({
+      'web/src/features/model.ts': AUTHORITY,
+      'web/src/features/dispatch.tsx': `import { intentActions as actions } from './model'
+import { useAuth } from '@/lib/auth/context'
+export function View({ effect }: { effect: 'push' | 'pull_request' | 'merge' }) {
+  const { can } = useAuth(); const control = can('voice:policy:admin')
+  return actions(effect, can) && control
+}
+`,
+    }, { inventory: AUTHORITY_INVENTORY }),
+    0, /check-console-perms: 0 route permission\(s\) have no console surface/,
+    { args: [], stderrMustNotMatch: /gitpublish:.*no can\(\) asks|unreadable/ },
+  )
+  check(
+    'permission argument is followed through a local wrapper',
+    makeRepo({ 'web/src/features/wrapper.tsx': view(`  const refusal = (permission: string) => !can(permission)
+  return refusal('session:read')`) }), [],
+  )
+  check(
+    'returned predicate forwards its consumed argument to aliased RBAC',
+    makeRepo({ 'web/src/features/closure.tsx': `import { can as rbacCan } from '@/lib/auth/rbac'
+import { useAuth } from '@/lib/auth/context'
+function permitsNow(hookCan: (permission: string) => boolean) {
+  if (Math.random() > .5) return hookCan
+  return (permission: string) => rbacCan(permission, { principal: null, tenant: null })
+}
+function startPath(permits: (permission: string) => boolean) { return permits('session:read') }
+export function View() {
+  const { can } = useAuth(); const control = can('voice:policy:admin')
+  return startPath(permitsNow(can)) && control
+}
+` }), [],
+  )
+  const registryFixture = `import { can as rbacCan } from '@/lib/auth/rbac'
+import { useAuth } from '@/lib/auth/context'
+interface View { id: string; permission?: string }
+const VIEWS: View[] = [{ id: 'session', permission: 'session:read' }]
+function viewById(id: string): View | undefined { return VIEWS.find((v) => v.id === id) }
+function permitsNow(hookCan: (permission: string) => boolean) {
+  if (Math.random() > .5) return hookCan
+  return (permission: string) => rbacCan(permission, { principal: null, tenant: null })
+}
+function startPath(permits: (permission: string) => boolean) {
+  const view = viewById('session')
+  return view && view.permission && permits(view.permission)
+}
+export function View() {
+  const { can } = useAuth(); const control = can('voice:policy:admin')
+  return startPath(permitsNow(can)) && control
+}
+`
+  const registryDeclaration = "const VIEWS: View[] = [{ id: 'session', permission: 'session:read' }]"
+  const registryEntries = "[{ id: 'session', permission: 'session:read' }]"
+  const frozenDeclaration = `const VIEWS: readonly View[] = Object.freeze((${registryEntries} satisfies View[]).map(view => Object.freeze(view)))`
+  const frozenRegistryFixture = registryFixture.replace(registryDeclaration, frozenDeclaration)
+  check('registry lookup consumed by a returned predicate remains readable',
+    makeRepo({ 'web/src/features/registry.tsx': frozenRegistryFixture }), [])
+  check('registry lookup does not credit an unrelated array with the same interface',
+    makeRepo({ 'web/src/features/registry.tsx': frozenRegistryFixture.replace(
+      'function viewById',
+      "const INERT: View[] = [{ id: 'inert', permission: 'ghost:read' }]\nfunction viewById",
+    ) }), [])
+  for (const [name, mutation] of [
+    ['push', "VIEWS.push({ id: 'external', permission: window.unknownPermission })"],
+    ['splice', "VIEWS.splice(0, 1, { id: 'external', permission: window.unknownPermission })"],
+    ['property assignment', 'VIEWS[0].permission = window.unknownPermission'],
+    ['array alias', "const alias = VIEWS; alias.push({ id: 'external', permission: window.unknownPermission })"],
+    ['element alias', 'const entry = VIEWS[0]; entry.permission = window.unknownPermission'],
+    ['array escape', 'window.mutateViews(VIEWS)'],
+    ['element escape', 'const entry = VIEWS[0]; window.mutateView(entry)'],
+    ['erased alias', 'const erased: any = VIEWS; window.mutateViews(erased)'],
+    ['closure escape', 'window.keep(() => VIEWS[0])'],
+    ['external collection escape', 'const external: View[] = window.externalViews; external.push(VIEWS[0])'],
+    ['callback array alias', "VIEWS.forEach((_v, _i, all) => all.splice(0, 1, { id: 'external', permission: window.unknownPermission }))"],
+    ['erased callback element', 'VIEWS.forEach((v: any) => { v.permission = window.unknownPermission })'],
+  ]) {
+    check(`unreadable: registry ${name} cannot be credited from its initializer`,
+      makeRepo({ 'web/src/features/registry.tsx': registryFixture.replace(
+        'function viewById', mutation + '\nfunction viewById',
+      ) }), ['unreadable - @ web/src/features/registry.tsx:9', 'unreadable - @ web/src/features/registry.tsx:13'])
+  }
+  for (const [name, declaration] of [
+    ['mutable literal', registryDeclaration],
+    ['readonly type only', `const VIEWS: readonly View[] = ${registryEntries}`],
+    ['outer freeze only', `const VIEWS = Object.freeze(${registryEntries})`],
+    ['element freeze only', `const VIEWS = (${registryEntries} satisfies View[]).map(view => Object.freeze(view))`],
+    ['callback returns original', `const VIEWS = Object.freeze((${registryEntries} satisfies View[]).map(view => view))`],
+    ['callback returns another object', `const VIEWS = Object.freeze((${registryEntries} satisfies View[]).map(view => Object.freeze({ ...view })))`],
+    ['shadow Object.freeze', `const Object = { freeze<T>(value: T): T { return value } }; ${frozenDeclaration}`],
+    ['typed shadow Object.freeze', `const Object = window.foreign as ObjectConstructor; ${frozenDeclaration}`],
+    ['shadow map', `const data = { map(fn: (v: View) => View): View[] { return ${registryEntries} } }; const VIEWS = Object.freeze(data.map(view => Object.freeze(view)))`],
+    ['typed foreign array', 'const data = window.foreign as View[]; const VIEWS = Object.freeze(data.map(view => Object.freeze(view)))'],
+    ['aliased freeze', `const seal = Object.freeze; const VIEWS = seal((${registryEntries} satisfies View[]).map(view => seal(view)))`],
+    ['aliased frozen array', frozenDeclaration.replace('VIEWS:', 'SOURCE:') + '; const VIEWS = SOURCE'],
+    ['opaque permission', frozenDeclaration.replace("permission: 'session:read'", 'permission: window.unknownPermission')],
+    ['duplicate permission with opaque overwrite', frozenDeclaration.replace("permission: 'session:read'", "permission: 'session:read', permission: window.unknownPermission")],
+    ['mutable permission binding', "let permission = 'session:read'; " + frozenDeclaration.replace("permission: 'session:read'", 'permission') + '; permission = window.unknownPermission'],
+  ]) {
+    check(`unreadable: ${name} does not prove a sealed literal permission registry`,
+      makeRepo({ 'web/src/features/registry.tsx': registryFixture.replace(registryDeclaration, declaration) }),
+      ['unreadable - @ web/src/features/registry.tsx:8', 'unreadable - @ web/src/features/registry.tsx:12'])
+  }
+  check('unreadable: an arbitrary find method is not the standard registry lookup',
+    makeRepo({ 'web/src/features/registry.tsx': registryFixture.replace(
+      "const VIEWS: View[] = [{ id: 'session', permission: 'session:read' }]",
+      "const VIEWS = { find(_predicate: unknown): View | undefined { return window.unknownView } }",
+    ) }), ['unreadable - @ web/src/features/registry.tsx:8', 'unreadable - @ web/src/features/registry.tsx:12'])
+  check('unreadable: the standard find on a remote array is not a visible registry',
+    makeRepo({ 'web/src/features/registry.tsx': registryFixture.replace(
+      "const VIEWS: View[] = [{ id: 'session', permission: 'session:read' }]",
+      'const VIEWS: View[] = window.unknownViews',
+    ) }), ['unreadable - @ web/src/features/registry.tsx:8', 'unreadable - @ web/src/features/registry.tsx:12'])
+  check('nested contextual property keeps the existing registry-write semantics',
+    makeRepo({ 'web/src/features/nested.tsx': `interface Step { permission: string }
+const STEPS: Step[] = [{ permission: 'session:read' }]
+${view("  return STEPS.map((step) => ({ step })).filter((row) => can(row.step.permission))")}` }), [])
+  checkExit(
+    'literal authority does not credit three unused effect branches',
+    makeRepo({
+      'web/src/features/model.ts': AUTHORITY,
+      'web/src/features/only-target.tsx': `import { authority } from './model'
+${view("  return can(authority('target').permission)")}`,
+    }, { inventory: AUTHORITY_INVENTORY }),
+    0, /3 route permission\(s\) have no console surface/,
+    { args: [], stderrMustNotMatch: /gitpublish:target:admin.*no can|unreadable/ },
+  )
+  check(
+    'undeclared: renamed delegated RBAC still checks its actual permission',
+    makeRepo({ 'web/src/features/delegated.tsx': `import { useAuth } from '@/lib/auth/context'
+function gate(allowed: (p: string) => boolean) { return allowed('ghost:read') }
+export function View() {
+  const { can: permits } = useAuth()
+  return gate(permits)
+}
+` }), ['undeclared ghost:read @ web/src/features/delegated.tsx:2'],
+  )
+  check(
+    'unreadable: renamed delegated RBAC with a mixed unknown callable origin',
+    makeRepo({ 'web/src/features/mixed.tsx': `import { useAuth } from '@/lib/auth/context'
+function gate(allowed: (p: string) => boolean) { return allowed('session:read') }
+${view("  const unknown = window.unknownPredicate\n  return gate(Math.random() ? can : unknown)")}` }),
+    ['unreadable - @ web/src/features/mixed.tsx:2'],
+  )
+  check(
+    'unreadable: an opaque actual permission survives a local wrapper',
+    makeRepo({ 'web/src/features/opaque.tsx': view(`  const refusal = (permission: string) => !can(permission)
+  return refusal(window.unknownPermission)`) }),
+    ['unreadable - @ web/src/features/opaque.tsx:4'],
+  )
+  check(
+    'unreadable: a dynamic selector asserted to a finite union is not proof',
+    makeRepo({
+      'web/src/features/model.ts': AUTHORITY,
+      'web/src/features/dynamic.tsx': `import { authority } from './model'
+${view("  return can(authority(window.unknownAction as 'target' | 'push').permission)")}`,
+    }), ['unreadable - @ web/src/features/dynamic.tsx:5'],
+  )
+  check(
+    'unreadable: one unknown authority return cannot disappear beside a known branch',
+    makeRepo({ 'web/src/features/unknown-return.tsx': `function authority(action: 'target' | 'push'): { permission: string } {
+  switch (action) {
+    case 'target': return { permission: 'session:read' }
+    default: return window.unknownAuthority
+  }
+}
+${view("  return can(authority(Math.random() ? 'target' : 'push').permission)")}` }),
+    ['unreadable - @ web/src/features/unknown-return.tsx:10'],
+  )
+  check(
+    'unreadable: a returned predicate with no consumer is not an empty permission set',
+    makeRepo({ 'web/src/features/unconsumed.tsx': `import { can as rbacCan } from '@/lib/auth/rbac'
+function permitsNow() { return (permission: string) => rbacCan(permission, { principal: null, tenant: null }) }
+${view("  return control")}` }),
+    ['unreadable - @ web/src/features/unconsumed.tsx:2'],
+  )
+}
+// Independent review witnesses: initializer effects and opaque dispatch must not
+// receive credit; declared built-in signatures do not establish runtime identity.
+function reviewCases() {
+  for (const [name, producer] of [
+    ['initializer assignment', "const result = { permission: 'session:read' }; const ignored = (result.permission = 'ghost:read'); return result"],
+    ['initializer alias assignment', "const result = { permission: 'session:read' }; const alias = result; const ignored = (alias.permission = 'ghost:read'); return result"],
+    ['statement assignment', "const result = { permission: 'session:read' }; result.permission = 'ghost:read'; return result"],
+    ['unused initializer call', "const ignored = window.mutateAuthority(); return { permission: 'session:read' }"],
+  ]) {
+    check(`unreadable: authority ${name} is outside the supported producer subset`,
+      makeRepo({ 'web/src/features/producer.tsx': `function authority() { ${producer} }
+${view("  return can(authority().permission)")}` }),
+      ['unreadable - @ web/src/features/producer.tsx:5'])
+  }
+  check('literal authority remains readable',
+    makeRepo({ 'web/src/features/producer.tsx': `function authority() { return { permission: 'session:read' } }
+${view("  return can(authority().permission)")}` }), [])
+  check('undeclared: literal authority still reports the reaching permission',
+    makeRepo({ 'web/src/features/producer.tsx': `function authority() { return { permission: 'ghost:read' } }
+${view("  return can(authority().permission)")}` }),
+    ['undeclared ghost:read @ web/src/features/producer.tsx:5'])
+  for (const [name, label] of [
+    ['opaque case', 'opaqueCase'],
+    ['ambiguous case', "Math.random() ? 'push' : 'pull'"],
+  ]) {
+    check(`unreadable: ${name} cannot be treated as a nonmatch`,
+      makeRepo({ 'web/src/features/switch.tsx': `declare const opaqueCase: 'push'
+function authority(action: 'push') { switch (action) { case ${label}: return { permission: 'ghost:read' }; default: return { permission: 'session:read' } } }
+${view("  return can(authority('push').permission)")}` }),
+      ['unreadable - @ web/src/features/switch.tsx:6'])
+  }
+  check('literal switch labels retain the selected authority',
+    makeRepo({ 'web/src/features/switch.tsx': `function authority(action: 'push') { switch (action) { case 'pull': return { permission: 'ghost:read' }; default: return { permission: 'session:read' } } }
+${view("  return can(authority('push').permission)")}` }), [])
+
+  const registry = (setup = '', mutation = '') => `interface Entry { id: string; permission: string }
+${setup}
+const VIEWS = Object.freeze([{ id: 'session', permission: 'session:read' }].map(entry => Object.freeze(entry))); ${mutation}
+function viewById(id: string) { return VIEWS.find(entry => entry.id === id) }
+${view("  return can(viewById('session')!.permission)")}`
+  for (const [name, setup, mutation = ''] of [
+    ['Object.freeze replacement', 'Object.freeze = ((value: unknown) => value) as ObjectConstructor["freeze"]', '(VIEWS as Entry[]).splice(0, 1, { id: "session", permission: "ghost:read" })'],
+    ['prototype find replacement', '(Array.prototype as any).find = () => ({ id: "session", permission: "ghost:read" })'],
+    ['prototype map replacement', '(Array.prototype as any).map = () => [{ id: "session", permission: "ghost:read" }]'],
+    ['constructor alias', 'const constructor = Object; constructor.freeze = ((v: unknown) => v) as ObjectConstructor["freeze"]'],
+    ['constructor escape', 'window.replaceFreeze(Object)'],
+    ['method escape', 'window.replaceFreeze(Object.freeze)'],
+    ['prototype alias', 'const prototype = Array.prototype; prototype.find = () => ({ id: "session", permission: "ghost:read" })'],
+    ['prototype escape', 'window.replaceFind(Array.prototype)'],
+    ['reflective method replacement', 'Object.defineProperty(Object, "freeze", { value: (v: unknown) => v })'],
+    ['computed method replacement', '(Object as any)["freeze"] = (v: unknown) => v'],
+    ['global constructor replacement', '(globalThis.Object as any).freeze = (v: unknown) => v'],
+  ]) {
+    check(`unreadable: registry ${name} invalidates standard runtime identity`,
+      makeRepo({ 'web/src/features/builtins.tsx': registry(setup, mutation) }),
+      ['unreadable - @ web/src/features/builtins.tsx:8'])
+  }
+  check('registry with unchanged built-ins remains readable',
+    makeRepo({ 'web/src/features/builtins.tsx': registry() }), [])
+  check('unrelated shadow does not invalidate the actual standard built-ins',
+    makeRepo({ 'web/src/features/builtins.tsx': registry('function unrelated(Object: { freeze: unknown }) { Object.freeze = null }') }), [])
+  check('unreadable: assigned callable alias cannot hide an RBAC origin',
+    makeRepo({ 'web/src/features/assigned.tsx': view(`  let gate = (_: string) => true
+  gate = can
+  return gate('ghost:read')`) }), ['unreadable - @ web/src/features/assigned.tsx:6'])
+  check('unreadable: overwriting an RBAC alias with an unknown callable cannot grant credit',
+    makeRepo({ 'web/src/features/assigned.tsx': view(`  let gate = can
+  gate = window.unknownPredicate
+  return gate('session:read')`) }), ['unreadable - @ web/src/features/assigned.tsx:6'])
+  check('unreadable: an alias of a reassigned callable retains its unknown state',
+    makeRepo({ 'web/src/features/assigned.tsx': view(`  let gate = (_: string) => true
+  gate = can
+  const alias = gate
+  return alias('ghost:read')`) }), ['unreadable - @ web/src/features/assigned.tsx:7'])
+  check('an unchanged unrelated local helper remains outside RBAC',
+    makeRepo({ 'web/src/features/assigned.tsx': view(`  const gate = (_: string) => true
+  return gate('ghost:read')`) }), [])
+}
+function computedGlobalCases() {
+  const registry = (setup) => `interface Entry { id: string; permission: string }
+${setup}
+const VIEWS = Object.freeze([{ id: 'session', permission: 'session:read' }].map(entry => Object.freeze(entry)))
+function viewById(id: string) { return VIEWS.find(entry => entry.id === id) }
+${view("  return can(viewById('session')!.permission)")}`
+  for (const [name, setup] of [
+    ['computed Object', 'globalThis["Object"].freeze = ((v: unknown) => v) as ObjectConstructor["freeze"]'],
+    ['computed Array find', '(globalThis["Array"].prototype as any).find = () => ({ id: "session", permission: "ghost:read" })'],
+    ['computed Array map', '(globalThis["Array"].prototype as any).map = () => [{ id: "session", permission: "ghost:read" }]'],
+    ['window Object', '(window["Object"] as any).freeze = (v: unknown) => v'],
+    ['self Array', '(self["Array"].prototype as any).find = () => ({ id: "session", permission: "ghost:read" })'],
+    ['dynamic global key', 'declare const key: string; (globalThis as any)[key].freeze = (v: unknown) => v'],
+    ['computed global alias', '(globalThis["globalThis"]["Object"] as any).freeze = (v: unknown) => v'],
+    ['escaped global object', 'const root = globalThis; root["Object"].freeze = ((v: unknown) => v) as ObjectConstructor["freeze"]'],
+  ]) {
+    check(`unreadable: ${name} cannot bypass standard constructor inspection`,
+      makeRepo({ 'web/src/features/global.tsx': registry(setup) }),
+      ['unreadable - @ web/src/features/global.tsx:8'])
+  }
+  check('literal non-constructor global property remains readable',
+    makeRepo({ 'web/src/features/global.tsx': registry('const clock = globalThis["performance"]; if (typeof window !== "undefined") window.setTimeout(() => {}, 0)') }), [])
+  check('parenthesized global casts preserve an ordinary property read',
+    makeRepo({ 'web/src/features/global.tsx': registry('const api = (window as unknown as { trustedTypes?: object }).trustedTypes') }), [])
+  check('qualified global type reference has no runtime escape',
+    makeRepo({ 'web/src/features/global.tsx': registry('let event: globalThis.KeyboardEvent | undefined') }), [])
+  check('unchanged computed standard constructor call remains readable',
+    makeRepo({ 'web/src/features/global.tsx': registry('globalThis["Object"].freeze({ inert: true })') }), [])
+  check('shadowed global spelling is not the standard global object',
+    makeRepo({ 'web/src/features/global.tsx': registry('function unrelated(globalThis: any, key: string) { globalThis[key].freeze = (v: unknown) => v }') }), [])
+}
+if (process.argv.includes('--global-only')) {
+  computedGlobalCases()
+  console.log(`computed-global regression: ${results.length - failures}/${results.length} pass`)
+  process.exit(failures ? 1 : 0)
+}
+computedGlobalCases()
+if (process.argv.includes('--review-only')) {
+  reviewCases()
+  console.log(`review regression: ${results.length - failures}/${results.length} pass`)
+  process.exit(failures ? 1 : 0)
+}
+reviewCases()
+dispatchCases()
+if (process.argv.includes('--dispatch-only')) {
+  console.log(`dispatch regression: ${results.length - failures}/${results.length} pass`)
+  process.exit(failures ? 1 : 0)
+}
 
 // ---------------------------------------------------------------------------
 // 1. The NEGATIVE control comes first. If the guard cries on correct code, nothing

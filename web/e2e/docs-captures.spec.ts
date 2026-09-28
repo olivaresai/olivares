@@ -1074,6 +1074,12 @@ const VIEWS: {
     heading: /^Source bindings$/,
   },
   {
+    id: 'provider-accounts',
+    path: '/provider-accounts',
+    settle: 1000,
+    heading: /^Provider accounts$/,
+  },
+  {
     id: 'agent-artifacts',
     path: '/agent-artifacts',
     settle: 1000,

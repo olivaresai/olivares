@@ -910,6 +910,12 @@ func stage1RegistrySrc(perm string) string {
 	return b.String()
 }
 
+// The production registry seals its literal array and every record before export.
+func stage1FrozenRegistrySrc(perm string) string {
+	source := strings.Replace(stage1RegistrySrc(perm), "FeatureView[] = [", "readonly FeatureView[] = Object.freeze(([", 1)
+	return strings.TrimSuffix(source, "]\n") + "] satisfies FeatureView[]).map((view) => Object.freeze(view)))\n"
+}
+
 const stage1Routes = `export const rootRoute = createRootRoute({ component: () => <Outlet /> })
 const loginRoute = createRoute({ getParentRoute: () => rootRoute, path: '/login', component: LoginPage })
 const settingsRoute = createRoute({ getParentRoute: () => appRoute, path: '/settings', component: SettingsPage })
@@ -972,6 +978,47 @@ func stage1Cases(base, script string) []caseResult {
 	// GREEN: a tiny but well-formed console dumps, and the entry hidden inside a comment
 	// is NOT in it — the whole reason this stage uses a compiler.
 	run1("well-formed-console-dumps", 0, `"path": "/beta"`, nil)
+
+	run1("frozen-console-dumps", 0, `"path": "/beta"`, func(dir string) error {
+		return write(dir, "web/src/features/registry.tsx", stage1FrozenRegistrySrc("'a:b:read'"))
+	})
+	for _, tc := range []struct{ name, old, replacement string }{
+		{"computed-freeze", "Object.freeze(([", "Object['freeze']((["},
+		{"optional-freeze", "Object.freeze(([", "Object.freeze?.((["},
+		{"computed-map", ").map(", ")['map']("},
+		{"optional-map", ").map(", ").map?.("},
+		{"different-method", ").map(", ").filter("},
+		{"different-callback", "Object.freeze(view)", "alter(view)"},
+		{"different-record", "Object.freeze(view)", "Object.freeze(other)"},
+		{"computed-record-freeze", "Object.freeze(view)", "Object['freeze'](view)"},
+		{"callback-block", "=> Object.freeze(view)", "=> { return Object.freeze(view) }"},
+		{"async-callback", ".map((view)", ".map(async (view)"},
+		{"default-parameter", ".map((view)", ".map((view = alter())"},
+		{"extra-freeze-argument", "Object.freeze(view)", "Object.freeze(view, other)"},
+		{"extra-map-argument", "Object.freeze(view)))", "Object.freeze(view), other))"},
+		{"extra-outer-argument", "Object.freeze(view)))", "Object.freeze(view)), other)"},
+	} {
+		run1("frozen-refuses-"+tc.name, 2, "not as an array literal", func(dir string) error {
+			return write(dir, "web/src/features/registry.tsx",
+				strings.Replace(stage1FrozenRegistrySrc("'a:b:read'"), tc.old, tc.replacement, 1))
+		})
+	}
+	run1("frozen-permission-is-computed", 2, "non-literal expression", func(dir string) error {
+		return write(dir, "web/src/features/registry.tsx", stage1FrozenRegistrySrc("PERMS.alpha"))
+	})
+	run1("frozen-array-is-incomplete", 2, "not an object literal", func(dir string) error {
+		return write(dir, "web/src/features/registry.tsx",
+			strings.Replace(stage1FrozenRegistrySrc("'a:b:read'"), "[\n", "[\n  ...unknown,\n", 1))
+	})
+
+	run1("frozen-array-is-truncated", 2, "invalid syntax", func(dir string) error {
+		return write(dir, "web/src/features/registry.tsx",
+			strings.TrimSuffix(stage1FrozenRegistrySrc("'a:b:read'"), ")\n"))
+	})
+	run1("frozen-receiver-is-computed", 2, "not as an array literal", func(dir string) error {
+		return write(dir, "web/src/features/registry.tsx",
+			"export const HUB_ORDER = ['operate']\nexport const FEATURE_VIEWS = Object.freeze(buildViews().map((view) => Object.freeze(view)))\n")
+	})
 
 	// RED: the registry stopped being an array literal, so nothing could be enumerated.
 	run1("registry-is-not-an-array", 2, "not as an array literal", func(dir string) error {

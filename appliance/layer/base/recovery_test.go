@@ -107,7 +107,7 @@ func TestStageMachine_AnswersBindOnlyOnceTheirStageAppliedAndTheRefusalNamesAnEx
 		t.Fatalf("first run: %v", err)
 	}
 	rec, err = newMachine(dir, h, &corrected, h.seams()).Run(context.Background())
-	if err != nil || rec.State != Refused || rec.Stage != StageValidate || !strings.Contains(rec.Reason, "appliance-firstboot reconcile") {
+	if err != nil || rec.State != Refused || rec.Stage != StageValidate || !strings.Contains(rec.Reason, "restore the answers") {
 		t.Fatalf("changed answers after the configuration applied: %+v %v", rec, err)
 	}
 }

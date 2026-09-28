@@ -75,6 +75,12 @@ func sessionsClosureRequestBodyDeclarationFor(r moduleRoute) (sessionsClosureReq
 		return sessionsClosureBodyDeclaration(true, sessionsCreateProviderSchema()), true
 	case http.MethodPatch + " /providers/{ref}":
 		return sessionsClosureBodyDeclaration(true, sessionsPatchProviderSchema()), true
+	case http.MethodPost + " /provider-accounts":
+		return sessionsClosureBodyDeclaration(true, sessionsCreateProviderAccountSchema()), true
+	case http.MethodPost + " /provider-accounts/{ref}/adopt":
+		return sessionsClosureBodyDeclaration(true, sessionsAdoptProviderAccountSchema()), true
+	case http.MethodPatch + " /provider-accounts/{ref}":
+		return sessionsClosureBodyDeclaration(true, sessionsPatchProviderAccountMetadataSchema()), true
 	case http.MethodPost + " /provider-profiles/{ref}/retire",
 		http.MethodPost + " /provider-source-bindings/{ref}/revoke",
 		// The connection TEST is bodyless on purpose: everything it needs —
@@ -295,6 +301,27 @@ func sessionsPatchProviderSchema() map[string]any {
 		"display_name", sessionsClosureOptionalString("An explicit string replaces the stored name; null/omission preserves it."),
 		"base_url", sessionsClosureOptionalString("An explicit string replaces the stored endpoint; null/omission preserves it."),
 		"api_key", sessionsClosureNullable(oaObj("type", "string", "minLength", 8, "description", "Rotates the credential in place: it reseals under the SAME reference, so every profile bound to this provider keeps working and the NEXT launch uses the new value — a session already running keeps the one it started with. The previous connection test is cleared, because a verdict measured on a credential that no longer exists is not evidence about the one replacing it.")),
+	))
+}
+
+// sessionsCreateProviderAccountSchema mirrors createProviderAccountRequest: the
+// driver, optional account name and retry identity. The execution
+// environment, the account reference, the home path, its mode and its isolation
+// level are the server's to decide, so none of them is a key of this body.
+func sessionsCreateProviderAccountSchema() map[string]any {
+	return sessionsClosureClosedObject(oaObj(
+		"idempotency_key", sessionsClosureOptionalString("Stable account creation intention: 1 to 128 ASCII letters, digits, hyphens or underscores. Reuse it after an uncertain result with the same driver and name. Empty or null starts a new intention. This key does not grant authority."),
+		"driver", oaObj("type", "string", "minLength", 1, "description", "Provider driver key, lower-cased ([a-z0-9][a-z0-9._-]*). The account's home is built for this driver on the node that serves this execution environment."),
+		"name", sessionsClosureOptionalString("The account's name: lowercase ASCII, a letter first, then letters, digits or '-', at most 32 characters. It is unique in the execution environment across every driver, archived accounts included, and a taken name is refused rather than replaced by another. Empty or null asks the server to generate one: the bare driver name first, then -b, -c and so on."),
+	), "driver")
+}
+
+// sessionsAdoptProviderAccountSchema mirrors adoptProviderAccountRequest: an
+// optional name and nothing else. The isolation level is not a request field,
+// because an adopted home is shared by what it is.
+func sessionsAdoptProviderAccountSchema() map[string]any {
+	return sessionsClosureClosedObject(oaObj(
+		"name", sessionsClosureOptionalString("The account's name: lowercase ASCII, a letter first, then letters, digits or '-', at most 32 characters. It is unique in the profile's execution environment across every driver, archived accounts included, and a taken name is refused rather than replaced by another. Empty or null asks the server to generate one: the bare driver name first, then -b, -c and so on."),
 	))
 }
 

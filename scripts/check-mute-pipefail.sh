@@ -228,10 +228,14 @@ def _cierre_sustitucion(s, i):
     return None
 
 # El sufijo: solo espacios y continuaciones `\`+salto entre el cierre de la palabra y el `||`,
-# un identificador, `=$?`, y ahi ACABA la lista (fin, salto, `;`, `&`, `|`, `#`, `)` o `}`).
+# Accept raw or double-quoted status, followed by the existing list boundary.
 # Un `||` en la linea siguiente SIN `\` no es continuacion en bash: es un error de sintaxis, y
 # no cuenta.
-SUFIJO_RC = re.compile(r'(?:[ \t]|\\\n)*\|\|[ \t]*[A-Za-z_]\w*=\$\?(?=[ \t\n;&|#)}]|$)')
+# After a quoted value, an adjacent # is part of the word, not a comment.
+SUFIJO_RC = re.compile(
+    r'(?:[ \t]|\\\n)*\|\|[ \t]*[A-Za-z_]\w*='
+    r'(?:\$\?(?=[ \t\n;&|#)}]|$)|"\$\?"(?=[ \t\n;&|)}]|$))'
+)
 
 def rc_guardado_ejecutable(cuerpo, tras_apertura, citada):
     """-> True solo si la sustitucion de la asignacion se cierra dentro de `cuerpo` y lo que

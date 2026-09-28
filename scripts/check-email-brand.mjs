@@ -412,114 +412,14 @@ const CANDIDATE_MARKS = [
 // Files that MENTION a mark without being a surface. Each needs a reason, and the
 // reason has to be that it cannot reach a customer's inbox.
 const NOT_A_SURFACE = [
-  {
-    path: 'commercial/license-worker/test/connect-paid-mixed-renewal-d1.test.ts',
-    why: 'A local paid-renewal journey replaces fetch with a Resend response stub and refuses every other destination; it defines no email layout and cannot deliver mail.',
-  },
-  {
-    path: 'commercial/license-worker/test/dodo-cancellation-lifecycle.test.ts',
-    why: 'A local Worker-router regression test intercepts the mail transport and rejects unexpected outbound hosts; it defines no email layout or live delivery.',
-  },
-  {
-    path: 'commercial/license-worker/test/customer-journey-d1.test.ts',
-    why: 'A local customer-journey test intercepts the email transport and checks the emitted result; it introduces no email layout or live delivery.',
-  },
-  // The gate itself and its battery: they name the marks in order to find them.
   { path: 'scripts/check-email-brand.mjs', why: 'this gate' },
-  // A SIBLING gate, and the same reason: check-portal-brand.mjs names api.resend.com and
-  // templates.generated in a COMMENT (its :14) that explains what THIS gate discovers, so
-  // that a reader knows why the licence portal fell outside both. It sends no mail and
-  // decides nothing about how mail looks. Undeclared it made the trunk red — and
-  // `lint:email-brand` is a FAST-LINT, so it was not just main: it bounced every contributor's
-  // branch push, mine among them, for a file none of them touch.
-  //
-  // ⚠ TRES CARRILES ESCRIBIERON ESTA MISMA EXENCIÓN. Dos aterrizaron en `main` —el MISMO path
-  // excluido dos veces, con dos razones distintas, por dos carriles que no se vieron— y el claim
-  // kernel-k3 traía una tercera. Se queda UNA. La duplicación no es el defecto: el defecto es que
-  // la lista aceptó la segunda EN SILENCIO. Quien escribe una exención cree estar añadiendo algo
-  // nuevo y nada se lo desmiente; el día que dos entradas se CONTRADIGAN tampoco dirá nada, y la
-  // segunda es invisible para quien lee la primera. Por eso ahora se rechazan rutas repetidas.
   { path: 'scripts/check-portal-brand.mjs', why: 'a sibling gate' },
-  // Test doubles: a mocked endpoint sends nothing.
-  { path: 'commercial/license-worker/test/e2e-hermetic.test.ts', why: 'mocks the mail API' },
-  // Same shape and for a stricter reason: it stubs globalThis.fetch and THROWS on any host
-  // other than the Resend endpoint, so an accidental real send fails the test. It names the
-  // endpoint in order to refuse everything else, and decides nothing about how mail looks.
-  { path: 'commercial/license-worker/test/dodo-issue.test.ts', why: 'stubs the mail API' },
-  {
-    path: 'commercial/license-worker/test/c03-19-operator-deliveries.test.ts',
-    why: 'stubs the mail API the same way dodo-issue.test.ts does; sends nothing',
-  },
-  {
-    path: 'commercial/license-worker/test/portal-login-csrf.test.ts',
-    why:
-      'the login-CSRF battery. It stubs globalThis.fetch and ASSERTS the endpoint, failing on any ' +
-      'other host, so an accidental real send fails the test — the same shape and the same ' +
-      'reasoning as dodo-issue.test.ts above. It names the endpoint in order to count sends: its ' +
-      'central claim is that a cross-site request causes ZERO of them. It decides nothing about ' +
-      'how mail looks and composes no body.',
-  },
-  // replay battery for H-04, and the SAME shape again: it swaps globalThis.fetch,
-  // THROWS on any host that is not the Resend endpoint ("the worker must not call ..."), and
-  // restores the real fetch afterwards. It names the endpoint in order to refuse every other
-  // one, so it cannot reach an inbox and decides nothing about how mail looks.
-  {
-    path: 'commercial/license-worker/test/h04-delivery-failed-replay.test.ts',
-    why: 'stubs the mail API and refuses any other host; sends nothing',
-  },
-  // The two batteries written for the 2026-08-27 licence-mail change. Both are DISCOVERED — one
-  // names the mail endpoint, the other imports the generated bundle — and both are exactly the
-  // shape this list exists for: they observe what the pipeline produced and send nothing.
-  {
-    path: 'commercial/license-worker/test/portal-cross-device.test.ts',
-    why:
-      'stubs globalThis.fetch and ASSERTS the endpoint, failing on any other host, so an ' +
-      'accidental real send fails the test. It names the endpoint in order to refuse everything ' +
-      'else — same shape and same reasoning as dodo-issue.test.ts above. Its one email-related ' +
-      'claim is that the confirmation code is ABSENT from the body, which is a property of the ' +
-      'body, not a decision about how it looks.',
-  },
-  // invitation battery, discovered by BOTH generated bundles at once — and that is
-  // precisely what it is there to check. It reads `src/email/templates.generated.ts` and
-  // `core/emailtemplate/templates.generated.json` in order to assert a BOUNDARY: the Worker's
-  // bundle carries `portalInvite` because the Worker sends it, and the engine's bundle must NOT,
-  // because the AGPL engine has no business holding a commercial portal's invitation copy. It also
-  // reads `email/templates.mjs` and the seven `email/copy/*.json` as TEXT, to assert that every
-  // locale declares the block and that none of them mentions a password — the portal has none, so
-  // a translation that invents one would be instructing customers to look for something that does
-  // not exist.
-  //
-  // It cannot reach an inbox: the file contains ZERO occurrences of `fetch`, of the mail endpoint,
-  // and of any transport at all (measured, not assumed), and its imports are node:test, node:fs,
-  // the D1 store, the SQLite double and the portal handler. It composes no body and decides
-  // nothing about how mail looks: every email-related claim in it is about what the pipeline
-  // ALREADY produced.
-  {
-    path: 'commercial/license-worker/test/s1320-portal-invitations.test.ts',
-    why:
-      'reads both generated bundles in order to assert the commercial/AGPL boundary between them, ' +
-      'and the locale copy in order to assert that no translation invents a password. No fetch, no ' +
-      'transport, no composed body: it observes what the pipeline produced and sends nothing.',
-  },
-  {
-    path: 'commercial/license-worker/test/email-portal-link.test.ts',
-    why:
-      'reads templates.generated.ts to assert that the four licence shapes are reachable, that ' +
-      'each carries exactly the markers its contract declares, and that the mark is drawn rather ' +
-      'than fetched. It composes through the real renderer and never reaches the network: it is ' +
-      'the same class as core/emailtemplate/emailtemplate_test.go, which asserts the derived ' +
-      'values from the other runtime.',
-  },
+  { path: 'scripts/test-email-private-inventory.mjs', why: 'tests inventory with local file fixtures; sends nothing' },
   { path: 'core/emailtemplate/emailtemplate_test.go', why: 'asserts the derived values' },
-  {
-    path: 'commercial/license-worker/test/h03-refund-portal-d1.test.ts',
-    why: 'The refunded-buyer portal journey (H-03, r116-commerce-prod-readiness) replaces globalThis.fetch with a stub that records the Resend call and throws on any other outbound host; it defines no email layout and cannot deliver mail. Same class as its two sibling journeys above. Declared here on 2026-09-17 when the M3 train exposed it as an undeclared candidate (control-plane step 31).',
-  },
 ]
 
 // Se rechaza al ARRANCAR, antes de mirar un solo fichero: un gate que no puede confiar en su
-// propia configuración no puede dar un verde. Ver el comentario de la exención de
-// check-portal-brand.mjs, arriba, para el caso medido que lo motivó.
+// propia configuración no puede dar un verde. Cada ruta debe tener una sola razón.
 {
   const vistos = new Map()
   const repetidos = []
@@ -577,10 +477,38 @@ function applicable(path, profile) {
   return !/^(commercial|cloud)\//.test(path)
 }
 
+// Private test descriptions stay with the private source. Missing or malformed
+// data must not turn into an empty list of declarations.
+// export-closure: hub-only commercial/email-non-surfaces.json — required when checking private sources.
+function nonSurfaces(profile) {
+  if (profile.name !== 'hub') return NOT_A_SURFACE
+  let privateEntries
+  try {
+    privateEntries = JSON.parse(readFileSync(join(ROOT, 'commercial/email-non-surfaces.json'), 'utf8'))
+  } catch {
+    throw new Error('private email inventory: cannot read a JSON array')
+  }
+  if (!Array.isArray(privateEntries)) throw new Error('private email inventory: expected an array')
+  const seen = new Set(NOT_A_SURFACE.map((entry) => entry.path))
+  for (const entry of privateEntries) {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry) ||
+        Object.keys(entry).sort().join(',') !== 'path,why' ||
+        typeof entry.path !== 'string' || !entry.path.startsWith('commercial/') ||
+        entry.path.split('/').some((part) => !part || part === '.' || part === '..') ||
+        entry.path.includes('\\') || typeof entry.why !== 'string' || !entry.why.trim()) {
+      throw new Error('private email inventory: invalid path or reason')
+    }
+    if (seen.has(entry.path)) throw new Error(`private email inventory: duplicate path ${entry.path}`)
+    seen.add(entry.path)
+  }
+  return [...NOT_A_SURFACE, ...privateEntries]
+}
+
 function run() {
   const problems = []
   const notes = []
   const profile = treeProfile()
+  const notSurfaces = nonSurfaces(profile)
   if (profile.name !== 'hub')
     notes.push(
       `${profile.name} tree — commercial/ and cloud/ are not part of it; their ` +
@@ -641,7 +569,7 @@ function run() {
     ...GENERATED,
     ...TRANSPORT_ONLY.map((t) => t.path),
     ...WAIVED.map((w) => w.path),
-    ...NOT_A_SURFACE.map((n) => n.path),
+    ...notSurfaces.map((n) => n.path),
   ])
   for (const { path, marks } of discover())
     if (!declared.has(path))
@@ -894,7 +822,19 @@ const isEntry =
 if (!isEntry) {
   // imported for its scanner; do nothing
 } else if (argv.includes('--selftest')) {
-  process.exit(selftest() ? 0 : 1)
+  if (!selftest()) process.exit(1)
+  if (treeProfile().name === 'hub') {
+    // export-closure: hub-only scripts/test-email-private-inventory.mjs — private fixture battery.
+    try {
+      execFileSync(process.execPath, [join(ROOT, 'scripts/test-email-private-inventory.mjs')], {
+        cwd: ROOT, stdio: 'inherit', timeout: 30_000,
+      })
+    } catch (error) {
+      console.error('check-email-brand: private inventory battery failed')
+      process.exit(Number.isInteger(error.status) ? error.status : 2)
+    }
+  }
+  process.exit(0)
 } else if (argv.includes('--list')) {
   for (const { path, marks } of discover()) console.log(`${path}\t${marks.join(',')}`)
 } else {

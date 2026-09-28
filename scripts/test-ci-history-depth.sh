@@ -92,6 +92,64 @@ d="$(fixture caso11 "0" rango)"; check "(11) rev-list A..B con fetch-depth: 0 NO
 # 9 · el arbol REAL de este repositorio tiene que estar limpio
 ( cd "$ROOT" && bash "$GATE" >/dev/null 2>&1 ); check "(9) el repositorio real sale limpio" 0 "$?"
 
+
+# Exercise the actual workflow guard, including history that static task discovery
+# cannot follow through a dispatcher. The repositories are local fixtures.
+GUARD="$TMP/checkout-history.sh"
+if python3 - "$ROOT/.github/workflows/mainline-ci.yml" "$GUARD" <<'PY_GUARD'
+import pathlib
+import sys
+import yaml
+
+steps = yaml.safe_load(pathlib.Path(sys.argv[1]).read_text())["jobs"]["control-plane"]["steps"]
+found = [i for i, step in enumerate(steps) if step.get("id") == "checkout-history"]
+if len(found) != 1 or found[0] == 0:
+    raise SystemExit("expected one checkout-history guard after checkout")
+i = found[0]
+checkout, guard = steps[i - 1], steps[i]
+if not checkout.get("uses", "").startswith("actions/checkout@"):
+    raise SystemExit("history guard must immediately follow checkout")
+if checkout.get("with", {}).get("fetch-depth") != 0:
+    raise SystemExit("history guard requires checkout fetch-depth 0")
+if "if" in guard or guard.get("continue-on-error", False):
+    raise SystemExit("history guard must run and fail the job on refusal")
+body = guard.get("run")
+if not isinstance(body, str) or not body.strip():
+    raise SystemExit("history guard has no executable body")
+pathlib.Path(sys.argv[2]).write_text(body)
+PY_GUARD
+then
+    check "(12) runtime guard immediately follows full checkout" 0 0
+    FULL="$TMP/full"
+    SHALLOW="$TMP/shallow"
+    OUTSIDE="$TMP/outside"
+    FAKEBIN="$TMP/bin"
+    mkdir -p "$OUTSIDE" "$FAKEBIN"
+    git init -q "$FULL" &&
+        git -C "$FULL" -c core.hooksPath=/dev/null -c user.name=Fixture \
+            -c user.email=fixture@example.invalid commit -q --allow-empty -m first &&
+        git -C "$FULL" -c core.hooksPath=/dev/null -c user.name=Fixture \
+            -c user.email=fixture@example.invalid commit -q --allow-empty -m second &&
+        git clone -q --depth 1 "file://$FULL" "$SHALLOW" || exit 2
+    check "(13) shallow fixture is actually shallow" true \
+        "$(git -C "$SHALLOW" rev-parse --is-shallow-repository)"
+    ( cd "$FULL" && bash "$GUARD" >"$TMP/full.log" 2>&1 );
+    check "(14) runtime guard accepts a complete repository" 0 "$?"
+    ( cd "$SHALLOW" && bash "$GUARD" >"$TMP/shallow.log" 2>&1 );
+    check "(15) runtime guard refuses a real shallow clone" 2 "$?"
+    ( cd "$OUTSIDE" && GIT_CEILING_DIRECTORIES="$TMP" bash "$GUARD" >"$TMP/outside.log" 2>&1 );
+    check "(16) runtime guard refuses a directory outside Git" 2 "$?"
+    printf '#!/bin/sh\nprintf "false\\n"\nexit 1\n' > "$FAKEBIN/git"
+    chmod +x "$FAKEBIN/git"
+    ( cd "$FULL" && PATH="$FAKEBIN:$PATH" bash "$GUARD" >"$TMP/git-failed.log" 2>&1 );
+    check "(17) failed Git with false output does not grant" 2 "$?"
+    printf '#!/bin/sh\nprintf "unknown\\n"\n' > "$FAKEBIN/git"
+    ( cd "$FULL" && PATH="$FAKEBIN:$PATH" bash "$GUARD" >"$TMP/git-unknown.log" 2>&1 );
+    check "(18) successful Git with unknown output refuses" 2 "$?"
+else
+    check "(12) runtime guard immediately follows full checkout" 0 1
+fi
+
 echo
 echo "check-ci-history-depth selftest: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

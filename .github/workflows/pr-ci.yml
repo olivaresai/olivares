@@ -91,21 +91,7 @@ jobs:
           cache: true
           cache-dependency-path: go.work.sum
       - name: install go-task (pinned)
-        run: |
-          # ⛔ LA GUARDA DE ABAJO YA ESTABA; FALTABAN LAS DOS QUE EVITAN EL FALLO EN VEZ DE
-          # NOMBRARLO. La guarda dice que `task` no se alcanza; `GOBIN` explicito y su `bin` en el
-          # PATH hacen que se alcance. En un runner auto-alojado PERSISTENTE, `go install` honra un
-          # GOBIN que venga del entorno del servicio POR ENCIMA de $GOPATH/bin y deja el binario
-          # fuera del PATH del job — sin fallar, porque instalar si instalo (medido en
-          # `ci-runner-3` el 2026-08-29, corrida 33278242758).
-          export GOBIN="$RUNNER_TEMP/gopath/bin"
-          echo "GOBIN=$GOBIN" >> "$GITHUB_ENV"
-          echo "$GOBIN" >> "$GITHUB_PATH"
-          export PATH="$GOBIN:$PATH"
-          go install github.com/go-task/task/v3/cmd/task@v3.51.1
-          # Installing is not reaching: a step that installs a tool without checking it is on
-          # PATH moves its own failure to whatever runs next.
-          command -v task || { echo "::error::go install reported OK and task is not on PATH"; exit 1; }
+        uses: ./.github/actions/olivares-tool-cache
       - name: licence headers and the AGPL boundary
         run: task lint:spdx lint:boundary
 
@@ -202,19 +188,7 @@ jobs:
           cache: true
           cache-dependency-path: go.work.sum
       - name: install go-task (pinned)
-        run: |
-          # ⛔ LA GUARDA DE ABAJO YA ESTABA; FALTABAN LAS DOS QUE EVITAN EL FALLO EN VEZ DE
-          # NOMBRARLO. La guarda dice que `task` no se alcanza; `GOBIN` explicito y su `bin` en el
-          # PATH hacen que se alcance. En un runner auto-alojado PERSISTENTE, `go install` honra un
-          # GOBIN que venga del entorno del servicio POR ENCIMA de $GOPATH/bin y deja el binario
-          # fuera del PATH del job — sin fallar, porque instalar si instalo (medido en
-          # `ci-runner-3` el 2026-08-29, corrida 33278242758).
-          export GOBIN="$RUNNER_TEMP/gopath/bin"
-          echo "GOBIN=$GOBIN" >> "$GITHUB_ENV"
-          echo "$GOBIN" >> "$GITHUB_PATH"
-          export PATH="$GOBIN:$PATH"
-          go install github.com/go-task/task/v3/cmd/task@v3.51.1
-          command -v task || { echo "::error::go install reported OK and task is not on PATH"; exit 1; }
+        uses: ./.github/actions/olivares-tool-cache
       - name: every workspace module compiles
         run: task build:go
       - name: build the development CLI with its first-party connectors
@@ -370,19 +344,7 @@ jobs:
           cache: true
           cache-dependency-path: go.work.sum
       - name: install go-task (pinned)
-        run: |
-          # ⛔ LA GUARDA DE ABAJO YA ESTABA; FALTABAN LAS DOS QUE EVITAN EL FALLO EN VEZ DE
-          # NOMBRARLO. La guarda dice que `task` no se alcanza; `GOBIN` explicito y su `bin` en el
-          # PATH hacen que se alcance. En un runner auto-alojado PERSISTENTE, `go install` honra un
-          # GOBIN que venga del entorno del servicio POR ENCIMA de $GOPATH/bin y deja el binario
-          # fuera del PATH del job — sin fallar, porque instalar si instalo (medido en
-          # `ci-runner-3` el 2026-08-29, corrida 33278242758).
-          export GOBIN="$RUNNER_TEMP/gopath/bin"
-          echo "GOBIN=$GOBIN" >> "$GITHUB_ENV"
-          echo "$GOBIN" >> "$GITHUB_PATH"
-          export PATH="$GOBIN:$PATH"
-          go install github.com/go-task/task/v3/cmd/task@v3.51.1
-          command -v task || { echo "::error::go install reported OK and task is not on PATH"; exit 1; }
+        uses: ./.github/actions/olivares-tool-cache
       - name: TMPDIR where an extracted binary can actually run
         # Several suites build and EXECUTE a helper. A hardened /tmp is noexec, and the failure
         # reads as a test defect rather than as a mount option.
@@ -501,19 +463,7 @@ jobs:
           cache: true
           cache-dependency-path: go.work.sum
       - name: install go-task (pinned)
-        run: |
-          # ⛔ LA GUARDA DE ABAJO YA ESTABA; FALTABAN LAS DOS QUE EVITAN EL FALLO EN VEZ DE
-          # NOMBRARLO. La guarda dice que `task` no se alcanza; `GOBIN` explicito y su `bin` en el
-          # PATH hacen que se alcance. En un runner auto-alojado PERSISTENTE, `go install` honra un
-          # GOBIN que venga del entorno del servicio POR ENCIMA de $GOPATH/bin y deja el binario
-          # fuera del PATH del job — sin fallar, porque instalar si instalo (medido en
-          # `ci-runner-3` el 2026-08-29, corrida 33278242758).
-          export GOBIN="$RUNNER_TEMP/gopath/bin"
-          echo "GOBIN=$GOBIN" >> "$GITHUB_ENV"
-          echo "$GOBIN" >> "$GITHUB_PATH"
-          export PATH="$GOBIN:$PATH"
-          go install github.com/go-task/task/v3/cmd/task@v3.51.1
-          command -v task || { echo "::error::go install reported OK and task is not on PATH"; exit 1; }
+        uses: ./.github/actions/olivares-tool-cache
       # Retain generation before the existing freshness check can reject a stale
       # committed bundle. Generation is development evidence, not acceptance.
       - name: verify the capture helper with isolated fake build fixtures

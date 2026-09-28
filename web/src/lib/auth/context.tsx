@@ -90,6 +90,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     staleTime: 60_000,
   })
 
+  // Drop the ended session's identity before a later login enables this query.
+  const signedOut = !token
+  useLayoutEffect(() => {
+    if (!signedOut) return
+    queryClient.removeQueries({ queryKey: queryKeys.whoami, exact: true })
+  }, [signedOut, queryClient])
+
   const principal = token ? (whoami.data ?? null) : null
   // Memoize so the array identity is stable per principal (keeps the tenant effect
   // and the context value from recomputing every render).

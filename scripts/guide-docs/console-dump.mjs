@@ -99,7 +99,9 @@ function parseFile(rel) {
   } catch (e) {
     die(`${rel} is unreadable: ${e.message}`)
   }
-  return ts.createSourceFile(abs, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
+  const source = ts.createSourceFile(abs, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
+  if (source.parseDiagnostics.length) die(`${rel} has invalid syntax; refusing to dump a partial roster`)
+  return source
 }
 
 /** The literal value of an object-literal property, or undefined when it is not a literal. */
@@ -132,6 +134,45 @@ function where(node, sf) {
   return `${path.relative(ROOT, sf.fileName)}:${line + 1}`
 }
 
+// Only erase syntax that cannot change the value. Calls are matched separately.
+function unwrap(node) {
+  while (node && (ts.isParenthesizedExpression(node) || ts.isSatisfiesExpression(node))) {
+    node = node.expression
+  }
+  return node
+}
+
+function methodCall(node, name) {
+  return node && ts.isCallExpression(node) && !node.questionDotToken &&
+    !node.typeArguments?.length && node.arguments.length === 1 &&
+    ts.isPropertyAccessExpression(node.expression) && !node.expression.questionDotToken &&
+    node.expression.name.text === name
+}
+
+function freezeArgument(node) {
+  if (!methodCall(node, 'freeze')) return null
+  const receiver = node.expression.expression
+  return ts.isIdentifier(receiver) && receiver.text === 'Object' ? node.arguments[0] : null
+}
+
+// Accept the literal roster, or its exact immutable production construction:
+// Object.freeze((literal satisfies FeatureView[]).map((view) => Object.freeze(view))).
+// This reads syntax; it never executes a wrapper, callback or registry initializer.
+function registryArray(initializer) {
+  if (initializer && ts.isArrayLiteralExpression(initializer)) return initializer
+  const mapped = freezeArgument(initializer)
+  if (!methodCall(mapped, 'map')) return null
+  const array = unwrap(mapped.expression.expression)
+  if (!array || !ts.isArrayLiteralExpression(array)) return null
+  const callback = mapped.arguments[0]
+  if (!ts.isArrowFunction(callback) || callback.modifiers?.length || callback.parameters.length !== 1) return null
+  const parameter = callback.parameters[0]
+  if (!ts.isIdentifier(parameter.name) || parameter.initializer || parameter.dotDotDotToken || parameter.questionToken) return null
+  const frozen = freezeArgument(callback.body)
+  if (!frozen || !ts.isIdentifier(frozen) || frozen.text !== parameter.name.text) return null
+  return array
+}
+
 // --- FEATURE_VIEWS -----------------------------------------------------------------
 const REGISTRY_REL = 'web/src/features/registry.tsx'
 const registry = parseFile(REGISTRY_REL)
@@ -141,10 +182,10 @@ for (const stmt of registry.statements) {
   if (!ts.isVariableStatement(stmt)) continue
   for (const d of stmt.declarationList.declarations) {
     if (!ts.isIdentifier(d.name) || d.name.text !== 'FEATURE_VIEWS') continue
-    if (!d.initializer || !ts.isArrayLiteralExpression(d.initializer)) {
-      die(`${REGISTRY_REL} declares FEATURE_VIEWS but not as an array literal, so it could not be walked`)
+    viewsArray = registryArray(d.initializer)
+    if (!viewsArray) {
+      die(`${REGISTRY_REL} declares FEATURE_VIEWS not as an array literal or its supported immutable wrapper, so it could not be walked`)
     }
-    viewsArray = d.initializer
   }
 }
 if (!viewsArray) die(`${REGISTRY_REL} declares no FEATURE_VIEWS, so no console route was enumerated`)

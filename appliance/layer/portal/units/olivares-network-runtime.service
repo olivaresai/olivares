@@ -1,0 +1,20 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+
+[Unit]
+Description=Initialize the protected network runtime
+Before=olivares-net-guard.socket olivares-net-guard.service olivares-helper-netrestore.socket
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/usr/libexec/olivares/olivares-net-guard initialize-runtime
+RemainAfterExit=yes
+NoNewPrivileges=yes
+ProtectSystem=full
+ProtectHome=yes
+PrivateTmp=yes
+RestrictAddressFamilies=AF_UNIX
+RestrictNamespaces=yes
+CapabilityBoundingSet=CAP_CHOWN CAP_FOWNER CAP_DAC_READ_SEARCH
+UMask=0077

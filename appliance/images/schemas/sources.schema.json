@@ -1,0 +1,151 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/olivaresai/olivares/blob/main/appliance/images/schemas/sources.schema.json",
+  "title": "olivares.ai/appliance-sources/v1",
+  "description": "SOURCES.json, the first member of the source bundle: every other member with its path inside the bundle, kind, byte size, SHA-256 and origin. An srpm member names the binary RPMs of the image it is the source of, and the OpenPGP fingerprint that signed it. The product and recipe members are `git archive` tar files of the pinned commit.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "version",
+    "source",
+    "lock_sha256",
+    "members"
+  ],
+  "properties": {
+    "schema": {
+      "const": "olivares.ai/appliance-sources/v1"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repository",
+        "commit",
+        "tree"
+      ],
+      "properties": {
+        "repository": {
+          "const": "https://github.com/olivaresai/olivares"
+        },
+        "commit": {
+          "$ref": "#/$defs/sha1"
+        },
+        "tree": {
+          "$ref": "#/$defs/sha1"
+        }
+      }
+    },
+    "lock_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "members": {
+      "type": "array",
+      "minItems": 3,
+      "uniqueItems": true,
+      "items": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "path",
+              "kind",
+              "size",
+              "sha256",
+              "origin",
+              "binaries",
+              "signed_by"
+            ],
+            "properties": {
+              "path": {
+                "type": "string",
+                "pattern": "^srpms/[A-Za-z0-9._+-]+\\.src\\.rpm$",
+                "maxLength": 256
+              },
+              "kind": {
+                "const": "srpm"
+              },
+              "size": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "sha256": {
+                "$ref": "#/$defs/sha256"
+              },
+              "origin": {
+                "type": "string",
+                "pattern": "^https://[A-Za-z0-9.-]+/[A-Za-z0-9._+/%-]+\\.src\\.rpm$",
+                "maxLength": 512
+              },
+              "binaries": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9._+-]+-([0-9]+:)?[A-Za-z0-9._+~^-]+-[A-Za-z0-9._+~^]+\\.(x86_64|noarch)$",
+                  "maxLength": 256
+                }
+              },
+              "signed_by": {
+                "type": "string",
+                "pattern": "^[0-9A-F]{40}$"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "path",
+              "kind",
+              "size",
+              "sha256",
+              "origin"
+            ],
+            "properties": {
+              "path": {
+                "enum": [
+                  "product/olivares.tar",
+                  "recipe/appliance-images.tar"
+                ]
+              },
+              "kind": {
+                "enum": [
+                  "product",
+                  "recipe"
+                ]
+              },
+              "size": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "sha256": {
+                "$ref": "#/$defs/sha256"
+              },
+              "origin": {
+                "type": "string",
+                "pattern": "^git\\+https://github\\.com/olivaresai/olivares@[0-9a-f]{40}(#appliance/images)?$"
+              }
+            }
+          }
+        ]
+      }
+    }
+  },
+  "$defs": {
+    "sha1": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  }
+}

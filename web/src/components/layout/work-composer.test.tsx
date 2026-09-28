@@ -115,6 +115,38 @@ async function pickProfile(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe('WorkComposer — what it offers, and to whom', () => {
+  it('keeps two same-driver profiles identifiable while color remains decorative', async () => {
+    api.listProfiles.mockResolvedValue({
+      items: [
+        { ...PROFILE, accent: 'blue' },
+        {
+          ...PROFILE,
+          profile_ref: 'ppf_research',
+          display_name: 'Research account',
+          accent: 'green',
+        },
+      ],
+      has_more: false,
+    })
+    const user = await open()
+    await user.click(screen.getByTestId('launcher-profile'))
+    const first = await screen.findByRole('option', { name: 'Team account' })
+    const second = screen.getByRole('option', { name: 'Research account' })
+    expect(first).toHaveAttribute('aria-description', 'ppf_team')
+    expect(second).toHaveAttribute('aria-description', 'ppf_research')
+    expect(
+      first.querySelector('[data-provider-accent="blue"]'),
+    ).toHaveAttribute('aria-hidden', 'true')
+    expect(
+      second.querySelector('[data-provider-accent="green"]'),
+    ).toHaveAttribute('aria-hidden', 'true')
+    await user.click(second)
+    expect(screen.getByTestId('launcher-profile')).toHaveTextContent(
+      'Research account',
+    )
+    expect(api.createRun).not.toHaveBeenCalled()
+  })
+
   it('is not rendered at all without the permission that would run it', async () => {
     // An offer that ends in a 403 is a magic pushbutton, which the front door does not
     // offer. The SCOPE LINE stays: knowing what the next action applies to is not a

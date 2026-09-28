@@ -1,0 +1,181 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+# Generate reviewable source artifacts. Import them before building the console
+# with pr-web; a generation artifact is not a release or a qualification verdict.
+name: public-generation
+
+on:
+  push:
+    branches: ['qual/public-generation-*']
+  workflow_dispatch:
+    inputs:
+      candidate_sha:
+        description: Exact commit at the dispatched ref
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: public-generation-${{ github.sha }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  generate:
+    if: github.repository == 'olivaresai/olivares' && github.event.deleted != true
+    runs-on: ubuntu-latest
+    # Step ceilings total 110 minutes; retain diagnostics before the job ceiling.
+    timeout-minutes: 125
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: bind the checkout and artifact identity
+        timeout-minutes: 2
+        env:
+          DISPATCH_CANDIDATE: ${{ inputs.candidate_sha }}
+          RUNNER_PLACEMENT: ${{ runner.environment }}
+        run: |
+          set -euo pipefail
+          case "$GITHUB_EVENT_NAME" in
+            push) candidate="$GITHUB_SHA" ;;
+            workflow_dispatch) candidate="$DISPATCH_CANDIDATE" ;;
+            *) exit 2 ;;
+          esac
+          [[ "$candidate" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$candidate" == "$GITHUB_SHA" && "$candidate" == "$(git rev-parse HEAD)" ]]
+          [[ "$RUNNER_PLACEMENT" == github-hosted ]]
+          receipt="$RUNNER_TEMP/public-generation"
+          mkdir -p "$receipt"
+          echo "GENERATION_RECEIPT=$receipt" >> "$GITHUB_ENV"
+          jq -n --arg repository "$GITHUB_REPOSITORY" --arg sha "$candidate" \
+            --arg tree "$(git rev-parse 'HEAD^{tree}')" --arg ref "$GITHUB_REF" \
+            --arg run "$GITHUB_RUN_ID" --arg attempt "$GITHUB_RUN_ATTEMPT" \
+            '{repository:$repository,checkout_sha:$sha,tree:$tree,ref:$ref,run_id:$run,run_attempt:$attempt}' \
+            > "$receipt/identity.json"
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        timeout-minutes: 5
+        with:
+          node-version-file: .node-version
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        timeout-minutes: 5
+        with:
+          dest: ${{ runner.temp }}/setup-pnpm
+          standalone: true
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        timeout-minutes: 10
+        with:
+          go-version-file: go.work
+          cache: false
+      - name: install the pinned task runner
+        timeout-minutes: 5
+        uses: ./.github/actions/olivares-tool-cache
+      - name: record tools and install frozen web dependencies
+        timeout-minutes: 10
+        run: |
+          set -euo pipefail
+          { go version; node --version; pnpm --version; task --version; } > "$GENERATION_RECEIPT/toolchain.txt"
+          pnpm --dir web install --frozen-lockfile
+      - name: generate OpenAPI and the typed web client
+        timeout-minutes: 25
+        run: |
+          set -euo pipefail
+          rc=0
+          task web:codegen > "$GENERATION_RECEIPT/web-codegen.log" 2>&1 || rc=$?
+          printf '%s\n' "$rc" > "$GENERATION_RECEIPT/web-codegen.exit"
+          cat "$GENERATION_RECEIPT/web-codegen.log"
+          exit "$rc"
+      - name: generate SDK operation layers
+        timeout-minutes: 15
+        run: |
+          set -euo pipefail
+          rc=0
+          task sdk:generate > "$GENERATION_RECEIPT/sdk-generate.log" 2>&1 || rc=$?
+          printf '%s\n' "$rc" > "$GENERATION_RECEIPT/sdk-generate.exit"
+          cat "$GENERATION_RECEIPT/sdk-generate.log"
+          exit "$rc"
+      - name: generate CLI reference pages
+        timeout-minutes: 10
+        run: |
+          set -euo pipefail
+          rc=0
+          bash scripts/check-cli-ref-docs.sh --write > "$GENERATION_RECEIPT/cli-reference.log" 2>&1 || rc=$?
+          printf '%s\n' "$rc" > "$GENERATION_RECEIPT/cli-reference.exit"
+          cat "$GENERATION_RECEIPT/cli-reference.log"
+          exit "$rc"
+      - name: generate console and operation guides
+        timeout-minutes: 10
+        run: |
+          set -euo pipefail
+          rc=0
+          bash scripts/check-guide-docs.sh --write > "$GENERATION_RECEIPT/guide-docs.log" 2>&1 || rc=$?
+          printf '%s\n' "$rc" > "$GENERATION_RECEIPT/guide-docs.exit"
+          cat "$GENERATION_RECEIPT/guide-docs.log"
+          exit "$rc"
+      - name: retain the bounded generated delta and all exits
+        if: always() && env.GENERATION_RECEIPT != ''
+        timeout-minutes: 3
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib, json, os, pathlib, subprocess
+          out = pathlib.Path(os.environ['GENERATION_RECEIPT'])
+          def git(*args):
+              return subprocess.check_output(['git', *args])
+          paths = [
+              'web/openapi/openapi.json', 'web/openapi/openapi.beta.json',
+              'web/src/lib/api/openapi.gen.ts',
+              'clients/go/operations.gen.go', 'clients/go/version.gen.go',
+              'clients/python/src/olivares_client/_operations.py',
+              'clients/typescript/src/operations.gen.ts', 'clients/typescript/src/version.gen.ts',
+              'clients/java/src/main/java/ai/olivares/client/Client.java',
+              'clients/java/src/main/java/ai/olivares/client/ApiMetadata.java',
+              'docs-site/src/content/docs/reference/console.md',
+              'docs-site/src/content/docs/reference/grpc.md',
+              'docs-site/src/content/docs/how-to/upgrade-and-rollback.md',
+          ]
+          paths += ['docs-site/src/content/docs/' + locale + 'reference/cli.md'
+                    for locale in ['', 'de/', 'es/', 'fr/', 'ja/', 'ru/', 'zh/']]
+          changed = git('diff', '--name-only', '-z', 'HEAD').decode().rstrip('\0').split('\0')
+          changed = [p for p in changed if p]
+          untracked = git('ls-files', '--others', '--exclude-standard', '-z').decode().rstrip('\0').split('\0')
+          untracked = [p for p in untracked if p]
+          unexpected = sorted(set(changed + untracked) - set(paths))
+          missing = [p for p in paths if not pathlib.Path(p).is_file() or pathlib.Path(p).is_symlink()]
+          tracked = set(git('ls-files', '-z', '--', *paths).decode().rstrip('\0').split('\0'))
+          missing_index = sorted(set(paths) - tracked)
+          commands = ['web-codegen', 'sdk-generate', 'cli-reference', 'guide-docs']
+          exits = {name: (out / (name + '.exit')).read_text().strip()
+                   if (out / (name + '.exit')).exists() else 'not-completed' for name in commands}
+          inventory = {p: hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest()
+                       for p in paths if p not in missing}
+          identity = json.loads((out / 'identity.json').read_text())
+          same_head = git('rev-parse', 'HEAD').decode().strip() == identity['checkout_sha']
+          ok = same_head and not (unexpected or missing or missing_index) and all(v == '0' for v in exits.values())
+          result = dict(generation_complete=ok, checkout_unchanged=same_head, exits=exits,
+                        changed=changed, untracked=untracked, unexpected=unexpected,
+                        missing=missing, missing_index=missing_index, outputs_sha256=inventory)
+          (out / 'result.json').write_text(json.dumps(result, indent=2) + '\n')
+          (out / 'porcelain.txt').write_bytes(git('status', '--porcelain', '--untracked-files=all'))
+          (out / 'generated.patch').write_bytes(git('diff', '--binary', 'HEAD', '--', *paths))
+          files = sorted(p for p in out.iterdir() if p.is_file() and p.name != 'SHA256SUMS')
+          (out / 'SHA256SUMS').write_text(''.join(hashlib.sha256(p.read_bytes()).hexdigest() + '  ' + p.name + '\n' for p in files))
+          if not ok:
+              raise SystemExit('Generation incomplete or outputs outside the declared boundary; inspect result.json')
+          PY
+      - name: upload generation evidence
+        if: always() && env.GENERATION_RECEIPT != ''
+        timeout-minutes: 5
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: official-generation-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.GENERATION_RECEIPT }}/
+          retention-days: 7
+          if-no-files-found: error

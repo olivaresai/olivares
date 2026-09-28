@@ -67,6 +67,14 @@ expect_rc() {
 	actual=$?
 	set -e
 	if [[ "$actual" -ne "$expected" ]]; then
+		# A step that could not look (rc=2) keeps the battery at rc=2; it is never
+		# reported as a finding.
+		if [[ "$actual" -eq 2 ]]; then
+			printf 'test-package-repositories: NO HE PODIDO MIRAR — %s could not look (rc=2, expected rc=%s)\n' \
+				"$label" "$expected" >&2
+			sed -n '1,20p' "$scratch/$label.stderr" >&2
+			exit 2
+		fi
 		printf 'test-package-repositories: HALLAZGO — %s expected rc=%s, got rc=%s\n' \
 			"$label" "$expected" "$actual" >&2
 		sed -n '1,20p' "$scratch/$label.stderr" >&2
@@ -81,6 +89,8 @@ render() {
 	local assets="$2"
 	local channel="$3"
 	local out="$4"
+	local rpm_tree=()
+	[[ -z "${5:-}" ]] || rpm_tree=(--rpm-tree "$5")
 	# The renderer renames its output out of TMPDIR, so it writes inside the short TMPDIR and
 	# the result then moves to OUT.
 	local staged="$short_tmp/render-out"
@@ -97,7 +107,7 @@ render() {
 		--channel "$channel" \
 		--source-date-epoch "$epoch" \
 		--valid-until-epoch "$valid_until" \
-		--out "$staged" || return $?
+		--out "$staged" "${rpm_tree[@]}" || return $?
 	mv -- "$staged" "$out"
 }
 
@@ -113,7 +123,11 @@ verify() {
 		--version "$version" \
 		--channel "$channel" \
 		--openpgp-key "$key_dir/openpgp-public.asc" \
-		--apk-key "$key_dir/apk-public.pem"
+		--apk-key "$key_dir/apk-public.pem" "${@:5}"
+}
+
+verify_s3() {
+	verify "$@" --rpm-s3
 }
 
 expect_rc fixture-stable 0 python3 "$repo_root/scripts/package_repository_test_fixtures.py" \
@@ -199,6 +213,102 @@ expect_rc render-security 0 render \
 expect_rc verify-security 0 verify \
 	"$scratch/key-one" "$scratch/assets-security" security "$scratch/repo-security"
 
+# The publisher's rpm trees come from S3's signed path (publish-packages). The
+# fixture trees are S3's own inside publish step, with stub Fedora tools and
+# key one; render --rpm-tree adopts them, and verify --rpm-s3 checks them with
+# S3's verifier and binds each rpm to its release asset's payload. The stub
+# tools execute from TMPDIR; a host whose short TMPDIR is mounted noexec may
+# name an exec-capable OLIVARES_EXEC_TMPDIR for that step alone.
+s3_tmpdir="${OLIVARES_EXEC_TMPDIR:-$TMPDIR}"
+[[ "$s3_tmpdir" == /* && -d "$s3_tmpdir" ]] || {
+	printf '%s\n' 'test-package-repositories: NO HE PODIDO MIRAR — OLIVARES_EXEC_TMPDIR must be an existing absolute directory' >&2
+	exit 2
+}
+for channel in stable security; do
+	expect_rc "s3-rpm-$channel" 0 env OLIVARES_PACKAGE_REPO_TEST_ONLY=1 TMPDIR="$s3_tmpdir" \
+		bash "$repo_root/scripts/test-rpm-repository.sh" --fixture-publish-tree \
+		--assets "$scratch/assets-$channel" --version "$version" --key-dir "$scratch/key-one" \
+		--out "$scratch/rpm-s3-$channel"
+	expect_rc "render-$channel-s3" 0 render \
+		"$scratch/key-one" "$scratch/assets-$channel" "$channel" "$scratch/repo-$channel-s3" "$scratch/rpm-s3-$channel"
+	# The apt and apk trees are the same bytes whichever rpm path is used.
+	for family in apt apk; do
+		expect_rc "same-$family-$channel" 0 diff -r \
+			"$scratch/repo-$channel/$channel/$family" "$scratch/repo-$channel-s3/$channel/$family"
+	done
+	expect_rc "verify-$channel-s3" 0 verify_s3 \
+		"$scratch/key-one" "$scratch/assets-$channel" "$channel" "$scratch/repo-$channel-s3"
+done
+
+# Mutant 5: the unsigned rpm render is not an S3 tree.
+expect_rc mutant-unsigned-rpm-as-s3 1 verify_s3 \
+	"$scratch/key-one" "$scratch/assets-stable" stable "$scratch/repo-stable"
+# Mutant 6: an S3 rpm changed after its metadata was signed.
+cp -a "$scratch/repo-stable-s3" "$scratch/repo-s3-changed"
+printf 'x' >>"$scratch/repo-s3-changed/stable/rpm/x86_64/olivares_${version}_linux_amd64.rpm"
+expect_rc mutant-s3-rpm-changed 1 verify_s3 \
+	"$scratch/key-one" "$scratch/assets-stable" stable "$scratch/repo-s3-changed"
+# Mutant 9: a file outside S3's declared delivery set in an rpm arch tree.
+cp -a "$scratch/repo-stable-s3" "$scratch/repo-s3-extra"
+printf 'not delivered\n' >"$scratch/repo-s3-extra/stable/rpm/x86_64/extra-unsigned.txt"
+expect_rc mutant-s3-rpm-extra-file 1 verify_s3 \
+	"$scratch/key-one" "$scratch/assets-stable" stable "$scratch/repo-s3-extra"
+grep -q 'unexpected=\[.extra-unsigned.txt.\]' "$scratch/mutant-s3-rpm-extra-file.stderr" || {
+	printf '%s\n' 'test-package-repositories: HALLAZGO — the extra-file mutant was refused for another reason' >&2
+	exit 1
+}
+# Mutant 7: a consistently signed S3 tree whose rpm payload is not the release
+# asset's. Its own metadata agrees; only the payload binding can refuse it.
+cp -a "$scratch/assets-stable" "$scratch/assets-other"
+printf 'x' >>"$scratch/assets-other/olivares_${version}_linux_amd64.rpm"
+expect_rc s3-rpm-other-payload 0 env OLIVARES_PACKAGE_REPO_TEST_ONLY=1 TMPDIR="$s3_tmpdir" \
+	bash "$repo_root/scripts/test-rpm-repository.sh" --fixture-publish-tree \
+	--assets "$scratch/assets-other" --version "$version" --key-dir "$scratch/key-one" \
+	--out "$scratch/rpm-s3-other"
+expect_rc render-stable-other-payload 0 render \
+	"$scratch/key-one" "$scratch/assets-stable" stable "$scratch/repo-s3-other" "$scratch/rpm-s3-other"
+expect_rc mutant-s3-rpm-other-payload 1 verify_s3 \
+	"$scratch/key-one" "$scratch/assets-stable" stable "$scratch/repo-s3-other"
+grep -q 'payload of its authenticated release asset' "$scratch/mutant-s3-rpm-other-payload.stderr" || {
+	printf '%s\n' 'test-package-repositories: HALLAZGO — the payload mutant was refused for another reason' >&2
+	exit 1
+}
+
+# The assembled publish tree holds S3's rpm trees, with repomd.xml.asc and
+# delivery.json for stable and security, and never the unsigned rpm render.
+key_view="$scratch/key-view"
+mkdir -m 0755 "$key_view"
+apk_name="$(jq -r .apk_public_key_name "$scratch/key-one/descriptor.json")"
+cp "$scratch/repo-stable/keys/olivares-package-repository.asc" "$key_view/olivares-packages.asc"
+gpg --homedir "$scratch/key-one/gnupg" --batch --dearmor --output "$key_view/olivares-packages.gpg" \
+	"$key_view/olivares-packages.asc"
+cp "$scratch/repo-stable/keys/$apk_name" "$key_view/$apk_name"
+chmod 0644 "$key_view"/*
+expect_rc assemble-s3 0 python3 "$repo_root/scripts/assemble-package-repository-publish-tree.py" \
+	--stable "$scratch/repo-stable-s3" --security "$scratch/repo-security-s3" \
+	--key-dir "$key_view" --out "$scratch/publish-s3"
+for channel in stable security; do
+	for arch in x86_64 aarch64; do
+		for object in delivery.json repodata/repomd.xml.asc; do
+			[[ -s "$scratch/publish-s3/$channel/rpm/$arch/$object" ]] || {
+				printf 'test-package-repositories: HALLAZGO — publish tree lacks %s/rpm/%s/%s\n' \
+					"$channel" "$arch" "$object" >&2
+				exit 1
+			}
+		done
+		[[ ! -e "$scratch/publish-s3/$channel/rpm/$arch/Packages" ]] || {
+			printf 'test-package-repositories: HALLAZGO — publish tree holds an unsigned rpm tree\n' >&2
+			exit 1
+		}
+	done
+done
+checks=$((checks + 1))
+printf 'ok %02d - publish tree holds S3 rpm-md, repomd.xml.asc and delivery.json for both channels\n' "$checks"
+# Mutant 8: the unsigned rpm render cannot be assembled for publication.
+expect_rc mutant-assemble-unsigned-rpm 1 python3 "$repo_root/scripts/assemble-package-repository-publish-tree.py" \
+	--stable "$scratch/repo-stable" --security "$scratch/repo-security" \
+	--key-dir "$key_view" --out "$scratch/publish-unsigned"
+
 # Mutant 1: a valid repository signed by a different key must be rejected by the
 # externally provisioned client anchors. Rendering and verifying with key two are
 # its positive control before the same tree is checked against key one.
@@ -245,4 +355,4 @@ expect_rc mutant-real-key-absent 2 env \
 checks=$((checks + 1))
 printf 'ok %02d - missing-key failure left no unsigned output\n' "$checks"
 
-printf 'test-package-repositories: OK — %d checks; 4/4 mutants red with positive controls\n' "$checks"
+printf 'test-package-repositories: OK — %d checks; 9/9 mutants red with positive controls\n' "$checks"

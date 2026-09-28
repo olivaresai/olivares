@@ -45,6 +45,7 @@ export const AUTH_ROUTES = [
   '/providers',
   '/provider-profiles',
   '/provider-bindings',
+  '/provider-accounts',
   '/agent-artifacts',
   '/workspace-templates',
   '/eventing',
