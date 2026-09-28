@@ -1,5 +1,5 @@
 {
-  "$description": "Semantic soft fills + lines, DERIVED at runtime from the (theme-switched) hue via color-mix(). They reference var(--success)/var(--surface) literally so a single definition in :root re-resolves in BOTH themes (the browser mixes against whatever the cascade resolves --success/--surface to under .dark). Emitted into :root{} only, exactly as ADM-CORE-04. $value carries a raw CSS color-mix() expression, passed through verbatim.",
+  "$description": "Semantic soft fills + lines, DERIVED at runtime from the (theme-switched) hue via color-mix(). They reference var(--success)/var(--surface) literally so a single definition in :root re-resolves in BOTH themes (the browser mixes against whatever the cascade resolves --success/--surface to under .dark). The brand source read by the transactional emails, the documentation site, the release diagrams and the website parity check; the console's own v26.10 visual system is generated from tokens/console/ instead. $value carries a raw CSS color-mix() expression, passed through verbatim.",
   "derived": {
     "$type": "color",
     "success-soft": {

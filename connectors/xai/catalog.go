@@ -49,10 +49,14 @@ func withCaps(extra ...modelprovider.Capability) []modelprovider.Capability {
 // family is a declared price + capability set keyed by a model-id prefix, matched
 // longest-prefix-first. Prices are USD per million tokens (list, AsOf pricingAsOf).
 type family struct {
-	prefix       string
-	pricing      modelprovider.ModelPricing
-	capabilities []modelprovider.Capability
-	context      int64
+	prefix        string
+	pricing       modelprovider.ModelPricing
+	capabilities  []modelprovider.Capability
+	context       int64
+	defaultEffort string
+	// exactOnly matches the whole ID. grok-4.7-fast is not a public API ID and
+	// must not inherit this row.
+	exactOnly bool
 }
 
 // price builds a USD/MTok list ModelPricing with the cached-read tier (xAI prices a cached
@@ -71,6 +75,21 @@ func price(in, out, cached float64) modelprovider.ModelPricing {
 // the current public pricing page, so the live /v1/language-models endpoint is the source
 // of truth for whatever an account actually has.
 var grokFamilies = []family{
+	// grok-4.7 base tier (<200k prompt tokens) is $2 / $0.50 cached / $6.
+	// At or above 200k, docs.x.ai/developers/pricing lists $4 / $1 cached / $12.
+	// Retrieved 2026-09-27T06:33:24Z. This row stores the base tier only.
+	// Model page: docs.x.ai/developers/grok-4-7. No text output cap, so max
+	// output stays 0. Not an alias for Grok 4.7 Fast.
+	{
+		prefix: "grok-4.7", exactOnly: true, defaultEffort: "high", context: 500_000,
+		pricing: modelprovider.ModelPricing{
+			InputPerMTokUSD: 2, OutputPerMTokUSD: 6, CacheReadPerMTokUSD: 0.50,
+			Currency: "USD", AsOf: "2026-09-27", Source: modelprovider.PricingList,
+		},
+		capabilities: []modelprovider.Capability{
+			modelprovider.CapToolUse, modelprovider.CapVision, modelprovider.CapExtendedThinking,
+		},
+	},
 	{prefix: "grok-4.3", pricing: price(1.25, 2.50, 0.20), capabilities: withCaps(modelprovider.CapVision), context: 1_000_000},
 	{prefix: "grok-4.20-0309-reasoning", pricing: price(1.25, 2.50, 0.20), capabilities: withCaps(modelprovider.CapExtendedThinking), context: 1_000_000},
 	{prefix: "grok-4.20-0309-non-reasoning", pricing: price(1.25, 2.50, 0.20), capabilities: chatCaps, context: 1_000_000},
@@ -88,14 +107,23 @@ var declaredModelIDs = []struct{ id, displayName string }{
 	{"grok-4.20-0309-non-reasoning", "Grok 4.20 (non-reasoning)"},
 	{"grok-4.20-multi-agent-0309", "Grok 4.20 (multi-agent)"},
 	{"grok-build-0.1", "Grok Build 0.1"},
+	{"grok-4.7", "Grok 4.7"},
 }
 
 // familyFor returns the declared pricing/capabilities/context for a model id, matched by the
 // longest family prefix. ok is false when no family matches (the connector then leaves
 // Model.Pricing nil rather than guess a price).
 func familyFor(modelID string) (family, bool) {
+	for _, f := range grokFamilies {
+		if f.exactOnly && modelID == f.prefix {
+			return f, true
+		}
+	}
 	best := -1
 	for i, f := range grokFamilies {
+		if f.exactOnly {
+			continue
+		}
 		if hasPrefix(modelID, f.prefix) {
 			if best < 0 || len(f.prefix) > len(grokFamilies[best].prefix) {
 				best = i
@@ -127,6 +155,7 @@ func buildDeclaredModel(id, displayName string) modelprovider.Model {
 		m.Pricing = &pc
 		m.Capabilities = append([]modelprovider.Capability(nil), f.capabilities...)
 		m.ContextWindow = f.context
+		m.DefaultEffort = f.defaultEffort
 	}
 	return m
 }

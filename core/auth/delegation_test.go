@@ -62,12 +62,10 @@ func newDelegFixtureFromPEP(t *testing.T, pf pepFixture) delegFixture {
 
 	u, err := pf.a.CreateUser(pf.ctx, pf.super, auth.NewUser{
 		Email: "subject@acme.test", DisplayName: "Subject", Password: subjectPassword,
+		Tenant: pf.tenant, Role: auth.RoleEditor,
 	})
 	if err != nil {
 		t.Fatalf("create subject: %v", err)
-	}
-	if _, err := pf.a.GrantMembership(pf.ctx, pf.super, u.ID, pf.tenant, auth.RoleEditor, model.ID("")); err != nil {
-		t.Fatalf("grant subject membership: %v", err)
 	}
 	groupID := createGroupWithMember(t, pf.ctx, pf.st, pf.tenant, u.ID)
 
@@ -281,12 +279,11 @@ func TestMintDelegationClampsTTLToSubjectExpiry(t *testing.T) {
 func TestMintConfinedSubjectRefused(t *testing.T) {
 	f := newDelegFixture(t)
 	// Create a workspace-confined subject: a membership scoped to a workspace id.
-	confined, err := f.a.CreateUser(f.ctx, f.super, auth.NewUser{Email: "confined@acme.test", Password: subjectPassword})
-	if err != nil {
-		t.Fatal(err)
-	}
 	ws := model.NewID()
-	if _, err := f.a.GrantMembership(f.ctx, f.super, confined.ID, f.tenant, auth.RoleEditor, ws); err != nil {
+	if _, err := f.a.CreateUser(f.ctx, f.super, auth.NewUser{
+		Email: "confined@acme.test", Password: subjectPassword,
+		Tenant: f.tenant, Role: auth.RoleEditor, WorkspaceID: ws,
+	}); err != nil {
 		t.Fatal(err)
 	}
 	sess, _, err := f.a.Login(f.ctx, "confined@acme.test", subjectPassword, "127.0.0.1")

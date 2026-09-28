@@ -408,7 +408,7 @@ func (m *Module) handleCreateBinding(w http.ResponseWriter, r *http.Request, mc 
 		out     bindingDTO
 		pending *postureRequestDTO
 	)
-	err := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
+	err := fencedWrite(r, mc, bindingSubjects(in), func(sc store.Scope) error {
 		// EVERYTHING THAT CAN REFUSE THE WRITE RUNS BEFORE THE CLASSIFICATION, and that
 		// ordering is the whole point. A proposal is only worth queueing if approving it can
 		// succeed: whatever a gated create defers to approval, an approver meets as a 409 or
@@ -454,6 +454,9 @@ func (m *Module) handleCreateBinding(w http.ResponseWriter, r *http.Request, mc 
 		out = toBindingDTO(rec)
 		return auditBinding(r.Context(), sc, mc, "create", in)
 	})
+	if writeFenceRefusal(w, err) {
+		return
+	}
 	if verr, ok := err.(validationError); ok {
 		writeJSON(w, http.StatusBadRequest, errorBody(string(verr)))
 		return
@@ -487,7 +490,7 @@ func (m *Module) handleUpdateBinding(w http.ResponseWriter, r *http.Request, mc 
 		out     bindingDTO
 		pending *postureRequestDTO
 	)
-	err := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
+	err := fencedWrite(r, mc, bindingSubjects(in), func(sc store.Scope) error {
 		repo, err := sc.Ext(bindingKind)
 		if err != nil {
 			return err
@@ -532,6 +535,9 @@ func (m *Module) handleUpdateBinding(w http.ResponseWriter, r *http.Request, mc 
 		out = toBindingDTO(rec)
 		return auditBinding(r.Context(), sc, mc, "update", in)
 	})
+	if writeFenceRefusal(w, err) {
+		return
+	}
 	if verr, ok := err.(validationError); ok {
 		writeJSON(w, http.StatusBadRequest, errorBody(string(verr)))
 		return

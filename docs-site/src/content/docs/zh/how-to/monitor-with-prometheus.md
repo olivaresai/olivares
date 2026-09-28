@@ -36,7 +36,8 @@ description: >-
 
 ## SLO 目标（已发布，诚实）
 
-单节点目标——默认拓扑实际所能支撑的——以及 HA 层级：
+以下是单节点和 HA 部署的运营目标，不是拓扑的实测结果或对客户的承诺。
+在声称达到目标之前，须验证具体部署和工作负载；验证状态记录在 `deploy/support-matrix.md` 中。
 
 | SLI | 单节点 | HA 层级（Postgres） |
 |---|---|---|
@@ -46,10 +47,9 @@ description: >-
 | 摄取延迟 p99 | **< 250 ms** | < 150 ms |
 | 摄取成功率 | **99.9%** | 99.95% |
 
-数值中的诚实之处：单节点上的单个写入者无法承诺三个九的可用性，所以文档不这么承诺——
-99.5%（每 28 天约 3 小时 39 分的预算）是单节点的真相，而 99.9% 这一层级是靠
-[HA 拓扑](/zh/tutorials/getting-started/kubernetes/#3-active-passive-高可用) 挣来的，
-而非靠乐观假设。
+在 28 天内，99.5% 的可用性目标允许 **201.6 分钟（3 小时 21 分 36 秒）**不可用时间，
+99.9% 则允许 **40.32 分钟**。仅部署 [HA 拓扑](/zh/tutorials/getting-started/kubernetes/#3-active-passive-高可用) 并不能达到这两个百分比。
+请在规定窗口内测量可用性，并保留该部署的故障与恢复验证证据。这些目标不是合同中的可用性承诺。
 
 ## 加载随附的告警规则
 
@@ -61,6 +61,10 @@ description: >-
 （`OlivaresEventBusSaturated`，队列 >90% 持续 10 分钟）、桥接健康
 （`OlivaresEventBusBridgeDropping`、`OlivaresEventBusBridgeDisconnected`），以及
 账本新鲜度（`OlivaresAuditCheckpointStale`，age > 2h）。
+
+燃尽率配置示例采用 30 天参考周期，上述可用性目标则采用 28 天。请区分告警速率、
+评估窗口和参考周期：14.4× 持续 1 小时、6× 持续 6 小时、1× 持续 3 天，分别消耗
+28 天预算的约 2.14%、5.36% 和 10.71%。随附告警的数值保持不变。
 
 ```yaml
 # prometheus.yml

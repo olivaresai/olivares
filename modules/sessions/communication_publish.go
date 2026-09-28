@@ -621,6 +621,11 @@ func projectInitialDirectNoticeFulfillment(
 	}, dbNow)
 }
 
+// errChannelPublishFenceChanged is the conflict a publish answers when its
+// Channel's publish fence changed after the preflight read it. A prepared
+// replay reads it as a move and prepares again.
+var errChannelPublishFenceChanged = fmt.Errorf("%w: channel_publish_fence_changed", store.ErrConflict)
+
 func lockDirectNoticePublishState(
 	ctx context.Context,
 	tx *communicationTx,
@@ -637,7 +642,7 @@ func lockDirectNoticePublishState(
 	if !equalDirectNoticeChannel(channel, preflight.Channel) || channel.State != ChannelActive ||
 		!oneOf(channel.ContentProtection, ContentProtectionStorage,
 			ContentProtectionApplicationSealed) {
-		return directNoticeLockedState{}, fmt.Errorf("%w: channel_publish_fence_changed", store.ErrConflict)
+		return directNoticeLockedState{}, errChannelPublishFenceChanged
 	}
 	routeGuard, err := lockCommunicationGuardByKind(ctx, tx, CommunicationGuardRouteRevision)
 	if err != nil {

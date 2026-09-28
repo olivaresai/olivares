@@ -24,7 +24,7 @@ enterprise` 时构建，且不出现在公开二进制文件中。商业授权�
 | 路径 | 授权许可 | 它是什么 |
 |---|---|---|
 | `core/` | **AGPL-3.0-only** | 引擎：摄取、事件总线、数据模型、模块运行时、API、授权、审计 |
-| `modules/` | **AGPL-3.0-only** | 这 30 个模块（清点、R/RW 访问图、FinOps、评估、护栏……） |
+| `modules/` | **AGPL-3.0-only** | 这 31 个模块（清点、R/RW 访问图、FinOps、评估、护栏……） |
 | `web/` | **AGPL-3.0-only** | React 界面 |
 | `sdk/` | **Apache-2.0** | 连接器/模块接口、gRPC 契约与共享类型 |
 | `connectors/` | **Apache-2.0** | 各类连接器（Claude、OpenAI、pgAudit、eBPF、云、Slack、SIEM……） |

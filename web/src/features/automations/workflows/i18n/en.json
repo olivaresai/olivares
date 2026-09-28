@@ -149,6 +149,23 @@
     "paused": "Paused: {{reason}}",
     "timeline": "Step timeline",
     "graph": "Read-only run graph",
+    "reauthorize": {
+      "title": "Waiting for reauthentication",
+      "explanation": "This run is paused until its initiator continues it with a current credential no wider than the one it started with.",
+      "planHash": "Plan hash to re-approve",
+      "button": "Reauthorize run",
+      "confirmTitle": "Reauthorize this run?",
+      "confirmDescription": "Your current credential becomes the run's credential and its paused steps resume. It must be a credential of the run's initiator, no wider than the one the run started with.",
+      "confirmPlan": "You re-approve this plan hash",
+      "confirm": "Reauthorize",
+      "done": "Run reauthorized",
+      "forbidden": "This credential cannot continue the run. Use a current credential of the run's initiator that is no wider than the one the run started with, or start a new run.",
+      "conflict": "The run is not waiting for reauthentication, its plan hash does not match, or another reauthorization is in progress. Refresh the run and try again if it is still paused.",
+      "notFound": "The run was not found in this workflow.",
+      "unavailable": "The run was not reauthorized because credential binding is unavailable. Try again.",
+      "failed": "The run could not be reauthorized.",
+      "refresh": "Refresh run"
+    },
     "status": {
       "running": "Running",
       "completed": "Completed",
@@ -164,6 +181,7 @@
       "done": "Done",
       "gate_passed": "Gate passed",
       "blocked": "Blocked",
+      "reauthentication_required": "Reauthentication required",
       "budget_blocked": "Budget blocked",
       "skipped": "Skipped"
     }

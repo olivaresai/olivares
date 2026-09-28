@@ -93,9 +93,9 @@
     "selectPrompt": "Wählen Sie einen Trace aus, um seinen Span-Wasserfall anzuzeigen.",
     "selectPromptHint": "Wählen Sie einen Trace aus der Liste, um jeden erzeugten Span mit Zeiten und Fehlern zu sehen.",
     "exportBtn": "OTLP exportieren",
-    "exportTitle": "OTLP-kompatibles JSON für Jaeger / Tempo / Datadog herunterladen",
+    "exportTitle": "Diese Spur als OTLP/JSON herunterladen. Nicht gegen ein benanntes Backend getestet.",
     "legend": "Akteurlegende",
-    "liveNote": "Read-Model der Hauptbuch-Korrelation: Die Zeilen werden aus den W3C-Trace-IDs abgeleitet, die auf Audit-Hauptbuch-Ereignissen geprägt sind (Auswertungsfenster: die letzten 20.000 Ereignisse). Die Balken sind HAUPTBUCH-EREIGNIS-Fenster, gruppiert nach Engine-Span-ID — die Engine speichert keine OTel-Spans; die vollständigen Spans liegen im OTLP-Collector des Betreibers.",
+    "liveNote": "Read-Model der Hauptbuch-Korrelation: Die Zeilen werden aus den W3C-Trace-IDs abgeleitet, die auf Audit-Hauptbuch-Ereignissen geprägt sind (Auswertungsfenster: die letzten 20.000 Ereignisse). Die Balken sind HAUPTBUCH-EREIGNIS-Fenster, gruppiert nach Engine-Span-ID — die Engine speichert keine OTel-Spans; exportierte Spans unterliegen der Stichprobenquote und haben keinen Verlustzähler, und sie liegen im OTLP-Collector des Betreibers.",
     "columns": {
       "trace": "Trace",
       "started": "Gestartet",

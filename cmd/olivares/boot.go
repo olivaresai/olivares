@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
+	"github.com/olivaresai/olivares/cmd/olivares/internal/githostdiff"
 	mcpc "github.com/olivaresai/olivares/connectors/mcp"
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/api/ratelimit"
@@ -658,6 +659,21 @@ type engine struct {
 	// apply the same refusal to the AUXILIARY listeners it owns (they live outside
 	// core/api's middleware chain).
 	haGate bool
+	// census is the opened store's composition census: its closed registry and
+	// the readiness verdict computed at open (erasurecensus.go). nil when the
+	// store does not expose one.
+	census store.CompositionCensus
+	// declared are the modules this composition declares to the census, each
+	// with its retirement step (erasurecensus.go).
+	declared []declaredModule
+	// retirementPump drives pending retirements on the active writer
+	// (retirementpump.go).
+	retirementPump *retirementPump
+	// retirementStop ends the pump's loop; nil when it was not started.
+	retirementStop context.CancelFunc
+	// standing is the standing reader every fenced writer reads through
+	// (standingport.go).
+	standing *standingPort
 }
 
 // nhiEnforcer is the subset of the governance module the hooks PEP needs for the
@@ -1209,6 +1225,10 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 			return nil, rerr
 		}
 	}
+	// The modules this composition and its edition declare to the census, with
+	// their retirement steps; their readers are declared with the schema, below.
+	contributions := censusContributions()
+	declared := declaredModules(set, contributions)
 	// THE ADMISSION OPENS THE STORE with the audit signer bound to it and the
 	// measurement of the custody this boot actually loaded.
 	//
@@ -1231,7 +1251,12 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 		// the circuit-breaker tables are engine schema too, registered in every
 		// edition for the same reason as the tool-pin table above — lint:schema-parity
 		// compares community against enterprise, and an enterprise-only table fails it.
-		return registerCircuitBreakerSchema(reg)
+		if err := registerCircuitBreakerSchema(reg); err != nil {
+			return err
+		}
+		// The retirement readers are declared before the registry closes, so the
+		// census verdict computed at open covers them.
+		return declareCompositionReaders(reg, declared, contributions)
 	})
 	// THE ADMISSION IS RELEASED HERE, and not earlier or later.
 	//
@@ -1245,6 +1270,11 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open store: %w", err)
 	}
+	// The composition census is read from the store as opened, before the
+	// service guards below wrap it and hide its optional capabilities; so is the
+	// auth partition's reader, which the store declared itself.
+	census, _ := st.(store.CompositionCensus)
+	declared = withAuthPartition(st, declared)
 	// in a region-scoped deployment wrap the store with the deny-closed
 	// residency guard, so every tenant-scoped unit of work for a tenant pinned to
 	// another region is refused (store.ErrResidencyViolation) rather than silently
@@ -1303,6 +1333,24 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	}
 	authr := auth.NewAuthenticator(st, nil)
 	authr.SetTrustedLoginProxies(*loginProxies)
+	// The guards above hide the store's census, so the authenticator is handed
+	// the one read at open for the retirement's absence proof.
+	if census != nil {
+		authr.UseCompositionCensus(census)
+	}
+	// One standing port for every fenced writer: routes read it from their
+	// module context, and modules that write outside a request receive it here,
+	// before Start.
+	standing := &standingPort{reader: authr}
+	for _, m := range set.all {
+		if sc, ok := m.(auth.StandingConsumer); ok {
+			sc.UseStanding(standing)
+		}
+	}
+	// The retirement pump: an offboard in this process wakes it, and it is
+	// started below, once boot cannot fail, on the active writer only.
+	retirement := newRetirementPump(authr, declared, log)
+	authr.SetRetirementWaker(retirement.wake)
 	var communicationStoreWitness *communicationGuardStoreWitness
 	var communicationComposition *communicationComposition
 	if set.sessions != nil {
@@ -1614,9 +1662,10 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 		set.knowledgeStatus.useGuardPostureStore(st, set.sourceScopeResolver)
 	}
 	// late-bind the raw store into the account eraser — it needs the AUTH
-	// partition (Store.AuthMutate), which no tenant-scoped data handle can reach.
+	// partition (Store.AuthMutate), which no tenant-scoped data handle can reach —
+	// and the engine's authenticator, whose offboard wakes the retirement pump.
 	if set.accountEraser != nil {
-		set.accountEraser.useStore(st)
+		set.accountEraser.use(st, authr)
 	}
 	// late-bind the same data handle into the policy truth-loop seams, both
 	// constructed in buildModules before the store existed. Until bound, the
@@ -1682,6 +1731,19 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 		// store's own durable leader fence. No private route calls StopManagedRun yet
 		// (W4); binding the ports makes the module's own admission answerable.
 		set.sessions.UseManagedStopAuthority(authr, authz, st.Leader())
+	}
+	// CM-10: a workflow run binds to the exact credential that starts it, and its
+	// reauthorization binds the successor, through the serving Authenticator. The
+	// binding is resolved at each communication effect by the pair bound above;
+	// orchestration only keeps the opaque handle.
+	if set.orchestration != nil {
+		set.orchestration.UseWorkflowCredentialBinder(authr)
+	}
+	// J10-S3: each publication effect rebuilds its caller from the exact
+	// credential through the serving Authenticator and is authorized by the
+	// same composed Authorizer that gates live routes. Unbound is deny-closed.
+	if set.gitpublish != nil {
+		set.gitpublish.UseAuthority(authr, authz)
 	}
 	// Unit G: late-bind the deployment's DURABLE disposition for the egress
 	// destination control. Without it an absent policy permits on every deployment,
@@ -1837,6 +1899,19 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 				"unchanged", "launching with the host credential variables")
 		}
 		set.sessions.UseProviderProbe(newProviderProbe())
+	}
+	// J10-S3: the publication module's custody and closed git executor. Its
+	// approved bindings come from the operator's source roster, and each
+	// credential only from the sealed secret store under git-host/
+	// (gitpublishcustody.go). Without a sealer or a git executable, both stay
+	// unbound and every publication effect answers unavailable.
+	if set.gitpublish != nil {
+		if custody, executor, gerr := newGitPublication(cfg.DataDir, sourceStore, secretStore, secretStoreSealerPresent); gerr != nil {
+			log.Warn("gitpublish: Git-host publication is unavailable until fixed; every push, pull request and merge is refused", "err", gerr)
+		} else {
+			set.gitpublish.UseCustody(custody)
+			set.gitpublish.UseGit(executor)
+		}
 	}
 
 	// In-place edition: resolve the commercial license by precedence (explicit
@@ -2031,7 +2106,10 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	}}
 
 	apiSrv, err := api.New(api.Options{
-		Store: st, Authenticator: authr, Authorizer: authz, Signer: signer,
+		Store: st, Authenticator: authr, Authorizer: authz, Signer: signer, Standing: standing,
+		// Invitations are mailed only through the deployment's own destination,
+		// with links to the console address the operator declared.
+		InviteSender: newInviteSender(osGetenv, notifyDispatcherOf(set), cfg.PublicAddr, log),
 		// ⛔ EL PRODUCTOR DE EVIDENCIA ES EL AUTENTICADOR, Y SIN ESTA LÍNEA UNA RUTA GOBERNADA
 		// IMPIDE ARRANCAR. checkGovernedRoutes se niega a montar un módulo que registre rutas
 		// gobernadas sin productor, así que mientras esto faltara, el día que un módulo real
@@ -2074,6 +2152,7 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 		// CRUD and POST /v1/console/runtime/reload — add/remove/rotate connectors in
 		// the running engine without a restart. Superadmin + AAL3 gated.
 		SourceRoster: sourceReconcilerSvc,
+		ContentDiff:  githostdiff.New(sourceReconcilerSvc, secretResolver), // J10-S1: reads the roster's running GitHub/GitLab sources.
 		// the console connector-onboarding surface (same reconciler) backs the
 		// descriptor catalog + sealed-credential CRUD + test under
 		// /v1/console/connectors — it seals an inline credential into the secret store
@@ -2242,6 +2321,17 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 			log.Warn("retention-sweep: could not register the sweep loop on the scheduler; periodic retention disposition disabled", "err", err)
 		}
 	}
+	// The FinOps admission recovery, on the same scheduler and behind the same leader gate
+	// as the sweep above. Every minute it retires the claims of callers that stopped before
+	// publishing and releases the holds they named; such a hold is released before it lapses
+	// when two consecutive passes take under three and a half minutes together. Every five
+	// minutes it also sweeps lapsed holds and files the drift that is left. It visits every
+	// served tenant, whether or not a request reaches it (admissionreconcile.go).
+	if recon := newAdmissionReconciler(st, set.finops, log); recon != nil {
+		if err := recon.register(rt); err != nil {
+			log.Warn("finops-admission: could not register the recovery jobs on the scheduler; a stale claim is retired only when its key is retried, and a lapsed hold only expires by its TTL", "err", err)
+		}
+	}
 	// the report schedule pump — fires DUE scheduled reports per tenant
 	// and records each run. nil in the community build (the reporting scheduler is
 	// not wired) or when the operator disabled the cadence — no rug-pull.
@@ -2345,6 +2435,17 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	if pump := newNotifyPump(osGetenv, st, set.notify, log); pump != nil {
 		if err := pump.register(rt); err != nil {
 			log.Warn("notify-dispatch: could not register the pump on the scheduler; notifications will NOT be delivered", "err", err)
+		}
+	}
+
+	// J10-S3: the publication sweep settles stale dispatches as uncertain and
+	// re-observes uncertain intents; it never dispatches. The pump itself skips
+	// a standby node. 0 disables it (warned).
+	if set.gitpublish != nil {
+		if interval, ok := gitpublishSweepInterval(osGetenv(gitpublishSweepIntervalEnv), log); ok {
+			if err := rt.SchedulePeriodic(gitpublishSweepJobName, interval, false, set.gitpublish.SweepPump(st.Leader(), gitpublishSweepTenants(st, log))); err != nil {
+				log.Warn("gitpublish-sweep: could not register the sweep on the scheduler; stale publications are not settled", "err", err)
+			}
 		}
 	}
 
@@ -2480,6 +2581,15 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 		haStop = cancel
 		go haPublisher.run(haCtx, st.Leader().IsLeader)
 	}
+	// The retirement pump runs for the life of the engine, a pass at a time and
+	// only while this node is the active writer; a new leader resumes from the
+	// records. A boot that does not start the runtime does not start it either.
+	var retirementStop context.CancelFunc
+	if !cfg.NoIngest {
+		retirementCtx, cancel := context.WithCancel(context.Background())
+		retirementStop = cancel
+		go retirement.run(retirementCtx, st.Leader().Active)
+	}
 
 	return &engine{
 		store: st, rt: rt, signer: signer, authr: authr, authz: authz,
@@ -2500,6 +2610,8 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 		notifyDispatcher: set.deferredSecrets.notify, secretResolver: secretResolver,
 		bus: bus, metrics: reg, rlStore: rlStore, wifBroker: set.wifBroker,
 		haPublisher: haPublisher, haStop: haStop, haGate: haCfg.Gate,
+		census: census, declared: declared, retirementPump: retirement, retirementStop: retirementStop,
+		standing: standing,
 	}, nil
 }
 
@@ -2581,6 +2693,9 @@ func (e *engine) Close() error {
 	// drops this pod immediately rather than after the endpoint controller notices.
 	if e.haStop != nil {
 		e.haStop()
+	}
+	if e.retirementStop != nil {
+		e.retirementStop()
 	}
 	if e.haPublisher != nil {
 		e.haPublisher.haShutdownLabel()

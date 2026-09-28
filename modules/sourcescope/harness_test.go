@@ -199,15 +199,12 @@ func (h *harness) createOrg(token, slug string) model.TenantID {
 // in tenant — so RoleIn(tenant) is false and only the source-scope binding governs it.
 func (h *harness) principalFor(admin string, tenant model.TenantID, email, role string) auth.Principal {
 	h.t.Helper()
-	r := h.do("POST", "/v1/users", admin, map[string]any{"email": email, "password": "memberpass1"}, nil)
-	if r.code != http.StatusCreated {
-		h.t.Fatalf("create user = %d %s", r.code, r.raw)
-	}
+	user := map[string]any{"email": email, "password": "memberpass1"}
 	if role != "" {
-		uid := r.body["id"].(string)
-		if r := h.do("POST", "/v1/memberships", admin, map[string]any{"user_id": uid, "tenant": tenant.String(), "role": role}, nil); r.code != http.StatusCreated {
-			h.t.Fatalf("grant membership = %d %s", r.code, r.raw)
-		}
+		user["tenant"], user["role"] = tenant.String(), role
+	}
+	if r := h.do("POST", "/v1/users", admin, user, nil); r.code != http.StatusCreated {
+		h.t.Fatalf("create user = %d %s", r.code, r.raw)
 	}
 	lr := h.do("POST", "/v1/auth/login", "", map[string]any{"email": email, "password": "memberpass1"}, nil)
 	if lr.code != http.StatusOK {

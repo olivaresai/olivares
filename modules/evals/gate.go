@@ -63,11 +63,14 @@ const (
 )
 
 type gateRequest struct {
-	SuiteRef    string            `json:"suite_ref"`
-	SubjectKind string            `json:"subject_kind,omitempty"`
-	SubjectRef  string            `json:"subject_ref,omitempty"`
-	BaselineRef string            `json:"baseline_ref,omitempty"`
-	Outputs     map[string]string `json:"outputs"`
+	Comparison  *ComparisonRequest `json:"comparison,omitempty"`
+	ModelRef    string             `json:"model_ref,omitempty"`
+	Variant     string             `json:"prompt_variant,omitempty"`
+	SuiteRef    string             `json:"suite_ref"`
+	SubjectKind string             `json:"subject_kind,omitempty"`
+	SubjectRef  string             `json:"subject_ref,omitempty"`
+	BaselineRef string             `json:"baseline_ref,omitempty"`
+	Outputs     map[string]string  `json:"outputs"`
 	// Seed fixes the deterministic case sample. Empty derives a stable default from
 	// the suite identity, so re-runs of the same suite version judge the SAME subset
 	// (and hit the verdict cache).
@@ -97,11 +100,12 @@ type gateCorrectedDTO struct {
 }
 
 type gateDTO struct {
-	ID         string   `json:"id"`
-	SuiteRef   string   `json:"suite_ref"`
-	SubjectRef string   `json:"subject_ref,omitempty"`
-	Verdict    string   `json:"verdict"`
-	Reasons    []string `json:"reasons,omitempty"`
+	Comparison ComparisonEvidence `json:"comparison"`
+	ID         string             `json:"id"`
+	SuiteRef   string             `json:"suite_ref"`
+	SubjectRef string             `json:"subject_ref,omitempty"`
+	Verdict    string             `json:"verdict"`
+	Reasons    []string           `json:"reasons,omitempty"`
 	// EffectiveVerdict is what CI must act on: the verdict, or "pass" after a
 	// governed override.
 	EffectiveVerdict  string              `json:"effective_verdict"`
@@ -135,6 +139,7 @@ func toGateDTO(rec model.Record) gateDTO {
 	if ref := rec.String(colCalibRef); ref != "" {
 		dto.Calibration = &gateCalibrationDTO{ReportRef: ref, MeetsTarget: true}
 	}
+
 	dto.EffectiveVerdict = effectiveVerdict(dto.Verdict, dto.Overridden)
 	return dto
 }
@@ -155,6 +160,11 @@ func (m *Module) handleGate(w http.ResponseWriter, r *http.Request, mc api.Modul
 	if !decodeJSON(w, r, &req) {
 		return
 	}
+	comparison, valid := normalizeComparison(req.Comparison, req.BaselineRef)
+	if !valid {
+		writeJSON(w, http.StatusBadRequest, errorBody("invalid comparison or baseline_ref"))
+		return
+	}
 	suiteID, ok := idParam(req.SuiteRef)
 	if !ok {
 		writeJSON(w, http.StatusBadRequest, errorBody("suite_ref is required"))
@@ -168,6 +178,9 @@ func (m *Module) handleGate(w http.ResponseWriter, r *http.Request, mc api.Modul
 	// Phase 1: read everything the verdict depends on.
 	var suite suiteDTO
 	var cases []caseDTO
+	var sampled []caseDTO
+	var seed string
+	var subj runSubject
 	var calib calibReportDTO
 	calibFound := false
 	found := false
@@ -179,6 +192,19 @@ func (m *Module) handleGate(w http.ResponseWriter, r *http.Request, mc api.Modul
 		suite, cases, found = s, cs, ok
 		if !ok {
 			return nil
+		}
+		seed = firstNonEmpty(clamp(strings.TrimSpace(req.Seed), maxNameLen), suiteID.String()+"@"+formatInt(s.SuiteVersion))
+		sampled = sampleCases(cs, seed, req.SampleSize)
+		subj = runSubject{suiteRef: suiteID.String(), suiteVer: s.SuiteVersion, subjectKind: firstNonEmpty(req.SubjectKind, s.SubjectKind), subjectRef: req.SubjectRef, modelRef: req.ModelRef, variant: req.Variant, baselineRef: req.BaselineRef, launchedBy: mc.Principal.Actor(), comparison: comparison}
+		comparisonScorer := m.scorerByID(s.Scorer)
+		if _, offline := m.judge.(offlineJudge); s.Scorer == scorerLLMJudge && !offline {
+			// Match the existing gate execution path, which substitutes the cached
+			// built-in judge scorer below even if the registry ID was overridden.
+			comparisonScorer = &judgeScorer{judge: func() Judge { return m.judge }}
+		}
+		subj.plan, lerr = m.prepareComparison(r.Context(), sc, s, subj, cs, sampled, comparisonScorer, seed, req.SampleSize)
+		if lerr != nil {
+			return lerr
 		}
 		if s.Scorer == scorerLLMJudge {
 			c, cok, cerr := latestCalibration(r.Context(), sc, s.JudgeModel)
@@ -198,9 +224,6 @@ func (m *Module) handleGate(w http.ResponseWriter, r *http.Request, mc api.Modul
 		return
 	}
 
-	seed := firstNonEmpty(clamp(strings.TrimSpace(req.Seed), maxNameLen), suiteID.String()+"@"+formatInt(suite.SuiteVersion))
-	sampled := sampleCases(cases, seed, req.SampleSize)
-
 	judged := suite.Scorer == scorerLLMJudge
 	_, judgeOffline := m.judge.(offlineJudge)
 
@@ -213,7 +236,8 @@ func (m *Module) handleGate(w http.ResponseWriter, r *http.Request, mc api.Modul
 
 	// Budget pre-flight (decision 3): only a judged gate spends. A blocked budget
 	// refuses to spend AND fails the gate (deny-closed); a throttle warns without
-	// spending. A FinOps read error never decides (the adapter is fail-open).
+	// spending. A callback error remains advisory. The engine's FinOps adapter answers
+	// an unreadable ledger with a blocked decision, not an error, so the gate fails.
 	budgetStopped := false
 	if judged && !judgeOffline {
 		dec, berr := m.budget.Check(r.Context(), mc.Tenant, BudgetDims{JudgeModelRef: suite.JudgeModel})
@@ -231,6 +255,17 @@ func (m *Module) handleGate(w http.ResponseWriter, r *http.Request, mc api.Modul
 		}
 	}
 
+	if budgetStopped {
+		out.Comparison = subj.plan.evidence
+		switch out.Comparison.Status {
+		case ComparisonUnknown, ComparisonIncompatible, ComparisonIncomplete:
+			out.Verdict = verdictFail
+			reasons = append(reasons, string(out.Comparison.Reason))
+		default:
+			out.Comparison.Status = ComparisonIncomplete
+			out.Comparison.Reason = ComparisonBudgetNotScored
+		}
+	}
 	var agg runAggregate
 	var cache *cachedJudge
 	if !budgetStopped {
@@ -263,22 +298,26 @@ func (m *Module) handleGate(w http.ResponseWriter, r *http.Request, mc api.Modul
 			colSampled: int64(len(sampled)), colTotal: int64(len(cases)), colSeed: seed,
 			colOverridden: false, colLaunchedBy: mc.Principal.Actor(), colOccurredAt: now.String(),
 		}
+		if budgetStopped {
+			b, err := json.Marshal(out.Comparison)
+			if err != nil {
+				return err
+			}
+			gateRec[colStoppedComparison] = string(b)
+		}
 		if suite.JudgeModel != "" {
 			gateRec[colJudgeModel] = suite.JudgeModel
 		}
 
 		if !budgetStopped {
-			subj := runSubject{
-				suiteRef: suiteID.String(), suiteVer: suite.SuiteVersion,
-				subjectKind: firstNonEmpty(req.SubjectKind, suite.SubjectKind), subjectRef: req.SubjectRef,
-				baselineRef: req.BaselineRef, launchedBy: mc.Principal.Actor(),
-			}
+
 			dto, ri, perr := m.persistRun(r.Context(), sc, suite, subj, agg)
 			if perr != nil {
 				return perr
 			}
 			reg = ri
 			out.Run = &dto
+			out.Comparison = dto.Comparison
 			out.RunRef = dto.ID
 			out.BaselineRef = dto.BaselineRef
 			gateRec[colRunRef] = dto.ID
@@ -343,8 +382,20 @@ func (m *Module) handleGate(w http.ResponseWriter, r *http.Request, mc api.Modul
 // reason is reported (a CI log should show the whole picture, not the first hit).
 func gateVerdict(suite suiteDTO, agg runAggregate, reg regressionInfo, judged, judgeOffline bool, calib calibReportDTO, calibFound bool) (string, []string) {
 	var fails, warns, notes []string
+	// The exception is evidence of execution, not a suite label or an unused port.
+	// Missing outputs and arbitrary custom scorer skips never carry this cause.
+	allJudgeUnavailable := agg.total > 0 && agg.judgeUnavailable == agg.total && agg.skipped == agg.total
+	offlineFirst := allJudgeUnavailable && reg.comparison.FirstRun && reg.comparison.Selection == "automatic" && reg.comparison.BaselineRef == "" && reg.comparison.Reason == "selected_cases_incomplete" && reg.comparison.Identity.Selected.Count > 0
+	switch reg.comparison.Status {
+	case ComparisonUnknown, ComparisonIncompatible, ComparisonIncomplete:
+		// Preserve only the established unwired-judge first-run warning. It remains
+		// incomplete and ineligible; other errors and requested comparisons fail.
+		if !offlineFirst {
+			fails = append(fails, string(reg.comparison.Reason))
+		}
+	}
 
-	if judged && judgeOffline {
+	if agg.judgeUnavailable > 0 {
 		// Decision 3: honest degradation — declared, never silent, never a block on
 		// a verdict nobody rendered.
 		warns = append(warns, reasonNoJudge)
@@ -366,7 +417,7 @@ func gateVerdict(suite suiteDTO, agg runAggregate, reg regressionInfo, judged, j
 	if scored := agg.passed + agg.failed; scored > 0 && agg.passRate < suite.PassThreshold {
 		fails = append(fails, reasonBelowThreshold)
 	}
-	if reg.baselineRef == "" {
+	if reg.comparison.Status == ComparisonNoBaseline || (reg.comparison.Status == ComparisonDisabled && reg.comparison.FirstRun) || (reg.comparison.Status == ComparisonIncomplete && offlineFirst) {
 		notes = append(notes, reasonNoBaseline)
 	}
 
@@ -408,18 +459,36 @@ func formatInt(v int64) string {
 // the stored verdict without a model call; a miss calls through and records the
 // verdict for the final transaction to persist. Single-goroutine (executeRun is
 // sequential), no locking.
+// cacheProtocolEvidence describes the score that was actually cached. Legacy
+// rows have no such receipt; reading them never backfills today's configuration.
+type cacheProtocolEvidence struct {
+	Version       int             `json:"version"`
+	Protocol      ScoringProtocol `json:"protocol"`
+	ObservedModel string          `json:"observed_model,omitempty"`
+	Known         bool            `json:"known"`
+}
+
 type cachedJudge struct {
-	inner      Judge
-	version    string
-	judgeModel string
-	criterion  string // the suite-level rubric, part of every key
-	prefetched map[string]JudgeVerdict
-	misses     map[string]JudgeVerdict
-	hits       int
+	inner         Judge
+	version       string
+	judgeModel    string
+	protocol      ScoringProtocol
+	protocolKnown bool
+	criterion     string // the suite-level rubric, part of every key
+	prefetched    map[string]JudgeVerdict
+	misses        map[string]JudgeVerdict
+	hits          int
 }
 
 func newCachedJudge(inner Judge, suite suiteDTO, version string) *cachedJudge {
+	var protocol ScoringProtocol
+	known := false
+	if describer, ok := inner.(JudgeProtocol); ok {
+		protocol, known = describer.JudgingProtocol(suite.JudgeModel)
+		known = known && protocol.Implementation != "" && protocol.Version != "" && protocol.ConfigDigest != "" && protocol.Provider != "" && protocol.Model != ""
+	}
 	return &cachedJudge{
+		protocol: protocol, protocolKnown: known,
 		inner: inner, version: version, judgeModel: suite.JudgeModel, criterion: suite.Criterion,
 		prefetched: map[string]JudgeVerdict{}, misses: map[string]JudgeVerdict{},
 	}
@@ -453,9 +522,16 @@ func (c *cachedJudge) prefetch(ctx context.Context, sc store.Scope, cases []case
 			continue
 		}
 		rec := recs[0]
-		c.prefetched[key] = JudgeVerdict{
-			Score: rec.Float(colResScore), Passed: rec.Bool(colPassedFlag), Reason: rec.String(colReason),
+		verdict := JudgeVerdict{Score: rec.Float(colResScore), Passed: rec.Bool(colPassedFlag), Reason: rec.String(colReason), ProtocolUnknown: true, Cached: true}
+		if raw := rec.String(colCacheProtocol); raw != "" {
+			var receipt cacheProtocolEvidence
+			if err := json.Unmarshal([]byte(raw), &receipt); err != nil {
+				return err
+			}
+			verdict.ObservedModel = receipt.ObservedModel
+			verdict.ProtocolUnknown = receipt.Version != 1 || !receipt.Known || !c.protocolKnown || receipt.Protocol != c.protocol
 		}
+		c.prefetched[key] = verdict
 	}
 	return nil
 }
@@ -485,8 +561,12 @@ func (c *cachedJudge) persistMisses(ctx context.Context, sc store.Scope, occurre
 		return err
 	}
 	for key, v := range c.misses {
+		metadata, err := json.Marshal(cacheProtocolEvidence{Version: 1, Protocol: c.protocol, ObservedModel: v.ObservedModel, Known: c.protocolKnown && !v.ProtocolUnknown})
+		if err != nil {
+			return err
+		}
 		if _, err := repo.Create(ctx, model.Record{
-			colInputHash: key, colJudgeModel: c.judgeModel,
+			colInputHash: key, colJudgeModel: c.judgeModel, colCacheProtocol: string(metadata),
 			colResScore: v.Score, colPassedFlag: v.Passed, colReason: clamp(v.Reason, maxLabelLen),
 			colOccurredAt: occurredAt,
 		}); err != nil && !isConflict(err) {
@@ -518,7 +598,12 @@ func (m *Module) handleListGates(w http.ResponseWriter, r *http.Request, mc api.
 			return err
 		}
 		for _, rec := range recs {
-			out.Items = append(out.Items, toGateDTO(rec))
+			dto := toGateDTO(rec)
+			dto.Comparison, err = readGateComparison(r.Context(), sc, rec)
+			if err != nil {
+				return err
+			}
+			out.Items = append(out.Items, dto)
 		}
 		out.Cursor, out.HasMore = page.Cursor, page.HasMore
 		return nil
@@ -552,6 +637,10 @@ func (m *Module) handleGetGate(w http.ResponseWriter, r *http.Request, mc api.Mo
 			return err
 		}
 		found, out = true, toGateDTO(rec)
+		out.Comparison, err = readGateComparison(r.Context(), sc, rec)
+		if err != nil {
+			return err
+		}
 		return nil
 	})
 	if err != nil {
@@ -621,6 +710,10 @@ func (m *Module) handleOverrideGate(w http.ResponseWriter, r *http.Request, mc a
 			return err
 		}
 		out = toGateDTO(updated)
+		out.Comparison, err = readGateComparison(r.Context(), sc, updated)
+		if err != nil {
+			return err
+		}
 		return auditEvent(r.Context(), sc, mc, "evals.gate.override", gateKind, id, map[string]any{
 			"suite_ref": out.SuiteRef, "original_verdict": out.Verdict, "reason": reason,
 		})

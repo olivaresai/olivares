@@ -71,6 +71,19 @@
       "throttle": "スロットル",
       "block": "ブロック"
     },
+    "admission": {
+      "holds": "有効な台帳行: {{n}} 件",
+      "drift": "台帳が呼び出し元の精算内容から乖離しています",
+      "outstanding": {
+        "corrupt": "整合性チェックに失敗したアドミッション行: {{n}} 件",
+        "unresolved": "未確定のリカバリ書き込み: {{n}} 件",
+        "undecodable": "未精算保留リストを復号できない行: {{n}} 件",
+        "owed_remaining": "精算待ちで残る保留: {{n}} 件",
+        "frontier_blocked": "試行ライフサイクルがブロックしている保留: {{n}} 件",
+        "legacy_pending": "以前のビルドが残したクレーム: {{n}} 件",
+        "legacy_owes_release": "以前のビルドが未実行の解放: {{n}} 件"
+      }
+    },
     "dialog": {
       "title": "新規予算",
       "name": "名称",

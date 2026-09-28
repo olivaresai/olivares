@@ -202,12 +202,12 @@ func (m *Module) registerIdentitySchema(reg store.ExtensionRegistry) error {
 		Kind:  identityKind,
 		Table: identityTable,
 		Fields: []model.FieldSpec{
-			{Name: colSID, Kind: model.KindText},
-			{Name: colOrigin, Kind: model.KindText},
+			{Name: colSID, Kind: model.KindText, Principal: pdeclNoneSID},
+			{Name: colOrigin, Kind: model.KindText, Principal: model.None("how the identity first came to exist, a closed set of origins: identity.go:85-93, identity.go:179, identity_read.go:58")},
 			{Name: colIDFirstSeen, Kind: model.KindTimestamp},
 			{Name: colIDLastSeen, Kind: model.KindTimestamp, Indexed: true},
 			{Name: colDeclaredAt, Kind: model.KindTimestamp, Nullable: true},
-			{Name: colMergedInto, Kind: model.KindText, Nullable: true},
+			{Name: colMergedInto, Kind: model.KindText, Nullable: true, Principal: pdeclNoneSID},
 			// Nullable is not laziness: it is what lets the engine ADD this column
 			// to an existing sessions_identity on the next boot rather than needing
 			// a hand-written migration per engine (reconcileColumns refuses a
@@ -215,7 +215,7 @@ func (m *Module) registerIdentitySchema(reg store.ExtensionRegistry) error {
 			// carries meaning — the tenant's default workspace — so an identity
 			// minted before this column existed reads as the safe default instead
 			// of as missing evidence.
-			{Name: colIDWorkspaceID, Kind: model.KindUUID, Nullable: true},
+			{Name: colIDWorkspaceID, Kind: model.KindUUID, Nullable: true, Principal: model.None("the core workspace id of the session's lineage, never an account: identity.go:354, identity_read.go:58")},
 		},
 		Indexes: []model.IndexSpec{{
 			Name:    "sessions_identity_sid_uniq",
@@ -242,11 +242,11 @@ func (m *Module) registerIdentitySchema(reg store.ExtensionRegistry) error {
 		Kind:  aliasKind,
 		Table: aliasTable,
 		Fields: []model.FieldSpec{
-			{Name: colAliasSID, Kind: model.KindText, Indexed: true},
-			{Name: colProvider, Kind: model.KindText},
-			{Name: colExternalID, Kind: model.KindText},
+			{Name: colAliasSID, Kind: model.KindText, Indexed: true, Principal: pdeclNoneSID},
+			{Name: colProvider, Kind: model.KindText, Principal: model.None("a lower-cased provider key, part of the alias natural key: identity.go:171, identity.go:397")},
+			{Name: colExternalID, Kind: model.KindText, Principal: pdeclNoneProviderSessionID},
 			{Name: colBoundAt, Kind: model.KindTimestamp},
-			{Name: colAliasConf, Kind: model.KindText},
+			{Name: colAliasConf, Kind: model.KindText, Principal: model.None("an alias confidence, a closed set: identity.go:100-101, identity.go:376-378")},
 		},
 		Indexes: []model.IndexSpec{{
 			// THE guarantee of SG-00. One provider-issued id resolves to exactly
@@ -572,3 +572,9 @@ func (m *Module) BindAlias(ctx context.Context, tenant model.TenantID, sid strin
 	}
 	return err
 }
+
+// Principal declarations of the identity plane. A canonical session and its
+// provider aliases name sessions, never accounts.
+var (
+	pdeclNoneProviderSessionID = model.None("a provider-issued session id (or the run reference of an operated run), used verbatim as the alias natural key and never resolved to an account: identity.go:172, identity.go:397, identity_work.go:211")
+)

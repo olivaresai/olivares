@@ -106,7 +106,14 @@ func (a *Authenticator) CompleteSSO(ctx context.Context, id FederatedIdentity, i
 	// point, so a refused session (for example ErrLoginEnforcementComponentAbsent) returns
 	// here with no subject binding, no group membership and no completion audit event. An
 	// earlier independent posture check would not serialize through that commit.
-	token, sess, err := a.mintSession(ctx, attempt, user, "sso.login", federatedLogin, nil)
+	// A sign-in through a tenant's identity provider carries only that tenant,
+	// whoever created the account; any other sign-in carries the account's own
+	// custody scope.
+	scope := user.CustodyScope()
+	if isTenantScope(tenant) {
+		scope = tenant
+	}
+	token, sess, err := a.mintSession(ctx, attempt, user, scope, "sso.login", federatedLogin, nil)
 	if err != nil {
 		return "", model.AuthSession{}, err
 	}
@@ -264,11 +271,18 @@ func (a *Authenticator) findOrProvision(ctx context.Context, id FederatedIdentit
 		if name == "" {
 			name = email
 		}
+		// The account's credentials belong to whoever provisioned it: the tenant
+		// whose provider vouched for it, or the deployment's own provider.
+		custody, custodyTenant := model.CustodyDeployment, model.TenantID("")
+		if bound {
+			custody, custodyTenant = model.CustodyTenant, scope
+		}
 		u, err := as.Users().Create(ctx, model.User{
 			Email: email, DisplayName: name, Status: model.StatusActive,
-			PasswordHash: "",         // SSO-only: no local password
-			ExternalID:   id.Subject, // SCIM/CAEP correlate their own ops by this
-			SsoSubject:   qualified,  // "" when no issuer ⇒ NULL; email stays the key
+			PasswordHash:      "",         // SSO-only: no local password
+			ExternalID:        id.Subject, // SCIM/CAEP correlate their own ops by this
+			SsoSubject:        qualified,  // "" when no issuer ⇒ NULL; email stays the key
+			CredentialCustody: custody, CustodyTenantID: custodyTenant,
 		})
 		if err != nil {
 			return err

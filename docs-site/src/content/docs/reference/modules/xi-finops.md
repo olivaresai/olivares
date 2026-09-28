@@ -3,7 +3,8 @@ title: "Module XI — cost & AI FinOps"
 description: >-
   Account for AI spend from the cost stream, slice it by any attribution
   dimension, forecast the period, and enforce budgets that deny the spend at the
-  cap — money-free on the wire, opt-in and fail-open. What it does, and its limits.
+  cap — money-free on the wire, opt-in, and refused when the ledger cannot be
+  read. What it does, and its limits.
 ---
 
 Module XI is the **cost / FinOps** layer for AI: it accounts for what the model and
@@ -66,13 +67,19 @@ with a **money-free reason** (no USD, no budget name on the read-only route). A 
 written to the append-only ledger and audited. See [Govern and approve](/how-to/govern-and-approve/).
 
 :::caution[Honest limits]
-- **Enforcement is opt-in, not deny-closed by default.** With no enforcing budget that
-  scopes a request, nothing is ever denied — that absence is the normal state, not a
-  security hole. Only a budget *definitively* at its limit denies. This is deliberate and
-  the inverse of the approval gate's deny-closed posture.
-- **The gate fails open.** A FinOps read error never takes down an in-flight action — an
-  approved fire/open proceeds and the router resolves. The durable backstop is the
-  budget-cap finding emitted on ingest, not the pre-flight gate.
+- **Enforcement is opt-in, not deny-closed by default.** While FinOps can read its
+  ledger, a request that no enforcing budget scopes is never denied — that absence is
+  the normal state, not a security hole. A budget denies only when it is *definitively*
+  at its limit. This is deliberate and the inverse of the approval gate's deny-closed
+  posture.
+- **A ledger the gate cannot read denies.** When FinOps cannot read or write its budget
+  ledger, the admission cannot be established and the spend is refused: an
+  orchestration fire, a voice open, a model route, an evals gate run and a durable MCP
+  task are denied, and the inference proxy answers **HTTP 503**. Session launch applies
+  its own availability posture (`OLIVARES_SESSION_BUDGET_AVAILABILITY`): unset, the
+  session launches on the Community edition and is refused with **HTTP 503** on the
+  Enterprise edition, and the failure is logged either way. The budget-cap finding
+  emitted on ingest still records spend that reached a cap.
 - **The router enforces only the scopes it knows pre-execution** (global / provider /
   model); finer scopes (agent, session, team, project) are enforced at the fire/open seams
   and the model gateway, not at route resolution.

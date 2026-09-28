@@ -1,34 +1,72 @@
 {
   "title": "设置",
-  "subtitle": "管理您的账户以及控制台的外观。",
-  "tabs": {
-    "profile": "个人资料",
-    "appearance": "外观",
-    "about": "关于"
+  "restoreAll": "全部恢复默认",
+  "search": "搜索设置",
+  "changedReset": "已更改 · 重置",
+  "noMatches": "没有匹配的设置。",
+  "groups": {
+    "you": "你",
+    "work": "工作",
+    "installation": "此安装"
   },
-  "profile": {
-    "title": "个人资料",
-    "email": "电子邮箱",
-    "displayName": "显示名称",
-    "role": "在本组织中的角色",
-    "memberships": "组织",
-    "actor": "主体"
+  "nav": {
+    "general": "常规",
+    "notifications": "通知",
+    "keyboard": "键盘",
+    "sessionDefaults": "会话默认值",
+    "aiTools": "AI 工具",
+    "workspaces": "工作区",
+    "deploy": "部署与更新",
+    "signIn": "登录与安全",
+    "setup": "设置向导",
+    "about": "关于",
+    "sections": "设置分区"
   },
-  "appearance": {
-    "title": "外观",
+  "general": {
+    "title": "常规",
+    "scope": "你自己的偏好。它们会跟随你到此安装上的每个工作区。",
     "theme": "主题",
-    "themeHint": "选择浅色、深色，或跟随系统设置。",
-    "density": "表格密度",
-    "densityHint": "紧凑模式可显示更多行；宽松模式则更为舒适。",
+    "themeHint": "除非你选择浅色或跟随系统，否则为深色。",
+    "density": "密度",
+    "densityHint": "紧凑显示更多行；舒适更易阅读。",
     "language": "语言",
-    "languageHint": "控制台界面语言。"
+    "languageHint": "English, Español, Deutsch, Français, 日本語, Русский, 中文.",
+    "time": "时间",
+    "timeHint": "时间按你的时区显示（{{zone}}）。记录和导出会保持 UTC。",
+    "clock24": "24 小时",
+    "clock12": "12 小时",
+    "startPage": "起始页",
+    "startPageHint": "登录后打开的页面。默认：主页。",
+    "confirmStop": "停止会话前确认",
+    "confirmStopHint": "在停止结束仍在工作的会话之前，询问一次。",
+    "reduceMotion": "减少动态效果",
+    "reduceMotionHint": "用淡入淡出代替移动。系统要求时开启。"
+  },
+  "unavailable": {
+    "notifications": "此安装尚未保存通知偏好。",
+    "sessionDefaults": "此安装尚未保存会话默认值。",
+    "signIn": "登录策略还不能在此屏幕上编辑。"
+  },
+  "keyboard": {
+    "title": "键盘",
+    "scope": "此安装响应的按键。对每个人都相同。"
   },
   "about": {
     "title": "关于",
+    "scope": "此安装以及当前登录的主体。",
     "version": "版本",
     "engine": "存储引擎",
-    "license": "许可状态",
-    "licensee": "授权给",
-    "none": "无"
+    "license": "许可证状态",
+    "licensee": "许可对象",
+    "none": "无",
+    "displayName": "显示名",
+    "actor": "主体",
+    "role": "在此组织中的角色",
+    "memberships": "组织"
+  },
+  "stopConfirm": {
+    "title": "停止此会话？",
+    "description": "停止会结束仍在工作的会话。",
+    "confirm": "停止会话"
   }
 }

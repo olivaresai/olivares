@@ -95,6 +95,9 @@ func EncodeEvent(e event.Event) ([]byte, error) {
 			SourceId: r.SourceID, SourceRevision: r.SourceRevision, EnvironmentRef: r.EnvironmentRef, BindingRef: r.BindingRef,
 		}
 	}
+	if m := e.InventoryMember; m != nil {
+		pe.InventoryMember = &pb.InventoryMember{RunId: m.RunID, Ordinal: m.Ordinal, Digest: m.Digest}
+	}
 	switch p := e.Payload.(type) {
 	case nil:
 		// no payload, no oneof
@@ -159,6 +162,9 @@ func DecodeEvent(data []byte, decoders map[event.Type]PayloadDecoder) (event.Eve
 		if reg.Valid() {
 			e.SourceRegistration = &reg
 		}
+	}
+	if m := pe.GetInventoryMember(); m != nil {
+		e.InventoryMember = &event.InventoryMember{RunID: m.RunId, Ordinal: m.Ordinal, Digest: m.Digest}
 	}
 	switch p := pe.GetPayload().(type) {
 	case nil:

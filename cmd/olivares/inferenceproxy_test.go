@@ -25,6 +25,7 @@ import (
 	"github.com/olivaresai/olivares/modules/inferenceproxy"
 	"github.com/olivaresai/olivares/modules/knowledge"
 	"github.com/olivaresai/olivares/modules/models"
+	"github.com/olivaresai/olivares/sdk"
 	"github.com/olivaresai/olivares/sdk/event"
 	sdkmodel "github.com/olivaresai/olivares/sdk/model"
 )
@@ -66,6 +67,23 @@ type fakeProxyBudget struct {
 	spendErr error
 	actor    string
 	groups   []string
+	// keys records every idempotency key the gate presented, in order, so a test can ask
+	// whether two calls presented themselves as one.
+	keys []string
+	// held are the holds the fake issued, in order; committed and released are the
+	// settlements the proxy made of them.
+	held      []string
+	committed []proxySettlement
+	released  []string
+	// settleCtxErrs records, for each settlement, the error of the context it ran under:
+	// nil unless that context was already done.
+	settleCtxErrs []error
+}
+
+// proxySettlement is one Commit the proxy made: the hold and the amount.
+type proxySettlement struct {
+	handle string
+	actual int64
 }
 
 func (f *fakeProxyBudget) CheckBudget(context.Context, model.TenantID, finops.SpendDims) (finops.BudgetCheck, error) {
@@ -80,6 +98,43 @@ func (f *fakeProxyBudget) CheckSpendLimit(_ context.Context, _ model.TenantID, a
 		return finops.SpendLimitCheck{Allowed: true}, nil
 	}
 	return f.spend, f.spendErr
+}
+
+// Reserve answers as the module does: a spend-limit or budget refusal, the deny-closed
+// refusal of a ledger it could not read, or an admission that holds a fresh hold whenever
+// the call has an amount to hold.
+func (f *fakeProxyBudget) Reserve(_ context.Context, _ model.TenantID, req finops.AdmissionRequest) (finops.Reservation, error) {
+	f.calls++
+	f.keys = append(f.keys, req.IdempotencyKey)
+	f.actor = req.ActorRef
+	f.groups = append([]string(nil), req.Groups...)
+	if f.spendErr != nil {
+		return finops.Reservation{
+			Allowed: false, Action: "block", Reason: finops.ReasonStoreUnreachable,
+			EstimateMicroUSD: req.EstimateMicroUSD,
+		}, nil
+	}
+	if !f.spend.Allowed && f.spend.SpendLimitID != "" {
+		return finops.Reservation{Allowed: false, Action: "block", SpendLimit: true, EstimateMicroUSD: req.EstimateMicroUSD}, nil
+	}
+	res, err := fakeAdmissionReserve(f.bc, f.err, req)
+	if err == nil && res.Allowed && req.EstimateMicroUSD > 0 {
+		res.Handle = model.NewID().String()
+		f.held = append(f.held, res.Handle)
+	}
+	return res, err
+}
+
+func (f *fakeProxyBudget) Commit(ctx context.Context, _ model.TenantID, handle string, actual int64) error {
+	f.committed = append(f.committed, proxySettlement{handle: handle, actual: actual})
+	f.settleCtxErrs = append(f.settleCtxErrs, ctx.Err())
+	return nil
+}
+
+func (f *fakeProxyBudget) Release(ctx context.Context, _ model.TenantID, handle string) error {
+	f.released = append(f.released, handle)
+	f.settleCtxErrs = append(f.settleCtxErrs, ctx.Err())
+	return nil
 }
 
 type fakeProxyKill struct {
@@ -731,7 +786,7 @@ func TestProxyAuthorizeModelAccessDenies(t *testing.T) {
 		t.Fatalf("a model-access deny must 403; got allow=%v status=%d", dec.Allow, dec.Status)
 	}
 	if bg.calls != 0 {
-		t.Error("budget (fail-open) must NOT run after a security deny")
+		t.Error("budget admission must NOT run after a security deny")
 	}
 }
 
@@ -766,17 +821,32 @@ func TestProxyAuthorizeBudgetBlockAndThrottle(t *testing.T) {
 	}
 }
 
-func TestProxyAuthorizeBudgetReadErrorFailsOPEN(t *testing.T) {
+// TestProxyAuthorizeBudgetReadErrorFailsCLOSED: the budget step reserves before the
+// forward, and a ledger it cannot read is not permission. The call is refused 503,
+// money-free, and the client is told not to retry.
+func TestProxyAuthorizeBudgetReadErrorFailsCLOSED(t *testing.T) {
 	a, mg, bg, kg, pol := allowAll()
 	bg.err = errBootInferenceProxy("finops read failed")
 	d := newTestDecider(a, mg, bg, kg, pol)
 	dec := d.Authorize(context.Background(), userReq("hi", false), "bearer")
-	if !dec.Allow {
-		t.Fatalf("a budget READ ERROR must FAIL OPEN (allow); got deny status=%d", dec.Status)
+	if dec.Allow {
+		t.Fatal("a budget READ ERROR must FAIL CLOSED (deny)")
+	}
+	if dec.Status != http.StatusServiceUnavailable || dec.ErrorType != "api_error" || dec.Reason != finops.ReasonStoreUnreachable {
+		t.Fatalf("unreadable ledger deny = %+v, want 503 api_error %q", dec, finops.ReasonStoreUnreachable)
+	}
+	if dec.Headers["x-should-retry"] != "false" {
+		t.Fatalf("x-should-retry = %q, want false", dec.Headers["x-should-retry"])
+	}
+	// The semantic class the verdict mapping reads: a hold that could not be taken is a
+	// reservation fault, not a firm policy refusal.
+	_, _, deny, ok := d.authorizeChain(context.Background(), userReq("hi", false), "bearer")
+	if ok || deny.code != gateCodeBudget || deny.class != sdk.FailureReservationFault {
+		t.Fatalf("unreadable ledger deny = code %q class %q, want %q %q", deny.code, deny.class, gateCodeBudget, sdk.FailureReservationFault)
 	}
 }
 
-func TestProxyAuthorizeSpendLimitDenyAndFailOpen(t *testing.T) {
+func TestProxyAuthorizeSpendLimitDenyAndFailClosed(t *testing.T) {
 	t.Run("at cap denies 402", func(t *testing.T) {
 		a, mg, bg, kg, pol := allowAll()
 		bg.spend = finops.SpendLimitCheck{Allowed: false, SpendLimitID: "spl_cap"}
@@ -796,11 +866,14 @@ func TestProxyAuthorizeSpendLimitDenyAndFailOpen(t *testing.T) {
 			t.Fatalf("under-cap request denied: %+v", dec)
 		}
 	})
-	t.Run("read error fails open", func(t *testing.T) {
+	// The spend limit is evaluated by the same admission as the budget, so a ledger that
+	// cannot be read refuses the call the same deny-closed way.
+	t.Run("read error fails closed", func(t *testing.T) {
 		a, mg, bg, kg, pol := allowAll()
 		bg.spendErr = errors.New("spend store unavailable")
-		if dec := newTestDecider(a, mg, bg, kg, pol).Authorize(context.Background(), userReq("hi", false), "bearer"); !dec.Allow {
-			t.Fatalf("spend-limit read error must fail open: %+v", dec)
+		dec := newTestDecider(a, mg, bg, kg, pol).Authorize(context.Background(), userReq("hi", false), "bearer")
+		if dec.Allow || dec.Status != http.StatusServiceUnavailable || dec.Reason != finops.ReasonStoreUnreachable {
+			t.Fatalf("spend-limit read error must fail closed: %+v", dec)
 		}
 	})
 }

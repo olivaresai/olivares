@@ -1,15 +1,15 @@
 ---
 title: "Module III — the read/write access map"
 description: >-
-  A key differentiated capability: a read/write access map of every origin→resource
-  edge, with the Permitted-vs-Observed diff (least-privilege drift). How edges are
-  built, classified and trusted, and the limits.
+  A key differentiated capability: a read/write access map of the origin→resource
+  edges that connectors observed, with the Permitted-vs-Observed diff
+  (least-privilege drift). How edges are built, classified and trusted, and the limits.
 ---
 
 Module III is the **read/write access map**: which origin (agent, identity, session)
 touches which resource, classified read or read-write, and the **Permitted-vs-Observed
 diff** that surfaces least-privilege drift. It is one of the product's most useful and
-differentiated capabilities — one of the 30 modules, not the whole product. This page is
+differentiated capabilities — one of the 31 modules, not the whole product. This page is
 the reference for what the map is and how to read it honestly.
 
 ## The edge

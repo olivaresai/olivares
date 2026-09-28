@@ -10,8 +10,13 @@ var pepServiceCredentialDescriptor = model.EntityDescriptor{
 	Kind:  "core.pep_service_credential",
 	Table: "pep_service_credentials",
 	Fields: []model.FieldSpec{
-		field("service_id", model.KindUUID, false),
-		field("token_id", model.KindUUID, false),
+		pdecl(field("service_id", model.KindUUID, false),
+			model.None("the PEP service row the credential authenticates as: core/auth/pepservice.go:380")),
+		// token_id names an API-token row, not an account. The account that owns
+		// the token is read from that row (core/auth/pepservice.go:398), whose
+		// user_id column carries the account declaration.
+		pdecl(field("token_id", model.KindUUID, false),
+			model.None("an API-token row id, matched against the presented token's own id: core/auth/pepservice.go:370")),
 		field("disabled_at", model.KindTimestamp, true),
 	},
 	Indexes: []model.IndexSpec{

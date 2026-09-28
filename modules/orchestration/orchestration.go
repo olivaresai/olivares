@@ -7,6 +7,7 @@ package orchestration
 import (
 	"context"
 	"log/slog"
+	"reflect"
 	"sync"
 	"time"
 
@@ -163,6 +164,12 @@ type Module struct {
 	workflowAck     WorkflowAckReader
 	workflowBinding WorkflowBindingControl
 	remoteWork      RemoteWorkExecutor
+	// credentialBinder is late-bound by the composition root; nil leaves every
+	// new run without a binding, so its communication effects pause.
+	credentialBinder WorkflowCredentialBinder
+	// reauthorizeHook is nil in production. Tests stop the reauthorize
+	// operation after one of its durable writes to exercise recovery.
+	reauthorizeHook func(reauthorizeStage) error
 	broker          *broker
 
 	activeWindow     time.Duration
@@ -248,6 +255,24 @@ func (m *Module) Descriptor() sdk.Descriptor {
 		Title:       "Communication & orchestration",
 		Description: "Observes and governs how agents coordinate: derives the live communication/delegation graph (A2A, supervisor-worker, swarms) from observed signals, and governs scheduled/autonomous agents — firing is a two-phase, HITL-gated, audited, append-only-evidenced privileged action that never actuates in-module. Minimal data: relations and metadata, never message payloads.",
 	}
+}
+
+// UseWorkflowCredentialBinder late-binds the core/auth credential-binding
+// producer once the serving Authenticator exists. Nil or a typed nil unbinds
+// it. Composition calls it before Start.
+func (m *Module) UseWorkflowCredentialBinder(binder WorkflowCredentialBinder) {
+	if binder == nil {
+		m.credentialBinder = nil
+		return
+	}
+	switch value := reflect.ValueOf(binder); value.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+		if value.IsNil() {
+			m.credentialBinder = nil
+			return
+		}
+	}
+	m.credentialBinder = binder
 }
 
 // UseData receives the least-privilege, tenant-parameterized data handle from the

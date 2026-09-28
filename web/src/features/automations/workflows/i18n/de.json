@@ -149,6 +149,23 @@
     "paused": "Pausiert: {{reason}}",
     "timeline": "Schrittverlauf",
     "graph": "Schreibgeschützter Laufgraph",
+    "reauthorize": {
+      "title": "Wartet auf erneute Authentifizierung",
+      "explanation": "Dieser Lauf ist pausiert, bis sein Initiator ihn mit aktuellen Anmeldedaten fortsetzt, die nicht weiter reichen als die, mit denen er gestartet wurde.",
+      "planHash": "Erneut freizugebender Plan-Hash",
+      "button": "Lauf erneut autorisieren",
+      "confirmTitle": "Diesen Lauf erneut autorisieren?",
+      "confirmDescription": "Ihre aktuellen Anmeldedaten werden zu den Anmeldedaten des Laufs, und seine pausierten Schritte werden fortgesetzt. Sie müssen dem Initiator des Laufs gehören und dürfen nicht weiter reichen als die, mit denen der Lauf gestartet wurde.",
+      "confirmPlan": "Sie geben diesen Plan-Hash erneut frei",
+      "confirm": "Erneut autorisieren",
+      "done": "Lauf erneut autorisiert",
+      "forbidden": "Mit diesen Anmeldedaten kann der Lauf nicht fortgesetzt werden. Verwenden Sie aktuelle Anmeldedaten des Initiators, die nicht weiter reichen als die, mit denen der Lauf gestartet wurde, oder starten Sie einen neuen Lauf.",
+      "conflict": "Der Lauf wartet nicht auf erneute Authentifizierung, sein Plan-Hash stimmt nicht überein, oder eine andere erneute Autorisierung läuft bereits. Aktualisieren Sie den Lauf und versuchen Sie es erneut, falls er noch pausiert ist.",
+      "notFound": "Der Lauf wurde in diesem Workflow nicht gefunden.",
+      "unavailable": "Der Lauf wurde nicht erneut autorisiert, weil die Bindung der Anmeldedaten nicht verfügbar ist. Versuchen Sie es erneut.",
+      "failed": "Der Lauf konnte nicht erneut autorisiert werden.",
+      "refresh": "Lauf aktualisieren"
+    },
     "status": {
       "running": "Läuft",
       "completed": "Abgeschlossen",
@@ -164,6 +181,7 @@
       "done": "Erledigt",
       "gate_passed": "Gate passiert",
       "blocked": "Blockiert",
+      "reauthentication_required": "Erneute Authentifizierung erforderlich",
       "budget_blocked": "Durch Budget blockiert",
       "skipped": "Übersprungen"
     }

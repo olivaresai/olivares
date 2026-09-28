@@ -34,6 +34,11 @@ var (
 	ErrTenantViolation = errors.New("tenant scope violation")
 	// ErrReadOnly is returned when a write is attempted inside a View scope.
 	ErrReadOnly = errors.New("scope is read-only")
+	// ErrUserAuthorityNotHeld is returned when a write stores a reference to an
+	// existing account whose authority version the transaction has not pinned.
+	// The writer must open its transaction with the directory authority barrier
+	// over every account it names; the row is never written.
+	ErrUserAuthorityNotHeld = errors.New("user authority not held")
 	// ErrTransactionTimeNotObserved is returned by the optional
 	// TransactionStampedGenericRepo methods unless TransactionNow succeeded first
 	// on the exact surrounding Scope. The repository never substitutes process

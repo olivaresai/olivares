@@ -15,24 +15,21 @@ import (
 	"testing"
 )
 
-// newUser creates a user and (optionally) a tenant membership, then logs in and
-// returns the session token.
+// newUser creates a user and (optionally) its first tenant membership in the same
+// transaction, then logs in and returns the session token.
 func (h *harness) newUser(email, password, tenant, role string) string {
 	h.t.Helper()
 	var u struct {
 		ID string `json:"id"`
 	}
-	if code := h.reqInto("POST", "/v1/users", h.adminToken, "", map[string]any{
+	body := map[string]any{
 		"email": email, "display_name": email, "password": password, "superadmin": false,
-	}, &u); code != http.StatusCreated || u.ID == "" {
-		h.t.Fatalf("create user %q = %d", email, code)
 	}
 	if tenant != "" {
-		if code, raw := h.req("POST", "/v1/memberships", h.adminToken, "", map[string]any{
-			"user_id": u.ID, "tenant": tenant, "role": role,
-		}); code != http.StatusCreated {
-			h.t.Fatalf("grant membership = %d: %s", code, raw)
-		}
+		body["tenant"], body["role"] = tenant, role
+	}
+	if code := h.reqInto("POST", "/v1/users", h.adminToken, "", body, &u); code != http.StatusCreated || u.ID == "" {
+		h.t.Fatalf("create user %q = %d", email, code)
 	}
 	var login struct {
 		Token string `json:"token"`

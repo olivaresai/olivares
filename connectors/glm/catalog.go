@@ -53,22 +53,30 @@ var (
 // only when the USD price is UNVERIFIED; those rows keep declared capabilities/limits
 // for catalog usefulness but Meter and Model.Pricing remain unpriced.
 type family struct {
-	prefix       string
-	pricing      *modelprovider.ModelPricing
-	capabilities []modelprovider.Capability
-	context      int64
-	maxOutput    int64
+	prefix        string
+	pricing       *modelprovider.ModelPricing
+	capabilities  []modelprovider.Capability
+	context       int64
+	maxOutput     int64
+	defaultEffort string
+	// datedSnapshotOnly accepts the exact prefix or a YYYYMMDD / YYYY-MM-DD
+	// snapshot suffix. Any other longer ID stays unknown.
+	datedSnapshotOnly bool
 }
 
 // price builds a USD/MTok list ModelPricing with an optional cache-read tier. GLM has
 // no verified cache-write tier, so those fields remain 0.
 func price(in, out, cacheRead float64) *modelprovider.ModelPricing {
+	return priceOn(pricingAsOf, in, out, cacheRead)
+}
+
+func priceOn(asOf string, in, out, cacheRead float64) *modelprovider.ModelPricing {
 	return &modelprovider.ModelPricing{
 		InputPerMTokUSD:     in,
 		OutputPerMTokUSD:    out,
 		CacheReadPerMTokUSD: cacheRead,
 		Currency:            "USD",
-		AsOf:                pricingAsOf,
+		AsOf:                asOf,
 		Source:              modelprovider.PricingList,
 	}
 }
@@ -78,6 +86,11 @@ func price(in, out, cacheRead float64) *modelprovider.ModelPricing {
 // prices are UNVERIFIED; this also prevents glm-4-flashx from inheriting the free
 // glm-4-flash price via prefix matching.
 var glmFamilies = []family{
+	// GLM-5.3 is text-only. Reasoning stays on; thinking.type disabled is rejected.
+	// Default reasoning_effort is max. Observed 2026-09-27.
+	{prefix: "glm-5.3-flashx", pricing: priceOn("2026-09-27", 0.37, 1.25, 0.075), capabilities: glmVisionReasoningCaps, context: 1_000_000, maxOutput: 128_000, datedSnapshotOnly: true},
+	{prefix: "glm-5.3-flash", pricing: priceOn("2026-09-27", 0.15, 0.50, 0.03), capabilities: glmVisionReasoningCaps, context: 1_000_000, maxOutput: 128_000, datedSnapshotOnly: true},
+	{prefix: "glm-5.3", pricing: priceOn("2026-09-27", 1.40, 4.40, 0.26), capabilities: glmReasoningCaps, context: 1_000_000, maxOutput: 128_000, defaultEffort: "max", datedSnapshotOnly: true},
 	{prefix: "glm-5.2", pricing: price(1.40, 4.40, 0.26), capabilities: glmReasoningCaps, context: 1_000_000},
 	{prefix: "glm-5.1", pricing: price(1.40, 4.40, 0.26), capabilities: glmReasoningCaps},
 	{prefix: "glm-5-turbo", pricing: price(1.20, 4.00, 0.24), capabilities: glmReasoningCaps},
@@ -122,6 +135,10 @@ var declaredModels = []struct{ id, displayName string }{
 	{"glm-4-plus", "GLM-4-Plus"},
 	{"glm-4-flashx", "GLM-4-FlashX"},
 	{"glm-4-flash", "GLM-4-Flash"},
+	// glm-5.3-flashx is an API model and is not in the GLM Coding Plan.
+	{"glm-5.3", "GLM-5.3"},
+	{"glm-5.3-flash", "GLM-5.3-Flash"},
+	{"glm-5.3-flashx", "GLM-5.3-FlashX"},
 }
 
 // Snapshot returns the declared GLM catalog. It never calls or parses /models because
@@ -151,8 +168,21 @@ func familyFor(modelID string) (family, bool) {
 }
 
 func declaredFamilyFor(modelID string) (family, bool) {
+	for _, f := range glmFamilies {
+		if modelID == f.prefix {
+			return f, true
+		}
+	}
+	if f, ok, blocked := datedSnapshotFamily(glmFamilies, modelID); blocked {
+		return family{}, false
+	} else if ok {
+		return f, true
+	}
 	best := -1
 	for i, f := range glmFamilies {
+		if f.datedSnapshotOnly {
+			continue
+		}
 		if hasPrefix(modelID, f.prefix) {
 			if best < 0 || len(f.prefix) > len(glmFamilies[best].prefix) {
 				best = i
@@ -163,6 +193,31 @@ func declaredFamilyFor(modelID string) (family, bool) {
 		return family{}, false
 	}
 	return glmFamilies[best], true
+}
+
+// datedSnapshotFamily matches a prefix that accepts only a dated snapshot
+// suffix. blocked is set when that suffix is not a snapshot date, so a
+// shorter family must not answer.
+func datedSnapshotFamily(rows []family, modelID string) (family, bool, bool) {
+	best := -1
+	for i, f := range rows {
+		if !f.datedSnapshotOnly {
+			continue
+		}
+		if len(modelID) > len(f.prefix) && hasPrefix(modelID, f.prefix+"-") {
+			if best < 0 || len(f.prefix) > len(rows[best].prefix) {
+				best = i
+			}
+		}
+	}
+	if best < 0 {
+		return family{}, false, false
+	}
+	f := rows[best]
+	if modelprovider.SnapshotDateSuffix(modelID, f.prefix) {
+		return f, true, false
+	}
+	return family{}, false, true
 }
 
 // hasPrefix is strings.HasPrefix without importing strings into this file.
@@ -187,6 +242,7 @@ func buildDeclaredModel(id, displayName string) modelprovider.Model {
 		m.Capabilities = append([]modelprovider.Capability(nil), f.capabilities...)
 		m.ContextWindow = f.context
 		m.MaxOutputTokens = f.maxOutput
+		m.DefaultEffort = f.defaultEffort
 	}
 	return m
 }

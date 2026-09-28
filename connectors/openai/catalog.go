@@ -34,6 +34,18 @@ var openAIStackCapabilities = []modelprovider.Capability{
 	modelprovider.CapFiles,
 }
 
+// gpt6Capabilities is the feature list on the GPT-6 model pages (2026-09-27):
+// streaming, function calling, image input, structured outputs, prompt caching,
+// and the batch endpoint. The files API is not in that list.
+var gpt6Capabilities = []modelprovider.Capability{
+	modelprovider.CapStreaming,
+	modelprovider.CapToolUse,
+	modelprovider.CapVision,
+	modelprovider.CapStructuredOutputs,
+	modelprovider.CapPromptCaching,
+	modelprovider.CapBatch,
+}
+
 // family is a declared price + capability set keyed by a model-id prefix. Matching
 // by prefix means a new "gpt-4o-*" version inherits the gpt-4o tier until the
 // operator updates the table; longest-prefix-first resolution keeps the more
@@ -44,6 +56,9 @@ type family struct {
 	capabilities []modelprovider.Capability
 	context      int64
 	maxOutput    int64
+	// datedSnapshotOnly accepts the exact prefix or a YYYYMMDD / YYYY-MM-DD
+	// snapshot suffix. Any other longer ID stays unknown.
+	datedSnapshotOnly bool
 }
 
 // openAIFamilies are matched longest-prefix-first by pricingFor. Prices are USD per
@@ -52,6 +67,40 @@ type family struct {
 // charge, so CacheWritePerMTokUSD stays 0 for those families; GPT-5.6 and later bill
 // cache writes separately. VERIFY against openai.com/pricing.
 var openAIFamilies = []family{
+	// GPT-6 rows match the exact ID or a dated snapshot suffix. A non-dated
+	// longer ID stays unknown. Cached input and cache writes are on each model
+	// page (2026-09-27). Prompts over 272K input tokens use a higher multiplier;
+	// ModelPricing holds the standard rate only.
+	{
+		prefix: "gpt-6-astra",
+		pricing: modelprovider.ModelPricing{
+			InputPerMTokUSD: 10, OutputPerMTokUSD: 50,
+			CacheWritePerMTokUSD: 12.5, CacheReadPerMTokUSD: 1,
+			Currency: "USD", AsOf: "2026-09-27", Source: modelprovider.PricingList,
+		},
+		capabilities: gpt6Capabilities, context: 1050000, maxOutput: 128000,
+		datedSnapshotOnly: true,
+	},
+	{
+		prefix: "gpt-6-sol",
+		pricing: modelprovider.ModelPricing{
+			InputPerMTokUSD: 2, OutputPerMTokUSD: 10,
+			CacheWritePerMTokUSD: 2.5, CacheReadPerMTokUSD: 0.2,
+			Currency: "USD", AsOf: "2026-09-27", Source: modelprovider.PricingList,
+		},
+		capabilities: gpt6Capabilities, context: 1050000, maxOutput: 128000,
+		datedSnapshotOnly: true,
+	},
+	{
+		prefix: "gpt-6-luna",
+		pricing: modelprovider.ModelPricing{
+			InputPerMTokUSD: 0.10, OutputPerMTokUSD: 0.50,
+			CacheWritePerMTokUSD: 0.125, CacheReadPerMTokUSD: 0.01,
+			Currency: "USD", AsOf: "2026-09-27", Source: modelprovider.PricingList,
+		},
+		capabilities: gpt6Capabilities, context: 1050000, maxOutput: 128000,
+		datedSnapshotOnly: true,
+	},
 	{
 		prefix: "gpt-5.6-terra",
 		pricing: modelprovider.ModelPricing{
@@ -148,8 +197,21 @@ var openAIFamilies = []family{
 // connector then leaves Model.Pricing nil rather than guess a price; an o-series or
 // otherwise unknown id falls here).
 func pricingFor(modelID string) (modelprovider.ModelPricing, []modelprovider.Capability, int64, int64, bool) {
+	for _, f := range openAIFamilies {
+		if modelID == f.prefix {
+			return f.pricing, f.capabilities, f.context, f.maxOutput, true
+		}
+	}
+	if f, ok, blocked := datedSnapshotFamily(openAIFamilies, modelID); blocked {
+		return modelprovider.ModelPricing{}, nil, 0, 0, false
+	} else if ok {
+		return f.pricing, f.capabilities, f.context, f.maxOutput, true
+	}
 	best := -1
 	for i, f := range openAIFamilies {
+		if f.datedSnapshotOnly {
+			continue
+		}
 		if hasPrefix(modelID, f.prefix) {
 			if best < 0 || len(f.prefix) > len(openAIFamilies[best].prefix) {
 				best = i
@@ -161,6 +223,31 @@ func pricingFor(modelID string) (modelprovider.ModelPricing, []modelprovider.Cap
 	}
 	f := openAIFamilies[best]
 	return f.pricing, f.capabilities, f.context, f.maxOutput, true
+}
+
+// datedSnapshotFamily matches a prefix that accepts only a dated snapshot
+// suffix. blocked is set when that suffix is not a snapshot date, so a
+// shorter family must not answer.
+func datedSnapshotFamily(rows []family, modelID string) (family, bool, bool) {
+	best := -1
+	for i, f := range rows {
+		if !f.datedSnapshotOnly {
+			continue
+		}
+		if len(modelID) > len(f.prefix) && hasPrefix(modelID, f.prefix+"-") {
+			if best < 0 || len(f.prefix) > len(rows[best].prefix) {
+				best = i
+			}
+		}
+	}
+	if best < 0 {
+		return family{}, false, false
+	}
+	f := rows[best]
+	if modelprovider.SnapshotDateSuffix(modelID, f.prefix) {
+		return f, true, false
+	}
+	return family{}, false, true
 }
 
 // hasPrefix is strings.HasPrefix without importing strings into this small file.
@@ -180,6 +267,9 @@ var declaredModelIDs = []struct {
 	{"gpt-4o", "GPT-4o"},
 	{"gpt-4o-mini", "GPT-4o mini"},
 	{"gpt-4.1", "GPT-4.1"},
+	{"gpt-6-astra", "GPT-6 Astra"},
+	{"gpt-6-sol", "GPT-6 Sol"},
+	{"gpt-6-luna", "GPT-6 Luna"},
 }
 
 // openAIModelDeprecations is exact-id lifecycle data from

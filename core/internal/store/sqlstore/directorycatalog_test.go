@@ -71,8 +71,23 @@ func TestDirectoryDescriptorShapesAreExact(t *testing.T) {
 			t.Errorf("descriptor lifecycle = append:%t retain:%t audited:%t, want true/true/false",
 				d.AppendOnly, d.RetainOnTenantDrop, d.Audited)
 		}
-		if !reflect.DeepEqual(d.Fields, wantFields) {
-			t.Errorf("%s fields = %+v, want %+v", d.Kind, d.Fields, wantFields)
+		// This pins the relation's shape. What each column says about accounts is
+		// its principal declaration, which the store requires of every text, JSON,
+		// bytes and UUID column it registers; here each such column must carry one,
+		// and the shape is compared without it.
+		shape := make([]model.FieldSpec, len(d.Fields))
+		for i, f := range d.Fields {
+			switch f.Kind {
+			case model.KindText, model.KindJSON, model.KindBytes, model.KindUUID:
+				if f.Principal == nil || f.Principal.Form == model.FormUndeclared {
+					t.Errorf("%s.%s declares nothing about accounts", d.Kind, f.Name)
+				}
+			}
+			f.Principal = nil
+			shape[i] = f
+		}
+		if !reflect.DeepEqual(shape, wantFields) {
+			t.Errorf("%s fields = %+v, want %+v", d.Kind, shape, wantFields)
 		}
 		if len(d.Indexes) != 2 || !d.Indexes[0].Unique || d.Indexes[1].Unique {
 			t.Fatalf("%s index uniqueness = %+v, want principal unique and source non-unique",
@@ -142,6 +157,16 @@ func TestDirectoryDescriptorShapesAreExact(t *testing.T) {
 		"core_user_tombstone", userFields,
 		[]string{"tenant_id", "principal_kind", "principal_ref"},
 	)
+	// The user tombstone's two account columns hold the erased account's id as
+	// evidence of the retirement: they record it and grant nothing.
+	for _, f := range userTombstoneDescriptor.Fields {
+		if f.Name != "principal_ref" && f.Name != "source_id" {
+			continue
+		}
+		if d := f.Principal; d == nil || d.Form != model.FormRef || d.Encoding != model.EncodeUserID || d.Class != model.ClassEvidence {
+			t.Errorf("core.user_tombstone.%s declares %+v, want an evidence reference by account id", f.Name, d)
+		}
+	}
 	if got, want := userTombstoneDescriptor.Checks, []string{
 		"tenant_id = 'ffffffff-ffff-ffff-ffff-ffffffffffff'",
 		"version = 1",

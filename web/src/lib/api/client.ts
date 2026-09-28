@@ -460,6 +460,7 @@ export async function apiFetchWithMeta<T>(
       parsed,
       res.statusText || 'Request failed',
     )
+    const retryAfter = res.headers.get('Retry-After')?.trim() || undefined
     const err = new ApiError(
       res.status,
       code,
@@ -467,6 +468,7 @@ export async function apiFetchWithMeta<T>(
       requestId,
       details,
       parsed,
+      retryAfter,
     )
     // An authenticated 401 means the session expired or was revoked → let the
     // app clear it and route to login. Anonymous 401s (e.g. bad login) surface

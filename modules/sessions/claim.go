@@ -128,10 +128,10 @@ func (m *Module) registerClaimSchema(reg store.ExtensionRegistry) error {
 			DeadlineColumn: colLeaseExpires,
 		},
 		Fields: []model.FieldSpec{
-			{Name: colClaimSID, Kind: model.KindText},
-			{Name: colHolder, Kind: model.KindText},
+			{Name: colClaimSID, Kind: model.KindText, Principal: pdeclNoneSID},
+			{Name: colHolder, Kind: model.KindText, Principal: pdeclClaimHolder},
 			{Name: colFence, Kind: model.KindInt},
-			{Name: colClaimState, Kind: model.KindText, Indexed: true},
+			{Name: colClaimState, Kind: model.KindText, Indexed: true, Principal: model.None("a claim state, a closed set: claim.go:62-64, claim.go:842")},
 			{Name: colLeaseExpires, Kind: model.KindTimestamp, Indexed: true},
 			{Name: colClaimedAt, Kind: model.KindTimestamp},
 			{Name: colRenewedAt, Kind: model.KindTimestamp, Nullable: true},
@@ -1082,3 +1082,14 @@ func (a *ClaimAdmission) Authorize(ctx context.Context, tenant model.TenantID, i
 	}
 	return a.inner.Authorize(ctx, tenant, intent)
 }
+
+// Principal declarations of the admission plane.
+var (
+	// pdeclClaimHolder is who holds a session's claim: the launching caller's
+	// audit actor string ("user:<account id>" or "token:<credential id>",
+	// runtime.go:916) or a work executor's agent identity
+	// (runtime_work_launch.go:309). The claim only fences every other holder
+	// out of the session (claim.go:238, claim.go:315); it lets the holder do
+	// nothing its role and grants do not, so it is kept as evidence.
+	pdeclClaimHolder = model.Ref(model.EncodeUserRef, model.ClassEvidence)
+)

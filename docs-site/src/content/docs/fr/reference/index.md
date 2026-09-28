@@ -29,7 +29,7 @@ limites](/fr/start/honesty-and-limits/) pour le contrat global.
 | **[gRPC](/fr/reference/grpc/)** | Le miroir gRPC du moteur et le contrat wire versionné des plugins utilisé par chaque connecteur et module hors processus. | Les tables d'enregistrement `grpc.ServiceDesc` que les serveurs transmettent à gRPC. |
 | **[Bus d'événements](/fr/reference/events/)** | Le bus d'événements interne : l'enveloppe d'événement, les types d'événements first-party et les payloads d'observation que les connecteurs y hissent. | Un contrat **AsyncAPI 3.0**, dérivé à la main du SDK Go. |
 | **[Écrans de la console](/fr/reference/console/)** | Chaque route publiée par la console, avec la permission RBAC requise et la page de référence qu'ouvre son lien d'aide intégré au produit. | Le recensement des routes de la console, épinglé au router construit. |
-| **[Catalogue des modules](/fr/reference/modules/overview/)** | Les 30 modules du produit — ce qu'est chacun, son statut, et quelles routes (le cas échéant) il expose hors de l'API de cœur. | Le catalogue de capacités du produit et les interfaces de modules typées. |
+| **[Catalogue des modules](/fr/reference/modules/overview/)** | Les 31 modules du produit — ce qu'est chacun, son statut, et quelles routes (le cas échéant) il expose hors de l'API de cœur. | Le catalogue de capacités du produit et les interfaces de modules typées. |
 | **[Contrat de la passerelle de modèles](/reference/model-gateway-contract/)** | Matrice driver × protocole × transport pour CreateMessage, le streaming, l'annulation et l'usage. Étiquettes de cellule honnêtes. | `connectors/modelprovider/gateway` et sa suite de conformité. |
 | **[CLI](/fr/reference/cli/)** | Le binaire `olivares` et ses sous-commandes — `serve`, `collector`, `audit`, `license`, `openapi`, `version` — et leurs flags. | Les définitions de commandes compilées. |
 | **[Configuration](/fr/reference/configuration/)** | Variables d'environnement et options runtime : le répertoire de données, le câblage des sources, le moteur d'autorisation et la signature du ledger. | Les chargeurs de configuration du moteur. |
@@ -88,7 +88,7 @@ dit plutôt que de l'inventer.
 
 ## Catalogue des modules
 
-Le [catalogue des modules](/fr/reference/modules/overview/) énumère les **30 modules** qui
+Le [catalogue des modules](/fr/reference/modules/overview/) énumère les **31 modules** qui
 reposent sur le moteur de cœur, à travers neuf domaines de capacité. L'un des plus utiles
 est l'**access map R/RW** avec son diff **Permitted-vs-Observed** : il lit depuis les logs,
 OTEL et (comme backstop non coopératif) eBPF plutôt que de siéger dans le data path, et il
@@ -101,7 +101,7 @@ L'observation passive est **classée par niveaux** selon le type de store — cl
 stores SQL, object et entrepôt ; lossy pour les document et vector stores ; impossible sans
 coopération pour les stores en mémoire ou embarqués — et le catalogue marque où un module est
 en phase de conception. Le registry de modèles propres et le fine-tuning sont une **capacité
-prévue**, pas l'un des 30 modules livrés.
+prévue**, pas l'un des 31 modules livrés.
 
 ## CLI
 

@@ -262,6 +262,7 @@ func assertReplayRetryReopen(t *testing.T, ctx context.Context, f *communication
 		t.Fatal(err)
 	}
 	m.UseData(api.NewModuleData(st))
+	bindStoreStanding(m, st)
 	t.Cleanup(func() { _ = st.Close() })
 	f.m, f.st = m, st
 	actual := replayRetryRows(t, ctx, *f)

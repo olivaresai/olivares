@@ -139,14 +139,17 @@ func (a cedarEpochFailingAudit) Append(context.Context, model.AuditDraft) (model
 }
 
 // cedarEpochVanishingRevisionRepo models the narrow TOCTOU that matters here:
-// activeRevisionNumber's activation-marker validation sees its target, while the
-// immediately following getRevision in latestActiveSelection does not. A stable
-// dangling marker is already rejected elsewhere; this decorator pins the second-read
-// hole so it cannot be collapsed into an innocent empty surface.
+// the selection sees its target, while the getRevision that loads it for
+// latestActiveSelection does not. The row vanishes on exact read vanishAt: the
+// second for an activated surface, whose activation-marker validation reads it
+// first, and the first for a surface its active-row list selects. A stable
+// dangling marker is already rejected elsewhere; this decorator pins the hole so
+// it cannot be collapsed into an innocent empty surface.
 type cedarEpochVanishingRevisionRepo struct {
 	store.GenericRepo
 	surface    string
 	revision   int64
+	vanishAt   int
 	exactReads int
 }
 
@@ -332,7 +335,7 @@ func (r *cedarEpochWrongIdentityRevisionRepo) exactRevisionRead(query model.Quer
 func (r *cedarEpochVanishingRevisionRepo) List(ctx context.Context, query model.Query) ([]model.Record, model.Page, error) {
 	if r.exactRevisionRead(query) {
 		r.exactReads++
-		if r.exactReads >= 2 {
+		if r.exactReads >= r.vanishAt {
 			return nil, model.Page{}, nil
 		}
 	}
@@ -405,6 +408,27 @@ func (f *managedEpochFixture) seedActivatedCedarSurface(t *testing.T, surface, s
 		return err
 	})
 	return number
+}
+
+// seedSelectedCedarSurface selects source on surface the way its writer does, and
+// returns the revision with the number of exact reads that select it. An engine
+// is activated, so activeRevisionNumber validates the marker's target and
+// latestActiveRevision reads it again. The managed projection and the adopted DDIL
+// snapshot have no activation stream (revision.go:351-353): their writers append a
+// newest active revision (scopedadmin.go:894, ddiladopt.go:166), which the
+// active-row list selects and one exact read loads.
+func (f *managedEpochFixture) seedSelectedCedarSurface(t *testing.T, surface, source string) (int64, int) {
+	t.Helper()
+	if surfaces.accepts(activationSurface(surface)) {
+		return f.seedActivatedCedarSurface(t, surface, source), 2
+	}
+	var number int64
+	f.mutate(t, func(sc store.Scope) error {
+		var err error
+		number, _, err = appendRevision(context.Background(), sc, surface, source, "seed", true, true, "")
+		return err
+	})
+	return number, 1
 }
 
 func cedarEpochHasAuditAction(t *testing.T, f *managedEpochFixture, action string) bool {
@@ -2158,8 +2182,8 @@ func TestCedarSelectedRevisionTOCTOUFailsClosedAndWritesNothing(t *testing.T) {
 	for _, surface := range []string{surfaceCedar, surfaceCedarManaged, surfaceCedarDDIL} {
 		t.Run(surface, func(t *testing.T) {
 			f := newManagedEpochFixture(t)
-			revision := f.seedActivatedCedarSurface(t, surface, `forbid(principal, action, resource);`)
-			vanisher := &cedarEpochVanishingRevisionRepo{surface: surface, revision: revision}
+			revision, selectionReads := f.seedSelectedCedarSurface(t, surface, `forbid(principal, action, resource);`)
+			vanisher := &cedarEpochVanishingRevisionRepo{surface: surface, revision: revision, vanishAt: selectionReads}
 			wrap := func(sc store.Scope) store.Scope {
 				base, err := sc.Ext(revisionKind)
 				if err != nil {
@@ -2173,10 +2197,10 @@ func TestCedarSelectedRevisionTOCTOUFailsClosedAndWritesNothing(t *testing.T) {
 			before := f.snapshot(t)
 			f.m.UseData(cedarEpochModuleData{st: f.st, wrap: wrap})
 			if err := f.m.ReloadActivePDP(context.Background(), f.tenant); err == nil {
-				t.Fatal("reload accepted a selected revision that disappeared on its second read")
+				t.Fatal("reload accepted a selected revision that disappeared during its selection read")
 			}
-			if vanisher.exactReads < 2 {
-				t.Fatalf("selected revision was not read twice: reads=%d", vanisher.exactReads)
+			if vanisher.exactReads < selectionReads {
+				t.Fatalf("selected revision was not read %d times: reads=%d", selectionReads, vanisher.exactReads)
 			}
 			state, loaded := f.m.grants.tenantState(f.tenant)
 			if !loaded || state.available {
@@ -3128,7 +3152,7 @@ func TestAuthoredCedarPreservesSignedDDILAnchorWithoutClockRead(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newManagedEpochFixture(t)
 			ddil := `forbid(principal, action, resource) when { context.permission == "agent:write" };`
-			f.seedActivatedCedarSurface(t, surfaceCedarDDIL, ddil)
+			f.seedSelectedCedarSurface(t, surfaceCedarDDIL, ddil)
 			anchor := time.Date(2026, 8, 15, 1, 2, 3, 456789000, time.UTC)
 			f.seedFreshness(t, FreshnessRecord{
 				RefreshedAt: anchor, MaxStaleness: time.Hour,

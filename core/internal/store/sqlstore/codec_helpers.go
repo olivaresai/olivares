@@ -165,3 +165,22 @@ func field(name string, k model.SQLKind, nullable bool) model.FieldSpec {
 func indexedField(name string, k model.SQLKind, nullable bool) model.FieldSpec {
 	return model.FieldSpec{Name: name, Kind: k, Nullable: nullable, Indexed: true}
 }
+
+// pdecl returns f carrying d, the declaration of what the column says about
+// principals. It changes nothing else about the column.
+func pdecl(f model.FieldSpec, d *model.ColumnDecl) model.FieldSpec {
+	f.Principal = d
+	return f
+}
+
+// pdeclStrings declares a JSON array of strings (encStrings) whose elements
+// name no principal, for the reason given.
+func pdeclStrings(reason string) *model.ColumnDecl {
+	return model.Nested([]string(nil), model.ClassEvidence, model.Leaf("[]", model.None(reason)))
+}
+
+// pdeclBoolVector declares a JSON object of named booleans (encBools) whose
+// keys name no principal, for the reason given.
+func pdeclBoolVector(reason string) *model.ColumnDecl {
+	return model.Nested(map[string]bool(nil), model.ClassEvidence, model.Leaf("{key}", model.None(reason)))
+}

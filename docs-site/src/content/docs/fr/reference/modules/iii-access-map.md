@@ -1,15 +1,16 @@
 ---
 title: "Module III — la carte d'accès en lecture/écriture"
 description: >-
-  Une capacité clé et différenciée : une carte d'accès en lecture/écriture de chaque arête
-  origine→ressource, avec le diff Permis-vs-Observé (dérive de moindre privilège). Comment les
-  arêtes sont construites, classifiées et fiabilisées, et les limites.
+  Une capacité clé et différenciée : une carte d'accès en lecture/écriture des arêtes
+  origine→ressource que les connecteurs ont observées, avec le diff Permis-vs-Observé
+  (dérive de moindre privilège). Comment les arêtes sont construites, classifiées et
+  fiabilisées, et les limites.
 ---
 
 Le module III est la **carte d'accès en lecture/écriture** : quelle origine (agent, identité,
 session) touche quelle ressource, classifiée en lecture ou lecture-écriture, et le **diff
 Permis-vs-Observé** qui fait apparaître la dérive de moindre privilège. C'est l'une des
-capacités les plus utiles et les plus différenciées du produit — l'un des 30 modules, pas le
+capacités les plus utiles et les plus différenciées du produit — l'un des 31 modules, pas le
 produit entier. Cette page est la référence de ce qu'est la carte et de la façon de la lire
 honnêtement.
 

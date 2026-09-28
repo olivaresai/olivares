@@ -93,9 +93,9 @@
     "selectPrompt": "Select a trace to see its span waterfall.",
     "selectPromptHint": "Pick a trace from the list to see every span it produced, with its timing and its errors.",
     "exportBtn": "Export OTLP",
-    "exportTitle": "Download OTLP-compatible JSON for Jaeger / Tempo / Datadog",
+    "exportTitle": "Download this trace as OTLP/JSON. Not tested against a named backend.",
     "legend": "Actor legend",
-    "liveNote": "Ledger-correlation read-model: rows are derived from the W3C trace ids stamped on audit-ledger events (walk window: the last 20,000 events). Bars are LEDGER-EVENT windows grouped by engine span id — the engine stores no OTel spans; the full spans live in the operator's OTLP collector.",
+    "liveNote": "Ledger-correlation read-model: rows are derived from the W3C trace ids stamped on audit-ledger events (walk window: the last 20,000 events). Bars are LEDGER-EVENT windows grouped by engine span id — the engine stores no OTel spans; exported spans, subject to the sample ratio and with no loss count, are in the operator's OTLP collector.",
     "columns": {
       "trace": "Trace",
       "started": "Started",

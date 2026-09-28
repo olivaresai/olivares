@@ -130,4 +130,22 @@ func TestHistoricalPredecessorAssertsRetainedV13HalvesOnSQLite(t *testing.T) {
 			t.Fatalf("causal error = %v", err)
 		}
 	})
+	t.Run("retained v14 tracking row", func(t *testing.T) {
+		st, dia := historicalFixtureSQLite(t)
+		dropUserAuthorityForHistoricalFixture(t, st.db, dia)
+		if _, err := st.db.ExecContext(ctx, dia.Rebind(
+			"INSERT INTO "+coreTrackingRelation(dia)+
+				"(version,name,applied_at,phase) VALUES (?,?,?,?)"),
+			coreConsentCustodyMigrationVersion, coreConsentCustodyMigrationName,
+			"2026-09-22T00:00:00.000Z", "expand"); err != nil {
+			t.Fatalf("reintroduce the v%d tracking row: %v", coreConsentCustodyMigrationVersion, err)
+		}
+		err := loginCapabilityHistoricalPredecessorAbsence(ctx, st.db, dia)
+		if err == nil {
+			t.Fatal("a retained v14 tracking row was accepted as a pre-v14 predecessor")
+		}
+		if !strings.Contains(err.Error(), "v14 is still tracked") {
+			t.Fatalf("causal error = %v", err)
+		}
+	})
 }

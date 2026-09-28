@@ -377,7 +377,8 @@ func (e *scopedEngine) ScopedEvidence(
 	} else if before.set != nil && (len(diag.Errors) > 0 || hasErroredForbid(before.set.policies, diag)) {
 		return decision, nil
 	}
-	if before.set != nil && cedarDecision == cedar.Allow && resourceGuard.Verdict == auth.CheckClean {
+	if before.set != nil && cedarDecision == cedar.Allow && resourceGuard.Verdict == auth.CheckClean &&
+		scopedGrantAboveFloor(req.Principal, req.Tenant, before.generation) {
 		if !e.grantExpiredState(before, ready, observedAt) {
 			effect = auth.EffectGrant
 		}

@@ -3,7 +3,9 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { useClientSettings } from '@/features/settings/preferences'
 import type { RunDTO } from './types'
 
 vi.mock('@/lib/auth/context', () => ({
@@ -14,6 +16,12 @@ vi.mock('@/components/ui/toaster', () => ({
 }))
 vi.mock('./live-console', () => ({ LiveConsole: () => <div>live</div> }))
 vi.mock('./governance-panel', () => ({ GovernancePanel: () => <div>gov</div> }))
+
+const httpPost = vi.hoisted(() => vi.fn())
+vi.mock('@/lib/api/client', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/api/client')>()
+  return { ...actual, http: { ...actual.http, post: httpPost } }
+})
 
 const api = vi.hoisted(() => ({ getRun: vi.fn() }))
 vi.mock('./api', async (orig) => {
@@ -47,6 +55,57 @@ function wrap(run: RunDTO) {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  localStorage.clear()
+  httpPost.mockResolvedValue({ run_ref: 'run-anon', state: 'stopped' })
+  useClientSettings.setState({
+    confirmStop: true,
+    clock: '24',
+    startPage: 'home',
+  })
+})
+
+async function clickStop() {
+  const user = userEvent.setup()
+  const button = await screen.findByRole('button', { name: /^Stop$/ })
+  await user.click(button)
+  return user
+}
+
+describe('Stop asks when confirm-before-stop is on', () => {
+  it('sends no stop when the operator cancels', async () => {
+    wrap(unnamed)
+    const user = await clickStop()
+    expect(
+      await screen.findByRole('heading', { name: /stop this session/i }),
+    ).toBeInTheDocument()
+    expect(httpPost).not.toHaveBeenCalled()
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(httpPost).not.toHaveBeenCalled()
+  })
+
+  it('sends exactly one stop when the operator confirms', async () => {
+    wrap(unnamed)
+    const user = await clickStop()
+    await user.click(screen.getByRole('button', { name: 'Stop the session' }))
+    const stops = httpPost.mock.calls.filter((call) =>
+      String(call[0]).endsWith('/stop'),
+    )
+    expect(stops).toHaveLength(1)
+    expect(String(stops[0]?.[0])).toContain('run-anon')
+  })
+
+  it('stops at once when confirm-before-stop is off', async () => {
+    useClientSettings.setState({ confirmStop: false })
+    wrap(unnamed)
+    await clickStop()
+    expect(
+      screen.queryByRole('heading', { name: /stop this session/i }),
+    ).not.toBeInTheDocument()
+    const stops = httpPost.mock.calls.filter((call) =>
+      String(call[0]).endsWith('/stop'),
+    )
+    expect(stops).toHaveLength(1)
+  })
 })
 
 describe('RunDetailSheet — what the run is called', () => {

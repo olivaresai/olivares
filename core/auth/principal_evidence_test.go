@@ -141,6 +141,10 @@ func (s *principalEvidenceScope) Tokens() store.Repository[model.APIToken] {
 	return principalEvidenceTokenRepo{Repository: s.AuthScope.Tokens(), hooks: s.hooks}
 }
 
+func (s *principalEvidenceScope) TenantExclusions() store.Repository[model.TenantExclusion] {
+	return principalEvidenceTraceRepo[model.TenantExclusion]{Repository: s.AuthScope.TenantExclusions(), hooks: s.hooks, name: "exclusion"}
+}
+
 type principalEvidenceTraceRepo[T any] struct {
 	store.Repository[T]
 	hooks *principalEvidenceHooks
@@ -810,7 +814,8 @@ func TestResolvePrincipalScopeRehydratesCurrentAuthorityInOneAuthView(t *testing
 		t.Fatalf("private provenance = %+v, want exact tenant/ref/epoch/DB window", resolved.evidence)
 	}
 	assertTraceExact(t, f.hooks.trace,
-		"directory-1", "session-get", "user-get", "membership-list", "group-member-list", "user-authority", "directory-2", "db-clock")
+		"directory-1", "session-get", "user-get", "membership-list", "group-member-list", "exclusion-list", "user-authority",
+		"directory-2", "db-clock")
 	if len(f.hooks.membershipQueries) == 0 || len(f.hooks.membershipQueries[0].Filters) != 0 {
 		t.Fatalf("evidence membership query = %+v, want unfiltered self-validation", f.hooks.membershipQueries)
 	}

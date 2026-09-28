@@ -15,8 +15,10 @@ var setSeenJTIDescriptor = model.EntityDescriptor{
 	Table:      "set_seen_jtis",
 	AppendOnly: true,
 	Fields: []model.FieldSpec{
-		field("jti", model.KindText, false),
-		indexedField("publisher_id", model.KindText, false),
+		pdecl(field("jti", model.KindText, false),
+			model.None("a security event token id, only compared to refuse a replay: core/auth/set_publisher.go:238")),
+		pdecl(indexedField("publisher_id", model.KindText, false),
+			model.None("a SET publisher id, compared to refuse a replay and resolved to a publisher: core/auth/set_publisher.go:237, core/auth/caep_events.go:182")),
 		field("expires_at", model.KindTimestamp, false),
 	},
 	Indexes: []model.IndexSpec{

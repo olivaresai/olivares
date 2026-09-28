@@ -218,14 +218,20 @@ func (r *Runtime) gatherLoop(s *sourceReg) {
 // from a one-shot/streaming source, which transitions to stopped/failed exactly as
 // before. It returns whether the pass succeeded (for backoff).
 func (r *Runtime) runGatherOnce(s *sourceReg, sink sdk.Sink, keepRunning bool) bool {
+	pass := r.collectionSink(s.ctx, s, sink)
 	err := func() (err error) {
+		returned := false
 		defer func() {
-			if rec := recover(); rec != nil {
-				err = fmt.Errorf("panic: %v", rec)
+			rec := recover()
+			if !returned {
+				err = fmt.Errorf("runtime: source Gather panic (%T)", rec)
 			}
 		}()
-		return s.conn.Gather(s.ctx, sink)
+		err = s.conn.Gather(s.ctx, pass)
+		returned = true
+		return err
 	}()
+	pass.finish(s.ctx, err)
 
 	switch {
 	case s.ctx.Err() != nil:

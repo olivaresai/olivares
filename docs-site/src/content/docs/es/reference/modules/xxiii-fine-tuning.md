@@ -87,6 +87,6 @@ externamente, con la política de la pila de proveedores permaneciendo en
 ## Relacionado
 
 - [Módulo XXIII — operaciones de modelos](/es/reference/modules/xxiii-model-operations/) — la superficie de gobernanza de modelos propios ya entregada: registro, admisión, linaje, despliegues, AIBOM.
-- [Catálogo de módulos](/es/reference/modules/overview/) — los 30 módulos entregados y dónde encaja el trabajo de modelos propios.
+- [Catálogo de módulos](/es/reference/modules/overview/) — los 31 módulos entregados y dónde encaja el trabajo de modelos propios.
 - [Módulo X — gestión de modelos y proveedores](/es/reference/modules/x-models/) — el vecino entregado que gobierna la pila de modelos de proveedor.
 - [Honestidad y límites](/es/start/honesty-and-limits/) — el contrato observar-ampliamente / actuar-sobre-un-subconjunto y qué significa "planificado".

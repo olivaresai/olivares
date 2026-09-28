@@ -41,8 +41,9 @@ The full buyer-facing package lives in the repository under `docs/trust/`:
   first commercial GA, annual thereafter, event-driven re-tests), scope, and a
   remediation workflow wired to the published CVE remediation targets in `SECURITY.md`.
 - **Reference architecture** — deployment topologies (single-node, HA
-  active-passive, multi-region, air-gapped), trust zones, measured sizing
-  baselines, RPO/RTO tiers, and the IdP/SIEM/ITSM/KMS integration surface.
+  active-passive, multi-region, air-gapped), trust zones, dated sizing measurements
+  with workload limits, planning estimates, RPO/RTO targets, and the
+  IdP/SIEM/ITSM/KMS integration surface.
 - **EU procurement artifacts** — an EU AI Act Annex IV technical-documentation
   template populated from live evidence, and a clause-by-clause crosswalk to the
   Commission's MCC-AI model contractual clauses (High-Risk and Light variants).
@@ -74,8 +75,13 @@ report would attest, you can verify directly in your own deployment.
   packages (JSON/CSV/OSCAL), model AIBOMs (CycloneDX 1.6 / SPDX 3.0.1 AI
   profile), model cards, and the regulatory calendar are all API responses, not
   PDFs — the product treats compliance dates and mappings as version-pinned data.
-- **Operational claims:** SLOs, sizing and RPO/RTO numbers in the reference
-  architecture trace to measured baselines committed in the repository.
+- **Operational claims:** distinguish operating targets, scoped historical
+  measurements and customer commitments. SLO and RPO/RTO targets are not measured
+  baselines; sizing observations apply only to their recorded workload and platform.
+  The recorded SQLite restore timings do not qualify PostgreSQL recovery or a
+  complete rebuild with keys, authority and external-effect reconciliation.
+  Consult `deploy/support-matrix.md`, `docs/17-PRODUCTION-READINESS-SLO.md` and
+  `docs/SIZING-AND-CAPACITY.md` for qualification status, provenance and limits.
 
 ## Support and accessibility
 

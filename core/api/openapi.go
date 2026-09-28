@@ -158,6 +158,17 @@ func buildOpenAPI() map[string]any {
 		return o
 	}
 
+	// consentRequired adds the answer a grant gives for an existing account that is
+	// not a member of the tenant: 202 and nothing written, whoever asks.
+	consentRequired := func(o map[string]any) map[string]any {
+		o["responses"].(map[string]any)["202"] = jsonResp(
+			"Consent required: the account exists and is not a member of the tenant; nothing was written",
+			obj("type", "object", "properties", obj(
+				"status", obj("type", "string", "enum", arr("consent_required")),
+			), "required", arr("status")))
+		return o
+	}
+
 	op204 := func(id, summary string, tags []string, secured bool, params ...any) map[string]any {
 		o := op(id, summary, tags, secured, jsonResp("OK", obj("type", "object")), nil, params...)
 		resps := o["responses"].(map[string]any)
@@ -325,7 +336,7 @@ func buildOpenAPI() map[string]any {
 				jsonResp("OK", listOf(ref("User"))),
 				nil, limitParam, cursorParam),
 			"post", op201("createUser", "Create a user (superadmin)", tagUsers, true,
-				jsonResp("Created", ref("User")),
+				jsonResp("Created", ref("CreatedUser")),
 				body(ref("CreateUserInput")))),
 		"/v1/users/superadmins", obj(
 			"get", op("listSuperadmins", "List superadmin accounts and their active/inactive status (superadmin)", tagUsers, true,
@@ -359,14 +370,14 @@ func buildOpenAPI() map[string]any {
 				))), nil, idParam)),
 
 		// ── Memberships ────────────────────────────────────────────────
-		"/v1/memberships", obj("post", op201("grantMembership", "Grant a user a role in a tenant", tagSystem, true,
+		"/v1/memberships", obj("post", consentRequired(op201("grantMembership", "Grant a user a role in a tenant", tagSystem, true,
 			jsonResp("Created", obj("type", "object", "properties", obj(
 				"id", obj("type", "string", "format", "uuid"),
 				"user_id", obj("type", "string", "format", "uuid"),
 				"tenant", obj("type", "string"),
 				"role", obj("type", "string"),
 			))),
-			body(ref("GrantMembershipInput")))),
+			body(ref("GrantMembershipInput"))))),
 		"/v1/members", obj("get", op("listMembers", "List the resolved tenant's member roster (role, workspace scoping, groups)", tagSystem, true,
 			jsonResp("OK", listOf(ref("RosterMember"))),
 			nil, tenantParam)),
@@ -615,11 +626,32 @@ func buildOpenAPI() map[string]any {
 			"created_at", obj("type", "string", "format", "date-time"),
 		), "required", arr("id", "email", "status", "is_superadmin", "created_at")),
 
+		"CreatedUser", obj("type", "object", "properties", obj(
+			"id", obj("type", "string", "format", "uuid"),
+			"email", obj("type", "string", "format", "email"),
+			"display_name", obj("type", "string"),
+			"status", obj("type", "string", "enum", arr("active", "inactive")),
+			"is_superadmin", obj("type", "boolean"),
+			"created_at", obj("type", "string", "format", "date-time"),
+			"membership", obj("type", "object",
+				"description", "The first membership, granted in the create transaction when tenant was given",
+				"properties", obj(
+					"id", obj("type", "string", "format", "uuid"),
+					"user_id", obj("type", "string", "format", "uuid"),
+					"tenant", obj("type", "string"),
+					"role", obj("type", "string"),
+					"workspace_id", obj("type", "string"),
+				)),
+		), "required", arr("id", "email", "status", "is_superadmin", "created_at")),
+
 		"CreateUserInput", obj("type", "object", "properties", obj(
 			"email", obj("type", "string", "format", "email"),
 			"display_name", obj("type", "string"),
 			"password", obj("type", "string", "format", "password", "minLength", 12),
 			"superadmin", obj("type", "boolean", "default", false),
+			"tenant", obj("type", "string", "description", "Optional tenant granted role in the create transaction"),
+			"role", obj("type", "string", "description", "The role granted in tenant"),
+			"workspace_id", obj("type", "string", "description", "Optional workspace the membership is confined to"),
 		), "required", arr("email", "password")),
 
 		// ── Token ───────────────────────────────────────────────────

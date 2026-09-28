@@ -44,6 +44,7 @@
       "invite": "招待",
       "inviteAnother": "別の人を招待",
       "invited": "{{email}}を招待しました。",
+      "consentRequired": "{{email}} にはすでにアカウントがあります。所有者が同意した場合にのみ参加します。",
       "or": "または",
       "ssoCta": "SSOを接続",
       "password": "パスワード",

@@ -14,6 +14,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 )
@@ -32,6 +33,14 @@ var (
 	ErrInvalidProtocolReplay  = errors.New("sessions: invalid protocol replay claim")
 	ErrProtocolReplayConflict = errors.New("sessions: protocol replay conflict")
 	ErrProtocolReplayUnknown  = errors.New("sessions: protocol replay evidence unavailable")
+	// ErrProtocolReplayAuthorityMoved answers a prepared replay whose fence or
+	// prepared evidence moved on both of its attempts. Nothing was written, so a
+	// later delivery is not a replay.
+	ErrProtocolReplayAuthorityMoved = fmt.Errorf("%w: authority_moved", ErrProtocolReplayUnknown)
+	// ErrProtocolReplayPreparedNested refuses a prepared replay opened inside
+	// another replay's transaction, where its standing read and preparation
+	// could only wait on that transaction.
+	ErrProtocolReplayPreparedNested = fmt.Errorf("%w: prepared_replay_nested", ErrInvalidProtocolReplay)
 )
 
 // ProtocolReplayClaim is the server-resolved identity of one authenticated
@@ -77,11 +86,21 @@ type ProtocolReplayMutation func(context.Context) (ProtocolReplaySettlement, err
 
 // ProtocolReplayStore is the composition-root port used by A2A/MCP adapters.
 // ApplyProtocolReplay commits the guarded mutation and its replay row together.
+// ApplyPreparedProtocolReplay does the same for a mutation that names accounts,
+// resolves work owners or publishes: it reads what the plan declares before
+// its transaction opens.
 type ProtocolReplayStore interface {
 	ApplyProtocolReplay(
 		context.Context,
 		model.TenantID,
 		ProtocolReplayClaim,
+		ProtocolReplayMutation,
+	) (ProtocolReplayResult, error)
+	ApplyPreparedProtocolReplay(
+		context.Context,
+		model.TenantID,
+		ProtocolReplayClaim,
+		ProtocolReplayPlan,
 		ProtocolReplayMutation,
 	) (ProtocolReplayResult, error)
 }
@@ -138,90 +157,15 @@ func (m *Module) ApplyProtocolReplay(
 	if err != nil {
 		return ProtocolReplayResult{}, err
 	}
-	var result ProtocolReplayResult
 	owning := true
 	maxAttempts := 2
 	if _, joined := protocolReplayScopeFromContext(ctx, tenant); joined {
 		maxAttempts = 1
 		owning = false
 	}
+	var result ProtocolReplayResult
 	for attempt := 0; attempt < maxAttempts; attempt++ {
-		var attemptCollector *deferredWorkOutboxCollector
-		if owning {
-			attemptCollector = &deferredWorkOutboxCollector{}
-		}
-		err = m.workData(tenant).Mutate(ctx, func(sc store.Scope) error {
-			repo, err := sc.Ext(protocolReplayGuardKind)
-			if err != nil {
-				return err
-			}
-			current, found, err := findProtocolReplayGuard(ctx, repo, normalized)
-			if err != nil {
-				return err
-			}
-			if found {
-				if current.WorkspaceID != normalized.WorkspaceID ||
-					(!normalized.ExpectedBindingID.IsZero() && current.BindingID != normalized.ExpectedBindingID) {
-					return protocolReplayConflict("claim_identity_changed")
-				}
-				result = ProtocolReplayResult{Guard: current, Replayed: true}
-				return nil
-			}
-			now, err := transactionNow(ctx, sc)
-			if err != nil {
-				return err
-			}
-			if !normalized.ExpiresAt.After(now.Time()) {
-				return protocolReplayInvalid("claim_expired")
-			}
-
-			joined, joinedCtx := newProtocolReplayTransactionContext(ctx, tenant, sc)
-			if attemptCollector != nil {
-				joined.collector = attemptCollector
-			}
-			settlement, mutationErr := mutation(joinedCtx)
-			joined.active.Store(false)
-			if mutationErr != nil {
-				return mutationErr
-			}
-			if !normalized.ExpectedBindingID.IsZero() &&
-				settlement.BindingID != normalized.ExpectedBindingID {
-				return protocolReplayConflict("settlement_binding_changed")
-			}
-			if !settlement.BindingID.IsZero() {
-				if err := validateProtocolReplayBinding(ctx, sc, normalized, settlement.BindingID); err != nil {
-					return err
-				}
-			}
-			guard := ProtocolReplayGuard{
-				AppendOnlyCommunicationEntity: AppendOnlyCommunicationEntity{
-					CommunicationEntity: CommunicationEntity{
-						ID: model.NewID(), TenantID: tenant, WorkspaceID: normalized.WorkspaceID,
-						Version: 1, CreatedAt: now.Time(),
-					},
-				},
-				Protocol: normalized.Protocol, PeerAuthority: normalized.PeerAuthority,
-				ReplayKind: normalized.Kind, ReplayHash: append([]byte(nil), normalized.replayHash...),
-				FirstSeenAt: now.Time(), ExpiresAt: normalized.ExpiresAt,
-				BindingID: settlement.BindingID,
-			}
-			created, err := repo.CreateWithID(ctx, guard.ID, protocolReplayGuardRecord(guard))
-			if err != nil {
-				return err
-			}
-			guard, err = protocolReplayGuardFromRecord(created)
-			if err != nil {
-				return err
-			}
-			result = ProtocolReplayResult{Guard: guard}
-			return nil
-		})
-		if attemptCollector != nil {
-			requests := attemptCollector.closeAndTake()
-			if err == nil {
-				m.flushDeferredWorkOutboxDrains(requests)
-			}
-		}
+		result, err = m.protocolReplayAttempt(ctx, tenant, normalized, owning, nil, nil, mutation)
 		if err == nil || !errors.Is(err, store.ErrConflict) {
 			break
 		}
@@ -230,6 +174,107 @@ func (m *Module) ApplyProtocolReplay(
 		return ProtocolReplayResult{}, classifyProtocolReplayStoreError(err)
 	}
 	return result, nil
+}
+
+// protocolReplayAttempt runs one attempt of a replay in one transaction. When
+// refs is non-empty the attempt pins them first, as the owning transaction's
+// first lock. It then answers an exact replay, or runs the mutation on a
+// joined context that carries prepared, and writes the guard.
+func (m *Module) protocolReplayAttempt(
+	ctx context.Context,
+	tenant model.TenantID,
+	normalized normalizedProtocolReplayClaim,
+	owning bool,
+	prepared *preparedReplay,
+	refs []store.UserAuthorityFactRef,
+	mutation ProtocolReplayMutation,
+) (ProtocolReplayResult, error) {
+	var result ProtocolReplayResult
+	var attemptCollector *deferredWorkOutboxCollector
+	if owning {
+		attemptCollector = &deferredWorkOutboxCollector{}
+	}
+	err := m.workData(tenant).Mutate(ctx, func(sc store.Scope) error {
+		if len(refs) > 0 {
+			if _, err := auth.PinFence(ctx, sc, auth.FenceDirectory, refs); err != nil {
+				return err
+			}
+		}
+		repo, err := sc.Ext(protocolReplayGuardKind)
+		if err != nil {
+			return err
+		}
+		current, found, err := findProtocolReplayGuard(ctx, repo, normalized)
+		if err != nil {
+			return err
+		}
+		if found {
+			if current.WorkspaceID != normalized.WorkspaceID ||
+				(!normalized.ExpectedBindingID.IsZero() && current.BindingID != normalized.ExpectedBindingID) {
+				return protocolReplayConflict("claim_identity_changed")
+			}
+			result = ProtocolReplayResult{Guard: current, Replayed: true}
+			return nil
+		}
+		now, err := transactionNow(ctx, sc)
+		if err != nil {
+			return err
+		}
+		if !normalized.ExpiresAt.After(now.Time()) {
+			return protocolReplayInvalid("claim_expired")
+		}
+
+		joined, joinedCtx := newProtocolReplayTransactionContext(ctx, tenant, sc)
+		if attemptCollector != nil {
+			joined.collector = attemptCollector
+		}
+		if prepared != nil {
+			joined.prepared = prepared
+		}
+		settlement, mutationErr := mutation(joinedCtx)
+		joined.active.Store(false)
+		if mutationErr != nil {
+			return mutationErr
+		}
+		if !normalized.ExpectedBindingID.IsZero() &&
+			settlement.BindingID != normalized.ExpectedBindingID {
+			return protocolReplayConflict("settlement_binding_changed")
+		}
+		if !settlement.BindingID.IsZero() {
+			if err := validateProtocolReplayBinding(ctx, sc, normalized, settlement.BindingID); err != nil {
+				return err
+			}
+		}
+		guard := ProtocolReplayGuard{
+			AppendOnlyCommunicationEntity: AppendOnlyCommunicationEntity{
+				CommunicationEntity: CommunicationEntity{
+					ID: model.NewID(), TenantID: tenant, WorkspaceID: normalized.WorkspaceID,
+					Version: 1, CreatedAt: now.Time(),
+				},
+			},
+			Protocol: normalized.Protocol, PeerAuthority: normalized.PeerAuthority,
+			ReplayKind: normalized.Kind, ReplayHash: append([]byte(nil), normalized.replayHash...),
+			FirstSeenAt: now.Time(), ExpiresAt: normalized.ExpiresAt,
+			BindingID: settlement.BindingID,
+		}
+		created, err := repo.CreateWithID(ctx, guard.ID, protocolReplayGuardRecord(guard))
+		if err != nil {
+			return err
+		}
+		guard, err = protocolReplayGuardFromRecord(created)
+		if err != nil {
+			return err
+		}
+		result = ProtocolReplayResult{Guard: guard}
+		return nil
+	})
+	if attemptCollector != nil {
+		requests := attemptCollector.closeAndTake()
+		if err == nil {
+			m.flushDeferredWorkOutboxDrains(requests)
+		}
+	}
+	return result, err
 }
 
 func findProtocolReplayGuard(
@@ -347,7 +392,10 @@ type protocolReplayTransactionContext struct {
 	tenant    model.TenantID
 	scope     store.Scope
 	collector *deferredWorkOutboxCollector
-	active    atomic.Bool
+	// prepared is the owning prepared replay's pin and evidence record; nil
+	// in a plain replay.
+	prepared *preparedReplay
+	active   atomic.Bool
 }
 
 // deferredWorkOutboxDrain is one actual shared-drain call skipped while a
@@ -400,11 +448,15 @@ func newProtocolReplayTransactionContext(
 	scope store.Scope,
 ) (*protocolReplayTransactionContext, context.Context) {
 	var collector *deferredWorkOutboxCollector
+	var prepared *preparedReplay
 	if parent, ok := ctx.Value(protocolReplayTransactionContextKey{}).(*protocolReplayTransactionContext); ok &&
-		parent != nil && parent.tenant == tenant && parent.collector != nil {
+		parent != nil && parent.tenant == tenant {
 		collector = parent.collector
+		prepared = parent.prepared
 	}
-	joined := &protocolReplayTransactionContext{tenant: tenant, scope: scope, collector: collector}
+	joined := &protocolReplayTransactionContext{
+		tenant: tenant, scope: scope, collector: collector, prepared: prepared,
+	}
 	joined.active.Store(true)
 	return joined, context.WithValue(ctx, protocolReplayTransactionContextKey{}, joined)
 }

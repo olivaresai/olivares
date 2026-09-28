@@ -14,7 +14,8 @@
   },
   "tabs": {
     "catalog": "目录",
-    "topology": "拓扑"
+    "topology": "拓扑",
+    "coverage": "采集覆盖"
   },
   "facets": {
     "allKinds": "全部类型",
@@ -121,6 +122,84 @@
       "title": "尚未发现资产域实体",
       "description": "连接器上报对智能体、会话、身份、MCP 能力、模型、提供方或资源的观测后，相应实体才会显示。",
       "action": "打开能力"
+    }
+  },
+  "coverage": {
+    "title": "采集覆盖",
+    "intro": "读取一个已打开的来源登记的采集证据。请输入运行时当前打开的登记的选择器：旧的选择器读取的是那次历史选择，而不是当前名册。",
+    "form": {
+      "legend": "来源登记选择器",
+      "sourceId": "来源标识",
+      "sourceIdHint": "来源名册行的持久标识，而不是其名称。",
+      "sourceRevision": "来源修订",
+      "sourceRevisionHint": "运行时为此登记打开的名册修订。",
+      "environmentRef": "环境引用",
+      "environmentRefHint": "应用该登记的执行环境。",
+      "submit": "读取覆盖",
+      "required": "请输入一个值。",
+      "tooLong": "最多使用 {{max}} 字节。",
+      "revisionInvalid": "请输入正整数。"
+    },
+    "idle": "输入来源标识、来源修订和环境引用以读取采集覆盖。三者都有效之前不会读取任何内容。",
+    "loading": "正在读取采集覆盖",
+    "refresh": "重新读取",
+    "scopeNote": "覆盖描述的是此登记及其查询在观测区间内的情况。它不是全局资产快照，也不是提供方授权。空的完成不会删除资源。",
+    "hasMore": "响应表明还有更多页。这是列表的续页标志，不能证明采集已完整。此选择最多只有一个头。",
+    "unknownNote": "未知表示已存储的证据无法确定此选择的覆盖。未匹配的选择读作未知，绝不读作无，也不读作继承的完整性。",
+    "values": {
+      "complete": "完整",
+      "partial": "部分",
+      "unavailable": "不可用",
+      "unsupported": "不支持",
+      "unknown": "未知"
+    },
+    "projections": {
+      "pending": "待定",
+      "committed": "已提交",
+      "failed": "失败"
+    },
+    "current": {
+      "title": "当前采集证据",
+      "coverage": "覆盖",
+      "reason": "原因",
+      "reasonNone": "未记录原因",
+      "projection": "投影",
+      "projectionHint": "排队的成员在其回执提交之前保持待定。仅枚举不能使其合格。",
+      "runId": "运行标识",
+      "runOrder": "运行顺序",
+      "admitted": "已接纳成员",
+      "committed": "已提交成员",
+      "expected": "预期成员",
+      "expectedOpen": "在主机关闭运行之前不记录。",
+      "rejection": "拒绝原因",
+      "noRun": "此选择没有记录任何采集运行。未知覆盖不等于零：它并不说明来源是否持有资源。",
+      "emptyComplete": "此运行以零个成员完成。空的完成不会从目录中删除资源。"
+    },
+    "lastQualified": {
+      "title": "最近一次合格成功",
+      "note": "此确切登记和范围的历史合格记录。它与当前枚举相互独立，之后的拒绝证据不会改写它。",
+      "absent": "此登记和范围没有报告合格成功。在某次运行合格之前它不存在，它的缺失并不说明当前运行的任何情况。"
+    },
+    "fields": {
+      "sourceId": "来源标识",
+      "sourceRevision": "来源修订",
+      "environmentRef": "环境引用",
+      "scopeContract": "范围契约",
+      "family": "类别",
+      "requestedScope": "请求范围指纹",
+      "fulfilledScope": "已满足范围指纹",
+      "hostStarted": "主机运行开始",
+      "hostFinished": "主机运行关闭",
+      "producerStarted": "生产方枚举开始",
+      "producerFinished": "生产方枚举结束",
+      "qualified": "合格时间",
+      "notRecorded": "未记录"
+    },
+    "error": {
+      "invalidTitle": "选择被拒绝",
+      "invalid": "引擎拒绝了此选择。来源标识和环境引用不能为空且最多 128 字节，来源修订必须是正整数。",
+      "suspendedTitle": "租户服务已暂停",
+      "suspended": "此租户的服务已暂停或未在服务中，因此无法读取采集覆盖。"
     }
   }
 }

@@ -130,8 +130,11 @@ builds:
     # third-party rebuild must pass -tags release AND both published public anchors
     # to match SHA-256 (docs/RELEASE-VERIFICATION.md).
     mod_timestamp: "{{ .CommitTimestamp }}"
-    goos: [linux, darwin]
-    goarch: [amd64, arm64]
+    # linux/amd64 only: this build feeds every linux/amd64 output, the Arch Linux package
+    # included, which no other architecture gets. The other three targets are the
+    # `olivares-ports` build below, identical in everything but its targets.
+    goos: [linux]
+    goarch: [amd64]
     # Render the VERSION-PINNED second-stage installer as a PRE-BUILD hook of this build, not
     # as a global `before` hook. GoReleaser 2.17.0 runs `before` hooks and only THEN ensures
     # that dist/ is empty, so a `before` hook writing dist/olivares-install-*.sh stopped every
@@ -142,6 +145,56 @@ builds:
     hooks:
       pre:
         - bash scripts/render-release-installer.sh {{ .Version }} dist/olivares-install-{{ .Version }}.sh {{ .IsSnapshot }}
+
+  # ---- the base binary's other targets --------------------------------------------
+  # IDENTICAL to the `olivares` build above in everything but its targets (kept in
+  # lockstep; scripts/test-nfpm-archlinux.sh compares them).
+  - id: olivares-ports
+    main: ./cmd/olivares
+    binary: olivares
+    # NOT plain `go`: the wrapper first compiles the first-party connector
+    # plugins FOR THIS TARGET (GOOS/GOARCH from the env goreleaser sets) into the
+    # go:embed dir cmd/olivares/firstparty/bins, under a lock (goreleaser builds
+    # targets in parallel and that dir is shared state), then execs `go` with the
+    # unchanged args. Without it every released artifact embedded ZERO plugins —
+    # the flagship claude source included — while dev builds (task build) worked
+    # (E1). The Extract path is asserted on the artifact by
+    # scripts/release-smoke.sh after a snapshot run.
+    tool: scripts/goreleaser-build-wrapper.sh
+    env:
+      - CGO_ENABLED=0 # modernc.org/sqlite is pure Go: fully static, memory-safe.
+    flags:
+      - -trimpath
+    # -tags release drops the dev license seed from the binary (core/license:
+    # embedded_dev.go is excluded; embedded_release.go has no seed). The verification
+    # anchor is then the license public key injected below. OLIVARES_LICENSE_PUBKEY
+    # and OLIVARES_OTA_PUBKEY are PUBLIC repo variables, not secrets. Their private
+    # halves have different custody: the license signer is the narrow online Worker;
+    # the OTA signer stays off-box/HSM and signs only during the release ceremony.
+    # The before hook rejects either empty/malformed anchor and rejects equality.
+    tags:
+      - release
+    ldflags:
+      - -s -w -buildid=
+      - -X main.version={{ .Version }}
+      - -X main.commit={{ .ShortCommit }}
+      - -X main.date={{ .CommitDate }}
+      - -X github.com/olivaresai/olivares/core/license.releasePublicKeyB64={{ .Env.OLIVARES_LICENSE_PUBKEY }}
+      # A DEDICATED OTA anchor authenticates update manifests. It must never be
+      # the license key whose private half is online in the fulfilment Worker.
+      - -X github.com/olivaresai/olivares/core/release.artifactVerifyKeyB64={{ .Env.OLIVARES_OTA_PUBKEY }}
+    # Pin the embedded timestamp to the commit so the same source → same bytes.
+    # NOTE: the embedded pubkey is now part of the reproducible input vector — a
+    # third-party rebuild must pass -tags release AND both published public anchors
+    # to match SHA-256 (docs/RELEASE-VERIFICATION.md).
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    # linux/arm64, darwin/amd64 and darwin/arm64: the base binary's other targets. The
+    # installer hook stays on `olivares`, which renders it once.
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+    ignore:
+      - goos: linux
+        goarch: amd64
 
   # ---- FIPS 140-3 build variant (SCP-09) — a SEPARATE, opt-in artifact -----------
   # IDENTICAL to the `olivares` build above (same -trimpath / -ldflags /
@@ -192,7 +245,7 @@ archives:
   # bundle EVERY build). The base build's binary bytes are unchanged by this — only
   # which builds this archive packages is made explicit.
   - id: olivares
-    ids: [olivares]
+    ids: [olivares, olivares-ports]
     formats: [tar.gz]
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     files:
@@ -251,15 +304,30 @@ checksum:
   # artifact list (internal/pipe/checksums/checksums.go:174-198), so `release.extra_files`
   # below is what actually puts the file on the draft. Both are required; neither is a
   # duplicate of the other.
+  #
+  # ⛔ RELEASE-ONLY EVIDENCE IS SKIPPED FOR A SNAPSHOT, AND ONLY FOR A SNAPSHOT. The evidence hook writes these two
+  # files for a real release and deliberately writes nothing for a snapshot (scripts/release-commit-evidence.sh), so
+  # the unconditional globs stopped every `task release:snapshot` at "calculating checksums". Measured in run
+  # 36357280245 (2026-09-27): every binary, archive, package and SBOM built in 14m8s, then "globbing failed for
+  # pattern release-commit.txt". The guard is GoReleaser's own rule as the pinned v2.17.0 binary carries it
+  # (internal/extrafiles/extra_files.go, extrafiles.Find): each glob is TEMPLATED, a glob that renders EMPTY is
+  # skipped ("ignoring empty glob"), and a non-empty glob that matches nothing still FAILS the stage. `not
+  # .IsSnapshot` therefore renders the literal name for every real release — a release missing either file still
+  # stops here, exactly as before — and nothing for a snapshot, whose checksums.txt still covers every artifact it
+  # built (no `ids`, no `disable`). No placeholder file is written to make a glob match.
+  # scripts/test-release-snapshot-checksum.sh pins both directions.
   extra_files:
-    - glob: release-commit.txt
+    - glob: '{{ if not .IsSnapshot }}release-commit.txt{{ end }}'
     # THE RUN THIS ARTIFACT SET CAME OUT OF, inside the same signed set. The commit above
     # says which SOURCE was built; it cannot say that this set was produced by a completed,
     # successful phase-1 run of this workflow in this repository, and the finalizer refuses
     # to publish without that second fact (scripts/release-finalize-stable.sh). Same pairing
     # rule as the line above: this declaration CHECKSUMS, `release.extra_files` UPLOADS, and
     # neither implies the other in v2.17.0.
-    - glob: release-build-context.json
+    - glob: '{{ if not .IsSnapshot }}release-build-context.json{{ end }}'
+    # The versioned installer IS produced by a snapshot (the olivares build pre-hook renders it with
+    # `render-release-installer.sh <version> … true`), so it stays unconditional and a snapshot's
+    # checksums.txt covers it too.
     - glob: dist/olivares-install-*.sh
 
 # Per-archive SBOMs as SIDECAR files. SPDX-2.3 (the interchange baseline) AND
@@ -332,10 +400,11 @@ signs:
 # never enables/starts the service (the operator opts in). Contents use the
 # packager field (goreleaser v2.17.0 NFPMContent) so APK does not receive the
 # systemd unit. APK upgrade scripts are apk.scripts, not host-tool detection.
+# The Arch Linux package is the second entry below.
 nfpms:
   - id: olivares-nfpm
     package_name: olivares
-    ids: [olivares]
+    ids: [olivares, olivares-ports]
     vendor: Olivares.AI
     homepage: https://olivares.ai
     maintainer: Olivares.AI <enterprise@olivares.ai>
@@ -421,6 +490,72 @@ nfpms:
       scripts:
         preupgrade: packaging/nfpm/apk-preupgrade.sh
         postupgrade: packaging/nfpm/postinstall.sh
+  # The Arch Linux package: linux/amd64 only (the `olivares` build), because no pacman
+  # repository or AUR entry serves another architecture. Its own entry because nfpm
+  # selects binaries per entry, not per format. The licence texts, unit, stamp and env
+  # file match the entry above; the scriptlets are Arch's own, because nFPM copies each
+  # script body into a function of .INSTALL and pacman calls it with version arguments,
+  # not with the deb/rpm/apk arguments the shared scripts read. The file name stays
+  # GoReleaser's default olivares_<version>_linux_amd64: the release index admits only
+  # olivares_<version>_* members.
+  - id: olivares-nfpm-archlinux
+    package_name: olivares
+    ids: [olivares]
+    vendor: Olivares.AI
+    homepage: https://olivares.ai
+    maintainer: Olivares.AI <enterprise@olivares.ai>
+    description: |-
+      Ground truth for enterprise AI — open, self-hosted AI governance control plane.
+      Discover the agents on your infrastructure, map what they can touch (the read/write
+      access map), surface least-privilege drift, and prove it — without standing in the
+      data path. Single static binary, embedded console, SQLite or Postgres.
+    license: AGPL-3.0-only
+    formats: [archlinux]
+    bindir: /usr/bin
+    contents:
+      - src: LICENSE
+        dst: /usr/share/doc/olivares/LICENSE
+      - src: NOTICE
+        dst: /usr/share/doc/olivares/NOTICE
+      - src: LICENSING.md
+        dst: /usr/share/doc/olivares/LICENSING.md
+      - src: DISCLAIMER.md
+        dst: /usr/share/doc/olivares/DISCLAIMER.md
+      - src: LICENSES
+        dst: /usr/share/doc/olivares/LICENSES
+      # Arch Linux keeps application licences in /usr/share/licenses/<package> (Arch package
+      # guidelines), and its container images do not extract /usr/share/doc.
+      - src: LICENSE
+        dst: /usr/share/licenses/olivares/LICENSE
+      - src: NOTICE
+        dst: /usr/share/licenses/olivares/NOTICE
+      - src: LICENSING.md
+        dst: /usr/share/licenses/olivares/LICENSING.md
+      - src: DISCLAIMER.md
+        dst: /usr/share/licenses/olivares/DISCLAIMER.md
+      - src: LICENSES
+        dst: /usr/share/licenses/olivares/LICENSES
+      - src: packaging/systemd/olivares.service
+        dst: /usr/lib/systemd/system/olivares.service
+      - src: packaging/nfpm/package-init-systemd.txt
+        dst: /usr/lib/olivares/package-init
+      # nFPM lists an Arch config file in .PKGINFO `backup`: pacman keeps a modified copy
+      # as .pacnew on upgrade and .pacsave on removal.
+      - src: packaging/olivares.env.example
+        dst: /etc/olivares/olivares.env
+        type: "config|noreplace"
+      # No /var/lib/olivares node: the package would own a root:root node that pacman
+      # compares with the olivares-owned directory on every upgrade.
+    scripts:
+      postinstall: packaging/nfpm/archlinux-postinstall.sh
+      preremove: packaging/nfpm/archlinux-preremove.sh
+      postremove: packaging/nfpm/archlinux-postremove.sh
+    archlinux:
+      packager: Olivares.AI <enterprise@olivares.ai>
+      scripts:
+        # pacman runs pre_upgrade/post_upgrade on an upgrade, never remove+install.
+        # There is no pre_upgrade: an upgrade does not stop the service.
+        postupgrade: packaging/nfpm/archlinux-postinstall.sh
 
 # Homebrew tap, as a CASK (the non-deprecated successor to `brews`; Homebrew now wants
 # casks for pre-built binaries). A cask auto-strips the Gatekeeper quarantine xattr on
@@ -502,7 +637,7 @@ dockers:
   # feeds it the arm64 binary (ids + goarch). Combined with the amd64 image into a
   # multi-arch manifest below. fips/stig stay amd64-only (x86 gov/compliance estates).
   - id: olivares-image-arm64
-    ids: [olivares]
+    ids: [olivares-ports]
     dockerfile: Dockerfile.release
     # The Dockerfile COPYs the licence texts, so they must be IN the build context;
     # goreleaser's context is a temp dir holding the binary and nothing else.

@@ -38,6 +38,7 @@ func (m *Module) Permissions() []auth.Permission {
 // authentication, tenant resolution and the declared permission check before the
 // handler runs, and pins the data handle to the resolved tenant.
 func (m *Module) APIRoutes(reg api.RouteRegistrar) {
+	reg.Handle("GET", "/collections", permCatalogRead, m.handleCollections)
 	reg.Handle("GET", "/summary", permCatalogRead, m.handleSummary)
 	reg.Handle("GET", "/entities", permCatalogRead, m.handleListEntities)
 	reg.Handle("GET", "/entities/{kind}/{id}", permCatalogRead, m.handleGetEntity)

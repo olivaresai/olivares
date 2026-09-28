@@ -49,9 +49,9 @@ Le package complet destiné aux acheteurs réside dans le dépôt sous
   re-tests déclenchés par événement), périmètre, et un flux de remédiation câblé
   aux objectifs de remédiation de CVE publiés dans `SECURITY.md`.
 - **Architecture de référence** — topologies de déploiement (nœud unique, HA
-  actif-passif, multi-région, air-gapped), zones de confiance, lignes de base de
-  dimensionnement mesurées, paliers RPO/RTO, et la surface d'intégration
-  IdP/SIEM/ITSM/KMS.
+  actif-passif, multi-région, air-gapped), zones de confiance, mesures datées de
+  dimensionnement avec leurs limites de charge, estimations de planification,
+  objectifs RPO/RTO et surface d'intégration IdP/SIEM/ITSM/KMS.
 - **Artefacts d'approvisionnement UE** — un modèle de documentation technique
   Annexe IV de l'EU AI Act rempli à partir de preuves en direct, et une
   table de correspondance clause par clause vers les clauses contractuelles
@@ -89,9 +89,15 @@ dans votre propre déploiement.
   réglementaire sont tous des réponses d'API, pas des PDF — le produit traite
   les dates et les correspondances de conformité comme des données figées par
   version.
-- **Affirmations opérationnelles :** les SLO, le dimensionnement et les chiffres
-  RPO/RTO de l'architecture de référence renvoient à des lignes de base mesurées
-  et versionnées dans le dépôt.
+- **Affirmations opérationnelles :** distinguez objectifs d'exploitation,
+  mesures historiques à périmètre défini et engagements envers le client. Les
+  objectifs SLO et RPO/RTO ne sont pas des références mesurées ; les observations
+  de dimensionnement valent uniquement pour la charge et la plateforme consignées.
+  Les temps de restauration SQLite mesurés ne qualifient ni la reprise PostgreSQL
+  ni une reconstruction complète avec clés, autorisations et rapprochement des
+  effets externes. Consultez `deploy/support-matrix.md`,
+  `docs/17-PRODUCTION-READINESS-SLO.md` et `docs/SIZING-AND-CAPACITY.md` pour le
+  statut de qualification, la provenance et les limites.
 
 ## Support et accessibilité
 

@@ -90,7 +90,11 @@ func TestSCIMProvisionJoinsTenant(t *testing.T) {
 	}
 }
 
-func TestSCIMDisableRevokesAccessButKeepsRecord(t *testing.T) {
+// TestSCIMDisableOffboardsOnlyFromTheTenant: a tenant's active=false removes the
+// account from that tenant — its membership, the tokens bound to the tenant —
+// and excludes its account-scope sessions there. It never writes the account's
+// global status and never revokes a session that carries another tenant.
+func TestSCIMDisableOffboardsOnlyFromTheTenant(t *testing.T) {
 	ctx := context.Background()
 	st := testStore(t)
 	a := auth.NewAuthenticator(st, nil)
@@ -102,27 +106,38 @@ func TestSCIMDisableRevokesAccessButKeepsRecord(t *testing.T) {
 	}
 	sessTok, apiTok := mintUserCreds(t, st, u.ID, tenant)
 
-	// active=false: cut access but keep the membership/record.
 	if _, err := a.SCIMUpdateUser(ctx, super, tenant, u.ID, auth.SCIMUserInput{UserName: "x@acme.com", Active: false}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := a.Authenticate(ctx, sessTok); !errors.Is(err, auth.ErrUnauthenticated) {
-		t.Errorf("session after disable = %v, want revoked", err)
+	p, err := a.Authenticate(ctx, sessTok)
+	if err != nil {
+		t.Fatalf("the account-scope session after the tenant's disable = %v, want it to authenticate", err)
+	}
+	if !p.ExcludedFrom(tenant) || p.IsMember(tenant) {
+		t.Errorf("the session still carries the disabling tenant")
 	}
 	if _, err := a.Authenticate(ctx, apiTok); !errors.Is(err, auth.ErrUnauthenticated) {
-		t.Errorf("token after disable = %v, want revoked", err)
+		t.Errorf("the tenant-bound token after disable = %v, want revoked", err)
 	}
-	// The record is still retrievable as a member (a disable, not a removal).
-	got, err := a.SCIMGetMember(ctx, tenant, u.ID)
-	if err != nil {
-		t.Fatalf("member after disable = %v, want still present", err)
+	if _, err := a.SCIMGetMember(ctx, tenant, u.ID); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("member after disable = %v, want ErrNotFound (offboarded)", err)
 	}
-	if got.Status != model.StatusInactive {
-		t.Errorf("status = %q, want inactive", got.Status)
+	if err := st.AuthView(ctx, func(as store.AuthScope) error {
+		got, err := as.Users().Get(ctx, u.ID)
+		if err == nil && got.Status != model.StatusActive {
+			t.Errorf("status = %q, want the account's global status untouched", got.Status)
+		}
+		return err
+	}); err != nil {
+		t.Fatal(err)
 	}
 }
 
-func TestSCIMDeprovisionOffboardsAndDeactivates(t *testing.T) {
+// TestSCIMDeprovisionOffboardsWithoutDeactivating: DELETE removes the account from
+// the tenant even when it was the account's last membership, and leaves the
+// account's global status, its account-scope sessions and its authenticators to
+// the deployment.
+func TestSCIMDeprovisionOffboardsWithoutDeactivating(t *testing.T) {
 	ctx := context.Background()
 	st := testStore(t)
 	a := auth.NewAuthenticator(st, nil)
@@ -133,7 +148,6 @@ func TestSCIMDeprovisionOffboardsAndDeactivates(t *testing.T) {
 		t.Fatal(err)
 	}
 	sessTok, apiTok := mintUserCreds(t, st, u.ID, tenant)
-	// A registered authenticator must go with the account on offboard.
 	if err := st.AuthMutate(ctx, func(as store.AuthScope) error {
 		_, err := as.WebAuthnCredentials().Create(ctx, model.WebAuthnCredential{
 			UserID: u.ID, CredentialID: "bGVhdmVyLWtleQ", Credential: []byte(`{}`),
@@ -143,28 +157,38 @@ func TestSCIMDeprovisionOffboardsAndDeactivates(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// DELETE (leaver): remove membership, revoke creds, deactivate (no tenants left).
 	if err := a.SCIMDeprovisionUser(ctx, super, tenant, u.ID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := a.SCIMGetMember(ctx, tenant, u.ID); !errors.Is(err, store.ErrNotFound) {
 		t.Errorf("member after deprovision = %v, want ErrNotFound (offboarded)", err)
 	}
-	if _, err := a.Authenticate(ctx, sessTok); !errors.Is(err, auth.ErrUnauthenticated) {
-		t.Errorf("session after deprovision = %v, want revoked", err)
+	p, err := a.Authenticate(ctx, sessTok)
+	if err != nil {
+		t.Fatalf("the account-scope session after deprovision = %v, want it to authenticate", err)
+	}
+	if !p.ExcludedFrom(tenant) || p.IsMember(tenant) {
+		t.Errorf("the session still carries the tenant that removed the account")
 	}
 	if _, err := a.Authenticate(ctx, apiTok); !errors.Is(err, auth.ErrUnauthenticated) {
-		t.Errorf("token after deprovision = %v, want revoked", err)
+		t.Errorf("the tenant-bound token after deprovision = %v, want revoked", err)
 	}
 	if err := st.AuthView(ctx, func(as store.AuthScope) error {
+		got, err := as.Users().Get(ctx, u.ID)
+		if err != nil {
+			return err
+		}
+		if got.Status != model.StatusActive {
+			t.Errorf("status after deprovision = %q, want the global status untouched", got.Status)
+		}
 		creds, _, err := as.WebAuthnCredentials().List(ctx, model.Query{
 			Filters: []model.Filter{{Column: "user_id", Op: model.OpEq, Value: u.ID.String()}},
 		})
 		if err != nil {
 			return err
 		}
-		if len(creds) != 0 {
-			t.Errorf("webauthn credentials after deprovision = %d, want 0 (hardware bindings offboarded)", len(creds))
+		if len(creds) != 1 {
+			t.Errorf("webauthn credentials after deprovision = %d, want the account's one kept", len(creds))
 		}
 		return nil
 	}); err != nil {

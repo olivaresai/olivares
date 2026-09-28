@@ -3,8 +3,8 @@ title: "Módulo XI — coste y FinOps de IA"
 description: >-
   Contabiliza el gasto en IA desde el stream de coste, segméntalo por cualquier
   dimensión de atribución, prevé el período, y aplica presupuestos que deniegan
-  el gasto en el tope — sin dinero en el cable, opt-in y fail-open. Qué hace, y sus
-  límites.
+  el gasto en el tope — sin dinero en el cable, opt-in, y denegando cuando no se
+  puede leer el libro mayor. Qué hace, y sus límites.
 ---
 
 El módulo XI es la capa de **coste / FinOps** para IA: contabiliza lo que reportan
@@ -74,14 +74,20 @@ suave con **HTTP 429**, y la denegación se escribe en el ledger append-only y s
 audita. Ver [Gobernar y aprobar](/es/how-to/govern-and-approve/).
 
 :::caution[Límites honestos]
-- **La aplicación es opt-in, no deny-closed por defecto.** Sin un presupuesto que
-  aplique y que tenga scope sobre una petición, nunca se deniega nada — esa ausencia
-  es el estado normal, no un agujero de seguridad. Solo un presupuesto
-  *definitivamente* en su límite deniega. Esto es deliberado y la inversa de la
-  postura deny-closed del gate de aprobación.
-- **La junta falla en abierto.** Un error de lectura de FinOps nunca tumba una acción
-  en vuelo — un fire/open aprobado procede y el router resuelve. El backstop durable
-  es el finding de tope-de-presupuesto emitido en la ingesta, no el gate pre-flight.
+- **La aplicación es opt-in, no deny-closed por defecto.** Mientras FinOps pueda leer su
+  libro mayor, una petición sobre la que no tenga scope ningún presupuesto que aplique nunca
+  se deniega — esa ausencia es el estado normal, no un agujero de seguridad. Un
+  presupuesto deniega solo cuando está *definitivamente* en su límite. Esto es deliberado
+  y la inversa de la postura deny-closed del gate de aprobación.
+- **Un libro mayor que el gate no puede leer deniega.** Cuando FinOps no puede leer ni
+  escribir su libro mayor de presupuestos, la admisión no se puede establecer y el gasto se
+  deniega: se rechazan el fire de orquestación, el open de voz, la ruta de modelo, la
+  ejecución de la puerta de evals y la tarea MCP durable, y el proxy de inferencia responde
+  **HTTP 503**. El lanzamiento de sesión aplica su propia postura de disponibilidad
+  (`OLIVARES_SESSION_BUDGET_AVAILABILITY`): sin definir, la sesión se lanza en la edición
+  Community y se rechaza con **HTTP 503** en la edición Enterprise, y en ambos casos el
+  fallo queda registrado. El finding de tope-de-presupuesto emitido en la ingesta sigue
+  registrando el gasto que llegó a un tope.
 - **El router solo aplica los scopes que conoce pre-ejecución** (global / provider /
   model); los scopes más finos (agent, session, team, project) se aplican en las
   juntas fire/open y en el gateway de modelos, no en la resolución de ruta.

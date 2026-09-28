@@ -1,0 +1,54 @@
+# Maintainer: Olivares.AI <enterprise at olivares dot ai>
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# Repackages the published, checksummed linux/amd64 release archive. Nothing is built.
+# The archive's own systemd template is rendered for a system install, the service
+# account and data directory come from sysusers.d and tmpfiles.d, and the package
+# never enables or starts the service. Regenerate .SRCINFO with
+# `makepkg --printsrcinfo > .SRCINFO` whenever this file changes; a new pkgver takes
+# its sha256 from that release's signed checksums.txt.
+
+pkgname=olivares-bin
+pkgver=26.9.0
+pkgrel=1
+pkgdesc='Open, self-hosted AI governance control plane (release binary)'
+arch=('x86_64')
+url='https://olivares.ai'
+license=('AGPL-3.0-only')
+provides=("olivares=${pkgver}")
+conflicts=('olivares')
+options=('!strip' '!debug')
+source=('olivares-sysusers.conf'
+        'olivares-tmpfiles.conf')
+sha256sums=('764f423d1407aed39273615f494133b1572be792013a7e7961fc096a1a20f3de'
+            '6195db3366a4e196dd81262c260c5f36cd0c57f90e745018c003e198c7aca038')
+source_x86_64=("https://github.com/olivaresai/olivares/releases/download/v${pkgver}/olivares_${pkgver}_linux_amd64.tar.gz")
+sha256sums_x86_64=('9246de50ab22a1a02c7f56b2ec5c360c16f1266528be03867f582efdadf735f2')
+
+package() {
+  install -Dm0755 "${srcdir}/olivares" "${pkgdir}/usr/bin/olivares"
+
+  sed -e 's|@USER_LINE@|User=olivares|' \
+      -e 's|@GROUP_LINE@|Group=olivares|' \
+      -e 's|@PROTECT_HOME@|true|' \
+      -e 's|@WANTED_BY@|multi-user.target|' \
+      -e 's|@BINARY@|/usr/bin/olivares|' \
+      -e 's|@DATA_DIR@|/var/lib/olivares|' \
+      -e 's|@CONFIG@|/etc/olivares/olivares.env|' \
+      -e '/@BIND_PATHS@/d' \
+      "${srcdir}/packaging/service/systemd.service" > "${srcdir}/olivares.service"
+  if grep -q '@[A-Z_]*@' "${srcdir}/olivares.service"; then
+    echo 'the release unit template has a placeholder this PKGBUILD does not render' >&2
+    return 1
+  fi
+  install -Dm0644 "${srcdir}/olivares.service" "${pkgdir}/usr/lib/systemd/system/olivares.service"
+  install -Dm0644 "${srcdir}/olivares-sysusers.conf" "${pkgdir}/usr/lib/sysusers.d/olivares.conf"
+  install -Dm0644 "${srcdir}/olivares-tmpfiles.conf" "${pkgdir}/usr/lib/tmpfiles.d/olivares.conf"
+
+  local text
+  for text in LICENSE NOTICE LICENSING.md DISCLAIMER.md; do
+    install -Dm0644 "${srcdir}/${text}" "${pkgdir}/usr/share/licenses/${pkgname}/${text}"
+  done
+  install -Dm0644 -t "${pkgdir}/usr/share/licenses/${pkgname}/LICENSES" "${srcdir}"/LICENSES/*
+}

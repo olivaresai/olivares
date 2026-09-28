@@ -128,6 +128,20 @@ func (f *scopeFixture) memberships(t *testing.T, userID model.ID) []model.Member
 	return ms
 }
 
+// seedMembership writes a membership through the store. It models one that
+// predates the consent rule: a grant never joins an existing account that is not
+// already a member.
+func (f *scopeFixture) seedMembership(t *testing.T, userID model.ID, tenant model.TenantID, role string) {
+	t.Helper()
+	ctx := context.Background()
+	if err := f.st.AuthMutate(ctx, func(as store.AuthScope) error {
+		_, err := as.Memberships().Create(ctx, model.Membership{UserID: userID, TargetTenantID: tenant, Role: role})
+		return err
+	}); err != nil {
+		t.Fatalf("seed membership: %v", err)
+	}
+}
+
 // link sets the issuer-qualified subject an account signs in as.
 func (f *scopeFixture) link(t *testing.T, userID model.ID, issuer, subject string) {
 	t.Helper()
@@ -251,9 +265,7 @@ func TestCompleteSSORefusesAMemberOfTwoTenantsOutsideTheProvidersClaim(t *testin
 		seedConfig(t, f.st, f.tA, "default", "https://idp.a.test", "a.test")
 		seedConfig(t, f.st, f.tB, "default", "https://idp.b.test", "b.test")
 		uid, _ := mustMember(t, ctx, f.a, f.super, f.tB, "shared@b.test", auth.RoleAdmin)
-		if _, err := f.a.GrantMembership(ctx, f.super, uid, f.tA, auth.RoleViewer, model.ID("")); err != nil {
-			t.Fatalf("grant the second membership: %v", err)
-		}
+		f.seedMembership(t, uid, f.tA, auth.RoleViewer)
 		return f, uid
 	}
 	t.Run("correlated by address", func(t *testing.T) {
@@ -506,9 +518,7 @@ func TestCompleteSSOStillRefusesASuperadmin(t *testing.T) {
 	if !ok {
 		t.Fatal("fixture has no superadmin account")
 	}
-	if _, err := f.a.GrantMembership(ctx, f.super, root.ID, f.tA, auth.RoleOwner, model.ID("")); err != nil {
-		t.Fatalf("grant the superadmin a membership: %v", err)
-	}
+	f.seedMembership(t, root.ID, f.tA, auth.RoleOwner)
 	before := f.sessions(t, root.ID)
 	for _, scope := range []model.TenantID{auth.GlobalFederationScope, f.tA} {
 		seq := auditHead(t, ctx, f.st)

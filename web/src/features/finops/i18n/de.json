@@ -73,6 +73,19 @@
       "throttle": "Drosseln",
       "block": "Blockieren"
     },
+    "admission": {
+      "holds": "Aktive Buchzeilen: {{n}}",
+      "drift": "Das Buch weicht von dem ab, was seine Aufrufer abgerechnet haben",
+      "outstanding": {
+        "corrupt": "Zulassungszeilen, die ihre Integritätsprüfung nicht bestehen: {{n}}",
+        "unresolved": "Noch unentschiedene Schreibvorgänge der Wiederherstellung: {{n}}",
+        "undecodable": "Zeilen, deren Liste geschuldeter Vormerkungen sich nicht dekodieren lässt: {{n}}",
+        "owed_remaining": "Noch geschuldete Vormerkungen: {{n}}",
+        "frontier_blocked": "Vom Versuchslebenszyklus blockierte Vormerkungen: {{n}}",
+        "legacy_pending": "Von einem früheren Build hinterlassene Ansprüche: {{n}}",
+        "legacy_owes_release": "Von einem früheren Build geschuldete Freigaben: {{n}}"
+      }
+    },
     "dialog": {
       "title": "Neues Budget",
       "name": "Name",

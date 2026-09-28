@@ -48,6 +48,17 @@ describe('workflows API', () => {
     )
   })
 
+  it('reauthorizes a run with exactly the reviewed plan hash', async () => {
+    await workflowsApi.reauthorize('workflow/one', 'run/1', 'sha256:plan-1')
+    expect(http.post).toHaveBeenCalledTimes(1)
+    expect(http.post).toHaveBeenCalledWith(
+      '/v1/m/orchestration/workflows/workflow%2Fone/runs/run%2F1/reauthorize',
+      { plan_hash: 'sha256:plan-1' },
+    )
+    // The engine decodes the body strictly: plan_hash is its only field.
+    expect(Object.keys(http.post.mock.calls[0][1])).toEqual(['plan_hash'])
+  })
+
   it('scopes every query key by tenant', () => {
     expect(workflowsKeys.list('tenant-a')).toEqual([
       'automations-workflows',

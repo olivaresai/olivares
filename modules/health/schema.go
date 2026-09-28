@@ -91,6 +91,21 @@ const (
 	colDepLastAt   = "last_seen_at"
 )
 
+// Principal declarations shared by the descriptors below: what a stored column
+// says about principals, with the reader lines that show it.
+var (
+	// The monitored subject kind, copied from the check onto its events and incidents.
+	pdeclNoneSubjectKind = model.None("the monitored subject kind, closed set agent|mcp validated on the check (checks.go:50, checks.go:81) and copied from the check onto event and incident rows: state.go:79")
+	// The monitored agent or MCP server, never an account.
+	pdeclNoneSubjectRef = model.None("the monitored agent or MCP server reference (subject kind agent|mcp: checks.go:50), matched against observed agent origins and MCP server resources (ingest.go:42, ingest.go:45) and mirrored as a core entity id when it parses as one (state.go:222); event and incident rows copy it from the check: state.go:80")
+	// The health.check row a transition or an incident came from.
+	pdeclNoneCheckRef = model.None("the id of the health.check row that produced the row: state.go:81, state.go:128, state.go:195")
+	// A health state.
+	pdeclNoneState = model.None("a health state from the closed set healthy|degraded|down|unknown: helpers.go:38, helpers.go:41, checks.go:60")
+	// A one-way fingerprint of probe detail, never the detail.
+	pdeclNoneDetailHash = model.None("a one-way SHA-256 fingerprint of the probe detail: helpers.go:199, state.go:99")
+)
+
 // RegisterSchema declares the module's four owned entities. The engine creates the
 // tables, injects the base columns (id/tenant_id/created_at/updated_at/version/
 // deleted_at) and attaches the unconditional tenant + append-only guards (S02 §7); a module cannot opt out of isolation. Every UNIQUE index leads with
@@ -109,20 +124,20 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Kind:  checkKind,
 		Table: checkTable,
 		Fields: []model.FieldSpec{
-			{Name: colName, Kind: model.KindText, Nullable: true},
-			{Name: colSubjectKind, Kind: model.KindText, Indexed: true},
-			{Name: colSubjectRef, Kind: model.KindText, Indexed: true},
+			{Name: colName, Kind: model.KindText, Nullable: true, Principal: model.None("an optional operator label, clamped and only rendered: checks.go:103, dto.go:48")},
+			{Name: colSubjectKind, Kind: model.KindText, Indexed: true, Principal: pdeclNoneSubjectKind},
+			{Name: colSubjectRef, Kind: model.KindText, Indexed: true, Principal: pdeclNoneSubjectRef},
 			{Name: colExpectedIvl, Kind: model.KindInt},
 			{Name: colGraceFactor, Kind: model.KindInt},
 			{Name: colSLATargetPM, Kind: model.KindInt},
-			{Name: colDesiredStat, Kind: model.KindText, Indexed: true},
-			{Name: colOwnerActor, Kind: model.KindText},
-			{Name: colOwnerActorK, Kind: model.KindText},
-			{Name: colLastState, Kind: model.KindText, Indexed: true},
+			{Name: colDesiredStat, Kind: model.KindText, Indexed: true, Principal: model.None("closed set active|paused|retired: checks.go:54")},
+			{Name: colOwnerActor, Kind: model.KindText, Principal: model.Ref(model.EncodeUserRef, model.ClassEvidence)},
+			{Name: colOwnerActorK, Kind: model.KindText, Principal: model.None("the creator's actor kind, a closed set of kind labels (user, token or system): checks.go:111, core/auth/principal.go:251, core/model/audit.go:115")},
+			{Name: colLastState, Kind: model.KindText, Indexed: true, Principal: pdeclNoneState},
 			{Name: colLastChecked, Kind: model.KindTimestamp, Nullable: true},
 			{Name: colLastSeenAt, Kind: model.KindTimestamp, Nullable: true},
 			{Name: colLastLatency, Kind: model.KindInt},
-			{Name: colLastDetailHash, Kind: model.KindText, Nullable: true},
+			{Name: colLastDetailHash, Kind: model.KindText, Nullable: true, Principal: pdeclNoneDetailHash},
 			{Name: colSLABreachOpen, Kind: model.KindBool},
 		},
 		Indexes: []model.IndexSpec{{
@@ -139,14 +154,14 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Table:      eventTable,
 		AppendOnly: true, // immutable reliability transition history (docs/SECURITY-HARDENING.md)
 		Fields: []model.FieldSpec{
-			{Name: colEvSubjectKind, Kind: model.KindText},
-			{Name: colEvSubjectRef, Kind: model.KindText, Indexed: true},
-			{Name: colEvCheckRef, Kind: model.KindUUID, Nullable: true, Indexed: true},
-			{Name: colEvState, Kind: model.KindText, Indexed: true},
-			{Name: colEvPrevState, Kind: model.KindText},
+			{Name: colEvSubjectKind, Kind: model.KindText, Principal: pdeclNoneSubjectKind},
+			{Name: colEvSubjectRef, Kind: model.KindText, Indexed: true, Principal: pdeclNoneSubjectRef},
+			{Name: colEvCheckRef, Kind: model.KindUUID, Nullable: true, Indexed: true, Principal: pdeclNoneCheckRef},
+			{Name: colEvState, Kind: model.KindText, Indexed: true, Principal: pdeclNoneState},
+			{Name: colEvPrevState, Kind: model.KindText, Principal: pdeclNoneState},
 			{Name: colEvLatency, Kind: model.KindInt},
-			{Name: colEvCause, Kind: model.KindText},
-			{Name: colEvDetailHash, Kind: model.KindText, Nullable: true},
+			{Name: colEvCause, Kind: model.KindText, Principal: model.None("the transition cause, closed set edge|report|sweep: helpers.go:55, helpers.go:57")},
+			{Name: colEvDetailHash, Kind: model.KindText, Nullable: true, Principal: pdeclNoneDetailHash},
 			{Name: colEvOccurredAt, Kind: model.KindTimestamp, Indexed: true},
 		},
 	}); err != nil {
@@ -157,16 +172,16 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Kind:  incidentKind,
 		Table: incidentTable,
 		Fields: []model.FieldSpec{
-			{Name: colInSubjectKind, Kind: model.KindText},
-			{Name: colInSubjectRef, Kind: model.KindText, Indexed: true},
-			{Name: colInCheckRef, Kind: model.KindUUID, Nullable: true, Indexed: true},
-			{Name: colInKind, Kind: model.KindText, Indexed: true},
-			{Name: colInSeverity, Kind: model.KindText},
-			{Name: colInState, Kind: model.KindText, Indexed: true},
+			{Name: colInSubjectKind, Kind: model.KindText, Principal: pdeclNoneSubjectKind},
+			{Name: colInSubjectRef, Kind: model.KindText, Indexed: true, Principal: pdeclNoneSubjectRef},
+			{Name: colInCheckRef, Kind: model.KindUUID, Nullable: true, Indexed: true, Principal: pdeclNoneCheckRef},
+			{Name: colInKind, Kind: model.KindText, Indexed: true, Principal: model.None("the degraded or down state that opened or escalated the incident: state.go:188, state.go:205")},
+			{Name: colInSeverity, Kind: model.KindText, Principal: model.None("a severity on the shared scale chosen by sevForState: state.go:45, state.go:183")},
+			{Name: colInState, Kind: model.KindText, Indexed: true, Principal: model.None("closed set open|resolved: state.go:175, state.go:190")},
 			{Name: colInOpenedAt, Kind: model.KindTimestamp, Indexed: true},
 			{Name: colInResolvedAt, Kind: model.KindTimestamp, Nullable: true},
-			{Name: colInDetailHash, Kind: model.KindText, Nullable: true},
-			{Name: colInSummary, Kind: model.KindText, Nullable: true},
+			{Name: colInDetailHash, Kind: model.KindText, Nullable: true, Principal: pdeclNoneDetailHash},
+			{Name: colInSummary, Kind: model.KindText, Nullable: true, Principal: model.None("a headline built from the subject kind, the agent or MCP subject ref and the state, only rendered: state.go:192, state.go:261, dto.go:91")},
 		},
 	}); err != nil {
 		return err
@@ -176,11 +191,11 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Kind:  dependencyKind,
 		Table: dependencyTable,
 		Fields: []model.FieldSpec{
-			{Name: colDepFromKind, Kind: model.KindText},
-			{Name: colDepFromRef, Kind: model.KindText, Indexed: true},
-			{Name: colDepToKind, Kind: model.KindText},
-			{Name: colDepToRef, Kind: model.KindText, Indexed: true},
-			{Name: colDepRelation, Kind: model.KindText},
+			{Name: colDepFromKind, Kind: model.KindText, Principal: model.None("the origin class of an observed edge (sdk/model/observation.go:55), defaulting to session: ingest.go:68, ingest.go:70; only rendered: dto.go:141")},
+			{Name: colDepFromRef, Kind: model.KindText, Indexed: true, Principal: model.None("the origin reference of an observed MCP-server, MCP-tool or delegation edge (ingest.go:73, ingest.go:77); only rendered and compared with check subject refs: dto.go:139, dependencies.go:56")},
+			{Name: colDepToKind, Kind: model.KindText, Principal: model.None("closed set mcp|mcp_tool|agent chosen by classifyDependency: ingest.go:74, ingest.go:76, ingest.go:78")},
+			{Name: colDepToRef, Kind: model.KindText, Indexed: true, Principal: model.None("the MCP server, MCP tool or delegated agent reference of an observed edge: ingest.go:74, ingest.go:78; only rendered: dto.go:140")},
+			{Name: colDepRelation, Kind: model.KindText, Principal: model.None("closed set uses_mcp|uses_tool|delegates_to: ingest.go:20, ingest.go:22")},
 			{Name: colDepObserved, Kind: model.KindInt},
 			{Name: colDepFirstAt, Kind: model.KindTimestamp},
 			{Name: colDepLastAt, Kind: model.KindTimestamp, Indexed: true},

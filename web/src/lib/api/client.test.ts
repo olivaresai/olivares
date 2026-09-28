@@ -141,6 +141,26 @@ describe('apiFetch', () => {
     })
   })
 
+  it('copies Retry-After from the failing response and leaves it unset otherwise', async () => {
+    mock(
+      503,
+      { error: { code: 'rate_limited', message: 'slow' } },
+      { 'Retry-After': '30' },
+    )
+    await expect(http.get('/v1/console/sources/diff')).rejects.toMatchObject({
+      status: 503,
+      code: 'rate_limited',
+      retryAfter: '30',
+    })
+    mock(502, { error: { code: 'upstream', message: 'down' } })
+    const missed = await http.get('/v1/console/sources/diff').then(
+      () => null,
+      (error: unknown) => error,
+    )
+    expect(missed).toBeInstanceOf(ApiError)
+    expect((missed as ApiError).retryAfter).toBeUndefined()
+  })
+
   it('calls onUnauthorized on an authenticated 401', async () => {
     const onUnauthorized = vi.fn()
     configureApiClient({ getToken: () => 'olvs_x', onUnauthorized })

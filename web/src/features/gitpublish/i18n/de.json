@@ -1,0 +1,244 @@
+{
+  "title": "Git-Veröffentlichung",
+  "subtitle": "Commits pushen, Pull-Requests öffnen und mergen – über genehmigte Veröffentlichungsziele.",
+  "notice": "Jede Anfrage wird im Moment des Sendens gegen die genehmigten Bindungen des Ziels und Ihre Berechtigung geprüft. Ein ungewisses Ergebnis auf dem Host wird nie erneut gesendet: Gleichen Sie es ab, um den Host zu lesen.",
+  "actions": {
+    "refresh": "Aktualisieren",
+    "newTarget": "Neues Ziel",
+    "open": "Öffnen",
+    "edit": "Bearbeiten",
+    "delete": "Löschen",
+    "cancel": "Abbrechen",
+    "close": "Schließen",
+    "push": "Pushen",
+    "pull_request": "Pull-Request öffnen",
+    "merge": "Mergen",
+    "reconcile": "Abgleichen",
+    "abandon": "Aufgeben"
+  },
+  "columns": {
+    "target": "Ziel",
+    "workspace": "Arbeitsbereich",
+    "pushPrefix": "Push-Präfix",
+    "mergeBases": "Merge-Basen",
+    "version": "Version",
+    "actions": "Aktionen"
+  },
+  "targets": {
+    "title": "Veröffentlichungsziele",
+    "description": "Jedes Ziel bindet genehmigte Anmeldedaten und ein genehmigtes Repository an ein Push-Präfix und an die Branches, in die es mergen darf.",
+    "empty": "Keine Veröffentlichungsziele",
+    "emptyAdmin": "Wählen Sie einen Arbeitsbereich und erstellen Sie ein Ziel aus einer genehmigten Anmeldedaten-Bindung und einer genehmigten Repository-Bindung.",
+    "emptyReader": "Ziele werden von einem Zieladministrator erstellt. Ziele, die Sie lesen dürfen, werden hier aufgeführt.",
+    "open": "Ziel {{id}} öffnen"
+  },
+  "target": {
+    "title": "Ziel {{id}}",
+    "description": "Die Bindung, über die dieses Ziel veröffentlicht, die Berechtigung, die jede Aktion erfordert, und die Absichten, die es hält.",
+    "binding": "Bindung",
+    "credentialBinding": "Anmeldedaten-Bindung",
+    "repositoryBinding": "Repository-Bindung",
+    "withheld": "Nur für Zieladministratoren sichtbar",
+    "noMergeBases": "Keine",
+    "bindingHint": "Pushes bleiben unter dem Push-Präfix, und Pull-Requests und Merges gehen nur in die Merge-Basen. Die Engine prüft bei jedem Senden einer Anfrage, ob beide Bindungen im Arbeitsbereich genehmigt sind.",
+    "actions": "Aktionen",
+    "administration": "Zielverwaltung",
+    "notHeld": "Berechtigung fehlt",
+    "created": "Veröffentlichungsziel erstellt",
+    "updated": "Veröffentlichungsziel aktualisiert",
+    "deleted": "Veröffentlichungsziel gelöscht",
+    "deleteTitle": "Ziel {{id}} löschen?",
+    "deleteDescription": "Die Engine lehnt es ab, ein Ziel zu löschen, das noch von einer Absicht gehalten wird, die gerade abgesendet wird, ungewiss oder aufgegeben ist."
+  },
+  "targetForm": {
+    "createTitle": "Neues Veröffentlichungsziel",
+    "editTitle": "Ziel {{id}} bearbeiten",
+    "description": "Binden Sie genehmigte Anmeldedaten und ein genehmigtes Repository an die Branches, in die dieses Ziel veröffentlichen darf.",
+    "credentialHint": "Die ID einer in diesem Arbeitsbereich genehmigten Anmeldedaten-Bindung. Die Konsole sieht ihr Geheimnis nie.",
+    "repositoryHint": "Die ID einer in diesem Arbeitsbereich genehmigten Repository-Bindung. Ihr Eigentümer muss einer der Eigentümer sein, die die Anmeldedaten-Bindung zulässt.",
+    "keepBinding": "Leer lassen, um die aktuelle Bindung beizubehalten.",
+    "prefixHint": "Pushes müssen unter diesem Branch-Präfix bleiben. Es endet mit einem Schrägstrich und darf keine Merge-Basis abdecken.",
+    "prefixSlash": "Das Push-Präfix muss mit einem Schrägstrich enden.",
+    "basesHint": "Die Branches, auf die Pull-Requests und Merges zielen dürfen, einer pro Zeile. Höchstens 16.",
+    "create": "Ziel erstellen",
+    "save": "Änderungen speichern"
+  },
+  "effects": {
+    "push": "Push",
+    "pull_request": "Pull-Request",
+    "merge": "Merge"
+  },
+  "authority": {
+    "requires": "Erfordert {{permission}}",
+    "requiresAal3": "Erfordert {{permission}} und eine Höherstufung auf AAL3"
+  },
+  "publish": {
+    "push": {
+      "title": "Commit pushen",
+      "description": "Pusht genau einen Commit auf einen Branch unter {{prefix}}, unter der Bedingung, dass der Branch noch auf dem erwarteten aktuellen Commit steht.",
+      "submit": "Push anfordern"
+    },
+    "pull_request": {
+      "title": "Pull-Request öffnen",
+      "description": "Öffnet einen Pull-Request von einem Branch unter {{prefix}} in eine Merge-Basis oder übernimmt den passenden bereits offenen.",
+      "submit": "Pull-Request anfordern"
+    },
+    "merge": {
+      "title": "Pull-Request mergen",
+      "description": "Merget einen Pull-Request nur, solange sein Head noch der geprüfte Commit ist.",
+      "submit": "Merge anfordern"
+    }
+  },
+  "fields": {
+    "ref": "Branch-Ref",
+    "refHint": "Eine vollständige Ref unter dem Push-Präfix, zum Beispiel refs/heads/{{prefix}}change.",
+    "expectedOld": "Erwarteter aktueller Commit",
+    "expectedOldHint": "Optional. Der Push ist an diesen Wert gebunden; für einen neuen Branch leer lassen.",
+    "commit": "Commit",
+    "tree": "Tree",
+    "treeHint": "Die Tree-ID des Commits. Die Engine lehnt den Push ab, wenn das verwaltete Repository einen anderen Tree enthält.",
+    "headRef": "Head-Branch",
+    "headRefHint": "Ein Branch unter {{prefix}}.",
+    "base": "Basis-Branch",
+    "title": "Titel",
+    "body": "Beschreibung",
+    "draft": "Als Entwurf öffnen",
+    "number": "Pull-Request-Nummer",
+    "expectedHead": "Geprüfter Head-Commit",
+    "expectedHeadHint": "Der Merge erfolgt nur, solange der Head des Pull-Requests dieser Commit ist.",
+    "method": "Merge-Methode",
+    "acknowledgeIntent": "Aufgegebene Absicht anerkennen",
+    "acknowledgeIntentHint": "Optional. Die ID einer aufgegebenen Absicht, die diesen Geltungsbereich hält. Sie anzugeben erfordert Zielverwaltung mit AAL3.",
+    "operationId": "Vorgangs-ID",
+    "operationIdHint": "Wird dieselbe Anfrage mit dieser ID erneut gesendet, wird die aufgezeichnete Absicht zurückgegeben. Es erfolgt kein zweites Absenden."
+  },
+  "methods": {
+    "merge": "Merge-Commit",
+    "squash": "Squash",
+    "rebase": "Rebase"
+  },
+  "states": {
+    "dispatching": "Wird abgesendet",
+    "applied": "Angewendet",
+    "adopted": "Übernommen",
+    "rejected": "Vom Host abgelehnt",
+    "not_dispatched": "Nicht abgesendet",
+    "uncertain": "Ungewiss",
+    "abandoned": "Aufgegeben"
+  },
+  "receipts": {
+    "caused": "Diese Anfrage hat die Auswirkung auf dem Host verursacht.",
+    "existing_effect": "Eine passende Auswirkung bestand bereits auf dem Host und wurde übernommen.",
+    "none": "Dieser Anfrage wird keine Auswirkung auf dem Host zugeschrieben."
+  },
+  "outcome": {
+    "toast": "Antwort der Engine: {{state}}",
+    "settled": {
+      "title": "Das Ergebnis der Anfrage steht fest"
+    },
+    "uncertain": {
+      "title": "Das Ergebnis auf dem Host ist ungewiss",
+      "body": "Die Anfrage wurde abgesendet, aber ihr Ergebnis auf dem Host steht nicht fest. Sie könnte angekommen sein. Senden Sie sie nicht erneut: Der Abgleich liest den Host und zeichnet auf, was er beobachtet."
+    },
+    "rejected": {
+      "title": "Der Host hat die Anfrage abgelehnt",
+      "body": "Der Host hat die Auswirkung verweigert. Die Absicht zeichnet die Ablehnung auf."
+    },
+    "refused": {
+      "title": "Die Engine hat die Anfrage abgelehnt",
+      "code": "Ablehnungscode:"
+    },
+    "unknown": {
+      "title": "Die Antwort der Engine ist nicht angekommen",
+      "body": "Die Anfrage wurde möglicherweise aufgezeichnet. Öffnen Sie die Absichten dieses Ziels, um das zu prüfen, und gleichen Sie sie dort ab, falls sie ungewiss ist."
+    }
+  },
+  "refusals": {
+    "authority_expired": "Die Berechtigungsprüfung wurde nicht rechtzeitig abgeschlossen, daher wurde die Anfrage nicht ausgeführt.",
+    "authority_unavailable": "Die Engine konnte über diese Anfrage nicht entscheiden, daher wurde sie nicht ausgeführt.",
+    "base_not_allowed": "Der Basis-Branch gehört nicht zu den Merge-Basen dieses Ziels.",
+    "binding_not_approved": "Eine Anmeldedaten-Bindung oder Repository-Bindung ist in diesem Arbeitsbereich nicht genehmigt.",
+    "content_mismatch": "Der Commit oder Tree stimmt nicht mit dem Inhalt des verwalteten Repositorys überein.",
+    "default_branch_refused": "Der Branch ist der Standard-Branch des Repositorys; das Veröffentlichen darauf wird abgelehnt.",
+    "dispatch_deadline_passed": "Die Absendefrist ist abgelaufen, bevor die Anfrage gesendet wurde. Es wurde nichts abgesendet.",
+    "field_not_accepted": "Die Anfrage enthielt ein Feld, das diese Route nicht akzeptiert.",
+    "forbidden": "Ihre aktuelle Berechtigung erlaubt diese Aktion für dieses Ziel nicht.",
+    "head_mismatch": "Der Head des Pull-Requests ist nicht mehr der geprüfte Commit.",
+    "host_credential_refused": "Der Git-Host hat die Anmeldedaten der Bindung oder deren Geltungsbereich abgelehnt. Es wurde nichts abgesendet.",
+    "host_unavailable": "Der Git-Host war nicht erreichbar. Es wurde nichts abgesendet.",
+    "intent_settled": "Das Ergebnis der Absicht steht bereits fest, daher kann sie nicht aufgegeben werden.",
+    "invalid_request": "Die Anfrage ist unvollständig oder fehlerhaft. Prüfen Sie die Branch-Namen und Commit-IDs.",
+    "lookup_incomplete": "Der aktuelle Zustand des Hosts konnte nicht vollständig gelesen werden, daher wurde nichts abgesendet.",
+    "not_found": "Das Ziel oder die Absicht existiert nicht oder ist für Sie nicht sichtbar.",
+    "not_mergeable": "Der Host meldet, dass der Pull-Request nicht gemergt werden kann.",
+    "operation_conflict": "Diese Vorgangs-ID wurde bereits für eine andere Anfrage verwendet.",
+    "protected_branch_refused": "Der Branch ist auf dem Host geschützt; das Veröffentlichen darauf wird abgelehnt.",
+    "push_prefix_overlaps_base": "Mit diesem Push-Präfix könnte ein Push auf einer Merge-Basis landen.",
+    "ref_not_allowed": "Der Branch liegt nicht unter dem Push-Präfix dieses Ziels.",
+    "repository_outside_binding": "Das Repository liegt außerhalb der Eigentümer, die die Anmeldedaten-Bindung zulässt.",
+    "runtime_credential_refused": "Mit den Runtime-Anmeldedaten einer Sitzung kann nicht veröffentlicht werden. Handeln Sie mit Ihren eigenen Anmeldedaten.",
+    "scoped_grant_required": "Diese Aktion erfordert eine bereichsbezogene Berechtigung für dieses Ziel.",
+    "stale_lease": "Der Branch steht nicht mehr auf dem erwarteten aktuellen Commit.",
+    "step_up_required": "Diese Aktion erfordert eine Höherstufung auf AAL3. Schließen Sie die Höherstufung ab, wenn Sie dazu aufgefordert werden.",
+    "subject_mismatch": "Diese Vorgangs-ID gehört zu einer Anfrage eines anderen Subjekts.",
+    "target_changed": "Das Ziel hat sich geändert, nachdem die Anfrage zugelassen wurde. Es wurde nichts abgesendet.",
+    "target_in_use": "Eine Absicht, die gerade abgesendet wird, ungewiss oder aufgegeben ist, hält dieses Ziel noch.",
+    "unresolved_intent": "Eine ungeklärte Absicht hält bereits diesen Branch, Pull-Request oder Merge.",
+    "unsupported_requirement": "Der Host kann diese Anforderung nicht erfüllen, zum Beispiel einen Rebase-Merge auf GitLab.",
+    "version_conflict": "Das Ziel hat sich geändert, seit Sie es geöffnet haben. Öffnen Sie es erneut, um die aktuelle Version zu sehen.",
+    "workflow_change_refused": "Der Commit ändert CI-Workflow-Dateien, deren Veröffentlichung dieses Ziel ablehnt.",
+    "unknown": "Die Engine hat die Anfrage mit einem Code abgelehnt, den diese Konsole nicht beschreibt."
+  },
+  "intents": {
+    "title": "Absichten",
+    "empty": "Für dieses Ziel sind keine Veröffentlichungsabsichten aufgezeichnet.",
+    "open": "Absicht {{id}} öffnen"
+  },
+  "intent": {
+    "title": "Absicht {{id}}",
+    "description": "Was angefordert wurde, was zuletzt auf dem Host beobachtet wurde und ob der Host die Anfrage bestätigt hat, wird getrennt aufgezeichnet.",
+    "state": "Status",
+    "effect": "Auswirkung",
+    "receipt": "Quittung",
+    "operationId": "Vorgangs-ID",
+    "attempt": "Versuch",
+    "targetVersion": "Zielversion",
+    "reason": "Grund",
+    "authorizedBy": "Übernommen von",
+    "dispatchDeadline": "Absendefrist",
+    "releaseFailure": "Fehler bei der Rückgabe der Anmeldedaten",
+    "requested": "Angefordert",
+    "observed": "Auf dem Host beobachtet",
+    "notObserved": "Der Host wurde für diese Absicht nicht beobachtet.",
+    "present": "Vorhanden",
+    "sha": "Commit auf dem Host",
+    "headSha": "Head-Commit",
+    "merged": "Gemergt",
+    "mergeCommit": "Merge-Commit",
+    "mergeTree": "Merge-Tree",
+    "contentMatch": "Head entspricht dem angeforderten Commit",
+    "source": "Quelle",
+    "at": "Zeitpunkt",
+    "acknowledged": "Vom Host bestätigt",
+    "acknowledgedValue": "Bestätigt",
+    "status": "Host-Status",
+    "requestId": "Host-Anfrage-ID",
+    "acknowledgedHint": "Eine Bestätigung ist die Erfolgsantwort des Hosts auf diese Anfrage. Sie ist keine Beobachtung der Auswirkung.",
+    "yes": "Ja",
+    "no": "Nein",
+    "observations": "Beobachtungen",
+    "observationsEmpty": "Für diese Absicht sind keine Beobachtungen aufgezeichnet.",
+    "obs": {
+      "at": "Zeitpunkt",
+      "attempt": "Versuch",
+      "source": "Quelle",
+      "result": "Ergebnis",
+      "host": "Host-Objekt, Status und Anfrage"
+    },
+    "abandonedNote": "Ein Administrator hat die Verantwortung für diese Absicht übernommen. Das beweist nichts über den Host. Ihr Geltungsbereich bleibt gehalten, bis eine neue Anfrage diese Absicht unter „Aufgegebene Absicht anerkennen“ angibt.",
+    "abandoned": "Absicht aufgegeben",
+    "abandonTitle": "Absicht {{id}} aufgeben?",
+    "abandonDescription": "Mit dem Aufgeben wird aufgezeichnet, dass Sie die Verantwortung für diese ungeklärte Absicht übernehmen. Der Host wird weder geändert noch gelesen, und der Geltungsbereich bleibt gehalten, bis eine neue Anfrage diese Absicht anerkennt.",
+    "abandonReason": "Grund (höchstens 256 Zeichen)"
+  }
+}

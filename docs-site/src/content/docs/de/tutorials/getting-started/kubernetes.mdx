@@ -156,10 +156,11 @@ Provisionieren Sie die Rolle mit
 
 ## 3. Active-Passive-HA
 
-Mit Postgres als gemeinsamem Store betreiben Sie mehrere Replicas. Eine wird zum
-Leader gewählt (ein Postgres Advisory Lock); Standbys beantworten `/readyz` mit
-`503 {"status":"standby"}`, sodass der Service nur an den Leader routet, und ein
-Standby übernimmt automatisch, wenn der Leader ausfällt.
+Mit Postgres als gemeinsamem Store betreiben Sie mehrere Replicas. Eine wird
+über einen Postgres Advisory Lock zum Leader gewählt; Standbys beantworten
+`/readyz` mit `503 {"status":"standby"}`, sodass der Service an den Leader routet.
+Sobald der Lock verfügbar wird, kann ein Standby automatisch gewählt werden.
+Diese Wahlfunktion ist kein Nachweis eines sicheren Failovers unter allen Fehlerbedingungen.
 
 Zwei Dinge sind strukturell erforderlich, und das Chart **erzwingt beide** (wir
 haben verifiziert, dass die Guards als harte Fehler rendern, nicht als
@@ -181,10 +182,14 @@ helm install olivares deploy/helm/olivares \
   --set core.auditSigningKeySecret=olivares-audit-key
 ```
 
-Die kanonischen HA-Größen sind 3 oder 5 Replicas, Active-Passive. Dieses
-Single-Writer-Design ist beabsichtigt (es entspricht dem Konsistenzmodell des
-Produkts); die [Production-Readiness-Kennzahlen](/how-to/monitor-with-prometheus/)
-dokumentieren die unterstützten Verfügbarkeitsstufen.
+Die kanonischen HA-Größen sind 3 oder 5 Replicas, Active-Passive. Das
+Single-Writer-Design entspricht dem Konsistenzmodell des Produkts. Die
+[Production-Readiness-Kennzahlen](/how-to/monitor-with-prometheus/) sind Betriebsziele, keine gemessene Verfügbarkeit dieser Topologie.
+Vorhandene Epoch- und Fence-Prüfungen schützen bestimmte Pfade; ihre Existenz belegt
+nicht die Abdeckung jedes Schreibvorgangs oder externen Effekts. Transaktions-Fencing und
+Failover-Verhalten müssen zusammen mit Wiederherstellungsnachweisen für die
+konkrete Bereitstellung qualifiziert werden, bevor erreichte HA-Service-Level
+behauptet werden.
 
 ## 4. Geplante verschlüsselte Backups
 
@@ -208,7 +213,7 @@ SECURITY` erreicht. Ein CronJob, der nur an die App-DSN verdrahtet wäre, würde
 also **bei jedem Lauf fehlschlagen** und Sie **ohne Backup** zurücklassen — der
 harte Guard beim Rendern ist dem stillen, dauerhaft leeren Backup-Ziel vorzuziehen.
 
-Standardwerte: alle 6 Stunden (`backup.schedule` legt Ihren RPO fest), 14 Tage
+Standardwerte: alle 6 Stunden (`backup.schedule` legt das Backup-Intervall fest, keinen gemessenen RPO), 14 Tage
 lokale Aufbewahrung, ein dediziertes Ziel-PVC. **Spiegeln Sie das Ziel an einen
 externen Standort und bewahren Sie den KEK getrennt von den Bundles auf** — ein
 Backup im selben Cluster ist kein Disaster Recovery. Üben Sie Restores mit

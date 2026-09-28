@@ -86,5 +86,6 @@ Positionierungsseite hier.
   27001/42001 sind **Readiness**, keine Zertifikate — siehe das Trust- &
   Procurement-Paket, das mit dem Quellcode ausgeliefert wird).
 - Keine erfundenen Benchmarks, Durchsatz-Behauptungen oder Genauigkeitszahlen.
-  Kapazitätszahlen stammen ausschließlich aus dem reproduzierbaren Benchmark-Harness, mit
-  Hardware-Provenienz.
+  Kapazitätszahlen stammen ausschließlich aus dem Benchmark-Harness. Er zeichnet
+  Commit, Go-Version, CPU, Speicher und Dateisystem auf. Ankunftsmuster, Warmup
+  und Deployment-Profil werden nicht aufgezeichnet.

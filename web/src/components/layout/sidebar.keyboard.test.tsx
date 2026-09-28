@@ -79,7 +79,7 @@ vi.mock('@/features/navigation/personal-navigation', () => ({
   }),
 }))
 
-import { Sidebar } from './sidebar'
+import { AreasTree } from './sidebar'
 import {
   DEFAULT_AREA_EXPANSION,
   usePreferencesStore,
@@ -97,12 +97,16 @@ afterEach(() => {
 })
 
 const rows = () =>
-  Array.from(document.querySelectorAll<HTMLElement>('aside [data-nav-row]'))
+  Array.from(
+    document.querySelectorAll<HTMLElement>(
+      '[data-slot="areas-tree"] [data-nav-row]',
+    ),
+  )
 const tabbable = () => rows().filter((r) => r.tabIndex === 0)
 
 describe('the navigation rail from a keyboard', () => {
   it('is ONE tab stop, not eighty-five', async () => {
-    renderIntel(<Sidebar />)
+    renderIntel(<AreasTree />)
     // Measured 2026-09-18 on the live console before this change: 85 focusable elements
     // in the sidebar. The rail is a composite now, so exactly one of its rows is tabbable
     // and the arrows do the rest.
@@ -112,12 +116,12 @@ describe('the navigation rail from a keyboard', () => {
 
   it('puts the tab stop on the row that names the current page', () => {
     routerState.pathname = '/'
-    renderIntel(<Sidebar />)
+    renderIntel(<AreasTree />)
     expect(tabbable()[0].getAttribute('aria-current')).toBe('page')
   })
 
   it('moves the focus and the tab stop together with ArrowDown', async () => {
-    renderIntel(<Sidebar />)
+    renderIntel(<AreasTree />)
     const start = tabbable()[0]
     start.focus()
     fireEvent.keyDown(start, { key: 'ArrowDown' })
@@ -128,7 +132,7 @@ describe('the navigation rail from a keyboard', () => {
   })
 
   it('reaches the last row with End and the first with Home', () => {
-    renderIntel(<Sidebar />)
+    renderIntel(<AreasTree />)
     const start = tabbable()[0]
     start.focus()
     fireEvent.keyDown(start, { key: 'End' })
@@ -138,28 +142,32 @@ describe('the navigation rail from a keyboard', () => {
   })
 
   it('opens a folded area with ArrowRight and folds it again with ArrowLeft', () => {
-    renderIntel(<Sidebar />)
+    renderIntel(<AreasTree />)
     const area = document.querySelector<HTMLElement>(
-      'aside [data-nav-area-row][data-area-open="false"]',
+      '[data-slot="areas-tree"] [data-nav-area-row][data-area-open="false"]',
     )!
     const id = area.getAttribute('data-nav-area-row')!
     area.focus()
     fireEvent.keyDown(area, { key: 'ArrowRight' })
     expect(
-      document.querySelector(`aside [data-nav-area-row="${id}"]`),
+      document.querySelector(
+        `[data-slot="areas-tree"] [data-nav-area-row="${id}"]`,
+      ),
     ).toHaveAttribute('data-area-open', 'true')
     const open = document.querySelector<HTMLElement>(
-      `aside [data-nav-area-row="${id}"]`,
+      `[data-slot="areas-tree"] [data-nav-area-row="${id}"]`,
     )!
     open.focus()
     fireEvent.keyDown(open, { key: 'ArrowLeft' })
     expect(
-      document.querySelector(`aside [data-nav-area-row="${id}"]`),
+      document.querySelector(
+        `[data-slot="areas-tree"] [data-nav-area-row="${id}"]`,
+      ),
     ).toHaveAttribute('data-area-open', 'false')
   })
 
   it('pins the focused row with `p`, through the row control the menu path uses', async () => {
-    renderIntel(<Sidebar />)
+    renderIntel(<AreasTree />)
     const row = rows().find((r) => r.getAttribute('data-pin-id') === 'home')!
     row.focus()
     fireEvent.keyDown(row, { key: 'p' })
@@ -171,9 +179,9 @@ describe('the navigation rail from a keyboard', () => {
   })
 
   it('offers the pin as a NAMED control that says which key does it', async () => {
-    renderIntel(<Sidebar />)
+    renderIntel(<AreasTree />)
     const pin = document.querySelector<HTMLButtonElement>(
-      'aside [data-rail-pin="home"]',
+      '[data-slot="areas-tree"] [data-rail-pin="home"]',
     )!
     // Named before it happens, and the name carries the key, which is what
     // makes the two equal paths rather than a key nobody can discover.
@@ -186,7 +194,7 @@ describe('the navigation rail from a keyboard', () => {
   })
 
   it('leaves the filter field its own keys', () => {
-    renderIntel(<Sidebar />)
+    renderIntel(<AreasTree />)
     const field = screen.getAllByRole('searchbox')[0]
     const before = tabbable()[0]
     fireEvent.keyDown(field, { key: 'ArrowDown' })
@@ -196,7 +204,7 @@ describe('the navigation rail from a keyboard', () => {
   })
 
   it('cuts no label: no navigation row truncates its text', () => {
-    renderIntel(<Sidebar />)
+    renderIntel(<AreasTree />)
     // Measured 2026-09-18: the rail cut 65 labels across the seven console languages.
     // jsdom has no layout, so the property held here is the CAUSE — no row applies
     // `truncate` — and the live spec measures the effect in a real browser.

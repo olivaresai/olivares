@@ -28,7 +28,7 @@ moteur) :
 | Chemin | Licence | Ce que c'est |
 |---|---|---|
 | `core/` | **AGPL-3.0-only** | le moteur : ingestion, bus d'événements, modèle de données, runtime des modules, API, authz, audit |
-| `modules/` | **AGPL-3.0-only** | les 30 modules (inventaire, la carte R/RW, FinOps, évaluations, garde-fous, …) |
+| `modules/` | **AGPL-3.0-only** | les 31 modules (inventaire, la carte R/RW, FinOps, évaluations, garde-fous, …) |
 | `web/` | **AGPL-3.0-only** | l'interface React |
 | `sdk/` | **Apache-2.0** | les interfaces connecteur/module, le contrat gRPC et les types partagés |
 | `connectors/` | **Apache-2.0** | les connecteurs (Claude, OpenAI, pgAudit, eBPF, cloud, Slack, SIEM, …) |

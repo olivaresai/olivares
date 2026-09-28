@@ -97,8 +97,10 @@ curl -ks "$BASE/v1/m/finops/value" \
 
 ## 备注
 
-- **刻意的 fail-open：** 如果预算检查本身出错（一次 FinOps 读取失败），推理会被放行而非
-  被悄无声息地阻断 —— 一个坏掉的计量表绝不能变成一次停机。该故障会被记录并可见。
+- **无法读取账本时拒绝：** 如果预算准入无法建立（FinOps 无法读取其账本），推理代理会以
+  **503**、原因 `budget store unreachable (deny-closed)` 和 `x-should-retry: false` 拒绝该调用，
+  而不是放行未计量的消费。在引擎自身的门控中，只有会话启动在这种情况下保留可配置的
+  姿态（`OLIVARES_SESSION_BUDGET_AVAILABILITY`）。
 - 预留容量（`reserved_micro_usd`）计入上限，因此预算无法通过预先占用来规避。
 - `cost_type` 被刻意**排除**在预算 dimension 之外 —— 估算回退（estimated-fallback）的
   条目会搭乘它们所属的那个 dimension，而不是另立一个平行池。

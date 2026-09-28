@@ -83,8 +83,27 @@ BUILD_CONTEXT_MAX_BYTES=4096
 # quarters of the platforms this release promises are simply absent.
 RECIPE_GOOS=(linux darwin)
 RECIPE_GOARCH=(amd64 arm64)
-RECIPE_PACKAGE_FORMATS=(deb rpm apk)
+# --- package recipe: begin (scripts/test-release-archlinux-members.sh runs this block alone)
+RECIPE_PACKAGE_FORMATS=(deb rpm apk archlinux)
 RECIPE_PACKAGE_GOARCH=(amd64 arm64)
+
+# recipe_package_goarch FORMAT: the architectures the recipe builds FORMAT for. The Arch
+# Linux package is amd64 only: no pacman repository or AUR entry serves another
+# architecture, so an Arch package for one would be an unmeasured, unserved artifact.
+recipe_package_goarch() {
+	case "$1" in
+	archlinux) printf '%s\n' amd64 ;;
+	*) printf '%s\n' "${RECIPE_PACKAGE_GOARCH[@]}" ;;
+	esac
+}
+
+# format_ext FORMAT: the file extension nfpm writes for FORMAT (archlinux: .pkg.tar.zst).
+format_ext() {
+	case "$1" in
+	archlinux) printf '%s\n' pkg.tar.zst ;;
+	*) printf '%s\n' "$1" ;;
+	esac
+}
 
 # Architecture spellings a native packager may legitimately use for the SAME goarch. The
 # finalizer never invents a package FILENAME — GoReleaser's conventional spelling is a
@@ -97,6 +116,47 @@ arch_aliases() {
 	*) printf '%s\n' "$1" ;;
 	esac
 }
+
+# package_member_findings NAMES: one line per way the signed members listed in the file
+# NAMES differ from the recipe. Each format needs exactly one member per architecture it
+# is built for, and a member of a format for an architecture the recipe does not build is
+# refused by its name. Prints nothing when the set matches.
+package_member_findings() {
+	local names=$1 fmt ext goarch alias cand found wanted matches
+	for fmt in "${RECIPE_PACKAGE_FORMATS[@]}"; do
+		ext=$(format_ext "$fmt")
+		for goarch in "${RECIPE_PACKAGE_GOARCH[@]}"; do
+			found=0
+			matches=
+			while IFS= read -r alias; do
+				while IFS= read -r cand; do
+					case "$cand" in
+					*."$ext")
+						case "$cand" in
+						*"$alias"*) found=$((found + 1)); matches="$matches $cand" ;;
+						esac
+						;;
+					esac
+				done <"$names"
+			done < <(arch_aliases "$goarch")
+			wanted=no
+			if recipe_package_goarch "$fmt" | grep -qx "$goarch"; then wanted=yes; fi
+			if [ "$wanted" = yes ]; then
+				case "$found" in
+				1) ;;
+				0) printf 'no %s package for %s in the signed checksums\n' "$fmt" "$goarch" ;;
+				*) printf '%s %s packages match %s; the ceremony cannot choose\n' "$found" "$fmt" "$goarch" ;;
+				esac
+			elif [ "$found" -gt 0 ]; then
+				for cand in $matches; do
+					printf '%s package %s is for %s, which the recipe does not build (%s only)\n' \
+						"$fmt" "$cand" "$goarch" "$(recipe_package_goarch "$fmt" | tr '\n' ' ' | sed 's/ $//')"
+				done
+			fi
+		done
+	done
+}
+# --- package recipe: end
 
 # --- verdict helpers ------------------------------------------------------------------
 # The three pre-publication verdicts are distinct because the operator's next action
@@ -823,34 +883,14 @@ fi
 
 # PACKAGES BY COVERAGE, NOT BY SPELLING. The native package filename is GoReleaser's
 # conventional form, which this tree cannot derive offline; what it CAN derive is the recipe
-# — three formats over two architectures, built from the base binary only — so the rule is
-# that the signed checksums carry exactly one member per (format, architecture) and that
-# every combination is covered. A missing .rpm for arm64 is caught; the exact spelling is
-# not asserted, and that limit is written down rather than papered over.
-pkg_unclassified=()
-for fmt in "${RECIPE_PACKAGE_FORMATS[@]}"; do
-	for goarch in "${RECIPE_PACKAGE_GOARCH[@]}"; do
-		found=0
-		while IFS= read -r alias; do
-			while IFS= read -r cand; do
-				case "$cand" in
-				*."$fmt")
-					case "$cand" in
-					*"$alias"*) found=$((found + 1)) ;;
-					esac
-					;;
-				esac
-			done <"$WORK/sum-names.txt"
-		done < <(arch_aliases "$goarch")
-		case "$found" in
-		1) ;;
-		0) pkg_unclassified+=("no ${fmt} package for ${goarch} in the signed checksums") ;;
-		*) pkg_unclassified+=("${found} ${fmt} packages match ${goarch}; the ceremony cannot choose") ;;
-		esac
-	done
-done
+# — each format over the architectures it is built for (recipe_package_goarch), from the base
+# binary only — so the rule is that the signed checksums carry exactly one member per
+# (format, architecture) and that every combination is covered. A missing .rpm for arm64 is
+# caught, and an Arch package for arm64 is refused by name; the exact spelling is not
+# asserted, and that limit is written down rather than papered over.
+mapfile -t pkg_unclassified < <(package_member_findings "$WORK/sum-names.txt")
 [ "${#pkg_unclassified[@]}" -eq 0 ] ||
-	refuse "the native package set is incomplete or ambiguous" "${pkg_unclassified[@]}"
+	refuse "the native package set is incomplete, ambiguous or outside the recipe" "${pkg_unclassified[@]}"
 
 # EXTRA ORDINARY ARTIFACTS ARE NAMED, NOT TOLERATED. Every checksums row must be one of the
 # derived members or an admitted package; anything else is a file in the signed set that
@@ -863,7 +903,7 @@ while IFS= read -r name; do
 	done
 	if [ "$explained" -eq 0 ]; then
 		for fmt in "${RECIPE_PACKAGE_FORMATS[@]}"; do
-			case "$name" in *."$fmt") explained=1 ;; esac
+			case "$name" in *."$(format_ext "$fmt")") explained=1 ;; esac
 		done
 	fi
 	[ "$explained" -eq 1 ] || unexplained+=("$name")

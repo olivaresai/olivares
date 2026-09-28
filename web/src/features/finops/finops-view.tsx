@@ -1662,6 +1662,58 @@ function AllocationSection({ range }: { range: { since: string } }) {
 
 // --- budgets tab (fans out a status query per budget) ------------------------
 
+/** The admission counters recovery left for a later pass or an operator, in the order
+ *  the admission line names them: the engine's outstanding counters, all seven.
+ *  `unresolved` and `frontier_blocked` are filled only by the reconciliation job's
+ *  recovery pass; the read route this line calls reports them as 0. */
+const ADMISSION_OUTSTANDING = [
+  'corrupt',
+  'unresolved',
+  'undecodable',
+  'owed_remaining',
+  'frontier_blocked',
+  'legacy_pending',
+  'legacy_owes_release',
+] as const
+
+/** The admission line, beside the budgets whose holds it counts. It reads
+ *  `GET /admission/reconciliation`, which moves nothing, and names the unsettled holds,
+ *  the drift and each outstanding counter the engine reported, every one only when it
+ *  is not zero. It lives inside `TenantBudgetsTab`, so it needs the same budget read as
+ *  its neighbors, and it says nothing when there is nothing to report. */
+function AdmissionDriftLine() {
+  const { t } = useTranslation(['finops'])
+  const { activeTenant } = useAuth()
+  const reconQ = useQuery({
+    queryKey: finopsKeys.admissionReconciliation(activeTenant),
+    queryFn: () => finopsApi.admissionReconciliation({ tenant: activeTenant }),
+    enabled: !!activeTenant,
+  })
+  const report = reconQ.data
+  // A failed read is not a broken screen: the budgets beside it are what the operator
+  // came to see, so it is not announced here.
+  if (!report) return null
+  const parts: string[] = []
+  if (report.active > 0) {
+    parts.push(t('budgets.admission.holds', { n: report.active }))
+  }
+  if (report.drift) parts.push(t('budgets.admission.drift'))
+  for (const counter of ADMISSION_OUTSTANDING) {
+    const n = report[counter]
+    if (n > 0) parts.push(t(`budgets.admission.outstanding.${counter}`, { n }))
+  }
+  if (parts.length === 0) return null
+  return (
+    <p
+      data-testid="admission-drift"
+      role="status"
+      className="mt-3 text-caption text-muted-foreground"
+    >
+      {parts.join(' · ')}
+    </p>
+  )
+}
+
 export function BudgetsTab({ canWrite }: { canWrite: boolean }) {
   const { activeTenant, can } = useAuth()
   // Read authority owns the query/form lifetime, independently of write access.
@@ -1816,6 +1868,7 @@ function TenantBudgetsTab({ canWrite }: { canWrite: boolean }) {
             )
           }
         </AsyncSection>
+        <AdmissionDriftLine />
       </SectionCard>
 
       <SectionCard

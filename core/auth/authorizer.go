@@ -229,6 +229,7 @@ func NewAuthorizer(eval PolicyEvaluator, opts ...Option) *Authorizer {
 // Authorize decides one Request. It denies by default. The order encodes the
 // algebra Allow = (RBAC ∨ Grant) ∧ ¬Forbid ∧ ¬deny-overlay:
 //
+//  0. An excluded principal, or a scoped session outside its tenant, is denied.
 //  1. The scoped engine runs FIRST: a FORBID short-circuits to deny (it overrides
 //     RBAC and any grant — forbid-overrides-permit), a GRANT records a positive
 //     authorization, ABSTAIN does nothing. A nil scoped engine abstains.
@@ -238,6 +239,15 @@ func NewAuthorizer(eval PolicyEvaluator, opts ...Option) *Authorizer {
 //  3. The deny-overlay (ABAC + external PDP) may then further-restrict the base
 //     grant. A faulty/unavailable overlay or scoped engine fails CLOSED.
 func (az *Authorizer) Authorize(ctx context.Context, req Request) Decision {
+	// An account removed from the tenant, or a session confined to another one,
+	// holds nothing there: no role, no scoped grant, no group subject. This is a
+	// platform invariant, refused before any grant is evaluated.
+	if req.Principal.ExcludedFrom(req.Tenant) {
+		return Decision{Allow: false, Reason: "tenant: the principal is excluded from this tenant", Class: ClassInvariant}
+	}
+	if scope := req.Principal.SessionScope(); !scope.IsZero() && scope != req.Tenant {
+		return Decision{Allow: false, Reason: "tenant: the session is scoped to another tenant", Class: ClassInvariant}
+	}
 	restricted, restrictionAllows := req.Principal.restrictedPermission(req.Tenant, req.Permission)
 	if restricted && !restrictionAllows {
 		return Decision{Allow: false, Reason: "credential ceiling: not permitted"}

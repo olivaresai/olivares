@@ -180,12 +180,38 @@ message MetricSample {
 // Observation is the sealed sum type a source streams to the host. The set of
 // payloads is closed (it matches model.Observation); an unknown payload is a
 // contract error, never silently dropped.
+message InventoryScope {
+ string contract = 1;
+ string family = 2;
+ repeated string selectors = 3;
+}
+message InventoryCollectionStart {
+ InventoryScope scope = 1;
+ google.protobuf.Timestamp observed_at = 2;
+}
+message InventoryCollectionMember { EdgeObservation edge = 1; }
+message InventoryCollectionReport {
+ string state = 1;
+ string reason = 2;
+ string requested_scope = 3;
+ string fulfilled_scope = 4;
+ int64 count = 5;
+ google.protobuf.Timestamp observed_until = 6;
+}
+message InventoryMember {
+ string run_id = 1;
+ int64 ordinal = 2;
+ string digest = 3;
+}
 message Observation {
   oneof payload {
     EdgeObservation edge = 1;
     CostSample cost = 2;
     FindingReport finding = 3;
     MetricSample metric = 4;
+    InventoryCollectionStart collection_start = 5;
+    InventoryCollectionMember collection_member = 6;
+    InventoryCollectionReport collection_report = 7;
   }
 }
 
@@ -216,6 +242,7 @@ message Event {
   // engine node that registered the source — the collector push envelope
   // (IngestEnvelope) deliberately has no such field.
   SourceRegistration source_registration = 11;
+  InventoryMember inventory_member = 12;
 }
 
 // SourceRegistration mirrors event.SourceRegistration: the durable roster row's
@@ -342,6 +369,8 @@ message OpenRequest {
 
 message Empty {}
 
+message GatherInventoryRequest { string capability = 1; }
+
 // SourceService is served by a SourceConnector plugin. Gather is server-
 // streaming: the plugin streams observations to the host, which lifts each onto
 // the event bus. The stream ends when the source's run completes (batch) or the
@@ -350,6 +379,7 @@ service SourceService {
   rpc Describe(Empty) returns (DescribeResponse);
   rpc Open(OpenRequest) returns (Empty);
   rpc Gather(Empty) returns (stream Observation);
+  rpc GatherInventory(GatherInventoryRequest) returns (stream Observation);
   rpc Close(Empty) returns (Empty);
 }
 

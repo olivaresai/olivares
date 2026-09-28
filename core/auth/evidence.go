@@ -166,6 +166,20 @@ func (az *Authorizer) authorizeEvidence(ctx context.Context, req Request, consul
 	}
 	baseRequest := cloneEvidenceRequest(req)
 
+	// The same invariant as Authorize: an excluded principal, or a scoped session
+	// outside its tenant, is denied before any producer is consulted.
+	if scope := baseRequest.Principal.SessionScope(); baseRequest.Principal.ExcludedFrom(baseRequest.Tenant) ||
+		(!scope.IsZero() && scope != baseRequest.Tenant) {
+		return finalizeAuthorizationEvidence(
+			CheckEvidence{Verdict: CheckBroken, Code: "tenant_excluded"},
+			checkGuardNotEvaluated,
+			checkForbidNotEvaluated,
+			nil,
+			evidenceWindow{},
+			EffectAbstain,
+		)
+	}
+
 	restricted, restrictionAllows := baseRequest.Principal.restrictedPermission(
 		baseRequest.Tenant,
 		baseRequest.Permission,
@@ -376,6 +390,20 @@ func cloneEvidenceRequest(req Request) Request {
 }
 
 func cloneEvidencePrincipal(principal Principal) Principal {
+	if principal.excluded != nil {
+		excluded := make(map[model.TenantID]struct{}, len(principal.excluded))
+		for tenant := range principal.excluded {
+			excluded[tenant] = struct{}{}
+		}
+		principal.excluded = excluded
+	}
+	if principal.floors != nil {
+		floors := make(map[model.TenantID]int64, len(principal.floors))
+		for tenant, floor := range principal.floors {
+			floors[tenant] = floor
+		}
+		principal.floors = floors
+	}
 	principal.AMR = append([]string(nil), principal.AMR...)
 	principal.audiences = append([]string(nil), principal.audiences...)
 

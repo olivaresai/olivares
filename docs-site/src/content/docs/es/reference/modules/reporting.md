@@ -50,5 +50,5 @@ y no forma parte del runtime community.
   postura y evidencia de compliance.
 - [Costes y AI FinOps](/es/reference/modules/xi-finops/) — superficie
   autoritativa de gasto.
-- [Catálogo de módulos](/es/reference/modules/overview/) — los 30 módulos
+- [Catálogo de módulos](/es/reference/modules/overview/) — los 31 módulos
   conectados y su madurez honesta.

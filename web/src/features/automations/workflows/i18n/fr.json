@@ -150,6 +150,23 @@
     "paused": "En pause : {{reason}}",
     "timeline": "Chronologie des étapes",
     "graph": "Graphe d’exécution en lecture seule",
+    "reauthorize": {
+      "title": "En attente de réauthentification",
+      "explanation": "Cette exécution est en pause jusqu’à ce que son initiateur la poursuive avec des identifiants actuels qui ne soient pas plus larges que ceux avec lesquels elle a démarré.",
+      "planHash": "Hash du plan à réapprouver",
+      "button": "Réautoriser l’exécution",
+      "confirmTitle": "Réautoriser cette exécution ?",
+      "confirmDescription": "Vos identifiants actuels deviennent ceux de l’exécution et ses étapes en pause reprennent. Ils doivent appartenir à l’initiateur de l’exécution et ne pas être plus larges que ceux avec lesquels elle a démarré.",
+      "confirmPlan": "Vous réapprouvez ce hash du plan",
+      "confirm": "Réautoriser",
+      "done": "Exécution réautorisée",
+      "forbidden": "Ces identifiants ne peuvent pas poursuivre l’exécution. Utilisez des identifiants actuels de l’initiateur de l’exécution, pas plus larges que ceux avec lesquels elle a démarré, ou lancez une nouvelle exécution.",
+      "conflict": "L’exécution n’attend pas de réauthentification, son hash du plan ne correspond pas ou une autre réautorisation est en cours. Actualisez l’exécution et réessayez si elle est toujours en pause.",
+      "notFound": "L’exécution est introuvable dans ce workflow.",
+      "unavailable": "L’exécution n’a pas été réautorisée, car la liaison des identifiants est indisponible. Réessayez.",
+      "failed": "Impossible de réautoriser l’exécution.",
+      "refresh": "Actualiser l’exécution"
+    },
     "status": {
       "running": "En cours",
       "completed": "Terminée",
@@ -165,6 +182,7 @@
       "done": "Terminée",
       "gate_passed": "Porte franchie",
       "blocked": "Bloquée",
+      "reauthentication_required": "Réauthentification requise",
       "budget_blocked": "Bloquée par le budget",
       "skipped": "Ignorée"
     }

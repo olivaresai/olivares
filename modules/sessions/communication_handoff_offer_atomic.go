@@ -33,14 +33,41 @@ type WorkItemHandoffOfferCommand struct {
 
 // OfferWorkItemHandoff is the public current-authority boundary. It does not
 // accept an existing carrier ID: every carrier identity is server-derived from
-// the idempotency key and remains inseparable from the Handoff receipt.
+// the idempotency key and remains inseparable from the Handoff receipt. The
+// Handoff names its source owner and its target, so it is a fenced write: both
+// accounts' standing is read first and the transaction's authority lock pins
+// their versions.
 //
 // A Session sender's own Claim can be renewed by another transaction of the
 // same Session between this request's observation and its authority lock. The
 // original offer of the same key does exactly that while a resend waits behind
 // it. That failure alone is followed by one recognition admission, as a Handoff
-// response is; every other failure is returned as it is.
+// response is, and the recognition's outcome is final: neither that stale
+// Claim nor any failure after the recognition started runs the offer again.
+// Every other failure is returned as it is, except one: when the fenced
+// authority lock finds a pinned account version, or a fact pinned with it,
+// moved, the whole offer runs once more with its standing read again.
 func (m *Module) OfferWorkItemHandoff(
+	ctx context.Context,
+	scope DirectoryScopeRef,
+	ref auth.PrincipalRef,
+	cmd WorkItemHandoffOfferCommand,
+) (HandoffOfferResult, error) {
+	var result HandoffOfferResult
+	err := m.fencedCommunicationCommand(ctx, func(ctx context.Context) error {
+		var err error
+		result, err = m.offerWorkItemHandoffAttempt(ctx, scope, ref, cmd)
+		return err
+	})
+	return result, err
+}
+
+// offerWorkItemHandoffAttempt is one attempt of the fenced offer. The ordinary
+// admission arms the fence with both parties' standing before its transaction.
+// When that transaction meets only the sender's stale own Claim, the attempt
+// makes its outcome final and runs the one recognition, whose transaction pins
+// the same account versions. Any other failure goes back to the fence as it is.
+func (m *Module) offerWorkItemHandoffAttempt(
 	ctx context.Context,
 	scope DirectoryScopeRef,
 	ref auth.PrincipalRef,
@@ -48,6 +75,10 @@ func (m *Module) OfferWorkItemHandoff(
 ) (HandoffOfferResult, error) {
 	admission, prepared, err := m.prepareWorkItemHandoffOffer(ctx, scope, ref, cmd, handoffOfferApply)
 	if err != nil {
+		return HandoffOfferResult{}, err
+	}
+	parties := append(actorAccounts(admission.normalized.actor), recipientAccounts(admission.target)...)
+	if err := m.fenceCommunicationAccounts(ctx, scope.TenantID, parties); err != nil {
 		return HandoffOfferResult{}, err
 	}
 	result, err := m.applyAtomicWorkItemHandoffOffer(ctx, admission, prepared, handoffOfferApply)
@@ -58,6 +89,9 @@ func (m *Module) OfferWorkItemHandoff(
 	if !eligible {
 		return HandoffOfferResult{}, err
 	}
+	// The recognition answers the stale Claim: whatever it returns stands, even
+	// though the same stale Claim marked the fence moved.
+	keepCommunicationOutcome(ctx)
 	return m.recognizeWorkItemHandoffOffer(ctx, scope, ref, cmd, admission, stale.fact)
 }
 

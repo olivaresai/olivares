@@ -27,7 +27,8 @@ import (
 // (SHA-256 fb5cc1e8…, relayed by Root as the currently implemented wire at B commit c04256a4), under
 // the Root direction an internal design note (not shipped) It is
 // not yet B's accepted final delivery; Root reports any bytes that change. Nothing outside this file
-// names a body or response field.
+// names a body or response field, except the apt-refresh answer, whose checks are
+// core/license/aptrefresh.CheckAnswer (Interface Q3 r2 §3.1.4.2).
 
 // connectResponseMaxBytes bounds every response before it is parsed.
 const connectResponseMaxBytes = 256 << 10
@@ -94,11 +95,23 @@ func (e *connectUnknownError) Unwrap() error { return e.err }
 type connectRefusal struct {
 	status int
 	code   connectv1.ErrorCode
+	// reason is the body's reason token (connectv1.RefusalReason), "" for none. It is compared by
+	// apt-refresh's outcome rule and never printed.
+	reason string
 }
 
 func (e *connectRefusal) Error() string {
 	return fmt.Sprintf("the licensing service refused with %d (%s): %s", e.status, e.code.Display(), e.code.Action())
 }
+
+// RefusalStatus is the HTTP status, for aptrefresh.OutcomeOf.
+func (e *connectRefusal) RefusalStatus() int { return e.status }
+
+// RefusalCode is the code as displayed: one outside the vocabulary is already unknown.
+func (e *connectRefusal) RefusalCode() connectv1.ErrorCode { return e.code }
+
+// RefusalReason is the body's reason token, "" for none.
+func (e *connectRefusal) RefusalReason() string { return e.reason }
 
 // definitive reports a refusal the same operation cannot overcome by repetition. A 401 is not
 // one: a proof is bound to a one-use challenge that each attempt draws fresh, so a proof refusal
@@ -176,12 +189,14 @@ func parseConnectRefusal(status int, hdr http.Header, body []byte) error {
 		return &connectUnknownError{reason: fmt.Sprintf("unexpected success status %d", status)}
 	}
 	code := connectv1.ErrorCode(hdr.Get(connectv1.HeaderError))
+	reason := ""
 	if obj, err := connectv1.ParseStrictObject(body, connectResponseMaxBytes); err == nil {
 		if s, ok := obj["error"].(string); ok && connectv1.ErrorCode(s) != code {
 			code = connectv1.ErrorCodeUnknown
 		}
+		reason = connectv1.RefusalReason(obj)
 	}
-	return &connectRefusal{status: status, code: code.Display()}
+	return &connectRefusal{status: status, code: code.Display(), reason: reason}
 }
 
 type connectChallenge struct {
@@ -338,6 +353,11 @@ func connectCompleteBindBody(requestID, approvalID, publicKey, channel string) (
 
 func connectRefreshBody(deploymentID, channel, publicKey string) ([]byte, error) {
 	return marshalConnectBody(map[string]any{"deployment_id": deploymentID, "channel": channel, "public_key": publicKey})
+}
+
+// connectAptRefreshBody is exactly {deployment_id, public_key} (Interface Q3 r2 §3.1.1.1).
+func connectAptRefreshBody(deploymentID, publicKey string) ([]byte, error) {
+	return marshalConnectBody(map[string]any{"deployment_id": deploymentID, "public_key": publicKey})
 }
 
 func connectRotateBody(deploymentID, newPublicKey, channel, oldPublicKey string) ([]byte, error) {

@@ -33,6 +33,11 @@ type PrincipalRef struct {
 	kind         PrincipalKind
 	credentialID model.ID
 	version      int64
+	// binding is set only on a reference ResolveCredentialBinding returned. It
+	// names the binding the reference was read from, which ResolvePrincipalScope
+	// proves current inside its own view, at the directory epoch the resolved
+	// authority carries (verifyCredentialBindingProof).
+	binding credentialBindingProof
 }
 
 // Principal is the authenticated identity of a request. It carries everything
@@ -162,6 +167,19 @@ type Principal struct {
 	// positive core decision, but product routes and readiness remain OFF until
 	// the later K3 composition cut.
 	evidence principalEvidenceProvenance
+
+	// excluded holds every tenant the account, or this one session, was removed
+	// from and has not been re-admitted to. The builders drop the grant, groups,
+	// confinement and ceiling there, and the authorizer refuses the tenant before
+	// any grant is evaluated.
+	excluded map[model.TenantID]struct{}
+	// sessionScope confines a scoped session to one tenant. It is zero for an
+	// account-scope credential.
+	sessionScope model.TenantID
+	// floors maps a tenant to the authorization epoch at which it last retired
+	// the account. A grant snapshot older than the floor does not authorize the
+	// principal there.
+	floors map[model.TenantID]int64
 }
 
 // Ref returns the opaque, exact credential reference for an authenticated
@@ -432,6 +450,98 @@ func newPrincipal(kind PrincipalKind, userID, credID model.ID, superadmin bool, 
 		}
 	}
 	return Principal{Kind: kind, UserID: userID, CredID: credID, Superadmin: superadmin, DisplayName: name, grants: g, groups: grp}
+}
+
+// ExcludedFrom reports whether the principal is excluded from tenant: its
+// account, or this one session, was removed there and has not been re-admitted.
+// The authorizer refuses an excluded principal before any grant is evaluated.
+func (p Principal) ExcludedFrom(tenant model.TenantID) bool {
+	_, excluded := p.excluded[tenant]
+	return excluded
+}
+
+// SessionScope returns the tenant a scoped session is confined to, or the zero
+// tenant for an account-scope credential.
+func (p Principal) SessionScope() model.TenantID { return p.sessionScope }
+
+// RetirementFloor returns the tenant authorization epoch at which the account
+// was last retired from tenant, if it was. A grant snapshot older than the floor
+// may not authorize the principal there.
+func (p Principal) RetirementFloor(tenant model.TenantID) (int64, bool) {
+	floor, ok := p.floors[tenant]
+	return floor, ok
+}
+
+// withStanding applies what the account's tenant exclusions say: every tenant
+// it is excluded from loses its grant, groups, confinement and ceiling, and each
+// retirement floor is recorded.
+func (p Principal) withStanding(s accountStanding) Principal {
+	if len(s.excluded) > 0 {
+		p.excluded = make(map[model.TenantID]struct{}, len(s.excluded))
+		for tenant := range s.excluded {
+			p.excluded[tenant] = struct{}{}
+		}
+		p = p.keepTenants(func(tenant model.TenantID) bool {
+			_, excluded := s.excluded[tenant]
+			return !excluded
+		})
+	}
+	if len(s.floors) > 0 {
+		p.floors = make(map[model.TenantID]int64, len(s.floors))
+		for tenant, floor := range s.floors {
+			p.floors[tenant] = floor
+		}
+	}
+	return p
+}
+
+// withSessionScope confines the principal to tenant: it keeps that tenant's
+// grant, groups, confinement and ceiling only, and never the superadmin role,
+// which is account-wide.
+func (p Principal) withSessionScope(tenant model.TenantID) Principal {
+	p.sessionScope = tenant
+	p.Superadmin = false
+	return p.keepTenants(func(t model.TenantID) bool { return t == tenant })
+}
+
+// keepTenants returns p with the per-tenant authority of every tenant keep
+// refuses removed, on fresh copies of the maps.
+func (p Principal) keepTenants(keep func(model.TenantID) bool) Principal {
+	grants := make(map[model.TenantID]string, len(p.grants))
+	for tenant, role := range p.grants {
+		if keep(tenant) {
+			grants[tenant] = role
+		}
+	}
+	p.grants = grants
+	if p.groups != nil {
+		groups := make(map[model.TenantID][]string, len(p.groups))
+		for tenant, ids := range p.groups {
+			if keep(tenant) {
+				groups[tenant] = append([]string(nil), ids...)
+			}
+		}
+		p.groups = groups
+	}
+	if p.confined != nil {
+		confined := make(map[model.TenantID]model.ID, len(p.confined))
+		for tenant, ws := range p.confined {
+			if keep(tenant) {
+				confined[tenant] = ws
+			}
+		}
+		p.confined = confined
+	}
+	if p.restricted != nil {
+		restricted := make(map[model.TenantID]map[Permission]struct{}, len(p.restricted))
+		for tenant, perms := range p.restricted {
+			if keep(tenant) {
+				restricted[tenant] = perms
+			}
+		}
+		p.restricted = restricted
+	}
+	return p
 }
 
 // withCredentialRef binds an already-authenticated principal to the exact

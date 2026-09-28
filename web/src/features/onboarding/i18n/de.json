@@ -44,6 +44,7 @@
       "invite": "Einladen",
       "inviteAnother": "Weiteren einladen",
       "invited": "{{email}} eingeladen.",
+      "consentRequired": "{{email}} hat bereits ein Konto; es tritt nur bei, wenn die Person, der es gehört, zustimmt.",
       "or": "oder",
       "ssoCta": "SSO verbinden",
       "password": "Passwort",

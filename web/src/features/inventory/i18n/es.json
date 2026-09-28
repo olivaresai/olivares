@@ -14,7 +14,8 @@
   },
   "tabs": {
     "catalog": "Catálogo",
-    "topology": "Topología"
+    "topology": "Topología",
+    "coverage": "Cobertura de recolección"
   },
   "facets": {
     "allKinds": "Todos los tipos",
@@ -121,6 +122,84 @@
       "title": "Aún no se han descubierto entidades del estate",
       "description": "Las entidades aparecen conforme las observaciones de los conectores informan de agentes, sesiones, identidades, capacidades MCP, modelos, proveedores o recursos.",
       "action": "Abrir capacidades"
+    }
+  },
+  "coverage": {
+    "title": "Cobertura de recolección",
+    "intro": "Lee la evidencia de recolección de un registro de fuente abierto. Introduce los selectores del registro que el runtime tiene abierto ahora: un selector antiguo lee esa selección histórica, no el roster actual.",
+    "form": {
+      "legend": "Selectores del registro de fuente",
+      "sourceId": "Id de fuente",
+      "sourceIdHint": "El id persistente de la fila del roster de fuentes, no su nombre.",
+      "sourceRevision": "Revisión de fuente",
+      "sourceRevisionHint": "La revisión del roster que el runtime abrió para este registro.",
+      "environmentRef": "Referencia de entorno",
+      "environmentRefHint": "El entorno de ejecución que aplicó el registro.",
+      "submit": "Leer cobertura",
+      "required": "Introduce un valor.",
+      "tooLong": "Usa como máximo {{max}} bytes.",
+      "revisionInvalid": "Introduce un número entero positivo."
+    },
+    "idle": "Introduce un id de fuente, una revisión de fuente y una referencia de entorno para leer la cobertura de recolección. No se lee nada hasta que los tres sean válidos.",
+    "loading": "Leyendo la cobertura de recolección",
+    "refresh": "Leer de nuevo",
+    "scopeNote": "La cobertura describe este registro y su consulta durante el intervalo observado. No es una instantánea global del parque ni una autorización del proveedor. Una finalización vacía no elimina recursos.",
+    "hasMore": "La respuesta indica que hay más páginas. Es un indicador de continuación de la lista, no evidencia de que la recolección esté completa. Esta selección tiene como máximo una cabeza.",
+    "unknownNote": "Desconocida significa que la evidencia almacenada no establece la cobertura de esta selección. Una selección sin coincidencia se lee como desconocida, nunca como ninguna ni como completitud heredada.",
+    "values": {
+      "complete": "Completa",
+      "partial": "Parcial",
+      "unavailable": "No disponible",
+      "unsupported": "No admitida",
+      "unknown": "Desconocida"
+    },
+    "projections": {
+      "pending": "Pendiente",
+      "committed": "Confirmada",
+      "failed": "Fallida"
+    },
+    "current": {
+      "title": "Evidencia de recolección actual",
+      "coverage": "Cobertura",
+      "reason": "Motivo",
+      "reasonNone": "Sin motivo registrado",
+      "projection": "Proyección",
+      "projectionHint": "Los miembros en cola siguen pendientes hasta que se confirma su recibo. La enumeración por sí sola no los califica.",
+      "runId": "Id de ejecución",
+      "runOrder": "Orden de ejecución",
+      "admitted": "Miembros admitidos",
+      "committed": "Miembros confirmados",
+      "expected": "Miembros esperados",
+      "expectedOpen": "No se registra hasta que el host cierra la ejecución.",
+      "rejection": "Motivo de rechazo",
+      "noRun": "No hay ninguna ejecución de recolección registrada para esta selección. Una cobertura desconocida no es cero: no dice si la fuente tiene recursos.",
+      "emptyComplete": "Esta ejecución se completó sin miembros. Una finalización vacía no elimina recursos del catálogo."
+    },
+    "lastQualified": {
+      "title": "Último éxito calificado",
+      "note": "Calificación histórica para este registro y alcance exactos. Es independiente de la enumeración actual, y la evidencia de rechazo posterior no la reescribe.",
+      "absent": "No se informa ningún éxito calificado para este registro y alcance. Falta hasta que una ejecución se califica, y su ausencia no dice nada sobre la ejecución actual."
+    },
+    "fields": {
+      "sourceId": "Id de fuente",
+      "sourceRevision": "Revisión de fuente",
+      "environmentRef": "Referencia de entorno",
+      "scopeContract": "Contrato de alcance",
+      "family": "Familia",
+      "requestedScope": "Huella del alcance solicitado",
+      "fulfilledScope": "Huella del alcance cumplido",
+      "hostStarted": "Inicio de la ejecución en el host",
+      "hostFinished": "Cierre de la ejecución en el host",
+      "producerStarted": "Inicio de la enumeración del productor",
+      "producerFinished": "Fin de la enumeración del productor",
+      "qualified": "Calificada el",
+      "notRecorded": "No registrado"
+    },
+    "error": {
+      "invalidTitle": "Selección rechazada",
+      "invalid": "El motor rechazó esta selección. El id de fuente y la referencia de entorno no pueden estar vacíos y deben tener como máximo 128 bytes, y la revisión de fuente debe ser un número entero positivo.",
+      "suspendedTitle": "Servicio del inquilino suspendido",
+      "suspended": "El servicio de este inquilino está suspendido o fuera de servicio, así que no se puede leer la cobertura de recolección."
     }
   }
 }

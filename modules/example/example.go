@@ -113,8 +113,8 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Table:   "example_observation",
 		Audited: true,
 		Fields: []model.FieldSpec{
-			{Name: "resource", Kind: model.KindText, Indexed: true},
-			{Name: "mode", Kind: model.KindText},
+			{Name: "resource", Kind: model.KindText, Indexed: true, Principal: model.None("a demo column no code writes or reads; the edge resource reference it mirrors is only logged: example.go:80, sdk/model/observation.go:65")},
+			{Name: "mode", Kind: model.KindText, Principal: model.None("a demo column no code writes or reads, mirroring an access mode from a closed set: sdk/model/enums.go:19, sdk/model/enums.go:35, example.go:80")},
 		},
 	})
 }

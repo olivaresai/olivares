@@ -87,7 +87,10 @@ describe('the thirteen nouns', () => {
   it('sends each noun to whichever hub its PRIMARY view actually sits in', () => {
     const wrong = PRODUCT_NOUNS.filter(
       (n) => hubOf.get(n.views[0]) !== n.hub,
-    ).map((n) => `${n.id}: declared ${n.hub}, primary view ${n.views[0]} is in ${hubOf.get(n.views[0])}`)
+    ).map(
+      (n) =>
+        `${n.id}: declared ${n.hub}, primary view ${n.views[0]} is in ${hubOf.get(n.views[0])}`,
+    )
     expect(
       wrong,
       `A noun advertises a hub that does not hold its first view:\n  ${wrong.join('\n  ')}`,
@@ -140,6 +143,8 @@ describe('the thirteen nouns', () => {
       postureExport: 'evidence',
       attestation: 'evidence',
       reporting: 'evidence',
+      // Compares repository revisions; it does not administer the connection.
+      sourceDiff: 'evidence',
       // "value" — what it costs and whether it is being used. Neither the thirteen
       // nouns nor the five hub verbs contain a word for money.
       'team-costs': 'value',
@@ -184,13 +189,19 @@ describe('the five hubs', () => {
     const stray = FEATURE_VIEWS.filter((v) => !HUB_ORDER.includes(v.hub)).map(
       (v) => `${v.id}: ${v.hub}`,
     )
-    expect(stray, `Views in a hub that HUB_ORDER never renders — invisible in the sidebar:\n  ${stray.join('\n  ')}`).toEqual([])
+    expect(
+      stray,
+      `Views in a hub that HUB_ORDER never renders — invisible in the sidebar:\n  ${stray.join('\n  ')}`,
+    ).toEqual([])
   })
 
   it('leaves no hub empty', () => {
     const empty = HUB_ORDER.filter(
       (h) => !FEATURE_VIEWS.some((v) => v.hub === h && !v.hideInNav),
     )
-    expect(empty, `Hubs that would render as a heading with nothing under it: ${empty.join(', ')}`).toEqual([])
+    expect(
+      empty,
+      `Hubs that would render as a heading with nothing under it: ${empty.join(', ')}`,
+    ).toEqual([])
   })
 })

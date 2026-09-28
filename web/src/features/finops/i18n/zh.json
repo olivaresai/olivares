@@ -71,6 +71,19 @@
       "throttle": "限流",
       "block": "阻断"
     },
+    "admission": {
+      "holds": "有效的账本行：{{n}}",
+      "drift": "该账本已与其调用方的结算结果产生偏差",
+      "outstanding": {
+        "corrupt": "未通过完整性检查的准入行：{{n}}",
+        "unresolved": "尚未确定的恢复写入：{{n}}",
+        "undecodable": "欠付保留列表无法解码的行：{{n}}",
+        "owed_remaining": "仍待结算的保留：{{n}}",
+        "frontier_blocked": "被尝试生命周期阻止的保留：{{n}}",
+        "legacy_pending": "早期构建遗留的声明：{{n}}",
+        "legacy_owes_release": "早期构建欠下的释放：{{n}}"
+      }
+    },
     "dialog": {
       "title": "新建预算",
       "name": "名称",

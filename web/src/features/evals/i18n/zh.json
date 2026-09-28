@@ -58,7 +58,7 @@
     "regressed": "已回退 · 漂移 {{drift}}",
     "noRegression": "无",
     "empty": "该范围内无运行。",
-    "emptyHint": "所选时间范围内的每次评估运行及其得分与耗时都会列在这里。放宽时间范围，或启动一次运行。",
+    "emptyHint": "所选时间范围内的每次评估运行及其得分都会列在这里。放宽时间范围，或启动一次运行。",
     "overN": "共 {{n}}",
     "notScored": "not scored — no verdict",
     "noBaseline": "no baseline — nothing compared"
@@ -118,7 +118,7 @@
   },
   "drift": {
     "title": "漂移 —— {{subject}}",
-    "description": "分数随时间相对于套件通过阈值的变化；持续下降即为劣化。",
+    "description": "分数随时间相对于套件通过阈值的变化。回归是与一次基线运行的分数点比较。那次运行可以使用另一个套件版本、模型或评分器，比较不会报告哪一项发生了变化。套件版本变更后，请固定一条基线。",
     "score": "分数",
     "threshold": "通过阈值",
     "pickerTitle": "对象",

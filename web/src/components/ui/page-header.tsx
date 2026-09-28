@@ -57,7 +57,7 @@ import { PagePrimaryActionSlot, PageSecondaryActionsSlot } from './page-actions'
  *    decisions, repeated in six places with three different sizes (measured 2026-09-17:
  *    `text-xl` here and in IntelPage, `text-lg` in login/setup/accept-invite/tenant-gate,
  *    `text-2xl` in settings and the status page). `text-title` is one token that
- *    carries size, leading, tracking and weight together (web/tokens/primitives.tokens.json,
+ *    carries size, leading, tracking and weight together (web/tokens/console/primitives.tokens.json,
  *    the `type` group), so the ladder moves in one place or not at all — which is
  *    exactly what the work-first pass then used to step the heading DOWN one rung,
  *    in one edit, for all 77 routes. A hand-written stack would have been 77 edits, or (more likely) six.

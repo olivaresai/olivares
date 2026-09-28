@@ -3,8 +3,8 @@ title: "Module XI — coûts et FinOps de l'IA"
 description: >-
   Comptabilisez les dépenses d'IA à partir du flux de coûts, découpez-les selon
   n'importe quelle dimension d'attribution, prévoyez la période, et appliquez des
-  budgets qui refusent la dépense au plafond — money-free sur le fil, opt-in et
-  fail-open. Ce qu'il fait, et ses limites.
+  budgets qui refusent la dépense au plafond — money-free sur le fil, opt-in, et
+  refusant quand le registre ne peut pas être lu. Ce qu'il fait, et ses limites.
 ---
 
 Le module XI est la couche **coûts / FinOps** pour l'IA : il comptabilise ce que les
@@ -71,13 +71,20 @@ la route en lecture seule). Un `block` dur refuse avec un **HTTP 402**, un `thro
 [Gouverner et approuver](/fr/how-to/govern-and-approve/).
 
 :::caution[Limites honnêtes]
-- **L'application est opt-in, pas deny-closed par défaut.** Sans budget d'application qui couvre
-  une requête, rien n'est jamais refusé — cette absence est l'état normal, pas une faille de
-  sécurité. Seul un budget *définitivement* à sa limite refuse. C'est délibéré et l'inverse de la
-  posture deny-closed du gate d'approbation.
-- **Le gate fait fail open.** Une erreur de lecture FinOps ne fait jamais tomber une action en
-  vol — un fire/open approuvé se poursuit et le routeur résout. Le filet de sécurité durable est
-  le finding de budget-cap émis à l'ingest, pas le gate pré-flight.
+- **L'application est opt-in, pas deny-closed par défaut.** Tant que FinOps peut lire son
+  registre, une requête qu'aucun budget d'application ne couvre n'est jamais refusée — cette
+  absence est l'état normal, pas une faille de sécurité. Un budget ne refuse que lorsqu'il
+  est *définitivement* à sa limite. C'est délibéré et l'inverse de la posture deny-closed du
+  gate d'approbation.
+- **Un registre que le gate ne peut pas lire refuse.** Quand FinOps ne peut ni lire ni écrire
+  son registre de budgets, l'admission ne peut pas être établie et la dépense est refusée :
+  un fire d'orchestration, un open vocal, une route de modèle, une exécution de la barrière
+  d'évals et une tâche MCP durable sont refusés, et le proxy d'inférence répond **HTTP 503**.
+  Le lancement de session applique sa propre posture de disponibilité
+  (`OLIVARES_SESSION_BUDGET_AVAILABILITY`) : non définie, la session démarre en édition
+  Community et est refusée avec **HTTP 503** en édition Enterprise ; l'échec est journalisé
+  dans les deux cas. Le finding de budget-cap émis à l'ingest enregistre toujours la dépense
+  qui a atteint un plafond.
 - **Le routeur n'applique que les portées qu'il connaît avant exécution** (global / provider /
   model) ; les portées plus fines (agent, session, team, project) sont appliquées aux jonctions
   fire/open et à la passerelle de modèles, pas à la résolution de route.

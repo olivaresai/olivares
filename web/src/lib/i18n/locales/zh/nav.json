@@ -44,11 +44,13 @@
     "communicationsAdministration": "频道管理",
     "communicationsHandoffs": "交接",
     "console": "管理",
+    "sourceDiff": "源差异",
     "permissions": "权限",
     "identity": "身份与 NHI",
     "claudePolicy": "Claude Code 治理",
     "routinePolicies": "例行任务策略",
     "deploy": "部署",
+    "gitPublication": "Git 发布",
     "knowledge": "知识库",
     "catalog": "目录",
     "killswitch": "紧急关停开关",
@@ -106,7 +108,7 @@
   "descriptions": {
     "home": "一览资产域概况与健康状况",
     "onboarding": "逐步部署配置",
-    "inventory": "发现并编目每一个智能体、MCP 与模型",
+    "inventory": "发现并编目连接器观察到的智能体、MCP 服务器与模型。",
     "sessions": "观测实时和已发现的会话及其时间线；与“运营会话”共用同一界面",
     "accessMap": "每个智能体的读取与写入内容（R/RW）",
     "health": "智能体与 MCP 的可用性与 SLA",
@@ -122,6 +124,7 @@
     "identity": "SSO、SCIM、NHI 名册与 WIF 关系图",
     "claudePolicy": "托管策略、钩子、MCP、沙箱与策略即代码",
     "deploy": "为智能体配置并接线到基础设施",
+    "gitPublication": "通过已批准的 Git 目标推送提交、创建拉取请求并合并",
     "knowledge": "知识库、RAG 与数据血缘",
     "catalog": "经审核批准的智能体与能力",
     "killswitch": "紧急停止、双人控制恢复与守护遏制",
@@ -165,7 +168,8 @@
     "eventing": "出站 Webhook 订阅、已捕获的事件日志、投递记录和死信队列",
     "team-costs": "按团队的成本归属：会话、令牌和支出，含每日趋势以及按项目和模型的明细",
     "backups": "控制平面的加密灾难恢复快照：创建、计划、下载和恢复",
-    "logs": "引擎实时日志流，支持按级别和模块筛选、搜索和暂停"
+    "logs": "引擎实时日志流，支持按级别和模块筛选、搜索和暂停",
+    "sourceDiff": "逐个文件比较已连接 Git 仓库的基准修订与 head 修订"
   },
   "commandActions": {
     "eventing": {
@@ -334,5 +338,73 @@
     "wireAria": "会话输入行",
     "turnFailed": "会话无法接受此回合。",
     "sendBackgroundHint": "Ctrl+Enter 发送并保留草稿以写下一句。"
+  },
+  "shell": {
+    "journeysLabel": "工作流程",
+    "journeys": {
+      "home": "主页",
+      "sessions": "会话",
+      "workspaceDashboard": "工作区",
+      "providers": "AI 工具",
+      "deploy": "部署"
+    },
+    "phoneBarLabel": "主导航",
+    "newSession": "新建会话",
+    "searchCommands": "搜索和命令",
+    "brandHome": "Olivares AI 主页",
+    "allAreas": "所有区域",
+    "more": "更多",
+    "moreLabel": "更多：所有区域",
+    "workspaceSwitch": "切换工作区。当前：{{name}}",
+    "workspaceCount": "工作区：{{count}}",
+    "rail": {
+      "title": "会话",
+      "all": "全部",
+      "groups": {
+        "needsYou": "需要你处理",
+        "working": "运行中",
+        "earlier": "更早"
+      },
+      "empty": {
+        "needsYou": "没有等待你的事项。",
+        "working": "没有正在运行的会话。",
+        "earlier": "没有更早的会话。"
+      },
+      "state": {
+        "need": "需要你处理",
+        "live": "运行中",
+        "ended": "已结束",
+        "idle": "空闲"
+      },
+      "workItem": "工作项",
+      "handoffFrom": "交接给你 · 来自 {{from}}",
+      "session": "会话",
+      "minutes": "{{count}} 分钟",
+      "hours": "{{count}} 小时",
+      "days": "{{count}} 天",
+      "loading": "正在读取会话…",
+      "error": "无法读取会话。"
+    },
+    "engine": {
+      "checking": "正在检查引擎",
+      "ready": "引擎就绪",
+      "unreachable": "无法连接引擎",
+      "offline": "自 {{time}} 起离线"
+    },
+    "panel": {
+      "show": "显示{{title}}",
+      "hide": "隐藏{{title}}",
+      "close": "关闭面板"
+    },
+    "keys": {
+      "command": {
+        "session": {
+          "new": "新建会话"
+        }
+      },
+      "when": {
+        "outsideField": "不在输入框中"
+      }
+    }
   }
 }

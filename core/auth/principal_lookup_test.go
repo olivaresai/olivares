@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/olivaresai/olivares/core/auth"
-	"github.com/olivaresai/olivares/core/model"
 )
 
 // PrincipalForUser must produce the SAME authorization-relevant principal a real login
@@ -21,12 +20,9 @@ func TestPrincipalForUserMatchesAuthenticated(t *testing.T) {
 	admin := mustSuperadmin(t, ctx, a)
 	tenant := provisionTenant(t, st, "acme")
 
-	u, err := a.CreateUser(ctx, admin, auth.NewUser{Email: "Dev@Acme.com", DisplayName: "Dev", Password: "dev-password-1"})
+	u, err := a.CreateUser(ctx, admin, auth.NewUser{Email: "Dev@Acme.com", DisplayName: "Dev", Password: "dev-password-1", Tenant: tenant, Role: auth.RoleEditor})
 	if err != nil {
 		t.Fatalf("create user: %v", err)
-	}
-	if _, err := a.GrantMembership(ctx, admin, u.ID, tenant, auth.RoleEditor, model.ID("")); err != nil {
-		t.Fatalf("grant: %v", err)
 	}
 
 	// Simulated principal (by id) carries the real role, the requested AAL, kind user.
@@ -80,12 +76,12 @@ func TestTenantPrincipalsPopulation(t *testing.T) {
 	admin := mustSuperadmin(t, ctx, a)
 	tenant := provisionTenant(t, st, "acme")
 
-	ed, _ := a.CreateUser(ctx, admin, auth.NewUser{Email: "ed@acme.com", Password: "dev-password-1"})
-	if _, err := a.GrantMembership(ctx, admin, ed.ID, tenant, auth.RoleEditor, model.ID("")); err != nil {
+	ed, err := a.CreateUser(ctx, admin, auth.NewUser{Email: "ed@acme.com", Password: "dev-password-1", Tenant: tenant, Role: auth.RoleEditor})
+	if err != nil {
 		t.Fatal(err)
 	}
-	vw, _ := a.CreateUser(ctx, admin, auth.NewUser{Email: "vw@acme.com", Password: "dev-password-1"})
-	if _, err := a.GrantMembership(ctx, admin, vw.ID, tenant, auth.RoleViewer, model.ID("")); err != nil {
+	vw, err := a.CreateUser(ctx, admin, auth.NewUser{Email: "vw@acme.com", Password: "dev-password-1", Tenant: tenant, Role: auth.RoleViewer})
+	if err != nil {
 		t.Fatal(err)
 	}
 	_, liveTok, err := a.IssueToken(ctx, admin, auth.TokenSpec{Name: "ci", BoundTenant: tenant, Role: auth.RoleAdmin})
@@ -140,8 +136,7 @@ func TestTenantPrincipalsPopulation(t *testing.T) {
 	// default enumerator reads the store fresh — no cache, so it cannot go stale, the
 	// no-divergence guarantee a cached PrincipalEnumerator must preserve).
 	before := len(pop)
-	nu, _ := a.CreateUser(ctx, admin, auth.NewUser{Email: "new@acme.com", Password: "dev-password-1"})
-	if _, err := a.GrantMembership(ctx, admin, nu.ID, tenant, auth.RoleViewer, model.ID("")); err != nil {
+	if _, err := a.CreateUser(ctx, admin, auth.NewUser{Email: "new@acme.com", Password: "dev-password-1", Tenant: tenant, Role: auth.RoleViewer}); err != nil {
 		t.Fatal(err)
 	}
 	pop2, err := a.TenantPrincipals(ctx, tenant, auth.AAL3)

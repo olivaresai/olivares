@@ -151,7 +151,10 @@ func TestSCIMSetReceiverDenyClosedWhenUnconfigured(t *testing.T) {
 	}
 }
 
-func TestSCIMSetReceiverDeactivateThenActivate(t *testing.T) {
+// TestSCIMSetReceiverDeactivateOffboardsAndActivateRestoresNothing: a tenant's
+// deactivate removes the account from that tenant only, and a later activate
+// from the same tenant finds no member and restores nothing.
+func TestSCIMSetReceiverDeactivateOffboardsAndActivateRestoresNothing(t *testing.T) {
 	ctx := context.Background()
 	st := testStore(t)
 	a := auth.NewAuthenticator(st, nil)
@@ -165,7 +168,6 @@ func TestSCIMSetReceiverDeactivateThenActivate(t *testing.T) {
 	signer := newES256Signer(t)
 	enableSET(t, ctx, a, super, tenant, signer)
 
-	// prov:deactivate → disable: cut creds, keep the record.
 	res, err := a.SCIMReceiveEvent(ctx, super, tenant, envFromSET(t, signer.signSET(t, "k1", provEvent(scim.EventProvDeactivate, u.ID.String(), "j1"))))
 	if err != nil {
 		t.Fatalf("deactivate = %v", err)
@@ -173,24 +175,21 @@ func TestSCIMSetReceiverDeactivateThenActivate(t *testing.T) {
 	if res.Action != auth.SCIMSetDisable || res.UserID != u.ID {
 		t.Errorf("result = %+v, want disable on %s", res, u.ID)
 	}
-	if _, err := a.Authenticate(ctx, sessTok); !errors.Is(err, auth.ErrUnauthenticated) {
-		t.Errorf("session after deactivate = %v, want revoked", err)
+	if p, err := a.Authenticate(ctx, sessTok); err != nil || !p.ExcludedFrom(tenant) {
+		t.Errorf("the account-scope session after deactivate = %v, want it authenticated and excluded from the tenant", err)
 	}
 	if _, err := a.Authenticate(ctx, apiTok); !errors.Is(err, auth.ErrUnauthenticated) {
 		t.Errorf("token after deactivate = %v, want revoked", err)
 	}
-	got, err := a.SCIMGetMember(ctx, tenant, u.ID)
-	if err != nil || got.Status != model.StatusInactive {
-		t.Fatalf("member after deactivate = (%v, status=%v), want present+inactive", err, got.Status)
+	if _, err := a.SCIMGetMember(ctx, tenant, u.ID); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("member after deactivate = %v, want ErrNotFound (offboarded)", err)
 	}
 
-	// prov:activate → re-enable: record returns to active.
-	if _, err := a.SCIMReceiveEvent(ctx, super, tenant, envFromSET(t, signer.signSET(t, "k1", provEvent(scim.EventProvActivate, u.ID.String(), "j2")))); err != nil {
-		t.Fatalf("activate = %v", err)
+	if _, err := a.SCIMReceiveEvent(ctx, super, tenant, envFromSET(t, signer.signSET(t, "k1", provEvent(scim.EventProvActivate, u.ID.String(), "j2")))); !errors.Is(err, auth.ErrSCIMSetSubject) {
+		t.Fatalf("activate after the offboard = %v, want ErrSCIMSetSubject (no member to activate)", err)
 	}
-	got, err = a.SCIMGetMember(ctx, tenant, u.ID)
-	if err != nil || got.Status != model.StatusActive {
-		t.Fatalf("member after activate = (%v, status=%v), want active", err, got.Status)
+	if _, err := a.SCIMGetMember(ctx, tenant, u.ID); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("activate restored the membership: %v", err)
 	}
 }
 
@@ -214,8 +213,8 @@ func TestSCIMSetReceiverDeleteOffboards(t *testing.T) {
 	if _, err := a.SCIMGetMember(ctx, tenant, u.ID); !errors.Is(err, store.ErrNotFound) {
 		t.Errorf("member after delete = %v, want ErrNotFound (offboarded)", err)
 	}
-	if _, err := a.Authenticate(ctx, sessTok); !errors.Is(err, auth.ErrUnauthenticated) {
-		t.Errorf("session after delete = %v, want revoked", err)
+	if p, err := a.Authenticate(ctx, sessTok); err != nil || !p.ExcludedFrom(tenant) {
+		t.Errorf("the account-scope session after delete = %v, want it authenticated and excluded from the tenant", err)
 	}
 }
 

@@ -65,6 +65,32 @@ const (
 	colCheckVerdict   = "verdict_summary"
 )
 
+// Principal declarations of the text and JSON columns above: what each stored
+// value says about accounts, with the reader lines that show it.
+var (
+	pdeclNoneNK          = model.None("a SHA-256 digest of the natural key, compared only for dedup: ingest.go:144, ingest.go:131")
+	pdeclNoneSubjectKind = model.None("a metric subject class, compared only with the fixed lens kinds: aggregate.go:83, api.go:233")
+	// A developer subject is a reported email or key name; other subjects are
+	// session or organization references. It is matched against every alias.
+	pdeclScanSubjectRef  = model.Scan(model.ClassEvidence)
+	pdeclNoneMetricName  = model.None("a metric name from the closed recognized set: contract.go:32, ingest.go:37")
+	pdeclNoneDay         = model.None("a UTC calendar day (YYYY-MM-DD): ingest.go:40, ingest.go:81")
+	pdeclNoneDimType     = model.None("a breakdown type compared only with fixed type values: aggregate.go:42, aggregate.go:73")
+	pdeclNoneDimTool     = model.None("a tool name, tallied and rendered only: aggregate.go:54, aggregate.go:126")
+	pdeclNoneDimDecision = model.None("an edit decision compared only with the reject value: aggregate.go:60")
+	pdeclNoneDimModel    = model.None("a model id, summed per model and rendered: aggregate.go:79, aggregate.go:106")
+	pdeclNoneTeam        = model.None("an operator team label, grouped and rendered only: aggregate.go:86, api.go:140")
+	pdeclNoneSource      = model.None("the name of the publishing connector, written only: adoption.go:111, ingest.go:121")
+	pdeclNoneUnit        = model.None("a measure unit label, written only: ingest.go:122")
+	pdeclVerdictSummary  = model.Nested(discrepancyVerdictSummary{}, model.ClassEvidence,
+		model.Leaf("day", model.None("the evaluated UTC day: discrepancy.go:80, discrepancy.go:339")),
+		model.Leaf("worst_metric", model.None("a metric name from the fixed comparison set: discrepancy.go:47, discrepancy.go:340")),
+		model.Leaf("severity", model.None("a finding severity from a closed set: discrepancy.go:265, sdk/model/enums.go:153")),
+		model.Leaf("directions{key}", model.None("a comparison direction from a closed set, or the truncation marker: discrepancy.go:30, discrepancy.go:109, discrepancy.go:334")),
+		model.Leaf("thresholds.floor{key}", model.None("a metric name from the fixed comparison set: discrepancy.go:47, discrepancy.go:372")),
+	)
+)
+
 // RegisterSchema declares the adoption read-model entity. One unique row per natural
 // key (per tenant), so a re-pulled Analytics day or a re-delivered OTLP delta is an
 // upsert, never a second row that double-counts.
@@ -73,18 +99,18 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Kind:  adoptionMetricKind,
 		Table: adoptionMetricTable,
 		Fields: []model.FieldSpec{
-			{Name: colNK, Kind: model.KindText},
-			{Name: colSubjectKind, Kind: model.KindText, Indexed: true},
-			{Name: colSubjectRef, Kind: model.KindText, Indexed: true},
-			{Name: colMetricName, Kind: model.KindText, Indexed: true},
-			{Name: colDay, Kind: model.KindText, Indexed: true},
-			{Name: colDimType, Kind: model.KindText, Nullable: true},
-			{Name: colDimTool, Kind: model.KindText, Nullable: true},
-			{Name: colDimDecision, Kind: model.KindText, Nullable: true},
-			{Name: colDimModel, Kind: model.KindText, Nullable: true, Indexed: true},
-			{Name: colTeam, Kind: model.KindText, Nullable: true, Indexed: true},
-			{Name: colSource, Kind: model.KindText, Nullable: true},
-			{Name: colUnit, Kind: model.KindText, Nullable: true},
+			{Name: colNK, Kind: model.KindText, Principal: pdeclNoneNK},
+			{Name: colSubjectKind, Kind: model.KindText, Indexed: true, Principal: pdeclNoneSubjectKind},
+			{Name: colSubjectRef, Kind: model.KindText, Indexed: true, Principal: pdeclScanSubjectRef},
+			{Name: colMetricName, Kind: model.KindText, Indexed: true, Principal: pdeclNoneMetricName},
+			{Name: colDay, Kind: model.KindText, Indexed: true, Principal: pdeclNoneDay},
+			{Name: colDimType, Kind: model.KindText, Nullable: true, Principal: pdeclNoneDimType},
+			{Name: colDimTool, Kind: model.KindText, Nullable: true, Principal: pdeclNoneDimTool},
+			{Name: colDimDecision, Kind: model.KindText, Nullable: true, Principal: pdeclNoneDimDecision},
+			{Name: colDimModel, Kind: model.KindText, Nullable: true, Indexed: true, Principal: pdeclNoneDimModel},
+			{Name: colTeam, Kind: model.KindText, Nullable: true, Indexed: true, Principal: pdeclNoneTeam},
+			{Name: colSource, Kind: model.KindText, Nullable: true, Principal: pdeclNoneSource},
+			{Name: colUnit, Kind: model.KindText, Nullable: true, Principal: pdeclNoneUnit},
 			{Name: colValue, Kind: model.KindInt},
 			{Name: colAdditive, Kind: model.KindInt},
 			{Name: colLastAt, Kind: model.KindTimestamp},
@@ -104,9 +130,9 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Kind:  adoptionDiscrepancyCheckKind,
 		Table: adoptionDiscrepancyCheckTable,
 		Fields: []model.FieldSpec{
-			{Name: colCheckDay, Kind: model.KindText, Indexed: true},
+			{Name: colCheckDay, Kind: model.KindText, Indexed: true, Principal: pdeclNoneDay},
 			{Name: colCheckEvaluated, Kind: model.KindTimestamp},
-			{Name: colCheckVerdict, Kind: model.KindJSON},
+			{Name: colCheckVerdict, Kind: model.KindJSON, Principal: pdeclVerdictSummary},
 		},
 		Indexes: []model.IndexSpec{{
 			// One marker per tenant/day. The ingest hook creates this before doing the

@@ -1,34 +1,72 @@
 {
   "title": "Ajustes",
-  "subtitle": "Gestiona tu cuenta y el aspecto de la consola.",
-  "tabs": {
-    "profile": "Perfil",
-    "appearance": "Apariencia",
-    "about": "Acerca de"
+  "restoreAll": "Restablecer todo",
+  "search": "Buscar ajustes",
+  "changedReset": "Cambiado · restablecer",
+  "noMatches": "Ningún ajuste coincide.",
+  "groups": {
+    "you": "Tú",
+    "work": "Trabajo",
+    "installation": "Esta instalación"
   },
-  "profile": {
-    "title": "Perfil",
-    "email": "Correo",
-    "displayName": "Nombre visible",
-    "role": "Rol en esta organización",
-    "memberships": "Organizaciones",
-    "actor": "Principal"
+  "nav": {
+    "general": "General",
+    "notifications": "Notificaciones",
+    "keyboard": "Teclado",
+    "sessionDefaults": "Valores de sesión",
+    "aiTools": "Herramientas de IA",
+    "workspaces": "Espacios de trabajo",
+    "deploy": "Despliegue y actualizaciones",
+    "signIn": "Inicio de sesión y seguridad",
+    "setup": "Configuración inicial",
+    "about": "Acerca de",
+    "sections": "Secciones de ajustes"
   },
-  "appearance": {
-    "title": "Apariencia",
+  "general": {
+    "title": "General",
+    "scope": "Tus preferencias. Te siguen a cada espacio de trabajo de esta instalación.",
     "theme": "Tema",
-    "themeHint": "Elige claro, oscuro o seguir al sistema.",
-    "density": "Densidad de tablas",
-    "densityHint": "La compacta muestra más filas; la cómoda es más espaciosa.",
+    "themeHint": "Oscuro, salvo que elijas claro o seguir el sistema.",
+    "density": "Densidad",
+    "densityHint": "Compacto muestra más filas; cómodo se lee mejor.",
     "language": "Idioma",
-    "languageHint": "El idioma de la interfaz de la consola."
+    "languageHint": "English, Español, Deutsch, Français, 日本語, Русский, 中文.",
+    "time": "Hora",
+    "timeHint": "Las horas se muestran en tu zona ({{zone}}). Los registros y las exportaciones siguen en UTC.",
+    "clock24": "24 horas",
+    "clock12": "12 horas",
+    "startPage": "Página de inicio",
+    "startPageHint": "Qué se abre al iniciar sesión. Predeterminado: Inicio.",
+    "confirmStop": "Confirmar antes de detener una sesión",
+    "confirmStopHint": "Preguntar una vez antes de que Detener acabe una sesión que sigue trabajando.",
+    "reduceMotion": "Reducir movimiento",
+    "reduceMotionHint": "Sustituye el movimiento por fundidos. Activo cuando el sistema lo pide."
+  },
+  "unavailable": {
+    "notifications": "Las preferencias de notificación aún no se guardan en esta instalación.",
+    "sessionDefaults": "Los valores de sesión aún no se guardan en esta instalación.",
+    "signIn": "La política de inicio de sesión aún no se edita en esta pantalla."
+  },
+  "keyboard": {
+    "title": "Teclado",
+    "scope": "Las teclas que responde esta instalación. Son las mismas para todos."
   },
   "about": {
     "title": "Acerca de",
+    "scope": "Esta instalación y el principal que ha iniciado sesión.",
     "version": "Versión",
-    "engine": "Motor de almacenamiento",
-    "license": "Estado de licencia",
-    "licensee": "Licenciado a",
-    "none": "Ninguno"
+    "engine": "Motor de almacén",
+    "license": "Estado de la licencia",
+    "licensee": "Licencia a nombre de",
+    "none": "Ninguno",
+    "displayName": "Nombre para mostrar",
+    "actor": "Principal",
+    "role": "Rol en esta organización",
+    "memberships": "Organizaciones"
+  },
+  "stopConfirm": {
+    "title": "¿Detener esta sesión?",
+    "description": "Detener acaba una sesión que sigue trabajando.",
+    "confirm": "Detener la sesión"
   }
 }

@@ -266,3 +266,224 @@ func TestRateLimitsTransientErrorDegrades(t *testing.T) {
 		t.Fatalf("transient error must degrade to 200/available=false, got %d %v", r.code, r.body)
 	}
 }
+
+// TestExecute_UnsupportedCapabilityNotSent is slice 2 on the text executor.
+// A Claude reference row that declares tool_use, vision or structured_outputs
+// yields no primary on a gateway endpoint, and the executor is not called.
+// With an empty endpoint the catalog still selects that row, POST /execute
+// returns not-implemented, and the executor sees no request. Empty requirements
+// still call the executor.
+func TestExecute_UnsupportedCapabilityNotSent(t *testing.T) {
+	for _, cap := range []string{"tool_use", "vision", "structured_outputs"} {
+		t.Run("gateway/"+cap, func(t *testing.T) {
+			ex := &stubExecutor{res: models.ExecuteResult{Text: "sent"}}
+			code, resolved, primary, calls, _ := executeCapability(t, ex, "http://gw:4000", []string{cap})
+			if calls != 0 {
+				t.Fatalf("executor calls = %d, want 0", calls)
+			}
+			if code != http.StatusUnprocessableEntity || resolved || primary != "" {
+				t.Fatalf("gateway %s: code=%d resolved=%v primary=%q, want 422 and no primary", cap, code, resolved, primary)
+			}
+		})
+		t.Run("direct/"+cap, func(t *testing.T) {
+			ex := &stubExecutor{res: models.ExecuteResult{Text: "sent"}}
+			code, resolved, primary, calls, reason := executeCapability(t, ex, "", []string{cap})
+			if calls != 0 {
+				t.Fatalf("executor calls = %d, want 0 (doer sees no request)", calls)
+			}
+			if code != http.StatusNotImplemented || !resolved || primary != "claude-opus-4-8" {
+				t.Fatalf("direct %s: code=%d resolved=%v primary=%q, want 501 with the selected Claude row", cap, code, resolved, primary)
+			}
+			if !strings.Contains(reason, cap) || !strings.Contains(reason, "not invocable on the gateway route") {
+				t.Fatalf("direct %s reason = %q, want %s named as not invocable on the gateway route", cap, reason, cap)
+			}
+			if strings.Contains(reason, "hello") {
+				t.Fatalf("direct %s reason echoed the request: %q", cap, reason)
+			}
+		})
+	}
+	t.Run("empty/direct", func(t *testing.T) {
+		ex := &stubExecutor{res: models.ExecuteResult{Text: "sent"}}
+		code, resolved, primary, calls, _ := executeCapability(t, ex, "", nil)
+		if code != http.StatusOK || !resolved || primary != "claude-opus-4-8" || calls != 1 {
+			t.Fatalf("empty direct: code=%d resolved=%v primary=%q calls=%d, want 200 and one executor call", code, resolved, primary, calls)
+		}
+	})
+	t.Run("empty/gateway", func(t *testing.T) {
+		ex := &stubExecutor{res: models.ExecuteResult{Text: "sent"}}
+		code, resolved, primary, calls, _ := executeCapability(t, ex, "http://gw:4000", nil)
+		if code != http.StatusOK || !resolved || primary != "claude-opus-4-8" || calls != 1 {
+			t.Fatalf("empty gateway: code=%d resolved=%v primary=%q calls=%d, want 200 and one executor call", code, resolved, primary, calls)
+		}
+	})
+}
+
+// executeCapability seeds the Claude reference row, stores one routing policy,
+// and posts /execute. It reports the status, whether a primary was selected,
+// that primary's model ref, and how many times the executor ran.
+func executeCapability(t *testing.T, ex *stubExecutor, endpoint string, required []string) (code int, resolved bool, primary string, calls int, reason string) {
+	t.Helper()
+	m := models.New(models.WithExecutor(ex))
+	h := newHarness(t, m)
+	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "acme")
+	seedModel(t, h, tenant, "anthropic", "claude-opus-4-8")
+	body := map[string]any{"name": "p", "enabled": true, "strategy": "cost"}
+	if endpoint != "" {
+		body["gateway_endpoint"] = endpoint
+	}
+	if required != nil {
+		body["required_capabilities"] = required
+	}
+	created := h.do("POST", "/v1/m/models/routing-policies", admin, body, tenantHdr(tenant))
+	if created.code != http.StatusCreated {
+		t.Fatalf("create routing policy = %d %s", created.code, created.raw)
+	}
+	id, _ := created.body["id"].(string)
+	if endpoint == "" && len(required) > 0 {
+		resolvedRow := h.do("POST", "/v1/m/models/routing-policies/"+id+"/resolve", admin, nil, tenantHdr(tenant))
+		gotResolved, gotPrimary := decisionSelection(resolvedRow.body)
+		if resolvedRow.code != http.StatusOK || !gotResolved || gotPrimary != "claude-opus-4-8" {
+			t.Fatalf("direct resolve = %d resolved=%v primary=%q, want the catalog selection", resolvedRow.code, gotResolved, gotPrimary)
+		}
+	}
+	got := h.do("POST", "/v1/m/models/routing-policies/"+id+"/execute", admin, map[string]any{"input": "hello"}, tenantHdr(tenant))
+	resolved, primary = decisionSelection(got.body)
+	return got.code, resolved, primary, ex.calls, decisionReason(got.body)
+}
+
+// TestExecute_ChatGatewayCapabilityRefusal pins the Chat path: a profile on the
+// gateway endpoint that requires a non-streaming flag refuses and does not call
+// Chat. The same profile with no gateway endpoint and no required flag calls
+// Chat once.
+func TestExecute_ChatGatewayCapabilityRefusal(t *testing.T) {
+	t.Run("gateway/tool_use", func(t *testing.T) {
+		r, chat, legacy := executeProfiled(t, true, []string{"tool_use"})
+		if chat.calls != 0 || legacy.calls != 0 {
+			t.Fatalf("chat calls=%d legacy calls=%d, want 0 and 0", chat.calls, legacy.calls)
+		}
+		reason := decisionReason(r.body)
+		if r.code != http.StatusUnprocessableEntity ||
+			!strings.Contains(reason, "tool_use") ||
+			!strings.Contains(reason, "not invocable on the gateway route") {
+			t.Fatalf("gateway chat tool_use = %d reason=%q raw=%s, want 422 naming tool_use as not invocable on the gateway route", r.code, reason, r.raw)
+		}
+		if responseErrorCode(r) == "profile_binding_mismatch" {
+			t.Fatalf("bare profile_binding_mismatch: %s", r.raw)
+		}
+		if strings.Contains(r.raw, "hello") || strings.Contains(r.raw, "opaque-test-key") || strings.Contains(r.raw, "gateway.example.invalid") {
+			t.Fatalf("refusal echoed request content or a secret: %s", r.raw)
+		}
+	})
+	t.Run("direct/none", func(t *testing.T) {
+		r, chat, legacy := executeProfiled(t, false, nil)
+		if r.code != http.StatusOK || chat.calls != 1 || legacy.calls != 0 {
+			t.Fatalf("direct chat with no required flag = %d chat=%d legacy=%d raw=%s, want 200 and one Chat call", r.code, chat.calls, legacy.calls, r.raw)
+		}
+	})
+}
+
+// chatTextUncarried is every catalog capability. The Chat text transport
+// sends one user string and stream false, so none of these is a working path.
+var chatTextUncarried = []string{
+	string(mp.CapStreaming),
+	string(mp.CapToolUse),
+	string(mp.CapVision),
+	string(mp.CapPDF),
+	string(mp.CapStructuredOutputs),
+	string(mp.CapPromptCaching),
+	string(mp.CapBatch),
+	string(mp.CapFiles),
+	string(mp.CapExtendedThinking),
+	string(mp.CapComputerUse),
+	string(mp.CapMemoryTool),
+	string(mp.CapContextManagement),
+	string(mp.CapCitations),
+}
+
+// TestExecute_ChatTextPathRefusesUncarriedCapability is the non-gateway Chat
+// path: a required flag the text transport cannot carry is refused before
+// ExecuteChat. No required flag still calls Chat once.
+func TestExecute_ChatTextPathRefusesUncarriedCapability(t *testing.T) {
+	for _, cap := range chatTextUncarried {
+		t.Run(cap, func(t *testing.T) {
+			r, chat, legacy := executeProfiled(t, false, []string{cap})
+			if chat.calls != 0 || legacy.calls != 0 {
+				t.Fatalf("%s chat=%d legacy=%d, want no send", cap, chat.calls, legacy.calls)
+			}
+			reason := decisionReason(r.body)
+			if r.code != http.StatusUnprocessableEntity ||
+				!strings.Contains(reason, cap) ||
+				!strings.Contains(reason, "not invocable on the Chat text path") {
+				t.Fatalf("%s = %d reason=%q raw=%s, want 422 naming it as not invocable on the Chat text path", cap, r.code, reason, r.raw)
+			}
+			if strings.Contains(r.raw, "hello") || strings.Contains(r.raw, "opaque-test-key") || strings.Contains(r.raw, "gateway.example.invalid") {
+				t.Fatalf("%s refusal echoed request content or a secret: %s", cap, r.raw)
+			}
+		})
+	}
+	t.Run("none", func(t *testing.T) {
+		r, chat, legacy := executeProfiled(t, false, nil)
+		if r.code != http.StatusOK || chat.calls != 1 || legacy.calls != 0 {
+			t.Fatalf("no required flag = %d chat=%d legacy=%d raw=%s, want 200 and one Chat call", r.code, chat.calls, legacy.calls, r.raw)
+		}
+	})
+}
+
+// executeProfiled stores one pinned Chat profile and posts /execute.
+// gateway sets the endpoint to the profile's own endpoint.
+func executeProfiled(t *testing.T, gateway bool, required []string) (resp, *stubChatExecutor, *stubExecutor) {
+	t.Helper()
+	chat := &stubChatExecutor{res: models.ChatExecutionResult{RequestRef: "req", AttemptRef: "att"}}
+	legacy := &stubExecutor{res: models.ExecuteResult{Text: "sent"}}
+	resolver := &fakeExecutionProfileResolver{profiles: map[string]models.ExecutionProfile{}}
+	m := models.New(
+		models.WithExecutionProfileResolver(resolver),
+		models.WithChatExecutor(chat),
+		models.WithExecutor(legacy),
+	)
+	h := newHarness(t, m)
+	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "chat-cap")
+	p := testExecutionProfile(tenant)
+	resolver.profiles[profileKey(tenant, p.Ref, p.Revision)] = p
+	seedModel(t, h, tenant, p.ProviderRef, p.ModelRef)
+	over := map[string]any{}
+	if gateway {
+		over["gateway_endpoint"] = p.Endpoint
+	}
+	if required != nil {
+		over["required_capabilities"] = required
+	}
+	created := h.do("POST", "/v1/m/models/routing-policies", admin, profilePolicyBody(over), tenantHdr(tenant))
+	if created.code != http.StatusCreated {
+		t.Fatalf("create profiled policy = %d %s", created.code, created.raw)
+	}
+	id, _ := created.body["id"].(string)
+	got := h.do("POST", "/v1/m/models/routing-policies/"+id+"/execute", admin, map[string]any{"input": "hello"}, tenantHdr(tenant))
+	return got, chat, legacy
+}
+
+func decisionReason(body map[string]any) string {
+	dec := body
+	if nested, ok := body["decision"].(map[string]any); ok {
+		dec = nested
+	}
+	reason, _ := dec["reason"].(string)
+	return reason
+}
+
+func decisionSelection(body map[string]any) (bool, string) {
+	// /execute nests the decision. /resolve is the decision itself.
+	dec := body
+	if nested, ok := body["decision"].(map[string]any); ok {
+		dec = nested
+	}
+	resolved, _ := dec["resolved"].(bool)
+	primary, _ := dec["primary"].(map[string]any)
+	if primary == nil {
+		return resolved, ""
+	}
+	ref, _ := primary["model_ref"].(string)
+	return resolved, ref
+}

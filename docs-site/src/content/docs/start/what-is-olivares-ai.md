@@ -32,10 +32,10 @@ architecture and of your configuration; it is a description, **not a guarantee**
 
 ## One capability: the read/write access map
 
-Among those capabilities is the **R/RW access map**. For every origin (an agent, a
-non-human identity, a session) it builds an edge to
-each resource it touches, classified **read**, **write**, **read-write** or
-**unknown**, and tagged with:
+Among those capabilities is the **R/RW access map**. For each origin a source
+observed (an agent, a non-human identity, a session) it builds an edge to each
+resource that signal shows it touching, classified **read**, **write**,
+**read-write** or **unknown**, and tagged with:
 
 - **where the signal came from** (`SignalSource`) — OpenTelemetry from a
   cooperative agent, a Postgres pgAudit READ/WRITE classification, an AWS
@@ -62,14 +62,14 @@ SQLite, D1). Where the read/write nature cannot be determined, the mode is
 
 The access map is one capability among many. The product is a **modular platform** (in
 the spirit of Grafana or Backstage): one engine plus modules plus connectors, designed so
-any module attaches without re-architecting the rest. It ships **30 modules** — inventory
+any module attaches without re-architecting the rest. It ships **31 modules** — inventory
 and live sessions, the R/RW map, agent orchestration (A2A, in development), MCP and skill management,
 identity and non-human identity, deployment, knowledge and context, security and
 guardrails, model and provider management, cost/FinOps, evals and a testing sandbox,
 red-teaming, compliance and evidence, an internal catalog, output integrations and SIEM
 push, voice/realtime, and health/SLA — plus platform capabilities not counted among the
 30 (its own API and manage-as-code, multi-tenancy, executive dashboards) — across
-**158 integrations** (a count measured from code by
+**159 integrations** (a count measured from code by
 `scripts/check-public-counts.sh`). A few capabilities are pre-v1 or
 deny-closed seams until provisioned; the docs are explicit about which.
 

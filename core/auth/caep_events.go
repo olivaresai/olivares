@@ -246,8 +246,11 @@ func (a *Authenticator) resolveCAEPSubject(ctx context.Context, tenant model.Ten
 		}
 		// SubjectUserID may be a session ID, not a user ID — fall through.
 	}
-	if env.SubjectEmail != "" {
-		if u, ok, err := a.SCIMFindMember(ctx, tenant, "email", env.SubjectEmail); err != nil {
+	// The stored address is the userName read through SCIMUserNameKey, so the
+	// subject is read the same way: a spelling the IdP itself provisioned, or
+	// any other letter case of it, names the member it was stored as.
+	if email := SCIMUserNameKey(env.SubjectEmail); email != "" {
+		if u, ok, err := a.SCIMFindMember(ctx, tenant, "email", email); err != nil {
 			return model.User{}, err
 		} else if ok {
 			return u, nil
@@ -263,11 +266,14 @@ func (a *Authenticator) resolveCAEPSubject(ctx context.Context, tenant model.Ten
 	return model.User{}, ErrSCIMSetSubject
 }
 
-// dispatchCAEPAction maps the action to the appropriate revocation primitive.
-// All unexported helpers (revokeUserAccess, revokeAllUserCredentials) are already
-// in this package; SCIMSetMemberActive and DegradeSessionAssurance are exported
-// methods on *Authenticator.
+// dispatchCAEPAction maps the action to the tenant-bounded primitive the
+// action table names: revoke what is scoped to or bound to this tenant, exclude
+// the rest from it, or offboard.
 func (a *Authenticator) dispatchCAEPAction(ctx context.Context, actor Principal, tenant model.TenantID, cfg CAEPSetConfig, env CAEPEventEnvelope, userID model.ID) error {
+	// A tenant's event acts only within that tenant: it revokes the sessions
+	// scoped to it and the tokens bound to it, and it excludes the account's
+	// account-scope sessions from it. It never revokes a session or token that
+	// carries another tenant, and never writes the account's global status.
 	switch env.Action {
 	case CAEPSessionRevoke:
 		return a.st.AuthMutate(ctx, func(as store.AuthScope) error {
@@ -275,22 +281,31 @@ func (a *Authenticator) dispatchCAEPAction(ctx context.Context, actor Principal,
 				return err
 			}
 			// For session-revoked, SubjectUserID may carry a session ID rather than a
-			// user ID (SSF opaque sub targeting one session). Try it as a session ID
-			// first; fall back to revoking ALL sessions for the user.
+			// user ID (SSF opaque sub targeting one session). A session scoped to this
+			// tenant is revoked; any other session of the account is excluded from it.
 			if env.SubjectUserID != "" {
 				s, err := as.Sessions().Get(ctx, model.ID(env.SubjectUserID))
 				if err == nil && s.UserID == userID && !s.Revoked {
-					s.Revoked = true
-					if _, err := as.Sessions().Update(ctx, s); err != nil {
+					if s.TenantScope == tenant {
+						s.Revoked = true
+						if _, err := as.Sessions().Update(ctx, s); err != nil {
+							return err
+						}
+						return auditAct(ctx, as, actor, "caep.session.revoked", "core.auth_session", s.ID)
+					}
+					if err := excludeSession(ctx, as, actor, userID, s.ID, tenant); err != nil {
 						return err
 					}
-					return auditAct(ctx, as, actor, "caep.session.revoked", "core.auth_session", s.ID)
+					return auditAct(ctx, as, actor, "caep.session.excluded", "core.auth_session", s.ID)
 				}
 			}
-			if err := revokeUserAccess(ctx, as, actor, userID, tenant, true); err != nil {
+			if err := revokeTenantTokens(ctx, as, actor, userID, tenant); err != nil {
 				return err
 			}
-			return auditAct(ctx, as, actor, "caep.session.revoked", "core.user", userID)
+			if err := excludeAccountSessions(ctx, as, actor, userID, tenant); err != nil {
+				return err
+			}
+			return auditAct(ctx, as, actor, "caep.session.excluded", "core.user", userID)
 		})
 
 	case CAEPTokenRevoke:
@@ -299,71 +314,62 @@ func (a *Authenticator) dispatchCAEPAction(ctx context.Context, actor Principal,
 			if err := prepareUserAuthorityWrite(ctx, as, userID); err != nil {
 				return err
 			}
-			if err := revokeUserAccess(ctx, as, actor, userID, tenant, false); err != nil {
+			if err := revokeTenantTokens(ctx, as, actor, userID, tenant); err != nil {
 				return err
 			}
 			return auditAct(ctx, as, actor, "caep.tokens.revoked", "core.user", userID)
 		})
 
 	case CAEPCredentialRevoke:
-		// credential-change: revoke all tenant-bound tokens and sessions.
+		// credential-change: this tenant's tokens and sessions.
 		return a.st.AuthMutate(ctx, func(as store.AuthScope) error {
 			if err := prepareUserAuthorityWrite(ctx, as, userID); err != nil {
 				return err
 			}
-			if err := revokeUserAccess(ctx, as, actor, userID, tenant, true); err != nil {
+			if err := revokeTenantTokens(ctx, as, actor, userID, tenant); err != nil {
+				return err
+			}
+			if err := excludeAccountSessions(ctx, as, actor, userID, tenant); err != nil {
 				return err
 			}
 			return auditAct(ctx, as, actor, "caep.credentials.revoked", "core.user", userID)
 		})
 
 	case CAEPDeviceNonCompliant:
-		// device-compliance-change: configurable step-up or revoke.
-		if cfg.DeviceNonCompliantAction == "step_up" {
-			return a.DegradeSessionAssurance(ctx, actor, userID)
-		}
+		// device-compliance-change: configurable step-up or revoke, in this tenant.
 		return a.st.AuthMutate(ctx, func(as store.AuthScope) error {
 			if err := prepareUserAuthorityWrite(ctx, as, userID); err != nil {
 				return err
 			}
-			if err := revokeUserAccess(ctx, as, actor, userID, tenant, true); err != nil {
+			if cfg.DeviceNonCompliantAction == "step_up" {
+				if err := degradeScopedSessions(ctx, as, userID, tenant); err != nil {
+					return err
+				}
+				if err := excludeAccountSessionsOnly(ctx, as, actor, userID, tenant); err != nil {
+					return err
+				}
+				return auditAct(ctx, as, actor, "caep.assurance.degraded", "core.user", userID)
+			}
+			if err := revokeTenantTokens(ctx, as, actor, userID, tenant); err != nil {
 				return err
 			}
-			return auditAct(ctx, as, actor, "caep.session.revoked", "core.user", userID)
+			if err := excludeAccountSessions(ctx, as, actor, userID, tenant); err != nil {
+				return err
+			}
+			return auditAct(ctx, as, actor, "caep.session.excluded", "core.user", userID)
 		})
 
-	case CAEPAccountDisable:
-		// RISC account-disabled: mark inactive + total credential cut.
-		// SCIMSetMemberActive cuts tenant-bound access (tokens + all sessions).
-		if err := a.SCIMSetMemberActive(ctx, actor, tenant, userID, false); err != nil {
-			return err
-		}
-		// revokeAllUserCredentials cuts unbound/system tokens the SCIM path cannot reach.
+	case CAEPAccountDisable, CAEPCredentialCompromise:
+		// RISC account-disabled / credential-compromise: this tenant removes the
+		// account, and reports the event for the deployment, whose own ceremony is
+		// the only global answer.
 		return a.st.AuthMutate(ctx, func(as store.AuthScope) error {
-			if err := prepareUserAuthorityWrite(ctx, as, userID); err != nil {
+			if _, err := a.scopedOffboard(ctx, as, actor, userID, tenant, "caep."+string(env.Action)); err != nil {
 				return err
 			}
-			// The disable (SCIMSetMemberActive) and the total credential cut
-			// (revokeAllUserCredentials) run in separate transactions. Between them,
-			// unbound system tokens remain valid — authToken checks t.Revoked, not
-			// u.Status. For non-superadmin accounts this gap is zero (no unbound
-			// tokens); for superadmin accounts the window is real but brief.
-			if err := revokeAllUserCredentials(ctx, as, actor, userID); err != nil {
-				return err
-			}
-			return auditAct(ctx, as, actor, "caep.account.disabled", "core.user", userID)
-		})
-
-	case CAEPCredentialCompromise:
-		// RISC credential-compromise: total credential cut (all tokens + all sessions).
-		return a.st.AuthMutate(ctx, func(as store.AuthScope) error {
-			if err := prepareUserAuthorityWrite(ctx, as, userID); err != nil {
-				return err
-			}
-			if err := revokeAllUserCredentials(ctx, as, actor, userID); err != nil {
-				return err
-			}
-			return auditAct(ctx, as, actor, "caep.credentials.revoked", "core.user", userID)
+			return metaAudit(ctx, as, actor, "account.compromise.reported", "core.user", userID, map[string]any{
+				"tenant": tenant.String(), "event": string(env.Action),
+			})
 		})
 
 	default:
@@ -371,6 +377,44 @@ func (a *Authenticator) dispatchCAEPAction(ctx context.Context, actor Principal,
 		// from a valid, verified publisher are acknowledged but not acted on).
 		return nil
 	}
+}
+
+// degradeScopedSessions lowers the account's elevated sessions scoped to t to
+// AAL1.
+func degradeScopedSessions(ctx context.Context, as store.AuthScope, user model.ID, t model.TenantID) error {
+	sessions, err := drainList(ctx, as.Sessions().List, byEq("user_id", user.String(), 0))
+	if err != nil {
+		return err
+	}
+	for _, s := range sessions {
+		if s.Revoked || s.TenantScope != t || s.AAL <= 1 {
+			continue
+		}
+		s.AAL = 1
+		s.AALExpiresAt = nil
+		if _, err := as.Sessions().Update(ctx, s); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// excludeAccountSessionsOnly excludes every live account-scope session of the
+// account from t, and leaves the sessions scoped to t in place.
+func excludeAccountSessionsOnly(ctx context.Context, as store.AuthScope, actor Principal, user model.ID, t model.TenantID) error {
+	sessions, err := drainList(ctx, as.Sessions().List, byEq("user_id", user.String(), 0))
+	if err != nil {
+		return err
+	}
+	for _, s := range sessions {
+		if s.Revoked || !s.TenantScope.IsZero() {
+			continue
+		}
+		if err := excludeSession(ctx, as, actor, user, s.ID, t); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // DegradeSessionAssurance downgrades all non-revoked elevated sessions for the

@@ -21,6 +21,7 @@ import { formatInt } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { inventoryApi, inventoryKeys } from './api'
 import { CatalogTable } from './catalog-table'
+import { CollectionCoverage } from './collection-coverage'
 import { EntityDetailSheet } from './entity-detail'
 import { KIND_ORDER } from './entity-icons'
 import { Topology } from './topology'
@@ -108,6 +109,7 @@ export function InventoryView() {
           <TabsList>
             <TabsTrigger value="catalog">{t('tabs.catalog')}</TabsTrigger>
             <TabsTrigger value="topology">{t('tabs.topology')}</TabsTrigger>
+            <TabsTrigger value="coverage">{t('tabs.coverage')}</TabsTrigger>
           </TabsList>
           <div className="flex items-center gap-2">
             <Select value={kind} onValueChange={setKind}>
@@ -147,6 +149,7 @@ export function InventoryView() {
             tab strip and the tiles above stay where they are across a switch. */}
         <TenantEstate
           key={activeTenant ?? 'none'}
+          tenant={activeTenant}
           kind={facetKind}
           status={facetStatus}
         />
@@ -197,7 +200,8 @@ export function InventoryView() {
  * reflections is rendered by the sheet as the calm forbidden state (entity-detail.tsx).
  *
  * What a switch DOES retire with this instance, on purpose: the DataTable's sort and
- * search text, which were controls over rows that no longer exist. The kind and status
+ * search text, which were controls over rows that no longer exist, and the collection
+ * coverage selection with its read. The kind and status
  * facets, the active tab and the summary tiles are InventoryView's and stay.
  *
  * Selection and focus destination are the same episode: the real activating node, a
@@ -223,7 +227,15 @@ function focusIfShown(el: HTMLElement | null | undefined): boolean {
   return el.ownerDocument.activeElement === el
 }
 
-function TenantEstate({ kind, status }: { kind?: string; status?: string }) {
+function TenantEstate({
+  tenant,
+  kind,
+  status,
+}: {
+  tenant: string | null
+  kind?: string
+  status?: string
+}) {
   const [episode, setEpisode] = useState<{
     entry: CatalogEntry
     token: number
@@ -269,6 +281,10 @@ function TenantEstate({ kind, status }: { kind?: string; status?: string }) {
       </TabsContent>
       <TabsContent value="topology">
         <Topology onSelect={selectEntry} />
+      </TabsContent>
+      {/* The coverage selection is this tenant's too: the key above retires it. */}
+      <TabsContent value="coverage">
+        <CollectionCoverage tenant={tenant} />
       </TabsContent>
       <EntityDetailSheet
         entry={episode?.entry ?? null}

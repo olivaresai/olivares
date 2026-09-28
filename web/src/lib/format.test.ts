@@ -1,10 +1,13 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import { afterAll, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, describe, expect, it } from 'vitest'
+import { useClientSettings } from '@/features/settings/preferences'
 import i18n from './i18n'
 import {
+  formatCalendarDate,
   formatDate,
+  formatDateTime,
   formatDayKey,
   formatDuration,
   formatFraction,
@@ -125,5 +128,32 @@ describe('locale awareness (active UI language)', () => {
     expect(formatDayKey('2026-12-01')).toContain('Dez')
     await i18n.changeLanguage('en')
     expect(formatDayKey('2026-12-01')).toContain('Dec')
+  })
+})
+
+describe('clock preference', () => {
+  const iso = '2026-06-15T15:04:00.000Z'
+
+  afterEach(() => {
+    useClientSettings.setState({ clock: '24' })
+  })
+
+  it('draws a 12-hour clock and a 24-hour clock', () => {
+    useClientSettings.setState({ clock: '12' })
+    const h12 = formatDateTime(iso, 'en-US')
+    useClientSettings.setState({ clock: '24' })
+    const h24 = formatDateTime(iso, 'en-US')
+    expect(h12).toMatch(/\b(AM|PM)\b/)
+    expect(h24).not.toMatch(/AM|PM/)
+    expect(h12).not.toBe(h24)
+  })
+
+  it('leaves a UTC calendar record on the same day either way', () => {
+    useClientSettings.setState({ clock: '12' })
+    const twelve = formatCalendarDate('2026-06-15', 'en-US')
+    useClientSettings.setState({ clock: '24' })
+    const twentyFour = formatCalendarDate('2026-06-15', 'en-US')
+    expect(twelve).toBe('Jun 15, 2026')
+    expect(twentyFour).toBe(twelve)
   })
 })

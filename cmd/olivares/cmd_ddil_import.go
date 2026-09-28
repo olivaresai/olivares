@@ -307,6 +307,7 @@ func newDDILImportCmd() *cobra.Command {
 					BundleCreatedAt: im.CreatedAt,
 					MaxStaleness:    time.Duration(im.Index.PolicyMaxStaleness),
 					Actor:           "ddil-import",
+					Standing:        eng.authr,
 				}, time.Now().UTC())
 				if adoptErr != nil {
 					refused := governance.AdoptReport{Reason: "refused"}

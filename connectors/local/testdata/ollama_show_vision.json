@@ -1,0 +1,6 @@
+{
+  "capabilities": ["completion", "vision"],
+  "model_info": {
+    "llava.context_length": 8192
+  }
+}

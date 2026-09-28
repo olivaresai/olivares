@@ -84,6 +84,20 @@ const (
 	colLastPollAt   = "last_poll_at"
 )
 
+// Principal declarations of the text columns above: what each stored value says
+// about accounts, with the reader lines that show it. The *_by columns hold the
+// writing principal's actor string and are evidence only.
+var (
+	pdeclNoneResponseDLPMode = model.None("a response-DLP mode from a closed set: policy.go:29, policy.go:324")
+	pdeclNoneDLPClass        = model.None("a sensitivity class id, compared only with detected content classes: policy.go:79, policy.go:317")
+	pdeclNoneDLPAction       = model.None("a rule action, allow or deny: api.go:340, policy.go:36")
+	pdeclNoneDLPNote         = model.None("operator prose, length-bounded and rendered only: api.go:344, api.go:294")
+	pdeclNoneDeviceCode      = model.None("an opaque random polling handle, compared only for lookup: cmd/olivares/appsgateway.go:640, devicegrant.go:308")
+	pdeclNoneUserCode        = model.None("a random short approval code, compared only for lookup: cmd/olivares/appsgateway.go:648, devicegrant.go:320")
+	pdeclNoneGrantState      = model.None("a device grant state from a closed set: devicegrant.go:20, devicegrant.go:124")
+	pdeclNoneGrantTenant     = model.None("the approving tenant id, not an account: devicegrant.go:275, cmd/olivares/appsgateway.go:305")
+)
+
 // RegisterSchema declares the module's owned entities. It satisfies the engine-side
 // runtime.SchemaProvider seam (structural — no runtime import) and is called once, at
 // store construction, before any Scope exists (S02 §7 /). The engine creates
@@ -102,7 +116,7 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Table: configTable,
 		Fields: []model.FieldSpec{
 			{Name: colFailOpen, Kind: model.KindBool},
-			{Name: colResponseDLPMode, Kind: model.KindText},
+			{Name: colResponseDLPMode, Kind: model.KindText, Principal: pdeclNoneResponseDLPMode},
 			{Name: colRecordMandatory, Kind: model.KindBool},
 			{Name: colGateModelAccess, Kind: model.KindBool},
 			{Name: colGateBudget, Kind: model.KindBool},
@@ -110,7 +124,7 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 			{Name: colGateContextWin, Kind: model.KindBool},
 			{Name: colGateDLPRequest, Kind: model.KindBool},
 			{Name: colGateDLPResponse, Kind: model.KindBool},
-			{Name: colUpdatedBy, Kind: model.KindText},
+			{Name: colUpdatedBy, Kind: model.KindText, Principal: model.Ref(model.EncodeUserRef, model.ClassEvidence)},
 			{Name: colCeilingsEnforce, Kind: model.KindBool, Nullable: true},
 			{Name: colCeilingMaxTokens, Kind: model.KindInt, Nullable: true},
 			{Name: colCeilingMaxToolUses, Kind: model.KindInt, Nullable: true},
@@ -131,10 +145,10 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Kind:  dlpRuleKind,
 		Table: dlpRuleTable,
 		Fields: []model.FieldSpec{
-			{Name: colClass, Kind: model.KindText, Indexed: true},
-			{Name: colAction, Kind: model.KindText},
-			{Name: colNote, Kind: model.KindText, Nullable: true},
-			{Name: colCreatedBy, Kind: model.KindText},
+			{Name: colClass, Kind: model.KindText, Indexed: true, Principal: pdeclNoneDLPClass},
+			{Name: colAction, Kind: model.KindText, Principal: pdeclNoneDLPAction},
+			{Name: colNote, Kind: model.KindText, Nullable: true, Principal: pdeclNoneDLPNote},
+			{Name: colCreatedBy, Kind: model.KindText, Principal: model.Ref(model.EncodeUserRef, model.ClassEvidence)},
 		},
 		Indexes: []model.IndexSpec{{
 			// One rule per (tenant, class). Leads with tenant_id.
@@ -149,12 +163,12 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Kind:  deviceGrantKind,
 		Table: deviceGrantTable,
 		Fields: []model.FieldSpec{
-			{Name: colDeviceCode, Kind: model.KindText, Indexed: true},
-			{Name: colUserCode, Kind: model.KindText, Indexed: true},
-			{Name: colGrantState, Kind: model.KindText, Indexed: true},
+			{Name: colDeviceCode, Kind: model.KindText, Indexed: true, Principal: pdeclNoneDeviceCode},
+			{Name: colUserCode, Kind: model.KindText, Indexed: true, Principal: pdeclNoneUserCode},
+			{Name: colGrantState, Kind: model.KindText, Indexed: true, Principal: pdeclNoneGrantState},
 			{Name: colGrantExpires, Kind: model.KindTimestamp},
-			{Name: colApprovedBy, Kind: model.KindText, Nullable: true},
-			{Name: colGrantTenant, Kind: model.KindText, Nullable: true},
+			{Name: colApprovedBy, Kind: model.KindText, Nullable: true, Principal: model.Ref(model.EncodeUserRef, model.ClassEvidence)},
+			{Name: colGrantTenant, Kind: model.KindText, Nullable: true, Principal: pdeclNoneGrantTenant},
 			{Name: colLastPollAt, Kind: model.KindTimestamp, Nullable: true},
 		},
 		Indexes: []model.IndexSpec{

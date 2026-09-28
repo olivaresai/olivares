@@ -56,6 +56,7 @@ func newHarness(t *testing.T, m *Module) *harness {
 		t.Fatal(err)
 	}
 	m.UseData(api.NewModuleData(st))
+	bindStoreStanding(m, st)
 	stopModuleAtCleanup(t, m)
 	_, priv, _ := ed25519.GenerateKey(nil)
 	signer, _ := audit.NewSigner(priv)
@@ -145,13 +146,9 @@ func (h *harness) createOrg(token, slug string) model.TenantID {
 
 func (h *harness) viewerToken(admin string, tenant model.TenantID, email string) string {
 	h.t.Helper()
-	r := h.doJSON("POST", "/v1/users", admin, map[string]any{"email": email, "password": "viewerpass1"}, nil)
+	r := h.doJSON("POST", "/v1/users", admin, map[string]any{"email": email, "password": "viewerpass1", "tenant": tenant.String(), "role": auth.RoleViewer}, nil)
 	if r.code != http.StatusCreated {
 		h.t.Fatalf("user = %d %s", r.code, r.raw)
-	}
-	uid := r.body["id"].(string)
-	if r := h.doJSON("POST", "/v1/memberships", admin, map[string]any{"user_id": uid, "tenant": tenant.String(), "role": auth.RoleViewer}, nil); r.code != http.StatusCreated {
-		h.t.Fatalf("grant = %d %s", r.code, r.raw)
 	}
 	r = h.doJSON("POST", "/v1/auth/login", "", map[string]any{"email": email, "password": "viewerpass1"}, nil)
 	return r.body["token"].(string)

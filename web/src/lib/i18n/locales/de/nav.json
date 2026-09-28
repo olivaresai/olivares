@@ -44,11 +44,13 @@
     "communicationsAdministration": "Kanalverwaltung",
     "communicationsHandoffs": "Übergaben",
     "console": "Verwaltung",
+    "sourceDiff": "Quellvergleich",
     "permissions": "Berechtigungen",
     "identity": "Identität & NHI",
     "claudePolicy": "Claude Code-Governance",
     "routinePolicies": "Routine-Richtlinien",
     "deploy": "Bereitstellung",
+    "gitPublication": "Git-Veröffentlichung",
     "knowledge": "Wissen",
     "catalog": "Katalog",
     "killswitch": "Not-Aus",
@@ -106,7 +108,7 @@
   "descriptions": {
     "home": "Bestandsübersicht und Zustand auf einen Blick",
     "onboarding": "Schrittweise Installationskonfiguration",
-    "inventory": "Jeden Agent, jedes MCP und Modell erkennen und katalogisieren",
+    "inventory": "Agenten, MCP-Server und Modelle, die Konnektoren beobachtet haben, erkennen und katalogisieren.",
     "sessions": "Live- und entdeckte Sitzungen mit ihren Zeitleisten beobachten; teilt sich den Bildschirm mit „Sitzungen betreiben“",
     "accessMap": "Was jeder Agent liest und schreibt (R/RW)",
     "health": "Verfügbarkeit und SLAs von Agenten und MCP",
@@ -122,6 +124,7 @@
     "identity": "SSO, SCIM, das NHI-Verzeichnis und der WIF-Graph",
     "claudePolicy": "Verwaltete Richtlinie, Hooks, MCP, Sandbox und Policy-as-Code",
     "deploy": "Agenten bereitstellen und mit der Infrastruktur verkabeln",
+    "gitPublication": "Commits pushen, Pull Requests öffnen und über freigegebene Git-Ziele mergen",
     "knowledge": "Wissensdatenbanken, RAG und Datenherkunft",
     "catalog": "Kuratierte, genehmigte Agenten und Fähigkeiten",
     "killswitch": "Notabschaltung, Wiederherstellung im Vier-Augen-Prinzip und Guardian-Eindämmung",
@@ -165,7 +168,8 @@
     "eventing": "Ausgehende Webhook-Abonnements, das Protokoll erfasster Ereignisse, Zustellungen und die Dead-Letter-Warteschlange",
     "team-costs": "Kostenzuordnung nach Team: Sitzungen, Token und Ausgaben, mit Tagesverlauf und Aufschlüsselung nach Projekt und Modell",
     "backups": "Verschlüsselte Disaster-Recovery-Schnappschüsse der Steuerungsebene: erstellen, planen, herunterladen und wiederherstellen",
-    "logs": "Der Live-Protokollstrom der Engine mit Filtern nach Stufe und Modul, Suche und Pause"
+    "logs": "Der Live-Protokollstrom der Engine mit Filtern nach Stufe und Modul, Suche und Pause",
+    "sourceDiff": "Vergleichen Sie eine Basis- und eine Head-Revision eines verbundenen Git-Repositorys, Datei für Datei"
   },
   "commandActions": {
     "eventing": {
@@ -334,5 +338,73 @@
     "wireAria": "Sitzungseingabezeile",
     "turnFailed": "Die Sitzung konnte diesen Zug nicht annehmen.",
     "sendBackgroundHint": "Strg+Eingabe sendet und lässt den Entwurf für den nächsten Satz bereit."
+  },
+  "shell": {
+    "journeysLabel": "Arbeitswege",
+    "journeys": {
+      "home": "Start",
+      "sessions": "Sitzungen",
+      "workspaceDashboard": "Arbeitsbereiche",
+      "providers": "KI-Werkzeuge",
+      "deploy": "Bereitstellen"
+    },
+    "phoneBarLabel": "Haupt",
+    "newSession": "Neue Sitzung",
+    "searchCommands": "Suche und Befehle",
+    "brandHome": "Olivares AI, Start",
+    "allAreas": "Alle Bereiche",
+    "more": "Mehr",
+    "moreLabel": "Mehr: alle Bereiche",
+    "workspaceSwitch": "Arbeitsbereich wechseln. Aktuell: {{name}}",
+    "workspaceCount": "Arbeitsbereiche: {{count}}",
+    "rail": {
+      "title": "Sitzungen",
+      "all": "Alle",
+      "groups": {
+        "needsYou": "Braucht Sie",
+        "working": "Läuft",
+        "earlier": "Früher"
+      },
+      "empty": {
+        "needsYou": "Nichts wartet auf Sie.",
+        "working": "Nichts läuft.",
+        "earlier": "Keine früheren Sitzungen."
+      },
+      "state": {
+        "need": "Braucht Sie",
+        "live": "Läuft",
+        "ended": "Beendet",
+        "idle": "Untätig"
+      },
+      "workItem": "Arbeitselement",
+      "handoffFrom": "Übergabe an Sie · von {{from}}",
+      "session": "Sitzung",
+      "minutes": "{{count}} Min.",
+      "hours": "{{count}} Std.",
+      "days": "{{count}} T.",
+      "loading": "Sitzungen werden gelesen…",
+      "error": "Die Sitzungen konnten nicht gelesen werden."
+    },
+    "engine": {
+      "checking": "Engine wird geprüft",
+      "ready": "Engine bereit",
+      "unreachable": "Engine nicht erreichbar",
+      "offline": "Offline seit {{time}}"
+    },
+    "panel": {
+      "show": "{{title}} anzeigen",
+      "hide": "{{title}} ausblenden",
+      "close": "Bereich schließen"
+    },
+    "keys": {
+      "command": {
+        "session": {
+          "new": "Neue Sitzung"
+        }
+      },
+      "when": {
+        "outsideField": "außerhalb eines Feldes"
+      }
+    }
   }
 }

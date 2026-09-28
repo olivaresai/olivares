@@ -233,9 +233,11 @@ export function CodeEditor({
       ref={hostRef}
       style={{ maxHeight: height }}
       className={cn(
-        'overflow-auto rounded-md border border-border-strong bg-surface',
+        // A writable editor is a text box, so its border is a control boundary (3:1);
+        // a read-only viewer is a container and keeps the hairline edge.
+        'overflow-auto rounded-md border bg-surface',
+        readOnly ? 'border-border-strong bg-muted/40' : 'border-ctl-border',
         'focus-within:border-ring focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-1 focus-within:ring-offset-background',
-        readOnly && 'bg-muted/40',
         invalid && 'border-danger ring-1 ring-danger',
         className,
       )}

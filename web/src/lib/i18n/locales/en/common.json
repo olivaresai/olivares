@@ -89,7 +89,18 @@
     "results": "Results",
     "searchResults": "Results in your data",
     "searchTruncated": "More matches exist — refine your query.",
-    "searchDegraded": "Some sources could not be searched — this list is incomplete."
+    "searchDegraded": "Some sources could not be searched — this list is incomplete.",
+    "deniedReason": "Needs {{permission}}.",
+    "deniedHelp": "Ask an administrator who can grant it.",
+    "noTargetReason": "Needs an organization to run in.",
+    "noTargetHelp": "Select an organization, then try again.",
+    "goTo": "Go to",
+    "recentSessions": "Recent sessions",
+    "settingsGroup": "Settings",
+    "scope": "in {{name}}",
+    "footerMove": "move",
+    "footerOpen": "open",
+    "footerCommands": "commands only"
   },
   "status": {
     "active": "Active",
@@ -258,5 +269,52 @@
     "problems_one": "{{count}} binding could not be read and does not fire: {{commands}}",
     "problems_other": "{{count}} bindings could not be read and do not fire: {{commands}}",
     "navRailNote": "The rail is one tab stop. These keys work while it has focus."
+  },
+  "ui": {
+    "status": {
+      "working": "Working",
+      "needsYou": "Needs you",
+      "done": "Done",
+      "failed": "Failed",
+      "paused": "Paused",
+      "idle": "Not started"
+    },
+    "state": {
+      "loading": "Loading…",
+      "filtered": {
+        "hidden_one": "{{count}} item is hidden by the filters.",
+        "hidden_other": "{{count}} items are hidden by the filters.",
+        "clear": "Clear filters"
+      },
+      "error": {
+        "title": "Could not reach the engine.",
+        "description": "The list is not empty. It could not be read.",
+        "retry": "Try again",
+        "diagnostics": "Open diagnostics",
+        "request": "Request {{id}} · {{time}}",
+        "requestId": "Request {{id}}"
+      },
+      "stale": {
+        "message": "Showing results from <0>{{lastGood}}</0>. The refresh at {{failedAt}} failed.",
+        "retry": "Retry"
+      },
+      "noAccess": {
+        "title": "You cannot open this",
+        "description": "Your role does not include it. Nothing else is shown about it."
+      },
+      "unknown": {
+        "title": "The request was sent, and the answer was lost.",
+        "description": "Checking the same request with the engine. Do not send it again.",
+        "checking": "Request {{id}} · checking for {{elapsed}}",
+        "retry": "Send again",
+        "retryReason": "Available when the engine confirms that nothing started."
+      }
+    },
+    "codeLine": {
+      "label": "Same thing in a terminal",
+      "copy": "Copy command",
+      "copied": "Copied",
+      "copyFailed": "Could not copy. Select the command and copy it."
+    }
   }
 }

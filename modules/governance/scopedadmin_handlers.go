@@ -1006,8 +1006,18 @@ func (m *Module) handleCreateScopedGrant(w http.ResponseWriter, r *http.Request,
 	var created model.ID
 	reloadManaged := false
 	var reloadFreshness FreshnessRecord
-	werr := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
-		if e := lockPolicyAuthorizationEpoch(r.Context(), sc); e != nil {
+	// A user subject that names an account is a fenced write: the account's
+	// standing is read first, and the transaction pins the tenant's authorization
+	// epoch and the account's authority version before anything else.
+	var subjects []model.ID
+	if g.SubjectKind == subjectUser {
+		if id, err := model.ParseID(g.SubjectRef); err == nil {
+			subjects = []model.ID{id}
+		}
+	}
+	mutate := func(fn func(store.Scope) error) error { return mc.Data.Mutate(r.Context(), fn) }
+	werr := auth.FencedWrite(r.Context(), mc.Standing, mc.Tenant, subjects, auth.FenceAuthorization, mutate, func(sc store.Scope, fenced bool) error {
+		if e := lockOrCheckPolicyAuthorizationEpoch(r.Context(), sc, fenced); e != nil {
 			return e
 		}
 		state, e := loadManagedProjectionState(r.Context(), sc)
@@ -1073,6 +1083,9 @@ func (m *Module) handleCreateScopedGrant(w http.ResponseWriter, r *http.Request,
 			"subject_kind": g.SubjectKind, "role": g.Role, "scope_tree": g.Scope.Tree, "scope_ref": g.Scope.Ref, "scope_class": g.Scope.Class,
 		})
 	})
+	if writeFenceRefusal(w, werr) {
+		return
+	}
 	if werr != nil {
 		writeRBACError(w, werr)
 		return

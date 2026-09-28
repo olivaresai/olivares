@@ -20,7 +20,7 @@ export function Checkbox({
     <CheckboxPrimitive.Root
       data-slot="checkbox"
       className={cn(
-        'peer relative size-4 shrink-0 rounded-sm border border-border-strong bg-surface',
+        'peer relative size-4 shrink-0 rounded-sm border border-ctl-border bg-surface',
         // WCAG 2.2 SC 2.5.8 Target Size (Min): the visual box stays 16px but a
         // transparent ::before extends the pointer target to 24×24 CSS px (the
         // pseudo-element belongs to the control, so clicks on it toggle it).

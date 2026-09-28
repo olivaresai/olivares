@@ -37,11 +37,13 @@ import { layeredLayout } from '@/features/shared/graph/layout'
 import { useIsDark } from '@/features/shared/graph/theme'
 import { cn } from '@/lib/utils'
 import { workflowsApi, workflowsKeys } from './api'
-import type {
-  RunWorkflowResponse,
-  WorkflowRun,
-  WorkflowRunStep,
-  WorkflowRunStepStatus,
+import { RunReauthorize } from './run-reauthorize'
+import {
+  isReauthenticationGated,
+  type RunWorkflowResponse,
+  type WorkflowRun,
+  type WorkflowRunStep,
+  type WorkflowRunStepStatus,
 } from './types'
 import './i18n'
 
@@ -170,7 +172,11 @@ export function RunPanel({
               retry={() => void selectedRun.refetch()}
             />
           ) : currentRun ? (
-            <RunView run={currentRun} />
+            <RunView
+              run={currentRun}
+              workflowId={workflowId}
+              canAdmin={canAdmin}
+            />
           ) : null}
 
           <section className="space-y-3 border-t border-border pt-4">
@@ -278,8 +284,17 @@ export function RunError({
   )
 }
 
-function RunView({ run }: { run: WorkflowRun }) {
+function RunView({
+  run,
+  workflowId,
+  canAdmin,
+}: {
+  run: WorkflowRun
+  workflowId: string
+  canAdmin: boolean
+}) {
   const { t } = useTranslation('automations-workflows')
+  const gated = isReauthenticationGated(run)
   return (
     <section className="space-y-4 rounded-lg border border-border bg-elevated p-4">
       <div className="flex flex-wrap items-center gap-2">
@@ -290,10 +305,21 @@ function RunView({ run }: { run: WorkflowRun }) {
           {t(`run.status.${run.status}`)}
         </Badge>
       </div>
-      {run.paused_reason ? (
+      {/* The reauthorize section explains its own pause; any other reason
+          keeps the generic line. */}
+      {run.paused_reason &&
+      !(gated && run.paused_reason === 'reauthentication_required') ? (
         <p className="rounded-md border border-warning-line bg-warning-soft p-2 text-body text-warning">
           {t('run.paused', { reason: run.paused_reason })}
         </p>
+      ) : null}
+      {gated ? (
+        <RunReauthorize
+          key={run.id}
+          workflowId={workflowId}
+          run={run}
+          canAdmin={canAdmin}
+        />
       ) : null}
       <div>
         <h4 className="mb-2 text-caption font-medium text-muted-foreground">
@@ -482,7 +508,14 @@ function stepStatusVariant(status: WorkflowRunStepStatus): BadgeVariant {
   )
     return 'success'
   if (['blocked', 'budget_blocked', 'failed'].includes(status)) return 'danger'
-  if (['executing', 'waiting', 'waiting_approval'].includes(status))
+  if (
+    [
+      'executing',
+      'waiting',
+      'waiting_approval',
+      'reauthentication_required',
+    ].includes(status)
+  )
     return 'warning'
   return 'neutral'
 }

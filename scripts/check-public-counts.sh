@@ -291,6 +291,15 @@ else
 		"the dated inventory is private agent-operational context" || exit 1
 fi
 
+# The waiver allowlist below quotes dated statements from launch documents that the public
+# export removes with docs/launch. It only NAMES these paths to match a quotation; nothing reads
+# or runs them, and in the published tree the entries never match.
+# export-closure: absent-by-design docs/launch/BORRADORES-COMUNIDADES-v26.8.0.md — quoted as history by the waiver allowlist, never read or run.
+# export-closure: absent-by-design docs/launch/NOTES-v26.8.0.md — quoted as history by the waiver allowlist, never read or run.
+# export-closure: absent-by-design docs/launch/PLAN-COMUNIDADES-v26.8.0.md — quoted as history by the waiver allowlist, never read or run.
+# export-closure: absent-by-design docs/launch/POSTS-2026-08-30.md — quoted as history by the waiver allowlist, never read or run.
+# export-closure: absent-by-design docs/launch/video-demo-script.md — quoted as history by the waiver allowlist, never read or run.
+
 export CPC_RELEASE_CHECKLIST CPC_REVIEW_NOTES CPC_DAY_D_RUNBOOK
 export CPC_BLOG_DRAFT CPC_LAUNCH_INDEX CPC_AGENT_STATE
 
@@ -580,6 +589,52 @@ BLOG_DRAFT = os.environ.get("CPC_BLOG_DRAFT", "")
 LAUNCH_INDEX = os.environ.get("CPC_LAUNCH_INDEX", "")
 AGENT_STATE = os.environ.get("CPC_AGENT_STATE", "")
 WAIVER_ALLOWLIST = [(path, literal) for path, literal in (
+    # 2026-08-31 approved v26.8.0 draft; preserve this exact historical statement.
+    ("docs/launch/BORRADORES-COMUNIDADES-v26.8.0.md", "the numbers on day D with `scripts/check-public-counts.sh` (2026-08-30: 30 modules · 158"),
+    # 2026-08-31 approved v26.8.0 draft; preserve this exact historical statement.
+    ("docs/launch/BORRADORES-COMUNIDADES-v26.8.0.md", "7. Numbers, with their script: 30 modules, 158 integrations (connector directories with Go code;"),
+    # 2026-08-31 approved v26.8.0 draft; preserve this exact historical statement.
+    ("docs/launch/BORRADORES-COMUNIDADES-v26.8.0.md", "**4/** Measured by the script the README runs: 30 modules, 158 integrations, 26 compliance"),
+    # 2026-08-31 approved v26.8.0 draft; preserve this exact historical statement.
+    ("docs/launch/BORRADORES-COMUNIDADES-v26.8.0.md", "- 30 modules, 158 integrations, 26 compliance framework catalogs — counted by"),
+    # 2026-08-31 approved v26.8.0 draft; preserve this exact historical statement.
+    ("docs/launch/BORRADORES-COMUNIDADES-v26.8.0.md", "The AGPL build is the whole platform: 30 product modules wired into one self-hosted Go binary"),
+    # 2026-08-31 approved v26.8.0 draft; preserve this exact historical statement.
+    ("docs/launch/BORRADORES-COMUNIDADES-v26.8.0.md", "**6. Numbers, and the script that produces them.** 30 modules, 158 integrations (connector"),
+    # v26.8.0 release notes; preserve this exact historical statement.
+    ("docs/launch/NOTES-v26.8.0.md", "30 modules · 158 integrations · 26 catalogs · 4 enforcement points."),
+    # v26.8.0 release notes; preserve this exact historical statement.
+    ("docs/launch/NOTES-v26.8.0.md", "- **One binary, 30 modules, 158 integrations, 26 framework catalogs, four"),
+    # v26.8.0 release notes; preserve this exact historical statement.
+    ("docs/launch/NOTES-v26.8.0.md", "- **Counting integrations honestly.** 158 integrations are connector directories"),
+    # v26.8.0 launch plan; preserve this exact historical statement.
+    ("docs/launch/PLAN-COMUNIDADES-v26.8.0.md", "- Números medidos por `scripts/check-public-counts.sh` (30-08): **30** módulos, **158**"),
+    # 2026-08-29 measurement and dated v26.8.0 draft; preserve this exact historical statement.
+    ("docs/launch/POSTS-2026-08-30.md", "2026-08-29 (30 modules · 158 integrations · 26 framework catalogs · 4 deny-closed"),
+    # 2026-08-29 measurement and dated v26.8.0 draft; preserve this exact historical statement.
+    ("docs/launch/POSTS-2026-08-30.md", "**4/** One binary, 30 modules, 158 integrations, four deny-closed enforcement points."),
+    # 2026-08-01 census in the old release runbook; preserve this exact historical statement.
+    (RELEASE_CHECKLIST, "      **Catalog counts refreshed to canon 2026-08-01: 30 modules · 158 integrations ·"),
+    # 2026-08-01 census in the old release runbook; preserve this exact historical statement.
+    (RELEASE_CHECKLIST, "(30 modules, all wired; 158 integrations; 26 framework catalogs; 4 deny-closed PEPs; 4 client SDKs —"),
+    # dated review and 2026-08-01 measurements; preserve this exact historical statement.
+    (REVIEW_NOTES, "> among 30 modules, NOT \"the pillar\"**; **\"control plane\" / \"govern agents\" are barred** from every title,"),
+    # dated review and 2026-08-01 measurements; preserve this exact historical statement.
+    (REVIEW_NOTES, "> bootstrapped\" caveat was about **connectors**, not modules); **158 integrations** — counted as connector"),
+    # dated review and 2026-08-01 measurements; preserve this exact historical statement.
+    (REVIEW_NOTES, "### C2. Catalog counts — corrected to code-verified figures: 30 modules (all wired), 158 integrations"),
+    # dated review and 2026-08-01 measurements; preserve this exact historical statement.
+    (REVIEW_NOTES, "Every artifact now states **30 modules, all wired into the binary** (no \"23\", no \"~20 of 23\"), with honest"),
+    # dated review and 2026-08-01 measurements; preserve this exact historical statement.
+    (REVIEW_NOTES, "per-capability maturity, and frames the connector breadth as **158 integrations** — counted as connector"),
+    # dated review and 2026-08-01 measurements; preserve this exact historical statement.
+    (REVIEW_NOTES, "operation as **two of the most demo-able capabilities among the 30-module breadth** (re-verified"),
+    # dated review and 2026-08-01 measurements; preserve this exact historical statement.
+    (REVIEW_NOTES, "  counts (30 modules all-wired; 158 integrations; 26 frameworks; 4 PEPs; 4 SDKs — re-verified 2026-08-01,"),
+    # 2026-07-06 rehearsed runbook; preserve this exact historical statement.
+    (DAY_D_RUNBOOK, "`scripts/check-public-counts.sh`): **30 modules wired · 158 integrations · 26 framework catalogs ·"),
+    # withdrawn 2026-08-29; preserved script; preserve this exact historical statement.
+    ("docs/launch/video-demo-script.md", "rest; it complements your agents and does not compete with or replace them. One Go binary, 30 modules, one console. Status: beta, pre-1.0."),
     (RELEASE_CHECKLIST, 'more than 125'),
     (REVIEW_NOTES, '23 modules'),
     (DAY_D_RUNBOOK, 'more than 125'),
@@ -647,9 +702,14 @@ ES_BASE = {0:"cero",1:"uno",2:"dos",3:"tres",4:"cuatro",5:"cinco",6:"seis",7:"si
 ES_TENS = {30:"treinta",40:"cuarenta",50:"cincuenta",60:"sesenta",70:"setenta",
            80:"ochenta",90:"noventa"}
 def es_words(n):
+    # A pattern, not a string: before a masculine noun a number ending in one drops its
+    # final vowel ("veintiún módulos", "treinta y un módulos"), and both forms are correct.
+    if n == 21: return r"veinti(?:ún|uno)"
     if n in ES_BASE: return ES_BASE[n]
     if n < 100:
         t = (n // 10) * 10
+        if n % 10 == 1:
+            return ES_TENS[t] + r" y un(?:o)?"
         return ES_TENS[t] + (" y " + ES_BASE[n % 10] if n % 10 else "")
     if n < 200:
         return "ciento" + (" " + es_words(n % 100) if n % 100 else "")
@@ -830,6 +890,7 @@ def selftest():
                                            "paths", minimum=2))
     expect_red("spelled wrong integrations", lambda: check_spelled("t", "f.srt", "A hundred and fifty-six\nintegrations."))
     expect_red("spelled wrong modules es", lambda: check_spelled("t", "f.srt", "Veintinueve módulos."))
+    expect_red("spelled wrong modules es apocope", lambda: check_spelled("t", "f.srt", "Treinta y un módulos."))
     expect_red("hedge about", lambda: check_hedges("t", "f.md", "about 157 integrations"))
     expect_red("hedge es", lambda: check_hedges("t", "f.md", "más de **135** integraciones"))
     expect_red("hedge ja", lambda: check_hedges("t", "f.md", "135を超える統合"))

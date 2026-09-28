@@ -1,6 +1,6 @@
 ---
 title: "Explication"
-description: "Vue d'ensemble orientée compréhension d'Olivares AI : comment il intègre, gère et sécurise l'IA d'entreprise en une seule ground truth : Claude Code au niveau le plus profond, Codex et Grok Build à ses côtés — son architecture modulaire répartie sur 30 modules, l'access map read-first et le modèle open-core."
+description: "Vue d'ensemble orientée compréhension d'Olivares AI : comment il intègre, gère et sécurise l'IA d'entreprise en une seule ground truth : Claude Code au niveau le plus profond, Codex et Grok Build à ses côtés — son architecture modulaire répartie sur 31 modules, l'access map read-first et le modèle open-core."
 ---
 
 Cette section est orientée compréhension. Elle explique *pourquoi* Olivares AI est
@@ -29,7 +29,7 @@ l'API. L'architecture est une plateforme, pas un outil unique : un **moteur cœu
 fournit les sous-systèmes partagés — l'ingestion et un bus d'événements en-process,
 le SDK de connecteurs, le runtime de modules, un modèle de données multi-tenant,
 l'API REST/gRPC, l'authentification et l'autorisation, et l'audit ledger
-append-only — et chaque capacité est l'un des **30 modules** qui se rattachent à ces
+append-only — et chaque capacité est l'un des **31 modules** qui se rattachent à ces
 sous-systèmes sans ré-architecturer le cœur. Les **connecteurs** alimentent le
 moteur depuis l'extérieur via un SDK stable ; un connecteur n'importe jamais depuis
 le cœur, ce qui garde la frontière de licence propre.
@@ -37,7 +37,7 @@ le cœur, ce qui garde la frontière de licence propre.
 Le store par défaut est SQLite (pur-Go) pour l'usage mono-nœud et air-gapped,
 passant à Postgres avec row-level security pour le multi-tenant et le passage à
 l'échelle. Le bus d'événements est en-process par défaut ; NATS est un binding
-distribué optionnel, pas une exigence. La plateforme livre aujourd'hui **30 modules**,
+distribué optionnel, pas une exigence. La plateforme livre aujourd'hui **31 modules**,
 chacun à sa propre maturité honnête — la plupart opérationnels et câblés de bout en
 bout, certains partiels ou opt-in — répartis sur neuf domaines de capacité ; le
 registre de modèles propriétaires et le fine-tuning sont une **capacité planifiée**,

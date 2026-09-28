@@ -1,0 +1,10 @@
+{
+  "capabilities": ["completion", "thinking"],
+  "thinking": {
+    "values": [false],
+    "default": false
+  },
+  "model_info": {
+    "llama.context_length": 1024
+  }
+}

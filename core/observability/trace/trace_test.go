@@ -6,12 +6,17 @@ package trace
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/baggage"
 	"go.opentelemetry.io/otel/propagation"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
@@ -269,5 +274,125 @@ func TestFromEnvGenAICompat(t *testing.T) {
 	t.Setenv("OLIVARES_OTEL_GENAI_COMPAT", "on")
 	if !FromEnv("v").GenAICompat {
 		t.Fatal("OLIVARES_OTEL_GENAI_COMPAT=on must enable GenAI deprecated dual-emit compat")
+	}
+}
+
+func TestProviderBaggagePolicyConfiguration(t *testing.T) {
+	const valid = `[{"origin":"https://api.anthropic.com","key":"deployment.environment","values":["canary"]}]`
+	const marker = "D09-CONFIG-PRIVATE-SENTINEL"
+	rule := ProviderBaggageRule{Origin: "https://api.anthropic.com", Key: "deployment.environment", Values: []string{"canary"}}
+	encode := func(rules []ProviderBaggageRule) string {
+		out, err := json.Marshal(rules)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(out)
+	}
+	cases := []struct {
+		name, input, reason string
+		allowed             bool
+	}{
+		{name: "unset"},
+		{name: "empty array", input: "[]"},
+		{name: "valid", input: valid, allowed: true},
+		{name: "invalid JSON", input: marker, reason: "invalid_json"},
+		{name: "null is not an array", input: "null", reason: "invalid_json"},
+		{name: "unknown field", input: `[{"origin":"https://api.anthropic.com","key":"deployment.environment","values":["canary"],"` + marker + `":true}]`, reason: "invalid_json"},
+		{name: "trailing JSON", input: valid + "[]", reason: "invalid_json"},
+		{name: "input bound", input: strings.Repeat(" ", 16385) + valid, reason: "over_limit"},
+		{name: "rule bound", input: encode(make([]ProviderBaggageRule, 33)), reason: "over_limit"},
+		{name: "duplicate normalized rule", input: encode([]ProviderBaggageRule{rule, {Origin: "https://API.ANTHROPIC.COM:443/", Key: rule.Key, Values: rule.Values}}), reason: "duplicate_rule"},
+		{name: "wildcard key", input: strings.Replace(valid, "deployment.environment", "deployment.*", 1), reason: "invalid_rule"},
+		{name: "wildcard value", input: strings.Replace(valid, "canary", "*", 1), reason: "invalid_rule"},
+		{name: "empty values", input: strings.Replace(valid, `["canary"]`, `[]`, 1), reason: "invalid_rule"},
+		{name: "value count bound", input: encode([]ProviderBaggageRule{{Origin: rule.Origin, Key: rule.Key, Values: make([]string, 9)}}), reason: "over_limit"},
+		{name: "empty value", input: strings.Replace(valid, "canary", "", 1), reason: "invalid_rule"},
+		{name: "empty key", input: strings.Replace(valid, rule.Key, "", 1), reason: "invalid_rule"},
+		{name: "non ASCII key", input: strings.Replace(valid, rule.Key, "déployment", 1), reason: "invalid_rule"},
+		{name: "non ASCII value", input: strings.Replace(valid, "canary", "cánary", 1), reason: "invalid_rule"},
+		{name: "non ASCII origin", input: strings.Replace(valid, "api.anthropic.com", "éxample.com", 1), reason: "invalid_rule"},
+		{name: "origin path", input: strings.Replace(valid, "api.anthropic.com", "api.anthropic.com/messages", 1), reason: "invalid_rule"},
+		{name: "origin userinfo", input: strings.Replace(valid, "api.anthropic.com", marker+"@api.anthropic.com", 1), reason: "invalid_rule"},
+		{name: "origin query", input: strings.Replace(valid, "api.anthropic.com", "api.anthropic.com?"+marker, 1), reason: "invalid_rule"},
+		{name: "origin fragment", input: strings.Replace(valid, "api.anthropic.com", "api.anthropic.com#"+marker, 1), reason: "invalid_rule"},
+		{name: "origin port", input: strings.Replace(valid, "api.anthropic.com", "api.anthropic.com:65536", 1), reason: "invalid_rule"},
+		{name: "key bound", input: strings.Replace(valid, "deployment.environment", strings.Repeat("k", 65), 1), reason: "over_limit"},
+		{name: "value bound", input: strings.Replace(valid, "canary", strings.Repeat("v", 65), 1), reason: "over_limit"},
+		{name: "invalid control value", input: strings.Replace(valid, "canary", marker+"/private", 1), reason: "invalid_rule"},
+		{name: "deny whole policy", input: strings.TrimSuffix(valid, "]") + `,{"origin":"` + marker + `","key":"other","values":["control"]}]`, reason: "invalid_rule"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("OLIVARES_OTEL_PROVIDER_BAGGAGE_ALLOWLIST", tc.input)
+			cfg := FromEnv("test")
+			cfg.Enabled, cfg.Endpoint = false, ""
+			checkProviderBaggageDiagnostic(t, cfg, tc.reason, tc.allowed)
+		})
+	}
+	t.Run("typed invalid config", func(t *testing.T) {
+		checkProviderBaggageDiagnostic(t, Config{ProviderBaggageAllowlist: []ProviderBaggageRule{{
+			Origin: "https://api.anthropic.com", Key: "deployment.environment", Values: []string{"*"},
+		}}}, "invalid_rule", false)
+	})
+}
+
+// The public error handler observes invalid policy without accessing private
+// compilation state. Empty/default and valid policies emit no rejection.
+func checkProviderBaggageDiagnostic(t *testing.T, cfg Config, reason string, allowed bool) {
+	t.Helper()
+	var mu sync.Mutex
+	var diagnostics []string
+	previous := otel.GetErrorHandler()
+	otel.SetErrorHandler(otel.ErrorHandlerFunc(func(err error) {
+		mu.Lock()
+		defer mu.Unlock()
+		diagnostics = append(diagnostics, err.Error())
+	}))
+	t.Cleanup(func() { otel.SetErrorHandler(previous) })
+	p, err := New(context.Background(), cfg)
+	if err != nil {
+		t.Fatalf("invalid telemetry policy must not fail inference construction: %v", err)
+	}
+	member, err := baggage.NewMemberRaw("deployment.environment", "canary")
+	if err != nil {
+		t.Fatal(err)
+	}
+	bag, err := baggage.New(member)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := baggage.ContextWithBaggage(context.Background(), bag)
+	client := p.AnthropicHTTPClient(propagationRoundTripFunc(func(r *http.Request) (*http.Response, error) {
+		want := ""
+		if allowed {
+			want = "deployment.environment=canary"
+		}
+		if got := r.Header.Get("baggage"); got != want {
+			t.Errorf("baggage = %q, want %q", got, want)
+		}
+		return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(strings.NewReader("{}"))}, nil
+	}))
+	for range 2 {
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://api.anthropic.com/v1/messages", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp, err := client.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = resp.Body.Close()
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if reason == "" {
+		if len(diagnostics) != 0 {
+			t.Errorf("valid/default policy reported a rejection: %v", diagnostics)
+		}
+		return
+	}
+	want := "trace: provider baggage policy rejected (" + reason + "); baggage propagation disabled"
+	if len(diagnostics) != 1 || diagnostics[0] != want {
+		t.Errorf("diagnostics = %v, want only %q once at construction", diagnostics, want)
 	}
 }

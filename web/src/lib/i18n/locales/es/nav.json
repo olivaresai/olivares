@@ -44,11 +44,13 @@
     "communicationsAdministration": "Administración de canales",
     "communicationsHandoffs": "Traspasos",
     "console": "Administración",
+    "sourceDiff": "Diferencia de origen",
     "permissions": "Permisos",
     "identity": "Identidad y NHI",
     "claudePolicy": "Gobierno de Claude Code",
     "routinePolicies": "Políticas de rutinas",
     "deploy": "Despliegue",
+    "gitPublication": "Publicación Git",
     "knowledge": "Conocimiento",
     "catalog": "Catálogo",
     "killswitch": "Kill switch",
@@ -106,7 +108,7 @@
   "descriptions": {
     "home": "Visión general del estado y la salud del estate",
     "onboarding": "Configuración del despliegue paso a paso",
-    "inventory": "Descubre y cataloga cada agente, MCP y modelo",
+    "inventory": "Descubre y cataloga los agentes, servidores MCP y modelos que los conectores observaron.",
     "sessions": "Observa sesiones vivas y descubiertas con sus cronologías; comparte pantalla con Operar sesiones",
     "accessMap": "Qué lee y escribe cada agente (R/RW)",
     "health": "Disponibilidad y SLA de agentes y MCP",
@@ -122,6 +124,7 @@
     "identity": "SSO, SCIM, el inventario NHI y el grafo WIF",
     "claudePolicy": "Política gestionada, hooks, MCP, sandbox y policy-as-code",
     "deploy": "Aprovisiona y conecta agentes a la infraestructura",
+    "gitPublication": "Publicar commits, abrir pull requests y fusionar mediante destinos Git aprobados",
     "knowledge": "Bases de conocimiento, RAG y linaje de datos",
     "catalog": "Agentes y capacidades aprobados y curados",
     "killswitch": "Parada de emergencia, recuperación con doble control y contención guardiana",
@@ -165,7 +168,8 @@
     "eventing": "Suscripciones webhook salientes, el registro de eventos capturados, las entregas y la cola de mensajes muertos",
     "team-costs": "Atribución de costes por equipo: sesiones, tokens y gasto, con tendencia diaria y desglose por proyecto y por modelo",
     "backups": "Instantáneas cifradas de recuperación ante desastres del control plane: crear, programar, descargar y restaurar",
-    "logs": "El flujo de registros del motor en vivo, con filtros por nivel y módulo, búsqueda y pausa"
+    "logs": "El flujo de registros del motor en vivo, con filtros por nivel y módulo, búsqueda y pausa",
+    "sourceDiff": "Compara una revisión base y una revisión head de un repositorio Git conectado, archivo por archivo"
   },
   "commandActions": {
     "eventing": {
@@ -334,5 +338,73 @@
     "wireAria": "Línea de entrada de la sesión",
     "turnFailed": "La sesión no ha podido aceptar este turno.",
     "sendBackgroundHint": "Ctrl+Entrar envía y deja el borrador listo para la siguiente frase."
+  },
+  "shell": {
+    "journeysLabel": "Recorridos",
+    "journeys": {
+      "home": "Inicio",
+      "sessions": "Sesiones",
+      "workspaceDashboard": "Espacios de trabajo",
+      "providers": "Herramientas de IA",
+      "deploy": "Despliegue"
+    },
+    "phoneBarLabel": "Principal",
+    "newSession": "Nueva sesión",
+    "searchCommands": "Buscar y comandos",
+    "brandHome": "Olivares AI, inicio",
+    "allAreas": "Todas las áreas",
+    "more": "Más",
+    "moreLabel": "Más: todas las áreas",
+    "workspaceSwitch": "Cambiar de espacio de trabajo. Actual: {{name}}",
+    "workspaceCount": "Espacios de trabajo: {{count}}",
+    "rail": {
+      "title": "Sesiones",
+      "all": "Todas",
+      "groups": {
+        "needsYou": "Te necesita",
+        "working": "En marcha",
+        "earlier": "Anteriores"
+      },
+      "empty": {
+        "needsYou": "Nada te espera.",
+        "working": "No hay nada en marcha.",
+        "earlier": "No hay sesiones anteriores."
+      },
+      "state": {
+        "need": "Te necesita",
+        "live": "En marcha",
+        "ended": "Terminada",
+        "idle": "Inactiva"
+      },
+      "workItem": "Elemento de trabajo",
+      "handoffFrom": "Traspaso para ti · de {{from}}",
+      "session": "Sesión",
+      "minutes": "{{count}} min",
+      "hours": "{{count}} h",
+      "days": "{{count}} d",
+      "loading": "Leyendo las sesiones…",
+      "error": "No se han podido leer las sesiones."
+    },
+    "engine": {
+      "checking": "Comprobando el motor",
+      "ready": "Motor listo",
+      "unreachable": "No se puede contactar con el motor",
+      "offline": "Sin conexión desde las {{time}}"
+    },
+    "panel": {
+      "show": "Mostrar {{title}}",
+      "hide": "Ocultar {{title}}",
+      "close": "Cerrar el panel"
+    },
+    "keys": {
+      "command": {
+        "session": {
+          "new": "Nueva sesión"
+        }
+      },
+      "when": {
+        "outsideField": "fuera de un campo"
+      }
+    }
   }
 }

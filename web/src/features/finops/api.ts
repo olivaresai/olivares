@@ -23,6 +23,7 @@ import type { ListResponse } from '@/lib/api/types'
 import { useSessionStore } from '@/stores/session'
 import { useTenantStore } from '@/stores/tenant'
 import type {
+  AdmissionReconciliation,
   Alert,
   AllocationResponse,
   Budget,
@@ -154,6 +155,15 @@ export const finopsApi = {
     http.get<AllocationResponse>(`${BASE}/spend/allocation`, {
       query: { ...params },
     }),
+
+  /** The admission report, which only reads (budget read). Recovery, the sweep and the
+   *  drift finding are the job's, `POST /admission/reconcile`, which needs budget write:
+   *  the console never calls it, so opening a screen never moves a hold. */
+  admissionReconciliation: (request?: TenantRequestOptions) =>
+    http.get<AdmissionReconciliation>(
+      `${BASE}/admission/reconciliation`,
+      request,
+    ),
   forecast: (period: string) =>
     http.get<ForecastResponse>(`${BASE}/forecast`, { query: { period } }),
   recommendations: () =>
@@ -379,6 +389,8 @@ export const finopsKeys = {
     params === undefined
       ? (['finops', tenant, 'allocation'] as const)
       : (['finops', tenant, 'allocation', params] as const),
+  admissionReconciliation: (tenant: string | null) =>
+    ['finops', tenant, 'admission', 'reconciliation'] as const,
   forecast: (tenant: string | null, period: string) =>
     ['finops', tenant, 'forecast', period] as const,
   recommendations: (tenant: string | null) =>

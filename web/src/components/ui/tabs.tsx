@@ -28,8 +28,9 @@ import { cn } from '@/lib/utils'
  * without touching a single caller:
  *
  * - `data-overflow` on the shell (`none | start | end | both`) reports which edge hides
- *   tabs; the strip fades at that edge (a mask, so it works over any surface colour) and
- *   a pointer scroll button appears there. The buttons are `aria-hidden` and out of the
+ *   tabs; the strip fades at that edge (a mask, so it works over any surface colour), and
+ *   while it overflows a pair of pointer scroll buttons sits beside it, the one toward a
+ *   hidden edge enabled. The buttons are `aria-hidden` and out of the
  *   Tab order on purpose: keyboard users already reach every tab with the arrow keys
  *   (Radix roving tabindex), so a second pair of stops would be noise for them.
  * - The focused tab and the selected tab are scrolled into view HORIZONTALLY, by
@@ -298,8 +299,13 @@ export function TabsList({
     measure()
   }
 
-  const showStart = overflow === 'start' || overflow === 'both'
-  const showEnd = overflow === 'end' || overflow === 'both'
+  // While the strip overflows at all, BOTH buttons keep their places, at every scroll
+  // position; the one toward an edge already reached is disabled, not removed. A button that
+  // appeared on the first press shrank the strip's box, and the resize reveal then scrolled the
+  // strip back to the selected tab: every press was undone (Connectors on /console at 1280 px).
+  const overflowing = overflow !== 'none'
+  const canStart = overflow === 'start' || overflow === 'both'
+  const canEnd = overflow === 'end' || overflow === 'both'
 
   return (
     <div
@@ -307,8 +313,12 @@ export function TabsList({
       data-overflow={overflow}
       className={cn('relative flex min-w-0', className)}
     >
-      {showStart && (
-        <TabsScrollButton direction={-1} onClick={() => scrollByPage(-1)} />
+      {overflowing && (
+        <TabsScrollButton
+          direction={-1}
+          disabled={!canStart}
+          onClick={() => scrollByPage(-1)}
+        />
       )}
       <List
         ref={(node) => {
@@ -329,8 +339,12 @@ export function TabsList({
         )}
         {...props}
       />
-      {showEnd && (
-        <TabsScrollButton direction={1} onClick={() => scrollByPage(1)} />
+      {overflowing && (
+        <TabsScrollButton
+          direction={1}
+          disabled={!canEnd}
+          onClick={() => scrollByPage(1)}
+        />
       )}
     </div>
   )
@@ -341,20 +355,30 @@ export function TabsList({
  * Tab sequence because the arrow keys already reach every tab; a scroll button that
  * TOOK a Tab stop would put two extra stops before the panel on every overflowing
  * strip. `data-slot` names it for the browser evidence and the component tests.
+ *
+ * It takes its OWN place beside the strip, never a place over it: a button laid over the
+ * strip's edge covered the tab the strip only partly showed, so a click on what was
+ * visible of that tab scrolled the strip instead of opening it (Connectors on /console at
+ * 1280 px). Beside the strip, a partly shown tab is clipped by the strip and whatever of
+ * it shows is the tab. The strip's rule continues under the button. At an edge already
+ * reached it is disabled, and keeps its place, so pressing its partner never changes the
+ * strip's width.
  */
 function TabsScrollButton({
   direction,
+  disabled,
   onClick,
 }: {
   direction: -1 | 1
+  disabled: boolean
   onClick: () => void
 }) {
   const Icon = direction < 0 ? ChevronLeft : ChevronRight
   return (
     <div
       className={cn(
-        'pointer-events-none absolute inset-y-0 z-10 flex items-center',
-        direction < 0 ? 'left-0' : 'right-0',
+        'flex shrink-0 items-center border-b border-border',
+        direction < 0 ? 'pr-1' : 'pl-1',
       )}
     >
       <button
@@ -363,8 +387,9 @@ function TabsScrollButton({
         aria-hidden="true"
         data-slot="tabs-scroll-button"
         data-direction={direction < 0 ? 'start' : 'end'}
+        disabled={disabled}
         onClick={onClick}
-        className="pointer-events-auto inline-flex size-7 items-center justify-center rounded-md border border-border bg-surface text-muted-foreground shadow-xs transition-colors duration-100 ease-out hover:bg-muted hover:text-foreground"
+        className="inline-flex size-7 items-center justify-center rounded-md border border-border bg-surface text-muted-foreground shadow-xs transition-colors duration-100 ease-out hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
       >
         <Icon className="size-4" aria-hidden="true" />
       </button>
@@ -379,12 +404,12 @@ export function TabsTrigger({
   return (
     <Trigger
       className={cn(
-        'inline-flex h-9 shrink-0 items-center -mb-px px-3 text-body font-medium whitespace-nowrap',
-        'border-b-2 border-transparent text-muted-foreground transition-colors duration-100 ease-out',
-        'hover:text-foreground',
-        'data-[state=active]:text-foreground data-[state=active]:border-accent-text',
-        'outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
-        'disabled:pointer-events-none disabled:opacity-50',
+        'inline-flex h-9 shrink-0 items-center gap-1.5 -mb-px px-3 text-body font-medium whitespace-nowrap',
+        'border-b-2 border-transparent text-text-2 transition-colors duration-100 ease-out',
+        'hover:text-text',
+        'data-[state=active]:text-text data-[state=active]:border-accent-strong',
+        'outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus',
+        'disabled:pointer-events-none disabled:text-text-3',
         className,
       )}
       {...props}
@@ -400,7 +425,7 @@ export function TabsContent({
     <Content
       className={cn(
         'pt-4 outline-none',
-        'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+        'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
         className,
       )}
       {...props}

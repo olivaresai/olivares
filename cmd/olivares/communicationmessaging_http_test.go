@@ -741,8 +741,9 @@ func createCommunicationHTTPTestUser(
 ) communicationHTTPTestUser {
 	t.Helper()
 	password := "k3-http-member-password"
+	// The account and its first membership are created in one transaction.
 	created := communicationHTTPTestRequest(t, eng, http.MethodPost, "/v1/users", adminToken, "",
-		map[string]any{"email": email, "password": password}, nil)
+		map[string]any{"email": email, "password": password, "tenant": tenant, "role": role}, nil)
 	if created.status != http.StatusCreated {
 		t.Fatalf("create user %s = %d: %s", email, created.status, created.raw)
 	}
@@ -752,11 +753,6 @@ func createCommunicationHTTPTestUser(
 	user = communicationHTTPTestDecode[struct {
 		ID model.ID `json:"id"`
 	}](t, created)
-	granted := communicationHTTPTestRequest(t, eng, http.MethodPost, "/v1/memberships", adminToken, "",
-		map[string]any{"user_id": user.ID, "tenant": tenant, "role": role}, nil)
-	if granted.status != http.StatusCreated {
-		t.Fatalf("grant %s membership = %d: %s", email, granted.status, granted.raw)
-	}
 	return loginCommunicationHTTPTestUser(t, eng, user.ID, email)
 }
 

@@ -5,11 +5,15 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 # Production readiness: SLIs, SLOs & the error-budget policy of the control plane
 
-**Date:** 2026-06-09 · **Status:** published targets — 99.5% for the single-node topology; 99.9% is the HA active-passive TARGET (Postgres leader election is implemented; the operator's opt-in `LeaderRouting` path awaits a recorded qualification run, and the Helm chart is not yet qualified for it — see §2.1)
+**Date:** 2026-06-09 (original targets) · **Support classification updated:** 2026-09-27.
+**Status:** operating targets and metric definitions, not a release support commitment.
+The [v26.10 deployment support matrix](../deploy/support-matrix.md) is the canonical
+qualification record and supersedes this guide's former support classification.
+The 99.5% single-node and 99.9% HA figures remain targets; neither is a customer SLA.
 
-> The control plane instruments the *agents* it governs in fine detail. This document is the other half a serious buyer asks for: **how we measure and operate the plane itself as a service.** It defines the Service Level Indicators (what we measure), the Service Level Objectives (what we commit to), and the error-budget policy (what happens when we miss). Companion docs: capacity & sizing (`docs/SIZING-AND-CAPACITY.md`), status page & incident comms (`docs/STATUS-AND-INCIDENT-COMMS.md`), on-call runbooks (`deploy/runbooks/`), and the alert rules that make these SLOs fire (`deploy/monitoring/olivares-slo.rules.yaml`).
+> The control plane instruments the *agents* it governs in fine detail. This document is the other half a serious buyer asks for: **how we measure and operate the plane itself as a service.** It defines the Service Level Indicators (what we measure), the Service Level Objectives (operating targets), and the error-budget policy (what happens when we miss). Companion docs: capacity & sizing (`docs/SIZING-AND-CAPACITY.md`), status page & incident comms (`docs/STATUS-AND-INCIDENT-COMMS.md`), on-call runbooks (`deploy/runbooks/`), and the alert rules that make these SLOs fire (`deploy/monitoring/olivares-slo.rules.yaml`).
 >
-> Method follows the Google SRE Workbook (*Implementing SLOs*, *Error Budget Policy*, *Alerting on SLOs*). Every SLI below maps to a metric that **exists on `/metrics` today** — we do not commit to a signal we cannot measure.
+> Method follows the Google SRE Workbook (*Implementing SLOs*, *Error Budget Policy*, *Alerting on SLOs*). Every SLI below maps to a metric that **exists on `/metrics` today** — a target needs a measurable signal, while a support commitment additionally needs its qualified deployment record.
 
 ---
 
@@ -17,11 +21,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 | Question | Answer |
 |---|---|
-| What's your availability SLO? | **99.5%/month** for the self-hosted single-node tier; **99.9%/month** is the HA active-passive TARGET — leader election is implemented, the qualified deployment path is the operator's opt-in `LeaderRouting`, and the Helm chart is not yet qualified (§2.1). (§2) |
-| p99 of ingest? | SLO **< 250 ms**. Measured floor on reference HW: **~1.2 ms** at the single-writer ceiling (`docs/SIZING-AND-CAPACITY.md`). |
-| p99 of the API? | SLO **< 300 ms** (read + write, all routes, per HTTP method). |
-| events/sec per node? | **~1,500 durable writes/sec** single-writer on the reference HW; the bus moves ~3.8M/sec, so the **store write is the ceiling** (§ sizing). |
-| When SQLite → Postgres? | When sustained writes approach the single-writer knee (~1–1.5k/s) **or** you need concurrent writers / HA. Concurrency makes SQLite *worse*, not better (sizing guide). |
+| What's your availability SLO? | Targets: **99.5%** for single-node and **99.9%** for HA over the **28-day** window (§2). A complete v26.10 deployment qualification is not recorded here; configuration and leader election alone do not establish one (§2.1). |
+| p99 of ingest? | Target **< 250 ms**. The historical SQLite write-path sample was **~1.2 ms** p99 on reference hardware with tmpfs; it is not an end-to-end ingest qualification (`docs/SIZING-AND-CAPACITY.md`). |
+| p99 of the API? | Target **< 300 ms**, aggregated per HTTP method; this does not establish each route's p99. |
+| events/sec per node? | Historical reference workload: **~1,500 SQLite writes/sec** on tmpfs and **~3.8M bus events/sec** in a separate store-free benchmark. These are workload observations, not v26.10 per-node capacity promises (§ sizing). |
+| When SQLite → Postgres? | Measure the single-writer knee on your storage and workload. The historical reference was ~1–1.5k/s. PostgreSQL supports concurrent database writers; a multi-instance HA deployment requires separate fencing and recovery qualification (sizing guide). |
 | Status page? | Yes — self-hostable, driven by the real SLIs (`docs/STATUS-AND-INCIDENT-COMMS.md`). |
 | Runbooks / on-call? | Yes — `deploy/runbooks/` (ledger-verify, collector backpressure, failover, key-rotation). |
 | Error-budget policy? | Yes — §3. Budget exhausted ⇒ releases freeze (except P0/security) until the SLO recovers. |
@@ -30,7 +34,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 ## 1. Service Level Indicators (SLIs) — what we actually measure
 
-Every SLI is `good events / valid events` (SRE). The control plane exposes a single, pure-Go Prometheus surface at **`GET /metrics`** (OpenMetrics-/Prometheus-text 0.0.4, unauthenticated, setup-exempt; bind it to a trusted scrape network — `core/api/metrics.go`, `core/metrics/metrics.go`). These are the **only** series that exist today; the SLOs commit to exactly these.
+Every SLI is `good events / valid events` (SRE). The control plane exposes a single, pure-Go Prometheus surface at **`GET /metrics`** (OpenMetrics-/Prometheus-text 0.0.4, unauthenticated, setup-exempt; bind it to a trusted scrape network — `core/api/metrics.go`, `core/metrics/metrics.go`). The following sections name the series used by these targets; their presence does not establish a deployment support commitment.
 
 ### 1.1 Availability / reachability — *is the control plane up?*
 
@@ -86,14 +90,16 @@ sum(rate(olivares_ingest_observations_total[5m]))
 
 ---
 
-## 2. Service Level Objectives (SLOs) — what we commit to
+<a id="2-service-level-objectives-slos--what-we-commit-to"></a>
+
+## 2. Service Level Objectives (SLOs) — operating targets
 
 **Measurement window:** rolling **28 days** (SRE general-purpose interval; integral weeks normalize weekday/weekend traffic). Weekly review, quarterly planning.
 
-| SLI | SLO (self-hosted single-node, **today**) | SLO (HA tier — target, pending qualification) | Source of target |
+| SLI | Target (self-hosted single-node) | Target (HA, pending qualification) | Historical planning basis, not a measured service guarantee |
 |---|---|---|---|
-| Availability (`/readyz` reachability) | **99.5%** / 28d (≈ **3h 39m**/30d budget) | **99.9%** / 28d (≈ **43m**/30d) | single-writer MTTR (§2.1) + SRE round-down |
-| Request success (non-5xx) | **99.9%** of requests | 99.95% | current performance, rounded down |
+| Availability (`/readyz` reachability) | **99.5%** / 28d (≈ **3h 22m**/28d budget) | **99.9%** / 28d (≈ **40m**/28d) | historical topology planning (§2.1); qualification required |
+| Request success (non-5xx) | **99.9%** of requests | 99.95% | proposed operating objective; release workload qualification required |
 | API latency p99 (per method) | **< 300 ms** | < 200 ms | measured store-write floor + handler headroom |
 | Ingest latency p99 | **< 250 ms** | < 150 ms | measured ~1.2 ms floor + backpressure headroom |
 | Ingest success rate | **99.9%** of authorized observations | 99.95% | decode/publish are rare, deterministic failures |
@@ -110,9 +116,28 @@ micro-measured.
 
 ### 2.1 Why two tiers — 99.5% single-node, 99.9% HA
 
-The **single-node tier** is single-writer: one StatefulSet replica, one ReadWriteOnce PVC. On node failure, recovery MTTR = pod reschedule + RWO volume detach/re-attach (single-AZ; can stall if the volume can't detach from a dead node) + cold start (TLS/key load, store open). A **schema-change upgrade is downtime** on this tier (RollingUpdate on a 1-replica StatefulSet terminates the old pod before the new one is Ready). A single such event can consume most of a 43-min (99.9%) monthly budget — so the single-node tier publishes **99.5%**.
+Single-node production is an intended topology when its deployment is qualified;
+HA is not a prerequisite. The Kubernetes example here is one StatefulSet replica
+and one ReadWriteOnce PVC. On node failure, recovery includes pod rescheduling,
+volume detach/re-attach (which can stall on a dead node), and cold start. A
+schema-change upgrade can require downtime: a one-replica StatefulSet rollout
+terminates the old pod before the replacement is Ready. Those costs motivated the
+historical **99.5%** target; they do not prove that a deployment meets it.
 
-The **HA tier is implemented** as active-passive over Postgres: `core.replicaCount > 1` with `core.engine=postgres` runs hot standbys behind Postgres-backed leader election (`core/internal/store/sqlstore/leader.go`, `leader_pg.go`); a standby answers **503 on `/readyz`**, so routing drains to the leader and failover is automatic; the chart requires a **shared audit-signing key** (`core.auditSigningKeySecret`, enforced in `deploy/helm/olivares/templates/_helpers.tpl`) so the ledger hash-chain does not fork on takeover; and schema changes follow the online **expand-contract** model (`docs/UPGRADE-AND-ROLLBACK.md`), so a routine upgrade is not an outage. Rollout and routing mechanics: `docs/HA-LEADER-ROUTING.md`. That topology is what the **99.9%** column commits to. We publish 99.5% for the single-node topology and 99.9% for HA — we do not claim multi-9s a deployment is not shaped to keep.
+Active-passive configuration exists for `core.replicaCount > 1` with
+`core.engine=postgres`, Postgres-backed leader election, and the required shared
+`core.auditSigningKeySecret`. The operator's opt-in `LeaderRouting` separates pod
+health from traffic readiness; the Helm chart retains the legacy layout. These
+mechanisms are described in [HA leader routing](HA-LEADER-ROUTING.md), including
+its test scope and residual failure discussion. They do not establish complete
+HA qualification or the **99.9%** target. The qualification record must bind actual
+write/effect fencing coverage, node/database/network faults, recovery, and the
+observed behavior of sessions and in-flight work.
+
+The [expand-contract upgrade procedure](UPGRADE-AND-ROLLBACK.md) is a compatibility
+mechanism, not a promise that routine upgrades cause no outage. Measure rollout,
+readiness failure and the declared compatible recovery path on the exact deployment;
+record any interruption. The support matrix controls the release status.
 
 ### 2.2 What counts against the budget
 
@@ -127,7 +152,7 @@ The **HA tier is implemented** as active-passive over Postgres: `core.replicaCou
 
 **Service & scope.** The Olivares control-plane engine (`cmd/olivares`): its HTTP/gRPC API, the collector→core ingest path, and the evidence ledger. Out of scope: the agents and external systems it governs, and customer-owned infrastructure.
 
-**Goals.** Keep reliability at or above the published SLOs (§2) over the rolling 28-day window; make every miss visible and actioned; spend the budget deliberately on change velocity.
+**Goals.** For a deployment adopting these operating targets, keep reliability at or above its selected SLOs (§2) over the rolling 28-day window; make every miss visible and actioned; spend the budget deliberately on change velocity.
 **Non-goals.** 100% reliability (the wrong target — SRE). Gating *all* engineering on a green budget; the policy gates **risky change**, not bug-fixes or security.
 
 **SLO-miss policy (budget exhausted).** When the 28-day error budget for an SLO is spent:
@@ -150,9 +175,12 @@ The **HA tier is implemented** as active-passive over Postgres: `core.replicaCou
 
 Alert on **error-budget burn rate**, not on raw thresholds, using the SRE multiwindow / multi-burn-rate method (a fast page + a slow ticket, each gated by a long-and-short window pair so the alert resets quickly and ignores blips). Burn rate `r` means the budget is being consumed `r×` faster than the SLO allows; `r` sustained over the window consumes `burn_rate × window / period` of the budget.
 
-For a **99.9%** objective (SRE Table 5-8), the starting configuration is:
+For a **99.9%** objective (SRE Table 5-8), the starting configuration below
+expresses the source example's budget fractions over **30 days**. For this guide's
+**28-day** window, use the formula above: the same rates/windows consume about
+**2.14%**, **5.36%** and **10.71%** respectively. The alert rates are unchanged.
 
-| Severity | Long window | Short window | Burn rate | Budget consumed |
+| Severity | Long window | Short window | Burn rate | Budget consumed over 30d (reference) |
 |---|---|---|---|---|
 | **Page** | 1 h | 5 m | **14.4** | 2% |
 | **Page** | 6 h | 30 m | **6** | 5% |
@@ -188,4 +216,4 @@ For the **99.5%** tier the budget is 5× larger, so the same *fraction-of-budget
 - Google SRE Workbook: [Implementing SLOs](https://sre.google/workbook/implementing-slos/) · [Error Budget Policy](https://sre.google/workbook/error-budget-policy/) · [Alerting on SLOs](https://sre.google/workbook/alerting-on-slos/).
 - Code SLI surface: `core/api/metrics.go`, `core/metrics/metrics.go`, `core/api/ingest.go`, `core/api/grpc.go`.
 - Companion docs: `docs/SIZING-AND-CAPACITY.md`, `docs/STATUS-AND-INCIDENT-COMMS.md`, `deploy/runbooks/`, `deploy/monitoring/olivares-slo.rules.yaml`.
-- HA toward the 99.9% target: Postgres leader election and `/readyz` drain are implemented; the operator's opt-in `LeaderRouting` is the qualified path once its cluster run is recorded, and the shipped Helm chart remains on the legacy layout (`docs/HA-LEADER-ROUTING.md` documents both and the gap).
+- HA toward the 99.9% target: [leader-routing mechanics and test limits](HA-LEADER-ROUTING.md); the [canonical support matrix](../deploy/support-matrix.md) requires the complete deployment record. One cluster routing run alone does not qualify write fencing, recovery or every workload.

@@ -39,7 +39,15 @@ var ErrCoreSchemaVersionAhead = errors.New("sqlstore: the database records a cor
 // It advances to v13 with the login capability control relation. v12 stays reserved
 // and unregistered, so the compiled plan is 1..11 then 13 and the preflight refuses any
 // recorded version the plan does not contain (ErrCoreSchemaVersionUnrecognized).
-const coreSupportedMigrationVersion = coreLoginCapabilityMigrationVersion
+//
+// It advances to v14 with credential custody, session scope, tenant exclusions and
+// account offers (consentmigration.go), so a v13 binary refuses a store that holds
+// them.
+//
+// It advances to v15 with durable credential bindings
+// (credentialbindingmigration.go), so a v14 binary refuses a store whose workflow
+// runs resolve them. The compiled plan is 1..11, 13, 14, 15.
+const coreSupportedMigrationVersion = coreCredentialBindingMigrationVersion
 
 // ErrCoreSchemaVersionUnrecognized is returned before any boot DDL when the database
 // records a version at or below the supported ceiling that this binary's compiled plan
@@ -58,7 +66,7 @@ func compiledCoreMigrationVersions(dia dialect.Dialect) map[int64]struct{} {
 }
 
 // compiledCoreMigrationVersionOrder is the compiled plan's versions in ascending order
-// (1..11 then 13). A legitimate tracked history is an ordered prefix of it.
+// (1..11, 13, 14, 15). A legitimate tracked history is an ordered prefix of it.
 func compiledCoreMigrationVersionOrder(dia dialect.Dialect) []int64 {
 	set := compiledCoreMigrationVersions(dia)
 	out := make([]int64, 0, len(set))

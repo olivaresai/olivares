@@ -122,8 +122,10 @@ upper tiers have nothing to recover from.
 
 **RPO** in a disaster = (instant of the disaster − `created_at` of the last good bundle;
 manifest field, visible with `dr inspect`). **RTO** = restore snapshot + verify
-+ boot. **Measure both in every DR drill (§8) and record the real numbers here —
-do not invent them.**
++ boot. `dr drill` measures SQLite RTO on a synthetic ledger. It does not
+measure RPO, and it does not measure a Postgres restore. Record a measured
+RTO with its event count and host. Do not replace a target above with an
+unmeasured figure.
 
 **Measured RTO (SQLite, `task dr:drill` on the reference build container, 2026-07-09).**
 The restore is verify-bound — the full ledger re-verification is a per-event Ed25519
@@ -460,7 +462,7 @@ olivares audit verify --tenant $TENANT --pubkey <base64> [--pubkey-alg …]
 
 An untested backup is not a backup. Two drills, escalating in fidelity:
 
-**a) Verify an EXISTING bundle** (proves a specific bundle is restorable), no prod:
+**a) Verify an EXISTING bundle** (SQLite: ledger continuity in a scratch directory; Postgres: digest and key decryption only), no prod:
 ```sh
 olivares dr verify --in /backups/olivares-dr-<ts>.drbundle --passphrase-file /run/secrets/dr-pass
 # SQLite: restores + verifies the full chain in a disposable dir → "DR drill PASSED".
@@ -473,7 +475,7 @@ not authenticate the manifest. Use `dr verify`, not `inspect`, for an integrity 
 For a separately authenticated older bundle, add `--allow-legacy-unsigned` deliberately;
 the default is deny-closed.
 
-**b) Full round-trip drill with a MEASURED RTO** (proves the whole pipeline), no prod:
+**b) Round-trip drill with a measured RTO** (synthetic-ledger continuity only; not grants, key custody or later effects), no prod:
 ```sh
 task dr:drill                 # or: olivares dr drill --events 1000
 # Seeds an ephemeral signed+checkpointed ledger → backs it up → DESTROYS the estate →

@@ -17,6 +17,7 @@ export const AUTH_ROUTES = [
   '/audit',
   '/health',
   '/console',
+  '/console/sources/diff',
   '/capabilities',
   '/communications/protocol-bindings',
   // K3 I1/I2/I3 — the five doors of the communications room (registry ids
@@ -34,6 +35,8 @@ export const AUTH_ROUTES = [
   //the AgentCore Cedar export route (registry id agentcoreExport).
   '/agentcore-export',
   '/deploy',
+  // Governed Git publication (registry id gitPublication).
+  '/git-publication',
   '/knowledge',
   '/catalog',
   '/killswitch',

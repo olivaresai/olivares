@@ -187,6 +187,60 @@ const (
 	colRtbGeneration  = "config_generation"  // the dispatcher config generation the approval saw
 )
 
+// pdeclLeaves classifies every listed leaf path of a Nested type with decl.
+func pdeclLeaves(decl *model.ColumnDecl, paths ...string) []model.LeafDecl {
+	out := make([]model.LeafDecl, 0, len(paths))
+	for _, p := range paths {
+		out = append(out, model.Leaf(p, decl))
+	}
+	return out
+}
+
+// What the columns of this module say about principals. A None reason cites the
+// reader or writer lines that show its value names no account.
+var (
+	// pdeclActorEvidence is the caller who made a change or a decision, as its
+	// actor ref "user:<id>" or "token:<id>", or the system actor of a detected
+	// cadence miss (revisions.go:79, schedules.go:300, workflow.go:139).
+	pdeclActorEvidence = model.Ref(model.EncodeUserRef, model.ClassEvidence)
+	// pdeclObservedOrigin is the origin of an observed edge: a connector's natural
+	// reference for an agent, a session or an identity
+	// (sdk/model/observation.go:55-59, ingest.go:96-114). Graph history only.
+	pdeclObservedOrigin = model.Scan(model.ClassEvidence)
+	// pdeclScheduleOwnerActor and pdeclScheduleOwnerUser are a schedule's owner,
+	// as its actor ref and as its bare account id. The writer fences what they
+	// name and the retirement step reads them (fence.go, retirement.go).
+	pdeclScheduleOwnerActor = model.Ref(model.EncodeUserRef, model.ClassObligation)
+	pdeclScheduleOwnerUser  = model.Ref(model.EncodeUserID, model.ClassObligation)
+
+	pdeclNoneActorKind      = model.None("the caller's actor kind, recorded beside its actor ref and rendered only: revisions.go:80, dto.go:284, workflow.go:321")
+	pdeclNoneName           = model.None("a schedule or workflow name, rendered, searched and hashed into a plan only: dto.go:236, search.go:40, workflow.go:46-55")
+	pdeclNoneScheduleEnum   = model.None("a closed subject kind, trigger kind or desired status the schedule validator checks: schedules.go:67-69, schedules.go:383")
+	pdeclNoneSubjectRef     = model.None("the agent, swarm or workflow a schedule or decision governs; subject kinds are agent, swarm or workflow only: schedules.go:67, schedules.go:383, workflow_run.go:1680")
+	pdeclNoneCadence        = model.None("a cron expression or event-type reference, hashed into the fire plan, checked against the cron allowlist and bound into the target: schedules.go:128-131, schedules.go:1090-1091, targetbind.go:94-95")
+	pdeclNoneWorkspaceRef   = model.None("the declaring caller's confined core workspace id, a routine-policy scope key: routinepolicy.go:149-150, routinepolicy.go:550")
+	pdeclNoneRevisionOf     = model.None("the id of the schedule or workflow a revision belongs to, compared before a restore: revisions.go:269, workflow.go:651")
+	pdeclNoneRevisionOp     = model.None("create, update or restore: revisions.go:42-44, revisions.go:328")
+	pdeclNoneObservedTarget = model.None("the observed worker, tool or MCP endpoint and the edge's kind, mode, signal and confidence labels: ingest.go:65-87, ingest.go:145-147, dto.go:51-65")
+	pdeclNoneApprovalClaim  = model.None("a spent approval id, the schedule it activated or the plan hash it was bound to: routinepolicy.go:684-685")
+	pdeclNoneFenceKey       = model.None("the constant fence family key: routinepolicy.go:492-499")
+	pdeclNoneDecision       = model.None("an op, schedule id, plan hash, approval id, gate or op status, dispatch ref, detail digest or short result of the decision ledger, rendered only: schedules.go:158-172, dto.go:271-288")
+	pdeclNoneOperation      = model.None("a ref, digest, label or state of the module's own governed-effect claim and outbox, compared for replay only: operation.go:189-196, operation.go:207-210, operation.go:276-282, operation.go:297-303")
+	pdeclNoneTargetBinding  = model.None("the run, step, profile, key id, fingerprint or generation of an approved target binding: workflow_run.go:393-397")
+	pdeclNoneRunState       = model.None("a workflow or work-item id, status, plan hash, approval id or pause reason of a run: workflow_run.go:834-836, workflow_run.go:1668-1670, workflow_run.go:1721")
+	pdeclNoneRunCaller      = model.None("the initiator's actor kind, agent identity, session identity or runtime generation, replayed into the step actor beside its account id: workflow_run.go:837-842, workflow_work_run.go:18-28")
+	pdeclNoneWorkflowText   = model.None("operator prose, bounded and rendered only: workflow.go:51, workflow.go:323")
+	pdeclNoneSnapshotField  = model.None("a field of the schedule as it stood; restore re-validates and re-applies only its status, subject, cadence, interval and grace: revisions.go:274-292, dto.go:229-251")
+
+	// pdeclScheduleSnapshot is a schedule revision's post-state snapshot. Its
+	// owner_actor is the declaring caller's actor ref, which a restore never
+	// re-applies (revisions.go:284-292).
+	pdeclScheduleSnapshot = model.Nested(scheduleDTO{}, model.ClassEvidence, append(
+		pdeclLeaves(pdeclNoneSnapshotField, "id", "name", "subject_kind", "subject_ref", "trigger_kind",
+			"cadence_spec", "desired_status", "last_fired_at", "last_observed_at", "missed_at", "health", "created_at"),
+		model.Leaf("owner_actor", model.Ref(model.EncodeUserRef, "")))...)
+)
+
 // RegisterSchema declares the module's three owned entities. The engine creates
 // the tables, injects the base columns and attaches the tenant/append-only guards
 // (S02 §7 /); a module cannot opt out of isolation. Every UNIQUE index
@@ -211,16 +265,16 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Kind:  relationKind,
 		Table: relationTable,
 		Fields: []model.FieldSpec{
-			{Name: colSupervisorRef, Kind: model.KindText, Indexed: true},
-			{Name: colWorkerRef, Kind: model.KindText, Indexed: true},
-			{Name: colLinkKind, Kind: model.KindText},
+			{Name: colSupervisorRef, Kind: model.KindText, Indexed: true, Principal: pdeclObservedOrigin},
+			{Name: colWorkerRef, Kind: model.KindText, Indexed: true, Principal: pdeclNoneObservedTarget},
+			{Name: colLinkKind, Kind: model.KindText, Principal: pdeclNoneObservedTarget},
 			// tool_ref is NOT nullable and defaults to "" so it is a stable part of
 			// the unique key (a NULL would make every link distinct and break the
 			// idempotent upsert dedup).
-			{Name: colToolRef, Kind: model.KindText},
-			{Name: colMode, Kind: model.KindText},
-			{Name: colSignalSource, Kind: model.KindText},
-			{Name: colConfidence, Kind: model.KindText},
+			{Name: colToolRef, Kind: model.KindText, Principal: pdeclNoneObservedTarget},
+			{Name: colMode, Kind: model.KindText, Principal: pdeclNoneObservedTarget},
+			{Name: colSignalSource, Kind: model.KindText, Principal: pdeclNoneObservedTarget},
+			{Name: colConfidence, Kind: model.KindText, Principal: pdeclNoneObservedTarget},
 			{Name: colDelegationCnt, Kind: model.KindInt},
 			{Name: colFirstSeenAt, Kind: model.KindTimestamp},
 			{Name: colLastSeenAt, Kind: model.KindTimestamp, Indexed: true},
@@ -238,16 +292,19 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Kind:  scheduleKind,
 		Table: scheduleTable,
 		Fields: []model.FieldSpec{
-			{Name: colSchedName, Kind: model.KindText, Indexed: true},
-			{Name: colSubjectKind, Kind: model.KindText},
-			{Name: colSubjectRef, Kind: model.KindText, Indexed: true},
-			{Name: colTriggerKind, Kind: model.KindText},
-			{Name: colCadenceSpec, Kind: model.KindText, Nullable: true},
+			{Name: colSchedName, Kind: model.KindText, Indexed: true, Principal: pdeclNoneName},
+			{Name: colSubjectKind, Kind: model.KindText, Principal: pdeclNoneScheduleEnum},
+			{Name: colSubjectRef, Kind: model.KindText, Indexed: true, Principal: pdeclNoneSubjectRef},
+			{Name: colTriggerKind, Kind: model.KindText, Principal: pdeclNoneScheduleEnum},
+			{Name: colCadenceSpec, Kind: model.KindText, Nullable: true, Principal: pdeclNoneCadence},
 			{Name: colExpectedIvl, Kind: model.KindInt},
 			{Name: colGraceFactor, Kind: model.KindInt},
-			{Name: colDesiredStat, Kind: model.KindText, Indexed: true},
-			{Name: colOwnerActor, Kind: model.KindText},
-			{Name: colOwnerActorK, Kind: model.KindText},
+			{Name: colDesiredStat, Kind: model.KindText, Indexed: true, Principal: pdeclNoneScheduleEnum},
+			// The declaring caller, "user:<id>" or "token:<id>": the accountable
+			// party of every autonomous fire, and the owner a routine policy is
+			// resolved for when owner_user_ref is absent (routinepolicy.go:160-165).
+			{Name: colOwnerActor, Kind: model.KindText, Principal: pdeclScheduleOwnerActor},
+			{Name: colOwnerActorK, Kind: model.KindText, Principal: pdeclNoneActorKind},
 			{Name: colLastFiredAt, Kind: model.KindTimestamp, Nullable: true},
 			{Name: colMissedAt, Kind: model.KindTimestamp, Nullable: true},
 			{Name: colFireReservedAt, Kind: model.KindTimestamp, Nullable: true},
@@ -259,8 +316,12 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 			// with an unset WorkspaceID. Without that recovery a single
 			// user- or workspace-scoped policy would refuse every patch,
 			// restore and fire of every routine that predates this session.
-			{Name: colOwnerUserRef, Kind: model.KindText, Nullable: true, Indexed: true},
-			{Name: colWorkspaceRef, Kind: model.KindText, Nullable: true, Indexed: true},
+			//
+			// owner_user_ref is the declaring caller's bare account id, the user
+			// axis every later patch, restore and fire resolves the routine policy
+			// for (routinepolicy.go:147-154).
+			{Name: colOwnerUserRef, Kind: model.KindText, Nullable: true, Indexed: true, Principal: pdeclScheduleOwnerUser},
+			{Name: colWorkspaceRef, Kind: model.KindText, Nullable: true, Indexed: true, Principal: pdeclNoneWorkspaceRef},
 		},
 		Indexes: []model.IndexSpec{{
 			Name:    "orchestration_schedule_uniq",
@@ -276,9 +337,9 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Kind:  activationClaimKind,
 		Table: activationClaimTable,
 		Fields: []model.FieldSpec{
-			{Name: colAcApprovalRef, Kind: model.KindText, Indexed: true},
-			{Name: colAcScheduleRef, Kind: model.KindText, Nullable: true},
-			{Name: colAcPlanHash, Kind: model.KindText},
+			{Name: colAcApprovalRef, Kind: model.KindText, Indexed: true, Principal: pdeclNoneApprovalClaim},
+			{Name: colAcScheduleRef, Kind: model.KindText, Nullable: true, Principal: pdeclNoneApprovalClaim},
+			{Name: colAcPlanHash, Kind: model.KindText, Principal: pdeclNoneApprovalClaim},
 		},
 		Indexes: []model.IndexSpec{{
 			Name:    "orchestration_activation_claim_uniq",
@@ -294,7 +355,7 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Kind:  admissionFenceKind,
 		Table: admissionFenceTable,
 		Fields: []model.FieldSpec{
-			{Name: colFenceKey, Kind: model.KindText, Indexed: true},
+			{Name: colFenceKey, Kind: model.KindText, Indexed: true, Principal: pdeclNoneFenceKey},
 		},
 		Indexes: []model.IndexSpec{{
 			Name:    "orchestration_admission_fence_uniq",
@@ -310,19 +371,19 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Table:      decisionTable,
 		AppendOnly: true, // immutable fire/miss governance evidence (docs/SECURITY-HARDENING.md)
 		Fields: []model.FieldSpec{
-			{Name: colDecSubjectKind, Kind: model.KindText},
-			{Name: colDecSubjectRef, Kind: model.KindText, Indexed: true},
-			{Name: colScheduleRef, Kind: model.KindUUID, Nullable: true, Indexed: true},
-			{Name: colOp, Kind: model.KindText, Indexed: true},
-			{Name: colPlanHash, Kind: model.KindText, Nullable: true, Indexed: true},
-			{Name: colApprovalRef, Kind: model.KindText, Nullable: true},
-			{Name: colGateStatus, Kind: model.KindText},
-			{Name: colOpStatus, Kind: model.KindText, Indexed: true},
-			{Name: colDispatchRef, Kind: model.KindText, Nullable: true},
-			{Name: colActor, Kind: model.KindText},
-			{Name: colActorKind, Kind: model.KindText},
-			{Name: colDetailHash, Kind: model.KindText, Nullable: true},
-			{Name: colResult, Kind: model.KindText, Nullable: true},
+			{Name: colDecSubjectKind, Kind: model.KindText, Principal: pdeclNoneSubjectRef},
+			{Name: colDecSubjectRef, Kind: model.KindText, Indexed: true, Principal: pdeclNoneSubjectRef},
+			{Name: colScheduleRef, Kind: model.KindUUID, Nullable: true, Indexed: true, Principal: pdeclNoneDecision},
+			{Name: colOp, Kind: model.KindText, Indexed: true, Principal: pdeclNoneDecision},
+			{Name: colPlanHash, Kind: model.KindText, Nullable: true, Indexed: true, Principal: pdeclNoneDecision},
+			{Name: colApprovalRef, Kind: model.KindText, Nullable: true, Principal: pdeclNoneDecision},
+			{Name: colGateStatus, Kind: model.KindText, Principal: pdeclNoneDecision},
+			{Name: colOpStatus, Kind: model.KindText, Indexed: true, Principal: pdeclNoneDecision},
+			{Name: colDispatchRef, Kind: model.KindText, Nullable: true, Principal: pdeclNoneDecision},
+			{Name: colActor, Kind: model.KindText, Principal: pdeclActorEvidence},
+			{Name: colActorKind, Kind: model.KindText, Principal: pdeclNoneActorKind},
+			{Name: colDetailHash, Kind: model.KindText, Nullable: true, Principal: pdeclNoneDecision},
+			{Name: colResult, Kind: model.KindText, Nullable: true, Principal: pdeclNoneDecision},
 			{Name: colOccurredAt, Kind: model.KindTimestamp, Indexed: true},
 		},
 	}); err != nil {
@@ -337,19 +398,19 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Kind:  operationKind,
 		Table: operationTable,
 		Fields: []model.FieldSpec{
-			{Name: colOpApprovalRef, Kind: model.KindText, Indexed: true},
-			{Name: colOpOperationID, Kind: model.KindText, Indexed: true},
-			{Name: colOpEffectDigest, Kind: model.KindText},
-			{Name: colOpSurface, Kind: model.KindText},
-			{Name: colOpAction, Kind: model.KindText},
-			{Name: colOpPlanHash, Kind: model.KindText},
-			{Name: colOpBindProfile, Kind: model.KindText},
-			{Name: colOpTargetFp, Kind: model.KindText},
-			{Name: colOpEvidenceRef, Kind: model.KindText, Nullable: true},
-			{Name: colOpState, Kind: model.KindText, Indexed: true},
-			{Name: colOpDispatchRef, Kind: model.KindText, Nullable: true},
-			{Name: colOpOutcome, Kind: model.KindText, Nullable: true},
-			{Name: colOpScheduleRef, Kind: model.KindUUID, Nullable: true, Indexed: true},
+			{Name: colOpApprovalRef, Kind: model.KindText, Indexed: true, Principal: pdeclNoneOperation},
+			{Name: colOpOperationID, Kind: model.KindText, Indexed: true, Principal: pdeclNoneOperation},
+			{Name: colOpEffectDigest, Kind: model.KindText, Principal: pdeclNoneOperation},
+			{Name: colOpSurface, Kind: model.KindText, Principal: pdeclNoneOperation},
+			{Name: colOpAction, Kind: model.KindText, Principal: pdeclNoneOperation},
+			{Name: colOpPlanHash, Kind: model.KindText, Principal: pdeclNoneOperation},
+			{Name: colOpBindProfile, Kind: model.KindText, Principal: pdeclNoneOperation},
+			{Name: colOpTargetFp, Kind: model.KindText, Principal: pdeclNoneOperation},
+			{Name: colOpEvidenceRef, Kind: model.KindText, Nullable: true, Principal: pdeclNoneOperation},
+			{Name: colOpState, Kind: model.KindText, Indexed: true, Principal: pdeclNoneOperation},
+			{Name: colOpDispatchRef, Kind: model.KindText, Nullable: true, Principal: pdeclNoneOperation},
+			{Name: colOpOutcome, Kind: model.KindText, Nullable: true, Principal: pdeclNoneOperation},
+			{Name: colOpScheduleRef, Kind: model.KindUUID, Nullable: true, Indexed: true, Principal: pdeclNoneOperation},
 		},
 		Indexes: []model.IndexSpec{
 			{Name: "orchestration_operation_id_uniq", Columns: []string{model.ColTenantID, colOpOperationID}, Unique: true},
@@ -366,13 +427,13 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Kind:  outboxKind,
 		Table: outboxTable,
 		Fields: []model.FieldSpec{
-			{Name: colObOperationID, Kind: model.KindText, Indexed: true},
-			{Name: colObEffectDigest, Kind: model.KindText},
-			{Name: colObTargetFp, Kind: model.KindText},
-			{Name: colObState, Kind: model.KindText, Indexed: true},
+			{Name: colObOperationID, Kind: model.KindText, Indexed: true, Principal: pdeclNoneOperation},
+			{Name: colObEffectDigest, Kind: model.KindText, Principal: pdeclNoneOperation},
+			{Name: colObTargetFp, Kind: model.KindText, Principal: pdeclNoneOperation},
+			{Name: colObState, Kind: model.KindText, Indexed: true, Principal: pdeclNoneOperation},
 			{Name: colObStartedAt, Kind: model.KindTimestamp, Nullable: true},
-			{Name: colObDispatchRef, Kind: model.KindText, Nullable: true},
-			{Name: colObOutcome, Kind: model.KindText, Nullable: true},
+			{Name: colObDispatchRef, Kind: model.KindText, Nullable: true, Principal: pdeclNoneOperation},
+			{Name: colObOutcome, Kind: model.KindText, Nullable: true, Principal: pdeclNoneOperation},
 		},
 		Indexes: []model.IndexSpec{{
 			Name: "orchestration_outbox_op_uniq", Columns: []string{model.ColTenantID, colObOperationID}, Unique: true,
@@ -386,12 +447,12 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Kind:  runTargetBindingKind,
 		Table: runTargetBindingTable,
 		Fields: []model.FieldSpec{
-			{Name: colRtbRunRef, Kind: model.KindUUID, Indexed: true},
-			{Name: colRtbStepRef, Kind: model.KindText},
-			{Name: colRtbProfile, Kind: model.KindText},
-			{Name: colRtbMacKeyID, Kind: model.KindText},
-			{Name: colRtbFingerprint, Kind: model.KindText},
-			{Name: colRtbGeneration, Kind: model.KindText},
+			{Name: colRtbRunRef, Kind: model.KindUUID, Indexed: true, Principal: pdeclNoneTargetBinding},
+			{Name: colRtbStepRef, Kind: model.KindText, Principal: pdeclNoneTargetBinding},
+			{Name: colRtbProfile, Kind: model.KindText, Principal: pdeclNoneTargetBinding},
+			{Name: colRtbMacKeyID, Kind: model.KindText, Principal: pdeclNoneTargetBinding},
+			{Name: colRtbFingerprint, Kind: model.KindText, Principal: pdeclNoneTargetBinding},
+			{Name: colRtbGeneration, Kind: model.KindText, Principal: pdeclNoneTargetBinding},
 		},
 		Indexes: []model.IndexSpec{{
 			Name: "orchestration_rtb_uniq", Columns: []string{model.ColTenantID, colRtbRunRef, colRtbStepRef}, Unique: true,

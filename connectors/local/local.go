@@ -9,15 +9,16 @@
 // derived monetary amount is zero unless the operator declares a $/MTok compute
 // rate (cost_per_mtok_usd); the value here is the token usage and latency.
 //
-// It is read-only and minimal-data (docs/SECURITY-HARDENING.md §0-3): it performs only GETs against
-// the operator's own inference servers, reads token counts and model metadata, and
-// carries no prompts or outputs. It imports only the SDK and the Apache
-// modelprovider contract, never the engine.
+// It is read-only and minimal-data (docs/SECURITY-HARDENING.md §0-3): it GETs the operator's own
+// inference servers for lists, residency, and metrics, and POSTs Ollama's
+// documented per-model show read. It carries no prompts or outputs. It imports
+// only the SDK and the Apache modelprovider contract, never the engine.
 package local
 
 import (
 	"context"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/olivaresai/olivares/connectors/internal/redact"
@@ -263,21 +264,36 @@ func (s *Source) Snapshot(ctx context.Context) (modelprovider.Catalog, error) {
 	return cat, nil
 }
 
-// ollamaModels lists /api/tags and maps each tag to a local model.
+// ollamaModels lists /api/tags and reads one documented show per model. A show
+// that fails or omits capabilities leaves that model unknown and does not fail
+// the list. Show reads share a small concurrency limit.
 func (s *Source) ollamaModels(ctx context.Context) ([]modelprovider.Model, error) {
 	var resp ollamaTagsResponse
 	latency, err := s.timedGetJSON(ctx, s.ollamaClient, "/api/tags", &resp)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]modelprovider.Model, 0, len(resp.Models))
-	for _, m := range resp.Models {
-		out = append(out, s.localModel(modelprovider.ProviderOllama, m.Name, m.Name, latency))
+	out := make([]modelprovider.Model, len(resp.Models))
+	sem := make(chan struct{}, ollamaShowConcurrency)
+	var wg sync.WaitGroup
+	for i, m := range resp.Models {
+		wg.Add(1)
+		go func(i int, m ollamaModel) {
+			defer wg.Done()
+			ev := s.ollamaEvidence(ctx, sem, m.Name)
+			out[i] = s.localModel(modelprovider.ProviderOllama, m.Name, m.Name, latency, ev)
+		}(i, m)
+	}
+	wg.Wait()
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	return out, nil
 }
 
-// vllmModels lists the OpenAI-compatible /v1/models and maps each to a local model.
+// vllmModels lists the OpenAI-compatible /v1/models. That list has no per-model
+// capability metadata, and vLLM does not stream for every model it can list, so
+// tool use, vision, and streaming stay unknown.
 func (s *Source) vllmModels(ctx context.Context) ([]modelprovider.Model, error) {
 	var resp vllmModelsResponse
 	latency, err := s.timedGetJSON(ctx, s.vllmClient, "/v1/models", &resp)
@@ -286,20 +302,27 @@ func (s *Source) vllmModels(ctx context.Context) ([]modelprovider.Model, error) 
 	}
 	out := make([]modelprovider.Model, 0, len(resp.Data))
 	for _, m := range resp.Data {
-		out = append(out, s.localModel(modelprovider.ProviderVLLM, m.ID, m.ID, latency))
+		out = append(out, s.localModel(modelprovider.ProviderVLLM, m.ID, m.ID, latency, modelEvidence{
+			source: capabilitySourceUnknown,
+		}))
 	}
 	return out, nil
 }
 
-// localModel assembles a Model for a local server, attaching the operator compute
-// price when one is declared and the measured endpoint latency.
-func (s *Source) localModel(providerRef, ref, display string, latencyMillis int64) modelprovider.Model {
+// localModel assembles a Model for a local server. Capabilities are the evidence
+// the caller read; they are not filled in from the model name. Pricing is the
+// operator compute rate when one is declared, and latency is the list endpoint
+// round-trip.
+func (s *Source) localModel(providerRef, ref, display string, latencyMillis int64, ev modelEvidence) modelprovider.Model {
 	m := modelprovider.Model{
 		ProviderRef:           providerRef,
 		Ref:                   ref,
 		DisplayName:           display,
 		ObservedLatencyMillis: latencyMillis,
-		Capabilities:          []modelprovider.Capability{modelprovider.CapStreaming, modelprovider.CapToolUse},
+		Capabilities:          ev.caps,
+		CapabilitySource:      ev.source,
+		ContextWindow:         ev.context,
+		APICapabilities:       ev.api,
 	}
 	if s.costPerMTok > 0 {
 		p := s.operatorPricing()

@@ -29,7 +29,7 @@ gesamten Contract.
 | **[gRPC](/de/reference/grpc/)** | Der gRPC-Mirror der Engine und der versionierte Plugin-Wire-Vertrag, den jeder Out-of-process-Connector und jedes Out-of-process-Modul spricht. | Die `grpc.ServiceDesc`-Registrierungstabellen, die die Server an gRPC übergeben. |
 | **[Event-Bus](/de/reference/events/)** | Der interne Event-Bus: der Event-Envelope, die First-Party-Event-Typen und die Beobachtungs-Payloads, die Connectors darauf heben. | Ein **AsyncAPI 3.0**-Contract, handgeleitet aus dem Go-SDK. |
 | **[Konsolenansichten](/de/reference/console/)** | Jede von der Konsole veröffentlichte Route samt erforderlicher RBAC-Permission und der Referenzseite, die ihr produktinterner Hilfe-Link öffnet. | Der Routenzensus der Konsole, gegen den gebauten Router gepinnt. |
-| **[Modul-Katalog](/de/reference/modules/overview/)** | Die 30 Produktmodule — was jedes ist, sein Status und welche Routes (falls vorhanden) es außerhalb der Core-API exponiert. | Der Produkt-Capability-Katalog und die typed Modul-Interfaces. |
+| **[Modul-Katalog](/de/reference/modules/overview/)** | Die 31 Produktmodule — was jedes ist, sein Status und welche Routes (falls vorhanden) es außerhalb der Core-API exponiert. | Der Produkt-Capability-Katalog und die typed Modul-Interfaces. |
 | **[Model-Gateway-Vertrag](/reference/model-gateway-contract/)** | Driver-×-Protokoll-×-Transport-Matrix für CreateMessage, Streaming, Cancellation und Usage. Ehrliche Zell-Labels. | `connectors/modelprovider/gateway` und seine Conformance-Suite. |
 | **[CLI](/de/reference/cli/)** | Das `olivares`-Binary und seine Subcommands — `serve`, `collector`, `audit`, `license`, `openapi`, `version` — und ihre Flags. | Die kompilierten Command-Definitionen. |
 | **[Konfiguration](/de/reference/configuration/)** | Umgebungsvariablen und Runtime-Optionen: das Datenverzeichnis, die Source-Verdrahtung, die Authorization-Engine und das Ledger-Signing. | Die Konfigurations-Loader der Engine. |
@@ -90,7 +90,7 @@ das, statt es zu erfinden.
 
 ## Modul-Katalog
 
-Der [Modul-Katalog](/de/reference/modules/overview/) zählt die **30 Module** auf,
+Der [Modul-Katalog](/de/reference/modules/overview/) zählt die **31 Module** auf,
 die auf der Core-Engine sitzen, über neun Capability-Bereiche. Eines der
 nützlichsten ist die **R/RW-Access-Map** mit ihrem **Permitted-vs-Observed**-Diff: sie
 liest aus Logs, OTEL und (als non-cooperative-Backstop) eBPF, statt im

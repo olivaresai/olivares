@@ -18,13 +18,14 @@ import (
 )
 
 // principalAuthoritySealDomain is written verbatim as the first bytes of every
-// v2 preimage. The trailing NUL is part of the domain, not a separator supplied
-// by the encoder.
-const principalAuthoritySealDomain = "olivares.auth.principal-authority-seal.v2\x00"
+// v3 preimage. The trailing NUL is part of the domain, not a separator supplied
+// by the encoder. v3 is v2 with the account's standing appended: its tenant
+// exclusions, the session's tenant scope and the retirement floors.
+const principalAuthoritySealDomain = "olivares.auth.principal-authority-seal.v3\x00"
 
 var errInvalidPrincipalAuthoritySeal = errors.New("auth: invalid principal authority seal input")
 
-// The v2 encoding has a fixed field order and a closed set of type tags. Every
+// The v3 encoding has a fixed field order and a closed set of type tags. Every
 // variable-width value carries an unsigned 64-bit big-endian byte length; every
 // collection carries an unsigned 64-bit big-endian element count. Integers are
 // fixed-width two's-complement big-endian values. Maps and authority sets are
@@ -77,7 +78,7 @@ func computePrincipalAuthoritySeal(p Principal) ([sha256.Size]byte, error) {
 	w.str(p.localSubject)
 	// A resolved principal must carry no local attribution. Encode the semantic
 	// zero explicitly so adding a local shape to a future protocol requires a
-	// new domain/version rather than silently changing v2.
+	// new domain/version rather than silently changing v3.
 	w.nilValue()
 	w.boolean(p.localSystem)
 	w.ref(p.credentialRef)
@@ -89,6 +90,13 @@ func computePrincipalAuthoritySeal(p Principal) ([sha256.Size]byte, error) {
 	w.i64(p.evidence.userAuthority.Version)
 	w.instant(p.evidence.observedAt)
 	w.instant(p.evidence.freshUntil)
+	// The account's standing narrows what its grant may authorize: the authorizer
+	// refuses an excluded tenant and a grant snapshot older than the tenant's
+	// retirement floor, and a scoped session acts in one tenant only. None of it
+	// may change under a valid seal.
+	w.tenantSet(p.excluded)
+	w.tenant(p.sessionScope)
+	w.floorMap(p.floors)
 	return w.sum(), nil
 }
 
@@ -104,7 +112,7 @@ func validPrincipalAuthoritySeal(p Principal) bool {
 // resolver can reconstruct: a human session, an ordinary bound token, a
 // canonical agent-OBO token, or one of the two server-authored runtime tokens.
 // Synthetic, ambiguous delegation/act-as, superadmin and local principals
-// cannot acquire a valid v2 seal.
+// cannot acquire a valid v3 seal.
 func validPrincipalAuthorityShape(p Principal) bool {
 	if p.localVia != "" || p.localSubject != "" || len(p.localMeta) != 0 || p.localSystem ||
 		p.Superadmin || !validPrincipalAuthorityProvenanceShape(p) || !validPrincipalReadAuthorityShape(p) ||
@@ -385,6 +393,24 @@ func (w *principalAuthoritySealWriter) groupMap(values map[model.TenantID][]stri
 	for _, tenant := range sortedPrincipalTenants(values) {
 		w.tenant(tenant)
 		w.stringSet(values[tenant])
+	}
+}
+
+// tenantSet encodes a set of tenants in byte order, so the map's iteration order
+// cannot alter the preimage.
+func (w *principalAuthoritySealWriter) tenantSet(values map[model.TenantID]struct{}) {
+	w.collection(principalSealTagSet, len(values))
+	for _, tenant := range sortedPrincipalTenants(values) {
+		w.tenant(tenant)
+	}
+}
+
+// floorMap encodes each tenant's retirement floor, tenants in byte order.
+func (w *principalAuthoritySealWriter) floorMap(values map[model.TenantID]int64) {
+	w.collection(principalSealTagMap, len(values))
+	for _, tenant := range sortedPrincipalTenants(values) {
+		w.tenant(tenant)
+		w.i64(values[tenant])
 	}
 }
 

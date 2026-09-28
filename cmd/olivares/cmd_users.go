@@ -34,7 +34,7 @@ const (
 //
 // Half of that is right and half of it is a legitimate caller shut out. An API
 // token genuinely can never pass: its principal sets no assurance level at all
-// (core/auth/authenticator.go:220), and a password session is minted at AAL1. But
+// (core/auth/authenticator.go:223), and a password session is minted at AAL1. But
 // a step-up does not mint a new credential — it ELEVATES THE SESSION ROW the
 // caller already holds (core/auth/assurance.go:57), for 15 minutes
 // (assurance.go:31), and `auth login --token` exists precisely to carry "a session
@@ -197,16 +197,18 @@ func usersSuperadminsCmd(client bootstrapClient) *cobra.Command {
 }
 
 func usersCreateCmd(client bootstrapClient) *cobra.Command {
-	var email, displayName, password, passwordFile string
+	var email, displayName, password, passwordFile, memberOf, role string
 	var superadmin bool
 	cmd := &cobra.Command{
 		Use:   "create",
 		Short: "Create a global user account (superadmin)",
 		Long: "Create a user account. Give it a password with --password-file (a file, or - to read\n" +
 			"stdin) so the secret never appears in the process table or the shell history; --password\n" +
-			"exists for parity with the rest of the CLI and warns when used. A new account can DO\n" +
-			"nothing until it is granted a tenant membership with `olivares members grant`.",
-		Example: `  olivares users create --email ops@example.com --display-name "Ops" --password-file /run/secrets/pw
+			"exists for parity with the rest of the CLI and warns when used. --member-of grants the\n" +
+			"account its first tenant membership (at --role) in the same transaction; an account that\n" +
+			"already exists is never joined to a tenant later without its holder's consent.",
+		Example: `  olivares users create --email ops@example.com --display-name "Ops" --password-file /run/secrets/pw \
+    --member-of <tenant-id> --role admin
   printf '%s' "$PW" | olivares users create --email ops@example.com --password-file -`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -236,6 +238,14 @@ func usersCreateCmd(client bootstrapClient) *cobra.Command {
 			if superadmin {
 				body["superadmin"] = true
 			}
+			if t := strings.TrimSpace(memberOf); t != "" {
+				role = strings.TrimSpace(role)
+				if !isKnownTokenRole(role) {
+					return exitcode.New(exitcode.Usage, fmt.Errorf(
+						"--role must be one of viewer, editor, admin, owner (got %q)", role))
+				}
+				body["tenant"], body["role"] = t, role
+			}
 			raw, err := client.expect(cmd, http.MethodPost, usersPath, body, http.StatusCreated)
 			if err != nil {
 				// The password traveled in this request body. Nothing in the engine's
@@ -253,9 +263,14 @@ func usersCreateCmd(client bootstrapClient) *cobra.Command {
 				if err != nil {
 					return err
 				}
+				if strings.TrimSpace(memberOf) != "" {
+					_, err = fmt.Fprintf(out, "→ member of tenant %s with the role %q\n",
+						safeCLIValue(memberOf, pw), safeCLIValue(role, pw))
+					return err
+				}
 				_, err = fmt.Fprintln(out,
-					"→ it can do nothing until it holds a membership: olivares members grant --user "+
-						safeCLIValue(user.ID, pw)+" --tenant <tenant> --role viewer")
+					"→ it holds no membership and can do nothing; a tenant cannot join an existing account "+
+						"without its holder's consent, so give the first membership at creation (--member-of)")
 				return err
 			}, json.RawMessage(raw))
 		},
@@ -265,6 +280,9 @@ func usersCreateCmd(client bootstrapClient) *cobra.Command {
 	cmd.Flags().StringVar(&password, "password", "", "initial password (prefer --password-file: this form is visible in the process table)")
 	cmd.Flags().StringVar(&passwordFile, "password-file", "", "read the initial password from a file, or - for stdin")
 	cmd.Flags().BoolVar(&superadmin, "superadmin", false, "create the account as a cross-tenant superadmin (the engine accepts this only from a superadmin)")
+	cmd.Flags().StringVar(&memberOf, "member-of", "", "grant the account its first membership in this tenant, in the same transaction")
+	cmd.Flags().StringVar(&role, "role", "viewer", "role of the first membership: viewer, editor, admin or owner (with --member-of)")
+	_ = cmd.RegisterFlagCompletionFunc("role", completeTokenRole)
 	return cmd
 }
 

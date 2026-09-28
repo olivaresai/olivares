@@ -1,0 +1,16 @@
+schema=olivares.pkg-pending/v1
+boot=3f2b8c1e-9a4d-4e6f-8b7a-1c2d3e4f5a6b
+pid=4242
+pid_start=123456
+ppid=4200
+ppid_start=123400
+batch=0123456789abcdef0123456789abcdef.7
+maintscript=postinst
+format=deb
+old=26.10.0
+new=unknown
+contract=upgrade-dispatch-v1
+condition=package_recovery_required
+reason=product-start-owned-by-package-phase
+prior=enabled/active
+instruction=/usr/libexec/olivares/olivares-product-package-phase status-v1

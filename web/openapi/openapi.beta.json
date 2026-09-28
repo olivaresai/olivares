@@ -18763,7 +18763,37 @@
                   "a": {
                     "additionalProperties": false,
                     "properties": {
+                      "baseline_ref": {
+                        "type": "string"
+                      },
+                      "comparison": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "mode": {
+                            "description": "candidate_change requires an explicit baseline_ref and declared candidate identities.",
+                            "enum": [
+                              "same_candidate",
+                              "candidate_change"
+                            ],
+                            "type": "string"
+                          },
+                          "version": {
+                            "enum": [
+                              1
+                            ],
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "version",
+                          "mode"
+                        ],
+                        "type": "object"
+                      },
                       "label": {
+                        "type": "string"
+                      },
+                      "model_ref": {
                         "type": "string"
                       },
                       "outputs": {
@@ -18781,7 +18811,37 @@
                   "b": {
                     "additionalProperties": false,
                     "properties": {
+                      "baseline_ref": {
+                        "type": "string"
+                      },
+                      "comparison": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "mode": {
+                            "description": "candidate_change requires an explicit baseline_ref and declared candidate identities.",
+                            "enum": [
+                              "same_candidate",
+                              "candidate_change"
+                            ],
+                            "type": "string"
+                          },
+                          "version": {
+                            "enum": [
+                              1
+                            ],
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "version",
+                          "mode"
+                        ],
+                        "type": "object"
+                      },
                       "label": {
+                        "type": "string"
+                      },
+                      "model_ref": {
                         "type": "string"
                       },
                       "outputs": {
@@ -19630,11 +19690,41 @@
                   "baseline_ref": {
                     "type": "string"
                   },
+                  "comparison": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "mode": {
+                        "description": "candidate_change requires an explicit baseline_ref and declared candidate identities.",
+                        "enum": [
+                          "same_candidate",
+                          "candidate_change"
+                        ],
+                        "type": "string"
+                      },
+                      "version": {
+                        "enum": [
+                          1
+                        ],
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "version",
+                      "mode"
+                    ],
+                    "type": "object"
+                  },
+                  "model_ref": {
+                    "type": "string"
+                  },
                   "outputs": {
                     "additionalProperties": {
                       "type": "string"
                     },
                     "type": "object"
+                  },
+                  "prompt_variant": {
+                    "type": "string"
                   },
                   "sample_size": {
                     "type": "integer"
@@ -20220,6 +20310,30 @@
                 "properties": {
                   "baseline_ref": {
                     "type": "string"
+                  },
+                  "comparison": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "mode": {
+                        "description": "candidate_change requires an explicit baseline_ref and declared candidate identities.",
+                        "enum": [
+                          "same_candidate",
+                          "candidate_change"
+                        ],
+                        "type": "string"
+                      },
+                      "version": {
+                        "enum": [
+                          1
+                        ],
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "version",
+                      "mode"
+                    ],
+                    "type": "object"
                   },
                   "model_ref": {
                     "type": "string"
@@ -23895,6 +24009,659 @@
         "summary": "Sends ONE synthetic \"eventing.test\" delivery to the subscription's endpoint, synchronously, signed with its real secret — the integrator's \"is my receiver wired correctly?\" probe.",
         "x-olivares-request-body-disposition": "bodyless",
         "x-required-permission": "eventing:subscription:admin",
+        "x-stability": "beta"
+      }
+    },
+    "/v1/m/finops/admission/commit": {
+      "post": {
+        "description": "Settles a hold with the cost the effect actually incurred, returning whatever headroom the estimate held beyond it.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "actual_micro_usd": {
+                    "description": "The measured cost. Ingest the spend first, so the ceiling never under-counts during settlement. A repeat with the same amount is answered as the first commit was; another amount after a commit is refused with 409.",
+                    "format": "int64",
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "handle": {
+                    "description": "The handle Reserve answered with. An empty handle settles nothing.",
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Settles a hold with the cost the effect actually incurred, returning whatever headroom the estimate held beyond it.",
+        "x-olivares-request-body-disposition": "schema-published",
+        "x-required-permission": "finops:budget:write",
+        "x-stability": "beta"
+      }
+    },
+    "/v1/m/finops/admission/reconcile": {
+      "post": {
+        "description": "Runs admission recovery, sweeps holds that expired unsettled, compares what remains against the commits and releases its callers made, and files a posture finding when the ledger drifted.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Runs admission recovery, sweeps holds that expired unsettled, compares what remains against the commits and releases its callers made, and files a posture finding when the ledger drifted.",
+        "x-olivares-request-body-disposition": "bodyless",
+        "x-required-permission": "finops:budget:write",
+        "x-stability": "beta"
+      }
+    },
+    "/v1/m/finops/admission/reconciliation": {
+      "get": {
+        "description": "Reports the reservation ledger against its commits and releases, and what recovery left outstanding: holds still owed, claims and releases an earlier build left, undecided recovery writes, and admission rows that fail their integrity check.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Reports the reservation ledger against its commits and releases, and what recovery left outstanding: holds still owed, claims and releases an earlier build left, undecided recovery writes, and admission rows that fail their integrity check.",
+        "x-required-permission": "finops:budget:read",
+        "x-stability": "beta"
+      }
+    },
+    "/v1/m/finops/admission/release": {
+      "post": {
+        "description": "Returns an unused hold to its budget when the effect did not happen, so an abandoned reservation stops withholding headroom from the next caller.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "handle": {
+                    "description": "The handle Reserve answered with. An empty handle releases nothing, and a committed hold stays committed.",
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Returns an unused hold to its budget when the effect did not happen, so an abandoned reservation stops withholding headroom from the next caller.",
+        "x-olivares-request-body-disposition": "schema-published",
+        "x-required-permission": "finops:budget:write",
+        "x-stability": "beta"
+      }
+    },
+    "/v1/m/finops/admission/reserve": {
+      "post": {
+        "description": "Holds the estimated spend of a billable effect against every enforcing budget that scopes the request, and against the named actor's spend limits, under one handle.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "actor_ref": {
+                    "description": "When set, the spend limits of that actor are held as well as the budgets.",
+                    "type": "string"
+                  },
+                  "dims": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "agent_group_refs": {
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      },
+                      "agent_ref": {
+                        "type": "string"
+                      },
+                      "api_key_ref": {
+                        "type": "string"
+                      },
+                      "context_window": {
+                        "type": "string"
+                      },
+                      "cost_center_ref": {
+                        "type": "string"
+                      },
+                      "cost_type": {
+                        "type": "string"
+                      },
+                      "gateway": {
+                        "type": "string"
+                      },
+                      "identity_ref": {
+                        "type": "string"
+                      },
+                      "inference_geo": {
+                        "type": "string"
+                      },
+                      "model_ref": {
+                        "type": "string"
+                      },
+                      "project": {
+                        "type": "string"
+                      },
+                      "provider_ref": {
+                        "type": "string"
+                      },
+                      "routine_ref": {
+                        "type": "string"
+                      },
+                      "service_tier": {
+                        "type": "string"
+                      },
+                      "session_ref": {
+                        "type": "string"
+                      },
+                      "team": {
+                        "type": "string"
+                      },
+                      "user_group_refs": {
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      },
+                      "workspace_ref": {
+                        "type": "string"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "estimate_micro_usd": {
+                    "description": "The amount to hold. Zero holds nothing and returns no handle, but a cap already past its limit still refuses it.",
+                    "format": "int64",
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "groups": {
+                    "description": "Directory group ids used to resolve the actor's spend limits.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "idempotency_key": {
+                    "description": "Bound to the tenant, the scope and the payload. A retry with the same key and payload inside the replay window is answered with the hold the first call took; the same key with another payload is refused with 409.",
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "scope": {
+                    "enum": [
+                      "session_launch",
+                      "model_gateway",
+                      "scheduled_job"
+                    ],
+                    "type": "string"
+                  },
+                  "unreachable": {
+                    "default": "deny",
+                    "description": "What a request answers when its admission cannot be established. Omitted, empty and unknown values mean deny. Allow admits with no hold.",
+                    "enum": [
+                      "",
+                      "deny",
+                      "allow"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "scope",
+                  "idempotency_key"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Holds the estimated spend of a billable effect against every enforcing budget that scopes the request, and against the named actor's spend limits, under one handle.",
+        "x-olivares-request-body-disposition": "schema-published",
+        "x-required-permission": "finops:budget:write",
         "x-stability": "beta"
       }
     },
@@ -29876,6 +30643,1624 @@
         ],
         "summary": "Serves the CFO panel (totals + cancellation-risk list).",
         "x-required-permission": "finops:spend:read",
+        "x-stability": "beta"
+      }
+    },
+    "/v1/m/gitpublish/intents": {
+      "get": {
+        "description": "Lists the publication intents of one target, named by ?target_id, with what each requested, what the host was last observed to hold and its current state.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Lists the publication intents of one target, named by ?target_id, with what each requested, what the host was last observed to hold and its current state.",
+        "x-required-permission": "gitpublish:target:read",
+        "x-stability": "beta"
+      }
+    },
+    "/v1/m/gitpublish/intents/{id}": {
+      "get": {
+        "description": "Returns one publication intent: what it requested, what the host was last observed to hold, whether the host acknowledged the request, and its state.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Path parameter id.",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Returns one publication intent: what it requested, what the host was last observed to hold, whether the host acknowledged the request, and its state.",
+        "x-required-permission": "gitpublish:target:read",
+        "x-stability": "beta"
+      }
+    },
+    "/v1/m/gitpublish/intents/{id}/abandon": {
+      "post": {
+        "description": "Records that an administrator takes responsibility for an unresolved publication intent, with a bounded reason.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Path parameter id.",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "reason": {
+                    "maxLength": 1024,
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "description": "The handler decodes one strict JSON document, bounded at 1 MiB; an unknown field is field_not_accepted.",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Records that an administrator takes responsibility for an unresolved publication intent, with a bounded reason.",
+        "x-olivares-request-body-disposition": "schema-published",
+        "x-required-permission": "gitpublish:target:admin",
+        "x-stability": "beta"
+      }
+    },
+    "/v1/m/gitpublish/intents/{id}/observations": {
+      "get": {
+        "description": "Lists every observation recorded for one publication intent: each host read, dispatcher outcome and refusal, with its attempt, result and time.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Path parameter id.",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Lists every observation recorded for one publication intent: each host read, dispatcher outcome and refusal, with its attempt, result and time.",
+        "x-required-permission": "gitpublish:target:read",
+        "x-stability": "beta"
+      }
+    },
+    "/v1/m/gitpublish/intents/{id}/reconcile": {
+      "post": {
+        "description": "Reads the host again for one publication intent and records what it observed.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Path parameter id.",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Reads the host again for one publication intent and records what it observed.",
+        "x-olivares-request-body-disposition": "bodyless",
+        "x-required-permission": "gitpublish:target:read",
+        "x-stability": "beta"
+      }
+    },
+    "/v1/m/gitpublish/targets": {
+      "get": {
+        "description": "Lists the publication targets the caller can read, without their credential and repository binding ids.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Lists the publication targets the caller can read, without their credential and repository binding ids.",
+        "x-required-permission": "gitpublish:target:read",
+        "x-stability": "beta"
+      },
+      "post": {
+        "description": "Records a publication target in a workspace: an approved credential binding, an approved repository binding, the branch prefix pushes must stay under and the allowed merge bases.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "credential_binding_id": {
+                    "description": "An approved credential binding in the caller's permitted scope; never a secret reference.",
+                    "type": "string"
+                  },
+                  "merge_bases": {
+                    "items": {
+                      "description": "An allowed target branch.",
+                      "pattern": "^[A-Za-z0-9._/-]+$",
+                      "type": "string"
+                    },
+                    "maxItems": 16,
+                    "type": "array"
+                  },
+                  "push_prefix": {
+                    "description": "Branch prefix ending in '/'; pushes and pull-request heads must be under it.",
+                    "pattern": "^[A-Za-z0-9._/-]+$",
+                    "type": "string"
+                  },
+                  "repository_binding_id": {
+                    "description": "An approved server repository binding; never a path.",
+                    "type": "string"
+                  },
+                  "workspace_id": {
+                    "description": "The workspace the target belongs to.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "workspace_id",
+                  "credential_binding_id",
+                  "repository_binding_id",
+                  "push_prefix"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "description": "The handler decodes one strict JSON document, bounded at 1 MiB; an unknown field is field_not_accepted.",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Records a publication target in a workspace: an approved credential binding, an approved repository binding, the branch prefix pushes must stay under and the allowed merge bases.",
+        "x-olivares-request-body-disposition": "schema-published",
+        "x-required-permission": "gitpublish:target:admin",
+        "x-stability": "beta"
+      }
+    },
+    "/v1/m/gitpublish/targets/{id}": {
+      "delete": {
+        "description": "Deletes a publication target that no dispatching, uncertain or abandoned intent still holds.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Path parameter id.",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Deletes a publication target that no dispatching, uncertain or abandoned intent still holds.",
+        "x-olivares-request-body-disposition": "bodyless",
+        "x-required-permission": "gitpublish:target:admin",
+        "x-stability": "beta"
+      },
+      "get": {
+        "description": "Returns one publication target. Its credential and repository binding ids are included only for a caller who holds target administration on it.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Path parameter id.",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Returns one publication target.",
+        "x-required-permission": "gitpublish:target:read",
+        "x-stability": "beta"
+      },
+      "put": {
+        "description": "Replaces a publication target's bindings, push prefix and merge bases under optimistic concurrency, refusing a stale expected_version.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Path parameter id.",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "credential_binding_id": {
+                    "description": "An approved credential binding in the caller's permitted scope; never a secret reference.",
+                    "type": "string"
+                  },
+                  "expected_version": {
+                    "description": "Optimistic concurrency: the version read.",
+                    "type": "integer"
+                  },
+                  "merge_bases": {
+                    "items": {
+                      "description": "An allowed target branch.",
+                      "pattern": "^[A-Za-z0-9._/-]+$",
+                      "type": "string"
+                    },
+                    "maxItems": 16,
+                    "type": "array"
+                  },
+                  "push_prefix": {
+                    "description": "Branch prefix ending in '/'; pushes and pull-request heads must be under it.",
+                    "pattern": "^[A-Za-z0-9._/-]+$",
+                    "type": "string"
+                  },
+                  "repository_binding_id": {
+                    "description": "An approved server repository binding; never a path.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "expected_version",
+                  "push_prefix"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "description": "The handler decodes one strict JSON document, bounded at 1 MiB; an unknown field is field_not_accepted.",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Replaces a publication target's bindings, push prefix and merge bases under optimistic concurrency, refusing a stale expected_version.",
+        "x-olivares-request-body-disposition": "schema-published",
+        "x-required-permission": "gitpublish:target:admin",
+        "x-stability": "beta"
+      }
+    },
+    "/v1/m/gitpublish/targets/{id}/merges": {
+      "post": {
+        "description": "Merges one pull request only while its head is still the reviewed expected_head, and returns the publication intent with the merge commit and tree it recorded.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Path parameter id.",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "acknowledge_intent": {
+                    "type": "string"
+                  },
+                  "expected_base": {
+                    "description": "Unsupported: refused with unsupported_requirement.",
+                    "type": "string"
+                  },
+                  "expected_head": {
+                    "description": "The reviewed source head; the host refuses the merge if the head differs.",
+                    "pattern": "^[0-9a-f]{40}([0-9a-f]{24})?$",
+                    "type": "string"
+                  },
+                  "expected_result_tree": {
+                    "description": "Unsupported: refused with unsupported_requirement.",
+                    "type": "string"
+                  },
+                  "method": {
+                    "description": "rebase is refused as unsupported_requirement on a GitLab target.",
+                    "enum": [
+                      "merge",
+                      "squash",
+                      "rebase"
+                    ],
+                    "type": "string"
+                  },
+                  "number": {
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  "operation_id": {
+                    "description": "Client idempotency key.",
+                    "pattern": "^[A-Za-z0-9._:-]{1,128}$",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "operation_id",
+                  "number",
+                  "expected_head",
+                  "method"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "description": "The handler decodes one strict JSON document, bounded at 1 MiB; an unknown field is field_not_accepted.",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Merges one pull request only while its head is still the reviewed expected_head, and returns the publication intent with the merge commit and tree it recorded.",
+        "x-olivares-request-body-disposition": "schema-published",
+        "x-required-permission": "gitpublish:merge:admin",
+        "x-stability": "beta"
+      }
+    },
+    "/v1/m/gitpublish/targets/{id}/pull-requests": {
+      "post": {
+        "description": "Opens a pull request from a branch under the target's push prefix into an allowed merge base, or adopts the matching open one, and returns the publication intent with its receipt.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Path parameter id.",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "acknowledge_intent": {
+                    "type": "string"
+                  },
+                  "base": {
+                    "description": "An allowed merge base.",
+                    "pattern": "^[A-Za-z0-9._/-]+$",
+                    "type": "string"
+                  },
+                  "body": {
+                    "maxLength": 65536,
+                    "type": "string"
+                  },
+                  "commit": {
+                    "description": "The requested head commit, recorded beside the observed one.",
+                    "pattern": "^[0-9a-f]{40}([0-9a-f]{24})?$",
+                    "type": "string"
+                  },
+                  "draft": {
+                    "type": "boolean"
+                  },
+                  "head_ref": {
+                    "description": "Source branch under push_prefix; the host binds branches, not SHAs.",
+                    "pattern": "^[A-Za-z0-9._/-]+$",
+                    "type": "string"
+                  },
+                  "operation_id": {
+                    "description": "Client idempotency key.",
+                    "pattern": "^[A-Za-z0-9._:-]{1,128}$",
+                    "type": "string"
+                  },
+                  "title": {
+                    "maxLength": 256,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "operation_id",
+                  "head_ref",
+                  "base",
+                  "commit",
+                  "title"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "description": "The handler decodes one strict JSON document, bounded at 1 MiB; an unknown field is field_not_accepted.",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Opens a pull request from a branch under the target's push prefix into an allowed merge base, or adopts the matching open one, and returns the publication intent with its receipt.",
+        "x-olivares-request-body-disposition": "schema-published",
+        "x-required-permission": "gitpublish:pull_request:write",
+        "x-stability": "beta"
+      }
+    },
+    "/v1/m/gitpublish/targets/{id}/pushes": {
+      "post": {
+        "description": "Pushes one exact commit to a branch under the target's push prefix, leased on the branch's expected current value, and returns the publication intent with its receipt.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Path parameter id.",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "acknowledge_intent": {
+                    "description": "Names an abandoned intent of the same scope this request knowingly proceeds past; requires target admin at AAL3.",
+                    "type": "string"
+                  },
+                  "commit": {
+                    "description": "The exact commit.",
+                    "pattern": "^[0-9a-f]{40}([0-9a-f]{24})?$",
+                    "type": "string"
+                  },
+                  "expected_old": {
+                    "description": "The lease: the ref's expected current value; empty requires the ref to be absent.",
+                    "type": "string"
+                  },
+                  "operation_id": {
+                    "description": "Client idempotency key.",
+                    "pattern": "^[A-Za-z0-9._:-]{1,128}$",
+                    "type": "string"
+                  },
+                  "ref": {
+                    "description": "A branch under push_prefix. A merge base, the host's default branch and any branch the host reports as protected are refused; tags are refused.",
+                    "pattern": "^refs/heads/[A-Za-z0-9._/-]+$",
+                    "type": "string"
+                  },
+                  "tree": {
+                    "description": "The commit's tree, checked in the server repository.",
+                    "pattern": "^[0-9a-f]{40}([0-9a-f]{24})?$",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "operation_id",
+                  "ref",
+                  "commit",
+                  "tree"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "description": "The handler decodes one strict JSON document, bounded at 1 MiB; an unknown field is field_not_accepted.",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Pushes one exact commit to a branch under the target's push prefix, leased on the branch's expected current value, and returns the publication intent with its receipt.",
+        "x-olivares-request-body-disposition": "schema-published",
+        "x-required-permission": "gitpublish:push:write",
         "x-stability": "beta"
       }
     },
@@ -45025,6 +47410,437 @@
         "x-stability": "beta"
       }
     },
+    "/v1/m/inventory/collections": {
+      "get": {
+        "description": "Returns the collection coverage of one opened source registration, selected by ?source_id, ?source_revision and ?environment_ref: the current run's result, and the last qualified run when its scope has one.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Source ID from the caller's CURRENT opened registration; nonempty, at most 128 bytes. An old selector reads that historical selection, not the current roster.",
+            "in": "query",
+            "name": "source_id",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "description": "Positive signed 64-bit revision from the same CURRENT opened registration; missing or invalid selectors return 400.",
+            "in": "query",
+            "name": "source_revision",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Environment from the same CURRENT opened registration; nonempty, at most 128 bytes. Unmatched selection returns unknown coverage.",
+            "in": "query",
+            "name": "environment_ref",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "cursor": {
+                      "description": "Optional list-envelope continuation cursor; this exact source selection has at most one head.",
+                      "type": "string"
+                    },
+                    "has_more": {
+                      "description": "List-envelope continuation flag, not evidence of collection completeness.",
+                      "type": "boolean"
+                    },
+                    "items": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "current": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "admitted_count": {
+                                "format": "int64",
+                                "maximum": 100000,
+                                "minimum": 0,
+                                "type": "integer"
+                              },
+                              "committed_count": {
+                                "format": "int64",
+                                "maximum": 100000,
+                                "minimum": 0,
+                                "type": "integer"
+                              },
+                              "coverage": {
+                                "enum": [
+                                  "complete",
+                                  "partial",
+                                  "unavailable",
+                                  "unsupported",
+                                  "unknown"
+                                ],
+                                "type": "string"
+                              },
+                              "environment_ref": {
+                                "minLength": 1,
+                                "type": "string"
+                              },
+                              "expected_count": {
+                                "format": "int64",
+                                "maximum": 100000,
+                                "minimum": 0,
+                                "type": "integer"
+                              },
+                              "family": {
+                                "enum": [
+                                  "azure.resource"
+                                ],
+                                "type": "string"
+                              },
+                              "fulfilled_scope": {
+                                "description": "SHA-256 fingerprint of the versioned query scope.",
+                                "pattern": "^[0-9a-f]{64}$",
+                                "type": "string"
+                              },
+                              "host_finished_at": {
+                                "description": "Host closure after Gather returns.",
+                                "format": "date-time",
+                                "type": "string"
+                              },
+                              "host_started_at": {
+                                "description": "Host start as an RFC3339 timestamp; empty when the selected registration has no run.",
+                                "type": "string"
+                              },
+                              "producer_finished_at": {
+                                "description": "Producer-declared enumeration end.",
+                                "format": "date-time",
+                                "type": "string"
+                              },
+                              "producer_started_at": {
+                                "description": "Producer-declared enumeration start.",
+                                "format": "date-time",
+                                "type": "string"
+                              },
+                              "projection": {
+                                "description": "Queued members are pending until their receipt/materialization commits; enumeration alone cannot qualify them.",
+                                "enum": [
+                                  "pending",
+                                  "committed",
+                                  "failed"
+                                ],
+                                "type": "string"
+                              },
+                              "qualified_at": {
+                                "description": "Inventory qualification after all expected members commit.",
+                                "format": "date-time",
+                                "type": "string"
+                              },
+                              "reason": {
+                                "enum": [
+                                  "",
+                                  "exhausted",
+                                  "page_limit",
+                                  "repeated_cursor",
+                                  "invalid_response",
+                                  "scope_unproven",
+                                  "scope_mismatch",
+                                  "provider_error",
+                                  "offline",
+                                  "disabled",
+                                  "member_limit",
+                                  "missing_report",
+                                  "protocol_error",
+                                  "gather_error",
+                                  "canceled",
+                                  "sink_error",
+                                  "persistence_rejected",
+                                  "commit_outcome_unknown",
+                                  "persistence_canceled",
+                                  "persistence_unavailable",
+                                  "persistence_error"
+                                ],
+                                "type": "string"
+                              },
+                              "rejection_reason": {
+                                "enum": [
+                                  "terminal_conflict",
+                                  "linkage_conflict",
+                                  "member_conflict",
+                                  "receipt_conflict"
+                                ],
+                                "type": "string"
+                              },
+                              "requested_scope": {
+                                "description": "SHA-256 fingerprint of the versioned query scope.",
+                                "pattern": "^[0-9a-f]{64}$",
+                                "type": "string"
+                              },
+                              "run_id": {
+                                "description": "Host run ID; empty when the selected registration has no run.",
+                                "type": "string"
+                              },
+                              "run_order": {
+                                "description": "Durable source order; zero when no run exists.",
+                                "format": "int64",
+                                "minimum": 0,
+                                "type": "integer"
+                              },
+                              "scope_contract": {
+                                "enum": [
+                                  "azure-resource-graph/2022-10-01/id-v1"
+                                ],
+                                "type": "string"
+                              },
+                              "source_id": {
+                                "minLength": 1,
+                                "type": "string"
+                              },
+                              "source_revision": {
+                                "format": "int64",
+                                "minimum": 1,
+                                "type": "integer"
+                              }
+                            },
+                            "required": [
+                              "run_id",
+                              "source_id",
+                              "source_revision",
+                              "environment_ref",
+                              "run_order",
+                              "coverage",
+                              "reason",
+                              "projection",
+                              "admitted_count",
+                              "committed_count",
+                              "expected_count",
+                              "host_started_at"
+                            ],
+                            "type": "object"
+                          },
+                          "last_qualified_success": {
+                            "additionalProperties": false,
+                            "description": "Immutable historical qualification for this exact registration and scope; absent until one run qualifies. Later rejection evidence does not rewrite this receipt.",
+                            "properties": {
+                              "environment_ref": {
+                                "minLength": 1,
+                                "type": "string"
+                              },
+                              "expected_count": {
+                                "format": "int64",
+                                "maximum": 100000,
+                                "minimum": 0,
+                                "type": "integer"
+                              },
+                              "family": {
+                                "enum": [
+                                  "azure.resource"
+                                ],
+                                "type": "string"
+                              },
+                              "fulfilled_scope": {
+                                "description": "SHA-256 fingerprint of the versioned query scope.",
+                                "pattern": "^[0-9a-f]{64}$",
+                                "type": "string"
+                              },
+                              "host_finished_at": {
+                                "description": "Host closure after Gather returns.",
+                                "format": "date-time",
+                                "type": "string"
+                              },
+                              "host_started_at": {
+                                "description": "Host run start, separate from producer observation time.",
+                                "format": "date-time",
+                                "type": "string"
+                              },
+                              "producer_finished_at": {
+                                "description": "Producer-declared enumeration end.",
+                                "format": "date-time",
+                                "type": "string"
+                              },
+                              "producer_started_at": {
+                                "description": "Producer-declared enumeration start.",
+                                "format": "date-time",
+                                "type": "string"
+                              },
+                              "qualified_at": {
+                                "description": "Inventory qualification after all expected members commit.",
+                                "format": "date-time",
+                                "type": "string"
+                              },
+                              "requested_scope": {
+                                "description": "SHA-256 fingerprint of the versioned query scope.",
+                                "pattern": "^[0-9a-f]{64}$",
+                                "type": "string"
+                              },
+                              "run_id": {
+                                "description": "Host-owned collection run ID.",
+                                "type": "string"
+                              },
+                              "scope_contract": {
+                                "enum": [
+                                  "azure-resource-graph/2022-10-01/id-v1"
+                                ],
+                                "type": "string"
+                              },
+                              "source_id": {
+                                "minLength": 1,
+                                "type": "string"
+                              },
+                              "source_revision": {
+                                "format": "int64",
+                                "minimum": 1,
+                                "type": "integer"
+                              }
+                            },
+                            "required": [
+                              "run_id",
+                              "source_id",
+                              "source_revision",
+                              "environment_ref",
+                              "scope_contract",
+                              "family",
+                              "requested_scope",
+                              "fulfilled_scope",
+                              "expected_count",
+                              "qualified_at",
+                              "host_started_at",
+                              "host_finished_at",
+                              "producer_started_at",
+                              "producer_finished_at"
+                            ],
+                            "type": "object"
+                          }
+                        },
+                        "required": [
+                          "current"
+                        ],
+                        "type": "object"
+                      },
+                      "maxItems": 1,
+                      "minItems": 1,
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "items",
+                    "has_more"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Collection evidence for the caller-selected CURRENT opened registration. An unmatched selection returns unknown, never inherited completeness. Current enumeration and projection are separate from historical last_qualified_success for the exact scope. Complete describes this query over its observed interval, not a global snapshot or provider authorization. Empty completion does not delete resources."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "423": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "tenant service suspended or not in service"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "stored collection evidence or store read failed; the generic error body contains no backend detail"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Returns the collection coverage of one opened source registration, selected by ?source_id, ?source_revision and ?environment_ref: the current run's result, and the last qualified run when its scope has one.",
+        "x-required-permission": "inventory:catalog:read",
+        "x-stability": "beta"
+      }
+    },
     "/v1/m/inventory/entities": {
       "get": {
         "description": "Lists catalog entries, optionally filtered by kind and status, paginated by the default id keyset cursor.",
@@ -53954,7 +56770,7 @@
     },
     "/v1/m/models/features": {
       "get": {
-        "description": "Returns the capability matrix: per API feature, which declared families support it.",
+        "description": "Returns the capability matrix: per API feature, which declared families declare it, and the matrix is not a gateway invocation guarantee.",
         "parameters": [
           {
             "description": "Target tenant id; required when the principal can act in more than one tenant.",
@@ -54044,7 +56860,7 @@
             "bearerAuth": []
           }
         ],
-        "summary": "Returns the capability matrix: per API feature, which declared families support it.",
+        "summary": "Returns the capability matrix: per API feature, which declared families declare it, and the matrix is not a gateway invocation guarantee.",
         "x-required-permission": "models:catalog:read",
         "x-stability": "beta"
       }
@@ -68022,6 +70838,143 @@
         ],
         "summary": "Returns one run's timeline.",
         "x-required-permission": "orchestration:workflow:read",
+        "x-stability": "beta"
+      }
+    },
+    "/v1/m/orchestration/workflows/{id}/runs/{run}/reauthorize": {
+      "post": {
+        "description": "Continues a run paused for reauthentication: it binds the caller's own fresh credential as the run's successor binding and resumes the paused steps.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Path parameter id.",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Path parameter run.",
+            "in": "path",
+            "name": "run",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "plan_hash": {
+                    "description": "The plan hash the operator reviewed; the run is reauthorized only against this plan.",
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "plan_hash"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Continues a run paused for reauthentication: it binds the caller's own fresh credential as the run's successor binding and resumes the paused steps.",
+        "x-olivares-request-body-disposition": "schema-published",
+        "x-required-permission": "orchestration:workflow:admin",
         "x-stability": "beta"
       }
     },

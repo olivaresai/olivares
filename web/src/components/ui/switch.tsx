@@ -7,7 +7,9 @@ import { cn } from '@/lib/utils'
 
 /**
  * Switch — Radix switch for immediate, binary settings (no confirm). Track is the
- * strong hairline color when off and copper when on; the thumb slides fast (120ms),
+ * control boundary color when off (3:1 against the surface, and under the thumb) and the
+ * orange fill with its border and the on-accent thumb when on; the thumb slides fast
+ * (120ms); a switch that cannot act is a dashed empty track,
  * color-only otherwise. Focus is a ring on the track. Prefer this over a checkbox
  * for "applies instantly" toggles; use Checkbox for form selections.
  */
@@ -24,10 +26,11 @@ export function Switch({
         // but a transparent ::before raises the pointer target to ≥24px tall (the
         // 36px width already clears 24px); the pseudo belongs to the switch.
         "before:absolute before:-inset-y-1 before:inset-x-0 before:content-['']",
-        'bg-border-strong transition-colors outline-none',
-        'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
-        'data-[state=checked]:bg-accent-text',
-        'disabled:pointer-events-none disabled:opacity-50',
+        'bg-ctl-border transition-colors duration-100 ease-out outline-none',
+        'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
+        'data-[state=checked]:border-accent-border data-[state=checked]:bg-accent',
+        'disabled:pointer-events-none disabled:border-dashed disabled:border-ctl-border disabled:bg-transparent',
+        'aria-disabled:cursor-not-allowed aria-disabled:border-dashed aria-disabled:border-ctl-border aria-disabled:bg-transparent',
         className,
       )}
       {...props}
@@ -35,8 +38,9 @@ export function Switch({
       <SwitchPrimitive.Thumb
         data-slot="switch-thumb"
         className={cn(
-          'pointer-events-none block size-4 translate-x-0.5 rounded-full bg-surface shadow-sm',
-          'transition-transform duration-150 ease-out data-[state=checked]:translate-x-[1.125rem]',
+          'pointer-events-none block size-3.5 translate-x-[3px] rounded-full bg-surface',
+          'transition-transform duration-100 ease-out data-[state=checked]:translate-x-[17px] data-[state=checked]:bg-on-accent',
+          '[[data-disabled]>&]:bg-ctl-border [[aria-disabled=true]>&]:bg-ctl-border',
         )}
       />
     </SwitchPrimitive.Root>

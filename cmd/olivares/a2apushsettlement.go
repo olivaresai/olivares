@@ -90,12 +90,17 @@ func (s *a2aPushSettlement) recordReply(
 		return false, err
 	}
 	command := projectA2APushReply(binding, route, reply)
-	replay, err := s.store.ApplyProtocolReplay(ctx, route.tenant, sessions.ProtocolReplayClaim{
+	// The reply's directory evidence is read before the replay transaction
+	// opens; its projection inside consumes it.
+	plan := sessions.ProtocolReplayPlan{
+		Publishes: []sessions.ProtocolReplayPublish{sessions.ProtocolReplyPublish(command.Route, command.Flow)},
+	}
+	replay, err := s.store.ApplyPreparedProtocolReplay(ctx, route.tenant, sessions.ProtocolReplayClaim{
 		WorkspaceID: route.workspace, Protocol: sessions.BindingProtocolA2A,
 		PeerAuthority: reply.Sender, Kind: replayKind,
 		ReplayID: replayID, ExpiresAt: replayExpiresAt,
 		ExpectedBindingID: binding.ID,
-	}, func(joinedCtx context.Context) (sessions.ProtocolReplaySettlement, error) {
+	}, plan, func(joinedCtx context.Context) (sessions.ProtocolReplaySettlement, error) {
 		_, projectErr := s.store.ProjectProtocolReply(joinedCtx, route.tenant, command)
 		return sessions.ProtocolReplaySettlement{BindingID: binding.ID}, projectErr
 	})
@@ -271,11 +276,19 @@ func (s *a2aPushSettlement) Record(ctx context.Context, update a2a.TaskUpdate) e
 	if strings.TrimSpace(update.ReplayID) == "" || update.ReplayExpiresAt.IsZero() {
 		return fmt.Errorf("a2a push: verified replay identity is missing")
 	}
-	replay, err := s.store.ApplyProtocolReplay(ctx, route.tenant, sessions.ProtocolReplayClaim{
+	// An interrupt state publishes to the route's recipient and links it as a
+	// required party, so its accounts are fenced and its directory evidence is
+	// read before the replay transaction opens. Other states publish nothing.
+	var plan sessions.ProtocolReplayPlan
+	if remote := a2aPushRemoteState(update.State); remote == "input_required" || remote == "auth_required" {
+		plan.Accounts = []model.ID{route.interrupt.SenderUserID, route.interrupt.RecipientUserID}
+		plan.Publishes = []sessions.ProtocolReplayPublish{sessions.ProtocolInterruptPublish(route.interrupt)}
+	}
+	replay, err := s.store.ApplyPreparedProtocolReplay(ctx, route.tenant, sessions.ProtocolReplayClaim{
 		WorkspaceID: route.workspace, Protocol: sessions.BindingProtocolA2A,
 		PeerAuthority: update.Sender, Kind: sessions.ProtocolReplayJTI,
 		ReplayID: update.ReplayID, ExpiresAt: update.ReplayExpiresAt,
-	}, func(joinedCtx context.Context) (sessions.ProtocolReplaySettlement, error) {
+	}, plan, func(joinedCtx context.Context) (sessions.ProtocolReplaySettlement, error) {
 		bindingID, err := s.recordUpdate(joinedCtx, route, update)
 		return sessions.ProtocolReplaySettlement{BindingID: bindingID}, err
 	})

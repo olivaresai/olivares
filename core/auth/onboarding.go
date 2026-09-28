@@ -14,8 +14,11 @@ import (
 )
 
 // Console onboarding (FASE X): bring a NON-federated person into a tenant
-// from the console — create (or reuse) the account and grant its membership in
-// ONE transaction. It is the tenant-scoped counterpart to the superadmin-only
+// from the console — create the account and grant its membership in ONE
+// transaction. An address that already has an account never joins it: a member
+// takes the unchanged re-grant path, an account this tenant created and later
+// removed is re-admitted once its removal completed, and any other account
+// answers ErrConsentRequired with nothing written. It is the tenant-scoped counterpart to the superadmin-only
 // CreateUser: the actor needs membership:write in the target tenant (RBAC, gated
 // at the handler) and the granted role passes the actor's role ceiling, and a new
 // account can NEVER be made a superadmin here. Two delivery modes:
@@ -58,8 +61,9 @@ type OnboardResult struct {
 	// Created reports whether a NEW account was created (false = the email already
 	// had an account and only the membership was granted/updated).
 	Created bool
-	// InviteToken is the single-use token to deliver to the invitee (invite mode,
-	// new account only). Shown ONCE — never stored in cleartext, never logged.
+	// InviteToken is the single-use token for the invitation mailer (invite mode,
+	// new account only). It goes only to the invitee's address, never into a
+	// response, a log or the audit.
 	InviteToken string
 	// InviteID is the stored invite's id (for revocation/listing).
 	InviteID model.ID
@@ -116,15 +120,39 @@ func (a *Authenticator) OnboardMember(ctx context.Context, actor Principal, tena
 	}
 
 	err := a.st.AuthMutate(ctx, func(as store.AuthScope) error {
+		// A foreign-claimed domain is refused before the address is looked up, so
+		// the answer reveals configuration, never an account.
+		if err := refuseForeignDomain(ctx, as, tenant, email, ""); err != nil {
+			return err
+		}
 		existing, _, err := as.Users().List(ctx, byEq("email", email, 1))
 		if err != nil {
 			return err
 		}
 		if len(existing) > 0 {
-			// The person already has an account: just grant the membership. We never
-			// reset another account's password or re-invite an existing user from here.
-			res.User = existing[0]
+			// The person already has an account. This tenant never joins it, never
+			// resets its password and never re-invites it.
+			if err := prepareUserAuthorityWrite(ctx, as, existing[0].ID); err != nil {
+				return err
+			}
+			u, err := as.Users().Get(ctx, existing[0].ID)
+			if err != nil {
+				return err
+			}
+			member, custodian, err := joinOrConsent(ctx, as, u, tenant)
+			if err != nil {
+				return err
+			}
+			res.User = u
 			res.Created = false
+			if custodian {
+				m, err := readmitCustodian(ctx, as, actor, u, tenant, in.Role, "")
+				res.Membership = m
+				return err
+			}
+			if !member {
+				return ErrConsentRequired
+			}
 		} else {
 			// The retained seat seam over a NEW account (reusing an existing one,
 			// the branch above, never went through it). Since B10 it is an
@@ -135,6 +163,8 @@ func (a *Authenticator) OnboardMember(ctx context.Context, actor Principal, tena
 			u, err := as.Users().Create(ctx, model.User{
 				Email: email, DisplayName: in.DisplayName, Status: model.StatusActive,
 				PasswordHash: passwordHash, IsSuperadmin: false, // deny-closed: never superadmin
+				// This tenant created the account: its credentials are the tenant's.
+				CredentialCustody: model.CustodyTenant, CustodyTenantID: tenant,
 			})
 			if err != nil {
 				return err
@@ -209,7 +239,7 @@ func (a *Authenticator) AcceptInvite(ctx context.Context, token, password, ip st
 	if err != nil {
 		return "", model.AuthSession{}, err
 	}
-	return a.mintSession(ctx, attempt, user, "user.invite.accept", passwordLogin, func(as store.AuthScope) error {
+	return a.mintSession(ctx, attempt, user, user.CustodyScope(), "user.invite.accept", passwordLogin, func(as store.AuthScope) error {
 		inv, u, err := a.pendingInvite(ctx, as, selector, secret)
 		if err != nil {
 			return err
@@ -217,8 +247,13 @@ func (a *Authenticator) AcceptInvite(ctx context.Context, token, password, ip st
 		if inv.ID != invite.ID || inv.Version != invite.Version || u.ID != user.ID || u.Version != user.Version {
 			return ErrInviteInvalid
 		}
+		if err := prepareUserAuthorityWrite(ctx, as, u.ID); err != nil {
+			return err
+		}
+		if err := inviteStillOwnsAccount(ctx, as, inv, u); err != nil {
+			return err
+		}
 		u.PasswordHash = hash
-		u.Status = model.StatusActive
 		if _, err := as.Users().Update(ctx, u); err != nil {
 			return err
 		}
@@ -233,6 +268,31 @@ func (a *Authenticator) AcceptInvite(ctx context.Context, token, password, ip st
 		})
 		return err
 	})
+}
+
+// inviteStillOwnsAccount refuses an invitation whose account is no longer
+// exactly what the invitation created: active, never a superadmin, with no
+// password, no sign-in subject and no session yet, and a member of the
+// invitation's tenant only. Redeeming it never writes the account's status.
+func inviteStillOwnsAccount(ctx context.Context, as store.AuthScope, inv model.UserInvite, u model.User) error {
+	if u.Status != model.StatusActive || u.IsSuperadmin || u.PasswordHash != "" || u.SsoSubject != "" {
+		return ErrInviteInvalid
+	}
+	ms, err := drainList(ctx, as.Memberships().List, byEq("user_id", u.ID.String(), 0))
+	if err != nil {
+		return err
+	}
+	if len(ms) != 1 || ms[0].TargetTenantID != inv.TargetTenantID {
+		return ErrInviteInvalid
+	}
+	sessions, _, err := as.Sessions().List(ctx, byEq("user_id", u.ID.String(), 1))
+	if err != nil {
+		return err
+	}
+	if len(sessions) != 0 {
+		return ErrInviteInvalid
+	}
+	return nil
 }
 
 // pendingInvite reads both authority records without writing. The caller must
@@ -283,6 +343,43 @@ func (a *Authenticator) ListPendingInvites(ctx context.Context, tenant model.Ten
 		return nil
 	})
 	return out, err
+}
+
+// ResendInvite rotates a pending invitation's secret and restarts its expiry,
+// so only the newly mailed token redeems it. It returns the invitation and the
+// new token for the invitation mailer; the token never reaches a response.
+func (a *Authenticator) ResendInvite(ctx context.Context, actor Principal, tenant model.TenantID, id model.ID) (model.UserInvite, string, error) {
+	cred, err := NewCredential(PrefixInvite)
+	if err != nil {
+		return model.UserInvite{}, "", err
+	}
+	var out model.UserInvite
+	err = a.st.AuthMutate(ctx, func(as store.AuthScope) error {
+		// The same lock order as RevokeInvite: global admission before the row.
+		if err := prepareUserAuthorityWrite(ctx, as); err != nil {
+			return err
+		}
+		inv, err := as.Invites().Get(ctx, id)
+		if err != nil {
+			return err
+		}
+		if inv.TargetTenantID != tenant {
+			return store.ErrNotFound
+		}
+		if inv.AcceptedAt != nil {
+			return ErrInviteInvalid
+		}
+		inv.Selector, inv.SecretHash = cred.Selector, cred.SecretHash
+		inv.ExpiresAt = model.NewTimestamp(a.clock.Now().Time().Add(inviteTTL))
+		if out, err = as.Invites().Update(ctx, inv); err != nil {
+			return err
+		}
+		return auditAct(ctx, as, actor, "user.invite.resend", "core.user_invite", id)
+	})
+	if err != nil {
+		return model.UserInvite{}, "", err
+	}
+	return out, cred.Token, nil
 }
 
 // RevokeInvite deletes a pending invitation. It is bound to tenant so a caller

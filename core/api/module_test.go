@@ -56,10 +56,8 @@ func TestModuleSeam(t *testing.T) {
 	tenantB := h.createOrg(admin, "globex")
 
 	// A viewer of A gets the module's read permission by verb tier.
-	r := h.do("POST", "/v1/users", admin, map[string]any{"email": "v@acme.com", "password": "viewerpass1"}, nil)
-	uid := r.body["id"].(string)
-	if r := h.do("POST", "/v1/memberships", admin, map[string]any{"user_id": uid, "tenant": tenantA.String(), "role": auth.RoleViewer}, nil); r.code != http.StatusCreated {
-		t.Fatalf("grant = %d %s", r.code, r.raw)
+	if r := h.do("POST", "/v1/users", admin, map[string]any{"email": "v@acme.com", "password": "viewerpass1", "tenant": tenantA.String(), "role": auth.RoleViewer}, nil); r.code != http.StatusCreated {
+		t.Fatalf("create user = %d %s", r.code, r.raw)
 	}
 	lr := h.do("POST", "/v1/auth/login", "", map[string]any{"email": "v@acme.com", "password": "viewerpass1"}, nil)
 	viewer := lr.body["token"].(string)

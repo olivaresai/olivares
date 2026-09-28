@@ -449,16 +449,13 @@ func TestAuthenticatorLoginAndAuthorize(t *testing.T) {
 	admin := mustSuperadmin(t, ctx, a)
 	tenant := provisionTenant(t, st, "acme")
 
-	// Create an editor user and grant it editor on the tenant.
-	u, err := a.CreateUser(ctx, admin, auth.NewUser{Email: "Dev@Acme.com", DisplayName: "Dev", Password: "dev-password-1"})
+	// Create an editor user with editor on the tenant.
+	u, err := a.CreateUser(ctx, admin, auth.NewUser{Email: "Dev@Acme.com", DisplayName: "Dev", Password: "dev-password-1", Tenant: tenant, Role: auth.RoleEditor})
 	if err != nil {
 		t.Fatalf("create user: %v", err)
 	}
 	if u.Email != "dev@acme.com" {
 		t.Fatalf("email not normalized: %q", u.Email)
-	}
-	if _, err := a.GrantMembership(ctx, admin, u.ID, tenant, auth.RoleEditor, model.ID("")); err != nil {
-		t.Fatalf("grant: %v", err)
 	}
 
 	// Login with mixed-case email works (normalized).
@@ -658,16 +655,12 @@ func TestRoleCeiling(t *testing.T) {
 	super := mustSuperadmin(t, ctx, a)
 	tenant := provisionTenant(t, st, "acme")
 
-	// A tenant admin.
-	adminUser, err := a.CreateUser(ctx, super, auth.NewUser{Email: "adm@a.com", Password: "adminpass1"})
-	if err != nil {
+	// A tenant admin, and a viewer member of the same tenant whose role it changes.
+	if _, err := a.CreateUser(ctx, super, auth.NewUser{Email: "adm@a.com", Password: "adminpass1", Tenant: tenant, Role: auth.RoleAdmin}); err != nil {
 		t.Fatal(err)
 	}
-	target, err := a.CreateUser(ctx, super, auth.NewUser{Email: "tgt@a.com", Password: "targetpass1"})
+	target, err := a.CreateUser(ctx, super, auth.NewUser{Email: "tgt@a.com", Password: "targetpass1", Tenant: tenant, Role: auth.RoleViewer})
 	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := a.GrantMembership(ctx, super, adminUser.ID, tenant, auth.RoleAdmin, model.ID("")); err != nil {
 		t.Fatal(err)
 	}
 	tok, _, _ := a.Login(ctx, "adm@a.com", "adminpass1", "1.1.1.1")

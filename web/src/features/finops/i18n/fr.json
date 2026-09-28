@@ -75,6 +75,19 @@
       "throttle": "Limiter le débit",
       "block": "Bloquer"
     },
+    "admission": {
+      "holds": "Lignes actives du registre : {{n}}",
+      "drift": "Le registre a dérivé de ce que ses appelants ont soldé",
+      "outstanding": {
+        "corrupt": "Lignes d’admission qui échouent à leur contrôle d’intégrité : {{n}}",
+        "unresolved": "Écritures de récupération encore indécises : {{n}}",
+        "undecodable": "Lignes dont la liste des retenues dues ne se décode pas : {{n}}",
+        "owed_remaining": "Retenues encore dues : {{n}}",
+        "frontier_blocked": "Retenues bloquées par le cycle de vie des tentatives : {{n}}",
+        "legacy_pending": "Réclamations laissées par une version antérieure : {{n}}",
+        "legacy_owes_release": "Libérations dues par une version antérieure : {{n}}"
+      }
+    },
     "dialog": {
       "title": "Nouveau budget",
       "name": "Nom",

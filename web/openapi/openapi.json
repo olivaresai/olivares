@@ -779,9 +779,21 @@
             "minLength": 12,
             "type": "string"
           },
+          "role": {
+            "description": "The role granted in tenant",
+            "type": "string"
+          },
           "superadmin": {
             "default": false,
             "type": "boolean"
+          },
+          "tenant": {
+            "description": "Optional tenant granted role in the create transaction",
+            "type": "string"
+          },
+          "workspace_id": {
+            "description": "Optional workspace the membership is confined to",
+            "type": "string"
           }
         },
         "required": [
@@ -807,6 +819,66 @@
         "required": [
           "name",
           "slug"
+        ],
+        "type": "object"
+      },
+      "CreatedUser": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "email": {
+            "format": "email",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "is_superadmin": {
+            "type": "boolean"
+          },
+          "membership": {
+            "description": "The first membership, granted in the create transaction when tenant was given",
+            "properties": {
+              "id": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "role": {
+                "type": "string"
+              },
+              "tenant": {
+                "type": "string"
+              },
+              "user_id": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "workspace_id": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "status": {
+            "enum": [
+              "active",
+              "inactive"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "status",
+          "is_superadmin",
+          "created_at"
         ],
         "type": "object"
       },
@@ -7310,6 +7382,27 @@
             },
             "description": "Created"
           },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "status": {
+                      "enum": [
+                        "consent_required"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "status"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Consent required: the account exists and is not a member of the tenant; nothing was written"
+          },
           "400": {
             "content": {
               "application/json": {
@@ -8853,7 +8946,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/User"
+                  "$ref": "#/components/schemas/CreatedUser"
                 }
               }
             },

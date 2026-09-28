@@ -652,6 +652,7 @@ build_release_state() { # build_release_state [sign-key-name] [manifest-version]
 	printf 'rpm\n' >"$ASSETS/olivares-${VERSION}-1.aarch64.rpm"
 	printf 'apk\n' >"$ASSETS/olivares_${VERSION}_x86_64.apk"
 	printf 'apk\n' >"$ASSETS/olivares_${VERSION}_aarch64.apk"
+	printf 'pkg\n' >"$ASSETS/olivares_${VERSION}_linux_amd64.pkg.tar.zst"
 
 	for a in "${BASE_ARCHIVES[@]}" "${FIPS_ARCHIVES[@]}"; do
 		printf '{"spdx":"%s"}\n' "$a" >"$ASSETS/${a}.spdx.sbom.json"
@@ -670,6 +671,7 @@ build_release_state() { # build_release_state [sign-key-name] [manifest-version]
 				olivares_${VERSION}_linux_amd64.deb olivares_${VERSION}_linux_arm64.deb \
 				olivares-${VERSION}-1.x86_64.rpm olivares-${VERSION}-1.aarch64.rpm \
 				olivares_${VERSION}_x86_64.apk olivares_${VERSION}_aarch64.apk \
+				olivares_${VERSION}_linux_amd64.pkg.tar.zst \
 				release-commit.txt release-build-context.json "olivares-install-${VERSION}.sh" \
 				>"$stage/checksums.txt"
 	) || return 1
@@ -1064,6 +1066,17 @@ rebuild_assets_json
 run_finalizer
 [ "$rc" -eq 1 ] && [ "$(patch_count)" -eq 0 ] && says 'no rpm package for arm64'
 check "a missing native PACKAGE refuses by coverage" "format x architecture" $?
+
+# The Arch Linux package is built for amd64 only. An arm64 Arch member in the signed set is
+# an artifact no repository serves; it is refused by its name, not admitted by coverage.
+build_release_state || blind "fixture"
+printf 'pkg\n' >"$ASSETS/olivares_${VERSION}_linux_arm64.pkg.tar.zst"
+printf '%s  %s\n' "$(sha256sum "$ASSETS/olivares_${VERSION}_linux_arm64.pkg.tar.zst" | cut -d' ' -f1)" \
+	"olivares_${VERSION}_linux_arm64.pkg.tar.zst" >>"$ASSETS/checksums.txt"
+rebuild_assets_json
+run_finalizer
+[ "$rc" -eq 1 ] && [ "$(patch_count)" -eq 0 ] && says "olivares_${VERSION}_linux_arm64.pkg.tar.zst is for arm64"
+check "an Arch package for arm64 refuses by name" "archlinux is amd64 only" $?
 
 build_release_state || blind "fixture"
 rm -f "$ASSETS/olivares_${VERSION}_linux_arm64.tar.gz.vex.sigstore.json"

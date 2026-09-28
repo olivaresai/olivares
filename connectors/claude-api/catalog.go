@@ -46,6 +46,9 @@ type family struct {
 	pricing       modelprovider.ModelPricing
 	contextWindow int64
 	maxOutput     int64
+	// datedSnapshotOnly accepts the exact prefix or a YYYYMMDD / YYYY-MM-DD
+	// snapshot suffix. Any other longer ID stays unknown.
+	datedSnapshotOnly bool
 }
 
 // claudeFamilies are matched longest-prefix-first by pricingFor. Prices are USD
@@ -75,18 +78,50 @@ var claudeFamilies = []family{
 		},
 		contextWindow: 200000, maxOutput: 64000,
 	},
-	// Claude Sonnet 5: VERIFIED 2026-07-03 against models/overview + pricing. The
-	// introductory $2/$10/MTok price through 2026-08-31 is promotional, so the durable
-	// list price declared here stays $3/$15; operators can override during the promo
-	// window. Remove this note after 2026-08-31 once the promo window is historical.
+	// Claude Sonnet 5. The pricing page states that the $2/$10 rate, once called
+	// introductory, is the standard price. Observed 2026-09-27 at
+	// platform.claude.com/docs/en/about-claude/pricing.
 	{
 		prefix: "claude-sonnet-5",
 		pricing: modelprovider.ModelPricing{
-			InputPerMTokUSD: 3, OutputPerMTokUSD: 15,
-			CacheWritePerMTokUSD: 3.75, CacheWrite1hPerMTokUSD: 6, CacheReadPerMTokUSD: 0.30,
-			Currency: "USD", AsOf: "2026-07-03", Source: modelprovider.PricingList,
+			InputPerMTokUSD: 2, OutputPerMTokUSD: 10,
+			CacheWritePerMTokUSD: 2.50, CacheWrite1hPerMTokUSD: 4, CacheReadPerMTokUSD: 0.20,
+			Currency: "USD", AsOf: "2026-09-27", Source: modelprovider.PricingList,
 		},
 		contextWindow: 1000000, maxOutput: 128000,
+	},
+	// Claude Fable 5.1. Same base 10/50 as Fable 5, but cache hits are $0.25,
+	// not $1. The longer prefix wins over "claude-fable". Observed 2026-09-27.
+	{
+		prefix: "claude-fable-5-1",
+		pricing: modelprovider.ModelPricing{
+			InputPerMTokUSD: 10, OutputPerMTokUSD: 50,
+			CacheWritePerMTokUSD: 12.50, CacheWrite1hPerMTokUSD: 20, CacheReadPerMTokUSD: 0.25,
+			Currency: "USD", AsOf: "2026-09-27", Source: modelprovider.PricingList,
+		},
+		contextWindow: 1000000, maxOutput: 128000, datedSnapshotOnly: true,
+	},
+	// Claude Opus 5.5. $4/$20, not the generic Opus $5/$25. Cache hit is 5% of
+	// input ($0.20). Observed 2026-09-27 on the models overview and pricing page.
+	{
+		prefix: "claude-opus-5-5",
+		pricing: modelprovider.ModelPricing{
+			InputPerMTokUSD: 4, OutputPerMTokUSD: 20,
+			CacheWritePerMTokUSD: 5, CacheWrite1hPerMTokUSD: 8, CacheReadPerMTokUSD: 0.20,
+			Currency: "USD", AsOf: "2026-09-27", Source: modelprovider.PricingList,
+		},
+		contextWindow: 1000000, maxOutput: 128000, datedSnapshotOnly: true,
+	},
+	// Dated Haiku 4.5 API ID. The alias claude-haiku-4-5 stays on the claude-haiku
+	// row. Same published 1/5 rates, stamped on the day this ID was re-read.
+	{
+		prefix: "claude-haiku-4-5-20251001",
+		pricing: modelprovider.ModelPricing{
+			InputPerMTokUSD: 1, OutputPerMTokUSD: 5,
+			CacheWritePerMTokUSD: 1.25, CacheWrite1hPerMTokUSD: 2, CacheReadPerMTokUSD: 0.10,
+			Currency: "USD", AsOf: "2026-09-27", Source: modelprovider.PricingList,
+		},
+		contextWindow: 200000, maxOutput: 64000, datedSnapshotOnly: true,
 	},
 	{
 		prefix: "claude-haiku",
@@ -175,8 +210,21 @@ var claudeFamilies = []family{
 // id, matched by the longest family prefix. ok is false when no family matches
 // (the connector then leaves Model.Pricing nil rather than guess a price).
 func pricingFor(modelID string) (modelprovider.ModelPricing, int64, int64, bool) {
+	for _, f := range claudeFamilies {
+		if modelID == f.prefix {
+			return f.pricing, f.contextWindow, f.maxOutput, true
+		}
+	}
+	if f, ok, blocked := datedSnapshotFamily(claudeFamilies, modelID); blocked {
+		return modelprovider.ModelPricing{}, 0, 0, false
+	} else if ok {
+		return f.pricing, f.contextWindow, f.maxOutput, true
+	}
 	best := -1
 	for i, f := range claudeFamilies {
+		if f.datedSnapshotOnly {
+			continue
+		}
 		if hasPrefix(modelID, f.prefix) {
 			if best < 0 || len(f.prefix) > len(claudeFamilies[best].prefix) {
 				best = i
@@ -188,6 +236,31 @@ func pricingFor(modelID string) (modelprovider.ModelPricing, int64, int64, bool)
 	}
 	f := claudeFamilies[best]
 	return f.pricing, f.contextWindow, f.maxOutput, true
+}
+
+// datedSnapshotFamily matches a prefix that accepts only a dated snapshot
+// suffix. blocked is set when that suffix is not a snapshot date, so a
+// shorter family must not answer.
+func datedSnapshotFamily(rows []family, modelID string) (family, bool, bool) {
+	best := -1
+	for i, f := range rows {
+		if !f.datedSnapshotOnly {
+			continue
+		}
+		if len(modelID) > len(f.prefix) && hasPrefix(modelID, f.prefix+"-") {
+			if best < 0 || len(f.prefix) > len(rows[best].prefix) {
+				best = i
+			}
+		}
+	}
+	if best < 0 {
+		return family{}, false, false
+	}
+	f := rows[best]
+	if modelprovider.SnapshotDateSuffix(modelID, f.prefix) {
+		return f, true, false
+	}
+	return family{}, false, true
 }
 
 // hasPrefix is strings.HasPrefix without importing strings into this small file.
@@ -208,6 +281,9 @@ var declaredModelIDs = []struct {
 	{"claude-sonnet-5", "Claude Sonnet 5"},
 	{"claude-sonnet-4-6", "Claude Sonnet 4.6"},
 	{"claude-haiku-4-5", "Claude Haiku 4.5"},
+	{"claude-fable-5-1", "Claude Fable 5.1"},
+	{"claude-opus-5-5", "Claude Opus 5.5"},
+	{"claude-haiku-4-5-20251001", "Claude Haiku 4.5"},
 	// claude-mythos-5 is deliberately NOT declared: it is limited-availability via
 	// Project Glasswing (restricted access tier, NOT generally available), so the
 	// live /v1/models lists it only for orgs with Glasswing access — declaring it in

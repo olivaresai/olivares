@@ -69,20 +69,26 @@ const (
 	// seq under a UNIQUE index — concurrent reservers collide on the seq and one
 	// retries, so the reserve→check→insert is serialized WITHOUT a process lock.
 	budgetReservationKind model.Kind = "finops.budget_reservation"
+	// admissionIdempotencyKind is the admission row: one per (tenant, idempotency
+	// key). From the claim until the money of a request is settled, the row names the
+	// hold identity every ledger row of that money carries. It is not a second money
+	// ledger: the reservation rows remain the authority for headroom.
+	admissionIdempotencyKind model.Kind = "finops.admission_idempotency"
 )
 
 const (
-	costSampleTable          = "finops_cost_sample"
-	budgetAlertTable         = "finops_budget_alert"
-	spendLimitAuditTable     = "finops_spend_limit_audit"
-	seatCountTable           = "finops_seat_count"
-	outcomeTable             = "finops_outcome"
-	costCenterTable          = "finops_cost_center"
-	costCenterMappingTable   = "finops_cost_center_mapping"
-	modelRateTable           = "finops_model_rate"
-	chargebackStatementTable = "finops_chargeback_statement"
-	statementLineTable       = "finops_statement_line"
-	budgetReservationTable   = "finops_budget_reservation"
+	costSampleTable           = "finops_cost_sample"
+	budgetAlertTable          = "finops_budget_alert"
+	spendLimitAuditTable      = "finops_spend_limit_audit"
+	seatCountTable            = "finops_seat_count"
+	outcomeTable              = "finops_outcome"
+	costCenterTable           = "finops_cost_center"
+	costCenterMappingTable    = "finops_cost_center_mapping"
+	modelRateTable            = "finops_model_rate"
+	chargebackStatementTable  = "finops_chargeback_statement"
+	statementLineTable        = "finops_statement_line"
+	budgetReservationTable    = "finops_budget_reservation"
+	admissionIdempotencyTable = "finops_admission_idempotency"
 )
 
 // Provenance values stored in colProvenance (mirroring sdk/model.CostProvenance).
@@ -299,12 +305,136 @@ const (
 	colResvSettledAt   = "settled_at" // when it left the active state
 )
 
+// finops.admission_idempotency columns. One row per (tenant, key). The first eight
+// are the row as an earlier build wrote it and keep their meaning; owed_handles is
+// the one column this build adds.
+const (
+	colAdmKey         = "idempotency_key"
+	colAdmPayloadHash = "payload_hash"
+	colAdmHandle      = "handle"
+	colAdmSpendHandle = "spend_handle"
+	colAdmScope       = "scope"
+	colAdmEstimate    = "estimate_micro_usd"
+	colAdmState       = "state"
+	// colAdmStateAt is when the row entered the state it is in, by the MODULE's
+	// clock: it bounds a replay and a claim, and the store's updated_at is the
+	// store's own observation, never the injected application clock. Nullable: a row
+	// written before the column existed has none, and is undated.
+	colAdmStateAt = "state_at"
+	// colAdmOwedHandles lists the hold identities of superseded generations whose
+	// money this row still owes back: NULL, or a JSON array of one to sixteen
+	// distinct identities. Nullable, so the reconciler adds it to a populated table
+	// in place and every existing row reads as owing nothing.
+	colAdmOwedHandles = "owed_handles"
+)
+
 // reservation lifecycle states.
 const (
 	resvStateActive    = "active"
 	resvStateCommitted = "committed"
 	resvStateReleased  = "released"
 	resvStateExpired   = "expired"
+)
+
+// pdeclLeaves classifies every listed leaf path of a Nested type with decl.
+func pdeclLeaves(decl *model.ColumnDecl, paths ...string) []model.LeafDecl {
+	out := make([]model.LeafDecl, 0, len(paths))
+	for _, p := range paths {
+		out = append(out, model.Leaf(p, decl))
+	}
+	return out
+}
+
+// What the columns of this module say about principals. A None reason cites the
+// reader or validator lines that show its value names no account.
+var (
+	// pdeclSpendActor is who incurred a cost as its source reports it: an actor
+	// ref, an account id or a developer email (sdk/model/observation.go:183-186).
+	// It is spend history: the spend-limit and seat readers only sum and count it
+	// (spendlimits.go:875, seats.go:253).
+	pdeclSpendActor = model.Scan(model.ClassEvidence)
+	// pdeclAPIKeyRef is a key or service-account reference, matched against the
+	// identity roster's external ids when a sample is ingested (ingest.go:538-549).
+	pdeclAPIKeyRef = model.Scan(model.ClassEvidence)
+	// pdeclIdentityRef is the external id of the roster identity a sample or an
+	// outcome resolved to (ingest.go:555-558, value.go:226-227, value.go:269).
+	pdeclIdentityRef = model.Ref(model.EncodeExternalID, model.ClassEvidence)
+	// pdeclBudgetKeyEvidence is a recorded budget key or scope value. Under the
+	// actor or identity dimension it names who a budget scoped
+	// (budgets.go:212-213, budgets.go:226-227); the row is history of a crossing.
+	pdeclBudgetKeyEvidence = model.Scan(model.ClassEvidence)
+	// pdeclBudgetKeyRestrict is a live reservation's scope key: a budget key, or
+	// the actor of a per-seat spend limit. Active rows only reduce the headroom
+	// left under that key (reservation.go:1152-1167).
+	pdeclBudgetKeyRestrict = model.Scan(model.ClassRestrict)
+	// pdeclCostCenterOwner is the owner an operator typed for a cost center; it
+	// is rendered only (costcenter.go:48).
+	pdeclCostCenterOwner = model.Scan(model.ClassEvidence)
+	// pdeclMappingKey is the dimension value a mapping rule matches. Under the
+	// identity dimension it is a roster identity's external id
+	// (costcenter.go:432-433, costcenter.go:459-462).
+	pdeclMappingKey = model.Scan(model.ClassEvidence)
+	// pdeclAdmissionKey is an admission's idempotency key. The engine's gates build
+	// it from a prefix and a fresh id or a run reference
+	// (cmd/olivares/budgetgate.go:87, cmd/olivares/sessiongov.go:307-318), but the
+	// reserve route stores the key its caller chose (admission_api.go:64), checked
+	// only for presence and length (admission.go:173-179). Readers only look a row
+	// up by it (admission_row.go:161-163).
+	pdeclAdmissionKey = model.Scan(model.ClassEvidence)
+
+	pdeclNoneNaturalKey        = model.None("a SHA-256 of the row's natural key, used only to deduplicate: ingest.go:687-696, value.go:209-216")
+	pdeclNoneCostLabel         = model.None("a provider, model, team, project, provenance, tier, window, region, gateway or cost-type label of a sample, grouped and filtered on only: ingest.go:645-676, analytics.go:30-62, analytics.go:73-75")
+	pdeclNoneAgentRef          = model.None("an agent's external id or name, never an account: value.go:239-245, value.go:259-262")
+	pdeclNoneSessionRef        = model.None("a session's external id, resolved only against sessions: value.go:229-231")
+	pdeclNoneProviderWorkspace = model.None("the provider's own billing workspace, neither a core workspace nor an account: core/model/descriptor.go:143-146, sdk/model/observation.go:179-181")
+	pdeclNoneIdentityLabel     = model.None("the kind and provider of the resolved roster identity, copied at ingest and rendered only: ingest.go:555-558")
+	pdeclNoneCostRecordID      = model.None("the id of the core cost-ledger entry a sample mirrors: ingest.go:249, ingest.go:648")
+	pdeclNoneCostCenterCode    = model.None("a cost-center accounting code, copied onto samples from an active cost center and filtered on: costcenter.go:495-498, statements.go:184")
+	pdeclNoneSeat              = model.None("the provider and UTC day of a seat-count snapshot: seats.go:110, seats.go:216-227")
+	pdeclNoneOutcomeLabel      = model.None("an outcome's subject kind, outcome id, verdict or source, rendered only: value.go:50-52, value.go:111, dto.go:312-324")
+	pdeclNoneBudgetID          = model.None("the id of the budget policy an alert belongs to: budgets.go:542, alert_record_evidence.go:428-429")
+	pdeclNoneAlertLabel        = model.None("a budget period, dimension or severity, compared with the digest-bound envelope and rendered: alert_record_evidence.go:1081-1084, dto.go:265-272")
+	pdeclNoneAlertHash         = model.None("a SHA-256 of the alert evidence envelope, recomputed and compared: alert_record_evidence.go:409, alert_record_evidence.go:434-435")
+	pdeclNoneAlertEnvelope     = model.None("a field of the digest-bound alert envelope, recomputed, checked and rendered only: alert_record_evidence.go:190-258, alert_record_evidence.go:407-451")
+	pdeclNoneSpendAudit        = model.None("the audit action or spend-limit wire id the mutation records: spendlimits.go:293, spendlimits.go:320, spendlimits.go:370")
+	pdeclNoneSpendLimitField   = model.None("a spend limit's wire id, type, timestamp, scope type, group id, amount, currency or period, built by spendLimitFromPolicy: spendlimits.go:220-238")
+	pdeclNoneCostCenterText    = model.None("operator display text or tags of a cost center, rendered only: costcenter.go:42-56")
+	pdeclNoneCostCenterStatus  = model.None("active or archived; attribution requires active: costcenter.go:84, costcenter.go:495")
+	pdeclNoneCostCenterID      = model.None("the id of the cost center a mapping rule or statement points at: costcenter.go:475, costcenter.go:488, statements.go:70")
+	pdeclNoneMappingDimension  = model.None("a closed mapping dimension: costcenter.go:116, costcenter.go:450")
+	pdeclNoneRate              = model.None("a provider, model or note of the admin price sheet: ratecatalog.go:45-56, ratecatalog.go:309-310")
+	pdeclNoneStatement         = model.None("a statement key, cost-center code or name, period or status, written by the generator and rendered: statements.go:67-85, statements.go:213-243")
+	pdeclNoneStatementLine     = model.None("the statement id or the model, provider or agent reference a line aggregates: statements.go:87-97, statements.go:266-270")
+	pdeclNoneReservation       = model.None("a policy id, policy kind, dimension, period, state or handle of a reservation, filtered on to sum held headroom: reservation.go:884-897, reservation.go:1154-1167")
+	pdeclNoneAttemptRef        = model.None("an attempt reference of 32 lowercase hex characters: attempt_types.go:319-337, attempt_reconcile.go:1026-1033")
+	pdeclNoneAdmissionHash     = model.None("an unkeyed SHA-256 of an admission request, compared only with a retry's: admission.go:186-211, admission_replay.go:77")
+	pdeclNoneAdmissionHold     = model.None("a hold identity, or a JSON list of them, each a canonical UUID the module minted and decoded strictly: admission_hold.go:46, admission_hold.go:53-62, admission_hold.go:79-106")
+	pdeclNoneAdmissionState    = model.None("a closed admission scope or row state, or the module clock's instant the row entered its state: admission.go:159-165, admission_row.go:18-30, admission_row.go:110-120")
+
+	// pdeclSpendLimitState is a spend limit's wire object as the audit trail
+	// recorded it. A user scope's user_id is "user:<id>" or "token:<id>"
+	// (spendlimits.go:152-155, spendlimits.go:223-225).
+	pdeclSpendLimitState = model.Nested(SpendLimit{}, model.ClassEvidence, append(
+		pdeclLeaves(pdeclNoneSpendLimitField, "type", "id", "created_at", "updated_at", "scope.type",
+			"scope.rbac_group_id", "amount", "currency", "period"),
+		model.Leaf("scope.user_id", model.Ref(model.EncodeUserRef, "")))...)
+	// pdeclAlertEvidence is the budget-alert evidence envelope. Its policy key and
+	// scope value are the budget's key, which names a principal under the actor
+	// or identity dimension (alert_record_evidence.go:198-199,
+	// alert_record_evidence.go:232-237).
+	pdeclAlertEvidence = model.Nested(alertEvidenceEnvelope{}, model.ClassEvidence, append(
+		pdeclLeaves(pdeclNoneAlertEnvelope, "alert_id", "tenant_id", "budget_id",
+			"policy.id", "policy.name", "policy.dimension", "policy.period", "policy.currency", "policy.action",
+			"policy.limit_micro_usd", "policy.reserved_micro_usd", "policy.config_fault",
+			"amount.class", "amount.value_micro_usd", "amount.currency", "amount.causes[]",
+			"decision.result", "decision.threshold", "decision.target_micro_usd", "decision.target_numerator",
+			"decision.target_denominator", "decision.causes[]",
+			"context.window_start", "context.window_end", "context.window_bounds", "context.provenance_filter",
+			"context.scope_column", "context.evaluated_at", "context.sample_occurred_at", "context.read_consistency",
+			"legacy.value_kind", "legacy.note"),
+		model.Leaf("policy.key", pdeclBudgetKeyEvidence),
+		model.Leaf("context.scope_value", pdeclBudgetKeyEvidence),
+		model.TypeLeaves(alertEvidenceComponent{}, pdeclLeaves(pdeclNoneAlertEnvelope, "state", "value_micro_usd", "causes[]")...))...)
 )
 
 // RegisterSchema declares the module's owned entities.
@@ -322,40 +452,40 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Kind:  costSampleKind,
 		Table: costSampleTable,
 		Fields: []model.FieldSpec{
-			{Name: colSampleKey, Kind: model.KindText},
-			{Name: colProviderRef, Kind: model.KindText, Indexed: true},
-			{Name: colModelRef, Kind: model.KindText, Indexed: true},
-			{Name: colAgentRef, Kind: model.KindText, Nullable: true, Indexed: true},
-			{Name: colSessionRef, Kind: model.KindText, Nullable: true},
-			{Name: colTeam, Kind: model.KindText, Nullable: true, Indexed: true},
-			{Name: colProject, Kind: model.KindText, Nullable: true, Indexed: true},
+			{Name: colSampleKey, Kind: model.KindText, Principal: pdeclNoneNaturalKey},
+			{Name: colProviderRef, Kind: model.KindText, Indexed: true, Principal: pdeclNoneCostLabel},
+			{Name: colModelRef, Kind: model.KindText, Indexed: true, Principal: pdeclNoneCostLabel},
+			{Name: colAgentRef, Kind: model.KindText, Nullable: true, Indexed: true, Principal: pdeclNoneAgentRef},
+			{Name: colSessionRef, Kind: model.KindText, Nullable: true, Principal: pdeclNoneSessionRef},
+			{Name: colTeam, Kind: model.KindText, Nullable: true, Indexed: true, Principal: pdeclNoneCostLabel},
+			{Name: colProject, Kind: model.KindText, Nullable: true, Indexed: true, Principal: pdeclNoneCostLabel},
 			{Name: colInputTokens, Kind: model.KindInt},
 			{Name: colOutputTokens, Kind: model.KindInt},
 			{Name: colCostMicroUSD, Kind: model.KindInt},
 			{Name: colOccurredAt, Kind: model.KindTimestamp, Indexed: true},
 			// Additive dimensions. All nullable/zero-default so existing rows and
 			// connectors that do not report a dimension stay valid.
-			{Name: colProvenance, Kind: model.KindText, Nullable: true, Indexed: true},
-			{Name: colWorkspaceRef, Kind: model.KindText, Nullable: true, Indexed: true},
-			{Name: colAPIKeyRef, Kind: model.KindText, Nullable: true, Indexed: true},
-			{Name: colActor, Kind: model.KindText, Nullable: true, Indexed: true},
-			{Name: colServiceTier, Kind: model.KindText, Nullable: true, Indexed: true},
-			{Name: colContextWindow, Kind: model.KindText, Nullable: true},
-			{Name: colInferenceGeo, Kind: model.KindText, Nullable: true, Indexed: true},
-			{Name: colGateway, Kind: model.KindText, Nullable: true, Indexed: true},
-			{Name: colCostType, Kind: model.KindText, Nullable: true},
+			{Name: colProvenance, Kind: model.KindText, Nullable: true, Indexed: true, Principal: pdeclNoneCostLabel},
+			{Name: colWorkspaceRef, Kind: model.KindText, Nullable: true, Indexed: true, Principal: pdeclNoneProviderWorkspace},
+			{Name: colAPIKeyRef, Kind: model.KindText, Nullable: true, Indexed: true, Principal: pdeclAPIKeyRef},
+			{Name: colActor, Kind: model.KindText, Nullable: true, Indexed: true, Principal: pdeclSpendActor},
+			{Name: colServiceTier, Kind: model.KindText, Nullable: true, Indexed: true, Principal: pdeclNoneCostLabel},
+			{Name: colContextWindow, Kind: model.KindText, Nullable: true, Principal: pdeclNoneCostLabel},
+			{Name: colInferenceGeo, Kind: model.KindText, Nullable: true, Indexed: true, Principal: pdeclNoneCostLabel},
+			{Name: colGateway, Kind: model.KindText, Nullable: true, Indexed: true, Principal: pdeclNoneCostLabel},
+			{Name: colCostType, Kind: model.KindText, Nullable: true, Principal: pdeclNoneCostLabel},
 			// Firm identity — resolved at ingest from agent.IdentityID, else
 			// api_key/actor matched to a roster Identity.ExternalID. Indexed: a
 			// per-identity budget aggregates on identity_ref.
-			{Name: colIdentityRef, Kind: model.KindText, Nullable: true, Indexed: true},
-			{Name: colIdentityKind, Kind: model.KindText, Nullable: true},
-			{Name: colIdentitySource, Kind: model.KindText, Nullable: true},
+			{Name: colIdentityRef, Kind: model.KindText, Nullable: true, Indexed: true, Principal: pdeclIdentityRef},
+			{Name: colIdentityKind, Kind: model.KindText, Nullable: true, Principal: pdeclNoneIdentityLabel},
+			{Name: colIdentitySource, Kind: model.KindText, Nullable: true, Principal: pdeclNoneIdentityLabel},
 			{Name: colCacheReadTokens, Kind: model.KindInt},
 			{Name: colCacheCreation1hTokens, Kind: model.KindInt},
 			{Name: colCacheCreation5mTokens, Kind: model.KindInt},
-			{Name: colCostRecordID, Kind: model.KindText, Nullable: true},
+			{Name: colCostRecordID, Kind: model.KindText, Nullable: true, Principal: pdeclNoneCostRecordID},
 			// cost center resolved at ingestion from mapping rules.
-			{Name: colCostCenterRef, Kind: model.KindText, Nullable: true, Indexed: true},
+			{Name: colCostCenterRef, Kind: model.KindText, Nullable: true, Indexed: true, Principal: pdeclNoneCostCenterCode},
 		},
 		Indexes: []model.IndexSpec{{
 			// One read-model row per NATURAL key (provider/model/dims/instant, NOT the
@@ -374,8 +504,8 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Kind:  seatCountKind,
 		Table: seatCountTable,
 		Fields: []model.FieldSpec{
-			{Name: colSeatProvider, Kind: model.KindText, Indexed: true},
-			{Name: colSeatDay, Kind: model.KindText, Indexed: true},
+			{Name: colSeatProvider, Kind: model.KindText, Indexed: true, Principal: pdeclNoneSeat},
+			{Name: colSeatDay, Kind: model.KindText, Indexed: true, Principal: pdeclNoneSeat},
 			{Name: colAssignedSeats, Kind: model.KindInt},
 			{Name: colPremiumSeats, Kind: model.KindInt},
 			{Name: colPendingInvites, Kind: model.KindInt},
@@ -396,19 +526,21 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Kind:  outcomeKind,
 		Table: outcomeTable,
 		Fields: []model.FieldSpec{
-			{Name: colOutcomeKey, Kind: model.KindText},
-			{Name: colOutcomeSubjectKind, Kind: model.KindText, Indexed: true},
-			{Name: colOutcomeSubjectRef, Kind: model.KindText, Indexed: true},
-			{Name: colOutcomeRef, Kind: model.KindText, Nullable: true},
-			{Name: colOutcomeVerdict, Kind: model.KindText, Indexed: true},
+			{Name: colOutcomeKey, Kind: model.KindText, Principal: pdeclNoneNaturalKey},
+			{Name: colOutcomeSubjectKind, Kind: model.KindText, Indexed: true, Principal: pdeclNoneOutcomeLabel},
+			// The graded subject as posted: for the identity kind it is a roster
+			// identity's reference (value.go:226-227). History of a result only.
+			{Name: colOutcomeSubjectRef, Kind: model.KindText, Indexed: true, Principal: model.Scan(model.ClassEvidence)},
+			{Name: colOutcomeRef, Kind: model.KindText, Nullable: true, Principal: pdeclNoneOutcomeLabel},
+			{Name: colOutcomeVerdict, Kind: model.KindText, Indexed: true, Principal: pdeclNoneOutcomeLabel},
 			{Name: colOutcomeValue, Kind: model.KindInt},
 			{Name: colOccurredAt, Kind: model.KindTimestamp, Indexed: true},
-			{Name: colOutcomeSource, Kind: model.KindText, Nullable: true, Indexed: true},
+			{Name: colOutcomeSource, Kind: model.KindText, Nullable: true, Indexed: true, Principal: pdeclNoneOutcomeLabel},
 			// Resolved join keys (stamped at ingest) — all nullable: an outcome may
 			// name a subject that does not resolve to an agent/identity (honest).
-			{Name: colAgentRef, Kind: model.KindText, Nullable: true, Indexed: true},
-			{Name: colIdentityRef, Kind: model.KindText, Nullable: true, Indexed: true},
-			{Name: colSessionRef, Kind: model.KindText, Nullable: true, Indexed: true},
+			{Name: colAgentRef, Kind: model.KindText, Nullable: true, Indexed: true, Principal: pdeclNoneAgentRef},
+			{Name: colIdentityRef, Kind: model.KindText, Nullable: true, Indexed: true, Principal: pdeclIdentityRef},
+			{Name: colSessionRef, Kind: model.KindText, Nullable: true, Indexed: true, Principal: pdeclNoneSessionRef},
 		},
 		Indexes: []model.IndexSpec{{
 			// One row per outcome natural key (source/subject/outcome_ref/instant): a
@@ -426,18 +558,18 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Kind:  budgetAlertKind,
 		Table: budgetAlertTable,
 		Fields: []model.FieldSpec{
-			{Name: colBudgetID, Kind: model.KindUUID, Indexed: true},
-			{Name: colPeriod, Kind: model.KindText},
+			{Name: colBudgetID, Kind: model.KindUUID, Indexed: true, Principal: pdeclNoneBudgetID},
+			{Name: colPeriod, Kind: model.KindText, Principal: pdeclNoneAlertLabel},
 			{Name: colPeriodStart, Kind: model.KindTimestamp},
 			{Name: colThresholdPct, Kind: model.KindInt},
-			{Name: colDimension, Kind: model.KindText},
-			{Name: colDimKey, Kind: model.KindText, Nullable: true},
+			{Name: colDimension, Kind: model.KindText, Principal: pdeclNoneAlertLabel},
+			{Name: colDimKey, Kind: model.KindText, Nullable: true, Principal: pdeclBudgetKeyEvidence},
 			{Name: colAlertSpend, Kind: model.KindInt},
 			{Name: colAlertLimit, Kind: model.KindInt},
-			{Name: colSeverity, Kind: model.KindText},
+			{Name: colSeverity, Kind: model.KindText, Principal: pdeclNoneAlertLabel},
 			{Name: colTriggeredAt, Kind: model.KindTimestamp, Indexed: true},
-			{Name: colAlertEvidence, Kind: model.KindJSON, Nullable: true},
-			{Name: colAlertEvidenceHash, Kind: model.KindText, Nullable: true},
+			{Name: colAlertEvidence, Kind: model.KindJSON, Nullable: true, Principal: pdeclAlertEvidence},
+			{Name: colAlertEvidenceHash, Kind: model.KindText, Nullable: true, Principal: pdeclNoneAlertHash},
 		},
 		Indexes: []model.IndexSpec{{
 			Name:    "finops_budget_alert_uniq",
@@ -452,11 +584,13 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Kind:  spendLimitAuditKind,
 		Table: spendLimitAuditTable,
 		Fields: []model.FieldSpec{
-			{Name: colSpendAuditActor, Kind: model.KindText},
-			{Name: colSpendAuditAction, Kind: model.KindText, Indexed: true},
-			{Name: colSpendAuditLimitID, Kind: model.KindText, Indexed: true},
-			{Name: colSpendAuditBefore, Kind: model.KindJSON, Nullable: true},
-			{Name: colSpendAuditAfter, Kind: model.KindJSON, Nullable: true},
+			// The administrator who changed a limit, as the caller's actor ref
+			// "user:<id>" or "token:<id>" (spendlimits.go:320, spendlimits.go:370).
+			{Name: colSpendAuditActor, Kind: model.KindText, Principal: model.Ref(model.EncodeUserRef, model.ClassEvidence)},
+			{Name: colSpendAuditAction, Kind: model.KindText, Indexed: true, Principal: pdeclNoneSpendAudit},
+			{Name: colSpendAuditLimitID, Kind: model.KindText, Indexed: true, Principal: pdeclNoneSpendAudit},
+			{Name: colSpendAuditBefore, Kind: model.KindJSON, Nullable: true, Principal: pdeclSpendLimitState},
+			{Name: colSpendAuditAfter, Kind: model.KindJSON, Nullable: true, Principal: pdeclSpendLimitState},
 		},
 	}); err != nil {
 		return err
@@ -467,12 +601,12 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Kind:  costCenterKind,
 		Table: costCenterTable,
 		Fields: []model.FieldSpec{
-			{Name: colCCCode, Kind: model.KindText},
-			{Name: colCCName, Kind: model.KindText},
-			{Name: colCCDescription, Kind: model.KindText, Nullable: true},
-			{Name: colCCOwner, Kind: model.KindText, Nullable: true},
-			{Name: colCCStatus, Kind: model.KindText, Indexed: true},
-			{Name: colCCMetadata, Kind: model.KindText, Nullable: true},
+			{Name: colCCCode, Kind: model.KindText, Principal: pdeclNoneCostCenterCode},
+			{Name: colCCName, Kind: model.KindText, Principal: pdeclNoneCostCenterText},
+			{Name: colCCDescription, Kind: model.KindText, Nullable: true, Principal: pdeclNoneCostCenterText},
+			{Name: colCCOwner, Kind: model.KindText, Nullable: true, Principal: pdeclCostCenterOwner},
+			{Name: colCCStatus, Kind: model.KindText, Indexed: true, Principal: pdeclNoneCostCenterStatus},
+			{Name: colCCMetadata, Kind: model.KindText, Nullable: true, Principal: pdeclNoneCostCenterText},
 		},
 		Indexes: []model.IndexSpec{{
 			Name:    "finops_cost_center_code_uniq",
@@ -488,9 +622,9 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Kind:  costCenterMappingKind,
 		Table: costCenterMappingTable,
 		Fields: []model.FieldSpec{
-			{Name: colCCMappingCostCenterID, Kind: model.KindUUID, Indexed: true},
-			{Name: colCCMappingDimension, Kind: model.KindText, Indexed: true},
-			{Name: colCCMappingKey, Kind: model.KindText},
+			{Name: colCCMappingCostCenterID, Kind: model.KindUUID, Indexed: true, Principal: pdeclNoneCostCenterID},
+			{Name: colCCMappingDimension, Kind: model.KindText, Indexed: true, Principal: pdeclNoneMappingDimension},
+			{Name: colCCMappingKey, Kind: model.KindText, Principal: pdeclMappingKey},
 			{Name: colCCMappingPriority, Kind: model.KindInt},
 		},
 		Indexes: []model.IndexSpec{{
@@ -507,15 +641,15 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Kind:  modelRateKind,
 		Table: modelRateTable,
 		Fields: []model.FieldSpec{
-			{Name: colRateProvider, Kind: model.KindText, Indexed: true},
-			{Name: colRateModel, Kind: model.KindText, Indexed: true},
+			{Name: colRateProvider, Kind: model.KindText, Indexed: true, Principal: pdeclNoneRate},
+			{Name: colRateModel, Kind: model.KindText, Indexed: true, Principal: pdeclNoneRate},
 			{Name: colRateInputMicroUSD, Kind: model.KindInt},
 			{Name: colRateOutputMicroUSD, Kind: model.KindInt},
 			{Name: colRateCacheReadMicroUSD, Kind: model.KindInt},
 			{Name: colRateCacheCreationMicroUSD, Kind: model.KindInt},
 			{Name: colRateEffectiveFrom, Kind: model.KindTimestamp, Indexed: true},
 			{Name: colRateEffectiveUntil, Kind: model.KindTimestamp, Nullable: true},
-			{Name: colRateNotes, Kind: model.KindText, Nullable: true},
+			{Name: colRateNotes, Kind: model.KindText, Nullable: true, Principal: pdeclNoneRate},
 		},
 		Indexes: []model.IndexSpec{{
 			Name:    "finops_model_rate_uniq",
@@ -531,18 +665,18 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Kind:  chargebackStatementKind,
 		Table: chargebackStatementTable,
 		Fields: []model.FieldSpec{
-			{Name: colStmtKey, Kind: model.KindText},
-			{Name: colStmtCostCenterID, Kind: model.KindUUID, Indexed: true},
-			{Name: colStmtCostCenterCode, Kind: model.KindText, Indexed: true},
-			{Name: colStmtCostCenterName, Kind: model.KindText},
-			{Name: colStmtPeriod, Kind: model.KindText},
+			{Name: colStmtKey, Kind: model.KindText, Principal: pdeclNoneStatement},
+			{Name: colStmtCostCenterID, Kind: model.KindUUID, Indexed: true, Principal: pdeclNoneCostCenterID},
+			{Name: colStmtCostCenterCode, Kind: model.KindText, Indexed: true, Principal: pdeclNoneStatement},
+			{Name: colStmtCostCenterName, Kind: model.KindText, Principal: pdeclNoneStatement},
+			{Name: colStmtPeriod, Kind: model.KindText, Principal: pdeclNoneStatement},
 			{Name: colStmtPeriodStart, Kind: model.KindTimestamp, Indexed: true},
 			{Name: colStmtPeriodEnd, Kind: model.KindTimestamp},
 			{Name: colStmtTotalMicroUSD, Kind: model.KindInt},
 			{Name: colStmtLineCount, Kind: model.KindInt},
 			{Name: colStmtPriorTotal, Kind: model.KindInt},
 			{Name: colStmtDeltaPct, Kind: model.KindInt},
-			{Name: colStmtStatus, Kind: model.KindText, Indexed: true},
+			{Name: colStmtStatus, Kind: model.KindText, Indexed: true, Principal: pdeclNoneStatement},
 			{Name: colStmtGeneratedAt, Kind: model.KindTimestamp},
 		},
 		Indexes: []model.IndexSpec{{
@@ -559,10 +693,10 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Kind:  statementLineKind,
 		Table: statementLineTable,
 		Fields: []model.FieldSpec{
-			{Name: colLineStatementID, Kind: model.KindUUID, Indexed: true},
-			{Name: colLineModelRef, Kind: model.KindText},
-			{Name: colLineProviderRef, Kind: model.KindText},
-			{Name: colLineAgentRef, Kind: model.KindText, Nullable: true},
+			{Name: colLineStatementID, Kind: model.KindUUID, Indexed: true, Principal: pdeclNoneStatementLine},
+			{Name: colLineModelRef, Kind: model.KindText, Principal: pdeclNoneStatementLine},
+			{Name: colLineProviderRef, Kind: model.KindText, Principal: pdeclNoneStatementLine},
+			{Name: colLineAgentRef, Kind: model.KindText, Nullable: true, Principal: pdeclNoneStatementLine},
 			{Name: colLineInputTokens, Kind: model.KindInt},
 			{Name: colLineOutputTokens, Kind: model.KindInt},
 			{Name: colLineCostMicroUSD, Kind: model.KindInt},
@@ -580,6 +714,35 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		return err
 	}
 
+	// The admission row. A database without the table gets it whole
+	// (applyModuleTables); one that has the earlier eight columns gets owed_handles
+	// added in place (reconcileColumns). Additive and nullable only: no column is
+	// altered or dropped, and no index is added to an existing table.
+	if err := reg.Register(model.EntityDescriptor{
+		Kind:  admissionIdempotencyKind,
+		Table: admissionIdempotencyTable,
+		Fields: []model.FieldSpec{
+			{Name: colAdmKey, Kind: model.KindText, Indexed: true, Principal: pdeclAdmissionKey},
+			{Name: colAdmPayloadHash, Kind: model.KindText, Principal: pdeclNoneAdmissionHash},
+			{Name: colAdmHandle, Kind: model.KindText, Indexed: true, Principal: pdeclNoneAdmissionHold},
+			{Name: colAdmSpendHandle, Kind: model.KindText, Nullable: true, Principal: pdeclNoneAdmissionHold},
+			{Name: colAdmScope, Kind: model.KindText, Principal: pdeclNoneAdmissionState},
+			{Name: colAdmEstimate, Kind: model.KindInt},
+			{Name: colAdmState, Kind: model.KindText, Indexed: true, Principal: pdeclNoneAdmissionState},
+			{Name: colAdmStateAt, Kind: model.KindText, Nullable: true, Principal: pdeclNoneAdmissionState},
+			// Text: the codec in admission_hold.go, not the store, decides what a
+			// valid list is, and an undecodable one is kept byte for byte.
+			{Name: colAdmOwedHandles, Kind: model.KindText, Nullable: true, Principal: pdeclNoneAdmissionHold},
+		},
+		Indexes: []model.IndexSpec{{
+			Name:    "finops_admission_idempotency_key_uniq",
+			Columns: []string{model.ColTenantID, colAdmKey},
+			Unique:  true,
+		}},
+	}); err != nil {
+		return err
+	}
+
 	// the dynamic reserve ledger (TOCTOU fix). A fresh table, added additively
 	// — applyModuleTables creates it on both a fresh DB and an in-place upgrade (it is
 	// a missing module table), so this is the "new migration" in descriptor form; no
@@ -588,17 +751,17 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Kind:  budgetReservationKind,
 		Table: budgetReservationTable,
 		Fields: []model.FieldSpec{
-			{Name: colResvPolicyRef, Kind: model.KindUUID, Indexed: true},
-			{Name: colResvPolicyKind, Kind: model.KindText},
-			{Name: colResvDimension, Kind: model.KindText, Nullable: true},
-			{Name: colResvScopeKey, Kind: model.KindText},
-			{Name: colResvPeriod, Kind: model.KindText},
+			{Name: colResvPolicyRef, Kind: model.KindUUID, Indexed: true, Principal: pdeclNoneReservation},
+			{Name: colResvPolicyKind, Kind: model.KindText, Principal: pdeclNoneReservation},
+			{Name: colResvDimension, Kind: model.KindText, Nullable: true, Principal: pdeclNoneReservation},
+			{Name: colResvScopeKey, Kind: model.KindText, Principal: pdeclBudgetKeyRestrict},
+			{Name: colResvPeriod, Kind: model.KindText, Principal: pdeclNoneReservation},
 			{Name: colResvPeriodStart, Kind: model.KindTimestamp, Indexed: true},
 			{Name: colResvSeq, Kind: model.KindInt},
 			{Name: colResvAmount, Kind: model.KindInt},
 			{Name: colResvActual, Kind: model.KindInt},
-			{Name: colResvState, Kind: model.KindText, Indexed: true},
-			{Name: colResvHandle, Kind: model.KindUUID, Indexed: true},
+			{Name: colResvState, Kind: model.KindText, Indexed: true, Principal: pdeclNoneReservation},
+			{Name: colResvHandle, Kind: model.KindUUID, Indexed: true, Principal: pdeclNoneReservation},
 			{Name: colResvExpiresAt, Kind: model.KindTimestamp, Indexed: true},
 			{Name: colResvSettledAt, Kind: model.KindTimestamp, Nullable: true},
 			// Attempt-lifecycle linkage. BOTH are nullable and BOTH stay NULL on every
@@ -610,7 +773,7 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 			// attempt_ref, an unknown lifecycle version or one column set without the
 			// other is a MALFORMED row, and reading it as legacy would hand a v1
 			// obligation to a branch that can expire it on a TTL.
-			{Name: colResvAttemptRef, Kind: model.KindText, Nullable: true},
+			{Name: colResvAttemptRef, Kind: model.KindText, Nullable: true, Principal: pdeclNoneAttemptRef},
 			{Name: colResvLifecycleVersion, Kind: model.KindInt, Nullable: true},
 		},
 		Indexes: []model.IndexSpec{{

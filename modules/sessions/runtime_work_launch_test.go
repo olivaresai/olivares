@@ -680,6 +680,7 @@ func TestLaunchForWorkReplaySurvivesStoreReopen(t *testing.T) {
 		t.Fatalf("create tenant: %v", err)
 	}
 	m1.UseData(api.NewModuleData(st1))
+	bindStoreStanding(m1, st1)
 	itemID, _, agentRef := readyWorkLaunchItem(t, m1, st1, tenant)
 	spec := workLaunchSpec(itemID, agentRef)
 	first, err := m1.LaunchForWork(ctx, tenant, spec)
@@ -705,6 +706,7 @@ func TestLaunchForWorkReplaySurvivesStoreReopen(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = st2.Close() })
 	m2.UseData(api.NewModuleData(st2))
+	bindStoreStanding(m2, st2)
 
 	explicit := spec
 	explicit.OwnerEpoch = first.OwnerEpoch

@@ -88,6 +88,9 @@ type sqlStore struct {
 	custodyRelation          custodialRelation
 	custodyRelationErr       error
 	evidenceRefusedSupported bool
+	// readiness is the composition census verdict over the closed registry
+	// (readiness.go), computed once at Open and immutable while the store serves.
+	readiness store.Readiness
 	// elector decides whether this node is the active writer in an active-passive
 	// HA cluster. Always non-nil: alwaysLeader for SQLite/single-node,
 	// pgElector for Postgres. The write-gate consults elector.active(); the
@@ -653,6 +656,11 @@ func openPrepared(ctx context.Context, cfg store.Config, register func(store.Ext
 	if err := reg.registerCoreUserAuthorityInvariants(); err != nil {
 		return closeOnErr(db, fmt.Errorf("sqlstore: User authority retention: %w", err))
 	}
+	// The auth partition's counted columns are read by the offboard itself; the
+	// store declares that reader from the partition's own declarations.
+	if err := reg.declareAuthPartitionReaders(); err != nil {
+		return closeOnErr(db, fmt.Errorf("sqlstore: auth partition readers: %w", err))
+	}
 	if register != nil {
 		if err := register(reg); err != nil {
 			return closeOnErr(db, fmt.Errorf("sqlstore: module registration: %w", err))
@@ -677,6 +685,10 @@ func openPrepared(ctx context.Context, cfg store.Config, register func(store.Ext
 	// failure: it makes one optional capability unavailable and leaves ordinary
 	// startup and every existing operation untouched.
 	custodyRelation, custodyRelationErr := resolveCustodialRelation(reg)
+	// The composition census is likewise computed once on the closed registry.
+	// An unready composition is not a boot failure either: it keeps serving, and
+	// every absence proof it is asked for answers incomplete with the cause.
+	readiness := computeCompositionReadiness(reg)
 	// Load and bind every active-engine module migration before entering schema
 	// work. In particular, a trigger transition that names a missing or duplicate
 	// migration version must fail while boot has performed catalog reads only; it
@@ -1372,6 +1384,7 @@ func openPrepared(ctx context.Context, cfg store.Config, register func(store.Ext
 		custodyRelation:          custodyRelation,
 		custodyRelationErr:       custodyRelationErr,
 		evidenceRefusedSupported: evidenceRefusedSupported,
+		readiness:                readiness,
 	}, nil
 }
 

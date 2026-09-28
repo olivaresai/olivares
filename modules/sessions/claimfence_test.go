@@ -340,6 +340,7 @@ func pgSess(t *testing.T) (*Module, model.TenantID, *testClock) {
 		t.Fatalf("tenant: %v", err)
 	}
 	m.UseData(api.NewModuleData(st))
+	bindStoreStanding(m, st)
 	return m, tenant, clk
 }
 

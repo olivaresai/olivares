@@ -95,20 +95,14 @@ describe('NextStep', () => {
     expectNoRawI18nKeys(container)
   })
 
-  it('every truncated line carries the full text on title=', () => {
+  it('paints each label whole: the verb, then its explanation, and nothing truncated', () => {
     const { container } = renderIntel(<NextStep />)
-    const truncated = [...container.querySelectorAll('.truncate')]
-    expect(truncated.length).toBeGreaterThan(0)
-    for (const el of truncated) {
-      expect(
-        el.getAttribute('title'),
-        `truncated without title=: ${el.textContent}`,
-      ).toBeTruthy()
-    }
-    const agent = screen
-      .getByTestId('home-next-step-agent')
-      .querySelector('.truncate')
-    expect(agent?.getAttribute('title')).toMatch(/Deploy an agent/)
-    expect(agent?.getAttribute('title')).toMatch(/Roll an agent out/)
+    // The labels wrap now (next-step.wrap.test.tsx): no cut line, so no hover title is
+    // needed to finish one. The link keeps the whole label on title= as before.
+    expect(container.querySelectorAll('.truncate')).toHaveLength(0)
+    const agent = screen.getByTestId('home-next-step-agent')
+    expect(agent).toHaveTextContent(/Deploy an agent/)
+    expect(agent).toHaveTextContent(/Roll an agent out/)
+    expect(agent.getAttribute('title')).toMatch(/Deploy an agent/)
   })
 })

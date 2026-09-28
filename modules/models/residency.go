@@ -56,11 +56,11 @@ func registerWorkspaceResidencySchema(reg store.ExtensionRegistry) error {
 		Kind:  WorkspaceResidencyKind,
 		Table: workspaceResidencyTable,
 		Fields: []model.FieldSpec{
-			{Name: colWSWorkspaceRef, Kind: model.KindText, Indexed: true},
-			{Name: colWSAllowedGeos, Kind: model.KindText, Nullable: true},
-			{Name: colWSDefaultGeo, Kind: model.KindText, Nullable: true},
-			{Name: colWSWorkspaceGeo, Kind: model.KindText, Nullable: true},
-			{Name: colWSAsOf, Kind: model.KindText, Nullable: true},
+			{Name: colWSWorkspaceRef, Kind: model.KindText, Indexed: true, Principal: model.None("the provider workspace id, compared only with cost-sample workspace ids at modules/compliance/residency.go:320-331")},
+			{Name: colWSAllowedGeos, Kind: model.KindText, Nullable: true, Principal: model.None("comma-separated geo codes normalized at residency.go:92-108, compared only as geos at modules/compliance/residency.go:321-327")},
+			{Name: colWSDefaultGeo, Kind: model.KindText, Nullable: true, Principal: model.None("a geo code lowercased at residency.go:118, only rendered at residency.go:129")},
+			{Name: colWSWorkspaceGeo, Kind: model.KindText, Nullable: true, Principal: model.None("a geo code lowercased at residency.go:119, only rendered at residency.go:130")},
+			{Name: colWSAsOf, Kind: model.KindText, Nullable: true, Principal: model.None("a capture-time label defaulted to the writer's timestamp at residency.go:111-114, residency.go:189, only rendered at residency.go:131")},
 		},
 		Indexes: []model.IndexSpec{{
 			Name: "models_workspace_residency_uniq", Columns: []string{model.ColTenantID, colWSWorkspaceRef}, Unique: true,

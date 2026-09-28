@@ -6,6 +6,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -62,6 +63,9 @@ func workflowCommunicationActor(
 		AgentExternalID: actor.AgentIdentity, SessionID: actor.SessionIdentity,
 		SessionRunRef: actor.SessionRunRef, SessionFence: actor.SessionFence,
 		PurposeRestricted: actor.PurposeRestricted,
+		// The run's opaque credential binding and the run it binds travel as they
+		// are; sessions resolves them through core/auth at the effect.
+		CredentialBinding: actor.CredentialBinding, CredentialSubject: actor.RunID,
 	}
 	if !actor.UserIdentity.IsZero() {
 		result.AuditKind = model.ActorUser
@@ -75,6 +79,20 @@ func workflowCommunicationActor(
 		)
 	}
 	return result, nil
+}
+
+// workflowCommunicationEffectError keeps the kernel's refusal and names the
+// two outcomes the run treats differently: a binding that needs the run's
+// reauthorization, and a denial by the current policy.
+func workflowCommunicationEffectError(err error) error {
+	switch {
+	case errors.Is(err, sessions.ErrWorkflowReauthenticationRequired):
+		return fmt.Errorf("%w: %w", orchestration.ErrWorkflowReauthenticationRequired, err)
+	case errors.Is(err, sessions.ErrCommunicationForbidden):
+		return fmt.Errorf("%w: %w", orchestration.ErrWorkflowEffectDenied, err)
+	default:
+		return err
+	}
 }
 
 func workflowCommunicationRecipient(
@@ -215,7 +233,7 @@ func (a *workflowCommunicationAdapter) SendWorkMessage(
 		AckDueAt: ackDueAt, IdempotencyKey: req.IdempotencyKey,
 	})
 	if err != nil {
-		return orchestration.WorkMessageResult{}, err
+		return orchestration.WorkMessageResult{}, workflowCommunicationEffectError(err)
 	}
 	if result.WorkItemID != req.WorkItemID || result.CommandID.IsZero() ||
 		result.MessageID.IsZero() || result.DeliveryID.IsZero() || result.EventID.IsZero() ||
@@ -262,7 +280,7 @@ func (a *workflowCommunicationAdapter) OfferWorkHandoff(
 		ExpectedOwnerEpoch: req.ExpectedOwnerEpoch, IdempotencyKey: req.IdempotencyKey,
 	})
 	if err != nil {
-		return orchestration.WorkHandoffResult{}, err
+		return orchestration.WorkHandoffResult{}, workflowCommunicationEffectError(err)
 	}
 	if result.WorkItemID != req.WorkItemID || result.CommandID.IsZero() ||
 		result.HandoffID.IsZero() || result.MessageID.IsZero() || result.DeliveryID.IsZero() ||
@@ -310,7 +328,7 @@ func (a *workflowCommunicationAdapter) ObserveWorkAck(
 		AfterEventSeq: query.AfterEventSeq,
 	})
 	if err != nil {
-		return orchestration.WorkAckObservation{}, err
+		return orchestration.WorkAckObservation{}, workflowCommunicationEffectError(err)
 	}
 	if result.EventSeq < 0 || (result.EventSeq == 0) != result.EventID.IsZero() {
 		return orchestration.WorkAckObservation{}, fmt.Errorf(

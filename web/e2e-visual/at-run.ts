@@ -251,6 +251,23 @@ const TOKEN_PAIRS: {
     fg: '--border-strong',
     bg: '--surface',
   },
+  // The CONTROL BOUNDARY: inputs, selects, comboboxes, text areas and checkboxes draw their
+  // border with `--ctl-border`, and an unchecked switch its track, so it is held to 1.4.11
+  // (3:1) on every surface a control sits on, and under the switch thumb.
+  {
+    name: 'ctl-border/background',
+    kind: 'ui',
+    fg: '--ctl-border',
+    bg: '--background',
+  },
+  { name: 'ctl-border/surface', kind: 'ui', fg: '--ctl-border', bg: '--surface' },
+  {
+    name: 'ctl-border/elevated',
+    kind: 'ui',
+    fg: '--ctl-border',
+    bg: '--elevated',
+  },
+  { name: 'surface/ctl-border', kind: 'ui', fg: '--surface', bg: '--ctl-border' },
   { name: 'ring/background', kind: 'ui', fg: '--ring', bg: '--background' },
   { name: 'ring/surface', kind: 'ui', fg: '--ring', bg: '--surface' },
   { name: 'accent/background', kind: 'ui', fg: '--accent', bg: '--background' },
@@ -354,8 +371,6 @@ const TOKEN_PAIRS: {
  */
 const RAMP =
   'raw Tailwind ramp; needs a brand-token decision for the method badges'
-const ACCENT_TEXT =
-  '`--accent-text` over a tinted surface; the token value is decided in the palette'
 // ⛔ POR QUÉ `--accent` NO ALCANZA 3:1 CONTRA LOS FONDOS CLAROS Y AUN ASÍ NO ES UN DEFECTO.
 //    Medido el 2026-08-18: `--accent` es `rgb(240,128,0)` —el naranja de marca— y contra
 //    `background` da 2,58, contra `surface` 2,69 y contra `accent-soft` 2,37, los tres por debajo del
@@ -389,21 +404,25 @@ const CONTRAST_DEBT: {
     origin: 'tokens.css',
     pair: 'accent/background',
     theme: 'light',
-    ratio: 2.58,
+    ratio: 2.69,
     why: ACCENT_FILL,
   },
+  // 2.69 until the v26.10 palette: the light card surface is now #f8f7f4 (it was white),
+  // so the same orange fill measures 2.52 on it. The fill still carries only ink
+  // (--accent-foreground, 6.88:1); the orange BOUNDARY is --accent-border (--accent-strong),
+  // 3.95:1 on this surface and held to 3:1 by the contract below.
   {
     origin: 'tokens.css',
     pair: 'accent/surface',
     theme: 'light',
-    ratio: 2.69,
+    ratio: 2.52,
     why: ACCENT_FILL,
   },
   {
     origin: 'tokens.css',
     pair: 'accent/accent-soft',
     theme: 'light',
-    ratio: 2.37,
+    ratio: 2.4,
     why: ACCENT_FILL,
   },
   // The api-playground badges: SIX HTTP-method badges plus the BETA marker on an
@@ -412,63 +431,48 @@ const CONTRAST_DEBT: {
   // as one fix. The `-600`/`-400` Tailwind ramp is off-brand to begin with.
   {
     origin: 'web/src/features/api-playground/request-panel.tsx:415',
-    pair: 'red-400 on red-500/15',
-    theme: 'dark',
-    ratio: 4.48,
-    why: RAMP,
-  },
-  {
-    origin: 'web/src/features/api-playground/request-panel.tsx:415',
     pair: 'emerald-600 on emerald-500/15',
     theme: 'light',
-    ratio: 3.05,
+    ratio: 3.17,
     why: RAMP,
   },
   {
     origin: 'web/src/features/api-playground/request-panel.tsx:415',
     pair: 'blue-600 on blue-500/15',
     theme: 'light',
-    ratio: 4.22,
+    ratio: 4.39,
     why: RAMP,
   },
   {
     origin: 'web/src/features/api-playground/request-panel.tsx:415',
     pair: 'amber-600 on amber-500/15',
     theme: 'light',
-    ratio: 2.74,
+    ratio: 2.85,
     why: RAMP,
   },
   {
     origin: 'web/src/features/api-playground/request-panel.tsx:415',
     pair: 'orange-600 on orange-500/15',
     theme: 'light',
-    ratio: 2.94,
+    ratio: 3.05,
     why: RAMP,
   },
   {
     origin: 'web/src/features/api-playground/request-panel.tsx:415',
     pair: 'red-600 on red-500/15',
     theme: 'light',
-    ratio: 3.7,
+    ratio: 3.85,
     why: RAMP,
   },
   {
     origin: 'web/src/features/api-playground/endpoint-tree.tsx:105',
     pair: 'amber-600 on amber-500/15',
     theme: 'light',
-    ratio: 2.65,
+    ratio: 2.66,
     why: RAMP,
   },
-  {
-    origin: 'tokens.css',
-    pair: 'accent-text/elevated',
-    theme: 'dark',
-    ratio: 4.33,
-    why: ACCENT_TEXT,
-  },
-  // `--accent-text` is AA on `--background` and `--surface` — both in the token
-  // contract — but not on `--muted`/`--accent-soft`/`--elevated`, which nobody
-  // had ever paired.
+  // `--accent-text` over `--elevated` (dark, 4.33) left the ledger with the v26.10
+  // palette: the orange as text is #ff9b3d there and passes on every dark surface.
 ]
 
 async function serve(context: BrowserContext) {
@@ -794,6 +798,15 @@ async function measureContrast(page: Page, derived: DerivedPair[]) {
       }
 
       // ---- 1. the design-token contract ----
+      // A translucent token (the soft fills, the hairlines) is painted over the page,
+      // never over nothing: its RGB channels alone are not a color anyone sees, and read
+      // that way a 12% tint of a status color scores 1:1 against that color. So a
+      // translucent background is composited over the page background declared on the
+      // root (the reading the guard above trusts), and the foreground over that — the
+      // same rule the derived compositions below apply. An opaque pair is unchanged:
+      // `over()` returns an opaque color as it is.
+      const tokenBase =
+        toRGBA(themeProbe.rootBg)?.rgba ?? ([255, 255, 255, 1] as RGBA)
       for (const p of TOKENS) {
         const fg = toRGBA(`var(${p.fg})`)
         const bg = toRGBA(`var(${p.bg})`)
@@ -815,7 +828,8 @@ async function measureContrast(page: Page, derived: DerivedPair[]) {
           })
           continue
         }
-        const ratio = ratioOf(fg.rgba, bg.rgba)
+        const bgSolid = over(bg.rgba, tokenBase)
+        const ratio = ratioOf(over(fg.rgba, bgSolid), bgSolid)
         rows.push({
           name: p.name,
           kind: p.kind,
@@ -1282,13 +1296,31 @@ async function main() {
   await browser.close()
 
   // ---- gate: what blocks a clean "Supports" for AT users ----
-  // EXCLUDED by design: the resting decorative borders (border-strong / *-line) are
-  // < 3:1 but are not the SOLE identifier of a component/state (fill + label + the
-  // >=3:1 focus ring identify controls); ratified as 1.4.11 Supports.
-  // The waiver is scoped to the TOKEN contract by construction: it matches names
-  // of the form `<token>/<token>`, which only that list produces. A derived
-  // composition is named `<fg> on <bg>` and can never be swept into it silently.
-  const DECORATIVE = /^(border-strong|.*-line)\//
+  // EXCLUDED by design, and NAMED one pairing at a time with its reason: the resting
+  // decorative hairlines are < 3:1 but are not the SOLE identifier of a component or a
+  // state. A form control's boundary is `--ctl-border`, held to 3:1 above; these tokens
+  // draw separators and container edges only. A pairing not in this map is judged at 3:1.
+  // The waiver is scoped to the TOKEN contract by construction: its keys are names of the
+  // form `<token>/<token>`, which only that list produces. A derived composition is named
+  // `<fg> on <bg>` and can never be swept into it silently.
+  const SEPARATOR =
+    'hairline separator or container edge (tables, menus, popovers, dialogs, sheets, buttons named by their text); no form control boundary uses it'
+  const STATUS_LINE =
+    'resting hairline beside a status label; the label and its glyph carry the state'
+  const DECORATIVE_PAIRS: Record<string, string> = {
+    'border-strong/background': SEPARATOR,
+    'border-strong/surface': SEPARATOR,
+    'success-line/surface': STATUS_LINE,
+    'warning-line/surface': STATUS_LINE,
+    'danger-line/surface': STATUS_LINE,
+    'info-line/surface': STATUS_LINE,
+    'accent-line/surface':
+      'resting hairline of a selected or accented container; the selection indicator is --accent-strong, held to 3:1',
+  }
+  const DECORATIVE = {
+    test: (name: string) =>
+      Object.prototype.hasOwnProperty.call(DECORATIVE_PAIRS, name),
+  }
   const axeBlocking = routeResults.flatMap((r) =>
     !r.medible
       ? []
@@ -1355,6 +1387,11 @@ async function main() {
     .map((c) =>
       c.unmeasured ? `${c.name} NOT MEASURED — ${c.unmeasured}` : c.name,
     )
+  for (const c of contrast)
+    if (failed(c) && !c.unmeasured && DECORATIVE.test(c.name))
+      console.log(
+        `  waived as decorative [${theme}]: ${c.name} ${c.ratio} — ${DECORATIVE_PAIRS[c.name]}`,
+      )
   const headingSkips = routeResults
     .filter((r) => r.medible && r.headingSkips.length)
     .map((r) => r.route)

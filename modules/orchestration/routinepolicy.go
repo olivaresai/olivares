@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/olivaresai/olivares/core/api"
+	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/cron"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
@@ -443,12 +444,20 @@ var errFenceContended = errors.New("orchestration: routine admission fence conte
 // need to have serialized against it. The invariant is "no admission exceeds a
 // cap in force at its own admission time", not "the population is bounded for
 // all time".
-func (m *Module) withAdmissionFence(ctx context.Context, mc api.ModuleContext, needed bool, fn func(sc store.Scope) error) error {
+//
+// subjects are the accounts the write names in a counted column (a new
+// schedule's owner). Each attempt reads their standing and pins them through the
+// directory authority barrier as its transaction's FIRST lock-bearing call,
+// ahead of the admission fence's own claim, which writes a row. nil pins nothing
+// and the transaction is exactly the one before.
+func (m *Module) withAdmissionFence(ctx context.Context, mc api.ModuleContext, needed bool, subjects []model.ID, fn func(sc store.Scope) error) error {
+	mutate := func(body func(store.Scope) error) error { return mc.Data.Mutate(ctx, body) }
 	if !needed {
-		return mc.Data.Mutate(ctx, fn)
+		return auth.FencedWrite(ctx, mc.Standing, mc.Tenant, subjects, auth.FenceDirectory, mutate,
+			func(sc store.Scope, _ bool) error { return fn(sc) })
 	}
 	for attempt := 0; attempt < maxFenceRetries; attempt++ {
-		err := mc.Data.Mutate(ctx, func(sc store.Scope) error {
+		err := auth.FencedWrite(ctx, mc.Standing, mc.Tenant, subjects, auth.FenceDirectory, mutate, func(sc store.Scope, _ bool) error {
 			if err := claimAdmissionFence(ctx, sc); err != nil {
 				return err
 			}

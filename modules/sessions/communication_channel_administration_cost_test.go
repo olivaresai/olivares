@@ -159,7 +159,9 @@ func seedSameSubjectActiveGrantsOnOtherChannels(
 ) int {
 	t.Helper()
 	ctx := context.Background()
-	if err := fx.m.data.Mutate(ctx, fx.tenant, func(sc store.Scope) error {
+	// A grant's subject is a counted reference, so a subject that is an account
+	// is pinned first, as a fenced writer pins it.
+	if err := communicationMutateFenced(ctx, fx.m, fx.st, fx.tenant, userSubjectAccounts(subject), func(sc store.Scope) error {
 		channels, err := sc.Ext(channelKind)
 		if err != nil {
 			return err

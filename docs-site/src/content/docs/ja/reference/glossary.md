@@ -13,7 +13,7 @@ description: >-
 モジュール III が持つ、**origin**（エージェント、アイデンティティ、セッション）と、それらが触れる
 **リソース**のグラフ。すべてのエッジは [mode](#mode) によって分類され、その [signal source](#signal-sourceシグナルソース)、
 [attribution](#attributionconfidence)、[coverage tier](#coverage-tierカバレッジ階層) でタグ付けされる。差別化された
-鍵となる能力の 1 つ —— 30 モジュールのうちの 1 つであって、製品全体ではない。
+鍵となる能力の 1 つ —— 31 モジュールのうちの 1 つであって、製品全体ではない。
 [Olivares AI とは？](/ja/start/what-is-olivares-ai/) を参照。
 
 ### Actuation states: `v1` / `on-demand` / `seam`
@@ -252,8 +252,10 @@ webhook）で、OCSF/CEF/LEEF/syslog/OTLP/JSON で配信するイベンティン
 
 ### SLI / SLO
 
-公開されたサービスレベル: `/readyz` による可用性、リクエスト成功、API と取り込みのレイテンシ p99 ——
-シングルノードと HA の階層を別々に正直に明示する。
+**SLI** は、`/readyz` による可用性、リクエスト成功率、API や取り込みの p99 レイテンシなど、
+サービスの挙動を測定する指標です。**SLO** は、28 日間などの明示した期間について、その SLI の
+目標を定めます。公開されているシングルノードと HA の数値は目標であり、実際の達成には対象の
+デプロイメントと期間に対応した測定が必要です。契約上のサービス保証は、別途明示する約束です。
 [モニタリング](/ja/how-to/monitor-with-prometheus/) を参照。
 
 ### Source（ソース）
@@ -265,5 +267,6 @@ webhook）で、OCSF/CEF/LEEF/syslog/OTLP/JSON で配信するイベンティン
 ### Stop gate（ストップゲート）
 
 すべての統治された actuation が [kill switch](#kill-switch) の状態に対して行う強制チェック ——
-他のいかなるゲートよりも前にチェックされ、**closed** で失敗する（budget チェックの逆: budget は open で
-失敗する —— 壊れたメーターが停止を引き起こしてはならないが、壊れた stop チェックは停止しなければならない）。
+他のいかなるゲートよりも前にチェックされ、**closed** で失敗する: 読み取れない stop チェックはその
+actuation を拒否する。エンジンのゲートの budget アドミッションも、台帳を読めないときは拒否する。独自の
+設定可能な可用性姿勢を適用するのはセッション起動だけである。

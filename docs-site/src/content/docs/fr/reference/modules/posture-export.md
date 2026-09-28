@@ -64,4 +64,4 @@ export partiel rapporte ses propres indicateurs de troncature et n'est jamais
 - [Honnêteté et limites](/fr/start/honesty-and-limits/) — pourquoi c'est une
   projection, non un push vérifié.
 - [Catalogue des modules](/fr/reference/modules/overview/) — où se situe l'export
-  de posture parmi les 30 modules livrés.
+  de posture parmi les 31 modules livrés.

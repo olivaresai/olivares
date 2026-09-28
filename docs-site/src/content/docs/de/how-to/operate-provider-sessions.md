@@ -30,7 +30,7 @@ Erfüllen Sie diese Punkte vor einem Start. Ein fehlender Punkt ist eine
 Ablehnung, kein Fallback.
 
 1. Olivares AI ist installiert und der erste Administrator existiert.
-   Siehe [Ihre erste Stunde](/how-to/first-hour/) für das Setup-Token und die
+   Siehe [Ihre erste Stunde](/de/how-to/first-hour/) für das Setup-Token und die
    AAL3-Passkey-Schranke. Das Anlegen von Quellen und privilegierte
    Session-Operationen erfordern AAL3 (`core/api/middleware.go` `requireAAL3`).
 2. Die offizielle Provider-CLI ist bereits auf **diesem Knoten** installiert.
@@ -62,7 +62,7 @@ hinzu.
 
 Claude-Starts brauchen weiterhin eine Inferenz-Credential-Quelle
 (`OLIVARES_SESSION_RUNTIME_WIF` oder `OLIVARES_SESSION_RUNTIME_TOKEN_FILE`).
-Siehe [Ihre erste Stunde §3](/how-to/first-hour/#3-eine-claude-code-sitzung-über-die-konsole-starten).
+Siehe [Ihre erste Stunde §3](/de/how-to/first-hour/#3-eine-claude-code-sitzung-über-die-konsole-starten).
 Codex und Grok verwenden nur den AUTHORIZED `auth_source` des Profils:
 `provider_account_home` oder `managed_injection`, ohne Fallback dazwischen und
 ohne Vorgabe (`CHANGELOG.md` `[26.9.0]`; `ProviderProfileDTO.auth_source`).
@@ -192,7 +192,7 @@ bestätigten Provider-Empfang.
 
 ## Verwandte Themen
 
-- [Ihre erste Stunde](/how-to/first-hour/) — Setup-Token, AAL3, Claude-Credential-Quelle.
+- [Ihre erste Stunde](/de/how-to/first-hour/) — Setup-Token, AAL3, Claude-Credential-Quelle.
 - [Claude Code mit Olivares betreiben](/how-to/run-claude-code-with-olivares/) — Co-Deployment-Topologien.
 - [Codex integrieren](/how-to/integrations/codex/) / [Grok Build integrieren](/how-to/integrations/grok/) — Connector und PEP-Hook.
 - [Session-Runtime-API](/reference/session-runtime-api/) — Listen, Attach, Input, Stop; Community-PTY und Editionsgrenze.

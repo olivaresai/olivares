@@ -261,7 +261,7 @@ type featureRow struct {
 }
 
 // handleFeatures returns the capability matrix: per API feature, which declared
-// families support it.
+// families declare it, and the matrix is not a gateway invocation guarantee.
 func (m *Module) handleFeatures(w http.ResponseWriter, r *http.Request, _ api.ModuleContext) {
 	rows := make([]featureRow, 0, len(allCapabilities))
 	for _, c := range allCapabilities {
@@ -681,9 +681,9 @@ func (m *Module) handleResolveRouting(w http.ResponseWriter, r *http.Request, mc
 // (FIN-08). When an enforcing budget that scopes the selected primary is at its cap it
 // MUTATES the decision to resolved=false (the gateway then gets no target → no spend),
 // records the budget action + a money-free reason, and returns the HTTP status to use
-// (402 block / 429 throttle) with denied=true. It FAILS OPEN: a budget-gate error
-// leaves the decision intact (the finops_budget_cap finding is the backstop), per
-// finops.CheckBudget's contract. The minimal dims (provider+model refs) come from the
+// (402 block / 429 throttle) with denied=true. The engine's gate reports a ledger it
+// cannot read as a block (store unreachable), denying the route; only a gate that
+// returns an error leaves it intact. The minimal dims (provider+model refs) come from the
 // resolved primary; global/provider/model enforcing budgets are what the router can cap
 // pre-execution (docs/SECURITY-HARDENING.md).
 func (m *Module) budgetDeniesRoute(r *http.Request, mc api.ModuleContext, dec *decisionDTO, sessionRef string) (int, bool) {

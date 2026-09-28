@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import { fireEvent, screen, within } from '@testing-library/react'
+import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ComponentProps } from 'react'
@@ -60,7 +60,7 @@ vi.mock('@/lib/auth/context', () => ({
 }))
 
 import i18n from 'i18next'
-import { MobileNav, Sidebar } from './sidebar'
+import { AreasSheet, AreasTree } from './sidebar'
 import { NAV_AREAS } from '@/features/registry'
 import {
   authorizedEntries,
@@ -99,9 +99,9 @@ const areaPanel = (id: string, root: ParentNode = document) =>
 const hrefs = () =>
   screen.getAllByRole('link').map((a) => a.getAttribute('href'))
 
-describe('Sidebar areas (N1)', () => {
+describe('the area directory (N1)', () => {
   it('renders Overview, the nine areas in the ratified order, and the pinned Settings', () => {
-    renderIntel(<Sidebar />)
+    renderIntel(<AreasTree />)
     const ids = [...document.querySelectorAll('[data-nav-area]')].map((e) =>
       e.getAttribute('data-nav-area'),
     )
@@ -117,7 +117,7 @@ describe('Sidebar areas (N1)', () => {
 
   it('gives each area a directory link AND a separate expand control, folded unless active', () => {
     routerState.pathname = '/agentops'
-    renderIntel(<Sidebar />)
+    renderIntel(<AreasTree />)
     const ai = areaRow('ai')
     const link = within(ai).getByRole('link', { name: 'AI' })
     expect(link).toHaveAttribute('href', '/areas/ai')
@@ -166,7 +166,7 @@ describe('Sidebar areas (N1)', () => {
 
   it('marks exactly one link as the current page and the containing area as the active branch', () => {
     routerState.pathname = '/agentops'
-    renderIntel(<Sidebar />)
+    renderIntel(<AreasTree />)
     const current = document.querySelectorAll('[aria-current="page"]')
     expect(current).toHaveLength(1)
     expect(current[0]).toHaveAttribute('href', '/agentops')
@@ -180,7 +180,7 @@ describe('Sidebar areas (N1)', () => {
 
   it('on a directory page the area link is the current page and its area is open', () => {
     routerState.pathname = '/areas/security-identity'
-    renderIntel(<Sidebar />)
+    renderIntel(<AreasTree />)
     const current = document.querySelectorAll('[aria-current="page"]')
     expect(current).toHaveLength(1)
     expect(current[0]).toHaveAttribute('href', '/areas/security-identity')
@@ -193,7 +193,7 @@ describe('Sidebar areas (N1)', () => {
   it('folds and reopens one area with the button, persisting the choice, without changing the route', async () => {
     routerState.pathname = '/agentops'
     const user = userEvent.setup()
-    renderIntel(<Sidebar />)
+    renderIntel(<AreasTree />)
     await user.click(toggleOf('ai'))
     expect(toggleOf('ai')).toHaveAttribute('aria-expanded', 'false')
     expect(areaPanel('ai')).toHaveClass('hidden')
@@ -214,7 +214,7 @@ describe('Sidebar areas (N1)', () => {
 
   it('expands and collapses every area at once', async () => {
     const user = userEvent.setup()
-    renderIntel(<Sidebar />)
+    renderIntel(<AreasTree />)
     await user.click(screen.getByRole('button', { name: 'Expand all areas' }))
     for (const a of NAV_AREAS)
       expect(toggleOf(a.id)).toHaveAttribute('aria-expanded', 'true')
@@ -225,7 +225,7 @@ describe('Sidebar areas (N1)', () => {
 
   it('offers an area only when one of its leaves is authorized (the union), never by a parent gate', () => {
     canMock.mockImplementation((p) => p === 'governance:routine:read')
-    renderIntel(<Sidebar />)
+    renderIntel(<AreasTree />)
     const ids = [...document.querySelectorAll('[data-nav-area]')].map((e) =>
       e.getAttribute('data-nav-area'),
     )
@@ -264,7 +264,7 @@ describe('Sidebar areas (N1)', () => {
   it('offers the sibling door only with its own permission', () => {
     canMock.mockImplementation((p) => p === 'sessions:run:read')
     routerState.pathname = '/agentops'
-    renderIntel(<Sidebar />)
+    renderIntel(<AreasTree />)
     const ai = areaPanel('ai')
     expect(
       within(ai)
@@ -274,12 +274,12 @@ describe('Sidebar areas (N1)', () => {
   })
 })
 
-describe('Sidebar search (P2-12, N1 index)', () => {
+describe('the area directory search (P2-12, N1 index)', () => {
   const filter = () => screen.getByRole('searchbox')
 
   it('narrows the sidebar to matching views, shown as one ranked list with their area and section', async () => {
     const user = userEvent.setup()
-    renderIntel(<Sidebar />)
+    renderIntel(<AreasTree />)
     const before = screen.getAllByRole('link').length
     expect(areaPanel('security-identity')).toHaveClass('hidden')
 
@@ -314,7 +314,7 @@ describe('Sidebar search (P2-12, N1 index)', () => {
   // order must be the palette's: the shared ranking over the shared authorized projection.
   it('renders filtered results in the shared rank order: a later-area label hit before an earlier-area description hit', async () => {
     const user = userEvent.setup()
-    renderIntel(<Sidebar />)
+    renderIntel(<AreasTree />)
     await user.type(filter(), 'admin')
     const shown = hrefs()
     const t = i18n.getFixedT(null, 'nav') as never
@@ -339,7 +339,7 @@ describe('Sidebar search (P2-12, N1 index)', () => {
   it('never lists a module the principal may not open, whatever it scores', async () => {
     canMock.mockImplementation((p) => p !== 'tenant:admin')
     const user = userEvent.setup()
-    renderIntel(<Sidebar />)
+    renderIntel(<AreasTree />)
     await user.type(filter(), 'admin')
     const shown = hrefs()
     expect(shown).not.toContain('/console')
@@ -351,7 +351,7 @@ describe('Sidebar search (P2-12, N1 index)', () => {
     // /access-map, /permissions or /console — it is the noun they manage, and an
     // operator who thinks in those thirteen words must still land on them.
     const user = userEvent.setup()
-    renderIntel(<Sidebar />)
+    renderIntel(<AreasTree />)
 
     await user.type(filter(), 'identities')
     const links = hrefs()
@@ -368,7 +368,7 @@ describe('Sidebar search (P2-12, N1 index)', () => {
 
   it('finds a view by its path, by its former name and by its English label', async () => {
     const user = userEvent.setup()
-    renderIntel(<Sidebar />)
+    renderIntel(<AreasTree />)
     await user.type(filter(), '/red-team')
     expect(hrefs()).toContain('/red-team')
     await user.clear(filter())
@@ -383,14 +383,14 @@ describe('Sidebar search (P2-12, N1 index)', () => {
 
   it('finds an area by its own name and keeps its directory link', async () => {
     const user = userEvent.setup()
-    renderIntel(<Sidebar />)
+    renderIntel(<AreasTree />)
     await user.type(filter(), 'automation')
     expect(hrefs()).toContain('/areas/automation')
   })
 
   it('says so when nothing matches, instead of showing an empty shell', async () => {
     const user = userEvent.setup()
-    renderIntel(<Sidebar />)
+    renderIntel(<AreasTree />)
     await user.type(filter(), 'zzz-no-such-view')
     // NO link survives — including the pinned Settings utility. It used to sit outside
     // the filter, which left one link on screen while the sr-only count announced zero.
@@ -400,14 +400,14 @@ describe('Sidebar search (P2-12, N1 index)', () => {
 
   it('keeps the pinned Settings link findable by name', async () => {
     const user = userEvent.setup()
-    renderIntel(<Sidebar />)
+    renderIntel(<AreasTree />)
     await user.type(filter(), 'settings')
     expect(hrefs()).toContain('/settings')
   })
 
   it('announces the number of links the operator can actually see', async () => {
     const user = userEvent.setup()
-    renderIntel(<Sidebar />)
+    renderIntel(<AreasTree />)
     await user.type(filter(), 'residency')
     const live = document.querySelector('[aria-live="polite"]') as HTMLElement
     const shown = screen.getAllByRole('link').length
@@ -417,7 +417,7 @@ describe('Sidebar search (P2-12, N1 index)', () => {
   it('returns focus to the field after clearing', async () => {
     // The clear button unmounts on click, so focus would otherwise land on <body>.
     const user = userEvent.setup()
-    renderIntel(<Sidebar />)
+    renderIntel(<AreasTree />)
     await user.type(filter(), 'residency')
     await user.click(screen.getByRole('button', { name: /clear/i }))
     expect(filter()).toHaveFocus()
@@ -425,7 +425,7 @@ describe('Sidebar search (P2-12, N1 index)', () => {
 
   it('restores the full list when the filter is cleared', async () => {
     const user = userEvent.setup()
-    renderIntel(<Sidebar />)
+    renderIntel(<AreasTree />)
     const before = screen.getAllByRole('link').length
 
     await user.type(filter(), 'residency')
@@ -434,77 +434,26 @@ describe('Sidebar search (P2-12, N1 index)', () => {
     expect(screen.getAllByRole('link')).toHaveLength(before)
     expect(filter()).toHaveValue('')
   })
-
-  it('offers no filter in the icon rail, where results could not be shown', () => {
-    usePreferencesStore.setState({ sidebarCollapsed: true })
-    renderIntel(<Sidebar />)
-    expect(screen.queryByRole('searchbox')).toBeNull()
-  })
 })
 
-describe('Sidebar icon rail', () => {
-  it('shows the areas as buttons that open a flyout with the directory link and every leaf', async () => {
-    usePreferencesStore.setState({ sidebarCollapsed: true })
-    routerState.pathname = '/agentops'
-    const user = userEvent.setup()
-    renderIntel(<Sidebar />)
-    // No fifty-icon list: the rail holds Overview, nine area buttons and Settings.
-    expect(document.querySelector('[data-nav-area]')).toBeNull()
-    expect(screen.getAllByRole('button', { name: /modules$/ })).toHaveLength(9)
-    const ai = screen.getByRole('button', { name: 'AI modules' })
-    expect(ai).toHaveAttribute('data-branch', 'active')
-    expect(ai).toHaveAttribute('aria-expanded', 'false')
-    await user.click(ai)
-    expect(ai).toHaveAttribute('aria-expanded', 'true')
-    const dialog = screen.getByRole('dialog', { name: 'AI modules' })
-    const links = within(dialog)
-      .getAllByRole('link')
-      .map((a) => a.getAttribute('href'))
-    expect(links[0]).toBe('/areas/ai')
-    expect(links).toEqual(
-      expect.arrayContaining(['/sessions', '/agentops', '/provider-profiles']),
-    )
-    expect(
-      within(dialog).getByRole('link', { name: /Operate sessions/ }),
-    ).toHaveAttribute('aria-current', 'page')
-    // Choosing a module closes the flyout.
-    await user.click(
-      within(dialog).getByRole('link', { name: /Observe sessions/ }),
-    )
-    expect(screen.queryByRole('dialog')).toBeNull()
-  })
-
-  it('ignores the expanded-sidebar fold state in the rail (a flyout is always complete)', async () => {
-    usePreferencesStore.setState({
-      sidebarCollapsed: true,
-      navAreas: { v: 1, open: [], closed: ['system'] },
-    })
-    const user = userEvent.setup()
-    renderIntel(<Sidebar />)
-    await user.click(
-      screen.getByRole('button', { name: 'System & settings modules' }),
-    )
-    const dialog = screen.getByRole('dialog')
-    expect(within(dialog).getAllByRole('link').length).toBeGreaterThan(1)
-  })
-})
-
-describe('MobileNav', () => {
-  // ⛔ THE REVIEW'S F2 CONTROL. The desktop sidebar stays mounted while the drawer opens, and
-  // the rail's flyout renders a third set of groups: every aria-controls in the drawer must
-  // resolve to exactly one element, INSIDE the drawer, and every group label to a heading
-  // inside its own group — under normal id resolution, not by counting classes.
-  it('resolves every aria-controls and aria-labelledby to its own instance while Sidebar and MobileNav are both mounted', async () => {
+describe('AreasSheet', () => {
+  // ⛔ THE REVIEW'S F2 CONTROL. Two directories can be mounted at once (the bare tree and
+  // the sheet): every aria-controls in the sheet must resolve to exactly one element,
+  // INSIDE the sheet, and every group label to a heading inside its own group — under
+  // normal id resolution, not by counting classes.
+  it('resolves every aria-controls and aria-labelledby to its own instance while the tree and the sheet are both mounted', async () => {
     const user = userEvent.setup()
     routerState.pathname = '/agentops'
     renderIntel(
       <>
-        <Sidebar />
-        <MobileNav open onOpenChange={() => {}} />
+        <AreasTree />
+        <AreasSheet open onOpenChange={() => {}} />
       </>,
     )
     const dialog = screen.getByRole('dialog')
-    const aside = document.querySelector('aside') as HTMLElement
+    const aside = document.querySelector(
+      '[data-slot="areas-tree"]',
+    ) as HTMLElement
     const drawerToggles = [
       ...dialog.querySelectorAll('button[aria-controls]'),
     ] as HTMLElement[]
@@ -542,44 +491,10 @@ describe('MobileNav', () => {
     expect(areaPanel('ai', aside)).toHaveClass('hidden')
   })
 
-  it('keeps the rail flyout groups distinct from the drawer groups', async () => {
-    usePreferencesStore.setState({ sidebarCollapsed: true })
-    renderIntel(
-      <>
-        <Sidebar />
-        <MobileNav open onOpenChange={() => {}} />
-      </>,
-    )
-    const drawer = screen.getByRole('dialog', { name: 'Main navigation' })
-    // The rail sits in the aria-hidden, pointer-inert desktop sidebar while the modal
-    // drawer is open; a plain DOM click (not a user-event pointer) opens its flyout so the
-    // three instances — desktop rail flyout, drawer, and their groups — coexist in the DOM.
-    fireEvent.click(
-      screen.getByRole('button', { name: 'AI modules', hidden: true }),
-    )
-    const flyout = (await screen.findByRole('dialog', {
-      name: 'AI modules',
-      hidden: true,
-    })) as HTMLElement
-    const ids = (root: ParentNode) =>
-      [...root.querySelectorAll('[role="group"][aria-labelledby]')].map((g) =>
-        g.getAttribute('aria-labelledby'),
-      )
-    const flyoutIds = ids(flyout)
-    const drawerIds = ids(drawer)
-    expect(flyoutIds.length).toBeGreaterThan(0)
-    expect(flyoutIds.filter((id) => drawerIds.includes(id))).toEqual([])
-    for (const id of [...flyoutIds, ...drawerIds])
-      expect(
-        document.querySelectorAll(`[id="${id}"]`),
-        id as string,
-      ).toHaveLength(1)
-  })
-
   it('projects the same areas and closes on navigation', async () => {
     const onOpenChange = vi.fn()
     const user = userEvent.setup()
-    renderIntel(<MobileNav open onOpenChange={onOpenChange} />)
+    renderIntel(<AreasSheet open onOpenChange={onOpenChange} />)
     const ids = [...document.querySelectorAll('[data-nav-area]')].map((e) =>
       e.getAttribute('data-nav-area'),
     )

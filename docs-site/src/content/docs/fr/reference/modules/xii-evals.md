@@ -39,8 +39,15 @@ persiste trois choses : une preuve par cas en ajout seul, un agrégat d'exécuti
 `Score`, `Passed`, `OccurredAt`, `Metrics`) que la conformité (XIII) et l'interface lisent
 **sans connaître les propres tables de XII**. Les exécutions s'effectuent de façon synchrone ; le flux SSE d'une
 exécution *rejoue l'exécution persistée* (trames par cas, puis un résumé), il n'actionne rien.
-Une régression par rapport à une référence positionne `regressed` et écrit un **`Finding`** central
-(`Kind = eval_regression`), émis au mieux sur le bus sous la forme
+Une régression est une comparaison de score ponctuelle avec une exécution de référence.
+Quand la baisse de score dépasse le `regression_threshold` de la suite, l'exécution
+positionne `regressed` et écrit un **`Finding`** central (`Kind = eval_regression`).
+Cette comparaison n'a pas d'intervalle. La référence automatique est la dernière
+exécution terminée pour la même suite et le même sujet, et pour la même variante
+lorsqu'il y en a une. Cette exécution peut utiliser une autre version de suite, un
+autre modèle ou un autre scorer, et la comparaison ne dit pas lequel a changé. Après
+un changement de version de suite, passez une référence explicite ou épinglez-en une
+(`POST /baselines`). Le constat est émis au mieux sur le bus sous la forme
 [`finding.reported`](/fr/reference/events/) pour que les modules de diffusion (santé/notifications) le
 routent. Côté lecture, les **tableaux de bord (scorecards)** agrègent le taux de réussite, le score moyen et la tendance par
 sujet et s'exportent en CSV/JSON.
@@ -77,12 +84,19 @@ concordent**, et rapporte le taux de `position_consistency` mesuré.
 La **barrière de régression** (`POST /gate`, CLI `evals gate`) transforme tout cela en un
 verdict CI bloquant : une régression par rapport à la référence, un taux de réussite inférieur au seuil de la suite, ou un
 **juge non calibré** font échouer la barrière (sortie 1) ; un identifiant de juge manquant se dégrade
-en un avertissement *déclaré*, jamais en une réussite silencieuse. Le coût du juge en CI est contrôlé par un
-échantillon de cas déterministe à graine fixe, un cache de verdicts indexé par contenu + épinglage du modèle juge +
-version du prompt, et un contrôle préalable de budget FinOps qui refuse de dépenser au-delà d'un plafond. La
+en un avertissement *déclaré*, jamais en une réussite silencieuse. La
+graine de la barrière choisit les cas de l'échantillon ; elle ne rend pas un modèle
+distant déterministe. Un succès du cache de verdicts, indexé par le contenu, l'épinglage
+du modèle juge et la version du prompt, renvoie le verdict enregistré. Un échec, et toute
+exécution `llm_judge` ordinaire hors de cette barrière, rappelle le juge distant et peut
+différer. Le contrôle FinOps ne porte que sur cette barrière. Quand aucun budget FinOps
+qui bloque ou limite ne s'applique aux appels au juge, la barrière autorise la dépense.
+Quand le stockage des budgets ne peut pas être lu, la barrière refuse la dépense et
+échoue avec `budget_blocked`. Un budget qui bloque ou limite arrête la dépense. La
 seule échappatoire à une barrière échouée est le **contournement gouverné** — niveau admin, raison
 écrite, audité — qui change le verdict *effectif* que la CI revérifie, jamais celui qui est
-enregistré. Chaque taux rapporté est livré avec son dénominateur et son intervalle à 95 % ; voir
+enregistré. Chaque taux rapporté est livré avec son dénominateur et son intervalle à 95 % ; la
+comparaison de régression, non. Voir
 `docs/EVAL-METHODOLOGY.md` dans le dépôt pour la méthodologie complète et les sources.
 
 :::caution[Limites honnêtes]

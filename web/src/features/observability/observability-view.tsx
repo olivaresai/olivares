@@ -318,7 +318,7 @@ function TracesTab({ tenant }: { tenant: string | null }) {
                 value={filters.q ?? ''}
                 onChange={(e) => patchUrlState({ q: e.target.value })}
                 placeholder={t('traces.searchPlaceholder')}
-                className="h-8 w-full rounded-md border bg-background pl-8 pr-3 text-caption focus:outline-none focus:ring-1 focus:ring-ring"
+                className="h-8 w-full rounded-md border border-ctl-border bg-background pl-8 pr-3 text-caption focus:outline-none focus:ring-1 focus:ring-ring"
                 aria-label={t('traces.searchPlaceholder')}
               />
             </div>
@@ -327,13 +327,13 @@ function TracesTab({ tenant }: { tenant: string | null }) {
               value={filters.service ?? ''}
               onChange={(e) => patchUrlState({ service: e.target.value })}
               placeholder={t('traces.filters.servicePlaceholder')}
-              className="h-8 w-full rounded-md border bg-background px-3 text-caption focus:outline-none focus:ring-1 focus:ring-ring"
+              className="h-8 w-full rounded-md border border-ctl-border bg-background px-3 text-caption focus:outline-none focus:ring-1 focus:ring-ring"
               aria-label={t('traces.filters.service')}
             />
             <select
               value={filters.status ?? ''}
               onChange={(e) => patchUrlState({ status: e.target.value })}
-              className="h-8 w-full rounded-md border bg-background px-3 text-caption text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+              className="h-8 w-full rounded-md border border-ctl-border bg-background px-3 text-caption text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
               aria-label={t('traces.filters.status')}
             >
               <option value="">{t('traces.filters.allStatuses')}</option>
@@ -349,7 +349,7 @@ function TracesTab({ tenant }: { tenant: string | null }) {
                 onChange={(e) =>
                   patchUrlState({ from: rfc3339FromLocal(e.target.value) })
                 }
-                className="h-8 min-w-0 flex-1 rounded-md border bg-background px-2 text-caption focus:outline-none focus:ring-1 focus:ring-ring"
+                className="h-8 min-w-0 flex-1 rounded-md border border-ctl-border bg-background px-2 text-caption focus:outline-none focus:ring-1 focus:ring-ring"
                 aria-label={t('traces.filters.from')}
               />
             </label>
@@ -363,7 +363,7 @@ function TracesTab({ tenant }: { tenant: string | null }) {
                 onChange={(e) =>
                   patchUrlState({ to: rfc3339FromLocal(e.target.value) })
                 }
-                className="h-8 min-w-0 flex-1 rounded-md border bg-background px-2 text-caption focus:outline-none focus:ring-1 focus:ring-ring"
+                className="h-8 min-w-0 flex-1 rounded-md border border-ctl-border bg-background px-2 text-caption focus:outline-none focus:ring-1 focus:ring-ring"
                 aria-label={t('traces.filters.to')}
               />
             </label>

@@ -37,6 +37,10 @@ const (
 	// DelegationProof "handle" scheme. Like every credential only SHA-256(secret)
 	// is stored, and it never authenticates through the ordinary Authenticate path.
 	PrefixDelegation = "olvd"
+	// PrefixScopedSession is a session confined to one tenant. It has its own
+	// prefix so that a binary which does not know session scope refuses the token
+	// instead of treating it as an account-wide session.
+	PrefixScopedSession = "olvt"
 
 	selectorBytes = 16 // 128-bit public selector
 	secretBytes   = 32 // 256-bit secret

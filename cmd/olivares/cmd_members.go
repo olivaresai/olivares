@@ -184,9 +184,23 @@ func membersGrantCmd(client bootstrapClient) *cobra.Command {
 			if ws := strings.TrimSpace(workspaceID); ws != "" {
 				body["workspace_id"] = ws
 			}
-			raw, err := client.expect(cmd, http.MethodPost, membershipsPath, body, http.StatusCreated)
+			raw, status, bearer, err := client.do(cmd, http.MethodPost, membershipsPath, body)
 			if err != nil {
 				return err
+			}
+			switch status {
+			case http.StatusCreated:
+			case http.StatusAccepted:
+				// The account exists and is not a member of the tenant: a grant never
+				// joins it without its holder's consent, and nothing was written.
+				return renderOut(cmd, func(out io.Writer) error {
+					_, err := fmt.Fprintf(out, "not granted: %s already has an account that is not a member of tenant %s; "+
+						"joining it requires its holder's consent (nothing was written)\n",
+						safeCLIValue(userID, ""), safeCLIValue(resolved.Tenant, ""))
+					return err
+				}, json.RawMessage(raw))
+			default:
+				return redactCoded(bootstrapHTTPError(status, raw), bearer)
 			}
 			var granted cliGrantedMembership
 			if err := decodeBootstrapJSON("members", raw, &granted); err != nil {

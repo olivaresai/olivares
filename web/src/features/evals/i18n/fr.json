@@ -58,7 +58,7 @@
     "regressed": "En régression · dérive {{drift}}",
     "noRegression": "Aucune",
     "empty": "Aucune exécution sur la période.",
-    "emptyHint": "Chaque exécution d’évaluation de la plage sélectionnée est listée ici avec son score et sa durée. Élargissez la plage ou lancez une exécution.",
+    "emptyHint": "Chaque exécution d’évaluation de la plage sélectionnée est listée ici avec son score. Élargissez la plage ou lancez une exécution.",
     "overN": "sur {{n}}",
     "notScored": "not scored — no verdict",
     "noBaseline": "no baseline — nothing compared"
@@ -118,7 +118,7 @@
   },
   "drift": {
     "title": "Dérive — {{subject}}",
-    "description": "Score au fil du temps par rapport au seuil de réussite de la suite ; un déclin soutenu constitue une dégradation.",
+    "description": "Score au fil du temps par rapport au seuil de réussite de la suite. Une régression est une comparaison de score ponctuelle avec une exécution de référence, qui peut utiliser une autre version de suite, un autre modèle ou un autre scorer, et la comparaison ne dit pas lequel a changé. Après un changement de version de suite, épinglez une référence.",
     "score": "Score",
     "threshold": "Seuil de réussite",
     "pickerTitle": "Sujet",

@@ -45,11 +45,7 @@ func (h *harness) postForm(path, token string, form url.Values) formResp {
 func (h *harness) issueEditorToken(super auth.Principal, tenant model.TenantID, email string) string {
 	h.t.Helper()
 	ctx := context.Background()
-	u, err := h.authr.CreateUser(ctx, super, auth.NewUser{Email: email, Password: "editor-pass-1"})
-	if err != nil {
-		h.t.Fatal(err)
-	}
-	if _, err := h.authr.GrantMembership(ctx, super, u.ID, tenant, auth.RoleEditor, model.ID("")); err != nil {
+	if _, err := h.authr.CreateUser(ctx, super, auth.NewUser{Email: email, Password: "editor-pass-1", Tenant: tenant, Role: auth.RoleEditor}); err != nil {
 		h.t.Fatal(err)
 	}
 	tok, _, err := h.authr.IssueToken(ctx, super, auth.TokenSpec{Name: "editor", BoundTenant: tenant, Role: auth.RoleEditor})

@@ -50,11 +50,11 @@ func registerAccessTierEntitlementSchema(reg store.ExtensionRegistry) error {
 		Kind:  accessTierEntitlementKind,
 		Table: accessTierEntitlementTable,
 		Fields: []model.FieldSpec{
-			{Name: colATETier, Kind: model.KindText, Indexed: true},
-			{Name: colATEState, Kind: model.KindText, Indexed: true},
-			{Name: colATENote, Kind: model.KindText, Nullable: true},
-			{Name: colATEAsOf, Kind: model.KindText, Nullable: true},
-			{Name: colATEUpdatedBy, Kind: model.KindText, Nullable: true},
+			{Name: colATETier, Kind: model.KindText, Indexed: true, Principal: model.None("an access-tier name normalized at entitlements.go:78-81, read only as a tier at entitlements.go:211")},
+			{Name: colATEState, Kind: model.KindText, Indexed: true, Principal: model.None("closed set refused otherwise at entitlements.go:82-85")},
+			{Name: colATENote, Kind: model.KindText, Nullable: true, Principal: model.None("operator prose only rendered at entitlements.go:110")},
+			{Name: colATEAsOf, Kind: model.KindText, Nullable: true, Principal: model.None("a capture-time label defaulted to the writer's timestamp at entitlements.go:92-95, entitlements.go:169, only rendered at entitlements.go:111")},
+			{Name: colATEUpdatedBy, Kind: model.KindText, Nullable: true, Principal: pdeclActorEvidence},
 		},
 		Indexes: []model.IndexSpec{{
 			Name: "models_access_tier_entitlement_uniq", Columns: []string{model.ColTenantID, colATETier}, Unique: true,

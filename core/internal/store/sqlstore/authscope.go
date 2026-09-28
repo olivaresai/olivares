@@ -22,6 +22,7 @@ type authScope struct {
 
 var _ store.AuthScope = (*authScope)(nil)
 var _ store.AuthPrincipalEvidenceScope = (*authScope)(nil)
+var _ store.AuthCredentialBindingScope = (*authScope)(nil)
 
 // The auth partition is where first-boot bootstrap decides "no user exists yet,
 // so I may create the first one". That decision is only safe if it serializes
@@ -171,6 +172,25 @@ func (a *authScope) PEPServiceCredentials() store.Repository[model.PEPServiceCre
 
 func (a *authScope) PDPDecisionClaims() store.PDPClaimReader {
 	return pdpClaimReader{inner: newTypedRepo(a.ts.repo(pdpDecisionClaimDescriptor), pdpDecisionClaimCodec)}
+}
+
+// TenantExclusions is directory-tracked like memberships: every write bumps the
+// excluding tenant's directory epoch, so a tenant writer that pinned it conflicts.
+func (a *authScope) TenantExclusions() store.Repository[model.TenantExclusion] {
+	inner := newTypedRepo(a.ts.repo(tenantExclusionDescriptor), tenantExclusionCodec)
+	return newDirectoryTrackedRepo(inner, a.ts.directoryWriter, authExclusionDirectoryResolver(inner))
+}
+
+func (a *authScope) AccountOffers() store.Repository[model.AccountOffer] {
+	return newTypedRepo(a.ts.repo(accountOfferDescriptor), accountOfferCodec)
+}
+
+// CredentialBindings hands out the narrow custody surface of durable credential
+// bindings (credential_binding.go): Get, a subject's current binding (Current)
+// and its one row per generation (AtGeneration), Create and the one-time
+// Supersede. No read returns a subject's whole history.
+func (a *authScope) CredentialBindings() store.CredentialBindingStore {
+	return credentialBindingStore{g: a.ts.repo(credentialBindingDescriptor), directory: a.ts.directoryWriter}
 }
 
 // pdpClaimReader is the CONCRETE read-only claim surface returned by

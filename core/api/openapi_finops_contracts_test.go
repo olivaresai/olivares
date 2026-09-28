@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 )
 
@@ -19,6 +20,8 @@ func TestFinopsRequestBodyContracts(t *testing.T) {
 		pattern  string
 		fields   []string
 		required []string
+		// dims, when set, is the property set of the nested `dims` document.
+		dims []string
 	}{
 		{
 			method: http.MethodPost, pattern: "/budgets",
@@ -74,6 +77,25 @@ func TestFinopsRequestBodyContracts(t *testing.T) {
 			fields:   []string{"period", "period_start"},
 			required: []string{"period", "period_start"},
 		},
+		{
+			method: http.MethodPost, pattern: "/admission/reserve",
+			fields:   []string{"actor_ref", "dims", "estimate_micro_usd", "groups", "idempotency_key", "scope", "unreachable"},
+			required: []string{"idempotency_key", "scope"},
+			// The names finops.SpendDims carries on the wire (modules/finops/budgets_wire_test.go).
+			dims: []string{"agent_group_refs", "agent_ref", "api_key_ref", "context_window", "cost_center_ref", "cost_type",
+				"gateway", "identity_ref", "inference_geo", "model_ref", "project", "provider_ref", "routine_ref",
+				"service_tier", "session_ref", "team", "user_group_refs", "workspace_ref"},
+		},
+		{
+			// No required list: Commit and Release answer an absent or empty handle as a
+			// no-op, so a required handle would publish a refusal the handler never makes.
+			method: http.MethodPost, pattern: "/admission/commit",
+			fields: []string{"actual_micro_usd", "handle"},
+		},
+		{
+			method: http.MethodPost, pattern: "/admission/release",
+			fields: []string{"handle"},
+		},
 	}
 
 	if got, want := len(finopsOpenAPIContracts), len(tests); got != want {
@@ -108,6 +130,12 @@ func TestFinopsRequestBodyContracts(t *testing.T) {
 			}
 			if got := sortedStrings(schema["required"]); !reflect.DeepEqual(got, tt.required) {
 				t.Fatalf("required = %v, want %v", got, tt.required)
+			}
+			if tt.dims != nil {
+				dims := mustMap(t, mustMap(t, properties["dims"], "schema.properties.dims")["properties"], "dims.properties")
+				if got := sortedMapKeys(dims); !reflect.DeepEqual(got, tt.dims) {
+					t.Fatalf("dims property names = %v, want %v", got, tt.dims)
+				}
 			}
 		})
 	}
@@ -173,21 +201,90 @@ func TestFinopsRequestBodyRegistryIsScopedAndFresh(t *testing.T) {
 func TestFinopsBodylessMutationsStayBodyless(t *testing.T) {
 	t.Parallel()
 
-	for _, pattern := range []string{
-		"/budgets/{id}",
-		"/cost-centers/{id}",
-		"/cost-centers/{id}/mappings/{mid}",
-		"/model-rates/{id}",
+	for _, route := range []moduleRoute{
+		{ns: "finops", method: http.MethodDelete, pattern: "/budgets/{id}"},
+		{ns: "finops", method: http.MethodDelete, pattern: "/cost-centers/{id}"},
+		{ns: "finops", method: http.MethodDelete, pattern: "/cost-centers/{id}/mappings/{mid}"},
+		{ns: "finops", method: http.MethodDelete, pattern: "/model-rates/{id}"},
+		// The reconciliation job takes its subject from the authenticated tenant.
+		{ns: "finops", method: http.MethodPost, pattern: "/admission/reconcile"},
 	} {
-		route := moduleRoute{ns: "finops", method: http.MethodDelete, pattern: pattern}
 		decl, ok := finopsRequestBodyDeclarationFor(route)
 		if !ok || decl.kind != finopsBodyless {
-			t.Errorf("DELETE %s declaration = (%#v, %t), want bodyless", pattern, decl, ok)
+			t.Errorf("%s %s declaration = (%#v, %t), want bodyless", route.method, route.pattern, decl, ok)
 		}
 		if body, found := finopsRequestBody(route); found || body != nil {
-			t.Errorf("DELETE %s unexpectedly declares requestBody %#v", pattern, body)
+			t.Errorf("%s %s unexpectedly declares requestBody %#v", route.method, route.pattern, body)
 		}
 	}
+}
+
+// TestContractsPublishOneHandle: an admission hold is settled by the one handle Reserve
+// answers with, and the published documents say so. Commit takes the handle and the
+// measured amount, release the handle alone, and no FinOps request document names a hold
+// anywhere else.
+func TestContractsPublishOneHandle(t *testing.T) {
+	t.Parallel()
+
+	for _, tt := range []struct {
+		pattern string
+		fields  []string
+	}{
+		{pattern: "/admission/commit", fields: []string{"actual_micro_usd", "handle"}},
+		{pattern: "/admission/release", fields: []string{"handle"}},
+	} {
+		body, ok := finopsRequestBody(moduleRoute{ns: "finops", method: http.MethodPost, pattern: tt.pattern})
+		if !ok {
+			t.Errorf("POST %s publishes no request document", tt.pattern)
+			continue
+		}
+		properties := mustMap(t, finopsBodySchema(t, body)["properties"], "schema.properties")
+		if got := sortedMapKeys(properties); !reflect.DeepEqual(got, tt.fields) {
+			t.Errorf("POST %s publishes %v, want %v", tt.pattern, got, tt.fields)
+		}
+		if handle, _ := properties["handle"].(map[string]any); handle["type"] != "string" {
+			t.Errorf("POST %s handle = %#v, want a string", tt.pattern, properties["handle"])
+		}
+	}
+
+	for key, contract := range finopsOpenAPIContracts {
+		for _, name := range holdNames(contract.schema(), "") {
+			if name != "handle" || (key != http.MethodPost+" /admission/commit" && key != http.MethodPost+" /admission/release") {
+				t.Errorf("%s publishes a hold under %q: the wire carries one handle, on commit and release only", key, name)
+			}
+		}
+	}
+}
+
+// holdNames lists, with its path from the document's root, every property of schema whose
+// name ends in "handle", through nested objects, arrays and composed branches.
+func holdNames(schema map[string]any, at string) []string {
+	var out []string
+	properties, _ := schema["properties"].(map[string]any)
+	for name, property := range properties {
+		path := name
+		if at != "" {
+			path = at + "." + name
+		}
+		if strings.HasSuffix(name, "handle") {
+			out = append(out, path)
+		}
+		if nested, ok := property.(map[string]any); ok {
+			out = append(out, holdNames(nested, path)...)
+		}
+	}
+	if items, ok := schema["items"].(map[string]any); ok {
+		out = append(out, holdNames(items, at+"[]")...)
+	}
+	for _, keyword := range []string{"allOf", "anyOf", "oneOf"} {
+		branches, _ := schema[keyword].([]any)
+		for _, branch := range branches {
+			if nested, ok := branch.(map[string]any); ok {
+				out = append(out, holdNames(nested, at)...)
+			}
+		}
+	}
+	return out
 }
 
 func finopsBodySchema(t *testing.T, body map[string]any) map[string]any {

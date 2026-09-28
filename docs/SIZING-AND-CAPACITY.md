@@ -5,9 +5,22 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 # Capacity, sizing & the SQLite→Postgres threshold
 
-**Date:** 2026-06-09 · **Status:** reproducible baseline measured on reference hardware (see provenance)
+**Date:** 2026-06-09 (initial baseline; later measurements are dated below).
+**Support classification updated:** 2026-09-27. Historical workload observations and
+planning examples; current release capacity is not qualified by these numbers.
+The [v26.10 deployment support matrix](../deploy/support-matrix.md) is the canonical
+qualification record and supersedes this guide's former support classification.
 
-> Answers the buyer's capacity questions — *events/sec per node, p99, governed decisions/sec, RAG corpus ceiling, storage growth, tenants, recovery time, when do I move SQLite→Postgres* — with **reproducible benchmarks, not asserted numbers**. The harness spans `core/bench/`, `cmd/olivares/`, `modules/inferenceproxy/` and `modules/knowledge/` (`task bench` → `scripts/bench-capacity.sh`); every number below was produced by it and is reproducible on your own hardware. Read §1 (how to reproduce) before trusting §2 (the write baseline); §2-ter adds the decision plane, retrieval plane and storage growth. **Write throughput is storage-bound** and the baseline was measured on a RAM filesystem.
+> This guide preserves recorded benchmarks for specific write, decision, retrieval
+> and storage workloads, plus separate DR observations and planning examples.
+> The benchmark harness spans `core/bench/`, `cmd/olivares/`,
+> `modules/inferenceproxy/` and `modules/knowledge/` (`task bench` →
+> `scripts/bench-capacity.sh`). Rerunning it measures the current artifact and host;
+> it does not promise the same results. Read each section's hardware, date, storage
+> and fixture limits. Missing artifact or workload fields are **not recorded**,
+> not inherited from a different section. The initial write baseline used tmpfs;
+> §2-bis records a separate durable-disk run, and §4 contains unqualified sizing
+> hypotheses rather than measured resource minima.
 
 ---
 
@@ -27,7 +40,7 @@ What each benchmark measures:
 - `BenchmarkAccessEdgeUpsert` — the observation→edge write (each ingested observation materializes/merges an access edge); a fresh origin per op = the conservative INSERT case. **This is the closest proxy to "events/sec per node."**
 - `BenchmarkAgentCreate` — a plain entity INSERT.
 - `BenchmarkWriteScaling` — the same write from 1, 4, 16 concurrent writers: characterizes the single-writer ceiling.
-- `BenchmarkBusFanout` — the in-process bus alone (store-free): proves the bus is not the bottleneck.
+- `BenchmarkBusFanout` — the in-process bus alone (store-free): isolates fan-out cost from store writes.
 
 ---
 
@@ -45,7 +58,12 @@ What each benchmark measures:
 | Access-edge upsert (INSERT) | **1,475** | 0.68 ms | 0.86 ms | **1.21 ms** | 8.94 ms | 199 |
 | Agent create (entity INSERT) | **1,884** | 0.54 ms | 0.71 ms | **1.09 ms** | 8.20 ms | 65 |
 
-**Read this as:** one node sustains **~1.5k durable writes/sec** with **sub-ms p50 and ~1.2 ms p99** at the single-writer ceiling on RAM-backed storage. The ingest-latency SLO (< 250 ms, [17-PRODUCTION-READINESS-SLO.md §2](17-PRODUCTION-READINESS-SLO.md)) has ~200× headroom over this floor — the SLO exists to catch **backpressure** (when a slow subscriber blocks the publish and ingest latency climbs toward seconds), not the happy path.
+**Read this as:** this historical SQLite workload on RAM-backed storage recorded
+**~1.5k writes/sec**, **sub-ms p50 and ~1.2 ms p99**. It does not establish durable
+storage performance or whole-node capacity. The ingest target (< 250 ms,
+[17-PRODUCTION-READINESS-SLO.md §2](17-PRODUCTION-READINESS-SLO.md)) is a separate
+end-to-end objective: store-write latency alone does not measure ingestion,
+subscriber backpressure or the complete workload.
 
 ### 2.2 The single-writer ceiling — concurrency makes SQLite *worse* (the SQLite→Postgres smoking gun)
 
@@ -64,7 +82,7 @@ SQLite is pinned to **one connection** (`SetMaxOpenConns(1)` in `core/internal/s
 | 1 | **3,829,168** |
 | 4 | 1,542,709 |
 
-The in-process event bus moves **~3.8M events/sec** — ~2,500× the durable-write rate. So the **store write is unambiguously the per-node ceiling**; the bus and CPU have ample headroom. (The bus applies bounded, blocking backpressure: a slow subscriber's full 256-deep queue blocks the publisher rather than dropping events — `core/eventbus/inproc.go`.)
+The historical store-free bus sample recorded **~3.8M events/sec** — ~2,500× the separate write-path sample. That comparison identifies the cost of those measured paths; it does not establish CPU headroom or the limiting component of every deployment. (The bus applies bounded, blocking backpressure: a slow subscriber's full 256-deep queue blocks the publisher rather than dropping events — `core/eventbus/inproc.go`.)
 
 ---
 
@@ -98,8 +116,9 @@ match the RAM-backed baseline within noise (fast fsync), so §2's numbers were n
 
 SQLite stays flat (~1.5k/s) at every concurrency — the single-connection serialization point.
 Postgres matches it at one writer and climbs with concurrency (3.5× at 4 writers, 5.3× at 16).
-**Measured crossover: between 1 and 2 concurrent writers — effectively, any concurrent write load
-at all favors Postgres on this class of hardware.** Single-writer latency is a wash (Postgres p99
+**Observed at the sampled points:** throughput was similar at one writer, and
+Postgres was higher at four and sixteen. The earlier **1–2 writer** crossover
+estimate was an inference; two writers were not a sampled row. Single-writer latency is a wash (Postgres p99
 is tighter; its audit-append throughput is ~13% lower per the chained-row round trips).
 
 ### 2-bis.3 Rate-limit admission cost (shared store vs in-proc)
@@ -112,9 +131,11 @@ is tighter; its audit-append throughput is ~13% lower per the chained-row round 
 | Postgres shared store, 8 workers (distinct tenants) | 0.71 ms | 0.95 ms | **11,058** aggregate |
 | Postgres shared store, 8 workers hammering ONE identity | 2.14 ms | 16.3 ms | **2,341** on that identity |
 
-Read this as: in HA mode (`OLIVARES_RATELIMIT_STORE=postgres`) every metered request pays one
-~0.5–0.7 ms plpgsql round trip — well inside the 300 ms API p99 budget — and a single hot
-identity (its aggregate bucket row serializes all its takes) still sustains **~2,300 takes/s**,
+Read this as: the PostgreSQL rate-limit-store benchmark
+(`OLIVARES_RATELIMIT_STORE=postgres`) recorded ~0.5–0.7 ms for the single-worker
+round trip, compared with the separate 300 ms API p99 target. The shared store is
+not itself an HA qualification. The sampled hot identity (its aggregate bucket row
+serializes all its takes) recorded **~2,300 takes/s**,
 above the highest built-in ceiling (tier `system`, 2,000/s). This is the evidence basis for the
 decision: the `Store` interface exists, but **the data does not justify a Redis
 implementation** at v1 scale.
@@ -135,8 +156,8 @@ as a CPU-and-serialization **lower bound** versus durable disk. Produced by `tas
 
 ### 2-ter.1 Decision plane — governed decisions/sec & p99
 
-Every request crosses one of two governed decision paths: the Claude Code **hook PEP** and the
-inline-inference **proxy PEP**. The in-memory policy *algebra* and the *end-to-end* governed decision
+The measurements cover two governed decision paths: the Claude Code **hook PEP**
+and the inline-inference **proxy PEP**. The in-memory policy *algebra* and the *end-to-end* governed decision
 (bearer auth, policy read, kill-switch, and — on the proxy path — a signed audit-ledger append) are
 measured separately.
 
@@ -147,11 +168,11 @@ measured separately.
 | Proxy DLP algebra (in-memory) | **219,000** | 1 µs | 1 µs | **2 µs** | pure DLP class decision |
 | Proxy authorize end-to-end | **1,707** | 0.56 ms | 0.71 ms | **1.08 ms** | + auth + per-call policy read + **signed audit append** |
 
-**Read this as:** the decision *algebra* is ~200k/sec — never the bottleneck (like the bus). A *full* governed
-decision is bounded by its store I/O: ~4.8k/sec for the read-only hook path, ~1.7k/sec for the proxy path
-that also writes a signed ledger entry per allowed call (the ~0.7 ms gap between them ≈ one signed audit
-append, consistent with §2.1's ~1.2 ms append floor). Both sit far inside the API p99 < 300 ms SLO
-(`docs/17-PRODUCTION-READINESS-SLO.md`). **Scope caveat:** the end-to-end figures use deterministic stubs
+**Read this as:** the historical algebra samples were ~200k/sec; the measured
+hook and proxy authorization paths were ~4.8k/sec and ~1.7k/sec respectively.
+Their measured latencies were below the separate API p99 < 300 ms target
+(`docs/17-PRODUCTION-READINESS-SLO.md`). These are not whole-session, provider
+streaming or settlement rates. **Scope caveat:** the end-to-end figures use deterministic stubs
 for the model-access, budget and PDP-overlay gates (each has its own cost but needs external or mutable
 state); they measure the auth + policy + kill-switch + audit spine, not those pluggable gates.
 
@@ -169,8 +190,11 @@ decode + exact rank + lineage/audit write), local hash embedder:
 Exact cosine ⇒ **recall@k = 1.0 by construction**. The ranker math alone is cheap (10k → 4 ms, 100k → 46 ms,
 1M → 594 ms); at 100k the end-to-end ~1 s is dominated **not** by cosine but by loading + decoding all 100k
 candidate rows from the store per query (~657 MB, ~7.1M allocations). That is the measured bottleneck, and it
-is why **100,000 chunks/tenant is the supported ceiling** of the linear index (enforced — the store-backed
-index refuses to exceed it). Beyond it, wire an **external vector backend** (`OLIVARES_VECTOR_BACKEND` =
+is the basis of the **100,000 chunks per knowledge base limit** of the store-backed
+linear index (`maxChunksPerKB`, enforced during ingest). The historical benchmark
+used one knowledge base in one tenant and reported `chunks/tenant`; it does not
+establish a tenant-wide total limit. This implementation bound is not a qualified
+throughput or latency commitment for every deployment. Beyond it, wire an **external vector backend** (`OLIVARES_VECTOR_BACKEND` =
 pgvector/Qdrant/…) that pushes the search down and skips the full-scan load, trading exactness for latency.
 Lead with the honest linear envelope; reach for ANN only when the corpus crosses this measured ceiling.
 
@@ -193,17 +217,25 @@ Tenants are **rows** under FORCE row-level security, not per-node processes, so 
 tenant cap**; the bound is aggregate write throughput plus per-tenant fixed storage. Provisioning a tenant
 (id + org + audit genesis + default workspace) measures **~930/sec** (p99 2.2 ms); a per-tenant scoped read
 costs the same whether spread across 100 distinct tenants or hammering one (**~10.4k/sec**, p99 0.14 ms) — the
-RLS predicate adds **no per-tenant scaling penalty**. Likewise "concurrent agents" is not a separate cap:
-sustained concurrent governed activity is bounded by the decision throughput above (~4.8k hook / ~1.7k proxy
-governed decisions/sec per node) and the single-writer durable-write ceiling (§2.2) for the mutations those
-decisions produce. Size by those measured rates, not by an agent count.
+sample did not show an additional per-tenant cost between those two cases. It does
+not establish behavior for arbitrary tenant counts. There is no separate agent-count
+capacity result here: the historical ~4.8k hook / ~1.7k proxy decisions/sec samples
+omit full provider execution. Size the complete concurrent workload, including its
+writes, from a new measurement of the intended deployment.
 
 ### 2-ter.5 Recovery time (RTO) is part of the envelope
 
-A restore re-verifies the full ledger (chain + per-event signatures + checkpoints), so RTO scales **linearly**
-with ledger size — measured **≈123 ms at 500 events → ≈1.26 s at 20,000 events** (`docs/DR-RUNBOOK.md`, drill
-log). Objective tiers: **< 15 min** (SQLite single-node, cron backups) / **< 30 min** (Postgres logical/PITR).
-Size the restore window from your ledger size and this linear verify curve.
+The historical SQLite drill recorded **123 ms at 500 events → 1.257 s at 20,000
+events**, including restore, boot and ledger verification. Its host was the
+reference build container on 2026-07-15: Linux 7.0.14-arch1-1, Go 1.26.4, 16 vCPU
+([DR runbook](DR-RUNBOOK.md), [day-2 drill log](DAY2-DRILL-LOG.md)). The approximately
+linear trend applies to that measured range, not an arbitrary estate or a complete
+isolated rebuild. The drill uses an ephemeral in-memory passphrase; it does not
+qualify operational key custody or reconciliation of effects after the restore point.
+The **< 15 min** SQLite and **< 30 min** Postgres logical/PITR figures are targets,
+not observed release-wide RTO or customer commitments. RPO needs the data classes
+and observed loss window. Measure the intended deployment's complete usable-state
+recovery, including keys, authority and external-effect reconciliation.
 
 ### 2-ter.6 Content sync memory is bounded by the KB, not the upstream corpus
 
@@ -215,7 +247,7 @@ SharePoint/Drive/filesystem source cannot balloon host RAM during a sync; a sour
 ordinary paginated `List` (already page-bounded for in-tree connectors). Orphan detection is preserved
 exactly — the delete set is the DB-of-this-source minus the refs seen while streaming, computed without ever
 holding the full upstream ref set — and a cancelled context cuts the paging immediately. The KB itself remains
-bound by the retrieval ceiling in §2-ter.2 (the 100,000-chunk/tenant enforced cap).
+bound by the retrieval ceiling in §2-ter.2 (the 100,000-chunk per knowledge base enforced cap).
 
 ---
 
@@ -225,31 +257,40 @@ Both backends are first-class today (selected by `--engine sqlite|postgres` + `-
 
 **Stay on SQLite (the embedded default) when ALL hold:**
 - Single node (no HA requirement — `replicaCount > 1` is unsupported on SQLite anyway).
-- Sustained write rate comfortably below the single-writer knee (reference: ~1k/s on RAM, **lower on disk** — measure yours).
+- Sustained write rate below the knee measured on your storage and workload; the historical ~1k/s planning reference is not a supported capacity limit.
 - Few concurrent writers (concurrency degrades SQLite, §2.2).
 - Air-gapped / embedded / self-serve where operational simplicity (one file, no DB to run) outweighs scale.
 
 **Move to Postgres when ANY holds:**
-- Sustained writes approach or exceed the single-writer knee on **your** storage (re-run §1 — fsync on durable disk lowers the knee, so the crossover comes sooner than the RAM baseline suggests).
+- Sustained writes approach or exceed the measured single-writer knee on **your** storage (re-run §1; the recorded NVMe result and tmpfs result were similar, so do not assume every disk shifts the knee by the same amount).
 - You have many concurrent writers (Postgres has a real pool + MVCC and scales with `MaxConns`/cores; SQLite does the opposite).
-- You need **HA / replicas / failover** — `replicaCount > 1` is supported **only** on Postgres, with FORCE row-level-security per tenant (already implemented: `core/internal/store/dialect`, `deploy/postgres/01-app-role.sql`).
+- You are qualifying **HA / replicas / failover**: the chart permits `core.replicaCount > 1` only with `core.engine=postgres` and a shared signing key. PostgreSQL and its tenant isolation are prerequisites, not proof of HA; use the [support matrix](../deploy/support-matrix.md) and the declared fault/recovery oracle.
 - You need horizontal read scaling or multi-host.
 
-**How to find your own crossover:** run `OLIVARES_TEST_POSTGRES_DSN=… task bench` on the target. SQLite's `writers=1/4/16` line stays flat-or-falling; Postgres climbs with writers. The crossover is the writer-count where Postgres aggregate throughput overtakes SQLite's flat ceiling. On the reference hardware that crossover measured at **1–2 concurrent writers** (§2-bis.2, 2026-06-12) — re-run on your storage class; networked block storage moves it.
+**How to find your own crossover:** run `OLIVARES_TEST_POSTGRES_DSN=… task bench` on the target. SQLite's `writers=1/4/16` line stays flat-or-falling; Postgres climbs with writers. The crossover is the writer-count where Postgres aggregate throughput overtakes SQLite's flat ceiling. The reference samples used **1, 4 and 16 writers** (§2-bis.2, 2026-06-12). The historical **1–2 writer** estimate was not directly sampled; measure the crossover on your storage class and workload.
 
 ---
 
 ## 4. Node sizing (single node, self-hosted tier)
 
-The constraint is the **single-writer commit path**, not CPU or RAM (the bus and runtime are far from saturated at the write ceiling). Practical guidance:
+The examples below are **historical planning hypotheses**, not benchmarked
+resource minima, qualified profiles or customer capacity commitments. The reference
+benchmark host had 32 GiB RAM; the 4/8 GiB suggestions were not that measured tuple.
+Measure CPU, memory, storage, concurrency and provider/model resources for the
+actual Module set and workload before selecting a node. Single-node production
+remains an intended topology when qualified.
 
-| Profile | Sustained ingest | Backend | Node (reference) | Notes |
+| Planning case | Workload hypothesis to measure | Backend | Unqualified resource estimate | Limits |
 |---|---|---|---|---|
 | Self-serve / dev | < ~200 writes/s | SQLite | 2 vCPU / 4 GiB / fast SSD | embedded, simplest |
-| Single-node prod | up to the measured knee (~1k/s on disk — verify) | SQLite | 4 vCPU / 8 GiB / **NVMe** (fsync-bound) | storage is the lever; prefer local NVMe |
-| Scale / HA | above the knee, or any HA need | **Postgres** | engine 4 vCPU / 8 GiB + managed PG | leader-election + standby; size PG to write load |
+| Single-node prod | historical ~1k/s planning assumption; measure the actual knee | SQLite | 4 vCPU / 8 GiB / **NVMe** (fsync-bound) | qualify the storage and complete workload |
+| Scale / HA | above the knee, or a declared HA requirement | **Postgres** | engine 4 vCPU / 8 GiB + managed PG | size the full workload; leader election and standby alone do not qualify HA |
 
-**fsync dominates write sizing.** Because each commit fsyncs the WAL, the single most impactful sizing choice is the **storage class**: local NVMe ≫ networked block ≫ slow disk. CPU/RAM headroom is large; do not over-provision compute to fix a write-throughput problem that is storage- or backend-bound.
+**Measure storage and compute together.** Commit latency depends on the selected
+durability settings and storage class. The historical samples do not establish a
+universal ordering of local NVMe, networked block and other disks, or spare CPU/RAM
+for an unmeasured workload. Increasing RAM does not replace admission bounds;
+retain headroom for model runtimes, subprocesses, queues and disk growth.
 
 `olivares_http_requests_in_flight`, `go_goroutines`, and `go_memstats_*` on `/metrics` are the headroom signals; alert on the write-latency SLO ([17-PRODUCTION-READINESS-SLO.md](17-PRODUCTION-READINESS-SLO.md)) and the saturation of the single writer (busy_timeout tail → the collector-backpressure runbook).
 

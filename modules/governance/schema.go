@@ -423,6 +423,39 @@ const (
 	colTFSObservedAt  = "observed_at"  // server instant the signal was recorded — the window boundary
 )
 
+// Principal declarations shared by several columns below. A shared None reason
+// is true for every column that carries it; every other column states its own.
+var (
+	// pdeclActorEvidence is an audit-actor string ("user:<id>" or "token:<id>")
+	// kept as provenance of who did something.
+	pdeclActorEvidence = model.Ref(model.EncodeUserRef, model.ClassEvidence)
+	// pdeclUserEvidence is a bare account id kept as provenance only.
+	pdeclUserEvidence = model.Ref(model.EncodeUserID, model.ClassEvidence)
+	// pdeclUserRestrict is a bare account id that a separation-of-duty or
+	// distinct-approver check reads, and that check can only refuse.
+	pdeclUserRestrict = model.Ref(model.EncodeUserID, model.ClassRestrict)
+	// pdeclRiskTier is a word of the closed risk-tier vocabulary.
+	pdeclRiskTier = model.None("a risk tier from the closed low|medium|high|critical vocabulary: risktier.go:55-61")
+	// pdeclPermission is one catalog permission of a role or group bundle.
+	pdeclPermission = model.None("a <kind>:<verb> catalog permission, validated at scopedadmin_handlers.go:188-196")
+	// pdeclRBACName is the operator key of a custom role or permission group.
+	pdeclRBACName = model.None("an identifier-class role or group name: scopedadmin_handlers.go:170-183")
+	// pdeclRBACProse is the display label or description of a role or group.
+	pdeclRBACProse = model.None("bounded operator prose (scopedadmin_handlers.go:230-235), rendered only: scopedadmin_handlers.go:100, scopedadmin_handlers.go:108")
+	// pdeclManagedSurface is the surface of a distributed or observed policy.
+	pdeclManagedSurface = model.None("a managed policy surface, validated at claudepolicy.go:246-255")
+	// pdeclStopAgentRef is an identifier of the agent a stop applies to.
+	pdeclStopAgentRef = model.None("an agent identifier; the stop reader only denies actuation attributed to that agent: killswitch.go:984-991")
+	// pdeclCollectionAttr is a key or value of mirrored directory group metadata.
+	pdeclCollectionAttr = model.None("directory group metadata whose email, UPN and credential keys are dropped before storage (roster.go:51, roster.go:399); no reader decodes it: roster.go:512")
+)
+
+// pdeclStringList declares a JSON array of strings whose every element is
+// classified by leaf. No element names a principal, so the class is vacuous.
+func pdeclStringList(leaf *model.ColumnDecl) *model.ColumnDecl {
+	return model.Nested([]string(nil), model.ClassEvidence, model.Leaf("[]", leaf))
+}
+
 // RegisterSchema declares the module's owned entities. It satisfies the
 // engine-side runtime.SchemaProvider seam (structural — no runtime import) and is
 // called once, at store construction, before any Scope exists (S02 §7 /):
@@ -445,11 +478,12 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Kind:  collectionKind,
 		Table: collectionTable,
 		Fields: []model.FieldSpec{
-			{Name: colSource, Kind: model.KindText, Indexed: true},
-			{Name: colColRef, Kind: model.KindText, Indexed: true},
-			{Name: colColKind, Kind: model.KindText, Indexed: true},
-			{Name: colDisplayName, Kind: model.KindText, Nullable: true},
-			{Name: colAttributes, Kind: model.KindJSON, Nullable: true},
+			{Name: colSource, Kind: model.KindText, Indexed: true, Principal: model.None("a directory source name, a lookup key and a rendered label: roster.go:339, roster.go:512")},
+			{Name: colColRef, Kind: model.KindText, Indexed: true, Principal: model.None("a directory group ref, a lookup key and a rendered label: roster.go:339, roster.go:512")},
+			{Name: colColKind, Kind: model.KindText, Indexed: true, Principal: model.None("a directory collection kind, filtered and rendered only: roster.go:512, roster.go:522")},
+			{Name: colDisplayName, Kind: model.KindText, Nullable: true, Principal: model.None("a directory display label, rendered only: roster.go:512")},
+			{Name: colAttributes, Kind: model.KindJSON, Nullable: true, Principal: model.Nested(map[string]string(nil), model.ClassEvidence,
+				model.Leaf("{key}", pdeclCollectionAttr), model.Leaf("{}", pdeclCollectionAttr))},
 		},
 		Indexes: []model.IndexSpec{{
 			// One collection row per (source, ref). Unique index leads with
@@ -466,10 +500,12 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Kind:  memberKind,
 		Table: memberTable,
 		Fields: []model.FieldSpec{
-			{Name: colSource, Kind: model.KindText, Indexed: true},
-			{Name: colCollectionRef, Kind: model.KindText, Indexed: true},
-			{Name: colMemberRef, Kind: model.KindText, Indexed: true},
-			{Name: colMemberKind, Kind: model.KindText},
+			{Name: colSource, Kind: model.KindText, Indexed: true, Principal: model.None("a directory source name, part of the edge's lookup key: roster.go:369")},
+			{Name: colCollectionRef, Kind: model.KindText, Indexed: true, Principal: model.None("a directory group ref; readers walk it as a group key only: roster.go:590, cmd/olivares/knowledgeguard.go:195")},
+			// The directory external id of the member (an identity or a nested group),
+			// mirrored from the source.
+			{Name: colMemberRef, Kind: model.KindText, Indexed: true, Principal: model.Ref(model.EncodeExternalID, model.ClassEvidence)},
+			{Name: colMemberKind, Kind: model.KindText, Principal: model.None("identity or collection, compared with the collection kind only: roster.go:623")},
 		},
 		Indexes: []model.IndexSpec{{
 			// One membership edge per (source, collection, member).
@@ -485,17 +521,19 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Kind:  approvalKind,
 		Table: approvalTable,
 		Fields: []model.FieldSpec{
-			{Name: colSubjectKind, Kind: model.KindText, Indexed: true},
-			{Name: colSubjectRef, Kind: model.KindText, Indexed: true},
-			{Name: colAction, Kind: model.KindText, Indexed: true},
-			{Name: colRequestedBy, Kind: model.KindText},
-			{Name: colRequestedByUser, Kind: model.KindText, Indexed: true},
-			{Name: colStatus, Kind: model.KindText, Indexed: true},
+			{Name: colSubjectKind, Kind: model.KindText, Indexed: true, Principal: model.None("an approval subject category, matched against approval policies and compared with \"agent\" only: approvals.go:314, killswitch.go:410")},
+			{Name: colSubjectRef, Kind: model.KindText, Indexed: true, Principal: model.None("an opaque approval subject compared verbatim with a gated action's subject: cmd/olivares/approvalbridge.go:793, killswitch.go:413")},
+			{Name: colAction, Kind: model.KindText, Indexed: true, Principal: model.None("a governed action name, matched against approval policies and the stop's action set: approvals.go:314, killswitch.go:384")},
+			// The requester's audit actor feeds the same separation-of-duty
+			// comparison as requested_by_user, which can only refuse a decision.
+			{Name: colRequestedBy, Kind: model.KindText, Principal: model.Ref(model.EncodeUserRef, model.ClassRestrict)},
+			{Name: colRequestedByUser, Kind: model.KindText, Indexed: true, Principal: pdeclUserRestrict},
+			{Name: colStatus, Kind: model.KindText, Indexed: true, Principal: model.None("a lifecycle status from a closed set: approvals.go:105")},
 			{Name: colRequiredApproval, Kind: model.KindInt},
 			{Name: colApproveCount, Kind: model.KindInt},
 			{Name: colRejectCount, Kind: model.KindInt},
-			{Name: colReason, Kind: model.KindText, Nullable: true},
-			{Name: colPolicyRef, Kind: model.KindText, Nullable: true},
+			{Name: colReason, Kind: model.KindText, Nullable: true, Principal: model.None("bounded operator prose, rendered only: approvals.go:94")},
+			{Name: colPolicyRef, Kind: model.KindText, Nullable: true, Principal: model.None("the id of the matched approval policy, rendered only: approvals.go:94")},
 			{Name: colExpiresAt, Kind: model.KindTimestamp, Nullable: true, Indexed: true},
 			{Name: colEscalateAt, Kind: model.KindTimestamp, Nullable: true},
 			{Name: colEscalatedAt, Kind: model.KindTimestamp, Nullable: true},
@@ -503,7 +541,7 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 			// (F-02): single-use consume markers, NULL until first consume. Added
 			// nullable so the store's additive reconcile materializes them on an existing
 			// table without a hand-authored migration (sqlstore reconcileColumns).
-			{Name: colConsumedBy, Kind: model.KindText, Nullable: true, Indexed: true},
+			{Name: colConsumedBy, Kind: model.KindText, Nullable: true, Indexed: true, Principal: model.None("the consuming caller's tool-use id, compared only with a later consumer id: approvals.go:840")},
 			{Name: colConsumedAt, Kind: model.KindTimestamp, Nullable: true},
 		},
 	}); err != nil {
@@ -515,12 +553,12 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Table:      decisionTable,
 		AppendOnly: true, // immutable action→human evidence (docs/SECURITY-HARDENING.md)
 		Fields: []model.FieldSpec{
-			{Name: colApprovalID, Kind: model.KindUUID, Indexed: true},
-			{Name: colDecision, Kind: model.KindText},
-			{Name: colDecider, Kind: model.KindText},
-			{Name: colDeciderUser, Kind: model.KindText, Indexed: true},
+			{Name: colApprovalID, Kind: model.KindUUID, Indexed: true, Principal: model.None("the id of the approval this decision belongs to: approvals.go:590")},
+			{Name: colDecision, Kind: model.KindText, Principal: model.None("approve or reject, compared at approvals.go:608")},
+			{Name: colDecider, Kind: model.KindText, Principal: pdeclActorEvidence},
+			{Name: colDeciderUser, Kind: model.KindText, Indexed: true, Principal: pdeclUserRestrict},
 			{Name: colLevel, Kind: model.KindInt, Nullable: true},
-			{Name: colNote, Kind: model.KindText, Nullable: true},
+			{Name: colNote, Kind: model.KindText, Nullable: true, Principal: model.None("bounded operator prose, rendered only: approvals.go:437")},
 			{Name: colDecidedAt, Kind: model.KindTimestamp},
 		},
 		Indexes: []model.IndexSpec{{
@@ -543,21 +581,21 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Kind:  breakGlassKind,
 		Table: breakGlassTable,
 		Fields: []model.FieldSpec{
-			{Name: colBGMatchAction, Kind: model.KindText, Nullable: true},
-			{Name: colBGReason, Kind: model.KindText},
-			{Name: colBGActivatedBy, Kind: model.KindText},
-			{Name: colBGActivatedByUser, Kind: model.KindText, Indexed: true},
-			{Name: colBGStatus, Kind: model.KindText, Indexed: true},
+			{Name: colBGMatchAction, Kind: model.KindText, Nullable: true, Principal: model.None("an action pattern matched against the consumed action only: breakglass.go:652")},
+			{Name: colBGReason, Kind: model.KindText, Principal: model.None("bounded operator prose, rendered only: breakglass.go:130")},
+			{Name: colBGActivatedBy, Kind: model.KindText, Principal: pdeclActorEvidence},
+			{Name: colBGActivatedByUser, Kind: model.KindText, Indexed: true, Principal: pdeclUserRestrict},
+			{Name: colBGStatus, Kind: model.KindText, Indexed: true, Principal: model.None("a lifecycle status from a closed set: breakglass.go:144")},
 			{Name: colBGActivatedAt, Kind: model.KindTimestamp},
 			{Name: colBGExpiresAt, Kind: model.KindTimestamp, Indexed: true},
 			{Name: colBGRevokedAt, Kind: model.KindTimestamp, Nullable: true},
 			{Name: colBGUseCount, Kind: model.KindInt},
 			{Name: colBGReviewed, Kind: model.KindBool, Indexed: true},
 			{Name: colBGReviewedAt, Kind: model.KindTimestamp, Nullable: true},
-			{Name: colBGReviewedBy, Kind: model.KindText, Nullable: true},
-			{Name: colBGReviewedByUser, Kind: model.KindText, Nullable: true},
-			{Name: colBGReviewNote, Kind: model.KindText, Nullable: true},
-			{Name: colBGActiveGuard, Kind: model.KindText, Nullable: true},
+			{Name: colBGReviewedBy, Kind: model.KindText, Nullable: true, Principal: pdeclActorEvidence},
+			{Name: colBGReviewedByUser, Kind: model.KindText, Nullable: true, Principal: pdeclUserEvidence},
+			{Name: colBGReviewNote, Kind: model.KindText, Nullable: true, Principal: model.None("bounded operator prose, rendered only: breakglass.go:135")},
+			{Name: colBGActiveGuard, Kind: model.KindText, Nullable: true, Principal: model.None("a constant sentinel backing the one-unreviewed-grant index: breakglass.go:81, breakglass.go:269")},
 		},
 		Indexes: []model.IndexSpec{{
 			// At most one UNREVIEWED grant per tenant: the hard backstop the app-level
@@ -582,12 +620,12 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Table:      breakGlassUseTable,
 		AppendOnly: true,
 		Fields: []model.FieldSpec{
-			{Name: colBGUseGrant, Kind: model.KindUUID, Indexed: true},
-			{Name: colAction, Kind: model.KindText, Indexed: true},
-			{Name: colSubjectKind, Kind: model.KindText, Nullable: true},
-			{Name: colSubjectRef, Kind: model.KindText, Nullable: true},
-			{Name: colBGUsedBy, Kind: model.KindText},
-			{Name: colBGUsedByUser, Kind: model.KindText, Nullable: true},
+			{Name: colBGUseGrant, Kind: model.KindUUID, Indexed: true, Principal: model.None("the id of the break-glass grant that was used: breakglass.go:406")},
+			{Name: colAction, Kind: model.KindText, Indexed: true, Principal: model.None("the consumed action name, rendered only: breakglass.go:412")},
+			{Name: colSubjectKind, Kind: model.KindText, Nullable: true, Principal: model.None("the caller-declared subject of the use, recorded and rendered only: breakglass.go:413")},
+			{Name: colSubjectRef, Kind: model.KindText, Nullable: true, Principal: model.None("the caller-declared subject of the use, recorded and rendered only: breakglass.go:413")},
+			{Name: colBGUsedBy, Kind: model.KindText, Principal: pdeclActorEvidence},
+			{Name: colBGUsedByUser, Kind: model.KindText, Nullable: true, Principal: pdeclUserEvidence},
 			{Name: colBGUsedAt, Kind: model.KindTimestamp},
 		},
 	}); err != nil {
@@ -604,29 +642,35 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		AuthorizationFact:      true,
 		AuthorizationLockOrder: 30,
 		Fields: []model.FieldSpec{
-			{Name: colNHIIdentityRef, Kind: model.KindText, Indexed: true},
-			{Name: colNHISource, Kind: model.KindText, Nullable: true, Indexed: true},
-			{Name: colNHICriticality, Kind: model.KindText},
-			{Name: colNHIOwnerRef, Kind: model.KindText, Nullable: true},
-			{Name: colNHIOwnerActor, Kind: model.KindText, Nullable: true},
-			{Name: colNHISponsorRef, Kind: model.KindText, Nullable: true, Indexed: true},
-			{Name: colNHISponsorActor, Kind: model.KindText, Nullable: true},
+			// The identity's own roster external id. Its readers block the identity
+			// (nhilifecycle_sweep.go:479-500) or check an agent identity's lifecycle;
+			// the row gives the named identity nothing its own grants do not.
+			{Name: colNHIIdentityRef, Kind: model.KindText, Indexed: true, Principal: model.Ref(model.EncodeExternalID, model.ClassRestrict)},
+			{Name: colNHISource, Kind: model.KindText, Nullable: true, Indexed: true, Principal: model.None("the provider an identity comes from, rendered and used to pick a rotation actuator: nhilifecycle.go:267, nhilifecycle_handlers.go:372")},
+			{Name: colNHICriticality, Kind: model.KindText, Principal: pdeclRiskTier},
+			// Owner and sponsor hold the external id of a human roster identity; the
+			// sponsor is compared with an account's external id before a delegation
+			// to the agent is minted (agentidentity.go:196-198).
+			{Name: colNHIOwnerRef, Kind: model.KindText, Nullable: true, Principal: model.Ref(model.EncodeExternalID, model.ClassAuthority)},
+			{Name: colNHIOwnerActor, Kind: model.KindText, Nullable: true, Principal: pdeclActorEvidence},
+			{Name: colNHISponsorRef, Kind: model.KindText, Nullable: true, Indexed: true, Principal: model.Ref(model.EncodeExternalID, model.ClassAuthority)},
+			{Name: colNHISponsorActor, Kind: model.KindText, Nullable: true, Principal: pdeclActorEvidence},
 			{Name: colNHIRotatedAt, Kind: model.KindTimestamp, Nullable: true},
 			{Name: colNHIMaxAgeSec, Kind: model.KindInt},
-			{Name: colNHITargetRef, Kind: model.KindText, Nullable: true},
-			{Name: colNHIStaleStatus, Kind: model.KindText, Indexed: true},
+			{Name: colNHITargetRef, Kind: model.KindText, Nullable: true, Principal: model.None("an operator-declared actuation target handed to the rotation actuator: nhilifecycle_handlers.go:375")},
+			{Name: colNHIStaleStatus, Kind: model.KindText, Indexed: true, Principal: model.None("ok, stale or unknown, counted by status only: reportsource.go:65, nhilifecycle_sweep.go:431")},
 			{Name: colNHIStaleSince, Kind: model.KindTimestamp, Nullable: true},
 			{Name: colNHIBlockAfter, Kind: model.KindTimestamp, Nullable: true},
-			{Name: colNHIEnforce, Kind: model.KindText, Indexed: true},
-			{Name: colNHIEnforceWhy, Kind: model.KindText, Nullable: true},
+			{Name: colNHIEnforce, Kind: model.KindText, Indexed: true, Principal: model.None("monitor, alert or blocked, compared at nhilifecycle_sweep.go:492")},
+			{Name: colNHIEnforceWhy, Kind: model.KindText, Nullable: true, Principal: model.None("a lifecycle reason returned with a block and rendered: nhilifecycle_sweep.go:494, nhilifecycle.go:277")},
 			{Name: colNHIOrphaned, Kind: model.KindBool, Indexed: true},
-			{Name: colNHIOffboard, Kind: model.KindText, Indexed: true},
+			{Name: colNHIOffboard, Kind: model.KindText, Indexed: true, Principal: model.None("none, soft_deleted or finalized, compared at nhilifecycle_sweep.go:176")},
 			{Name: colNHISoftAt, Kind: model.KindTimestamp, Nullable: true},
 			{Name: colNHIRecoverUntil, Kind: model.KindTimestamp, Nullable: true},
 			// (post-nullable => reconciled additively onto live tables).
 			{Name: colNHIRegistryOrphan, Kind: model.KindBool, Nullable: true},
 			// (post-nullable => reconciled additively onto live tables).
-			{Name: colNHIKind, Kind: model.KindText, Nullable: true},
+			{Name: colNHIKind, Kind: model.KindText, Nullable: true, Principal: model.None("empty or agent, compared at agentidentity.go:269")},
 		},
 		Indexes: []model.IndexSpec{{
 			// One lifecycle row per NHI (identity_ref). Leads with tenant_id;
@@ -649,11 +693,13 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Table:      nhiEventTable,
 		AppendOnly: true,
 		Fields: []model.FieldSpec{
-			{Name: colNHIEvtIdentity, Kind: model.KindText, Indexed: true},
-			{Name: colNHIEvtKind, Kind: model.KindText, Indexed: true},
-			{Name: colNHIEvtActor, Kind: model.KindText},
-			{Name: colNHIEvtUser, Kind: model.KindText, Nullable: true},
-			{Name: colNHIEvtDetail, Kind: model.KindText, Nullable: true},
+			{Name: colNHIEvtIdentity, Kind: model.KindText, Indexed: true, Principal: model.Ref(model.EncodeExternalID, model.ClassEvidence)},
+			{Name: colNHIEvtKind, Kind: model.KindText, Indexed: true, Principal: model.None("a lifecycle event name, rendered only: nhilifecycle_handlers.go:143")},
+			{Name: colNHIEvtActor, Kind: model.KindText, Principal: pdeclActorEvidence},
+			{Name: colNHIEvtUser, Kind: model.KindText, Nullable: true, Principal: pdeclUserEvidence},
+			// Detail prose embeds owner and sponsor external ids at untyped positions
+			// (nhilifecycle_handlers.go:240).
+			{Name: colNHIEvtDetail, Kind: model.KindText, Nullable: true, Principal: model.Scan(model.ClassEvidence)},
 			{Name: colNHIEvtAt, Kind: model.KindTimestamp},
 		},
 	}); err != nil {
@@ -670,13 +716,13 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Table:      revisionTable,
 		AppendOnly: true,
 		Fields: []model.FieldSpec{
-			{Name: colRevSurface, Kind: model.KindText, Indexed: true},
+			{Name: colRevSurface, Kind: model.KindText, Indexed: true, Principal: model.None("a surface of the closed revision registry; the writer refuses any other: revision.go:112")},
 			{Name: colRevNumber, Kind: model.KindInt, Indexed: true},
-			{Name: colRevContent, Kind: model.KindText},
-			{Name: colRevAuthor, Kind: model.KindText},
+			{Name: colRevContent, Kind: model.KindText, Principal: revisionContentDecl},
+			{Name: colRevAuthor, Kind: model.KindText, Principal: pdeclActorEvidence},
 			{Name: colRevValidated, Kind: model.KindBool},
 			{Name: colRevActive, Kind: model.KindBool, Nullable: true},
-			{Name: colRevNote, Kind: model.KindText, Nullable: true},
+			{Name: colRevNote, Kind: model.KindText, Nullable: true, Principal: model.None("an optional publish note, rendered only: revision.go:68")},
 		},
 		Indexes: []model.IndexSpec{{
 			// One revision number per (surface): the DB-level guard that serializes the
@@ -699,8 +745,8 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Table: policyFreshnessTable,
 		Fields: []model.FieldSpec{
 			{Name: colFreshRefreshedAt, Kind: model.KindTimestamp},
-			{Name: colFreshMaxStaleness, Kind: model.KindText},
-			{Name: colFreshAdoptedRevision, Kind: model.KindText},
+			{Name: colFreshMaxStaleness, Kind: model.KindText, Principal: model.None("a duration, parsed at freshness.go:82-85")},
+			{Name: colFreshAdoptedRevision, Kind: model.KindText, Principal: model.None("a policy content digest, compared at freshness.go:189")},
 			{Name: colFreshAdoptedCreated, Kind: model.KindTimestamp, Nullable: true},
 		},
 		Indexes: []model.IndexSpec{{
@@ -720,13 +766,14 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Table:      distributionTable,
 		AppendOnly: true,
 		Fields: []model.FieldSpec{
-			{Name: colDistSurface, Kind: model.KindText, Indexed: true},
+			{Name: colDistSurface, Kind: model.KindText, Indexed: true, Principal: pdeclManagedSurface},
 			{Name: colDistRevision, Kind: model.KindInt, Indexed: true},
-			{Name: colDistRendered, Kind: model.KindText},
-			{Name: colDistSHA, Kind: model.KindText},
-			{Name: colDistSig, Kind: model.KindText},
-			{Name: colDistPubKey, Kind: model.KindText},
-			{Name: colDistKeyFP, Kind: model.KindText},
+			// A distributed copy of a revision's content; the revision is the source.
+			{Name: colDistRendered, Kind: model.KindText, Principal: model.Scan(model.ClassEvidence)},
+			{Name: colDistSHA, Kind: model.KindText, Principal: model.None("a hex digest of the distributed bytes, compared at claudepolicy_truth.go:678")},
+			{Name: colDistSig, Kind: model.KindText, Principal: model.None("a detached signature produced at claudepolicy_truth.go:183 and rendered only: claudepolicy_truth.go:568")},
+			{Name: colDistPubKey, Kind: model.KindText, Principal: model.None("a verifier public key, rendered only: claudepolicy_truth.go:569")},
+			{Name: colDistKeyFP, Kind: model.KindText, Principal: model.None("a signer key fingerprint, compared at claudepolicy_truth.go:682")},
 			{Name: colDistSignedAt, Kind: model.KindTimestamp},
 		},
 		Indexes: []model.IndexSpec{{
@@ -747,14 +794,15 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Kind:  observedKind,
 		Table: observedTable,
 		Fields: []model.FieldSpec{
-			{Name: colObsSurface, Kind: model.KindText, Indexed: true},
-			{Name: colObsScope, Kind: model.KindText, Indexed: true},
-			{Name: colObsContent, Kind: model.KindText},
-			{Name: colObsContentSHA, Kind: model.KindText},
+			{Name: colObsSurface, Kind: model.KindText, Indexed: true, Principal: pdeclManagedSurface},
+			{Name: colObsScope, Kind: model.KindText, Indexed: true, Principal: model.None("a host or distribution name, validated at claudepolicy_truth.go:628-636 and used as the upsert key: claudepolicy_truth.go:709")},
+			// A host's observed copy of a policy document, compared for drift only.
+			{Name: colObsContent, Kind: model.KindText, Principal: model.Scan(model.ClassEvidence)},
+			{Name: colObsContentSHA, Kind: model.KindText, Principal: model.None("a hex digest of the stored content: claudepolicy_truth.go:725, claudepolicy_truth.go:954")},
 			{Name: colObsReportedRev, Kind: model.KindInt, Nullable: true},
-			{Name: colObsReportedSHA, Kind: model.KindText, Nullable: true},
+			{Name: colObsReportedSHA, Kind: model.KindText, Nullable: true, Principal: model.None("an artifact hash echoed by the host, compared before it is stored: claudepolicy_truth.go:678, claudepolicy_truth.go:718")},
 			{Name: colObsVerified, Kind: model.KindBool},
-			{Name: colObsReporter, Kind: model.KindText},
+			{Name: colObsReporter, Kind: model.KindText, Principal: pdeclActorEvidence},
 			{Name: colObsCheckedInAt, Kind: model.KindTimestamp},
 			{Name: colObsDriftCount, Kind: model.KindInt},
 			{Name: colObsDriftAt, Kind: model.KindTimestamp, Nullable: true},
@@ -777,32 +825,32 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Kind:  killSwitchKind,
 		Table: killSwitchTable,
 		Fields: []model.FieldSpec{
-			{Name: colKSScopeKind, Kind: model.KindText, Indexed: true},
-			{Name: colKSScopeRef, Kind: model.KindText, Nullable: true, Indexed: true},
-			{Name: colKSAgentID, Kind: model.KindUUID, Nullable: true},
-			{Name: colKSAgentExternal, Kind: model.KindText, Nullable: true},
-			{Name: colKSStatus, Kind: model.KindText, Indexed: true},
-			{Name: colKSReason, Kind: model.KindText},
-			{Name: colKSSource, Kind: model.KindText},
-			{Name: colKSRuleRef, Kind: model.KindUUID, Nullable: true},
-			{Name: colKSEngagedBy, Kind: model.KindText},
-			{Name: colKSEngagedByUser, Kind: model.KindText, Nullable: true},
+			{Name: colKSScopeKind, Kind: model.KindText, Indexed: true, Principal: model.None("estate or agent, compared at killswitch.go:984")},
+			{Name: colKSScopeRef, Kind: model.KindText, Nullable: true, Indexed: true, Principal: pdeclStopAgentRef},
+			{Name: colKSAgentID, Kind: model.KindUUID, Nullable: true, Principal: pdeclStopAgentRef},
+			{Name: colKSAgentExternal, Kind: model.KindText, Nullable: true, Principal: pdeclStopAgentRef},
+			{Name: colKSStatus, Kind: model.KindText, Indexed: true, Principal: model.None("active or reenabled, compared at killswitch.go:978")},
+			{Name: colKSReason, Kind: model.KindText, Principal: model.None("bounded operator prose, rendered only: killswitch.go:200")},
+			{Name: colKSSource, Kind: model.KindText, Principal: model.None("the engaging path from a closed set, rendered only: killswitch.go:200")},
+			{Name: colKSRuleRef, Kind: model.KindUUID, Nullable: true, Principal: model.None("the id of the guardian rule that engaged the stop, rendered only: killswitch.go:201")},
+			{Name: colKSEngagedBy, Kind: model.KindText, Principal: pdeclActorEvidence},
+			{Name: colKSEngagedByUser, Kind: model.KindText, Nullable: true, Principal: pdeclUserRestrict},
 			{Name: colKSEngagedAAL, Kind: model.KindInt},
 			{Name: colKSEngagedAt, Kind: model.KindTimestamp},
 			{Name: colKSEngageSeq, Kind: model.KindInt},
 			{Name: colKSRevokedCount, Kind: model.KindInt},
-			{Name: colKSReenableAppr, Kind: model.KindUUID, Nullable: true},
-			{Name: colKSReenableReqBy, Kind: model.KindText, Nullable: true},
-			{Name: colKSReenabledBy, Kind: model.KindText, Nullable: true},
-			{Name: colKSReenabledUser, Kind: model.KindText, Nullable: true},
+			{Name: colKSReenableAppr, Kind: model.KindUUID, Nullable: true, Principal: model.None("the id of the bound re-enable approval: killswitch.go:685")},
+			{Name: colKSReenableReqBy, Kind: model.KindText, Nullable: true, Principal: pdeclUserRestrict},
+			{Name: colKSReenabledBy, Kind: model.KindText, Nullable: true, Principal: pdeclActorEvidence},
+			{Name: colKSReenabledUser, Kind: model.KindText, Nullable: true, Principal: pdeclUserRestrict},
 			{Name: colKSReenabledAt, Kind: model.KindTimestamp, Nullable: true},
 			{Name: colKSReenableSeq, Kind: model.KindInt, Nullable: true},
 			{Name: colKSReviewed, Kind: model.KindBool, Indexed: true},
 			{Name: colKSReviewedAt, Kind: model.KindTimestamp, Nullable: true},
-			{Name: colKSReviewedBy, Kind: model.KindText, Nullable: true},
-			{Name: colKSReviewedUser, Kind: model.KindText, Nullable: true},
-			{Name: colKSReviewNote, Kind: model.KindText, Nullable: true},
-			{Name: colKSActiveGuard, Kind: model.KindText, Nullable: true},
+			{Name: colKSReviewedBy, Kind: model.KindText, Nullable: true, Principal: pdeclActorEvidence},
+			{Name: colKSReviewedUser, Kind: model.KindText, Nullable: true, Principal: pdeclUserEvidence},
+			{Name: colKSReviewNote, Kind: model.KindText, Nullable: true, Principal: model.None("bounded operator prose, rendered only: killswitch.go:207")},
+			{Name: colKSActiveGuard, Kind: model.KindText, Nullable: true, Principal: model.None("a sentinel of the stop's scope key backing the unique index: killswitch.go:286, killswitch.go:742")},
 		},
 		Indexes: []model.IndexSpec{{
 			// At most one ACTIVE stop per scope ("stop:<scopeKey>") and at most one
@@ -823,16 +871,16 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Kind:  guardianRuleKind,
 		Table: guardianRuleTable,
 		Fields: []model.FieldSpec{
-			{Name: colGRName, Kind: model.KindText, Indexed: true},
+			{Name: colGRName, Kind: model.KindText, Indexed: true, Principal: model.None("an operator rule label, rendered and copied into the action trail: guardian.go:142, guardian.go:709")},
 			{Name: colGREnabled, Kind: model.KindBool, Indexed: true},
-			{Name: colGRMatchKinds, Kind: model.KindText, Nullable: true},
-			{Name: colGRMinSeverity, Kind: model.KindText},
-			{Name: colGRAction, Kind: model.KindText},
-			{Name: colGRMode, Kind: model.KindText},
-			{Name: colGRCreatedBy, Kind: model.KindText},
-			{Name: colGRNote, Kind: model.KindText, Nullable: true},
+			{Name: colGRMatchKinds, Kind: model.KindText, Nullable: true, Principal: model.None("comma-separated finding kinds matched against a finding's kind: guardian.go:650")},
+			{Name: colGRMinSeverity, Kind: model.KindText, Principal: model.None("a severity floor from a closed set: guardian.go:212, guardian.go:647")},
+			{Name: colGRAction, Kind: model.KindText, Principal: model.None("a containment action from a closed set: guardian.go:215-219")},
+			{Name: colGRMode, Kind: model.KindText, Principal: model.None("auto or approval: guardian.go:220-224")},
+			{Name: colGRCreatedBy, Kind: model.KindText, Principal: pdeclActorEvidence},
+			{Name: colGRNote, Kind: model.KindText, Nullable: true, Principal: model.None("bounded operator prose, rendered only: guardian.go:146")},
 			// agent-tier filter (nullable, reconciled additively).
-			{Name: colGRAgentTier, Kind: model.KindText, Nullable: true},
+			{Name: colGRAgentTier, Kind: model.KindText, Nullable: true, Principal: pdeclRiskTier},
 		},
 		Indexes: []model.IndexSpec{{
 			// One rule per (tenant, name): names are the operator-facing identity.
@@ -852,16 +900,16 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Kind:  customRoleKind,
 		Table: customRoleTable,
 		Fields: []model.FieldSpec{
-			{Name: colRBACName, Kind: model.KindText, Indexed: true},
-			{Name: colRBACDisplayName, Kind: model.KindText, Nullable: true},
-			{Name: colRBACDescription, Kind: model.KindText, Nullable: true},
-			{Name: colRBACPerms, Kind: model.KindJSON},
-			{Name: colRBACGroups, Kind: model.KindJSON, Nullable: true},
+			{Name: colRBACName, Kind: model.KindText, Indexed: true, Principal: pdeclRBACName},
+			{Name: colRBACDisplayName, Kind: model.KindText, Nullable: true, Principal: pdeclRBACProse},
+			{Name: colRBACDescription, Kind: model.KindText, Nullable: true, Principal: pdeclRBACProse},
+			{Name: colRBACPerms, Kind: model.KindJSON, Principal: pdeclStringList(pdeclPermission)},
+			{Name: colRBACGroups, Kind: model.KindJSON, Nullable: true, Principal: pdeclStringList(model.None("a permission-group name, resolved against the tenant's permission groups: scopedadmin_handlers.go:511-514"))},
 			// additive nullable columns — an existing row reads back Base "" and
 			// Excludes nil, which is exactly the pre semantics (no base, no subtraction).
-			{Name: colRBACBaseRole, Kind: model.KindText, Nullable: true},
-			{Name: colRBACExcludes, Kind: model.KindJSON, Nullable: true},
-			{Name: colRBACCreatedBy, Kind: model.KindText},
+			{Name: colRBACBaseRole, Kind: model.KindText, Nullable: true, Principal: model.None("a built-in role name or empty: scopedadmin_handlers.go:221")},
+			{Name: colRBACExcludes, Kind: model.KindJSON, Nullable: true, Principal: pdeclStringList(pdeclPermission)},
+			{Name: colRBACCreatedBy, Kind: model.KindText, Principal: pdeclActorEvidence},
 		},
 		Indexes: []model.IndexSpec{{
 			// One role per (tenant, name): the operator-facing identity. Leads with
@@ -880,11 +928,11 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Kind:  permGroupKind,
 		Table: permGroupTable,
 		Fields: []model.FieldSpec{
-			{Name: colRBACName, Kind: model.KindText, Indexed: true},
-			{Name: colRBACDisplayName, Kind: model.KindText, Nullable: true},
-			{Name: colRBACDescription, Kind: model.KindText, Nullable: true},
-			{Name: colRBACPerms, Kind: model.KindJSON},
-			{Name: colRBACCreatedBy, Kind: model.KindText},
+			{Name: colRBACName, Kind: model.KindText, Indexed: true, Principal: pdeclRBACName},
+			{Name: colRBACDisplayName, Kind: model.KindText, Nullable: true, Principal: pdeclRBACProse},
+			{Name: colRBACDescription, Kind: model.KindText, Nullable: true, Principal: pdeclRBACProse},
+			{Name: colRBACPerms, Kind: model.KindJSON, Principal: pdeclStringList(pdeclPermission)},
+			{Name: colRBACCreatedBy, Kind: model.KindText, Principal: pdeclActorEvidence},
 		},
 		Indexes: []model.IndexSpec{{
 			Name:    "governance_permission_group_uniq",
@@ -903,15 +951,15 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Kind:  scopedGrantKind,
 		Table: scopedGrantTable,
 		Fields: []model.FieldSpec{
-			{Name: colSGSubjectKind, Kind: model.KindText, Indexed: true},
-			{Name: colSGSubjectRef, Kind: model.KindText, Indexed: true},
-			{Name: colSGRole, Kind: model.KindText, Indexed: true},
+			{Name: colSGSubjectKind, Kind: model.KindText, Indexed: true, Principal: model.None("user, role or group; the writer refuses any other kind: scopedadmin_handlers.go:985-1003")},
+			{Name: colSGSubjectRef, Kind: model.KindText, Indexed: true, Principal: model.KindRef(colSGSubjectKind, model.ClassAuthority)},
+			{Name: colSGRole, Kind: model.KindText, Indexed: true, Principal: model.None("a built-in or custom role name, resolved at scopedadmin_handlers.go:1018-1023")},
 			{Name: colSGRoleCustom, Kind: model.KindBool},
-			{Name: colSGScopeTree, Kind: model.KindText, Indexed: true},
-			{Name: colSGScopeRef, Kind: model.KindText},
-			{Name: colSGScopeClass, Kind: model.KindText},
-			{Name: colSGCreatedBy, Kind: model.KindText},
-			{Name: colSGNote, Kind: model.KindText, Nullable: true},
+			{Name: colSGScopeTree, Kind: model.KindText, Indexed: true, Principal: model.None("tenant, workspace, agent_group or folder: scopedadmin_handlers.go:254-289")},
+			{Name: colSGScopeRef, Kind: model.KindText, Principal: model.None("a workspace or agent-group slug or a resource id, resolved at scopedadmin_handlers.go:259-287")},
+			{Name: colSGScopeClass, Kind: model.KindText, Principal: model.None("a scopeable resource kind: scopedadmin_handlers.go:291")},
+			{Name: colSGCreatedBy, Kind: model.KindText, Principal: pdeclActorEvidence},
+			{Name: colSGNote, Kind: model.KindText, Nullable: true, Principal: model.None("bounded operator prose (scopedadmin_handlers.go:969), rendered only: scopedadmin_handlers.go:118")},
 		},
 		Indexes: []model.IndexSpec{{
 			// One grant per (subject, role, scope): the dedup backstop. scope_ref/
@@ -932,13 +980,13 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Kind:  agentRiskProfileKind,
 		Table: agentRiskProfileTable,
 		Fields: []model.FieldSpec{
-			{Name: colARPAgentID, Kind: model.KindUUID, Indexed: true},
-			{Name: colARPOperatorTier, Kind: model.KindText, Nullable: true},
-			{Name: colARPSuggestedTier, Kind: model.KindText, Nullable: true},
-			{Name: colARPEffectiveTier, Kind: model.KindText, Nullable: true, Indexed: true},
-			{Name: colARPState, Kind: model.KindText, Indexed: true},
-			{Name: colARPSignals, Kind: model.KindJSON, Nullable: true},
-			{Name: colARPReviewedBy, Kind: model.KindText, Nullable: true},
+			{Name: colARPAgentID, Kind: model.KindUUID, Indexed: true, Principal: model.None("a core agent id, parsed as one: agentrisk.go:378")},
+			{Name: colARPOperatorTier, Kind: model.KindText, Nullable: true, Principal: pdeclRiskTier},
+			{Name: colARPSuggestedTier, Kind: model.KindText, Nullable: true, Principal: pdeclRiskTier},
+			{Name: colARPEffectiveTier, Kind: model.KindText, Nullable: true, Indexed: true, Principal: pdeclRiskTier},
+			{Name: colARPState, Kind: model.KindText, Indexed: true, Principal: model.None("unclassified, suggested or reviewed: agentrisk.go:42-44, agentrisk.go:282")},
+			{Name: colARPSignals, Kind: model.KindJSON, Nullable: true, Principal: model.None("numeric and boolean heuristic counters written at agentrisk.go:263-274 and rendered only: agentrisk.go:62-68")},
+			{Name: colARPReviewedBy, Kind: model.KindText, Nullable: true, Principal: pdeclActorEvidence},
 			{Name: colARPReviewedAt, Kind: model.KindTimestamp, Nullable: true},
 		},
 		Indexes: []model.IndexSpec{{
@@ -958,19 +1006,21 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Kind:  guardianActionKind,
 		Table: guardianActionTable,
 		Fields: []model.FieldSpec{
-			{Name: colGARule, Kind: model.KindUUID, Indexed: true},
-			{Name: colGARuleName, Kind: model.KindText},
-			{Name: colGAFindingKind, Kind: model.KindText, Indexed: true},
-			{Name: colGAFindingRef, Kind: model.KindText, Indexed: true},
-			{Name: colGASeverity, Kind: model.KindText},
-			{Name: colGATargetKind, Kind: model.KindText},
-			{Name: colGATargetRef, Kind: model.KindText, Nullable: true},
-			{Name: colGAAction, Kind: model.KindText},
-			{Name: colGAMode, Kind: model.KindText},
-			{Name: colGAStatus, Kind: model.KindText, Indexed: true},
-			{Name: colGAApprovalID, Kind: model.KindUUID, Nullable: true},
-			{Name: colGAKillswitchID, Kind: model.KindUUID, Nullable: true},
-			{Name: colGADetail, Kind: model.KindText, Nullable: true},
+			{Name: colGARule, Kind: model.KindUUID, Indexed: true, Principal: model.None("the id of the guardian rule that acted: guardian.go:432, guardian.go:1046")},
+			{Name: colGARuleName, Kind: model.KindText, Principal: model.None("a copy of the rule label, rendered and used as prose: guardian.go:171, guardian.go:1046")},
+			{Name: colGAFindingKind, Kind: model.KindText, Indexed: true, Principal: model.None("a finding kind label: guardian.go:172, guardian.go:1048")},
+			{Name: colGAFindingRef, Kind: model.KindText, Indexed: true, Principal: model.None("a finding digest used as the dedup key: guardian.go:664, guardian.go:729")},
+			{Name: colGASeverity, Kind: model.KindText, Principal: model.None("a finding severity label: guardian.go:173, guardian.go:1048")},
+			{Name: colGATargetKind, Kind: model.KindText, Principal: model.None("agent, identity or estate: guardian.go:676-690")},
+			// An agent ref or an identity's roster external id; containment of the
+			// target only ever blocks or stops it (guardian.go:1046-1048).
+			{Name: colGATargetRef, Kind: model.KindText, Nullable: true, Principal: model.Ref(model.EncodeExternalID, model.ClassRestrict)},
+			{Name: colGAAction, Kind: model.KindText, Principal: model.None("a containment action from a closed set: guardian.go:215-219, guardian.go:1047")},
+			{Name: colGAMode, Kind: model.KindText, Principal: model.None("auto or approval: guardian.go:220-224")},
+			{Name: colGAStatus, Kind: model.KindText, Indexed: true, Principal: model.None("a lifecycle status, compared at guardian.go:1024")},
+			{Name: colGAApprovalID, Kind: model.KindUUID, Nullable: true, Principal: model.None("the id of the bound approval: guardian.go:1031")},
+			{Name: colGAKillswitchID, Kind: model.KindUUID, Nullable: true, Principal: model.None("the id of the stop the action engaged: killswitch_evidence.go:240")},
+			{Name: colGADetail, Kind: model.KindText, Nullable: true, Principal: model.None("an outcome text, rendered only: guardian.go:176")},
 			{Name: colGAExecutedAt, Kind: model.KindTimestamp, Nullable: true},
 		},
 		Indexes: []model.IndexSpec{{
@@ -991,16 +1041,18 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Kind:  routinePolicyKind,
 		Table: routinePolicyTable,
 		Fields: []model.FieldSpec{
-			{Name: colRPName, Kind: model.KindText, Indexed: true},
-			{Name: colRPScopeKind, Kind: model.KindText, Indexed: true},
-			{Name: colRPScopeRef, Kind: model.KindText},
+			{Name: colRPName, Kind: model.KindText, Indexed: true, Principal: model.None("an operator policy label, rendered only: routines.go:86")},
+			{Name: colRPScopeKind, Kind: model.KindText, Indexed: true, Principal: model.None("tenant, workspace or user: routines.go:201-208, routinepolicy_resolve.go:338-357")},
+			// A user-scoped policy names the owning account's id; it only narrows
+			// what that account's routines may do (routinepolicy_resolve.go:346-353).
+			{Name: colRPScopeRef, Kind: model.KindText, Principal: model.KindRef(colRPScopeKind, model.ClassRestrict)},
 			{Name: colRPEnabled, Kind: model.KindBool, Indexed: true},
 			{Name: colRPMaxCadenceSec, Kind: model.KindInt},
 			{Name: colRPMaxActive, Kind: model.KindInt},
 			{Name: colRPRequireApproval, Kind: model.KindBool},
-			{Name: colRPAllowedCron, Kind: model.KindJSON, Nullable: true},
-			{Name: colRPBlockedEnvs, Kind: model.KindJSON, Nullable: true},
-			{Name: colRPCreatedBy, Kind: model.KindText},
+			{Name: colRPAllowedCron, Kind: model.KindJSON, Nullable: true, Principal: pdeclStringList(model.None("a cron pattern, canonicalized and compared as a schedule: routinepolicy_resolve.go:292-300"))},
+			{Name: colRPBlockedEnvs, Kind: model.KindJSON, Nullable: true, Principal: pdeclStringList(model.None("an environment id collected into the blocked set: routinepolicy_resolve.go:282-289"))},
+			{Name: colRPCreatedBy, Kind: model.KindText, Principal: pdeclActorEvidence},
 		},
 		Indexes: []model.IndexSpec{{
 			// One policy per (tenant, name): the operator-facing identity.
@@ -1024,10 +1076,10 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Kind:  tierFloorSignalKind,
 		Table: tierFloorSignalTable,
 		Fields: []model.FieldSpec{
-			{Name: colTFSAgentID, Kind: model.KindUUID, Indexed: true},
-			{Name: colTFSFingerprint, Kind: model.KindText, Indexed: true},
-			{Name: colTFSSeverity, Kind: model.KindText},
-			{Name: colTFSFindingKind, Kind: model.KindText},
+			{Name: colTFSAgentID, Kind: model.KindUUID, Indexed: true, Principal: model.None("the canonical agent id the floor counts by: tierfloor.go:176")},
+			{Name: colTFSFingerprint, Kind: model.KindText, Indexed: true, Principal: model.None("a finding digest used as the idempotency key: tierfloor.go:158")},
+			{Name: colTFSSeverity, Kind: model.KindText, Principal: model.None("a finding severity kept as evidence; the only reader counts rows by agent and time: tierfloor.go:176-181")},
+			{Name: colTFSFindingKind, Kind: model.KindText, Principal: model.None("a finding kind kept as evidence; the only reader counts rows by agent and time: tierfloor.go:176-181")},
 			{Name: colTFSObservedAt, Kind: model.KindTimestamp, Indexed: true},
 		},
 		Indexes: []model.IndexSpec{{

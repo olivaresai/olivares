@@ -271,6 +271,7 @@ func TestProtocolBindingReserveSettleReplayAndRestart(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = st.Close() })
 	restarted.UseData(api.NewModuleData(st))
+	bindStoreStanding(restarted, st)
 	afterRestart, err := restarted.GetProtocolBinding(context.Background(), f.tenant, ProtocolBindingRef{ID: reviewed.ID})
 	if err != nil || afterRestart.ID != reviewed.ID || afterRestart.ExternalID != reviewed.ExternalID ||
 		afterRestart.LastCommandID != reviewed.LastCommandID || afterRestart.LastEventID != reviewed.LastEventID {

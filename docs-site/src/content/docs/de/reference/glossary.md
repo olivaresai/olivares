@@ -282,9 +282,12 @@ Siehe [Push zu SIEM](/de/how-to/cookbook/push-to-siem/).
 
 ### SLI / SLO
 
-Die publizierten Service-Levels: Verfügbarkeit via `/readyz`, Request-Erfolg,
-API- und Ingest-Latenz p99 — mit Single-Node- und HA-Stufen separat
-und ehrlich angegeben.
+Ein **SLI** misst das Verhalten eines Dienstes, etwa die Verfügbarkeit über
+`/readyz`, den Request-Erfolg oder die p99-Latenz von API und Ingest. Ein **SLO**
+legt dafür einen Zielwert über ein angegebenes Zeitfenster fest, etwa 28 Tage.
+Die veröffentlichten Single-Node- und HA-Ziele bleiben Ziele; ihre beobachtete
+Erreichung benötigt Messungen für diese Bereitstellung und dieses Zeitfenster.
+Eine vertragliche Servicezusage ist eine gesonderte, ausdrückliche Verpflichtung.
 Siehe [Monitoring](/de/how-to/monitor-with-prometheus/).
 
 ### Source
@@ -298,5 +301,7 @@ Siehe [Eine Quelle anbinden](/de/how-to/connect-a-source/).
 
 Der Enforcement-Check, den jede governte Aktuierung gegen den
 [Kill-Switch](#kill-switch)-State macht — vor jedem anderen Gate geprüft, fail-
-**closed** (das Inverse des Budget-Checks, der fail-open ist: ein kaputter
-Meter darf keinen Outage verursachen, aber ein kaputter Stop-Check schon).
+**closed**: Ein Stop-Check, der nicht gelesen werden kann, verweigert die Aktion.
+Auch die Budget-Zulassung der Engine-Gates verweigert, wenn sie ihr Ledger nicht
+lesen kann; nur der Session-Start wendet seine eigene konfigurierbare
+Verfügbarkeitshaltung an.

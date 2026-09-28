@@ -156,16 +156,13 @@ func (h *c3HTTP) createOrg(admin, slug string) model.TenantID {
 // ws is set) and returns its session token.
 func (h *c3HTTP) memberToken(admin string, tenant model.TenantID, email, role string, ws model.ID) string {
 	h.t.Helper()
-	r := h.do("POST", "/v1/users", admin, map[string]any{"email": email, "password": "memberpass1"}, "")
+	user := map[string]any{"email": email, "password": "memberpass1", "tenant": tenant.String(), "role": role}
+	if !ws.IsZero() {
+		user["workspace_id"] = ws.String()
+	}
+	r := h.do("POST", "/v1/users", admin, user, "")
 	if r.code != http.StatusCreated {
 		h.t.Fatalf("create user %s = %d %s", email, r.code, r.raw)
-	}
-	grant := map[string]any{"user_id": r.body["id"], "tenant": tenant.String(), "role": role}
-	if !ws.IsZero() {
-		grant["workspace_id"] = ws.String()
-	}
-	if r := h.do("POST", "/v1/memberships", admin, grant, ""); r.code != http.StatusCreated {
-		h.t.Fatalf("grant %s = %d %s", email, r.code, r.raw)
 	}
 	r = h.do("POST", "/v1/auth/login", "", map[string]any{"email": email, "password": "memberpass1"}, "")
 	if r.code != http.StatusOK {

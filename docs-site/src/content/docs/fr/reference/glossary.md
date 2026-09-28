@@ -17,7 +17,7 @@ Le graphe du module III des **origines** (agents, identités, sessions) et des
 **ressources** qu'elles touchent, chaque arête classée par [mode](#mode) et étiquetée
 avec sa [signal source](#signal-source), son [attribution](#attribution-confiance)
 et son [niveau de couverture](#niveau-de-couverture). Une capacité différenciante clé — l'un
-des 30 modules, pas l'ensemble du produit. Voir [Qu'est-ce qu'Olivares AI ?](/fr/start/what-is-olivares-ai/).
+des 31 modules, pas l'ensemble du produit. Voir [Qu'est-ce qu'Olivares AI ?](/fr/start/what-is-olivares-ai/).
 
 ### États d'actuation : `v1` / `on-demand` / `seam`
 
@@ -280,9 +280,12 @@ Voir [push vers SIEM](/fr/how-to/cookbook/push-to-siem/).
 
 ### SLI / SLO
 
-Les niveaux de service publiés : disponibilité via `/readyz`, succès des requêtes,
-latence p99 de l'API et de l'ingest — avec les tiers single-node et HA énoncés
-séparément et honnêtement.
+Un **SLI** mesure le comportement du service, par exemple la disponibilité via
+`/readyz`, le succès des requêtes ou la latence p99 de l'API et de l'ingestion.
+Un **SLO** fixe un objectif pour ce SLI sur une fenêtre indiquée, par exemple
+28 jours. Les objectifs publiés pour un nœud unique et la HA restent des cibles ;
+leur atteinte observée exige des mesures pour ce déploiement et cette fenêtre.
+Une promesse contractuelle de service est un engagement explicite et distinct.
 Voir [monitoring](/fr/how-to/monitor-with-prometheus/).
 
 ### Source
@@ -295,6 +298,7 @@ Voir [connecter une source](/fr/how-to/connect-a-source/).
 ### Stop gate
 
 Le contrôle d'enforcement que chaque actuation gouvernée effectue contre l'état du
-[kill switch](#kill-switch) — vérifié avant tout autre gate, échouant **fermé**
-(l'inverse du contrôle de budget, qui échoue ouvert : un compteur cassé ne doit pas
-provoquer de panne, mais un contrôle d'arrêt cassé doit).
+[kill switch](#kill-switch) — vérifié avant tout autre gate, échouant **fermé** :
+un contrôle d'arrêt illisible refuse l'actuation. L'admission budgétaire des gates
+du moteur refuse elle aussi quand elle ne peut pas lire son registre ; seul le
+lancement de session applique sa propre posture de disponibilité configurable.

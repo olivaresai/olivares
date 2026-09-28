@@ -484,6 +484,45 @@ func boundedColumnAt(desc model.EntityDescriptor, i int) (col string, kind model
 	return col, kind, desc.NullableColumn(col)
 }
 
+// boundedShape is the checked column list of one projected read: id, the
+// private tenant_id witness unless tenant_id was requested, then the
+// requested columns in request order. It is separate from the registry
+// descriptor, which still owns the table, filters, confinement, kinds and
+// nullability.
+type boundedShape struct {
+	columns []boundedShapeColumn
+	// witness means tenant_id is private: it is inspected, charged and
+	// checked against the Scope tenant like any column, then omitted from
+	// the published Record.
+	witness bool
+}
+
+// boundedShapeColumn is one shape column and its admission bound. A keyBound
+// column (id, the witness) admits the observed encoding's canonical key
+// bound, as key selection does; every other variable column admits limit.
+type boundedShapeColumn struct {
+	name     string
+	kind     model.SQLKind
+	nullable bool
+	keyBound bool
+	limit    uint64
+}
+
+// boundedColumns resolves a read's column ordinals: the checked shape when
+// one is set, otherwise the descriptor's AllColumns order.
+type boundedColumns struct {
+	desc  model.EntityDescriptor
+	shape *boundedShape
+}
+
+func (c boundedColumns) at(i int) (col string, kind model.SQLKind, nullable bool) {
+	if c.shape != nil {
+		s := c.shape.columns[i]
+		return s.name, s.kind, s.nullable
+	}
+	return boundedColumnAt(c.desc, i)
+}
+
 // boundedInspectionExprs is one column's fixed metadata: its storage or NULL
 // class, an octet count for a variable kind and, on SQLite, a boolean range
 // flag. A column's metadata never splits across inspection groups.
@@ -512,10 +551,15 @@ type boundedPlan struct {
 // largest consecutive inspection group that starts at start and fits the
 // result-column ceiling. end == start means one column cannot fit.
 func (r *boundedReader) nextInspectionGroup(desc model.EntityDescriptor, arity, start int) (int, uint64) {
+	return r.inspectionGroup(boundedColumns{desc: desc}, arity, start)
+}
+
+// inspectionGroup is nextInspectionGroup over a resolved column order.
+func (r *boundedReader) inspectionGroup(cols boundedColumns, arity, start int) (int, uint64) {
 	pg := r.postgres()
 	end, exprs := start, uint64(0)
 	for ; end < arity; end++ {
-		_, kind, _ := boundedColumnAt(desc, end)
+		_, kind, _ := cols.at(end)
 		n := boundedInspectionExprs(kind, pg)
 		if n > r.columns-exprs {
 			break
@@ -531,9 +575,14 @@ func (r *boundedReader) nextInspectionGroup(desc model.EntityDescriptor, arity, 
 // (g values, the reject flag and v SQL NULL flags, g + 1 + v) both fit the
 // result-column ceiling. end == start means one column cannot fit.
 func (r *boundedReader) nextPayloadGroup(desc model.EntityDescriptor, arity, start int) (int, uint64) {
+	return r.payloadGroup(boundedColumns{desc: desc}, arity, start)
+}
+
+// payloadGroup is nextPayloadGroup over a resolved column order.
+func (r *boundedReader) payloadGroup(cols boundedColumns, arity, start int) (int, uint64) {
 	end, g, v := start, uint64(0), uint64(0)
 	for ; end < arity; end++ {
-		_, _, nullable := boundedColumnAt(desc, end)
+		_, _, nullable := cols.at(end)
 		ng, nv := g+1, v
 		if nullable {
 			nv++
@@ -553,13 +602,27 @@ func (r *boundedReader) plan(desc model.EntityDescriptor) (boundedPlan, error) {
 	if len(desc.Fields) > math.MaxInt-base {
 		return boundedPlan{}, boundedOverflow("descriptor arity")
 	}
-	p := boundedPlan{arity: base + len(desc.Fields)}
+	return r.planColumns(boundedColumns{desc: desc}, base+len(desc.Fields))
+}
+
+// planTarget checks a target's plan: its projection shape's when one is
+// set, otherwise its descriptor's.
+func (r *boundedReader) planTarget(target boundedTarget) (boundedPlan, error) {
+	if target.shape == nil {
+		return r.plan(target.desc)
+	}
+	return r.planColumns(target.columns(), len(target.shape.columns))
+}
+
+// planColumns computes both group plans over arity resolved columns.
+func (r *boundedReader) planColumns(cols boundedColumns, arity int) (boundedPlan, error) {
+	p := boundedPlan{arity: arity}
 	unfit := func(what string) error {
 		return fmt.Errorf("%w: one column's %s exceeds the %d result-column ceiling",
 			store.ErrBoundedReadUnavailable, what, r.columns)
 	}
 	for start := 0; start < p.arity; {
-		end, exprs := r.nextInspectionGroup(desc, p.arity, start)
+		end, exprs := r.inspectionGroup(cols, p.arity, start)
 		if end == start {
 			return boundedPlan{}, unfit("inspection metadata")
 		}
@@ -571,7 +634,7 @@ func (r *boundedReader) plan(desc model.EntityDescriptor) (boundedPlan, error) {
 		start = end
 	}
 	for start := 0; start < p.arity; {
-		end, _ := r.nextPayloadGroup(desc, p.arity, start)
+		end, _ := r.payloadGroup(cols, p.arity, start)
 		if end == start {
 			return boundedPlan{}, unfit("payload projection")
 		}
@@ -730,6 +793,14 @@ type boundedTarget struct {
 	desc    model.EntityDescriptor
 	sql     *genericRepo // filter rendering and relation only; never materializes
 	lineage *model.Filter
+	// shape, when set, is the checked projection a read inspects and loads
+	// in place of the descriptor's AllColumns.
+	shape *boundedShape
+}
+
+// columns resolves the target's read ordinals.
+func (target boundedTarget) columns() boundedColumns {
+	return boundedColumns{desc: target.desc, shape: target.shape}
 }
 
 func (r *boundedReader) targetFor(desc model.EntityDescriptor) *genericRepo {
@@ -967,6 +1038,7 @@ type boundedAdmission struct {
 	octets   uint64
 	bound    uint64 // returned representation bound for variable values
 	charge   uint64 // admitted cell charge, without its separate SQL NULL flag
+	limit    uint64 // the column's admission bound; 0 is the reader's MaxCellBytes
 }
 
 // boundedRow is one selected row's complete admission.
@@ -1018,10 +1090,10 @@ func (c *boundedCall) inspect(
 	enc sqliteTextEncoding,
 ) (boundedRow, bool, error) {
 	pg := c.r.postgres()
-	desc := target.desc
+	cols := target.columns()
 	// The checked plan and its complete metadata total precede every
 	// descriptor-sized allocation and every SQL text (R4.2).
-	plan, err := c.r.plan(desc)
+	plan, err := c.r.planTarget(target)
 	if err != nil {
 		c.attempted = true
 		return boundedRow{}, false, err
@@ -1040,15 +1112,18 @@ func (c *boundedCall) inspect(
 		return boundedRow{}, false, boundedOverflow("payload row")
 	}
 	relation := target.sql.relation()
+	// A projected id or witness admits the canonical key bound of the observed
+	// encoding, as key selection does, never a fixed octet count.
+	keyBound := boundedKeyChars * enc.asciiOctets() * enc.textMultiplier()
 	admissions := make([]boundedAdmission, plan.arity)
 	for start, group := 0, 0; start < plan.arity; group++ {
-		end, exprs := c.r.nextInspectionGroup(desc, plan.arity, start)
+		end, exprs := c.r.inspectionGroup(cols, plan.arity, start)
 		// Layout: every class, then the group's lengths, then its SQLite
 		// boolean flags; the decoder below walks the same plan.
 		render := func(w *boundedSQL) {
 			w.s("SELECT ")
 			for i := start; i < end; i++ {
-				col, _, _ := boundedColumnAt(desc, i)
+				col, _, _ := cols.at(i)
 				if i > start {
 					w.s(", ")
 				}
@@ -1061,7 +1136,7 @@ func (c *boundedCall) inspect(
 					"WHEN 'real' THEN 2 WHEN 'text' THEN 3 WHEN 'blob' THEN 4 ELSE 5 END")
 			}
 			for i := start; i < end; i++ {
-				col, kind, _ := boundedColumnAt(desc, i)
+				col, kind, _ := cols.at(i)
 				switch {
 				case pg && textLikeKind(kind):
 					w.s(", CASE WHEN ", col, " IS NULL THEN 0 ELSE ", pgTextOctetsPrefix, col, pgTextOctetsSuffix, " END")
@@ -1073,7 +1148,7 @@ func (c *boundedCall) inspect(
 			}
 			if !pg {
 				for i := start; i < end; i++ {
-					if col, kind, _ := boundedColumnAt(desc, i); kind == model.KindBool {
+					if col, kind, _ := cols.at(i); kind == model.KindBool {
 						w.s(", CASE WHEN typeof(", col, ") = 'integer' AND ", col, " IN (0, 1) THEN 1 ELSE 0 END")
 					}
 				}
@@ -1117,8 +1192,14 @@ func (c *boundedCall) inspect(
 		}
 		next := end - start
 		for i := start; i < end; i++ {
-			col, kind, nullable := boundedColumnAt(desc, i)
+			col, kind, nullable := cols.at(i)
 			a := boundedAdmission{column: col, kind: kind, nullable: nullable, class: values[i-start].Int64}
+			if target.shape != nil {
+				a.limit = target.shape.columns[i].limit
+				if target.shape.columns[i].keyBound {
+					a.limit = keyBound
+				}
+			}
 			if pg && a.class != sqliteClassNull {
 				a.class = pgStorageClass(kind)
 			}
@@ -1131,6 +1212,23 @@ func (c *boundedCall) inspect(
 				a.octets = uint64(n)
 			}
 			admissions[i] = a
+		}
+		// A projection validates every column's class, NULL state and boolean
+		// range before any bound, so an earlier oversized column never hides a
+		// later malformed one. Full-record reads keep their per-column order.
+		if target.shape != nil {
+			flag := next
+			for i := start; i < end; i++ {
+				a := &admissions[i]
+				boolOK := pg && a.kind == model.KindBool
+				if !pg && a.kind == model.KindBool {
+					boolOK = values[flag].Int64 == 1
+					flag++
+				}
+				if err := admitClass(a, boolOK); err != nil {
+					return boundedRow{}, false, err
+				}
+			}
 		}
 		for i := start; i < end; i++ {
 			a := &admissions[i]
@@ -1170,59 +1268,59 @@ func (c *boundedCall) inspect(
 	return boundedRow{admissions: admissions, rowUnits: rowUnits, envelopes: envelopes}, true, nil
 }
 
-// admit validates one column's storage class and returns its payload charge.
-func (c *boundedCall) admit(a *boundedAdmission, boolOK bool, enc sqliteTextEncoding) (uint64, error) {
-	metadata := func() error {
+// admitClass validates one column's storage class, its NULL state and, for a
+// boolean, its range flag.
+func admitClass(a *boundedAdmission, boolOK bool) error {
+	ok := false
+	switch {
+	case a.class == sqliteClassNull:
+		ok = a.nullable
+	case textLikeKind(a.kind):
+		ok = a.class == sqliteClassText || a.class == sqliteClassBlob
+	case a.kind == model.KindBytes:
+		ok = a.class == sqliteClassBlob
+	case a.kind == model.KindInt:
+		ok = a.class == sqliteClassInteger
+	case a.kind == model.KindFloat:
+		ok = a.class == sqliteClassInteger || a.class == sqliteClassReal
+	case a.kind == model.KindBool:
+		ok = a.class == sqliteClassInteger && boolOK
+	}
+	if !ok {
 		return fmt.Errorf("%w: column %s has an inadmissible storage class", store.ErrBoundedReadMetadata, a.column)
 	}
-	if a.class == sqliteClassNull {
-		if !a.nullable {
-			return 0, metadata()
-		}
-		return boundedNullUnits, nil
+	return nil
+}
+
+// admit validates one column's storage class and returns its payload charge.
+// A variable value's representation bound must fit the column's own bound
+// (a projection's MaxBytes) or, by default, the reader's MaxCellBytes.
+func (c *boundedCall) admit(a *boundedAdmission, boolOK bool, enc sqliteTextEncoding) (uint64, error) {
+	if err := admitClass(a, boolOK); err != nil {
+		return 0, err
 	}
 	switch {
-	case textLikeKind(a.kind):
-		switch a.class {
-		case sqliteClassText:
-			bound, ok := mulBounded(a.octets, enc.textMultiplier())
-			if !ok {
-				return 0, boundedOverflow("cell")
-			}
-			a.bound = bound
-		case sqliteClassBlob:
-			a.bound = a.octets
-		default:
-			return 0, metadata()
+	case a.class == sqliteClassNull:
+		return boundedNullUnits, nil
+	case textLikeKind(a.kind) && a.class == sqliteClassText:
+		bound, ok := mulBounded(a.octets, enc.textMultiplier())
+		if !ok {
+			return 0, boundedOverflow("cell")
 		}
-	case a.kind == model.KindBytes:
-		if a.class != sqliteClassBlob {
-			return 0, metadata()
-		}
+		a.bound = bound
+	case textLikeKind(a.kind) || a.kind == model.KindBytes:
 		a.bound = a.octets
-	case a.kind == model.KindInt:
-		if a.class != sqliteClassInteger {
-			return 0, metadata()
-		}
-		return boundedFixedUnits, nil
-	case a.kind == model.KindFloat:
-		if a.class != sqliteClassInteger && a.class != sqliteClassReal {
-			return 0, metadata()
-		}
-		return boundedFixedUnits, nil
-	case a.kind == model.KindBool:
-		if a.class != sqliteClassInteger || !boolOK {
-			return 0, metadata()
-		}
-		if c.r.postgres() {
-			return boundedBoolUnits, nil // PostgreSQL returns a validated native bool
-		}
-		return boundedFixedUnits, nil
+	case a.kind == model.KindBool && c.r.postgres():
+		return boundedBoolUnits, nil // PostgreSQL returns a validated native bool
 	default:
-		return 0, metadata()
+		return boundedFixedUnits, nil
 	}
-	if a.bound > c.r.lim.MaxCellBytes {
-		return 0, boundedLimitError("MaxCellBytes", "cell "+a.column, a.bound)
+	dimension, limit := "MaxCellBytes", c.r.lim.MaxCellBytes
+	if a.limit != 0 {
+		dimension, limit = "MaxBytes", a.limit
+	}
+	if a.bound > limit {
+		return 0, boundedLimitError(dimension, "cell "+a.column, a.bound)
 	}
 	charge, ok := addBounded(boundedVarUnits, a.bound)
 	if !ok {
@@ -1369,7 +1467,7 @@ func (c *boundedCall) admitPayloadStatements(target boundedTarget, page []bounde
 		}
 		arity := len(p.row.admissions)
 		for start := 0; start < arity; {
-			end, _ := c.r.nextPayloadGroup(target.desc, arity, start)
+			end, _ := c.r.payloadGroup(target.columns(), arity, start)
 			if end == start {
 				return boundedOverflow("payload plan")
 			}
@@ -1389,7 +1487,7 @@ func (c *boundedCall) load(ctx context.Context, target boundedTarget, p boundedP
 	arity := len(p.row.admissions)
 	rec := make(model.Record, arity)
 	for start := 0; start < arity; {
-		end, _ := c.r.nextPayloadGroup(target.desc, arity, start)
+		end, _ := c.r.payloadGroup(target.columns(), arity, start)
 		if end == start {
 			c.attempted = true
 			return nil, boundedOverflow("payload plan")
@@ -1401,6 +1499,9 @@ func (c *boundedCall) load(ctx context.Context, target boundedTarget, p boundedP
 	}
 	if rec.String(model.ColID) != p.id || rec.String(model.ColTenantID) != c.r.sc.tenant.String() {
 		return nil, fmt.Errorf("%w: row identity differs", store.ErrBoundedReadConsistency)
+	}
+	if target.shape != nil && target.shape.witness {
+		delete(rec, model.ColTenantID) // checked and charged, never published
 	}
 	return rec, nil
 }
@@ -1693,11 +1794,39 @@ func (c *boundedCall) listRecords(
 	if err != nil {
 		return nil, model.Page{}, err
 	}
+	keys, more, err := c.selectKeys(ctx, target, where, args, limit, cursor, enc)
+	if err != nil {
+		return nil, model.Page{}, err
+	}
+	out, err := c.loadSelected(ctx, target, where, args, keys, enc)
+	if err != nil {
+		return nil, model.Page{}, err
+	}
+	page := model.Page{HasMore: more}
+	if page.HasMore && len(out) > 0 {
+		page.Cursor = out[len(out)-1].String(model.ColID)
+	}
+	return out, page, nil
+}
+
+// selectKeys is guarded key selection: at most limit keys in ascending order
+// under the complete authorized predicate, plus one lookahead key reported
+// only as more. Its rows are closed before it returns, so a caller decides
+// absence or ambiguity before any row lock, inspection or payload statement.
+func (c *boundedCall) selectKeys(
+	ctx context.Context,
+	target boundedTarget,
+	where string,
+	args []any,
+	limit int,
+	cursor string,
+	enc sqliteTextEncoding,
+) ([]string, bool, error) {
 	keyOctets := boundedKeyChars * enc.asciiOctets()
 	keyBound := keyOctets * enc.textMultiplier()
 	if keyBound > c.r.lim.MaxCellBytes {
 		c.attempted = true
-		return nil, model.Page{}, boundedLimitError("MaxCellBytes", "key", keyBound)
+		return nil, false, boundedLimitError("MaxCellBytes", "key", keyBound)
 	}
 	pg := c.r.postgres()
 	relation := target.sql.relation()
@@ -1728,7 +1857,7 @@ func (c *boundedCall) listRecords(
 	rows, err := c.queryRendered(ctx, "key selection", render, uint64(limit)+1,
 		boundedVarUnits+keyBound+boundedFixedUnits, 0, 1, args, cursorArg...)
 	if err != nil {
-		return nil, model.Page{}, err
+		return nil, false, err
 	}
 	keys := make([]string, 0, limit+1)
 	previous := cursor
@@ -1756,19 +1885,34 @@ func (c *boundedCall) listRecords(
 		keys = append(keys, key.String)
 	}
 	if err := c.closeRows(rows, loopErr); err != nil {
-		return nil, model.Page{}, err
+		return nil, false, err
 	}
 	if loopErr != nil {
-		return nil, model.Page{}, loopErr
+		return nil, false, loopErr
 	}
-	page := model.Page{}
-	if len(keys) > limit {
-		keys = keys[:limit]
-		page.HasMore = true
-		c.r.mu.Lock()
-		c.r.lookObs++
-		c.r.mu.Unlock()
+	if len(keys) <= limit {
+		return keys, false, nil
 	}
+	c.r.mu.Lock()
+	c.r.lookObs++
+	c.r.mu.Unlock()
+	return keys[:limit], true, nil
+}
+
+// loadSelected is the journey of already selected keys: PostgreSQL Mutate
+// row locks, per-row inspection, complete page admission, the payload
+// statement preflight, then the payload groups. It returns no Record unless
+// every selected row loads.
+func (c *boundedCall) loadSelected(
+	ctx context.Context,
+	target boundedTarget,
+	where string,
+	args []any,
+	keys []string,
+	enc sqliteTextEncoding,
+) ([]model.Record, error) {
+	pg := c.r.postgres()
+	relation := target.sql.relation()
 	// PostgreSQL Mutate: lock every selected payload row in ascending ID order
 	// before measuring it. A row whose filters or authority no longer match
 	// after the wait is a consistency failure, never a reordered page. The
@@ -1777,10 +1921,10 @@ func (c *boundedCall) listRecords(
 		for _, key := range keys {
 			found, err := c.lockKey(ctx, target, where, args, key)
 			if err != nil {
-				return nil, model.Page{}, err
+				return nil, err
 			}
 			if !found {
-				return nil, model.Page{}, fmt.Errorf("%w: selected row changed while waiting for its lock",
+				return nil, fmt.Errorf("%w: selected row changed while waiting for its lock",
 					store.ErrBoundedReadConsistency)
 			}
 		}
@@ -1790,35 +1934,32 @@ func (c *boundedCall) listRecords(
 	for i, key := range keys {
 		row, found, err := c.inspect(ctx, target, where, args, key, enc)
 		if err != nil {
-			return nil, model.Page{}, err
+			return nil, err
 		}
 		if !found {
-			return nil, model.Page{}, fmt.Errorf("%w: selected row disappeared", store.ErrBoundedReadConsistency)
+			return nil, fmt.Errorf("%w: selected row disappeared", store.ErrBoundedReadConsistency)
 		}
 		selected[i] = boundedPayload{relation: relation, where: where, id: key, args: args, row: row, pg: pg}
 		var ok bool
 		if envelopes, ok = addBounded(envelopes, row.envelopes); !ok {
-			return nil, model.Page{}, boundedOverflow("payload page")
+			return nil, boundedOverflow("payload page")
 		}
 	}
 	if err := c.admitPage(envelopes, uint64(len(keys))); err != nil {
-		return nil, model.Page{}, err
+		return nil, err
 	}
 	if err := c.admitPayloadStatements(target, selected); err != nil {
-		return nil, model.Page{}, err
+		return nil, err
 	}
 	out := make([]model.Record, 0, len(keys))
 	for _, p := range selected {
 		rec, err := c.load(ctx, target, p)
 		if err != nil {
-			return nil, model.Page{}, err
+			return nil, err
 		}
 		out = append(out, rec)
 	}
-	if page.HasMore && len(out) > 0 {
-		page.Cursor = out[len(out)-1].String(model.ColID)
-	}
-	return out, page, nil
+	return out, nil
 }
 
 // prepareGet validates a Get request before any I/O.
@@ -1976,4 +2117,299 @@ func (r *boundedReader) listExtensions(ctx context.Context, call *boundedCall, k
 		return nil, model.Page{}, err
 	}
 	return call.listRecords(ctx, target, filters, limit, q.Cursor, q.IncludeDeleted)
+}
+
+// Projections. A projection reads the requested columns of one registry
+// extension kind under their own explicit bounds, through the same key
+// selection, inspection, admission and payload journey as a complete record.
+
+// ProjectBounded implements store.BoundedReader.
+func (r *boundedReader) ProjectBounded(ctx context.Context, p store.BoundedProjection) ([]model.Record, model.Page, error) {
+	call, err := r.begin()
+	if err != nil {
+		return nil, model.Page{}, err
+	}
+	out, page, err := r.projectBounded(ctx, call, p)
+	if err != nil {
+		return nil, model.Page{}, call.finish(err)
+	}
+	return out, page, call.finish(nil)
+}
+
+func (r *boundedReader) projectBounded(ctx context.Context, call *boundedCall, p store.BoundedProjection) ([]model.Record, model.Page, error) {
+	target, filters, limit, err := r.projectionTarget(p, false)
+	if err != nil {
+		return nil, model.Page{}, err
+	}
+	return call.listRecords(ctx, target, filters, limit, p.Query.Cursor, false)
+}
+
+// ProjectBoundedOne implements store.BoundedReader.
+func (r *boundedReader) ProjectBoundedOne(ctx context.Context, p store.BoundedProjection) (model.Record, error) {
+	call, err := r.begin()
+	if err != nil {
+		return nil, err
+	}
+	rec, err := r.projectOne(ctx, call, p)
+	if err != nil {
+		return nil, call.finish(err)
+	}
+	return rec, call.finish(nil)
+}
+
+// projectOne decides cardinality from at most two selected keys, before any
+// row lock, inspection or payload statement. A duplicate set never has a row
+// read, so its first row cannot become the answer; a selected row that
+// disappears later is a consistency failure, not absence.
+func (r *boundedReader) projectOne(ctx context.Context, call *boundedCall, p store.BoundedProjection) (model.Record, error) {
+	target, filters, _, err := r.projectionTarget(p, true)
+	if err != nil {
+		return nil, err
+	}
+	enc, err := call.representation(ctx, target)
+	if err != nil {
+		return nil, err
+	}
+	where, args, err := target.where(r.sc.tenant, filters, false)
+	if err != nil {
+		return nil, err
+	}
+	keys, more, err := call.selectKeys(ctx, target, where, args, 1, "", enc)
+	if err != nil {
+		return nil, err
+	}
+	if more {
+		return nil, fmt.Errorf("%w: selection is not unique", store.ErrBoundedReadMetadata)
+	}
+	if len(keys) == 0 {
+		return nil, store.ErrNotFound
+	}
+	out, err := call.loadSelected(ctx, target, where, args, keys, enc)
+	if err != nil {
+		return nil, err
+	}
+	return out[0], nil
+}
+
+// projectionTarget resolves a projection's registry target and admits the
+// complete request before any I/O and before any request-sized copy: the
+// kind, the cursor, every column name and bound and every filter are counted
+// under MaxParameterBytes and the complete shape's plan is checked. Only then
+// are the admitted filters and columns copied, once.
+func (r *boundedReader) projectionTarget(p store.BoundedProjection, one bool) (boundedTarget, []model.Filter, int, error) {
+	fail := func(err error) (boundedTarget, []model.Filter, int, error) { return boundedTarget{}, nil, 0, err }
+	target, err := r.extensionTarget(p.Kind)
+	if err != nil {
+		return fail(err)
+	}
+	q := p.Query
+	params := &boundedParams{max: r.lim.MaxParameterBytes}
+	if err := params.add(uint64(len(p.Kind)), "kind"); err != nil {
+		return fail(err)
+	}
+	if err := params.add(uint64(len(q.Cursor)), "cursor"); err != nil {
+		return fail(err)
+	}
+	if len(q.Sort) != 0 {
+		return fail(invalidBoundedRead("custom sort is not supported"))
+	}
+	if q.IncludeDeleted {
+		return fail(invalidBoundedRead("deleted rows are not projected"))
+	}
+	limit := 1
+	if one {
+		// A single projection selects one key and one lookahead key; it takes
+		// no page limit and no cursor.
+		if q.Limit != 0 || q.Cursor != "" {
+			return fail(invalidBoundedRead("a single projection takes no limit or cursor"))
+		}
+	} else {
+		if q.Limit <= 0 || q.Limit > maxLimit || uint64(q.Limit) > r.lim.MaxRowsPerPage {
+			return fail(invalidBoundedRead("limit must be positive and within the page limits"))
+		}
+		if q.Cursor != "" && !canonicalBoundedID(q.Cursor) {
+			return fail(invalidBoundedRead("cursor is not a canonical identifier"))
+		}
+		limit = q.Limit
+	}
+	witness, err := r.checkProjection(target.desc, p.Columns, params)
+	if err != nil {
+		return fail(err)
+	}
+	filters, err := r.validateFilters(target, q.Filters, params)
+	if err != nil {
+		return fail(err)
+	}
+	target.shape = copyProjection(target.desc, p.Columns, witness)
+	return target, filters, limit, nil
+}
+
+// checkProjection is the projection request's counting pass; it allocates
+// nothing. It charges every column name and bound to MaxParameterBytes,
+// refuses an invalid, unknown or repeated column, and checks that the
+// complete shape (id, the tenant witness and the requested columns) fits one
+// inspection group and one payload group, so every class check precedes
+// every bound check. witness reports that tenant_id was not requested.
+func (r *boundedReader) checkProjection(desc model.EntityDescriptor, columns []store.BoundedColumn, params *boundedParams) (bool, error) {
+	if len(columns) == 0 {
+		return false, invalidBoundedRead("a projection names at least one column")
+	}
+	// Each descriptor column except id is projectable at most once, so a
+	// longer request is refused before any of it is examined.
+	if len(columns) > boundedBaseCount(desc)-1+len(desc.Fields) {
+		return false, invalidBoundedRead("a projection names more columns than its descriptor")
+	}
+	pg := r.postgres()
+	witness := true
+	exprs := boundedInspectionExprs(model.KindUUID, pg) // id
+	nullable := uint64(0)
+	for i, column := range columns {
+		if err := params.add(uint64(len(column.Name)), "projected column"); err != nil {
+			return false, err
+		}
+		if err := params.add(8, "projected column bound"); err != nil {
+			return false, err
+		}
+		if column.Name == model.ColID || column.Name == model.ColDeletedAt {
+			return false, invalidBoundedRead("id and deleted_at are not projected")
+		}
+		kind, ok := desc.KindOfColumn(column.Name)
+		if !ok {
+			return false, fmt.Errorf("%w: unknown projected column", store.ErrUnknownEntity)
+		}
+		for _, prior := range columns[:i] {
+			if prior.Name == column.Name {
+				return false, invalidBoundedRead("a projected column is repeated")
+			}
+		}
+		variable := textLikeKind(kind) || kind == model.KindBytes
+		if variable && (column.MaxBytes == 0 || column.MaxBytes > r.lim.MaxCellBytes) {
+			return false, invalidBoundedRead("a variable column's bound must lie in 1..MaxCellBytes")
+		}
+		if !variable && column.MaxBytes != 0 {
+			return false, invalidBoundedRead("a fixed-width column takes no byte bound")
+		}
+		if column.Name == model.ColTenantID {
+			witness = false
+		}
+		exprs += boundedInspectionExprs(kind, pg)
+		if desc.NullableColumn(column.Name) {
+			nullable++
+		}
+	}
+	arity := uint64(len(columns)) + 1 // with id
+	if witness {
+		exprs += boundedInspectionExprs(model.KindUUID, pg)
+		arity++
+	}
+	if exprs > r.columns || arity+1 > r.columns || arity+1+nullable > r.columns {
+		return false, fmt.Errorf("%w: a projection must fit one inspection group and one payload group of %d result columns",
+			store.ErrBoundedReadUnavailable, r.columns)
+	}
+	return witness, nil
+}
+
+// copyProjection copies an admitted projection once into its checked shape:
+// id, the private tenant witness unless tenant_id was requested, then the
+// requested columns in request order.
+func copyProjection(desc model.EntityDescriptor, columns []store.BoundedColumn, witness bool) *boundedShape {
+	n := len(columns) + 1
+	if witness {
+		n++
+	}
+	shape := &boundedShape{columns: make([]boundedShapeColumn, 0, n), witness: witness}
+	shape.columns = append(shape.columns, boundedShapeColumn{name: model.ColID, kind: model.KindUUID, keyBound: true})
+	if witness {
+		shape.columns = append(shape.columns, boundedShapeColumn{name: model.ColTenantID, kind: model.KindUUID, keyBound: true})
+	}
+	for _, column := range columns {
+		kind, _ := desc.KindOfColumn(column.Name)
+		shape.columns = append(shape.columns, boundedShapeColumn{
+			name: column.Name, kind: kind, nullable: desc.NullableColumn(column.Name), limit: column.MaxBytes,
+		})
+	}
+	return shape
+}
+
+// boundedArtifactColumns is the bounded policy-artifact read shape: the base
+// columns and the provenance and content columns that decodePolicyArtifact
+// verifies. The eight denormalized artifact columns are never read.
+var boundedArtifactColumns = [...]string{
+	model.ColID, model.ColTenantID, model.ColCreatedAt, model.ColUpdatedAt, model.ColVersion,
+	colAESchemaVersion, colAEProducer, colAESourceEventID, colAEEventType, colAEAdapter,
+	colAEOccurredAt, colAERecordedAt, colAERecordDigest, colAELedgerRef, colAEContent,
+}
+
+// GetPolicyArtifact implements store.BoundedReader.
+func (r *boundedReader) GetPolicyArtifact(ctx context.Context, id model.ID, b store.PolicyArtifactBounds) (model.PolicyArtifact, error) {
+	call, err := r.begin()
+	if err != nil {
+		return model.PolicyArtifact{}, err
+	}
+	artifact, err := r.getPolicyArtifact(ctx, call, id, b)
+	if err != nil {
+		return model.PolicyArtifact{}, call.finish(err)
+	}
+	return artifact, call.finish(nil)
+}
+
+// getPolicyArtifact reads the fixed integrity shape under both bounds, then
+// runs the existing decode, record-digest and ledger checks on the completely
+// admitted row only. A decode failure is metadata and ends the reader. The
+// load has already compared the row's id and tenant with the request and the
+// scope, refusing a difference as a consistency failure, and the decode copies
+// those same values, so it adds no identity check of its own.
+//
+// The read keeps the PostgreSQL Mutate row lock every read takes. The policy
+// artifacts are append-only, and an application role separate from the schema
+// owner lacks the UPDATE privilege that lock needs there, so a caller reads
+// them from a View reader.
+func (r *boundedReader) getPolicyArtifact(ctx context.Context, call *boundedCall, id model.ID, b store.PolicyArtifactBounds) (model.PolicyArtifact, error) {
+	target, err := r.artifactTarget(b)
+	if err != nil {
+		return model.PolicyArtifact{}, err
+	}
+	filters, err := r.prepareGet(target, model.PolicyArtifactKind, id)
+	if err != nil {
+		return model.PolicyArtifact{}, err
+	}
+	rec, err := call.getRecord(ctx, target, filters, id.String())
+	if err != nil {
+		return model.PolicyArtifact{}, err
+	}
+	artifact, err := decodePolicyArtifact(rec)
+	if err != nil {
+		return model.PolicyArtifact{}, fmt.Errorf("%w: %w", store.ErrBoundedReadMetadata, err)
+	}
+	return artifact, nil
+}
+
+// artifactTarget admits a bounded artifact read before any I/O: confinement
+// first, then both explicit bounds, then the fixed shape. Access evidence
+// carries no workspace lineage, so a confined reader is denied, as the
+// confined Scope's access-evidence store is.
+func (r *boundedReader) artifactTarget(b store.PolicyArtifactBounds) (boundedTarget, error) {
+	if !r.opts.AccessEvidenceReadAllowed() {
+		return boundedTarget{}, fmt.Errorf("%w: access evidence carries no workspace lineage",
+			store.ErrWorkspaceLineageRequired)
+	}
+	if b.ContentBytes == 0 || b.ContentBytes > r.lim.MaxCellBytes {
+		return boundedTarget{}, invalidBoundedRead("ContentBytes must lie in 1..MaxCellBytes")
+	}
+	if b.MetadataBytes == 0 || b.MetadataBytes > r.lim.MaxCellBytes {
+		return boundedTarget{}, invalidBoundedRead("MetadataBytes must lie in 1..MaxCellBytes")
+	}
+	desc := policyArtifactDescriptor
+	shape := &boundedShape{columns: make([]boundedShapeColumn, 0, len(boundedArtifactColumns))}
+	for _, name := range boundedArtifactColumns {
+		kind, _ := desc.KindOfColumn(name)
+		limit := b.MetadataBytes
+		if name == colAEContent {
+			limit = b.ContentBytes
+		}
+		shape.columns = append(shape.columns, boundedShapeColumn{
+			name: name, kind: kind, nullable: desc.NullableColumn(name), limit: limit,
+		})
+	}
+	return boundedTarget{desc: desc, sql: r.targetFor(desc), shape: shape}, nil
 }

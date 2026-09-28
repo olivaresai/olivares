@@ -456,7 +456,7 @@ export default defineConfig({
             {
               label: 'Modules catalog',
               items: [
-                { label: 'Overview — the 30 modules', slug: 'reference/modules/overview' },
+                { label: 'Overview — the 31 modules', slug: 'reference/modules/overview' },
                 // Observe
                 { label: 'Inventory & discovery', slug: 'reference/modules/i-inventory' },
                 { label: 'Live operation & sessions', slug: 'reference/modules/ii-sessions' },
@@ -495,9 +495,9 @@ export default defineConfig({
                 { label: 'Output integrations & notifications', slug: 'reference/modules/xv-notify' },
                 { label: 'Eventing & webhooks', slug: 'reference/modules/eventing' },
                 { label: 'Saved console views', slug: 'reference/modules/consoleviews' },
-                // Edition availability descriptor (modules/sessioncockpit; not one of the 30)
+                // Edition availability descriptor (modules/sessioncockpit; not one of the 31)
                 { label: 'Session cockpit (availability)', slug: 'reference/modules/session-cockpit' },
-                // Platform & core capabilities (not counted among the 30 modules)
+                // Platform & core capabilities (not counted among the 31 modules)
                 { label: 'API & manage-as-code (platform)', slug: 'reference/modules/xix-api-manage-as-code' },
                 { label: 'Multi-tenancy & org management (platform)', slug: 'reference/modules/xx-multi-tenancy' },
                 { label: 'Executive dashboards & reporting (console)', slug: 'reference/modules/xxi-executive-dashboards' },

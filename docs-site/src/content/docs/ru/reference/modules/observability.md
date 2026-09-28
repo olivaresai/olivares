@@ -7,7 +7,7 @@ description: >-
   работающего бинарника. Она не владеет ни одной сущностью и ничего не хранит.
 ---
 
-Observability (`modules/observability`) — один из 30 модулей; подобно
+Observability (`modules/observability`) — один из 31 модуля; подобно
 [live-ingest](/ru/reference/modules/live-ingest/), он выполняет архитектурную роль,
 а не занимает слот возможности. Это **read-модель движка о самом себе**: три
 read-only поверхности под `/v1/m/observability/`, отвечающие на вопросы, которые

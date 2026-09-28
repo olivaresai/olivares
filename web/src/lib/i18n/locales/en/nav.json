@@ -44,11 +44,13 @@
     "communicationsAdministration": "Channel administration",
     "communicationsHandoffs": "Handoffs",
     "console": "Administration",
+    "sourceDiff": "Source diff",
     "permissions": "Permissions",
     "identity": "Identity & NHI",
     "claudePolicy": "Claude Code governance",
     "routinePolicies": "Routine policies",
     "deploy": "Deployment",
+    "gitPublication": "Git publication",
     "knowledge": "Knowledge",
     "catalog": "Catalog",
     "killswitch": "Kill switch",
@@ -106,7 +108,7 @@
   "descriptions": {
     "home": "Estate overview and health at a glance",
     "onboarding": "Step-by-step deployment configuration",
-    "inventory": "Discover and catalog every agent, MCP and model",
+    "inventory": "Discover and catalog the agents, MCP servers and models that connectors observed.",
     "sessions": "Observe live and discovered sessions with their timelines; shares its screen with Operate sessions",
     "accessMap": "What each agent reads and writes (R/RW)",
     "health": "Agent and MCP uptime and SLAs",
@@ -122,6 +124,7 @@
     "identity": "SSO, SCIM, the NHI roster and the WIF graph",
     "claudePolicy": "Managed policy, hooks, MCP, sandbox and policy-as-code",
     "deploy": "Provision and wire agents to infrastructure",
+    "gitPublication": "Push commits, open pull requests and merge through approved Git targets",
     "knowledge": "Knowledge bases, RAG and data lineage",
     "catalog": "Curated, approved agents and capabilities",
     "killswitch": "Emergency stop, dual-control recovery and guardian containment",
@@ -165,7 +168,8 @@
     "eventing": "Outbound webhook subscriptions, the captured event log, deliveries and the dead-letter queue",
     "team-costs": "Cost attribution by team: sessions, tokens and spend, with a daily trend and a per-project and per-model breakdown",
     "backups": "Encrypted disaster-recovery snapshots of the control plane: create, schedule, download and restore",
-    "logs": "The live engine log stream, with level and module filters, search and pause"
+    "logs": "The live engine log stream, with level and module filters, search and pause",
+    "sourceDiff": "Compare a base and a head revision of a connected Git repository, file by file"
   },
   "commandActions": {
     "eventing": {
@@ -334,5 +338,73 @@
     "wireAria": "Session input line",
     "turnFailed": "The session could not accept this turn.",
     "sendBackgroundHint": "Ctrl+Enter sends and keeps the draft ready for the next sentence."
+  },
+  "shell": {
+    "journeysLabel": "Journeys",
+    "journeys": {
+      "home": "Home",
+      "sessions": "Sessions",
+      "workspaceDashboard": "Workspaces",
+      "providers": "AI tools",
+      "deploy": "Deploy"
+    },
+    "phoneBarLabel": "Main",
+    "newSession": "New session",
+    "searchCommands": "Search and commands",
+    "brandHome": "Olivares AI, home",
+    "allAreas": "All areas",
+    "more": "More",
+    "moreLabel": "More: all areas",
+    "workspaceSwitch": "Switch workspace. Current: {{name}}",
+    "workspaceCount": "Workspaces: {{count}}",
+    "rail": {
+      "title": "Sessions",
+      "all": "All",
+      "groups": {
+        "needsYou": "Needs you",
+        "working": "Working",
+        "earlier": "Earlier"
+      },
+      "empty": {
+        "needsYou": "Nothing waits for you.",
+        "working": "Nothing is running.",
+        "earlier": "No earlier sessions."
+      },
+      "state": {
+        "need": "Needs you",
+        "live": "Working",
+        "ended": "Ended",
+        "idle": "Idle"
+      },
+      "workItem": "Work item",
+      "handoffFrom": "Handoff to you · from {{from}}",
+      "session": "Session",
+      "minutes": "{{count}}m",
+      "hours": "{{count}}h",
+      "days": "{{count}}d",
+      "loading": "Reading sessions…",
+      "error": "The sessions could not be read."
+    },
+    "engine": {
+      "checking": "Checking the engine",
+      "ready": "Engine ready",
+      "unreachable": "Engine not reachable",
+      "offline": "Offline since {{time}}"
+    },
+    "panel": {
+      "show": "Show {{title}}",
+      "hide": "Hide {{title}}",
+      "close": "Close the panel"
+    },
+    "keys": {
+      "command": {
+        "session": {
+          "new": "New session"
+        }
+      },
+      "when": {
+        "outsideField": "not in a field"
+      }
+    }
   }
 }

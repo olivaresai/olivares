@@ -1,7 +1,7 @@
 ---
 title: Catalogue des modules
 description: >-
-  Les 30 modules d'Olivares AI — organisés par les neuf domaines de
+  Les 31 modules d'Olivares AI — organisés par les neuf domaines de
   fonctionnalités, avec la maturité honnête de chaque module. Olivares AI
   intègre, gère et sécurise l'IA en entreprise, une seule ground truth : Claude Code au niveau le plus profond, Codex et Grok Build à ses côtés
   Claude Code ; ceci est la référence par module.
@@ -9,14 +9,14 @@ description: >-
 
 Olivares AI intègre, gère et sécurise l'IA en entreprise, une seule ground truth :
 Claude Code au niveau le plus profond, Codex et Grok Build à ses côtés. C'est une **plateforme modulaire** — un moteur, une
-console, et **30 modules** câblés dans un binaire unique — qui observe où
+console, et **31 modules** câblés dans un binaire unique — qui observe où
 s'exécutent les agents, gouverne ce qu'ils sont autorisés à faire, et (sur un
 sous-ensemble croissant) agit sur votre infrastructure réelle. Chaque module
 (a) consomme des événements/données normalisés du cœur (core), (b) déclare ses
 entités dans le modèle de données partagé, et (c) expose ses propres points de
 terminaison d'API et vues d'UI — sans toucher au cœur ni aux autres modules.
 
-Les 30 modules sont organisés par les **neuf domaines de fonctionnalités**
+Les 31 modules sont organisés par les **neuf domaines de fonctionnalités**
 ci-dessous. Lisez le statut de chaque module en **deux moitiés** :
 *Gouverner/Observer* (cataloguer, observer, contrôler, rapporter) est construit
 et câblé aujourd'hui ; *Actionner* (agir sur l'infrastructure réelle — déployer,
@@ -36,10 +36,10 @@ de conception là où c'est indiqué (voir
 La **carte d'accès** (`iii-access-map`) — le graphe lecture/lecture-écriture de
 ce que chaque agent peut toucher et touche effectivement, avec la dérive de
 moindre privilège = `Permitted ≠ Observed` — est **l'une des fonctionnalités les
-plus utiles parmi les 30**, pas le produit tout entier. L'étendue est l'enjeu :
+plus utiles parmi les 31**, pas le produit tout entier. L'étendue est l'enjeu :
 neuf domaines, un moteur, une console.
 
-## Les 30 modules, par domaine de fonctionnalités
+## Les 31 modules, par domaine de fonctionnalités
 
 Chaque ligne renvoie à sa page de module (`/reference/modules/<slug>/`). La
 colonne **Actionner** correspond à l'état honnête de la moitié « agir » ; `—`
@@ -50,7 +50,7 @@ d'actionnement.
 
 | Module | Actionner | Objet |
 |---|---|---|
-| [Inventaire et découverte](/fr/reference/modules/i-inventory/) | — | Découvrir et cataloguer chaque agent/session/serveur MCP/outil/modèle/identité du parc. |
+| [Inventaire et découverte](/fr/reference/modules/i-inventory/) | — | Découvrir et cataloguer les agents, sessions, serveurs MCP, outils, modèles et identités que les connecteurs ont observés. |
 | [Opération en direct et sessions](/fr/reference/modules/ii-sessions/) | — | État en temps réel de chaque agent et session ; héberge aussi le runtime gouverné de session Claude Code. |
 | [Carte d'accès et de ressources (R/RW)](/fr/reference/modules/iii-access-map/) | — | Ce à quoi chaque agent accède, et s'il lit ou écrit ; dérive de moindre privilège = `Permitted ≠ Observed`. |
 | [Orchestration et A2A](/fr/reference/modules/iv-orchestration/) | à la demande | Observer-et-gouverner le graphe de délégation/communication en direct ; le dispatch est câblé à la demande, fermé par défaut jusqu'au provisionnement. |
@@ -67,6 +67,7 @@ d'actionnement.
 | [Identité, permissions et gouvernance](/fr/reference/modules/vi-governance/) | — | Qui et quoi peut faire quoi, de façon granulaire : Cedar RBAC + deny-overlay + grants à portée définie, réconciliation de roster, admin/rôles personnalisés à portée définie, break-glass, kill-switch. |
 | [Cadrage des sources et identifiants](/fr/reference/modules/sourcescope/) | — | Lier des sources à un workspace/groupe d'agents ; résolveur à portée définie fermé par défaut + identifiants à portée définie au moment de la résolution. |
 | [Déploiement et intégration](/fr/reference/modules/vii-deploy/) | à la demande (503) | Planifier et gouverner les déploiements vers l'infrastructure réelle ; l'exécuteur est à la demande — les `apply`/`retire` en production renvoient `503` jusqu'au provisionnement. |
+| [Publication Git gouvernée](/fr/reference/modules/gitpublish/) | on-demand | Envoyer des commits, ouvrir des pull requests et fusionner avec des liaisons Git approuvées, une autorisation actuelle et des résultats conservés. |
 
 > **Identité et accès** vit à l'intérieur de la [gouvernance](/fr/reference/modules/vi-governance/) —
 > il n'y a pas de module séparé. Le cycle de vie NHI, la fédération d'identité
@@ -138,16 +139,15 @@ par nature et n'a pas de surface d'actionnement. Cette répartition est le contr
 honnête : le produit **observe et gouverne largement aujourd'hui, et actionne sur
 un sous-ensemble croissant, principalement soumis au provisionnement** — voir
 [Honnêteté et limites](/fr/start/honesty-and-limits/). Le catalogue est dérivé de
-la racine de composition (`cmd/olivares/wire.go`) : les 30 modules y sont
-construits et enregistrés via `rt.AddModule` (vérifié le 2026-08-01,
-main @ f632f03f).
+la racine de composition (`cmd/olivares/wire.go`) : les 31 modules y sont
+construits et enregistrés via `rt.AddModule` (vérifié le 2026-09-27).
 
-## Couture de disponibilité d'édition (non comptée parmi les 30 modules)
+## Couture de disponibilité d'édition (non comptée parmi les 31 modules)
 
-Le catalogue ci-dessus, ce sont les **30 modules** que la racine de composition
+Le catalogue ci-dessus, ce sont les **31 modules** que la racine de composition
 construit comme modules produit. Séparément, Community enregistre un
 descripteur de disponibilité sous l'espace de noms API `session-cockpit`. Ce
-n'est pas l'un de ces 30.
+n'est pas l'un de ces 31.
 
 - [Cockpit de sessions (disponibilité)](/fr/reference/modules/session-cockpit/) —
   zéro gestionnaire dans Community ; `/v1/m/session-cockpit` renvoie **404 par
@@ -157,11 +157,11 @@ n'est pas l'un de ces 30.
   [Exploitation en direct et sessions](/fr/reference/modules/ii-sessions/) et
   [Exécuter Claude Code avec Olivares](/fr/how-to/run-claude-code-with-olivares/).
 
-## Capacités plateforme et cœur (non comptées parmi les 30 modules)
+## Capacités plateforme et cœur (non comptées parmi les 31 modules)
 
 Ce sont des capacités réelles et livrées, mais ce sont des **capacités
 moteur/cœur/web**, pas des modules de l'ensemble `modules/` — elles ne sont donc
-pas comptées dans les 30 :
+pas comptées dans les 31 :
 
 - [Propre API + manage-as-code](/fr/reference/modules/xix-api-manage-as-code/) —
   **Capacité moteur/cœur.** L'API REST/gRPC versionnée du moteur lui-même plus le
@@ -173,7 +173,7 @@ pas comptées dans les 30 :
 - [Tableaux de bord exécutifs](/fr/reference/modules/xxi-executive-dashboards/) —
   **Capacité web.** Vues de console pour les dirigeants aux côtés de l'UI
   technique. (Le backend de génération de rapports est le module
-  [reporting](/fr/reference/modules/reporting/), qui EST compté parmi les 30.)
+  [reporting](/fr/reference/modules/reporting/), qui EST compté parmi les 31.)
 - [Opérations des modèles (modèles propres)](/fr/reference/modules/xxiii-model-operations/) —
   **Capacité du module models** (comptée via la ligne du module X, pas une ligne
   à part) : le registre gouverné des modèles propres, l'admission des modèles
@@ -185,7 +185,7 @@ locale ([xxiii-fine-tuning](/fr/reference/modules/xxiii-fine-tuning/)) — la
 plateforme gouverne et enregistre ce travail aujourd'hui (voir les opérations des
 modèles ci-dessus) mais n'exécute pas l'entraînement et ne sert pas l'inférence
 elle-même ; la moitié exécutante est un travail **prévu** documenté, **non livré**
-et pas l'un des 30.
+et pas l'un des 31.
 
 ## Comment les modules apparaissent dans l'API et le bus
 
@@ -199,14 +199,14 @@ et pas l'un des 30.
 
 ## Couches
 
-Les 30 modules s'appuient sur des couches au-dessus du moteur, aux côtés des
+Les 31 modules s'appuient sur des couches au-dessus du moteur, aux côtés des
 capacités moteur/cœur et web ci-dessus :
 
 - **Moteur (couche 0)** — les capacités propre-API/manage-as-code et
-  multi-tenancy (cœur, non comptées dans les 30).
+  multi-tenancy (cœur, non comptées dans les 31).
 - **Cœur (couche 1)** — inventory, sessions, access-map, models, health,
   observability.
-- **Gestion (couche 2)** — capabilities, governance, sourcescope, deploy,
+- **Gestion (couche 2)** — capabilities, governance, sourcescope, deploy, gitpublish,
   knowledge.
 - **Intelligence (couche 3)** — orchestration, security, recording, inference
   proxy, finops, evals, compliance, reporting, siemforward, posture-export, catalog, notify,

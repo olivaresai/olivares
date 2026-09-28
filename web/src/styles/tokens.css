@@ -2,135 +2,245 @@
 /* SPDX-License-Identifier: AGPL-3.0-only */
 
 /*
- * Olivares Operations Console — design tokens (brand-aligned, dark-first).
+ * Olivares AI console — design tokens (v26.10 visual system).
  *
- * GENERATED FILE — DO NOT EDIT. Source of truth: web/tokens/*.tokens.json (DTCG
- * 2025.10). Regenerate with `pnpm tokens`; `pnpm tokens:check` guards drift in CI.
- * The :root{} / .dark{} CSS-var blocks and the Tailwind 4 @theme inline{} block
- * below are emitted from the final Olivares brand identity (brandv4, 2026-06-10): brand neutrals #28282b / #fafaf9, the single brand orange #f08000 — the FILL
- * (--accent) in BOTH themes, deepened to #b45500 only where it is TEXT on the light
- * canvas (--accent-text) — and the attributed/approximate confidence
- * axis. Every TEXT pair is AA or better in both themes; the light accent FILL against
- * the canvas is deliberately below the 3:1 non-text threshold (2.58:1), because the
- * brand orange cannot reach it there — a declared trade-off, not an oversight. The tokens are not hand-authored (ADM-CORE-04): they are generated from a
- * standard, interoperable DTCG source via Style Dictionary.
+ * GENERATED FILE — DO NOT EDIT. Source of truth: web/tokens/console/*.tokens.json
+ * (DTCG 2025.10). Regenerate with `pnpm tokens`; `pnpm tokens:check` guards drift in CI.
+ * Blocks, in order: the LIGHT theme (:root), the DARK theme (.dark), the Tailwind 4
+ * @theme inline mapping, density (comfortable by default, compact by attribute) and
+ * motion (stopped under prefers-reduced-motion and under the Reduce motion setting).
+ * Each theme holds the palette — four layered neutrals, three text tones, the single
+ * brand orange #f08000 by role, status colors with soft fills — and the role names the
+ * components use, each resolved from the palette. Every text token is at least 4.5:1 and
+ * every control boundary, focus ring and selection border at least 3:1 on every surface
+ * of its theme (src/styles/tokens.test.ts measures the 372 pairs).
  */
 
 :root {
-  /* Surfaces & text — LIGHT */
-  --background: #fafaf9;
-  --surface: #ffffff;
+  /* Palette — neutrals — LIGHT */
+  --frame: #efeee9;
+  --canvas: #ffffff;
+  --surface: #f8f7f4;
+  --raised: #ffffff;
+  --hover: rgba(20, 18, 14, 0.04);
+  --active: rgba(20, 18, 14, 0.075);
+  --line: rgba(20, 18, 14, 0.09);
+  --line-strong: rgba(20, 18, 14, 0.16);
+  --ctl-border: #8a8883;
+  --scrim: rgba(26, 25, 23, 0.32);
+
+  /* Palette — text — LIGHT */
+  --text: #1a1917;
+  --text-2: #4a4742;
+  --text-3: #5f5c55;
+
+  /* Palette — the brand orange, by role — LIGHT */
+  --accent: #f08000;
+  --on-accent: #1a1206;
+  --accent-text: #9c4a00;
+  --accent-soft: rgba(240, 128, 0, 0.12);
+  --accent-line: rgba(194, 96, 0, 0.45);
+  --accent-border: #c26000;
+  --focus: #b45500;
+
+  /* Palette — status and diff — LIGHT */
+  --ok: #18693f;
+  --ok-soft: rgba(24, 105, 63, 0.09);
+  --warn: #7d5400;
+  --warn-soft: rgba(125, 84, 0, 0.09);
+  --bad: #a8231c;
+  --bad-soft: rgba(168, 35, 28, 0.08);
+  --info: #1c58a3;
+  --info-soft: rgba(28, 88, 163, 0.08);
+  --diff-add: rgba(29, 122, 75, 0.1);
+  --diff-del: rgba(179, 38, 30, 0.09);
+
+  /* Palette — depth and atmosphere — LIGHT */
+  --shadow-pop:
+    0 18px 48px -14px rgba(30, 24, 16, 0.28), 0 2px 6px rgba(30, 24, 16, 0.08);
+  --shadow-card: 0 1px 2px rgba(30, 24, 16, 0.05);
+  --ember: radial-gradient(
+    720px 260px at 50% -110px,
+    rgba(240, 128, 0, 0.09),
+    transparent 70%
+  );
+
+  /* Roles — surfaces and text */
+  --background: #ffffff;
   --elevated: #ffffff;
-  --overlay: rgba(24, 24, 27, 0.45);
-  --muted: #f1f1f0;
-  --muted-foreground: #5c564e;
-  --foreground: #28282b;
-  --border: #e6e6e4;
-  --border-strong: #d6d6d3;
+  --overlay: rgba(26, 25, 23, 0.32);
+  --muted: #ededed;
+  --muted-foreground: #4a4742;
+  --foreground: #1a1917;
+  --border: rgba(20, 18, 14, 0.09);
+  --border-strong: rgba(20, 18, 14, 0.16);
   --ring: #b45500;
 
-  /* Brand accent (single orange) — LIGHT */
-  --accent: #f08000;
+  /* Roles — the orange */
   --accent-foreground: #1a1206;
-  --accent-hover: #d87000;
+  --accent-hover: #fe8800;
   --accent-active: #cc6a00;
-  --accent-text: #a84f00;
-  --accent-soft: #fdeedf;
-  --accent-soft-foreground: #8a3f00;
-  --accent-line: #f2c49e;
+  --accent-soft-foreground: #9c4a00;
 
-  /* Semantics — LIGHT (text/solid; soft fill + line derived below) */
-  --success: #2f6b2c;
-  --warning: #8a5300;
-  --danger: #b0201b;
-  --info: #1e5a86;
+  /* Roles — status */
+  --success: #18693f;
+  --warning: #7d5400;
+  --danger: #a8231c;
   --danger-solid: #b0201b;
   --danger-solid-foreground: #fff8f0;
+  --success-soft: rgba(24, 105, 63, 0.09);
+  --warning-soft: rgba(125, 84, 0, 0.09);
+  --danger-soft: rgba(168, 35, 28, 0.08);
 
-  /* Access-graph confidence (orthogonal cool axis) — LIGHT */
+  /* Roles — access-graph confidence (a cool axis apart from status) */
   --confidence-attributed: #0a7c77;
   --confidence-approximate: #5b6470;
 
-  /* Elevation — LIGHT (depth from layered surfaces + hairlines) */
-  --elev-xs: 0 1px 1px rgba(28, 28, 31, 0.04);
-  --elev-sm: 0 1px 2px rgba(28, 28, 31, 0.06), 0 1px 1px rgba(28, 28, 31, 0.04);
-  --elev-md:
-    0 2px 6px -1px rgba(28, 28, 31, 0.08), 0 1px 2px rgba(28, 28, 31, 0.06);
+  /* Roles — elevation */
+  --elev-xs: 0 1px 2px rgba(30, 24, 16, 0.05);
+  --elev-sm: 0 1px 2px rgba(30, 24, 16, 0.05);
+  --elev-md: 0 1px 2px rgba(30, 24, 16, 0.05);
   --elev-lg:
-    0 8px 24px -6px rgba(28, 28, 31, 0.12),
-    0 2px 6px -2px rgba(28, 28, 31, 0.08);
+    0 18px 48px -14px rgba(30, 24, 16, 0.28), 0 2px 6px rgba(30, 24, 16, 0.08);
   --elev-xl:
-    0 20px 48px -12px rgba(28, 28, 31, 0.18),
-    0 4px 12px -4px rgba(28, 28, 31, 0.1);
+    0 18px 48px -14px rgba(30, 24, 16, 0.28), 0 2px 6px rgba(30, 24, 16, 0.08);
 
-  /* Semantic soft fills + lines — derived from the (theme-switched) hue */
-  --success-soft: color-mix(in oklab, var(--success) 12%, var(--surface));
-  --success-line: color-mix(in oklab, var(--success) 32%, var(--surface));
-  --warning-soft: color-mix(in oklab, var(--warning) 12%, var(--surface));
-  --warning-line: color-mix(in oklab, var(--warning) 32%, var(--surface));
-  --danger-soft: color-mix(in oklab, var(--danger) 7%, var(--surface));
-  --danger-line: color-mix(in oklab, var(--danger) 32%, var(--surface));
-  --info-soft: color-mix(in oklab, var(--info) 12%, var(--surface));
-  --info-line: color-mix(in oklab, var(--info) 32%, var(--surface));
-
-  /* Selection/active indicator — accent held at >=3:1 vs surface & background (SC 1.4.11) */
+  /* Roles — selection indicator, >=3:1 on its neighbours (SC 1.4.11) */
   --accent-strong: #c26000;
+
+  /* Status hairlines, mixed at runtime from the theme status color */
+  --success-line: color-mix(in oklab, var(--success) 32%, var(--surface));
+  --warning-line: color-mix(in oklab, var(--warning) 32%, var(--surface));
+  --danger-line: color-mix(in oklab, var(--danger) 32%, var(--surface));
+  --info-line: color-mix(in oklab, var(--info) 32%, var(--surface));
 }
 
 .dark {
-  /* Surfaces & text — DARK (primary operator surface) */
-  --background: #28282b;
-  --surface: #2f2f33;
-  --elevated: #38383d;
-  --overlay: rgba(16, 16, 18, 0.88);
-  --muted: #323237;
-  --muted-foreground: #aaaab3;
-  --foreground: #fafaf9;
-  --border: #3a3a40;
-  --border-strong: #4c4c54;
-  --ring: #f0974a;
+  /* Palette — neutrals — DARK */
+  --frame: #0a0a0c;
+  --canvas: #111113;
+  --surface: #17171a;
+  --raised: #1d1d21;
+  --hover: rgba(255, 255, 255, 0.045);
+  --active: rgba(255, 255, 255, 0.08);
+  --line: rgba(255, 255, 255, 0.08);
+  --line-strong: rgba(255, 255, 255, 0.14);
+  --ctl-border: #6e6e72;
+  --scrim: rgba(5, 5, 6, 0.62);
 
-  /* Brand accent — DARK */
+  /* Palette — text — DARK */
+  --text: #f3f2ef;
+  --text-2: #b0aea8;
+  --text-3: #9a9892;
+
+  /* Palette — the brand orange, by role — DARK */
   --accent: #f08000;
+  --on-accent: #1a1206;
+  --accent-text: #ff9b3d;
+  --accent-soft: rgba(240, 128, 0, 0.13);
+  --accent-line: rgba(240, 128, 0, 0.42);
+  --accent-border: #f08000;
+  --focus: #ffb366;
+
+  /* Palette — status and diff — DARK */
+  --ok: #52c98f;
+  --ok-soft: rgba(82, 201, 143, 0.12);
+  --warn: #e8c14a;
+  --warn-soft: rgba(232, 193, 74, 0.12);
+  --bad: #f47a70;
+  --bad-soft: rgba(244, 122, 112, 0.12);
+  --info: #72aef5;
+  --info-soft: rgba(114, 174, 245, 0.12);
+  --diff-add: rgba(82, 201, 143, 0.13);
+  --diff-del: rgba(244, 122, 112, 0.13);
+
+  /* Palette — depth and atmosphere — DARK */
+  --shadow-pop:
+    0 18px 48px -12px rgba(0, 0, 0, 0.72), 0 2px 6px rgba(0, 0, 0, 0.4);
+  --shadow-card: none;
+  --ember: radial-gradient(
+    720px 260px at 50% -110px,
+    rgba(240, 128, 0, 0.12),
+    transparent 70%
+  );
+
+  /* Roles — surfaces and text */
+  --background: #111113;
+  --elevated: #1d1d21;
+  --overlay: rgba(5, 5, 6, 0.62);
+  --muted: #242426;
+  --muted-foreground: #b0aea8;
+  --foreground: #f3f2ef;
+  --border: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.14);
+  --ring: #ffb366;
+
+  /* Roles — the orange */
   --accent-foreground: #1a1206;
-  --accent-hover: #f89020;
+  --accent-hover: #fe8800;
   --accent-active: #d87000;
-  --accent-text: #f08000;
-  --accent-soft: #34250f;
-  --accent-soft-foreground: #f0974a;
-  --accent-line: #5a3d17;
+  --accent-soft-foreground: #ff9b3d;
 
-  /* Selection/active indicator — DARK */
-  --accent-strong: color-mix(in oklab, var(--accent) 85%, var(--surface));
-
-  /* Semantics — DARK */
-  --success: #86c58a;
-  --warning: #e7b65a;
-  --danger: #f7928b;
-  --info: #6fb6e6;
+  /* Roles — status */
+  --success: #52c98f;
+  --warning: #e8c14a;
+  --danger: #f47a70;
   --danger-solid: #c5362f;
   --danger-solid-foreground: #fff1ef;
+  --success-soft: rgba(82, 201, 143, 0.12);
+  --warning-soft: rgba(232, 193, 74, 0.12);
+  --danger-soft: rgba(244, 122, 112, 0.12);
 
-  /* Confidence — DARK */
+  /* Roles — access-graph confidence (a cool axis apart from status) */
   --confidence-attributed: #5be0d8;
   --confidence-approximate: #9aa3b0;
 
-  /* Elevation — DARK (borders + inset top highlight carry the lit edge) */
+  /* Roles — elevation */
   --elev-xs: none;
-  --elev-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
-  --elev-md: 0 2px 8px -2px rgba(0, 0, 0, 0.6);
+  --elev-sm: none;
+  --elev-md: none;
   --elev-lg:
-    0 10px 30px -8px rgba(0, 0, 0, 0.7),
-    inset 0 1px 0 0 rgba(250, 250, 249, 0.04);
+    0 18px 48px -12px rgba(0, 0, 0, 0.72), 0 2px 6px rgba(0, 0, 0, 0.4);
   --elev-xl:
-    0 28px 64px -16px rgba(0, 0, 0, 0.8),
-    inset 0 1px 0 0 rgba(250, 250, 249, 0.05);
+    0 18px 48px -12px rgba(0, 0, 0, 0.72), 0 2px 6px rgba(0, 0, 0, 0.4);
+
+  /* Roles — selection indicator, >=3:1 on its neighbours (SC 1.4.11) */
+  --accent-strong: #f08000;
 }
 
 @theme inline {
-  /* Surfaces, accent, semantics & confidence — mapped to the theme vars */
-  --color-background: var(--background);
+  /* Palette and roles — mapped to the theme vars */
+  --color-frame: var(--frame);
+  --color-canvas: var(--canvas);
   --color-surface: var(--surface);
+  --color-raised: var(--raised);
+  --color-hover: var(--hover);
+  --color-active: var(--active);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-ctl-border: var(--ctl-border);
+  --color-scrim: var(--scrim);
+  --color-text: var(--text);
+  --color-text-2: var(--text-2);
+  --color-text-3: var(--text-3);
+  --color-accent: var(--accent);
+  --color-on-accent: var(--on-accent);
+  --color-accent-text: var(--accent-text);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-line: var(--accent-line);
+  --color-accent-border: var(--accent-border);
+  --color-focus: var(--focus);
+  --color-ok: var(--ok);
+  --color-ok-soft: var(--ok-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-bad: var(--bad);
+  --color-bad-soft: var(--bad-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-diff-add: var(--diff-add);
+  --color-diff-del: var(--diff-del);
+  --color-background: var(--background);
   --color-elevated: var(--elevated);
   --color-overlay: var(--overlay);
   --color-muted: var(--muted);
@@ -139,29 +249,23 @@
   --color-border: var(--border);
   --color-border-strong: var(--border-strong);
   --color-ring: var(--ring);
-  --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent-hover: var(--accent-hover);
   --color-accent-active: var(--accent-active);
-  --color-accent-text: var(--accent-text);
-  --color-accent-soft: var(--accent-soft);
   --color-accent-soft-foreground: var(--accent-soft-foreground);
-  --color-accent-line: var(--accent-line);
   --color-success: var(--success);
   --color-warning: var(--warning);
   --color-danger: var(--danger);
-  --color-info: var(--info);
   --color-danger-solid: var(--danger-solid);
   --color-danger-solid-foreground: var(--danger-solid-foreground);
+  --color-success-soft: var(--success-soft);
+  --color-warning-soft: var(--warning-soft);
+  --color-danger-soft: var(--danger-soft);
   --color-confidence-attributed: var(--confidence-attributed);
   --color-confidence-approximate: var(--confidence-approximate);
-  --color-success-soft: var(--success-soft);
   --color-success-line: var(--success-line);
-  --color-warning-soft: var(--warning-soft);
   --color-warning-line: var(--warning-line);
-  --color-danger-soft: var(--danger-soft);
   --color-danger-line: var(--danger-line);
-  --color-info-soft: var(--info-soft);
   --color-info-line: var(--info-line);
   --color-accent-strong: var(--accent-strong);
 
@@ -178,22 +282,25 @@
   --color-graphite-900: #232327;
   --color-graphite-950: #1b1b1e;
 
-  /* Typography (all self-hosted via @fontsource-variable in main.tsx) */
+  /* Typography — self-hosted in src/styles/fonts.css */
   --font-sans:
-    'Inter Variable', Inter, system-ui, -apple-system, 'Segoe UI', Roboto,
-    Helvetica, Arial, sans-serif;
+    'Geist', system-ui, -apple-system, 'Segoe UI', 'Noto Sans CJK SC',
+    'PingFang SC', 'Microsoft YaHei', 'Yu Gothic', sans-serif;
   --font-mono:
-    'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, SFMono-Regular,
-    Menlo, Consolas, 'Liberation Mono', monospace;
+    'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas,
+    'Liberation Mono', monospace;
   --font-display:
-    'Space Grotesk Variable', 'Space Grotesk', 'Inter Variable', system-ui,
-    sans-serif;
+    'Geist', system-ui, -apple-system, 'Segoe UI', 'Noto Sans CJK SC',
+    'PingFang SC', 'Microsoft YaHei', 'Yu Gothic', sans-serif;
 
-  /* Radii — tight/instrument-grade */
+  /* Radii — controls, cards, panels */
+  --radius-ctl: 0.4375rem;
+  --radius-card: 0.625rem;
+  --radius-panel: 0.875rem;
   --radius-sm: 0.25rem;
-  --radius-md: 0.375rem;
-  --radius-lg: 0.5rem;
-  --radius-xl: 0.75rem;
+  --radius-md: 0.4375rem;
+  --radius-lg: 0.625rem;
+  --radius-xl: 0.875rem;
 
   /* Elevation (theme-switched via --elev-*) */
   --shadow-xs: var(--elev-xs);
@@ -202,38 +309,47 @@
   --shadow-lg: var(--elev-lg);
   --shadow-xl: var(--elev-xl);
 
-  /* Motion — fast, mechanical, no bounce */
-  --ease-out: cubic-bezier(0.2, 0.7, 0.2, 1);
+  /* Motion — one easing curve, no bounce */
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
   --ease-in: cubic-bezier(0.4, 0, 1, 1);
   --animate-pulse-live: pulse-live 2s ease-in-out infinite;
-  --default-transition-duration: 140ms;
-  --default-transition-timing-function: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --default-transition-duration: var(--duration-fast);
+  --default-transition-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
 
-  /* Operator type scale — size + leading + tracking + weight per step */
-  --text-display-lg: 2rem;
-  --text-display-lg--line-height: 2.375rem;
-  --text-display-lg--letter-spacing: -0.025em;
+  /* Type ladder — size + leading + tracking + weight per step */
+  --text-hero: 2.5rem;
+  --text-hero--line-height: 2.75rem;
+  --text-hero--letter-spacing: -0.035em;
+  --text-hero--font-weight: 600;
+  --text-display-lg: 1.875rem;
+  --text-display-lg--line-height: 2.25rem;
+  --text-display-lg--letter-spacing: -0.03em;
   --text-display-lg--font-weight: 600;
-  --text-display: 1.5rem;
-  --text-display--line-height: 1.875rem;
+  --text-display: 1.375rem;
+  --text-display--line-height: 1.75rem;
   --text-display--letter-spacing: -0.02em;
   --text-display--font-weight: 600;
-  --text-title: 1.125rem;
-  --text-title--line-height: 1.5rem;
-  --text-title--letter-spacing: -0.015em;
+  --text-title: 1.375rem;
+  --text-title--line-height: 1.75rem;
+  --text-title--letter-spacing: -0.02em;
   --text-title--font-weight: 600;
   --text-heading: 1rem;
   --text-heading--line-height: 1.375rem;
   --text-heading--letter-spacing: -0.01em;
   --text-heading--font-weight: 600;
+  --text-body-l: 0.9375rem;
+  --text-body-l--line-height: 1.5rem;
   --text-body: 0.875rem;
-  --text-body--line-height: 1.375rem;
-  --text-caption: 0.75rem;
+  --text-body--line-height: 1.25rem;
+  --text-caption: 0.8125rem;
   --text-caption--line-height: 1.125rem;
-  --text-overline: 0.6875rem;
+  --text-overline: 0.75rem;
   --text-overline--line-height: 1rem;
-  --text-overline--letter-spacing: 0.08em;
-  --text-overline--font-weight: 600;
+  --text-overline--font-weight: 500;
+  --text-mono: 0.8125rem;
+  --text-mono--line-height: 1.25rem;
+  --text-mono-s: 0.75rem;
+  --text-mono-s--line-height: 1.125rem;
 
   /* Layout — the shell geometry, named rather than bracketed */
   --container-page: 90rem;
@@ -242,4 +358,45 @@
   --console-inspector-width: 20rem;
   --console-row-height: 2.25rem;
   --console-list-row-height: 2.5rem;
+}
+
+:root,
+[data-density='comfortable'] {
+  /* Density — comfortable (the default) */
+  --density-row-list: 3.25rem;
+  --density-row-table: 2.75rem;
+  --density-control: 2rem;
+}
+
+[data-density='compact'] {
+  /* Density — compact (spacing only; type does not change) */
+  --density-row-list: 2.5rem;
+  --density-row-table: 2.25rem;
+  --density-control: 1.75rem;
+}
+
+:root {
+  /* Motion — durations and entrance distance */
+  --duration-fast: 120ms;
+  --duration-panel: 180ms;
+  --duration-sheet: 240ms;
+  --motion-shift: 0.375rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    /* Reduced motion — movement stops */
+    --duration-fast: 0ms;
+    --duration-panel: 0ms;
+    --duration-sheet: 0ms;
+    --motion-shift: 0px;
+  }
+}
+
+[data-motion='reduce'] {
+  /* Reduced motion — movement stops */
+  --duration-fast: 0ms;
+  --duration-panel: 0ms;
+  --duration-sheet: 0ms;
+  --motion-shift: 0px;
 }

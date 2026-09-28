@@ -2,7 +2,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useMutation } from '@tanstack/react-query'
+import {
+  useMutation,
+  useQueryClient,
+  type QueryClient,
+} from '@tanstack/react-query'
 import { Link, Navigate, useNavigate } from '@tanstack/react-router'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
@@ -13,9 +17,59 @@ import { Card } from '@/components/ui/card'
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { ApiError } from '@/lib/api/errors'
+import { queryKeys } from '@/lib/api/query'
+import type { Whoami } from '@/lib/api/types'
 import { useAuth } from '@/lib/auth/context'
+import { can as rbacCan } from '@/lib/auth/rbac'
 import { useServerInfo } from '@/lib/hooks/use-server-info'
 import { PasskeyAddressNotice } from '@/features/identity/passkey-address'
+import { viewById } from '@/features/navigation/model'
+import {
+  START_PAGE_IDS,
+  useClientSettings,
+} from '@/features/settings/preferences'
+import { useTenantStore } from '@/stores/tenant'
+
+/**
+ * The tenant `can()` will settle on once sign-in has stored whoami. A persisted
+ * choice is kept when it still belongs to this principal; otherwise the first
+ * grant is the one the session effect selects. Superadmin authority does not
+ * need a grant.
+ */
+function tenantFor(principal: Whoami): string | null {
+  const active = useTenantStore.getState().activeTenant
+  const ids = principal.grants
+    .map((grant) => grant.tenant)
+    .filter((id) => id.length > 0)
+  if (active && (principal.superadmin || ids.includes(active))) return active
+  return ids[0] ?? null
+}
+
+/**
+ * Sign-in writes whoami before this callback runs, and the hook's `can` is still
+ * the anonymous closure from the render that submitted the form. Prefer that
+ * stored principal. When the cache is empty (the page is only rendering), the
+ * hook is already current.
+ */
+function permitsNow(
+  client: QueryClient,
+  hookCan: (permission: string) => boolean,
+): (permission: string) => boolean {
+  const principal = client.getQueryData<Whoami>(queryKeys.whoami) ?? null
+  if (!principal) return hookCan
+  const tenant = tenantFor(principal)
+  return (permission) => rbacCan(permission, { principal, tenant })
+}
+
+/** Where sign-in lands. An unknown or refused destination stays on the home page. */
+function startPath(permits: (permission: string) => boolean): string {
+  const choice = useClientSettings.getState().startPage
+  if (!(START_PAGE_IDS as readonly string[]).includes(choice)) return '/'
+  const view = viewById(choice)
+  if (!view) return '/'
+  if (view.permission && !permits(view.permission)) return '/'
+  return view.path
+}
 
 const schema = z.object({
   email: z.string().email(),
@@ -25,8 +79,9 @@ type LoginValues = z.infer<typeof schema>
 
 export function LoginPage() {
   const { t } = useTranslation(['auth', 'common', 'errors'])
-  const { status, login } = useAuth()
+  const { status, login, can } = useAuth()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const serverInfo = useServerInfo()
   const form = useForm<LoginValues>({
     resolver: zodResolver(schema),
@@ -35,12 +90,14 @@ export function LoginPage() {
 
   const mutation = useMutation({
     mutationFn: (values: LoginValues) => login(values),
-    onSuccess: () => navigate({ to: '/' }),
+    onSuccess: () =>
+      navigate({ to: startPath(permitsNow(queryClient, can)) as '/' }),
   })
 
   // First-boot has no users yet → the setup flow takes precedence.
   if (serverInfo.data?.setup_required) return <Navigate to="/setup" />
-  if (status === 'authenticated') return <Navigate to="/" />
+  if (status === 'authenticated')
+    return <Navigate to={startPath(permitsNow(queryClient, can)) as '/'} />
 
   const submitError =
     mutation.error instanceof ApiError && mutation.error.isLockedOut

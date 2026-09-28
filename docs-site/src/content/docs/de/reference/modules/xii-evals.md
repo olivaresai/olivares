@@ -42,9 +42,16 @@ zentrales **`EvalResult`** — das kanonische Artefakt (`Suite`, `SubjectKind`, 
 `Score`, `Passed`, `OccurredAt`, `Metrics`), das Compliance (XIII) und die UI lesen, **ohne die
 eigenen Tabellen von XII zu kennen**. Runs werden synchron ausgeführt; der SSE-Stream eines
 Runs *gibt den persistierten Run wieder* (Frames pro Fall, dann eine Zusammenfassung), er löst
-nichts aus. Eine Regression gegenüber einer Baseline setzt `regressed` und schreibt ein zentrales
-**`Finding`** (`Kind = eval_regression`), das nach bestem Bemühen auf dem Bus als
-[`finding.reported`](/de/reference/events/) ausgegeben wird, damit Delivery-Module (Health/Benachrichtigungen)
+nichts aus. Eine Regression ist ein Punktvergleich mit einem Baseline-Run. Liegt der
+Score-Abfall über der `regression_threshold` der Suite, setzt der Run `regressed` und
+schreibt ein zentrales **`Finding`** (`Kind = eval_regression`). Dieser Vergleich hat
+kein Intervall. Die automatische Baseline ist der letzte abgeschlossene Run derselben
+Suite und desselben Subjekts, bei gesetzter Variante auch derselben Variante. Dieser
+Run kann eine andere Suite-Version, ein anderes Modell oder einen anderen Scorer
+nutzen, und der Vergleich meldet nicht, was sich geändert hat. Nach einem Wechsel der
+Suite-Version übergeben Sie eine explizite Baseline oder pinnen eine (`POST /baselines`).
+Das Finding wird nach bestem Bemühen auf dem Bus als
+[`finding.reported`](/de/reference/events/) ausgegeben, damit Delivery-Module (Health/Benachrichtigungen)
 es routen. Auf der Leseseite aggregieren **Scorecards** Pass-Rate, mittleren Score und Trend pro
 Subjekt und exportieren als CSV/JSON.
 
@@ -81,12 +88,18 @@ Das **Regressions-Gate** (`POST /gate`, CLI `evals gate`) verwandelt all dies in
 blockierendes CI-Urteil: eine Regression gegenüber der Baseline, eine Pass-Rate unter dem
 Suite-Schwellenwert oder ein **unkalibrierter Judge** lässt das Gate scheitern (Exit 1); ein
 fehlender Judge-Credential degradiert zu einer *deklarierten* Warnung, niemals zu einem stillen
-Pass. Die Judge-Kosten in CI werden gesteuert durch ein deterministisch geseedetes Fall-Sample,
-einen Urteils-Cache mit Schlüssel aus Inhalt + Judge-Modell-Pin + Prompt-Version sowie eine
-FinOps-Budget-Vorprüfung, die sich weigert, über eine Obergrenze hinaus auszugeben. Der einzige
+Pass. Der Seed des Gates wählt die Fälle der Stichprobe; er macht ein entferntes Modell nicht
+deterministisch. Ein Treffer im Urteils-Cache (Schlüssel: Inhalt, Judge-Modell-Pin und
+Prompt-Version) gibt das gespeicherte Urteil zurück. Ein Fehltreffer und jeder gewöhnliche
+`llm_judge`-Run außerhalb dieses Gates rufen den entfernten Judge erneut auf und können
+abweichen. Die FinOps-Vorprüfung läuft nur auf diesem Gate. Gilt für die Judge-Aufrufe
+kein FinOps-Budget, das blockiert oder drosselt, erlaubt das Gate die Ausgabe. Ist der
+Budgetspeicher nicht lesbar, verweigert das Gate die Ausgabe und scheitert mit
+`budget_blocked`. Ein Budget, das blockiert oder drosselt, stoppt die Ausgabe. Der einzige
 Ausweg aus einem gescheiterten Gate ist das **gesteuerte Override** — Admin-Stufe, schriftliche
 Begründung, auditiert —, das das *effektive* Urteil ändert, das CI erneut prüft, niemals das
-aufgezeichnete. Jede berichtete Rate kommt mit ihrem Nenner und 95%-Intervall; siehe
+aufgezeichnete. Jede berichtete Rate kommt mit ihrem Nenner und 95%-Intervall; der Regressionsvergleich
+nicht. Siehe
 `docs/EVAL-METHODOLOGY.md` im Repository für die vollständige Methodik und Quellen.
 
 :::caution[Ehrliche Grenzen]

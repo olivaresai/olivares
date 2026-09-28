@@ -73,6 +73,8 @@ type SourceRegistrationAdmission func(context.Context, string, event.SourceRegis
 // Options configures a Runtime.
 type Options struct {
 	SourceRegistrationAdmission SourceRegistrationAdmission
+	// InventoryRecorder may be provided explicitly or by the single opted-in module.
+	InventoryRecorder event.InventoryRecorder
 	// Logger is the base logger; nil uses slog.Default(). Each component gets a
 	// child logger with its name attached.
 	Logger *slog.Logger
@@ -108,8 +110,9 @@ type Runtime struct {
 	bus    eventbus.Bus
 	ownBus bool
 
-	sinkFactory     func(tenant, source string) sdk.Sink
-	sourceAdmission SourceRegistrationAdmission
+	sinkFactory       func(tenant, source string) sdk.Sink
+	sourceAdmission   SourceRegistrationAdmission
+	inventoryRecorder event.InventoryRecorder
 
 	mu sync.Mutex
 	// names is the ONE registration-name namespace shared by sources, outputs and
@@ -233,7 +236,7 @@ func New(opts Options) *Runtime {
 		log:         log,
 		bus:         bus,
 		ownBus:      ownBus,
-		sinkFactory: opts.SinkFactory, sourceAdmission: opts.SourceRegistrationAdmission,
+		sinkFactory: opts.SinkFactory, sourceAdmission: opts.SourceRegistrationAdmission, inventoryRecorder: opts.InventoryRecorder,
 		names:    make(map[string]struct{}),
 		srcIndex: make(map[string]*sourceReg),
 
@@ -506,9 +509,21 @@ func (r *Runtime) AddModule(mod sdk.Module, cfg sdk.Config) error {
 	if r.started {
 		return ErrAlreadyStarted
 	}
+	var recorder event.InventoryRecorder
+	if provider, ok := mod.(interface {
+		InventoryCoverageRecorder() event.InventoryRecorder
+	}); ok {
+		recorder = provider.InventoryCoverageRecorder()
+	}
+	if recorder != nil && r.inventoryRecorder != nil {
+		return errors.New("runtime: duplicate inventory recorder")
+	}
 	d := mod.Descriptor()
 	if err := r.reserveDescriptorName(d); err != nil {
 		return err
+	}
+	if recorder != nil {
+		r.inventoryRecorder = recorder
 	}
 	r.modules = append(r.modules, &moduleReg{mod: mod, cfg: cfg, name: d.Name, status: StatusPending})
 	return nil

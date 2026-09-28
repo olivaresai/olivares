@@ -407,6 +407,7 @@ func (m *Module) handleCommunicationChannelCreate(w http.ResponseWriter, r *http
 	}
 	ctx, cancel := communicationHTTPContext(r)
 	defer cancel()
+	ctx = withRequestStanding(ctx, mc.Standing)
 	result, err := m.CreateChannel(ctx, scope, ref, cmd)
 	if err != nil {
 		writeCommunicationError(w, err)
@@ -693,6 +694,7 @@ func (m *Module) handleChannelAdminCommand(
 	}
 	ctx, cancel := communicationHTTPContext(r)
 	defer cancel()
+	ctx = withRequestStanding(ctx, mc.Standing)
 	result, err := command(ctx, scope, ref)
 	if err != nil {
 		writeCommunicationError(w, err)
@@ -957,6 +959,7 @@ func (m *Module) handleCommunicationHandoffOffer(w http.ResponseWriter, r *http.
 	}
 	ctx, cancel := communicationHTTPContext(r)
 	defer cancel()
+	ctx = withRequestStanding(ctx, mc.Standing)
 	result, err := m.OfferWorkItemHandoff(ctx, scope, ref, cmd)
 	if err != nil {
 		writeCommunicationError(w, err)
@@ -996,6 +999,7 @@ func (m *Module) handleCommunicationHandoffResponse(w http.ResponseWriter, r *ht
 	}
 	ctx, cancel := communicationHTTPContext(r)
 	defer cancel()
+	ctx = withRequestStanding(ctx, mc.Standing)
 	result, err := m.RespondHandoff(ctx, scope, ref, handoffID, cmd)
 	if err != nil {
 		writeCommunicationError(w, err)

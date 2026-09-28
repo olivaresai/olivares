@@ -197,6 +197,18 @@ func (s *fakeRemoteWorkStore) GetProtocolBinding(
 	return s.binding, nil
 }
 
+// ApplyPreparedProtocolReplay records the replay as ApplyProtocolReplay does:
+// the plan's preparation reads the kernel's stores, which this double has none of.
+func (s *fakeRemoteWorkStore) ApplyPreparedProtocolReplay(
+	ctx context.Context,
+	tenant model.TenantID,
+	claim sessions.ProtocolReplayClaim,
+	_ sessions.ProtocolReplayPlan,
+	mutation sessions.ProtocolReplayMutation,
+) (sessions.ProtocolReplayResult, error) {
+	return s.ApplyProtocolReplay(ctx, tenant, claim, mutation)
+}
+
 func (s *fakeRemoteWorkStore) ApplyProtocolReplay(
 	ctx context.Context,
 	_ model.TenantID,

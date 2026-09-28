@@ -229,7 +229,25 @@ func (m *Module) GetChannel(
 	return result, nil
 }
 
+// CreateChannel creates an active Channel with its explicit initial grants. A
+// user grant is a fenced write: the named accounts' standing is read first and
+// the transaction's authority lock pins their authority versions.
 func (m *Module) CreateChannel(
+	ctx context.Context,
+	scope DirectoryScopeRef,
+	ref auth.PrincipalRef,
+	cmd ChannelCreateCommand,
+) (ChannelMutationResult, error) {
+	var result ChannelMutationResult
+	err := m.fencedCommunicationCommand(ctx, func(ctx context.Context) error {
+		var err error
+		result, err = m.createChannel(ctx, scope, ref, cmd)
+		return err
+	})
+	return result, err
+}
+
+func (m *Module) createChannel(
 	ctx context.Context,
 	scope DirectoryScopeRef,
 	ref auth.PrincipalRef,
@@ -273,6 +291,9 @@ func (m *Module) CreateChannel(
 		ctx, scope.TenantID, communicationClaimsForPrincipal(inspected.principal),
 	)
 	if err != nil {
+		return ChannelMutationResult{}, err
+	}
+	if err := m.fenceCommunicationAccounts(ctx, scope.TenantID, channelGrantAccounts(cmd.InitialGrants...)); err != nil {
 		return ChannelMutationResult{}, err
 	}
 	var result ChannelMutationResult
@@ -712,14 +733,26 @@ func (m *channelConfigurationMutation) apply(
 	return after, nil, ValidateChannelUpdate(before, after)
 }
 
+// GrantChannel issues the subject's next grant generation. A user subject is a
+// fenced write: the account's standing is read first and the transaction's
+// authority lock pins its authority version.
 func (m *Module) GrantChannel(
 	ctx context.Context,
 	scope DirectoryScopeRef,
 	ref auth.PrincipalRef,
 	cmd ChannelGrantCommand,
 ) (ChannelMutationResult, error) {
-	return m.mutateChannelAdmin(ctx, scope, ref, cmd.ChannelID, cmd.IfMatch,
-		communicationChannelGrantAudit, &channelGrantMutation{cmd: cmd})
+	var result ChannelMutationResult
+	err := m.fencedCommunicationCommand(ctx, func(ctx context.Context) error {
+		if err := m.fenceCommunicationAccounts(ctx, scope.TenantID, channelGrantAccounts(cmd.Grant)); err != nil {
+			return err
+		}
+		var err error
+		result, err = m.mutateChannelAdmin(ctx, scope, ref, cmd.ChannelID, cmd.IfMatch,
+			communicationChannelGrantAudit, &channelGrantMutation{cmd: cmd})
+		return err
+	})
+	return result, err
 }
 
 // channelGrantMutation issues the granted subject's NEXT generation. It needs

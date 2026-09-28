@@ -44,11 +44,13 @@
     "communicationsAdministration": "Administration des canaux",
     "communicationsHandoffs": "Transferts",
     "console": "Administration",
+    "sourceDiff": "Comparaison de source",
     "permissions": "Permissions",
     "identity": "Identité et NHI",
     "claudePolicy": "Gouvernance de Claude Code",
     "routinePolicies": "Politiques de routines",
     "deploy": "Déploiement",
+    "gitPublication": "Publication Git",
     "knowledge": "Connaissances",
     "catalog": "Catalogue",
     "killswitch": "Coupe-circuit",
@@ -106,7 +108,7 @@
   "descriptions": {
     "home": "Vue d’ensemble du parc et état de santé en un coup d’œil",
     "onboarding": "Configuration du déploiement étape par étape",
-    "inventory": "Découvrez et cataloguez chaque agent, MCP et modèle",
+    "inventory": "Découvrez et cataloguez les agents, serveurs MCP et modèles que les connecteurs ont observés.",
     "sessions": "Observer les sessions en direct et découvertes avec leurs chronologies ; partage son écran avec « Opérer les sessions »",
     "accessMap": "Ce que chaque agent lit et écrit (R/RW)",
     "health": "Disponibilité et SLA des agents et des MCP",
@@ -122,6 +124,7 @@
     "identity": "SSO, SCIM, le répertoire des NHI et le graphe WIF",
     "claudePolicy": "Politique gérée, hooks, MCP, bac à sable et politique en tant que code",
     "deploy": "Provisionnez et câblez les agents à l’infrastructure",
+    "gitPublication": "Pousser des commits, ouvrir des pull requests et fusionner via des cibles Git approuvées",
     "knowledge": "Bases de connaissances, RAG et lignage des données",
     "catalog": "Agents et capacités curés et approuvés",
     "killswitch": "Arrêt d’urgence, reprise en double contrôle et confinement par gardien",
@@ -165,7 +168,8 @@
     "eventing": "Abonnements webhook sortants, journal des événements capturés, livraisons et file des messages morts",
     "team-costs": "Attribution des coûts par équipe : sessions, jetons et dépenses, avec tendance quotidienne et ventilation par projet et par modèle",
     "backups": "Instantanés chiffrés de reprise après sinistre du plan de contrôle : créer, planifier, télécharger et restaurer",
-    "logs": "Le flux de journaux du moteur en direct, avec filtres par niveau et module, recherche et pause"
+    "logs": "Le flux de journaux du moteur en direct, avec filtres par niveau et module, recherche et pause",
+    "sourceDiff": "Comparez une révision de base et une révision head d'un dépôt Git connecté, fichier par fichier"
   },
   "commandActions": {
     "eventing": {
@@ -334,5 +338,73 @@
     "wireAria": "Ligne d’entrée de session",
     "turnFailed": "La session n’a pas pu accepter ce tour.",
     "sendBackgroundHint": "Ctrl+Entrée envoie et laisse le brouillon prêt pour la phrase suivante."
+  },
+  "shell": {
+    "journeysLabel": "Parcours",
+    "journeys": {
+      "home": "Accueil",
+      "sessions": "Sessions",
+      "workspaceDashboard": "Espaces de travail",
+      "providers": "Outils d’IA",
+      "deploy": "Déploiement"
+    },
+    "phoneBarLabel": "Principal",
+    "newSession": "Nouvelle session",
+    "searchCommands": "Recherche et commandes",
+    "brandHome": "Olivares AI, accueil",
+    "allAreas": "Tous les domaines",
+    "more": "Plus",
+    "moreLabel": "Plus : tous les domaines",
+    "workspaceSwitch": "Changer d’espace de travail. Actuel : {{name}}",
+    "workspaceCount": "Espaces de travail : {{count}}",
+    "rail": {
+      "title": "Sessions",
+      "all": "Toutes",
+      "groups": {
+        "needsYou": "Vous attend",
+        "working": "En cours",
+        "earlier": "Plus tôt"
+      },
+      "empty": {
+        "needsYou": "Rien ne vous attend.",
+        "working": "Rien n’est en cours.",
+        "earlier": "Aucune session antérieure."
+      },
+      "state": {
+        "need": "Vous attend",
+        "live": "En cours",
+        "ended": "Terminée",
+        "idle": "Inactive"
+      },
+      "workItem": "Élément de travail",
+      "handoffFrom": "Transfert pour vous · de {{from}}",
+      "session": "Session",
+      "minutes": "{{count}} min",
+      "hours": "{{count}} h",
+      "days": "{{count}} j",
+      "loading": "Lecture des sessions…",
+      "error": "Les sessions n’ont pas pu être lues."
+    },
+    "engine": {
+      "checking": "Vérification du moteur",
+      "ready": "Moteur prêt",
+      "unreachable": "Moteur injoignable",
+      "offline": "Hors ligne depuis {{time}}"
+    },
+    "panel": {
+      "show": "Afficher {{title}}",
+      "hide": "Masquer {{title}}",
+      "close": "Fermer le panneau"
+    },
+    "keys": {
+      "command": {
+        "session": {
+          "new": "Nouvelle session"
+        }
+      },
+      "when": {
+        "outsideField": "hors d’un champ"
+      }
+    }
   }
 }

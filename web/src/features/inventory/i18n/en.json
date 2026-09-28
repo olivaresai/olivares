@@ -14,7 +14,8 @@
   },
   "tabs": {
     "catalog": "Catalog",
-    "topology": "Topology"
+    "topology": "Topology",
+    "coverage": "Collection coverage"
   },
   "facets": {
     "allKinds": "All kinds",
@@ -121,6 +122,84 @@
       "title": "No estate entities discovered yet",
       "description": "Entities appear as connector observations report agents, sessions, identities, MCP capabilities, models, providers, or resources.",
       "action": "Open capabilities"
+    }
+  },
+  "coverage": {
+    "title": "Collection coverage",
+    "intro": "Reads the collection evidence of one opened source registration. Enter the selectors of the registration the runtime currently has open: an older selector reads that historical selection, not the current roster.",
+    "form": {
+      "legend": "Source registration selectors",
+      "sourceId": "Source ID",
+      "sourceIdHint": "The persistent ID of the source roster row, not its name.",
+      "sourceRevision": "Source revision",
+      "sourceRevisionHint": "The roster revision the runtime opened for this registration.",
+      "environmentRef": "Environment reference",
+      "environmentRefHint": "The execution environment that applied the registration.",
+      "submit": "Read coverage",
+      "required": "Enter a value.",
+      "tooLong": "Use at most {{max}} bytes.",
+      "revisionInvalid": "Enter a positive whole number."
+    },
+    "idle": "Enter a source ID, source revision and environment reference to read collection coverage. Nothing is read until all three are valid.",
+    "loading": "Reading collection coverage",
+    "refresh": "Read again",
+    "scopeNote": "Coverage describes this registration and its query over the observed interval. It is not a global estate snapshot and not a provider authorization. Empty completion does not delete resources.",
+    "hasMore": "The response reports more pages. That is a list continuation flag, not evidence of collection completeness. This selection has at most one head.",
+    "unknownNote": "Unknown means the stored evidence does not establish coverage for this selection. An unmatched selection reads as unknown, never as none or as inherited completeness.",
+    "values": {
+      "complete": "Complete",
+      "partial": "Partial",
+      "unavailable": "Unavailable",
+      "unsupported": "Unsupported",
+      "unknown": "Unknown"
+    },
+    "projections": {
+      "pending": "Pending",
+      "committed": "Committed",
+      "failed": "Failed"
+    },
+    "current": {
+      "title": "Current collection evidence",
+      "coverage": "Coverage",
+      "reason": "Reason",
+      "reasonNone": "No reason recorded",
+      "projection": "Projection",
+      "projectionHint": "Queued members stay pending until their receipt commits. Enumeration alone does not qualify them.",
+      "runId": "Run ID",
+      "runOrder": "Run order",
+      "admitted": "Admitted members",
+      "committed": "Committed members",
+      "expected": "Expected members",
+      "expectedOpen": "Not recorded until the host closes the run.",
+      "rejection": "Rejection reason",
+      "noRun": "No collection run is recorded for this selection. Unknown coverage is not zero: it does not say whether the source holds resources.",
+      "emptyComplete": "This run completed with no members. Empty completion does not delete resources from the catalog."
+    },
+    "lastQualified": {
+      "title": "Last qualified success",
+      "note": "Historical qualification for this exact registration and scope. It is separate from the current enumeration, and later rejection evidence does not rewrite it.",
+      "absent": "No qualified success is reported for this registration and scope. It is absent until a run qualifies, and its absence says nothing about the current run."
+    },
+    "fields": {
+      "sourceId": "Source ID",
+      "sourceRevision": "Source revision",
+      "environmentRef": "Environment reference",
+      "scopeContract": "Scope contract",
+      "family": "Family",
+      "requestedScope": "Requested scope fingerprint",
+      "fulfilledScope": "Fulfilled scope fingerprint",
+      "hostStarted": "Host run start",
+      "hostFinished": "Host run close",
+      "producerStarted": "Producer enumeration start",
+      "producerFinished": "Producer enumeration end",
+      "qualified": "Qualified at",
+      "notRecorded": "Not recorded"
+    },
+    "error": {
+      "invalidTitle": "Selection refused",
+      "invalid": "The engine refused this selection. Source ID and environment reference must be nonempty and at most 128 bytes, and source revision must be a positive whole number.",
+      "suspendedTitle": "Tenant service suspended",
+      "suspended": "This tenant's service is suspended or not in service, so collection coverage cannot be read."
     }
   }
 }

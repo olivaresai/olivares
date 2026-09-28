@@ -219,3 +219,28 @@ func TestSubjectValidation(t *testing.T) {
 		}
 	}
 }
+
+func TestInventoryCoverageHostLinkCodec(t *testing.T) {
+	for _, labels := range []map[string]string{nil, {}, {"team": "platform"}} {
+		in := event.FromObservation("tenant", "source", model.EdgeObservation{Labels: labels, ResourceRef: "/subscriptions/sub-1/providers/test/things/a", ObservedAt: time.Date(2026, 9, 27, 9, 0, 0, 0, time.UTC)})
+		in.ID = "host-event"
+		in.SourceRegistration = &event.SourceRegistration{SourceID: "host-source", SourceRevision: 3, EnvironmentRef: "host-env"}
+		in.InventoryMember = &event.InventoryMember{RunID: "host-run", Ordinal: 7, Digest: event.InventoryMemberDigest(in)}
+		encoded, err := EncodeEvent(in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out, err := DecodeEvent(encoded, DefaultDecoders())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(in.InventoryMember, out.InventoryMember) || !reflect.DeepEqual(in.SourceRegistration, out.SourceRegistration) || event.InventoryMemberDigest(out) != in.InventoryMember.Digest {
+			t.Fatalf("host linkage changed: %+v", out)
+		}
+	}
+	invalid := event.FromObservation("tenant", "source", model.EdgeObservation{ObservedAt: time.Date(10000, 1, 1, 0, 0, 0, 0, time.UTC)})
+	if event.InventoryMemberDigest(invalid) != "" {
+		t.Fatal("unencodable member received a constant digest")
+	}
+
+}

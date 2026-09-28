@@ -135,10 +135,10 @@ StatefulSet 的更新屏障）。`/livez` 保持 200 —— 只检查进程，�
 
 ## 3. Active-passive 高可用
 
-以 Postgres 作为共享存储时，可运行多个副本。其中一个会被选为
-leader（一把 Postgres advisory lock）；备用节点对 `/readyz` 返回
-`503 {"status":"standby"}`，因此 Service 只路由到 leader，
-当 leader 消失时，备用节点会自动接管。
+以 Postgres 作为共享存储时，可运行多个副本。通过 Postgres advisory lock 选出一个
+leader；备用节点对 `/readyz` 返回 `503 {"status":"standby"}`，使 Service 将请求路由到
+leader。当锁可用时，可以自动选举备用节点。这种选举能力本身并不能证明各种故障下的安全切换
+已经通过验证。
 
 有两点是结构上必需的，chart **对两者都强制执行**（我们
 已验证这些防护以硬失败而非警告的形式渲染）：
@@ -159,10 +159,10 @@ helm install olivares deploy/helm/olivares \
   --set core.auditSigningKeySecret=olivares-audit-key
 ```
 
-规范的高可用规模为 3 或 5 个副本，active-passive。这种单写入者
-设计是有意为之（它与产品的一致性模型相匹配）；
-[生产就绪指标](/how-to/monitor-with-prometheus/)记录了它所支持的
-可用性层级。
+规范的高可用规模为 3 或 5 个副本，active-passive。单写入者设计符合产品的一致性模型。
+[生产就绪指标](/how-to/monitor-with-prometheus/) 是运营目标，不是该拓扑的实测可用性。现有 epoch 和 fencing 检查保护特定路径，
+但其存在不能证明覆盖了每次写入或外部效果。在声称达到 HA 服务水平之前，必须验证事务 fencing
+和故障切换行为，并提供具体部署的恢复证据。
 
 ## 4. 定时加密备份
 
@@ -184,7 +184,7 @@ helm upgrade olivares deploy/helm/olivares --reuse-values \
 之下会中止，因此一个接到应用 DSN 上的 CronJob 每次运行都会失败，
 最终让你**完全没有备份**。
 
-默认配置：每 6 小时一次（`backup.schedule` 设定你的 RPO）、本地保留
+默认配置：每 6 小时一次（`backup.schedule` 设定备份间隔，并不代表实测 RPO）、本地保留
 14 天、一个专用的目标 PVC。**请将目标镜像到异地，
 并将 KEK 与备份包分开保存** —— 同集群内的备份不算
 灾难恢复。用 `olivares dr verify` 演练恢复；完整

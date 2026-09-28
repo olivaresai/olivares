@@ -20,16 +20,13 @@ import (
 // it in (mirrors roleUser but adds the workspace_id).
 func (h *harness) confinedUser(admin string, tenant model.TenantID, email, role string, ws model.ID) (string, string) {
 	h.t.Helper()
-	r := h.do("POST", "/v1/users", admin, map[string]any{"email": email, "password": "memberpass1"}, nil)
+	r := h.do("POST", "/v1/users", admin, map[string]any{
+		"email": email, "password": "memberpass1", "tenant": tenant.String(), "role": role, "workspace_id": ws.String(),
+	}, nil)
 	if r.code != http.StatusCreated {
 		h.t.Fatalf("create user %s = %d %s", email, r.code, r.raw)
 	}
 	uid := r.body["id"].(string)
-	if r := h.do("POST", "/v1/memberships", admin, map[string]any{
-		"user_id": uid, "tenant": tenant.String(), "role": role, "workspace_id": ws.String(),
-	}, nil); r.code != http.StatusCreated {
-		h.t.Fatalf("grant confined %s = %d %s", email, r.code, r.raw)
-	}
 	r = h.do("POST", "/v1/auth/login", "", map[string]any{"email": email, "password": "memberpass1"}, nil)
 	if r.code != http.StatusOK {
 		h.t.Fatalf("login %s = %d %s", email, r.code, r.raw)
@@ -186,7 +183,11 @@ func TestGrantMembershipWorkspaceValidation(t *testing.T) {
 	tenant := h.createOrg(admin, "valco")
 	ws := h.createWorkspace(tenant, "wa")
 
-	r := h.do("POST", "/v1/users", admin, map[string]any{"email": "v@valco.io", "password": "memberpass1"}, nil)
+	// The account is created a tenant-wide member, so each grant below is a
+	// re-grant of an existing member that would narrow it to a workspace.
+	r := h.do("POST", "/v1/users", admin, map[string]any{
+		"email": "v@valco.io", "password": "memberpass1", "tenant": tenant.String(), "role": "editor",
+	}, nil)
 	uid := r.body["id"].(string)
 
 	// A bogus workspace id is rejected (deny-closed against a typo that would silently confine).

@@ -82,9 +82,6 @@ export function RefChip({
           aria-hidden
         />
       )}
-      <span className="sr-only">
-        {copied ? t('context.copied') : t('context.copy')}
-      </span>
     </button>
   )
 }

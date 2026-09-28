@@ -89,7 +89,18 @@
     "results": "結果",
     "searchResults": "データ内の結果",
     "searchTruncated": "さらに一致があります — 検索を絞り込んでください。",
-    "searchDegraded": "一部のソースを検索できませんでした — この一覧は不完全です。"
+    "searchDegraded": "一部のソースを検索できませんでした — この一覧は不完全です。",
+    "deniedReason": "{{permission}} が必要です。",
+    "deniedHelp": "付与できる管理者に依頼してください。",
+    "noTargetReason": "実行する組織が必要です。",
+    "noTargetHelp": "組織を選択してから、もう一度試してください。",
+    "goTo": "移動",
+    "recentSessions": "最近のセッション",
+    "settingsGroup": "設定",
+    "scope": "{{name}} 内",
+    "footerMove": "移動",
+    "footerOpen": "開く",
+    "footerCommands": "コマンドのみ"
   },
   "status": {
     "active": "アクティブ",
@@ -257,5 +268,51 @@
     "modNote": "Windows と Linux では ⌘ は Ctrl です。",
     "problems_other": "{{count}} 件のキー割り当てを読み取れず、動作しません: {{commands}}",
     "navRailNote": "レールはタブ停止点が 1 つです。フォーカスがある間、これらのキーが働きます。"
+  },
+  "ui": {
+    "status": {
+      "working": "実行中",
+      "needsYou": "対応が必要",
+      "done": "完了",
+      "failed": "失敗",
+      "paused": "一時停止",
+      "idle": "未開始"
+    },
+    "state": {
+      "loading": "読み込み中…",
+      "filtered": {
+        "hidden_other": "フィルターで {{count}} 件が非表示です。",
+        "clear": "フィルターを解除"
+      },
+      "error": {
+        "title": "エンジンに接続できませんでした。",
+        "description": "リストは空ではありません。読み取れませんでした。",
+        "retry": "再試行",
+        "diagnostics": "診断を開く",
+        "request": "リクエスト {{id}} · {{time}}",
+        "requestId": "リクエスト {{id}}"
+      },
+      "stale": {
+        "message": "<0>{{lastGood}}</0> の結果を表示しています。{{failedAt}} の更新は失敗しました。",
+        "retry": "再読み込み"
+      },
+      "noAccess": {
+        "title": "これを開く権限がありません",
+        "description": "あなたのロールには含まれていません。これ以上の情報は表示されません。"
+      },
+      "unknown": {
+        "title": "リクエストは送信されましたが、応答が失われました。",
+        "description": "同じリクエストをエンジンで確認しています。再送しないでください。",
+        "checking": "リクエスト {{id}} · 確認中 {{elapsed}}",
+        "retry": "再送",
+        "retryReason": "何も開始されていないことをエンジンが確認すると使えます。"
+      }
+    },
+    "codeLine": {
+      "label": "ターミナルで同じ操作",
+      "copy": "コマンドをコピー",
+      "copied": "コピーしました",
+      "copyFailed": "コピーできませんでした。コマンドを選択してコピーしてください。"
+    }
   }
 }

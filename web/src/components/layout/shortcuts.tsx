@@ -20,35 +20,27 @@ import {
   isTypingTarget,
   resolveBinding,
 } from '@/lib/keybindings/model'
-import { COMMAND_GROUP, KEY_GROUPS, KEYBINDINGS } from '@/lib/keybindings/table'
+import {
+  COMMAND_GROUP,
+  KEY_GROUPS,
+  KEYBINDINGS,
+  NAV_LEADER,
+  NAV_SEQUENCES,
+  NAV_SEQUENCE_TIMEOUT_MS,
+} from '@/lib/keybindings/table'
 import { useCommandStore } from '@/stores/command'
 import { usePreferencesStore } from '@/stores/preferences'
+import { useNewSession } from './new-session'
 import { COMPOSER_INPUT_ID } from './work-composer-id'
 
-/** How long a leader sequence stays armed after pressing `g`. */
-const SEQUENCE_TIMEOUT_MS = 1200
+/** The g+letter navigation map, declared in the keybindings table: letter →
+ * registry id. A binding only fires (and only shows in the help overlay) when the
+ * operator may open that view — the same visibility rule as the sidebar. */
+export const NAV_SHORTCUTS = NAV_SEQUENCES
 
-/** The g+letter navigation map: letter → feature id from the registry.
- * A binding only fires (and only shows in the help overlay) when RBAC lets the
- * operator see that feature — the same visibility rule as the sidebar. */
-export const NAV_SHORTCUTS: ReadonlyArray<{ key: string; featureId: string }> =
-  [
-    { key: 'h', featureId: 'home' },
-    { key: 'w', featureId: 'workspaceDashboard' },
-    { key: 'i', featureId: 'inventory' },
-    { key: 's', featureId: 'sessions' },
-    { key: 'a', featureId: 'automations' },
-    { key: 'e', featureId: 'eventing' },
-    { key: 'n', featureId: 'alerting' },
-    { key: 'o', featureId: 'orchestration' },
-    { key: 'c', featureId: 'console' },
-    { key: 'p', featureId: 'permissions' },
-    { key: 'm', featureId: 'models' },
-    { key: 'f', featureId: 'finops' },
-    { key: 'd', featureId: 'dashboards' },
-    { key: 'u', featureId: 'audit' },
-    { key: 'k', featureId: 'knowledge' },
-  ]
+/** Commands whose names the shell's own strings carry (nav.json), not common.json. */
+const SHELL_COMMANDS: ReadonlySet<string> = new Set(['session.new'])
+const SHELL_CONTEXTS: ReadonlySet<string> = new Set(['outsideField'])
 
 /** True while any Radix dialog/sheet is open — g-navigation behind a modal
  * would move the page under the operator's feet. */
@@ -91,6 +83,15 @@ export function GlobalShortcuts() {
   const [helpOpen, setHelpOpen] = useState(false)
   const armedUntil = useRef(0)
   const { valid, problems } = auditKeybindings(KEYBINDINGS)
+  const newSession = useNewSession()
+  const commandLabel = (command: string) =>
+    SHELL_COMMANDS.has(command)
+      ? t(`nav:shell.keys.command.${command}`)
+      : t(`common:keys.command.${command}`)
+  const contextLabel = (when: string) =>
+    SHELL_CONTEXTS.has(when)
+      ? t(`nav:shell.keys.when.${when}`)
+      : t(`common:keys.when.${when}`)
 
   const visible = NAV_SHORTCUTS.filter(({ featureId }) => {
     const view = FEATURE_VIEWS.find((v) => v.id === featureId)
@@ -108,7 +109,9 @@ export function GlobalShortcuts() {
       // ⌘K FIRST, and it is the one chord that still works while typing: the palette
       // is how an operator LEAVES a field they opened by accident. It moved here from
       // `command-menu.tsx` so the console has ONE keyboard authority and one table.
-      const chordCommand = resolveBinding(KEYBINDINGS, e)
+      const chordCommand = resolveBinding(KEYBINDINGS, e, {
+        outsideField: !typing,
+      })
       if (chordCommand === 'palette.open') {
         e.preventDefault()
         useCommandStore.getState().toggle()
@@ -164,22 +167,30 @@ export function GlobalShortcuts() {
       if (helpOpen || modalIsOpen()) return
 
       const now = Date.now()
-      if (e.key === 'g') {
-        armedUntil.current = now + SEQUENCE_TIMEOUT_MS
+      if (e.key === NAV_LEADER) {
+        armedUntil.current = now + NAV_SEQUENCE_TIMEOUT_MS
         return
       }
-      if (armedUntil.current < now) return
-      armedUntil.current = 0
-      const binding = visible.find((b) => b.key === e.key)
-      if (!binding) return
-      const view = FEATURE_VIEWS.find((v) => v.id === binding.featureId)
-      if (!view) return
-      e.preventDefault()
-      void navigate({ to: view.path as never })
+      // An armed sequence takes the letter first: `g n` goes to Alerting, while `n`
+      // alone starts a new session.
+      if (armedUntil.current >= now) {
+        armedUntil.current = 0
+        const binding = visible.find((b) => b.key === e.key)
+        if (!binding) return
+        const view = FEATURE_VIEWS.find((v) => v.id === binding.featureId)
+        if (!view) return
+        e.preventDefault()
+        void navigate({ to: view.path as never })
+        return
+      }
+      if (chordCommand === 'session.new') {
+        e.preventDefault()
+        newSession()
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [helpOpen, navigate, visible])
+  }, [helpOpen, navigate, visible, newSession])
 
   return (
     <Dialog open={helpOpen} onOpenChange={setHelpOpen}>
@@ -213,10 +224,10 @@ export function GlobalShortcuts() {
                       data-testid={`keybinding-${rule.command}`}
                     >
                       <dt className="min-w-0 truncate">
-                        {t(`common:keys.command.${rule.command}`)}
+                        {commandLabel(rule.command)}
                         {rule.when ? (
                           <span className="ml-1.5 text-caption text-muted-foreground">
-                            {t(`common:keys.when.${rule.when}`)}
+                            {contextLabel(rule.when)}
                           </span>
                         ) : null}
                       </dt>
@@ -296,7 +307,7 @@ export function GlobalShortcuts() {
                 >
                   <dt className="truncate">{t(`nav:items.${featureId}`)}</dt>
                   <dd className="flex gap-1">
-                    <Kbd>g</Kbd>
+                    <Kbd>{NAV_LEADER}</Kbd>
                     <Kbd>{key}</Kbd>
                   </dd>
                 </div>

@@ -103,7 +103,7 @@ describe('PageHeader', () => {
 
   it('takes its size from the type scale, not from a hand-written stack', () => {
     // The one class assertion worth keeping: `text-title` is the token
-    // (web/tokens/primitives.tokens.json, the `type` group) that carries size, leading,
+    // (web/tokens/console/primitives.tokens.json, the `type` group) that carries size, leading,
     // tracking AND weight together. Six places used to spell that stack by hand with
     // three different sizes; this is the check that says the heading reads the ladder.
     //

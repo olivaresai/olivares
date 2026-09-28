@@ -378,9 +378,17 @@ func (m *Module) handleCreateSubscription(w http.ResponseWriter, r *http.Request
 		writeStoreError(w, err)
 		return
 	}
+	// The owner is a fenced reference: its account's standing is read here and
+	// pinned first inside the transaction, before the proof below is stamped.
+	subjects, err := ownerSubjects(mc.Principal)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
 	enabled := in.Enabled == nil || *in.Enabled
 	var out subscriptionDTO
-	err = mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
+	mutate := func(fn func(store.Scope) error) error { return mc.Data.Mutate(r.Context(), fn) }
+	err = auth.FencedWrite(r.Context(), mc.Standing, mc.Tenant, subjects, auth.FenceDirectory, mutate, func(sc store.Scope, _ bool) error {
 		repo, err := sc.Ext(subscriptionKind)
 		if err != nil {
 			return err
@@ -424,6 +432,9 @@ func (m *Module) handleCreateSubscription(w http.ResponseWriter, r *http.Request
 				"sink_kind": in.SinkKind,
 			})
 	})
+	if writeFenceRefusal(w, err) {
+		return
+	}
 	if err != nil {
 		writeStoreError(w, err)
 		return

@@ -8,12 +8,18 @@ import (
 	"context"
 	"errors"
 
+	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 )
 
 // WorkActor is the authenticated workflow initiator projected into the work
 // ports. It is provenance only; adapters construct the neighbor module's
 // principal from trusted composition state, never from workflow config.
+//
+// CredentialBinding and RunID are the run's opaque core/auth credential
+// binding and the run it binds. A communication effect resolves the pair
+// through core/auth; neither is authority by itself, and the handle prints and
+// serializes as nothing.
 type WorkActor struct {
 	Kind              string
 	Ref               string
@@ -24,7 +30,27 @@ type WorkActor struct {
 	SessionRunRef     string
 	SessionFence      int64
 	PurposeRestricted bool
+	CredentialBinding auth.CredentialBinding
+	RunID             model.ID
 }
+
+// WorkflowCredentialBinder is the core/auth producer of run credential
+// bindings. *auth.Authenticator satisfies it; the composition root binds it
+// once after the serving Authenticator exists.
+type WorkflowCredentialBinder interface {
+	BindCredential(context.Context, auth.Principal, auth.CredentialBindingSubject) (auth.CredentialBinding, error)
+	RebindCredential(
+		ctx context.Context,
+		old auth.CredentialBinding,
+		generation int64,
+		p auth.Principal,
+		s auth.CredentialBindingSubject,
+		authorizedBy auth.Principal,
+	) (auth.CredentialBinding, error)
+	VerifyCredentialContinuation(context.Context, auth.Principal, auth.CredentialBindingSubject) error
+}
+
+var _ WorkflowCredentialBinder = (*auth.Authenticator)(nil)
 
 type WorkParticipant struct {
 	Kind string
@@ -262,6 +288,15 @@ var (
 	ErrWorkflowHandoffUnwired   = errors.New("orchestration: workflow handoff control is not wired")
 	ErrWorkflowAckReaderUnwired = errors.New("orchestration: workflow ack reader is not wired")
 	ErrWorkflowBindingUnwired   = errors.New("orchestration: workflow binding control is not wired")
+
+	// ErrWorkflowReauthenticationRequired is returned by a communication port
+	// when the run's credential binding is missing, invalid, superseded or no
+	// longer names a current credential. The step pauses the run until the
+	// owning reauthorize operation binds a fresh credential of the same account.
+	ErrWorkflowReauthenticationRequired = errors.New("orchestration: workflow effect requires reauthentication")
+	// ErrWorkflowEffectDenied is returned when the current policy denies the
+	// bound credential the effect. The step is blocked, not paused.
+	ErrWorkflowEffectDenied = errors.New("orchestration: workflow effect denied by current policy")
 )
 
 type unwiredWorkflowWorkControl struct{}

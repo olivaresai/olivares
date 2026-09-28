@@ -267,11 +267,14 @@ assert "preupgrade: packaging/nfpm/apk-preupgrade.sh" in goreleaser
 assert "postupgrade: packaging/nfpm/postinstall.sh" in goreleaser
 # The systemd unit must not be an unscoped contents entry (that shipped it in APK).
 systemd_src = "src: packaging/systemd/olivares.service"
-assert goreleaser.count(systemd_src) == 2
+assert goreleaser.count(systemd_src) == 3
 assert "packager: deb" in goreleaser and "packager: rpm" in goreleaser
 import yaml
 nfpm = yaml.safe_load(goreleaser)["nfpms"]
-assert len(nfpm) == 1
+# Two entries: deb/rpm/apk from both base builds, and the Arch Linux package from the
+# linux/amd64 build only.
+assert len(nfpm) == 2
+assert nfpm[0]["formats"] == ["deb", "rpm", "apk"] and nfpm[0]["ids"] == ["olivares", "olivares-ports"]
 contents = nfpm[0]["contents"]
 apk_units = [c for c in contents if c.get("dst") == "/etc/init.d/olivares"]
 assert len(apk_units) == 1 and apk_units[0].get("packager") == "apk"
@@ -280,6 +283,16 @@ sysd = [c for c in contents if c.get("src") == "packaging/systemd/olivares.servi
 assert {c.get("packager") for c in sysd} == {"deb", "rpm"}
 stamps = [c for c in contents if c.get("dst") == "/usr/lib/olivares/package-init"]
 assert {c.get("packager") for c in stamps} == {"deb", "rpm", "apk"}
+arch = nfpm[1]
+assert arch["formats"] == ["archlinux"] and arch["ids"] == ["olivares"]
+arch_dst = {c.get("dst"): c for c in arch["contents"]}
+assert arch_dst["/usr/lib/olivares/package-init"]["src"] == "packaging/nfpm/package-init-systemd.txt"
+assert arch_dst["/usr/lib/systemd/system/olivares.service"]["src"] == "packaging/systemd/olivares.service"
+assert "/var/lib/olivares" not in arch_dst and "/etc/init.d/olivares" not in arch_dst
+assert arch["scripts"] == {"postinstall": "packaging/nfpm/archlinux-postinstall.sh",
+                           "preremove": "packaging/nfpm/archlinux-preremove.sh",
+                           "postremove": "packaging/nfpm/archlinux-postremove.sh"}
+assert arch["archlinux"]["scripts"] == {"postupgrade": "packaging/nfpm/archlinux-postinstall.sh"}
 apk_stamp = [c for c in stamps if c.get("packager") == "apk"][0]
 assert apk_stamp.get("src") == "packaging/nfpm/package-init-openrc.txt"
 data_dirs = [c for c in contents if c.get("dst") == "/var/lib/olivares"]

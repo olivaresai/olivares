@@ -561,13 +561,13 @@ export const SIDEBAR_LABELS = {
     "de": "Übersicht",
     "fr": "Vue d'ensemble"
   },
-  "Overview — the 30 modules": {
-    "es": "Visión general — los 30 módulos",
-    "zh-CN": "概览 —— 30 个模块",
-    "ru": "Обзор — 30 модулей",
-    "ja": "概要 — 30個のモジュール",
-    "de": "Übersicht — die 30 Module",
-    "fr": "Vue d'ensemble — les 30 modules"
+  "Overview — the 31 modules": {
+    "es": "Visión general — los 31 módulos",
+    "zh-CN": "概览 —— 31 个模块",
+    "ru": "Обзор — 31 модуль",
+    "ja": "概要 — 31個のモジュール",
+    "de": "Übersicht — die 31 Module",
+    "fr": "Vue d'ensemble — les 31 modules"
   },
   "Fine-tuning & inference execution (planned)": {
     "es": "Ejecución de fine-tuning e inferencia (planificado)",

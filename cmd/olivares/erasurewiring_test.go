@@ -12,15 +12,16 @@ import (
 	"testing"
 
 	claudecompliance "github.com/olivaresai/olivares/connectors/claude-compliance"
+	"github.com/olivaresai/olivares/core/auth"
 	coreengine "github.com/olivaresai/olivares/core/engine"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/modules/compliance"
 )
 
-// Cmd-adapter contracts: the account eraser's refusal rules (superadmin,
-// multi-tenant principals), the full anonymization (email/name/credential, panel
-// sessions with IPs deleted, tokens revoked+renamed, memberships removed), the
+// Cmd-adapter contracts: the account eraser's refusal of a superadmin, the
+// tenant's own leg for every other account (its membership and tenant tokens
+// removed, the global record kept for the deployment's erasure ceremony), the
 // "user:<id>" alias resolution, and the provider adapter's honest outcome folding.
 
 func erasureTestStore(t *testing.T) store.Store {
@@ -96,48 +97,55 @@ func TestAccountEraserAnonymizesAndRefuses(t *testing.T) {
 	tenant := mkTenant(t, st, "acme")
 	other := mkTenant(t, st, "globex")
 	a := &accountEraserAdapter{log: slog.Default()}
-	a.useStore(st)
+	a.use(st, auth.NewAuthenticator(st, nil))
 	ctx := context.Background()
 
-	// 1) The happy path: single-tenant user, matched by EMAIL, fully anonymized.
+	// 1) A single-tenant user the tenant created (custody evidence), matched by
+	// EMAIL: the tenant's own leg runs and the global record is kept. No tenant
+	// erasure anonymizes an account until the deployment proves nothing outside
+	// the tenant relies on it.
 	user := seedUser(t, st, "maria@example.com", false, tenant)
+	if err := st.AuthMutate(ctx, func(as store.AuthScope) error {
+		u, err := as.Users().Get(ctx, user.ID)
+		if err != nil {
+			return err
+		}
+		u.CredentialCustody, u.CustodyTenantID = model.CustodyTenant, tenant
+		_, err = as.Users().Update(ctx, u)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
 	out, err := a.EraseAccount(ctx, tenant, []string{"maria@example.com"}, "user:dpo", "user")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !out.Attempted || out.Erased != 1 {
-		t.Fatalf("outcome = %+v", out)
+	if !out.Attempted || out.Erased != 0 || !strings.Contains(out.Detail, "deployment's erasure ceremony") {
+		t.Fatalf("outcome = %+v, want attempted, nothing anonymized, the global record left to the deployment", out)
 	}
 	if err := st.AuthView(ctx, func(as store.AuthScope) error {
 		u, err := as.Users().Get(ctx, user.ID)
 		if err != nil {
 			return err
 		}
-		if strings.Contains(u.Email, "maria") || u.DisplayName != "[erased]" ||
-			u.PasswordHash != "" || u.ExternalID != "" || u.Status != model.StatusInactive {
-			t.Fatalf("user not anonymized: %+v", u)
+		if u.Email != "maria@example.com" || u.DisplayName != "Maria" || u.PasswordHash == "" ||
+			u.ExternalID != "scim-1" || u.Status != model.StatusActive {
+			t.Fatalf("the tenant's erasure changed the global account: %+v", u)
 		}
 		ms, _, err := as.Memberships().List(ctx, model.Query{Filters: []model.Filter{eqFilter("user_id", user.ID.String())}})
 		if err != nil {
 			return err
 		}
 		if len(ms) != 0 {
-			t.Fatalf("memberships survive: %d", len(ms))
-		}
-		ss, _, err := as.Sessions().List(ctx, model.Query{Filters: []model.Filter{eqFilter("user_id", user.ID.String())}})
-		if err != nil {
-			return err
-		}
-		if len(ss) != 0 {
-			t.Fatalf("panel sessions (with IPs) survive: %d", len(ss))
+			t.Fatalf("the tenant's membership survives its erasure: %d", len(ms))
 		}
 		ts, _, err := as.Tokens().List(ctx, model.Query{Filters: []model.Filter{eqFilter("user_id", user.ID.String())}})
 		if err != nil {
 			return err
 		}
 		for _, tok := range ts {
-			if !tok.Revoked || tok.Name != "[erased]" {
-				t.Fatalf("token not revoked+renamed: %+v", tok)
+			if tok.BoundTenantID == tenant && !tok.Revoked {
+				t.Fatalf("a token bound to the tenant survives its erasure: %+v", tok)
 			}
 		}
 		return nil
@@ -145,12 +153,13 @@ func TestAccountEraserAnonymizesAndRefuses(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// 2) "user:<id>" alias form resolves to the SAME (already anonymized) account.
+	// 2) "user:<id>" alias form resolves to the SAME account; the repeated leg
+	// writes nothing new and says the same.
 	out, err = a.EraseAccount(ctx, tenant, []string{"user:" + user.ID.String()}, "user:dpo", "user")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if out.Erased != 1 { // idempotent re-anonymize is fine; the point is resolution
+	if out.Erased != 0 || !strings.Contains(out.Detail, "deployment's erasure ceremony") {
 		t.Fatalf("alias resolution outcome = %+v", out)
 	}
 
@@ -164,14 +173,27 @@ func TestAccountEraserAnonymizesAndRefuses(t *testing.T) {
 		t.Fatalf("superadmin outcome = %+v", out)
 	}
 
-	// 4) A principal with memberships in ANOTHER tenant is REFUSED.
-	seedUser(t, st, "shared@example.com", false, tenant, other)
+	// 4) A principal with memberships in ANOTHER tenant keeps them and its global
+	// record; only this tenant's membership goes.
+	shared := seedUser(t, st, "shared@example.com", false, tenant, other)
 	out, err = a.EraseAccount(ctx, tenant, []string{"shared@example.com"}, "user:dpo", "user")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if out.Erased != 0 || !strings.Contains(out.Detail, "other tenants") {
+	if out.Erased != 0 || !strings.Contains(out.Detail, "deployment's erasure ceremony") {
 		t.Fatalf("multi-tenant outcome = %+v", out)
+	}
+	if err := st.AuthView(ctx, func(as store.AuthScope) error {
+		ms, _, err := as.Memberships().List(ctx, model.Query{Filters: []model.Filter{eqFilter("user_id", shared.ID.String())}})
+		if err != nil {
+			return err
+		}
+		if len(ms) != 1 || ms[0].TargetTenantID != other {
+			t.Fatalf("the shared account's memberships after the tenant's erasure = %+v, want only the other tenant's", ms)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
 	}
 
 	// 5) No match is an honest, non-fabricated outcome.

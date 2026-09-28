@@ -125,6 +125,8 @@ OLIVARES_EVENTING_RETENTION	no	168h	How long delivered events are kept for repla
 OLIVARES_EVENTING_SECRET_KEY	no		Key that encrypts eventing subscription signing secrets at rest.
 OLIVARES_EXECUTION_ENVIRONMENT_ID	no		Explicit execution-environment reference for this node, read at boot by cmd/olivares/providerprofiles.go. Unset, the engine generates one identity once into `execution-environment-id` in the data directory (0600, atomic exclusive create) and reuses it; set, the value must be 1..256 printable bytes with no whitespace, colon or vertical bar, and a malformed value refuses boot instead of degrading in silence. It is REQUIRED on a topology with only shared state and no node-local data directory: there, without it, profiled session launches stay deny-closed.
 OLIVARES_EXTRA_ARGS	no		Extra `serve` arguments appended by the packaged service unit, for operators who configure the daemon through an environment file.
+OLIVARES_FINOPS_ADMISSION_LEGACY_WRITERS_STOPPED_AT	no		Instant every writer of the earlier FinOps admission build stopped, as an RFC 3339 time in UTC ending in `Z`. Read once at startup. Recovery retires a claim those writers left, but only once five minutes have passed since this instant and only while no row they left is dated later; empty, the default, or text that is not such an instant retires none.
+OLIVARES_GITPUBLISH_SWEEP_INTERVAL	no	1m	How often the Git publication sweep settles stale dispatches and re-observes uncertain publications, as a Go duration. `0` disables it.
 OLIVARES_GROK_HOOK_	no		Family prefix for the Grok Build hook client and server settings listed above.
 OLIVARES_GROK_HOOK_ACCOUNT	no		Account the Grok Build hook client reports.
 OLIVARES_GROK_HOOK_AGENT	no		Agent identity the Grok Build hook client reports.
@@ -150,6 +152,7 @@ OLIVARES_INCIDENTLOOP_CONFIG	no		Path to the JSON configuration of the incident 
 OLIVARES_INFERENCE_PROXY_CONFIG	no		Path to the JSON configuration of the governed inference proxy.
 OLIVARES_INGEST_TOKEN	no		Bearer token the collector ingest endpoint requires from telemetry senders.
 OLIVARES_INSECURE	no		Set to `1` to let the CLI talk to a plaintext or untrusted-TLS endpoint. Local development only.
+OLIVARES_INVITE_MAIL_DESTINATION	no		Name of the email destination in the notification file, scoped to no tenant, that invitations are mailed through. Without it, and without a declared console address, invite mode is unavailable.
 OLIVARES_KEY_CUSTODY	no		Custody posture required of the audit signing key: whether a raw on-disk key is accepted or a wrapped one is demanded.
 OLIVARES_KEY_WRAP	no		Family stem naming the key management backend that wraps signing keys.
 OLIVARES_KEY_WRAP_	no		Family prefix from which the per-backend key-wrapping keys are built.
@@ -210,6 +213,7 @@ OLIVARES_OTEL_ENDPOINT	no		OTLP endpoint traces are exported to. Falls back to t
 OLIVARES_OTEL_GENAI_COMPAT	no		Set to a true value to also emit the generative-AI semantic-convention attributes on spans.
 OLIVARES_OTEL_INSECURE	no		Set to a true value to export traces over plaintext. Local development only.
 OLIVARES_OTEL_PROTOCOL	no		OTLP protocol used for export. Falls back to the standard `OTEL_EXPORTER_OTLP_PROTOCOL`.
+OLIVARES_OTEL_PROVIDER_BAGGAGE_ALLOWLIST	no	[]	JSON array of exact HTTP(S) origin, baggage key and non-secret control values allowed through the mounted AnthropicHTTPClient; empty denies baggage. Invalid policy reports a bounded reason once at construction and suppresses baggage without blocking inference.
 OLIVARES_OTEL_SAMPLE_RATIO	no		Fraction of traces sampled, between 0 and 1.
 OLIVARES_OTEL_SERVICE_NAME	no		Service name reported on exported traces.
 OLIVARES_PDF_RENDER_TIMEOUT	no	30s	Maximum time one Chromium render of a PDF report may take, as a positive Go duration with units. Read by the reporting add-on for each render; a value that is not a positive duration is refused by name before Chromium is started. Raise it on slow hosts where a structural render does not fit the default.

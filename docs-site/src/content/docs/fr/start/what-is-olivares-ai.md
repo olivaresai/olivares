@@ -36,9 +36,10 @@ configuration ; c'est une description, **pas une garantie**.
 
 ## Une capacité : la carte d'accès lecture/écriture
 
-Parmi ces capacités figure la **carte d'accès L/L-É**. Pour chaque origine (un agent, une
-identité non-humaine, une session) elle construit une arête vers chaque ressource qu'elle
-touche, classée **read**, **write**, **read-write** ou **unknown**, et étiquetée avec :
+Parmi ces capacités figure la **carte d'accès L/L-É**. Pour chaque origine qu'une
+source a observée (un agent, une identité non-humaine, une session), elle construit
+une arête vers chaque ressource que ce signal montre qu'elle touche, classée
+**read**, **write**, **read-write** ou **unknown**, et étiquetée avec :
 
 - **d'où provient le signal** (`SignalSource`) — OpenTelemetry depuis un agent coopératif,
   une classification READ/WRITE pgAudit Postgres, un enregistrement AWS CloudTrail, un
@@ -67,7 +68,7 @@ SQLite, D1). Là où la nature lecture/écriture ne peut être déterminée, le 
 La carte d'accès est une capacité parmi beaucoup. Le produit est une **plateforme
 modulaire** (dans l'esprit de Grafana ou Backstage) : un moteur plus des modules plus des
 connecteurs, conçu pour que tout module se rattache sans réarchitecturer le reste. Il
-embarque **30 modules** — inventaire et sessions en direct, la carte L/L-É, l'orchestration
+embarque **31 modules** — inventaire et sessions en direct, la carte L/L-É, l'orchestration
 d'agents (A2A, en développement), la gestion MCP et des compétences, l'identité et l'identité non-humaine, le
 déploiement, la connaissance et le contexte, la sécurité et les guardrails, la gestion des
 modèles et des fournisseurs, le coût/FinOps, les évals et un bac à sable de test, le
@@ -75,7 +76,7 @@ red-teaming, la conformité et les preuves, un catalogue interne, les intégrati
 et le push SIEM, la voix/temps réel, et la santé/SLA — plus des capacités de plateforme
 non comptées parmi les 30 (sa propre API et la gestion-en-tant-que-code, le
 multi-tenant, les tableaux de bord exécutifs) — à travers
-**158 intégrations** (un décompte mesuré depuis le code par `scripts/check-public-counts.sh`).
+**159 intégrations** (un décompte mesuré depuis le code par `scripts/check-public-counts.sh`).
 Quelques capacités sont pré-v1 ou des coutures deny-closed jusqu'à provisionnement ; la
 documentation est explicite sur lesquelles.
 

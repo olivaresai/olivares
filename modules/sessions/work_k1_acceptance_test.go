@@ -239,6 +239,7 @@ func TestWorkAuditGapCommitsNoDomainRows(t *testing.T) {
 	}
 	f.st = degradedStore
 	f.m.UseData(api.NewModuleData(f.st))
+	bindStoreStanding(f.m, f.st)
 	defer f.st.Close()
 	statusStore, ok := f.st.(store.AuditSpoolStatuser)
 	if !ok {

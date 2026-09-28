@@ -126,6 +126,7 @@ func (m *Module) persistObservation(ctx context.Context, e event.Event, facts in
 	key := digest(keyBytes)
 	at := m.clock.Now().Time()
 	conflict := false
+	collectionConflict := false
 	err = m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(observationReceiptKind)
 		if err != nil {
@@ -134,6 +135,18 @@ func (m *Module) persistObservation(ctx context.Context, e event.Event, facts in
 		rows, _, err := repo.List(ctx, model.Query{Filters: []model.Filter{eq(colReceiptKey, key)}, Limit: 1})
 		if err != nil {
 			return err
+		}
+		var existing model.Record
+		if len(rows) != 0 {
+			existing = rows[0]
+		}
+		valid, err := m.checkCollectionLink(ctx, sc, e, existing, at)
+		if err != nil {
+			return err
+		}
+		if !valid {
+			collectionConflict = true
+			return nil
 		}
 		if len(rows) != 0 {
 			receipt := rows[0]
@@ -153,7 +166,7 @@ func (m *Module) persistObservation(ctx context.Context, e event.Event, facts in
 		// error for the WHOLE transaction; never swallow it as a complete receipt.
 		receipt, err := repo.Create(ctx, model.Record{colReceiptKey: key, colEventID: e.ID,
 			colFactsHash: factsHash, colFacts: string(encoded), colFirstSeen: instant(at),
-			colLastSeen: instant(at), colDeliveries: int64(1), colMemberCount: int64(0)})
+			colLastSeen: instant(at), colDeliveries: int64(1), colMemberCount: int64(0), colCollectionLink: collectionLinkValue(e)})
 		if err != nil {
 			return err
 		}
@@ -192,10 +205,16 @@ func (m *Module) persistObservation(ctx context.Context, e event.Event, facts in
 		}
 		receipt[colMemberCount] = int64(len(projection.members))
 		_, err = repo.Update(ctx, receipt)
-		return err
+		if err != nil {
+			return err
+		}
+		return m.commitCollectionMember(ctx, sc, e, receipt)
 	})
 	if err != nil {
 		return err
+	}
+	if collectionConflict {
+		return ErrCollectionRejected
 	}
 	if conflict {
 		return ErrObservationReceiptConflict

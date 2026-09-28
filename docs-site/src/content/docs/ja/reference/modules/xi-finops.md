@@ -2,8 +2,8 @@
 title: "モジュール XI — コストと AI FinOps"
 description: >-
   コストストリームから AI 支出を計上し、任意の attribution ディメンションでスライスし、
-  期間を予測し、上限で支出を拒否する budget を強制する — ワイヤー上は金額フリー、opt-in
-  かつ fail-open。何をするか、そしてその制限。
+  期間を予測し、上限で支出を拒否する budget を強制する — ワイヤー上は金額フリー、opt-in、
+  そして台帳を読めないときは拒否。何をするか、そしてその制限。
 ---
 
 モジュール XI は AI のための**コスト／FinOps** レイヤーである。model および provider コネクタが
@@ -65,13 +65,17 @@ SIEM／PagerDuty への配信は output-connector モジュールの役目であ
 を参照。
 
 :::caution[正直な制限]
-- **強制は opt-in であり、デフォルトで deny-closed ではない。** リクエストをスコープする
-  強制 budget が無ければ、何も拒否されることはない — その不在は通常の状態であり、セキュリティ
-  ホールではない。*明確に*上限にある budget のみが拒否する。これは意図的であり、承認ゲートの
-  deny-closed な姿勢とは逆である。
-- **ゲートは fail open する。** FinOps の読み取りエラーが in-flight なアクションを停止させる
-  ことは決してない — 承認された fire/open は進行し、router は解決する。耐久性のあるバック
-  ストップは、pre-flight ゲートではなく、ingest 時に発行される budget-cap finding である。
+- **強制は opt-in であり、デフォルトで deny-closed ではない。** FinOps が台帳を読める限り、
+  リクエストをスコープする強制 budget が無ければ、何も拒否されることはない — その不在は通常の
+  状態であり、セキュリティホールではない。budget が拒否するのは、それが*明確に*上限にある
+  ときだけである。これは意図的であり、承認ゲートの deny-closed な姿勢とは逆である。
+- **ゲートが読めない台帳は拒否する。** FinOps が budget の台帳を読み書きできない場合、
+  アドミッションを確立できず、支出は拒否される: オーケストレーションの fire、音声の open、
+  モデルのルート、evals ゲートの実行、永続的な MCP タスクは拒否され、推論プロキシは
+  **HTTP 503** を返す。セッション起動は独自の可用性姿勢（`OLIVARES_SESSION_BUDGET_AVAILABILITY`）
+  を適用する: 未設定なら、セッションは Community エディションでは起動し、Enterprise エディション
+  では **HTTP 503** で拒否され、どちらの場合も失敗はログに記録される。ingest 時に発行される
+  budget-cap finding は、上限に達した支出を引き続き記録する。
 - **router は実行前に知るスコープのみを強制する**（global／provider／model）。より細かい
   スコープ（agent、session、team、project）は、ルート解決時ではなく fire/open シームと
   model ゲートウェイで強制される。

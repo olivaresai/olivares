@@ -2051,8 +2051,14 @@ func confirmDirectNoticeAckReplayLockedWithScope(
 	); err != nil {
 		return err
 	}
+	// A DirectNotice Message carries its own event stream, so its version runs
+	// one ahead of its last event. A workflow WorkTask's events live on its
+	// WorkItem and the Message keeps LastEventSeq zero, exactly as the first Ack
+	// (lockDirectNoticeAckEventAggregate) and directNoticeAckReceiptAggregateCurrent
+	// hold; the aggregate check below confirms that carrier's WorkItem stream.
 	if locked.message.Version == math.MaxInt64 || locked.message.LastEventSeq == math.MaxInt64 ||
-		locked.message.Version != locked.message.LastEventSeq+1 {
+		(preflight.normalized.carrier.class == "" &&
+			locked.message.Version != locked.message.LastEventSeq+1) {
 		return communicationError(
 			ErrCommunicationEvidenceUnknown,
 			"DirectNotice Ack replay Message event sequence is unavailable",

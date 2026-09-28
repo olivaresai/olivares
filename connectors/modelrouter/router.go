@@ -10,6 +10,7 @@ import (
 	"sort"
 
 	"github.com/olivaresai/olivares/connectors/modelprovider"
+	"github.com/olivaresai/olivares/connectors/modelprovider/gateway"
 )
 
 // Policy is how the router orders candidate models. The set is small and explicit;
@@ -132,9 +133,17 @@ type gatewayRouter struct {
 
 // NewGatewayRouter builds a router that selects natively from the catalog but
 // marks every target as routed through endpoint (an external LiteLLM/OpenRouter-
-// style gateway). policy controls the native ordering.
+// style gateway). policy controls the native ordering. Each model's
+// capabilities are replaced with what RouteGateway can invoke, so a declared
+// flag the gateway cannot send does not satisfy a requirement. The native
+// router is not masked.
 func NewGatewayRouter(catalog modelprovider.Catalog, policy Policy, endpoint string) Router {
-	return &gatewayRouter{inner: NewNativeRouter(catalog, policy), endpoint: endpoint}
+	masked := modelprovider.Catalog{Models: make([]modelprovider.Model, len(catalog.Models))}
+	for i, m := range catalog.Models {
+		m.Capabilities = gateway.Effective(m.Capabilities, gateway.RouteGateway)
+		masked.Models[i] = m
+	}
+	return &gatewayRouter{inner: NewNativeRouter(masked, policy), endpoint: endpoint}
 }
 
 // Route selects natively, then rewrites the targets to go via the gateway.

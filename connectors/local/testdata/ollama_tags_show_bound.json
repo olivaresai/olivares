@@ -1,0 +1,10 @@
+{
+  "models": [
+    {"name": "fixture-bound-1", "model": "fixture-bound-1"},
+    {"name": "fixture-bound-2", "model": "fixture-bound-2"},
+    {"name": "fixture-bound-3", "model": "fixture-bound-3"},
+    {"name": "fixture-bound-4", "model": "fixture-bound-4"},
+    {"name": "fixture-bound-5", "model": "fixture-bound-5"},
+    {"name": "fixture-bound-6", "model": "fixture-bound-6"}
+  ]
+}

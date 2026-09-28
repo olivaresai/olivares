@@ -6,16 +6,24 @@ package plugin_test
 import (
 	"context"
 	"errors"
+	"io"
+	"net"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	goplugin "github.com/hashicorp/go-plugin"
-
 	"github.com/olivaresai/olivares/sdk"
 	"github.com/olivaresai/olivares/sdk/model"
 	"github.com/olivaresai/olivares/sdk/plugin"
+	pb "github.com/olivaresai/olivares/sdk/plugin/genpb/olivaresv1"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
+	"google.golang.org/grpc/test/bufconn"
 )
 
 // fakeSource is a SourceConnector served over gRPC by the test. Gather emits one
@@ -160,9 +168,9 @@ func TestSourcePluginGatherErrorPropagates(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected Gather to surface the connector error across the wire")
 	}
-	// gRPC wraps the error message; assert it carried through.
-	if got := err.Error(); !strings.Contains(got, "upstream unavailable") {
-		t.Errorf("error message not propagated: %q", got)
+	// The negotiated stream reports failure without exposing provider details.
+	if status.Code(err) != codes.Internal || strings.Contains(err.Error(), "upstream unavailable") {
+		t.Errorf("unbounded negotiated failure: %v", err)
 	}
 }
 
@@ -526,4 +534,303 @@ func TestAPlainPluginErrorStaysIndeterminate(t *testing.T) {
 	if !report.Outcome.Retryable() {
 		t.Fatal("an unclassified plugin failure must stay retryable, or every transient outage dead-letters on the first attempt")
 	}
+}
+
+// coverageWireSource crosses only the public SourcePlugin RPC boundary.
+type coverageWireSource struct{ fakeSource }
+
+func (s *coverageWireSource) Gather(ctx context.Context, sink sdk.Sink) error {
+	scope := model.InventoryScope{Contract: model.AzureInventoryContract, Family: "azure.resource", Selectors: []string{"sub-1"}}
+	at := time.Date(2026, 9, 27, 9, 0, 0, 0, time.UTC)
+	for _, o := range []model.Observation{model.InventoryCollectionStart{Scope: scope, ObservedAt: at}, model.InventoryCollectionMember{Edge: model.EdgeObservation{OriginKind: "azure.subscription", OriginRef: "sub-1", ResourceKind: "azure.resource", ResourceRef: "/subscriptions/sub-1/providers/test/things/a", Source: "azure", ObservedAt: at}}, model.InventoryCollectionReport{State: "complete", Reason: "exhausted", Count: 1, RequestedScope: scope.Fingerprint(), FulfilledScope: scope.Fingerprint(), ObservedUntil: at}} {
+		if err := sink.Emit(ctx, o); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+func coverageGRPC(t *testing.T, register func(*grpc.Server), options ...grpc.ServerOption) *grpc.ClientConn {
+	t.Helper()
+	listener := bufconn.Listen(1 << 20)
+	server := grpc.NewServer(options...)
+	register(server)
+	done := make(chan struct{})
+	go func() { defer close(done); _ = server.Serve(listener) }()
+	t.Cleanup(func() { server.Stop(); _ = listener.Close(); <-done })
+	conn, err := grpc.NewClient("passthrough:///coverage", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithContextDialer(func(context.Context, string) (net.Conn, error) { return listener.Dial() }))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+	return conn
+}
+
+type legacyCoverageServer struct {
+	pb.UnimplementedSourceServiceServer
+	capabilities []string
+	legacyCalls  int
+	partial      bool
+}
+
+func (s *legacyCoverageServer) Describe(context.Context, *pb.Empty) (*pb.DescribeResponse, error) {
+	return &pb.DescribeResponse{Descriptor_: &pb.Descriptor{Name: "legacy", ApiVersion: sdk.APIVersion, Type: pb.ComponentType_COMPONENT_TYPE_SOURCE}, Capabilities: s.capabilities}, nil
+}
+func (s *legacyCoverageServer) Gather(_ *pb.Empty, stream grpc.ServerStreamingServer[pb.Observation]) error {
+	s.legacyCalls++
+	return stream.Send(&pb.Observation{Payload: &pb.Observation_Edge{Edge: &pb.EdgeObservation{ResourceRef: "legacy-resource"}}})
+}
+func (s *legacyCoverageServer) GatherInventory(_ *pb.GatherInventoryRequest, stream grpc.ServerStreamingServer[pb.Observation]) error {
+	if !s.partial {
+		return status.Error(codes.Unimplemented, "synthetic absent method")
+	}
+	if err := stream.Send(&pb.Observation{Payload: &pb.Observation_Edge{Edge: &pb.EdgeObservation{ResourceRef: "one-effect"}}}); err != nil {
+		return err
+	}
+	return status.Error(codes.Unavailable, "synthetic interrupted stream")
+}
+func TestInventoryCoveragePluginCompatibility(t *testing.T) {
+	t.Run("new peers and old client", func(t *testing.T) {
+		conn := coverageGRPC(t, func(server *grpc.Server) {
+			if err := (&plugin.SourcePlugin{Impl: &coverageWireSource{}}).GRPCServer(nil, server); err != nil {
+				t.Fatal(err)
+			}
+		})
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		raw, err := (&plugin.SourcePlugin{}).GRPCClient(ctx, nil, conn)
+		if err != nil {
+			t.Fatal(err)
+		}
+		sink := &collectSink{}
+		if err := raw.(sdk.SourceConnector).Gather(ctx, sink); err != nil {
+			t.Fatal(err)
+		}
+		if len(sink.got) != 3 {
+			t.Fatalf("negotiated frames %v", sink.got)
+		}
+		if _, ok := sink.got[0].(model.InventoryCollectionStart); !ok {
+			t.Fatal("start lost")
+		}
+		if _, ok := sink.got[2].(model.InventoryCollectionReport); !ok {
+			t.Fatal("terminal lost")
+		}
+		stream, err := pb.NewSourceServiceClient(conn).Gather(ctx, &pb.Empty{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		msg, err := stream.Recv()
+		if err != nil || msg.GetEdge() == nil {
+			t.Fatalf("legacy member not unwrapped: %v %v", msg, err)
+		}
+		if _, err := stream.Recv(); err != io.EOF {
+			t.Fatalf("legacy received control: %v", err)
+		}
+	})
+	t.Run("new client old server", func(t *testing.T) {
+		old := &legacyCoverageServer{}
+		conn := coverageGRPC(t, func(server *grpc.Server) { pb.RegisterSourceServiceServer(server, old) })
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		raw, err := (&plugin.SourcePlugin{}).GRPCClient(ctx, nil, conn)
+		if err != nil {
+			t.Fatal(err)
+		}
+		sink := &collectSink{}
+		if err := raw.(sdk.SourceConnector).Gather(ctx, sink); err != nil {
+			t.Fatal(err)
+		}
+		if len(sink.got) != 1 || sink.got[0].ObservationType() != model.ObsEdge {
+			t.Fatal("legacy ingestion lost")
+		}
+	})
+	t.Run("advertised RPC missing never falls back", func(t *testing.T) {
+		old := &legacyCoverageServer{capabilities: []string{model.InventoryCoverageCapability}}
+		conn := coverageGRPC(t, func(server *grpc.Server) { pb.RegisterSourceServiceServer(server, old) })
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		raw, err := (&plugin.SourcePlugin{}).GRPCClient(ctx, nil, conn)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := raw.(sdk.SourceConnector).Gather(ctx, &collectSink{}); err == nil {
+			t.Fatal("missing method accepted")
+		}
+		if old.legacyCalls != 0 {
+			t.Fatal("new Gather replayed through legacy fallback")
+		}
+	})
+	t.Run("partial execution never falls back", func(t *testing.T) {
+		old := &legacyCoverageServer{capabilities: []string{model.InventoryCoverageCapability}, partial: true}
+		conn := coverageGRPC(t, func(server *grpc.Server) { pb.RegisterSourceServiceServer(server, old) })
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		raw, err := (&plugin.SourcePlugin{}).GRPCClient(ctx, nil, conn)
+		if err != nil {
+			t.Fatal(err)
+		}
+		sink := &collectSink{}
+		if err := raw.(sdk.SourceConnector).Gather(ctx, sink); err == nil {
+			t.Fatal("partial stream was silently retried")
+		}
+		if len(sink.got) != 1 || old.legacyCalls != 0 {
+			t.Fatal("partial execution replayed or lost ordinary observation")
+		}
+	})
+	t.Run("contradictory version", func(t *testing.T) {
+		old := &legacyCoverageServer{capabilities: []string{model.InventoryCoverageCapability, "inventory-coverage-v2"}}
+		conn := coverageGRPC(t, func(server *grpc.Server) { pb.RegisterSourceServiceServer(server, old) })
+		if _, err := (&plugin.SourcePlugin{}).GRPCClient(context.Background(), nil, conn); err == nil {
+			t.Fatal("contradictory capability accepted")
+		}
+	})
+}
+func TestInventoryCoverageObservationCodec(t *testing.T) {
+	source := &coverageWireSource{}
+	sink := &collectSink{}
+	if err := source.Gather(context.Background(), sink); err != nil {
+		t.Fatal(err)
+	}
+	for _, in := range sink.got {
+		wire, err := plugin.ObservationToPB(in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out, err := plugin.ObservationFromPB(wire)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(in, out) {
+			t.Fatalf("lost control fields: in=%+v out=%+v", in, out)
+		}
+	}
+}
+
+type coverageRefusalSource struct {
+	fakeSource
+	gather func(context.Context, sdk.Sink) error
+}
+
+func (s *coverageRefusalSource) Gather(ctx context.Context, sink sdk.Sink) error {
+	return s.gather(ctx, sink)
+}
+
+type coverageRefusalStream struct {
+	grpc.ServerStream
+	failure error
+}
+
+func (s coverageRefusalStream) SendMsg(any) error { return s.failure }
+
+func TestInventoryCoveragePluginRefusalStatus(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		send, gather error
+		want         codes.Code
+	}{
+		{"ignored_send", status.Error(codes.Unavailable, "synthetic sensitive send detail"), nil, codes.Unavailable},
+		{"first_send_over_later_gather", status.Error(codes.Unavailable, "synthetic sensitive send detail"), errors.New("synthetic provider detail"), codes.Unavailable},
+		{"codec_over_later_gather", nil, status.Error(codes.PermissionDenied, "synthetic provider detail"), codes.InvalidArgument},
+		{"gather_canceled", nil, context.Canceled, codes.Canceled},
+		{"gather_deadline", nil, context.DeadlineExceeded, codes.DeadlineExceeded},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			impl := &coverageRefusalSource{gather: func(ctx context.Context, sink sdk.Sink) error {
+				if tc.send != nil {
+					_ = sink.Emit(ctx, model.EdgeObservation{})
+					_ = sink.Emit(ctx, (*model.InventoryCollectionReport)(nil))
+				}
+				if tc.name == "codec_over_later_gather" {
+					_ = sink.Emit(ctx, (*model.InventoryCollectionReport)(nil))
+				}
+				return tc.gather
+			}}
+			option := grpc.StreamInterceptor(func(srv any, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+				if tc.send != nil {
+					return handler(srv, coverageRefusalStream{ServerStream: stream, failure: tc.send})
+				}
+				return handler(srv, stream)
+			})
+			conn := coverageGRPC(t, func(server *grpc.Server) {
+				if err := (&plugin.SourcePlugin{Impl: impl}).GRPCServer(nil, server); err != nil {
+					t.Fatal(err)
+				}
+			}, option)
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer cancel()
+			raw, err := (&plugin.SourcePlugin{}).GRPCClient(ctx, nil, conn)
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = raw.(sdk.SourceConnector).Gather(ctx, &collectSink{})
+			if status.Code(err) != tc.want {
+				t.Fatalf("status = %v, want %v", err, tc.want)
+			}
+			if strings.Contains(err.Error(), "synthetic") {
+				t.Fatalf("raw error crossed negotiated boundary: %v", err)
+			}
+		})
+	}
+}
+
+func TestInventoryCoveragePluginCanceledStreamAndLegacyError(t *testing.T) {
+	t.Run("canceled stream", func(t *testing.T) {
+		entered, returned := make(chan struct{}), make(chan struct{})
+		impl := &coverageRefusalSource{gather: func(ctx context.Context, sink sdk.Sink) error {
+			defer close(returned)
+			_ = sink.Emit(ctx, (*model.InventoryCollectionReport)(nil))
+			close(entered)
+			<-ctx.Done()
+			return nil // Neither ignored refusal nor cancellation may become clean EOF.
+		}}
+		conn := coverageGRPC(t, func(server *grpc.Server) {
+			if err := (&plugin.SourcePlugin{Impl: impl}).GRPCServer(nil, server); err != nil {
+				t.Fatal(err)
+			}
+		})
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		raw, err := (&plugin.SourcePlugin{}).GRPCClient(ctx, nil, conn)
+		if err != nil {
+			t.Fatal(err)
+		}
+		result := make(chan error, 1)
+		go func() { result <- raw.(sdk.SourceConnector).Gather(ctx, &collectSink{}) }()
+		select {
+		case <-entered:
+		case <-ctx.Done():
+			t.Fatal("connector never entered")
+		}
+		cancel()
+		select {
+		case err := <-result:
+			if status.Code(err) != codes.Canceled {
+				t.Fatalf("cancel became %v", err)
+			}
+		case <-time.After(3 * time.Second):
+			t.Fatal("client did not return")
+		}
+		select {
+		case <-returned:
+		case <-time.After(3 * time.Second):
+			t.Fatal("connector did not observe cancellation")
+		}
+	})
+	t.Run("legacy Gather preserves its error contract", func(t *testing.T) {
+		impl := &fakeSource{gatherErr: errors.New("legacy upstream unavailable")}
+		conn := coverageGRPC(t, func(server *grpc.Server) {
+			if err := (&plugin.SourcePlugin{Impl: impl}).GRPCServer(nil, server); err != nil {
+				t.Fatal(err)
+			}
+		})
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		stream, err := pb.NewSourceServiceClient(conn).Gather(ctx, &pb.Empty{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = stream.Recv()
+		if err == nil || !strings.Contains(err.Error(), "legacy upstream unavailable") {
+			t.Fatalf("legacy error contract changed: %v", err)
+		}
+	})
 }

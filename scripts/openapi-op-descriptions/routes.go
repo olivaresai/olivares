@@ -18,6 +18,13 @@
 // method, a computed pattern, a registrar handed to a helper) is reported by name
 // instead of skipped, and compose() then requires the set it produced to EQUAL the
 // operation set of the committed beta document.
+//
+// IT READS EVERY DOOR THE RECORDING REGISTRAR ANSWERS. core/api's recording registrar
+// publishes Handle, HandleEntity and the two governed doors, HandlePolicy and
+// HandleSealed, which a module reaches through a registrar found by type assertion
+// (`door, ok := reg.(sealedRegistrar)`). Reading only the first two left a governed
+// route in the document and out of this roster, so the gate stopped at "the document
+// and the routes disagree" instead of naming the handler whose prose was missing.
 
 package main
 
@@ -68,6 +75,21 @@ func (r moduleRoute) where() string {
 	}
 	return r.handler + " (" + r.handlerPos + ")"
 }
+
+// registrationShapes is every door a module registers a route through, with its
+// argument count and the index of the handler it mounts. The method and the pattern
+// are always the first two arguments.
+var registrationShapes = map[string]struct{ args, handler int }{
+	"Handle":       {args: 4, handler: 3},
+	"HandleEntity": {args: 5, handler: 4},
+	"HandlePolicy": {args: 5, handler: 4},
+	"HandleSealed": {args: 5, handler: 4},
+}
+
+// governedDoors are the doors a module finds by type assertion. Their names mean a
+// route registration and nothing else, so a call to one that no APIRoutes registrar
+// reaches is refused rather than skipped.
+var governedDoors = map[string]bool{"HandlePolicy": true, "HandleSealed": true}
 
 // enumerateModuleRoutes reads every module package under dir and returns the routes
 // its APIRoutes methods register.
@@ -253,6 +275,7 @@ func (p *pkg) namespaceOf(fd *ast.FuncDecl) (string, bool) {
 func (p *pkg) routes() ([]moduleRoute, error) {
 	var out []moduleRoute
 	reached := map[*ast.FuncDecl]bool{}
+	read := map[*ast.CallExpr]bool{}
 	for _, fd := range p.apiRoutes {
 		recv := recvType(fd)
 		ns, ok := p.nsByRecv[recv]
@@ -277,6 +300,7 @@ func (p *pkg) routes() ([]moduleRoute, error) {
 			}
 			r.file, r.line = p.files[c.owner], p.fset.Position(c.call.Pos()).Line
 			out = append(out, r)
+			read[c.call] = true
 		}
 	}
 
@@ -294,7 +318,41 @@ func (p *pkg) routes() ([]moduleRoute, error) {
 				p.files[fd], p.fset.Position(fd.Pos()).Line, fd.Name.Name, found)
 		}
 	}
+
+	// A governed door called on anything but a registrar an APIRoutes body holds
+	// (a door handed to a helper, stored, or declared with var) is a route the
+	// document publishes and this walk did not read.
+	if pos, door, ok := p.unreadGovernedCall(read); ok {
+		return nil, blind("%s:%d: a route is registered through %s on a registrar no APIRoutes body holds, so this gate cannot tell which namespace it mounts under",
+			pos.Filename, pos.Line, door)
+	}
 	return out, nil
+}
+
+// unreadGovernedCall returns the first call to a governed door, in file and line
+// order, that the walk from the APIRoutes bodies did not read.
+func (p *pkg) unreadGovernedCall(read map[*ast.CallExpr]bool) (token.Position, string, bool) {
+	var first token.Position
+	var door string
+	for fd := range p.files {
+		ast.Inspect(fd, func(n ast.Node) bool {
+			ce, ok := n.(*ast.CallExpr)
+			if !ok || read[ce] {
+				return true
+			}
+			sel, ok := ce.Fun.(*ast.SelectorExpr)
+			if !ok || !governedDoors[sel.Sel.Name] {
+				return true
+			}
+			pos := p.fset.Position(ce.Pos())
+			pos.Filename = p.rel(pos.Filename)
+			if door == "" || pos.Filename < first.Filename || (pos.Filename == first.Filename && pos.Line < first.Line) {
+				first, door = pos, sel.Sel.Name
+			}
+			return true
+		})
+	}
+	return first, door, door != ""
 }
 
 // registration is one route registration together with the function it was written
@@ -370,13 +428,30 @@ func (p *pkg) gather(fd *ast.FuncDecl, names []string, recv string, reached map[
 	return out, nil
 }
 
-// callsOn returns the reg.Handle / reg.HandleEntity calls in fd's body, in source
-// order, made on one of the given registrar identifiers.
+// callsOn returns the route registrations in fd's body, in source order, made on one
+// of the given registrar identifiers or on a registrar asserted from one of them
+// (`door, ok := reg.(sealedRegistrar)`), through any door in registrationShapes.
 func (p *pkg) callsOn(fd *ast.FuncDecl, names []string) []*ast.CallExpr {
 	want := map[string]bool{}
 	for _, n := range names {
 		want[n] = true
 	}
+	ast.Inspect(fd, func(n ast.Node) bool {
+		as, ok := n.(*ast.AssignStmt)
+		if !ok || len(as.Lhs) == 0 || len(as.Rhs) != 1 {
+			return true
+		}
+		ta, ok := as.Rhs[0].(*ast.TypeAssertExpr)
+		if !ok {
+			return true
+		}
+		if from, ok := ta.X.(*ast.Ident); ok && want[from.Name] {
+			if to, ok := as.Lhs[0].(*ast.Ident); ok && to.Name != "_" {
+				want[to.Name] = true
+			}
+		}
+		return true
+	})
 	var out []*ast.CallExpr
 	ast.Inspect(fd, func(n ast.Node) bool {
 		ce, ok := n.(*ast.CallExpr)
@@ -384,7 +459,10 @@ func (p *pkg) callsOn(fd *ast.FuncDecl, names []string) []*ast.CallExpr {
 			return true
 		}
 		sel, ok := ce.Fun.(*ast.SelectorExpr)
-		if !ok || (sel.Sel.Name != "Handle" && sel.Sel.Name != "HandleEntity") {
+		if !ok {
+			return true
+		}
+		if _, door := registrationShapes[sel.Sel.Name]; !door {
 			return true
 		}
 		if id, ok := sel.X.(*ast.Ident); ok && want[id.Name] {
@@ -398,11 +476,8 @@ func (p *pkg) callsOn(fd *ast.FuncDecl, names []string) []*ast.CallExpr {
 func (p *pkg) route(ns, recvName, recvType string, call *ast.CallExpr) (moduleRoute, error) {
 	pos := p.fset.Position(call.Pos())
 	pos.Filename = p.rel(pos.Filename)
-	entity := call.Fun.(*ast.SelectorExpr).Sel.Name == "HandleEntity"
-	wantArgs, handlerIdx := 4, 3
-	if entity {
-		wantArgs, handlerIdx = 5, 4
-	}
+	shape := registrationShapes[call.Fun.(*ast.SelectorExpr).Sel.Name]
+	wantArgs, handlerIdx := shape.args, shape.handler
 	if len(call.Args) != wantArgs {
 		return moduleRoute{}, blind("%s:%d: a route registration with %d arguments is not the shape this gate reads",
 			pos.Filename, pos.Line, len(call.Args))

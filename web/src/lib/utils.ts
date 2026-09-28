@@ -7,7 +7,7 @@ import { extendTailwindMerge } from 'tailwind-merge'
 /**
  * THE TYPE SCALE, AS tailwind-merge SEES IT.
  *
- * The seven steps emitted into `@theme` from `web/tokens/primitives.tokens.json`.
+ * The steps emitted into `@theme` from `web/tokens/console/primitives.tokens.json`.
  * They are listed here for ONE reason, and it is measured rather than tidy.
  *
  * ⛔ WITHOUT THIS LIST, `cn` DELETED THE SIZE. tailwind-merge 3.6.0 knows Tailwind's
@@ -34,16 +34,20 @@ import { extendTailwindMerge } from 'tailwind-merge'
  *   render and must not carry a parser.
  */
 export const TYPE_SCALE_STEPS = [
+  'hero',
   'display-lg',
   'display',
   'title',
   'heading',
+  'body-l',
   'body',
   'caption',
   'overline',
+  'mono',
+  'mono-s',
 ] as const
 
-/** tailwind-merge, taught the seven steps so they resolve as FONT SIZES. */
+/** tailwind-merge, taught every step of the ladder so they resolve as FONT SIZES. */
 const twMerge = extendTailwindMerge({
   extend: {
     classGroups: {

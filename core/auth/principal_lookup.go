@@ -74,9 +74,10 @@ func (a *Authenticator) PrincipalForUser(ctx context.Context, ref string, assura
 //
 // Its semantics are PrincipalForUser's, unchanged and deliberately not duplicated: an
 // absent or inactive account is (zero, false, nil) because it authorizes nothing,
-// CredID is the user id, the assurance is clamped to [AAL1, AAL3] and the
-// workspace confinements are applied. It stays unexported because it is a seam inside
-// this package, not a second public way to build a principal.
+// CredID is the user id, the assurance is clamped to [AAL1, AAL3], and the
+// workspace confinements and the account's standing (its tenant exclusions and their
+// retirement floors) are applied. It stays unexported because it is a seam inside this
+// package, not a second public way to build a principal.
 func principalForUserInScope(ctx context.Context, as store.AuthScope, ref string, assurance int) (Principal, bool, error) {
 	u, ok, err := lookupUser(ctx, as, ref)
 	if err != nil || !ok {
@@ -89,11 +90,16 @@ func principalForUserInScope(ctx context.Context, as store.AuthScope, ref string
 	if err != nil {
 		return Principal{}, false, err
 	}
+	standing, err := loadStanding(ctx, as, u.ID, "")
+	if err != nil {
+		return Principal{}, false, err
+	}
 	// CredID is the user id (not a live session id): a simulated principal stands
 	// for the user's STANDING entitlement, not one credential. No authored grant
 	// keys on a specific credential id (targets Role/User/Group), so this is
 	// decision-irrelevant; it gives the Cedar principal a stable, meaningful UID.
-	p := newPrincipal(KindUser, u.ID, u.ID, u.IsSuperadmin, u.DisplayName, grants, groups).withConfinements(confined)
+	p := newPrincipal(KindUser, u.ID, u.ID, u.IsSuperadmin, u.DisplayName, grants, groups).
+		withConfinements(confined).withStanding(standing)
 	p.AAL = clampUserAAL(assurance)
 	return p, true, nil
 }
@@ -115,9 +121,9 @@ func (a *Authenticator) PrincipalForToken(ctx context.Context, tokenID model.ID)
 			}
 			return e
 		}
-		pr, ok := a.principalFromToken(t)
-		if !ok {
-			return nil
+		pr, ok, e := a.principalFromToken(ctx, as, t)
+		if e != nil || !ok {
+			return e
 		}
 		p, found = pr, true
 		return nil
@@ -168,7 +174,12 @@ func (a *Authenticator) TenantPrincipals(ctx context.Context, tenant model.Tenan
 			if e != nil {
 				return e
 			}
-			pr := newPrincipal(KindUser, u.ID, u.ID, u.IsSuperadmin, u.DisplayName, grants, groups).withConfinements(confined)
+			standing, e := loadStanding(ctx, as, u.ID, "")
+			if e != nil {
+				return e
+			}
+			pr := newPrincipal(KindUser, u.ID, u.ID, u.IsSuperadmin, u.DisplayName, grants, groups).
+				withConfinements(confined).withStanding(standing)
 			pr.AAL = clampUserAAL(assurance)
 			out = append(out, pr)
 			return nil
@@ -212,7 +223,11 @@ func (a *Authenticator) TenantPrincipals(ctx context.Context, tenant model.Tenan
 				continue
 			}
 			seenTok[t.ID] = true
-			if pr, ok := a.principalFromToken(t); ok {
+			pr, ok, e := a.principalFromToken(ctx, as, t)
+			if e != nil {
+				return e
+			}
+			if ok {
 				out = append(out, pr)
 			}
 		}
@@ -227,25 +242,26 @@ func (a *Authenticator) TenantPrincipals(ctx context.Context, tenant model.Tenan
 // principalFromToken builds the principal for a stored token exactly as authToken
 // does (minus the secret check — the caller is enumerating, not authenticating) and
 // reports whether the token can authorize anything at all: a revoked, expired or
-// misconfigured (bound-but-no-tenant/role) token reports false. AAL stays 0.
-func (a *Authenticator) principalFromToken(t model.APIToken) (Principal, bool) {
+// misconfigured (bound-but-no-tenant/role) token reports false. AAL stays 0. The
+// owner's standing applies exactly as on the authenticated path.
+func (a *Authenticator) principalFromToken(ctx context.Context, as store.AuthScope, t model.APIToken) (Principal, bool, error) {
 	if t.Revoked {
-		return Principal{}, false
+		return Principal{}, false, nil
 	}
 	if t.ExpiresAt != nil {
 		now := a.clock.Now()
 		switch t.Purpose {
 		case WorkSessionCredentialPurpose:
 			if workSessionCredentialExpired(*t.ExpiresAt, now) {
-				return Principal{}, false
+				return Principal{}, false, nil
 			}
 		case CommunicationSessionCredentialPurpose:
 			if communicationSessionCredentialExpired(*t.ExpiresAt, now) {
-				return Principal{}, false
+				return Principal{}, false, nil
 			}
 		default:
 			if t.ExpiresAt.Before(now) {
-				return Principal{}, false
+				return Principal{}, false, nil
 			}
 		}
 	}
@@ -254,26 +270,31 @@ func (a *Authenticator) principalFromToken(t model.APIToken) (Principal, bool) {
 	// every other purpose remains confined to its dedicated protocol path.
 	switch t.Purpose {
 	case WorkSessionCredentialPurpose:
-		return workSessionPrincipal(t)
+		p, ok := workSessionPrincipal(t)
+		return p, ok, nil
 	case CommunicationSessionCredentialPurpose:
-		return communicationSessionPrincipal(t)
+		p, ok := communicationSessionPrincipal(t)
+		return p, ok, nil
 	case "":
 		// Continue through ordinary token validation below.
 	default:
-		return Principal{}, false
+		return Principal{}, false, nil
 	}
 	if t.SessionRef != "" || !t.WorkspaceID.IsZero() || t.SessionRunRef != "" ||
 		t.SessionFence != 0 {
-		return Principal{}, false
+		return Principal{}, false, nil
 	}
 	grants := map[model.TenantID]string{}
 	if !t.IsSuperadmin {
 		if t.BoundTenantID.IsZero() || !IsRole(t.Role) {
-			return Principal{}, false
+			return Principal{}, false, nil
 		}
 		grants[t.BoundTenantID] = t.Role
 	}
-	p := newPrincipal(KindToken, t.UserID, t.ID, t.IsSuperadmin, t.Name, grants, nil)
+	p, err := withTokenStanding(ctx, as, newPrincipal(KindToken, t.UserID, t.ID, t.IsSuperadmin, t.Name, grants, nil), t)
+	if err != nil {
+		return Principal{}, false, err
+	}
 	// Carry the delegation binding exactly as authToken does, so a simulated
 	// (token-exchanged) principal is byte-identical to the authenticated one. Authorize
 	// does not read these, but matching them removes any doubt about divergence.
@@ -287,7 +308,7 @@ func (a *Authenticator) principalFromToken(t model.APIToken) (Principal, bool) {
 	if t.AgentRef != "" {
 		p = p.WithAgentIdentity(t.AgentRef)
 	}
-	return p, true
+	return p, true, nil
 }
 
 // lookupUser resolves a user by id first, then (AuthZEN-interop convenience) by

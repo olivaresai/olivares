@@ -597,8 +597,9 @@ func createDirectNoticeExactReadGrantForTest(
 	if err != nil {
 		t.Fatalf("encode exact-read ChannelGrant: %v", err)
 	}
-	if _, err := communicationCreateWithID(
-		context.Background(), fixture.m, fixture.tenant, channelGrantKind, id, record,
+	if _, err := communicationCreateFencedWithID(
+		context.Background(), fixture.m, fixture.st, fixture.tenant, channelGrantKind, id, record,
+		userSubjectAccounts(subject)...,
 	); err != nil {
 		t.Fatalf("create exact-read ChannelGrant: %v", err)
 	}

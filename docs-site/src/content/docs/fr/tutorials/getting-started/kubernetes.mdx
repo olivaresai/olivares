@@ -150,9 +150,10 @@ rôle avec `olivares db init --admin-role olivares_admin …` (voir
 ## 3. HA active-passive
 
 Avec Postgres comme store partagé, exécutez plusieurs répliques. L'une est élue
-leader (un verrou consultatif Postgres) ; les standbys répondent à `/readyz` par
-`503 {"status":"standby"}` afin que le Service ne route que vers le leader, et un
-standby prend le relais automatiquement quand le leader disparaît.
+leader par un verrou consultatif Postgres ; les standbys répondent à `/readyz`
+par `503 {"status":"standby"}` pour que le Service route vers le leader. Lorsque
+le verrou devient disponible, un standby peut être élu automatiquement. Cette
+capacité d'élection ne qualifie pas un basculement sûr dans tous les cas de panne.
 
 Deux choses sont structurellement requises, et le chart **impose les deux** (nous
 avons vérifié que les garde-fous se rendent comme des échecs durs, pas des avertissements) :
@@ -174,9 +175,13 @@ helm install olivares deploy/helm/olivares \
 ```
 
 Les tailles HA canoniques sont 3 ou 5 répliques, active-passive. Cette conception
-à écriture unique est délibérée (elle correspond au modèle de cohérence du produit) ; les
-[chiffres de production-readiness](/how-to/monitor-with-prometheus/) documentent les
-paliers de disponibilité qu'elle prend en charge.
+à écriture unique correspond au modèle de cohérence du produit. Les
+[chiffres de production-readiness](/how-to/monitor-with-prometheus/) sont des objectifs d'exploitation, pas une disponibilité mesurée pour cette topologie.
+Les contrôles d'epoch et de fencing existants protègent certains chemins ; leur
+présence ne prouve pas la couverture de chaque écriture ou effet externe. Il faut
+qualifier le fencing des transactions et le comportement de basculement, avec des
+preuves de reprise propres au déploiement, avant d'affirmer que des niveaux de
+service HA sont atteints.
 
 ## 4. Sauvegardes chiffrées planifiées
 
@@ -200,7 +205,7 @@ applicatif **échouerait à chaque exécution** et vous laisserait **sans aucune
 sauvegarde**. Le garde-fou transforme cette panne silencieuse en échec dur à
 l'installation.
 
-Valeurs par défaut : toutes les 6 heures (`backup.schedule` définit votre RPO), rétention
+Valeurs par défaut : toutes les 6 heures (`backup.schedule` définit la fréquence des sauvegardes, pas un RPO observé), rétention
 locale de 14 jours, un PVC de destination dédié. **Mirroitez la destination hors site et
 gardez la KEK séparée des bundles** — une sauvegarde sur le même cluster n'est pas de la
 reprise après sinistre. Faites des exercices de restauration avec `olivares dr verify` ; la

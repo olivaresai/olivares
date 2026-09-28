@@ -42,11 +42,44 @@ type family struct {
 	prefix       string
 	pricing      modelprovider.ModelPricing
 	capabilities []modelprovider.Capability
+	// datedSnapshotOnly accepts the exact prefix or a YYYYMMDD / YYYY-MM-DD
+	// snapshot suffix. Any other longer ID stays unknown.
+	datedSnapshotOnly bool
 }
 
 // codexFamilies are matched longest-prefix-first. Prices are USD per million tokens
 // (list, AsOf pricingAsOf). VERIFY against openai.com/pricing.
 var codexFamilies = []family{
+	{
+		prefix: "gpt-6-astra",
+		pricing: modelprovider.ModelPricing{
+			InputPerMTokUSD: 10, OutputPerMTokUSD: 50,
+			CacheWritePerMTokUSD: 12.5, CacheReadPerMTokUSD: 1,
+			Currency: "USD", AsOf: "2026-09-27", Source: modelprovider.PricingList,
+		},
+		capabilities:      codexCapabilities,
+		datedSnapshotOnly: true,
+	},
+	{
+		prefix: "gpt-6-sol",
+		pricing: modelprovider.ModelPricing{
+			InputPerMTokUSD: 2, OutputPerMTokUSD: 10,
+			CacheWritePerMTokUSD: 2.5, CacheReadPerMTokUSD: 0.2,
+			Currency: "USD", AsOf: "2026-09-27", Source: modelprovider.PricingList,
+		},
+		capabilities:      codexCapabilities,
+		datedSnapshotOnly: true,
+	},
+	{
+		prefix: "gpt-6-luna",
+		pricing: modelprovider.ModelPricing{
+			InputPerMTokUSD: 0.10, OutputPerMTokUSD: 0.50,
+			CacheWritePerMTokUSD: 0.125, CacheReadPerMTokUSD: 0.01,
+			Currency: "USD", AsOf: "2026-09-27", Source: modelprovider.PricingList,
+		},
+		capabilities:      codexCapabilities,
+		datedSnapshotOnly: true,
+	},
 	{
 		prefix: "gpt-5.6-terra",
 		pricing: modelprovider.ModelPricing{
@@ -112,6 +145,30 @@ var declaredModelIDs = []struct {
 	{"gpt-5-codex", "GPT-5 Codex"},
 	{"gpt-5-codex-mini", "GPT-5 Codex mini"},
 	{"codex-mini-latest", "Codex mini (latest)"},
+	{"gpt-6-astra", "GPT-6 Astra"},
+	{"gpt-6-sol", "GPT-6 Sol"},
+	{"gpt-6-luna", "GPT-6 Luna"},
+}
+
+// chatGPTCodexRetirement is a retirement that applies only to Codex with
+// ChatGPT sign-in. It does not apply to the OpenAI API. The published
+// replacement depends on the plan (gpt-6-sol or gpt-6-luna), so no single
+// successor is stored. Observed 2026-09-27 at learn.chatgpt.com/docs/models.
+type chatGPTCodexRetirement struct {
+	Channel   string
+	RetiresOn string
+	AsOf      string
+}
+
+func chatGPTAuthenticatedCodexRetirement(modelID string) (chatGPTCodexRetirement, bool) {
+	if modelID != "gpt-5.5" {
+		return chatGPTCodexRetirement{}, false
+	}
+	return chatGPTCodexRetirement{
+		Channel:   "chatgpt-authenticated-codex",
+		RetiresOn: "2026-10-14",
+		AsOf:      "2026-09-27",
+	}, true
 }
 
 var codexModelDeprecations = map[string]struct {
@@ -127,8 +184,21 @@ var codexModelDeprecations = map[string]struct {
 // longest family prefix. ok is false when no family matches (the connector then leaves
 // Model.Pricing nil rather than guess).
 func pricingFor(modelID string) (modelprovider.ModelPricing, []modelprovider.Capability, bool) {
+	for _, f := range codexFamilies {
+		if modelID == f.prefix {
+			return f.pricing, f.capabilities, true
+		}
+	}
+	if f, ok, blocked := datedSnapshotFamily(codexFamilies, modelID); blocked {
+		return modelprovider.ModelPricing{}, nil, false
+	} else if ok {
+		return f.pricing, f.capabilities, true
+	}
 	best := -1
 	for i, f := range codexFamilies {
+		if f.datedSnapshotOnly {
+			continue
+		}
 		if hasPrefix(modelID, f.prefix) {
 			if best < 0 || len(f.prefix) > len(codexFamilies[best].prefix) {
 				best = i
@@ -140,6 +210,31 @@ func pricingFor(modelID string) (modelprovider.ModelPricing, []modelprovider.Cap
 	}
 	f := codexFamilies[best]
 	return f.pricing, f.capabilities, true
+}
+
+// datedSnapshotFamily matches a prefix that accepts only a dated snapshot
+// suffix. blocked is set when that suffix is not a snapshot date, so a
+// shorter family must not answer.
+func datedSnapshotFamily(rows []family, modelID string) (family, bool, bool) {
+	best := -1
+	for i, f := range rows {
+		if !f.datedSnapshotOnly {
+			continue
+		}
+		if len(modelID) > len(f.prefix) && hasPrefix(modelID, f.prefix+"-") {
+			if best < 0 || len(f.prefix) > len(rows[best].prefix) {
+				best = i
+			}
+		}
+	}
+	if best < 0 {
+		return family{}, false, false
+	}
+	f := rows[best]
+	if modelprovider.SnapshotDateSuffix(modelID, f.prefix) {
+		return f, true, false
+	}
+	return family{}, false, true
 }
 
 // hasPrefix is strings.HasPrefix without importing strings into this file.
@@ -170,6 +265,12 @@ func buildModel(id, displayName string) modelprovider.Model {
 			RetiresOn:      r.retiresOn,
 			ReplacementRef: r.replacementRef,
 			AsOf:           "2026-07-15",
+		}}
+	} else if r, ok := chatGPTAuthenticatedCodexRetirement(id); ok {
+		m.Retirements = []modelprovider.ModelRetirement{{
+			Surface:   model.Gateway(r.Channel),
+			RetiresOn: r.RetiresOn,
+			AsOf:      r.AsOf,
 		}}
 	}
 	return m

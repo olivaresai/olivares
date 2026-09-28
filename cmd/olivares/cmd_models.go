@@ -122,7 +122,8 @@ func newModelsReferenceCmds(c modelstackClient) []*cobra.Command {
 			Use:   "features",
 			Short: "Show which model families declare each API capability",
 			Long: "Show the capability matrix: for every API feature (streaming, tool use, vision, PDF,\n" +
-				"prompt caching, batch, extended thinking, …), which declared families support it.",
+				"prompt caching, batch, extended thinking, …), which declared families declare it,\n" +
+				"and the matrix is not a gateway invocation guarantee.",
 			Example: `  olivares models features
   olivares models features -o json`,
 			Target: modelstackTarget{Collection: "/features"},

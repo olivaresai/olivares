@@ -94,7 +94,7 @@ const CLASS_HELPERS = new Set(['cn', 'clsx', 'classNames', 'twMerge', 'twJoin'])
  *    colours (`text-danger`) and sizes (`text-sm`). The list below used to enumerate
  *    Tailwind's built-in sizes, which is fine as long as nobody adds one — and the
  *    operator type scale added seven (`text-display-lg` … `text-overline`,
- *    web/tokens/primitives.tokens.json,
+ *    web/tokens/console/primitives.tokens.json,
  *    the `type` group). The gate did NOT go quiet about them: it reported them as
  *    `NOT MEASURED — no color rule for .text-body` and exited 2, which is the whole
  *    point of its fail-closed design. But the remedy must not be a second
@@ -108,7 +108,7 @@ const CLASS_HELPERS = new Set(['cn', 'clsx', 'classNames', 'twMerge', 'twJoin'])
 function typeScaleUtilities(): Set<string> {
   try {
     const raw = readFileSync(
-      join(repoRoot, 'web', 'tokens', 'primitives.tokens.json'),
+      join(repoRoot, 'web', 'tokens', 'console', 'primitives.tokens.json'),
       'utf8',
     )
     const group = (JSON.parse(raw) as Record<string, unknown>).type

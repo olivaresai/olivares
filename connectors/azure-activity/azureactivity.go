@@ -44,7 +44,7 @@ func (s *Source) Descriptor() sdk.Descriptor { return descriptor() }
 
 // Open resolves and validates configuration and builds the shared HTTP client. A
 // MISSING or PARTIAL credential is offline-safe: Open succeeds and Gather is a
-// silent no-op.
+// coverage-only unavailable result, with no resource observations.
 func (s *Source) Open(_ context.Context, cfg sdk.Config) error {
 	s.client = &http.Client{Timeout: defaultTimeout}
 	c, err := loadConfig(cfg, s.client)
@@ -56,21 +56,31 @@ func (s *Source) Open(_ context.Context, cfg sdk.Config) error {
 	return nil
 }
 
-// Gather runs one discovery pass. Offline (no credential) returns immediately. It
+// Gather runs one discovery pass. Offline reports unavailable coverage. It
 // first resolves the subscription set (explicit config, else auto-listed), then
 // runs the enabled services. A failure in one service yields exactly one health
 // finding and the pass continues; ctx is honored throughout. Inventory edges
 // carry the per-pass timestamp; activity edges carry the event's own timestamp.
 func (s *Source) Gather(ctx context.Context, sink sdk.Sink) error {
 	if s.cfg.tokens == nil {
-		return nil // offline: no credential configured.
+		return s.inventoryUnavailable(ctx, sink, "unavailable", "offline", time.Now().UTC())
 	}
 	at := time.Now().UTC()
+	if !s.cfg.enableInventory {
+		if err := s.inventoryUnavailable(ctx, sink, "unavailable", "disabled", at); err != nil {
+			return err
+		}
+	}
 
 	subs, err := s.resolveSubscriptions(ctx)
 	if err != nil {
 		if ctx.Err() != nil {
 			return ctx.Err()
+		}
+		if s.cfg.enableInventory {
+			if e := s.inventoryUnavailable(ctx, sink, "unavailable", "provider_error", at); e != nil {
+				return e
+			}
 		}
 		return sink.Emit(ctx, healthFinding(subjectSubscriptions, s.tenantRef(),
 			"Azure subscription discovery failed", err, at))
@@ -78,6 +88,11 @@ func (s *Source) Gather(ctx context.Context, sink sdk.Sink) error {
 	if len(subs) == 0 {
 		// A credentialed connector that can see no subscriptions is a permissions
 		// signal, not silence — emit one finding and stop (nothing to read).
+		if s.cfg.enableInventory {
+			if e := s.inventoryUnavailable(ctx, sink, "unavailable", "scope_unproven", at); e != nil {
+				return e
+			}
+		}
 		return sink.Emit(ctx, healthFinding(subjectSubscriptions, s.tenantRef(),
 			"Azure: no subscriptions visible to the service principal", errNoSubscriptions, at))
 	}

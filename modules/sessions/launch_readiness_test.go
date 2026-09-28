@@ -171,6 +171,7 @@ func newReadinessFixture(t *testing.T, be readinessEngine, m *Module) *readiness
 		t.Fatal(err)
 	}
 	m.UseData(api.NewModuleData(st))
+	bindStoreStanding(m, st)
 	stopModuleAtCleanup(t, m)
 	_, priv, _ := ed25519.GenerateKey(nil)
 	signer, _ := audit.NewSigner(priv)

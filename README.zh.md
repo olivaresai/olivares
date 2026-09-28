@@ -33,13 +33,13 @@ Claude Code 在最深一层集成（`PreToolUse`/`PostToolUse` 钩子、受管�
 <br><sub><b>访问图</b> — 每个 agent 在整个 estate 中读写什么，允许对照观察。</sub>
 </div>
 
-- **看见它。** 清点每个已发现的 agent、会话、模型、MCP 服务器、工具和身份；一张读写**访问图**，带 Permitted-vs-Observed **漂移**视图；实时会话、编排图、健康状况和 SLA。它看不到的内容会标记为 `unknown`，绝不猜测。
+- **看见它。** 清点连接器观察到的 agent、会话、模型、MCP 服务器、工具和身份；一张读写**访问图**，带 Permitted-vs-Observed **漂移**视图；实时会话、编排图、健康状况和 SLA。它无法分类的访问会标记为 `unknown`，绝不猜测。没有任何连接器观察到的资源不会出现，而这种缺失并不能证明该资源不存在。
 - **运行工作。** 带有所有权、依赖关系、验收标准和决策的持久工作项；围栏租约确保两个 agent 无法同时持有同一项工作；从控制台启动、附加、中断和停止 Claude Code、Codex 和 Grok 会话；通过 A2A 向获授权对等方委派。
 - **治理并执行它。** 一个 Cedar 授权引擎，以及**四个 deny-closed 执行点**——Claude Code 钩子、内联 `/v1/messages` 推理代理、MCP `tools/call` 关卡和 A2A 委派关卡——使未授权操作在运行前被阻断、挂起等待双人审批，或被改写。预算可以拒绝或限制支出，破玻璃机制实行双人控制，还有一个失败即关闭的 estate **kill-switch**。
 - **受治理地供给它。** 内容源（SharePoint、Confluence、Google Drive、Notion、Salesforce、Snowflake、S3、Azure AI Search、SAP OData、PostgreSQL，以及限定根目录的文件系统）进入受治理检索，检索时以 deny-closed 强制许可级别。
 - **证明它。** 一份哈希链、Ed25519 签名的审计台账；映射到 **26 个框架目录**（EU AI Act、NIST AI RMF、ISO 42001、SOC 2、ISO 27001、GDPR……）的封存证据——自行评估的控制族，并非认证；SIEM/ITSM 推送（CEF/LEEF/syslog/OTLP/OCSF）；WebAuthn/FIDO2、PIV/CAC、SSO、SCIM、BYOK/CMEK 以及经验证的被遗忘权，均按部署配置。
 
-**30 个模块**、一个控制台、**158 项集成**——计数从代码推导，并由 [`scripts/check-public-counts.sh`](scripts/check-public-counts.sh) 在每次推送时强制校验；明细见 [`connectors/README.md`](connectors/README.md)，每个模块及其成熟度见[模块目录](docs-site/src/content/docs/reference/modules/overview.md)。
+**31 个模块**、一个控制台、**159 项集成**——计数从代码推导，并由 [`scripts/check-public-counts.sh`](scripts/check-public-counts.sh) 在每次推送时强制校验；明细见 [`connectors/README.md`](connectors/README.md)，每个模块及其成熟度见[模块目录](docs-site/src/content/docs/reference/modules/overview.md)。
 
 ## 安装
 

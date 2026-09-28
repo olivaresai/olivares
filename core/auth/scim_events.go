@@ -272,48 +272,33 @@ func (a *Authenticator) resolveSetSubject(ctx context.Context, tenant model.Tena
 	return model.User{}, ErrSCIMSetSubject
 }
 
-// SCIMSetMemberActive flips a tenant member's active status. Disabling cuts
-// access (revoke tenant-bound tokens cascading to exchanged children + all
-// sessions) and marks the account inactive while preserving the membership;
-// re-activating only restores the status (access is re-granted by the IdP's next
-// provisioning, not by reviving old tokens). It is idempotent.
+// SCIMSetMemberActive applies a tenant's activity signal to a member. A tenant
+// never writes the account's global status: a disable is a scoped offboard of
+// the account from this tenant, and an activate writes nothing (a later
+// provisioning re-admits only an account this tenant created). Membership is
+// read again inside the transaction: a member that left after the preflight
+// answers ErrNotFound and nothing is written. It is idempotent.
 func (a *Authenticator) SCIMSetMemberActive(ctx context.Context, actor Principal, tenant model.TenantID, id model.ID, active bool) error {
 	if _, err := a.SCIMGetMember(ctx, tenant, id); err != nil {
 		return err
 	}
 	return a.st.AuthMutate(ctx, func(as store.AuthScope) error {
-		if err := prepareUserAuthorityWrite(ctx, as, id); err != nil {
-			return err
-		}
 		// A successful preflight does not authorize a later transaction: a
 		// departure may have committed before we acquired the directory lock.
+		// Preparation holds that lock, so this membership stays valid until commit.
+		if err := prepareUserAuthorityWrite(ctx, as); err != nil {
+			return err
+		}
 		if _, ok, err := membershipOf(ctx, as, id, tenant); err != nil {
 			return err
 		} else if !ok {
 			return store.ErrNotFound
 		}
-		u, err := as.Users().Get(ctx, id)
-		if err != nil {
-			return err
+		if active {
+			return auditAct(ctx, as, actor, "scim.set.activate.local", "core.user", id)
 		}
-		want := scimStatus(active)
-		if u.Status != want {
-			u.Status = want
-			if _, err := as.Users().Update(ctx, u); err != nil {
-				return err
-			}
-		}
-		action := "scim.set.activate"
-		if !active {
-			action = "scim.set.deactivate"
-		}
-		if err := auditAct(ctx, as, actor, action, "core.user", id); err != nil {
-			return err
-		}
-		if !active {
-			return revokeUserAccess(ctx, as, actor, id, tenant, true)
-		}
-		return nil
+		_, err := a.scopedOffboard(ctx, as, actor, id, tenant, "scim.set.deactivate")
+		return err
 	})
 }
 

@@ -59,7 +59,12 @@ import { AAL, RequireAssurance } from '@/features/identity/assurance'
 // The console i18n namespace is registered too: the source step reuses the console's
 // plugin-connector strings (pluginNote/testUnavailable) instead of duplicating them.
 import '@/features/console/i18n'
-import { consoleApi, consoleKeys } from '@/features/console/api'
+import {
+  consoleApi,
+  consoleKeys,
+  isConsentRequired,
+  type OnboardResponse,
+} from '@/features/console/api'
 import { CustomFields, type CustomRow } from '@/features/console/custom-fields'
 import type {
   ConnectorInfo,
@@ -677,7 +682,7 @@ function IdentityStep({
   const [mode, setMode] = useState<'invite' | 'password'>('invite')
   const [password, setPassword] = useState('')
 
-  const mut = usePrivilegedMutation<void, { invite?: { accept_url: string } }>({
+  const mut = usePrivilegedMutation<void, OnboardResponse>({
     mutationFn: () =>
       consoleApi.onboard({
         email: email.trim(),
@@ -686,7 +691,11 @@ function IdentityStep({
         ...(mode === 'password' ? { password } : {}),
       }),
     invalidateKeys: [consoleKeys.members(tenant), consoleKeys.invites(tenant)],
-    successMessage: t('steps.identity.invited', { email: email.trim() }),
+    // An existing account is never added here: it joins only by its holder's consent.
+    successMessage: (data) =>
+      isConsentRequired(data)
+        ? t('steps.identity.consentRequired', { email: email.trim() })
+        : t('steps.identity.invited', { email: email.trim() }),
     onDone: () => {
       setEmail('')
       setPassword('')

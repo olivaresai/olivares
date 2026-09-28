@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 )
@@ -32,8 +33,23 @@ func (m *Module) ReserveProtocolBinding(
 		return ProtocolBinding{}, err
 	}
 	var result ProtocolBinding
+	// An MCP task projection lets its owner operate the task, so it is a fenced
+	// write: the owner accounts' standing is read before each attempt, and the
+	// transaction pins their authority versions with the tenant's directory fact
+	// before anything else. A version that moved in between conflicts, and the
+	// retry below reads the standing again.
+	owners := protocolMCPTaskAccounts(normalized.MCPTask)
 	for attempt := 0; attempt < 2; attempt++ {
+		ownerRefs, fenceErr := auth.FenceSubjects(ctx, m.standingFor(ctx), tenant, owners)
+		if fenceErr != nil {
+			return ProtocolBinding{}, fenceErr
+		}
 		err = m.workData(tenant).Mutate(ctx, func(sc store.Scope) error {
+			if len(ownerRefs) > 0 {
+				if _, err := auth.PinFence(ctx, sc, auth.FenceDirectory, ownerRefs); err != nil {
+					return err
+				}
+			}
 			repo, err := sc.Ext(protocolBindingKind)
 			if err != nil {
 				return err

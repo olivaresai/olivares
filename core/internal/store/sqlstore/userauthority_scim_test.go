@@ -93,15 +93,18 @@ func TestUserAuthoritySCIMCompound(t *testing.T) {
 						if err != nil {
 							return err
 						}
-						if (got.Status == model.StatusInactive) != orphan {
+						// A tenant's deprovision is a scoped offboard: whether or not it
+						// was the last membership, the global status and the
+						// account-scope session are the deployment's, never the tenant's.
+						if got.Status == model.StatusInactive {
 							t.Errorf("orphan=%t status=%s", orphan, got.Status)
 						}
 						session, err := as.Sessions().Get(ctx, f.Sessions[0].ID)
 						if err != nil {
 							return err
 						}
-						if session.Revoked != orphan {
-							t.Errorf("orphan=%t revoked=%t", orphan, session.Revoked)
+						if session.Revoked {
+							t.Errorf("orphan=%t revoked the account-scope session", orphan)
 						}
 						for _, tok := range tokens {
 							got, err := as.Tokens().Get(ctx, tok.ID)
@@ -123,12 +126,10 @@ func TestUserAuthoritySCIMCompound(t *testing.T) {
 					}); err != nil {
 						t.Fatal(err)
 					}
+					// The offboard's retirement record moves H exactly once.
 					gotH := sqlstore.F2AUserAuthorityVersionForTest(t, raw, u.ID)
-					if orphan && gotH != beforeH+2 {
-						t.Fatalf("orphan H=%d want%d (session revoke + User disable)", gotH, beforeH+2)
-					}
-					if !orphan && gotH != beforeH {
-						t.Fatalf("non-orphan H changed %d -> %d", beforeH, gotH)
+					if gotH != beforeH+1 {
+						t.Fatalf("orphan=%t H=%d want %d (the offboard's one bump)", orphan, gotH, beforeH+1)
 					}
 					if err := a.SCIMDeprovisionUser(ctx, actor, f.Tenants[0], u.ID); err != nil {
 						t.Fatalf("SCIM retry: %v", err)

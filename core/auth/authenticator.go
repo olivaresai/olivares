@@ -7,6 +7,7 @@ package auth
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"strings"
 	"sync"
@@ -98,6 +99,13 @@ type Authenticator struct {
 	// cap is a binary packaging decision, so embedders and the test suite are
 	// unmapped unless they inject one.
 	groupMapper GroupMapper
+
+	// retirementWake wakes the retirement pump after an offboard (retirement.go).
+	// nil means no pump is running in this process; the record still waits for one.
+	retirementWake func()
+	// census is the composition census of the store as it opened, for a store
+	// wrapped in guards that hide it (retirement.go); nil reads it from st.
+	census store.CompositionCensus
 }
 
 // NewAuthenticator builds an Authenticator over st. clock may be nil (system
@@ -127,7 +135,9 @@ func (a *Authenticator) Authenticate(ctx context.Context, token string) (Princip
 	}
 	switch prefix {
 	case PrefixSession:
-		return a.authSession(ctx, selector, secret)
+		return a.authSession(ctx, selector, secret, false)
+	case PrefixScopedSession:
+		return a.authSession(ctx, selector, secret, true)
 	case PrefixToken:
 		return a.authToken(ctx, selector, secret)
 	default:
@@ -135,7 +145,10 @@ func (a *Authenticator) Authenticate(ctx context.Context, token string) (Princip
 	}
 }
 
-func (a *Authenticator) authSession(ctx context.Context, selector, secret string) (Principal, error) {
+// authSession resolves a session credential. scoped is whether the token
+// carries the scoped-session prefix; the stored row's scope must agree with it,
+// so a token minted for one tenant can never present as account-wide.
+func (a *Authenticator) authSession(ctx context.Context, selector, secret string, scoped bool) (Principal, error) {
 	var p Principal
 	err := a.st.AuthView(ctx, func(as store.AuthScope) error {
 		sessions, _, err := as.Sessions().List(ctx, byEq("selector", selector, 1))
@@ -147,6 +160,9 @@ func (a *Authenticator) authSession(ctx context.Context, selector, secret string
 		}
 		s := sessions[0]
 		if !SecretMatches(secret, s.SecretHash) || s.Revoked || s.ExpiresAt.Before(a.clock.Now()) {
+			return ErrUnauthenticated
+		}
+		if scoped == s.TenantScope.IsZero() {
 			return ErrUnauthenticated
 		}
 		u, err := as.Users().Get(ctx, s.UserID)
@@ -166,7 +182,15 @@ func (a *Authenticator) authSession(ctx context.Context, selector, secret string
 		if err != nil {
 			return err
 		}
-		p = newPrincipal(KindUser, u.ID, s.ID, u.IsSuperadmin, u.DisplayName, grants, groups).withConfinements(confined)
+		standing, err := loadStanding(ctx, as, u.ID, s.ID)
+		if err != nil {
+			return err
+		}
+		p = newPrincipal(KindUser, u.ID, s.ID, u.IsSuperadmin, u.DisplayName, grants, groups).
+			withConfinements(confined).withStanding(standing)
+		if scoped {
+			p = p.withSessionScope(s.TenantScope)
+		}
 		p.AAL = effectiveAAL(s, a.clock.Now())
 		p.AMR = s.AMR
 		p = p.withCredentialRef(s.Version)
@@ -243,6 +267,9 @@ func (a *Authenticator) authToken(ctx context.Context, selector, secret string) 
 				grants[t.BoundTenantID] = t.Role
 			}
 			p = newPrincipal(KindToken, t.UserID, t.ID, t.IsSuperadmin, t.Name, grants, nil)
+			if p, err = withTokenStanding(ctx, as, p, t); err != nil {
+				return err
+			}
 			// A token-exchanged (delegated) token carries its audience binding and the
 			// principal it acts for, so a resource server can enforce confused-deputy
 			// protection (RFC 8707) and the audit trail can attribute the delegation.
@@ -406,6 +433,68 @@ func loadGrants(ctx context.Context, as store.AuthScope, userID model.ID) (map[m
 	return g, subjectGroups, confined, nil
 }
 
+// accountStanding is what an account's tenant exclusions say about its
+// principal: the tenants it, or the session being resolved, is excluded from,
+// and the authorization epoch at which each tenant last retired it.
+type accountStanding struct {
+	excluded map[model.TenantID]struct{}
+	floors   map[model.TenantID]int64
+}
+
+// loadStanding reads the account's tenant exclusions. session is the session
+// being resolved, or zero: a session exclusion removes only that session from
+// its tenant. An exclusion of a kind this build does not know excludes.
+func loadStanding(ctx context.Context, as store.AuthScope, userID, session model.ID) (accountStanding, error) {
+	rows, err := drainList(ctx, as.TenantExclusions().List, byEq("user_id", userID.String(), 0))
+	if err != nil {
+		return accountStanding{}, err
+	}
+	var st accountStanding
+	exclude := func(tenant model.TenantID) {
+		if st.excluded == nil {
+			st.excluded = map[model.TenantID]struct{}{}
+		}
+		st.excluded[tenant] = struct{}{}
+	}
+	for _, x := range rows {
+		switch x.Kind {
+		case model.ExclusionOffboard:
+			if x.RetiredEpoch != nil {
+				if st.floors == nil {
+					st.floors = map[model.TenantID]int64{}
+				}
+				if floor, ok := st.floors[x.TargetTenantID]; !ok || *x.RetiredEpoch > floor {
+					st.floors[x.TargetTenantID] = *x.RetiredEpoch
+				}
+			}
+			if x.InForce() {
+				exclude(x.TargetTenantID)
+			}
+		case model.ExclusionSession:
+			if !session.IsZero() && x.SessionID == session {
+				exclude(x.TargetTenantID)
+			}
+		default:
+			exclude(x.TargetTenantID)
+		}
+	}
+	return st, nil
+}
+
+// withTokenStanding applies the owner's standing to an ordinary token
+// principal: a token bound to a tenant that excludes its owner carries nothing
+// there, and the owner's floor in that tenant travels with it.
+func withTokenStanding(ctx context.Context, as store.AuthScope, p Principal, t model.APIToken) (Principal, error) {
+	if t.UserID.IsZero() || t.IsSuperadmin {
+		return p, nil
+	}
+	standing, err := loadStanding(ctx, as, t.UserID, "")
+	if err != nil {
+		return Principal{}, err
+	}
+	return p.withStanding(standing), nil
+}
+
 // groupByID resolves a group id through a per-call cache (each group is fetched
 // at most once). A missing group caches and returns nil (a dangling edge grants
 // nothing — deny-closed), distinguishing "resolved to absent" from "not yet
@@ -567,7 +656,7 @@ func (a *Authenticator) LoginFrom(ctx context.Context, emailRaw, password, ip st
 		return "", model.AuthSession{}, ErrInvalidCredentials
 	}
 
-	token, sess, err := a.mintSession(ctx, attempt, user, "auth.login", passwordLogin, nil)
+	token, sess, err := a.mintSession(ctx, attempt, user, user.CustodyScope(), "auth.login", passwordLogin, nil)
 	if err != nil {
 		return "", model.AuthSession{}, err
 	}
@@ -582,7 +671,11 @@ func (a *Authenticator) LoginFrom(ctx context.Context, emailRaw, password, ip st
 // validated SSO assertion). method names how it was established; every
 // fresh session starts at AAL1 — assurance is only ever raised by a verified
 // step-up ceremony (ElevateSession), never at mint time (fail-closed).
-func (a *Authenticator) mintSession(ctx context.Context, attempt *loginAttempt, user model.User, action string, method sessionLoginMethod, activate func(store.AuthScope) error) (string, model.AuthSession, error) {
+//
+// scope confines the session to one tenant: an account a tenant holds signs in
+// scoped to it, and so does every sign-in through a tenant's identity provider.
+// The zero scope is an account-scope session.
+func (a *Authenticator) mintSession(ctx context.Context, attempt *loginAttempt, user model.User, scope model.TenantID, action string, method sessionLoginMethod, activate func(store.AuthScope) error) (string, model.AuthSession, error) {
 	if attempt == nil || (method != passwordLogin && method != federatedLogin) {
 		return "", model.AuthSession{}, ErrInvalidCredentials
 	}
@@ -611,7 +704,7 @@ func (a *Authenticator) mintSession(ctx context.Context, attempt *loginAttempt, 
 				return err
 			}
 		}
-		t, s, err := a.mintSessionTx(ctx, as, user, ip, action, amr)
+		t, s, err := a.mintSessionTx(ctx, as, user, scope, ip, action, amr)
 		tok, sess = t, s
 		return err
 	}); err != nil {
@@ -624,26 +717,36 @@ func (a *Authenticator) mintSession(ctx context.Context, attempt *loginAttempt, 
 // caller's auth transaction. Only mintSession calls it, after policy admission and
 // any atomic account activation. A fresh session is always AAL1; assurance
 // is only ever raised by a verified step-up ceremony (ElevateSession).
-func (a *Authenticator) mintSessionTx(ctx context.Context, as store.AuthScope, user model.User, ip, action string, amr []string) (string, model.AuthSession, error) {
+func (a *Authenticator) mintSessionTx(ctx context.Context, as store.AuthScope, user model.User, scope model.TenantID, ip, action string, amr []string) (string, model.AuthSession, error) {
 	// R5 defense at the create seam: the guard is idempotent, so a caller that already
 	// took it first pays one more read. A caller that reached here after a directory or
 	// audit lock gets the store's lock-order error, which also poisons the transaction.
 	if err := a.guardNewLoginSession(ctx, as); err != nil {
 		return "", model.AuthSession{}, err
 	}
-	cred, err := NewCredential(PrefixSession)
+	// A scoped session has its own prefix, so a binary that does not know session
+	// scope refuses the token instead of reading it as account-wide. Each prefix is
+	// named at its call, so the session issuance census sees both producers.
+	var cred Credential
+	var err error
+	if scope.IsZero() {
+		cred, err = NewCredential(PrefixSession)
+	} else {
+		cred, err = NewCredential(PrefixScopedSession)
+	}
 	if err != nil {
 		return "", model.AuthSession{}, err
 	}
 	now := a.clock.Now()
 	created, err := as.Sessions().Create(ctx, model.AuthSession{
-		UserID:     user.ID,
-		Selector:   cred.Selector,
-		SecretHash: cred.SecretHash,
-		ExpiresAt:  model.NewTimestamp(now.Time().Add(a.sessionTTL)),
-		CreatedIP:  ip,
-		AAL:        1,
-		AMR:        amr,
+		UserID:      user.ID,
+		Selector:    cred.Selector,
+		SecretHash:  cred.SecretHash,
+		ExpiresAt:   model.NewTimestamp(now.Time().Add(a.sessionTTL)),
+		CreatedIP:   ip,
+		AAL:         1,
+		AMR:         amr,
+		TenantScope: scope,
 	})
 	if err != nil {
 		return "", model.AuthSession{}, err
@@ -669,12 +772,11 @@ func (a *Authenticator) RefreshSession(ctx context.Context, actor Principal) (st
 	if actor.Kind != KindUser || actor.CredID.IsZero() {
 		return "", model.AuthSession{}, ErrUnauthenticated
 	}
-	cred, err := NewCredential(PrefixSession)
-	if err != nil {
-		return "", model.AuthSession{}, err
-	}
 	now := a.clock.Now()
-	var sess model.AuthSession
+	var (
+		sess  model.AuthSession
+		token string
+	)
 	if err := a.st.AuthMutate(ctx, func(as store.AuthScope) error {
 		s, err := as.Sessions().Get(ctx, actor.CredID)
 		if err != nil {
@@ -688,6 +790,18 @@ func (a *Authenticator) RefreshSession(ctx context.Context, actor Principal) (st
 		if s.Revoked || s.ExpiresAt.Before(now) {
 			return ErrUnauthenticated
 		}
+		// A scoped session stays scoped: the new token carries the prefix the
+		// row's scope requires, named at its call for the session issuance census.
+		var cred Credential
+		if s.TenantScope.IsZero() {
+			cred, err = NewCredential(PrefixSession)
+		} else {
+			cred, err = NewCredential(PrefixScopedSession)
+		}
+		if err != nil {
+			return err
+		}
+		token = cred.Token
 		s.Selector = cred.Selector
 		s.SecretHash = cred.SecretHash
 		s.ExpiresAt = model.NewTimestamp(now.Time().Add(a.sessionTTL))
@@ -704,7 +818,7 @@ func (a *Authenticator) RefreshSession(ctx context.Context, actor Principal) (st
 	}); err != nil {
 		return "", model.AuthSession{}, err
 	}
-	return cred.Token, sess, nil
+	return token, sess, nil
 }
 
 // RevokeSession marks a session revoked (logout), recording it with the acting
@@ -753,35 +867,35 @@ var errDrainListIncomplete = errors.New("auth: repository listing did not comple
 // directory group's member rows, a tenant's groups, a tenant's member set)
 // would silently truncate — and a truncated read here corrupts writes built on
 // it (a member diff misses rows; the leaver sweep leaves stale elevations). The
-// page bound is a runaway guard far above any real tenant, not a working limit.
-// A continuation that cannot make progress, or one that exceeds the bound,
-// fails closed and discards the partial result. The caller's q.Limit/q.Cursor
-// are overridden (completeness is the point).
+// guards are runaway bounds far above any real tenant, not working limits: at
+// most one hundred calls and 100,000 rows. It pages through store.WalkPages, so
+// a continuation that cannot make progress, or one that exceeds either bound,
+// fails closed with errDrainListIncomplete and discards the partial result. The
+// caller's q.Limit/q.Cursor are overridden (completeness is the point).
 func drainList[T any](ctx context.Context, list func(context.Context, model.Query) ([]T, model.Page, error), q model.Query) ([]T, error) {
 	const pageSize, maxPages = 1000, 100
 	q.Limit = pageSize
 	q.Cursor = ""
-	var out []T
-	seenCursors := make(map[string]struct{}, maxPages)
-	for i := 0; i < maxPages; i++ {
-		items, page, err := list(ctx, q)
-		if err != nil {
-			return nil, err
+	calls := 0
+	guarded := func(c context.Context, pq model.Query) ([]T, model.Page, error) {
+		if calls == maxPages {
+			return nil, model.Page{}, fmt.Errorf("%w: more than %d pages", store.ErrPageCapacity, maxPages)
 		}
-		out = append(out, items...)
-		if !page.HasMore {
-			return out, nil
-		}
-		if page.Cursor == "" {
-			return nil, errDrainListIncomplete
-		}
-		if _, seen := seenCursors[page.Cursor]; seen {
-			return nil, errDrainListIncomplete
-		}
-		seenCursors[page.Cursor] = struct{}{}
-		q.Cursor = page.Cursor
+		calls++
+		return list(c, pq)
 	}
-	return nil, errDrainListIncomplete
+	var out []T
+	err := store.WalkPages(ctx, guarded, q, pageSize*maxPages, func(rows []T) error {
+		out = append(out, rows...)
+		return nil
+	})
+	if errors.Is(err, store.ErrPageContinuation) || errors.Is(err, store.ErrPageCapacity) {
+		return nil, fmt.Errorf("%w: %w", errDrainListIncomplete, err)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 // normalizeEmail lowercases and trims an email for consistent storage and lookup.

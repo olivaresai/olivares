@@ -192,10 +192,20 @@ root_line="$(awk -F '\t' '$2 ~ /stable\/apt\/dists\/stable\/InRelease$/{line=NR}
 [[ "$content_line" -gt 0 && "$root_line" -gt "$content_line" ]]
 ok 'positive promotion writes content before signed discovery roots'
 
+pacman_log="$scratch/pacman.log"
+if ! bash "$root/scripts/test-package-publish-pacman.sh" >"$pacman_log" 2>&1; then
+	sed 's/^/  /' "$pacman_log" >&2
+	exit 1
+fi
+grep -Fx 'ok - unsigned_database' "$pacman_log" >/dev/null
+grep -Fx 'ok - wrongly_signed_database' "$pacman_log" >/dev/null
+grep -F 'test-package-publish-pacman: 18/18 cases green' "$pacman_log" >/dev/null
+ok 'pacman family: render, unsigned and wrongly signed database refusals, digest, evidence and roots-last cases green'
+
 wrong_key_log="$scratch/wrong-key.log"
 bash "$root/scripts/test-package-repositories.sh" >"$wrong_key_log"
 grep -F 'mutant-wrong-signing-key' "$wrong_key_log" >/dev/null
 grep -F '4/4 mutants red with positive controls' "$wrong_key_log" >/dev/null
 ok 'real wrong-signing-key mutant remains red with its positive control'
 
-printf 'test-package-publish: OK — %d controls; staging-only, partial and wrong-key mutants are red\n' "$checks"
+printf 'test-package-publish: OK — %d controls; staging-only, partial, pacman and wrong-key mutants are red\n' "$checks"

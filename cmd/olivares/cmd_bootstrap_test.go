@@ -200,12 +200,47 @@ func TestUsersCreateReadsThePasswordFromStdinAndNamesTheNextStep(t *testing.T) {
 	if body["email"] != "ops@example.com" || body["display_name"] != "Ops" {
 		t.Fatalf("create body = %#v", body)
 	}
-	if !strings.Contains(out, "usr-1") || !strings.Contains(out, "members grant") {
+	// A tenant cannot join an existing account without its holder's consent, so
+	// the next step is the first membership at creation, never a later grant.
+	if !strings.Contains(out, "usr-1") || !strings.Contains(out, "--member-of") {
 		t.Fatalf("output does not name the account or the next step:\n%s", out)
+	}
+	if strings.Contains(out, "members grant") {
+		t.Fatalf("output names a later grant, which the consent rule refuses:\n%s", out)
 	}
 	// The password must never be echoed back at the operator.
 	if strings.Contains(out, "correct-horse-battery-staple") {
 		t.Fatalf("stdout echoed the password:\n%s", out)
+	}
+}
+
+func TestUsersCreateGrantsTheFirstMembershipInTheSameRequest(t *testing.T) {
+	prepareBootstrapCLITest(t)
+	var body map[string]any
+	srv := newCountingServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != usersPath {
+			http.NotFound(w, r)
+			return
+		}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"id": "usr-2", "email": "dev@example.com", "status": "active",
+			"is_superadmin": false, "created_at": "2026-08-16T10:00:00Z",
+		})
+	})
+
+	out, _, err := execRootStdin(t, "correct-horse-battery-staple\n",
+		"users", "create", "--server", srv.URL, "--token", "olvk_caller",
+		"--email", "dev@example.com", "--password-file", "-", "--member-of", "tenant-a", "--role", "editor")
+	if err != nil {
+		t.Fatalf("users create --member-of: %v", err)
+	}
+	if body["tenant"] != "tenant-a" || body["role"] != "editor" {
+		t.Fatalf("create body = %#v, want the first membership in tenant-a as editor", body)
+	}
+	if !strings.Contains(out, "usr-2") || !strings.Contains(out, "member of tenant tenant-a") {
+		t.Fatalf("output does not name the account and its membership:\n%s", out)
 	}
 }
 

@@ -95,6 +95,8 @@ func (s *Source) handleWebhook(sink sdk.Sink) http.HandlerFunc {
 			s.handlePush(r, w, body, sink)
 		case "pull_request":
 			s.handlePullRequest(r, w, body, sink)
+		case "check_run", "check_suite", "workflow_run":
+			s.handleGitHubEvidence(r, w, event, body, sink)
 		default:
 			// Accept and ignore unhandled event types.
 			w.WriteHeader(http.StatusOK)

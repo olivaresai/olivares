@@ -381,6 +381,7 @@ func TestWorkMutableNoDeleteRowsSurviveDropTenantAcrossBackends(t *testing.T) {
 			}
 			defer st.Close() //nolint:errcheck
 			m.UseData(api.NewModuleData(st))
+			bindStoreStanding(m, st)
 
 			var tenant model.TenantID
 			if err := st.System(ctx, func(sys store.SystemScope) error {
@@ -930,6 +931,7 @@ func TestWorkSchemaPostgresRLSFunctionallyDenies(t *testing.T) {
 		t.Fatalf("provision tenants: %v", err)
 	}
 	m.UseData(api.NewModuleData(st))
+	bindStoreStanding(m, st)
 
 	var workspaceA model.ID
 	if err := m.data.View(ctx, tenantA, func(sc store.Scope) error {

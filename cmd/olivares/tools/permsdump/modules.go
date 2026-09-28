@@ -16,6 +16,7 @@ import (
 	"github.com/olivaresai/olivares/modules/evals"
 	"github.com/olivaresai/olivares/modules/eventing"
 	"github.com/olivaresai/olivares/modules/finops"
+	"github.com/olivaresai/olivares/modules/gitpublish"
 	"github.com/olivaresai/olivares/modules/governance"
 	"github.com/olivaresai/olivares/modules/health"
 	"github.com/olivaresai/olivares/modules/inferenceproxy"
@@ -69,6 +70,7 @@ func allModules() []api.Module {
 		evals.New(),
 		evt,
 		finops.New(),
+		gitpublish.New(gitpublish.Options{}),
 		governance.New(),
 		// The authoring consoles: route-only modules that reuse governance's
 		// tables and mount their own hyphenated REST namespaces. They are separate

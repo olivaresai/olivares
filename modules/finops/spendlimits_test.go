@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/olivaresai/olivares/core/api"
+	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 )
@@ -102,6 +103,7 @@ func TestSpendLimitValidation(t *testing.T) {
 
 func TestSpendLimitEffectiveResolutionAndPeriods(t *testing.T) {
 	m, st, tenant, _ := newFin(t)
+	m.UseStanding(auth.NewAuthenticator(st, nil))
 	now := time.Date(2026, 7, 11, 12, 0, 0, 0, time.UTC)
 	m.clock = spendLimitClock{at: now}
 	u1 := createCanonicalUser(t, st, "spend limit group member one").ID

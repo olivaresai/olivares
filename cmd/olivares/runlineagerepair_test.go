@@ -433,12 +433,10 @@ func TestBootBindsManagedStopAndSchedulesRunLineageRepair(t *testing.T) {
 	if err != nil {
 		t.Fatalf("admin authenticate: %v", err)
 	}
-	user, err := eng.authr.CreateUser(ctx, admin, auth.NewUser{Email: "editor@w3.test", Password: "editorpassword1"})
-	if err != nil {
+	if _, err := eng.authr.CreateUser(ctx, admin, auth.NewUser{
+		Email: "editor@w3.test", Password: "editorpassword1", Tenant: tenant, Role: auth.RoleEditor,
+	}); err != nil {
 		t.Fatalf("create user: %v", err)
-	}
-	if _, err := eng.authr.GrantMembership(ctx, admin, user.ID, tenant, auth.RoleEditor, ""); err != nil {
-		t.Fatalf("grant editor: %v", err)
 	}
 	token, _, err := eng.authr.Login(ctx, "editor@w3.test", "editorpassword1", "127.0.0.1")
 	if err != nil {

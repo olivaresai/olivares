@@ -223,30 +223,30 @@ func (m *Module) registerProviderProfileSchema(reg store.ExtensionRegistry) erro
 		Kind:  providerProfileKind,
 		Table: providerProfileTable,
 		Fields: []model.FieldSpec{
-			{Name: colPPRef, Kind: model.KindText},
-			{Name: colPPDriver, Kind: model.KindText},
-			{Name: colPPEnvRef, Kind: model.KindText, Indexed: true},
-			{Name: colPPConfigHome, Kind: model.KindText},
-			{Name: colPPUserHome, Kind: model.KindText},
-			{Name: colPPDisplayName, Kind: model.KindText},
-			{Name: colPPState, Kind: model.KindText, Indexed: true},
-			{Name: colPPHomeSlot, Kind: model.KindText},
+			{Name: colPPRef, Kind: model.KindText, Principal: pdeclNoneProfileRef},
+			{Name: colPPDriver, Kind: model.KindText, Principal: pdeclNoneDriverKey},
+			{Name: colPPEnvRef, Kind: model.KindText, Indexed: true, Principal: pdeclNoneEnvRef},
+			{Name: colPPConfigHome, Kind: model.KindText, Principal: pdeclNoneHomePath},
+			{Name: colPPUserHome, Kind: model.KindText, Principal: pdeclNoneHomePath},
+			{Name: colPPDisplayName, Kind: model.KindText, Principal: model.None("an operator-chosen profile name, bounded and shown only: provider_profile.go:367, provider_profile.go:438")},
+			{Name: colPPState, Kind: model.KindText, Indexed: true, Principal: model.None("a profile lifecycle state, a closed set: provider_profile.go:72-78, provider_profile.go:719")},
+			{Name: colPPHomeSlot, Kind: model.KindText, Principal: model.None("the uniqueness key of an active home built from environment, driver and config home, or a retired marker: provider_profile.go:381-385")},
 			{Name: colPPRetiredAt, Kind: model.KindTimestamp, Nullable: true},
 			// Nullable: an existing profile gains the column on the next boot and reads
 			// as "no authorized source", which is the deny-closed value.
-			{Name: colPPAuthSource, Kind: model.KindText, Nullable: true},
+			{Name: colPPAuthSource, Kind: model.KindText, Nullable: true, Principal: pdeclNoneAuthSource},
 			// Nullable for the same reason and with the same reading: an existing
 			// profile gains the column and reads as "no provider record named", which
 			// is exactly today's behaviour (the host environment decides). It is NOT
 			// part of the home slot: binding a record is an authorization, not an
 			// identity, so it does not create another profile id.
-			{Name: colPPProviderRecordRef, Kind: model.KindText, Nullable: true},
+			{Name: colPPProviderRecordRef, Kind: model.KindText, Nullable: true, Principal: pdeclNoneProviderRecordRef},
 			// The declared SESSION POLICY (provider_profile_policy.go). Nullable is the
 			// contract, not hygiene: NULL means the operator declared nothing, which is
 			// deny-closed — the child is launched with no built-in tools. A profile that
 			// predates the columns therefore reads as undeclared, which is what it is.
-			{Name: colPPSessionTools, Kind: model.KindText, Nullable: true},
-			{Name: colPPSessionPermissionMode, Kind: model.KindText, Nullable: true},
+			{Name: colPPSessionTools, Kind: model.KindText, Nullable: true, Principal: pdeclProfileSessionTools},
+			{Name: colPPSessionPermissionMode, Kind: model.KindText, Nullable: true, Principal: pdeclNonePermissionMode},
 		},
 		Indexes: []model.IndexSpec{
 			{Name: "sessions_provider_profile_ref_uniq", Columns: []string{model.ColTenantID, colPPRef}, Unique: true},
@@ -935,3 +935,13 @@ func (m *Module) revalidateStoredProfile(ctx context.Context, tenant model.Tenan
 	// one it was born with.
 	return snap, profileSessionPolicy(prof), err
 }
+
+// Principal declarations of the provider-profile descriptor. A profile is
+// storage identity on an execution environment; no column names an account.
+var (
+	// pdeclProfileSessionTools is the declared tool surface, stored as a JSON
+	// array of strings and decoded back (provider_profile_policy.go:138-150).
+	pdeclProfileSessionTools = model.Nested([]string{}, model.ClassEvidence,
+		model.Leaf("[]", model.None("a declared session tool name: provider_profile_policy.go:138-150")),
+	)
+)

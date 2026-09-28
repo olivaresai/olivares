@@ -14,7 +14,8 @@
   },
   "tabs": {
     "catalog": "Katalog",
-    "topology": "Topologie"
+    "topology": "Topologie",
+    "coverage": "Erfassungsabdeckung"
   },
   "facets": {
     "allKinds": "Alle Arten",
@@ -121,6 +122,84 @@
       "title": "Noch keine Bestandsentitäten erkannt",
       "description": "Entitäten erscheinen, sobald Konnektorbeobachtungen Agenten, Sitzungen, Identitäten, MCP-Fähigkeiten, Modelle, Anbieter oder Ressourcen melden.",
       "action": "Fähigkeiten öffnen"
+    }
+  },
+  "coverage": {
+    "title": "Erfassungsabdeckung",
+    "intro": "Liest die Erfassungsnachweise einer geöffneten Quellenregistrierung. Geben Sie die Selektoren der Registrierung ein, die die Laufzeit derzeit geöffnet hat: Ein älterer Selektor liest diese historische Auswahl, nicht den aktuellen Bestand.",
+    "form": {
+      "legend": "Selektoren der Quellenregistrierung",
+      "sourceId": "Quellen-ID",
+      "sourceIdHint": "Die dauerhafte ID der Zeile im Quellenbestand, nicht ihr Name.",
+      "sourceRevision": "Quellenrevision",
+      "sourceRevisionHint": "Die Bestandsrevision, die die Laufzeit für diese Registrierung geöffnet hat.",
+      "environmentRef": "Umgebungsreferenz",
+      "environmentRefHint": "Die Ausführungsumgebung, die die Registrierung angewendet hat.",
+      "submit": "Abdeckung lesen",
+      "required": "Geben Sie einen Wert ein.",
+      "tooLong": "Verwenden Sie höchstens {{max}} Byte.",
+      "revisionInvalid": "Geben Sie eine positive ganze Zahl ein."
+    },
+    "idle": "Geben Sie eine Quellen-ID, eine Quellenrevision und eine Umgebungsreferenz ein, um die Erfassungsabdeckung zu lesen. Gelesen wird erst, wenn alle drei gültig sind.",
+    "loading": "Erfassungsabdeckung wird gelesen",
+    "refresh": "Erneut lesen",
+    "scopeNote": "Die Abdeckung beschreibt diese Registrierung und ihre Abfrage über das beobachtete Intervall. Sie ist weder ein globaler Snapshot des Bestands noch eine Autorisierung des Anbieters. Ein leerer Abschluss löscht keine Ressourcen.",
+    "hasMore": "Die Antwort meldet weitere Seiten. Das ist ein Fortsetzungskennzeichen der Liste, kein Nachweis für eine vollständige Erfassung. Diese Auswahl hat höchstens einen Kopf.",
+    "unknownNote": "Unbekannt bedeutet, dass die gespeicherten Nachweise die Abdeckung für diese Auswahl nicht belegen. Eine Auswahl ohne Treffer gilt als unbekannt, niemals als keine und niemals als geerbte Vollständigkeit.",
+    "values": {
+      "complete": "Vollständig",
+      "partial": "Teilweise",
+      "unavailable": "Nicht verfügbar",
+      "unsupported": "Nicht unterstützt",
+      "unknown": "Unbekannt"
+    },
+    "projections": {
+      "pending": "Ausstehend",
+      "committed": "Festgeschrieben",
+      "failed": "Fehlgeschlagen"
+    },
+    "current": {
+      "title": "Aktuelle Erfassungsnachweise",
+      "coverage": "Abdeckung",
+      "reason": "Grund",
+      "reasonNone": "Kein Grund erfasst",
+      "projection": "Projektion",
+      "projectionHint": "Eingereihte Mitglieder bleiben ausstehend, bis ihr Beleg festgeschrieben ist. Die Aufzählung allein qualifiziert sie nicht.",
+      "runId": "Lauf-ID",
+      "runOrder": "Laufreihenfolge",
+      "admitted": "Zugelassene Mitglieder",
+      "committed": "Festgeschriebene Mitglieder",
+      "expected": "Erwartete Mitglieder",
+      "expectedOpen": "Wird erst erfasst, wenn der Host den Lauf schließt.",
+      "rejection": "Ablehnungsgrund",
+      "noRun": "Für diese Auswahl ist kein Erfassungslauf erfasst. Unbekannte Abdeckung ist nicht null: Sie sagt nicht, ob die Quelle Ressourcen enthält.",
+      "emptyComplete": "Dieser Lauf wurde ohne Mitglieder abgeschlossen. Ein leerer Abschluss löscht keine Ressourcen aus dem Katalog."
+    },
+    "lastQualified": {
+      "title": "Letzter qualifizierter Erfolg",
+      "note": "Historische Qualifizierung für genau diese Registrierung und diesen Umfang. Sie ist von der aktuellen Aufzählung getrennt, und spätere Ablehnungsnachweise schreiben sie nicht um.",
+      "absent": "Für diese Registrierung und diesen Umfang wird kein qualifizierter Erfolg gemeldet. Er fehlt, bis ein Lauf sich qualifiziert, und sein Fehlen sagt nichts über den aktuellen Lauf aus."
+    },
+    "fields": {
+      "sourceId": "Quellen-ID",
+      "sourceRevision": "Quellenrevision",
+      "environmentRef": "Umgebungsreferenz",
+      "scopeContract": "Umfangsvertrag",
+      "family": "Familie",
+      "requestedScope": "Fingerabdruck des angeforderten Umfangs",
+      "fulfilledScope": "Fingerabdruck des erfüllten Umfangs",
+      "hostStarted": "Start des Host-Laufs",
+      "hostFinished": "Abschluss des Host-Laufs",
+      "producerStarted": "Beginn der Aufzählung durch den Produzenten",
+      "producerFinished": "Ende der Aufzählung durch den Produzenten",
+      "qualified": "Qualifiziert am",
+      "notRecorded": "Nicht erfasst"
+    },
+    "error": {
+      "invalidTitle": "Auswahl abgelehnt",
+      "invalid": "Die Engine hat diese Auswahl abgelehnt. Quellen-ID und Umgebungsreferenz dürfen nicht leer sein und höchstens 128 Byte umfassen, und die Quellenrevision muss eine positive ganze Zahl sein.",
+      "suspendedTitle": "Mandantendienst ausgesetzt",
+      "suspended": "Der Dienst dieses Mandanten ist ausgesetzt oder nicht in Betrieb, daher kann die Erfassungsabdeckung nicht gelesen werden."
     }
   }
 }

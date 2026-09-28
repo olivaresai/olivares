@@ -102,6 +102,15 @@ func TestBudgetEvidenceTargetDurableBinding(t *testing.T) {
 	}
 }
 
+// otherPolicyKind is the kind the different_kind case gives a budget policy: a
+// policy that is not a budget. The policy writer refuses a kind no linked module
+// registered, so the fixture registers it with a spec that names no principal.
+const otherPolicyKind = "guardrail"
+
+func init() {
+	model.MustRegisterPolicyKind(otherPolicyKind, model.None("a fixture policy kind no reader resolves: alert_evidence_target_test.go:108"))
+}
+
 func TestBudgetEvidenceTargetRefusals(t *testing.T) {
 	ctx := context.Background()
 	m, st, tenant, host := newFin(t)
@@ -212,7 +221,7 @@ func TestBudgetEvidenceTargetRefusals(t *testing.T) {
 	})
 	for name, change := range map[string]func(*model.Policy){
 		"disabled":          func(p *model.Policy) { p.Enabled = false },
-		"different_kind":    func(p *model.Policy) { p.Kind = "guardrail" },
+		"different_kind":    func(p *model.Policy) { p.Kind = otherPolicyKind },
 		"action_changed":    func(p *model.Policy) { p.Spec["action"] = "alert" },
 		"dimension_changed": func(p *model.Policy) { p.Spec["dimension"] = "workspace" },
 		"limit_invalid":     func(p *model.Policy) { p.Spec["limit_micro_usd"] = nil },

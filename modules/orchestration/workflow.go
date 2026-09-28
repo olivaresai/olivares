@@ -12,6 +12,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/olivaresai/olivares/core/api"
+	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 )
@@ -282,10 +283,18 @@ func (m *Module) handleCreateWorkflow(w http.ResponseWriter, r *http.Request, mc
 		enabled = *in.Enabled
 	}
 
+	// A step naming a work participant is a fenced write: the named accounts'
+	// standing is read first and pinned before anything else in the transaction.
+	subjects, err := stepSubjects(steps)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
 	var dto workflowDetailDTO
 	var refErr *graphError
 	overCap := false
-	err := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
+	mutate := func(fn func(store.Scope) error) error { return mc.Data.Mutate(r.Context(), fn) }
+	err = auth.FencedWrite(r.Context(), mc.Standing, mc.Tenant, subjects, auth.FenceDirectory, mutate, func(sc store.Scope, _ bool) error {
 		repo, err := sc.Ext(workflowKind)
 		if err != nil {
 			return err
@@ -328,6 +337,9 @@ func (m *Module) handleCreateWorkflow(w http.ResponseWriter, r *http.Request, mc
 		return auditEvent(r.Context(), sc, mc, "orchestration.workflow.create", workflowKind, id,
 			map[string]any{"name": dto.Name, "steps": len(steps), "enabled": enabled})
 	})
+	if writeFenceRefusal(w, err) {
+		return
+	}
 	if err != nil {
 		writeStoreError(w, err)
 		return
@@ -491,10 +503,16 @@ func (m *Module) handlePutWorkflowSteps(w http.ResponseWriter, r *http.Request, 
 		writeGraphError(w, ge)
 		return
 	}
+	subjects, err := stepSubjects(steps)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
 	var dto workflowDetailDTO
 	var refErr *graphError
 	found := false
-	err := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
+	mutate := func(fn func(store.Scope) error) error { return mc.Data.Mutate(r.Context(), fn) }
+	err = auth.FencedWrite(r.Context(), mc.Standing, mc.Tenant, subjects, auth.FenceDirectory, mutate, func(sc store.Scope, _ bool) error {
 		rec, _, ok, err := getWorkflow(r.Context(), sc, id)
 		if err != nil || !ok {
 			return err
@@ -528,6 +546,9 @@ func (m *Module) handlePutWorkflowSteps(w http.ResponseWriter, r *http.Request, 
 		return auditEvent(r.Context(), sc, mc, "orchestration.workflow.steps", workflowKind, id,
 			map[string]any{"steps": len(steps), "plan_hash": dto.PlanHash})
 	})
+	if writeFenceRefusal(w, err) {
+		return
+	}
 	if err != nil {
 		writeStoreError(w, err)
 		return
@@ -600,10 +621,18 @@ func (m *Module) handleRestoreWorkflow(w http.ResponseWriter, r *http.Request, m
 		writeJSON(w, http.StatusBadRequest, errorBody("revision_id is required"))
 		return
 	}
+	// The revision is append-only, so the accounts its steps name are read before
+	// the transaction and pinned first inside it; the transaction re-reads it.
+	subjects, err := m.restoreSubjects(r.Context(), mc, id, in.RevisionID)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
 	var dto workflowDetailDTO
 	var ge *graphError
 	found := false
-	err := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
+	mutate := func(fn func(store.Scope) error) error { return mc.Data.Mutate(r.Context(), fn) }
+	err = auth.FencedWrite(r.Context(), mc.Standing, mc.Tenant, subjects, auth.FenceDirectory, mutate, func(sc store.Scope, _ bool) error {
 		rec, _, ok, err := getWorkflow(r.Context(), sc, id)
 		if err != nil || !ok {
 			return err
@@ -667,6 +696,9 @@ func (m *Module) handleRestoreWorkflow(w http.ResponseWriter, r *http.Request, m
 		return auditEvent(r.Context(), sc, mc, "orchestration.workflow.restore", workflowKind, id,
 			map[string]any{"name": dto.Name, "revision": in.RevisionID, "steps": len(steps)})
 	})
+	if writeFenceRefusal(w, err) {
+		return
+	}
 	if err != nil {
 		writeStoreError(w, err)
 		return
@@ -680,4 +712,39 @@ func (m *Module) handleRestoreWorkflow(w http.ResponseWriter, r *http.Request, m
 		return
 	}
 	writeJSON(w, http.StatusOK, dto)
+}
+
+// restoreSubjects returns the accounts the steps of workflow id's revision
+// revisionID name, as the restore would validate and write them. A revision that
+// is missing, belongs to another workflow or does not validate names none: the
+// restore's own transaction answers it and writes nothing.
+func (m *Module) restoreSubjects(ctx context.Context, mc api.ModuleContext, id model.ID, revisionID string) ([]model.ID, error) {
+	var subjects []model.ID
+	err := mc.Data.View(ctx, func(sc store.Scope) error {
+		revRepo, err := sc.Ext(wfRevisionKind)
+		if err != nil {
+			return err
+		}
+		revRec, err := revRepo.Get(ctx, model.ID(revisionID))
+		if err != nil {
+			if isNotFound(err) {
+				return nil
+			}
+			return err
+		}
+		if revRec.String(colWfRevSubject) != id.String() {
+			return nil
+		}
+		var snap workflowDetailDTO
+		if err := json.Unmarshal([]byte(revRec.String(colWfRevSnapshot)), &snap); err != nil {
+			return err
+		}
+		steps, ge := validateGraph(snap.Steps, m.maxWorkflowSteps)
+		if ge != nil {
+			return nil
+		}
+		subjects, err = stepSubjects(steps)
+		return err
+	})
+	return subjects, err
 }

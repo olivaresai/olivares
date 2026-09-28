@@ -808,6 +808,7 @@ func (m *Module) preflightDirectNoticeReaderIdentity(
 	if err := ValidateCommunicationPrincipalForScope(principal, scope); err != nil {
 		return directNoticeReaderIdentityPreflight{}, err
 	}
+	ports := m.communicationEvidencePorts(ctx, scope.TenantID, false)
 	current := func(at time.Time) bool {
 		return coreCurrent == nil || coreCurrent(at)
 	}
@@ -817,7 +818,7 @@ func (m *Module) preflightDirectNoticeReaderIdentity(
 			ErrCommunicationEvidenceUnknown, "direct notice core expired before resolution",
 		)
 	}
-	resolution, err := m.communicationDirectoryResolver.ResolvePrincipal(ctx, scope, principal)
+	resolution, err := ports.directory.ResolvePrincipal(ctx, scope, principal)
 	if err != nil || ValidatePrincipalResolution(resolution) != nil {
 		return directNoticeReaderIdentityPreflight{}, communicationError(
 			ErrCommunicationEvidenceUnknown, "direct notice principal resolution is unavailable",
@@ -854,7 +855,7 @@ func (m *Module) preflightDirectNoticeReaderIdentity(
 			"direct notice principal did not resolve to its authenticated identity",
 		)
 	}
-	closure, err := m.communicationGrantClosure.ResolveChannelGrantSubjects(ctx, scope, principal)
+	closure, err := ports.closure.ResolveChannelGrantSubjects(ctx, scope, principal)
 	if err != nil {
 		return directNoticeReaderIdentityPreflight{}, communicationError(
 			ErrCommunicationEvidenceUnknown, "direct notice ChannelGrant closure is unavailable",

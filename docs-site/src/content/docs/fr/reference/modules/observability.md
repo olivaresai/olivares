@@ -8,7 +8,7 @@ description: >-
   entité et ne persiste rien.
 ---
 
-Observabilité (`modules/observability`) est l'un des 30 modules — comme
+Observabilité (`modules/observability`) est l'un des 31 modules — comme
 [live-ingest](/fr/reference/modules/live-ingest/), il remplit un rôle
 architectural plutôt qu'il ne comble une fonctionnalité. C'est le **modèle de
 lecture du moteur sur lui-même** : trois surfaces en lecture seule sous

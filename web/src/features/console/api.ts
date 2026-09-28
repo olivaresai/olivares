@@ -44,11 +44,12 @@ export interface OnboardedUser {
   created_at: string
 }
 
+/** An invitation as its creator sees it: the link is mailed to the invitee only,
+ * so no token or link ever reaches the console. */
 export interface InviteHandle {
   id: string
-  token: string
-  accept_url: string
   expires_at: string
+  delivery: 'sent' | 'failed'
 }
 
 export interface OnboardResult {
@@ -56,6 +57,20 @@ export interface OnboardResult {
   created: boolean
   membership: MembershipRef
   invite?: InviteHandle
+}
+
+/** The answer (202) for an address whose account already exists and is not a
+ * member here: nothing was written, and it joins only if its holder consents. */
+export interface ConsentRequired {
+  status: 'consent_required'
+}
+
+export type OnboardResponse = OnboardResult | ConsentRequired
+
+export function isConsentRequired(
+  r: OnboardResponse | undefined,
+): r is ConsentRequired {
+  return !!r && 'status' in r && r.status === 'consent_required'
 }
 
 export interface OnboardInput {
@@ -1165,13 +1180,16 @@ function bindingDeleteResult(
 export const consoleApi = {
   // People: onboarding + invites.
   onboard: (input: OnboardInput) =>
-    http.post<OnboardResult>('/v1/onboard', input),
+    http.post<OnboardResponse>('/v1/onboard', input),
   listInvites: () =>
     http.get<ListResponse<InviteDTO>>('/v1/invites', {
       query: { limit: EVIDENCE_PAGE },
     }),
   revokeInvite: (id: string) =>
     http.delete<void>(`/v1/invites/${encodeURIComponent(id)}`),
+  /** Mails a pending invitation again, with a new secret; the old link stops working. */
+  resendInvite: (id: string) =>
+    http.post<InviteHandle>(`/v1/invites/${encodeURIComponent(id)}/resend`),
   listMembers: () =>
     http.get<ListResponse<RosterMemberDTO>>('/v1/members', {
       query: { limit: EVIDENCE_PAGE },

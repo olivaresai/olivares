@@ -93,9 +93,9 @@
     "selectPrompt": "Selecciona una traza para ver su cascada de tramos.",
     "selectPromptHint": "Elige una traza de la lista para ver todos sus tramos, con sus tiempos y sus errores.",
     "exportBtn": "Exportar OTLP",
-    "exportTitle": "Descargar JSON compatible con OTLP para Jaeger / Tempo / Datadog",
+    "exportTitle": "Descargar esta traza como OTLP/JSON. No probado con un backend con nombre.",
     "legend": "Leyenda de actores",
-    "liveNote": "Modelo de lectura por correlación con el libro mayor: las filas se derivan de los identificadores W3C estampados en los eventos del libro mayor de auditoría (ventana de recorrido: los últimos 20.000 eventos). Las barras son ventanas de EVENTOS DEL LIBRO MAYOR agrupadas por identificador de tramo del motor: el motor no almacena tramos OTel; los tramos completos viven en el colector OTLP del operador.",
+    "liveNote": "Modelo de lectura por correlación con el libro mayor: las filas se derivan de los identificadores W3C estampados en los eventos del libro mayor de auditoría (ventana de recorrido: los últimos 20.000 eventos). Las barras son ventanas de EVENTOS DEL LIBRO MAYOR agrupadas por identificador de tramo del motor: el motor no almacena tramos OTel; los tramos exportados, sujetos a la proporción de muestreo y sin un recuento de pérdidas, están en el colector OTLP del operador.",
     "columns": {
       "trace": "Traza",
       "started": "Inicio",

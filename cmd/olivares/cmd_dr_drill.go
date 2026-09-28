@@ -34,12 +34,11 @@ func drDrillCmd() *cobra.Command {
 	var keepArtifacts bool
 	cmd := &cobra.Command{
 		Use:   "drill",
-		Short: "Full DR round-trip drill (backup→destroy→restore→verify) with a measured RTO",
-		Long: "drill proves a backup is actually restorable, end to end, in a disposable\n" +
-			"scratch dir: it seeds an ephemeral signed ledger, backs it up, destroys the\n" +
-			"estate, restores into a clean dir and re-verifies the full chain — then prints\n" +
-			"the measured RTO (restore + boot + verify). It never touches a real data dir,\n" +
-			"so it is CI-safe (docs/DR-RUNBOOK.md §8).",
+		Short: "Drill synthetic-ledger continuity and print measured RTO",
+		Long: "drill checks backup, restore and ledger continuity on a synthetic signed\n" +
+			"ledger in a scratch directory, then prints the measured RTO (restore + boot +\n" +
+			"verify). It does not check grants, key custody or effects after the restore\n" +
+			"point, and it never touches a real data directory (docs/DR-RUNBOOK.md §8).",
 		Example: "  olivares dr drill --events 100",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {

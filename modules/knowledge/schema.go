@@ -279,6 +279,39 @@ const (
 	colDetails     = "details"
 )
 
+// Principal declarations shared by several columns below. Each cited line holds
+// for every column that uses the declaration.
+var (
+	// pdeclActorEvidence is the acting principal's audit actor string ("user:<id>"
+	// or "token:<id>"), recorded as provenance and only rendered.
+	pdeclActorEvidence = model.Ref(model.EncodeUserRef, model.ClassEvidence)
+	pdeclNoneDigest    = model.None("a hex SHA-256 digest produced by hashHex, only compared or rendered: helpers.go:187-190")
+	pdeclNoneClassif   = model.None("a classification label from a closed ladder; the only comparer fails closed on any other value: vector.go:33-35, vector.go:51-61")
+	pdeclNoneRegion    = model.None("a data-residency region label; readers compare it with a region pin or render it: retrieval.go:348, query.go:193, documents.go:45, lineage.go:49")
+	pdeclNoneEmbedder  = model.None("the wired embedder's model ref, recorded and rendered only: kb.go:238, ingest.go:647, kb.go:72")
+	pdeclNoneKBRef     = model.None("a knowledge base row id, used only as a lookup filter: documents.go:59, retrieval.go:187, discovery.go:223, external_labels.go:28, sync.go:140")
+	pdeclNoneDocRef    = model.None("a knowledge document row id, used only as a lookup key: ingest.go:634, retrieval.go:199, external_labels.go:44")
+	pdeclNoneProduct   = model.None("a data product row id, used only as a lookup filter: dataproduct.go:756, dataproduct.go:952")
+	pdeclNoneSource    = model.None("a content source kind label: connectors/contentsource/contentsource.go:17-38, ingest.go:601")
+	pdeclNoneBasis     = model.None("a scan basis from a closed set: discovery.go:42-45")
+	pdeclNoneDetector  = model.None("the classifier catalog version, only rendered: ports.go:169-171, discovery.go:572")
+	pdeclNoneSensClass = model.None("a sensitivity class id from the classifier catalog, compared only with DLP rule classes: ports.go:140-151, dlp.go:67-81")
+	// pdeclACL is a document permission list. An entry is compared only with the
+	// collection refs the retrieval guard resolves for the reading identity, never
+	// resolved to an account.
+	pdeclACL = model.Nested([]string{}, model.ClassEvidence,
+		model.Leaf("[]", model.None("a permission reference, matched only against the reader's resolved group refs: vector.go:63-80, retrieval.go:195, ingest.go:421-424, cmd/olivares/knowledgeguard.go:195-200")))
+	// pdeclSensClasses is a list of sensitivity class ids.
+	pdeclSensClasses = model.Nested([]string{}, model.ClassEvidence, model.Leaf("[]", pdeclNoneSensClass))
+	// pdeclChunkProvenance is one retrieved chunk's provenance on a lineage row.
+	pdeclChunkProvenance = model.None("a chunk provenance field (row ids and source labels), recorded and rendered only: query.go:304-307, lineage.go:43-44")
+	// The governed memory columns shared by the agent-global and the scoped tables.
+	pdeclNoneMemAgent   = model.None("a caller-declared agent namespace ref, matched only for equality and used as the agent hold subject: memory.go:178, memory.go:306, memory.go:579")
+	pdeclNoneMemKey     = model.None("a caller-chosen memory key, matched only for upsert and rendered: memory.go:178, memory.go:105")
+	pdeclNoneMemContent = model.None("redacted memory content, integrity-checked and returned only: memory.go:161, memory_integrity.go:189-190, memory.go:105")
+	pdeclNoneMemRegion  = model.None("a data-residency region label, defaulted and rendered only: memory.go:696-699, memory.go:106")
+)
+
 // RegisterSchema declares the module's owned entities. It satisfies the
 // engine-side runtime.SchemaProvider seam (structural — no runtime import) and is
 // called once, at store construction, before any Scope exists (S02 §7 /):
@@ -300,15 +333,15 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 			Kind:  baseKind,
 			Table: baseTable,
 			Fields: []model.FieldSpec{
-				{Name: colName, Kind: model.KindText, Indexed: true},
-				{Name: colClassif, Kind: model.KindText},
-				{Name: colResidency, Kind: model.KindText, Indexed: true},
-				{Name: colEmbedPolicy, Kind: model.KindText},
-				{Name: colEmbedModel, Kind: model.KindText, Nullable: true},
+				{Name: colName, Kind: model.KindText, Indexed: true, Principal: model.None("a knowledge base display name, unique per tenant, only matched and rendered: kb.go:231, kb.go:70")},
+				{Name: colClassif, Kind: model.KindText, Principal: pdeclNoneClassif},
+				{Name: colResidency, Kind: model.KindText, Indexed: true, Principal: pdeclNoneRegion},
+				{Name: colEmbedPolicy, Kind: model.KindText, Principal: model.None("an embed policy from a closed set: kb.go:80-96")},
+				{Name: colEmbedModel, Kind: model.KindText, Nullable: true, Principal: pdeclNoneEmbedder},
 				{Name: colDim, Kind: model.KindInt},
-				{Name: colDefaultACL, Kind: model.KindJSON, Nullable: true},
-				{Name: colOwnerRef, Kind: model.KindText},
-				{Name: colStatus, Kind: model.KindText, Indexed: true},
+				{Name: colDefaultACL, Kind: model.KindJSON, Nullable: true, Principal: pdeclACL},
+				{Name: colOwnerRef, Kind: model.KindText, Principal: pdeclActorEvidence},
+				{Name: colStatus, Kind: model.KindText, Indexed: true, Principal: model.None("a knowledge base status from a closed set: kb.go:36-39, kb.go:191")},
 				{Name: colDocCount, Kind: model.KindInt},
 				{Name: colChunkCount, Kind: model.KindInt},
 			},
@@ -320,21 +353,21 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 			Kind:  documentKind,
 			Table: documentTable,
 			Fields: []model.FieldSpec{
-				{Name: colKBRef, Kind: model.KindUUID, Indexed: true},
-				{Name: colSourceKind, Kind: model.KindText, Indexed: true},
-				{Name: colSourceRef, Kind: model.KindText, Nullable: true},
-				{Name: colSourceMode, Kind: model.KindText, Nullable: true, Indexed: true},
-				{Name: colSourceDocID, Kind: model.KindText, Indexed: true},
-				{Name: colTitle, Kind: model.KindText},
-				{Name: colContentType, Kind: model.KindText},
-				{Name: colClassif, Kind: model.KindText, Indexed: true},
-				{Name: colResidency, Kind: model.KindText},
-				{Name: colACL, Kind: model.KindJSON, Nullable: true},
-				{Name: colContentHash, Kind: model.KindText},
+				{Name: colKBRef, Kind: model.KindUUID, Indexed: true, Principal: pdeclNoneKBRef},
+				{Name: colSourceKind, Kind: model.KindText, Indexed: true, Principal: pdeclNoneSource},
+				{Name: colSourceRef, Kind: model.KindText, Nullable: true, Principal: model.None("the legacy source reference, written as the source kind: ingest.go:601")},
+				{Name: colSourceMode, Kind: model.KindText, Nullable: true, Indexed: true, Principal: model.None("a source mode from a closed set: source_mode.go:14-18, source_mode.go:41-55")},
+				{Name: colSourceDocID, Kind: model.KindText, Indexed: true, Principal: model.None("the source system's natural document id, matched only for upsert and rendered: ingest.go:607-608, documents.go:44")},
+				{Name: colTitle, Kind: model.KindText, Principal: model.None("a source document title, only rendered: documents.go:44, query.go:301")},
+				{Name: colContentType, Kind: model.KindText, Principal: model.None("a MIME-like content type hint, defaulted and rendered only: ingest.go:756-761, documents.go:45")},
+				{Name: colClassif, Kind: model.KindText, Indexed: true, Principal: pdeclNoneClassif},
+				{Name: colResidency, Kind: model.KindText, Principal: pdeclNoneRegion},
+				{Name: colACL, Kind: model.KindJSON, Nullable: true, Principal: pdeclACL},
+				{Name: colContentHash, Kind: model.KindText, Principal: pdeclNoneDigest},
 				{Name: colRedactCount, Kind: model.KindInt},
-				{Name: colSpaceRef, Kind: model.KindText, Nullable: true},
+				{Name: colSpaceRef, Kind: model.KindText, Nullable: true, Principal: model.None("the source container reference, provenance only: connectors/contentsource/contentsource.go:100-103, documents.go:47")},
 				{Name: colDocChunkCnt, Kind: model.KindInt},
-				{Name: colStatus, Kind: model.KindText, Indexed: true},
+				{Name: colStatus, Kind: model.KindText, Indexed: true, Principal: model.None("a document status from a closed set: ingest.go:24-27, ingest.go:596-599")},
 			},
 			Indexes: []model.IndexSpec{{
 				// One document row per (kb, source, source_doc_id): re-ingest upserts in
@@ -348,17 +381,17 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 			Kind:  chunkKind,
 			Table: chunkTable,
 			Fields: []model.FieldSpec{
-				{Name: colKBRef, Kind: model.KindUUID, Indexed: true},
-				{Name: colDocRef, Kind: model.KindUUID, Indexed: true},
+				{Name: colKBRef, Kind: model.KindUUID, Indexed: true, Principal: pdeclNoneKBRef},
+				{Name: colDocRef, Kind: model.KindUUID, Indexed: true, Principal: pdeclNoneDocRef},
 				{Name: colChunkIndex, Kind: model.KindInt},
-				{Name: colText, Kind: model.KindText},
-				{Name: colEmbedding, Kind: model.KindBytes, Nullable: true},
-				{Name: colEmbedModel, Kind: model.KindText, Nullable: true},
+				{Name: colText, Kind: model.KindText, Principal: model.None("redacted document content, only ranked and returned as retrieval text: query.go:286, query.go:300-302")},
+				{Name: colEmbedding, Kind: model.KindBytes, Nullable: true, Principal: model.None("a magic-prefixed float32 vector, only decoded for ranking: vector.go:94-120")},
+				{Name: colEmbedModel, Kind: model.KindText, Nullable: true, Principal: pdeclNoneEmbedder},
 				{Name: colDim, Kind: model.KindInt},
 				{Name: colTokenCount, Kind: model.KindInt},
-				{Name: colContentHash, Kind: model.KindText},
-				{Name: colClassif, Kind: model.KindText, Indexed: true},
-				{Name: colACL, Kind: model.KindJSON, Nullable: true},
+				{Name: colContentHash, Kind: model.KindText, Principal: pdeclNoneDigest},
+				{Name: colClassif, Kind: model.KindText, Indexed: true, Principal: pdeclNoneClassif},
+				{Name: colACL, Kind: model.KindJSON, Nullable: true, Principal: pdeclACL},
 				{Name: colIndexed, Kind: model.KindBool, Indexed: true},
 			},
 			Indexes: []model.IndexSpec{{
@@ -371,11 +404,11 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 			Kind:  promptKind,
 			Table: promptTable,
 			Fields: []model.FieldSpec{
-				{Name: colName, Kind: model.KindText, Indexed: true},
+				{Name: colName, Kind: model.KindText, Indexed: true, Principal: model.None("a prompt name, unique per tenant, only matched and rendered: prompt.go:115, prompt.go:67")},
 				{Name: colCurrentRev, Kind: model.KindInt},
-				{Name: colLatestHash, Kind: model.KindText, Nullable: true},
-				{Name: colOwnerRef, Kind: model.KindText},
-				{Name: colStatus, Kind: model.KindText, Indexed: true},
+				{Name: colLatestHash, Kind: model.KindText, Nullable: true, Principal: pdeclNoneDigest},
+				{Name: colOwnerRef, Kind: model.KindText, Principal: pdeclActorEvidence},
+				{Name: colStatus, Kind: model.KindText, Indexed: true, Principal: model.None("a prompt status from a closed set: prompt.go:21-24, prompt.go:122")},
 			},
 			Indexes: []model.IndexSpec{{
 				Name: "knowledge_prompt_uniq", Columns: []string{model.ColTenantID, colName}, Unique: true,
@@ -386,13 +419,13 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 			Table:      revisionTable,
 			AppendOnly: true, // immutable prompt version history (docs/SECURITY-HARDENING.md)
 			Fields: []model.FieldSpec{
-				{Name: colPromptRef, Kind: model.KindUUID, Indexed: true},
+				{Name: colPromptRef, Kind: model.KindUUID, Indexed: true, Principal: model.None("a prompt row id, written and rendered only: prompt.go:210, prompt.go:74")},
 				{Name: colRevNum, Kind: model.KindInt, Indexed: true},
-				{Name: colLabel, Kind: model.KindText, Nullable: true},
-				{Name: colTemplate, Kind: model.KindText},
-				{Name: colTemplateHash, Kind: model.KindText},
-				{Name: colNote, Kind: model.KindText, Nullable: true},
-				{Name: colCreatedBy, Kind: model.KindText},
+				{Name: colLabel, Kind: model.KindText, Nullable: true, Principal: model.None("an operator revision tag, only rendered: prompt.go:74")},
+				{Name: colTemplate, Kind: model.KindText, Principal: model.None("a redacted prompt template, only returned: prompt.go:89, prompt.go:75")},
+				{Name: colTemplateHash, Kind: model.KindText, Principal: pdeclNoneDigest},
+				{Name: colNote, Kind: model.KindText, Nullable: true, Principal: model.None("operator revision prose, only rendered: prompt.go:75")},
+				{Name: colCreatedBy, Kind: model.KindText, Principal: pdeclActorEvidence},
 			},
 			Indexes: []model.IndexSpec{{
 				Name:    "knowledge_prompt_revision_uniq",
@@ -404,14 +437,14 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 			Kind:  memoryKind,
 			Table: memoryTable,
 			Fields: []model.FieldSpec{
-				{Name: colAgentRef, Kind: model.KindText, Indexed: true},
-				{Name: colMemKey, Kind: model.KindText, Indexed: true},
-				{Name: colContent, Kind: model.KindText},
-				{Name: colContentHash, Kind: model.KindText},
-				{Name: colClassif, Kind: model.KindText},
-				{Name: colResidency, Kind: model.KindText},
+				{Name: colAgentRef, Kind: model.KindText, Indexed: true, Principal: pdeclNoneMemAgent},
+				{Name: colMemKey, Kind: model.KindText, Indexed: true, Principal: pdeclNoneMemKey},
+				{Name: colContent, Kind: model.KindText, Principal: pdeclNoneMemContent},
+				{Name: colContentHash, Kind: model.KindText, Principal: pdeclNoneDigest},
+				{Name: colClassif, Kind: model.KindText, Principal: pdeclNoneClassif},
+				{Name: colResidency, Kind: model.KindText, Principal: pdeclNoneMemRegion},
 				{Name: colExpiresAt, Kind: model.KindTimestamp, Nullable: true, Indexed: true},
-				{Name: colCreatedBy, Kind: model.KindText},
+				{Name: colCreatedBy, Kind: model.KindText, Principal: pdeclActorEvidence},
 			},
 			Indexes: []model.IndexSpec{{
 				Name:    "knowledge_memory_uniq",
@@ -429,16 +462,18 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 			Kind:  scopedMemoryKind,
 			Table: scopedMemoryTable,
 			Fields: []model.FieldSpec{
-				{Name: colAgentRef, Kind: model.KindText, Indexed: true},
-				{Name: colUserRef, Kind: model.KindText, Indexed: true},
-				{Name: colSessionRef, Kind: model.KindText, Indexed: true},
-				{Name: colMemKey, Kind: model.KindText, Indexed: true},
-				{Name: colContent, Kind: model.KindText},
-				{Name: colContentHash, Kind: model.KindText},
-				{Name: colClassif, Kind: model.KindText},
-				{Name: colResidency, Kind: model.KindText},
+				{Name: colAgentRef, Kind: model.KindText, Indexed: true, Principal: pdeclNoneMemAgent},
+				// A caller-declared namespace ref in no fixed encoding; it is the
+				// tenant's own data about a user, so it is evidence.
+				{Name: colUserRef, Kind: model.KindText, Indexed: true, Principal: model.Scan(model.ClassEvidence)},
+				{Name: colSessionRef, Kind: model.KindText, Indexed: true, Principal: model.None("a caller-declared session namespace ref, matched only for equality and used as the session hold subject: memory_integrity.go:124-125, memory.go:583")},
+				{Name: colMemKey, Kind: model.KindText, Indexed: true, Principal: pdeclNoneMemKey},
+				{Name: colContent, Kind: model.KindText, Principal: pdeclNoneMemContent},
+				{Name: colContentHash, Kind: model.KindText, Principal: pdeclNoneDigest},
+				{Name: colClassif, Kind: model.KindText, Principal: pdeclNoneClassif},
+				{Name: colResidency, Kind: model.KindText, Principal: pdeclNoneMemRegion},
 				{Name: colExpiresAt, Kind: model.KindTimestamp, Nullable: true, Indexed: true},
-				{Name: colCreatedBy, Kind: model.KindText},
+				{Name: colCreatedBy, Kind: model.KindText, Principal: pdeclActorEvidence},
 			},
 			Indexes: []model.IndexSpec{{
 				Name:    "knowledge_memory_scoped_uniq",
@@ -450,13 +485,15 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 			Kind:  ctxPolicyKind,
 			Table: ctxPolicyTable,
 			Fields: []model.FieldSpec{
-				{Name: colScopeKind, Kind: model.KindText, Indexed: true},
-				{Name: colScopeRef, Kind: model.KindText, Indexed: true},
+				{Name: colScopeKind, Kind: model.KindText, Indexed: true, Principal: model.None("a policy scope kind from a closed set: context.go:49-52, context.go:103")},
+				// Scope kind "user" makes the ref a bare account id; a matching row
+				// only lowers a ceiling, adds a redaction floor or denies.
+				{Name: colScopeRef, Kind: model.KindText, Indexed: true, Principal: model.KindRef(colScopeKind, model.ClassRestrict)},
 				{Name: colMaxTokens, Kind: model.KindInt},
-				{Name: colStrategy, Kind: model.KindText},
+				{Name: colStrategy, Kind: model.KindText, Principal: model.None("a compaction strategy from a closed set: context.go:118-123")},
 				{Name: colRedactReq, Kind: model.KindBool},
-				{Name: colSpec, Kind: model.KindJSON, Nullable: true},
-				{Name: colEffect, Kind: model.KindText, Nullable: true},
+				{Name: colSpec, Kind: model.KindJSON, Nullable: true, Principal: model.None("a free-form policy document; the resolver reads only excluded_sources as source names and otherwise renders it: context.go:309-310, context.go:444-470, context.go:87-88")},
+				{Name: colEffect, Kind: model.KindText, Nullable: true, Principal: model.None("a policy effect from a closed set: context.go:111-117, context.go:376-381")},
 			},
 			Indexes: []model.IndexSpec{{
 				Name:    "knowledge_context_policy_uniq",
@@ -472,17 +509,25 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 			// events, each its own append-only row. Deduplicating would erase the
 			// audit trail rely on.
 			Fields: []model.FieldSpec{
-				{Name: colKBRef, Kind: model.KindUUID, Indexed: true},
-				{Name: colAgentRef, Kind: model.KindText, Indexed: true},
-				{Name: colSessionRef, Kind: model.KindText, Nullable: true},
-				{Name: colQueryHash, Kind: model.KindText, Indexed: true},
-				{Name: colChunkRefs, Kind: model.KindJSON, Nullable: true},
-				{Name: colSourceRefs, Kind: model.KindJSON, Nullable: true},
-				{Name: colResidency, Kind: model.KindText},
-				{Name: colDecision, Kind: model.KindText, Indexed: true},
-				{Name: colReason, Kind: model.KindText, Nullable: true},
+				{Name: colKBRef, Kind: model.KindUUID, Indexed: true, Principal: pdeclNoneKBRef},
+				{Name: colAgentRef, Kind: model.KindText, Indexed: true, Principal: model.None("the authenticated agent's identity ref, recorded and used only as a filter: query.go:128, retrieval.go:292, lineage.go:65")},
+				{Name: colSessionRef, Kind: model.KindText, Nullable: true, Principal: model.None("a caller-declared session ref, recorded and rendered only: retrieval.go:292, lineage.go:48")},
+				{Name: colQueryHash, Kind: model.KindText, Indexed: true, Principal: pdeclNoneDigest},
+				{Name: colChunkRefs, Kind: model.KindJSON, Nullable: true, Principal: model.Nested([]chunkRef{}, model.ClassEvidence,
+					model.Leaf("[].chunk_id", pdeclChunkProvenance),
+					model.Leaf("[].kb_ref", pdeclChunkProvenance),
+					model.Leaf("[].doc_ref", pdeclChunkProvenance),
+					model.Leaf("[].source_kind", pdeclChunkProvenance),
+					model.Leaf("[].source_ref", pdeclChunkProvenance),
+					model.Leaf("[].source_mode", pdeclChunkProvenance),
+					model.Leaf("[].content_hash", pdeclNoneDigest))},
+				{Name: colSourceRefs, Kind: model.KindJSON, Nullable: true, Principal: model.Nested([]string{}, model.ClassEvidence,
+					model.Leaf("[]", model.None("a knowledge document row id, recorded and rendered only: query.go:308, query.go:367, lineage.go:49")))},
+				{Name: colResidency, Kind: model.KindText, Principal: pdeclNoneRegion},
+				{Name: colDecision, Kind: model.KindText, Indexed: true, Principal: model.None("a retrieval decision from a closed set: retrieval.go:24-25")},
+				{Name: colReason, Kind: model.KindText, Nullable: true, Principal: model.None("a generated decision reason, only rendered: query.go:315-354, lineage.go:50")},
 				{Name: colEgress, Kind: model.KindBool},
-				{Name: colEgressProvider, Kind: model.KindText, Nullable: true},
+				{Name: colEgressProvider, Kind: model.KindText, Nullable: true, Principal: pdeclNoneDigest},
 				{Name: colResultCount, Kind: model.KindInt},
 				{Name: colOccurredAt, Kind: model.KindTimestamp, Indexed: true},
 			},
@@ -491,16 +536,19 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 			Kind:  labelKind,
 			Table: labelTable,
 			Fields: []model.FieldSpec{
-				{Name: colSubjectKind, Kind: model.KindText, Indexed: true},
-				{Name: colSubjectRef, Kind: model.KindText, Indexed: true},
+				{Name: colSubjectKind, Kind: model.KindText, Indexed: true, Principal: model.None("a label subject kind from a closed set: discovery.go:36-39, discovery.go:288-291")},
+				{Name: colSubjectRef, Kind: model.KindText, Indexed: true, Principal: model.None("a document row id or a source document path, matched only for upsert and lookup: discovery.go:37-38, discovery.go:184, discovery.go:233")},
 				// Text (not UUID): empty for a source_document label, which has no KB.
-				{Name: colKBRef, Kind: model.KindText, Nullable: true, Indexed: true},
-				{Name: colClasses, Kind: model.KindJSON, Nullable: true},
-				{Name: colMaxSeverity, Kind: model.KindText, Nullable: true},
-				{Name: colRecommended, Kind: model.KindText, Nullable: true},
-				{Name: colBasis, Kind: model.KindText},
-				{Name: colContentHash, Kind: model.KindText},
-				{Name: colDetectorVer, Kind: model.KindText},
+				{Name: colKBRef, Kind: model.KindText, Nullable: true, Indexed: true, Principal: pdeclNoneKBRef},
+				{Name: colClasses, Kind: model.KindJSON, Nullable: true, Principal: model.Nested([]classHit{}, model.ClassEvidence,
+					model.Leaf("[].class", pdeclNoneSensClass),
+					model.Leaf("[].rule", model.None("a named classifier rule, only rendered: ports.go:140-151, discovery.go:570")),
+					model.Leaf("[].severity", model.None("a rule severity, only ranked: discovery.go:138-147")))},
+				{Name: colMaxSeverity, Kind: model.KindText, Nullable: true, Principal: model.None("a severity label, only ranked and rendered: discovery.go:138-147, discovery.go:570")},
+				{Name: colRecommended, Kind: model.KindText, Nullable: true, Principal: model.None("an advisory classification from a closed set: discovery.go:154-165")},
+				{Name: colBasis, Kind: model.KindText, Principal: pdeclNoneBasis},
+				{Name: colContentHash, Kind: model.KindText, Principal: pdeclNoneDigest},
+				{Name: colDetectorVer, Kind: model.KindText, Principal: pdeclNoneDetector},
 				{Name: colScannedAt, Kind: model.KindTimestamp},
 			},
 			Indexes: []model.IndexSpec{{
@@ -514,15 +562,16 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 			Table:      piiScanTable,
 			AppendOnly: true, // discovery evidence: scans happened, with what catalog
 			Fields: []model.FieldSpec{
-				{Name: colScopeKind, Kind: model.KindText, Indexed: true}, // "kb" | "source"
-				{Name: colScopeRef, Kind: model.KindText, Indexed: true},
-				{Name: colBasis, Kind: model.KindText},
+				{Name: colScopeKind, Kind: model.KindText, Indexed: true, Principal: model.None("a scan scope kind from a closed set: discovery.go:48-51")}, // "kb" | "source"
+				{Name: colScopeRef, Kind: model.KindText, Indexed: true, Principal: model.None("a knowledge base id or a registered source name: discovery.go:462, discovery.go:519")},
+				{Name: colBasis, Kind: model.KindText, Principal: pdeclNoneBasis},
 				{Name: colDocsScanned, Kind: model.KindInt},
 				{Name: colChunksScanned, Kind: model.KindInt},
 				{Name: colDocsWithHits, Kind: model.KindInt},
-				{Name: colHitSummary, Kind: model.KindJSON, Nullable: true},
+				{Name: colHitSummary, Kind: model.KindJSON, Nullable: true, Principal: model.Nested(map[string]int{}, model.ClassEvidence,
+					model.Leaf("{key}", pdeclNoneSensClass))},
 				{Name: colRedactedSeen, Kind: model.KindInt},
-				{Name: colDetectorVer, Kind: model.KindText},
+				{Name: colDetectorVer, Kind: model.KindText, Principal: pdeclNoneDetector},
 				{Name: colOccurredAt, Kind: model.KindTimestamp, Indexed: true},
 			},
 		},
@@ -530,10 +579,10 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 			Kind:  dlpRuleKind,
 			Table: dlpRuleTable,
 			Fields: []model.FieldSpec{
-				{Name: colClass, Kind: model.KindText, Indexed: true},
-				{Name: colAction, Kind: model.KindText},
-				{Name: colNote, Kind: model.KindText, Nullable: true},
-				{Name: colCreatedBy, Kind: model.KindText},
+				{Name: colClass, Kind: model.KindText, Indexed: true, Principal: model.None("a sensitivity class id or a reserved class, compared only with label classes: dlp.go:42-47, dlp.go:67-81")},
+				{Name: colAction, Kind: model.KindText, Principal: model.None("a DLP action from a closed set: dlp.go:205-208")},
+				{Name: colNote, Kind: model.KindText, Nullable: true, Principal: model.None("operator rule prose, only rendered: dlp.go:163")},
+				{Name: colCreatedBy, Kind: model.KindText, Principal: pdeclActorEvidence},
 			},
 			Indexes: []model.IndexSpec{{
 				Name: "knowledge_dlp_rule_uniq", Columns: []string{model.ColTenantID, colClass}, Unique: true,
@@ -544,13 +593,13 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 			Table:      dlpEventTable,
 			AppendOnly: true, // enforcement evidence: the gate fired, on what
 			Fields: []model.FieldSpec{
-				{Name: colKBRef, Kind: model.KindText, Nullable: true, Indexed: true},
-				{Name: colDLPAction, Kind: model.KindText, Indexed: true},
-				{Name: colDLPClasses, Kind: model.KindJSON, Nullable: true},
+				{Name: colKBRef, Kind: model.KindText, Nullable: true, Indexed: true, Principal: pdeclNoneKBRef},
+				{Name: colDLPAction, Kind: model.KindText, Indexed: true, Principal: model.None("a DLP event action from a closed set: dlp.go:50-53")},
+				{Name: colDLPClasses, Kind: model.KindJSON, Nullable: true, Principal: pdeclSensClasses},
 				{Name: colChunksHeld, Kind: model.KindInt},
-				{Name: colAgentRef, Kind: model.KindText, Nullable: true},
-				{Name: colLineageRef, Kind: model.KindText, Nullable: true},
-				{Name: colReason, Kind: model.KindText, Nullable: true},
+				{Name: colAgentRef, Kind: model.KindText, Nullable: true, Principal: model.None("the retrieving agent's identity ref copied from its lineage row, written only: dlp.go:124, retrieval.go:306-307")},
+				{Name: colLineageRef, Kind: model.KindText, Nullable: true, Principal: model.None("a lineage row id, written only: dlp.go:124, retrieval.go:306-307")},
+				{Name: colReason, Kind: model.KindText, Nullable: true, Principal: model.None("a generated enforcement reason, written only: dlp.go:125, ingest.go:742")},
 				{Name: colOccurredAt, Kind: model.KindTimestamp, Indexed: true},
 			},
 		},
@@ -560,15 +609,15 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 			Kind:  syncStateKind,
 			Table: syncStateTable,
 			Fields: []model.FieldSpec{
-				{Name: colKBRef, Kind: model.KindUUID, Indexed: true},
-				{Name: colSourceName, Kind: model.KindText, Indexed: true},
-				{Name: colSyncToken, Kind: model.KindText, Nullable: true},
+				{Name: colKBRef, Kind: model.KindUUID, Indexed: true, Principal: pdeclNoneKBRef},
+				{Name: colSourceName, Kind: model.KindText, Indexed: true, Principal: model.None("a registered content source name, matched only as a filter: sync.go:111, sync.go:140")},
+				{Name: colSyncToken, Kind: model.KindText, Nullable: true, Principal: model.None("the source's opaque delta cursor, only handed back to the source: sync.go:323")},
 				{Name: colLastSyncAt, Kind: model.KindTimestamp, Nullable: true},
-				{Name: colLastSyncStatus, Kind: model.KindText},
+				{Name: colLastSyncStatus, Kind: model.KindText, Principal: model.None("a sync status from a closed set: sync.go:27-31")},
 				{Name: colDocsSynced, Kind: model.KindInt},
 				{Name: colDocsDeleted, Kind: model.KindInt},
 				{Name: colACLsRefreshed, Kind: model.KindInt},
-				{Name: colSyncErrors, Kind: model.KindText, Nullable: true},
+				{Name: colSyncErrors, Kind: model.KindText, Nullable: true, Principal: model.None("generated sync error lines, stored only: sync.go:134-138")},
 			},
 			Indexes: []model.IndexSpec{{
 				Name:    "knowledge_sync_state_uniq",
@@ -583,10 +632,11 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 			Kind:  extLabelKind,
 			Table: extLabelTable,
 			Fields: []model.FieldSpec{
-				{Name: colDocRef, Kind: model.KindUUID, Indexed: true},
-				{Name: colKBRef, Kind: model.KindUUID, Indexed: true},
-				{Name: colLabels, Kind: model.KindJSON, Nullable: true},
-				{Name: colSourceKind, Kind: model.KindText},
+				{Name: colDocRef, Kind: model.KindUUID, Indexed: true, Principal: pdeclNoneDocRef},
+				{Name: colKBRef, Kind: model.KindUUID, Indexed: true, Principal: pdeclNoneKBRef},
+				{Name: colLabels, Kind: model.KindJSON, Nullable: true, Principal: model.Nested([]string{}, model.ClassEvidence,
+					model.Leaf("[]", model.None("a source sensitivity label, compared only with label clearances: external_labels.go:55-88")))},
+				{Name: colSourceKind, Kind: model.KindText, Principal: pdeclNoneSource},
 				// updated_at is an engine-injected base column (model.ColUpdatedAt); no custom field.
 			},
 			Indexes: []model.IndexSpec{{
@@ -599,17 +649,19 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 			Kind:  dataProductKind,
 			Table: dataProductTable,
 			Fields: []model.FieldSpec{
-				{Name: colName, Kind: model.KindText, Indexed: true},
-				{Name: colDescription, Kind: model.KindText, Nullable: true},
-				{Name: colOwnerRef, Kind: model.KindText, Indexed: true},
-				{Name: colStatus, Kind: model.KindText, Indexed: true},
-				{Name: colKBRef, Kind: model.KindUUID, Nullable: true, Indexed: true},
-				{Name: colTags, Kind: model.KindJSON, Nullable: true},
+				{Name: colName, Kind: model.KindText, Indexed: true, Principal: model.None("a data product name, unique per tenant, only matched and rendered: dataproduct.go:477, dataproduct.go:182")},
+				{Name: colDescription, Kind: model.KindText, Nullable: true, Principal: model.None("operator description prose, only rendered: dataproduct.go:183")},
+				// A caller-chosen owner label in no fixed encoding (the actor string by
+				// default); it is only rendered and filtered, so it is evidence.
+				{Name: colOwnerRef, Kind: model.KindText, Indexed: true, Principal: model.Scan(model.ClassEvidence)},
+				{Name: colStatus, Kind: model.KindText, Indexed: true, Principal: model.None("a data product status from a closed set: dataproduct.go:27-30, dataproduct.go:288-291")},
+				{Name: colKBRef, Kind: model.KindUUID, Nullable: true, Indexed: true, Principal: pdeclNoneKBRef},
+				{Name: colTags, Kind: model.KindJSON, Nullable: true, Principal: model.None("free-form operator tags, only rendered: dataproduct.go:249-254, dataproduct.go:187")},
 				{Name: colFreshnessSLASeconds, Kind: model.KindInt},
-				{Name: colAvailabilityTarget, Kind: model.KindText, Nullable: true},
+				{Name: colAvailabilityTarget, Kind: model.KindText, Nullable: true, Principal: model.None("an operator availability label, only rendered: dataproduct.go:189")},
 				{Name: colQualityScore, Kind: model.KindInt},
 				{Name: colUsageCount, Kind: model.KindInt},
-				{Name: colEnforcementMode, Kind: model.KindText},
+				{Name: colEnforcementMode, Kind: model.KindText, Principal: model.None("an enforcement mode from a closed set: dataproduct.go:32-34, dataproduct.go:284-286")},
 				{Name: colLastIngestAt, Kind: model.KindTimestamp, Nullable: true},
 				{Name: colLastHealthAt, Kind: model.KindTimestamp, Nullable: true},
 			},
@@ -621,15 +673,15 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 			Kind:  dataContractKind,
 			Table: dataContractTable,
 			Fields: []model.FieldSpec{
-				{Name: colProductRef, Kind: model.KindUUID, Indexed: true},
+				{Name: colProductRef, Kind: model.KindUUID, Indexed: true, Principal: pdeclNoneProduct},
 				{Name: colContractVersion, Kind: model.KindInt, Indexed: true},
-				{Name: colSchemaDefinition, Kind: model.KindJSON, Nullable: true},
-				{Name: colValidationMode, Kind: model.KindText},
+				{Name: colSchemaDefinition, Kind: model.KindJSON, Nullable: true, Principal: model.None("a caller-supplied JSON Schema, used only to validate documents and rendered: dataproduct.go:1537-1545, dataproduct.go:203")},
+				{Name: colValidationMode, Kind: model.KindText, Principal: model.None("a validation mode from a closed set: dataproduct.go:36-38, dataproduct.go:798-807")},
 				{Name: colCompletenessThreshold, Kind: model.KindInt},
 				{Name: colFreshnessOverrideSeconds, Kind: model.KindInt},
-				{Name: colStatus, Kind: model.KindText, Indexed: true},
-				{Name: colCreatedBy, Kind: model.KindText},
-				{Name: colNote, Kind: model.KindText, Nullable: true},
+				{Name: colStatus, Kind: model.KindText, Indexed: true, Principal: model.None("a contract status from a closed set: dataproduct.go:40-41")},
+				{Name: colCreatedBy, Kind: model.KindText, Principal: pdeclActorEvidence},
+				{Name: colNote, Kind: model.KindText, Nullable: true, Principal: model.None("operator contract prose, only rendered: dataproduct.go:209")},
 			},
 			Indexes: []model.IndexSpec{{
 				Name:    "knowledge_data_contract_uniq",
@@ -642,13 +694,13 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 			Table:      dpEventTable,
 			AppendOnly: true, // Enforcement evidence: never rewrite/delete decisions
 			Fields: []model.FieldSpec{
-				{Name: colProductRef, Kind: model.KindText, Indexed: true},
-				{Name: colContractRef, Kind: model.KindText, Nullable: true},
-				{Name: colEventType, Kind: model.KindText, Indexed: true},
-				{Name: colSeverity, Kind: model.KindText},
-				{Name: colSubjectKind, Kind: model.KindText, Nullable: true, Indexed: true},
-				{Name: colSubjectRef, Kind: model.KindText, Nullable: true},
-				{Name: colDetails, Kind: model.KindJSON, Nullable: true},
+				{Name: colProductRef, Kind: model.KindText, Indexed: true, Principal: pdeclNoneProduct},
+				{Name: colContractRef, Kind: model.KindText, Nullable: true, Principal: model.None("a data contract row id, recorded and rendered only: dataproduct.go:1259, dataproduct.go:217")},
+				{Name: colEventType, Kind: model.KindText, Indexed: true, Principal: model.None("an event type from a closed set: dataproduct.go:43-48")},
+				{Name: colSeverity, Kind: model.KindText, Principal: model.None("a severity from a closed set: dataproduct.go:50-53")},
+				{Name: colSubjectKind, Kind: model.KindText, Nullable: true, Indexed: true, Principal: model.None("an event subject kind fixed in code: dataproduct.go:55-57, dataproduct.go:700")},
+				{Name: colSubjectRef, Kind: model.KindText, Nullable: true, Principal: model.None("a data product id, a source document id or a query digest: dataproduct.go:700, dataproduct.go:1316, dataproduct.go:1377")},
+				{Name: colDetails, Kind: model.KindJSON, Nullable: true, Principal: model.None("a generated map of labels, counts and validation errors, only rendered: dataproduct.go:1263-1264, dataproduct.go:222")},
 				{Name: colOccurredAt, Kind: model.KindTimestamp, Indexed: true},
 			},
 		},

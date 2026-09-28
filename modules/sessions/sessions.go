@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/olivaresai/olivares/core/api"
+	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/sdk"
 	"github.com/olivaresai/olivares/sdk/event"
@@ -35,8 +36,11 @@ type Module struct {
 	log          *slog.Logger
 	data         api.ModuleData
 	recoveryData api.ModuleData
-	clock        model.Clock
-	broker       *broker
+	// standing is the standing port of the fenced writers that run outside a
+	// request (account_fence.go). Nil refuses every write that names an account.
+	standing auth.StandingReader
+	clock    model.Clock
+	broker   *broker
 
 	activeWindow time.Duration
 	idleWindow   time.Duration

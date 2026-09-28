@@ -45,6 +45,7 @@ const (
 	defaultLookback           = time.Hour
 	defaultMaxEvents          = 1000
 	defaultMaxPages           = 50
+	maximumPages              = 100
 	defaultTimeout            = 30 * time.Second
 )
 
@@ -62,7 +63,7 @@ const (
 // config is the resolved connector configuration. The credential fields hold
 // secret values in memory only; they are never logged or emitted.
 type config struct {
-	tokens tokenSource // nil ⇒ offline (no/partial credential): Gather is a silent no-op.
+	tokens tokenSource // nil ⇒ offline: no provider call; inventory reports unavailable.
 
 	tenantID      string   // for tenant ⊳ subscription edges; may be "" with a static token.
 	subscriptions []string // explicit subscription ids; auto-listed when empty.
@@ -103,7 +104,7 @@ func descriptor() sdk.Descriptor {
 			{Key: cfgRAIAPIVersion, Type: sdk.FieldString, Default: defaultRAIAPIVersion, Description: "Cognitive Services management api-version for the RAI reads (accounts/raiPolicies/deployments)."},
 			{Key: cfgLookback, Type: sdk.FieldDuration, Default: defaultLookback.String(), Description: "Activity Log lookback window."},
 			{Key: cfgMaxEvents, Type: sdk.FieldInt, Default: fmt.Sprintf("%d", defaultMaxEvents), Description: "max Activity Log events per pass (across all subscriptions)."},
-			{Key: cfgMaxPages, Type: sdk.FieldInt, Default: fmt.Sprintf("%d", defaultMaxPages), Description: "max API pages per list operation (pagination safety bound)."},
+			{Key: cfgMaxPages, Type: sdk.FieldInt, Default: fmt.Sprintf("%d", defaultMaxPages), Description: "max API pages per list operation (1–100; inventory at the cap is partial)."},
 			{Key: cfgSharedAccounts, Type: sdk.FieldString, Description: "comma-separated caller ids (objectId/appId/UPN) that are shared/pooled (attribution marked approximate)."},
 			{Key: cfgManagementEndpoint, Type: sdk.FieldString, Default: defaultManagementEndpoint, Description: "Azure Resource Manager endpoint base URL (override for testing)."},
 			{Key: cfgTimeout, Type: sdk.FieldDuration, Default: defaultTimeout.String(), Description: "per-request HTTP timeout."},
@@ -113,7 +114,7 @@ func descriptor() sdk.Descriptor {
 
 // loadConfig resolves the connector configuration, applying defaults and parsing
 // the credential. A MISSING or PARTIAL client credential is offline-safe (no
-// token source ⇒ Gather is a no-op), mirroring entra-agent. Secret values are
+// token source ⇒ no provider calls, unavailable inventory), mirroring entra-agent. Secret values are
 // read here and held in memory only.
 func loadConfig(cfg sdk.Config, client *http.Client) (config, error) {
 	c := config{
@@ -138,6 +139,9 @@ func loadConfig(cfg sdk.Config, client *http.Client) (config, error) {
 	}
 	if c.maxPages <= 0 {
 		c.maxPages = defaultMaxPages
+	}
+	if c.maxPages > maximumPages {
+		c.maxPages = maximumPages
 	}
 	if c.timeout <= 0 {
 		c.timeout = defaultTimeout

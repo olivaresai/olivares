@@ -1,0 +1,241 @@
+{
+  "$description": "Console LIGHT theme, emitted to the :root block of src/styles/tokens.css by tokens/build.mjs. The same palette as the dark theme, tuned for a white sheet: the orange stays #f08000 as a fill, is deepened to #9c4a00 as text and to #c26000 as a boundary, because the fill alone is 2.69:1 on white. `roles` holds the names the components use.",
+  "palette": {
+    "$type": "color",
+    "frame": {
+      "$value": "#efeee9",
+      "$description": "Window frame: the sidebar and the gutters around the sheet."
+    },
+    "canvas": {
+      "$value": "#ffffff",
+      "$description": "The sheet: the rounded work area."
+    },
+    "surface": {
+      "$value": "#f8f7f4",
+      "$description": "Cards, the composer and list groups."
+    },
+    "raised": {
+      "$value": "#ffffff",
+      "$description": "Menus, popovers and dialogs."
+    },
+    "hover": {
+      "$value": "rgba(20, 18, 14, 0.04)",
+      "$description": "Pointer hover fill."
+    },
+    "active": {
+      "$value": "rgba(20, 18, 14, 0.075)",
+      "$description": "Selection and pressed fill."
+    },
+    "line": {
+      "$value": "rgba(20, 18, 14, 0.09)",
+      "$description": "Hairline separator. Decorative only: it never carries information."
+    },
+    "line-strong": {
+      "$value": "rgba(20, 18, 14, 0.16)",
+      "$description": "Stronger hairline. Decorative only."
+    },
+    "ctl-border": {
+      "$value": "#8a8883",
+      "$description": "Boundary of inputs, selects and switches: at least 3:1 on every surface."
+    },
+    "scrim": {
+      "$value": "rgba(26, 25, 23, 0.32)",
+      "$description": "Backdrop behind a modal dialog or sheet."
+    },
+    "text": {
+      "$value": "#1a1917",
+      "$description": "Primary text."
+    },
+    "text-2": {
+      "$value": "#4a4742",
+      "$description": "Secondary text."
+    },
+    "text-3": {
+      "$value": "#5f5c55",
+      "$description": "Tertiary text: at least 4.5:1 on every surface, under the selection fill and on every soft fill."
+    },
+    "accent": {
+      "$value": "#f08000",
+      "$description": "The brand orange as a FILL: the one primary action, the selected row, running work."
+    },
+    "on-accent": {
+      "$value": "#1a1206",
+      "$description": "Ink on the orange fill."
+    },
+    "accent-text": {
+      "$value": "#9c4a00",
+      "$description": "The orange as text."
+    },
+    "accent-soft": {
+      "$value": "rgba(240, 128, 0, 0.12)",
+      "$description": "Soft orange fill (translucent)."
+    },
+    "accent-line": {
+      "$value": "rgba(194, 96, 0, 0.45)",
+      "$description": "Orange hairline (translucent). Decorative only."
+    },
+    "accent-border": {
+      "$value": "#c26000",
+      "$description": "Orange boundary and selection bar: at least 3:1 on canvas and surface."
+    },
+    "focus": {
+      "$value": "#b45500",
+      "$description": "Focus ring (2 px, 2 px offset)."
+    },
+    "ok": {
+      "$value": "#18693f",
+      "$description": "Success text and glyph."
+    },
+    "ok-soft": {
+      "$value": "rgba(24, 105, 63, 0.09)"
+    },
+    "warn": {
+      "$value": "#7d5400",
+      "$description": "Warning text and glyph. Yellow, so that orange never means warning."
+    },
+    "warn-soft": {
+      "$value": "rgba(125, 84, 0, 0.09)"
+    },
+    "bad": {
+      "$value": "#a8231c",
+      "$description": "Error text and glyph."
+    },
+    "bad-soft": {
+      "$value": "rgba(168, 35, 28, 0.08)"
+    },
+    "info": {
+      "$value": "#1c58a3",
+      "$description": "Information text and glyph."
+    },
+    "info-soft": {
+      "$value": "rgba(28, 88, 163, 0.08)"
+    },
+    "diff-add": {
+      "$value": "rgba(29, 122, 75, 0.1)",
+      "$description": "Added line in a diff."
+    },
+    "diff-del": {
+      "$value": "rgba(179, 38, 30, 0.09)",
+      "$description": "Removed line in a diff."
+    }
+  },
+  "depth": {
+    "$description": "Depth. Dark: the four neutrals and the hairlines carry depth, and popovers add one shadow. Light: a 1 px card shadow and the same popover shadow at a lower alpha. No other shadows.",
+    "shadow-pop": {
+      "$type": "shadow",
+      "$value": "0 18px 48px -14px rgba(30, 24, 16, 0.28), 0 2px 6px rgba(30, 24, 16, 0.08)",
+      "$description": "Menus, popovers and dialogs."
+    },
+    "shadow-card": {
+      "$type": "shadow",
+      "$value": "0 1px 2px rgba(30, 24, 16, 0.05)",
+      "$description": "Cards."
+    },
+    "ember": {
+      "$value": "radial-gradient(720px 260px at 50% -110px, rgba(240, 128, 0, 0.09), transparent 70%)",
+      "$description": "The one soft orange glow at the top of the sheet on Home and on the first run."
+    }
+  },
+  "roles": {
+    "$type": "color",
+    "$description": "The names the console components paint with today. Each alias is resolved at build time, so the generated file holds the palette value itself and one value lives in one place.",
+    "background": {
+      "$value": "{palette.canvas}"
+    },
+    "elevated": {
+      "$value": "{palette.raised}"
+    },
+    "overlay": {
+      "$value": "{palette.scrim}"
+    },
+    "muted-foreground": {
+      "$value": "{palette.text-2}"
+    },
+    "foreground": {
+      "$value": "{palette.text}"
+    },
+    "border": {
+      "$value": "{palette.line}"
+    },
+    "border-strong": {
+      "$value": "{palette.line-strong}"
+    },
+    "ring": {
+      "$value": "{palette.focus}"
+    },
+    "accent-foreground": {
+      "$value": "{palette.on-accent}"
+    },
+    "accent-soft-foreground": {
+      "$value": "{palette.accent-text}"
+    },
+    "accent-strong": {
+      "$value": "{palette.accent-border}"
+    },
+    "success": {
+      "$value": "{palette.ok}"
+    },
+    "warning": {
+      "$value": "{palette.warn}"
+    },
+    "danger": {
+      "$value": "{palette.bad}"
+    },
+    "success-soft": {
+      "$value": "{palette.ok-soft}"
+    },
+    "warning-soft": {
+      "$value": "{palette.warn-soft}"
+    },
+    "danger-soft": {
+      "$value": "{palette.bad-soft}"
+    },
+    "muted": {
+      "$value": "#ededed",
+      "$description": "Solid well: the selection fill (`active`) painted on the canvas, as one opaque color, so text on it is measured like text under the selection fill."
+    },
+    "accent-hover": {
+      "$value": "#fe8800",
+      "$description": "The primary action on hover: the orange at brightness 1.06, as the design renders it. Ink stays above 4.5:1."
+    },
+    "accent-active": {
+      "$value": "#cc6a00",
+      "$description": "The primary action while pressed. Ink stays above 4.5:1."
+    },
+    "danger-solid": {
+      "$value": "#b0201b",
+      "$description": "Solid destructive fill (not part of the palette; kept at its measured value)."
+    },
+    "danger-solid-foreground": {
+      "$value": "#fff8f0",
+      "$description": "Ink on the solid destructive fill."
+    },
+    "confidence-attributed": {
+      "$value": "#0a7c77",
+      "$description": "Access-graph confidence: attributed (a cool axis apart from status)."
+    },
+    "confidence-approximate": {
+      "$value": "#5b6470",
+      "$description": "Access-graph confidence: approximate."
+    }
+  },
+  "elevation": {
+    "$type": "shadow",
+    "$description": "The elevation steps the components use, mapped onto the two shadows of the design: cards on the lower three, popovers and dialogs on the upper two.",
+    "elev-xs": {
+      "$value": "{depth.shadow-card}"
+    },
+    "elev-sm": {
+      "$value": "{depth.shadow-card}"
+    },
+    "elev-md": {
+      "$value": "{depth.shadow-card}"
+    },
+    "elev-lg": {
+      "$value": "{depth.shadow-pop}"
+    },
+    "elev-xl": {
+      "$value": "{depth.shadow-pop}"
+    }
+  }
+}

@@ -5,6 +5,7 @@ package modelprovider
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/olivaresai/olivares/sdk/model"
@@ -75,6 +76,9 @@ const (
 	ProviderOllama = "ollama"
 	// ProviderVLLM is local inference via vLLM (local connector).
 	ProviderVLLM = "vllm"
+	// ProviderKimi labels Moonshot Kimi model metadata for an openai_compatible
+	// provider record. It is not a provider kind and it does not create a store.
+	ProviderKimi = "kimi"
 )
 
 // ProviderKind classifies how a provider is reached, which the router and FinOps
@@ -512,4 +516,107 @@ type CatalogProvider interface {
 	// calls (or returns the connector's declared/offline catalog when no
 	// credential is configured) and honors ctx for cancellation.
 	Snapshot(ctx context.Context) (Catalog, error)
+}
+
+// exactCompatibleModels are model IDs with no native connector. A tenant's
+// openai_compatible record names the model; lookup is exact, not by prefix.
+// Tool, vision, structured-output, and extended-thinking flags are omitted:
+// the generic gateway that serves this route is text-only, and K3 requires
+// the prior assistant message with its reasoning on later turns. Observed
+// 2026-09-27.
+//
+// kimi-k3 is the platform ID (https://platform.kimi.ai/docs/pricing/chat).
+// k3, k3-256k, kimi-for-coding, and kimi-for-coding-highspeed are Kimi Code
+// channel IDs (https://www.kimi.com/code/docs/en/kimi-code/models.html).
+// kimi-for-coding currently serves K2.8 Preview. kimi-for-coding-highspeed
+// currently serves K2.7 Code HighSpeed. Code-channel token prices are not
+// published on that page, so those rows stay unpriced.
+// k3's 1,048,576 context is the higher-tier window. Plus and Moderato plans
+// are capped at 262,144. That cap is not a second field on Model.
+var exactCompatibleModels = []Model{
+	{
+		ProviderRef: ProviderKimi, Ref: "kimi-k3", DisplayName: "Kimi K3",
+		Capabilities:    []Capability{CapStreaming, CapPromptCaching},
+		ContextWindow:   1_048_576,
+		MaxOutputTokens: 1_048_576,
+		DefaultEffort:   "max",
+		Pricing: &ModelPricing{
+			InputPerMTokUSD: 3, OutputPerMTokUSD: 15,
+			CacheWritePerMTokUSD: 3, CacheWrite1hPerMTokUSD: 6, CacheReadPerMTokUSD: 0.30,
+			Currency: "USD", AsOf: "2026-09-27", Source: PricingList,
+		},
+	},
+	{
+		ProviderRef: ProviderKimi, Ref: "k3", DisplayName: "K3",
+		ContextWindow: 1_048_576, DefaultEffort: "high",
+	},
+	{
+		ProviderRef: ProviderKimi, Ref: "k3-256k", DisplayName: "K3 256K",
+		ContextWindow: 262_144, DefaultEffort: "high",
+	},
+	{
+		ProviderRef: ProviderKimi, Ref: "kimi-for-coding", DisplayName: "K2.8 Preview",
+		ContextWindow: 1_048_576, DefaultEffort: "max",
+	},
+	{
+		ProviderRef: ProviderKimi, Ref: "kimi-for-coding-highspeed", DisplayName: "K2.7 Code HighSpeed",
+		ContextWindow: 262_144,
+	},
+}
+
+// SnapshotDateSuffix reports whether id is prefix plus a snapshot date and
+// nothing else. The accepted suffixes are "-" + YYYYMMDD and "-" + YYYY-MM-DD.
+// The bare prefix is not a suffix; callers match that by equality.
+func SnapshotDateSuffix(id, prefix string) bool {
+	if prefix == "" || len(id) <= len(prefix)+1 {
+		return false
+	}
+	if !strings.HasPrefix(id, prefix) || id[len(prefix)] != '-' {
+		return false
+	}
+	rest := id[len(prefix)+1:]
+	switch len(rest) {
+	case 8:
+		return allDigits(rest)
+	case 10:
+		return rest[4] == '-' && rest[7] == '-' &&
+			allDigits(rest[0:4]) && allDigits(rest[5:7]) && allDigits(rest[8:10])
+	default:
+		return false
+	}
+}
+
+func allDigits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+// ExactCompatibleModel returns the metadata row for an exact model ID that is
+// reached through an openai_compatible provider record. ok is false when the
+// ID is unknown. A family prefix never matches.
+func ExactCompatibleModel(modelID string) (Model, bool) {
+	id := strings.ToLower(strings.TrimSpace(modelID))
+	if id == "" {
+		return Model{}, false
+	}
+	for _, m := range exactCompatibleModels {
+		if m.Ref != id {
+			continue
+		}
+		out := m
+		out.Capabilities = append([]Capability(nil), m.Capabilities...)
+		if m.Pricing != nil {
+			p := *m.Pricing
+			out.Pricing = &p
+		}
+		return out, true
+	}
+	return Model{}, false
 }

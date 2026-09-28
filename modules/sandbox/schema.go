@@ -80,6 +80,26 @@ const (
 	colDecidedBy     = "decided_by"
 )
 
+// Principal declarations shared by more than one column below.
+var (
+	// pdeclNoneDigest is a one-way hex digest; nothing reads a principal back out.
+	pdeclNoneDigest = model.None("a one-way SHA-256 hex digest: helpers.go:149-152, scenarios.go:79, runs.go:77")
+	// pdeclNoneFixture is synthetic scenario text that only the isolated runner matches and echoes.
+	pdeclNoneFixture = model.None("synthetic fixture text, matched and echoed only by the isolated runner: ports.go:111-123, cmd/olivares/sandboxrt.go:75-89")
+	// pdeclNoneScenarioRef is the id of a sandbox scenario row.
+	pdeclNoneScenarioRef = model.None("the id of a sandbox scenario row: runs.go:230, compare.go:72, runs.go:131-133")
+	// pdeclNoneRunRef is the id of a sandbox run row.
+	pdeclNoneRunRef = model.None("the id of a sandbox run row: runs.go:148, runs.go:156, compare.go:157")
+	// pdeclNoneSubjectRef is a scenario id, a session external id or a live-row id.
+	pdeclNoneSubjectRef = model.None("a scenario id, a session external id or a live-row id, never an account: runs.go:223, runs.go:287-289, compare.go:92, compare.go:102-104, modules/sessions/export.go:362")
+	// pdeclNoneLiveRef is the id of a sessions live row.
+	pdeclNoneLiveRef = model.None("the id of a sessions live row: history_target.go:26-31, modules/sessions/export.go:371")
+	// pdeclNoneSuiteRef is the id of an evals suite row.
+	pdeclNoneSuiteRef = model.None("the id of an evals suite row: modules/evals/scoreoutputs.go:68, modules/evals/scoreoutputs.go:80")
+	// pdeclNoneStepKey is a step key, operator-chosen or generated from the step position.
+	pdeclNoneStepKey = model.None("a step key, operator-chosen or generated from the step position: scenarios.go:259-262, cmd/olivares/sessionadapters.go:206-211")
+)
+
 // RegisterSchema declares the module's four owned entities (the SchemaProvider seam).
 // The engine creates the tables, injects base columns and attaches the tenant/audit/
 // append-only guards; a module cannot opt out of isolation.
@@ -93,13 +113,19 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Kind:  scenarioKind,
 		Table: scenarioTable,
 		Fields: []model.FieldSpec{
-			{Name: colName, Kind: model.KindText, Indexed: true},
-			{Name: colDescription, Kind: model.KindText, Nullable: true},
-			{Name: colSubjectKind, Kind: model.KindText, Nullable: true},
-			{Name: colSteps, Kind: model.KindJSON, Nullable: true},
-			{Name: colMocks, Kind: model.KindJSON, Nullable: true},
-			{Name: colSpecHash, Kind: model.KindText, Nullable: true},
-			{Name: colScenStatus, Kind: model.KindText, Indexed: true},
+			{Name: colName, Kind: model.KindText, Indexed: true, Principal: model.None("an operator-chosen scenario name, rendered only: scenarios.go:70, scenarios.go:46")},
+			{Name: colDescription, Kind: model.KindText, Nullable: true, Principal: model.None("operator prose, rendered only: scenarios.go:89, scenarios.go:46")},
+			{Name: colSubjectKind, Kind: model.KindText, Nullable: true, Principal: model.None("a subject-kind label, forwarded to the scorer and rendered, never resolved to an account: scenarios.go:90, scenarios.go:47, runs.go:224")},
+			{Name: colSteps, Kind: model.KindJSON, Nullable: true, Principal: model.Nested([]stepDTO(nil), model.ClassEvidence,
+				model.Leaf("[].key", pdeclNoneStepKey),
+				model.Leaf("[].input", pdeclNoneFixture),
+			)},
+			{Name: colMocks, Kind: model.KindJSON, Nullable: true, Principal: model.Nested([]mockDTO(nil), model.ClassEvidence,
+				model.Leaf("[].resource", pdeclNoneFixture),
+				model.Leaf("[].response", pdeclNoneFixture),
+			)},
+			{Name: colSpecHash, Kind: model.KindText, Nullable: true, Principal: pdeclNoneDigest},
+			{Name: colScenStatus, Kind: model.KindText, Indexed: true, Principal: model.None("a closed status set active|archived: scenarios.go:92, scenarios.go:203")},
 		},
 		Indexes: []model.IndexSpec{{
 			// One scenario per (tenant, name). Unique index leads with tenant_id.
@@ -115,25 +141,25 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Kind:  runKind,
 		Table: runTable, // mutable: a run is created running and updated to a terminal state
 		Fields: []model.FieldSpec{
-			{Name: colScenarioRef, Kind: model.KindUUID, Nullable: true, Indexed: true},
-			{Name: colKind, Kind: model.KindText, Indexed: true},
-			{Name: colSubjectRef, Kind: model.KindText, Indexed: true},
-			{Name: colLiveRef, Kind: model.KindUUID, Nullable: true},
-			{Name: colVariant, Kind: model.KindText, Nullable: true},
-			{Name: colRunner, Kind: model.KindText, Indexed: true},
+			{Name: colScenarioRef, Kind: model.KindUUID, Nullable: true, Indexed: true, Principal: pdeclNoneScenarioRef},
+			{Name: colKind, Kind: model.KindText, Indexed: true, Principal: model.None("a closed run-kind set: runs.go:21-25")},
+			{Name: colSubjectRef, Kind: model.KindText, Indexed: true, Principal: pdeclNoneSubjectRef},
+			{Name: colLiveRef, Kind: model.KindUUID, Nullable: true, Principal: pdeclNoneLiveRef},
+			{Name: colVariant, Kind: model.KindText, Nullable: true, Principal: model.None("a variant label, recorded and rendered only: runs.go:134-136, runs.go:335")},
+			{Name: colRunner, Kind: model.KindText, Indexed: true, Principal: model.None("the runner backend name: ports.go:68, runs.go:54")},
 			{Name: colIsolated, Kind: model.KindBool},
-			{Name: colRunStatus, Kind: model.KindText, Indexed: true},
+			{Name: colRunStatus, Kind: model.KindText, Indexed: true, Principal: model.None("a closed status set completed|degraded|error: runs.go:54, runs.go:58, runs.go:101, runs.go:284")},
 			{Name: colStepsTotal, Kind: model.KindInt},
 			{Name: colStepsOK, Kind: model.KindInt},
 			{Name: colStepsError, Kind: model.KindInt},
-			{Name: colOutputsHash, Kind: model.KindText, Nullable: true},
+			{Name: colOutputsHash, Kind: model.KindText, Nullable: true, Principal: pdeclNoneDigest},
 			{Name: colScore, Kind: model.KindFloat, Nullable: true},
 			{Name: colPassed, Kind: model.KindBool, Nullable: true},
-			{Name: colSuiteRef, Kind: model.KindUUID, Nullable: true},
+			{Name: colSuiteRef, Kind: model.KindUUID, Nullable: true, Principal: pdeclNoneSuiteRef},
 			{Name: colDestroyed, Kind: model.KindBool},
 			{Name: colStartedAt, Kind: model.KindTimestamp, Indexed: true},
 			{Name: colFinishedAt, Kind: model.KindTimestamp, Nullable: true},
-			{Name: colLaunchedBy, Kind: model.KindText},
+			{Name: colLaunchedBy, Kind: model.KindText, Principal: model.Ref(model.EncodeUserRef, model.ClassEvidence)},
 		},
 	}); err != nil {
 		return err
@@ -144,9 +170,9 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Table:      outputTable,
 		AppendOnly: true, // immutable per-step evidence
 		Fields: []model.FieldSpec{
-			{Name: colRunRef, Kind: model.KindUUID, Indexed: true},
-			{Name: colStepKey, Kind: model.KindText, Indexed: true},
-			{Name: colOutput, Kind: model.KindText, Nullable: true},
+			{Name: colRunRef, Kind: model.KindUUID, Indexed: true, Principal: pdeclNoneRunRef},
+			{Name: colStepKey, Kind: model.KindText, Indexed: true, Principal: pdeclNoneStepKey},
+			{Name: colOutput, Kind: model.KindText, Nullable: true, Principal: model.None("runner output text, clamped, then rendered and scored only: runs.go:157, runs.go:91, runs.go:431")},
 			{Name: colMockHit, Kind: model.KindBool},
 			{Name: colOccurredAt, Kind: model.KindTimestamp},
 		},
@@ -159,17 +185,17 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Table:      comparisonTable,
 		AppendOnly: true, // immutable deploy-decision evidence (docs/SECURITY-HARDENING.md)
 		Fields: []model.FieldSpec{
-			{Name: colScenarioRef, Kind: model.KindUUID, Nullable: true, Indexed: true},
-			{Name: colBaselineRun, Kind: model.KindUUID},
-			{Name: colCandidateRun, Kind: model.KindUUID},
-			{Name: colSubjectRef, Kind: model.KindText, Nullable: true},
-			{Name: colLiveRef, Kind: model.KindUUID, Nullable: true},
-			{Name: colSuiteRef, Kind: model.KindUUID, Nullable: true},
-			{Name: colVerdict, Kind: model.KindText, Indexed: true},
+			{Name: colScenarioRef, Kind: model.KindUUID, Nullable: true, Indexed: true, Principal: pdeclNoneScenarioRef},
+			{Name: colBaselineRun, Kind: model.KindUUID, Principal: pdeclNoneRunRef},
+			{Name: colCandidateRun, Kind: model.KindUUID, Principal: pdeclNoneRunRef},
+			{Name: colSubjectRef, Kind: model.KindText, Nullable: true, Principal: pdeclNoneSubjectRef},
+			{Name: colLiveRef, Kind: model.KindUUID, Nullable: true, Principal: pdeclNoneLiveRef},
+			{Name: colSuiteRef, Kind: model.KindUUID, Nullable: true, Principal: pdeclNoneSuiteRef},
+			{Name: colVerdict, Kind: model.KindText, Indexed: true, Principal: model.None("a closed verdict set: compare.go:21-26")},
 			{Name: colBaselineScore, Kind: model.KindFloat},
 			{Name: colCandScore, Kind: model.KindFloat},
 			{Name: colDelta, Kind: model.KindFloat},
-			{Name: colDecidedBy, Kind: model.KindText},
+			{Name: colDecidedBy, Kind: model.KindText, Principal: model.Ref(model.EncodeUserRef, model.ClassEvidence)},
 			{Name: colOccurredAt, Kind: model.KindTimestamp},
 		},
 	})

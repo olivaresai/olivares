@@ -160,6 +160,7 @@ func newRuntimeHarness(t *testing.T, opts ...Option) (*Module, store.Store, mode
 		t.Fatalf("tenant: %v", err)
 	}
 	m.UseData(api.NewModuleData(st))
+	bindStoreStanding(m, st)
 	stopModuleAtCleanup(t, m)
 	return m, st, tenant, clk
 }

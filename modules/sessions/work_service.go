@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/olivaresai/olivares/core/api"
+	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 )
@@ -160,7 +161,7 @@ func classifyWorkStoreError(err error) error {
 	//
 	// No vocabulary is invented: "forbidden" is what this file already answers for an
 	// authority denial (:390,:401,:411) and "invalid_cursor" is what the read path
-	// already answers for a cursor it rejects (work_api.go:518, work_read.go:57). They
+	// already answers for a cursor it rejects (work_api.go:519, work_read.go:57). They
 	// are coarser than the core codes, and saying so is better than a code that is
 	// false: distinguishing suspension from authorization is a contract change to
 	// coordinate with the console, not a side effect of centralizing a mapping.
@@ -462,7 +463,9 @@ func (m *Module) checkParticipant(ctx context.Context, tenant model.TenantID, wo
 	if m.workIdentity == nil {
 		return unknown("evidence_unavailable", nil)
 	}
-	p, err := m.workIdentity.ResolveParticipant(ctx, tenant, workspace, kind, ref)
+	// Inside a prepared replay the owner was resolved before the owning
+	// transaction opened; the answer is read from what it recorded.
+	p, err := m.participantResolverFor(ctx, tenant).ResolveParticipant(ctx, tenant, workspace, kind, ref)
 	if err != nil {
 		// ⛔ UN REF QUE NO RESUELVE ES UNA DECISION, NO UNA CEGUERA — y esto contestaba
 		// la TERCERA respuesta para las dos cosas.
@@ -1696,6 +1699,25 @@ func (m *Module) applyWithData(
 	if err := m.prepareAgentWorkAuthority(ctx, data, tenant, principal, &cmd); err != nil {
 		return CommandResult{}, classifyWorkStoreError(err)
 	}
+	// A command that makes an account the item's owner is a fenced write: the
+	// account's standing is read before the transaction, which pins its
+	// authority version with the tenant's directory fact before anything else. A
+	// version that moved in between is read again once.
+	// Inside a prepared replay that fenced the owners, their standing was read
+	// before the owning transaction, which pinned them as its first lock.
+	owners := workCommandOwnerAccounts(cmd)
+	ownersCovered, err := joinedFence(ctx, tenant, owners)
+	if err != nil {
+		return CommandResult{}, err
+	}
+	var ownerRefs []store.UserAuthorityFactRef
+	if !ownersCovered {
+		ownerRefs, err = auth.FenceSubjects(ctx, m.standingFor(ctx), tenant, owners)
+		if err != nil {
+			return CommandResult{}, err
+		}
+	}
+	ownerFenceRetried := false
 	var postCommitRefusal error
 	cmd.postCommitRefusal = &postCommitRefusal
 
@@ -1705,7 +1727,14 @@ func (m *Module) applyWithData(
 	var nudgeLimit int
 	for graphAttempt := 0; ; graphAttempt++ {
 		result, auditGap, event, nudgeLimit = CommandResult{}, false, WorkEventEnvelope{}, 0
+		ownerFenceMoved := false
 		err = data.Mutate(ctx, func(sc store.Scope) error {
+			if len(ownerRefs) > 0 {
+				if _, err := auth.PinFence(ctx, sc, auth.FenceDirectory, ownerRefs); err != nil {
+					ownerFenceMoved = errors.Is(err, store.ErrConflict)
+					return err
+				}
+			}
 			if replay, found, err := findCommandReceipt(ctx, sc, actorFP, idemHash, scope, requestHash); err != nil {
 				return err
 			} else if found {
@@ -1864,6 +1893,13 @@ func (m *Module) applyWithData(
 			})
 			return err
 		})
+		if ownerFenceMoved && !ownerFenceRetried {
+			ownerFenceRetried = true
+			if ownerRefs, err = auth.FenceSubjects(ctx, m.standingFor(ctx), tenant, owners); err != nil {
+				return CommandResult{}, err
+			}
+			continue
+		}
 		if errors.Is(err, errDependencyGuardRaced) && graphAttempt < 3 {
 			// The guard is an OCC serialization point. Reopen a fresh transaction
 			// so an opposing edge is reported as dependency_cycle, while two

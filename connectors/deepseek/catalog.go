@@ -52,6 +52,16 @@ var v4Caps = []modelprovider.Capability{
 	modelprovider.CapExtendedThinking,
 }
 
+// v4FlashCaps is v4Caps plus vision. deepseek-flash serves DeepSeek-V4.1-Flash,
+// which accepts images. deepseek-v4-pro does not.
+var v4FlashCaps = []modelprovider.Capability{
+	modelprovider.CapStreaming,
+	modelprovider.CapToolUse,
+	modelprovider.CapStructuredOutputs,
+	modelprovider.CapExtendedThinking,
+	modelprovider.CapVision,
+}
+
 // family is a declared price + capability set keyed by a model-id prefix, matched
 // longest-prefix-first (so a dated id like "deepseek-chat-20260601" beats the base
 // "deepseek-chat"). Prices are USD per million tokens (list, AsOf pricingAsOf).
@@ -101,6 +111,52 @@ var declaredModels = []struct{ id, displayName string }{
 	{"deepseek-v4-pro", "DeepSeek V4 Pro"},
 	{"deepseek-chat", "DeepSeek Chat (V3)"},
 	{"deepseek-reasoner", "DeepSeek Reasoner (R1)"},
+	{"deepseek-flash", "DeepSeek-V4.1-Flash"},
+	{"deepseek-v4-flash-vision-exp", "DeepSeek-V4.1-Flash"},
+}
+
+// exactTariff is an ID whose published price is a peak/off-peak tariff.
+// ModelPricing cannot hold that tariff, so the price stays unknown. Legacy
+// flash IDs are still accepted upstream and are served by deepseek-flash.
+// A dated neighbor with no exact row still uses the older prefix family.
+type exactTariff struct {
+	capabilities []modelprovider.Capability
+	context      int64
+	maxOutput    int64
+	deprecated   bool
+	retirements  []modelprovider.ModelRetirement
+}
+
+func deepseekServedByFlash() []modelprovider.ModelRetirement {
+	return []modelprovider.ModelRetirement{{
+		Surface:        model.GatewayDirect,
+		ReplacementRef: "deepseek-flash",
+		AsOf:           "2026-09-27",
+	}}
+}
+
+// Peak is 01:00-04:00 and 06:00-10:00 UTC on weekdays, excluding Chinese public
+// holidays. Other hours are off-peak, at half the peak rate. Per million tokens
+// the page lists cache-miss / cache-hit / output:
+// deepseek-flash off-peak 0.15 / 0.003 / 0.60, peak 0.30 / 0.006 / 1.20;
+// deepseek-v4-pro off-peak 0.66 / 0.022 / 1.98, peak 1.32 / 0.044 / 3.96.
+// Observed 2026-09-27 at api-docs.deepseek.com/quick_start/pricing.
+// Legacy deepseek-v4-flash and deepseek-v4-flash-vision-exp are served by
+// DeepSeek-V4.1-Flash and billed at the flash tariff.
+func exactTariffFor(modelID string) (exactTariff, bool) {
+	switch modelID {
+	case "deepseek-flash":
+		return exactTariff{capabilities: v4FlashCaps, context: 1_000_000, maxOutput: 384_000}, true
+	case "deepseek-v4-pro":
+		return exactTariff{capabilities: v4Caps, context: 1_000_000, maxOutput: 384_000}, true
+	case "deepseek-v4-flash", "deepseek-v4-flash-vision-exp":
+		return exactTariff{
+			capabilities: v4FlashCaps, context: 1_000_000, maxOutput: 384_000,
+			deprecated: true, retirements: deepseekServedByFlash(),
+		}, true
+	default:
+		return exactTariff{}, false
+	}
 }
 
 func deepseekLegacyRetirements() []modelprovider.ModelRetirement {
@@ -117,6 +173,11 @@ func deepseekLegacyRetirements() []modelprovider.ModelRetirement {
 // the longest family prefix. ok is false when no family matches (the connector then leaves
 // Model.Pricing nil rather than guess a price).
 func familyFor(modelID string) (family, bool) {
+	// An exact tariff ID has no single list price. Do not let the older prefix
+	// answer for it. Dated IDs that are not exact still use the prefix below.
+	if _, ok := exactTariffFor(modelID); ok {
+		return family{}, false
+	}
 	best := -1
 	for i, f := range deepseekFamilies {
 		if hasPrefix(modelID, f.prefix) {
@@ -144,6 +205,14 @@ func buildDeclaredModel(id, displayName string) modelprovider.Model {
 		Ref:              id,
 		DisplayName:      displayName,
 		CapabilitySource: "declared",
+	}
+	if e, ok := exactTariffFor(id); ok {
+		m.Capabilities = append([]modelprovider.Capability(nil), e.capabilities...)
+		m.ContextWindow = e.context
+		m.MaxOutputTokens = e.maxOutput
+		m.Deprecated = e.deprecated
+		m.Retirements = append([]modelprovider.ModelRetirement(nil), e.retirements...)
+		return m
 	}
 	if f, ok := familyFor(id); ok {
 		pc := f.pricing

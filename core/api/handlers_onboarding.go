@@ -6,6 +6,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"time"
 
@@ -24,12 +25,17 @@ import (
 // invitee redeems to set their own password. The accept leg is unauthenticated
 // (the invitee has no session yet); the token is the gate.
 
-// InviteSender optionally delivers an invitation link by email (e.g. over the
-// notify module). It is best-effort: when nil, or on a send error, the invite
-// token is still returned to the admin once (show-once) so it can be relayed
-// out-of-band. The composition root wires it; the API never holds a mailer.
+// InviteSender delivers an invitation by email, to the invitee's address only.
+// It is the only path an invitation's token takes: no response, log or audit
+// carries it. The sender builds the link itself, from the console address the
+// operator declared for the deployment, with token in its fragment; the API
+// never builds a link, so no request header can choose where a token is sent.
+// When it is nil, invite mode answers 409 invite_delivery_unavailable and writes
+// nothing; a failed send is reported as the invitation's delivery state, and a
+// resend with a new secret retries it. The composition root wires it; the API
+// never holds a mailer.
 type InviteSender interface {
-	SendInvite(ctx context.Context, email, acceptURL string, expiresAt time.Time) error
+	SendInvite(ctx context.Context, email, token string, expiresAt time.Time) error
 }
 
 // onboardInput is the POST /v1/onboard payload.
@@ -68,10 +74,18 @@ func (s *Server) handleOnboardMember(w http.ResponseWriter, r *http.Request) {
 		s.badRequest(w, r, "mode must be \"password\" or \"invite\"")
 		return
 	}
+	if in.Mode == "invite" && s.inviteSender == nil {
+		s.writeError(w, r, auth.ErrInviteDeliveryUnavailable)
+		return
+	}
 	res, err := s.authr.OnboardMember(r.Context(), p, tenant, auth.OnboardInput{
 		Email: in.Email, DisplayName: in.DisplayName, Role: in.Role,
 		Password: in.Password, Invite: in.Mode == "invite",
 	})
+	if errors.Is(err, auth.ErrConsentRequired) {
+		writeConsentRequired(w)
+		return
+	}
 	if err != nil {
 		s.writeError(w, r, err)
 		return
@@ -85,29 +99,59 @@ func (s *Server) handleOnboardMember(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 	if res.InviteToken != "" {
-		// Put the bearer token in the URL fragment, which browsers never send in
-		// the HTTP request or Referer header. A query token would be captured by
-		// ordinary ingress/access logs before the SPA had any chance to scrub it.
-		acceptURL := schemeHost(r) + "/accept-invite#token=" + res.InviteToken
 		var expStr string
-		var expTime time.Time
 		if res.ExpiresAt != nil {
 			expStr = res.ExpiresAt.String()
-			expTime = res.ExpiresAt.Time()
-		}
-		// Best-effort email delivery; the token is returned regardless (show-once).
-		if s.inviteSender != nil {
-			if err := s.inviteSender.SendInvite(r.Context(), res.User.Email, acceptURL, expTime); err != nil {
-				s.log.Warn("api: invite email delivery failed; token returned for out-of-band relay",
-					"err", err, "invite", res.InviteID.String(), "request_id", requestID(r.Context()))
-			}
 		}
 		out["invite"] = map[string]any{
-			"id": res.InviteID.String(), "token": res.InviteToken,
-			"accept_url": acceptURL, "expires_at": expStr,
+			"id": res.InviteID.String(), "expires_at": expStr,
+			"delivery": s.deliverInvite(r, res.User.Email, res.InviteID, res.InviteToken, res.ExpiresAt),
 		}
 	}
 	writeJSON(w, http.StatusCreated, out)
+}
+
+// deliverInvite hands the invitation's token to the mailer for the invitee's
+// address and returns the delivery state ("sent" or "failed"). The token travels
+// only in the mail.
+func (s *Server) deliverInvite(r *http.Request, email string, id model.ID, token string, expiresAt *model.Timestamp) string {
+	var exp time.Time
+	if expiresAt != nil {
+		exp = expiresAt.Time()
+	}
+	if err := s.inviteSender.SendInvite(r.Context(), email, token, exp); err != nil {
+		s.log.Warn("api: invitation delivery failed; a resend issues a new secret",
+			"err", err, "invite", id.String(), "request_id", requestID(r.Context()))
+		return "failed"
+	}
+	return "sent"
+}
+
+// handleResendInvite rotates a pending invitation's secret and mails the new
+// link to the invitee. membership:write + AAL3; 409 invite_delivery_unavailable
+// without a mailer.
+func (s *Server) handleResendInvite(w http.ResponseWriter, r *http.Request) {
+	p, tenant, ok := s.authzTenant(w, r, "membership:write")
+	if !ok {
+		return
+	}
+	if !s.requireAAL3(w, r, p) {
+		return
+	}
+	if s.inviteSender == nil {
+		s.writeError(w, r, auth.ErrInviteDeliveryUnavailable)
+		return
+	}
+	inv, token, err := s.authr.ResendInvite(r.Context(), p, tenant, model.ID(chi.URLParam(r, "id")))
+	if err != nil {
+		s.writeError(w, r, err)
+		return
+	}
+	exp := inv.ExpiresAt
+	writeJSON(w, http.StatusAccepted, map[string]any{
+		"id": inv.ID.String(), "expires_at": inv.ExpiresAt.String(),
+		"delivery": s.deliverInvite(r, inv.Email, inv.ID, token, &exp),
+	})
 }
 
 // handleAcceptInvite redeems an invite token: sets the password, activates the

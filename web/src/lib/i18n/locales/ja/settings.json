@@ -1,34 +1,72 @@
 {
   "title": "設定",
-  "subtitle": "アカウントとコンソールの表示を管理します。",
-  "tabs": {
-    "profile": "プロフィール",
-    "appearance": "外観",
-    "about": "情報"
+  "restoreAll": "すべて既定に戻す",
+  "search": "設定を検索",
+  "changedReset": "変更済み · リセット",
+  "noMatches": "一致する設定はありません。",
+  "groups": {
+    "you": "あなた",
+    "work": "作業",
+    "installation": "このインストール"
   },
-  "profile": {
-    "title": "プロフィール",
-    "email": "Email",
-    "displayName": "表示名",
-    "role": "この組織でのロール",
-    "memberships": "組織",
-    "actor": "プリンシパル"
+  "nav": {
+    "general": "一般",
+    "notifications": "通知",
+    "keyboard": "キーボード",
+    "sessionDefaults": "セッションの既定",
+    "aiTools": "AI ツール",
+    "workspaces": "ワークスペース",
+    "deploy": "デプロイと更新",
+    "signIn": "サインインとセキュリティ",
+    "setup": "セットアップ",
+    "about": "情報",
+    "sections": "設定のセクション"
   },
-  "appearance": {
-    "title": "外観",
+  "general": {
+    "title": "一般",
+    "scope": "あなた自身の設定です。このインストールのすべてのワークスペースに付いていきます。",
     "theme": "テーマ",
-    "themeHint": "ライト、ダーク、またはシステム設定に従う、から選択します。",
-    "density": "テーブルの行間隔",
-    "densityHint": "コンパクトはより多くの行を表示し、ゆったりは余白が広くなります。",
+    "themeHint": "ライトを選ぶかシステムに従うまで、ダークです。",
+    "density": "密度",
+    "densityHint": "コンパクトは行を多く表示し、ゆったりは読みやすくなります。",
     "language": "言語",
-    "languageHint": "コンソールのインターフェース言語です。"
+    "languageHint": "English, Español, Deutsch, Français, 日本語, Русский, 中文.",
+    "time": "時刻",
+    "timeHint": "時刻はあなたの地域（{{zone}}）で表示します。記録とエクスポートは UTC のままです。",
+    "clock24": "24 時間",
+    "clock12": "12 時間",
+    "startPage": "開始ページ",
+    "startPageHint": "サインインしたときに開くページです。既定: ホーム。",
+    "confirmStop": "セッションを停止する前に確認する",
+    "confirmStopHint": "作業中のセッションを停止が終える前に、一度確認します。",
+    "reduceMotion": "動きを減らす",
+    "reduceMotionHint": "動きをフェードに置き換えます。システムが求めたときにオンになります。"
+  },
+  "unavailable": {
+    "notifications": "通知の設定は、このインストールにはまだ保存されません。",
+    "sessionDefaults": "セッションの既定は、このインストールにはまだ保存されません。",
+    "signIn": "サインインの方針は、この画面ではまだ編集できません。"
+  },
+  "keyboard": {
+    "title": "キーボード",
+    "scope": "このインストールが応答するキーです。だれにとっても同じです。"
   },
   "about": {
     "title": "情報",
+    "scope": "このインストールと、サインイン中のプリンシパルです。",
     "version": "バージョン",
     "engine": "ストアエンジン",
-    "license": "ライセンスステータス",
+    "license": "ライセンスの状態",
     "licensee": "ライセンス先",
-    "none": "なし"
+    "none": "なし",
+    "displayName": "表示名",
+    "actor": "プリンシパル",
+    "role": "この組織でのロール",
+    "memberships": "組織"
+  },
+  "stopConfirm": {
+    "title": "このセッションを停止しますか？",
+    "description": "停止は、まだ作業中のセッションを終えます。",
+    "confirm": "セッションを停止"
   }
 }

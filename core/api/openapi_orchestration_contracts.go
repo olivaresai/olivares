@@ -57,9 +57,22 @@ func orchestrationRequestBodyDeclarationFor(r moduleRoute) (orchestrationRequest
 		return orchestrationBodyDeclaration(false, orchestrationApprovalSchema(false)), true
 	case http.MethodPost + " /workflows/{id}/dry-run":
 		return orchestrationRequestBodyDeclaration{kind: orchestrationBodyless}, true
+	case http.MethodPost + " /workflows/{id}/runs/{run}/reauthorize":
+		return orchestrationBodyDeclaration(true, orchestrationReauthorizeSchema()), true
 	default:
 		return orchestrationRequestBodyDeclaration{}, false
 	}
+}
+
+// orchestrationReauthorizeSchema is the body of the owning continuation of a
+// gated run (modules/orchestration/workflow_reauthorize.go): one strict JSON
+// document whose plan_hash names the plan the operator reviewed; the handler
+// refuses unknown fields and an empty plan_hash.
+func orchestrationReauthorizeSchema() map[string]any {
+	return orchestrationClosedObject(oaObj(
+		"plan_hash", oaObj("type", "string", "minLength", 1,
+			"description", "The plan hash the operator reviewed; the run is reauthorized only against this plan."),
+	), "plan_hash")
 }
 
 func orchestrationBodyDeclaration(required bool, schema map[string]any) orchestrationRequestBodyDeclaration {

@@ -18,6 +18,9 @@ package event
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"time"
 
 	"github.com/olivaresai/olivares/sdk/model"
@@ -95,6 +98,8 @@ type Event struct {
 	// process ownership is proven by the runtime that created the process, not by
 	// the channel an observation used (provider-session-identity-lot §3).
 	SourceRegistration *SourceRegistration
+	// InventoryMember is stamped only by the registered host after durable admission.
+	InventoryMember *InventoryMember
 	// Time is when the underlying fact occurred (the connector's clock).
 	Time time.Time
 	// Payload is the fact. For the first-party Types it is a model.Observation;
@@ -255,4 +260,59 @@ func MetricOf(e Event) (model.MetricSample, bool) {
 	default:
 		return model.MetricSample{}, false
 	}
+}
+
+// InventoryRun is host-owned identity for one Gather; the recorder assigns order.
+type InventoryRun struct {
+	ID, Tenant   string
+	Registration SourceRegistration
+	StartedAt    time.Time
+}
+
+// InventoryMember binds the actual admitted event to one immutable ordinal.
+type InventoryMember struct {
+	RunID   string `json:"run_id"`
+	Ordinal int64  `json:"ordinal"`
+	Digest  string `json:"digest"`
+}
+
+// InventoryFinish carries the host-closed proposal and exact admitted population.
+type InventoryFinish struct {
+	Report     model.InventoryCollectionReport
+	Expected   int64
+	FinishedAt time.Time
+}
+
+// InventoryRecorder is the collection-result persistence seam. None of these
+// methods publish events; member projection joins the existing receipt transaction.
+type InventoryRecorder interface {
+	BeginRun(context.Context, InventoryRun) error
+	StartCollection(context.Context, InventoryRun, model.InventoryCollectionStart) error
+	AdmitMember(context.Context, InventoryRun, string, InventoryMember) error
+	FinishRun(context.Context, InventoryRun, InventoryFinish) error
+}
+
+// InventoryMemberDigest binds the event identity and immutable normalized payload.
+func InventoryMemberDigest(e Event) string {
+	edge, ok := EdgeOf(e)
+	if !ok {
+		return ""
+	}
+	edge.ObservedAt = edge.ObservedAt.UTC()
+	// Protobuf treats nil and an empty map identically. Canonicalize that wire
+	// equivalence before binding the payload, without changing C1-v1 facts.
+	if len(edge.Labels) == 0 {
+		edge.Labels = nil
+	}
+	b, err := json.Marshal(struct {
+		ID, Tenant, Source string
+		Registration       *SourceRegistration
+		Time               time.Time
+		Edge               model.EdgeObservation
+	}{e.ID, e.Tenant, e.Source, e.SourceRegistration, e.Time.UTC(), edge})
+	if err != nil {
+		return ""
+	}
+	h := sha256.Sum256(b)
+	return hex.EncodeToString(h[:])
 }

@@ -16,6 +16,7 @@ import (
 
 	"github.com/olivaresai/olivares/connectors/identitysource"
 	"github.com/olivaresai/olivares/core/api"
+	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 )
@@ -101,8 +102,16 @@ func (m *Module) SyncRoster(ctx context.Context, tenant model.TenantID, graph id
 	if m.data == nil {
 		return RosterReport{}, errNoData
 	}
+	// The registry-declared owners and sponsors are fenced references: the
+	// accounts they name are resolved and their standing read before the
+	// transaction, which pins them first (federatedOwnershipAccounts).
+	subjects, err := federatedOwnershipAccounts(ctx, m.standing, graph)
+	if err != nil {
+		return RosterReport{}, err
+	}
 	var rep RosterReport
-	err := m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+	mutate := func(fn func(store.Scope) error) error { return m.data.Mutate(ctx, tenant, fn) }
+	err = auth.FencedWrite(ctx, m.standing, tenant, subjects, auth.FenceDirectory, mutate, func(sc store.Scope, _ bool) error {
 		r, e := reconcileGraph(ctx, sc, graph)
 		if e != nil {
 			return e
@@ -676,7 +685,7 @@ func (m *Module) handleRosterSync(w http.ResponseWriter, r *http.Request, mc api
 			// ⚠ DECLARADO, no introducido aquí: este debugf pasa el error CRUDO del conector, y
 			// core/api/log_handler.go expone un visor de logs a `system:admin`, así que con DEBUG
 			// activo un host, un DN o un fragmento de token pueden llegar a esa API. La línea es
-			// IDÉNTICA a la de main (roster.go:626 allí) — la heredé, no la escribí. Lo que este
+			// IDÉNTICA a la de main (roster.go:635 allí) — la heredé, no la escribí. Lo que este
 			// cambio SÍ altera es la frecuencia: antes el primer fallo abortaba el tenant y se
 			// registraba UNO; ahora se registran todos los de la pasada. Señalado por el contraste
 			// adversarial (P1-2) y dejado fuera de este PR a propósito: redactar el error de
@@ -690,12 +699,21 @@ func (m *Module) handleRosterSync(w http.ResponseWriter, r *http.Request, mc api
 			continue
 		}
 		agg.Sources++
-		err = mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
+		// The registry-declared owners and sponsors are fenced references, as on
+		// the seam path above.
+		subjects, rerr := federatedOwnershipAccounts(r.Context(), mc.Standing, graph)
+		if rerr != nil {
+			writeStoreError(w, rerr)
+			return
+		}
+		mutate := func(fn func(store.Scope) error) error { return mc.Data.Mutate(r.Context(), fn) }
+		var synced RosterReport
+		err = auth.FencedWrite(r.Context(), mc.Standing, mc.Tenant, subjects, auth.FenceDirectory, mutate, func(sc store.Scope, _ bool) error {
 			rep, e := reconcileGraph(r.Context(), sc, graph)
 			if e != nil {
 				return e
 			}
-			agg.add(rep)
+			synced = rep
 			// same federated-ownership mapping as the seam path (SyncRoster).
 			owned, skippedOwn, e := m.syncFederatedOwnership(r.Context(), sc, graph)
 			if e != nil {
@@ -713,10 +731,14 @@ func (m *Module) handleRosterSync(w http.ResponseWriter, r *http.Request, mc api
 			}
 			return auditEvent(r.Context(), sc, mc, "governance.roster.sync", collectionKind, "", meta)
 		})
+		if writeFenceRefusal(w, err) {
+			return
+		}
 		if err != nil {
 			writeStoreError(w, err)
 			return
 		}
+		agg.add(synced)
 	}
 	agg.ProvidersConfigured = matched
 

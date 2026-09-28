@@ -164,6 +164,13 @@ var exactConfigEnvKeys = []string{
 	"OLIVARES_EVENTING_SECRET_KEY",
 	"OLIVARES_EXECUTION_ENVIRONMENT_ID",
 	"OLIVARES_EXTRA_ARGS",
+	// Read once at startup and handed to the FinOps module (admissionreconcile.go): the
+	// instant every writer of the earlier admission build stopped, an RFC 3339 instant in
+	// UTC. Recovery retires a claim those writers staged, but only once five minutes have
+	// passed since that instant and only while no row they left is dated later.
+	"OLIVARES_FINOPS_ADMISSION_LEGACY_WRITERS_STOPPED_AT",
+	// How often the Git publication sweep runs (gitpublishcustody.go); 0 disables it.
+	"OLIVARES_GITPUBLISH_SWEEP_INTERVAL",
 	"OLIVARES_GUARDIAN_SWEEP_INTERVAL",
 	"OLIVARES_HA_LEADER_GATE",
 	"OLIVARES_HA_LEADER_LABEL",
@@ -180,6 +187,9 @@ var exactConfigEnvKeys = []string{
 	"OLIVARES_INFERENCE_PROXY_CONFIG",
 	"OLIVARES_INGEST_TOKEN",
 	"OLIVARES_INSECURE",
+	// The deployment's own email destination invitations are mailed through
+	// (invitemail.go:25).
+	"OLIVARES_INVITE_MAIL_DESTINATION",
 	"OLIVARES_KEY_CUSTODY",
 	"OLIVARES_KEY_WRAP",
 	"OLIVARES_KEY_WRAP_AWS_KEY_ID",

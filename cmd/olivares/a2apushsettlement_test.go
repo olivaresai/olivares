@@ -29,6 +29,18 @@ type recordingA2APushStore struct {
 	reloadCalls int
 }
 
+// ApplyPreparedProtocolReplay records the replay as ApplyProtocolReplay does:
+// the plan's preparation reads the kernel's stores, which this double has none of.
+func (s *recordingA2APushStore) ApplyPreparedProtocolReplay(
+	ctx context.Context,
+	tenant model.TenantID,
+	claim sessions.ProtocolReplayClaim,
+	_ sessions.ProtocolReplayPlan,
+	mutation sessions.ProtocolReplayMutation,
+) (sessions.ProtocolReplayResult, error) {
+	return s.ApplyProtocolReplay(ctx, tenant, claim, mutation)
+}
+
 func (s *recordingA2APushStore) ApplyProtocolReplay(
 	ctx context.Context,
 	_ model.TenantID,

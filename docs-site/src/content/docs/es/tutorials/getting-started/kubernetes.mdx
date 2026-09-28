@@ -154,9 +154,11 @@ y apunta `--admin-dsn` a él.
 ## 3. HA activo-pasivo
 
 Con Postgres como almacén compartido, ejecuta varias réplicas. Una se elige como
-líder (un advisory lock de Postgres); las réplicas en espera responden a `/readyz`
-con `503 {"status":"standby"}` para que el Service solo enrute al líder, y una
-réplica en espera toma el relevo automáticamente cuando el líder desaparece.
+líder mediante un advisory lock de Postgres; las réplicas en espera responden a
+`/readyz` con `503 {"status":"standby"}` para que el Service enrute al líder.
+Cuando el lock queda disponible, una réplica en espera puede ser elegida
+automáticamente. Esta capacidad de elección no cualifica un failover seguro
+ante todos los fallos.
 
 Hay dos cosas estructuralmente obligatorias, y el chart **fuerza ambas**
 (verificamos que las guardas se renderizan como fallos duros, no como avisos):
@@ -177,10 +179,14 @@ helm install olivares deploy/helm/olivares \
   --set core.auditSigningKeySecret=olivares-audit-key
 ```
 
-Los tamaños canónicos de HA son 3 o 5 réplicas, activo-pasivo. Este diseño de
-único escritor es deliberado (encaja con el modelo de consistencia del producto);
-los [números de preparación para producción](/how-to/monitor-with-prometheus/)
-documentan los niveles de disponibilidad que soporta.
+Los tamaños canónicos de HA son 3 o 5 réplicas, activo-pasivo. El diseño de
+único escritor encaja con el modelo de consistencia del producto. Los
+[números de preparación para producción](/how-to/monitor-with-prometheus/) son objetivos operativos, no disponibilidad medida para esta topología.
+Las comprobaciones de epoch y fencing existentes protegen rutas concretas; su
+presencia no acredita cobertura de toda escritura o efecto externo. Antes de
+atribuir niveles de servicio HA logrados, hay que cualificar el fencing de las
+transacciones y el comportamiento de failover, con evidencia de recuperación
+del despliegue concreto.
 
 ## 4. Copias de seguridad cifradas programadas
 
@@ -204,7 +210,7 @@ rol de aplicación bajo `FORCE ROW LEVEL SECURITY`, así que un `CronJob` cablea
 al DSN de la aplicación fallaría en cada ejecución y te dejaría **sin copia de
 seguridad alguna**.
 
-Valores por defecto: cada 6 horas (`backup.schedule` fija tu RPO), retención local
+Valores por defecto: cada 6 horas (`backup.schedule` fija el intervalo de copias, no un RPO observado), retención local
 de 14 días, un PVC de destino dedicado. **Replica el destino fuera del sitio y
 mantén la KEK separada de los paquetes** — una copia de seguridad en el mismo
 clúster no es recuperación ante desastres. Ensaya restauraciones con

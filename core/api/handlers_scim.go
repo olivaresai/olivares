@@ -233,7 +233,7 @@ func (s *Server) scimCreateUser(w http.ResponseWriter, r *http.Request) {
 			writeSCIMError(w, scim.NewError(http.StatusBadRequest, scim.TypeInvalidValue, "userName is required"))
 			return
 		}
-		s.scimInternal(w, r, err)
+		s.scimNotFoundOr(w, r, err)
 		return
 	}
 	usersURL := scimUsersURL(r)
@@ -301,9 +301,12 @@ func (s *Server) scimPatchUser(w http.ResponseWriter, r *http.Request) {
 		writeSCIMError(w, scim.NewError(http.StatusBadRequest, scim.TypeInvalidSyntax, "invalid PatchOp body"))
 		return
 	}
+	// The resource is a member of this tenant, so it is active in the tenant's
+	// view whatever the account's global status: only an explicit active=false in
+	// the patch removes it, never an attribute change applied to a suspended one.
 	current := scim.InboundUser{
 		UserName: cur.Email, ExternalID: cur.ExternalID, DisplayName: cur.DisplayName,
-		Active:         cur.Status == model.StatusActive,
+		Active:         true,
 		EmployeeNumber: cur.EmployeeNumber, Department: cur.Department, Manager: cur.Manager,
 	}
 	patched, perr := scim.ApplyPatch(current, body)
@@ -335,7 +338,7 @@ func (s *Server) scimDeleteUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.authr.SCIMDeprovisionUser(r.Context(), p, tenant, id); err != nil {
-		s.scimInternal(w, r, err)
+		s.scimNotFoundOr(w, r, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -395,14 +398,24 @@ func (s *Server) scimSchema(w http.ResponseWriter, r *http.Request) {
 	writeSCIMError(w, scim.NewError(http.StatusNotFound, "", "unknown schema"))
 }
 
-// scimNotFoundOr writes a SCIM 404 for a not-found/other-tenant member, else an
-// internal error.
+// scimNotFoundOr writes a SCIM 404 for a not-found/other-tenant member, the
+// containment refusals a tenant's connection meets, else an internal error.
 func (s *Server) scimNotFoundOr(w http.ResponseWriter, r *http.Request, err error) {
-	if errors.Is(err, store.ErrNotFound) {
+	switch {
+	case errors.Is(err, store.ErrNotFound):
 		writeSCIMError(w, scim.NewError(http.StatusNotFound, "", "resource not found"))
-		return
+	case errors.Is(err, auth.ErrForeignDomain):
+		writeSCIMError(w, scim.NewError(http.StatusForbidden, "",
+			"domain_claimed_elsewhere: the address's domain is claimed by another organization's identity provider"))
+	case errors.Is(err, auth.ErrNotTenantGoverned):
+		writeSCIMError(w, scim.NewError(http.StatusForbidden, "",
+			"not_tenant_governed: the account is not governed by this organization alone"))
+	case errors.Is(err, auth.ErrRetirementPending):
+		writeSCIMError(w, scim.NewError(http.StatusConflict, "",
+			"retirement_pending: the account's removal from this organization has not completed"))
+	default:
+		s.scimInternal(w, r, err)
 	}
-	s.scimInternal(w, r, err)
 }
 
 // scimInternal logs and writes a SCIM 500 without leaking internals.

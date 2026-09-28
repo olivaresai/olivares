@@ -219,17 +219,17 @@ func (m *Module) registerRuntimeSchema(reg store.ExtensionRegistry) error {
 		Kind:  runKind,
 		Table: runTable,
 		Fields: []model.FieldSpec{
-			{Name: colRunRef, Kind: model.KindText},
-			{Name: colRunName, Kind: model.KindText, Nullable: true},
-			{Name: colTransport, Kind: model.KindText},
-			{Name: colPermissionMode, Kind: model.KindText},
-			{Name: colEffort, Kind: model.KindText, Nullable: true},
-			{Name: colRunModelRef, Kind: model.KindText, Nullable: true},
-			{Name: colWorkspaceRef, Kind: model.KindText, Nullable: true},
+			{Name: colRunRef, Kind: model.KindText, Principal: pdeclNoneRunRef},
+			{Name: colRunName, Kind: model.KindText, Nullable: true, Principal: model.None("an operator-chosen run label, shown only: runtime_dto.go:119")},
+			{Name: colTransport, Kind: model.KindText, Principal: model.None("a run transport, a closed set: runtime_ports.go:39-49, runtime_dto.go:120")},
+			{Name: colPermissionMode, Kind: model.KindText, Principal: pdeclNonePermissionMode},
+			{Name: colEffort, Kind: model.KindText, Nullable: true, Principal: model.None("an effort level, a closed set: runtime_ports.go:98-100, runtime_dto.go:122")},
+			{Name: colRunModelRef, Kind: model.KindText, Nullable: true, Principal: model.None("a model id the launch passes to the child, shown only: runtime_dto.go:123")},
+			{Name: colWorkspaceRef, Kind: model.KindText, Nullable: true, Principal: model.None("the id of a registered host workspace, never an account: workspace.go:82, runtime_dto.go:124")},
 			// Nullable for the expand-contract reason every stamp below gives: an
 			// existing sessions_run gains it on the next boot (reconcileColumns) and a
 			// row that predates it carries no recorded directory.
-			{Name: colRunWorkspacePath, Kind: model.KindText, Nullable: true},
+			{Name: colRunWorkspacePath, Kind: model.KindText, Nullable: true, Principal: model.None("the effective working directory path of the run, shown only: runtime_dto.go:125")},
 			// Nullable for the same expand-contract reason, and read deny-closed: a run
 			// that predates it cannot PROVE the directory is this plane's, so release
 			// leaves it alone instead of removing a path it cannot account for.
@@ -238,7 +238,7 @@ func (m *Module) registerRuntimeSchema(reg store.ExtensionRegistry) error {
 			// template's body — the terms are re-resolved from the template row on every
 			// launch and resume, so a tightened template governs the next relaunch rather
 			// than a snapshot nobody can see going stale. Nullable: an untemplated run.
-			{Name: colTemplateID, Kind: model.KindText, Nullable: true},
+			{Name: colTemplateID, Kind: model.KindText, Nullable: true, Principal: model.None("the id of a workspace template row: runtime.go:1239, runtime_dto.go:126")},
 			// The template's store version at launch. A template is MUTABLE, so its id alone
 			// does not say what a running child was started under; with the revision an
 			// operator can tell an edited template from the terms actually applied, and the
@@ -249,69 +249,69 @@ func (m *Module) registerRuntimeSchema(reg store.ExtensionRegistry) error {
 			// persisting the value is what lets a later boot reconcile a child that outlived
 			// its ceiling, and lets the panel state the limit rather than imply one.
 			{Name: colTemplateCeiling, Kind: model.KindInt, Nullable: true},
-			{Name: colIsolation, Kind: model.KindText},
-			{Name: colState, Kind: model.KindText, Indexed: true},
-			{Name: colClaudeSessionID, Kind: model.KindText, Nullable: true},
+			{Name: colIsolation, Kind: model.KindText, Principal: model.None("an isolation posture, a closed set: runtime_ports.go:70-72, runtime_dto.go:129")},
+			{Name: colState, Kind: model.KindText, Indexed: true, Principal: pdeclNoneRunState},
+			{Name: colClaudeSessionID, Kind: model.KindText, Nullable: true, Principal: model.None("the provider's own conversation id captured from the child's stream, shown only: runtime_bridge.go:180, runtime_dto.go:131")},
 			{Name: colPID, Kind: model.KindInt, Nullable: true},
-			{Name: colCredentialID, Kind: model.KindText, Nullable: true},
+			{Name: colCredentialID, Kind: model.KindText, Nullable: true, Principal: model.None("the id of the per-run credential, a revocation handle and never the bearer value: runtime.go:2412, runtime_dto.go:133")},
 			{Name: colExitCode, Kind: model.KindInt, Nullable: true},
-			{Name: colReason, Kind: model.KindText, Nullable: true},
+			{Name: colReason, Kind: model.KindText, Nullable: true, Principal: model.None("the detail text of the last transition, shown only: runtime.go:2743, runtime_dto.go:135")},
 			{Name: colLastEventSeq, Kind: model.KindInt},
 			{Name: colStartedAt, Kind: model.KindTimestamp, Nullable: true},
 			{Name: colLastActivityAt, Kind: model.KindTimestamp, Nullable: true, Indexed: true},
 			{Name: colStoppedAt, Kind: model.KindTimestamp, Nullable: true},
 			// Governance facts, all nullable so a row that predates them reads
 			// as the safe default (Record.Bool ⇒ false; missing text ⇒ "").
-			{Name: colRunAgentRef, Kind: model.KindText, Nullable: true},
+			{Name: colRunAgentRef, Kind: model.KindText, Nullable: true, Principal: model.None("the run's agent identity string, compared as part of the launch snapshot and shown, never an account: runtime.go:2072, runtime_communication_credential.go:706, runtime_dto.go:141")},
 			{Name: colPEPProvisioned, Kind: model.KindBool, Nullable: true},
 			{Name: colRecordIO, Kind: model.KindBool, Nullable: true},
-			{Name: colApprovalRef, Kind: model.KindText, Nullable: true},
+			{Name: colApprovalRef, Kind: model.KindText, Nullable: true, Principal: model.None("the id of the approval opened for a critical launch, shown only: runtime.go:2073, runtime_dto.go:144")},
 			{Name: colCritical, Kind: model.KindBool, Nullable: true},
 			// SG-02-b: the admission stamp. The claim this run is operating under, written
 			// under that claim's own authority at launch, so a later governed write has a
 			// DURABLE thing to compare the live claim against instead of re-reading the
 			// current fence and comparing it with itself. Nullable: NULL means a run that
 			// predates the control, which the next launch adopts and stamps once.
-			{Name: colClaimHolder, Kind: model.KindText, Nullable: true},
+			{Name: colClaimHolder, Kind: model.KindText, Nullable: true, Principal: pdeclActorRef},
 			{Name: colClaimFence, Kind: model.KindInt, Nullable: true},
-			{Name: colRunClaimSID, Kind: model.KindText, Nullable: true},
+			{Name: colRunClaimSID, Kind: model.KindText, Nullable: true, Principal: pdeclNoneSID},
 			// Nullable for the same expand-contract reason as the stamp above: an
 			// existing sessions_run gains it on the next boot (reconcileColumns),
 			// and a row that predates it carries no lawful lineage.
-			{Name: colRunAuthzWorkspaceID, Kind: model.KindUUID, Nullable: true},
-			{Name: colCommunicationWorkspaceID, Kind: model.KindUUID, Nullable: true},
-			{Name: colWorkCredentialID, Kind: model.KindUUID, Nullable: true},
+			{Name: colRunAuthzWorkspaceID, Kind: model.KindUUID, Nullable: true, Principal: model.None("the core workspace id of the run's authorization lineage, never an account: runtime_schema.go:319-323, identity_read.go:158")},
+			{Name: colCommunicationWorkspaceID, Kind: model.KindUUID, Nullable: true, Principal: model.None("the core workspace id a communication credential was bound to: runtime_communication_credential.go:325, runtime_communication_credential.go:511")},
+			{Name: colWorkCredentialID, Kind: model.KindUUID, Nullable: true, Principal: pdeclNoneRuntimeCredentialHandle},
 			{Name: colWorkCredentialExpiresAt, Kind: model.KindTimestamp, Nullable: true},
-			{Name: colCommunicationCredentialID, Kind: model.KindUUID, Nullable: true},
+			{Name: colCommunicationCredentialID, Kind: model.KindUUID, Nullable: true, Principal: pdeclNoneRuntimeCredentialHandle},
 			{Name: colCommunicationExpiresAt, Kind: model.KindTimestamp, Nullable: true},
-			{Name: colRuntimeLaunchID, Kind: model.KindUUID, Nullable: true},
+			{Name: colRuntimeLaunchID, Kind: model.KindUUID, Nullable: true, Principal: model.None("the id of the run's current launch generation: runtime_communication_credential.go:282, managed_stop_phases.go:497")},
 			// K2: nullable is an expand-contract requirement for historical runs.
-			{Name: colRunWorkItemID, Kind: model.KindUUID, Nullable: true},
+			{Name: colRunWorkItemID, Kind: model.KindUUID, Nullable: true, Principal: model.None("the id of the work item a work launch was dispatched for: runtime_work_lease.go:315, runtime_dto.go:146")},
 			{Name: colRunWorkLeaseFence, Kind: model.KindInt, Nullable: true},
-			{Name: colRunWorkDispatchKey, Kind: model.KindBytes, Nullable: true},
+			{Name: colRunWorkDispatchKey, Kind: model.KindBytes, Nullable: true, Principal: model.None("the digest key of a work dispatch reservation: runtime_work_lease.go:333, runtime_dto.go:148")},
 			{Name: colRunWorkOwnerEpoch, Kind: model.KindInt, Nullable: true},
-			{Name: colRunWorkLaunchSpecHash, Kind: model.KindBytes, Nullable: true},
+			{Name: colRunWorkLaunchSpecHash, Kind: model.KindBytes, Nullable: true, Principal: model.None("a SHA-256 of the complete launch request of a work dispatch, compared only for replay: runtime.go:2435, runtime_work_launch.go:158")},
 			// B1: nullable so an existing sessions_run gains them on the next boot
 			// (reconcileColumns) and a pre-profile row reads as "no profile".
-			{Name: colRunProfileID, Kind: model.KindText, Nullable: true, Indexed: true},
-			{Name: colRunProfileDriver, Kind: model.KindText, Nullable: true},
-			{Name: colRunProfileEnvRef, Kind: model.KindText, Nullable: true},
-			{Name: colRunProfileConfigHome, Kind: model.KindText, Nullable: true},
-			{Name: colRunProfileUserHome, Kind: model.KindText, Nullable: true},
+			{Name: colRunProfileID, Kind: model.KindText, Nullable: true, Indexed: true, Principal: pdeclNoneProfileRef},
+			{Name: colRunProfileDriver, Kind: model.KindText, Nullable: true, Principal: pdeclNoneDriverKey},
+			{Name: colRunProfileEnvRef, Kind: model.KindText, Nullable: true, Principal: pdeclNoneEnvRef},
+			{Name: colRunProfileConfigHome, Kind: model.KindText, Nullable: true, Principal: pdeclNoneHomePath},
+			{Name: colRunProfileUserHome, Kind: model.KindText, Nullable: true, Principal: pdeclNoneHomePath},
 			// Nullable for the same expand-contract reason as the B1 stamp above: an
 			// existing sessions_run gains them on the next boot (reconcileColumns) and a
 			// row that predates them reads as "no authorized source, readiness unknown".
-			{Name: colRunProviderAuthSource, Kind: model.KindText, Nullable: true},
-			{Name: colRunProviderAuthState, Kind: model.KindText, Nullable: true},
-			{Name: colRunProviderRecordRef, Kind: model.KindText, Nullable: true},
-			{Name: colRunLiveRef, Kind: model.KindText, Nullable: true},
+			{Name: colRunProviderAuthSource, Kind: model.KindText, Nullable: true, Principal: pdeclNoneAuthSource},
+			{Name: colRunProviderAuthState, Kind: model.KindText, Nullable: true, Principal: model.None("the provider's reported authentication readiness, a closed set: runtime_provider_auth.go:55-57, runtime_driver.go:893")},
+			{Name: colRunProviderRecordRef, Kind: model.KindText, Nullable: true, Principal: pdeclNoneProviderRecordRef},
+			{Name: colRunLiveRef, Kind: model.KindText, Nullable: true, Principal: model.None("the id of the plane's managed live row for the run: runtime_profile.go:337, runtime_dto.go:156")},
 			// Nullable = UNKNOWN, never zero: see the constants. A run that predates
 			// these columns gains them on the next boot (reconcileColumns) and reads as
 			// "the provider reported no usage", which is what was true.
 			{Name: colRunInputTokens, Kind: model.KindInt, Nullable: true},
 			{Name: colRunOutputTokens, Kind: model.KindInt, Nullable: true},
 			{Name: colRunCostMicroUSD, Kind: model.KindInt, Nullable: true},
-			{Name: colRunUsageModelRef, Kind: model.KindText, Nullable: true},
+			{Name: colRunUsageModelRef, Kind: model.KindText, Nullable: true, Principal: model.None("the model id reported with the run's usage, shown only: runtime_usage.go:374, runtime_dto.go:160")},
 		},
 		// The run's authorization lineage. Unset is HIDDEN, never the tenant
 		// default: see colRunAuthzWorkspaceID. Declaring it is also what turns a
@@ -341,28 +341,36 @@ func (m *Module) registerRuntimeSchema(reg store.ExtensionRegistry) error {
 		Table:      runEventTable,
 		AppendOnly: true, // immutability: no UPDATE/DELETE (engine triggers/grants)
 		Fields: []model.FieldSpec{
-			{Name: colEvRunRef, Kind: model.KindText, Indexed: true},
+			{Name: colEvRunRef, Kind: model.KindText, Indexed: true, Principal: pdeclNoneRunRef},
 			{Name: colEvSeq, Kind: model.KindInt},
 			{Name: colEvAt, Kind: model.KindTimestamp},
-			{Name: colEvEvent, Kind: model.KindText},
-			{Name: colEvFromState, Kind: model.KindText, Nullable: true},
-			{Name: colEvToState, Kind: model.KindText, Nullable: true},
-			{Name: colEvDetail, Kind: model.KindText, Nullable: true},
-			{Name: colEvActor, Kind: model.KindText, Nullable: true},
-			{Name: colEvActorKind, Kind: model.KindText, Nullable: true},
-			{Name: colEvPayloadHash, Kind: model.KindText},
+			{Name: colEvEvent, Kind: model.KindText, Principal: model.None("a lifecycle event name chosen by this module: runtime_ledger.go:189, runtime_dto.go:207")},
+			{Name: colEvFromState, Kind: model.KindText, Nullable: true, Principal: pdeclNoneRunState},
+			{Name: colEvToState, Kind: model.KindText, Nullable: true, Principal: pdeclNoneRunState},
+			{Name: colEvDetail, Kind: model.KindText, Nullable: true, Principal: model.None("transition detail text, shown only: runtime_ledger.go:196, runtime_dto.go:210")},
+			{Name: colEvActor, Kind: model.KindText, Nullable: true, Principal: pdeclActorRef},
+			{Name: colEvActorKind, Kind: model.KindText, Nullable: true, Principal: model.None("the caller's audit actor kind label, never an account: runtime_api.go:525, runtime_ledger.go:198, runtime_dto.go:212")},
+			{Name: colEvPayloadHash, Kind: model.KindText, Principal: model.None("the hex SHA-256 anchoring the event in the audit chain: runtime_ledger.go:151, runtime_ledger.go:190")},
 			{Name: colEvAuditSeq, Kind: model.KindInt},
 			// K2: complete generation under which a fenced runtime action was
 			// settled. Nullable keeps historical/non-work events compatible.
-			{Name: colEvWorkItemID, Kind: model.KindUUID, Nullable: true},
-			{Name: colEvWorkSID, Kind: model.KindText, Nullable: true},
+			{Name: colEvWorkItemID, Kind: model.KindUUID, Nullable: true, Principal: model.None("the id of the work item whose lease generation settled the action: runtime_ledger.go:200, runtime_dto.go:215")},
+			{Name: colEvWorkSID, Kind: model.KindText, Nullable: true, Principal: pdeclNoneSID},
 			{Name: colEvWorkFence, Kind: model.KindInt, Nullable: true},
 			// P1: which launch generation this terminal event retired, and what the
 			// owner actually observed about that process. The engine's descriptor
 			// reconciler adds both to an existing database before module SQL runs, so
 			// no migration file declares them and no append-only row is rewritten.
-			{Name: colEvRetiredLaunchID, Kind: model.KindUUID, Nullable: true},
-			{Name: colEvTerminalObservation, Kind: model.KindText, Nullable: true},
+			{Name: colEvRetiredLaunchID, Kind: model.KindUUID, Nullable: true, Principal: model.None("the id of the launch generation a terminal event retired: runtime_ledger.go:89-98, runtime_ledger.go:209, runtime_dto.go:218")},
+			{Name: colEvTerminalObservation, Kind: model.KindText, Nullable: true, Principal: model.None("a terminal process observation, a closed set: runtime_ledger.go:63-69, runtime_ledger.go:99")},
 		},
 	})
 }
+
+// Principal declarations of the operated-run descriptors. The run row and its
+// ledger name sessions, profiles, credentials and work by opaque ids; the only
+// principal-bearing columns are the actor strings, kept as evidence.
+var (
+	pdeclNoneRunState                = model.None("a run lifecycle state, a closed set: runtime_ports.go:77-84, runtime_dto.go:168-169, runtime_dto.go:208-209")
+	pdeclNoneRuntimeCredentialHandle = model.None("the id of a runtime credential, a revocation handle and never the bearer value or an account: runtime_communication_credential.go:513-515, runtime_communication_credential.go:560-565")
+)

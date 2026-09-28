@@ -45,6 +45,19 @@ NOTICES FOR THIRD-PARTY COMPONENTS:
     from the OCSF schema project (https://github.com/ocsf/ocsf-schema).
     Copyright OCSF contributors. Licensed under the Apache License, Version 2.0.
 
+  * Geist Variable font (web/src/assets/fonts/geist/), vendored verbatim from the
+    Geist 1.7.2 release (https://github.com/vercel/geist-font).
+    Copyright (c) 2023 Vercel, in collaboration with basement.studio.
+    Licensed under the SIL Open Font License, Version 1.1; the license text ships
+    with the console as web/public/licenses/fonts/Geist-OFL.txt.
+
+  * JetBrains Mono font, Latin subset, weights 400 and 500
+    (web/src/assets/fonts/jetbrains-mono/), vendored verbatim from the Fontsource
+    5.2.8 build of JetBrains Mono (https://github.com/JetBrains/JetBrainsMono).
+    Copyright 2020 The JetBrains Mono Project Authors.
+    Licensed under the SIL Open Font License, Version 1.1; the license text ships
+    with the console as web/public/licenses/fonts/JetBrainsMono-OFL.txt.
+
 Notices for any component vendored later must be appended to this list as required
 by that component's license. The components actually present in a given artifact
 are enumerated in the SBOM published with that artifact.

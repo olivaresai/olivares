@@ -52,14 +52,9 @@ func TestBudgetEvidenceAuthenticatedCollectorDenied(t *testing.T) {
 	h := newHarness(t)
 	admin := h.adminLogin()
 	tenant := h.createOrg(admin, "budget-transport")
-	r := h.do("POST", "/v1/users", admin, map[string]any{"email": "budget@acme.com", "password": "collectorpass123"}, nil)
+	r := h.do("POST", "/v1/users", admin, map[string]any{"email": "budget@acme.com", "password": "collectorpass123", "tenant": tenant.String(), "role": auth.RoleAdmin}, nil)
 	if r.code != http.StatusCreated {
 		t.Fatalf("create user: %d %s", r.code, r.raw)
-	}
-	uid := r.body["id"].(string)
-	r = h.do("POST", "/v1/memberships", admin, map[string]any{"user_id": uid, "tenant": tenant.String(), "role": auth.RoleAdmin}, nil)
-	if r.code != http.StatusCreated {
-		t.Fatalf("membership: %d %s", r.code, r.raw)
 	}
 	r = h.do("POST", "/v1/auth/login", "", map[string]any{"email": "budget@acme.com", "password": "collectorpass123"}, nil)
 	if r.code != http.StatusOK {

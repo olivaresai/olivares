@@ -1,0 +1,244 @@
+{
+  "title": "Git publication",
+  "subtitle": "Push commits, open pull requests and merge through approved publication targets.",
+  "notice": "Every request is checked against the target’s approved bindings and your authority at the moment you send it. An uncertain outcome on the host is never sent again: reconcile it to read the host.",
+  "actions": {
+    "refresh": "Refresh",
+    "newTarget": "New target",
+    "open": "Open",
+    "edit": "Edit",
+    "delete": "Delete",
+    "cancel": "Cancel",
+    "close": "Close",
+    "push": "Push",
+    "pull_request": "Open pull request",
+    "merge": "Merge",
+    "reconcile": "Reconcile",
+    "abandon": "Abandon"
+  },
+  "columns": {
+    "target": "Target",
+    "workspace": "Workspace",
+    "pushPrefix": "Push prefix",
+    "mergeBases": "Merge bases",
+    "version": "Version",
+    "actions": "Actions"
+  },
+  "targets": {
+    "title": "Publication targets",
+    "description": "Each target binds an approved credential and repository to a push prefix and the branches it may merge into.",
+    "empty": "No publication targets",
+    "emptyAdmin": "Select a workspace and create a target from an approved credential binding and repository binding.",
+    "emptyReader": "A target administrator creates targets. Targets you can read are listed here.",
+    "open": "Open target {{id}}"
+  },
+  "target": {
+    "title": "Target {{id}}",
+    "description": "The binding this target publishes through, the authority each action requires and the intents it holds.",
+    "binding": "Binding",
+    "credentialBinding": "Credential binding",
+    "repositoryBinding": "Repository binding",
+    "withheld": "Shown to target administrators only",
+    "noMergeBases": "None",
+    "bindingHint": "Pushes stay under the push prefix, and pull requests and merges go only into the merge bases. The engine checks that both bindings are approved in the workspace each time a request is sent.",
+    "actions": "Actions",
+    "administration": "Target administration",
+    "notHeld": "Not held",
+    "created": "Publication target created",
+    "updated": "Publication target updated",
+    "deleted": "Publication target deleted",
+    "deleteTitle": "Delete target {{id}}?",
+    "deleteDescription": "The engine refuses to delete a target that a dispatching, uncertain or abandoned intent still holds."
+  },
+  "targetForm": {
+    "createTitle": "New publication target",
+    "editTitle": "Edit target {{id}}",
+    "description": "Bind an approved credential and repository to the branches this target may publish.",
+    "credentialHint": "The ID of a credential binding approved in this workspace. The console never sees its secret.",
+    "repositoryHint": "The ID of a repository binding approved in this workspace. Its owner must be one the credential binding allows.",
+    "keepBinding": "Leave empty to keep the current binding.",
+    "prefixHint": "Pushes must stay under this branch prefix. It ends with a slash and may not cover a merge base.",
+    "prefixSlash": "The push prefix must end with a slash.",
+    "basesHint": "The branches pull requests and merges may target, one per line. At most 16.",
+    "create": "Create target",
+    "save": "Save changes"
+  },
+  "effects": {
+    "push": "Push",
+    "pull_request": "Pull request",
+    "merge": "Merge"
+  },
+  "authority": {
+    "requires": "Requires {{permission}}",
+    "requiresAal3": "Requires {{permission}} and a step-up to AAL3"
+  },
+  "publish": {
+    "push": {
+      "title": "Push a commit",
+      "description": "Pushes one exact commit to a branch under {{prefix}}, leased on the branch’s expected current commit.",
+      "submit": "Request push"
+    },
+    "pull_request": {
+      "title": "Open a pull request",
+      "description": "Opens a pull request from a branch under {{prefix}} into a merge base, or adopts the matching open one.",
+      "submit": "Request pull request"
+    },
+    "merge": {
+      "title": "Merge a pull request",
+      "description": "Merges one pull request only while its head is still the reviewed commit.",
+      "submit": "Request merge"
+    }
+  },
+  "fields": {
+    "ref": "Branch ref",
+    "refHint": "A full ref under the push prefix, for example refs/heads/{{prefix}}change.",
+    "expectedOld": "Expected current commit",
+    "expectedOldHint": "Optional. The push is leased on this value; leave it empty for a new branch.",
+    "commit": "Commit",
+    "tree": "Tree",
+    "treeHint": "The commit’s tree ID. The engine refuses the push if the managed repository holds a different tree.",
+    "headRef": "Head branch",
+    "headRefHint": "A branch under {{prefix}}.",
+    "base": "Base branch",
+    "title": "Title",
+    "body": "Description",
+    "draft": "Open as a draft",
+    "number": "Pull request number",
+    "expectedHead": "Reviewed head commit",
+    "expectedHeadHint": "The merge happens only while the pull request’s head is this commit.",
+    "method": "Merge method",
+    "acknowledgeIntent": "Acknowledge abandoned intent",
+    "acknowledgeIntentHint": "Optional. The ID of an abandoned intent that holds this scope. Naming it needs target administration at AAL3.",
+    "operationId": "Operation ID",
+    "operationIdHint": "Sending this same request again with this ID returns the recorded intent. It does not dispatch a second time."
+  },
+  "methods": {
+    "merge": "Merge commit",
+    "squash": "Squash",
+    "rebase": "Rebase"
+  },
+  "states": {
+    "dispatching": "Dispatching",
+    "applied": "Applied",
+    "adopted": "Adopted",
+    "rejected": "Rejected by the host",
+    "not_dispatched": "Not dispatched",
+    "uncertain": "Uncertain",
+    "abandoned": "Abandoned"
+  },
+  "receipts": {
+    "caused": "This request caused the effect on the host.",
+    "existing_effect": "A matching effect already existed on the host and was adopted.",
+    "none": "No effect on the host is attributed to this request."
+  },
+  "outcome": {
+    "toast": "The engine answered: {{state}}",
+    "settled": {
+      "title": "The request is settled"
+    },
+    "uncertain": {
+      "title": "The outcome on the host is uncertain",
+      "body": "The request was dispatched, but its result on the host is not confirmed. It may have landed. Do not send it again: reconcile reads the host and records what it observes."
+    },
+    "rejected": {
+      "title": "The host rejected the request",
+      "body": "The host refused the effect. The intent records the refusal."
+    },
+    "refused": {
+      "title": "The engine refused the request",
+      "code": "Refusal code:"
+    },
+    "unknown": {
+      "title": "The engine’s answer did not arrive",
+      "body": "The request may have been recorded. Open this target’s intents to see whether it was, and reconcile it there if it is uncertain."
+    }
+  },
+  "refusals": {
+    "authority_expired": "The authority check did not finish in time, so the request was not carried out.",
+    "authority_unavailable": "The engine could not decide on this request, so it was not carried out.",
+    "base_not_allowed": "The base branch is not one of this target’s merge bases.",
+    "binding_not_approved": "A credential binding or repository binding is not approved in this workspace.",
+    "content_mismatch": "The commit or tree does not match what the managed repository holds.",
+    "default_branch_refused": "The branch is the repository’s default branch, and publishing to it is refused.",
+    "dispatch_deadline_passed": "The dispatch deadline passed before the request was sent. Nothing was dispatched.",
+    "field_not_accepted": "The request carried a field this route does not accept.",
+    "forbidden": "Your current authority does not allow this action on this target.",
+    "head_mismatch": "The pull request’s head is no longer the reviewed commit.",
+    "host_credential_refused": "The Git host refused the binding’s credential or its scope. Nothing was dispatched.",
+    "host_unavailable": "The Git host could not be reached. Nothing was dispatched.",
+    "intent_settled": "The intent is already settled, so it cannot be abandoned.",
+    "invalid_request": "The request is incomplete or malformed. Check the branch names and commit IDs.",
+    "lookup_incomplete": "The host’s current state could not be read completely, so nothing was dispatched.",
+    "not_found": "The target or intent does not exist, or you cannot see it.",
+    "not_mergeable": "The host reports that the pull request cannot be merged.",
+    "operation_conflict": "This operation ID was already used for a different request.",
+    "protected_branch_refused": "The branch is protected on the host, and publishing to it is refused.",
+    "push_prefix_overlaps_base": "The push prefix would let a push land on a merge base.",
+    "ref_not_allowed": "The branch is not under this target’s push prefix.",
+    "repository_outside_binding": "The repository is outside the owners the credential binding allows.",
+    "runtime_credential_refused": "A session’s runtime credential cannot publish. Act with your own credential.",
+    "scoped_grant_required": "This action needs a scoped grant on this target.",
+    "stale_lease": "The branch no longer holds the expected current commit.",
+    "step_up_required": "This action needs a step-up to AAL3. Complete the step-up when asked.",
+    "subject_mismatch": "This operation ID belongs to a request made by another subject.",
+    "target_changed": "The target changed after the request was admitted. Nothing was dispatched.",
+    "target_in_use": "A dispatching, uncertain or abandoned intent still holds this target.",
+    "unresolved_intent": "An unresolved intent already holds this branch, pull request or merge.",
+    "unsupported_requirement": "The host cannot honour this requirement, for example a rebase merge on GitLab.",
+    "version_conflict": "The target changed since you opened it. Reopen it to see the current version.",
+    "workflow_change_refused": "The commit changes CI workflow files, which this target refuses to publish.",
+    "unknown": "The engine refused the request with a code this console does not describe."
+  },
+  "intents": {
+    "title": "Intents",
+    "empty": "No publication intents are recorded for this target.",
+    "open": "Open intent {{id}}"
+  },
+  "intent": {
+    "title": "Intent {{id}}",
+    "description": "What was requested, what the host was last observed to hold, and whether the host acknowledged the request are recorded separately.",
+    "state": "State",
+    "effect": "Effect",
+    "receipt": "Receipt",
+    "operationId": "Operation ID",
+    "attempt": "Attempt",
+    "targetVersion": "Target version",
+    "reason": "Reason",
+    "authorizedBy": "Taken on by",
+    "dispatchDeadline": "Dispatch deadline",
+    "releaseFailure": "Credential release failure",
+    "requested": "Requested",
+    "observed": "Observed on the host",
+    "notObserved": "The host has not been observed for this intent.",
+    "present": "Present",
+    "sha": "Commit on the host",
+    "headSha": "Head commit",
+    "merged": "Merged",
+    "mergeCommit": "Merge commit",
+    "mergeTree": "Merge tree",
+    "contentMatch": "Head matches the requested commit",
+    "source": "Source",
+    "at": "At",
+    "acknowledged": "Acknowledged by the host",
+    "acknowledgedValue": "Acknowledged",
+    "status": "Host status",
+    "requestId": "Host request ID",
+    "acknowledgedHint": "An acknowledgment is the host’s success response to this request. It is not an observation of the effect.",
+    "yes": "Yes",
+    "no": "No",
+    "observations": "Observations",
+    "observationsEmpty": "No observations are recorded for this intent.",
+    "obs": {
+      "at": "At",
+      "attempt": "Attempt",
+      "source": "Source",
+      "result": "Result",
+      "host": "Host object, status and request"
+    },
+    "abandonedNote": "An administrator took responsibility for this intent. That proves nothing about the host. Its scope stays held until a new request names this intent under Acknowledge abandoned intent.",
+    "abandoned": "Intent abandoned",
+    "abandonTitle": "Abandon intent {{id}}?",
+    "abandonDescription": "Abandoning records that you take responsibility for this unresolved intent. It does not change or read the host, and the scope stays held until a new request acknowledges this intent.",
+    "abandonReason": "Reason (at most 256 characters)"
+  }
+}

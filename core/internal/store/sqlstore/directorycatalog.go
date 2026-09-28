@@ -64,29 +64,47 @@ var directoryEpochCodec = model.Codec[model.DirectoryEpoch]{
 	},
 }
 
+// pdeclNoneRetireAudit* are why no reader resolves a tombstone's audit anchor
+// to a principal: the validator compares it with the audit event appended in
+// the same transaction. pdeclRetireActor is the audit actor that retired the
+// principal ("user:<id>", "agent:<id>", "system", ...), recorded as evidence.
+var (
+	pdeclNoneRetireAuditEvent  = model.None("the id of the audit event appended with the tombstone: core/model/directory.go:200")
+	pdeclNoneRetireAuditHash   = model.None("the 32-byte audit chain hash of that event: core/model/directory.go:206")
+	pdeclNoneRetireAuditAction = model.None("the one audit action the tombstone kind accepts: core/model/directory.go:209")
+	pdeclNoneRetireAuditTarget = model.None("the audit target, which must be the tombstone itself: core/model/directory.go:213")
+	pdeclRetireActor           = model.Ref(model.EncodeUserRef, model.ClassEvidence)
+)
+
 var directoryTombstoneDescriptor = model.EntityDescriptor{
 	Kind:               model.DirectoryTombstoneKind,
 	Table:              "core_directory_tombstone",
 	AppendOnly:         true,
 	RetainOnTenantDrop: true,
 	Fields: []model.FieldSpec{
-		field("principal_kind", model.KindText, false),
-		field("principal_ref", model.KindUUID, false),
-		field("source_kind", model.KindText, false),
-		field("source_id", model.KindUUID, false),
+		pdecl(field("principal_kind", model.KindText, false),
+			model.None("a retired principal kind the validator limits to identity or agent: core/model/directory.go:312")),
+		pdecl(field("principal_ref", model.KindUUID, false),
+			model.None("the retired roster identity or agent row, never an account: core/model/directory.go:312, core/model/directory.go:317")),
+		pdecl(field("source_kind", model.KindText, false),
+			model.None("the source entity kind, core.identity or core.agent: core/model/directory.go:320, core/model/directory.go:326")),
+		pdecl(field("source_id", model.KindUUID, false),
+			model.None("the retired identity or agent source row: core/model/directory.go:330, core/model/directory.go:333")),
 		// The nil UUID is the canonical non-NULL sentinel when workspace does not
 		// participate in the principal identity.
-		field("workspace_ref", model.KindUUID, false),
+		pdecl(field("workspace_ref", model.KindUUID, false),
+			model.None("the workspace the retired recipient was bound in, or the nil sentinel: core/model/directory.go:340")),
 		field("resulting_epoch", model.KindInt, false),
-		field("cause", model.KindText, false),
-		field("actor", model.KindText, false),
+		pdecl(field("cause", model.KindText, false),
+			model.None("a retirement cause from the closed vocabulary matched to the principal kind: core/model/directory.go:349")),
+		pdecl(field("actor", model.KindText, false), pdeclRetireActor),
 		field("retired_at", model.KindTimestamp, false),
-		field("audit_event_id", model.KindUUID, false),
+		pdecl(field("audit_event_id", model.KindUUID, false), pdeclNoneRetireAuditEvent),
 		field("audit_seq", model.KindInt, false),
-		field("audit_hash", model.KindBytes, false),
-		field("audit_action", model.KindText, false),
-		field("audit_target_kind", model.KindText, false),
-		field("audit_target_id", model.KindUUID, false),
+		pdecl(field("audit_hash", model.KindBytes, false), pdeclNoneRetireAuditHash),
+		pdecl(field("audit_action", model.KindText, false), pdeclNoneRetireAuditAction),
+		pdecl(field("audit_target_kind", model.KindText, false), pdeclNoneRetireAuditTarget),
+		pdecl(field("audit_target_id", model.KindUUID, false), pdeclNoneRetireAuditTarget),
 	},
 	Indexes: []model.IndexSpec{
 		{
@@ -192,20 +210,28 @@ var userTombstoneDescriptor = model.EntityDescriptor{
 	AppendOnly:         true,
 	RetainOnTenantDrop: true,
 	Fields: []model.FieldSpec{
-		field("principal_kind", model.KindText, false),
-		field("principal_ref", model.KindUUID, false),
-		field("source_kind", model.KindText, false),
-		field("source_id", model.KindUUID, false),
-		field("resulting_epochs", model.KindJSON, false),
-		field("cause", model.KindText, false),
-		field("actor", model.KindText, false),
+		pdecl(field("principal_kind", model.KindText, false),
+			model.None("the principal kind, which the validator fixes to user: core/model/directory.go:250")),
+		// principal_ref and source_id both hold the erased account's id: the
+		// tombstone records the retirement and grants nothing.
+		pdecl(field("principal_ref", model.KindUUID, false),
+			model.Ref(model.EncodeUserID, model.ClassEvidence)),
+		pdecl(field("source_kind", model.KindText, false),
+			model.None("the source entity kind, fixed to core.user: core/model/directory.go:257")),
+		pdecl(field("source_id", model.KindUUID, false),
+			model.Ref(model.EncodeUserID, model.ClassEvidence)),
+		pdecl(field("resulting_epochs", model.KindJSON, false), model.Nested(map[string]int64(nil), model.ClassEvidence,
+			model.Leaf("{key}", model.None("a tenant id keyed to its resulting epoch: core/model/directory.go:146")))),
+		pdecl(field("cause", model.KindText, false),
+			model.None("a retirement cause the validator fixes to user_erased: core/model/directory.go:268")),
+		pdecl(field("actor", model.KindText, false), pdeclRetireActor),
 		field("retired_at", model.KindTimestamp, false),
-		field("audit_event_id", model.KindUUID, false),
+		pdecl(field("audit_event_id", model.KindUUID, false), pdeclNoneRetireAuditEvent),
 		field("audit_seq", model.KindInt, false),
-		field("audit_hash", model.KindBytes, false),
-		field("audit_action", model.KindText, false),
-		field("audit_target_kind", model.KindText, false),
-		field("audit_target_id", model.KindUUID, false),
+		pdecl(field("audit_hash", model.KindBytes, false), pdeclNoneRetireAuditHash),
+		pdecl(field("audit_action", model.KindText, false), pdeclNoneRetireAuditAction),
+		pdecl(field("audit_target_kind", model.KindText, false), pdeclNoneRetireAuditTarget),
+		pdecl(field("audit_target_id", model.KindUUID, false), pdeclNoneRetireAuditTarget),
 	},
 	Indexes: []model.IndexSpec{
 		{

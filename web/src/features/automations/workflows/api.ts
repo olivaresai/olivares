@@ -7,6 +7,7 @@ import type {
   CreateWorkflowInput,
   DryRunResponse,
   PatchWorkflowInput,
+  ReauthorizeRunResponse,
   RunWorkflowResponse,
   WorkflowDetail,
   WorkflowListResponse,
@@ -53,6 +54,14 @@ export const workflowsApi = {
   runDetail: (id: string, runId: string) =>
     http.get<WorkflowRun>(
       `${workflowPath(id)}/runs/${encodeURIComponent(runId)}`,
+    ),
+  // Continues a run paused for reauthentication under the caller's current
+  // credential. plan_hash is the plan the operator reviewed; the engine refuses
+  // any other (modules/orchestration/workflow_reauthorize.go).
+  reauthorize: (id: string, runId: string, planHash: string) =>
+    http.post<ReauthorizeRunResponse>(
+      `${workflowPath(id)}/runs/${encodeURIComponent(runId)}/reauthorize`,
+      { plan_hash: planHash },
     ),
   // ⛔ LAS DOS LISTAS DE OPCIONES DEL EDITOR, con su techo. Van a los MISMOS handlers que los
   // raíles de la pestaña de aterrizaje —`modules/orchestration/schedules.go:343` y

@@ -83,6 +83,6 @@ v1 の労力を競うほどには変えないからです。
 ## 関連
 
 - [モジュール XXIII — モデルオペレーション](/ja/reference/modules/xxiii-model-operations/) — 出荷済みの自社モデル統治面:レジストリ、アドミッション、リネージ、デプロイメント、AIBOM。
-- [モジュールカタログ](/ja/reference/modules/overview/) — 出荷済みの30個のモジュールと、自社モデル作業の位置づけ。
+- [モジュールカタログ](/ja/reference/modules/overview/) — 出荷済みの31個のモジュールと、自社モデル作業の位置づけ。
 - [モジュール X — モデルとプロバイダーの管理](/ja/reference/modules/x-models/) — ベンダーモデルスタックを統治する出荷済みの隣人。
 - [誠実さと制約](/ja/start/honesty-and-limits/) — 広く観測し、サブセットに対して行動する契約と、「計画中」の意味。

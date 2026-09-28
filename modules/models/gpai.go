@@ -61,7 +61,7 @@ func registerGPAISchema(reg store.ExtensionRegistry) error {
 		Kind:  GPAIPostureKind,
 		Table: gpaiPostureTable,
 		Fields: []model.FieldSpec{
-			{Name: colGPAIProvider, Kind: model.KindText, Indexed: true},
+			{Name: colGPAIProvider, Kind: model.KindText, Indexed: true, Principal: model.None("a model-provider reference required at gpai.go:176-180, matched only at aibom.go:310, inventory.go:93")},
 			{Name: colGPAICoP, Kind: model.KindBool},
 			{Name: colGPAITechDocs, Kind: model.KindBool},
 			{Name: colGPAITrainData, Kind: model.KindBool},
@@ -70,10 +70,10 @@ func registerGPAISchema(reg store.ExtensionRegistry) error {
 			{Name: colGPAISystemic, Kind: model.KindBool},
 			{Name: colGPAISafety, Kind: model.KindBool},
 			{Name: colGPAIVerified, Kind: model.KindBool, Indexed: true},
-			{Name: colGPAIMethod, Kind: model.KindText, Nullable: true},
-			{Name: colGPAIAttestedBy, Kind: model.KindText, Nullable: true},
-			{Name: colGPAIAttestedAt, Kind: model.KindText, Nullable: true},
-			{Name: colGPAINote, Kind: model.KindText, Nullable: true},
+			{Name: colGPAIMethod, Kind: model.KindText, Nullable: true, Principal: model.None("operator prose only rendered at gpai.go:133")},
+			{Name: colGPAIAttestedBy, Kind: model.KindText, Nullable: true, Principal: pdeclActorEvidence},
+			{Name: colGPAIAttestedAt, Kind: model.KindText, Nullable: true, Principal: model.None("a timestamp the writer formats at gpai.go:188")},
+			{Name: colGPAINote, Kind: model.KindText, Nullable: true, Principal: model.None("operator prose only rendered at gpai.go:134")},
 		},
 		Indexes: []model.IndexSpec{{
 			Name: "models_gpai_posture_uniq", Columns: []string{model.ColTenantID, colGPAIProvider}, Unique: true,

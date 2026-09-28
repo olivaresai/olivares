@@ -396,12 +396,13 @@ func (d *directNoticeFinalExpiryData) Mutate(
 		locker, lockerOK := sc.(store.TransactionLocker)
 		authority, authorityOK := sc.(store.AuthoritySnapshotLocker)
 		directory, directoryOK := sc.(store.DirectorySnapshotReader)
-		if !clockOK || !lockerOK || !authorityOK || !directoryOK {
+		barrier, barrierOK := sc.(store.DirectoryAuthoritySnapshotLocker)
+		if !clockOK || !lockerOK || !authorityOK || !directoryOK || !barrierOK {
 			return errors.New("direct notice final-expiry scope lacks transaction capabilities")
 		}
 		return fn(&directNoticeFinalExpiryScope{
 			Scope: sc, rawClock: clock, locker: locker, authority: authority,
-			directory: directory, data: d,
+			directory: directory, barrier: barrier, data: d,
 		})
 	})
 }
@@ -412,7 +413,10 @@ type directNoticeFinalExpiryScope struct {
 	locker    store.TransactionLocker
 	authority store.AuthoritySnapshotLocker
 	directory store.DirectorySnapshotReader
-	data      *directNoticeFinalExpiryData
+	// barrier is the directory authority barrier a command that names accounts
+	// takes its one authority lock through.
+	barrier store.DirectoryAuthoritySnapshotLocker
+	data    *directNoticeFinalExpiryData
 }
 
 func (s *directNoticeFinalExpiryScope) TransactionNow(
@@ -440,6 +444,13 @@ func (s *directNoticeFinalExpiryScope) LockAuthoritySnapshot(
 	facts []store.AuthorizationFactRef,
 ) error {
 	return s.authority.LockAuthoritySnapshot(ctx, facts)
+}
+
+func (s *directNoticeFinalExpiryScope) LockDirectoryAuthoritySnapshot(
+	ctx context.Context,
+	bundle store.AuthoritySnapshotBundle,
+) error {
+	return s.barrier.LockDirectoryAuthoritySnapshot(ctx, bundle)
 }
 
 func (s *directNoticeFinalExpiryScope) ReadDirectoryEpoch(
@@ -975,8 +986,14 @@ func newDirectNoticeFixtureForBackendWithClock(
 		if encodeErr != nil {
 			t.Fatalf("encode ChannelGrant: %v", encodeErr)
 		}
-		if _, createErr := communicationCreateWithID(
-			ctx, fixture.m, fixture.tenant, channelGrantKind, id, record,
+		// With exact authority the sender is an onboarded account, and a grant's
+		// subject is a counted reference, so the grant is written pinned.
+		var named []model.ID
+		if exactAuthority {
+			named = append(named, subject)
+		}
+		if _, createErr := communicationCreateFencedWithID(
+			ctx, fixture.m, fixture.st, fixture.tenant, channelGrantKind, id, record, named...,
 		); createErr != nil {
 			t.Fatalf("create ChannelGrant: %v", createErr)
 		}
@@ -1120,6 +1137,100 @@ func (f directNoticeFixture) command(idempotency model.ID, canary string) Direct
 	}
 }
 
+// bindStoreStanding binds the store's own authenticator as m's standing port,
+// the port the composition binds at boot, so the module's fenced writers read
+// the standing of the accounts they name. With no port they refuse any write
+// naming an account.
+func bindStoreStanding(m *Module, st store.Store) {
+	m.UseStanding(auth.NewAuthenticator(st, nil))
+}
+
+// communicationMutateFenced runs fn in one module transaction that first pins
+// the authority versions of the accounts in users through the directory
+// barrier, as a fenced writer's transaction does: the write seam admits a
+// counted reference to an account only in a transaction that pinned it. An id
+// that names no account is not pinned, and with none fn runs as it would in an
+// ordinary transaction.
+func communicationMutateFenced(
+	ctx context.Context,
+	m *Module,
+	st store.Store,
+	tenant model.TenantID,
+	users []model.ID,
+	fn func(store.Scope) error,
+) error {
+	return auth.FencedWrite(ctx, auth.NewAuthenticator(st, nil), tenant, users, auth.FenceDirectory,
+		func(write func(store.Scope) error) error { return m.data.Mutate(ctx, tenant, write) },
+		func(sc store.Scope, _ bool) error { return fn(sc) })
+}
+
+// userSubjectAccounts returns the account a user grant subject names, for a
+// fenced create to pin; any other subject names none.
+func userSubjectAccounts(subject CommunicationSubjectRef) []model.ID {
+	if subject.Kind != SubjectUser {
+		return nil
+	}
+	account, err := model.ParseID(subject.Ref)
+	if err != nil {
+		return nil
+	}
+	return []model.ID{account}
+}
+
+// communicationCreateFencedWithID is communicationCreateWithID in a transaction
+// that pins the accounts in users, the accounts the row names.
+func communicationCreateFencedWithID(
+	ctx context.Context,
+	m *Module,
+	st store.Store,
+	tenant model.TenantID,
+	kind model.Kind,
+	id model.ID,
+	record model.Record,
+	users ...model.ID,
+) (model.Record, error) {
+	var created model.Record
+	err := communicationMutateFenced(ctx, m, st, tenant, users, func(sc store.Scope) error {
+		repo, err := sc.Ext(kind)
+		if err != nil {
+			return err
+		}
+		created, err = repo.CreateWithID(ctx, id, record)
+		return err
+	})
+	return created, err
+}
+
+// communicationFencedContext returns ctx carrying a communication fence armed
+// with the authority versions of the accounts in users, as
+// fenceCommunicationAccounts arms one for a fenced command.
+func communicationFencedContext(
+	ctx context.Context,
+	st store.Store,
+	tenant model.TenantID,
+	users ...model.ID,
+) (context.Context, error) {
+	refs, err := auth.FenceSubjects(ctx, auth.NewAuthenticator(st, nil), tenant, users)
+	if err != nil {
+		return nil, err
+	}
+	return context.WithValue(ctx, communicationFenceKey{}, &communicationFence{refs: refs}), nil
+}
+
+// lockCommunicationFence takes a communication transaction's one authority lock
+// over the tenant's directory epoch. With a fence armed in ctx that lock is the
+// directory barrier, which pins the fence's accounts, as a fenced command's
+// first lock does.
+func lockCommunicationFence(ctx context.Context, tx *communicationTx) error {
+	epoch, err := tx.directorySnapshotReader().ReadDirectoryEpoch(ctx)
+	if err != nil {
+		return err
+	}
+	return tx.lockAuthoritySnapshot(ctx, []store.AuthorizationFactRef{{
+		Kind: model.DirectoryEpochKind, ID: epoch.ID, Version: epoch.Version,
+	}})
+}
+
 func createDirectNoticeGrantForTest(
 	t *testing.T,
 	fixture directNoticeFixture,
@@ -1145,8 +1256,16 @@ func createDirectNoticeGrantForTest(
 	if err != nil {
 		t.Fatalf("encode direct notice ChannelGrant: %v", err)
 	}
-	if _, err := communicationCreateWithID(
-		context.Background(), fixture.m, fixture.tenant, channelGrantKind, id, record,
+	// In the exact-authority estate a user subject may be an account, and the
+	// grant's subject is a counted reference, so the grant is written pinned.
+	var named []model.ID
+	if fixture.authr != nil && subject.Kind == SubjectUser {
+		if account, parseErr := model.ParseID(subject.Ref); parseErr == nil {
+			named = append(named, account)
+		}
+	}
+	if _, err := communicationCreateFencedWithID(
+		context.Background(), fixture.m, fixture.st, fixture.tenant, channelGrantKind, id, record, named...,
 	); err != nil {
 		t.Fatalf("create direct notice ChannelGrant: %v", err)
 	}

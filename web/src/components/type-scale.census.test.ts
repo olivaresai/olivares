@@ -121,6 +121,9 @@ const AT_THE_STANDARD = [
   'features/saved-views',
   'components/charts',
   'app',
+  // The capture-only components page of the v26.10 primitives, carried to the ladder from
+  // its first line (not a product route; its own HTML entry).
+  'dev',
 ] as const
 
 /**
@@ -214,9 +217,10 @@ describe('the type ladder, across the directories carried to it', () => {
   })
 
   it('offers a step for every role a surface needs to name', () => {
-    // Seven steps, and the census below is the evidence that they are enough: seven
-    // directories were carried across without one exception row.
-    expect(TYPE_SCALE_STEPS).toHaveLength(7)
+    // Eleven steps: the seven every surface already names, each at the design value of
+    // its role, plus the four the v26.10 design adds (hero, body-l, mono, mono-s). The
+    // census above is the evidence that they are enough: no exception row.
+    expect(TYPE_SCALE_STEPS).toHaveLength(11)
     expect(DECLARED).toEqual([])
   })
 })

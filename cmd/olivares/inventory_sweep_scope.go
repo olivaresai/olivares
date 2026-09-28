@@ -86,7 +86,7 @@ func (s inventorySweepScopeSource) ListSweepTenants(ctx context.Context) ([]mode
 // in a stable order.
 //
 // A malformed business row is an ERROR rather than a skip, following the same
-// rule as the promotion census (preparePDPReloadTenants, boot.go:126-140): a row
+// rule as the promotion census (preparePDPReloadTenants, boot.go:127-141): a row
 // this process cannot read is a tenant it cannot account for, and silently
 // dropping it would turn an incomplete census into a clean-looking one.
 //

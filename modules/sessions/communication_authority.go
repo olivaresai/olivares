@@ -7,6 +7,7 @@ package sessions
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync/atomic"
 	"time"
 
@@ -51,10 +52,27 @@ type communicationRequestAuthoritySources struct {
 	source   communicationAuthorizationEvidenceSource
 }
 
+// communicationCredentialBindingResolver is the credential-binding half of the
+// same resolver. It is asserted on the bound resolver rather than added to
+// communicationPrincipalAuthorityResolver, so the one boot call that binds the
+// exact pair carries it and a resolver without it refuses every bound workflow
+// effect.
+type communicationCredentialBindingResolver interface {
+	ResolveCredentialBinding(
+		context.Context, auth.CredentialBinding, auth.CredentialBindingSubject,
+	) (auth.PrincipalRef, error)
+}
+
 var (
 	_ communicationPrincipalAuthorityResolver  = (*auth.Authenticator)(nil)
 	_ communicationAuthorizationEvidenceSource = (*auth.Authorizer)(nil)
+	_ communicationCredentialBindingResolver   = (*auth.Authenticator)(nil)
 )
+
+// errCommunicationCredentialNotCurrent marks, inside the evidence-unknown
+// class, the one refusal that means the exact credential revision is gone:
+// refreshed, revised, rotated, revoked, deleted or expired.
+var errCommunicationCredentialNotCurrent = errors.New("authenticated credential is no longer current")
 
 func (m *Module) useCommunicationRequestAuthoritySources(
 	resolver communicationPrincipalAuthorityResolver,
@@ -84,6 +102,72 @@ func (m *Module) bindCurrentCommunicationRequestAuthority(
 		)
 	}
 	return bindCommunicationRequestAuthority(ctx, sources.resolver, sources.source, ref, question)
+}
+
+// bindWorkflowCredentialAuthority binds current request authority for a
+// workflow effect from the run's credential binding. The subject is the
+// effect's tenant, the run the actor names and the run's user; the binding
+// resolves to the exact credential revision it pins, and that credential goes
+// through the same exact pair as any request. A binding that does not resolve,
+// or whose credential revision is no longer current, is
+// ErrWorkflowReauthenticationRequired; a current-policy denial stays
+// ErrCommunicationForbidden. Nothing here consults the legacy operation port.
+func (m *Module) bindWorkflowCredentialAuthority(
+	ctx context.Context,
+	actor WorkflowCommunicationActor,
+	principal CommunicationPrincipal,
+	question communicationAuthorityQuestion,
+) (communicationRequestAuthority, error) {
+	if ctx == nil || question.validate() != nil || principal.UserID.IsZero() {
+		return communicationRequestAuthority{}, communicationError(
+			ErrCommunicationEvidenceUnknown, "workflow credential authority question is malformed",
+		)
+	}
+	sources := m.communicationAuthoritySources
+	if sources == nil || !communicationPortBound(sources.resolver) ||
+		!communicationPortBound(sources.source) {
+		return communicationRequestAuthority{}, communicationError(
+			ErrCommunicationEvidenceUnknown, "communication request authority sources are unavailable",
+		)
+	}
+	bindings, ok := sources.resolver.(communicationCredentialBindingResolver)
+	if !ok || !communicationPortBound(bindings) {
+		return communicationRequestAuthority{}, communicationError(
+			ErrCommunicationEvidenceUnknown, "workflow credential binding resolver is unavailable",
+		)
+	}
+	ref, err := bindings.ResolveCredentialBinding(ctx, actor.CredentialBinding, auth.CredentialBindingSubject{
+		Tenant: question.entity.TenantID, Kind: auth.CredentialBindingWorkflowRun,
+		Ref: actor.CredentialSubject, User: principal.UserID,
+	})
+	switch {
+	case errors.Is(err, auth.ErrCredentialBindingInvalid):
+		return communicationRequestAuthority{}, fmt.Errorf(
+			"%w: the run's credential binding does not resolve", ErrWorkflowReauthenticationRequired,
+		)
+	case err != nil:
+		// An outage, a cancellation or a timeout says nothing about the
+		// binding: it is unavailable evidence, never a reauthentication.
+		return communicationRequestAuthority{}, communicationError(
+			ErrCommunicationEvidenceUnknown, "workflow credential binding evidence is unavailable",
+		)
+	}
+	bound, err := bindCommunicationRequestAuthority(ctx, sources.resolver, sources.source, ref, question)
+	if errors.Is(err, errCommunicationCredentialNotCurrent) {
+		return communicationRequestAuthority{}, fmt.Errorf(
+			"%w: the run's bound credential is no longer current", ErrWorkflowReauthenticationRequired,
+		)
+	}
+	if err != nil {
+		return communicationRequestAuthority{}, err
+	}
+	inspection, err := bound.contextFor(question)
+	if err != nil || inspection.principal != principal {
+		return communicationRequestAuthority{}, communicationError(
+			ErrCommunicationEvidenceUnknown, "workflow bound credential names another account",
+		)
+	}
+	return bound, nil
 }
 
 // communicationAuthorityQuestion is the server-selected, exact authorization
@@ -275,8 +359,8 @@ func bindCommunicationRequestAuthority(
 	resolved, err := resolver.ResolvePrincipalScope(ctx, ref, question.entity.TenantID)
 	if err != nil {
 		if errors.Is(err, auth.ErrUnauthenticated) {
-			return communicationRequestAuthority{}, communicationError(
-				ErrCommunicationEvidenceUnknown, "authenticated credential is no longer current",
+			return communicationRequestAuthority{}, fmt.Errorf(
+				"%w: %w", ErrCommunicationEvidenceUnknown, errCommunicationCredentialNotCurrent,
 			)
 		}
 		return communicationRequestAuthority{}, communicationError(

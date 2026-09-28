@@ -90,7 +90,7 @@ func writerAttestDescriptor() model.EntityDescriptor {
 		Kind:  writerAttestKind,
 		Table: writerAttestTable,
 		Fields: []model.FieldSpec{
-			{Name: colAttestNonce, Kind: model.KindText},
+			{Name: colAttestNonce, Kind: model.KindText, Principal: model.None("a random per-mutation nonce: egresswriterfence.go:244")},
 			{Name: colAttestCapability, Kind: model.KindInt},
 			// The fence generation the writer OBSERVED. Carried so the proof cannot be made
 			// against a disposition read before the last decision: a node whose cached read is
@@ -159,13 +159,13 @@ func egressExceptionDescriptor() model.EntityDescriptor {
 		Table:      egressExceptionTable,
 		AppendOnly: true,
 		Fields: []model.FieldSpec{
-			{Name: colExcSubRef, Kind: model.KindText, Indexed: true},
-			{Name: colExcKind, Kind: model.KindText},
-			{Name: colExcDigest, Kind: model.KindText},
-			{Name: colExcScheme, Kind: model.KindText},
-			{Name: colExcHost, Kind: model.KindText},
+			{Name: colExcSubRef, Kind: model.KindText, Indexed: true, Principal: model.None("the id of the subscription whose destination was recorded, a match key: egressrollout.go:668")},
+			{Name: colExcKind, Kind: model.KindText, Principal: model.None("a closed authority-grammar set, read back as that grammar: egressrollout.go:807")},
+			{Name: colExcDigest, Kind: model.KindText, Principal: model.None("a digest of the destination authority, the match key: egressrollout.go:669")},
+			{Name: colExcScheme, Kind: model.KindText, Principal: model.None("the destination URL scheme, rendered in the operator report: egressrollout.go:808")},
+			{Name: colExcHost, Kind: model.KindText, Principal: model.None("the destination host without user information, rendered in the operator report: egressrollout.go:809")},
 			{Name: colExcPort, Kind: model.KindInt},
-			{Name: colExcBatch, Kind: model.KindText},
+			{Name: colExcBatch, Kind: model.KindText, Principal: model.None("the seeding pass's timestamp label: egressrollout.go:449")},
 		},
 		Indexes: []model.IndexSpec{{
 			// One row per (subscription, authority). The uniqueness is what makes a
@@ -191,11 +191,11 @@ func egressSeedDescriptor() model.EntityDescriptor {
 		Table:      egressSeedTable,
 		AppendOnly: true,
 		Fields: []model.FieldSpec{
-			{Name: colSeedBatch, Kind: model.KindText},
+			{Name: colSeedBatch, Kind: model.KindText, Principal: model.None("the seeding pass's timestamp label: egressrollout.go:449, egressrollout.go:598")},
 			{Name: colSeedSubs, Kind: model.KindInt},
 			{Name: colSeedExcs, Kind: model.KindInt},
 			{Name: colSeedUnparsed, Kind: model.KindInt},
-			{Name: colSeedDigest, Kind: model.KindText},
+			{Name: colSeedDigest, Kind: model.KindText, Principal: model.None("a fingerprint of the recorded set: egressrollout.go:533")},
 		},
 		Indexes: []model.IndexSpec{{
 			Name:    "eventing_egress_seed_uniq",
@@ -339,26 +339,26 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Kind:  subscriptionKind,
 		Table: subscriptionTable,
 		Fields: []model.FieldSpec{
-			{Name: colSubName, Kind: model.KindText, Indexed: true},
+			{Name: colSubName, Kind: model.KindText, Indexed: true, Principal: model.None("the subscription's display name, rendered and searched: subscription.go:143, search.go:40")},
 			{Name: colSubEnabled, Kind: model.KindBool, Indexed: true},
-			{Name: colSubTypes, Kind: model.KindText},
-			{Name: colSubSources, Kind: model.KindText, Nullable: true},
-			{Name: colSubEndpoint, Kind: model.KindText},
-			{Name: colSubSecret, Kind: model.KindText},
-			{Name: colSubSecretHint, Kind: model.KindText},
-			{Name: colSubRole, Kind: model.KindText},
-			{Name: colSubDescription, Kind: model.KindText, Nullable: true},
-			{Name: colSubOwnerActor, Kind: model.KindText},
-			{Name: colSubOwnerActorK, Kind: model.KindText},
+			{Name: colSubTypes, Kind: model.KindText, Principal: model.None("a list of cataloged event types, validated at write and matched per event: subscription.go:217, capture.go:223")},
+			{Name: colSubSources, Kind: model.KindText, Nullable: true, Principal: model.None("a list of emitter source names, matched per event: capture.go:226")},
+			{Name: colSubEndpoint, Kind: model.KindText, Principal: model.None("the consumer URL, validated at write and dialed at delivery: subscription.go:197, dispatch.go:457")},
+			{Name: colSubSecret, Kind: model.KindText, Principal: model.None("a sealed signing secret: subscription.go:352, dispatch.go:458")},
+			{Name: colSubSecretHint, Kind: model.KindText, Principal: model.None("a digest prefix of the signing secret: subscription.go:701")},
+			{Name: colSubRole, Kind: model.KindText, Principal: model.None("a closed tenant role for the per-event authorization filter: subscription.go:200, dispatch.go:456")},
+			{Name: colSubDescription, Kind: model.KindText, Nullable: true, Principal: model.None("operator prose, rendered only: subscription.go:150")},
+			{Name: colSubOwnerActor, Kind: model.KindText, Principal: pdeclSubscriptionOwner},
+			{Name: colSubOwnerActorK, Kind: model.KindText, Principal: pdeclNoneActorKind},
 			// Unit H. Nullable: the engine's additive reconcile adds it to an existing
 			// table, and a row written before this unit reads as NULL.
-			{Name: colWriterNonce, Kind: model.KindText, Nullable: true},
+			{Name: colWriterNonce, Kind: model.KindText, Nullable: true, Principal: model.None("a random per-mutation nonce stamped by the writer fence: egresswriterfence.go:244, egresswriterfence.go:273")},
 			// auth headers + retry policy (fresh installs; upgraded estates
 			// get these via migration 0002).
-			{Name: colSubAuthType, Kind: model.KindText, Nullable: true},
-			{Name: colSubAuthValSealed, Kind: model.KindText, Nullable: true},
-			{Name: colSubAuthValHint, Kind: model.KindText, Nullable: true},
-			{Name: colSubAuthHeaderName, Kind: model.KindText, Nullable: true},
+			{Name: colSubAuthType, Kind: model.KindText, Nullable: true, Principal: model.None("a closed delivery auth-type set: subscription.go:91-96, subscription.go:230")},
+			{Name: colSubAuthValSealed, Kind: model.KindText, Nullable: true, Principal: model.None("a sealed delivery credential: subscription.go:367, dispatch.go:469")},
+			{Name: colSubAuthValHint, Kind: model.KindText, Nullable: true, Principal: model.None("a digest prefix of the delivery credential: subscription.go:407, subscription.go:701")},
+			{Name: colSubAuthHeaderName, Kind: model.KindText, Nullable: true, Principal: model.None("an HTTP header name, sent at delivery: subscription.go:237, dispatch.go:468")},
 			{Name: colSubMaxAttempts, Kind: model.KindInt, Nullable: true},
 			{Name: colSubInitInterval, Kind: model.KindInt, Nullable: true},
 		},
@@ -377,11 +377,11 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Fields: []model.FieldSpec{
 			// seq is NOT also field-Indexed: the unique index below covers it.
 			{Name: colEvSeq, Kind: model.KindInt},
-			{Name: colEvEventID, Kind: model.KindText},
-			{Name: colEvType, Kind: model.KindText, Indexed: true},
-			{Name: colEvSource, Kind: model.KindText},
+			{Name: colEvEventID, Kind: model.KindText, Principal: model.None("the bus event id, the capture idempotency key: capture.go:159")},
+			{Name: colEvType, Kind: model.KindText, Indexed: true, Principal: model.None("the event type discriminator, matched against subscriptions: replay.go:96")},
+			{Name: colEvSource, Kind: model.KindText, Principal: model.None("the emitting component's name, matched against subscriptions: replay.go:99")},
 			{Name: colEvOccurredAt, Kind: model.KindTimestamp},
-			{Name: colEvPayload, Kind: model.KindText},
+			{Name: colEvPayload, Kind: model.KindText, Principal: model.Scan(model.ClassEvidence)},
 		},
 		Indexes: []model.IndexSpec{
 			{
@@ -418,17 +418,17 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Kind:  deliveryKind,
 		Table: deliveryTable,
 		Fields: []model.FieldSpec{
-			{Name: colDelSubRef, Kind: model.KindUUID, Indexed: true},
-			{Name: colDelEventRef, Kind: model.KindUUID},
-			{Name: colDelEventID, Kind: model.KindText},
+			{Name: colDelSubRef, Kind: model.KindUUID, Indexed: true, Principal: model.None("the id of the subscription a delivery targets, filtered and rendered: replay.go:142, replay.go:169")},
+			{Name: colDelEventRef, Kind: model.KindUUID, Principal: model.None("the id of the captured event row a delivery carries: replay.go:103")},
+			{Name: colDelEventID, Kind: model.KindText, Principal: model.None("the bus event id, rendered only: replay.go:170")},
 			{Name: colDelEventSeq, Kind: model.KindInt},
-			{Name: colDelEventType, Kind: model.KindText, Indexed: true},
-			{Name: colDelStatus, Kind: model.KindText, Indexed: true},
-			{Name: colDelOrigin, Kind: model.KindText},
+			{Name: colDelEventType, Kind: model.KindText, Indexed: true, Principal: model.None("the event type discriminator, filtered by the reader's permissions: replay.go:164")},
+			{Name: colDelStatus, Kind: model.KindText, Indexed: true, Principal: model.None("a closed delivery status set: replay.go:208-213")},
+			{Name: colDelOrigin, Kind: model.KindText, Principal: model.None("a closed delivery origin set (live or replay): capture.go:189, replay.go:106")},
 			{Name: colDelAttempts, Kind: model.KindInt},
 			{Name: colDelNextAt, Kind: model.KindTimestamp, Indexed: true},
 			{Name: colDelLastAt, Kind: model.KindTimestamp, Nullable: true},
-			{Name: colDelLastStatus, Kind: model.KindText, Nullable: true},
+			{Name: colDelLastStatus, Kind: model.KindText, Nullable: true, Principal: model.None("a short outcome class, rendered only: dispatch.go:317, replay.go:177")},
 		},
 		Indexes: []model.IndexSpec{{
 			// The retention sweep's pruning predicate (status is separately
@@ -466,15 +466,15 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Kind:  subscriptionSinkKind,
 		Table: subscriptionSinkTable,
 		Fields: []model.FieldSpec{
-			{Name: colSinkSubRef, Kind: model.KindUUID},
-			{Name: colSinkKind, Kind: model.KindText},
-			{Name: colSinkFormat, Kind: model.KindText, Nullable: true},
-			{Name: colSinkCred, Kind: model.KindText, Nullable: true},
-			{Name: colSinkOpts, Kind: model.KindText, Nullable: true},
-			{Name: colSinkHint, Kind: model.KindText, Nullable: true},
+			{Name: colSinkSubRef, Kind: model.KindUUID, Principal: model.None("the id of the owning subscription, the 1:1 lookup key: sink.go:168")},
+			{Name: colSinkKind, Kind: model.KindText, Principal: model.None("a closed sink-kind set: sink.go:90-105")},
+			{Name: colSinkFormat, Kind: model.KindText, Nullable: true, Principal: model.None("a closed sink-format set: sink.go:116-133")},
+			{Name: colSinkCred, Kind: model.KindText, Nullable: true, Principal: model.None("a sealed sink credential: sink.go:302, sink.go:182")},
+			{Name: colSinkOpts, Kind: model.KindText, Nullable: true, Principal: pdeclSinkOpts},
+			{Name: colSinkHint, Kind: model.KindText, Nullable: true, Principal: model.None("a digest prefix of the sink credential: sink.go:342-347")},
 			// Unit H — the sink profile decides the rendered URL, so it is a destination
 			// surface and carries the same proof as the endpoint.
-			{Name: colWriterNonce, Kind: model.KindText, Nullable: true},
+			{Name: colWriterNonce, Kind: model.KindText, Nullable: true, Principal: model.None("a random per-mutation nonce stamped by the writer fence: egresswriterfence.go:244, egresswriterfence.go:273")},
 		},
 		Indexes: []model.IndexSpec{{
 			// One sink profile per subscription (the 1:1 anchor; leads with the
@@ -524,3 +524,50 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 	}
 	return reg.Migrations(Namespace, sub)
 }
+
+// Principal declarations shared by the eventing descriptors.
+var (
+	// pdeclNoneActorKind is an actor-kind label, never an account reference.
+	pdeclNoneActorKind = model.None("an actor-kind label from a closed set: core/auth/principal.go:243-251, subscription.go:401, revisions.go:81")
+
+	// pdeclSubscriptionOwner is the principal that created a subscription, as its
+	// actor ref. The creation fences what it names and the retirement step reads
+	// it (fence.go, retirement.go).
+	pdeclSubscriptionOwner = model.Ref(model.EncodeUserRef, model.ClassAuthority)
+
+	// pdeclSinkOpts is the SIEM sink's flat routing-option map.
+	pdeclSinkOpts = model.Nested(map[string]string{}, model.ClassEvidence,
+		model.Leaf("{key}", model.None("a routing option name, bounded at write and passed to the sink renderer: subscription.go:125-128, sink.go:220")),
+		model.Leaf("{}", model.None("a non-secret routing value, bounded at write and passed to the sink renderer: subscription.go:125-128, sink.go:220")),
+	)
+
+	// pdeclSnapshotColumn is a leaf copied from a subscription column the restore
+	// re-validates before writing it back.
+	pdeclSnapshotColumn = model.None("a copy of a subscription column in its redacted projection, re-validated before a restore writes it back: subscription.go:141-157, revisions.go:236-244")
+	// pdeclSnapshotSinkColumn is a leaf copied from the sink profile, which a restore
+	// never writes back.
+	pdeclSnapshotSinkColumn = model.None("a copy of a sink-profile column, rendered only; a restore does not write it back: sink.go:536-539, revisions.go:236-243")
+
+	// pdeclSubscriptionSnapshot is the revision ledger's snapshot: the redacted
+	// subscription projection, which carries no owner or other account reference.
+	pdeclSubscriptionSnapshot = model.Nested(subscriptionDTO{}, model.ClassEvidence,
+		model.Leaf("id", model.None("the subscription's row id: subscription.go:142")),
+		model.Leaf("name", pdeclSnapshotColumn),
+		model.Leaf("event_types[]", pdeclSnapshotColumn),
+		model.Leaf("match_sources[]", pdeclSnapshotColumn),
+		model.Leaf("endpoint", pdeclSnapshotColumn),
+		model.Leaf("secret_hint", pdeclSnapshotColumn),
+		model.Leaf("role", pdeclSnapshotColumn),
+		model.Leaf("description", pdeclSnapshotColumn),
+		model.Leaf("created_at", pdeclSnapshotColumn),
+		model.Leaf("updated_at", pdeclSnapshotColumn),
+		model.Leaf("auth_type", pdeclSnapshotColumn),
+		model.Leaf("auth_value_hint", pdeclSnapshotColumn),
+		model.Leaf("auth_header_name", pdeclSnapshotColumn),
+		model.Leaf("sink_kind", pdeclSnapshotSinkColumn),
+		model.Leaf("sink_format", pdeclSnapshotSinkColumn),
+		model.Leaf("sink_opts{key}", pdeclSnapshotSinkColumn),
+		model.Leaf("sink_opts{}", pdeclSnapshotSinkColumn),
+		model.Leaf("sink_cred_hint", pdeclSnapshotSinkColumn),
+	)
+)

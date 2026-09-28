@@ -379,7 +379,7 @@ func newObservabilityTracesExportCmd(flags *authClientFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:   "export <trace-id>",
 		Short: "Export one trace as OTLP-compatible JSON",
-		Long: "export emits the OTLP/JSON form of one trace, for Jaeger, Tempo or Datadog.\n" +
+		Long: "export emits this trace as OTLP/JSON. It is not tested against a named backend.\n" +
 			"The document is the engine's, not this command's: it is written through\n" +
 			"unmodified so that what a collector ingests is byte-for-byte what the control\n" +
 			"plane produced.",

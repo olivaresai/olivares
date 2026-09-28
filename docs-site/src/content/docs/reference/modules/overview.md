@@ -1,7 +1,7 @@
 ---
 title: Modules catalog
 description: >-
-  The 30 modules of Olivares AI — organized by the nine capability areas, with
+  The 31 modules of Olivares AI — organized by the nine capability areas, with
   each module's honest maturity. Olivares AI integrates, manages and secures AI
   in the enterprise, one ground truth: Claude Code at the deepest level, Codex and Grok Build alongside; this is the per-module
   reference.
@@ -9,14 +9,14 @@ description: >-
 
 Olivares AI integrates, manages and secures AI in the enterprise, one ground truth:
 Claude Code at the deepest level, Codex and Grok Build alongside. It is a **modular platform** — one engine, one
-console, and **30 modules** wired into a single binary — that observes where
+console, and **31 modules** wired into a single binary — that observes where
 agents run, governs what they are allowed to do, and (on a growing subset) acts
 on your real infrastructure. Every module (a) consumes normalized events/data
 from the core, (b) declares its entities in the shared data model, and (c)
 exposes its own API endpoints and UI views — without touching the core or other
 modules.
 
-The 30 modules are organized by the **nine capability areas** below. Read each
+The 31 modules are organized by the **nine capability areas** below. Read each
 module's status as **two halves**: *Govern/Observe* (catalog, observe, gate,
 report) is built and wired today; *Actuate* (acting on real infrastructure —
 deploy, dispatch, send, enforce, run) falls into honest states — **live** in the
@@ -31,10 +31,10 @@ by module, and much of the product is pre-1.0 / design-stage where noted (see
 
 The **access map** (`iii-access-map`) — the read/read-write graph of what each
 agent can and does touch, with least-privilege drift = `Permitted ≠ Observed` —
-is **one of the most useful capabilities among the 30**, not the whole product.
+is **one of the most useful capabilities among the 31**, not the whole product.
 The breadth is the point: nine areas, one engine, one console.
 
-## The 30 modules, by capability area
+## The 31 modules, by capability area
 
 Each row links to its module page (`/reference/modules/<slug>/`). The **Actuate**
 column is the honest state of the acting half; `—` means the module
@@ -44,7 +44,7 @@ governs/observes by nature and has no actuation surface.
 
 | Module | Actuate | Purpose |
 |---|---|---|
-| [Inventory & discovery](/reference/modules/i-inventory/) | — | Discover and catalog every agent/session/MCP server/tool/model/identity in the estate. |
+| [Inventory & discovery](/reference/modules/i-inventory/) | — | Discover and catalog the agents, sessions, MCP servers, tools, models and identities that connectors observed. |
 | [Live operation & sessions](/reference/modules/ii-sessions/) | — | Real-time state of each agent and session; also hosts the governed Claude Code session runtime. |
 | [Access & resource map (R/RW)](/reference/modules/iii-access-map/) | — | What each agent accesses, and whether it reads or writes; least-privilege drift = `Permitted ≠ Observed`. |
 | [Orchestration & A2A](/reference/modules/iv-orchestration/) | on-demand | Observe-and-govern the live delegation/communication graph; dispatch is wired on-demand, deny-closed until provisioned. |
@@ -61,6 +61,7 @@ governs/observes by nature and has no actuation surface.
 | [Identity, permissions & governance](/reference/modules/vi-governance/) | — | Who and what can do what, granular: Cedar RBAC + deny-overlay + scoped grants, roster reconciliation, scoped admin/custom roles, break-glass, kill-switch. |
 | [Source & credential scoping](/reference/modules/sourcescope/) | — | Bind sources to a workspace/agent-group; deny-closed scoped resolver + scoped credentials at resolution time. |
 | [Deployment & integration](/reference/modules/vii-deploy/) | on-demand (503) | Plan and govern deployments to real infrastructure; the executor is on-demand — live `apply`/`retire` return `503` until provisioned. |
+| [Governed Git publication](/reference/modules/gitpublish/) | on-demand | Push commits, open pull requests and merge through approved Git-host bindings, with current caller authority and retained intent outcomes. |
 
 > **Identity & access** lives inside [governance](/reference/modules/vi-governance/) —
 > there is no separate module. NHI lifecycle, agent-identity federation, AAL3
@@ -129,14 +130,14 @@ live-ingest is env-gated; posture-export is a neutral read-only projection); `�
 is the honest contract: the product **observes and governs broadly today, and
 actuates on a growing, mostly provision-gated subset** — see
 [Honesty & limits](/start/honesty-and-limits/). The catalog is derived from the
-composition root (`cmd/olivares/wire.go`): all 30 modules are constructed there
-and registered via `rt.AddModule` (verified 2026-07-24).
+composition root (`cmd/olivares/wire.go`): all 31 modules are constructed there
+and registered via `rt.AddModule` (verified 2026-09-27).
 
-## Edition availability seam (not counted among the 30 modules)
+## Edition availability seam (not counted among the 31 modules)
 
-The catalog above is the **30 modules** the composition root constructs as
+The catalog above is the **31 modules** the composition root constructs as
 product modules. Separately, Community registers an availability descriptor
-under the `session-cockpit` API namespace. It is not one of those 30.
+under the `session-cockpit` API namespace. It is not one of those 31.
 
 - [Session cockpit (availability)](/reference/modules/session-cockpit/) —
   zero handlers in Community; `/v1/m/session-cockpit` returns **404 by
@@ -145,10 +146,10 @@ under the `session-cockpit` API namespace. It is not one of those 30.
   [Live operation & sessions](/reference/modules/ii-sessions/) and
   [Run Claude Code with Olivares](/how-to/run-claude-code-with-olivares/).
 
-## Platform & core capabilities (not counted among the 30 modules)
+## Platform & core capabilities (not counted among the 31 modules)
 
 These are real, shipped capabilities, but they are **engine/core/web capabilities**,
-not modules in the `modules/` set — so they are not counted in the 30:
+not modules in the `modules/` set — so they are not counted in the 31:
 
 - [Own API + manage-as-code](/reference/modules/xix-api-manage-as-code/) —
   **Engine/core capability.** The engine's own versioned REST/gRPC API plus the
@@ -159,7 +160,7 @@ not modules in the `modules/` set — so they are not counted in the 30:
 - [Executive dashboards](/reference/modules/xxi-executive-dashboards/) — **Web capability.**
   Leadership console views alongside the technical UI. (Its report-generation
   backend is the [reporting](/reference/modules/reporting/) module, which IS
-  counted among the 30.)
+  counted among the 31.)
 - [Model operations (own models)](/reference/modules/xxiii-model-operations/) —
   **Capability of the models module** (counted through module X's row, not a
   separate row): the governed registry of owned models, signed-model admission,
@@ -170,7 +171,7 @@ not modules in the `modules/` set — so they are not counted in the 30:
 ([xxiii-fine-tuning](/reference/modules/xxiii-fine-tuning/)) — the platform
 governs and records that work today (see model operations above) but does not
 run training or serve inference itself; the executing half is documented
-**planned** work, **not shipped** and not one of the 30.
+**planned** work, **not shipped** and not one of the 31.
 
 ## How modules show up in the API and the bus
 
@@ -185,14 +186,14 @@ run training or serve inference itself; the executing half is documented
 
 ## Layers
 
-The 30 modules build on layers over the engine, alongside the engine/core and
+The 31 modules build on layers over the engine, alongside the engine/core and
 web capabilities above:
 
 - **Engine (layer 0)** — the own-API/manage-as-code and multi-tenancy
-  capabilities (core, not counted in the 30).
+  capabilities (core, not counted in the 31).
 - **Core (layer 1)** — inventory, sessions, access-map, models, health,
   observability.
-- **Management (layer 2)** — capabilities, governance, sourcescope, deploy,
+- **Management (layer 2)** — capabilities, governance, sourcescope, deploy, gitpublish,
   knowledge.
 - **Intelligence (layer 3)** — orchestration, security, recording, inference
   proxy, finops, evals, compliance, reporting, siemforward, posture-export, catalog, notify,

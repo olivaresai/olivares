@@ -103,6 +103,10 @@ type FieldSpec struct {
 	// ONLY a hash". A module that needs a usable, partially-scrubbed value (e.g. a
 	// path with the secret removed) must scrub it in its handler and NOT set Redact.
 	Redact bool
+	// Principal declares what the column says about principals (principal_decl.go).
+	// Every TEXT, JSON, BYTES and UUID column carries one; the completeness check,
+	// the write seam and the retirement steps all read this same declaration.
+	Principal *ColumnDecl
 }
 
 // WorkspaceLineageEncoding says what a lineage column's value CONTAINS, because

@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/engine/enginetest"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
@@ -136,6 +137,7 @@ func runDisabledSelection(t *testing.T, m *Module, st store.Store, tenant model.
 	ctx := context.Background()
 	now := time.Date(2026, 7, 11, 12, 0, 0, 0, time.UTC)
 	m.clock = spendLimitClock{at: now}
+	m.UseStanding(auth.NewAuthenticator(st, nil))
 
 	u1 := createCanonicalUser(t, st, "ses1 member one").ID
 	u2 := createCanonicalUser(t, st, "ses1 member two").ID

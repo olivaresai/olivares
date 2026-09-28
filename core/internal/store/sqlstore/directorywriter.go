@@ -601,6 +601,32 @@ func authGroupDirectoryResolver(
 	}
 }
 
+// authExclusionDirectoryResolver reports the excluding tenant of an exclusion
+// write: its old and new tenant on update, so a moved row fences both.
+func authExclusionDirectoryResolver(
+	inner store.Repository[model.TenantExclusion],
+) directoryTenantResolver[model.TenantExclusion] {
+	return directoryTenantResolver[model.TenantExclusion]{
+		create: func(_ context.Context, e model.TenantExclusion) ([]model.TenantID, error) {
+			return []model.TenantID{e.TargetTenantID}, nil
+		},
+		update: func(ctx context.Context, e model.TenantExclusion) ([]model.TenantID, error) {
+			old, err := inner.Get(ctx, e.ID)
+			if err != nil {
+				return nil, err
+			}
+			return []model.TenantID{old.TargetTenantID, e.TargetTenantID}, nil
+		},
+		delete: func(ctx context.Context, id model.ID) ([]model.TenantID, error) {
+			old, err := inner.Get(ctx, id)
+			if err != nil {
+				return nil, err
+			}
+			return []model.TenantID{old.TargetTenantID}, nil
+		},
+	}
+}
+
 func authGroupMemberDirectoryResolver(
 	ts *tenantScope,
 	memberRepo store.Repository[model.UserGroupMember],

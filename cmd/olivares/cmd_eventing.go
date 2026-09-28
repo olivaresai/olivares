@@ -511,7 +511,7 @@ func eventingSubCreateCmd() *cobra.Command {
 // them, and nothing in either command says that is about to happen: the operator asked to
 // move a URL and got a key rotation they did not request and were not warned about.
 //
-// The HTTP API has had PUT since long before this: modules/eventing/subscription.go:436,
+// The HTTP API has had PUT since long before this: modules/eventing/subscription.go:447,
 // whose own comment states the contract this verb honors — "an empty cred on update means
 // keep the stored one". So the engine was already able to do the right thing and only the
 // CLI could not ask for it. That is the C08 shape exactly.
@@ -591,7 +591,7 @@ func eventingSubUpdateCmd() *cobra.Command {
 			// The SAME destination rules the API applies, and only when the destination
 			// actually changes: re-checking an untouched endpoint would make a subscription
 			// whose host predates today's policy impossible to disable, which is the exact
-			// trap the API's own comment at subscription.go:452 warns about.
+			// trap the API's own comment at subscription.go:463 warns about.
 			//
 			// The subscription id IS passed here, unlike in create. An update NAMES the
 			// subscription, so one whose destination this deployment already had stays
@@ -627,7 +627,7 @@ func eventingSubUpdateCmd() *cobra.Command {
 				//
 				// La definicion interna ya trataba la reactivacion como esa clase de mutacion:
 				// el handler del modulo estampa proof al pasar de desactivado a activado
-				// (modules/eventing/subscription.go:521-545) y el trigger SQLite aplica la misma
+				// (modules/eventing/subscription.go:532-556) y el trigger SQLite aplica la misma
 				// condicion (…/0004_writer_fence_subscription_upd.sql:14-22,52-59). El CLI era el
 				// unico de los tres que no la aplicaba.
 				//

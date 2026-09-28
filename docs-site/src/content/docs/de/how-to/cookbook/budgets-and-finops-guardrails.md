@@ -108,10 +108,13 @@ was die ehrliche Umkehrung einer Erfolgsmetrik ist.
 
 ## Hinweise
 
-- **Bewusst Fail-open:** Wenn der Budget-Check selbst Fehler wirft (ein
-  FinOps-Lesefehler), wird die Inferenz erlaubt statt still blockiert — ein
-  defekter Zähler darf nicht zum Ausfall werden. Der Fehler wird geloggt und
-  ist sichtbar.
+- **Verweigert, wenn das Ledger nicht lesbar ist:** Lässt sich die
+  Budget-Zulassung nicht herstellen (FinOps kann sein Ledger nicht lesen), lehnt
+  der Inferenz-Proxy den Aufruf mit **503**, dem Grund
+  `budget store unreachable (deny-closed)` und `x-should-retry: false` ab, statt
+  ungemessene Ausgaben durchzulassen. Unter den eigenen Gates der Engine behält
+  nur der Session-Start für diesen Fall eine konfigurierbare Haltung
+  (`OLIVARES_SESSION_BUDGET_AVAILABILITY`).
 - Reservierte Kapazität (`reserved_micro_usd`) zählt zum Limit, sodass ein
   Budget nicht durch Vorab-Buchung umgangen werden kann.
 - `cost_type` ist bewusst **keine** Budget-Dimension — Estimated-Fallback-Zeilen

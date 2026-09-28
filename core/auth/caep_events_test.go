@@ -250,10 +250,8 @@ func TestCAEPReceiverSessionRevoke(t *testing.T) {
 		t.Errorf("result = %+v, want session_revoke on %s", res, u.ID)
 	}
 
-	// Session MUST be revoked.
-	if _, err := a.Authenticate(ctx, sessTok); !errors.Is(err, auth.ErrUnauthenticated) {
-		t.Errorf("session after revoke = %v, want ErrUnauthenticated", err)
-	}
+	// The account-scope session is excluded from the tenant, not revoked.
+	assertExcludedFrom(t, ctx, a, sessTok, tenant, "session after revoke")
 	// Tenant-bound token also revoked (revokeUserAccess revokes tenant-bound tokens).
 	if _, err := a.Authenticate(ctx, apiTok); !errors.Is(err, auth.ErrUnauthenticated) {
 		t.Errorf("api token after session revoke = %v, want ErrUnauthenticated", err)
@@ -323,9 +321,7 @@ func TestCAEPReceiverCredentialRevoke(t *testing.T) {
 	}
 
 	// Both session AND API token must be revoked.
-	if _, err := a.Authenticate(ctx, sessTok); !errors.Is(err, auth.ErrUnauthenticated) {
-		t.Errorf("session after credential revoke = %v, want ErrUnauthenticated", err)
-	}
+	assertExcludedFrom(t, ctx, a, sessTok, tenant, "session after credential revoke")
 	if _, err := a.Authenticate(ctx, apiTok); !errors.Is(err, auth.ErrUnauthenticated) {
 		t.Errorf("api token after credential revoke = %v, want ErrUnauthenticated", err)
 	}
@@ -358,10 +354,9 @@ func TestCAEPReceiverDeviceNonCompliantRevoke(t *testing.T) {
 		t.Errorf("result action = %q, want device_noncompliant", res.Action)
 	}
 
-	// Default action is revoke: both session and token must be cut.
-	if _, err := a.Authenticate(ctx, sessTok); !errors.Is(err, auth.ErrUnauthenticated) {
-		t.Errorf("session after device revoke = %v, want ErrUnauthenticated", err)
-	}
+	// Default action is revoke: the tenant-bound token is cut and the
+	// account-scope session is excluded from the tenant.
+	assertExcludedFrom(t, ctx, a, sessTok, tenant, "session after device revoke")
 	if _, err := a.Authenticate(ctx, apiTok); !errors.Is(err, auth.ErrUnauthenticated) {
 		t.Errorf("api token after device revoke = %v, want ErrUnauthenticated", err)
 	}
@@ -396,15 +391,13 @@ func TestCAEPReceiverDeviceNonCompliantStepUp(t *testing.T) {
 		t.Fatalf("device non-compliant step-up = %v", err)
 	}
 
-	// The elevated session should still be accessible (not revoked — just degraded).
-	if _, err := a.Authenticate(ctx, sessTok); err != nil {
-		t.Errorf("elevated session after step-up = %v, want still valid (just degraded)", err)
-	}
-	if _, err := a.Authenticate(ctx, sessTokNormal); err != nil {
-		t.Errorf("normal session after step-up = %v, want still valid", err)
-	}
+	// Neither account-scope session is revoked; the tenant excludes both. Their
+	// assurance is the account's, so the tenant does not lower it (a session
+	// scoped to the tenant would be degraded instead).
+	assertExcludedFrom(t, ctx, a, sessTok, tenant, "elevated session after step-up")
+	assertExcludedFrom(t, ctx, a, sessTokNormal, tenant, "normal session after step-up")
 
-	// Verify AAL was degraded in the store by reading the session back.
+	// Nothing was revoked, and the account-scope sessions keep their assurance.
 	if err := st.AuthView(ctx, func(as store.AuthScope) error {
 		sessions, _, err := as.Sessions().List(ctx, model.Query{
 			Filters: []model.Filter{{Column: "user_id", Op: model.OpEq, Value: u.ID.String()}},
@@ -415,17 +408,92 @@ func TestCAEPReceiverDeviceNonCompliantStepUp(t *testing.T) {
 		}
 		for _, s := range sessions {
 			if s.Revoked {
-				t.Errorf("session %s is revoked after step-up (should only be degraded)", s.ID)
-				continue
-			}
-			if s.AAL > 1 {
-				t.Errorf("session %s AAL = %d after step-up, want ≤ 1", s.ID, s.AAL)
+				t.Errorf("session %s is revoked after step-up (should only be excluded)", s.ID)
 			}
 		}
 		return nil
 	}); err != nil {
 		t.Fatal(err)
 	}
+}
+
+// TestCAEPDeviceStepUpDegradesOnlyTheSessionsScopedToTheTenant: a tenant's
+// device step-up event lowers to AAL1 the account's elevated sessions scoped to
+// that tenant, revoking none, and leaves a session scoped to another tenant at
+// its assurance, on both engines.
+func TestCAEPDeviceStepUpDegradesOnlyTheSessionsScopedToTheTenant(t *testing.T) {
+	for _, engine := range []store.Engine{store.EngineSQLite, store.EnginePostgres} {
+		t.Run(string(engine), func(t *testing.T) {
+			ctx := context.Background()
+			st := openScopeStore(t, engine)
+			a := auth.NewAuthenticator(st, nil)
+			super := mustSuperadmin(t, ctx, a)
+			tenant := provisionTenant(t, st, "acme")
+			other := provisionTenant(t, st, "globex")
+			signer := newES256Signer(t)
+
+			u, _, err := a.SCIMProvisionUser(ctx, super, tenant, auth.SCIMUserInput{UserName: "grace@acme.com", Active: true})
+			if err != nil {
+				t.Fatal(err)
+			}
+			joinThroughStore(t, st, u.ID, other)
+			scoped := mintScopedSession(t, st, u.ID, tenant, 3)
+			foreign := mintScopedSession(t, st, u.ID, other, 3)
+
+			enableCAEPStepUp(t, ctx, a, super, tenant, signer)
+			if _, err := a.CAEPReceiveEvent(ctx, super, tenant, caepEnvFromSET(t, signer.signSET(t, "k1", caepEvent(
+				"https://schemas.openid.net/secevent/caep/event-type/device-compliance-change",
+				u.ID.String(), "j1",
+			)), auth.CAEPDeviceNonCompliant)); err != nil {
+				t.Fatalf("device non-compliant step-up = %v", err)
+			}
+
+			sessions := map[model.ID]model.AuthSession{}
+			if err := st.AuthView(ctx, func(as store.AuthScope) error {
+				list, _, err := as.Sessions().List(ctx, model.Query{
+					Filters: []model.Filter{{Column: "user_id", Op: model.OpEq, Value: u.ID.String()}},
+					Limit:   10,
+				})
+				for _, s := range list {
+					sessions[s.ID] = s
+				}
+				return err
+			}); err != nil {
+				t.Fatal(err)
+			}
+			if s, ok := sessions[scoped]; !ok || s.AAL != 1 || s.AALExpiresAt != nil || s.Revoked {
+				t.Errorf("the session scoped to the tenant after its step-up event = %+v (found %t), want AAL1 with no step-up window, not revoked", s, ok)
+			}
+			if s, ok := sessions[foreign]; !ok || s.AAL != 3 || s.Revoked {
+				t.Errorf("the session scoped to another tenant after the event = %+v (found %t), want AAL3, not revoked", s, ok)
+			}
+		})
+	}
+}
+
+// mintScopedSession creates a live session of userID scoped to tenant, elevated
+// to aal within its step-up window, and returns its id.
+func mintScopedSession(t *testing.T, st store.Store, userID model.ID, tenant model.TenantID, aal int) model.ID {
+	t.Helper()
+	ctx := context.Background()
+	c, err := auth.NewCredential(auth.PrefixSession)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var id model.ID
+	if err := st.AuthMutate(ctx, func(as store.AuthScope) error {
+		window := model.NewTimestamp(time.Now().Add(10 * time.Minute))
+		s, err := as.Sessions().Create(ctx, model.AuthSession{
+			UserID: userID, Selector: c.Selector, SecretHash: c.SecretHash,
+			ExpiresAt: model.NewTimestamp(time.Now().Add(time.Hour)),
+			AAL:       aal, AALExpiresAt: &window, TenantScope: tenant,
+		})
+		id = s.ID
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return id
 }
 
 func TestCAEPReceiverAccountDisable(t *testing.T) {
@@ -454,16 +522,13 @@ func TestCAEPReceiverAccountDisable(t *testing.T) {
 		t.Errorf("result = %+v, want account_disable on %s", res, u.ID)
 	}
 
-	// User must be inactive in the store.
-	got, err := a.SCIMGetMember(ctx, tenant, u.ID)
-	if err != nil || got.Status != model.StatusInactive {
-		t.Fatalf("member after disable = (%v, status=%v), want present+inactive", err, got.Status)
+	// The tenant removes the account from itself; the global status is the
+	// deployment's.
+	if _, err := a.SCIMGetMember(ctx, tenant, u.ID); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("member after disable = %v, want ErrNotFound (offboarded)", err)
 	}
-
-	// Total cut: both session and API token must be revoked.
-	if _, err := a.Authenticate(ctx, sessTok); !errors.Is(err, auth.ErrUnauthenticated) {
-		t.Errorf("session after account disable = %v, want ErrUnauthenticated", err)
-	}
+	assertGlobalStatusActive(t, ctx, st, u.ID)
+	assertExcludedFrom(t, ctx, a, sessTok, tenant, "session after account disable")
 	if _, err := a.Authenticate(ctx, apiTok); !errors.Is(err, auth.ErrUnauthenticated) {
 		t.Errorf("api token after account disable = %v, want ErrUnauthenticated", err)
 	}
@@ -495,10 +560,13 @@ func TestCAEPReceiverCredentialCompromise(t *testing.T) {
 		t.Errorf("result action = %q, want credential_compromise", res.Action)
 	}
 
-	// Total cut: both session and API token must be revoked.
-	if _, err := a.Authenticate(ctx, sessTok); !errors.Is(err, auth.ErrUnauthenticated) {
-		t.Errorf("session after compromise = %v, want ErrUnauthenticated", err)
+	// The tenant removes the account from itself and reports the compromise to
+	// the deployment; the account's other tenants and status are untouched.
+	if _, err := a.SCIMGetMember(ctx, tenant, u.ID); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("member after compromise = %v, want ErrNotFound (offboarded)", err)
 	}
+	assertGlobalStatusActive(t, ctx, st, u.ID)
+	assertExcludedFrom(t, ctx, a, sessTok, tenant, "session after compromise")
 	if _, err := a.Authenticate(ctx, apiTok); !errors.Is(err, auth.ErrUnauthenticated) {
 		t.Errorf("api token after compromise = %v, want ErrUnauthenticated", err)
 	}
@@ -700,9 +768,7 @@ func TestCAEPReceiverSubjectByEmail(t *testing.T) {
 	if res.UserID != u.ID {
 		t.Errorf("resolved user = %s, want %s", res.UserID, u.ID)
 	}
-	if _, err := a.Authenticate(ctx, sessTok); !errors.Is(err, auth.ErrUnauthenticated) {
-		t.Errorf("session after email-subject revoke = %v, want ErrUnauthenticated", err)
-	}
+	assertExcludedFrom(t, ctx, a, sessTok, tenant, "session after email-subject revoke")
 }
 
 // mintUserCredsWithAAL creates a session with a specific AAL level and a
@@ -735,4 +801,34 @@ func mintUserCredsWithAAL(t *testing.T, st store.Store, userID model.ID, tenant 
 		t.Fatal(err)
 	}
 	return sc.Token, tc.Token
+}
+
+// assertExcludedFrom checks that tok still authenticates (an account-scope
+// session carries the account's other tenants) and that its principal is
+// excluded from tenant: a tenant's event never revokes it outright.
+func assertExcludedFrom(t *testing.T, ctx context.Context, a *auth.Authenticator, tok string, tenant model.TenantID, what string) {
+	t.Helper()
+	p, err := a.Authenticate(ctx, tok)
+	if err != nil {
+		t.Errorf("%s = %v, want the account-scope session to authenticate", what, err)
+		return
+	}
+	if !p.ExcludedFrom(tenant) || p.IsMember(tenant) {
+		t.Errorf("%s still carries the tenant that sent the event", what)
+	}
+}
+
+// assertGlobalStatusActive checks that a tenant's event left the account's
+// global status as it was.
+func assertGlobalStatusActive(t *testing.T, ctx context.Context, st store.Store, id model.ID) {
+	t.Helper()
+	if err := st.AuthView(ctx, func(as store.AuthScope) error {
+		u, err := as.Users().Get(ctx, id)
+		if err == nil && u.Status != model.StatusActive {
+			t.Errorf("the tenant's event wrote the account's global status: %q", u.Status)
+		}
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
 }

@@ -788,6 +788,7 @@ func TestCommunicationGuardUpgradeNeedsExplicitReconcileSQLite(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = upgraded.Close() })
 	module.UseData(api.NewModuleData(upgraded))
+	bindStoreStanding(module, upgraded)
 	module.UseCommunicationGuardReconciliationData(
 		NewCommunicationGuardReconciliationData(api.NewModuleData(upgraded)),
 	)
@@ -1322,6 +1323,7 @@ func TestCommunicationGuardReconcileBoundsTransactionsAndPreservesProgressSQLite
 	t.Cleanup(func() { _ = upgraded.Close() })
 	data := api.NewModuleData(upgraded)
 	module.UseData(data)
+	bindStoreStanding(module, upgraded)
 	lateFailure := errors.New("injected late workspace failure")
 	const failAt = extraWorkspaces + 1
 	fault := &communicationGuardFaultData{

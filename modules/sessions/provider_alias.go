@@ -58,12 +58,12 @@ func (m *Module) registerProviderAliasSchema(reg store.ExtensionRegistry) error 
 		Kind:  providerAliasKind,
 		Table: providerAliasTable,
 		Fields: []model.FieldSpec{
-			{Name: colPAProfileID, Kind: model.KindText},
-			{Name: colPAProvider, Kind: model.KindText},
-			{Name: colPAExternalID, Kind: model.KindText},
-			{Name: colPASID, Kind: model.KindText, Indexed: true},
-			{Name: colPARunRef, Kind: model.KindText, Indexed: true},
-			{Name: colPALaunchID, Kind: model.KindUUID},
+			{Name: colPAProfileID, Kind: model.KindText, Principal: pdeclNoneProfileRef},
+			{Name: colPAProvider, Kind: model.KindText, Principal: pdeclNoneDriverKey},
+			{Name: colPAExternalID, Kind: model.KindText, Principal: pdeclNoneScopedProviderSessionID},
+			{Name: colPASID, Kind: model.KindText, Indexed: true, Principal: pdeclNoneSID},
+			{Name: colPARunRef, Kind: model.KindText, Indexed: true, Principal: pdeclNoneRunRef},
+			{Name: colPALaunchID, Kind: model.KindUUID, Principal: model.None("the id of the launch generation that bound the alias: provider_alias.go:116, provider_alias.go:151, provider_alias.go:215")},
 			{Name: colPAClaimFence, Kind: model.KindInt},
 			{Name: colPABoundAt, Kind: model.KindTimestamp},
 		},
@@ -228,3 +228,9 @@ func scopedAliasStatus(err error) int {
 	}
 	return http.StatusInternalServerError
 }
+
+// Principal declarations of the profile-scoped provider aliases. An alias
+// names a session a launched process owns, never an account.
+var (
+	pdeclNoneScopedProviderSessionID = model.None("a provider-issued session id captured from the owned child's stream, part of the scoped alias natural key and never resolved to an account: provider_alias.go:148, provider_alias.go:174, provider_alias.go:214")
+)

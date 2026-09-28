@@ -79,25 +79,34 @@ const (
 // a real question — "what did this producer send" and "is this exact fact
 // already here" — and occurred_at because a reader walks these records by when
 // the fact happened, never by when the row arrived.
-func accessEvidenceProvenanceFields() []model.FieldSpec {
+//
+// content is the family's declaration of its content column, whose Go type
+// differs per family.
+func accessEvidenceProvenanceFields(content *model.ColumnDecl) []model.FieldSpec {
 	return []model.FieldSpec{
 		field(colAESchemaVersion, model.KindInt, false),
-		indexedField(colAEProducer, model.KindText, false),
-		field(colAESourceEventID, model.KindText, false),
-		field(colAEEventType, model.KindText, false),
-		field(colAEAdapter, model.KindText, false),
+		pdecl(indexedField(colAEProducer, model.KindText, false),
+			model.None("the registered producer instance the host attributes the record to: core/model/accessevidence.go:84")),
+		pdecl(field(colAESourceEventID, model.KindText, false),
+			model.None("the producer's original event id: core/model/accessevidence.go:88, sdk/accessevidence.go:938")),
+		pdecl(field(colAEEventType, model.KindText, false),
+			model.None("the family's closed event type: sdk/accessevidence.go:623, core/store/accessevidence.go:232")),
+		pdecl(field(colAEAdapter, model.KindText, false),
+			model.None("the producing adapter's version: core/model/accessevidence.go:95, core/store/accessevidence.go:235")),
 		indexedField(colAEOccurredAt, model.KindTimestamp, false),
 		field(colAERecordedAt, model.KindTimestamp, false),
-		indexedField(colAERecordDigest, model.KindText, false),
-		field(colAELedgerRef, model.KindText, false),
-		field(colAEContent, model.KindJSON, false),
+		pdecl(indexedField(colAERecordDigest, model.KindText, false),
+			model.None("the canonical digest of envelope and content: core/model/accessevidence.go:104, sdk/accessevidence.go:990")),
+		pdecl(field(colAELedgerRef, model.KindText, false),
+			model.None("the hex chain hash of the anchoring ledger event, a pointer that confers nothing: core/model/accessevidence.go:108")),
+		pdecl(field(colAEContent, model.KindJSON, false), content),
 	}
 }
 
-// accessEvidenceFields prepends the shared provenance columns to a family's own
-// columns.
-func accessEvidenceFields(own ...model.FieldSpec) []model.FieldSpec {
-	return append(accessEvidenceProvenanceFields(), own...)
+// accessEvidenceFields prepends the shared provenance columns, with the
+// family's content declaration, to a family's own columns.
+func accessEvidenceFields(content *model.ColumnDecl, own ...model.FieldSpec) []model.FieldSpec {
+	return append(accessEvidenceProvenanceFields(content), own...)
 }
 
 // accessEvidenceIngestIndex is the DB-level ground truth of idempotency: one
@@ -154,14 +163,14 @@ var policyArtifactDescriptor = model.EntityDescriptor{
 	Kind:       model.PolicyArtifactKind,
 	Table:      policyArtifactTable,
 	AppendOnly: true,
-	Fields: accessEvidenceFields(
-		indexedField("authority_id", model.KindText, false),
-		indexedField("surface", model.KindText, false),
-		field("engine", model.KindText, false),
-		indexedField("artifact_digest", model.KindText, false),
-		field("origin", model.KindText, false),
-		indexedField("availability", model.KindText, false),
-		field("governance_surface", model.KindText, true),
+	Fields: accessEvidenceFields(pdeclAEArtifactContent,
+		pdecl(indexedField("authority_id", model.KindText, false), pdeclNoneAEAuthorityID),
+		pdecl(indexedField("surface", model.KindText, false), pdeclNoneAESurface),
+		pdecl(field("engine", model.KindText, false), pdeclNoneAEEngine),
+		pdecl(indexedField("artifact_digest", model.KindText, false), pdeclNoneAEArtifactDigest),
+		pdecl(field("origin", model.KindText, false), pdeclNoneAEOrigin),
+		pdecl(indexedField("availability", model.KindText, false), pdeclNoneAEAvailability),
+		pdecl(field("governance_surface", model.KindText, true), pdeclNoneAEGovSurface),
 		field("governance_revision", model.KindInt, true),
 	),
 	Indexes: []model.IndexSpec{accessEvidenceIngestIndex(policyArtifactTable)},
@@ -182,16 +191,17 @@ var authorityTransitionDescriptor = model.EntityDescriptor{
 	Kind:       model.AuthorityTransitionKind,
 	Table:      authorityTransitionTable,
 	AppendOnly: true,
-	Fields: accessEvidenceFields(
-		field("subject_kind", model.KindText, false),
-		indexedField("subject_ref", model.KindText, false),
-		indexedField("subject_artifact_id", model.KindUUID, true),
-		field("transition", model.KindText, false),
+	Fields: accessEvidenceFields(pdeclAETransitionContent,
+		pdecl(field("subject_kind", model.KindText, false), pdeclNoneAESubjectKind),
+		pdecl(indexedField("subject_ref", model.KindText, false), pdeclNoneAESubjectRef),
+		pdecl(indexedField("subject_artifact_id", model.KindUUID, true),
+			model.None("the artifact row the store resolved inside the tenant, zero for grant and binding subjects: core/model/accessevidence.go:177")),
+		pdecl(field("transition", model.KindText, false), pdeclNoneAETransition),
 		field("authority_sequence", model.KindInt, true),
 		indexedField("effective_at", model.KindTimestamp, false),
 		field("effective_until", model.KindTimestamp, true),
 		field("known_at", model.KindTimestamp, false),
-		field("snapshot_completeness", model.KindText, false),
+		pdecl(field("snapshot_completeness", model.KindText, false), pdeclNoneAESnapshot),
 	),
 	Indexes: []model.IndexSpec{accessEvidenceIngestIndex(authorityTransitionTable)},
 	Checks: []string{
@@ -218,19 +228,19 @@ var actionObservationDescriptor = model.EntityDescriptor{
 	Kind:       model.ActionObservationKind,
 	Table:      actionObservationTable,
 	AppendOnly: true,
-	Fields: accessEvidenceFields(
-		indexedField("question_digest", model.KindText, false),
-		indexedField("stage", model.KindText, false),
-		field("mediation", model.KindText, false),
-		field("prevention", model.KindText, false),
-		field("confirmation", model.KindText, true),
-		indexedField("principal_ref", model.KindText, true),
-		indexedField("resource_ref", model.KindText, true),
-		indexedField("action", model.KindText, false),
-		indexedField("operation_id", model.KindText, true),
-		field("effect_digest", model.KindText, true),
-		indexedField("parent_observation_id", model.KindUUID, true),
-		indexedField("decision_id", model.KindUUID, true),
+	Fields: accessEvidenceFields(pdeclAEObservationContent,
+		pdecl(indexedField("question_digest", model.KindText, false), pdeclNoneAEQuestionDigest),
+		pdecl(indexedField("stage", model.KindText, false), pdeclNoneAEStage),
+		pdecl(field("mediation", model.KindText, false), pdeclNoneAEMediation),
+		pdecl(field("prevention", model.KindText, false), pdeclNoneAEPrevention),
+		pdecl(field("confirmation", model.KindText, true), pdeclNoneAEConfirmation),
+		pdecl(indexedField("principal_ref", model.KindText, true), pdeclScanAEEvidence),
+		pdecl(indexedField("resource_ref", model.KindText, true), pdeclNoneAEResource),
+		pdecl(indexedField("action", model.KindText, false), pdeclNoneAEAction),
+		pdecl(indexedField("operation_id", model.KindText, true), pdeclNoneAEOperation),
+		pdecl(field("effect_digest", model.KindText, true), pdeclNoneAEEffect),
+		pdecl(indexedField("parent_observation_id", model.KindUUID, true), pdeclNoneAEResolvedRow),
+		pdecl(indexedField("decision_id", model.KindUUID, true), pdeclNoneAEResolvedRow),
 	),
 	Indexes: []model.IndexSpec{accessEvidenceIngestIndex(actionObservationTable)},
 	Checks: []string{
@@ -254,16 +264,16 @@ var authorizationDecisionDescriptor = model.EntityDescriptor{
 	Kind:       model.AuthorizationDecisionKind,
 	Table:      authorizationDecisionTable,
 	AppendOnly: true,
-	Fields: accessEvidenceFields(
-		indexedField("question_digest", model.KindText, false),
-		field("purpose", model.KindText, false),
-		indexedField("outcome", model.KindText, false),
-		field("disposition", model.KindText, true),
+	Fields: accessEvidenceFields(pdeclAEDecisionContent,
+		pdecl(indexedField("question_digest", model.KindText, false), pdeclNoneAEQuestionDigest),
+		pdecl(field("purpose", model.KindText, false), pdeclNoneAEPurpose),
+		pdecl(indexedField("outcome", model.KindText, false), pdeclNoneAEOutcome),
+		pdecl(field("disposition", model.KindText, true), pdeclNoneAEDisposition),
 		field("shadow", model.KindBool, false),
-		indexedField("evaluator", model.KindText, false),
-		field("replay_completeness", model.KindText, false),
-		indexedField("operation_id", model.KindText, true),
-		field("effect_digest", model.KindText, true),
+		pdecl(indexedField("evaluator", model.KindText, false), pdeclNoneAEEvaluator),
+		pdecl(field("replay_completeness", model.KindText, false), pdeclNoneAEReplay),
+		pdecl(indexedField("operation_id", model.KindText, true), pdeclNoneAEOperation),
+		pdecl(field("effect_digest", model.KindText, true), pdeclNoneAEEffect),
 	),
 	Indexes: []model.IndexSpec{accessEvidenceIngestIndex(authorizationDecisionTable)},
 	Checks: []string{
@@ -280,6 +290,182 @@ var authorizationDecisionDescriptor = model.EntityDescriptor{
 			string(sdk.ReplayComplete), string(sdk.ReplayIncomplete), string(sdk.ReplayUnknown)),
 	},
 }
+
+// The declarations of what the access-evidence columns and content leaves say
+// about principals. Every family is retained evidence: no live producer writes
+// these relations yet and no reader turns a stored value into authority; the
+// replay reader rebuilds a request evaluated only against the retained artifact
+// (modules/governance/replay.go:354-377). Principal-bearing strings are
+// therefore evidence, scanned as text because their issuer namespaces vary.
+var (
+	pdeclScanAEEvidence = model.Scan(model.ClassEvidence)
+
+	pdeclNoneAEAuthorityID    = model.None("the issuer the producer names, not accepted as proof of authority: core/model/accessevidence.go:150, sdk/accessevidence.go:640")
+	pdeclNoneAESurface        = model.None("the policy surface label: sdk/accessevidence.go:645")
+	pdeclNoneAEEngine         = model.None("the evaluator that consumes the artifact: sdk/accessevidence.go:647, modules/governance/replay.go:173")
+	pdeclNoneAEArtifactDigest = model.None("the digest of the artifact bytes, recomputed over retained content: core/store/accessevidence.go:374")
+	pdeclNoneAEOrigin         = model.None("a provenance class from the closed vocabulary: core/store/accessevidence.go:334")
+	pdeclNoneAEAvailability   = model.None("a reconstructibility state from the closed vocabulary: core/store/accessevidence.go:336")
+	pdeclNoneAEGovSurface     = model.None("a local policy-revision surface name: sdk/accessevidence.go:657, core/store/accessevidence.go:291")
+
+	pdeclNoneAESubjectKind = model.None("an authority subject kind limited to policy artifact, grant or binding: core/store/accessevidence.go:411")
+	pdeclNoneAESubjectRef  = model.None("the artifact, grant or binding the transition names, never an account: sdk/accessevidence.go:700, core/model/accessevidence.go:177")
+	pdeclNoneAETransition  = model.None("an authority event from the closed vocabulary: core/store/accessevidence.go:415")
+	pdeclNoneAESnapshot    = model.None("a snapshot completeness from the closed vocabulary: core/store/accessevidence.go:417")
+	pdeclNoneAETimestamp   = model.None("canonical UTC timestamp text: sdk/accessevidence.go:718, core/store/accessevidence.go:425, core/store/accessevidence.go:546")
+	pdeclNoneAEReasonCode  = model.None("a stable machine-readable reason code, never prose: sdk/accessevidence.go:722, sdk/accessevidence.go:805")
+	pdeclNoneAEMapKey      = model.None("the name of a scope, condition, obligation or context entry: sdk/accessevidence.go:666, sdk/accessevidence.go:724, sdk/accessevidence.go:808, sdk/accessevidence.go:533")
+
+	pdeclNoneAEQuestionDigest = model.None("the canonical digest of the question: core/model/accessevidence.go:192, sdk/accessevidence.go:564")
+	pdeclNoneAEStage          = model.None("an observed stage from the closed vocabulary: core/store/accessevidence.go:463")
+	pdeclNoneAEMediation      = model.None("a mediation label from the closed vocabulary: core/store/accessevidence.go:465")
+	pdeclNoneAEPrevention     = model.None("a prevention capability from the closed vocabulary: core/store/accessevidence.go:467")
+	pdeclNoneAEConfirmation   = model.None("an effect confirmation level from the closed vocabulary: core/store/accessevidence.go:478")
+	pdeclNoneAEResource       = model.None("the resource named inside its origin scope: sdk/accessevidence.go:518, modules/governance/replay.go:374")
+	pdeclNoneAEAction         = model.None("the protocol's exact operation, its vocabulary version or a coarse mode: sdk/accessevidence.go:525, core/store/accessevidence.go:260")
+	pdeclNoneAEOperation      = model.None("an evidence-journal operation id, a single-use idempotency id: sdk/accessevidence.go:759, sdk/evidence.go:74")
+	pdeclNoneAEEffect         = model.None("an opaque digest of the governed effect binding: sdk/accessevidence.go:759, sdk/evidence.go:86")
+	pdeclNoneAEResolvedRow    = model.None("an observation or decision row the store resolved inside the tenant: core/model/accessevidence.go:196")
+	pdeclNoneAEEvidenceRef    = model.None("a ledger anchor pointer for verification, not a receipt: sdk/accessevidence.go:776, sdk/accessevidence.go:843")
+
+	pdeclNoneAEPurpose     = model.None("a decision purpose from the closed vocabulary: core/store/accessevidence.go:507")
+	pdeclNoneAEOutcome     = model.None("a decision outcome from the closed vocabulary: core/store/accessevidence.go:509")
+	pdeclNoneAEDisposition = model.None("an effective disposition from the closed vocabulary: core/store/accessevidence.go:511")
+	pdeclNoneAEEvaluator   = model.None("the evaluator name or version that decided: core/store/accessevidence.go:515")
+	pdeclNoneAEReplay      = model.None("a replay completeness claim from the closed vocabulary: core/store/accessevidence.go:513")
+)
+
+// pdeclAEQuestionLeaves classifies every occurrence of the normalized access
+// question inside a content document.
+var pdeclAEQuestionLeaves = model.TypeLeaves(sdk.AccessQuestion{},
+	model.Leaf("principal_kind", model.None("an open principal kind label, read only to shape a replayed request: sdk/accessevidence.go:481, modules/governance/replay.go:357")),
+	model.Leaf("principal_ref", pdeclScanAEEvidence),
+	model.Leaf("issuer", model.None("the identity issuer that authenticated the principal: sdk/accessevidence.go:486")),
+	model.Leaf("credential_class", model.None("a credential kind label, never a credential value: sdk/accessevidence.go:488")),
+	model.Leaf("credential_ref", pdeclScanAEEvidence),
+	model.Leaf("actor_ref", pdeclScanAEEvidence),
+	model.Leaf("subject_ref", pdeclScanAEEvidence),
+	model.Leaf("delegation_refs[]", pdeclScanAEEvidence),
+	model.Leaf("agent_ref", pdeclNoneAEBindingRef),
+	model.Leaf("session_ref", pdeclNoneAEBindingRef),
+	model.Leaf("run_ref", pdeclNoneAEBindingRef),
+	model.Leaf("profile_ref", pdeclNoneAEBindingRef),
+	model.Leaf("environment_ref", pdeclNoneAEBindingRef),
+	model.Leaf("workspace_ref", pdeclNoneAEBindingRef),
+	model.Leaf("source_instance", pdeclNoneAEOriginScope),
+	model.Leaf("endpoint", pdeclNoneAEOriginScope),
+	model.Leaf("namespace", pdeclNoneAEOriginScope),
+	model.Leaf("resource_kind", pdeclNoneAEResource),
+	model.Leaf("resource_ref", pdeclNoneAEResource),
+	model.Leaf("resource_attributes_digest", model.None("a digest of the resource attribute snapshot: sdk/accessevidence.go:521")),
+	model.Leaf("action", pdeclNoneAEAction),
+	model.Leaf("action_vocabulary", pdeclNoneAEAction),
+	model.Leaf("mode", pdeclNoneAEAction),
+	model.Leaf("context{key}", pdeclNoneAEMapKey),
+	model.Leaf("context{}", pdeclScanAEEvidence),
+)
+
+// pdeclNoneAEBindingRef and pdeclNoneAEOriginScope are the question's
+// non-principal references.
+var (
+	pdeclNoneAEBindingRef  = model.None("a binding-demonstrated agent, session, run, profile, environment or workspace reference, never an account: sdk/accessevidence.go:501")
+	pdeclNoneAEOriginScope = model.None("the origin scope that makes the resource reference canonical: sdk/accessevidence.go:513")
+)
+
+// pdeclAEDependencyLeaves classifies every typed input a record names.
+var pdeclAEDependencyLeaves = model.TypeLeaves(sdk.AccessDependency{},
+	model.Leaf("kind", model.None("a dependency kind label: sdk/accessevidence.go:572, sdk/accessevidence.go:584")),
+	model.Leaf("ref", model.None("a tenant-scoped reference to a policy artifact, fact, role, membership or binding input, never an account: sdk/accessevidence.go:574, sdk/accessevidence.go:584")),
+	model.Leaf("digest", model.None("a digest binding the input's exact content: sdk/accessevidence.go:576")),
+	model.Leaf("version", model.None("the input's own version or sequence: sdk/accessevidence.go:578")),
+)
+
+// The content declarations of the four families.
+var (
+	pdeclAEArtifactContent = model.Nested(sdk.PolicyArtifactContent{}, model.ClassEvidence,
+		model.Leaf("authority_id", pdeclNoneAEAuthorityID),
+		model.Leaf("surface", pdeclNoneAESurface),
+		model.Leaf("engine", pdeclNoneAEEngine),
+		model.Leaf("native_version", model.None("the issuer's own version string: sdk/accessevidence.go:649")),
+		model.Leaf("artifact_digest", pdeclNoneAEArtifactDigest),
+		model.Leaf("digest_algorithm", model.None("the digest algorithm name: core/store/accessevidence.go:370")),
+		model.Leaf("governance_surface", pdeclNoneAEGovSurface),
+		model.Leaf("origin", pdeclNoneAEOrigin),
+		model.Leaf("authorized_scope{key}", pdeclNoneAEMapKey),
+		model.Leaf("authorized_scope{}", pdeclScanAEEvidence),
+		model.Leaf("availability", pdeclNoneAEAvailability),
+		// content is retained policy text, evaluated only by a replay.
+		model.Leaf("content", pdeclScanAEEvidence),
+		model.Leaf("content_ref", model.None("a durable reference to the protected store that holds the artifact: sdk/accessevidence.go:674")),
+		pdeclAEDependencyLeaves,
+	)
+	pdeclAETransitionContent = model.Nested(sdk.AuthorityTransitionContent{}, model.ClassEvidence,
+		model.Leaf("subject_kind", pdeclNoneAESubjectKind),
+		model.Leaf("subject_ref", pdeclNoneAESubjectRef),
+		model.Leaf("transition", pdeclNoneAETransition),
+		model.Leaf("governance_surface", pdeclNoneAEGovSurface),
+		model.Leaf("effective_at", pdeclNoneAETimestamp),
+		model.Leaf("effective_until", pdeclNoneAETimestamp),
+		model.Leaf("known_at", pdeclNoneAETimestamp),
+		model.Leaf("reason_code", pdeclNoneAEReasonCode),
+		model.Leaf("snapshot_completeness", pdeclNoneAESnapshot),
+		model.Leaf("snapshot_scope{key}", pdeclNoneAEMapKey),
+		model.Leaf("snapshot_scope{}", pdeclScanAEEvidence),
+		model.Leaf("conditions{key}", pdeclNoneAEMapKey),
+		model.Leaf("conditions{}", pdeclScanAEEvidence),
+	)
+	pdeclAEObservationContent = model.Nested(sdk.ActionObservationContent{}, model.ClassEvidence,
+		pdeclAEQuestionLeaves,
+		model.Leaf("stage", pdeclNoneAEStage),
+		model.Leaf("mediation", pdeclNoneAEMediation),
+		model.Leaf("prevention", pdeclNoneAEPrevention),
+		model.Leaf("prevention_detail{key}", pdeclNoneAEPreventionDetail),
+		model.Leaf("prevention_detail{}", pdeclNoneAEPreventionDetail),
+		model.Leaf("confirmation", pdeclNoneAEConfirmation),
+		model.Leaf("operation_id", pdeclNoneAEOperation),
+		model.Leaf("effect_digest", pdeclNoneAEEffect),
+		model.Leaf("parent_ref", pdeclNoneAEResolvedRow),
+		model.Leaf("decision_ref", pdeclNoneAEResolvedRow),
+		model.Leaf("provider_correlation{key}", pdeclNoneAECorrelation),
+		model.Leaf("provider_correlation{}", pdeclNoneAECorrelation),
+		model.Leaf("result_code", model.None("the protocol's stable result code, never a body: sdk/accessevidence.go:774")),
+		model.Leaf("evidence_ref", pdeclNoneAEEvidenceRef),
+	)
+	pdeclAEDecisionContent = model.Nested(sdk.AuthorizationDecisionContent{}, model.ClassEvidence,
+		pdeclAEQuestionLeaves,
+		pdeclAEDependencyLeaves,
+		model.Leaf("purpose", pdeclNoneAEPurpose),
+		model.Leaf("evaluator", pdeclNoneAEEvaluator),
+		model.Leaf("evaluator_version", pdeclNoneAEEvaluator),
+		model.Leaf("outcome", pdeclNoneAEOutcome),
+		model.Leaf("disposition", pdeclNoneAEDisposition),
+		model.Leaf("reason_code", pdeclNoneAEReasonCode),
+		model.Leaf("obligations{key}", pdeclNoneAEMapKey),
+		model.Leaf("obligations{}", pdeclScanAEEvidence),
+		model.Leaf("replay_completeness", pdeclNoneAEReplay),
+		model.Leaf("valid_from", pdeclNoneAETimestamp),
+		model.Leaf("valid_until", pdeclNoneAETimestamp),
+		model.Leaf("authorization_point", model.None("where the decision was taken, an enforcement-point label: sdk/accessevidence.go:822")),
+		// claim_holder has no producer yet; it may name the holder of a claim.
+		model.Leaf("claim_holder", pdeclScanAEEvidence),
+		model.Leaf("profile_state", model.None("a surface profile state label: sdk/accessevidence.go:826")),
+		model.Leaf("approval_ref", pdeclNoneAEReliedOn),
+		model.Leaf("delegation_ref", pdeclNoneAEReliedOn),
+		model.Leaf("operation_id", pdeclNoneAEOperation),
+		model.Leaf("effect_digest", pdeclNoneAEEffect),
+		model.Leaf("evidence_ref", pdeclNoneAEEvidenceRef),
+		model.Leaf("policy_version_id", model.None("the retained artifact id or a surface:revision pair: sdk/accessevidence.go:846, modules/governance/replay.go:297")),
+		model.Leaf("inputs_digest", model.None("the canonical digest of the inputs: sdk/accessevidence.go:853, sdk/accessevidence.go:883")),
+	)
+)
+
+// pdeclNoneAEPreventionDetail, pdeclNoneAECorrelation and pdeclNoneAEReliedOn
+// are observation and decision references that name no principal.
+var (
+	pdeclNoneAEPreventionDetail = model.None("the deployment fact behind a prevention claim, a provider version or hook configuration: sdk/accessevidence.go:752")
+	pdeclNoneAECorrelation      = model.None("a provider's own correlation ids (a provider session id, a hook event id), never authentication: sdk/accessevidence.go:770")
+	pdeclNoneAEReliedOn         = model.None("an approval or delegation record the decision relied on: sdk/accessevidence.go:834")
+)
 
 // ---------------------------------------------------------------------------
 // Provenance encode/decode

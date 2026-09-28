@@ -63,18 +63,16 @@ func newAgentExchangeFixture(t *testing.T) agentExchangeFixture {
 
 	const sponsorExtID = "idp-sponsor-1"
 
-	// 1. Create the sponsor user with a password (so we can log in).
+	// 1. Create the sponsor user with a password (so we can log in), and
+	// 2. its tenant membership in the same create, so SCIMUpdateUser can find them.
 	sponsor, err := a.CreateUser(ctx, super, auth.NewUser{
 		Email:    "sponsor@acme.com",
 		Password: "sponsor-pass-123",
+		Tenant:   tenant,
+		Role:     auth.RoleEditor,
 	})
 	if err != nil {
 		t.Fatalf("CreateUser: %v", err)
-	}
-
-	// 2. Grant tenant membership so SCIMUpdateUser can find them.
-	if _, err := a.GrantMembership(ctx, super, sponsor.ID, tenant, auth.RoleEditor, model.ID("")); err != nil {
-		t.Fatalf("GrantMembership: %v", err)
 	}
 
 	// 3. Set ExternalID via SCIM update (the convergence anchor).

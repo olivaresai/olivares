@@ -220,6 +220,15 @@ is_excluded_path() {
 # otherwise be read as an extension called "release"), then by extension.
 classify() {
   base=${1##*/}
+  # The package-upgrade record fixtures are the exact lines and records the shipped
+  # maintainer scripts write, parsed byte for byte by check-records-v1.py against the
+  # grammar's size bounds (the longest valid line is 506 bytes of 512), so an inline
+  # header would change what the grammar reads. DATA, scoped to that directory and not
+  # to the suffixes: a .line or .record anywhere else is still unclassified (exit 2).
+  case "$1" in
+    scripts/fixtures/package-upgrade/records-v1/*.line|scripts/fixtures/package-upgrade/records-v1/*.record)
+      echo data; return ;;
+  esac
   case "$base" in
     # ---- SOURCE -------------------------------------------------------------
     # Go, the TypeScript/JavaScript family INCLUDING the ESM/CJS spellings, markup and
@@ -260,6 +269,9 @@ classify() {
     # Container/build recipes and project metadata. `Dockerfile.*` covers the five variants
     # (release, fips, stig, agentops, ebpf-source) whose suffixes are NOT extensions.
     Dockerfile|Dockerfile.*|Containerfile|Makefile|Taskfile.yml|CODEOWNERS) echo data; return ;;
+    # AUR metadata: packaging/aur/*/.SRCINFO must equal `makepkg --printsrcinfo`
+    # byte for byte, so it cannot carry a header. Licensed by the REUSE.toml annotation.
+    .SRCINFO) echo data; return ;;
     # License/notice texts and legal boilerplate: REUSE.toml marks these CC0-1.0 precisely
     # so nobody demands a licence header for a licence.
     LICENSE|NOTICE|DCO|CLA.md|LICENSING.md) echo data; return ;;

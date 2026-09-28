@@ -42,7 +42,7 @@ func TestLoginComponentAbsent_LateCreateSeamRefusesAndPoisons(t *testing.T) {
 		}); err != nil {
 			return err
 		}
-		_, _, seamErr = a.mintSessionTx(ctx, as, user, "127.0.0.1", "auth.login", []string{"pwd"})
+		_, _, seamErr = a.mintSessionTx(ctx, as, user, user.CustodyScope(), "127.0.0.1", "auth.login", []string{"pwd"})
 		return nil // discarded on purpose: the store must still refuse to commit
 	})
 	if !errors.Is(seamErr, store.ErrLoginCapabilityLockOrder) {

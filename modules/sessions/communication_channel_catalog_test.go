@@ -230,7 +230,8 @@ func (f channelCatalogFixture) grant(
 	if err != nil {
 		t.Fatalf("encode catalog ChannelGrant: %v", err)
 	}
-	if _, err := communicationCreateWithID(context.Background(), f.m, f.tenant, channelGrantKind, id, record); err != nil {
+	if _, err := communicationCreateFencedWithID(context.Background(), f.m, f.st, f.tenant, channelGrantKind, id, record,
+		userSubjectAccounts(subject)...); err != nil {
 		t.Fatalf("create catalog ChannelGrant: %v", err)
 	}
 	return id

@@ -54,6 +54,7 @@ func sessOn(t *testing.T, eng store.Engine, dsn string) (*Module, model.TenantID
 		t.Fatalf("tenant %s: %v", eng, err)
 	}
 	m.UseData(api.NewModuleData(st))
+	bindStoreStanding(m, st)
 	stopModuleAtCleanup(t, m)
 	return m, tenant, clk
 }

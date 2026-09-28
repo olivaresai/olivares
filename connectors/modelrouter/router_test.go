@@ -158,6 +158,66 @@ func TestGatewayRouter_RewritesTargets(t *testing.T) {
 	}
 }
 
+// claudeToolCatalog is one Claude reference-shaped row that declares the three
+// capabilities the text gateway cannot invoke, plus streaming, which it can.
+func claudeToolCatalog() modelprovider.Catalog {
+	return modelprovider.Catalog{Models: []modelprovider.Model{{
+		ProviderRef: modelprovider.ProviderAnthropic,
+		Ref:         "claude-opus-4-8",
+		Pricing:     price(5, 25),
+		Capabilities: []modelprovider.Capability{
+			modelprovider.CapStreaming,
+			modelprovider.CapToolUse,
+			modelprovider.CapVision,
+			modelprovider.CapStructuredOutputs,
+		},
+	}}}
+}
+
+// TestGatewayRouter_RequiredCapabilityYieldsNoPrimary is slice 2: a gateway
+// route intersects the requirement with the effective capability. tool_use,
+// vision and structured_outputs yield no primary. An empty requirement still
+// selects. The native router still selects on the declared flag.
+func TestGatewayRouter_RequiredCapabilityYieldsNoPrimary(t *testing.T) {
+	cat := claudeToolCatalog()
+	for _, cap := range []modelprovider.Capability{
+		modelprovider.CapToolUse,
+		modelprovider.CapVision,
+		modelprovider.CapStructuredOutputs,
+	} {
+		t.Run("gateway/"+string(cap), func(t *testing.T) {
+			r := NewGatewayRouter(cat, PolicyCost, "http://gw:4000")
+			d, err := r.Route(context.Background(), Requirement{RequiredCapabilities: []modelprovider.Capability{cap}})
+			if !errors.Is(err, ErrNoCandidate) {
+				t.Fatalf("Route err = %v, want ErrNoCandidate (no primary)", err)
+			}
+			if d.Primary.ModelRef != "" || d.Primary.ProviderRef != "" || d.Primary.Endpoint != "" {
+				t.Fatalf("primary = %+v, want none", d.Primary)
+			}
+		})
+	}
+	t.Run("gateway/empty", func(t *testing.T) {
+		r := NewGatewayRouter(cat, PolicyCost, "http://gw:4000")
+		d, err := r.Route(context.Background(), Requirement{})
+		if err != nil {
+			t.Fatalf("empty requirement: %v", err)
+		}
+		if d.Primary.ModelRef != "claude-opus-4-8" || !d.Primary.ViaGateway {
+			t.Fatalf("empty requirement primary = %+v, want claude-opus-4-8 via gateway", d.Primary)
+		}
+	})
+	t.Run("native/tool_use", func(t *testing.T) {
+		r := NewNativeRouter(cat, PolicyCost)
+		d, err := r.Route(context.Background(), Requirement{RequiredCapabilities: []modelprovider.Capability{modelprovider.CapToolUse}})
+		if err != nil {
+			t.Fatalf("native tool_use: %v", err)
+		}
+		if d.Primary.ModelRef != "claude-opus-4-8" || d.Primary.ViaGateway {
+			t.Fatalf("native primary = %+v, want direct claude-opus-4-8", d.Primary)
+		}
+	})
+}
+
 func refs(ts []Target) []string {
 	out := make([]string, len(ts))
 	for i, t := range ts {

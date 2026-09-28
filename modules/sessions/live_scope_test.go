@@ -47,6 +47,7 @@ func openProfiledRuntime(t *testing.T, be profileBackend, opts ...Option) (*Modu
 		t.Fatalf("open %s: %v", be.name, err)
 	}
 	m.UseData(api.NewModuleData(st))
+	bindStoreStanding(m, st)
 	stopModuleAtCleanup(t, m)
 	return m, st, clk
 }

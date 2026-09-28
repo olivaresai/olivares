@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"strings"
 
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
@@ -40,11 +41,12 @@ const (
 // mesh stitching hold even in no-op mode; only span recording and OTLP export are
 // gated on Enabled. A Provider is safe for concurrent use.
 type Provider struct {
-	propagator  propagation.TextMapPropagator
-	tracer      oteltrace.Tracer
-	enabled     bool
-	genAICompat bool
-	genai       *genAIInstruments // nil when disabled
+	propagator    propagation.TextMapPropagator
+	tracer        oteltrace.Tracer
+	enabled       bool
+	genAICompat   bool
+	genai         *genAIInstruments // nil when disabled
+	baggagePolicy providerBaggagePolicy
 
 	tp          *sdktrace.TracerProvider // nil when disabled
 	mp          *sdkmetric.MeterProvider // nil when disabled
@@ -62,8 +64,13 @@ func New(ctx context.Context, cfg Config) (*Provider, error) {
 		// parses the L2 random-trace-id flag and future traceparent versions forward-
 		// compatibly (rather than rejecting them) and never deletes/reorders an upstream
 		// tracestate member it did not write — exactly the read-first rule (docs/SECURITY-HARDENING.md).
-		propagator:  propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}),
-		genAICompat: cfg.GenAICompat,
+		propagator:    propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}),
+		genAICompat:   cfg.GenAICompat,
+		baggagePolicy: compileProviderBaggage(cfg.ProviderBaggageAllowlist, cfg.providerBaggageRejection),
+	}
+	if p.baggagePolicy.state == baggagePolicyInvalid {
+		// Report only a fixed reason, never parser text or caller-supplied values.
+		otel.Handle(fmt.Errorf("trace: provider baggage policy rejected (%s); baggage propagation disabled", p.baggagePolicy.reason))
 	}
 
 	if !cfg.Enabled || strings.TrimSpace(cfg.Endpoint) == "" {
@@ -123,7 +130,8 @@ func New(ctx context.Context, cfg Config) (*Provider, error) {
 	return p, nil
 }
 
-// Propagator returns the composite W3C Trace Context + Baggage propagator.
+// Propagator returns the composite W3C Trace Context + Baggage propagator for
+// ingress/internal use. Provider egress uses AnthropicHTTPClient's baggage policy.
 func (p *Provider) Propagator() propagation.TextMapPropagator { return p.propagator }
 
 // Enabled reports whether spans are recorded and exported (a collector is wired).

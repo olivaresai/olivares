@@ -59,4 +59,7 @@ func (m *Module) APIRoutes(reg api.RouteRegistrar) {
 	reg.Handle("POST", "/workflows/{id}/run", permWorkflowAdmin, m.handleRunWorkflow)
 	reg.Handle("GET", "/workflows/{id}/runs", permWorkflowRead, m.handleListWorkflowRuns)
 	reg.Handle("GET", "/workflows/{id}/runs/{run}", permWorkflowRead, m.handleGetWorkflowRun)
+	// The owning continuation of a run paused for reauthentication: admin-tier,
+	// like starting the run, and bound to the caller's own credential.
+	reg.Handle("POST", "/workflows/{id}/runs/{run}/reauthorize", permWorkflowAdmin, m.handleReauthorizeWorkflowRun)
 }

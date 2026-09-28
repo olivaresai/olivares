@@ -22,10 +22,13 @@ import (
 type handoffServiceFixture struct {
 	directNoticeFixture
 	targetRef auth.PrincipalRef
-	workID    model.ID
-	leaseID   model.ID
-	message   Message
-	delivery  MessageDelivery
+	// targetAccount is the onboarded target's account, a member of the tenant
+	// with a read grant on the Channel.
+	targetAccount model.ID
+	workID        model.ID
+	leaseID       model.ID
+	message       Message
+	delivery      MessageDelivery
 }
 
 func newHandoffServiceFixture(t *testing.T) handoffServiceFixture {
@@ -86,6 +89,10 @@ func newHandoffServiceFixtureFor(
 	} else {
 		fixture = newDirectNoticeExactAuthorityFixtureWithClock(t, setup)
 	}
+	// An offer and an accept name the parties' accounts, so each reads their
+	// standing before its transaction. The composition binds that port at boot;
+	// the estate binds the store's own authenticator.
+	fixture.m.UseStanding(auth.NewAuthenticator(fixture.st, nil))
 	ctx := context.Background()
 	target, err := fixture.authr.OnboardMember(
 		ctx, fixture.authUser, fixture.tenant, auth.OnboardInput{
@@ -167,8 +174,11 @@ func newHandoffServiceFixtureFor(
 	if err != nil {
 		t.Fatalf("encode target ChannelGrant: %v", err)
 	}
-	if _, err := communicationCreateWithID(
-		ctx, fixture.m, fixture.tenant, channelGrantKind, grantID, grantRecord,
+	// The target and the sender are accounts, and the grant's subject, the item's
+	// owner and the delivery's recipients are counted references to them, so each
+	// such row is written the way a fenced writer writes it.
+	if _, err := communicationCreateFencedWithID(
+		ctx, fixture.m, fixture.st, fixture.tenant, channelGrantKind, grantID, grantRecord, target.User.ID,
 	); err != nil {
 		t.Fatalf("create target ChannelGrant: %v", err)
 	}
@@ -178,8 +188,8 @@ func newHandoffServiceFixtureFor(
 	workRecord[colWorkOwnerKind] = string(RecipientUser)
 	workRecord[colWorkOwnerRef] = fixture.sender.String()
 	workRecord[colWorkLastEventSeq] = int64(1)
-	createdWork, err := communicationCreateWithID(
-		ctx, fixture.m, fixture.tenant, workItemKind, workID, workRecord,
+	createdWork, err := communicationCreateFencedWithID(
+		ctx, fixture.m, fixture.st, fixture.tenant, workItemKind, workID, workRecord, fixture.sender,
 	)
 	if err != nil {
 		t.Fatalf("create Handoff WorkItem: %v", err)
@@ -340,15 +350,16 @@ func newHandoffServiceFixtureFor(
 		t.Fatalf("create Handoff Audience: %v", err)
 	}
 	deliveryRecord, _ := messageDeliveryToRecord(delivery)
-	if _, err := communicationCreateWithID(
-		ctx, fixture.m, fixture.tenant, messageDeliveryKind, delivery.ID, deliveryRecord,
+	if _, err := communicationCreateFencedWithID(
+		ctx, fixture.m, fixture.st, fixture.tenant, messageDeliveryKind, delivery.ID, deliveryRecord,
+		target.User.ID,
 	); err != nil {
 		t.Fatalf("create Handoff Delivery: %v", err)
 	}
 	contributionRecord, _ := messageAudienceRecipientToRecord(contribution)
-	if _, err := communicationCreateWithID(
-		ctx, fixture.m, fixture.tenant, messageAudienceRecipientKind,
-		contribution.ID, contributionRecord,
+	if _, err := communicationCreateFencedWithID(
+		ctx, fixture.m, fixture.st, fixture.tenant, messageAudienceRecipientKind,
+		contribution.ID, contributionRecord, target.User.ID,
 	); err != nil {
 		t.Fatalf("create Handoff contribution: %v", err)
 	}
@@ -372,7 +383,7 @@ func newHandoffServiceFixtureFor(
 		t.Fatalf("seed WorkItem version = %d, want 1", createdWork.Int(model.ColVersion))
 	}
 	return handoffServiceFixture{
-		directNoticeFixture: fixture, targetRef: targetRef,
+		directNoticeFixture: fixture, targetRef: targetRef, targetAccount: target.User.ID,
 		workID: workID, leaseID: leaseID, message: message, delivery: delivery,
 	}
 }
@@ -722,7 +733,9 @@ func TestHandoffAcceptRollsBackAfterConcurrentOwnerChange(t *testing.T) {
 	if err != nil {
 		t.Fatalf("offer Handoff before concurrent owner change: %v", err)
 	}
-	if err := fixture.m.data.Mutate(ctx, fixture.tenant, func(sc store.Scope) error {
+	// The new owner is the target's account, a counted reference, so the change
+	// commits in a transaction that pins it, as a concurrent owner writer would.
+	if err := communicationMutateFenced(ctx, fixture.m, fixture.st, fixture.tenant, []model.ID{fixture.targetAccount}, func(sc store.Scope) error {
 		repo, err := sc.Ext(workItemKind)
 		if err != nil {
 			return err

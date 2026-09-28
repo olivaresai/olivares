@@ -852,12 +852,10 @@ func (f *typedEvidenceFixture) confinedPrincipal(t *testing.T, workspace model.I
 	}
 	user, err := authn.CreateUser(ctx, admin, auth.NewUser{
 		Email: "typed-evidence-confined@example.test", DisplayName: "Confined", Password: "strong-password-2",
+		Tenant: f.tenant, Role: auth.RoleEditor, WorkspaceID: workspace,
 	})
 	if err != nil {
 		t.Fatalf("create confined user: %v", err)
-	}
-	if _, err := authn.GrantMembership(ctx, admin, user.ID, f.tenant, auth.RoleEditor, workspace); err != nil {
-		t.Fatalf("grant confined membership: %v", err)
 	}
 	principal, found, err := authn.PrincipalForUser(ctx, user.ID.String(), auth.AAL3)
 	if err != nil || !found {

@@ -133,9 +133,30 @@ export function isAreaOpen(
   return activeAreaId === areaId && !expansion.closed.includes(areaId)
 }
 
+/**
+ * The two appearance switches the design tokens honor, written onto <html>:
+ * `data-density` keys the spacing tokens (comfortable by default, compact on request) and
+ * `data-motion="reduce"` stops the motion tokens and animations, exactly as the operating
+ * system's reduced-motion preference does (styles/tokens.css, index.css). The attribute is
+ * absent unless the operator asks for reduced motion, so the system preference still
+ * applies on its own.
+ */
+export function applyAppearance(p: {
+  density: Density
+  reduceMotion: boolean
+}): void {
+  if (typeof document === 'undefined') return
+  const root = document.documentElement
+  root.dataset.density = p.density
+  if (p.reduceMotion) root.dataset.motion = 'reduce'
+  else root.removeAttribute('data-motion')
+}
+
 interface PreferencesState {
   sidebarCollapsed: boolean
   density: Density
+  /** The console's own Reduce motion setting; the system preference applies regardless. */
+  reduceMotion: boolean
   /** Nav group ids the operator collapsed in the expanded sidebar. Retired hub ids;
    * kept so an existing persisted preference keeps its shape. Not read by the N1 sidebar. */
   collapsedNavGroups: string[]
@@ -144,6 +165,7 @@ interface PreferencesState {
   setSidebarCollapsed: (collapsed: boolean) => void
   toggleSidebar: () => void
   setDensity: (density: Density) => void
+  setReduceMotion: (reduceMotion: boolean) => void
   toggleNavGroup: (group: string) => void
   /** Open or fold one area on purpose. */
   setAreaOpen: (areaId: string, open: boolean) => void
@@ -158,12 +180,14 @@ export const usePreferencesStore = create<PreferencesState>()(
     (set) => ({
       sidebarCollapsed: false,
       density: 'comfortable',
+      reduceMotion: false,
       collapsedNavGroups: [],
       navAreas: DEFAULT_AREA_EXPANSION,
       setSidebarCollapsed: (sidebarCollapsed) => set({ sidebarCollapsed }),
       toggleSidebar: () =>
         set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
       setDensity: (density) => set({ density }),
+      setReduceMotion: (reduceMotion) => set({ reduceMotion }),
       toggleNavGroup: (group) =>
         set((s) => ({
           collapsedNavGroups: s.collapsedNavGroups.includes(group)
@@ -214,10 +238,13 @@ export const usePreferencesStore = create<PreferencesState>()(
       // value can never reset density, theme or the sidebar, and never hides the areas.
       merge: (persisted, current) => {
         const p = (persisted ?? {}) as Partial<PreferencesState>
-        const { navAreas, ...rest } = p
+        const { navAreas, reduceMotion, ...rest } = p
         return {
           ...current,
           ...rest,
+          // A blob saved before the setting existed (or holding anything but `true`)
+          // keeps full motion; the system preference still applies on its own.
+          reduceMotion: reduceMotion === true,
           navAreas: isAreaExpansion(navAreas)
             ? navAreas
             : DEFAULT_AREA_EXPANSION,
@@ -226,3 +253,10 @@ export const usePreferencesStore = create<PreferencesState>()(
     },
   ),
 )
+
+// The switches reach <html> once the stored preference is read, and on every change after.
+applyAppearance(usePreferencesStore.getState())
+usePreferencesStore.subscribe((s, prev) => {
+  if (s.density !== prev.density || s.reduceMotion !== prev.reduceMotion)
+    applyAppearance(s)
+})

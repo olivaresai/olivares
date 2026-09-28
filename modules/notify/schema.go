@@ -101,6 +101,49 @@ const (
 	obStatusDead       = "dead" // dead-letter: exhausted retries or a deterministic reject
 )
 
+// Principal declarations of this package's columns (schema.go, revisions.go). A
+// declaration shared by several columns cites lines that hold for every column
+// using it.
+var (
+	// pdeclActorRef is the caller principal's audit actor string ("user:<id>" or
+	// "token:<id>", core/auth/principal.go:219-227); it records who authored or
+	// changed a route and is only rendered (dto.go:44, revisions.go:123).
+	pdeclActorRef      = model.Ref(model.EncodeUserRef, model.ClassEvidence)
+	pdeclNoneActorKind = model.None("the caller principal's actor kind, a closed set: core/auth/principal.go:243-251, route.go:111, revisions.go:79")
+	// pdeclScanFindingText is text copied verbatim from an inbound finding: its
+	// subject reference, its title, or the notification rendered from both
+	// (deliver.go:198, deliver.go:212, deliver.go:529, deliver.go:556). Emitters
+	// put a person's alias there, e.g. an email as subject and in the title
+	// (connectors/claude-api/shadowauth.go:53-54), so it is matched against every
+	// alias as evidence of what was sent.
+	pdeclScanFindingText = model.Scan(model.ClassEvidence)
+	pdeclNoneRouteID     = model.None("the id of a notify route, written from the route id and read back only to load or match that route: deliver.go:742, outbox.go:258, revisions.go:177")
+	pdeclNoneRouteName   = model.None("an operator-chosen route label and natural key, only displayed, sorted, searched and hashed into dedup keys: dto.go:33, deliver.go:336, deliver.go:784, search.go:40")
+	pdeclNoneDestination = model.None("a provisioned destination name for an output connector, checked against the tenant's destinations and resolved only by the dispatcher: route.go:63, ports.go:65")
+	pdeclNoneEventType   = model.None("a routed bus event type (or a set of them), a closed set: evaluate.go:24-31, evaluate.go:62, deliver.go:240")
+	pdeclNoneKind        = model.None("a finding kind or approval action label (or a set of kind globs), matched only against route kind globs: deliver.go:246, helpers.go:264")
+	pdeclNoneSeverity    = model.None("a severity label, read only as a severity: helpers.go:286-298, helpers.go:302-305")
+	pdeclNoneSources     = model.None("a set of emitter module names, compared only with an event's source: deliver.go:249, deliver.go:210")
+	pdeclNoneSubjectKind = model.None("a subject-kind label (or a set of them), compared only with a route's subject-kind set: deliver.go:252")
+	pdeclNoneDedupKey    = model.None("a SHA-256 digest of the route and finding coordinates: deliver.go:336, helpers.go:180-182")
+	pdeclNoneDetail      = model.None("a fixed outcome token chosen by this module, never destination text: deliver.go:711-714, deliver.go:723, outbox.go:261, outbox_api.go:122")
+	// pdeclRouteSnapshot is a route revision's snapshot, the routeDTO the revision
+	// writer marshals (revisions.go:70); restore never re-applies its owner
+	// (revisions.go:203-212).
+	pdeclRouteSnapshot = model.Nested(routeDTO{}, model.ClassEvidence,
+		model.Leaf("id", pdeclNoneRouteID),
+		model.Leaf("name", pdeclNoneRouteName),
+		model.Leaf("match_types[]", pdeclNoneEventType),
+		model.Leaf("match_kinds[]", pdeclNoneKind),
+		model.Leaf("min_severity", pdeclNoneSeverity),
+		model.Leaf("match_sources[]", pdeclNoneSources),
+		model.Leaf("match_subject_kinds[]", pdeclNoneSubjectKind),
+		model.Leaf("destination", pdeclNoneDestination),
+		model.Leaf("owner_actor", pdeclActorRef),
+		model.Leaf("created_at", model.None("the route's creation timestamp text: dto.go:45")),
+	)
+)
+
 // RegisterSchema declares the module's two owned entities. The engine creates the
 // tables, injects the base columns and attaches the tenant + append-only guards
 // (S02 §7); a module cannot opt out of isolation. The route UNIQUE index
@@ -122,19 +165,19 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Kind:  routeKind,
 		Table: routeTable,
 		Fields: []model.FieldSpec{
-			{Name: colName, Kind: model.KindText, Indexed: true},
+			{Name: colName, Kind: model.KindText, Indexed: true, Principal: pdeclNoneRouteName},
 			{Name: colEnabled, Kind: model.KindBool, Indexed: true},
-			{Name: colMatchTypes, Kind: model.KindText, Nullable: true},
-			{Name: colMatchKinds, Kind: model.KindText, Nullable: true},
-			{Name: colMinSeverity, Kind: model.KindText, Nullable: true},
-			{Name: colMatchSources, Kind: model.KindText, Nullable: true},
-			{Name: colMatchSubjects, Kind: model.KindText, Nullable: true},
-			{Name: colDestination, Kind: model.KindText, Indexed: true},
+			{Name: colMatchTypes, Kind: model.KindText, Nullable: true, Principal: pdeclNoneEventType},
+			{Name: colMatchKinds, Kind: model.KindText, Nullable: true, Principal: pdeclNoneKind},
+			{Name: colMinSeverity, Kind: model.KindText, Nullable: true, Principal: pdeclNoneSeverity},
+			{Name: colMatchSources, Kind: model.KindText, Nullable: true, Principal: pdeclNoneSources},
+			{Name: colMatchSubjects, Kind: model.KindText, Nullable: true, Principal: pdeclNoneSubjectKind},
+			{Name: colDestination, Kind: model.KindText, Indexed: true, Principal: pdeclNoneDestination},
 			{Name: colDedupWindow, Kind: model.KindInt},
 			{Name: colThrottleWin, Kind: model.KindInt},
 			{Name: colPriority, Kind: model.KindInt, Indexed: true},
-			{Name: colOwnerActor, Kind: model.KindText},
-			{Name: colOwnerActorK, Kind: model.KindText},
+			{Name: colOwnerActor, Kind: model.KindText, Principal: pdeclActorRef},
+			{Name: colOwnerActorK, Kind: model.KindText, Principal: pdeclNoneActorKind},
 		},
 		Indexes: []model.IndexSpec{{
 			Name:    "notify_route_uniq",
@@ -150,17 +193,17 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Table:      deliveryTable,
 		AppendOnly: true, // immutable notification evidence trail (docs/SECURITY-HARDENING.md)
 		Fields: []model.FieldSpec{
-			{Name: colDelRouteRef, Kind: model.KindUUID, Nullable: true, Indexed: true},
-			{Name: colDelDestination, Kind: model.KindText, Indexed: true},
-			{Name: colDelEventType, Kind: model.KindText},
-			{Name: colDelKind, Kind: model.KindText, Indexed: true},
-			{Name: colDelSeverity, Kind: model.KindText},
-			{Name: colDelSubjectKind, Kind: model.KindText},
-			{Name: colDelSubjectRef, Kind: model.KindText},
-			{Name: colDelTitle, Kind: model.KindText, Nullable: true},
-			{Name: colDelDedupKey, Kind: model.KindText, Indexed: true},
-			{Name: colDelStatus, Kind: model.KindText, Indexed: true},
-			{Name: colDelDetail, Kind: model.KindText, Nullable: true},
+			{Name: colDelRouteRef, Kind: model.KindUUID, Nullable: true, Indexed: true, Principal: pdeclNoneRouteID},
+			{Name: colDelDestination, Kind: model.KindText, Indexed: true, Principal: pdeclNoneDestination},
+			{Name: colDelEventType, Kind: model.KindText, Principal: pdeclNoneEventType},
+			{Name: colDelKind, Kind: model.KindText, Indexed: true, Principal: pdeclNoneKind},
+			{Name: colDelSeverity, Kind: model.KindText, Principal: pdeclNoneSeverity},
+			{Name: colDelSubjectKind, Kind: model.KindText, Principal: pdeclNoneSubjectKind},
+			{Name: colDelSubjectRef, Kind: model.KindText, Principal: pdeclScanFindingText},
+			{Name: colDelTitle, Kind: model.KindText, Nullable: true, Principal: pdeclScanFindingText},
+			{Name: colDelDedupKey, Kind: model.KindText, Indexed: true, Principal: pdeclNoneDedupKey},
+			{Name: colDelStatus, Kind: model.KindText, Indexed: true, Principal: model.None("a delivery status, a closed set: deliver.go:37-50")},
+			{Name: colDelDetail, Kind: model.KindText, Nullable: true, Principal: pdeclNoneDetail},
 			{Name: colDelOccurredAt, Kind: model.KindTimestamp, Indexed: true},
 		},
 	}); err != nil {
@@ -174,21 +217,21 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Kind:  outboxKind,
 		Table: outboxTable,
 		Fields: []model.FieldSpec{
-			{Name: colObStatus, Kind: model.KindText, Indexed: true},
+			{Name: colObStatus, Kind: model.KindText, Indexed: true, Principal: model.None("an outbox lifecycle status, a closed set written only from the queue's own constants: outbox.go:233-245, outbox.go:275, outbox_api.go:111")},
 			{Name: colObAttempts, Kind: model.KindInt},
 			{Name: colObNextAt, Kind: model.KindTimestamp, Indexed: true},
 			{Name: colObLastAt, Kind: model.KindTimestamp, Indexed: true},
-			{Name: colObLastDetail, Kind: model.KindText, Nullable: true},
-			{Name: colObDestination, Kind: model.KindText, Indexed: true},
-			{Name: colObNotifyJSON, Kind: model.KindText},
-			{Name: colObRouteRef, Kind: model.KindUUID, Nullable: true},
-			{Name: colObEventType, Kind: model.KindText},
-			{Name: colObKind, Kind: model.KindText},
-			{Name: colObSeverity, Kind: model.KindText},
-			{Name: colObSubjectKind, Kind: model.KindText},
-			{Name: colObSubjectRef, Kind: model.KindText},
-			{Name: colObTitle, Kind: model.KindText, Nullable: true},
-			{Name: colObDedupKey, Kind: model.KindText},
+			{Name: colObLastDetail, Kind: model.KindText, Nullable: true, Principal: pdeclNoneDetail},
+			{Name: colObDestination, Kind: model.KindText, Indexed: true, Principal: pdeclNoneDestination},
+			{Name: colObNotifyJSON, Kind: model.KindText, Principal: pdeclScanFindingText},
+			{Name: colObRouteRef, Kind: model.KindUUID, Nullable: true, Principal: pdeclNoneRouteID},
+			{Name: colObEventType, Kind: model.KindText, Principal: pdeclNoneEventType},
+			{Name: colObKind, Kind: model.KindText, Principal: pdeclNoneKind},
+			{Name: colObSeverity, Kind: model.KindText, Principal: pdeclNoneSeverity},
+			{Name: colObSubjectKind, Kind: model.KindText, Principal: pdeclNoneSubjectKind},
+			{Name: colObSubjectRef, Kind: model.KindText, Principal: pdeclScanFindingText},
+			{Name: colObTitle, Kind: model.KindText, Nullable: true, Principal: pdeclScanFindingText},
+			{Name: colObDedupKey, Kind: model.KindText, Principal: pdeclNoneDedupKey},
 			{Name: colObOccurredAt, Kind: model.KindTimestamp},
 		},
 	})

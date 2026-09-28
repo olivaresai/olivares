@@ -1007,6 +1007,12 @@ const VIEWS: {
     heading: /^Control console$/,
   },
   {
+    id: 'sourceDiff',
+    path: '/console/sources/diff',
+    settle: 1000,
+    heading: /^Source diff$/,
+  },
+  {
     id: 'permissions',
     path: '/permissions',
     settle: 1000,
@@ -1029,6 +1035,12 @@ const VIEWS: {
     path: '/deploy',
     settle: 1000,
     heading: /^Deployment & integration$/,
+  },
+  {
+    id: 'git-publication',
+    path: '/git-publication',
+    settle: 1000,
+    heading: /^Git publication$/,
   },
   { id: 'work', path: '/work', settle: 1000, live: true, heading: /^Work$/ },
   {

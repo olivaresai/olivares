@@ -92,6 +92,7 @@ func newManagedStopFixtureWith(t *testing.T, cfg store.Config, opts ...Option) *
 		t.Fatalf("tenant: %v", err)
 	}
 	m.UseData(api.NewModuleData(st))
+	bindStoreStanding(m, st)
 	stopModuleAtCleanup(t, m)
 	m.UseExecutionEnvironmentRef(testEnvRef)
 
@@ -153,12 +154,8 @@ func (f *managedStopFixture) operator(email, role string, elevate bool, deadline
 	f.t.Helper()
 	ctx := context.Background()
 	admin := f.admin()
-	user, err := f.authr.CreateUser(ctx, admin, auth.NewUser{Email: email, Password: "operatorpass1"})
-	if err != nil {
-		f.t.Fatalf("create user %s: %v", email, err)
-	}
-	if _, err := f.authr.GrantMembership(ctx, admin, user.ID, f.tenant, role, ""); err != nil {
-		f.t.Fatalf("grant %s to %s: %v", role, email, err)
+	if _, err := f.authr.CreateUser(ctx, admin, auth.NewUser{Email: email, Password: "operatorpass1", Tenant: f.tenant, Role: role}); err != nil {
+		f.t.Fatalf("create %s user %s: %v", role, email, err)
 	}
 	token, _, err := f.authr.Login(ctx, email, "operatorpass1", "127.0.0.1")
 	if err != nil {

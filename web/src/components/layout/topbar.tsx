@@ -3,8 +3,8 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { FavoriteButton } from './personal-navigation'
 import { Link, useRouterState } from '@tanstack/react-router'
-import { ChevronLeft, CircleHelp, Menu, Search } from 'lucide-react'
-import { Fragment, type Ref } from 'react'
+import { ChevronLeft, CircleHelp, PanelLeftOpen, Search } from 'lucide-react'
+import { Fragment } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   Breadcrumb,
@@ -15,15 +15,20 @@ import {
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb'
 import { Button } from '@/components/ui/button'
-import { Kbd } from '@/components/ui/kbd'
+import { cn } from '@/lib/utils'
 import {
   breadcrumbTrail,
   currentViewId as resolveViewId,
   resolveLocation,
+  type Crumb,
 } from '@/features/navigation/model'
 import { useCommandStore } from '@/stores/command'
+import { usePreferencesStore } from '@/stores/preferences'
+import { useWorkspaceStore } from '@/stores/workspace'
+import { BrandMark } from './brand'
 import { NotificationBell } from './notification-bell'
-import { ThemeToggle } from './theme-toggle'
+import { JOURNEY_IDS } from './shell-destinations'
+import { SidePanelToggle } from './side-panel'
 import { UserMenu } from './user-menu'
 
 /**
@@ -67,90 +72,54 @@ export function currentViewId(pathname: string): string | null {
   return resolveViewId(pathname)
 }
 
+const JOURNEYS: ReadonlySet<string> = new Set(JOURNEY_IDS)
+
 /**
- * LAYOUT CONTRACT — ONE 48 px ROW, AT EVERY WIDTH.
- *
- * ⛔ THE SECOND ROW IS GONE, AND SO IS THE ONE DEFECT IT CAUSED. Below `lg` this bar
- *    carried a second 40 px row holding the organisation and workspace switchers. It
- *    existed for a good reason — the one the retired paragraph below still states, and
- *    it is still true — and it cost 40 px of every phone viewport. The measurement
- *    measured the consequence: on a 390×844 phone the chrome above any content
- *    was 52 % of the viewport (topbar 48 + context row 45 + launcher 125 CSS px).
- *
- *    **The switchers moved to the RAIL, under the wordmark** (`sidebar.tsx`), which is
- *    where the scope belongs on first principles: it is what the NAVIGATION operates
- *    on, so it is the rail's caption and not the page's. Nothing was cut — below `lg`
- *    the rail is a drawer, so the switchers travel with the navigation they scope, and
- *    the drawer trigger is the FIRST control in this bar.
- *
- *    The trade, stated so nobody has to rediscover it: below `lg` the active
- *    organisation is one drawer-open away instead of on screen. At 390 px this bar has
- *    no room for a 14 rem label, and the alternative is the row this removes.
- *
- * ⇒ The bar is `h-[var(--console-header-height)]` and `flex-nowrap` at every width, so
- *   its height is a TOKEN and not an emergent property of what happens to be in it.
- *
- * ⛔ AND THE PURPOSE BANNER IS NOT HERE AND NEVER WAS — it is the route's, and §3.1.2
- *   of the design is what removes it. This note only exists because the two were
- *   measured together as "the top 190 px".
- *
- * HISTORY, retained because the reasons are still the reasons — the second row's, and
- * the breadcrumb's, which is unchanged:
- *
- * Measured on the rendered console (console-ui-current-baseline,
- * 2026-09-06, `captures/demo/console-light-en-d1024.png` and `*-m390.png`):
- *
- * - The bar was a single `h-12` flex row and the breadcrumb list wrapped. At 1024 px
- *   (sidebar open, 784 px of content) "Overview › Control console" broke onto two
- *   lines inside the 48 px bar; at 390 px it painted OVER the page header. Now the
- *   breadcrumb is one truncating line (`ui/breadcrumb.tsx`): the parent crumb gives
- *   way first (`shrink-[3]`), the page crumb truncates last, and below `sm` the
- *   first parent collapses to an icon link that KEEPS its accessible name — nothing is
- *   hidden, it is condensed.
- * - Below `lg` (where the sidebar is a drawer) the bar is two fixed rows: the first
- *   holds the menu, the trail and every icon action (search, help, notifications,
- *   theme, account); the second holds the CONTEXT — organization + workspace
- *   switchers — with the whole width to themselves, so tenant and workspace identity
- *   stay READABLE at 390 px instead of being cut to three letters or pushed off the
- *   right edge. The wrapper that carries the second row is `lg:contents`, so at `lg`
- *   and above its children rejoin the single row exactly where they sit in the DOM
- *   (between notifications and theme, the order the console has always had) — one
- *   DOM instance of every control, no duplicates.
- *   Measured trade-off, stated so nobody rediscovers it: below `lg` the Tab sequence
- *   is menu → trail → search → help → notifications → organization → workspace →
- *   theme → account, i.e. it visits the context row before returning to the last
- *   two icons of row one. The alternative (context row after account in the DOM)
- *   keeps the sequence strictly by row but moves the switchers to the far right of
- *   the desktop bar, after the avatar, on every screen. These controls are
- *   independent of each other, so the sequence still preserves meaning and
- *   operability (WCAG 2.4.3); the desktop arrangement was kept.
- * - The search button keeps its icon and accessible name everywhere; its text label
- *   and ⌘K hint show from `xl`, because at exactly 1024 px they are what squeezed the
- *   trail below its minimum width.
- * - The bar is `shrink-0` in the shell's column and `main` scrolls below it, so its
- *   bounds never overlap content at any of the three viewports.
- *
- * TRAIL (N1): resolved by features/navigation/model.ts from the registry and the area
- * model, never by splitting the url. `Overview` alone at `/`; `Overview › Area` on a
- * directory page (the area IS the location, with an explicit way home); `Area › Module`
- * on a module; `Area › Parent › Detail` on a deep-link-only detail; `System & settings ›
- * Settings` on the utility. Ancestors link, the page does not, and sections — grouping
- * labels, not pages — never appear.
+ * THE TRAIL. On a journey it reads as the design draws it — the workspace, then the
+ * journey ("telescopes / Sessions") — because the journey IS the location and the
+ * workspace is what it operates on. Everywhere else it is the registry trail resolved by
+ * features/navigation/model.ts (`Area › Module`, `Area › Parent › Detail`): ancestors
+ * link, the page does not, and sections never appear.
  */
-export function Topbar({
-  onMenuClick,
-  menuButtonRef,
-}: {
-  onMenuClick: () => void
-  /** The drawer gives focus back to this button when it closes (MobileNav). */
-  menuButtonRef?: Ref<HTMLButtonElement>
-}) {
+function useTrail(): Crumb[] {
+  const { t } = useTranslation(['nav', 'common'])
+  const pathname = useRouterState({ select: (s) => s.location.pathname })
+  const workspaceName = useWorkspaceStore((s) => s.activeWorkspaceName)
+  const location = resolveLocation(pathname)
+  if (
+    (location.kind === 'view' || location.kind === 'home') &&
+    JOURNEYS.has(location.view.id)
+  ) {
+    return [
+      { label: workspaceName ?? t('nav:workspace.all') },
+      { label: t(`nav:shell.journeys.${location.view.id}`) },
+    ]
+  }
+  return breadcrumbTrail(t, location)
+}
+
+/**
+ * THE TOP BAR (redesign §3.2): one 52 px row at every width — breadcrumb · page state ·
+ * page actions · panel toggles. Search moved to the sidebar beside New session, and the
+ * account, theme and settings to the sidebar footer; below 761 px, where the sidebar is
+ * replaced by the phone bar, the bar carries the brand mark, search and the account.
+ *
+ * `page-state` and `page-actions` are the places a screen fills (the session's "Working ·
+ * 6m 12s", its Pause and Stop); the frame reserves them and draws nothing of its own.
+ *
+ * The breadcrumb is one truncating line (`ui/breadcrumb.tsx`): the parent crumb gives way
+ * first, the page crumb truncates last, and below `sm` the first parent that links
+ * collapses to an icon link that keeps its accessible name.
+ */
+export function Topbar() {
   const { t } = useTranslation(['nav', 'common'])
   const pathname = useRouterState({ select: (s) => s.location.pathname })
   const setCommandOpen = useCommandStore((s) => s.setOpen)
+  const sidebarHidden = usePreferencesStore((s) => s.sidebarCollapsed)
+  const showSidebar = usePreferencesStore((s) => s.toggleSidebar)
 
   const location = resolveLocation(pathname)
-  const trail = breadcrumbTrail(t, location)
+  const trail = useTrail()
   const parents = trail.slice(0, -1)
   const page = trail[trail.length - 1]
   // Contextual help: the current view's Diátaxis page on the docs site; a directory
@@ -165,33 +134,36 @@ export function Topbar({
   return (
     <header
       data-slot="topbar"
-      className="flex h-[var(--console-header-height)] min-h-[var(--console-header-height)] shrink-0 flex-nowrap items-center gap-x-1 border-b border-border bg-surface px-3 sm:gap-x-2 print:hidden"
+      className="flex h-13 min-h-13 shrink-0 flex-nowrap items-center gap-x-1 border-b border-line bg-canvas pr-3 pl-5 max-[760px]:pl-3 sm:gap-x-2 print:hidden"
     >
-      <Button
-        ref={menuButtonRef}
-        variant="ghost"
-        size="icon"
-        className="lg:hidden"
-        onClick={onMenuClick}
-        aria-label={t('common:actions.openMenu')}
+      <Link
+        to={'/' as never}
+        aria-label={t('nav:shell.brandHome')}
+        className="grid size-8 shrink-0 place-items-center rounded-ctl text-text outline-none focus-visible:ring-2 focus-visible:ring-focus min-[761px]:hidden"
       >
-        <Menu />
-      </Button>
+        <BrandMark />
+      </Link>
+      {sidebarHidden ? (
+        <button
+          type="button"
+          onClick={showSidebar}
+          aria-label={t('common:actions.expandSidebar')}
+          aria-keyshortcuts="Control+B Meta+B"
+          className="hidden size-8 shrink-0 place-items-center rounded-ctl text-text-2 outline-none hover:bg-hover hover:text-text focus-visible:ring-2 focus-visible:ring-focus min-[761px]:grid"
+        >
+          <PanelLeftOpen aria-hidden className="size-4" />
+        </button>
+      ) : null}
 
-      {/* The trail no longer SETS the bar's height (it used to, with `min-h-12`): the
-          height is the token on the header and this is a full-height flex child of it. */}
       <Breadcrumb className="flex h-full min-w-24 flex-1 items-center">
-        <BreadcrumbList>
+        <BreadcrumbList className="text-body font-medium">
           {parents.map((crumb, i) => (
             <Fragment key={`${crumb.to ?? ''}:${i}`}>
-              {/* The parent crumb shrinks three times faster than the page crumb, so
-                  the ancestor is what gets the ellipsis first; below `sm` the FIRST
-                  ancestor is the icon link — same href, same accessible name. Both
-                  variants are a 24 px target (WCAG 2.5.8): `size-6` for the icon,
-                  `leading-6` for the text line — the baseline's only axe finding at
-                  390 px was this link at 22 px. */}
+              {/* The parent crumb shrinks three times faster than the page crumb; below
+                  `sm` the FIRST linking ancestor is the icon link — same href, same
+                  accessible name, and a 24 px target (WCAG 2.5.8). */}
               <BreadcrumbItem className="shrink-0 sm:shrink-[3]">
-                {i === 0 ? (
+                {i === 0 && crumb.to ? (
                   <BreadcrumbLink
                     asChild
                     className="inline-flex size-6 items-center justify-center sm:hidden"
@@ -205,38 +177,69 @@ export function Topbar({
                     </Link>
                   </BreadcrumbLink>
                 ) : null}
-                <BreadcrumbLink asChild className={cnParent(i === 0)}>
-                  <Link to={crumb.to as never}>{crumb.label}</Link>
-                </BreadcrumbLink>
+                {crumb.to ? (
+                  <BreadcrumbLink asChild className={cnParent(i === 0)}>
+                    <Link to={crumb.to as never}>{crumb.label}</Link>
+                  </BreadcrumbLink>
+                ) : (
+                  <span
+                    className={cn(
+                      'inline-block min-w-6 truncate leading-6 text-text-2',
+                      i === 0 && 'max-[639px]:hidden',
+                    )}
+                    title={crumb.label}
+                  >
+                    {crumb.label}
+                  </span>
+                )}
               </BreadcrumbItem>
+              {/* The design's slash, quiet: the trail reads as a path. */}
               <BreadcrumbSeparator
-                className={i === 0 ? 'hidden sm:inline-flex' : undefined}
-              />
+                className={cn(
+                  'px-0.5 text-text-3',
+                  i === 0 && 'hidden sm:inline-flex',
+                )}
+              >
+                /
+              </BreadcrumbSeparator>
             </Fragment>
           ))}
           <BreadcrumbItem>
-            <BreadcrumbPage className="font-display">
+            <BreadcrumbPage className="text-text">
               {page?.label ?? ''}
             </BreadcrumbPage>
           </BreadcrumbItem>
         </BreadcrumbList>
       </Breadcrumb>
 
+      <div
+        data-slot="page-state"
+        className="flex min-w-0 items-center empty:hidden"
+      />
+      <div
+        data-slot="page-actions"
+        className="flex shrink-0 items-center gap-2 empty:hidden"
+      />
+
       <button
         type="button"
         onClick={() => setCommandOpen(true)}
-        aria-label={t('common:actions.search')}
-        className="inline-flex h-8 shrink-0 items-center gap-2 rounded-md border border-border-strong bg-surface px-2.5 text-body text-muted-foreground outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+        aria-label={t('nav:shell.searchCommands')}
+        className="grid size-8 shrink-0 place-items-center rounded-ctl text-text-2 outline-none hover:bg-hover hover:text-text focus-visible:ring-2 focus-visible:ring-focus min-[761px]:hidden"
       >
         <Search className="size-4" aria-hidden />
-        <span className="hidden xl:inline">{t('common:actions.search')}…</span>
-        <Kbd className="ml-1 hidden xl:inline-flex">⌘K</Kbd>
       </button>
 
       <FavoriteButton />
+      <NotificationBell />
 
       {helpHref ? (
-        <Button asChild variant="ghost" size="icon">
+        <Button
+          asChild
+          variant="ghost"
+          size="icon"
+          className="max-[760px]:hidden"
+        >
           <a
             href={
               DEEP_LINKS_PUBLISHED && helpHref !== '/'
@@ -252,22 +255,21 @@ export function Topbar({
         </Button>
       ) : null}
 
-      <NotificationBell />
+      <SidePanelToggle />
 
-      <ThemeToggle />
-      <UserMenu />
+      <span className="min-[761px]:hidden">
+        <UserMenu />
+      </span>
     </header>
   )
 }
 
-/** The text rendering of a parent crumb: the first one hides below `sm` (its icon twin
- * shows instead); later ancestors — a detail's parent — stay text at every width.
- * `min-w-6` + `inline-block`: an area name can be two letters ("AI"/"IA"), and a 14 px
- * wide link is below the 24 px pointer target (WCAG 2.5.8) — axe measured exactly that on
- * the built console (console-navigation-n1, 2026-09-06, `/agentops`, 14×24 px). The old
- * parent crumb was always "Overview", so the case never existed before the areas. */
+/** The text rendering of a parent crumb that links: the first one hides below `sm` (its
+ * icon twin shows instead); later ancestors stay text at every width. `min-w-6` +
+ * `inline-block`: an area name can be two letters ("AI"/"IA"), and a 14 px wide link is
+ * below the 24 px pointer target (WCAG 2.5.8). */
 function cnParent(first: boolean): string {
   return first
-    ? 'hidden min-w-6 leading-6 sm:inline-block'
-    : 'inline-block min-w-6 leading-6'
+    ? 'hidden min-w-6 leading-6 text-text-2 sm:inline-block'
+    : 'inline-block min-w-6 leading-6 text-text-2'
 }

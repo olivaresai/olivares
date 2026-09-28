@@ -41,6 +41,10 @@ const (
 	colTPDriftAt     = "drift_at"
 )
 
+// pdeclToolPinDigest is why no reader resolves a pinned or drifted tool
+// fingerprint to a principal: it is a SHA-256 of the tool definition.
+var pdeclToolPinDigest = model.None("a SHA-256 of the tool definition: connectors/mcp/toolpin.go:74")
+
 // registerToolPinSchema declares the tool-pin entity. Called from the boot's
 // composite schema registrar alongside the module fan-out.
 func registerToolPinSchema(reg store.ExtensionRegistry) error {
@@ -48,14 +52,15 @@ func registerToolPinSchema(reg store.ExtensionRegistry) error {
 		Kind:  toolPinKind,
 		Table: toolPinTable,
 		Fields: []model.FieldSpec{
-			{Name: colTPTool, Kind: model.KindText, Indexed: true},
-			{Name: colTPFingerprint, Kind: model.KindText},
+			{Name: colTPTool, Kind: model.KindText, Indexed: true,
+				Principal: model.None("the name of the pinned MCP tool: connectors/mcp/toolpin.go:205, connectors/mcp/toolpin.go:239")},
+			{Name: colTPFingerprint, Kind: model.KindText, Principal: pdeclToolPinDigest},
 			{Name: colTPPinnedAt, Kind: model.KindTimestamp},
 			// The pin's UpdatedAt maps to the engine-stamped base updated_at:
 			// the row is only ever written when the pin changes, so the two
 			// instants are the same event.
 			{Name: colTPPinCount, Kind: model.KindInt},
-			{Name: colTPDriftFp, Kind: model.KindText, Nullable: true},
+			{Name: colTPDriftFp, Kind: model.KindText, Nullable: true, Principal: pdeclToolPinDigest},
 			{Name: colTPDriftAt, Kind: model.KindTimestamp, Nullable: true},
 		},
 		Indexes: []model.IndexSpec{{

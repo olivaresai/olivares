@@ -105,9 +105,12 @@ which is the honest inverse of a success metric.
 
 ## Notes
 
-- **Fail-open, deliberately:** if the budget check itself errors (a FinOps
-  read failure), inference is allowed rather than silently blocked — a
-  broken meter must not become an outage. The failure is logged and visible.
+- **Refused when the ledger cannot be read:** if the budget admission cannot be
+  established (FinOps cannot read its ledger), the inference proxy refuses the
+  call with **503**, the reason `budget store unreachable (deny-closed)` and
+  `x-should-retry: false`, rather than letting unmetered spend through. Among
+  the engine's own gates, only session launch keeps a configurable posture for
+  this case (`OLIVARES_SESSION_BUDGET_AVAILABILITY`).
 - Reserved capacity (`reserved_micro_usd`) counts toward the limit, so a
   budget cannot be dodged by pre-booking.
 - `cost_type` is deliberately **not** a budget dimension — estimated-fallback

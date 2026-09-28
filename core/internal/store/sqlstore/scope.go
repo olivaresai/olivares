@@ -32,6 +32,11 @@ type tenantScope struct {
 	bindingPoison   error                  // binding failures terminate View and prevent Mutate commit
 	authorityLocked bool                   // prevents late SYSTEM locks after tenant authority
 
+	// directoryFactLocked records that this transaction locked the tenant's
+	// directory fact (applyAuthoritySnapshot); the write seam reads it for the
+	// membership-bound references (userrefseam.go).
+	directoryFactLocked bool
+
 	// The custodial effect state (P2 / W1). custodyMu guards all five fields and
 	// the write gate that reads them; see custodial_write_gate.go for what each
 	// phase admits. They are inert in every transaction that never binds one:
@@ -384,6 +389,13 @@ func (sc *tenantScope) applyAuthoritySnapshot(ctx context.Context, facts []order
 			}
 		}
 	}
+	if lock {
+		for i := range facts {
+			if facts[i].ref.Kind == model.DirectoryEpochKind {
+				sc.directoryFactLocked = true
+			}
+		}
+	}
 	return nil
 }
 
@@ -416,6 +428,7 @@ func (sc *tenantScope) repo(desc model.EntityDescriptor) *genericRepo {
 		// one gate. origin stays the zero value (ordinary) here: only
 		// custodyRepo and authorityTouchRepo change it.
 		writeGuard: sc.guardScopeWrite,
+		userRefs:   sc.userReferenceSeam(),
 		poison: func(err error) {
 			if sc.lineageWriter != nil {
 				sc.lineageWriter.poison(err)

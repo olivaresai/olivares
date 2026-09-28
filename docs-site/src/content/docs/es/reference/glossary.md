@@ -280,9 +280,12 @@ Ver [push a SIEM](/es/how-to/cookbook/push-to-siem/).
 
 ### SLI / SLO
 
-Los niveles de servicio publicados: disponibilidad vía `/readyz`, éxito de petición,
-latencia p99 de API e ingest — con los niveles de nodo único y HA enunciados
-por separado y honestamente.
+Un **SLI** mide el comportamiento del servicio, como la disponibilidad vía
+`/readyz`, el éxito de las peticiones o la latencia p99 de API e ingesta. Un **SLO**
+fija un objetivo para ese SLI durante una ventana indicada, como 28 días. Los
+objetivos publicados para nodo único y HA siguen siendo objetivos; demostrar su
+cumplimiento requiere mediciones de ese despliegue y esa ventana. Una promesa
+contractual de servicio es un compromiso explícito y separado.
 Ver [monitorización](/es/how-to/monitor-with-prometheus/).
 
 ### Fuente
@@ -296,5 +299,7 @@ Ver [conectar una fuente](/es/how-to/connect-a-source/).
 
 El chequeo de enforcement que toda actuación gobernada hace contra el estado del
 [kill switch](#kill-switch) — comprobado antes que cualquier otro gate, fallando
-**cerrado** (el inverso del chequeo de budget, que falla abierto: un medidor roto
-no debe causar una caída, pero un chequeo de stop roto sí).
+**cerrado**: un chequeo de stop que no se puede leer deniega la actuación. La
+admisión de presupuesto de los gates del motor también deniega cuando no puede
+leer su libro mayor; solo el lanzamiento de sesión aplica su propia postura de
+disponibilidad configurable.

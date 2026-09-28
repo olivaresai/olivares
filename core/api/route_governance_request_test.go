@@ -190,15 +190,10 @@ func witnessTenantPrincipal(t *testing.T, h *harness, admin string, tenant model
 	t.Helper()
 	created := h.do("POST", "/v1/users", admin, map[string]any{
 		"email": "witness@witnessroute.test", "password": "witnessroute1",
+		"tenant": tenant.String(), "role": auth.RoleViewer,
 	}, nil)
 	if created.code != http.StatusCreated {
 		t.Fatalf("create tenant member = %d %s", created.code, created.raw)
-	}
-	member := h.do("POST", "/v1/memberships", admin, map[string]any{
-		"user_id": created.body["id"], "tenant": tenant.String(), "role": auth.RoleViewer,
-	}, nil)
-	if member.code != http.StatusCreated {
-		t.Fatalf("create membership = %d %s", member.code, member.raw)
 	}
 	login := h.do("POST", "/v1/auth/login", "", map[string]any{
 		"email": "witness@witnessroute.test", "password": "witnessroute1",

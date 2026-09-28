@@ -115,10 +115,8 @@ func TestBindingWriteRequiresWriteTier(t *testing.T) {
 	h.createWorkspace(tenant, "payments")
 	// principalFor grants a membership; reuse its login by issuing the same flow but we
 	// need the TOKEN, so log in directly here.
-	if r := h.do("POST", "/v1/users", admin, map[string]any{"email": "v@acme.io", "password": "memberpass1"}, nil); r.code != http.StatusCreated {
+	if r := h.do("POST", "/v1/users", admin, map[string]any{"email": "v@acme.io", "password": "memberpass1", "tenant": tenant.String(), "role": auth.RoleViewer}, nil); r.code != http.StatusCreated {
 		t.Fatalf("create user = %d %s", r.code, r.raw)
-	} else if r2 := h.do("POST", "/v1/memberships", admin, map[string]any{"user_id": r.body["id"], "tenant": tenant.String(), "role": auth.RoleViewer}, nil); r2.code != http.StatusCreated {
-		t.Fatalf("grant = %d %s", r2.code, r2.raw)
 	}
 	lr := h.do("POST", "/v1/auth/login", "", map[string]any{"email": "v@acme.io", "password": "memberpass1"}, nil)
 	viewerTok := lr.body["token"].(string)

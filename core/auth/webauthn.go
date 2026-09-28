@@ -192,6 +192,25 @@ func (a *Authenticator) ceremonies() *ceremonyStore {
 	return a.ceremonyPending
 }
 
+// ErrSessionScopeMismatch refuses a change to the account's authenticators
+// from a session scoped to a tenant that is not the account's custody scope:
+// an authenticator is account-wide, and a scoped session carries one tenant.
+var ErrSessionScopeMismatch = errors.New("auth: this session is scoped to one tenant and cannot change the account's authenticators")
+
+// mayChangeAuthenticators reports whether actor's session may register or
+// remove an authenticator of u: its scope must equal the account's custody
+// scope (zero for an account that no tenant holds).
+func mayChangeAuthenticators(actor Principal, u model.User) error {
+	scope, custody := actor.SessionScope(), u.CustodyScope()
+	if scope.IsZero() && custody.IsZero() {
+		return nil
+	}
+	if scope != custody {
+		return ErrSessionScopeMismatch
+	}
+	return nil
+}
+
 // loadWebAuthnUser reads the acting user and its registered credentials. Rows
 // whose stored credential record fails to decode are SKIPPED for ceremonies
 // (they can no longer verify anything) — registration still excludes their ids.
@@ -248,6 +267,9 @@ func (a *Authenticator) BeginWebAuthnRegistration(ctx context.Context, actor Pri
 	}); err != nil {
 		return nil, err
 	}
+	if err := mayChangeAuthenticators(actor, wu.user); err != nil {
+		return nil, err
+	}
 	if len(rows) > 0 && actor.AAL < AAL3 {
 		a.auditStepUpFailure(ctx, actor, "webauthn", "registration_step_up")
 		return nil, ErrStepUpRequired
@@ -299,6 +321,9 @@ func (a *Authenticator) FinishWebAuthnRegistration(ctx context.Context, actor Pr
 		wu, _, err = loadWebAuthnUser(ctx, as, actor.UserID)
 		return err
 	}); err != nil {
+		return err
+	}
+	if err := mayChangeAuthenticators(actor, wu.user); err != nil {
 		return err
 	}
 	cred, err := wa.CreateCredential(wu, session, parsed)
@@ -514,6 +539,13 @@ func (a *Authenticator) DeleteWebAuthnCredential(ctx context.Context, actor Prin
 		}
 		if row.UserID != actor.UserID {
 			return store.ErrNotFound // never an other-user existence oracle
+		}
+		owner, err := as.Users().Get(ctx, actor.UserID)
+		if err != nil {
+			return err
+		}
+		if err := mayChangeAuthenticators(actor, owner); err != nil {
+			return err
 		}
 		// Last-credential guard: refuse to delete if it would leave zero
 		// authenticators — the user would lose the ability to step up.

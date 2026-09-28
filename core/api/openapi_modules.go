@@ -523,6 +523,7 @@ func moduleOperation(r moduleRoute) map[string]any {
 	}
 	params = append(params, moduleRouteParameters(r)...)
 	o["parameters"] = params
+	inventoryCollectionsContract(r, o)
 	return o
 }
 
@@ -1093,6 +1094,9 @@ func moduleRequestBody(r moduleRoute) (map[string]any, bool) {
 		return body, true
 	}
 	if body, ok := orchestrationRequestBody(r); ok {
+		return body, true
+	}
+	if body, ok := gitpublishRequestBody(r); ok {
 		return body, true
 	}
 	if body, ok := sourceScopeRequestBody(r); ok {

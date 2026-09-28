@@ -306,11 +306,11 @@ const (
 )
 
 func communicationFields(extra ...model.FieldSpec) []model.FieldSpec {
-	return append([]model.FieldSpec{{Name: colWorkWorkspaceID, Kind: model.KindUUID}}, extra...)
+	return append([]model.FieldSpec{{Name: colWorkWorkspaceID, Kind: model.KindUUID, Principal: pdeclNoneWorkspaceID}}, extra...)
 }
 
 func communicationFieldGroups(groups ...[]model.FieldSpec) []model.FieldSpec {
-	fields := []model.FieldSpec{{Name: colWorkWorkspaceID, Kind: model.KindUUID}}
+	fields := []model.FieldSpec{{Name: colWorkWorkspaceID, Kind: model.KindUUID, Principal: pdeclNoneWorkspaceID}}
 	for _, group := range groups {
 		fields = append(fields, group...)
 	}
@@ -331,13 +331,13 @@ func communicationIndexes(name string, extra ...model.IndexSpec) []model.IndexSp
 // metadata columns are nullable as one all-or-none group as well.
 func protectedPayloadFields(prefix string, optional bool) []model.FieldSpec {
 	return []model.FieldSpec{
-		{Name: prefix + "_encoding", Kind: model.KindText, Nullable: optional},
-		{Name: prefix + "_plain_json", Kind: model.KindJSON, Nullable: true},
-		{Name: prefix + "_sealed_json", Kind: model.KindJSON, Nullable: true},
-		{Name: prefix + "_schema", Kind: model.KindText, Nullable: optional},
-		{Name: prefix + "_digest", Kind: model.KindBytes, Nullable: optional},
-		{Name: prefix + "_seal_key_version", Kind: model.KindText, Nullable: true},
-		{Name: prefix + "_digest_key_version", Kind: model.KindText, Nullable: true},
+		{Name: prefix + "_encoding", Kind: model.KindText, Nullable: optional, Principal: pdeclNonePayloadEncoding},
+		{Name: prefix + "_plain_json", Kind: model.KindJSON, Nullable: true, Principal: pdeclPayloadPlain[prefix]},
+		{Name: prefix + "_sealed_json", Kind: model.KindJSON, Nullable: true, Principal: pdeclPayloadSealed},
+		{Name: prefix + "_schema", Kind: model.KindText, Nullable: optional, Principal: pdeclNonePayloadSchema},
+		{Name: prefix + "_digest", Kind: model.KindBytes, Nullable: optional, Principal: pdeclNonePayloadDigest},
+		{Name: prefix + "_seal_key_version", Kind: model.KindText, Nullable: true, Principal: pdeclNonePayloadKeyVersion},
+		{Name: prefix + "_digest_key_version", Kind: model.KindText, Nullable: true, Principal: pdeclNonePayloadKeyVersion},
 		{Name: prefix + "_protection_generation", Kind: model.KindInt, Nullable: optional},
 	}
 }
@@ -348,18 +348,18 @@ func (m *Module) registerCommunicationSchema(reg store.ExtensionRegistry) error 
 			Kind: channelKind, Table: channelTable, RetainOnTenantDrop: true,
 			WorkspaceLineage: hiddenWorkspaceLineage,
 			Fields: communicationFields(
-				model.FieldSpec{Name: colCommSlug, Kind: model.KindText},
-				model.FieldSpec{Name: colCommName, Kind: model.KindText},
-				model.FieldSpec{Name: colCommDescription, Kind: model.KindText, Nullable: true},
-				model.FieldSpec{Name: colCommKind, Kind: model.KindText},
-				model.FieldSpec{Name: colCommState, Kind: model.KindText},
-				model.FieldSpec{Name: colCommSensitivity, Kind: model.KindText},
-				model.FieldSpec{Name: colCommContentProtection, Kind: model.KindText},
+				model.FieldSpec{Name: colCommSlug, Kind: model.KindText, Principal: model.None("a channel slug, a bounded vocabulary token: communication_state.go:1227")},
+				model.FieldSpec{Name: colCommName, Kind: model.KindText, Principal: model.None("a channel display name, bounded prose: communication_state.go:1227")},
+				model.FieldSpec{Name: colCommDescription, Kind: model.KindText, Nullable: true, Principal: model.None("channel description prose: communication_state.go:1228")},
+				model.FieldSpec{Name: colCommKind, Kind: model.KindText, Principal: model.None("a channel kind, a closed set: communication_state.go:60-62, communication_state.go:1229")},
+				model.FieldSpec{Name: colCommState, Kind: model.KindText, Principal: model.None("a channel state, a closed set: communication_state.go:64, communication_state.go:1229")},
+				model.FieldSpec{Name: colCommSensitivity, Kind: model.KindText, Principal: model.None("a channel sensitivity, a closed set: communication_state.go:66-68, communication_state.go:1229")},
+				model.FieldSpec{Name: colCommContentProtection, Kind: model.KindText, Principal: model.None("a content protection mode, a closed set: communication_state.go:70-72, communication_state.go:1230")},
 				model.FieldSpec{Name: colCommProtectionGeneration, Kind: model.KindInt},
-				model.FieldSpec{Name: colCommDefaultAckPolicy, Kind: model.KindText},
+				model.FieldSpec{Name: colCommDefaultAckPolicy, Kind: model.KindText, Principal: pdeclNoneAckPolicy},
 				model.FieldSpec{Name: colCommDefaultAckTimeoutMS, Kind: model.KindInt},
-				model.FieldSpec{Name: colCommDefaultWake, Kind: model.KindText},
-				model.FieldSpec{Name: colCommRetentionPolicyRef, Kind: model.KindText, Nullable: true},
+				model.FieldSpec{Name: colCommDefaultWake, Kind: model.KindText, Principal: pdeclNoneWakePolicy},
+				model.FieldSpec{Name: colCommRetentionPolicyRef, Kind: model.KindText, Nullable: true, Principal: model.None("an opaque retention policy reference, checked only for shape: communication_state.go:1234")},
 				model.FieldSpec{Name: colCommMaxFanout, Kind: model.KindInt},
 				model.FieldSpec{Name: colCommMaxAutomationDepth, Kind: model.KindInt},
 				model.FieldSpec{Name: colCommACLRevision, Kind: model.KindInt},
@@ -378,20 +378,20 @@ func (m *Module) registerCommunicationSchema(reg store.ExtensionRegistry) error 
 			Kind: channelGrantKind, Table: channelGrantTable, RetainOnTenantDrop: true,
 			WorkspaceLineage: hiddenWorkspaceLineage,
 			Fields: communicationFields(
-				model.FieldSpec{Name: colCommChannelID, Kind: model.KindUUID},
-				model.FieldSpec{Name: colCommSubjectKind, Kind: model.KindText},
-				model.FieldSpec{Name: colCommSubjectRef, Kind: model.KindText},
+				model.FieldSpec{Name: colCommChannelID, Kind: model.KindUUID, Principal: pdeclNoneChannelID},
+				model.FieldSpec{Name: colCommSubjectKind, Kind: model.KindText, Principal: pdeclNoneCommSubjectKind},
+				model.FieldSpec{Name: colCommSubjectRef, Kind: model.KindText, Principal: model.KindRef(colCommSubjectKind, model.ClassAuthority)},
 				model.FieldSpec{Name: colCommGeneration, Kind: model.KindInt},
 				model.FieldSpec{Name: colCommCanRead, Kind: model.KindBool},
 				model.FieldSpec{Name: colCommCanWrite, Kind: model.KindBool},
 				model.FieldSpec{Name: colCommCanAdmin, Kind: model.KindBool},
-				model.FieldSpec{Name: colCommState, Kind: model.KindText},
-				model.FieldSpec{Name: colCommGrantedByKind, Kind: model.KindText},
-				model.FieldSpec{Name: colCommGrantedByRef, Kind: model.KindText},
-				model.FieldSpec{Name: colCommRevokedByKind, Kind: model.KindText, Nullable: true},
-				model.FieldSpec{Name: colCommRevokedByRef, Kind: model.KindText, Nullable: true},
+				model.FieldSpec{Name: colCommState, Kind: model.KindText, Principal: model.None("a channel grant state, a closed set: communication_state.go:78-80, communication_state.go:1299")},
+				model.FieldSpec{Name: colCommGrantedByKind, Kind: model.KindText, Principal: pdeclNoneCommActorKind},
+				model.FieldSpec{Name: colCommGrantedByRef, Kind: model.KindText, Principal: model.KindRef(colCommGrantedByKind, model.ClassEvidence)},
+				model.FieldSpec{Name: colCommRevokedByKind, Kind: model.KindText, Nullable: true, Principal: pdeclNoneCommActorKind},
+				model.FieldSpec{Name: colCommRevokedByRef, Kind: model.KindText, Nullable: true, Principal: model.KindRef(colCommRevokedByKind, model.ClassEvidence)},
 				model.FieldSpec{Name: colCommExpiresAt, Kind: model.KindTimestamp, Nullable: true},
-				model.FieldSpec{Name: colCommSupersedesID, Kind: model.KindUUID, Nullable: true},
+				model.FieldSpec{Name: colCommSupersedesID, Kind: model.KindUUID, Nullable: true, Principal: model.None("the id of the grant generation this one supersedes: communication_state.go:1301-1303")},
 			),
 			Indexes: communicationIndexes("sessions_channel_grant_workspace",
 				model.IndexSpec{Name: "sessions_channel_grant_uniq", Columns: []string{model.ColTenantID, colCommChannelID, colCommSubjectKind, colCommSubjectRef, colCommGeneration}, Unique: true},
@@ -476,17 +476,17 @@ func (m *Module) registerCommunicationSchema(reg store.ExtensionRegistry) error 
 			Kind: channelSubscriptionKind, Table: channelSubscriptionTable, RetainOnTenantDrop: true,
 			WorkspaceLineage: hiddenWorkspaceLineage,
 			Fields: communicationFields(
-				model.FieldSpec{Name: colCommChannelID, Kind: model.KindUUID},
-				model.FieldSpec{Name: colCommSubscriberKind, Kind: model.KindText},
-				model.FieldSpec{Name: colCommSubscriberRef, Kind: model.KindText},
+				model.FieldSpec{Name: colCommChannelID, Kind: model.KindUUID, Principal: pdeclNoneChannelID},
+				model.FieldSpec{Name: colCommSubscriberKind, Kind: model.KindText, Principal: pdeclNoneCommSubjectKind},
+				model.FieldSpec{Name: colCommSubscriberRef, Kind: model.KindText, Principal: model.KindRef(colCommSubscriberKind, model.ClassAuthority)},
 				model.FieldSpec{Name: colCommGeneration, Kind: model.KindInt},
-				model.FieldSpec{Name: colCommMode, Kind: model.KindText},
-				model.FieldSpec{Name: colCommWake, Kind: model.KindText},
+				model.FieldSpec{Name: colCommMode, Kind: model.KindText, Principal: model.None("a subscription mode, a closed set: communication_state.go:86-88, communication_state.go:1322")},
+				model.FieldSpec{Name: colCommWake, Kind: model.KindText, Principal: pdeclNoneWakePolicy},
 				model.FieldSpec{Name: colCommRequiredForCritical, Kind: model.KindBool},
-				model.FieldSpec{Name: colCommState, Kind: model.KindText},
-				model.FieldSpec{Name: colCommFilterJSON, Kind: model.KindJSON, Nullable: true},
-				model.FieldSpec{Name: colCommFilterHash, Kind: model.KindBytes, Nullable: true},
-				model.FieldSpec{Name: colCommSupersedesID, Kind: model.KindUUID, Nullable: true},
+				model.FieldSpec{Name: colCommState, Kind: model.KindText, Principal: model.None("a subscription state, a closed set: communication_state.go:92-94, communication_state.go:1323")},
+				model.FieldSpec{Name: colCommFilterJSON, Kind: model.KindJSON, Nullable: true, Principal: model.None("an opaque canonical JSON filter checked only for canonical form and its digest; no reader interprets it: communication_state.go:1204-1219, communication_state.go:1329, communication_codec.go:732")},
+				model.FieldSpec{Name: colCommFilterHash, Kind: model.KindBytes, Nullable: true, Principal: model.None("the SHA-256 of the subscription filter: communication_state.go:1216-1218, communication_state.go:1329")},
+				model.FieldSpec{Name: colCommSupersedesID, Kind: model.KindUUID, Nullable: true, Principal: model.None("the id of the subscription generation this one supersedes: communication_state.go:1324-1326")},
 			),
 			Indexes: communicationIndexes("sessions_channel_subscription_workspace",
 				model.IndexSpec{Name: "sessions_channel_subscription_uniq", Columns: []string{model.ColTenantID, colCommChannelID, colCommSubscriberKind, colCommSubscriberRef, colCommGeneration}, Unique: true},
@@ -499,13 +499,13 @@ func (m *Module) registerCommunicationSchema(reg store.ExtensionRegistry) error 
 			Kind: channelLabelDefinitionKind, Table: channelLabelDefinitionTable, RetainOnTenantDrop: true,
 			WorkspaceLineage: hiddenWorkspaceLineage,
 			Fields: communicationFields(
-				model.FieldSpec{Name: colCommChannelID, Kind: model.KindUUID},
-				model.FieldSpec{Name: colCommLabelKey, Kind: model.KindText},
+				model.FieldSpec{Name: colCommChannelID, Kind: model.KindUUID, Principal: pdeclNoneChannelID},
+				model.FieldSpec{Name: colCommLabelKey, Kind: model.KindText, Principal: model.None("a label key, a bounded vocabulary token: communication_state.go:1343")},
 				model.FieldSpec{Name: colCommGeneration, Kind: model.KindInt},
-				model.FieldSpec{Name: colCommAllowedValuesJSON, Kind: model.KindJSON},
-				model.FieldSpec{Name: colCommValuesHash, Kind: model.KindBytes},
-				model.FieldSpec{Name: colCommClassification, Kind: model.KindText},
-				model.FieldSpec{Name: colCommState, Kind: model.KindText},
+				model.FieldSpec{Name: colCommAllowedValuesJSON, Kind: model.KindJSON, Principal: pdeclLabelVocabulary},
+				model.FieldSpec{Name: colCommValuesHash, Kind: model.KindBytes, Principal: model.None("the SHA-256 of the label vocabulary: communication_state.go:1216-1218, communication_state.go:1347")},
+				model.FieldSpec{Name: colCommClassification, Kind: model.KindText, Principal: model.None("a label classification, a closed set of one: communication_state.go:137, communication_state.go:1344")},
+				model.FieldSpec{Name: colCommState, Kind: model.KindText, Principal: model.None("a label definition state, a closed set: communication_state.go:96, communication_state.go:1344")},
 			),
 			Indexes: communicationIndexes("sessions_channel_label_definition_workspace",
 				model.IndexSpec{Name: "sessions_channel_label_definition_uniq", Columns: []string{model.ColTenantID, colCommChannelID, colCommLabelKey, colCommGeneration}, Unique: true},
@@ -516,22 +516,22 @@ func (m *Module) registerCommunicationSchema(reg store.ExtensionRegistry) error 
 			Kind: channelRouteKind, Table: channelRouteTable, RetainOnTenantDrop: true,
 			WorkspaceLineage: hiddenWorkspaceLineage,
 			Fields: communicationFields(
-				model.FieldSpec{Name: colCommRouteKey, Kind: model.KindText},
+				model.FieldSpec{Name: colCommRouteKey, Kind: model.KindText, Principal: model.None("a route key, a bounded vocabulary token: communication_state.go:1375")},
 				model.FieldSpec{Name: colCommGeneration, Kind: model.KindInt},
 				model.FieldSpec{Name: colCommPriority, Kind: model.KindInt},
-				model.FieldSpec{Name: colCommSourceKind, Kind: model.KindText},
-				model.FieldSpec{Name: colCommEventType, Kind: model.KindText, Nullable: true},
-				model.FieldSpec{Name: colCommMessageKind, Kind: model.KindText, Nullable: true},
-				model.FieldSpec{Name: colCommMinimumUrgency, Kind: model.KindText, Nullable: true},
-				model.FieldSpec{Name: colCommLabelMatchJSON, Kind: model.KindJSON, Nullable: true},
-				model.FieldSpec{Name: colCommTargetChannelID, Kind: model.KindUUID},
-				model.FieldSpec{Name: colCommAudienceKind, Kind: model.KindText},
-				model.FieldSpec{Name: colCommAudienceRef, Kind: model.KindUUID, Nullable: true},
-				model.FieldSpec{Name: colCommAckPolicy, Kind: model.KindText},
-				model.FieldSpec{Name: colCommWakePolicy, Kind: model.KindText},
+				model.FieldSpec{Name: colCommSourceKind, Kind: model.KindText, Principal: model.None("a route source kind, a closed set: communication_state.go:98-100, communication_state.go:1376")},
+				model.FieldSpec{Name: colCommEventType, Kind: model.KindText, Nullable: true, Principal: model.None("a routed event type, a bounded vocabulary token: communication_state.go:1384")},
+				model.FieldSpec{Name: colCommMessageKind, Kind: model.KindText, Nullable: true, Principal: pdeclNoneMessageKind},
+				model.FieldSpec{Name: colCommMinimumUrgency, Kind: model.KindText, Nullable: true, Principal: pdeclNoneUrgency},
+				model.FieldSpec{Name: colCommLabelMatchJSON, Kind: model.KindJSON, Nullable: true, Principal: pdeclLabelMap},
+				model.FieldSpec{Name: colCommTargetChannelID, Kind: model.KindUUID, Principal: model.None("the id of the Channel the route targets: communication_state.go:1376")},
+				model.FieldSpec{Name: colCommAudienceKind, Kind: model.KindText, Principal: model.None("a route audience kind, a closed set with no account kind: communication_state.go:102-105, communication_state.go:1377")},
+				model.FieldSpec{Name: colCommAudienceRef, Kind: model.KindUUID, Nullable: true, Principal: model.None("the id of the user group or agent group a route addresses, required only for the two group audience kinds and never an account: communication_state.go:1411-1414")},
+				model.FieldSpec{Name: colCommAckPolicy, Kind: model.KindText, Principal: pdeclNoneAckPolicy},
+				model.FieldSpec{Name: colCommWakePolicy, Kind: model.KindText, Principal: pdeclNoneWakePolicy},
 				model.FieldSpec{Name: colCommCatchAll, Kind: model.KindBool},
-				model.FieldSpec{Name: colCommState, Kind: model.KindText},
-				model.FieldSpec{Name: colCommSupersedesID, Kind: model.KindUUID, Nullable: true},
+				model.FieldSpec{Name: colCommState, Kind: model.KindText, Principal: model.None("a route state, a closed set: communication_state.go:107, communication_state.go:1378")},
+				model.FieldSpec{Name: colCommSupersedesID, Kind: model.KindUUID, Nullable: true, Principal: model.None("the id of the route generation this one supersedes: communication_state.go:1379-1381")},
 			),
 			Indexes: communicationIndexes("sessions_channel_route_workspace",
 				model.IndexSpec{Name: "sessions_channel_route_uniq", Columns: []string{model.ColTenantID, colWorkWorkspaceID, colCommRouteKey, colCommGeneration}, Unique: true},
@@ -544,20 +544,20 @@ func (m *Module) registerCommunicationSchema(reg store.ExtensionRegistry) error 
 			Kind: communicationEndpointKind, Table: communicationEndpointTable, RetainOnTenantDrop: true,
 			WorkspaceLineage: hiddenWorkspaceLineage,
 			Fields: communicationFields(
-				model.FieldSpec{Name: colCommOwnerKind, Kind: model.KindText},
-				model.FieldSpec{Name: colCommOwnerRef, Kind: model.KindText},
-				model.FieldSpec{Name: colCommProviderKey, Kind: model.KindText},
-				model.FieldSpec{Name: colTransport, Kind: model.KindText},
-				model.FieldSpec{Name: colCommEndpointRef, Kind: model.KindText},
-				model.FieldSpec{Name: colCommSessionSID, Kind: model.KindText, Nullable: true},
-				model.FieldSpec{Name: colCommCapabilitiesJSON, Kind: model.KindJSON},
-				model.FieldSpec{Name: colCommTransportFingerprint, Kind: model.KindText, Nullable: true},
-				model.FieldSpec{Name: colCommSupportLevel, Kind: model.KindText},
+				model.FieldSpec{Name: colCommOwnerKind, Kind: model.KindText, Principal: pdeclNoneCommRecipientKind},
+				model.FieldSpec{Name: colCommOwnerRef, Kind: model.KindText, Principal: model.KindRef(colCommOwnerKind, model.ClassAuthority)},
+				model.FieldSpec{Name: colCommProviderKey, Kind: model.KindText, Principal: model.None("an endpoint provider key from a closed list or a driver prefix: communication_state.go:1447, communication_state.go:1468-1475")},
+				model.FieldSpec{Name: colTransport, Kind: model.KindText, Principal: model.None("an endpoint transport, a bounded vocabulary token: communication_state.go:1448")},
+				model.FieldSpec{Name: colCommEndpointRef, Kind: model.KindText, Principal: model.None("an opaque endpoint reference checked only for shape: communication_state.go:1448")},
+				model.FieldSpec{Name: colCommSessionSID, Kind: model.KindText, Nullable: true, Principal: pdeclNoneSID},
+				model.FieldSpec{Name: colCommCapabilitiesJSON, Kind: model.KindJSON, Principal: model.None("an opaque canonical JSON capability document checked only for canonical form and size: communication_state.go:1461-1462, communication_codec.go:862")},
+				model.FieldSpec{Name: colCommTransportFingerprint, Kind: model.KindText, Nullable: true, Principal: model.None("an opaque transport fingerprint checked only for shape: communication_state.go:1451")},
+				model.FieldSpec{Name: colCommSupportLevel, Kind: model.KindText, Principal: model.None("an endpoint support level, a closed set: communication_state.go:109-111, communication_state.go:1449")},
 				model.FieldSpec{Name: colCommPriority, Kind: model.KindInt},
-				model.FieldSpec{Name: colCommState, Kind: model.KindText},
+				model.FieldSpec{Name: colCommState, Kind: model.KindText, Principal: model.None("an endpoint state, a closed set: communication_state.go:113-115, communication_state.go:1449")},
 				model.FieldSpec{Name: colCommHeartbeatExpiresAt, Kind: model.KindTimestamp, Nullable: true},
 				model.FieldSpec{Name: colCommGeneration, Kind: model.KindInt},
-				model.FieldSpec{Name: colCommSecretRef, Kind: model.KindText, Nullable: true},
+				model.FieldSpec{Name: colCommSecretRef, Kind: model.KindText, Nullable: true, Principal: model.None("an opaque secret locator, never a value or an account: communication_state.go:1452")},
 			),
 			Indexes: communicationIndexes("sessions_communication_endpoint_workspace",
 				model.IndexSpec{Name: "sessions_communication_endpoint_uniq", Columns: []string{model.ColTenantID, colCommProviderKey, colCommEndpointRef, colCommGeneration}, Unique: true},
@@ -570,35 +570,35 @@ func (m *Module) registerCommunicationSchema(reg store.ExtensionRegistry) error 
 			WorkspaceLineage: hiddenWorkspaceLineage,
 			Fields: communicationFieldGroups(
 				[]model.FieldSpec{
-					{Name: colCommChannelID, Kind: model.KindUUID},
-					{Name: colWorkItemID, Kind: model.KindUUID, Nullable: true},
-					{Name: colCommThreadID, Kind: model.KindUUID},
-					{Name: colCommKind, Kind: model.KindText},
-					{Name: colCommState, Kind: model.KindText},
-					{Name: colCommSenderKind, Kind: model.KindText},
-					{Name: colCommSenderRef, Kind: model.KindText},
+					{Name: colCommChannelID, Kind: model.KindUUID, Principal: pdeclNoneChannelID},
+					{Name: colWorkItemID, Kind: model.KindUUID, Nullable: true, Principal: pdeclNoneWorkItemID},
+					{Name: colCommThreadID, Kind: model.KindUUID, Principal: model.None("the id of the root message of the thread: communication_state.go:1548, communication_state.go:1554-1556")},
+					{Name: colCommKind, Kind: model.KindText, Principal: pdeclNoneMessageKind},
+					{Name: colCommState, Kind: model.KindText, Principal: model.None("a message state, a closed set: communication_state.go:130-132, communication_state.go:1549")},
+					{Name: colCommSenderKind, Kind: model.KindText, Principal: pdeclNoneCommActorKind},
+					{Name: colCommSenderRef, Kind: model.KindText, Principal: model.KindRef(colCommSenderKind, model.ClassEvidence)},
 				},
 				protectedPayloadFields("payload", false),
 				[]model.FieldSpec{
-					{Name: colCommLabelsJSON, Kind: model.KindJSON, Nullable: true},
-					{Name: colCommLabelsHash, Kind: model.KindBytes, Nullable: true},
-					{Name: colCommUrgency, Kind: model.KindText},
-					{Name: colCommAckPolicy, Kind: model.KindText},
+					{Name: colCommLabelsJSON, Kind: model.KindJSON, Nullable: true, Principal: pdeclLabelMap},
+					{Name: colCommLabelsHash, Kind: model.KindBytes, Nullable: true, Principal: model.None("the SHA-256 of the canonical message labels: communication_state.go:1573-1579")},
+					{Name: colCommUrgency, Kind: model.KindText, Principal: pdeclNoneUrgency},
+					{Name: colCommAckPolicy, Kind: model.KindText, Principal: pdeclNoneAckPolicy},
 					{Name: colCommAckQuorum, Kind: model.KindInt},
 					{Name: colCommAvailableAt, Kind: model.KindTimestamp},
 					{Name: colCommAckDueAt, Kind: model.KindTimestamp, Nullable: true},
 					{Name: colCommExpiresAt, Kind: model.KindTimestamp, Nullable: true},
-					{Name: colCommReplyToID, Kind: model.KindUUID, Nullable: true},
-					{Name: colCommSupersedesID, Kind: model.KindUUID, Nullable: true},
-					{Name: colCommOriginEventID, Kind: model.KindUUID, Nullable: true},
+					{Name: colCommReplyToID, Kind: model.KindUUID, Nullable: true, Principal: model.None("the id of the message this one replies to: communication_state.go:1558")},
+					{Name: colCommSupersedesID, Kind: model.KindUUID, Nullable: true, Principal: model.None("the id of the message this one supersedes: communication_state.go:1582-1588")},
+					{Name: colCommOriginEventID, Kind: model.KindUUID, Nullable: true, Principal: model.None("the id of the event a message originated from: communication_state.go:1582-1588")},
 					{Name: colCommAutomationDepth, Kind: model.KindInt},
 					{Name: colCommPublishedAt, Kind: model.KindTimestamp, Nullable: true},
 					{Name: colCommTerminalAt, Kind: model.KindTimestamp, Nullable: true},
-					{Name: colCommTerminalCode, Kind: model.KindText, Nullable: true},
+					{Name: colCommTerminalCode, Kind: model.KindText, Nullable: true, Principal: model.None("a bounded terminal code: communication_state.go:1637")},
 				},
 				protectedPayloadFields("terminal_reason", true),
 				[]model.FieldSpec{
-					{Name: colCommAudienceHash, Kind: model.KindBytes, Nullable: true},
+					{Name: colCommAudienceHash, Kind: model.KindBytes, Nullable: true, Principal: model.None("the SHA-256 sealing the message's resolved audience: communication_state.go:1649-1651")},
 					{Name: colCommLastEventSeq, Kind: model.KindInt},
 				},
 			),
@@ -615,21 +615,21 @@ func (m *Module) registerCommunicationSchema(reg store.ExtensionRegistry) error 
 			Kind: messageAudienceKind, Table: messageAudienceTable, AppendOnly: true,
 			WorkspaceLineage: hiddenWorkspaceLineage,
 			Fields: communicationFields(
-				model.FieldSpec{Name: colCommMessageID, Kind: model.KindUUID},
+				model.FieldSpec{Name: colCommMessageID, Kind: model.KindUUID, Principal: pdeclNoneMessageID},
 				model.FieldSpec{Name: colCommOrdinal, Kind: model.KindInt},
-				model.FieldSpec{Name: colCommSelectorKind, Kind: model.KindText},
-				model.FieldSpec{Name: colCommSelectorRef, Kind: model.KindText, Nullable: true},
+				model.FieldSpec{Name: colCommSelectorKind, Kind: model.KindText, Principal: pdeclNoneSelectorKind},
+				model.FieldSpec{Name: colCommSelectorRef, Kind: model.KindText, Nullable: true, Principal: pdeclSelectorRef},
 				model.FieldSpec{Name: colCommSelectorRequired, Kind: model.KindBool},
-				model.FieldSpec{Name: colCommSelectorWakePolicy, Kind: model.KindText},
-				model.FieldSpec{Name: colCommRouteRuleID, Kind: model.KindUUID, Nullable: true},
+				model.FieldSpec{Name: colCommSelectorWakePolicy, Kind: model.KindText, Principal: pdeclNoneWakePolicy},
+				model.FieldSpec{Name: colCommRouteRuleID, Kind: model.KindUUID, Nullable: true, Principal: pdeclNoneRouteRuleID},
 				model.FieldSpec{Name: colCommChannelACLRevision, Kind: model.KindInt},
 				model.FieldSpec{Name: colCommRouteRevision, Kind: model.KindInt},
 				model.FieldSpec{Name: colCommSubscriptionRevision, Kind: model.KindInt},
 				model.FieldSpec{Name: colCommDirectoryEpoch, Kind: model.KindInt},
 				model.FieldSpec{Name: colCommDirectorySnapshotAt, Kind: model.KindTimestamp},
 				model.FieldSpec{Name: colCommResolvedCount, Kind: model.KindInt},
-				model.FieldSpec{Name: colCommSelectorHash, Kind: model.KindBytes},
-				model.FieldSpec{Name: colCommResolvedHash, Kind: model.KindBytes},
+				model.FieldSpec{Name: colCommSelectorHash, Kind: model.KindBytes, Principal: model.None("the SHA-256 of the canonical audience selector: communication_state.go:2160, communication_state.go:2163-2170")},
+				model.FieldSpec{Name: colCommResolvedHash, Kind: model.KindBytes, Principal: model.None("the SHA-256 of the resolved audience: communication_state.go:2160")},
 			),
 			Indexes: communicationIndexes("sessions_message_audience_workspace",
 				model.IndexSpec{Name: "sessions_message_audience_uniq", Columns: []string{model.ColTenantID, colCommMessageID, colCommOrdinal}, Unique: true},
@@ -641,36 +641,36 @@ func (m *Module) registerCommunicationSchema(reg store.ExtensionRegistry) error 
 			Kind: messageAudienceRecipientKind, Table: messageAudienceRecipientTable, AppendOnly: true,
 			WorkspaceLineage: hiddenWorkspaceLineage,
 			Fields: communicationFields(
-				model.FieldSpec{Name: colCommMessageAudienceID, Kind: model.KindUUID},
-				model.FieldSpec{Name: colCommMessageDeliveryID, Kind: model.KindUUID},
-				model.FieldSpec{Name: colCommRecipientKind, Kind: model.KindText},
-				model.FieldSpec{Name: colCommRecipientRef, Kind: model.KindText},
+				model.FieldSpec{Name: colCommMessageAudienceID, Kind: model.KindUUID, Principal: model.None("the id of the audience selector row the arc belongs to: communication_state.go:4125")},
+				model.FieldSpec{Name: colCommMessageDeliveryID, Kind: model.KindUUID, Principal: model.None("the id of the delivery the arc resolved to: communication_state.go:4126")},
+				model.FieldSpec{Name: colCommRecipientKind, Kind: model.KindText, Principal: pdeclNoneCommRecipientKind},
+				model.FieldSpec{Name: colCommRecipientRef, Kind: model.KindText, Principal: pdeclRecipientRef},
 				model.FieldSpec{Name: colCommRecipientEpoch, Kind: model.KindInt},
 				model.FieldSpec{Name: colCommRequired, Kind: model.KindBool},
-				model.FieldSpec{Name: colCommWakePolicy, Kind: model.KindText},
-				model.FieldSpec{Name: colCommRouteReasonsJSON, Kind: model.KindJSON},
-				model.FieldSpec{Name: colCommSelectorKind, Kind: model.KindText},
-				model.FieldSpec{Name: colCommSelectorRef, Kind: model.KindText, Nullable: true},
+				model.FieldSpec{Name: colCommWakePolicy, Kind: model.KindText, Principal: pdeclNoneWakePolicy},
+				model.FieldSpec{Name: colCommRouteReasonsJSON, Kind: model.KindJSON, Principal: pdeclRouteReasons},
+				model.FieldSpec{Name: colCommSelectorKind, Kind: model.KindText, Principal: pdeclNoneSelectorKind},
+				model.FieldSpec{Name: colCommSelectorRef, Kind: model.KindText, Nullable: true, Principal: pdeclSelectorRef},
 				model.FieldSpec{Name: colCommSelectorRequired, Kind: model.KindBool},
-				model.FieldSpec{Name: colCommSelectorWakePolicy, Kind: model.KindText},
+				model.FieldSpec{Name: colCommSelectorWakePolicy, Kind: model.KindText, Principal: pdeclNoneWakePolicy},
 				model.FieldSpec{Name: colCommDirectoryEpoch, Kind: model.KindInt},
 				model.FieldSpec{Name: colCommChannelACLRevision, Kind: model.KindInt},
 				model.FieldSpec{Name: colCommRouteRevision, Kind: model.KindInt},
 				model.FieldSpec{Name: colCommSubscriptionRevision, Kind: model.KindInt},
-				model.FieldSpec{Name: colCommCausalKind, Kind: model.KindText},
-				model.FieldSpec{Name: colCommCausalRef, Kind: model.KindText},
-				model.FieldSpec{Name: colCommCausalFactKind, Kind: model.KindText, Nullable: true},
-				model.FieldSpec{Name: colCommCausalFactID, Kind: model.KindUUID, Nullable: true},
+				model.FieldSpec{Name: colCommCausalKind, Kind: model.KindText, Principal: model.None("an audience causal kind, a closed set with no account kind: communication_state.go:151-154, communication_state.go:4131")},
+				model.FieldSpec{Name: colCommCausalRef, Kind: model.KindText, Principal: pdeclCausalRef},
+				model.FieldSpec{Name: colCommCausalFactKind, Kind: model.KindText, Nullable: true, Principal: model.None("the entity kind of the directory fact that witnessed the arc: communication_state.go:3972-3980, communication_state.go:4058-4100")},
+				model.FieldSpec{Name: colCommCausalFactID, Kind: model.KindUUID, Nullable: true, Principal: model.None("the id of the directory fact row that witnessed the arc, a membership or roster row and never an account id: communication_state.go:3972-3980, communication_state.go:4058-4100")},
 				model.FieldSpec{Name: colCommCausalFactVersion, Kind: model.KindInt, Nullable: true},
-				model.FieldSpec{Name: colCommObservedSessionSID, Kind: model.KindText, Nullable: true},
+				model.FieldSpec{Name: colCommObservedSessionSID, Kind: model.KindText, Nullable: true, Principal: pdeclNoneSID},
 				model.FieldSpec{Name: colCommObservedClaimFence, Kind: model.KindInt, Nullable: true},
-				model.FieldSpec{Name: colCommOriginalSubscriberKind, Kind: model.KindText, Nullable: true},
-				model.FieldSpec{Name: colCommOriginalSubscriberRef, Kind: model.KindText, Nullable: true},
-				model.FieldSpec{Name: colCommSubscriptionID, Kind: model.KindUUID, Nullable: true},
+				model.FieldSpec{Name: colCommOriginalSubscriberKind, Kind: model.KindText, Nullable: true, Principal: pdeclNoneCommSubjectKind},
+				model.FieldSpec{Name: colCommOriginalSubscriberRef, Kind: model.KindText, Nullable: true, Principal: model.KindRef(colCommOriginalSubscriberKind, model.ClassEvidence)},
+				model.FieldSpec{Name: colCommSubscriptionID, Kind: model.KindUUID, Nullable: true, Principal: model.None("the id of the subscription that produced a subscriber arc: communication_state.go:4046-4050")},
 				model.FieldSpec{Name: colCommSubscriptionGeneration, Kind: model.KindInt, Nullable: true},
-				model.FieldSpec{Name: colCommRouteRuleID, Kind: model.KindUUID, Nullable: true},
+				model.FieldSpec{Name: colCommRouteRuleID, Kind: model.KindUUID, Nullable: true, Principal: pdeclNoneRouteRuleID},
 				model.FieldSpec{Name: colCommRouteRuleGeneration, Kind: model.KindInt, Nullable: true},
-				model.FieldSpec{Name: colCommCausalArcHash, Kind: model.KindBytes},
+				model.FieldSpec{Name: colCommCausalArcHash, Kind: model.KindBytes, Principal: model.None("the SHA-256 of the canonical causal arc: communication_state.go:4155-4173, communication_state.go:4176-4188")},
 			),
 			Indexes: communicationIndexes("sessions_message_audience_recipient_workspace",
 				model.IndexSpec{Name: "sessions_message_audience_recipient_arc_uniq", Columns: []string{model.ColTenantID, colCommMessageAudienceID, colCommCausalArcHash}, Unique: true},
@@ -683,30 +683,30 @@ func (m *Module) registerCommunicationSchema(reg store.ExtensionRegistry) error 
 			Kind: messageDeliveryKind, Table: messageDeliveryTable, RetainOnTenantDrop: true,
 			WorkspaceLineage: hiddenWorkspaceLineage,
 			Fields: communicationFields(
-				model.FieldSpec{Name: colCommMessageID, Kind: model.KindUUID},
-				model.FieldSpec{Name: colCommRecipientKind, Kind: model.KindText},
-				model.FieldSpec{Name: colCommRecipientRef, Kind: model.KindText},
+				model.FieldSpec{Name: colCommMessageID, Kind: model.KindUUID, Principal: pdeclNoneMessageID},
+				model.FieldSpec{Name: colCommRecipientKind, Kind: model.KindText, Principal: pdeclNoneCommRecipientKind},
+				model.FieldSpec{Name: colCommRecipientRef, Kind: model.KindText, Principal: pdeclRecipientRef},
 				model.FieldSpec{Name: colCommRecipientEpoch, Kind: model.KindInt},
 				model.FieldSpec{Name: colCommDeliverySeq, Kind: model.KindInt},
 				model.FieldSpec{Name: colCommRequired, Kind: model.KindBool},
-				model.FieldSpec{Name: colCommRouteReasonsJSON, Kind: model.KindJSON},
-				model.FieldSpec{Name: colCommWakePolicy, Kind: model.KindText},
-				model.FieldSpec{Name: colCommState, Kind: model.KindText},
+				model.FieldSpec{Name: colCommRouteReasonsJSON, Kind: model.KindJSON, Principal: pdeclRouteReasons},
+				model.FieldSpec{Name: colCommWakePolicy, Kind: model.KindText, Principal: pdeclNoneWakePolicy},
+				model.FieldSpec{Name: colCommState, Kind: model.KindText, Principal: model.None("a delivery state, a closed set: communication_state.go:156-159, communication_state.go:1955")},
 				model.FieldSpec{Name: colCommAvailableAt, Kind: model.KindTimestamp},
 				model.FieldSpec{Name: colCommFirstSeenAt, Kind: model.KindTimestamp, Nullable: true},
 				model.FieldSpec{Name: colCommAckDueAt, Kind: model.KindTimestamp, Nullable: true},
 				model.FieldSpec{Name: colCommExpiresAt, Kind: model.KindTimestamp, Nullable: true},
-				model.FieldSpec{Name: colCommAckID, Kind: model.KindUUID, Nullable: true},
+				model.FieldSpec{Name: colCommAckID, Kind: model.KindUUID, Nullable: true, Principal: model.None("the id of the acknowledgement that settled the delivery: communication_state.go:1993")},
 				model.FieldSpec{Name: colCommAcknowledgedAt, Kind: model.KindTimestamp, Nullable: true},
-				model.FieldSpec{Name: colCommLastWakeVerdict, Kind: model.KindText, Nullable: true},
-				model.FieldSpec{Name: colCommLastWakeCode, Kind: model.KindText, Nullable: true},
+				model.FieldSpec{Name: colCommLastWakeVerdict, Kind: model.KindText, Nullable: true, Principal: pdeclNoneVerdict},
+				model.FieldSpec{Name: colCommLastWakeCode, Kind: model.KindText, Nullable: true, Principal: model.None("a bounded wake outcome code: communication_state.go:1980")},
 				model.FieldSpec{Name: colCommLastWakeAt, Kind: model.KindTimestamp, Nullable: true},
-				model.FieldSpec{Name: colCommRetirementTombstoneKind, Kind: model.KindText, Nullable: true},
-				model.FieldSpec{Name: colCommRetirementTombstoneID, Kind: model.KindUUID, Nullable: true},
+				model.FieldSpec{Name: colCommRetirementTombstoneKind, Kind: model.KindText, Nullable: true, Principal: model.None("the entity kind of the directory tombstone that proved the recipient retired: communication_state.go:2006-2012")},
+				model.FieldSpec{Name: colCommRetirementTombstoneID, Kind: model.KindUUID, Nullable: true, Principal: model.None("the id of the directory tombstone row that proved the recipient retired, the tombstone and never the account id: communication_state.go:2006-2012, core/store/directory.go:142-148")},
 				model.FieldSpec{Name: colCommRetirementTombstoneVersion, Kind: model.KindInt, Nullable: true},
 				model.FieldSpec{Name: colCommRetirementEpoch, Kind: model.KindInt, Nullable: true},
 				model.FieldSpec{Name: colCommUndeliverableAt, Kind: model.KindTimestamp, Nullable: true},
-				model.FieldSpec{Name: colCommUndeliverableCode, Kind: model.KindText, Nullable: true},
+				model.FieldSpec{Name: colCommUndeliverableCode, Kind: model.KindText, Nullable: true, Principal: model.None("a bounded undeliverable code: communication_state.go:2015")},
 			),
 			Indexes: communicationIndexes("sessions_message_delivery_workspace",
 				model.IndexSpec{Name: "sessions_message_delivery_recipient_uniq", Columns: []string{model.ColTenantID, colCommMessageID, colCommRecipientKind, colCommRecipientRef}, Unique: true},
@@ -721,13 +721,13 @@ func (m *Module) registerCommunicationSchema(reg store.ExtensionRegistry) error 
 			Kind: inboxCursorKind, Table: inboxCursorTable, RetainOnTenantDrop: true,
 			WorkspaceLineage: hiddenWorkspaceLineage,
 			Fields: communicationFields(
-				model.FieldSpec{Name: colCommReaderKind, Kind: model.KindText},
-				model.FieldSpec{Name: colCommReaderRef, Kind: model.KindText},
-				model.FieldSpec{Name: colCommMailboxKind, Kind: model.KindText},
-				model.FieldSpec{Name: colCommMailboxRef, Kind: model.KindText},
+				model.FieldSpec{Name: colCommReaderKind, Kind: model.KindText, Principal: pdeclNoneCommRecipientKind},
+				model.FieldSpec{Name: colCommReaderRef, Kind: model.KindText, Principal: pdeclReaderRef},
+				model.FieldSpec{Name: colCommMailboxKind, Kind: model.KindText, Principal: pdeclNoneMailboxKind},
+				model.FieldSpec{Name: colCommMailboxRef, Kind: model.KindText, Principal: pdeclMailboxRef},
 				model.FieldSpec{Name: colCommLastSeenSeq, Kind: model.KindInt},
 				model.FieldSpec{Name: colCommLastSeenAt, Kind: model.KindTimestamp},
-				model.FieldSpec{Name: colCommFilterHash, Kind: model.KindBytes},
+				model.FieldSpec{Name: colCommFilterHash, Kind: model.KindBytes, Principal: pdeclNoneCursorFilterHash},
 			),
 			Indexes: communicationIndexes("sessions_inbox_cursor_workspace",
 				model.IndexSpec{Name: "sessions_inbox_cursor_uniq", Columns: []string{model.ColTenantID, colWorkWorkspaceID, colCommReaderKind, colCommReaderRef, colCommMailboxKind, colCommMailboxRef, colCommFilterHash}, Unique: true},
@@ -737,17 +737,17 @@ func (m *Module) registerCommunicationSchema(reg store.ExtensionRegistry) error 
 			Kind: inboxCursorBarrierKind, Table: inboxCursorBarrierTable, RetainOnTenantDrop: true,
 			WorkspaceLineage: hiddenWorkspaceLineage,
 			Fields: communicationFields(
-				model.FieldSpec{Name: colCommReaderKind, Kind: model.KindText},
-				model.FieldSpec{Name: colCommReaderRef, Kind: model.KindText},
-				model.FieldSpec{Name: colCommMailboxKind, Kind: model.KindText},
-				model.FieldSpec{Name: colCommMailboxRef, Kind: model.KindText},
-				model.FieldSpec{Name: colCommFilterHash, Kind: model.KindBytes},
-				model.FieldSpec{Name: colCommDeliveryID, Kind: model.KindUUID},
+				model.FieldSpec{Name: colCommReaderKind, Kind: model.KindText, Principal: pdeclNoneCommRecipientKind},
+				model.FieldSpec{Name: colCommReaderRef, Kind: model.KindText, Principal: pdeclReaderRef},
+				model.FieldSpec{Name: colCommMailboxKind, Kind: model.KindText, Principal: pdeclNoneMailboxKind},
+				model.FieldSpec{Name: colCommMailboxRef, Kind: model.KindText, Principal: pdeclMailboxRef},
+				model.FieldSpec{Name: colCommFilterHash, Kind: model.KindBytes, Principal: pdeclNoneCursorFilterHash},
+				model.FieldSpec{Name: colCommDeliveryID, Kind: model.KindUUID, Principal: pdeclNoneDeliveryID},
 				model.FieldSpec{Name: colCommBarrierSeq, Kind: model.KindInt},
-				model.FieldSpec{Name: colCommCause, Kind: model.KindText},
-				model.FieldSpec{Name: colCommState, Kind: model.KindText},
+				model.FieldSpec{Name: colCommCause, Kind: model.KindText, Principal: model.None("a cursor barrier cause, a closed set: communication_state.go:163-165, communication_state.go:6887")},
+				model.FieldSpec{Name: colCommState, Kind: model.KindText, Principal: model.None("a cursor barrier state, a closed set: communication_state.go:167-169, communication_state.go:6887")},
 				model.FieldSpec{Name: colCommResolvedAt, Kind: model.KindTimestamp, Nullable: true},
-				model.FieldSpec{Name: colCommReasonCode, Kind: model.KindText},
+				model.FieldSpec{Name: colCommReasonCode, Kind: model.KindText, Principal: model.None("a bounded barrier reason code: communication_state.go:6887")},
 			),
 			Indexes: communicationIndexes("sessions_inbox_cursor_barrier_workspace",
 				model.IndexSpec{Name: "sessions_inbox_cursor_barrier_active", Columns: []string{model.ColTenantID, colWorkWorkspaceID, colCommReaderKind, colCommReaderRef, colCommMailboxKind, colCommMailboxRef, colCommFilterHash, colCommState, colCommBarrierSeq, model.ColID}},
@@ -759,12 +759,12 @@ func (m *Module) registerCommunicationSchema(reg store.ExtensionRegistry) error 
 			WorkspaceLineage: hiddenWorkspaceLineage,
 			Fields: communicationFieldGroups(
 				[]model.FieldSpec{
-					{Name: colCommDeliveryID, Kind: model.KindUUID},
-					{Name: colCommAckKind, Kind: model.KindText},
-					{Name: colCommActorKind, Kind: model.KindText},
-					{Name: colCommActorRef, Kind: model.KindText},
-					{Name: colCommOnBehalfOfKind, Kind: model.KindText, Nullable: true},
-					{Name: colCommOnBehalfOfRef, Kind: model.KindText, Nullable: true},
+					{Name: colCommDeliveryID, Kind: model.KindUUID, Principal: pdeclNoneDeliveryID},
+					{Name: colCommAckKind, Kind: model.KindText, Principal: model.None("an acknowledgement kind, a closed set of one: communication_state.go:171, communication_state.go:2187")},
+					{Name: colCommActorKind, Kind: model.KindText, Principal: pdeclNoneCommActorKind},
+					{Name: colCommActorRef, Kind: model.KindText, Principal: pdeclCommActorRef},
+					{Name: colCommOnBehalfOfKind, Kind: model.KindText, Nullable: true, Principal: pdeclNoneCommRecipientKind},
+					{Name: colCommOnBehalfOfRef, Kind: model.KindText, Nullable: true, Principal: model.KindRef(colCommOnBehalfOfKind, model.ClassEvidence)},
 				},
 				protectedPayloadFields("note", true),
 				[]model.FieldSpec{
@@ -781,7 +781,7 @@ func (m *Module) registerCommunicationSchema(reg store.ExtensionRegistry) error 
 			Kind: communicationGuardKind, Table: communicationGuardTable, RetainOnTenantDrop: true,
 			WorkspaceLineage: hiddenWorkspaceLineage,
 			Fields: communicationFields(
-				model.FieldSpec{Name: colCommGuardKind, Kind: model.KindText},
+				model.FieldSpec{Name: colCommGuardKind, Kind: model.KindText, Principal: model.None("a communication guard kind, a closed set: communication_state.go:173-175, communication_state.go:2209")},
 				model.FieldSpec{Name: colCommNextSeq, Kind: model.KindInt},
 				model.FieldSpec{Name: colCommLastDBTime, Kind: model.KindTimestamp},
 			),
@@ -794,24 +794,24 @@ func (m *Module) registerCommunicationSchema(reg store.ExtensionRegistry) error 
 			WorkspaceLineage: hiddenWorkspaceLineage,
 			Fields: communicationFieldGroups(
 				[]model.FieldSpec{
-					{Name: colCommMessageID, Kind: model.KindUUID},
-					{Name: colWorkItemID, Kind: model.KindUUID},
-					{Name: colCommDecisionKey, Kind: model.KindText},
-					{Name: colCommRequesterKind, Kind: model.KindText},
-					{Name: colCommRequesterRef, Kind: model.KindText},
-					{Name: colCommOwnerKind, Kind: model.KindText},
-					{Name: colCommOwnerRef, Kind: model.KindText},
-					{Name: colCommAcceptedDeliveryID, Kind: model.KindUUID, Nullable: true},
-					{Name: colCommState, Kind: model.KindText},
+					{Name: colCommMessageID, Kind: model.KindUUID, Principal: pdeclNoneMessageID},
+					{Name: colWorkItemID, Kind: model.KindUUID, Principal: pdeclNoneWorkItemID},
+					{Name: colCommDecisionKey, Kind: model.KindText, Principal: model.None("a decision key, a bounded vocabulary token: communication_state.go:2803")},
+					{Name: colCommRequesterKind, Kind: model.KindText, Principal: pdeclNoneCommActorKind},
+					{Name: colCommRequesterRef, Kind: model.KindText, Principal: model.KindRef(colCommRequesterKind, model.ClassObligation)},
+					{Name: colCommOwnerKind, Kind: model.KindText, Principal: pdeclNoneCommSubjectKind},
+					{Name: colCommOwnerRef, Kind: model.KindText, Principal: model.KindRef(colCommOwnerKind, model.ClassAuthority)},
+					{Name: colCommAcceptedDeliveryID, Kind: model.KindUUID, Nullable: true, Principal: model.None("the id of the delivery through which the request was accepted: communication_state.go:2813-2814")},
+					{Name: colCommState, Kind: model.KindText, Principal: pdeclNoneDecisionRequestState},
 				},
 				protectedPayloadFields("request", false),
 				[]model.FieldSpec{
-					{Name: colCommAuthorityRequirement, Kind: model.KindText},
+					{Name: colCommAuthorityRequirement, Kind: model.KindText, Principal: model.None("a bounded authority requirement token: communication_state.go:2807")},
 					{Name: colCommDueAt, Kind: model.KindTimestamp},
 					{Name: colCommAcceptedAt, Kind: model.KindTimestamp, Nullable: true},
-					{Name: colCommBlockedCode, Kind: model.KindText, Nullable: true},
-					{Name: colCommTerminalCode, Kind: model.KindText, Nullable: true},
-					{Name: colCommResolvedDecisionID, Kind: model.KindUUID, Nullable: true},
+					{Name: colCommBlockedCode, Kind: model.KindText, Nullable: true, Principal: model.None("a bounded block code: communication_state.go:2833")},
+					{Name: colCommTerminalCode, Kind: model.KindText, Nullable: true, Principal: model.None("a bounded terminal code: communication_state.go:2838, communication_state.go:2843")},
+					{Name: colCommResolvedDecisionID, Kind: model.KindUUID, Nullable: true, Principal: model.None("the id of the work decision that resolved the request: communication_state.go:2839")},
 					{Name: colCommLastResponseSeq, Kind: model.KindInt},
 				},
 			),
@@ -827,18 +827,18 @@ func (m *Module) registerCommunicationSchema(reg store.ExtensionRegistry) error 
 			WorkspaceLineage: hiddenWorkspaceLineage,
 			Fields: communicationFieldGroups(
 				[]model.FieldSpec{
-					{Name: colCommRequestID, Kind: model.KindUUID},
+					{Name: colCommRequestID, Kind: model.KindUUID, Principal: model.None("the id of the decision request the response belongs to: communication_state.go:3061")},
 					{Name: colCommResponseSeq, Kind: model.KindInt},
-					{Name: colCommFromState, Kind: model.KindText},
-					{Name: colCommToState, Kind: model.KindText},
-					{Name: colCommActorKind, Kind: model.KindText},
-					{Name: colCommActorRef, Kind: model.KindText},
+					{Name: colCommFromState, Kind: model.KindText, Principal: pdeclNoneDecisionRequestState},
+					{Name: colCommToState, Kind: model.KindText, Principal: pdeclNoneDecisionRequestState},
+					{Name: colCommActorKind, Kind: model.KindText, Principal: pdeclNoneCommActorKind},
+					{Name: colCommActorRef, Kind: model.KindText, Principal: pdeclCommActorRef},
 				},
 				protectedPayloadFields("response", false),
 				[]model.FieldSpec{
-					{Name: colCommAcceptedDeliveryID, Kind: model.KindUUID, Nullable: true},
-					{Name: colCommBlockerWorkItemID, Kind: model.KindUUID, Nullable: true},
-					{Name: colCommWorkDecisionID, Kind: model.KindUUID, Nullable: true},
+					{Name: colCommAcceptedDeliveryID, Kind: model.KindUUID, Nullable: true, Principal: model.None("the id of the delivery through which the request was accepted: communication_state.go:3063-3064")},
+					{Name: colCommBlockerWorkItemID, Kind: model.KindUUID, Nullable: true, Principal: model.None("the id of the work item a blocking response points to: communication_state.go:3082-3083")},
+					{Name: colCommWorkDecisionID, Kind: model.KindUUID, Nullable: true, Principal: model.None("the id of the work decision a resolving response produced: communication_state.go:3080-3081")},
 					{Name: colCommRespondedAt, Kind: model.KindTimestamp},
 				},
 			),
@@ -852,28 +852,28 @@ func (m *Module) registerCommunicationSchema(reg store.ExtensionRegistry) error 
 			WorkspaceLineage: hiddenWorkspaceLineage,
 			Fields: communicationFieldGroups(
 				[]model.FieldSpec{
-					{Name: colWorkItemID, Kind: model.KindUUID},
-					{Name: colCommMessageID, Kind: model.KindUUID},
-					{Name: colCommDeliveryID, Kind: model.KindUUID},
-					{Name: colCommFromKind, Kind: model.KindText},
-					{Name: colCommFromRef, Kind: model.KindText},
+					{Name: colWorkItemID, Kind: model.KindUUID, Principal: pdeclNoneWorkItemID},
+					{Name: colCommMessageID, Kind: model.KindUUID, Principal: pdeclNoneMessageID},
+					{Name: colCommDeliveryID, Kind: model.KindUUID, Principal: pdeclNoneDeliveryID},
+					{Name: colCommFromKind, Kind: model.KindText, Principal: pdeclNoneCommRecipientKind},
+					{Name: colCommFromRef, Kind: model.KindText, Principal: model.KindRef(colCommFromKind, model.ClassObligation)},
 					{Name: colCommFromOwnerEpoch, Kind: model.KindInt},
-					{Name: colCommToKind, Kind: model.KindText},
-					{Name: colCommToRef, Kind: model.KindText},
+					{Name: colCommToKind, Kind: model.KindText, Principal: pdeclNoneCommRecipientKind},
+					{Name: colCommToRef, Kind: model.KindText, Principal: model.KindRef(colCommToKind, model.ClassObligation)},
 					{Name: colCommOfferedLeaseFence, Kind: model.KindInt, Nullable: true},
 					{Name: colCommContextEventSeq, Kind: model.KindInt},
-					{Name: colCommContextHash, Kind: model.KindBytes},
+					{Name: colCommContextHash, Kind: model.KindBytes, Principal: model.None("the SHA-256 of the canonical handoff context: communication_state.go:3187, communication_state.go:3192-3194")},
 				},
 				protectedPayloadFields("handoff", false),
 				[]model.FieldSpec{
-					{Name: colCommState, Kind: model.KindText},
+					{Name: colCommState, Kind: model.KindText, Principal: model.None("a handoff state, a closed set: communication_state.go:182-184, communication_state.go:3189")},
 					{Name: colCommAckDeadline, Kind: model.KindTimestamp},
-					{Name: colCommAckID, Kind: model.KindUUID, Nullable: true},
+					{Name: colCommAckID, Kind: model.KindUUID, Nullable: true, Principal: model.None("the id of the acknowledgement that accepted the handoff: communication_state.go:3217")},
 					{Name: colCommAcceptedAt, Kind: model.KindTimestamp, Nullable: true},
 					{Name: colCommRejectedAt, Kind: model.KindTimestamp, Nullable: true},
 					{Name: colCommWithdrawnAt, Kind: model.KindTimestamp, Nullable: true},
 					{Name: colCommExpiredAt, Kind: model.KindTimestamp, Nullable: true},
-					{Name: colCommTerminalCode, Kind: model.KindText, Nullable: true},
+					{Name: colCommTerminalCode, Kind: model.KindText, Nullable: true, Principal: model.None("a bounded terminal code: communication_state.go:3230")},
 				},
 				protectedPayloadFields("terminal_reason", true),
 				[]model.FieldSpec{
@@ -892,34 +892,34 @@ func (m *Module) registerCommunicationSchema(reg store.ExtensionRegistry) error 
 			Kind: deliveryDispatchKind, Table: deliveryDispatchTable, RetainOnTenantDrop: true,
 			WorkspaceLineage: hiddenWorkspaceLineage,
 			Fields: communicationFields(
-				model.FieldSpec{Name: colCommDeliveryID, Kind: model.KindUUID},
-				model.FieldSpec{Name: colCommRootDispatchID, Kind: model.KindUUID},
-				model.FieldSpec{Name: colCommPredecessorID, Kind: model.KindUUID, Nullable: true},
-				model.FieldSpec{Name: colCommEndpointID, Kind: model.KindUUID},
+				model.FieldSpec{Name: colCommDeliveryID, Kind: model.KindUUID, Principal: pdeclNoneDeliveryID},
+				model.FieldSpec{Name: colCommRootDispatchID, Kind: model.KindUUID, Principal: model.None("the id of the first dispatch of the lineage: communication_state.go:7828, communication_state.go:7841-7846")},
+				model.FieldSpec{Name: colCommPredecessorID, Kind: model.KindUUID, Nullable: true, Principal: model.None("the id of the dispatch this one succeeds: communication_state.go:7845")},
+				model.FieldSpec{Name: colCommEndpointID, Kind: model.KindUUID, Principal: model.None("the id of the endpoint the dispatch targets: communication_state.go:7829")},
 				model.FieldSpec{Name: colCommEndpointGeneration, Kind: model.KindInt},
-				model.FieldSpec{Name: colCommRouteRuleID, Kind: model.KindUUID, Nullable: true},
+				model.FieldSpec{Name: colCommRouteRuleID, Kind: model.KindUUID, Nullable: true, Principal: pdeclNoneRouteRuleID},
 				model.FieldSpec{Name: colCommRouteRuleGeneration, Kind: model.KindInt, Nullable: true},
 				model.FieldSpec{Name: colCommDispatchGeneration, Kind: model.KindInt},
 				model.FieldSpec{Name: colCommRerouteRung, Kind: model.KindInt},
 				model.FieldSpec{Name: colCommPolicyGeneration, Kind: model.KindInt},
-				model.FieldSpec{Name: colCommState, Kind: model.KindText},
+				model.FieldSpec{Name: colCommState, Kind: model.KindText, Principal: model.None("a dispatch state, a closed set: communication_state.go:186-189, communication_state.go:7831")},
 				model.FieldSpec{Name: colCommAttemptCount, Kind: model.KindInt},
 				model.FieldSpec{Name: colCommNextAttemptAt, Kind: model.KindTimestamp, Nullable: true},
-				model.FieldSpec{Name: colCommClaimOwner, Kind: model.KindText, Nullable: true},
+				model.FieldSpec{Name: colCommClaimOwner, Kind: model.KindText, Nullable: true, Principal: model.None("a dispatch worker's claim token, a bounded vocabulary token: communication_state.go:7863-7864")},
 				model.FieldSpec{Name: colCommClaimUntil, Kind: model.KindTimestamp, Nullable: true},
-				model.FieldSpec{Name: colCommIdempotencyKeyHash, Kind: model.KindBytes},
-				model.FieldSpec{Name: colCommLastVerdict, Kind: model.KindText, Nullable: true},
-				model.FieldSpec{Name: colCommLastCode, Kind: model.KindText, Nullable: true},
+				model.FieldSpec{Name: colCommIdempotencyKeyHash, Kind: model.KindBytes, Principal: model.None("a SHA-256 idempotency key of the dispatch: communication_state.go:7832")},
+				model.FieldSpec{Name: colCommLastVerdict, Kind: model.KindText, Nullable: true, Principal: pdeclNoneVerdict},
+				model.FieldSpec{Name: colCommLastCode, Kind: model.KindText, Nullable: true, Principal: model.None("a bounded attempt outcome code: communication_state.go:7885")},
 				model.FieldSpec{Name: colCommResolutionDeadlineAt, Kind: model.KindTimestamp, Nullable: true},
-				model.FieldSpec{Name: colCommResolutionCode, Kind: model.KindText, Nullable: true},
-				model.FieldSpec{Name: colCommReconciledAttemptID, Kind: model.KindUUID, Nullable: true},
-				model.FieldSpec{Name: colCommReconciledEndpointID, Kind: model.KindUUID, Nullable: true},
+				model.FieldSpec{Name: colCommResolutionCode, Kind: model.KindText, Nullable: true, Principal: model.None("a bounded resolution code: communication_state.go:7886")},
+				model.FieldSpec{Name: colCommReconciledAttemptID, Kind: model.KindUUID, Nullable: true, Principal: model.None("the id of the attempt a reconciliation settled: communication_state.go:7796")},
+				model.FieldSpec{Name: colCommReconciledEndpointID, Kind: model.KindUUID, Nullable: true, Principal: model.None("the id of the endpoint a reconciliation settled: communication_state.go:7797")},
 				model.FieldSpec{Name: colCommReconciledEndpointGeneration, Kind: model.KindInt, Nullable: true},
-				model.FieldSpec{Name: colCommReconciliationVerdict, Kind: model.KindText, Nullable: true},
-				model.FieldSpec{Name: colCommReconciliationCode, Kind: model.KindText, Nullable: true},
-				model.FieldSpec{Name: colCommReconciliationEvidenceRef, Kind: model.KindText, Nullable: true},
+				model.FieldSpec{Name: colCommReconciliationVerdict, Kind: model.KindText, Nullable: true, Principal: pdeclNoneVerdict},
+				model.FieldSpec{Name: colCommReconciliationCode, Kind: model.KindText, Nullable: true, Principal: model.None("a bounded reconciliation code: communication_state.go:7800")},
+				model.FieldSpec{Name: colCommReconciliationEvidenceRef, Kind: model.KindText, Nullable: true, Principal: model.None("an opaque reference to reconciliation evidence checked only for shape: communication_state.go:7801")},
 				model.FieldSpec{Name: colCommReconciliationObservedAt, Kind: model.KindTimestamp, Nullable: true},
-				model.FieldSpec{Name: colCommProviderAcceptanceHash, Kind: model.KindBytes, Nullable: true},
+				model.FieldSpec{Name: colCommProviderAcceptanceHash, Kind: model.KindBytes, Nullable: true, Principal: model.None("a SHA-256 of the provider's acceptance evidence: communication_state.go:7805")},
 				model.FieldSpec{Name: colCommSettledAt, Kind: model.KindTimestamp, Nullable: true},
 			),
 			Indexes: communicationIndexes("sessions_delivery_dispatch_workspace",
@@ -936,16 +936,16 @@ func (m *Module) registerCommunicationSchema(reg store.ExtensionRegistry) error 
 			Kind: deliveryAttemptKind, Table: deliveryAttemptTable, RetainOnTenantDrop: true,
 			WorkspaceLineage: hiddenWorkspaceLineage,
 			Fields: communicationFields(
-				model.FieldSpec{Name: colCommDispatchID, Kind: model.KindUUID},
+				model.FieldSpec{Name: colCommDispatchID, Kind: model.KindUUID, Principal: model.None("the id of the dispatch the attempt belongs to: communication_state.go:7938")},
 				model.FieldSpec{Name: colCommAttemptSeq, Kind: model.KindInt},
-				model.FieldSpec{Name: colCommState, Kind: model.KindText},
+				model.FieldSpec{Name: colCommState, Kind: model.KindText, Principal: model.None("an attempt state, a closed set: communication_state.go:191-193, communication_state.go:7939")},
 				model.FieldSpec{Name: colCommStartedAt, Kind: model.KindTimestamp},
-				model.FieldSpec{Name: colCommTransmitBoundary, Kind: model.KindText},
+				model.FieldSpec{Name: colCommTransmitBoundary, Kind: model.KindText, Principal: model.None("a transmit boundary, a closed set: communication_state.go:195-197, communication_state.go:7939")},
 				model.FieldSpec{Name: colCommFinishedAt, Kind: model.KindTimestamp, Nullable: true},
-				model.FieldSpec{Name: colCommVerdict, Kind: model.KindText, Nullable: true},
-				model.FieldSpec{Name: colCommCode, Kind: model.KindText, Nullable: true},
-				model.FieldSpec{Name: colCommProviderReceiptHash, Kind: model.KindBytes, Nullable: true},
-				model.FieldSpec{Name: colCommRequestHash, Kind: model.KindBytes},
+				model.FieldSpec{Name: colCommVerdict, Kind: model.KindText, Nullable: true, Principal: pdeclNoneVerdict},
+				model.FieldSpec{Name: colCommCode, Kind: model.KindText, Nullable: true, Principal: model.None("a bounded attempt outcome code: communication_state.go:7953")},
+				model.FieldSpec{Name: colCommProviderReceiptHash, Kind: model.KindBytes, Nullable: true, Principal: model.None("a SHA-256 of the provider's receipt: communication_state.go:7941")},
+				model.FieldSpec{Name: colCommRequestHash, Kind: model.KindBytes, Principal: model.None("a SHA-256 of the transmitted request: communication_state.go:7940")},
 			),
 			Indexes: communicationIndexes("sessions_delivery_attempt_workspace",
 				model.IndexSpec{Name: "sessions_delivery_attempt_dispatch_uniq", Columns: []string{model.ColTenantID, colCommDispatchID}, Unique: true},
@@ -956,22 +956,22 @@ func (m *Module) registerCommunicationSchema(reg store.ExtensionRegistry) error 
 			Kind: communicationCommandKind, Table: communicationCommandTable, AppendOnly: true,
 			WorkspaceLineage: hiddenWorkspaceLineage,
 			Fields: communicationFields(
-				model.FieldSpec{Name: colCommCommandID, Kind: model.KindUUID},
-				model.FieldSpec{Name: colCommActorFingerprint, Kind: model.KindBytes},
-				model.FieldSpec{Name: colCommCommandScope, Kind: model.KindText},
-				model.FieldSpec{Name: colCommIdempotencyKeyHash, Kind: model.KindBytes},
-				model.FieldSpec{Name: colCommRequestDigest, Kind: model.KindBytes},
-				model.FieldSpec{Name: colCommSealKeyVersion, Kind: model.KindText, Nullable: true},
-				model.FieldSpec{Name: colCommDigestKeyVersion, Kind: model.KindText, Nullable: true},
-				model.FieldSpec{Name: colCommPlanHash, Kind: model.KindBytes},
-				model.FieldSpec{Name: colCommResultKind, Kind: model.KindText},
-				model.FieldSpec{Name: colCommResultID, Kind: model.KindUUID, Nullable: true},
+				model.FieldSpec{Name: colCommCommandID, Kind: model.KindUUID, Principal: model.None("the id of a communication command receipt: communication_state.go:2309")},
+				model.FieldSpec{Name: colCommActorFingerprint, Kind: model.KindBytes, Principal: model.None("an unkeyed SHA-256 of the caller's canonical actor kind and ref, used only as an idempotency namespace key and compared for equality: communication_ack_service.go:609-616, communication_state.go:2309")},
+				model.FieldSpec{Name: colCommCommandScope, Kind: model.KindText, Principal: model.None("an opaque command scope label: communication_state.go:2310")},
+				model.FieldSpec{Name: colCommIdempotencyKeyHash, Kind: model.KindBytes, Principal: model.None("a SHA-256 of the caller's idempotency key: communication_state.go:2310")},
+				model.FieldSpec{Name: colCommRequestDigest, Kind: model.KindBytes, Principal: model.None("a digest of the canonical request: communication_state.go:2311")},
+				model.FieldSpec{Name: colCommSealKeyVersion, Kind: model.KindText, Nullable: true, Principal: model.None("a key version label chosen by the content sealer: communication_state.go:2317-2319")},
+				model.FieldSpec{Name: colCommDigestKeyVersion, Kind: model.KindText, Nullable: true, Principal: model.None("a key version label chosen by the content sealer: communication_state.go:2317-2319")},
+				model.FieldSpec{Name: colCommPlanHash, Kind: model.KindBytes, Principal: model.None("a SHA-256 of the command plan: communication_state.go:2311")},
+				model.FieldSpec{Name: colCommResultKind, Kind: model.KindText, Principal: model.None("the entity kind of the command result: communication_state.go:2312")},
+				model.FieldSpec{Name: colCommResultID, Kind: model.KindUUID, Nullable: true, Principal: model.None("the id of the command's result row: communication_state.go:2315")},
 				model.FieldSpec{Name: colCommHTTPStatus, Kind: model.KindInt},
-				model.FieldSpec{Name: colCommResponseProjectionJSON, Kind: model.KindJSON},
-				model.FieldSpec{Name: colCommResponseDigest, Kind: model.KindBytes},
-				model.FieldSpec{Name: colEventID, Kind: model.KindUUID, Nullable: true},
+				model.FieldSpec{Name: colCommResponseProjectionJSON, Kind: model.KindJSON, Principal: pdeclCommandResponseProjection},
+				model.FieldSpec{Name: colCommResponseDigest, Kind: model.KindBytes, Principal: model.None("a digest binding the closed response projection: communication_state.go:2313, communication_state.go:2369-2374")},
+				model.FieldSpec{Name: colEventID, Kind: model.KindUUID, Nullable: true, Principal: model.None("the id of the work event the command appended: communication_state.go:2316")},
 				model.FieldSpec{Name: colCommAuditSeq, Kind: model.KindInt},
-				model.FieldSpec{Name: colCommAuditHash, Kind: model.KindBytes, Nullable: true},
+				model.FieldSpec{Name: colCommAuditHash, Kind: model.KindBytes, Nullable: true, Principal: model.None("the hash of the audit event the command committed with: communication_state.go:2321-2322")},
 				model.FieldSpec{Name: colCommCompletedAt, Kind: model.KindTimestamp},
 			),
 			Indexes: communicationIndexes("sessions_communication_command_workspace",
@@ -1041,7 +1041,7 @@ func communicationSchemaInvariants() map[store.Engine][]store.SchemaTrigger {
 		"sessions_channel_label_definition_guard":     "556cf239310b0effa528246d76f4d8e196d85d359125ba9178581821dab28bc1",
 		"sessions_channel_label_definition_no_delete": "57250c53e51e35c165c0cb913948011a512bbacedbdcdd270bd91596dc09db73",
 		"sessions_channel_no_delete":                  "93bc37af2a3107ff44e2416262492722b400ccf9c3038d5192cbfde42853bbb3",
-		"sessions_channel_route_guard":                "1e39b1d5f20ce3d453af669d63f355ceed87008b9f5f598ab2a98d498d9e9efb",
+		"sessions_channel_route_guard":                "509abdc9f8fbc3b7d22f128cd2d838fd562ace712067d1f94cfa766f2f4ffd7b",
 		"sessions_channel_route_no_delete":            "753505cd2f58b28bd3ef379363be91102ec48a26ca5f89b6f402bd0182853a49",
 		"sessions_channel_subscription_guard":         "4fbec18f080bc2195103b396d109a484c7dcc40d1b897091302e5fbfc2be6088",
 		"sessions_channel_subscription_no_delete":     "6e8459f6e0908b81d433ec73c0ac7afae729a9b94978dd2e29cba0db90a216c1",
@@ -1050,7 +1050,7 @@ func communicationSchemaInvariants() map[store.Engine][]store.SchemaTrigger {
 		"sessions_communication_endpoint_no_delete":   "ab32af900ae0b990f2ed83001305dde42505689be528e48ff130147aefac6cef",
 		"sessions_communication_guard_guard":          "aa625e70e658c1fde98135adefd8eb2636aaf5c3c2101425beab4f5c5015f059",
 		"sessions_communication_guard_no_delete":      "408165651cf18f6ac9da71c5e498173863762c18a95273c5d7b2467d6ab6d23e",
-		"sessions_decision_request_guard":             "a70af9db9dd5244f33876693c50b0e9b87cb80f8fa998715d7a07edeec4b7cab",
+		"sessions_decision_request_guard":             "80d2f06ec67e7357537a73b3050df009ae48f8aee86a70c07c19e27d9873b848",
 		"sessions_decision_request_no_delete":         "84419d157e55e126035bc54be0090d86480ae95a5304e33cbf3131fcadd87139",
 		"sessions_decision_response_guard":            "ffb9a01c2c036afeef2ae139f6f2c89eb938b09093b6bcada7a80086af58081e",
 		"sessions_delivery_attempt_guard":             "70b1ef42c95e65bb48ce45f784a523ae3f7d67587d77da8953579a80a4463581",
@@ -1163,6 +1163,25 @@ func communicationSchemaInvariants() map[store.Engine][]store.SchemaTrigger {
 				},
 			}}
 		}
+		// Migration 25 repairs the ChannelRoute event_type and DecisionRequest
+		// authority_requirement bounds: 0012 wrote both as {1,256}, above
+		// PostgreSQL's regular-expression repetition limit of 255, so both guards
+		// raised SQLSTATE 2201B on every row that reached them. Only these two
+		// triggers move, to a reserved copy of the shared validator with those two
+		// expressions rewritten; the other sixteen keep the shared function.
+		if previous, ok := map[string]string{
+			"sessions_channel_route_guard":    "1e39b1d5f20ce3d453af669d63f355ceed87008b9f5f598ab2a98d498d9e9efb",
+			"sessions_decision_request_guard": "a70af9db9dd5244f33876693c50b0e9b87cb80f8fa998715d7a07edeec4b7cab",
+		}[postgresGuard]; ok {
+			postgresTrigger.Transitions = []store.SchemaTriggerTransition{{
+				MigrationVersion:         25,
+				PreviousDefinitionSHA256: previous,
+				PostgresFunctionIdentity: &store.SchemaTriggerFunctionIdentityTransition{
+					PreviousName: "olivares_sessions_communication_validate",
+					NextName:     "olivares_sessions_communication_validate_v25",
+				},
+			}}
+		}
 		postgres = append(postgres, postgresTrigger)
 		sqliteInsert := definition.table + "_guard_ins"
 		sqliteTrigger := store.SchemaTrigger{
@@ -1257,3 +1276,141 @@ func sessionsSchemaInvariants() map[store.Engine][]store.SchemaTrigger {
 	}
 	return combined
 }
+
+// Principal declarations of the communication descriptors. Every (kind, ref)
+// pair here spells an account as kind "user" with a canonical account id and a
+// session as an osn_ id (communication_state.go:276-327), which is the (kind,
+// ref) encoding: only a "user" kind resolves to an account. A shared
+// declaration cites lines that hold for every column using it.
+var (
+	pdeclNoneCommActorKind        = model.None("a communication actor kind, a closed set: communication_state.go:147-149, communication_state.go:308-311")
+	pdeclNoneCommSubjectKind      = model.None("a communication subject kind, a closed set: communication_state.go:74-76, communication_state.go:276-279")
+	pdeclNoneCommRecipientKind    = model.None("a recipient kind, a closed set: communication_state.go:145, communication_state.go:292-295")
+	pdeclNoneSelectorKind         = model.None("an audience selector kind, a closed set: communication_state.go:140-143, communication_state.go:329-331")
+	pdeclNoneWakePolicy           = model.None("a wake policy, a closed set: communication_state.go:90")
+	pdeclNoneAckPolicy            = model.None("an acknowledgement policy, a closed set: communication_state.go:136-138")
+	pdeclNoneUrgency              = model.None("a message urgency, a closed set: communication_state.go:134")
+	pdeclNoneMessageKind          = model.None("a message kind, a closed set: communication_state.go:125-128")
+	pdeclNoneMailboxKind          = model.None("a mailbox kind, a closed set: communication_state.go:161, communication_state.go:6853")
+	pdeclNoneVerdict              = model.None("an assessment verdict, a closed set: work_model.go:33-35, communication_state.go:215-217")
+	pdeclNoneCursorFilterHash     = model.None("the SHA-256 of an inbox cursor's canonical filter: communication_state.go:6854, communication_state.go:6885")
+	pdeclNoneChannelID            = model.None("the id of the Channel the row belongs to, never an account: communication_state.go:1297, communication_state.go:1321, communication_state.go:1343, communication_state.go:1548, communication_protocol_interrupt.go:830")
+	pdeclNoneMessageID            = model.None("the id of a Message, never an account: communication_state.go:1953, communication_state.go:2155, communication_state.go:2801, communication_state.go:3183, communication_binding_service.go:584")
+	pdeclNoneDeliveryID           = model.None("the id of a message delivery, never an account: communication_state.go:2187, communication_state.go:3184, communication_state.go:6886, communication_state.go:7827, communication_binding_service.go:585")
+	pdeclNoneRouteRuleID          = model.None("the id of a channel route rule, never an account: communication_state.go:2156, communication_state.go:4145-4148, communication_state.go:7721")
+	pdeclNoneDecisionRequestState = model.None("a decision request state, a closed set: communication_state.go:177-180, communication_state.go:2804, communication_state.go:3062-3063")
+
+	pdeclSelectorRef  = model.KindRef(colCommSelectorKind, model.ClassEvidence)
+	pdeclReaderRef    = model.KindRef(colCommReaderKind, model.ClassEvidence)
+	pdeclCommActorRef = model.KindRef(colCommActorKind, model.ClassEvidence)
+	// pdeclRecipientRef makes the recipient a required party of the delivery
+	// it names: it must see and, where the policy asks, acknowledge it. A publish
+	// fans out to current directory members under the directory fact it already
+	// locks (communication_publish.go:453), and a reader must still be one
+	// (communication_ack_service.go:429), so the reference is member-bound.
+	pdeclRecipientRef = model.KindRef(colCommRecipientKind, model.ClassObligation).BoundToMembers()
+
+	// pdeclCausalRef is the ref of an audience arc's cause: the recipient itself
+	// for a direct arc, the original subscriber for a subscriber arc, a group id
+	// for a group arc or the workspace id for a workspace-member arc
+	// (communication_state.go:4058-4100). The causal kind never says "user", so
+	// no (kind, ref) pair fixes where an account id sits; it is matched against
+	// every alias as evidence.
+	pdeclCausalRef = model.Scan(model.ClassEvidence)
+	// pdeclMailboxRef is an inbox cursor's mailbox: the reader's own ref for a
+	// personal mailbox, which is an account id when the reader is a user, or a
+	// Channel id (communication_state.go:6857-6858). The mailbox kind never
+	// says "user", so it is matched against every alias as evidence.
+	pdeclMailboxRef = model.Scan(model.ClassEvidence)
+
+	// pdeclRouteReasons is the route reason list the delivery and audience
+	// writers marshal as a JSON array of strings (communication_model.go:607,
+	// communication_model.go:635).
+	pdeclRouteReasons = model.Nested([]RouteReason{}, model.ClassEvidence,
+		model.Leaf("[]", model.None("a route reason, a bounded vocabulary token: communication_state.go:4190-4201")),
+	)
+	// pdeclLabelMap is a canonical label map of bounded tokens, the message
+	// labels or a route's label matcher (communication_state.go:1423-1441).
+	pdeclLabelMap = model.Nested(map[string]string{}, model.ClassEvidence,
+		model.Leaf("{key}", model.None("a label key, a bounded vocabulary token: communication_state.go:1434-1437")),
+		model.Leaf("{}", model.None("a label value, a bounded vocabulary token: communication_state.go:1434-1437")),
+	)
+	// pdeclLabelVocabulary is a label definition's allowed values, a sorted JSON
+	// array of bounded tokens (communication_state.go:1350-1367).
+	pdeclLabelVocabulary = model.Nested([]string{}, model.ClassEvidence,
+		model.Leaf("[]", model.None("a label vocabulary value, a bounded vocabulary token: communication_state.go:1350-1358")),
+	)
+	// pdeclCommandResponseProjection is the closed receipt projection, which
+	// has no field for human content or a principal (communication_model.go:811-821).
+	pdeclCommandResponseProjection = model.Nested(CommunicationCommandResponseProjection{}, model.ClassEvidence,
+		model.Leaf("ids{key}", model.None("a projection id name from a closed set: communication_state.go:2330-2334, communication_state.go:2343-2344")),
+		model.Leaf("ids{}", model.None("the canonical id of a communication row the command produced: communication_state.go:2343-2344")),
+		model.Leaf("state", model.None("a resulting entity state from a closed set: communication_state.go:2255-2263, communication_state.go:2326-2327")),
+		model.Leaf("counts{key}", model.None("a count name from a closed set: communication_state.go:2335-2338, communication_state.go:2348-2349")),
+		model.Leaf("digests{key}", model.None("a digest name from a closed set: communication_state.go:2339-2342, communication_state.go:2353-2354")),
+		model.Leaf("digests{}", model.None("a SHA-256 digest: communication_state.go:2353-2354")),
+		model.Leaf("inbox_cursor.barrier_delivery_id", model.None("the id of the delivery a cursor barrier waits on: communication_state.go:2296-2297")),
+		model.Leaf("inbox_cursor.barrier_reason", model.None("a cursor barrier cause, a closed set: communication_state.go:163-165, communication_state.go:2298")),
+	)
+
+	pdeclNonePayloadEncoding   = model.None("a protected-payload encoding, a closed set: communication_state.go:117, communication_state.go:888")
+	pdeclNonePayloadSchema     = model.None("the schema name of a protected-payload slot, a closed set: communication_state.go:964-983, communication_state.go:1122-1123")
+	pdeclNonePayloadDigest     = model.None("a digest of the protected content, compared and never resolved: communication_state.go:888-889, communication_state.go:902-904")
+	pdeclNonePayloadKeyVersion = model.None("a key version label chosen by the content sealer: communication_state.go:909-910")
+	// pdeclPayloadSealed is the sealed envelope the payload writer marshals
+	// (communication_codec.go:449) and the reader decodes
+	// (communication_codec.go:494-499).
+	pdeclPayloadSealed = model.Nested(SealedPayload{}, model.ClassEvidence,
+		model.Leaf("ciphertext", model.None("ciphertext only the content sealer opens: communication_state.go:906-912, communication_model.go:1082-1087")),
+		model.Leaf("key_version", pdeclNonePayloadKeyVersion),
+	)
+	// pdeclContentReference classifies every content reference inside a
+	// payload: an opaque kind, ref and hash checked only for shape and returned
+	// to authorized readers; no reader resolves one to an account.
+	pdeclContentReference = model.TypeLeaves(ContentReference{},
+		model.Leaf("kind", model.None("an opaque content reference kind, checked only for shape: communication_state.go:985-991, communication_state.go:1522-1524")),
+		model.Leaf("ref", model.None("an opaque content reference, checked only for shape: communication_state.go:985-991, communication_state.go:1522-1524")),
+		model.Leaf("hash", model.None("an optional opaque content hash, checked only for shape: communication_state.go:985-991, communication_state.go:1522-1524")),
+	)
+	pdeclNoneContentProse = model.None("human prose of a protected payload, bounded and returned only to authorized readers: communication_state.go:993-1005, communication_state.go:1026-1066, communication_state.go:1503-1542")
+	pdeclNoneContentToken = model.None("a bounded vocabulary token of a protected payload: communication_state.go:994, communication_state.go:1034, communication_state.go:1045, communication_state.go:1529")
+	pdeclReasonContent    = model.Nested(CommunicationReasonContent{}, model.ClassEvidence,
+		model.Leaf("code", pdeclNoneContentToken),
+		model.Leaf("text", pdeclNoneContentProse),
+		pdeclContentReference,
+	)
+	// pdeclPayloadPlain is the plain JSON of each protected-payload slot, keyed
+	// by the column prefix protectedPayloadFields is called with; each is the
+	// slot content type the validator decodes (communication_state.go:1073-1111).
+	// A prefix missing here leaves its column undeclared, which the census
+	// reports.
+	pdeclPayloadPlain = map[string]*model.ColumnDecl{
+		"payload": model.Nested(MessageContent{}, model.ClassEvidence,
+			model.Leaf("subject", pdeclNoneContentProse),
+			model.Leaf("blocks[].type", model.None("a content block type, a closed set: communication_state.go:119-121, communication_state.go:1510")),
+			model.Leaf("blocks[].format", model.None("a text format, a closed set: communication_state.go:123, communication_state.go:1515")),
+			model.Leaf("blocks[].text", pdeclNoneContentProse),
+			model.Leaf("blocks[].code", pdeclNoneContentToken),
+			pdeclContentReference,
+		),
+		"terminal_reason": pdeclReasonContent,
+		"note":            pdeclReasonContent,
+		"request": model.Nested(DecisionRequestContent{}, model.ClassEvidence,
+			model.Leaf("question", pdeclNoneContentProse),
+			model.Leaf("choices[].key", pdeclNoneContentToken),
+			model.Leaf("choices[].label", pdeclNoneContentProse),
+		),
+		"response": model.Nested(DecisionResponseContent{}, model.ClassEvidence,
+			model.Leaf("choice_key", pdeclNoneContentToken),
+			model.Leaf("reason.code", pdeclNoneContentToken),
+			model.Leaf("reason.text", pdeclNoneContentProse),
+			pdeclContentReference,
+		),
+		"handoff": model.Nested(HandoffContent{}, model.ClassEvidence,
+			model.Leaf("summary", pdeclNoneContentProse),
+			model.Leaf("next_action", pdeclNoneContentProse),
+			model.Leaf("risk", pdeclNoneContentProse),
+			pdeclContentReference,
+		),
+	}
+)

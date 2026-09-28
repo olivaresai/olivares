@@ -121,7 +121,7 @@ reporting a fabricated zero. Methods (`modules/evals/stats.go`, closed and deter
 
 | Measured condition | Verdict | Reason code |
 |---|---|---|
-| Regression vs baseline (drift > the suite's `regression_threshold`) | **fail** | `regression_vs_baseline` |
+| Point-score drift above the suite's `regression_threshold`, against one baseline run, with no interval | **fail** | `regression_vs_baseline` |
 | `pass_rate` < the suite's `pass_threshold` | **fail** | `below_pass_threshold` |
 | Run in error state (all cases errored) | **fail** | `run_error` |
 | `llm_judge` suite with judge wired but WITHOUT calibration for the pin | **fail** | `judge_uncalibrated` |
@@ -131,18 +131,36 @@ reporting a fabricated zero. Methods (`modules/evals/stats.go`, closed and deter
 | No judge credential (honest degradation — a recorded design decision) | warn | `no_judge_credential` |
 | First execution (no baseline to compare) | note | `no_baseline` |
 
+The regression row compares one run's score with one baseline run's score. It is
+not an interval and it has no experiment design. Pass rate and mean score are still reported with the intervals in §4; the
+`below_pass_threshold` row compares the point pass rate with the threshold. The automatic baseline is the latest completed run for
+the same suite and subject, and the same variant when one is set
+(`modules/evals/runs.go`). Suite version, model ref and scorer need not match,
+and the comparison does not report which changed. After a suite version change,
+pass `--baseline` or pin a baseline (`POST /v1/m/evals/baselines`). When no
+FinOps budget that blocks or throttles applies to the judge calls, the gate
+allows the spend. When the budget store cannot be read, the gate refuses the
+spend and fails with `budget_blocked` (`cmd/olivares/budgetgate.go`,
+`modules/evals/gate.go`). A budget that blocks or throttles stops the spend.
+Ordinary `llm_judge` runs do not call this pre-flight.
+
 - **Controlled cost**: **seed-deterministic** subset (`sample_size` cases with the lowest
-  `hash(seed|case_key)` — fixed across re-runs), **verdict cache** keyed by
-  `(prompt-version | judge_model pin | criterion | input | expected | output)` — an identical
-  re-run costs ZERO calls — and budget pre-flight over the spend of the CI itself.
+  `hash(seed|case_key)` — the seed selects the sample, not the model output), **verdict cache** keyed by
+  `(prompt-version | judge_model pin | criterion | input | expected | output)` — a cache
+  hit costs zero judge calls; a miss calls the model — and a budget pre-flight on
+  this gate only. An ordinary run outside the gate does not use this cache.
   Changing the judge prompt requires a bump of `judgeCacheVersion` (`gate.go`), which invalidates the
   entire cache by construction (the version lives inside the hash).
 - **Governed override**: `POST /v1/m/evals/gate/{id}/override` — admin-tier, mandatory written
   reason, audited with the original verdict. The recorded verdict does NOT change; what changes is the
   `effective_verdict` that CI consults with `--check-id`. A gate in pass is not "overrideable" and an
   override is not undone (re-run the gate).
-- Each gate evaluation persists a normal run (it enters the suite's trend) + the gate row
-  (verdict, reasons, seed, sample, override) — reproducible and auditable.
+- Each gate evaluation persists a normal run (it enters the suite's trend) and the gate row
+  (verdict, reasons, seed, sample, override). The stored row is auditable. Re-running the gate reproduces the case scores of
+  a deterministic scorer and of verdict-cache hits. Without `--baseline` or a
+  pinned baseline, the regression row compares with the latest completed run,
+  which can be the previous gate's own run, so the verdict can change. An
+  `llm_judge` cache miss calls the remote model again and may differ.
 
 Example job (GitHub Actions):
 
@@ -171,9 +189,14 @@ eval-gate:
 - Audited privileged actions: `evals.run.launch`, `evals.ab.score`, `evals.monitor`,
   `evals.baseline.pin`, `evals.calibration.label`, `evals.calibration.run`, `evals.gate.run`,
   `evals.gate.override`.
-- Reproducibility: closed and deterministic statistics (no random sampling), hash-based
-  sampling with an explicit persisted seed, cache keyed by content+pin+prompt version, append-only
-  reports. Re-running with the same inputs yields the same numbers.
+- Reproducibility: closed and deterministic statistics (no random sampling) and
+  hash-based sampling with an explicit persisted seed. The seed fixes which cases
+  the gate samples; it does not make a remote model deterministic. A gate
+  verdict-cache hit returns the stored verdict without another model call. An
+  ordinary `llm_judge` run calls the remote judge again and may differ. A run
+  records suite version, an optional model ref, the scorer id and
+  `prompt_variant`. It does not record prompt or template version, executor,
+  provider build, tool or retrieval versions, or environment.
 
 ## 7. Public benchmarks: verified, none applicable (2026-06)
 

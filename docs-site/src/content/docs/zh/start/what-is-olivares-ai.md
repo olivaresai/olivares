@@ -26,7 +26,7 @@ Olivares AI 两者兼顾。一方面，它给你的 AI 提供工作所需的东�
 
 ## 一项能力：读/写访问图
 
-在这些能力之中有**R/RW 访问图**。对于每个发起方（一个 agent、一个非人类身份、一个会话），它都会向它所触及的
+在这些能力之中有**R/RW 访问图**。对于来源观察到的每个发起方（一个 agent、一个非人类身份、一个会话），它向该信号显示其触及的
 每个资源建立一条边，分类为 **read**、**write**、**read-write** 或 **unknown**，并标注：
 
 - **信号来自何处**（`SignalSource`）——来自协作式 agent 的 OpenTelemetry、Postgres 的 pgAudit
@@ -46,10 +46,10 @@ Olivares AI 两者兼顾。一方面，它给你的 AI 提供工作所需的东�
 ## 一个平台，而非单一功能
 
 访问图只是众多能力之一。该产品是一个**模块化平台**（精神上类似 Grafana 或 Backstage）：一个引擎加上模块再加上
-connector，其设计使得任何模块都能在无需重构其余部分的情况下接入。它内置 **30 个模块**——清单与实时会话、
+connector，其设计使得任何模块都能在无需重构其余部分的情况下接入。它内置 **31 个模块**——清单与实时会话、
 R/RW 图、agent 编排（A2A，开发中）、MCP 与技能管理、身份与非人类身份、部署、知识与上下文、安全与 guardrail（护栏）、
 模型与提供方管理、成本/FinOps、evals 与测试沙箱、red-teaming、合规与证据、内部目录、输出集成与 SIEM 推送、
-voice/realtime，以及健康/SLA——再加上不计入这 30 个模块的平台能力（它自己的 API 与 manage-as-code、多租户、高管仪表盘）——涵盖 **158 项集成**（该数字由 `scripts/check-public-counts.sh` 从代码中测得）。
+voice/realtime，以及健康/SLA——再加上不计入这 31 个模块的平台能力（它自己的 API 与 manage-as-code、多租户、高管仪表盘）——涵盖 **159 项集成**（该数字由 `scripts/check-public-counts.sh` 从代码中测得）。
 少数能力在 provisioned 之前是 pre-v1 或 deny-closed 的接缝；文档会明确说明是哪些。
 
 完整列表参见[模块目录](/zh/reference/modules/overview/)，引擎与模块如何组合在一起参见

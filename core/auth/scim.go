@@ -100,6 +100,9 @@ func (a *Authenticator) SCIMProvisionUser(ctx context.Context, actor Principal, 
 	var out model.User
 	var created bool
 	err := a.st.AuthMutate(ctx, func(as store.AuthScope) error {
+		if err := refuseForeignDomain(ctx, as, tenant, email, ""); err != nil {
+			return err
+		}
 		existing, _, err := as.Users().List(ctx, byEq("email", email, 1))
 		if err != nil {
 			return err
@@ -107,17 +110,35 @@ func (a *Authenticator) SCIMProvisionUser(ctx context.Context, actor Principal, 
 		if len(existing) > 0 {
 			// The address is taken. Whether this connection may have the resource
 			// is decided by the membership boundary every other SCIM verb stands
-			// behind (SCIMGetMember), and nothing is written on either side of it.
-			u := existing[0]
-			if _, ok, err := membershipOf(ctx, as, u.ID, tenant); err != nil {
+			// behind (SCIMGetMember). The one account a connection may bring back
+			// is one its own tenant created and removed: it is re-admitted once
+			// that removal completed. Any other account is not written.
+			if err := prepareUserAuthorityWrite(ctx, as, existing[0].ID); err != nil {
 				return err
-			} else if !ok {
+			}
+			u, err := as.Users().Get(ctx, existing[0].ID)
+			if err != nil {
+				return err
+			}
+			member, custodian, err := joinOrConsent(ctx, as, u, tenant)
+			switch {
+			case errors.Is(err, ErrConsentRequired):
+				return store.ErrConflict
+			case err != nil:
+				return err
+			case custodian:
+				if _, err := readmitCustodian(ctx, as, actor, u, tenant, SCIMDefaultRole, ""); err != nil {
+					return err
+				}
+			case !member:
 				return store.ErrConflict
 			}
 			out = u
 			return nil
 		}
-		u := model.User{Email: email, PasswordHash: ""} // SSO/SCIM-provisioned: no local password
+		// SSO/SCIM-provisioned: no local password. This tenant created the
+		// account, so its credentials are the tenant's.
+		u := model.User{Email: email, PasswordHash: "", CredentialCustody: model.CustodyTenant, CustodyTenantID: tenant}
 		applyDirectoryAttrs(&u, in)
 		if u, err = as.Users().Create(ctx, u); err != nil {
 			return err
@@ -142,12 +163,14 @@ func (a *Authenticator) SCIMProvisionUser(ctx context.Context, actor Principal, 
 	return out, created, err
 }
 
-// SCIMUpdateUser applies a full directory attribute set to a tenant member
-// (PUT/PATCH). When active flips to false it DISABLES the account — the SCIM
-// resource remains retrievable as active:false, but the user's access is cut:
-// its tenant-bound tokens (and their exchanged children) and ALL its sessions are
-// revoked. The membership stays (the record is preserved until a DELETE
-// offboards it). It returns the updated user.
+// SCIMUpdateUser applies a directory attribute set to a tenant member
+// (PUT/PATCH). A tenant never writes an account's global status: active=false
+// is a scoped offboard — the resource answers once as active:false and is then
+// gone from this tenant — and active=true writes nothing. Attributes are the
+// account's global record, so a tenant writes them only for an account it
+// alone governs (tenantGoverned) and that the deployment has not suspended; a
+// rename also passes the foreign-domain check. Any other change answers
+// ErrNotTenantGoverned and nothing is written.
 func (a *Authenticator) SCIMUpdateUser(ctx context.Context, actor Principal, tenant model.TenantID, id model.ID, in SCIMUserInput) (model.User, error) {
 	if _, err := a.SCIMGetMember(ctx, tenant, id); err != nil {
 		return model.User{}, err
@@ -168,162 +191,71 @@ func (a *Authenticator) SCIMUpdateUser(ctx context.Context, actor Principal, ten
 		if err != nil {
 			return err
 		}
-		if in.UserName != "" {
-			u.Email = normalizeEmail(in.UserName)
-		}
-		applyDirectoryAttrs(&u, in)
-		if out, err = as.Users().Update(ctx, u); err != nil {
-			return err
-		}
-		if err := auditAct(ctx, as, actor, "scim.user.update", "core.user", id); err != nil {
-			return err
-		}
 		if !in.Active {
-			// Disabling cuts access: revoke tenant-bound tokens (cascade) + all sessions.
-			if err := revokeUserAccess(ctx, as, actor, id, tenant, true); err != nil {
+			if _, err := a.scopedOffboard(ctx, as, actor, id, tenant, "scim.deactivate"); err != nil {
+				return err
+			}
+			out = u
+			out.Status = model.StatusInactive // this tenant's view of the resource
+			return nil
+		}
+		next := u
+		if in.UserName != "" {
+			next.Email = normalizeEmail(in.UserName)
+		}
+		applyDirectoryAttrs(&next, in)
+		next.Status = u.Status
+		if next == u {
+			out = u
+			return nil
+		}
+		// A globally suspended account's attributes belong to the deployment that
+		// suspended it: no tenant writes them, whatever its custody.
+		if u.Status != model.StatusActive {
+			return ErrNotTenantGoverned
+		}
+		governed, err := tenantGoverned(ctx, as, u, tenant)
+		if err != nil {
+			return err
+		}
+		if !governed {
+			return ErrNotTenantGoverned
+		}
+		if next.Email != u.Email {
+			if err := refuseForeignDomain(ctx, as, tenant, next.Email, ""); err != nil {
 				return err
 			}
 		}
-		return nil
+		if out, err = as.Users().Update(ctx, next); err != nil {
+			return err
+		}
+		return auditAct(ctx, as, actor, "scim.user.update", "core.user", id)
 	})
 	return out, err
 }
 
-// revokeUserAccess revokes the user's tokens bound to tenant (cascading to their
-// exchanged children) and, when allSessions is true, every session the user
-// holds. It is the shared credential-cut used by both disable and deprovision.
-func revokeUserAccess(ctx context.Context, as store.AuthScope, actor Principal, id model.ID, tenant model.TenantID, allSessions bool) error {
-	if allSessions {
-		if err := prepareUserAuthorityWrite(ctx, as, id); err != nil {
-			return err
-		}
-	}
-	toks, _, err := as.Tokens().List(ctx, byEq("user_id", id.String(), 1000))
-	if err != nil {
-		return err
-	}
-	for _, t := range toks {
-		if t.BoundTenantID == tenant && !t.Revoked {
-			if err := revokeTokenTree(ctx, as, actor, t.ID); err != nil {
-				return err
-			}
-		}
-	}
-	if !allSessions {
-		return nil
-	}
-	sessions, _, err := as.Sessions().List(ctx, byEq("user_id", id.String(), 1000))
-	if err != nil {
-		return err
-	}
-	for _, s := range sessions {
-		if !s.Revoked {
-			s.Revoked = true
-			if _, err := as.Sessions().Update(ctx, s); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-// SCIMDeprovisionUser is the leaver path. It removes the user's membership in
-// tenant — and its rows in this tenant's groups — and revokes the user's tokens
-// BOUND to that tenant (cascading to their exchanged children). If the user is
-// left with no memberships at all, the account is deactivated and ALL its
-// sessions revoked — the departed-employee guarantee (IDN-04). It is
-// idempotent.
+// SCIMDeprovisionUser is the leaver path: a scoped offboard of the account
+// from tenant. The account's global status, its other tenants, its
+// account-scope sessions and its authenticators are never touched, however many
+// memberships it has left. An account that is not a member of tenant, read
+// inside the transaction, is a no-op. It is idempotent.
 func (a *Authenticator) SCIMDeprovisionUser(ctx context.Context, actor Principal, tenant model.TenantID, id model.ID) error {
 	return a.st.AuthMutate(ctx, func(as store.AuthScope) error {
 		// Serialize the membership read before claiming any User authority.
-		// An absent resource (including a departed or unknown User) is a no-op.
+		// An absent resource (including a departed or unknown User) is a no-op:
+		// nothing is written, not even a retirement record.
 		if err := prepareUserAuthorityWrite(ctx, as); err != nil {
 			return err
 		}
-		m, ok, err := membershipOf(ctx, as, id, tenant)
-		if err != nil {
+		if _, ok, err := membershipOf(ctx, as, id, tenant); err != nil {
 			return err
-		}
-		if !ok {
+		} else if !ok {
 			return nil
 		}
-		// A real departure may revoke sessions and disable an orphan. Declare
-		// its H before the first membership/G write or audit, under the same lock.
-		if err := prepareUserAuthorityWrite(ctx, as, id); err != nil {
-			return err
-		}
-		// 1. Remove the membership in this tenant.
-		if err := as.Memberships().Delete(ctx, m.ID); err != nil {
-			return err
-		}
-		if err := auditAct(ctx, as, actor, "scim.user.leave", "core.membership", id); err != nil {
-			return err
-		}
-		// 2. Remove the user's rows in THIS tenant's groups. A stale member row
-		// grants nothing today (loadGrants requires a direct membership in the
-		// group's tenant), but it would silently RE-ELEVATE the user the moment a
-		// membership reappeared — the leaver must leave the rosters too. Rows
-		// whose group is gone are left alone (no tenant attribution to act on);
-		// groups of OTHER tenants are untouched (a tenant's SCIM connection never
-		// edits another tenant's rosters).
-		rows, err := drainList(ctx, as.GroupMembers().List, byEq("user_id", id.String(), 0))
-		if err != nil {
-			return err
-		}
-		for _, r := range rows {
-			grp, err := as.Groups().Get(ctx, r.GroupID)
-			if err != nil {
-				if errors.Is(err, store.ErrNotFound) {
-					continue
-				}
-				return err
-			}
-			if grp.TargetTenantID != tenant {
-				continue
-			}
-			if err := as.GroupMembers().Delete(ctx, r.ID); err != nil && !errors.Is(err, store.ErrNotFound) {
-				return err
-			}
-		}
-		// 3. If the user has remaining memberships elsewhere, only its tenant-bound
-		// credentials are cut. If it is left in NO tenant, deactivate the account
-		// and revoke every session — the departed-employee guarantee.
-		remaining, _, err := as.Memberships().List(ctx, byEq("user_id", id.String(), 1))
-		if err != nil {
-			return err
-		}
-		orphaned := len(remaining) == 0
-		if err := revokeUserAccess(ctx, as, actor, id, tenant, orphaned); err != nil {
-			return err
-		}
-		if orphaned {
-			u, err := as.Users().Get(ctx, id)
-			if err != nil {
-				return err
-			}
-			if u.Status != model.StatusInactive {
-				u.Status = model.StatusInactive
-				if _, err := as.Users().Update(ctx, u); err != nil {
-					return err
-				}
-			}
-			// a departed employee's registered authenticators go with the
-			// account — a later re-activation never inherits the leaver's
-			// hardware bindings.
-			creds, _, err := as.WebAuthnCredentials().List(ctx, byEq("user_id", id.String(), 1000))
-			if err != nil {
-				return err
-			}
-			for _, c := range creds {
-				if err := as.WebAuthnCredentials().Delete(ctx, c.ID); err != nil {
-					return err
-				}
-			}
-			if err := auditAct(ctx, as, actor, "scim.user.deprovision", "core.user", id); err != nil {
-				return err
-			}
-		}
-		return nil
+		// A member leaves by the scoped offboard, under the same lock: it declares
+		// the account's H before its first write.
+		_, err := a.scopedOffboard(ctx, as, actor, id, tenant, "scim.deprovision")
+		return err
 	})
 }
 

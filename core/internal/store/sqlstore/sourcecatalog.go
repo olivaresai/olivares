@@ -27,19 +27,36 @@ var sourceDefDescriptor = model.EntityDescriptor{
 	Kind:  "core.source_def",
 	Table: "source_defs",
 	Fields: []model.FieldSpec{
-		indexedField("scope", model.KindUUID, false),
-		indexedField("name", model.KindText, false),
-		field("kind", model.KindText, true),
-		field("tenant", model.KindText, false),
+		pdecl(indexedField("scope", model.KindUUID, false),
+			model.None("the configuration scope tenant the roster is loaded under: core/auth/source_store.go:169")),
+		pdecl(indexedField("name", model.KindText, false),
+			model.None("an operator handle checked by the name validator: core/auth/source_store.go:112")),
+		pdecl(field("kind", model.KindText, true),
+			model.None("a connector kind that selects the connector to run: cmd/olivares/reconcile.go:458, cmd/olivares/reconcile.go:476")),
+		pdecl(field("tenant", model.KindText, false),
+			model.None("the business tenant observations are stamped with: core/auth/source_store.go:115, cmd/olivares/reconcile.go:420")),
 		field("poll_seconds", model.KindInt, false),
 		field("enabled", model.KindBool, false),
-		field("config", model.KindJSON, true),
-		field("plugin", model.KindJSON, true),
+		pdecl(field("config", model.KindJSON, true), model.Nested(map[string]string(nil), model.ClassEvidence,
+			model.Leaf("{key}", pdeclNoneSourceConfig),
+			model.Leaf("{}", pdeclNoneSourceConfig))),
+		pdecl(field("plugin", model.KindJSON, true), model.Nested(model.SourcePluginRef{}, model.ClassEvidence,
+			model.Leaf("path", pdeclNoneSourcePlugin),
+			model.Leaf("sha256", pdeclNoneSourcePlugin),
+			model.Leaf("bundle", pdeclNoneSourcePlugin),
+			model.Leaf("predicate_types[]", pdeclNoneSourcePlugin))),
 	},
 	Indexes: []model.IndexSpec{
 		{Name: "source_defs_scope_name_uniq", Columns: []string{"tenant_id", "scope", "name"}, Unique: true},
 	},
 }
+
+// pdeclNoneSourceConfig and pdeclNoneSourcePlugin are why no reader resolves a
+// source's connector settings or plugin pin to a principal.
+var (
+	pdeclNoneSourceConfig = model.None("connector settings and secret references, validated as references and handed to the connector only: core/auth/source_store.go:129, cmd/olivares/reconcile.go:439")
+	pdeclNoneSourcePlugin = model.None("a plugin binary path, digest pin, attestation path and predicate allow-list, used only to admit the binary: cmd/olivares/reconcile.go:442, cmd/olivares/reconcile.go:443")
+)
 
 var sourceDefCodec = model.Codec[model.SourceDef]{
 	Base: func(e *model.SourceDef) *model.BaseFields { return &e.BaseFields },

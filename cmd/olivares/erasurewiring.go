@@ -14,14 +14,15 @@ import (
 	"time"
 
 	claudecompliance "github.com/olivaresai/olivares/connectors/claude-compliance"
+	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/modules/compliance"
 )
 
 // erasurewiring.go adapts the two RTBF seams only the composition root can
-// provide: the ACCOUNT leg (engine user anonymization — user rows live in the
-// system tenant behind store.AuthScope, unreachable from any module) and the
+// provide: the ACCOUNT leg (the tenant's own hold on engine users — user rows live
+// in the system tenant behind store.AuthScope, unreachable from any module) and the
 // PROVIDER leg (the Anthropic Compliance DELETE passthrough, whose
 // dual-control gate needs the approval bridge and whose delete credential is
 // operator-provisioned). Both stay honest when unconfigured: compliance keeps its
@@ -29,124 +30,111 @@ import (
 
 // ---- the account leg --------------------------------------------------------------
 
-// accountEraserAdapter anonymizes engine user accounts in the auth partition. It is
-// constructed in buildModules (before the store exists) and late-bound to the store
-// by boot() — the knowledgeGuard pattern.
+// accountEraserAdapter removes a tenant's hold on engine user accounts in the auth
+// partition. It is constructed in buildModules (before the store exists) and
+// late-bound to the store by boot() — the knowledgeGuard pattern.
 type accountEraserAdapter struct {
-	mu  sync.RWMutex
-	st  store.Store
-	log *slog.Logger
+	mu    sync.RWMutex
+	st    store.Store
+	authr *auth.Authenticator
+	log   *slog.Logger
 }
 
-func (a *accountEraserAdapter) useStore(st store.Store) {
+// use binds the adapter to the opened store and to the engine's authenticator,
+// whose offboard wakes the engine's retirement pump.
+func (a *accountEraserAdapter) use(st store.Store, authr *auth.Authenticator) {
 	a.mu.Lock()
-	a.st = st
+	a.st, a.authr = st, authr
 	a.mu.Unlock()
 }
 
 var _ compliance.AccountEraser = (*accountEraserAdapter)(nil)
 
-// EraseAccount anonymizes every account matching one of the subject's identifiers
+// EraseAccount acts on every account matching one of the subject's identifiers
 // (an email — matched normalized — or a user id). The rules, in order:
 //
 //   - a superadmin account is REFUSED (operational safety: an RTBF case against the
 //     operator's own root account is a manual, deliberate ceremony);
-//   - an account holding memberships in OTHER tenants is REFUSED (one tenant's DSR
-//     cannot erase a principal shared with another tenant);
-//   - otherwise the account is ANONYMIZED in place, never hard-deleted: the id
-//     survives so ledger actors ("user:<id>") resolve to a tombstone — email,
-//     display name, SCIM external id and password hash are destroyed, the account
-//     is deactivated, its memberships in the requesting tenant are removed, its
-//     panel sessions are deleted (they carry a client IP) and its API tokens are
-//     revoked with their operator-given names scrubbed.
+//   - every other account keeps its global record, whatever its custody: the
+//     tenant's erasure removes only what the tenant holds (the scoped offboard:
+//     its membership, group rows, tenant tokens and tenant sessions here, with
+//     the exclusion), and the receipt says the global record waits for the
+//     deployment's erasure ceremony. One tenant cannot prove on its own that no
+//     other tenant still relies on an account, so no tenant erasure anonymizes
+//     one.
 //
-// Everything runs in ONE auth-partition transaction with a system-tenant
-// self-audit per anonymized account (ids only — the erased email never appears).
+// Each account runs in its own auth-partition transaction with a system-tenant
+// self-audit (ids only — the erased email never appears). When a later
+// identifier fails, the outcome returned with the error still reports what the
+// earlier ones committed; a re-execution repeats none of them, because an
+// offboard of an account already removed writes nothing.
 func (a *accountEraserAdapter) EraseAccount(ctx context.Context, tenant model.TenantID, refs []string, requestedBy, requestedByKind string) (compliance.AccountEraseOutcome, error) {
 	a.mu.RLock()
-	st := a.st
+	st, authr := a.st, a.authr
 	a.mu.RUnlock()
-	if st == nil {
+	if st == nil || authr == nil {
 		return compliance.AccountEraseOutcome{}, errors.New("account eraser has no store handle yet (boot incomplete)")
 	}
 	if requestedByKind == "" {
 		requestedByKind = model.ActorSystem
 	}
+	offboarder, err := auth.NewSystemOperator("erasure", "a tenant's erasure request")
+	if err != nil {
+		return compliance.AccountEraseOutcome{}, err
+	}
 	out := compliance.AccountEraseOutcome{Attempted: true}
 	var notes []string
-	err := st.AuthMutate(ctx, func(as store.AuthScope) error {
-		for _, ref := range refs {
+	finish := func() compliance.AccountEraseOutcome {
+		if len(notes) == 0 {
+			notes = append(notes, "no matching engine account")
+		}
+		out.Detail = strings.Join(notes, "; ")
+		return out
+	}
+	for _, ref := range refs {
+		var note string
+		err := st.AuthMutate(ctx, func(as store.AuthScope) error {
+			note = ""
 			user, found, err := findUserByRef(ctx, as, ref)
-			if err != nil {
+			if err != nil || !found {
 				return err
-			}
-			if !found {
-				continue
 			}
 			if user.IsSuperadmin {
-				notes = append(notes, "a matching superadmin account was refused (manual ceremony required)")
-				continue
+				note = "a matching superadmin account was refused (manual ceremony required)"
+				return nil
 			}
-			memberships, err := listAllAuth(ctx, as.Memberships(), eqFilter("user_id", user.ID.String()))
-			if err != nil {
-				return err
-			}
-			foreign := false
-			for _, mb := range memberships {
-				if mb.TargetTenantID != tenant {
-					foreign = true
-					break
-				}
-			}
-			if foreign {
-				notes = append(notes, "a matching account holds memberships in other tenants and was refused")
-				continue
-			}
-			if err := anonymizeUser(ctx, as, user, memberships); err != nil {
+			if _, err := authr.OffboardFromTenant(ctx, as, offboarder, user.ID, tenant, "erasure"); err != nil {
 				return err
 			}
 			if _, err := as.Audit().Append(ctx, model.AuditDraft{
-				Actor: requestedBy, ActorKind: requestedByKind, Action: "auth.user.erase",
+				Actor: requestedBy, ActorKind: requestedByKind, Action: "auth.user.erase.tenant_hold",
 				TargetKind: "core.user", TargetID: user.ID,
 				Meta: map[string]any{"tenant": tenant.String(), "reason": "rtbf"},
 			}); err != nil {
 				return err
 			}
-			out.Erased++
+			note = accountContainmentNote
+			return nil
+		})
+		if err != nil {
+			return finish(), err
 		}
-		return nil
-	})
-	if err != nil {
-		return compliance.AccountEraseOutcome{}, err
+		if note != "" {
+			notes = append(notes, note)
+		}
 	}
-	if out.Erased == 0 && len(notes) == 0 {
-		notes = append(notes, "no matching engine account (it may have been anonymized by a prior run)")
-	}
-	out.Detail = strings.Join(notes, "; ")
-	return out, nil
+	return finish(), nil
 }
+
+// accountContainmentNote is what a tenant's erasure receipt says about a
+// matching account: the tenant's own hold on it is gone, and its global record
+// is left for the deployment's erasure ceremony.
+const accountContainmentNote = "a matching account's membership in this tenant was removed; " +
+	"its global record waits for the deployment's erasure ceremony"
 
 // eqFilter is a tiny model.Filter helper for the auth queries below.
 func eqFilter(col string, val any) model.Filter {
 	return model.Filter{Column: col, Op: model.OpEq, Value: val}
-}
-
-// listAllAuth pages a typed auth repository fully (the store's default List page
-// is 100 rows — a partial read here would be silent under-erasure).
-func listAllAuth[T any](ctx context.Context, repo store.Repository[T], filters ...model.Filter) ([]T, error) {
-	var out []T
-	cursor := ""
-	for {
-		page, p, err := repo.List(ctx, model.Query{Filters: filters, Limit: 500, Cursor: cursor})
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, page...)
-		if !p.HasMore || p.Cursor == "" {
-			return out, nil
-		}
-		cursor = p.Cursor
-	}
 }
 
 // findUserByRef resolves an identifier to a user: by normalized email, by id, and
@@ -174,49 +162,6 @@ func findUserByRef(ctx context.Context, as store.AuthScope, ref string) (model.U
 		return model.User{}, false, err
 	}
 	return user, true, nil
-}
-
-// anonymizeUser is the in-place account tombstone + credential revocation.
-func anonymizeUser(ctx context.Context, as store.AuthScope, user model.User, memberships []model.Membership) error {
-	user.Email = "erased-" + strings.ToLower(user.ID.String()) + "@erased.invalid"
-	user.DisplayName = "[erased]"
-	user.ExternalID = ""
-	user.PasswordHash = ""
-	user.Status = model.StatusInactive
-	if _, err := as.Users().Update(ctx, user); err != nil {
-		return err
-	}
-	for _, mb := range memberships {
-		if err := as.Memberships().Delete(ctx, mb.ID); err != nil {
-			return err
-		}
-	}
-	// Panel sessions carry a client IP: delete the rows outright (fully paged —
-	// a default List page would silently leave sessions behind).
-	sessions, err := listAllAuth(ctx, as.Sessions(), eqFilter("user_id", user.ID.String()))
-	if err != nil {
-		return err
-	}
-	for _, s := range sessions {
-		if err := as.Sessions().Delete(ctx, s.ID); err != nil {
-			return err
-		}
-	}
-	// API tokens stay as revoked rows (the credential's existence is audit-relevant)
-	// but their operator-given names — free text a person may be named in — are
-	// scrubbed.
-	tokens, err := listAllAuth(ctx, as.Tokens(), eqFilter("user_id", user.ID.String()))
-	if err != nil {
-		return err
-	}
-	for _, t := range tokens {
-		t.Revoked = true
-		t.Name = "[erased]"
-		if _, err := as.Tokens().Update(ctx, t); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 // ---- the provider leg -------------------------------------------------------------

@@ -107,10 +107,13 @@ résultats — qui est l'inverse honnête d'une métrique de succès.
 
 ## Notes
 
-- **Fail-open, délibérément :** si le check du budget lui-même échoue (un échec
-  de lecture FinOps), l'inférence est autorisée plutôt que bloquée
-  silencieusement — un compteur cassé ne doit pas devenir une panne. L'échec
-  est journalisé et visible.
+- **Refusé quand le registre ne peut pas être lu :** si l'admission budgétaire ne
+  peut pas être établie (FinOps ne peut pas lire son registre), le proxy
+  d'inférence refuse l'appel avec **503**, la raison
+  `budget store unreachable (deny-closed)` et `x-should-retry: false`, plutôt
+  que de laisser passer une dépense non mesurée. Parmi les gates propres au
+  moteur, seul le lancement de session garde une posture configurable pour ce
+  cas (`OLIVARES_SESSION_BUDGET_AVAILABILITY`).
 - La capacité réservée (`reserved_micro_usd`) compte dans la limite, de sorte
   qu'un budget ne peut pas être contourné par une pré-réservation.
 - `cost_type` n'est délibérément **pas** une dimension de budget — les lignes de

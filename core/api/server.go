@@ -151,10 +151,13 @@ type Options struct {
 	// nil = not configured: the status endpoint reports the honest 501 seam and
 	// elevation is refused (fail-closed).
 	PIV *auth.PIVConfig
-	// InviteSender optionally delivers onboarding invitation links by email.
-	// nil leaves invites show-once only (the token is returned to the admin to
-	// relay out-of-band) — the console still works without a mailer wired.
+	// InviteSender delivers onboarding invitation links by email, to the
+	// invitee's address only. nil makes invite mode answer 409
+	// invite_delivery_unavailable: the token is never returned to the inviter.
 	InviteSender InviteSender
+	// Standing is the port fenced module writers read a referenced account's
+	// standing through (ModuleContext.Standing). nil uses the Authenticator.
+	Standing auth.StandingReader
 	// FederationService is the MANAGED SSO config service: it backs the
 	// console SSO config endpoints AND resolves the live provider for login (so
 	// SSO is store-driven, not env-only). When set it supersedes Federation for the
@@ -172,6 +175,10 @@ type Options struct {
 	// that adds/removes/rotates connectors in the running engine without a restart.
 	// Superadmin + AAL3 gated. nil leaves those endpoints answering 501.
 	SourceRoster SourceRoster
+	// ContentDiff reads a bounded git-host content diff for
+	// GET /v1/console/sources/diff. nil answers 501 until the composition
+	// root attaches a reader.
+	ContentDiff ContentDiffReader
 	// ConnectorOnboarding is the console connector-onboarding surface: the
 	// descriptor catalog + sealed-credential CRUD + connectivity test that lets an
 	// operator add a connector AND its credentials from the console (sealing inline
@@ -340,9 +347,11 @@ type Server struct {
 	webauthnUnusable bool
 	// piv: the PIV/CAC client-cert route config; nil = not configured.
 	piv *auth.PIVConfig
-	// inviteSender: optional onboarding-invite email delivery; nil = invites
-	// are show-once only (token returned to the admin to relay out-of-band).
+	// inviteSender: onboarding-invite email delivery; nil = invite mode is
+	// refused (409 invite_delivery_unavailable).
 	inviteSender InviteSender
+	// standing is the port every module route's fenced writer reads through.
+	standing auth.StandingReader
 	// fedSvc: the managed SSO config service; when set, login resolves its
 	// provider through it (store-driven) and the console SSO config endpoints use
 	// it. nil = login on the static fed and config endpoints report unavailable.
@@ -353,6 +362,8 @@ type Server struct {
 	// sourceRoster: the live source-reconfiguration surface backing the
 	// source CRUD + /v1/console/runtime/reload. nil = those endpoints answer 501.
 	sourceRoster SourceRoster
+	// contentDiff (J10-S1): bounded git-host content diff. nil = 501.
+	contentDiff ContentDiffReader
 	// connectorOnboarding: the console connector-onboarding surface backing
 	// the descriptor catalog + sealed-credential CRUD + test under
 	// /v1/console/connectors. nil = those endpoints answer 501.
@@ -469,7 +480,8 @@ func New(opts Options) (*Server, error) {
 		coreEntityResolver: opts.CoreEntityResolver,
 		principalEvidence:  opts.PrincipalEvidenceProducer,
 		inviteSender:       opts.InviteSender, fedSvc: opts.FederationService, secretStore: opts.SecretStore,
-		sourceRoster: opts.SourceRoster, connectorOnboarding: opts.ConnectorOnboarding,
+		standing:     opts.Standing,
+		sourceRoster: opts.SourceRoster, contentDiff: opts.ContentDiff, connectorOnboarding: opts.ConnectorOnboarding,
 		knowledgeStatus:                opts.KnowledgeStatus,
 		updateStatus:                   opts.UpdateStatus,
 		updateRefresh:                  opts.UpdateRefresh,
@@ -541,6 +553,9 @@ func New(opts Options) (*Server, error) {
 		return nil, err
 	}
 	s.handler = h
+	if s.standing == nil && s.authr != nil {
+		s.standing = s.authr
+	}
 	// AFTER buildRouter, which is what mounts the modules and fills searchKinds: the
 	// catalog must describe what this binary SERVES, so it is read from the mount, not
 	// from opts.
@@ -787,6 +802,8 @@ func (s *Server) buildRouter(modules []Module) (http.Handler, error) {
 		r.Get("/", s.handleListSources)
 		r.Put("/", s.handlePutSource)
 		r.Delete("/", s.handleDeleteSource)
+		// J10-S1: bounded read-only content diff. Same permission as the roster read.
+		r.Get("/diff", s.handleGitHostDiff)
 	})
 	// console connector ONBOARDING — the descriptor catalog the console renders
 	// a form from, plus a sealed-credential CRUD and a connectivity test that compose
@@ -913,6 +930,7 @@ func (s *Server) buildRouter(modules []Module) (http.Handler, error) {
 		r.Get("/", s.handleListInvites)
 		r.Post("/accept", s.handleAcceptInvite)
 		r.Delete("/{id}", s.handleRevokeInvite)
+		r.Post("/{id}/resend", s.handleResendInvite)
 	})
 	// the operator's view of SCIM-provisioned groups and the group→role
 	// mapping (a mapped group elevates its members' effective role in its tenant
@@ -1908,6 +1926,7 @@ func (cr chiRegistrar) handle(method, pattern string, perm auth.Permission, ref 
 			// puertas no gobernadas es el valor cero, que no autoriza nada por construccion.
 			Authorization: witness,
 			Data:          NewScopedData(cr.s.st, tenant),
+			Standing:      cr.s.standing,
 		}
 		rec := cr.s.recorder
 		if rec == nil {

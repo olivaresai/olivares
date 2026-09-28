@@ -30,6 +30,7 @@ import (
 	"github.com/olivaresai/olivares/modules/evals"
 	"github.com/olivaresai/olivares/modules/eventing"
 	"github.com/olivaresai/olivares/modules/finops"
+	"github.com/olivaresai/olivares/modules/gitpublish"
 	"github.com/olivaresai/olivares/modules/governance"
 	"github.com/olivaresai/olivares/modules/health"
 	"github.com/olivaresai/olivares/modules/inferenceproxy"
@@ -257,6 +258,10 @@ type moduleSet struct {
 	// — before rt.Start. It is the SAME instance that is already in `all`; this is
 	// the typed reference, never a second inventory.New().
 	inventory *inventory.Module
+	// J10-S3: authorized Git-host publication, kept so boot() can bind its
+	// authority, custody and closed git executor and schedule its sweep. It is
+	// the SAME instance that is in `all`.
+	gitpublish *gitpublish.Module
 }
 
 // buildModules constructs all Fase C modules and wires the inter-module adapters that
@@ -396,8 +401,8 @@ func buildModules(signer *audit.Signer, catalogSigner, policySigner ed25519.Priv
 	}))
 	// the regression gate's budget pre-flight over the CI's own judge
 	// spend. FinOps is constructed further down, so the adapter is LATE-BOUND
-	// (evBudget.bind(fin) below); until then it allows — the same fail-open posture
-	// as the sibling budget gates in budgetgate.go.
+	// (evBudget.bind(fin) below); until then it allows, with no ledger to ask yet.
+	// Once bound, a ledger it cannot read denies, as in budgetgate.go's other gates.
 	evBudget := &evalsBudgetGate{log: log}
 	evOpts = append(evOpts, evals.WithBudgetGate(evBudget))
 	ev := evals.New(evOpts...)
@@ -675,16 +680,16 @@ func buildModules(signer *audit.Signer, catalogSigner, policySigner ed25519.Priv
 		}
 	}
 
-	// (FIN-08): wire the FinOps pre-flight budget gate into the actuation seams
+	// (FIN-08): wire the FinOps budget admission into the actuation seams
 	// (orchestration fire, voice open) and the model-router (resolve). The SAME finops
 	// instance is in the module set below, so the engine's UseData wires its store before
-	// any request reaches CheckBudget. Unlike the approval gate / dispatcher this needs
+	// any request reaches Reserve. Unlike the approval gate / dispatcher this needs
 	// NO operator config — FinOps is in-process — so it is ALWAYS wired: an exhausted
 	// enforcing budget (action=throttle|block) now DENIES the spend (deny-closed) instead
 	// of only emitting the finops_budget_cap finding. The gate is opt-in by nature (no
-	// enforcing budget ⇒ never denies) and fails OPEN on a FinOps read error, so wiring it
-	// can never take down actuation. See budgetgate.go.
-	fin := finops.New()
+	// enforcing budget ⇒ never denies), holds nothing (these seams never learn a cost),
+	// and fails CLOSED on a ledger it cannot read. See budgetgate.go.
+	fin := finops.New(finops.WithLegacyWriterStop(admissionLegacyWriterStop(osGetenv, log)))
 	orchOpts = append(orchOpts, orchestration.WithBudgetGate(orchBudgetGate{fin: fin, log: log}))
 	voiceOpts = append(voiceOpts, voice.WithBudgetGate(voiceBudgetGate{fin: fin, log: log}))
 	// late-bind the evals regression-gate budget adapter (evals is built first).
@@ -990,7 +995,13 @@ func buildModules(signer *audit.Signer, catalogSigner, policySigner ed25519.Priv
 	// constructed outside the slice so the composition root can hand the
 	// cadence pump its tenant-scoped scan seam (the eventing-module pattern).
 	orch := orchestration.New(orchOpts...)
-	inv := inventory.New()
+	inv := inventory.New(inventory.WithCollectionCoverage())
+	// J10-S3: constructed outside the slice so boot() binds its ports and its
+	// sweep on this instance. A capability release that fails before any intent
+	// exists is logged by target and bounded code; the token never reaches it.
+	gpub := gitpublish.New(gitpublish.Options{OnReleaseFailure: func(target model.ID, code string) {
+		log.Warn("gitpublish: a host capability could not be released", "target", target.String(), "code", code)
+	}})
 	all := []api.Module{
 		accessmap.New(),
 		// the pin verifier's operator surface (enterprise implements
@@ -1016,6 +1027,7 @@ func buildModules(signer *audit.Signer, catalogSigner, policySigner ed25519.Priv
 		ev,
 		evtm,
 		fin,
+		gpub,
 		gov,
 		// Authoring consoles (route-only; they reuse gov's policy_revision/approval
 		// tables via the shared store and mount the hyphenated REST namespaces the web
@@ -1092,6 +1104,7 @@ func buildModules(signer *audit.Signer, catalogSigner, policySigner ed25519.Priv
 		reporting:           rep,
 		chatExecutor:        chatExecutor,
 		inventory:           inv,
+		gitpublish:          gpub,
 		deferredSecrets:     &deferredSecretWiring{content: pendingContent, knowledge: km, notify: notifyDispatcher, claude: claudeThreads}}, nil
 }
 

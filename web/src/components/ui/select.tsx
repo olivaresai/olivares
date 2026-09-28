@@ -9,9 +9,10 @@ import { cn } from '@/lib/utils'
 
 /**
  * Select — Radix select dressed as a control-plane input. The trigger reads exactly
- * like an Input (h-8, hairline, copper focus ring) with a chevron affordance; the
- * content is an elevated, hairline-bordered popover. Items highlight on the muted
- * fill and show a copper Check + accent-text label when chosen. Rendered in
+ * like an Input (h-8, on the canvas, the control boundary, the focus outline) with a
+ * chevron affordance; the content is a raised, hairline-bordered popover with the popover
+ * shadow. Items highlight on the hover fill and show an orange Check + accent-text label
+ * when chosen. Rendered in
  * `popper` position so it never overflows its container. Re-exports the Radix
  * Root/Group/Value so callers compose a full, accessible listbox.
  */
@@ -49,12 +50,13 @@ export function SelectTrigger({
       data-slot="select-trigger"
       {...heredado}
       className={cn(
-        'flex h-8 w-full items-center justify-between gap-2 rounded-md border border-border-strong bg-surface px-2.5',
-        'text-body text-foreground transition-colors outline-none',
-        'data-[placeholder]:text-muted-foreground',
-        'focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background',
-        'aria-[invalid=true]:border-danger aria-[invalid=true]:ring-danger',
-        'disabled:pointer-events-none disabled:opacity-50 disabled:bg-muted',
+        'flex h-8 w-full items-center justify-between gap-2 rounded-ctl border border-ctl-border bg-canvas px-3',
+        'text-body text-text transition-colors duration-100 ease-out outline-none',
+        'data-[placeholder]:text-text-3',
+        'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
+        'aria-[invalid=true]:border-bad aria-[invalid=true]:focus-visible:outline-bad',
+        'disabled:pointer-events-none disabled:border-dashed disabled:bg-surface disabled:text-text-3',
+        'aria-disabled:cursor-not-allowed aria-disabled:border-dashed aria-disabled:bg-surface aria-disabled:text-text-3',
         '[&>span]:line-clamp-1 [&_svg]:size-4 [&_svg]:shrink-0',
         className,
       )}
@@ -62,7 +64,7 @@ export function SelectTrigger({
     >
       {children}
       <SelectPrimitive.Icon asChild>
-        <ChevronDown className="size-4 text-muted-foreground" />
+        <ChevronDown className="size-4 text-text-3" />
       </SelectPrimitive.Icon>
     </SelectPrimitive.Trigger>
   )
@@ -83,7 +85,7 @@ export function SelectContent({
         sideOffset={sideOffset}
         className={cn(
           'relative z-50 max-h-[var(--radix-select-content-available-height)] min-w-[8rem] overflow-hidden',
-          'rounded-md border border-border-strong bg-elevated text-foreground shadow-md',
+          'rounded-card border border-line-strong bg-raised text-text shadow-[var(--shadow-pop)]',
           'transition-opacity duration-150 ease-out',
           'data-[state=closed]:opacity-0 data-[state=open]:opacity-100',
           position === 'popper' &&
@@ -115,10 +117,7 @@ export function SelectLabel({
   return (
     <SelectPrimitive.Label
       data-slot="select-label"
-      className={cn(
-        'px-2 py-1.5 text-caption font-medium text-muted-foreground',
-        className,
-      )}
+      className={cn('px-2 py-1.5 text-overline text-text-3', className)}
       {...props}
     />
   )
@@ -133,10 +132,10 @@ export function SelectItem({
     <SelectPrimitive.Item
       data-slot="select-item"
       className={cn(
-        'relative flex h-8 w-full cursor-default items-center rounded-sm py-1 pr-8 pl-2 text-body outline-none select-none',
-        'data-[highlighted]:bg-muted data-[highlighted]:text-foreground',
-        'data-[state=checked]:text-accent-text',
-        'data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
+        'relative flex h-8 w-full cursor-default items-center rounded-[6px] py-1 pr-8 pl-2 text-body outline-none select-none',
+        'data-[highlighted]:bg-hover data-[highlighted]:text-text',
+        'data-[state=checked]:font-medium data-[state=checked]:text-accent-text',
+        'data-[disabled]:pointer-events-none data-[disabled]:text-text-3',
         '[&_svg]:size-4 [&_svg]:shrink-0',
         className,
       )}
@@ -159,7 +158,7 @@ export function SelectSeparator({
   return (
     <SelectPrimitive.Separator
       data-slot="select-separator"
-      className={cn('-mx-1 my-1 h-px bg-border', className)}
+      className={cn('-mx-1 my-1 h-px bg-line', className)}
       {...props}
     />
   )
@@ -173,7 +172,7 @@ export function SelectScrollUpButton({
     <SelectPrimitive.ScrollUpButton
       data-slot="select-scroll-up"
       className={cn(
-        'flex cursor-default items-center justify-center py-1 text-muted-foreground',
+        'flex cursor-default items-center justify-center py-1 text-text-3',
         className,
       )}
       {...props}
@@ -191,7 +190,7 @@ export function SelectScrollDownButton({
     <SelectPrimitive.ScrollDownButton
       data-slot="select-scroll-down"
       className={cn(
-        'flex cursor-default items-center justify-center py-1 text-muted-foreground',
+        'flex cursor-default items-center justify-center py-1 text-text-3',
         className,
       )}
       {...props}

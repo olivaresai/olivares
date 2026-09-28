@@ -1,0 +1,16 @@
+schema=olivares.pkg-pending/v1
+boot=3f2b8c1e-9a4d-4e6f-8b7a-1c2d3e4f5a6b
+pid=4194304
+pid_start=99999999999999999999
+ppid=4194304
+ppid_start=99999999999999999999
+batch=0123456789abcdef0123456789abcdef.18446744073709551615
+maintscript=postinst
+format=unknown
+old=26.10.0~rc1+snapshot.20260927.abcdef0123
+new=26.10.0~rc1+snapshot.20260927.abcdef0123
+contract=upgrade-dispatch-v1
+condition=legacy-prerm-upgrade
+reason=replaced-prerm-stopped-and-disabled
+prior=unknown
+instruction=if olivares was enabled before this upgrade: systemctl enable --now olivares; if it was running but not enabled: systemctl start olivares

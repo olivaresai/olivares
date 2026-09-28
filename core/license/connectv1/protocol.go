@@ -47,6 +47,10 @@ const (
 	PathChallenges  = "/connect/challenges"
 	PathDeployments = "/connect/deployments"
 	PathRefresh     = "/connect/refresh"
+	// PathAptRefresh issues the APT download credential (Interface Q3 r2 §3.1.1.1).
+	PathAptRefresh = "/connect/apt-refresh"
+	// PathDnfRefresh issues the DNF download credential. Body and proof match apt-refresh.
+	PathDnfRefresh = "/connect/dnf-refresh"
 )
 
 // Operation names a challenge is bound to (types.ts ConnectOperationName).
@@ -58,6 +62,8 @@ const (
 	OpDelete      = "delete"
 	OpRecover     = "recover"
 	OpReactivate  = "reactivate"
+	OpAptRefresh  = "apt-refresh"
+	OpDnfRefresh  = "dnf-refresh"
 )
 
 // Bind request operations carried in a pending bind body (`operation`).
@@ -99,6 +105,10 @@ func IntendedRoute(operation, target string) (method, path string, err error) {
 		return "POST", PathDeployments, nil
 	case OpRefresh:
 		return "POST", PathRefresh, nil
+	case OpAptRefresh:
+		return "POST", PathAptRefresh, nil
+	case OpDnfRefresh:
+		return "POST", PathDnfRefresh, nil
 	case OpRotateKey, OpRecover, OpReactivate:
 		p, err := RotateKeyPath(target)
 		return "POST", p, err
@@ -107,6 +117,17 @@ func IntendedRoute(operation, target string) (method, path string, err error) {
 		return "DELETE", p, err
 	}
 	return "", "", fmt.Errorf("connectv1: unknown operation %q", operation)
+}
+
+var refusalReasonPattern = regexp.MustCompile(`^[a-z_]{1,64}$`)
+
+// RefusalReason is the reason a refusal body names beside its code: one lowercase token of at most 64
+// bytes, or "" when the body names none or anything else. The client compares it and never echoes it.
+func RefusalReason(obj map[string]any) string {
+	if s, ok := obj["reason"].(string); ok && refusalReasonPattern.MatchString(s) {
+		return s
+	}
+	return ""
 }
 
 // ErrorCode is the closed connect-v1 refusal vocabulary (errors.ts ConnectErrorCode).
@@ -131,6 +152,8 @@ const (
 	ErrAuthorityUnavailable      ErrorCode = "authority_unavailable"
 	ErrProviderAdapterMissing    ErrorCode = "provider_adapter_missing"
 	ErrTrustUnavailable          ErrorCode = "trust_unavailable"
+	// ErrSecuritySetUnresolved is apt-refresh's refusal when no allowed security set is proven.
+	ErrSecuritySetUnresolved ErrorCode = "security_set_unresolved"
 )
 
 // ErrorCodeUnknown is the display label for a code outside the vocabulary.
@@ -154,6 +177,7 @@ var knownCodes = map[ErrorCode]string{
 	ErrAuthorityUnavailable:      "the commercial authority is not available; retry later or ask the owner to approve recovery",
 	ErrProviderAdapterMissing:    "this commerce provider has no connect-v1 authority adapter",
 	ErrTrustUnavailable:          "the service is missing its license signing or download configuration",
+	ErrSecuritySetUnresolved:     "the service cannot prove which security set this deployment may receive; contact support",
 }
 
 // Known reports whether c is in the vocabulary.

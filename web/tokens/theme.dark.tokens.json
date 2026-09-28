@@ -1,5 +1,5 @@
 {
-  "$description": "Olivares console — DARK theme color + elevation tokens (primary operator surface, dark-first). Emitted to the .dark{} block of src/styles/tokens.css by tokens/build.mjs. Re-derived from the final brand identity (brandv4, 2026-06-10): the canonical brand dark #28282b is the app canvas, neutrals are a near-neutral cool ramp, and the single brand orange #f08000 is the accent. The semantic axes are preserved (success/warning/danger/info + the cool confidence axis: teal attributed / slate approximate), AA+ on the new charcoal surfaces (ADM-CORE-04).",
+  "$description": "Olivares console — DARK theme color + elevation tokens (primary operator surface, dark-first). The brand source read by the transactional emails, the documentation site, the release diagrams and the website parity check; the console's own v26.10 visual system is generated from tokens/console/ instead. Re-derived from the final brand identity (brandv4, 2026-06-10): the canonical brand dark #28282b is the app canvas, neutrals are a near-neutral cool ramp, and the single brand orange #f08000 is the accent. The semantic axes are preserved (success/warning/danger/info + the cool confidence axis: teal attributed / slate approximate), AA+ on the new charcoal surfaces (ADM-CORE-04).",
   "color": {
     "$type": "color",
     "background": {

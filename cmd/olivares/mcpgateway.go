@@ -1215,10 +1215,10 @@ func mapMCPGateStatus(neutral string) mcpc.GateStatus {
 	}
 }
 
-// mcpTaskGate adapts the FinOps pre-flight budget check to durable MCP task creation.
-// A durable task is treated as long-lived session spend: definitive block/throttle caps
-// deny the handle before the client learns it; checker errors fail open like the other
-// budget adapters.
+// mcpTaskGate adapts FinOps admission to durable MCP task creation. A durable task is
+// treated as long-lived session spend: definitive block/throttle caps deny the handle
+// before the client learns it, and a ledger that cannot be read denies it too, like the
+// other budget adapters.
 type mcpTaskGate struct {
 	fin    budgetChecker
 	tenant model.TenantID
@@ -1231,25 +1231,57 @@ func (g mcpTaskGate) AuthorizeTask(ctx context.Context, intent mcpc.TaskIntent) 
 	if g.fin == nil || g.tenant.IsZero() {
 		return mcpc.TaskGateDecision{Allow: true}, nil
 	}
-	chk, err := g.fin.CheckBudget(ctx, g.tenant, finops.SpendDims{
-		AgentRef:   intent.Subject,
-		SessionRef: intent.TaskID,
-		Gateway:    "mcp",
-		CostType:   "task",
+	// The key is the task's own id, so every question about one task lands on one
+	// admission row. A task's cost is accounted as it runs, not here, so the gate holds
+	// nothing it would have to settle (engineGateNoEstimate, budgetgate.go).
+	key := strings.TrimSpace(intent.TaskID)
+	if key == "" {
+		key = model.NewID().String()
+	}
+	res, err := g.fin.Reserve(ctx, g.tenant, finops.AdmissionRequest{
+		Scope: finops.AdmissionScopeScheduledJob,
+		Dims: finops.SpendDims{
+			AgentRef:   intent.Subject,
+			SessionRef: intent.TaskID,
+			Gateway:    "mcp",
+			CostType:   "task",
+		},
+		EstimateMicroUSD: engineGateNoEstimate,
+		IdempotencyKey:   "mcp_task/" + key,
+		Unreachable:      engineReserveUnreachable,
 	})
 	if err != nil {
 		if g.log != nil {
-			g.log.Error("mcp task-gate: budget check failed; allowing task creation (fail-open)", "err", err)
+			g.log.Error("mcp task-gate: budget admission failed; denying task creation (fail-closed)", "err", err)
 		}
-		return mcpc.TaskGateDecision{Allow: true}, nil
+		return mcpTaskBudgetUnavailable(), nil
 	}
-	if !chk.Allowed {
+	if !res.Allowed {
+		switch res.Reason {
+		case finops.ReasonStoreUnreachable:
+			return mcpTaskBudgetUnavailable(), nil
+		case finops.ReasonAdmissionIntegrity:
+			// Refused in every posture: the ledger answered, and the refusal is not a cap.
+			return mcpc.TaskGateDecision{
+				Allow: false, Reason: finops.ReasonAdmissionIntegrity,
+				DeniedStatus: http.StatusServiceUnavailable,
+			}, nil
+		}
 		return mcpc.TaskGateDecision{
-			Allow: false, Reason: "task budget " + budgetActionLabel(chk.Action),
-			DeniedStatus: budgetStatus(chk.Action),
+			Allow: false, Reason: "task budget " + budgetActionLabel(res.Action),
+			DeniedStatus: budgetStatus(res.Action),
 		}, nil
 	}
 	return mcpc.TaskGateDecision{Allow: true}, nil
+}
+
+// mcpTaskBudgetUnavailable is the task gate's refusal when admission could not be
+// established: the budget control is unavailable, and the task is not created.
+func mcpTaskBudgetUnavailable() mcpc.TaskGateDecision {
+	return mcpc.TaskGateDecision{
+		Allow: false, Reason: "task budget control unavailable (deny-closed)",
+		DeniedStatus: http.StatusServiceUnavailable,
+	}
 }
 
 // mcpGateAuditor is the evidence seam adapter of the MCP gateway: it backs the

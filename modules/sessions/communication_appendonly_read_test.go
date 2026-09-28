@@ -405,6 +405,7 @@ func TestCommunicationAppendOnlyReadOnSplitOwnerPostgres(t *testing.T) {
 		t.Fatalf("create tenant: %v", err)
 	}
 	m.UseData(api.NewModuleData(st))
+	bindStoreStanding(m, st)
 	m.UseCommunicationGuardReconciliationData(
 		NewCommunicationGuardReconciliationData(api.NewModuleData(st)),
 	)
