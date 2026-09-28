@@ -199,6 +199,10 @@ func TestFirstBoot_FirewallAdapterAppliesAndMeasuresThroughTheOwner(t *testing.T
 			h.adapter.Measurement = filepath.Join(t.TempDir(), "measured.json")
 		}},
 		"a measurement of another boot": {selection, in, func(h *host) {
+			// Replace our read-only fixture through its owned parent; this also works as non-root.
+			if err := os.Remove(h.adapter.BootID); err != nil {
+				t.Fatal(err)
+			}
 			if err := os.WriteFile(h.adapter.BootID, []byte("1f2e3d4c-5b6a-4978-8a9b-0c1d2e3f4a5b\n"), 0o444); err != nil {
 				t.Fatal(err)
 			}

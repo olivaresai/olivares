@@ -556,7 +556,7 @@ PY
 	#    cuerpo vacio tambien crea. Aqui, y solo aqui, el marcador ES lo que evita el duplicado, y
 	#    la forma de probarlo es CONTANDO FILAS, no leyendo el rc.
 	cuenta_agentes() {
-		curl -sf -H "Authorization: Bearer $OLIVARES_VERIFY_TOKEN" \
+		printf 'Authorization: Bearer %s\n' "$OLIVARES_VERIFY_TOKEN" | curl -sf -H @- \
 			-H "X-Olivares-Tenant: $OLIVARES_VERIFY_TENANT" \
 			"$OLIVARES_VERIFY_ENGINE/v1/agents" 2>/dev/null |
 			python3 -c 'import sys,json;print(len(json.load(sys.stdin).get("items") or []))' 2>/dev/null || printf 'NO_PUDE_MIRAR'

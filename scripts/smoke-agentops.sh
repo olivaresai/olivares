@@ -165,7 +165,7 @@ curl -sf -X POST "$BASE/v1/setup" -H 'Content-Type: application/json' \
 TOKEN="$(curl -sf -X POST "$BASE/v1/auth/login" -H 'Content-Type: application/json' \
   -d '{"email":"admin@local","password":"correct-horse-battery-staple"}' | jget token)"
 [ -n "$TOKEN" ] || fail "login returned no token"
-TENANT="$(curl -sf -X POST "$BASE/v1/system/orgs" -H "Authorization: Bearer $TOKEN" \
+TENANT="$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf -X POST "$BASE/v1/system/orgs" -H @- \
   -H 'Content-Type: application/json' -d '{"name":"Production","slug":"prod"}' | jget tenant_id)"
 [ -n "$TENANT" ] || fail "could not create the production tenant"
 

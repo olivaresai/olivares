@@ -328,8 +328,19 @@ func TestCertHelper_GenerateNamesTheCurrentOriginAndAddresses(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := leaf.CheckSignatureFrom(leaf); err != nil {
+		if leaf.IsCA || leaf.KeyUsage&x509.KeyUsageCertSign != 0 {
+			t.Fatal("the generated server leaf grants CA signing authority")
+		}
+		if !bytes.Equal(leaf.RawIssuer, leaf.RawSubject) {
+			t.Fatal("the generated certificate is not self-issued")
+		}
+		if err := leaf.CheckSignature(leaf.SignatureAlgorithm, leaf.RawTBSCertificate, leaf.Signature); err != nil {
 			t.Fatalf("the generated certificate is not self-signed: %v", err)
+		}
+		tampered := bytes.Clone(leaf.Signature)
+		tampered[len(tampered)-1] ^= 1
+		if err := leaf.CheckSignature(leaf.SignatureAlgorithm, leaf.RawTBSCertificate, tampered); err == nil {
+			t.Fatal("a modified leaf signature verified")
 		}
 		if leaf.NotBefore.After(testNow) || leaf.NotAfter.Before(testNow) {
 			t.Fatalf("the certificate is not valid now: %v to %v", leaf.NotBefore, leaf.NotAfter)

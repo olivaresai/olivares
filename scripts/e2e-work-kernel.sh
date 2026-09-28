@@ -59,10 +59,10 @@ api() { # api <metodo> <ruta> <fichero-cuerpo|-> [cabeceras extra...]
 api_as() { # api_as <token> <metodo> <ruta> <fichero-cuerpo|-> [cabeceras...]
   local tok=$1 m=$2 p=$3 body=$4; shift 4
   local args=(-s -X "$m" "$B$p"
-    -H "Authorization: Bearer $tok" -H "X-Olivares-Tenant: $TEN"
+    -H "X-Olivares-Tenant: $TEN"
     -H 'Content-Type: application/json' "$@")
   [ "$body" != "-" ] && args+=(-d @"$body")
-  curl "${args[@]}"
+  printf 'Authorization: Bearer %s\n' "$tok" | curl -H @- "${args[@]}"
 }
 jq_() { python3 -c "import json,sys
 try: d=json.load(sys.stdin)

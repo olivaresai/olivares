@@ -2,11 +2,13 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 """Static checks of olivares-selinux.spec against Fedora's independent-policy packaging and the module's ports.
 
-The spec is read as text: this suite needs no rpm tooling. The hosted workflow builds and installs the package.
+Text and stub-scriptlet checks need no RPM tooling. An additional expansion check runs when rpm is present.
+The hosted workflow builds and installs the package.
 Run: python3 -m unittest discover -s appliance/selinux -p 'test_*.py'
 """
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -228,6 +230,27 @@ class Spec(unittest.TestCase):
                     continue
                 with self.subTest(section=section, line=line):
                     self.assertIsNone(re.search(r"%(?!\{|selinux_)", line), "rpm would read it as a macro")
+
+    def test_comments_contain_no_active_rpm_macros(self):
+        for line in self.text.splitlines():
+            if line.lstrip().startswith("#"):
+                with self.subTest(line=line):
+                    self.assertNotIn("%", line.replace("%%", ""), "RPM expands macros even in comments")
+
+    @unittest.skipUnless(shutil.which("rpm"), "rpm comment expansion requires the hosted RPM toolchain")
+    def test_comment_text_survives_real_rpm_expansion(self):
+        # Supply a multiline macro even on a host without selinux-policy-devel.
+        macro = "selinux_modules_install() first\nif [ -e /etc/selinux/config ]; then\n:; fi"
+        comments = "\n".join(line for line in self.text.splitlines() if line.lstrip().startswith("#"))
+        result = subprocess.run(["rpm", "--define", macro, "--eval", comments], capture_output=True,
+                                text=True, check=False, timeout=5)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.rstrip("\n"), comments.replace("%%", "%"))
+        # A deliberately unescaped mention must expand; otherwise this oracle saw no macro.
+        negative = subprocess.run(["rpm", "--define", macro, "--eval", "# %selinux_modules_install"],
+                                  capture_output=True, text=True, check=False, timeout=5)
+        self.assertEqual(negative.returncode, 0, negative.stderr)
+        self.assertIn("\nif [ -e /etc/selinux/config ]; then", negative.stdout)
 
     def test_the_scriptlets_parse_as_sh(self):
         for section in ("%pre", "%post", "%postun", "%posttrans"):

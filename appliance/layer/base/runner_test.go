@@ -9,7 +9,6 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"testing"
 
@@ -34,10 +33,6 @@ func TestAdapters_RunOnlyProgramsExecRunnerRuns(t *testing.T) {
 	record := func(_ context.Context, name string, args ...string) ([]byte, error) {
 		names = append(names, name)
 		switch {
-		case name == "cloud-init":
-			return []byte(`{"status": "running", "errors": []}`), nil
-		case name == "id":
-			return []byte(strconv.Itoa(os.Getuid()) + "\n"), nil
 		case name == "systemctl" && len(args) > 0 && args[0] == "is-enabled":
 			return []byte("enabled\n"), nil
 		case name == "systemctl" && len(args) > 0 && args[0] == "is-active":
@@ -55,7 +50,8 @@ func TestAdapters_RunOnlyProgramsExecRunnerRuns(t *testing.T) {
 	_ = ProductService{Host: host}.Verify(ctx, in, "")
 	_, _ = ProductReadiness{Host: host}.Measure(ctx, in)
 
-	want := "cloud-init " + filepath.Join(root, productBinary) + " systemctl id systemctl systemctl systemctl systemctl"
+	// Cloud-init status and the service account UID come from files, without child programs.
+	want := filepath.Join(root, productBinary) + " systemctl systemctl systemctl systemctl systemctl"
 	if got := strings.Join(names, " "); got != want {
 		t.Fatalf("the adapters ran %q, want %q", got, want)
 	}

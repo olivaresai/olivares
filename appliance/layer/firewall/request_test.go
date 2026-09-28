@@ -14,8 +14,11 @@ import (
 // The owner's program serves the seam's firewall helper: its socket name is the registry's, the
 // seam knows it as a module helper, and its instances run as root, as its template states.
 func TestHelperName_IsTheRegistrysFirewallModuleHelper(t *testing.T) {
-	if firewall.HelperName != "firewall" || firewall.HelperName != helperschema.HelperFirewall {
-		t.Fatalf("the program serves %q and the registry names %q; both are firewall", firewall.HelperName, helperschema.HelperFirewall)
+	if firewall.HelperName != "firewall" {
+		t.Fatalf("the program serves %q, want firewall", firewall.HelperName)
+	}
+	if firewall.HelperName != helperschema.HelperFirewall {
+		t.Fatalf("the program serves %q and the registry names %q", firewall.HelperName, helperschema.HelperFirewall)
 	}
 	if class, ok := helperschema.ClassOf(firewall.HelperName); !ok || class != helperschema.ClassModule {
 		t.Fatalf("the seam knows %s as class %v (known %v), want the module class", firewall.HelperName, class, ok)

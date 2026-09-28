@@ -43,8 +43,23 @@ func TestHelperUnits_FlatPathsAndTheStaticSupportBundleAccount(t *testing.T) {
 		t.Fatalf("the census names %d binaries for %d helpers", len(helperBinaries), len(helperschema.Helpers()))
 	}
 	units, err := filepath.Glob(filepath.Join("..", "units", "*"))
-	if err != nil || len(units) != 2*(len(helperschema.Helpers())-len(rootUnitDirs)) {
-		t.Fatalf("the helpers' units are %v (%v), want one socket and one template per helper", units, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Network helpers use their own protocol and admission. Inventory their units without
+	// assigning them a root-helper class or the seam's root-only socket contract.
+	var expectedUnits []string
+	for _, name := range append(helperschema.Helpers(), "netprobe", "netrestore") {
+		if _, elsewhere := rootUnitDirs[name]; elsewhere {
+			continue
+		}
+		for _, suffix := range []string{".socket", "@.service"} {
+			expectedUnits = append(expectedUnits, filepath.Join("..", "units", "olivares-helper-"+name+suffix))
+		}
+	}
+	slices.Sort(expectedUnits)
+	if !slices.Equal(units, expectedUnits) {
+		t.Fatalf("the helpers' units are %v, want exactly %v", units, expectedUnits)
 	}
 	for _, unit := range units {
 		data, err := os.ReadFile(unit)

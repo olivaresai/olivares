@@ -153,8 +153,24 @@ no_setup_token() {
   ! grep -Eq 'olst_[A-Z2-7]{16,}' "$1"
 }
 
-# applied_once FILE — the product configuration stage was applied exactly once in the journal.
-applied_once() { [ "$(grep -cF 'generate-product-config: applied' "$1")" -eq 1 ]; }
+# configuration_applied STATE JOURNAL — 0: one recorded application; 1: duplicate;
+# 2: no usable original evidence. Missing evidence is UNMEASURED, not a restart success.
+configuration_applied() {
+  local records applications
+  records=$(jq '[.completed[]? | select(.stage == "generate-product-config")] | length' "$1") || return 2
+  applications=$(grep -cF 'generate-product-config: applied' "$2") || true
+  [ "$records" -le 1 ] && [ "${applications:-0}" -le 1 ] || return 1
+  [ "$records" -eq 1 ] && [ "${applications:-0}" -eq 1 ] || return 2
+  jq -e '.completed[] | select(.stage == "generate-product-config") |
+    .effect | type == "string" and length > 0' "$1" >/dev/null || return 2
+}
+
+# applied_once BEFORE_STATE BEFORE_JOURNAL AFTER_STATE AFTER_JOURNAL — first prove the
+# original application; a single counterfeit line after an early refusal cannot replace it.
+applied_once() {
+  configuration_applied "$1" "$2" || return $?
+  configuration_applied "$3" "$4"
+}
 
 # compared_more BEFORE AFTER — the later journal holds more recorded-effect comparisons.
 compared_more() {
@@ -345,12 +361,37 @@ settle() {
   return 1
 }
 
+# Keep read-only network facts and failures at every observation, including early refusal.
+# Profile metadata is enough to identify its renderer; do not copy keys or connection secrets.
+network_probe() {
+  local name=$1 dir=$2 label=$3 status=0
+  shift 3
+  docker exec "$name" "$@" > "$dir/$label.txt" 2>&1 || status=$?
+  printf '\nexit %s\n' "$status" >> "$dir/$label.txt"
+}
+
+capture_network() {
+  local name=$1 dir=$2
+  network_probe "$name" "$dir" nm-version nmcli --version
+  network_probe "$name" "$dir" nm-active nmcli --mode multiline --fields all connection show --active
+  network_probe "$name" "$dir" nm-profiles nmcli --mode multiline --fields all connection show
+  network_probe "$name" "$dir" nm-devices nmcli --fields GENERAL device show
+  network_probe "$name" "$dir" cloud-init-version cloud-init --version
+  network_probe "$name" "$dir" cloud-init-renderer sh -c \
+    'grep -inE "renderer|netplan|network-manager|NetworkManager" /var/log/cloud-init.log'
+  network_probe "$name" "$dir" cloud-init-renderer-config sh -c \
+    'grep -nE -A 6 "renderers:|activators:" /etc/cloud/cloud.cfg /etc/cloud/cloud.cfg.d/*.cfg'
+  network_probe "$name" "$dir" network-files find /etc/NetworkManager/system-connections \
+    /run/NetworkManager/system-connections /etc/netplan /run/systemd/network -maxdepth 1 -type f -print
+}
+
 # unsettled SCENARIO NAME DIR WHAT — settle failed: keep Docker's view of the container
 # (container.state.json, container.log) in DIR and report the scenario unmeasured. When the
 # boot command's remount failed, systemd never started, and the line says so instead of WHAT.
 unsettled() {
   local scenario=$1 name=$2 dir=$3 what=$4 state
   mkdir -p "$dir"
+  capture_network "$name" "$dir"
   docker inspect --format '{{json .State}}' "$name" > "$dir/container.state.json" 2>&1 || true
   docker logs "$name" > "$dir/container.log" 2>&1 || true
   state=$(jq -r 'if .Running then "running" else "exited with status \(.ExitCode)" end' \
@@ -396,6 +437,7 @@ remove_base() {
 capture() {
   local name=$1 dir=$2
   mkdir -p "$dir"
+  capture_network "$name" "$dir"
   docker exec "$name" cat /var/lib/olivares-appliance/state.json > "$dir/state.json" 2>/dev/null || echo '{}' > "$dir/state.json"
   docker exec "$name" journalctl --boot --no-pager > "$dir/journal.txt" 2>/dev/null || true
   docker exec "$name" cloud-init status --format json > "$dir/cloud-init.json" 2>/dev/null || true
@@ -680,34 +722,52 @@ restart_and_change() {
   control single_carrier_stops_at_the_token_seam record_is \
     "$(counterfeit "$d/first/state.json" '.state = "ready"')" refused prepare-setup-delivery
 
-  docker exec fx-restart systemctl restart olivares-appliance-firstboot.service >/dev/null 2>&1 || true
-  settle fx-restart || { unsettled restart fx-restart "$d/restarted" "first boot did not stop after a restart"; return; }
-  capture fx-restart "$d/restarted"
-  jq '.completed' "$d/first/state.json" > "$d/first/completed.json"
-  jq '.completed' "$d/restarted/state.json" > "$d/restarted/completed.json"
-  check restart_keeps_the_recorded_stages same "$d/first/completed.json" "$d/restarted/completed.json"
-  control restart_keeps_the_recorded_stages same "$d/first/completed.json" "$(counterfeit "$d/restarted/completed.json" '.[1:]')"
-  check restart_does_not_regenerate_the_configuration same "$d/first/olivares.env" "$d/restarted/olivares.env"
-  control restart_does_not_regenerate_the_configuration same "$d/first/olivares.env" "$(counterfeit_text "regenerated")"
-  check restart_compares_recorded_effects compared_more "$d/first/journal.txt" "$d/restarted/journal.txt"
-  control restart_compares_recorded_effects compared_more "$d/first/journal.txt" "$d/first/journal.txt"
-  check restart_does_not_reapply_a_recorded_stage applied_once "$d/restarted/journal.txt"
-  control restart_does_not_reapply_a_recorded_stage applied_once \
-    "$(counterfeit_lines "$d/restarted/journal.txt" 'first boot: generate-product-config: applied')"
+  local initial=0
+  configuration_applied "$d/first/state.json" "$d/first/journal.txt" || initial=$?
+  if [ "$initial" -eq 0 ] && ! [ -s "$d/first/olivares.env" ]; then initial=2; fi
+  case $initial in
+    1) say "FAIL restart: the initial configuration was recorded or applied more than once"
+       failures=$((failures + 1)) ;;
+    2) unable "restart/change: no recorded initial configuration application; comparisons are unmeasured" ;;
+  esac
+  if [ "$initial" -eq 0 ]; then
+    docker exec fx-restart systemctl restart olivares-appliance-firstboot.service >/dev/null 2>&1 || true
+    settle fx-restart || { unsettled restart fx-restart "$d/restarted" "first boot did not stop after a restart"; return; }
+    capture fx-restart "$d/restarted"
+    jq '.completed' "$d/first/state.json" > "$d/first/completed.json"
+    jq '.completed' "$d/restarted/state.json" > "$d/restarted/completed.json"
+    check restart_keeps_the_recorded_stages same "$d/first/completed.json" "$d/restarted/completed.json"
+    control restart_keeps_the_recorded_stages same "$d/first/completed.json" "$(counterfeit "$d/restarted/completed.json" '.[1:]')"
+    check restart_does_not_regenerate_the_configuration same "$d/first/olivares.env" "$d/restarted/olivares.env"
+    control restart_does_not_regenerate_the_configuration same "$d/first/olivares.env" "$(counterfeit_text "regenerated")"
+    check restart_compares_recorded_effects compared_more "$d/first/journal.txt" "$d/restarted/journal.txt"
+    control restart_compares_recorded_effects compared_more "$d/first/journal.txt" "$d/first/journal.txt"
+    local restarted=0
+    applied_once "$d/first/state.json" "$d/first/journal.txt" \
+      "$d/restarted/state.json" "$d/restarted/journal.txt" || restarted=$?
+    if [ "$restarted" -eq 2 ]; then
+      unable "restart_does_not_reapply_a_recorded_stage: the restarted record or journal is unavailable"
+    else
+      check restart_does_not_reapply_a_recorded_stage test "$restarted" -eq 0
+      control restart_does_not_reapply_a_recorded_stage applied_once \
+        "$d/first/state.json" "$d/first/journal.txt" "$d/restarted/state.json" \
+        "$(counterfeit_lines "$d/restarted/journal.txt" 'first boot: generate-product-config: applied')"
+    fi
 
-  answers changed | docker exec --interactive fx-restart sh -c 'cat > /etc/olivares-appliance/carriers/nocloud.json'
-  docker exec fx-restart systemctl restart olivares-appliance-firstboot.service >/dev/null 2>&1 || true
-  settle fx-restart || { unsettled restart fx-restart "$d/changed" "first boot did not stop after the answers changed"; return; }
-  capture fx-restart "$d/changed"
-  jq '.completed' "$d/changed/state.json" > "$d/changed/completed.json"
-  check changed_answers_refuse_at_validate record_is "$d/changed/state.json" refused validate
-  control changed_answers_refuse_at_validate record_is "$(counterfeit "$d/changed/state.json" '.stage = "prepare-setup-delivery"')" refused validate
-  check changed_answers_name_the_last_completed_stage reason_names "$d/changed/state.json" initialize-storage
-  control changed_answers_name_the_last_completed_stage reason_names \
-    "$(counterfeit "$d/changed/state.json" '.reason = "the answers changed"')" initialize-storage
-  check changed_answers_apply_nothing same "$d/first/completed.json" "$d/changed/completed.json"
-  control changed_answers_apply_nothing same "$d/first/completed.json" "$(counterfeit "$d/changed/completed.json" '. + [{"stage": "prepare-setup-delivery"}]')"
-  journal_is_clean restart "$d/changed"
+    answers changed | docker exec --interactive fx-restart sh -c 'cat > /etc/olivares-appliance/carriers/nocloud.json'
+    docker exec fx-restart systemctl restart olivares-appliance-firstboot.service >/dev/null 2>&1 || true
+    settle fx-restart || { unsettled restart fx-restart "$d/changed" "first boot did not stop after the answers changed"; return; }
+    capture fx-restart "$d/changed"
+    jq '.completed' "$d/changed/state.json" > "$d/changed/completed.json"
+    check changed_answers_refuse_at_validate record_is "$d/changed/state.json" refused validate
+    control changed_answers_refuse_at_validate record_is "$(counterfeit "$d/changed/state.json" '.stage = "prepare-setup-delivery"')" refused validate
+    check changed_answers_name_the_last_completed_stage reason_names "$d/changed/state.json" initialize-storage
+    control changed_answers_name_the_last_completed_stage reason_names \
+      "$(counterfeit "$d/changed/state.json" '.reason = "the answers changed"')" initialize-storage
+    check changed_answers_apply_nothing same "$d/first/completed.json" "$d/changed/completed.json"
+    control changed_answers_apply_nothing same "$d/first/completed.json" "$(counterfeit "$d/changed/completed.json" '. + [{"stage": "prepare-setup-delivery"}]')"
+    journal_is_clean restart "$d/changed"
+  fi
 
   local how status=0
   how=$(remove_base fx-restart) || status=$?

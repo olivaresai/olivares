@@ -490,11 +490,13 @@ set -euo pipefail
 : "${OLIVARES_TOKEN:?set OLIVARES_TOKEN to an admin/editor token}"
 : "${OLIVARES_TENANT:=%s}"
 
-hdr=(-H "Authorization: Bearer ${OLIVARES_TOKEN}" -H "X-Olivares-Tenant: ${OLIVARES_TENANT}" -H "Content-Type: application/json")
-curl_json() { curl -skS "$@" ; }
+hdr=(-H "X-Olivares-Tenant: ${OLIVARES_TENANT}" -H "Content-Type: application/json")
+# The bearer never enters curl's argv: a pasted shell shares /proc with every
+# other process of the same user, and argv is the readable channel.
+curl_json() { printf 'Authorization: Bearer %%s\n' "${OLIVARES_TOKEN}" | curl -skS -H @- "$@" ; }
 
 echo "Checking semantic retrieval status..."
-status="$(curl_json "${OLIVARES_BASE_URL}/status")"
+status="$(curl -skS "${OLIVARES_BASE_URL}/status")"
 semantic="$(printf '%%s' "$status" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("retrieval_semantic"))')"
 if [ "$semantic" != "True" ] && [ "$semantic" != "true" ]; then
   echo "FAIL: retrieval_semantic is not true. Configure OLIVARES_EMBEDDINGS_* before creating the model_backed KB." >&2

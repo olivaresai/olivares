@@ -89,8 +89,8 @@ wait_health() {
 # `olivares claude-hook` command stamps from its environment).
 decision() {
   local tool="$1" input="$2"
-  curl -sf -X POST "$PEP" \
-    -H "Authorization: Bearer $TOKEN" \
+  printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf -X POST "$PEP" \
+    -H @- \
     -H "X-Olivares-Hook-Tenant: $TENANT" \
     -H 'Content-Type: application/json' \
     -d "{\"session_id\":\"sess-example\",\"hook_event_name\":\"PreToolUse\",\"tool_name\":\"$tool\",\"tool_input\":$input}" \
@@ -100,8 +100,8 @@ decision() {
 # rewritten_field TOOL INPUT_JSON FIELD: POST a hook and print updatedInput[FIELD].
 rewritten_field() {
   local tool="$1" input="$2" field="$3"
-  curl -sf -X POST "$PEP" \
-    -H "Authorization: Bearer $TOKEN" \
+  printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf -X POST "$PEP" \
+    -H @- \
     -H "X-Olivares-Hook-Tenant: $TENANT" \
     -H 'Content-Type: application/json' \
     -d "{\"session_id\":\"sess-example\",\"hook_event_name\":\"PreToolUse\",\"tool_name\":\"$tool\",\"tool_input\":$input}" \
@@ -133,7 +133,7 @@ TOKEN="$(curl -sf -X POST "$BASE/v1/auth/login" -H 'Content-Type: application/js
   -d '{"email":"admin@local","password":"correct-horse-battery-staple"}' \
   | python3 -c 'import sys,json;print(json.load(sys.stdin)["token"])')"
 [ -n "$TOKEN" ] || fail "login returned no token"
-TENANT="$(curl -sf -X POST "$BASE/v1/system/orgs" -H "Authorization: Bearer $TOKEN" \
+TENANT="$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf -X POST "$BASE/v1/system/orgs" -H @- \
   -H 'Content-Type: application/json' -d '{"name":"Production","slug":"prod"}' \
   | python3 -c 'import sys,json;print(json.load(sys.stdin)["tenant_id"])')"
 [ -n "$TENANT" ] || fail "could not create the production tenant"

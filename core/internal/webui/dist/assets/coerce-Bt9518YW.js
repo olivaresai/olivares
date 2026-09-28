@@ -1,0 +1,1 @@
+import{Cr as e,fr as t}from"./index-Ddl1Ne2Z.js";function n(n){return e(t,n)}export{n as t};

@@ -317,7 +317,7 @@ TOKEN="$(curl -sf -X POST "http://127.0.0.1:$PORT/v1/auth/login" \
   -H 'Content-Type: application/json' \
   -d '{"email":"demo@olivares.local","password":"olivares-demo-estate"}' \
   | python3 -c 'import sys,json;print(json.load(sys.stdin)["token"])')"
-TENANT="$(curl -sf "http://127.0.0.1:$PORT/v1/system/orgs" -H "Authorization: Bearer $TOKEN" \
+TENANT="$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf "http://127.0.0.1:$PORT/v1/system/orgs" -H @- \
   | python3 -c 'import sys,json;[print(o["tenant_id"]) for o in json.load(sys.stdin)["items"] if o["slug"]=="demo"]')"
 if [ -z "$TENANT" ]; then
   echo "ERROR: could not resolve the demo tenant" >&2
@@ -328,8 +328,8 @@ fi
 # Preliminary routing probe only. A 4xx can precede the module's readiness check and therefore
 # does not prove effective K3 readiness. Each captured handoffs view must independently obtain
 # an authorized HTTP 200 collection read for its selected workspace.
-K3_PROBE="$(curl -s -o /dev/null -w '%{http_code}' \
-  -H "Authorization: Bearer $TOKEN" -H "X-Olivares-Tenant: $TENANT" \
+K3_PROBE="$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -s -o /dev/null -w '%{http_code}' \
+  -H @- -H "X-Olivares-Tenant: $TENANT" \
   "http://127.0.0.1:$PORT/v1/m/sessions/inbox?workspace_id=00000000-0000-7000-8000-000000000000" || true)"
 case "$K3_PROBE" in
 2?? | 4??) echo "==> K3 preliminary routing probe HTTP $K3_PROBE; authorized collection proof remains required" ;;
@@ -580,8 +580,8 @@ fi
 #    agente demo (OLIVARES_SESSION_RUNTIME_CLAUDE_BIN), asi que cada lanzamiento es determinista
 #    y sin red.
 echo "==> Launching governed sessions so /sessions is a table, not one row"
-WS_REF="$(curl -sf "http://127.0.0.1:$PORT/v1/m/sessions/workspaces" \
-  -H "Authorization: Bearer $TOKEN" -H "X-Olivares-Tenant: $TENANT" \
+WS_REF="$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf "http://127.0.0.1:$PORT/v1/m/sessions/workspaces" \
+  -H @- -H "X-Olivares-Tenant: $TENANT" \
   | python3 -c 'import sys,json;i=(json.load(sys.stdin).get("items") or []);print(i[0].get("workspace_ref","") if i else "")' 2>/dev/null || true)"
 # Receipts live outside $DATA so cleanup cannot erase the refusal or the five
 # corroborated identities. playwright-report/ is gitignored; callers may override.
@@ -607,8 +607,8 @@ if ! OLIVARES_TOKEN="$TOKEN" python3 "$ROOT/scripts/seed-docs-capture-sessions.p
   exit 1
 fi
 
-DEMO_SESSION_ID="$(curl -sf "http://127.0.0.1:$PORT/v1/m/recording/sessions" \
-  -H "Authorization: Bearer $TOKEN" -H "X-Olivares-Tenant: $TENANT" \
+DEMO_SESSION_ID="$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf "http://127.0.0.1:$PORT/v1/m/recording/sessions" \
+  -H @- -H "X-Olivares-Tenant: $TENANT" \
   | python3 -c 'import sys,json;d=json.load(sys.stdin);i=(d.get("items") or []);print(i[0]["id"] if i else "")' 2>/dev/null || echo "")"
 if [ -n "$DEMO_SESSION_ID" ]; then
   echo "==> Demo recording session: $DEMO_SESSION_ID"

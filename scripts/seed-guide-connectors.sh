@@ -86,8 +86,8 @@ seed grok-demo grok 60 \
 #    «Stopped» — exactamente la foto que the planner rechazo.
 if [ -n "$PORT" ]; then
   echo "==> reloading the running engine so the console sees them"
-  curl -sf -X POST "http://127.0.0.1:$PORT/v1/console/runtime/reload" \
-    -H "Authorization: Bearer ${OLIVARES_TOKEN:-}" >/dev/null 2>&1 \
+  printf 'Authorization: Bearer %s\n' "${OLIVARES_TOKEN:-}" | curl -sf -X POST "http://127.0.0.1:$PORT/v1/console/runtime/reload" \
+    -H @- >/dev/null 2>&1 \
     || echo "   (reload endpoint refused; falling back to SIGHUP)" >&2
 fi
 if [ -n "${OLIVARES_ENGINE_PID:-}" ]; then

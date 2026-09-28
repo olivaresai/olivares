@@ -7,6 +7,7 @@ package portal
 import (
 	"context"
 	"encoding/json"
+	"html"
 	"net/http"
 	"reflect"
 	"strings"
@@ -61,7 +62,7 @@ func TestFirewallPage_ServesTheConsolesFirewallReadOnThisHostWithNoAct(t *testin
 		t.Fatalf("GET /firewall from this host: %d %v", rec.Code, rec.Header())
 	}
 	for _, want := range []string{
-		"<h1>Firewall</h1>", (Status{}).SignIn.Statement(),
+		"<h1>Firewall</h1>", html.EscapeString((Status{}).SignIn.Statement()),
 		"9443/tcp", "eth0", "every interface", "546/udp", "input drop", policy.Digest(confirmed),
 		id, "reverts unless confirmed",
 		"apply: disabled (act_not_adopted)", "confirm: disabled (act_not_adopted)", "olivares-appliance firewall confirm " + id,

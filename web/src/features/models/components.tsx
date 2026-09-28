@@ -42,7 +42,10 @@ export function CapabilityMatrix({ catalog }: { catalog: CatalogResponse }) {
       description={t('catalog.description')}
       noPadding
     >
-      <XScroll contentKey={catalog.models.length}>
+      <XScroll
+        contentKey={catalog.models.length}
+        accessibleLabel={t('catalog.title')}
+      >
         <StaticTable oneLine>
           <thead>
             <tr>
@@ -121,7 +124,10 @@ export function PricingTable({ catalog }: { catalog: CatalogResponse }) {
             date: formatDate(catalog.pricing_as_of, i18n.language),
           })}
         </CaveatNotice>
-        <XScroll contentKey={catalog.models.length}>
+        <XScroll
+          contentKey={catalog.models.length}
+          accessibleLabel={t('catalog.pricingTitle')}
+        >
           <StaticTable oneLine>
             <thead>
               <tr>

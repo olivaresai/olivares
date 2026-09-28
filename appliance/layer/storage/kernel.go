@@ -55,7 +55,9 @@ func sysfsDevIs(content string, number uint64) bool {
 	if err != nil {
 		return false
 	}
-	wantMajor := (number>>8)&0xfff | (number>>32)&^uint64(0xfff)
-	wantMinor := number&0xff | (number>>12)&^uint64(0xff)
+	// glibc bits/sysmacros.h: each component is 32 bits. In particular, the high
+	// major bits above bit 43 must not leak into the minor after shifting by 12.
+	wantMajor := (number>>8)&0xfff | (number>>32)&0xfffff000
+	wantMinor := number&0xff | (number>>12)&0xffffff00
 	return major == wantMajor && minor == wantMinor
 }
