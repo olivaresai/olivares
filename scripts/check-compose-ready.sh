@@ -210,10 +210,8 @@ task_pin = re.compile(
     r"(?m)^[ \t]*go install github\.com/go-task/task/v3/cmd/task@(v\d+\.\d+\.\d+)[ \t]*$"
 )
 mainline_pins = set(task_pin.findall(mainline))
-# Mainline also installs Task through the reviewed local cache action. Resolve its
-# declared default and each literal override, rather than treating removal of the
-# old go-install spelling as removal of the pin. The SDK's separate inline pin is
-# outside this existing bare-command contract.
+# Mainline installs Task through the reviewed local cache action. Resolve its
+# declared default and each literal override so every caller shares the same pin.
 cache_uses = re.compile(r"(?m)^        uses: \./\.github/actions/olivares-tool-cache[ \t]*$")
 cache_steps = [block for block in re.split(r"(?m)^      - ", mainline) if cache_uses.search(block)]
 if cache_steps:
@@ -235,7 +233,7 @@ if cache_steps:
         assert len(overrides) == len(declarations) and len(overrides) <= 1, "Task cache version override has an unsupported form"
         mainline_pins.add(literal_task_version(overrides[0]) if overrides else default)
 assert len(mainline_pins) == 1, f"mainline-ci.yml Task pins are not one version: {sorted(mainline_pins)}"
-installs = [i for i, block in enumerate(steps) if task_pin.search(block)]
+installs = [i for i, block in enumerate(steps) if cache_uses.search(block)]
 users = [
     i for i, block in enumerate(steps)
     if re.search(r"(?m)^[ \t]*(?:run:[ \t]*)?task[ \t]+[a-z]", block)
@@ -245,9 +243,13 @@ assert len(installs) == 1 and installs[0] < users[0], (
     f"compose-ready.yml runs {step_name(steps[users[0]])!r} without first installing the pinned Task"
 )
 install = steps[installs[0]]
-assert set(task_pin.findall(install)) == mainline_pins, "compose-ready.yml Task pin differs from mainline-ci.yml"
-for token in ('>> "$GITHUB_PATH"', "command -v task"):
-    assert token in install, f"the Task install step lacks {token!r}"
+versions = re.findall(r"(?m)^          task_version:[ \t]*(.*)$", install)
+assert len(versions) == 1, "compose-ready.yml must declare its Task version explicitly"
+assert {literal_task_version(versions[0])} == mainline_pins, "compose-ready.yml Task pin differs from mainline-ci.yml"
+assert "command -v task" in action, "the shared Task action lacks its following-step PATH check"
+assert 'echo "$job_dir" >> "${GITHUB_PATH:?GITHUB_PATH is not set}"' in read(
+    ".github/actions/olivares-tool-cache/install.sh"
+), "the shared Task installer does not publish its verified directory"
 
 # The runner's Docker daemon is shared. The CI-only final layer carries exactly two changes,
 # both about sharing one daemon: the engine's published ports are replaced by an empty list,

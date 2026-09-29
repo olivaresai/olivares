@@ -1,0 +1,44 @@
+{
+  "schema": "olivares-appliance-fedora-repositories/v1",
+  "purpose": "The Fedora 44 repository metadata and key the fedora44-server-amd64 profile is built from. fedora-repo-pinned.sh refuses a repository whose repomd.xml no longer has the sha256 recorded here, and a key file whose sha256 differs.",
+  "basis": "Each repomd.xml was read by an anonymous HTTPS GET at the recorded time; the primary metadata it names was retained and verified against its checksum and open-checksum. Fedora does not sign repomd.xml (repodata/repomd.xml.asc returned 404 on both trees at 2026-09-27T10:08:35Z), so the sha256 is what binds the metadata; every package is checked against the key. The releases tree is fixed after the release; the updates tree keeps only current builds, so its pin holds until the next updates push and is then re-pinned, never loosened.",
+  "repositories": {
+    "fedora-44-releases": {
+      "baseurl": "https://dl.fedoraproject.org/pub/fedora/linux/releases/44/Everything/x86_64/os/",
+      "repomd_sha256": "da3845427d188097f6fd71b417a039bdfb8efefc4f38ca44b5cbb94f95a18991",
+      "repomd_bytes": 5966,
+      "primary_sha256": "c48e47563bbf65b996c95caf4a608223f982c314cab637e6ab87dd1df67b9d26",
+      "recorded_at": "2026-09-27T13:43:10Z"
+    },
+    "fedora-44-updates": {
+      "baseurl": "https://dl.fedoraproject.org/pub/fedora/linux/updates/44/Everything/x86_64/",
+      "repomd_sha256": "204b9f69d50089542161aaab293a8ddce072ea7130d1c0dbb76737d6c15ee7b8",
+      "repomd_bytes": 7055,
+      "primary_sha256": "8b982f405946c38471baf73db8b098ad1961eadd9ca20c9e77813a66005ae1de",
+      "recorded_at": "2026-09-27T13:43:10Z"
+    }
+  },
+  "key": {
+    "path": "/etc/pki/rpm-gpg/RPM-GPG-KEY-fedora-44-primary",
+    "sha256": "93642aec521a1e5e96dd715f7ae0ec0850ebc9de09a94ce03cae5263f26cc18a",
+    "bytes": 1672,
+    "fingerprint": "36F612DCF27F7D1A48A835E4DBFCF71C6D9F90A6",
+    "basis": "The file fedora-gpg-keys-44-2.noarch (updates primary) installs, byte-equal to https://src.fedoraproject.org/rpms/fedora-repos/raw/f44/f/RPM-GPG-KEY-fedora-44-primary; its fingerprint is the one https://fedoraproject.org/security/ lists for Fedora 44 (read 2026-09-27T10:04:20Z)."
+  },
+  "source_repositories": {
+    "fedora-44-releases-source": {
+      "baseurl": "https://dl.fedoraproject.org/pub/fedora/linux/releases/44/Everything/source/tree/",
+      "repomd_sha256": "251ebbbd83c0c21f148905a4961f887fe2b1a6a53accbb256462a679f868f686",
+      "repomd_bytes": 4978,
+      "primary_sha256": "c2dcdc609d12c90294d8bbe3589901a14826c1f6f088c9f88853bc87a8883f9a",
+      "recorded_at": "2026-09-27T13:43:10Z"
+    },
+    "fedora-44-updates-source": {
+      "baseurl": "https://dl.fedoraproject.org/pub/fedora/linux/updates/44/Everything/source/tree/",
+      "repomd_sha256": "8dfac2862ca5c7b69d579b4c04032a39024e4bbb641e2a11e01a60ca8571bc74",
+      "repomd_bytes": 6068,
+      "primary_sha256": "38e6264b0e0285065461f8b2ac4794ab8bcf29591aade699071d8729fa56362c",
+      "recorded_at": "2026-09-27T13:43:10Z"
+    }
+  }
+}

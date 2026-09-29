@@ -128,7 +128,7 @@ wiring() {
 	printf 'ok %s - %s (rc=%s)\n' "$number" "$name" "$rc"
 }
 anchor "$workflow" 2 '^          OLIVARES_ADMIN_PASSWORD: '
-anchor "$workflow" 1 'go install github\.com/go-task/task/v3/cmd/task@'
+anchor "$workflow" 1 'uses: \./\.github/actions/olivares-tool-cache'
 anchor "$workflow" 1 '^    runs-on: '
 anchor "$workflow" 3 '\$\{\{ github\.repository_id \}\}'
 anchor "$workflow" 3 '\$\{\{ github\.run_id \}\}'
@@ -149,7 +149,7 @@ wiring 3 unmutated-view 0 'compose-ready contract: OK' "$workflow" cat
 wiring 4 admin-password-omitted 1 "without ['OLIVARES_ADMIN_PASSWORD']" "$workflow" \
 	sed -e '/^          OLIVARES_ADMIN_PASSWORD: /d'
 wiring 5 task-install-omitted 1 'without first installing the pinned Task' "$workflow" \
-	sed -e '/go install github\.com\/go-task\/task\/v3\/cmd\/task@/d'
+	sed -e '/uses: \.\/\.github\/actions\/olivares-tool-cache/d'
 wiring 6 hosted-runner-fallback 1 'must route its job to' "$workflow" \
 	sed -e "s/^    runs-on: .*/    runs-on: \${{ vars.CI_RUNNER || 'ubuntu-latest' }}/"
 wiring 7 owner-without-repository 1 'READY_POSITIVE_PROJECT does not vary with repository_id' "$workflow" \

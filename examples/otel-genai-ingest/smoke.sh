@@ -93,7 +93,7 @@ wait_health() {
   return 1
 }
 
-api_get() { curl -sf "$BASE$1" -H "Authorization: Bearer $TOKEN" -H "X-Olivares-Tenant: $TENANT"; }
+api_get() { printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf "$BASE$1" -H @- -H "X-Olivares-Tenant: $TENANT"; }
 
 # The Claude/OTEL source ships embedded as an out-of-process plugin binary, so the
 # binary must be built with `task build:bin` (which runs build:connectors). A plain
@@ -122,7 +122,7 @@ TOKEN="$(curl -sf -X POST "$BASE/v1/auth/login" -H 'Content-Type: application/js
   -d '{"email":"admin@local","password":"correct-horse-battery-staple"}' \
   | python3 -c 'import sys,json;print(json.load(sys.stdin)["token"])')"
 [ -n "$TOKEN" ] || fail "login returned no token"
-TENANT="$(curl -sf -X POST "$BASE/v1/system/orgs" -H "Authorization: Bearer $TOKEN" \
+TENANT="$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf -X POST "$BASE/v1/system/orgs" -H @- \
   -H 'Content-Type: application/json' -d '{"name":"Agents","slug":"agents"}' \
   | python3 -c 'import sys,json;print(json.load(sys.stdin)["tenant_id"])')"
 [ -n "$TENANT" ] || fail "could not create the tenant"

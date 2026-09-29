@@ -82,10 +82,17 @@ PEEK="$ROOT/scripts/lib/ci-yaml-peek.py"
 # autoalojado y nada en el arbol demuestra que la biblioteca se alcance alli.
 
 step_field() { # <fichero> <id> <campo>  ; rc 3 = el paso no esta
-  python3 "$PEEK" step-field "$1" control-plane "$2" "$3"
+  if [ "$2" = pg-roles-cloud ]; then
+    python3 "$PEEK" step-field-for-consumer "$1" "$2" test-cloud-norace "$3"
+  else
+    python3 "$PEEK" step-field-anyjob "$1" "$2" "$3"
+  fi
 }
 notice_if() { # el `if:` del paso de aviso, buscado por nombre (no tiene id)
-  python3 "$PEEK" step-if-byname "$1" control-plane 'NOT APPLICABLE notice'
+  python3 "$PEEK" step-if-byname-anyjob "$1" 'NOT APPLICABLE notice'
+}
+step_jobs() {
+  python3 "$PEEK" step-jobs "$1" "$2"
 }
 
 # ---------------------------------------------------------------- banco de pruebas
@@ -378,6 +385,21 @@ exports_ok() { # <fichero GITHUB_ENV>
       -e 's#^postgres://[^/]*##' | command grep -c '^/cloudcp$')" = "11" ] || return 1
   return 0
 }
+
+# Step outputs are visible only within the job that produced them.
+# Resolve ownership before executing the selected provisioning body.
+J_PROV=$(step_jobs "$WF" pg-roles-cloud) || cannot "cannot locate pg-roles-cloud jobs"
+J_CONS=$(step_jobs "$WF" test-cloud-norace) || cannot "cannot locate test-cloud-norace jobs"
+orphan=""
+for job in $J_CONS; do
+  printf '%s\n' "$J_PROV" | command grep -Fxq -- "$job" || orphan="$orphan $job"
+done
+if [ -z "$orphan" ]; then
+  ok "cloud consumers share their job with pg-roles-cloud"
+else
+  no "cloud consumers lack pg-roles-cloud in their own job:$orphan"
+  exit 1
+fi
 
 B="$WORK/block.sh"
 if ! step_field "$WF" pg-roles-cloud run > "$B" 2>"$WORK/e"; then

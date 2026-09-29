@@ -134,8 +134,8 @@ for _ in $(seq 1 40); do
   if ! kill -0 "$PID" 2>/dev/null; then
     break
   fi
-  ORGS="$(curl -sf "http://127.0.0.1:$PORT/v1/system/orgs" \
-    -H "Authorization: Bearer $TOKEN" || true)"
+  ORGS="$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf "http://127.0.0.1:$PORT/v1/system/orgs" \
+    -H @- || true)"
   TENANT="$(python3 -c 'import sys,json;[print(o["tenant_id"]) for o in json.load(sys.stdin).get("items", []) if o.get("slug")=="demo"]' \
     <<<"$ORGS" 2>/dev/null || true)"
   if [ -n "$TENANT" ]; then

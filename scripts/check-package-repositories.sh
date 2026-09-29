@@ -91,9 +91,12 @@ for token in (
 for label in (
     "mutant-wrong-signing-key", "mutant-package-without-index",
     "mutant-stable-serves-security", "mutant-real-key-absent",
+    "mutant-unsigned-rpm-as-s3", "mutant-s3-rpm-changed",
+    "mutant-s3-rpm-other-payload", "mutant-assemble-unsigned-rpm",
+    "mutant-s3-rpm-extra-file",
 ):
     assert label in battery, label
-assert "4/4 mutants red with positive controls" in battery
+assert "9/9 mutants red with positive controls" in battery
 for token in (
     'apt-get -y install "olivares=$version"', "repo_gpgcheck=1", "dnf -y install",
     "apk update", 'apk add "olivares=$version"', "apk fetch", "cmp -s",

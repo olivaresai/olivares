@@ -1,0 +1,7 @@
+{
+  "schema": "olivares-appliance-package-repository-key/v1",
+  "purpose": "The package-repository key a release build of the Fedora profile expects: build.sh refuses a delivery whose key, repomd.xml.asc or delivery.json names another fingerprint unless --qualification-key names a throwaway key, and then the build's manifest records release false.",
+  "release_fingerprint": "AE27B5B818C9BCFE485B4D8B155E5EC6550A6EF8",
+  "basis": "D's production key descriptor, packaging/repositories/production-key-descriptor.json (openpgp_fingerprint, environment production, purpose apt-rpm-apk-repository-metadata), added in 416f3c1d and unchanged at ccf7ea20 and at S3's 0621ff27. The published https://packages.olivares.ai/keys/olivares-package-repository.asc answered 404 at 2026-09-27T11:16:14Z, so the key bytes are not read here: they arrive with each delivery and must carry this fingerprint.",
+  "image_key_path": "/etc/pki/rpm-gpg/RPM-GPG-KEY-olivares-package-repository"
+}

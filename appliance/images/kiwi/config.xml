@@ -1,0 +1,418 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-FileCopyrightText: 2026 Olivares.AI -->
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<!--
+  The ONE image description of the Olivares AI appliance, read by KIWI NG. One description
+  with profiles is the design's rule: an edition is a profile here, never a second file that
+  drifts from this one. A2 delivers the server edition on amd64, based on Fedora 44 (the
+  shipping profile) and still buildable on Debian 13 (not shipping); the workstation edition
+  (A5) and arm64 (A6) are profiles added to this same document.
+
+  What this description does NOT do, on purpose:
+    * it starts no service and creates no identity. The appliance layer is installed as a
+      package and its own postinstall enables first boot; every host key, machine ID,
+      certificate, setup token and signing key is made on the first boot of each instance.
+    * it carries no first-boot logic. The layer is a package (design 5.2), so it is tested
+      without building an image and it updates through the normal channel on appliances that
+      are already installed.
+
+  Schema and attribute names are KIWI NG's own, from its documented schema:
+  https://osinside.github.io/kiwi/image_description/elements.html (read 2026-09-22).
+-->
+<image schemaversion="8.5" name="olivares-appliance" displayname="Olivares Server">
+  <description type="system">
+    <author>Olivares.AI</author>
+    <contact>enterprise@olivares.ai</contact>
+    <specification>Olivares Server appliance, based on Fedora 44; the debian13-server-amd64 profile, not shipping, is based on Debian 13 (trixie)</specification>
+  </description>
+
+  <profiles>
+    <!-- The edition and the architecture are one profile: the packages, the disk layout and
+         the firmware of an edition travel together. import="true" makes it the profile a
+         build takes when none is named; build.sh always names it.
+
+         Fedora 44 is the shipping base (Root c1efc2ee, 2026-09-27): its conventional RPM/DNF
+         package base, server/minimal, amd64. The Debian 13 profile stays, not shipping, while
+         its own tests stay valid for Debian; it is not a Fedora test. -->
+    <profile name="fedora44-server-amd64" description="Server edition, amd64, based on Fedora 44 (server/minimal, RPM/DNF); the shipping profile" import="true"/>
+    <profile name="debian13-server-amd64" description="Server edition, amd64, based on Debian 13 (trixie); not shipping"/>
+    <!-- The firmware flag of the recipe. Redistributable but not free firmware is what the
+         official Debian installer has included since bookworm and it is what makes the image
+         boot on most server network and storage controllers. The owner's decision on whether
+         the published image carries it is still open (design 10.1, 11.4), so it is a profile
+         and not a fact of the edition: FIRMWARE=free drops it and the image is 100% free. -->
+    <profile name="firmware-nonfree" description="Redistributable non-free firmware for network, storage and graphics controllers"/>
+    <!-- The same FIRMWARE flag on Fedora: linux-firmware is Fedora's redistributable firmware,
+         and FIRMWARE=free drops it there too. -->
+    <profile name="fedora44-firmware" description="Fedora 44's redistributable firmware (linux-firmware) for network, storage and graphics controllers"/>
+  </profiles>
+
+  <preferences profiles="debian13-server-amd64" arch="x86_64">
+    <version>1.0.0</version>
+    <packagemanager>apt</packagemanager>
+    <!-- KIWI's element for every package manager: with it, KIWI's apt configuration sets
+         AllowUnauthenticated "false". Every repository below is verified by its locked keyring
+         or is this build's own package repository. -->
+    <rpm-check-signatures>true</rpm-check-signatures>
+    <locale>en_US</locale>
+    <!-- No <keytable>: KIWI applies it with systemd-firstboot, which accepts only a *.map or
+         *.map.gz keymap under /usr/share/keymaps, /usr/share/kbd/keymaps or /usr/lib/kbd/keymaps,
+         and no Debian 13 package ships one named us. Debian's systemd is built without vconsole
+         support, so the setting would not be applied at boot either; with no keymap loaded the
+         console keeps the kernel's built-in US map. -->
+    <timezone>UTC</timezone>
+    <!--
+      oem, not iso: the artifact this description builds is the expandable disk, and the three
+      formats are assembled from it (appliance/images/formats). installiso="true" is what adds
+      the hybrid installer medium, which boots under legacy BIOS and under UEFI from the same
+      file, and installboot="install" makes its default entry the installation itself so an
+      unattended install needs no keystroke.
+
+      firmware="uefi" is KIWI's EFI layout FOR SECURE BOOT: shim first, then the signed GRUB.
+      eficsm="true" (KIWI's default, stated here because the boot battery depends on it) keeps
+      the legacy BIOS path on the same disk, which is why one disk image answers all three
+      firmware cases of the boot oracle.
+
+      oem-resize is false because the capability lives in a dracut module (dracut-kiwi-oem-repart)
+      that Debian 13 does not package, and the recipe takes its packages from Debian mirrors
+      only. The disk is therefore fixed at the size declared below; growing the data volume is
+      an operator action until A4 revisits it. Disabling the resize is documented as removing
+      the need for that package.
+
+      The console is on tty0 AND on the serial port: the label the layer installs in
+      /etc/issue.d is what the boot battery reads over ttyS0, and an appliance without a screen
+      is the normal case.
+
+      /boot is its own ext4 partition. The root is the btrfs subvolume @, so that a rollback
+      (A4) never touches the data volumes below. Debian's signed GRUB reads the early script KIWI
+      puts on the ESP, and that script loads /boot/grub/grub.cfg from the root file system; GRUB
+      2.12 without SUSE's subvolume patches reads btrfs paths from the top level, where the file
+      is /@/boot/grub/grub.cfg, and stops at its prompt (hosted run 36259628735). On the boot
+      partition the script loads /grub/grub.cfg, which is where the file is. 1024 MB holds two
+      kernels and their initrds while unattended-upgrades replaces one.
+    -->
+    <type image="oem" filesystem="btrfs" firmware="uefi" eficsm="true" efipartsize="512"
+          bootpartition="true" bootfilesystem="ext4" bootpartsize="1024"
+          installiso="true" installboot="install" btrfs_root_is_subvolume="true"
+          kernelcmdline="console=tty0 console=ttyS0,115200n8 net.ifnames=0 systemd.show_status=1">
+      <bootloader name="grub2" timeout="3"/>
+      <size unit="G">12</size>
+      <oemconfig>
+        <oem-resize>false</oem-resize>
+        <oem-unattended>true</oem-unattended>
+        <oem-swap>false</oem-swap>
+        <oem-skip-verify>false</oem-skip-verify>
+      </oemconfig>
+      <systemdisk>
+        <!-- The product's data and the first-boot record live outside the root subvolume, so a
+             rollback of the system (A4) never rolls back the audit book or makes first boot
+             run its recorded stages again. -->
+        <volume name="var/lib/olivares"/>
+        <volume name="var/lib/olivares-appliance"/>
+      </systemdisk>
+    </type>
+  </preferences>
+
+  <preferences profiles="fedora44-server-amd64" arch="x86_64">
+    <version>1.0.0</version>
+    <!-- KIWI 11.0.4 names its Fedora package managers dnf4 and dnf5 (kiwi.rnc :999); Fedora 44's is
+         dnf5. KIWI hands dnf5 this release version (else it passes releasever 0), and with
+         rpm-check-signatures every package is checked against the imported Fedora key. -->
+    <packagemanager>dnf5</packagemanager>
+    <release-version>44</release-version>
+    <rpm-check-signatures>true</rpm-check-signatures>
+    <locale>en_US</locale>
+    <timezone>UTC</timezone>
+    <!-- The product's boot and storage layout, the same attributes as the Debian type above: it
+         is the product's, not the distribution's, and nothing about it is inferred from Fedora. -->
+    <!-- SELinux stays enforcing (Root c1efc2ee, section 2): KIWI labels the root with the
+         file_contexts of this policy after config.sh and after the disk sync (system/setup.py
+         :633-645), and config.sh writes the enforcing mode and fails a root KIWI could not label. -->
+    <type image="oem" filesystem="btrfs" firmware="uefi" eficsm="true" efipartsize="512"
+          bootpartition="true" bootfilesystem="ext4" bootpartsize="1024"
+          installiso="true" installboot="install" btrfs_root_is_subvolume="true"
+          selinux_policy="targeted"
+          kernelcmdline="console=tty0 console=ttyS0,115200n8 net.ifnames=0 systemd.show_status=1">
+      <!-- GRUB 2.12 as Fedora 44 ships it. KIWI writes these settings into /etc/default/grub, the
+           only defaults file Fedora's grub2-mkconfig reads: the menu on the console and on the
+           serial port, and GRUB_ENABLE_BLSCFG=true (grub2.py :700-800). The kernels are Boot Loader
+           Specification entries under /boot/loader/entries on the ext4 boot partition, which
+           grub2-efi-x64 owns and GRUB's blscfg reads: the entry form A4 consumes. Fedora's signed
+           grubx64.efi embeds the prefix /EFI/fedora, where KIWI copies its early script (the shim
+           vendor directory), and the script loads /grub2/grub.cfg from the boot partition, because
+           grub2-tools ships grub2-install (defaults.py :649-669). -->
+      <bootloader name="grub2" timeout="3" bls="true" output_console="console serial"
+                  input_console="console serial"
+                  serial_line="serial --unit=0 --speed=115200 --word=8 --parity=no --stop=1"/>
+      <size unit="G">12</size>
+      <oemconfig>
+        <oem-resize>false</oem-resize>
+        <oem-unattended>true</oem-unattended>
+        <oem-swap>false</oem-swap>
+        <oem-skip-verify>false</oem-skip-verify>
+      </oemconfig>
+      <systemdisk>
+        <volume name="var/lib/olivares"/>
+        <volume name="var/lib/olivares-appliance"/>
+      </systemdisk>
+    </type>
+  </preferences>
+
+  <!-- Debian 13 and nothing else. A build that needs any other network location is a build
+       nobody can repeat: the appliance's own packages arrive through the local repository
+       below, which build.sh stages from dist/. imageinclude puts the three Debian repositories
+       into the image's apt sources, which is where unattended-upgrades reads its security
+       updates from.
+
+       Each Debian repository is verified with the Debian archive keyring the builder already
+       has. KIWI runs archive-signed-by.sh on the apt sources file it writes for the repository,
+       at build time and for the image's own sources; the script refuses a key file whose sha256
+       differs from archive-keys.json and otherwise adds a Signed-By line naming it. apt 3.0.3
+       in the builder reads a repository's keyring from Signed-By, and does not read the
+       trusted.gpg file where KIWI's own <signing> keys would go. -->
+  <repository type="apt-deb" alias="debian-trixie" distribution="trixie" profiles="debian13-server-amd64"
+              components="main non-free-firmware" repository_gpgcheck="true" imageinclude="true"
+              customize="archive-signed-by.sh">
+    <source path="http://deb.debian.org/debian"/>
+  </repository>
+  <repository type="apt-deb" alias="debian-trixie-updates" distribution="trixie-updates" profiles="debian13-server-amd64"
+              components="main non-free-firmware" repository_gpgcheck="true" imageinclude="true"
+              customize="archive-signed-by.sh">
+    <source path="http://deb.debian.org/debian"/>
+  </repository>
+  <repository type="apt-deb" alias="debian-trixie-security" distribution="trixie-security" profiles="debian13-server-amd64"
+              components="main non-free-firmware" repository_gpgcheck="true" imageinclude="true"
+              customize="archive-signed-by.sh">
+    <source path="http://security.debian.org/debian-security"/>
+  </repository>
+  <!-- The local repository is the one repository trusted without a signature: build.sh stages
+       its packages in this build (the two it copies from dist/ and the dracut package its stage
+       step builds), and its index has no Release file to sign. apt refuses such a repository
+       unless it is trusted, and KIWI writes `trusted: yes` for a repository only when
+       repository_gpgcheck is false. The Debian repositories above keep their signature check. -->
+  <repository type="deb-dir" alias="olivares-appliance-packages" repository_gpgcheck="false" profiles="debian13-server-amd64">
+    <source path="dir:///packages"/>
+  </repository>
+
+  <!-- Fedora 44 and nothing else: the Everything x86_64 releases and updates trees as rpm-md. Every
+       package is checked against the Fedora 44 key (package_gpgcheck; KIWI imports the signing key
+       into the image's rpm database). Fedora does not sign repomd.xml, so fedora-repo-pinned.sh, the
+       customize script KIWI runs on each .repo file it writes, refuses a tree whose repomd.xml no
+       longer has the sha256 fedora-repositories.json pins, and adds the locked key as gpgkey. The
+       build repositories do not become the image's update channel: which update authority the
+       appliance runs, and from where, is the host slice's decision. -->
+  <repository type="rpm-md" alias="fedora-44-releases" profiles="fedora44-server-amd64"
+              repository_gpgcheck="false" package_gpgcheck="true" customize="fedora-repo-pinned.sh">
+    <source path="https://dl.fedoraproject.org/pub/fedora/linux/releases/44/Everything/x86_64/os/">
+      <signing key="file:///etc/pki/rpm-gpg/RPM-GPG-KEY-fedora-44-primary"/>
+    </source>
+  </repository>
+  <repository type="rpm-md" alias="fedora-44-updates" profiles="fedora44-server-amd64"
+              repository_gpgcheck="false" package_gpgcheck="true" customize="fedora-repo-pinned.sh">
+    <source path="https://dl.fedoraproject.org/pub/fedora/linux/updates/44/Everything/x86_64/">
+      <signing key="file:///etc/pki/rpm-gpg/RPM-GPG-KEY-fedora-44-primary"/>
+    </source>
+  </repository>
+  <!-- The product's own RPMs: the Interface through which D's nFPM RPMs (olivares and
+       olivares-appliance-base) enter the Fedora image, as the signed rpm-md tree D's S3 produces
+       (signed RPM headers, repodata/repomd.xml.asc with the package-repository key) with its
+       delivery.json. Both checks are on, here as on the appliance (D, 2026-09-27; F5 r3 §7):
+       build.sh refuses a delivery whose key, signature, sha256 or package set is not the expected
+       one before KIWI reads it (delivery_check.py), and stages the checked key beside the
+       description. olivares-repo-pinned.sh, KIWI's customize script for the .repo file, checks the
+       key's fingerprint against that pin again and names it as gpgkey. -->
+  <repository type="rpm-md" alias="olivares-appliance-rpms" profiles="fedora44-server-amd64"
+              repository_gpgcheck="true" package_gpgcheck="true" customize="olivares-repo-pinned.sh">
+    <source path="dir:///packages">
+      <signing key="file:///description/olivares-package-repository.asc"/>
+    </source>
+  </repository>
+  <!-- The dracut RPM the stage step builds from the builder's KIWI 11.0.4 modules, in a repository
+       of its own that holds exactly that RPM. The stage step signs it and the repository's repomd.xml
+       with a per-build key, through the same S3 scripts that sign the product repository, and
+       discards the secret key; the build log and the manifest record the key's fingerprint. So no
+       repository of the recipe is ever read with a check off, and the product repository keeps
+       exactly D's two packages. -->
+  <repository type="rpm-md" alias="olivares-appliance-build" profiles="fedora44-server-amd64"
+              repository_gpgcheck="true" package_gpgcheck="true" customize="olivares-repo-pinned.sh">
+    <source path="dir:///build-packages">
+      <signing key="file:///description/olivares-build-key.asc"/>
+    </source>
+  </repository>
+
+  <!-- The trust the bootstrap needs before anything else is installed: apt, its keyring and
+       the tools that check a signature. -->
+  <packages type="bootstrap" profiles="debian13-server-amd64">
+    <package name="apt"/>
+    <package name="dpkg"/>
+    <package name="gnupg"/>
+    <package name="gpgv"/>
+    <package name="ca-certificates"/>
+    <package name="debian-archive-keyring"/>
+  </packages>
+
+  <packages type="image" profiles="debian13-server-amd64">
+    <!-- the system -->
+    <package name="linux-image-amd64"/>
+    <package name="systemd"/>
+    <package name="systemd-sysv"/>
+    <package name="systemd-timesyncd"/>
+    <package name="dbus"/>
+    <package name="dracut"/>
+    <package name="dracut-core"/>
+    <package name="locales"/>
+    <package name="tzdata"/>
+    <package name="sudo"/>
+    <package name="less"/>
+    <package name="ca-certificates"/>
+    <!-- the disk: btrfs root, the EFI system partition and the tools a rescue needs -->
+    <package name="btrfs-progs"/>
+    <package name="dosfstools"/>
+    <package name="e2fsprogs"/>
+    <package name="gdisk"/>
+    <package name="parted"/>
+    <!-- what the installer medium's initrd calls while it writes the disk image to the
+         target: the partition mapper, the progress dialog the unattended path skips, and
+         the compressor the embedded image is stored with -->
+    <package name="kpartx"/>
+    <package name="dialog"/>
+    <package name="xz-utils"/>
+    <!-- the boot chain, both firmwares. shim-signed is signed by the Microsoft UEFI CA and is
+         what a machine with Secure Boot on verifies first; grub-efi-amd64-signed is the second
+         stage it verifies; grub-pc-bin is the same disk's legacy BIOS path. Removing
+         shim-signed is the negative control of the Secure Boot case of the boot battery. -->
+    <package name="grub2-common"/>
+    <package name="grub-efi-amd64-bin"/>
+    <package name="grub-efi-amd64-signed"/>
+    <package name="shim-signed"/>
+    <package name="grub-pc-bin"/>
+    <package name="efibootmgr"/>
+    <package name="mokutil"/>
+    <!-- the host settings' owner, the keys first boot records, and the update channel of the
+         base the appliance commits to for the life of the release -->
+    <package name="cloud-init"/>
+    <package name="openssh-server"/>
+    <package name="unattended-upgrades"/>
+    <package name="nftables"/>
+    <!-- system management, separate from the product's own console (design 3.1) -->
+    <package name="cockpit-ws"/>
+    <package name="cockpit-system"/>
+    <!-- the edition the image ships installed, and the appliance layer beside it. Both come
+         from the local repository build.sh stages; the layer's postinstall enables first boot
+         and starts nothing. -->
+    <package name="olivares"/>
+    <package name="olivares-appliance-base"/>
+    <!-- The installer medium's dracut modules, from the SAME pinned KIWI release that builds
+         this image: Debian 13 packages none of them (measured on packages.debian.org,
+         2026-09-22), and the recipe takes nothing from a second network location. They arrive
+         as the package KIWI's runtime check for an installer medium requires by name
+         (check_dracut_module_for_oem_install_in_package_list): build.sh's stage step builds it
+         in the builder from the builder's own modules (dracut_package.py) into the local
+         repository, at the locked KIWI version, so dpkg owns the files in the image. -->
+    <package name="dracut-kiwi-oem-dump"/>
+    <!-- What those modules need in the image root. KIWI adds kiwi-dump and kiwi-dump-reboot to the
+         installer initrd with dracut's add list, and dracut exits 1 when an added module, or a
+         module it depends on, cannot be installed. kiwi-dump depends on dracut's network module,
+         which ships in dracut-network; the network backend this image can run is systemd-networkd
+         (systemd ships it), which needs ip from iproute2. kiwi-lib depends on dracut's crypt
+         module, which needs cryptsetup. kiwi-dump-reboot boots the installed system with kexec.
+         Each was measured necessary against Debian 13 and dracut 106. -->
+    <package name="dracut-network"/>
+    <package name="iproute2"/>
+    <package name="cryptsetup-bin"/>
+    <package name="kexec-tools"/>
+  </packages>
+
+  <packages type="image" profiles="firmware-nonfree">
+    <package name="firmware-linux-nonfree"/>
+  </packages>
+
+  <!-- Fedora 44: the rpm database and its keyring first. dnf5 installs into the image root from the
+       builder (KIWI runs the builder's dnf5 with installroot), so the image carries no package tool
+       of its own: which update authority the appliance runs is the host slice's decision, and
+       nothing is installed for it until the host slice names it. -->
+  <packages type="bootstrap" profiles="fedora44-server-amd64">
+    <package name="filesystem"/>
+    <package name="fedora-release-server"/>
+    <package name="fedora-gpg-keys"/>
+    <package name="rpm"/>
+    <package name="ca-certificates"/>
+  </packages>
+
+  <!-- The Debian profile's packages mapped to Fedora 44 names (r12-fedora/PACKAGE-MAP.tsv gives the
+       reason, NEVRA and sha256 of each). -->
+  <packages type="image" profiles="fedora44-server-amd64">
+    <!-- the system: Fedora ships udev apart from systemd, and builds no systemd-timesyncd -->
+    <package name="kernel"/>
+    <package name="systemd"/>
+    <package name="systemd-udev"/>
+    <package name="chrony"/>
+    <package name="dbus-broker"/>
+    <package name="dracut"/>
+    <package name="glibc-langpack-en"/>
+    <package name="tzdata"/>
+    <package name="sudo"/>
+    <package name="less"/>
+    <package name="ca-certificates"/>
+    <!-- the disk -->
+    <package name="btrfs-progs"/>
+    <package name="dosfstools"/>
+    <package name="e2fsprogs"/>
+    <package name="gdisk"/>
+    <package name="parted"/>
+    <!-- the installer medium's initrd: partition mapper, dialog, compressor -->
+    <package name="kpartx"/>
+    <package name="dialog"/>
+    <package name="xz"/>
+    <!-- the boot chain, both firmwares: shim signed by the Microsoft UEFI CA, Fedora's signed GRUB
+         it verifies, the x86_64-efi modules, GRUB's tools, and the legacy BIOS path of eficsm -->
+    <package name="grub2-common"/>
+    <package name="grub2-tools"/>
+    <package name="grub2-efi-x64-modules"/>
+    <package name="grub2-efi-x64"/>
+    <package name="shim-x64"/>
+    <package name="grub2-pc"/>
+    <package name="grub2-pc-modules"/>
+    <package name="efibootmgr"/>
+    <package name="mokutil"/>
+    <!-- the host settings' owner, the keys first boot records, the firewall and the network owner
+         cloud-init renders to on Fedora -->
+    <package name="cloud-init"/>
+    <package name="openssh-server"/>
+    <package name="nftables"/>
+    <package name="NetworkManager"/>
+    <!-- system management -->
+    <package name="cockpit-ws"/>
+    <package name="cockpit-system"/>
+    <!-- the product and the appliance layer, D's RPMs from the local repository -->
+    <package name="olivares"/>
+    <package name="olivares-appliance-base"/>
+    <!-- KIWI 11.0.4's installer modules, built by the stage step at the locked version (Fedora 44
+         packages dracut-kiwi-oem-dump 11.0.2 only), and what they need in the image root -->
+    <package name="dracut-kiwi-oem-dump"/>
+    <package name="dracut-network"/>
+    <package name="iproute"/>
+    <package name="cryptsetup"/>
+    <package name="kexec-tools"/>
+    <!-- The update interface F5 r3 §10 names for this recipe: dnf5 and the actions plugin the
+         package-phase bridge hooks, dnf5-automatic installed and disabled (one automatic route: the
+         profile overlay's preset, checked by config.sh), and Fedora's own repository files. Our key
+         and repository file, and installonly_limit, are the profile overlay's (fedora44-server-amd64/). -->
+    <package name="dnf5"/>
+    <package name="libdnf5-plugin-actions"/>
+    <package name="dnf5-plugin-automatic"/>
+    <package name="fedora-repos"/>
+    <!-- SELinux: the targeted policy, enforcing, and setfiles, with which KIWI labels the root; the appliance's
+         policy module (olivares-selinux, from the local repository like the product, which requires it before its own
+         install) and semanage, which the module package's scriptlets run (policycoreutils-python-utils, the pinned
+         policycoreutils build) -->
+    <package name="selinux-policy-targeted"/>
+    <package name="policycoreutils"/>
+    <package name="policycoreutils-python-utils"/>
+    <package name="olivares-selinux"/>
+  </packages>
+
+  <packages type="image" profiles="fedora44-firmware">
+    <package name="linux-firmware"/>
+  </packages>
+</image>

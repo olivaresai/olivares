@@ -1,0 +1,41 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+# Accesses the installed policy must not grant, at least one per domain. compare_rules.py policy mode fails if any is
+# granted in the policy's defaults or with a boolean the module declares at true or at false, except in the one state
+# its allowed_when names (<boolean>=true or false). Lines starting with # are comments.
+id	source	target	class	perm	allowed_when	reason
+N-PORTAL-KEY	olivares_portal_t	olivares_portal_key_t	file	read		the console measures the key by lstat and never opens it
+N-PORTAL-PORT	olivares_portal_t	pki_ca_port_t	tcp_socket	name_bind		the console binds tcp 9443 alone, not the rest of Fedora's 9443-9447
+N-RCON	olivares_repair_console_t	olivares_helper_bundle_sock_t	sock_file	write		the repair console reaches the power helper only
+N-HPWR	olivares_helper_power_t	olivares_portal_t	dir	search		the power helper attests only the repair console
+N-HBND	olivares_helper_bundle_t	olivares_helper_bundle_var_lib_t	dir	remove_name		the spool is written once and never emptied by the helper
+N-SNAP	olivares_snapshotcore_t	olivares_var_lib_t	file	read		the excluded-state guard reads subvolume ids, never the product's files
+N-FBOOT-KEY	olivares_firstboot_t	olivares_portal_key_t	file	write		first boot publishes the console's selection, never its key
+N-FBOOT-CLOUDINIT	olivares_firstboot_t	cloud_init_exec_t	file	execute		first boot stats cloud-init's program and never runs it
+N-FBOOT-EXEC	olivares_firstboot_t	bin_t	file	execute		first boot executes no generic command
+N-FBOOT-PRIVATE	olivares_firstboot_t	sshd_key_t	file	read		first boot reads the public host keys only
+N-PROD-JIT	olivares_t	olivares_t	process	execmem	olivares_operate_runtime=true	executable memory only while olivares_operate_runtime is on
+N-PROD-PORT	olivares_t	http_port_t	tcp_socket	name_bind		the engine binds tcp 8443 alone, not every http port
+N-API-PROD-CONNECT	olivares_t	olivares_portal_t	unix_stream_socket	connectto		the product engine is not an admitted caller of the local API
+N-API-PROD-SOCK	olivares_t	olivares_portal_api_sock_t	sock_file	write		the product engine does not reach local.sock
+N-API-RCON-CONNECT	olivares_repair_console_t	olivares_portal_t	unix_stream_socket	connectto		repair on tty1 does not depend on the local API
+N-PORTAL-OPS-PARENT	olivares_portal_t	olivares_portal_var_lib_t	dir	write		the operations leaf's parent is root's; the portal only searches it
+N-PORTAL-VARLIB	olivares_portal_t	var_lib_t	dir	write		no ancestor of the operations leaf is writable by the portal
+N-PORTAL-LIFECYCLE-ADD	olivares_portal_t	olivares_lifecycle_run_t	dir	add_name		the portal places nothing in the lifecycle directory, so it cannot replace the lock
+N-PORTAL-LIFECYCLE-UNLINK	olivares_portal_t	olivares_lifecycle_lock_t	file	unlink		the portal never removes or replaces lifecycle.lock
+N-PORTAL-LIFECYCLE-WRITE	olivares_portal_t	olivares_lifecycle_lock_t	file	write		the portal holds lifecycle.lock read-only and never truncates it
+N-CLI-KEY-OPEN	olivares_cli_t	olivares_portal_key_t	file	open		the CLI stats tls.key and never opens it
+N-CLI-KEY-READ	olivares_cli_t	olivares_portal_key_t	file	read		the CLI never reads the private key
+N-NET-GUARD-SYSCONN	olivares_net_guard_t	NetworkManager_etc_rw_t	file	write		the guard changes profiles only through NetworkManager
+N-NET-RESTORE-JOURNAL	olivares_helper_netrestore_t	olivares_net_guard_var_lib_t	file	write		netrestore reads the guard's journal only
+N-NET-PROBE-NMETC	olivares_helper_netprobe_t	NetworkManager_etc_rw_t	file	write		netprobe writes no NetworkManager keyfile
+N-NET-PROD-STATE	olivares_t	olivares_net_guard_var_lib_t	dir	write		the product engine never writes the guard's state
+N-NET-PORTAL-STATE	olivares_portal_t	olivares_net_guard_var_lib_t	dir	write		the portal never writes the guard's state
+N-NET-CLI-STATE	olivares_cli_t	olivares_net_guard_var_lib_t	dir	write		the CLI never writes the guard's state
+N-NET-PORTAL-LOCK	olivares_portal_t	olivares_network_run_t	file	lock		the portal has no writer authority over the network lock
+N-NET-PROBE-NMCONF	olivares_helper_netprobe_t	NetworkManager_etc_t	file	write		netprobe writes no NetworkManager configuration
+N-NET-PROBE-NMRUN	olivares_helper_netprobe_t	NetworkManager_var_run_t	file	write		netprobe writes no NetworkManager runtime file
+N-NET-GUARD-SYSCONN-ADD	olivares_net_guard_t	NetworkManager_etc_rw_t	dir	add_name		the guard adds no keyfile; netrestore alone touches keyfiles
+N-NET-GUARD-LEDGER	olivares_net_guard_t	olivares_netrestore_run_t	dir	add_name		the guard cannot write root's restore ledger
+N-FBOOT-ETC-WRITE	olivares_firstboot_t	etc_t	file	write		first boot writes no etc_t file; its drop-in has its own type
+N-FBOOT-ETC-UNLINK	olivares_firstboot_t	etc_t	file	unlink		first boot removes or replaces no etc_t file

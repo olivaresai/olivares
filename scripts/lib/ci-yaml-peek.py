@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-"""Lee tres cosas concretas de nuestros YAML de CI usando SOLO la biblioteca estandar.
+"""Read step fields, owning jobs and task commands using the standard library.
 
 POR QUE EXISTE, y no es preferencia de estilo. Las dos baterias que lo usan corren como paso de
 `mainline-ci`, y ese job corre en un runner AUTOALOJADO (`hetzner`, srv17), no en una imagen de
@@ -16,8 +16,9 @@ respuesta a la duda es 2, «no he podido mirar», nunca una cadena vacia que el 
 ausencia.
 
 Salidas: 0 imprime lo pedido · 2 no he podido mirar (fichero ilegible o forma inesperada)
-         3 no esta, o no esta exactamente una vez.
+         3 missing or ambiguous; equal values in distinct jobs are accepted.
 """
+import re
 import sys
 
 
@@ -76,6 +77,8 @@ def _bloques(region, marca):
 def _valor(bloque, clave, sangria):
     """El valor de `clave` en un bloque. Escalar en linea, o bloque literal tras `|`."""
     pref = " " * sangria + clave + ":"
+    if sum(ln.startswith(pref) for ln in bloque) > 1:
+        raise SystemExit(2)
     for i, ln in enumerate(bloque):
         if not ln.startswith(pref):
             continue
@@ -107,11 +110,111 @@ def _pasos(ruta, job):
     return _bloques(sub, "      - ")
 
 
+def _jobs(lineas):
+    """Read every job in the supported layout; do not skip unknown headers."""
+    region = _region(lineas, "jobs:", 0)
+    jobs = []
+    for line in region:
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        indent = len(line) - len(line.lstrip(" "))
+        if indent < 6 and line.lstrip(" ").startswith("\t"):
+            raise SystemExit(2)
+        if indent == 2:
+            match = re.fullmatch(r"  ([A-Za-z_][A-Za-z0-9_-]*):", line)
+            if match is None or match[1] in jobs:
+                raise SystemExit(2)
+            jobs.append(match[1])
+        elif indent < 2:
+            raise SystemExit(2)
+    if not jobs:
+        raise SystemExit(2)
+    return jobs
+
+
+def _pasos_de(lineas, job):
+    """Only a reusable-workflow job may omit its local steps."""
+    region = _region(lineas, f"  {job}:", 2)
+    try:
+        steps = _region(region, "    steps:", 4)
+    except SystemExit as error:
+        if error.code != 3:
+            raise
+        if any(line.startswith("    steps:") for line in region):
+            raise SystemExit(2)
+        if _valor(region, "uses", 4) is not None:
+            return []
+        raise SystemExit(2)
+    blocks = _bloques(steps, "      - ")
+    if not blocks:
+        raise SystemExit(2)
+    ids = set()
+    for block in blocks:
+        ident = _valor(block, "id", 8)
+        if ident is not None:
+            if ident in ids:
+                raise SystemExit(2)
+            ids.add(ident)
+    return blocks
+
+
+def _busca(ruta, predicate):
+    lines = _lineas(ruta)
+    found = []
+    for job in _jobs(lines):
+        for block in _pasos_de(lines, job):
+            if predicate(block):
+                found.append((job, block))
+    return found
+
+
+def _un_valor(found, field):
+    if not found:
+        raise SystemExit(3)
+    if len({job for job, _ in found}) != len(found):
+        raise SystemExit(3)
+    values = {(_valor(block, field, 8) or "") for _, block in found}
+    if len(values) != 1:
+        raise SystemExit(3)
+    return values.pop()
+
+
 def main(argv):
     if len(argv) < 2:
         sys.stderr.write("uso: ci-yaml-peek.py <orden> ...\n")
         return 2
     orden = argv[1]
+
+    if orden == "step-field-anyjob":  # <workflow> <id> <field>
+        path, ident, field = argv[2:5]
+        found = _busca(path, lambda block: _valor(block, "id", 8) == ident)
+        sys.stdout.write(_un_valor(found, field))
+        return 0
+
+    if orden == "step-field-for-consumer":  # <workflow> <provider> <consumer> <field>
+        path, provider, consumer, field = argv[2:6]
+        found = _busca(path, lambda block: _valor(block, "id", 8) in (provider, consumer))
+        owners = {job for job, block in found if _valor(block, "id", 8) == consumer}
+        selected = [(job, block) for job, block in found
+                    if job in owners and _valor(block, "id", 8) == provider]
+        if not owners or {job for job, _ in selected} != owners:
+            return 3
+        sys.stdout.write(_un_valor(selected, field))
+        return 0
+
+    if orden == "step-if-byname-anyjob":  # <workflow> <name fragment>
+        path, fragment = argv[2:4]
+        found = _busca(path, lambda block: fragment in (_valor(block, "name", 8) or ""))
+        sys.stdout.write(_un_valor(found, "if"))
+        return 0
+
+    if orden == "step-jobs":  # <workflow> <id>
+        path, ident = argv[2:4]
+        found = _busca(path, lambda block: _valor(block, "id", 8) == ident)
+        if not found:
+            return 3
+        sys.stdout.write("".join(job + "\n" for job, _ in found))
+        return 0
 
     if orden == "step-field":          # <workflow> <job> <id> <campo>
         ruta, job, ident, campo = argv[2:6]

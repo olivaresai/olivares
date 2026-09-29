@@ -5,7 +5,10 @@
 package main
 
 import (
+	"bytes"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -33,5 +36,56 @@ func TestReconcile_ExitsByOutcomeAndNamesTheUnitToRunNext(t *testing.T) {
 	}
 	if code, line := reconcileOutcome(base.Record{}, nil); code != 0 || strings.Contains(line, "appliance-firstboot apply") {
 		t.Fatalf("the next step runs outside the unit: %q", line)
+	}
+}
+
+func TestHandOverHostSettingsCommand_RequiresVerifiedRecord(t *testing.T) {
+	for _, verified := range []bool{false, true} {
+		t.Run(map[bool]string{false: "unverified", true: "verified"}[verified], func(t *testing.T) {
+			root := t.TempDir()
+			store := base.Store{Dir: filepath.Join(root, "state")}
+			if err := os.MkdirAll(store.Dir, 0700); err != nil {
+				t.Fatal(err)
+			}
+			rec := base.Record{Schema: "olivares-appliance-firstboot/v1", State: base.Pending}
+			if verified {
+				rec.Completed = []base.Completed{{Stage: base.StageHostSettings, Effect: "verified"}}
+			}
+			if err := store.Save(rec); err != nil {
+				t.Fatal(err)
+			}
+			var output bytes.Buffer
+			code := handOverHostSettings(store, base.HostSettingsHandoff{Host: base.Host{Root: root}}, &output, &output)
+			_, err := os.Stat(filepath.Join(root, base.HostOwnerFile))
+			if verified {
+				if code != 0 || err != nil {
+					t.Fatalf("verified handoff failed: %d %v", code, err)
+				}
+			} else if code != 1 || !os.IsNotExist(err) {
+				t.Fatalf("unverified handoff had effect: %d %v", code, err)
+			}
+		})
+	}
+	root := t.TempDir()
+	var output bytes.Buffer
+	if code := handOverHostSettings(base.Store{Dir: filepath.Join(root, "state")}, base.HostSettingsHandoff{Host: base.Host{Root: root}}, &output, &output); code != 1 {
+		t.Fatalf("missing record exit %d", code)
+	}
+}
+
+func TestHandOverHostSettingsCommand_UsesTheExistingLock(t *testing.T) {
+	root := t.TempDir()
+	store := base.Store{Dir: filepath.Join(root, "state")}
+	unlock, err := store.Lock()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer unlock()
+	var out bytes.Buffer
+	if code := handOverHostSettings(store, base.HostSettingsHandoff{Host: base.Host{Root: root}}, &out, &out); code != 2 {
+		t.Fatalf("contending handoff exit %d", code)
+	}
+	if _, err := os.Stat(filepath.Join(root, base.HostOwnerFile)); !os.IsNotExist(err) {
+		t.Fatal("contending handoff touched owner file")
 	}
 }

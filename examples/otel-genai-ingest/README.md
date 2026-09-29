@@ -45,7 +45,7 @@ curl -sf -X POST localhost:8443/v1/setup \
   -d '{"token":"olst_…","email":"admin@local","password":"correct-horse-battery-staple"}'
 TOKEN=$(curl -sf -X POST localhost:8443/v1/auth/login \
   -d '{"email":"admin@local","password":"correct-horse-battery-staple"}' | jq -r .token)
-TENANT=$(curl -sf -X POST localhost:8443/v1/system/orgs -H "Authorization: Bearer $TOKEN" \
+TENANT=$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf -X POST localhost:8443/v1/system/orgs -H @- \
   -d '{"name":"Agents","slug":"agents"}' | jq -r .tenant_id)
 ```
 
@@ -84,8 +84,8 @@ Any OTel SDK exports this shape; here is one span as plain OTLP/HTTP JSON
 curl -sf -X POST localhost:4318/v1/traces \
   -H 'Content-Type: application/json' --data-binary @span.json
 
-curl -sf localhost:8443/v1/m/finops/spend/summary \
-  -H "Authorization: Bearer $TOKEN" -H "X-Olivares-Tenant: $TENANT" | jq
+printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf localhost:8443/v1/m/finops/spend/summary -H @- \
+  -H "X-Olivares-Tenant: $TENANT" | jq
 # {
 #   "samples": 1,
 #   "input_tokens": 1200,

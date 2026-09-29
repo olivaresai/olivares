@@ -1,0 +1,66 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+# File and port contexts of the appliance's SELinux policy module; generate.py reads it by column name.
+# Lines starting with # are comments.
+id	path	file_type	type	entry	declare	fedora_type	fedora_rule	used_by	note
+C01	/usr/libexec/olivares/olivares-portal	--	olivares_portal_exec_t	module	init_daemon_domain	bin_t	-	olivares_portal_t	entry point; without it /usr/libexec is bin_t (corecommands.fc:271)
+C02	/usr/libexec/olivares/olivares-repair-console	--	olivares_repair_console_exec_t	module	init_daemon_domain	bin_t	-	olivares_repair_console_t	entry point
+C03	/usr/libexec/olivares/olivares-portal-power	--	olivares_helper_power_exec_t	module	init_daemon_domain	bin_t	-	olivares_helper_power_t	entry point
+C04	/usr/libexec/olivares/olivares-portal-support-bundle	--	olivares_helper_bundle_exec_t	module	init_daemon_domain	bin_t	-	olivares_helper_bundle_t	entry point
+C05	/usr/libexec/olivares/olivares-snapshotcore	--	olivares_snapshotcore_exec_t	module	init_daemon_domain	bin_t	-	olivares_snapshotcore_t	entry point of the snapshot core's four units
+C06	/usr/libexec/olivares/olivares-booted-root	--	olivares_booted_root_exec_t	module	files_type	bin_t	-	none (initrd, before policy load)	entry point of no domain; not executable by any appliance domain
+C07	/usr/libexec/olivares	-d	bin_t	fedora	-	bin_t	-	all appliance domains (search)	the directory keeps the Fedora type of /usr/libexec
+C08	/usr/bin/appliance-firstboot	--	olivares_firstboot_exec_t	module	init_daemon_domain	bin_t	-	olivares_firstboot_t	entry point of first boot and readiness
+C09	/usr/bin/appliance-answers	--	bin_t	fedora	-	bin_t	-	operator shell	an operator's tool; runs in the caller's domain
+C10	/usr/bin/olivares	--	olivares_exec_t	module	init_daemon_domain	bin_t	-	olivares_t; executed without transition by olivares_firstboot_t	entry point of the product
+C11	/usr/lib/systemd/system/olivares\.service	--	olivares_unit_file_t	module	systemd_unit_file	systemd_unit_file_t	-	init_t reads; olivares_firstboot_t enable/start/status	declared with systemd_unit_file()
+C12	/etc/systemd/system/olivares\.service\.d(/.*)?	all	olivares_unit_file_t	module	systemd_unit_file	etc_t	-	olivares_firstboot_t writes; init_t reads	includes agentops.conf when installed
+C13	/usr/lib/systemd/system/olivares-(portal|repair-console|helper-.*|appliance-.*|bootpoints-.*|excluded-state-guard)\..*	--	systemd_unit_file_t	fedora	-	systemd_unit_file_t	-	init_t	Fedora labels /usr/lib/systemd/system(/.*)? systemd_unit_file_t (systemd.fc:35); no appliance domain controls these units
+C14	/run/olivares-helpers	-d	olivares_helper_run_t	module	files_type	var_run_t	-	init_t creates; repair console searches	systemd applies the file-context label when it creates it
+C15	/run/olivares-helpers/power\.sock	-s	olivares_helper_power_sock_t	module	files_type	var_run_t	-	init_t binds; olivares_repair_console_t connects	one type per helper socket
+C16	/run/olivares-helpers/support-bundle\.sock	-s	olivares_helper_bundle_sock_t	module	files_type	var_run_t	-	init_t binds; no appliance client	no invoker is admitted, so no domain may connect
+C17	/var/lib/olivares-support-bundle(/.*)?	all	olivares_helper_bundle_var_lib_t	module	files_type	var_lib_t	-	olivares_helper_bundle_t	key, acts/ and out/
+C18	/etc/olivares-portal(/.*)?	all	olivares_portal_etc_t	module	files_config_file	etc_t	-	olivares_portal_t reads; olivares_firstboot_t writes selection.json; init_t reads tls.crt	selection.json and tls.crt
+C19	/etc/olivares-portal/tls\.key	--	olivares_portal_key_t	module	files_security_file	etc_t	-	init_t reads; olivares_portal_t getattr only	the operator's private key: PID 1 alone reads it
+C20	/run/credentials/olivares-portal\.service(/.*)?	all	olivares_portal_cred_t	module	files_type	var_run_t	-	olivares_portal_t	systemd label_fix()es the credential directory (exec-credential.c:974,1051); the files' label is measured on the enforcing image
+C21	/run/credentials/olivares-appliance-(firstboot|readiness)\.service(/.*)?	all	olivares_firstboot_cred_t	module	files_type	var_run_t	-	olivares_firstboot_t	the answers credential; the files' label is measured on the enforcing image
+C22	/run/olivares-firewall(/.*)?	all	olivares_firewall_run_t	module	files_type	var_run_t	-	olivares_portal_t reads; producer not in the tree	its writer is not in the tree yet
+C23	/var/lib/olivares-appliance(/.*)?	all	olivares_appliance_var_lib_t	module	files_type	var_lib_t	-	olivares_firstboot_t; olivares_snapshotcore_t (dir ioctl only)	btrfs volume excluded from returns; type frozen from module 1.0.0, so every retained root knows it
+C24	/var/lib/olivares(/.*)?	all	olivares_var_lib_t	module	files_type	var_lib_t	-	olivares_t; olivares_firstboot_t reads; olivares_snapshotcore_t (dir ioctl only)	btrfs volume excluded from returns; type frozen at module 1.0.0
+C25	/etc/olivares(/.*)?	all	olivares_etc_t	module	files_config_file	etc_t	-	olivares_firstboot_t writes; init_t reads	olivares.env, agentops.env
+C26	/etc/olivares-appliance(/.*)?	all	olivares_appliance_etc_t	module	files_config_file	etc_t	-	olivares_firstboot_t reads; cloud-init writes	the base package ships the directory and carriers/, so files cloud-init writes inherit this type
+C27	/boot/olivares(/.*)?	all	olivares_boot_t	module	files_type	boot_t	-	olivares_snapshotcore_t	manifest, store, journal, locks, entries.cfg; GRUB reads them before any policy exists
+C28	/run/olivares-snapshotcore(/.*)?	all	olivares_snapshotcore_run_t	module	files_type	var_run_t	-	olivares_snapshotcore_t	boot.json, witness.json
+C29	/run/olivares-boot(/.*)?	all	olivares_boot_run_t	module	files_type	var_run_t	-	olivares_snapshotcore_t reads	written in the initrd before policy load; systemd relabels /run after loading the policy (mount-setup.c:494-495)
+C30	/etc/grub\.d/(06_olivares_points|11_olivares_points_end)	--	etc_t	fedora	-	etc_t	-	grub2-mkconfig	same type as Fedora's own /etc/grub.d scripts (files.fc:50)
+C31	/etc/pam\.d/olivares-portal	--	etc_t	fedora	-	etc_t	-	PAM of the portal (not wired)	Fedora default for /etc
+C32	/usr/share/polkit-1/rules\.d/50-olivares-helpers\.rules	--	usr_t	fedora	-	usr_t	-	polkitd	Fedora default for /usr/share
+C33	/etc/issue\.d/olivares-appliance\.issue	--	etc_t	fedora	-	etc_t	-	getty	Fedora default for /etc
+C34	tcp 8444	port	olivares_grpc_port_t	module	corenet_port	unreserved_port_t	range	olivares_t name_bind	semanage port -a in %post: 8444 has no port rule of its own, only the unreserved range
+C35	tcp 11434	port	olivares_model_runtime_port_t	module	corenet_port	unreserved_port_t	range	olivares_t name_connect; the local model runtime	semanage port -a in %post: 11434 has no port rule of its own, only the unreserved range
+C36	/etc/ssh/ssh_host_[^/]+_key\.pub	--	olivares_ssh_host_pub_t	module	files_type	sshd_key_t	-	olivares_firstboot_t reads	public host keys only; its stem is longer than Fedora's ssh_host.*_key.pub (ssh.fc:20), so it wins; private keys stay sshd_key_t
+C37	tcp 8443	port	olivares_console_port_t	module	corenet_port	http_port_t	exact	olivares_t name_bind; olivares_firstboot_t name_connect	semanage port -m in %post: Fedora has an exact tcp 8443 record in http_port_t
+C38	tcp 9443	port	olivares_portal_port_t	module	corenet_port	pki_ca_port_t	range	olivares_portal_t name_bind	semanage port -a in %post: Fedora has 9443 only inside pki_ca_port_t's 9443-9447 range, and port -m needs an exact record
+C39	/usr/bin/olivares-appliance	--	olivares_cli_exec_t	module	application_domain	bin_t	-	olivares_cli_t, entered from the operator's login domain (not granted yet)	the CLI's entry point, where its package installs it; without it /usr/bin is bin_t (corecommands.fc:165)
+C40	/run/olivares-portal-api	-d	olivares_portal_api_run_t	module	files_type	var_run_t	-	systemd_tmpfiles_t and init_t create; olivares_cli_t searches	root:root 0755; no appliance domain writes it but PID 1
+C41	/run/olivares-portal-api/local\.sock	-s	olivares_portal_api_sock_t	module	files_type	var_run_t	-	init_t binds; olivares_cli_t connects	root 0666; admission is the portal's peer check and this module's one caller domain, not a socket group
+C42	/run/olivares-lifecycle	-d	olivares_lifecycle_run_t	module	files_type	var_run_t	-	systemd_tmpfiles_t creates; olivares_portal_t searches	root:olivares-lifecycle 0750; the portal adds, removes and writes nothing here
+C43	/run/olivares-lifecycle/lifecycle\.lock	--	olivares_lifecycle_lock_t	module	files_type	var_run_t	-	systemd_tmpfiles_t creates; olivares_portal_t holds it shared	root:olivares-lifecycle 0640; a stable inode, never truncated or replaced during boot
+C44	/run/olivares-portal-receipts(/.*)?	all	olivares_portal_receipts_run_t	module	files_type	var_run_t	-	init_t creates and removes; no producer yet	the portal's RuntimeDirectory, 0700, removed on stop
+C45	/var/lib/olivares-portal	-d	olivares_portal_var_lib_t	module	files_type	var_lib_t	-	systemd_tmpfiles_t creates; init_t adds the leaf; olivares_portal_t searches	root:root 0755, the protected parent; the directory alone, so nothing beside the leaf takes this type
+C46	/var/lib/olivares-portal/operations(/.*)?	all	olivares_portal_ops_t	module	files_type	var_lib_t	-	init_t creates (StateDirectory); olivares_portal_t	the static account's leaf, 0700: hostop/v1 records and store.lock; never /var/lib/private, never a symlink
+C47	/usr/libexec/olivares/olivares-net-guard	--	olivares_net_guard_exec_t	module	init_daemon_domain	bin_t	-	olivares_net_guard_t (the guard and its root initializer)	entry point of the network guard
+C48	/usr/libexec/olivares/olivares-portal-netrestore	--	olivares_helper_netrestore_exec_t	module	init_daemon_domain	bin_t	-	olivares_helper_netrestore_t	entry point of netrestore
+C49	/usr/libexec/olivares/olivares-portal-netprobe	--	olivares_helper_netprobe_exec_t	module	init_daemon_domain	bin_t	-	olivares_helper_netprobe_t	entry point of netprobe
+C50	/run/olivares-net-guard-api	-d	olivares_net_guard_api_run_t	module	files_type	var_run_t	-	the initializer and init_t create; clients search	root:root 0755; no portal or guard write
+C51	/run/olivares-net-guard-api/guard\.sock	-s	olivares_net_guard_sock_t	module	files_type	var_run_t	-	init_t binds; the portal and the tty1 console connect	root:olivares-portal 0660
+C52	/run/olivares-helpers/netprobe\.sock	-s	olivares_helper_netprobe_sock_t	module	files_type	var_run_t	-	init_t binds; the portal and the tty1 console connect	root:olivares-portal 0660
+C53	/run/olivares-helpers/netrestore\.sock	-s	olivares_helper_netrestore_sock_t	module	files_type	var_run_t	-	init_t binds; the guard and the tty1 console connect	root:olivares-net-guard 0660
+C54	/run/olivares-network(/.*)?	all	olivares_network_run_t	module	files_type	var_run_t	-	the initializer creates; the guard locks and reads	root:olivares-net-guard 0750; network.lock and pid-namespace.json 0640
+C55	/run/olivares-netrestore(/.*)?	all	olivares_netrestore_run_t	module	files_type	var_run_t	-	netrestore writes; the guard reads	root's append-only ledger, root:olivares-net-guard 0750 and 0640
+C56	/var/lib/olivares-net-guard(/.*)?	all	olivares_net_guard_var_lib_t	module	files_type	var_lib_t	-	olivares_net_guard_t writes; netrestore reads	the guard's StateDirectory 0700 and its acts journal
+C57	/etc/cloud/cloud\.cfg\.d/99-olivares-host-owner\.cfg	--	olivares_cloud_owner_t	module	files_config_file	etc_t	-	olivares_firstboot_t writes; cloud_init_t reads	the host-owner drop-in; without the module it is etc_t (files.fc:50)
+C58	/usr/lib/systemd/system/olivares-(net-guard|network-runtime)\..*	--	systemd_unit_file_t	fedora	-	systemd_unit_file_t	-	init_t	Fedora's unit-file label (the helper units match C13)
+C59	/usr/share/polkit-1/rules\.d/60-olivares-portal\.rules	--	usr_t	fedora	-	usr_t	-	polkitd	same type as Fedora's own rules
+C60	/etc/NetworkManager/conf\.d/10-olivares\.conf	--	NetworkManager_etc_t	fedora	-	NetworkManager_etc_t	-	NetworkManager_t	networkmanager.fc:3
+C61	/etc/cloud/cloud\.cfg\.d/99-olivares-renderer\.cfg	--	etc_t	fedora	-	etc_t	-	cloud_init_t	files.fc:50

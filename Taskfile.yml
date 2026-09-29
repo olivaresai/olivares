@@ -238,18 +238,71 @@ tasks:
 
   appliance:package:base:
     desc: >-
-      Package olivares-appliance-base as dist/olivares-appliance-base.deb with nfpm v2.47.0.
-      VERSION defaults to 0.0.0-dev and ARCH to the Go architecture. Not a push gate: the
-      appliance-a1 workflow builds, installs and boots it.
+      Package olivares-appliance-base with nfpm v2.47.0 from the one manifest, as
+      dist/olivares-appliance-base.rpm for the Fedora image and dist/olivares-appliance-base.deb
+      for Debian as an installation target. VERSION defaults to 0.0.0-dev and ARCH to the Go
+      architecture. Not a push gate: the appliance-a1 workflow builds, installs and boots it.
     deps: [appliance:build:firstboot]
     cmds:
       - mkdir -p dist
+      - VERSION="${VERSION:-0.0.0-dev}" ARCH="${ARCH:-$(go env GOARCH)}" go run github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.47.0 package --config packaging/nfpm/olivares-appliance-base.yaml --packager rpm --target dist/olivares-appliance-base.rpm
       - VERSION="${VERSION:-0.0.0-dev}" ARCH="${ARCH:-$(go env GOARCH)}" go run github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.47.0 package --config packaging/nfpm/olivares-appliance-base.yaml --packager deb --target dist/olivares-appliance-base.deb
 
   appliance:test:base:
     desc: Test the first-boot stage machine, its seams, the carriers and the package manifest.
     cmds:
       - go test -race -count=1 -timeout 120s ./appliance/layer/... ./appliance/answers/carriers/...
+
+  appliance:build:
+    desc: >-
+      One hosted server amd64 qualification transaction: qualify one builder, build, assemble
+      iso, qcow2 and ova together (FORMAT=all, the only value) and run all four guest cases and
+      NoCloud. A single-format export is not a supported or qualified target. Requires, on the
+      shipping BASE=fedora44, the signed rpm-md tree of the product and layer RPMs with its
+      delivery.json in PACKAGE_DIR (and QUALIFICATION_KEY when a throwaway key signed it; the
+      Debian base, BASE=debian13, reads the .debs in PACKAGE_DIR), an explicit
+      ACCELERATOR=kvm|tcg and a new EVIDENCE directory in the current Actions job. Not a push gate.
+    vars:
+      EDITION: '{{.EDITION | default "server"}}'
+      ARCH: '{{.ARCH | default "amd64"}}'
+      FORMAT: '{{.FORMAT | default "all"}}'
+      EVIDENCE: '{{.EVIDENCE | default ""}}'
+      ACCELERATOR: '{{.ACCELERATOR | default ""}}'
+      FIRMWARE: '{{.FIRMWARE | default "nonfree"}}'
+      BASE: '{{.BASE | default "fedora44"}}'
+      PACKAGE_DIR: '{{.PACKAGE_DIR | default "dist/rpm"}}'
+      QUALIFICATION_KEY: '{{.QUALIFICATION_KEY | default ""}}'
+      TARGET_DIR: '{{.TARGET_DIR | default "dist/appliance"}}'
+    cmds:
+      - |
+        if [ "{{.EDITION}}" != server ] || [ "{{.ARCH}}" != amd64 ] || [ "{{.FORMAT}}" != all ]; then
+          echo "appliance:build is one qualification transaction: EDITION=server ARCH=amd64 FORMAT=all" >&2
+          echo "(iso, qcow2 and ova together); {{.EDITION}} {{.ARCH}} FORMAT={{.FORMAT}} is not supported" >&2
+          exit 2
+        fi
+      - >-
+        python3 appliance/images/kiwi/attempt.py --evidence "{{.EVIDENCE}}"
+        --accelerator "{{.ACCELERATOR}}" --firmware "{{.FIRMWARE}}"
+        --base "{{.BASE}}" --package-dir "{{.PACKAGE_DIR}}" --qualification-key "{{.QUALIFICATION_KEY}}"
+        --target-dir "{{.TARGET_DIR}}"
+
+  appliance:boot:
+    desc: >-
+      Boot supplied artifacts through the guest battery and NoCloud with an explicit
+      ACCELERATOR=kvm|tcg. This standalone run does not admit or qualify a builder. Not a push gate.
+    vars:
+      ARTIFACTS: '{{.ARTIFACTS | default "dist/appliance"}}'
+      EVIDENCE: '{{.EVIDENCE | default "dist/appliance/evidence"}}'
+      ACCELERATOR: '{{.ACCELERATOR | default ""}}'
+    cmds:
+      - |
+        case "{{.ACCELERATOR}}" in
+          kvm|tcg) ;;
+          *) echo "appliance:boot needs ACCELERATOR=kvm or tcg, typed explicitly" >&2; exit 2 ;;
+        esac
+      - bash appliance/test/battery-selftest.sh "{{.EVIDENCE}}/selftest"
+      - APPLIANCE_BOOT_ACCEL="{{.ACCELERATOR}}" bash appliance/test/boot-battery.sh "{{.ARTIFACTS}}" "{{.EVIDENCE}}/boot"
+      - APPLIANCE_BOOT_ACCEL="{{.ACCELERATOR}}" bash appliance/test/nocloud-probe.sh "{{.ARTIFACTS}}" "{{.EVIDENCE}}/nocloud"
 
   build:commerce:
     desc: >-
@@ -472,9 +525,15 @@ tasks:
     # R111-SR1. modules/sessions was still active after 149 of a 210-minute step in job
     # 103686207033 with no failure: one package that does not fit one runner. With no selector
     # this runs the COMPLETE package, exactly as the ./modules sweep does; the CI job sets the
-    # pair and each leg runs an anchored subset. The 150m per-binary cap is unchanged.
+    # pair and each leg runs an anchored subset.
+    # Three nested clocks: 180m per test binary < 210m per step < 240m per job. `-timeout` counts
+    # the binary's own time, and the longest successful run of each of the four partitions took
+    # 145.6 to 149.0 minutes of it, which left the former 150m cap about one minute of margin.
+    # 180m leaves 31 minutes over that maximum, and the 6 to 11 minutes of build and setup around
+    # the binary still fit the 210m step. This is a budget, not a performance claim: a partition
+    # that hangs still panics with its stack at 180m and the leg goes red.
     cmds:
-      - bash scripts/with-pg-env.sh bash scripts/sessions-race-partition.sh go test -race -count=1 -timeout 150m
+      - bash scripts/with-pg-env.sh bash scripts/sessions-race-partition.sh go test -race -count=1 -timeout 180m
 
   test:race-hot:modules:
     desc: -race over the ./modules module alone (sub-leg — CI runs it as its own job, race-modules).
@@ -781,7 +840,13 @@ tasks:
       GOWORK: "off"
     cmds:
       # Igual que `test:cloud`: ver la nota de arriba.
-      - bash scripts/with-pg-env.sh bash scripts/private-leg.sh test:cloud:norace cloud/control-plane go test -count=1 -timeout 10m ./...
+      # One package binary at a time (-p 1). Three packages of this module (the root package,
+      # internal/store and internal/billing) run the migrations against the one database that
+      # DATABASE_MIGRATOR_URL names, and `go test ./...` runs packages in parallel, so the
+      # migrators compete for the migration lock and the loser fails with "can't acquire database
+      # lock". with-pg-env.sh narrows -p only for -race commands, so this leg sets it itself. No
+      # test is dropped and no assertion changes; the packages stop overlapping.
+      - bash scripts/with-pg-env.sh bash scripts/private-leg.sh test:cloud:norace cloud/control-plane go test -count=1 -p 1 -timeout 10m ./...
 
   test:commerce:
     desc: >-
@@ -1395,6 +1460,11 @@ tasks:
       # off would be switched off itself. The wrapper proves the shim is actually on PATH
       # before the first signature is produced.
       - bash scripts/with-cosign-guard.sh bash scripts/check-cosign-contract.sh
+
+  lint:ci-task-install:selftest:
+    desc: Verify pinned Task callers, archive validation and the executable selected by the next CI step.
+    cmds:
+      - python3 scripts/test-ci-task-install.py
 
   lint:ensure-shellcheck:selftest:
     desc: >-
@@ -2659,10 +2729,10 @@ tasks:
 
   lint:test-budget-placement:selftest:
     desc: >-
-      Battery of lint:test-budget-placement. Forty-three rows over throwaway trees, with the
+      Battery of lint:test-budget-placement. Forty-six rows over throwaway trees, with the
       positive control first and the three HISTORICAL regressions carried as rows: the
       pre-fix bodies of the three tests the class was measured on must be red and their
-      shipped remedies green. FOURTEEN mutants accredit the fourteen properties a naive
+      shipped remedies green. FIFTEEN mutants accredit the fifteen properties a naive
       implementation drops — ORDER, THRESHOLD, COMMENT immunity, STRING immunity (a fixture
       head inside a `t.Fatalf` must not go red in the fast path), send-vs-receive, the
       millisecond divisor, the bare `time.Unit`, package-constant resolution, the DISCOVERY
@@ -2671,7 +2741,10 @@ tasks:
       because an EMPTY one is already caught by the discovery guard and a mutant against it
       would prove nothing), the READER's own failure (awk's status), the modelprovider fixture
       heads this series itself moved a budget below, and METHOD-NAME extraction, the last graded
-      on the OUTPUT because its mutant does not move the exit code. The reviewed exemption is
+      on the OUTPUT because its mutant does not move the exit code, and a portable literal
+      parenthesis in the dynamic fixture expression. A distinct installed awk also checks
+      the defect and its remedy; that row is explicitly skipped when none is available.
+      The reviewed exemption is
       exercised against the SHIPPED table, with no environment override. Three rows build their
       precondition with `chmod 000`, which denies nothing to uid 0: under root they report
       SKIPPED and are counted, never silently green.
@@ -2898,6 +2971,7 @@ tasks:
       COSTE: 263 s en caja tranquila (0 % estrangulada) y 926 s con un goreleaser encima (64 %).
       3,5x la MISMA bateria sobre el MISMO arbol, solo por la carga.
     cmds:
+      - bash scripts/hub-leg.sh lint:fabricated-paths:selftest scripts/test-fabricated-paths.sh --battery-contract-only
       - bash scripts/hub-leg.sh lint:fabricated-paths:selftest scripts/test-fabricated-paths.sh
 
   lint:orphan-batteries:

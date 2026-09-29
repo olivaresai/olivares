@@ -72,14 +72,11 @@
 # groups own it, one shard each, and a pattern that ALSO names it exactly is a finding,
 # because every test of it would then run twice.
 #
-# WHY THE FAMILIES ARE FIRST LETTERS AND NOT SUBJECTS. The race partition names about 500
-# families by hand because it needs eight balanced turns; this needs four and three, and
-# the first letter of the name after `Test` is the coarsest predicate that balances them
-# to within 7 %. It has one property a hand-written family list does not: it needs NO
-# MAINTENANCE when a test is added, because every name begins with some letter — a
-# contributor can tell where a new test lands by reading its first letter, and the letters
-# nobody named are exactly the remainder. The counts below are from the source of this
-# tree (2429 top-level tests and 2 fuzz targets in cmd/olivares; 1270 in sqlstore).
+# FAMILY CHOICE. Most groups use first letters; expensive communication families use
+# longer prefixes. The reader already accepts both. Test count is not a duration measure:
+# the September 28 functional run below falsified the original count-based calibration.
+# A new name matching no declared prefix belongs to the computed remainder, including a
+# new C family. No hand-maintained list of individual tests is needed.
 
 shard root-a
 shard root-b
@@ -92,27 +89,27 @@ shard sessions
 shard modules
 
 # --- the four shards of the root package ------------------------------------------------
-# THE ARITHMETIC. 2700 s is the sizing basis: it is the only number that BOUNDS the package
-# from below, because the run that produced it did not finish. Four groups put no group over
-# 27.0 % of it — 730 s, 12.2 min — which is the number to compare against the rule this file
-# uses for a group: nothing predicted above 20 min on a hosted runner. Three groups would
-# have been 900 s, and 900 s is only 25 % under 20 min on a package whose last five complete
-# measurements disagree by 78 %; that is the margin this partition exists because we lost.
+# REBALANCED 2026-09-29 after public PR #184. In the September 28 functional run,
+# cmd/olivares selected 2584 names: old A/B/C selected 719 and exhausted its 1800 s
+# timeout; D-K selected 654 and took 501.876 s; L-R selected 701 and took 212.237 s;
+# the remainder selected 510 and took 321.278 s. The test active at the timeout had
+# run for only six seconds. The original 2431-name, proportional-count prediction
+# of 730 s for A/B/C was therefore not a usable bound.
 #
-#   a  TestA… TestB… TestC…                   657 of 2431 = 27.0 %  → 730 s
-#   b  TestD… through TestK…                   639          = 26.3 %  → 710 s
-#   c  TestL… through TestR…                   645          = 26.5 %  → 716 s
-#   rest  everything else — TestS… to TestZ…,  490          = 20.2 %  → 545 s
-#         the two fuzz targets, and every name
-#         no letter above claims
+# Communication is split across the existing four jobs. Older hosted race timings
+# (run 35136307725, September 16) measured these top-level families separately:
+# Channel 1009.78 s, Incoming 649.37 s, Handoff plus Messaging 374.85 s. Those older
+# race measurements guide relative placement only; they are NOT predictions of this
+# candidate's functional duration. Channel goes beside the fastest measured group,
+# Incoming beside D-K, and Handoff/Messaging stay beside A/B. Other C names join the
+# dynamic remainder, whose whole-package phase also took about 549 s on September 28.
 #
-# The remainder is the SMALLEST group on purpose: it is the one that grows without anybody
-# deciding, so it starts with the most room. `-run` selects fuzz targets and examples as
-# well as tests, so they are in the universe and the remainder carries them; a partition
-# written as if only `Test*` existed would have dropped both fuzz targets without a word.
-group root-a    github.com/olivaresai/olivares/cmd/olivares a    A B C
-group root-b    github.com/olivaresai/olivares/cmd/olivares b    D E F G H I J K
-group root-c    github.com/olivaresai/olivares/cmd/olivares c    L M N O P Q R
+# The next official runs must measure this partition. No job, timeout, test, subtest
+# or package is added or removed. Every selected top-level test keeps all its subtests;
+# fuzz targets, examples and future unmatched names remain in the computed complement.
+group root-a    github.com/olivaresai/olivares/cmd/olivares a    A B CommunicationHandoff CommunicationMessaging
+group root-b    github.com/olivaresai/olivares/cmd/olivares b    D E F G H I J K CommunicationIncoming
+group root-c    github.com/olivaresai/olivares/cmd/olivares c    L M N O P Q R CommunicationChannel
 group root-rest github.com/olivaresai/olivares/cmd/olivares rest *
 
 # The eight sibling packages of cmd/olivares and the 178 connector packages ride with the
@@ -121,9 +118,10 @@ group root-rest github.com/olivaresai/olivares/cmd/olivares rest *
 pkg root-a github.com/olivaresai/olivares/cmd/...
 pkg root-a github.com/olivaresai/olivares/connectors/...
 
-# The rest of core, the operator and the control plane ride with the remainder group, which
-# is the smallest of the four: 674.6 s of test time, 337 s at the two lanes the sweep
-# measured. No package here reaches 440 s (governance, 431.8 s).
+# The rest of core, the operator and the control plane retain their remainder-group
+# placement. The historical sweep measured 674.6 s of test time (337 s at two lanes);
+# the September 28 public run spent about 549 s in the whole-package/build phase.
+# These packages and the new name group share the step clock and must be timed together.
 pkg root-rest github.com/olivaresai/olivares/core/...
 pkg root-rest github.com/olivaresai/olivares/operator/...
 pkg root-rest github.com/olivaresai/olivares-cloud-cp/...
@@ -177,71 +175,26 @@ optional github.com/olivaresai/olivares-cloud-cp/...
 # "the union of the shards is the whole suite" is a claim about the whole suite. They ride
 # with the shard that owns the control plane's packages.
 #
-# ⛔ THEY ARE NOT IN root-rest's PREDICTION BELOW, AND IN ONE OF THE TWO ARMS THAT MATTERS.
-# In the published tree they answer NOT APPLICABLE and cost seconds. In the preprod arm, where
-# cloud/ and commercial/ exist, they RUN and nobody has measured them — and the step ceiling
-# they run under drops from 55 to 35 with this change. So root-rest's 882 s is the prediction
-# for the published arm only. The first preprod run of this head has to be read step by step
-# for these three, and if they do not fit under 35 min beside the group, they move to a shard
-# of their own. Until that number exists this is the one shard whose budget is incomplete.
+# These private legs are NOT included in the public measurements. In the published
+# tree they answer NOT APPLICABLE; where cloud/ and commercial/ exist, they run.
+# Qualification of the private arm must include their time under the same 35-minute
+# step ceiling. A public timing cannot establish that the private arm fits.
 leg root-rest test:cloud:norace
 leg root-rest test:commerce
 leg root-rest test:commerce-core:norace
 
 # --- the clocks -------------------------------------------------------------------
-# THE PREDICTED WALL CLOCK, shard by shard, from the numbers above. A shard runs its whole
-# packages in one `go test` and each of its groups in another, one after the other, because
-# `-run` is an option of the COMMAND and not of a package.
+# The September 20 calibration predicted 12-17 minutes per shard by multiplying test
+# counts by a package total. September 28 disproved that assumption for root-a; the
+# numbers retained above for store and modules are historical calibration, not a
+# current bound. This repartition changes family placement without raising ceilings.
 #
-#   root-a      730 + 30*    760 s   12.7 min
-#   root-b      710           710 s   11.8 min
-#   root-c      716           716 s   11.9 min
-#   root-rest   545 + 337     882 s   14.7 min   (+ three legs, unmeasured in preprod)
-#   store-a     923 + 35*     958 s   16.0 min
-#   store-b     921           921 s   15.4 min
-#   store-rest  857           857 s   14.3 min
-#   sessions    995           995 s   16.6 min
-#   modules     998           998 s   16.6 min   ← the slowest shard
-#
-# * ESTIMATE, not a measurement, and the only two numbers in this table that are. The 30 s is
-# the 178 connector packages (25.4 s of test time, measured) plus the eight sibling packages
-# of the root, which were never timed on their own; the 35 s is the four remaining
-# core/internal packages, the clients, the SDK and the provider, which were never timed
-# either. Both are small enough that the shard they are in is decided by its group, and both
-# are read off the first two hosted runs — `go test` prints a line per package.
-#
-# The largest GROUP is root-a's at 730 s, 12.2 min. The 12.7 min beside it is the SHARD, which
-# is the group plus its packages; the two are not the same number and the 20-minute rule this
-# partition was sized against is about the group.
-#
-# go-timeout 30m: this clock is PER TEST BINARY, so what it has to cover is the longest
-# single invocation and not the slowest shard — modules/sessions at 995 s, then the store's
-# first group at 923 s. (The slowest SHARD is `modules` at 998 s, but no single binary in it
-# reaches 440 s.) 30 min leaves 81 % of headroom over 16.6 min, and it is LOWER than
-# the 45 it replaces on purpose: 45 was the number a package reached twice in one day, and a
-# timeout that only fires after three quarters of an hour is a diagnosis that arrives after
-# the contribution has already waited for it. Go panics with its goroutine dump, the package
-# name and now the group's `-run`; the step ceiling only cancels.
-#
-# step 35m: the slowest step is a shard's wall clock plus the build, so it is `modules` at
-# 998 s. The build allowance is 180 s and it is TRANSFERRED, not measured here: the shard that
-# ran cmd/olivares on 2026-09-20 took 2726 s of step with 2567 s inside that one package, so
-# 159 s built 189 packages and ran the other 188 — a different module set from any shard
-# below, which is why 180 rounds it up rather than reusing it as if it were the same work.
-# 998 + 180 = 1178 s, 19.6 min, and 35 leaves 78 % of headroom over it while staying above the
-# Go timeout. The first two runs replace the transferred figure with each shard's own.
-#
-# job 45m: the step plus checkout, setup-go, the pinned go-task install and the two Postgres
-# services — the same 10 minutes this file has always left between the two ceilings.
-#
-# WHAT NINE JOBS COST INSTEAD OF FOUR, because somebody pays for those minutes and the file
-# has to say so. Five more jobs, each paying that per-job overhead once, and two of the nine
-# build a test binary that used to be built once: the ESTIMATE is +18 to +25 runner-minutes
-# per pull request. It is an estimate and it is marked as one — the only step timing this
-# tree has is the 159 s above — and the job/step budget makes +50 the worst it could be. What
-# it buys is the answer arriving in about 20 minutes instead of 45 or never, on a check every
-# contribution waits for. The first two hosted runs turn the estimate into a number: add up
-# the nine jobs' durations and compare with the four the tag shipped.
+# go-timeout 30m is PER TEST BINARY. It yields a goroutine dump and the package name;
+# the 35m step ceiling also includes builds, whole packages and private legs. The 45m
+# job ceiling additionally covers checkout, tool setup and both Postgres services.
+# All three clocks remain unchanged. Keeping nine jobs also preserves the number of
+# runners, tool setups and database service pairs; no new job overhead is introduced.
+# A completed official run must establish the candidate's duration and headroom.
 #
 # THE MATRIX IS NOT DERIVED FROM THIS FILE, IT IS COMPARED WITH IT. The reader has a `matrix`
 # subcommand and no workflow calls it: deriving the list would need a setup job, and a job
@@ -250,13 +203,11 @@ leg root-rest test:commerce-core:norace
 # difference — so adding a shard means editing this file and the workflow, and forgetting
 # either one is a red and not a drift.
 #
-# THESE ARE PREDICTIONS AND THEY REST ON ONE ASSUMPTION: that a group's seconds are its share
-# of the package's tests. The counts are exact and the package totals are measured, but no
-# per-test duration has ever been measured on a runner, so the share is a proxy. The first
-# two hosted runs are what turns it into a measurement — read the seconds `go test` prints
-# per group, and if any group is more than 30 % off its prediction, move letters between the
-# groups of that package and nothing else. Re-measure it once the shards have run: a ceiling
-# that was never measured is a guess that nothing corrects.
+# RECALIBRATION. Read per-group Go seconds and whole-step durations from the next two
+# completed official runs. Record the candidate and runner for each observation. If a
+# group exceeds the 20-minute sizing target, or its measured duration varies by more
+# than 30 %, inspect the costly families and redistribute within this partition.
+# Preserve exact coverage and measure again; counts alone do not establish a budget.
 go-timeout-minutes 30
 step-ceiling-minutes 35
 job-ceiling-minutes 45

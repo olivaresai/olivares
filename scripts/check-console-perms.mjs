@@ -374,7 +374,8 @@ function sinkSignatureOf(decl) {
   if (!decl) return null
   if (ts.isPropertySignature(decl) || ts.isPropertyDeclaration(decl)) return decl
   if (!ts.isBindingElement(decl)) return null
-  const name = ts.isIdentifier(decl.name) ? decl.name.text : null
+  const key = decl.propertyName ?? decl.name
+  const name = ts.isIdentifier(key) || ts.isStringLiteral(key) ? key.text : null
   if (!name) return null
   // `decl.parent` is the ObjectBindingPattern; its parent is what is being
   // destructured — a parameter (`function X({ p }: Props)`) or a variable
@@ -513,69 +514,359 @@ function writesTo(sig) {
   return out
 }
 
-/**
- * Resolve an expression to the set of permission strings it can carry.
- * Returns null when it cannot be resolved — which the caller turns into a finding,
- * never into silence.
- */
-function resolve(expr, depth = 0, seen = new Set()) {
-  if (!expr || depth > 6) return null
-  if (ts.isStringLiteral(expr) || ts.isNoSubstitutionTemplateLiteral(expr)) return [expr.text]
-  if (ts.isParenthesizedExpression(expr)) return resolve(expr.expression, depth + 1, seen)
-  if (ts.isAsExpression(expr) || ts.isSatisfiesExpression?.(expr)) {
-    return resolve(expr.expression, depth + 1, seen)
+// Index local call edges by symbol, including arguments that carry a callable and
+// closures returned to another local consumer. This is independent of the later
+// capability graph: its roots/credit rules remain unchanged.
+const permissionCalls = []
+const callableAssignments = new Map()
+for (const sf of sourceFiles) walk(sf, (n) => {
+  if (ts.isCallExpression(n)) permissionCalls.push(n)
+  if (ts.isBinaryExpression(n) && n.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
+      n.operatorToken.kind <= ts.SyntaxKind.LastAssignment) {
+    const left = unwrapExpr(n.left)
+    const d = ts.isIdentifier(left) ? declOf(left) : null
+    if (d) {
+      let writes = callableAssignments.get(d)
+      if (!writes) callableAssignments.set(d, writes = [])
+      writes.push(n.right)
+    }
   }
-  // `cond ? 'a' : 'b'` — both branches reach can().
+})
+const permissionCallers = new Map()
+function parameterInputs(parameter) {
+  const fn = parameter.parent
+  if (!isFunctionLike(fn)) return []
+  const index = fn.parameters.indexOf(parameter)
+  return [...(permissionCallers.get(fn) ?? [])].map((call) => call.arguments[index])
+}
+function returnedExpressions(fn) {
+  if (!fn.body) return [null]
+  if (!ts.isBlock(fn.body)) return [fn.body]
+  const out = []
+  function visit(n) {
+    if (isFunctionLike(n)) return
+    if (ts.isReturnStatement(n)) out.push(n.expression ?? null)
+    else ts.forEachChild(n, visit)
+  }
+  visit(fn.body)
+  // A returned predicate must exist on every path. Unsupported endings stay opaque.
+  if (!fn.body.statements.length || !ts.isReturnStatement(fn.body.statements.at(-1))) out.push(null)
+  return out
+}
+const UNKNOWN_CALLABLE = Symbol('unknown callable')
+function callableOrigins(expr, seen = new Set()) {
+  expr = unwrapExpr(expr)
+  if (!expr || seen.has(expr) || seen.size > 24) return [UNKNOWN_CALLABLE]
+  const next = new Set(seen).add(expr)
+  if (isFunctionLike(expr)) return [expr]
   if (ts.isConditionalExpression(expr)) {
-    const a = resolve(expr.whenTrue, depth + 1, seen)
-    const b = resolve(expr.whenFalse, depth + 1, seen)
-    return a && b ? [...a, ...b] : null
+    return [...callableOrigins(expr.whenTrue, next), ...callableOrigins(expr.whenFalse, next)]
   }
-
-  const nameNode = ts.isPropertyAccessExpression(expr)
-    ? expr.name
-    : ts.isIdentifier(expr)
-      ? expr
-      : null
-  if (!nameNode) return null
-
-  const decl = declOf(nameNode)
-  if (!decl) return null
-  if (seen.has(decl)) return []
-  seen.add(decl)
-
-  // A module constant, or one property of an object-literal constant.
-  if (ts.isVariableDeclaration(decl) && decl.initializer) {
-    return resolve(decl.initializer, depth + 1, seen)
+  if (ts.isCallExpression(expr)) {
+    return callableOrigins(expr.expression, next).flatMap((fn) =>
+      typeof fn !== 'symbol' && isFunctionLike(fn)
+        ? returnedExpressions(fn).flatMap((value) => callableOrigins(value, next))
+        : [UNKNOWN_CALLABLE],
+    )
   }
-  if (ts.isPropertyAssignment(decl)) return resolve(decl.initializer, depth + 1, seen)
-  if (ts.isShorthandPropertyAssignment(decl)) {
-    const v = checker.getShorthandAssignmentValueSymbol(decl)?.declarations?.[0]
-    return v && ts.isVariableDeclaration(v) ? resolve(v.initializer, depth + 1, seen) : null
+  const name = ts.isPropertyAccessExpression(expr) ? expr.name : expr
+  const raw = ts.isIdentifier(name) ? declOf(name) : null
+  const d = ts.isIdentifier(name) ? canonicalDecl(name) : null
+  if (!d) return [UNKNOWN_CALLABLE]
+  const writes = callableAssignments.get(raw)
+  if (writes) {
+    // No execution-order proof for mutable aliases. Preserve any RBAC origin so
+    // a renamed call is inspected, but never credit an ambiguous assigned callable.
+    const initial = ts.isVariableDeclaration(raw) ? callableOrigins(raw.initializer, next)
+      : canDecls.has(d) ? [d] : [UNKNOWN_CALLABLE]
+    return [UNKNOWN_CALLABLE, ...initial, ...writes.flatMap((v) => callableOrigins(v, next))]
   }
-  if (ts.isEnumMember(decl)) return decl.initializer ? resolve(decl.initializer, depth + 1, seen) : null
+  // Follow each variable rather than canonically jumping past a reassigned alias.
+  if (raw && ts.isVariableDeclaration(raw)) return callableOrigins(raw.initializer, next)
+  if (canDecls.has(d)) return [d]
+  const fn = callableOf(d)
+  if (fn) return [fn]
+  if (ts.isVariableDeclaration(d) && d.initializer) return callableOrigins(d.initializer, next)
+  if (ts.isParameter(d)) {
+    const inputs = parameterInputs(d)
+    return inputs.length ? inputs.flatMap((v) => callableOrigins(v, next)) : [UNKNOWN_CALLABLE]
+  }
+  return [UNKNOWN_CALLABLE]
+}
+// Monotonic edges; the small bound is an inspection limit, never permission credit.
+for (let round = 0; ; round++) {
+  let changed = false
+  for (const call of permissionCalls) {
+    for (const fn of callableOrigins(call.expression)) {
+      if (typeof fn === 'symbol' || !isFunctionLike(fn)) continue
+      let callers = permissionCallers.get(fn)
+      if (!callers) permissionCallers.set(fn, callers = new Set())
+      if (!callers.has(call)) { callers.add(call); changed = true }
+    }
+  }
+  if (!changed) break
+  if (round === 12) die('local permission call graph did not converge; nothing was verified')
+}
 
-  // An interface property or a component prop: resolve through everything that
-  // WRITES it.
-  const sig = sinkSignatureOf(decl)
-  if (sig) {
-    const { writes, opaque } = writesTo(sig)
-    // A sink nothing writes is NOT an empty set of permissions — it is a sink this
-    // guard failed to read. The distinction is the difference between a check and a
-    // decoration: returning [] here contributes no permissions and no finding, so
-    // an entire prop-fed surface would vanish in silence. It did: an early version
-    // returned [] and a component whose permission arrives by JSX attribute
-    // disappeared from the check without a word.
-    if (writes.length === 0 && !opaque) return null
-    // A spread that could be carrying this property is the same answer: not read.
-    if (opaque) return null
-    const out = []
-    for (const w of writes) {
-      const v = resolve(w, depth + 1, new Set(seen))
-      if (v === null) return null // one unreadable write makes the whole sink unread
-      out.push(...v)
+function combineValues(parts) {
+  return parts.some((p) => p === null) ? null : [...new Set(parts.flat())]
+}
+
+// Only dispatch discriminators may use a finite declared type. A permission of
+// type string (or an asserted permission union) still needs its actual producer.
+function dispatchValues(expr, depth, bindings) {
+  const values = resolve(expr, depth, new Set(), bindings)
+  if (values !== null) return values
+  expr = unwrapExpr(expr)
+  if (!expr || depth > 32) return null
+  if (ts.isIdentifier(expr)) {
+    const d = declOf(expr)
+    const bound = bindings.get(d)
+    if (bound) return bound.values ?? dispatchValues(bound.expr, depth + 1, bound.bindings)
+    if (d && ts.isVariableDeclaration(d) && d.initializer) {
+      return dispatchValues(d.initializer, depth + 1, bindings)
+    }
+    if (d && ts.isParameter(d)) {
+      const inputs = parameterInputs(d)
+      if (inputs.length) return combineValues(inputs.map((v) => dispatchValues(v, depth + 1, bindings)))
+    }
+  }
+  if (!ts.isIdentifier(expr) && !ts.isPropertyAccessExpression(expr)) return null
+  const t = checker.getTypeAtLocation(expr)
+  const members = t.isUnion() ? t.types : [t]
+  return members.length <= 32 && members.every((v) => v.flags & ts.TypeFlags.StringLiteral)
+    ? members.map((v) => v.value) : null
+}
+
+function resolveStatements(statements, projection, depth, bindings) {
+  if (depth > 32) return null
+  for (let i = 0; i < statements.length; i++) {
+    const statement = statements[i]
+    const tail = statements.slice(i + 1)
+    if (ts.isReturnStatement(statement)) {
+      return resolve(statement.expression, depth + 1, new Set(), bindings, projection)
+    }
+    if (ts.isSwitchStatement(statement)) {
+      const choices = dispatchValues(statement.expression, depth + 1, bindings)
+      if (!choices?.length) return null
+      const clauses = statement.caseBlock.clauses
+      // Only literal labels are in the supported dispatch subset. An opaque or
+      // multi-valued expression is not evidence that its branch cannot match.
+      const labels = clauses.map((c) => ts.isCaseClause(c) ? unwrapExpr(c.expression) : null)
+      if (labels.some((label) => label &&
+          !ts.isStringLiteral(label) && !ts.isNoSubstitutionTemplateLiteral(label))) return null
+      return combineValues(choices.map((value) => {
+        let index = labels.findIndex((label) => label?.text === value)
+        if (index < 0) index = clauses.findIndex(ts.isDefaultClause)
+        if (index < 0) return resolveStatements(tail, projection, depth + 1, bindings)
+        const narrowed = new Map(bindings)
+        if (ts.isIdentifier(statement.expression)) {
+          narrowed.set(declOf(statement.expression), { values: [value] })
+        }
+        return resolveStatements([...clauses.slice(index).flatMap((c) => [...c.statements]), ...tail],
+          projection, depth + 1, narrowed)
+      }))
+    }
+    if (ts.isIfStatement(statement)) {
+      const branch = (n) => n ? ts.isBlock(n) ? [...n.statements] : [n] : []
+      return combineValues([statement.thenStatement, statement.elseStatement].map((n) =>
+        resolveStatements([...branch(n), ...tail], projection, depth + 1, bindings)))
+    }
+    // Declarations can execute arbitrary initializers, including assignments via
+    // aliases. Only return/if/switch are supported; never skip a statement's effects.
+    return null
+  }
+  return null
+}
+
+// Only this runtime-sealed construction is readable: Object.freeze of a visible
+// array literal mapped through entry => Object.freeze(entry). Initializers,
+// readonly types, asserted signatures and aliases alone do not prove immutability.
+function standardMethod(call, owner, name) {
+  if (!call || !ts.isCallExpression(call) || !ts.isPropertyAccessExpression(call.expression) ||
+      call.expression.name.text !== name) return false
+  const method = checker.getResolvedSignature(call)?.declaration
+  return !!method && program.isSourceFileDefaultLibrary(method.getSourceFile()) &&
+    method.parent.name?.text === owner && method.name?.getText() === name
+}
+function standardFreeze(call) {
+  if (!standardMethod(call, 'ObjectConstructor', 'freeze') || call.arguments.length !== 1) return false
+  const receiver = call.expression.expression
+  const declarations = ts.isIdentifier(receiver)
+    ? checker.getSymbolAtLocation(receiver)?.declarations : null
+  return !!declarations?.some((d) => ts.isVariableDeclaration(d) && d.name.getText() === 'Object') &&
+    declarations.every((d) => program.isSourceFileDefaultLibrary(d.getSourceFile()))
+}
+// Declared signatures do not prove unchanged runtime methods. Within the source
+// census, constructors must stay behind direct static calls: exposing one (or its
+// prototype/member) could replace freeze/map/find. Reject that evidence rather
+// than interpreting aliases, mutation order or arbitrary dependency code.
+function standardConstructorReference(node) {
+  if (!ts.isIdentifier(node) || !['Object', 'Array'].includes(node.text)) return false
+  const declarations = checker.getSymbolAtLocation(node)?.declarations
+  return !!declarations?.some((d) => ts.isVariableDeclaration(d) && d.name.getText() === node.text) &&
+    declarations.every((d) => program.isSourceFileDefaultLibrary(d.getSourceFile()))
+}
+function outerExpression(node) {
+  while (node.parent && unwrapExpr(node.parent) === unwrapExpr(node)) node = node.parent
+  return node
+}
+const globalObjectNames = ['globalThis', 'window', 'self']
+const globalObjectSymbols = new Set(globalObjectNames.map((name) =>
+  checker.resolveName(name, undefined, ts.SymbolFlags.Value, false)).filter(Boolean))
+const registryBuiltinsIntact = !sourceFiles.some((sf) => {
+  let exposed = false
+  walk(sf, (node) => {
+    if (exposed) return
+    const globalObject = ts.isIdentifier(node) && globalObjectSymbols.has(checker.getSymbolAtLocation(node))
+    if (!globalObject && !standardConstructorReference(node)) return
+    let typeName = node
+    while (ts.isQualifiedName(typeName.parent)) typeName = typeName.parent
+    if (ts.isTypeReferenceNode(typeName.parent) || ts.isTypeQueryNode(typeName.parent)) return
+    if (ts.isPropertyAccessExpression(node.parent) && node.parent.name === node) node = node.parent
+    node = outerExpression(node)
+    if (globalObject) {
+      if (ts.isTypeOfExpression(node.parent)) return
+      const access = node.parent
+      const key = ts.isPropertyAccessExpression(access) && access.expression === node ? access.name
+        : ts.isElementAccessExpression(access) && access.expression === node ? unwrapExpr(access.argumentExpression) : null
+      if (!key || !(ts.isIdentifier(key) && ts.isPropertyAccessExpression(access) ||
+          ts.isStringLiteral(key) || ts.isNoSubstitutionTemplateLiteral(key)) || globalObjectNames.includes(key.text)) {
+        exposed = true // dynamic key or global-object escape: no heap/alias proof
+        return
+      }
+      if (!['Object', 'Array'].includes(key.text)) return
+      node = outerExpression(access) // dotted and computed constructors use the same check
+    }
+    if (ts.isPropertyAccessExpression(node.parent) && node.parent.expression === node) {
+      if (node.parent.name.text === 'prototype') { exposed = true; return }
+      node = outerExpression(node.parent)
+    }
+    exposed = !((ts.isCallExpression(node.parent) || ts.isNewExpression(node.parent)) &&
+      node.parent.expression === node)
+  })
+  return exposed
+})
+function sealedRegistryProperty(call, projection, depth, seen, bindings) {
+  if (!registryBuiltinsIntact || projection.length !== 1 ||
+      !(standardMethod(call, 'Array', 'find') || standardMethod(call, 'ReadonlyArray', 'find'))) return null
+  let receiver = unwrapExpr(call.expression.expression)
+  if (ts.isIdentifier(receiver)) {
+    const d = declOf(receiver)
+    if (!d || !ts.isVariableDeclaration(d) || !(d.parent.flags & ts.NodeFlags.Const)) return null
+    receiver = unwrapExpr(d.initializer)
+  }
+  if (!standardFreeze(receiver)) return null
+  const map = unwrapExpr(receiver.arguments[0])
+  if (!standardMethod(map, 'Array', 'map') || map.arguments.length !== 1) return null
+  const array = unwrapExpr(map.expression.expression)
+  const callback = unwrapExpr(map.arguments[0])
+  if (!ts.isArrayLiteralExpression(array) || !ts.isArrowFunction(callback) ||
+      callback.parameters.length !== 1 || callback.modifiers?.some((m) => m.kind === ts.SyntaxKind.AsyncKeyword)) return null
+  const parameter = callback.parameters[0]
+  const frozen = unwrapExpr(callback.body)
+  if (!ts.isIdentifier(parameter.name) || parameter.initializer || parameter.dotDotDotToken ||
+      !standardFreeze(frozen)) return null
+  const returned = unwrapExpr(frozen.arguments[0])
+  if (!ts.isIdentifier(returned) || declOf(returned) !== parameter) return null
+  const values = combineValues(array.elements.map((entry) => {
+    if (!ts.isObjectLiteralExpression(entry) || entry.properties.some((p) =>
+      !ts.isPropertyAssignment(p) || ts.isComputedPropertyName(p.name) || p.name.text === '__proto__')) return null
+    const properties = entry.properties.filter((p) => p.name.text === projection[0])
+    if (!properties.length) return [] // an explicitly absent optional permission
+    if (properties.length !== 1) return null // a later write must not hide behind the first
+    const value = unwrapExpr(properties[0].initializer)
+    if (!ts.isStringLiteral(value) && !ts.isNoSubstitutionTemplateLiteral(value)) return null
+    return resolve(value, depth + 1, new Set(seen), bindings)
+  }))
+  return values?.length ? values : null
+}
+
+/** Resolve permissions through finite local producers; null always fails closed. */
+function resolve(expr, depth = 0, seen = new Set(), bindings = new Map(), projection = []) {
+  expr = unwrapExpr(expr)
+  if (!expr || depth > 32) return null
+  if (!projection.length && (ts.isStringLiteral(expr) || ts.isNoSubstitutionTemplateLiteral(expr))) {
+    return [expr.text]
+  }
+  if (ts.isConditionalExpression(expr)) {
+    return combineValues([expr.whenTrue, expr.whenFalse].map((branch) =>
+      resolve(branch, depth + 1, new Set(seen), bindings, projection)))
+  }
+  if (!projection.length && ts.isTemplateExpression(expr)) {
+    let out = [expr.head.text]
+    for (const span of expr.templateSpans) {
+      const values = dispatchValues(span.expression, depth + 1, bindings)
+      if (!values || out.length * values.length > 64) return null
+      out = out.flatMap((prefix) => values.map((v) => prefix + v + span.literal.text))
     }
     return out
+  }
+  if (ts.isCallExpression(expr)) {
+    const name = calleeNameNode(expr)
+    const fn = name && callableOf(canonicalDecl(name))
+    if (!fn?.body) return sealedRegistryProperty(expr, projection, depth, seen, bindings)
+    const bound = new Map(bindings)
+    fn.parameters.forEach((p, i) => bound.set(p, { expr: expr.arguments[i] ?? p.initializer, bindings }))
+    return ts.isBlock(fn.body)
+      ? resolveStatements([...fn.body.statements], projection, depth + 1, bound)
+      : resolve(fn.body, depth + 1, new Set(seen), bound, projection)
+  }
+  if (ts.isElementAccessExpression(expr)) {
+    const keys = dispatchValues(expr.argumentExpression, depth + 1, bindings)
+    return keys?.length ? combineValues(keys.map((key) =>
+      resolve(expr.expression, depth + 1, new Set(seen), bindings, [key, ...projection]))) : null
+  }
+  if (ts.isObjectLiteralExpression(expr)) {
+    if (!projection.length) return null
+    const [key, ...rest] = projection
+    for (const p of [...expr.properties].reverse()) {
+      if (ts.isSpreadAssignment(p)) return resolve(p.expression, depth + 1, seen, bindings, projection)
+      if ((ts.isIdentifier(p.name) || ts.isStringLiteral(p.name)) && p.name.text === key) {
+        const value = ts.isShorthandPropertyAssignment(p)
+          ? checker.getShorthandAssignmentValueSymbol(p)?.declarations?.[0]?.initializer : p.initializer
+        return resolve(value, depth + 1, seen, bindings, rest)
+      }
+      if (p.name && ts.isComputedPropertyName(p.name)) return null
+    }
+    return null
+  }
+  if (ts.isPropertyAccessExpression(expr)) {
+    const base = unwrapExpr(expr.expression)
+    const d = ts.isIdentifier(base) ? declOf(base) : null
+    // Project actual objects/return values before falling back to interface writes.
+    if (ts.isCallExpression(base) || ts.isObjectLiteralExpression(base) ||
+        ts.isElementAccessExpression(base) ||
+        (d && ((ts.isVariableDeclaration(d) && d.initializer) || bindings.has(d)))) {
+      return resolve(base, depth + 1, seen, bindings, [expr.name.text, ...projection])
+    }
+  }
+  const nameNode = ts.isPropertyAccessExpression(expr) ? expr.name : ts.isIdentifier(expr) ? expr : null
+  if (!nameNode) return null
+  const decl = declOf(nameNode)
+  if (!decl || seen.has(decl)) return null
+  const next = new Set(seen).add(decl)
+  const bound = bindings.get(decl)
+  if (bound) return bound.values
+    ? projection.length ? null : bound.values
+    : resolve(bound.expr, depth + 1, new Set(), bound.bindings, projection)
+  if (ts.isParameter(decl)) {
+    const inputs = parameterInputs(decl)
+    return inputs.length ? combineValues(inputs.map((v) =>
+      resolve(v, depth + 1, new Set(next), bindings, projection))) : null
+  }
+  if (ts.isVariableDeclaration(decl) || ts.isPropertyAssignment(decl) || ts.isEnumMember(decl)) {
+    return resolve(decl.initializer, depth + 1, next, bindings, projection)
+  }
+  if (ts.isShorthandPropertyAssignment(decl)) {
+    const v = checker.getShorthandAssignmentValueSymbol(decl)?.declarations?.[0]
+    return v && ts.isVariableDeclaration(v) ? resolve(v.initializer, depth + 1, next, bindings, projection) : null
+  }
+  const sig = sinkSignatureOf(decl)
+  if (sig && !projection.length) {
+    const { writes, opaque } = writesTo(sig)
+    if (!writes.length || opaque) return null
+    return combineValues(writes.map((w) => resolve(w, depth + 1, new Set(next), bindings)))
   }
   return null
 }
@@ -609,14 +900,17 @@ for (const sf of sourceFiles) {
     // matched on identity; the spelling is used only to decide whether a call that
     // does NOT resolve deserves a finding.
     const d = canonicalDecl(nameNode)
-    const isCan = !!d && canDecls.has(d)
-    if (!isCan && nameNode.text !== 'can') return
+    const origins = callableOrigins(callee)
+    const hasCan = origins.some((origin) => canDecls.has(origin))
+    const isCan = hasCan && origins.every((origin) => canDecls.has(origin) ||
+      (typeof origin !== 'symbol' && isFunctionLike(origin)))
+    if (!hasCan && nameNode.text !== 'can') return
     if (!isCan) {
       finding(
         'unreadable',
         n,
-        'a call to something named can() that does not resolve to the console RBAC mirror ' +
-          `(web/src/lib/auth). Declared at ${d ? at(d) : 'nowhere this guard could follow'}. ` +
+        `cannot establish the RBAC origin of ${nameNode.text}() without unknown callable inputs. ` +
+          `Declared at ${d ? at(d) : 'nowhere this guard could follow'}. ` +
           'If this is an unrelated helper, it needs a different name or this guard needs to ' +
           'learn about it — it will not assume.',
       )

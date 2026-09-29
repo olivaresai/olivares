@@ -18,8 +18,8 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -40,6 +40,22 @@ const (
 	// machineIDKey keys the machine ID digest, as machine-id(5) asks of applications.
 	machineIDKey = "olivares-appliance-firstboot/machine-id"
 )
+
+// cloud-init's own files, read where its status command reads them (cloud-init 26.1,
+// cloudinit/cmd/status.py): the program, its run directory's status and result, the marker
+// file and generator marker that disable it, and the kernel command line.
+const (
+	cloudInitProgram      = "/usr/bin/cloud-init"
+	cloudInitStatusFile   = "/run/cloud-init/status.json"
+	cloudInitResultFile   = "/run/cloud-init/result.json"
+	cloudInitDisabledFile = "/etc/cloud/cloud-init.disabled"
+	cloudInitGeneratorOff = "/run/cloud-init/disabled"
+	kernelCommandLine     = "/proc/cmdline"
+)
+
+// userdbDirs are systemd's drop-in directories of JSON user records, in the order nss-systemd(8)
+// lists them.
+var userdbDirs = []string{"/etc/userdb", "/run/userdb", "/run/host/userdb", "/usr/lib/userdb"}
 
 // Host is the installation the Linux adapters observe and change.
 type Host struct {
@@ -101,9 +117,13 @@ func (s OSIdentity) observe(context.Context, Input) (Effect, error) {
 		machine.Sum(nil)[:8], len(keys), fingerprints.Sum(nil)[:8])), nil
 }
 
-// CloudInitHost waits for cloud-init, the single owner of host settings, and verifies what
-// it applied. It never applies a host setting.
-type CloudInitHost struct{ Host Host }
+// CloudInitHost verifies what cloud-init, the single owner of host settings, applied after
+// its final stage ended. It never applies a host setting.
+type CloudInitHost struct {
+	Host     Host
+	Network  NetworkReader
+	Networkd NetworkdReader
+}
 
 // Apply verifies the host settings and records what was verified.
 func (s CloudInitHost) Apply(ctx context.Context, in Input) (Effect, error) {
@@ -116,26 +136,28 @@ func (s CloudInitHost) Verify(ctx context.Context, in Input, recorded Effect) er
 		"run `appliance-firstboot reconcile` to verify them again before the product starts")
 }
 
+// observe reads cloud-init's own files and runs no program, with the outcomes of its status
+// command: errors in any stage refuse, as the command's exit 1; recoverable errors alone do not,
+// as its exit 2 after completion; a disabled cloud-init refuses. First boot runs after
+// cloud-final.service: missing status or result files then refuse an incomplete run.
 func (s CloudInitHost) observe(ctx context.Context, in Input) (Effect, error) {
-	out, err := s.Host.Run(ctx, "cloud-init", "status", "--format", "json")
-	if errors.Is(err, exec.ErrNotFound) {
+	if info, err := os.Stat(s.Host.path(cloudInitProgram)); err != nil || info.IsDir() {
 		return "", Refuse("the declared host owner cloud-init is not installed")
 	}
-	// Exit 2 reports recoverable errors after completion; the status is still printed.
-	var status struct {
-		Status string `json:"status"`
-		Errors []any  `json:"errors"`
-	}
-	if len(out) == 0 || json.Unmarshal(out, &status) != nil {
-		return "", Refuse("the cloud-init status cannot be read")
-	}
+	status, err := s.status()
 	switch {
-	case status.Status == "running" || status.Status == "not started" || status.Status == "not run":
-		return "", Wait("cloud-init has not completed")
-	case status.Status == "disabled":
-		return "", Refuse("cloud-init, the declared host owner, is disabled")
-	case status.Status != "done" || len(status.Errors) > 0:
+	case err != nil:
+		return "", Refuse("the cloud-init status cannot be read")
+	case status.errors > 0:
 		return "", Refuse("cloud-init reported errors; its own log names them")
+	case s.disabled():
+		return "", Refuse("cloud-init, the declared host owner, is disabled")
+	case status.missing:
+		return "", Refuse("cloud-init did not run in this boot")
+	case status.running:
+		return "", Refuse("cloud-init's final stage did not complete; its own log names the failure")
+	case status.latest == 0:
+		return "", Wait("cloud-init has not completed")
 	}
 	hostname, err := os.ReadFile(s.Host.path("/proc/sys/kernel/hostname"))
 	if err != nil || strings.ToLower(strings.TrimSpace(string(hostname))) != in.Answers.Hostname {
@@ -153,8 +175,82 @@ func (s CloudInitHost) observe(ctx context.Context, in Input) (Effect, error) {
 			return "", Refuse("a declared SSH public key is not authorized for any account; cloud-init owns them")
 		}
 	}
-	return Effect(fmt.Sprintf("cloud-init done; hostname, UTC and %d SSH key(s) verified; "+
-		"network mode and time servers delegated to cloud-init", len(in.Answers.SSHAuthorizedKeys))), nil
+	if err := s.verifyNetwork(ctx, in); err != nil {
+		return "", err
+	}
+	return Effect(fmt.Sprintf("cloud-init done; hostname, UTC, NetworkManager and %d SSH key(s) verified; time servers delegated to cloud-init", len(in.Answers.SSHAuthorizedKeys))), nil
+}
+
+// cloudInitStatus is what cloud-init's status command derives from its status and result files:
+// the errors every stage recorded, whether both files are missing, whether a result is missing
+// after a status was written, and the latest stage time, zero until a stage has started.
+type cloudInitStatus struct {
+	errors  int
+	missing bool
+	running bool
+	latest  float64
+}
+
+func (s CloudInitHost) status() (cloudInitStatus, error) {
+	var st cloudInitStatus
+	raw, err := os.ReadFile(s.Host.path(cloudInitStatusFile))
+	if errors.Is(err, os.ErrNotExist) {
+		if _, resultErr := os.Stat(s.Host.path(cloudInitResultFile)); errors.Is(resultErr, os.ErrNotExist) {
+			st.missing = true
+			return st, nil
+		}
+		return st, err
+	}
+	if err != nil {
+		return st, err
+	}
+	var doc struct {
+		V1 map[string]json.RawMessage `json:"v1"`
+	}
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		return st, err
+	}
+	for _, value := range doc.V1 {
+		// Only the stages are objects; the datasource is a string and the current stage a
+		// string or null, and the command skips both.
+		var stage struct {
+			Errors   []json.RawMessage `json:"errors"`
+			Start    *float64          `json:"start"`
+			Finished *float64          `json:"finished"`
+		}
+		if !bytes.HasPrefix(bytes.TrimSpace(value), []byte("{")) {
+			continue
+		}
+		if err := json.Unmarshal(value, &stage); err != nil {
+			return st, err
+		}
+		st.errors += len(stage.Errors)
+		for _, at := range []*float64{stage.Start, stage.Finished} {
+			if at != nil && *at > st.latest {
+				st.latest = *at
+			}
+		}
+	}
+	switch _, err := os.Stat(s.Host.path(cloudInitResultFile)); {
+	case errors.Is(err, os.ErrNotExist):
+		st.running = true
+	case err != nil:
+		return st, err
+	}
+	return st, nil
+}
+
+// disabled reports what cloud-init's status command reports as disabled, in its order:
+// cloud-init=enabled on the kernel command line wins; then the marker file, cloud-init=disabled
+// on the command line and the generator's marker disable it.
+func (s CloudInitHost) disabled() bool {
+	cmdline, _ := os.ReadFile(s.Host.path(kernelCommandLine))
+	args := strings.Fields(string(cmdline))
+	if slices.Contains(args, "cloud-init=enabled") {
+		return false
+	}
+	exists := func(p string) bool { _, err := os.Stat(s.Host.path(p)); return err == nil }
+	return exists(cloudInitDisabledFile) || slices.Contains(args, "cloud-init=disabled") || exists(cloudInitGeneratorOff)
 }
 
 func (s CloudInitHost) utc() bool {
@@ -196,8 +292,9 @@ func (s CloudInitHost) authorizedKeys() (map[string]bool, error) {
 
 // ProductConfig has the product's own generator write the product configuration file, the
 // generator's documented output, and declares the public console address, an environment key
-// the product's unit reads, in a drop-in the appliance owns. The appliance itself writes no
-// file the product package installed.
+// the product's unit reads, in a drop-in the appliance owns. It also publishes the Appliance
+// Console's selection when the answers declare one (PortalSelectionFile). The appliance itself
+// writes no file the product package installed.
 type ProductConfig struct{ Host Host }
 
 // Apply generates the configuration. The generator is deterministic, so a run interrupted
@@ -223,6 +320,9 @@ func (s ProductConfig) Apply(ctx context.Context, in Input) (Effect, error) {
 	if err := writeAtomic(filepath.Dir(dropIn), filepath.Base(dropIn), []byte(content), 0o644); err != nil {
 		return "", Refuse("the product drop-in cannot be written")
 	}
+	if err := s.publishPortalSelection(in.Answers); err != nil {
+		return "", err
+	}
 	if _, err := s.Host.Run(ctx, "systemctl", "daemon-reload"); err != nil {
 		return "", Refuse("systemd could not reload its unit files")
 	}
@@ -236,7 +336,10 @@ func (s ProductConfig) Verify(ctx context.Context, in Input, recorded Effect) er
 			"run `appliance-firstboot reconcile` to generate it again before the product starts")
 }
 
-func (s ProductConfig) observe(context.Context, Input) (Effect, error) {
+// observe records the configuration, the drop-in and, when the answers declare one, the
+// published selection. Answers without the console's fields keep the effect's earlier form, so
+// a record written before those fields existed still verifies.
+func (s ProductConfig) observe(_ context.Context, in Input) (Effect, error) {
 	env, err := os.ReadFile(s.Host.path(productEnvFile))
 	if err != nil {
 		return "", Refuse("the product configuration cannot be read")
@@ -245,8 +348,16 @@ func (s ProductConfig) observe(context.Context, Input) (Effect, error) {
 	if err != nil {
 		return "", Refuse("the product drop-in cannot be read")
 	}
+	selection, err := s.observePortalSelection(in.Answers)
+	if err != nil {
+		return "", err
+	}
 	envSum, dropInSum := sha256.Sum256(env), sha256.Sum256(dropIn)
-	return Effect(fmt.Sprintf("olivares.env=%x drop-in=%x", envSum[:8], dropInSum[:8])), nil
+	effect := fmt.Sprintf("olivares.env=%x drop-in=%x", envSum[:8], dropInSum[:8])
+	if selection != "" {
+		effect += " portal-selection=" + selection
+	}
+	return Effect(effect), nil
 }
 
 // Storage verifies the storage of the single-node profile. Its initialization mechanism is
@@ -264,22 +375,54 @@ func (s Storage) Verify(ctx context.Context, in Input, recorded Effect) error {
 		"run `appliance-firstboot reconcile` to verify it again before the product starts")
 }
 
-func (s Storage) observe(ctx context.Context, _ Input) (Effect, error) {
+func (s Storage) observe(context.Context, Input) (Effect, error) {
 	info, err := os.Lstat(s.Host.path(ProductDataDir))
 	if err != nil || !info.IsDir() {
 		return "", Refuse("the product data directory is missing")
 	}
-	uid, err := s.Host.Run(ctx, "id", "-u", productAccount)
-	if err != nil {
+	uid, ok := s.Host.accountUID(productAccount)
+	if !ok {
 		return "", Refuse("the product service account is missing")
 	}
 	st, ok := info.Sys().(*syscall.Stat_t)
-	if !ok || strconv.FormatUint(uint64(st.Uid), 10) != strings.TrimSpace(string(uid)) || info.Mode().Perm()&0o007 != 0 {
+	if !ok || strconv.FormatUint(uint64(st.Uid), 10) != uid || info.Mode().Perm()&0o007 != 0 {
 		return "", Refuse("the product data directory is not private to the product service account")
 	}
 	return Effect(fmt.Sprintf("single-node-prod: %s owned by the service account (uid %s), mode %04o; "+
 		"the product's first start creates the store and readiness measures it",
-		ProductDataDir, strings.TrimSpace(string(uid)), uint32(info.Mode().Perm()))), nil
+		ProductDataDir, uid, uint32(info.Mode().Perm()))), nil
+}
+
+// accountUID resolves account's uid, in decimal, from files alone: the host's /etc/passwd
+// (passwd(5): name:password:UID:GID:GECOS:directory:shell), and only when the account is not
+// there, a systemd userdb drop-in record named for it (nss-systemd(8): NAME.user, a JSON user
+// record whose userName is NAME). It runs no program.
+func (h Host) accountUID(account string) (string, bool) {
+	if data, err := os.ReadFile(h.path("/etc/passwd")); err == nil {
+		lines := bufio.NewScanner(bytes.NewReader(data))
+		for lines.Scan() {
+			fields := strings.Split(lines.Text(), ":")
+			if len(fields) != 7 || fields[0] != account {
+				continue
+			}
+			uid, err := strconv.ParseUint(fields[2], 10, 32)
+			return strconv.FormatUint(uid, 10), err == nil
+		}
+	}
+	for _, dir := range userdbDirs {
+		data, err := os.ReadFile(h.path(filepath.Join(dir, account+".user")))
+		if err != nil {
+			continue
+		}
+		var record struct {
+			UserName string  `json:"userName"`
+			UID      *uint32 `json:"uid"`
+		}
+		if json.Unmarshal(data, &record) == nil && record.UserName == account && record.UID != nil {
+			return strconv.FormatUint(uint64(*record.UID), 10), true
+		}
+	}
+	return "", false
 }
 
 // ProductService enables and starts the product unit without waiting for it: the first-boot

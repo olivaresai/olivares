@@ -1,0 +1,49 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# One connection to the firewall owner, started by olivares-helper-firewall.socket with the
+# connection as standard input and output. The program takes no argument and no path. It loads
+# the table inet olivares with nft -f - (the ruleset on standard input), reads it back with
+# nft -j list table inet olivares, keeps the confirmed policy and the windows in its state
+# directory and publishes /run/olivares-firewall/measured.json. It runs as root with
+# CAP_NET_ADMIN alone, because the kernel refuses nftables netlink messages from a sender without
+# CAP_NET_ADMIN in the network namespace, root included; and in the host's network namespace,
+# because a private one would hold a private table. It opens no IP socket.
+[Unit]
+Description=Appliance firewall owner (one connection)
+Documentation=https://github.com/olivaresai/olivares
+
+[Service]
+ExecStart=/usr/libexec/olivares/olivares-portal-firewall
+User=root
+StandardInput=socket
+StandardOutput=socket
+StandardError=journal
+RuntimeMaxSec=60
+NoNewPrivileges=yes
+ProtectSystem=strict
+StateDirectory=olivares-firewall
+StateDirectoryMode=0700
+RuntimeDirectory=olivares-firewall
+RuntimeDirectoryMode=0755
+RuntimeDirectoryPreserve=yes
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+RestrictAddressFamilies=AF_UNIX AF_NETLINK
+IPAddressDeny=any
+ProtectClock=yes
+ProtectHostname=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+RestrictNamespaces=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+CapabilityBoundingSet=CAP_NET_ADMIN
+AmbientCapabilities=
+UMask=0077

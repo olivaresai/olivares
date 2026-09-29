@@ -1,0 +1,26 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# The firewall owner's socket. Each connection starts one instance of
+# olivares-helper-firewall@.service (Accept=yes), which reads one document, {"op",
+# "operation_id", "candidate", "app", "revert_after_s"}, and admits its invoker from the
+# connection itself: the account of the peer's credentials, and the unit and controlling terminal
+# of the process the peer's pidfd names. It admits the Appliance Console for status, apply,
+# confirm and revert, and the repair console on tty1 for status and revert. The socket is
+# root's, group olivares-portal, mode 0660, so only root and the console's account can connect,
+# and connecting is necessary, never sufficient.
+[Unit]
+Description=Appliance firewall owner socket
+Documentation=https://github.com/olivaresai/olivares
+
+[Socket]
+ListenStream=/run/olivares-helpers/firewall.sock
+Accept=yes
+SocketUser=root
+SocketGroup=olivares-portal
+SocketMode=0660
+DirectoryMode=0755
+MaxConnections=4
+
+[Install]
+WantedBy=sockets.target

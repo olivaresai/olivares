@@ -1,0 +1,68 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# The Appliance Console: read-only status of this appliance, served over TLS on the
+# sockets olivares-portal.socket passes in. The console binds no socket itself, performs
+# no privileged act and changes nothing on the host. Its socket starts it; it has no
+# [Install] section.
+#
+# TLS custody is measured where the operator keeps the files: in the directory named by
+# OLIVARES_PORTAL_TLS_DIRECTORY the console requires, with lstat and without reading the
+# key, the directory and both files to be owned by root (or the service's own user) and
+# writable by their owner only, the key to be mode 0600 or 0400 and none of them to be a
+# symbolic link. The directory must be searchable and the certificate readable by the
+# service (for example 0755 and 0644). LoadCredential= is the delivery: the service
+# manager reads the two files as root when the service starts and hands the service
+# private copies, and the service does not start while either file is missing. The
+# comparison is the proof: the console refuses a delivered certificate that is not byte
+# for byte the operator's, and the delivered key must pair with it, so a drop-in that
+# points LoadCredential= elsewhere cannot verify custody without the operator's private
+# key. Without verified material the console serves nothing, not even loopback. It never
+# creates a certificate.
+[Unit]
+Description=Appliance Console (read-only status)
+Documentation=https://github.com/olivaresai/olivares
+Requires=olivares-portal.socket
+After=olivares-portal.socket
+
+[Service]
+Type=simple
+ExecStart=/usr/libexec/olivares/olivares-portal
+DynamicUser=yes
+User=olivares-portal
+Environment=OLIVARES_PORTAL_TLS_DIRECTORY=/etc/olivares-portal
+LoadCredential=tls.crt:/etc/olivares-portal/tls.crt
+LoadCredential=tls.key:/etc/olivares-portal/tls.key
+
+# --- hardening: the product unit's set (packaging/systemd/olivares.service), plus the
+# network and hostname lines a status page with no clients of its own can afford ---
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+# The passed socket belongs to the host network namespace, so the console still answers
+# on it while it can open no connection of its own.
+PrivateNetwork=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+IPAddressDeny=any
+IPAddressAllow=localhost
+ProtectClock=true
+ProtectHostname=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+RestrictNamespaces=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+# Port 9443 is unprivileged and the socket is bound by the service manager: no
+# capability is needed.
+CapabilityBoundingSet=
+AmbientCapabilities=
+UMask=0027

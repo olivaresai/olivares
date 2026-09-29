@@ -187,7 +187,7 @@ export function SourceDiffView({
     <div className="flex h-full min-h-0 flex-col">
       <header className="flex flex-wrap items-end gap-3 border-b border-border p-4">
         <PageHeader
-          title={t('items.sourceDiff', { ns: 'nav' })}
+          title={t('nav:items.sourceDiff')}
           className="w-full"
         />
         <div className="flex flex-col gap-1">

@@ -986,1032 +986,1089 @@ export interface FeatureCapability {
  *               IV Orchestration · XVI Voice · XVII Sandbox · XVIII Red-teaming
  *  Executive    XXI Dashboards
  */
-export const FEATURE_VIEWS: FeatureView[] = [
-  {
-    id: 'home',
-    path: '/',
-    navigation: { kind: 'root' },
-    helpHref: '/',
-    hub: 'operate',
-    icon: LayoutDashboard,
-    element: lazyView(HomeView),
-  },
+// Consumers share these permission-bearing records. Seal both the registry and
+// each record before export so an alias cannot replace an authority declaration.
+export const FEATURE_VIEWS: readonly FeatureView[] = Object.freeze(
+  (
+    [
+      {
+        id: 'home',
+        path: '/',
+        navigation: { kind: 'root' },
+        helpHref: '/',
+        hub: 'operate',
+        icon: LayoutDashboard,
+        element: lazyView(HomeView),
+      },
 
-  // Onboarding wizard: first-time deployment setup. Superadmin-gated so only
-  // the operator who configures the deployment sees it. Not hidden — it surfaces
-  // in the nav as a persistent reminder until the operator completes or dismisses.
-  {
-    id: 'onboarding',
-    path: '/onboarding',
-    navigation: { kind: 'feature', areaId: 'system', sectionId: 'maintenance' },
-    helpHref: '/start/quickstart',
-    hub: 'connect',
-    // Compass, not Rocket: Rocket is Deploy's icon — a guided first-run
-    // is wayfinding, and every registered view must carry a unique glyph.
-    icon: Compass,
-    permission: 'system:admin',
-    element: lazyView(OnboardingView),
-  },
+      // Onboarding wizard: first-time deployment setup. Superadmin-gated so only
+      // the operator who configures the deployment sees it. Not hidden — it surfaces
+      // in the nav as a persistent reminder until the operator completes or dismisses.
+      {
+        id: 'onboarding',
+        path: '/onboarding',
+        navigation: {
+          kind: 'feature',
+          areaId: 'system',
+          sectionId: 'maintenance',
+        },
+        helpHref: '/start/quickstart',
+        hub: 'connect',
+        // Compass, not Rocket: Rocket is Deploy's icon — a guided first-run
+        // is wayfinding, and every registered view must carry a unique glyph.
+        icon: Compass,
+        permission: 'system:admin',
+        element: lazyView(OnboardingView),
+      },
 
-  // Per-workspace dashboard: agents, sessions, resources and groups scoped
-  // to the workspace selected in the topbar switcher. Gated on tenant:read (the
-  // same permission the workspace list requires).
-  {
-    id: 'workspaceDashboard',
-    path: '/workspace',
-    navigation: {
-      kind: 'feature',
-      areaId: 'infrastructure',
-      sectionId: 'estate',
-    },
-    helpHref: '/reference/modules/xx-multi-tenancy',
-    hub: 'operate',
-    // PanelsTopLeft, not Layers: Layers belongs to Platforms; a dashboard
-    // of scoped panels is what this view actually is.
-    icon: PanelsTopLeft,
-    permission: 'tenant:read',
-    element: lazyView(WorkspaceDashboardView),
-  },
+      // Per-workspace dashboard: agents, sessions, resources and groups scoped
+      // to the workspace selected in the topbar switcher. Gated on tenant:read (the
+      // same permission the workspace list requires).
+      {
+        id: 'workspaceDashboard',
+        path: '/workspace',
+        navigation: {
+          kind: 'feature',
+          areaId: 'infrastructure',
+          sectionId: 'estate',
+        },
+        helpHref: '/reference/modules/xx-multi-tenancy',
+        hub: 'operate',
+        // PanelsTopLeft, not Layers: Layers belongs to Platforms; a dashboard
+        // of scoped panels is what this view actually is.
+        icon: PanelsTopLeft,
+        permission: 'tenant:read',
+        element: lazyView(WorkspaceDashboardView),
+      },
 
-  // Visibility ()
-  {
-    id: 'inventory',
-    path: '/inventory',
-    navigation: {
-      kind: 'feature',
-      areaId: 'infrastructure',
-      sectionId: 'estate',
-    },
-    helpHref: '/reference/modules/i-inventory',
-    hub: 'connect',
-    icon: Boxes,
-    permission: 'inventory:catalog:read',
-    element: lazyView(InventoryView),
-  },
-  {
-    //the OBSERVE door into the unified sessions room. Same view and same card
-    // as `/agentops`; this entrance keeps the visibility framing and the live-read
-    // permission the observed half needs.
-    id: 'sessions',
-    path: '/sessions',
-    navigation: { kind: 'feature', areaId: 'ai', sectionId: 'sessions' },
-    helpHref: '/reference/modules/ii-sessions',
-    hub: 'operate',
-    icon: Activity,
-    permission: 'sessions:live:read',
-    element: lazyView(SessionsWorkspaceView, { entrance: 'observe' as const }),
-  },
-  {
-    id: 'accessMap',
-    path: '/access-map',
-    navigation: {
-      kind: 'feature',
-      areaId: 'security-identity',
-      sectionId: 'access',
-    },
-    helpHref: '/reference/modules/iii-access-map',
-    hub: 'govern',
-    icon: Network,
-    permission: 'accessmap:graph:read',
-    element: lazyView(AccessMapView),
-  },
-  {
-    //Audit / Evidence Explorer over the core ledger (/v1/audit). Gated on
-    // audit:read (the same RBAC the backend enforces); export/verify gate the same
-    // perm server-side, the superadmin system-ledger toggle is hidden otherwise.
-    id: 'audit',
-    path: '/audit',
-    navigation: {
-      kind: 'feature',
-      areaId: 'observation',
-      sectionId: 'audit-recordings',
-    },
-    savedViewsFeatureId: 'audit',
-    helpHref: '/reference/modules/ix-security',
-    hub: 'prove',
-    icon: FileCheck2,
-    permission: 'audit:read',
-    element: lazyView(AuditView),
-  },
-  {
-    id: 'health',
-    path: '/health',
-    navigation: {
-      kind: 'feature',
-      areaId: 'observation',
-      sectionId: 'operations',
-    },
-    helpHref: '/reference/modules/xxii-health',
-    hub: 'operate',
-    icon: HeartPulse,
-    permission: 'health:status:read',
-    element: lazyView(HealthView),
-  },
+      // Visibility ()
+      {
+        id: 'inventory',
+        path: '/inventory',
+        navigation: {
+          kind: 'feature',
+          areaId: 'infrastructure',
+          sectionId: 'estate',
+        },
+        helpHref: '/reference/modules/i-inventory',
+        hub: 'connect',
+        icon: Boxes,
+        permission: 'inventory:catalog:read',
+        element: lazyView(InventoryView),
+      },
+      {
+        //the OBSERVE door into the unified sessions room. Same view and same card
+        // as `/agentops`; this entrance keeps the visibility framing and the live-read
+        // permission the observed half needs.
+        id: 'sessions',
+        path: '/sessions',
+        navigation: { kind: 'feature', areaId: 'ai', sectionId: 'sessions' },
+        helpHref: '/reference/modules/ii-sessions',
+        hub: 'operate',
+        icon: Activity,
+        permission: 'sessions:live:read',
+        element: lazyView(SessionsWorkspaceView, {
+          entrance: 'observe' as const,
+        }),
+      },
+      {
+        id: 'accessMap',
+        path: '/access-map',
+        navigation: {
+          kind: 'feature',
+          areaId: 'security-identity',
+          sectionId: 'access',
+        },
+        helpHref: '/reference/modules/iii-access-map',
+        hub: 'govern',
+        icon: Network,
+        permission: 'accessmap:graph:read',
+        element: lazyView(AccessMapView),
+      },
+      {
+        //Audit / Evidence Explorer over the core ledger (/v1/audit). Gated on
+        // audit:read (the same RBAC the backend enforces); export/verify gate the same
+        // perm server-side, the superadmin system-ledger toggle is hidden otherwise.
+        id: 'audit',
+        path: '/audit',
+        navigation: {
+          kind: 'feature',
+          areaId: 'observation',
+          sectionId: 'audit-recordings',
+        },
+        savedViewsFeatureId: 'audit',
+        helpHref: '/reference/modules/ix-security',
+        hub: 'prove',
+        icon: FileCheck2,
+        permission: 'audit:read',
+        element: lazyView(AuditView),
+      },
+      {
+        id: 'health',
+        path: '/health',
+        navigation: {
+          kind: 'feature',
+          areaId: 'observation',
+          sectionId: 'operations',
+        },
+        helpHref: '/reference/modules/xxii-health',
+        hub: 'operate',
+        icon: HeartPulse,
+        permission: 'health:status:read',
+        element: lazyView(HealthView),
+      },
 
-  // Management ()
-  {
-    // Control console: the configure surface (onboard users, SSO/IdP,
-    // workspaces & agent-groups, scoped admin). Gated on tenant:admin so org
-    // admins/owners + superadmins see it; each tab gates its writes further.
-    id: 'console',
-    path: '/console',
-    navigation: {
-      kind: 'feature',
-      areaId: 'system',
-      sectionId: 'administration',
-    },
-    helpHref: '/reference/modules/xx-multi-tenancy',
-    hub: 'govern',
-    icon: SlidersHorizontal,
-    permission: 'tenant:admin',
-    element: lazyView(ConsoleView),
-  },
-  {
-    id: 'sourceDiff',
-    path: '/console/sources/diff',
-    navigation: {
-      kind: 'feature',
-      areaId: 'system',
-      sectionId: 'administration',
-    },
-    helpHref: '/reference/console',
-    hub: 'govern',
-    icon: GitCompare,
-    permission: 'system:admin',
-    element: lazyView(SourceDiffView),
-  },
-  {
-    id: 'capabilities',
-    path: '/capabilities',
-    navigation: {
-      kind: 'feature',
-      areaId: 'data-context',
-      sectionId: 'capabilities',
-    },
-    helpHref: '/reference/modules/v-capabilities',
-    hub: 'connect',
-    icon: Plug,
-    permission: 'capabilities:catalog:read',
-    element: lazyView(CapabilitiesView),
-  },
-  {
-    id: 'protocolBindings',
-    path: '/communications/protocol-bindings',
-    navigation: {
-      kind: 'feature',
-      areaId: 'work-communications',
-      sectionId: 'communications',
-    },
-    helpHref: '/reference/modules/ii-sessions',
-    hub: 'connect',
-    icon: Cable,
-    permission: 'sessions:protocol-binding:read',
-    element: lazyView(ProtocolBindingsView),
-  },
-  {
-    // K3 I1 — the CATALOG door: visible channels and the channel card, gated on the
-    // read tier the engine requires on `GET /channels` and `GET /channels/{id}`.
-    // Sending gates inside on sessions:message-send:write and the channel's own bits.
-    id: 'communications',
-    path: '/communications',
-    navigation: {
-      kind: 'feature',
-      areaId: 'work-communications',
-      sectionId: 'communications',
-    },
-    helpHref: '/reference/modules/ii-sessions',
-    hub: 'operate',
-    icon: MessagesSquare,
-    permission: 'sessions:channel:read',
-    element: lazyView(CommunicationsView, { entrance: 'catalog' as const }),
-  },
-  {
-    // K3 I1 — the INBOX door: the exact personal mailbox, delivery and message reads
-    // and the explicit Ack. Its own permission because the engine declares
-    // sessions:delivery:read independently of channel:read; message reads gate on
-    // sessions:message:read and the Ack on sessions:delivery:write inside.
-    id: 'communicationsInbox',
-    path: '/communications/inbox',
-    navigation: {
-      kind: 'feature',
-      areaId: 'work-communications',
-      sectionId: 'communications',
-    },
-    helpHref: '/reference/modules/ii-sessions',
-    hub: 'operate',
-    icon: Inbox,
-    permission: 'sessions:delivery:read',
-    element: lazyView(CommunicationsView, { entrance: 'inbox' as const }),
-  },
-  {
-    // K3 I1 — the CREATE door: `POST /channels` with explicit initial grants, usable
-    // by a principal that cannot read the catalog at all.
-    id: 'communicationsNew',
-    path: '/communications/new',
-    navigation: {
-      kind: 'feature',
-      areaId: 'work-communications',
-      sectionId: 'communications',
-    },
-    helpHref: '/reference/modules/ii-sessions',
-    hub: 'operate',
-    icon: MailPlus,
-    permission: 'sessions:channel:write',
-    element: lazyView(CommunicationsView, { entrance: 'new' as const }),
-  },
-  {
-    // K3 I3 — the Handoffs door: the personal page of work-responsibility offers
-    // addressed to this principal, the protected offer context behind each one and
-    // the accept/reject response. Its own route because the personal collection is
-    // a `sessions:delivery:read` surface a principal may hold without the catalog,
-    // like the ordinary inbox beside it; responding is gated apart, on
-    // `sessions:handoff-response:write`, where the act happens. The icon is
-    // distinct from the inbox's because every registered view needs its own glyph.
-    id: 'communicationsHandoffs',
-    path: '/communications/handoffs',
-    navigation: {
-      kind: 'feature',
-      areaId: 'work-communications',
-      sectionId: 'communications',
-    },
-    helpHref: '/reference/modules/ii-sessions',
-    hub: 'operate',
-    icon: Handshake,
-    permission: 'sessions:delivery:read',
-    element: lazyView(CommunicationsView, { entrance: 'handoffs' as const }),
-  },
-  {
-    // K3 I2 — the ADMINISTRATION door: the administrable catalog
-    // (`GET /channels/administration`), the grant history, `PATCH /channels`, grant
-    // and revoke. Its own permission because the engine declares
-    // sessions:channel:admin independently of channel:read: a principal holding
-    // core admin and a local admin bit — and no local read bit — must reach it
-    // without the catalog. The engine decides the local bit on every read.
-    id: 'communicationsAdministration',
-    path: '/communications/administration',
-    navigation: {
-      kind: 'feature',
-      areaId: 'work-communications',
-      sectionId: 'communications',
-    },
-    helpHref: '/reference/modules/ii-sessions',
-    hub: 'operate',
-    icon: KeyRound,
-    // ⛔ KEPT, AND IT NO LONGER DECIDES. `sessions:channel:admin` is a tenant-wide
-    //    membership fact, and this door's authority is not: it may be held through a
-    //    workspace-scoped authored grant the permission set never names, and it may be
-    //    reflected here while an authored policy forbids the same operation. So the
-    //    engine is asked (`capability` below) and this string stays for what it still
-    //    truthfully is — the reflection, read by every unmigrated consumer and by the
-    //    census that proves the console never asks for a permission the engine does not
-    //    declare. Removing it would not tighten anything; it would delete the record.
-    permission: 'sessions:channel:admin',
-    capability: {
-      surface: administrationSurfaceQuestion,
-      deepLink: administrationDeepLinkQuestion,
-    },
-    // The one view whose answer expires on a budget while an operator is typing into it.
-    // The boundary holds their touched fields and nothing else, above the cut that
-    // rebuilds this room every few seconds; see channel-admin-continuity.tsx.
-    continuity: ChannelAdminContinuity,
-    element: lazyView(CommunicationsView, {
-      entrance: 'administration' as const,
-    }),
-  },
-  {
-    id: 'permissions',
-    path: '/permissions',
-    navigation: {
-      kind: 'feature',
-      areaId: 'security-identity',
-      sectionId: 'access',
-    },
-    helpHref: '/reference/modules/vi-governance',
-    hub: 'govern',
-    icon: ShieldCheck,
-    permission: 'governance:identity:read',
-    element: lazyView(GovernanceView),
-  },
-  {
-    id: 'identity',
-    path: '/identity',
-    navigation: {
-      kind: 'feature',
-      areaId: 'security-identity',
-      sectionId: 'access',
-    },
-    helpHref: '/reference/modules/vi-governance',
-    hub: 'govern',
-    icon: Fingerprint,
-    permission: 'governance:identity:read',
-    element: lazyView(IdentityView),
-  },
-  {
-    id: 'claudePolicy',
-    path: '/claude-policy',
-    navigation: {
-      kind: 'feature',
-      areaId: 'security-identity',
-      sectionId: 'policy',
-    },
-    helpHref: '/how-to/connectors/claude-code-hooks-pep',
-    hub: 'govern',
-    icon: ScrollText,
-    permission: 'governance:claude-policy:read',
-    element: lazyView(ClaudePolicyView),
-  },
-  {
-    //(plan 3.6) routine governance: cadence floors, concurrency caps,
-    // approval requirements, cron allowlists and blocked environments for
-    // Claude Code Routines. Gated on governance:routine:read — the same RBAC
-    // the six engine routes enforce (governance.go:528-533); authoring gates
-    // separately on governance:routine:admin inside the view.
-    id: 'routinePolicies',
-    path: '/routine-policies',
-    navigation: {
-      kind: 'feature',
-      areaId: 'security-identity',
-      sectionId: 'policy',
-    },
-    helpHref: '/reference/modules/vi-governance',
-    hub: 'govern',
-    // CalendarCog, not Timer (taken by Orchestration) and not Workflow: this is
-    // governance OVER a schedule, not the schedule itself.
-    icon: CalendarCog,
-    permission: 'governance:routine:read',
-    element: lazyView(RoutinePoliciesView),
-  },
-  {
-    //the console half of the AgentCore Cedar export. Both engine
-    // routes require governance:agentcore-export:admin (governance.go:563-564):
-    // planning reads remote AWS policy metadata and applying mutates the remote
-    // engine, so there is no read tier to gate on and the ADMIN permission is
-    // the honest gate. The registry already carries admin-gated entries for the
-    // same reason (system:admin at :453, tenant:admin at :536,
-    // recording:session:admin at :794) — a nav permission is "what this
-    // principal may reach", not "a :read suffix".
-    id: 'agentcoreExport',
-    path: '/agentcore-export',
-    navigation: {
-      kind: 'feature',
-      areaId: 'security-identity',
-      sectionId: 'boundaries',
-    },
-    helpHref: '/reference/modules/vi-governance',
-    // `hub`, not `group`. #694 was written before main renamed the nav axis, and its NEW entry
-    // came through the merge with the old field name because there was nothing to merge it
-    // against — a CLEAN merge that produced a type error, which the build caught. 'govern' is
-    // measured, not guessed: of the six entries #694 marked group:'management', main places five
-    // in 'govern', and this one carries a governance:*:admin permission and vi-governance docs.
-    hub: 'govern',
-    // CloudUpload, not Upload (a plain upload) and not ShieldCheck (taken by
-    // Permissions): this pushes local policy OUT to a remote cloud engine.
-    icon: CloudUpload,
-    permission: 'governance:agentcore-export:admin',
-    element: lazyView(AgentCoreExportView),
-  },
-  {
-    id: 'deploy',
-    path: '/deploy',
-    navigation: {
-      kind: 'feature',
-      areaId: 'deployment',
-      sectionId: 'deployments',
-    },
-    helpHref: '/reference/modules/vii-deploy',
-    hub: 'connect',
-    icon: Rocket,
-    permission: 'deploy:deployment:read',
-    element: lazyView(DeployView),
-  },
-  {
-    id: 'gitPublication',
-    path: '/git-publication',
-    navigation: {
-      kind: 'feature',
-      areaId: 'deployment',
-      sectionId: 'deployments',
-    },
-    helpHref: '/reference/modules/gitpublish',
-    hub: 'connect',
-    icon: GitBranchPlus,
-    permission: 'gitpublish:target:read',
-    element: lazyView(GitPublicationView),
-  },
-  {
-    id: 'knowledge',
-    path: '/knowledge',
-    navigation: {
-      kind: 'feature',
-      areaId: 'data-context',
-      sectionId: 'knowledge',
-    },
-    helpHref: '/reference/modules/viii-knowledge',
-    hub: 'connect',
-    icon: BookOpen,
-    permission: 'knowledge:kb:read',
-    element: lazyView(KnowledgeView),
-  },
-  {
-    id: 'catalog',
-    path: '/catalog',
-    navigation: {
-      kind: 'feature',
-      areaId: 'data-context',
-      sectionId: 'capabilities',
-    },
-    helpHref: '/reference/modules/xiv-catalog',
-    hub: 'connect',
-    icon: Library,
-    permission: 'catalog:entry:read',
-    element: lazyView(CatalogView),
-  },
-  {
-    id: 'killswitch',
-    path: '/killswitch',
-    navigation: {
-      kind: 'feature',
-      areaId: 'security-identity',
-      sectionId: 'defense',
-    },
-    helpHref: '/how-to/cookbook/kill-switch-drill',
-    hub: 'operate',
-    icon: OctagonAlert,
-    permission: 'governance:killswitch:read',
-    element: lazyView(KillswitchView),
-  },
-  {
-    // Work cockpit — the durable cross-session backlog (K1). Gated on the base
-    // work-read perm; write/admin actions gate further inside the view
-    // (sessions:work:write / :admin), and the decisions tab on
-    // sessions:decision:read. All six reach whoami's effective set, measured on the
-    // wire by cmd/olivares/work_console_whoami_reach_test.go.
-    id: 'work',
-    path: '/work',
-    navigation: {
-      kind: 'feature',
-      areaId: 'work-communications',
-      sectionId: 'work',
-    },
-    helpHref: '/reference/modules/ii-sessions',
-    hub: 'operate',
-    icon: ClipboardList,
-    permission: 'sessions:work:read',
-    element: lazyView(WorkView),
-  },
-  {
-    //Claude Code operate portal (FASE V) unified. Gated on the base
-    // run-read perm; create/stop/cleanup actions gate further inside the view
-    // (sessions:run:write/admin). Same view and same card as `/sessions`: this
-    // entrance keeps the operate framing (launch, workspaces) and its own permission,
-    // so nothing an operator could reach before became unreachable.
-    id: 'agentops',
-    path: '/agentops',
-    navigation: { kind: 'feature', areaId: 'ai', sectionId: 'sessions' },
-    helpHref: '/how-to/run-claude-code-with-olivares',
-    hub: 'operate',
-    icon: Terminal,
-    permission: 'sessions:run:read',
-    element: lazyView(SessionsWorkspaceView, { entrance: 'operate' as const }),
-  },
-  {
-    // The credential a session launches with. It sits FIRST in the environments
-    // section because it is the first thing a new operator needs and the last thing
-    // the product used to offer: a profile with no credential launches nothing, and
-    // the answer to "where does my API key go" used to be a variable in the server's
-    // shell.
-    id: 'providers',
-    path: '/providers',
-    navigation: { kind: 'feature', areaId: 'ai', sectionId: 'environments' },
-    helpHref: '/how-to/add-a-provider',
-    hub: 'operate',
-    // KeySquare and not KeyRound: the icon guard requires one lucide glyph per view,
-    // and KeyRound is the channel-administration view's. Two screens sharing a glyph
-    // is how a sidebar stops being scannable.
-    icon: KeySquare,
-    permission: 'sessions:provider:read',
-    element: lazyView(ProvidersView),
-  },
-  {
-    // The provider-profile plane's own door, gated on ITS read tier. The plane is
-    // also a tab inside `/agentops` and `/sessions`, but those routes require run:read
-    // or live:read, so a principal holding only sessions:profile:read could reach no
-    // screen for a permission the engine declares. Same view as the next entry, opened
-    // on the profiles tab; write/admin actions gate further inside (sessions:profile:
-    // write/admin). Two doors into one room — not a redirect, and the generic route
-    // guard keeps declaring exactly one permission per entry.
-    id: 'providerProfiles',
-    path: '/provider-profiles',
-    navigation: { kind: 'feature', areaId: 'ai', sectionId: 'environments' },
-    helpHref: '/reference/modules/ii-sessions',
-    hub: 'operate',
-    icon: IdCard,
-    permission: 'sessions:profile:read',
-    element: lazyView(ProviderAdminView, { entrance: 'profiles' as const }),
-  },
-  {
-    // The source-binding door, gated on the binding plane's OWN read tier, which is
-    // independent of the profile tiers. Opens on the tenant-wide bindings table; bind
-    // and revoke gate on sessions:profile-binding:write/admin inside, and binding also
-    // needs the deployment-wide source authority the engine decides on the roster read.
-    id: 'providerBindings',
-    path: '/provider-bindings',
-    navigation: { kind: 'feature', areaId: 'ai', sectionId: 'environments' },
-    helpHref: '/reference/modules/ii-sessions',
-    hub: 'operate',
-    icon: Link2,
-    permission: 'sessions:profile-binding:read',
-    element: lazyView(ProviderAdminView, { entrance: 'bindings' as const }),
-  },
-  {
-    // Agent-artifact supply chain. This is tenant-estate metadata and its
-    // own models.agent_aibom ledger, not the lineage of one owned model.
-    id: 'agentArtifacts',
-    path: '/agent-artifacts',
-    navigation: {
-      kind: 'feature',
-      areaId: 'data-context',
-      sectionId: 'artifacts',
-    },
-    helpHref: '/reference/modules/xxiii-model-operations',
-    hub: 'prove',
-    icon: PackageSearch,
-    permission: 'models:registry:read',
-    element: lazyView(AgentArtifactsView),
-  },
-  {
-    // Workspace templates catalog — reusable session configuration snapshots
-    // (hooks, settings, connectors, policies). Gated on the base template-read perm;
-    // create/edit/archive actions gate further inside the view.
-    id: 'workspace-templates',
-    path: '/workspace-templates',
-    navigation: { kind: 'feature', areaId: 'ai', sectionId: 'environments' },
-    helpHref: '/reference/modules/ii-sessions',
-    hub: 'operate',
-    icon: LayoutTemplate,
-    permission: 'sessions:template:read',
-    element: lazyView(TemplatesView),
-  },
-  {
-    // Eventing (webhook event subscriptions) — outbound webhooks, event log,
-    // delivery tracking, and dead-letter queue. Gated on the subscription-read perm;
-    // write actions gate further inside the view (eventing:subscription:write).
-    id: 'eventing',
-    path: '/eventing',
-    navigation: { kind: 'feature', areaId: 'automation', sectionId: 'events' },
-    helpHref: '/reference/modules/eventing',
-    hub: 'automate',
-    icon: Bell,
-    permission: 'eventing:subscription:read',
-    commandActions: [
-      { id: 'createSubscription', permission: 'eventing:subscription:write' },
-    ],
-    element: lazyView(EventingView),
-  },
-  {
-    //Automations — the unified aggregator over schedules, event
-    // subscriptions and alert routes, plus the trigger catalog. Gated on the
-    // schedules read perm (the core rail); each panel inside degrades
-    // independently on a per-rail 403 (deny-closed, never a blank page).
-    id: 'automations',
-    path: '/automations',
-    navigation: {
-      kind: 'feature',
-      areaId: 'automation',
-      sectionId: 'workflows',
-    },
-    helpHref: '/reference/modules/iv-orchestration',
-    hub: 'automate',
-    icon: Zap,
-    permission: 'orchestration:schedule:read',
-    element: lazyView(AutomationsView),
-  },
-  {
-    //Inference proxy admin — config gates, egress DLP rules and device
-    // approvals. Gated on the proxy config-read perm; config writes need editor,
-    // DLP writes need admin, and every write requires an AAL3 step-up in the view.
-    id: 'inferenceProxy',
-    path: '/inference-proxy',
-    navigation: {
-      kind: 'feature',
-      areaId: 'security-identity',
-      sectionId: 'policy',
-    },
-    helpHref: '/reference/modules/inferenceproxy',
-    hub: 'govern',
-    icon: Waypoints,
-    permission: 'inferenceproxy:config:read',
-    element: lazyView(InferenceProxyView),
-  },
-  {
-    //Alerting — notify routes (event → destination) CRUD + live test, and the
-    // read-only delivery log. Gated on the route-read perm; create/edit need write,
-    // delete/test need admin (enforced server-side and mirrored inside the view).
-    id: 'alerting',
-    path: '/alerting',
-    navigation: { kind: 'feature', areaId: 'automation', sectionId: 'events' },
-    helpHref: '/reference/modules/xv-notify',
-    hub: 'automate',
-    icon: Siren,
-    permission: 'notify:route:read',
-    commandActions: [{ id: 'createRoute', permission: 'notify:route:write' }],
-    element: lazyView(AlertingView),
-  },
+      // Management ()
+      {
+        // Control console: the configure surface (onboard users, SSO/IdP,
+        // workspaces & agent-groups, scoped admin). Gated on tenant:admin so org
+        // admins/owners + superadmins see it; each tab gates its writes further.
+        id: 'console',
+        path: '/console',
+        navigation: {
+          kind: 'feature',
+          areaId: 'system',
+          sectionId: 'administration',
+        },
+        helpHref: '/reference/modules/xx-multi-tenancy',
+        hub: 'govern',
+        icon: SlidersHorizontal,
+        permission: 'tenant:admin',
+        element: lazyView(ConsoleView),
+      },
+      {
+        id: 'sourceDiff',
+        path: '/console/sources/diff',
+        navigation: {
+          kind: 'feature',
+          areaId: 'system',
+          sectionId: 'administration',
+        },
+        helpHref: '/reference/console',
+        hub: 'govern',
+        icon: GitCompare,
+        permission: 'system:admin',
+        element: lazyView(SourceDiffView),
+      },
+      {
+        id: 'capabilities',
+        path: '/capabilities',
+        navigation: {
+          kind: 'feature',
+          areaId: 'data-context',
+          sectionId: 'capabilities',
+        },
+        helpHref: '/reference/modules/v-capabilities',
+        hub: 'connect',
+        icon: Plug,
+        permission: 'capabilities:catalog:read',
+        element: lazyView(CapabilitiesView),
+      },
+      {
+        id: 'protocolBindings',
+        path: '/communications/protocol-bindings',
+        navigation: {
+          kind: 'feature',
+          areaId: 'work-communications',
+          sectionId: 'communications',
+        },
+        helpHref: '/reference/modules/ii-sessions',
+        hub: 'connect',
+        icon: Cable,
+        permission: 'sessions:protocol-binding:read',
+        element: lazyView(ProtocolBindingsView),
+      },
+      {
+        // K3 I1 — the CATALOG door: visible channels and the channel card, gated on the
+        // read tier the engine requires on `GET /channels` and `GET /channels/{id}`.
+        // Sending gates inside on sessions:message-send:write and the channel's own bits.
+        id: 'communications',
+        path: '/communications',
+        navigation: {
+          kind: 'feature',
+          areaId: 'work-communications',
+          sectionId: 'communications',
+        },
+        helpHref: '/reference/modules/ii-sessions',
+        hub: 'operate',
+        icon: MessagesSquare,
+        permission: 'sessions:channel:read',
+        element: lazyView(CommunicationsView, { entrance: 'catalog' as const }),
+      },
+      {
+        // K3 I1 — the INBOX door: the exact personal mailbox, delivery and message reads
+        // and the explicit Ack. Its own permission because the engine declares
+        // sessions:delivery:read independently of channel:read; message reads gate on
+        // sessions:message:read and the Ack on sessions:delivery:write inside.
+        id: 'communicationsInbox',
+        path: '/communications/inbox',
+        navigation: {
+          kind: 'feature',
+          areaId: 'work-communications',
+          sectionId: 'communications',
+        },
+        helpHref: '/reference/modules/ii-sessions',
+        hub: 'operate',
+        icon: Inbox,
+        permission: 'sessions:delivery:read',
+        element: lazyView(CommunicationsView, { entrance: 'inbox' as const }),
+      },
+      {
+        // K3 I1 — the CREATE door: `POST /channels` with explicit initial grants, usable
+        // by a principal that cannot read the catalog at all.
+        id: 'communicationsNew',
+        path: '/communications/new',
+        navigation: {
+          kind: 'feature',
+          areaId: 'work-communications',
+          sectionId: 'communications',
+        },
+        helpHref: '/reference/modules/ii-sessions',
+        hub: 'operate',
+        icon: MailPlus,
+        permission: 'sessions:channel:write',
+        element: lazyView(CommunicationsView, { entrance: 'new' as const }),
+      },
+      {
+        // K3 I3 — the Handoffs door: the personal page of work-responsibility offers
+        // addressed to this principal, the protected offer context behind each one and
+        // the accept/reject response. Its own route because the personal collection is
+        // a `sessions:delivery:read` surface a principal may hold without the catalog,
+        // like the ordinary inbox beside it; responding is gated apart, on
+        // `sessions:handoff-response:write`, where the act happens. The icon is
+        // distinct from the inbox's because every registered view needs its own glyph.
+        id: 'communicationsHandoffs',
+        path: '/communications/handoffs',
+        navigation: {
+          kind: 'feature',
+          areaId: 'work-communications',
+          sectionId: 'communications',
+        },
+        helpHref: '/reference/modules/ii-sessions',
+        hub: 'operate',
+        icon: Handshake,
+        permission: 'sessions:delivery:read',
+        element: lazyView(CommunicationsView, {
+          entrance: 'handoffs' as const,
+        }),
+      },
+      {
+        // K3 I2 — the ADMINISTRATION door: the administrable catalog
+        // (`GET /channels/administration`), the grant history, `PATCH /channels`, grant
+        // and revoke. Its own permission because the engine declares
+        // sessions:channel:admin independently of channel:read: a principal holding
+        // core admin and a local admin bit — and no local read bit — must reach it
+        // without the catalog. The engine decides the local bit on every read.
+        id: 'communicationsAdministration',
+        path: '/communications/administration',
+        navigation: {
+          kind: 'feature',
+          areaId: 'work-communications',
+          sectionId: 'communications',
+        },
+        helpHref: '/reference/modules/ii-sessions',
+        hub: 'operate',
+        icon: KeyRound,
+        // ⛔ KEPT, AND IT NO LONGER DECIDES. `sessions:channel:admin` is a tenant-wide
+        //    membership fact, and this door's authority is not: it may be held through a
+        //    workspace-scoped authored grant the permission set never names, and it may be
+        //    reflected here while an authored policy forbids the same operation. So the
+        //    engine is asked (`capability` below) and this string stays for what it still
+        //    truthfully is — the reflection, read by every unmigrated consumer and by the
+        //    census that proves the console never asks for a permission the engine does not
+        //    declare. Removing it would not tighten anything; it would delete the record.
+        permission: 'sessions:channel:admin',
+        capability: {
+          surface: administrationSurfaceQuestion,
+          deepLink: administrationDeepLinkQuestion,
+        },
+        // The one view whose answer expires on a budget while an operator is typing into it.
+        // The boundary holds their touched fields and nothing else, above the cut that
+        // rebuilds this room every few seconds; see channel-admin-continuity.tsx.
+        continuity: ChannelAdminContinuity,
+        element: lazyView(CommunicationsView, {
+          entrance: 'administration' as const,
+        }),
+      },
+      {
+        id: 'permissions',
+        path: '/permissions',
+        navigation: {
+          kind: 'feature',
+          areaId: 'security-identity',
+          sectionId: 'access',
+        },
+        helpHref: '/reference/modules/vi-governance',
+        hub: 'govern',
+        icon: ShieldCheck,
+        permission: 'governance:identity:read',
+        element: lazyView(GovernanceView),
+      },
+      {
+        id: 'identity',
+        path: '/identity',
+        navigation: {
+          kind: 'feature',
+          areaId: 'security-identity',
+          sectionId: 'access',
+        },
+        helpHref: '/reference/modules/vi-governance',
+        hub: 'govern',
+        icon: Fingerprint,
+        permission: 'governance:identity:read',
+        element: lazyView(IdentityView),
+      },
+      {
+        id: 'claudePolicy',
+        path: '/claude-policy',
+        navigation: {
+          kind: 'feature',
+          areaId: 'security-identity',
+          sectionId: 'policy',
+        },
+        helpHref: '/how-to/connectors/claude-code-hooks-pep',
+        hub: 'govern',
+        icon: ScrollText,
+        permission: 'governance:claude-policy:read',
+        element: lazyView(ClaudePolicyView),
+      },
+      {
+        //(plan 3.6) routine governance: cadence floors, concurrency caps,
+        // approval requirements, cron allowlists and blocked environments for
+        // Claude Code Routines. Gated on governance:routine:read — the same RBAC
+        // the six engine routes enforce (governance.go:528-533); authoring gates
+        // separately on governance:routine:admin inside the view.
+        id: 'routinePolicies',
+        path: '/routine-policies',
+        navigation: {
+          kind: 'feature',
+          areaId: 'security-identity',
+          sectionId: 'policy',
+        },
+        helpHref: '/reference/modules/vi-governance',
+        hub: 'govern',
+        // CalendarCog, not Timer (taken by Orchestration) and not Workflow: this is
+        // governance OVER a schedule, not the schedule itself.
+        icon: CalendarCog,
+        permission: 'governance:routine:read',
+        element: lazyView(RoutinePoliciesView),
+      },
+      {
+        //the console half of the AgentCore Cedar export. Both engine
+        // routes require governance:agentcore-export:admin (governance.go:563-564):
+        // planning reads remote AWS policy metadata and applying mutates the remote
+        // engine, so there is no read tier to gate on and the ADMIN permission is
+        // the honest gate. The registry already carries admin-gated entries for the
+        // same reason (system:admin at :453, tenant:admin at :536,
+        // recording:session:admin at :794) — a nav permission is "what this
+        // principal may reach", not "a :read suffix".
+        id: 'agentcoreExport',
+        path: '/agentcore-export',
+        navigation: {
+          kind: 'feature',
+          areaId: 'security-identity',
+          sectionId: 'boundaries',
+        },
+        helpHref: '/reference/modules/vi-governance',
+        // `hub`, not `group`. #694 was written before main renamed the nav axis, and its NEW entry
+        // came through the merge with the old field name because there was nothing to merge it
+        // against — a CLEAN merge that produced a type error, which the build caught. 'govern' is
+        // measured, not guessed: of the six entries #694 marked group:'management', main places five
+        // in 'govern', and this one carries a governance:*:admin permission and vi-governance docs.
+        hub: 'govern',
+        // CloudUpload, not Upload (a plain upload) and not ShieldCheck (taken by
+        // Permissions): this pushes local policy OUT to a remote cloud engine.
+        icon: CloudUpload,
+        permission: 'governance:agentcore-export:admin',
+        element: lazyView(AgentCoreExportView),
+      },
+      {
+        id: 'deploy',
+        path: '/deploy',
+        navigation: {
+          kind: 'feature',
+          areaId: 'deployment',
+          sectionId: 'deployments',
+        },
+        helpHref: '/reference/modules/vii-deploy',
+        hub: 'connect',
+        icon: Rocket,
+        permission: 'deploy:deployment:read',
+        element: lazyView(DeployView),
+      },
+      {
+        id: 'gitPublication',
+        path: '/git-publication',
+        navigation: {
+          kind: 'feature',
+          areaId: 'deployment',
+          sectionId: 'deployments',
+        },
+        helpHref: '/reference/modules/gitpublish',
+        hub: 'connect',
+        icon: GitBranchPlus,
+        permission: 'gitpublish:target:read',
+        element: lazyView(GitPublicationView),
+      },
+      {
+        id: 'knowledge',
+        path: '/knowledge',
+        navigation: {
+          kind: 'feature',
+          areaId: 'data-context',
+          sectionId: 'knowledge',
+        },
+        helpHref: '/reference/modules/viii-knowledge',
+        hub: 'connect',
+        icon: BookOpen,
+        permission: 'knowledge:kb:read',
+        element: lazyView(KnowledgeView),
+      },
+      {
+        id: 'catalog',
+        path: '/catalog',
+        navigation: {
+          kind: 'feature',
+          areaId: 'data-context',
+          sectionId: 'capabilities',
+        },
+        helpHref: '/reference/modules/xiv-catalog',
+        hub: 'connect',
+        icon: Library,
+        permission: 'catalog:entry:read',
+        element: lazyView(CatalogView),
+      },
+      {
+        id: 'killswitch',
+        path: '/killswitch',
+        navigation: {
+          kind: 'feature',
+          areaId: 'security-identity',
+          sectionId: 'defense',
+        },
+        helpHref: '/how-to/cookbook/kill-switch-drill',
+        hub: 'operate',
+        icon: OctagonAlert,
+        permission: 'governance:killswitch:read',
+        element: lazyView(KillswitchView),
+      },
+      {
+        // Work cockpit — the durable cross-session backlog (K1). Gated on the base
+        // work-read perm; write/admin actions gate further inside the view
+        // (sessions:work:write / :admin), and the decisions tab on
+        // sessions:decision:read. All six reach whoami's effective set, measured on the
+        // wire by cmd/olivares/work_console_whoami_reach_test.go.
+        id: 'work',
+        path: '/work',
+        navigation: {
+          kind: 'feature',
+          areaId: 'work-communications',
+          sectionId: 'work',
+        },
+        helpHref: '/reference/modules/ii-sessions',
+        hub: 'operate',
+        icon: ClipboardList,
+        permission: 'sessions:work:read',
+        element: lazyView(WorkView),
+      },
+      {
+        //Claude Code operate portal (FASE V) unified. Gated on the base
+        // run-read perm; create/stop/cleanup actions gate further inside the view
+        // (sessions:run:write/admin). Same view and same card as `/sessions`: this
+        // entrance keeps the operate framing (launch, workspaces) and its own permission,
+        // so nothing an operator could reach before became unreachable.
+        id: 'agentops',
+        path: '/agentops',
+        navigation: { kind: 'feature', areaId: 'ai', sectionId: 'sessions' },
+        helpHref: '/how-to/run-claude-code-with-olivares',
+        hub: 'operate',
+        icon: Terminal,
+        permission: 'sessions:run:read',
+        element: lazyView(SessionsWorkspaceView, {
+          entrance: 'operate' as const,
+        }),
+      },
+      {
+        // The credential a session launches with. It sits FIRST in the environments
+        // section because it is the first thing a new operator needs and the last thing
+        // the product used to offer: a profile with no credential launches nothing, and
+        // the answer to "where does my API key go" used to be a variable in the server's
+        // shell.
+        id: 'providers',
+        path: '/providers',
+        navigation: {
+          kind: 'feature',
+          areaId: 'ai',
+          sectionId: 'environments',
+        },
+        helpHref: '/how-to/add-a-provider',
+        hub: 'operate',
+        // KeySquare and not KeyRound: the icon guard requires one lucide glyph per view,
+        // and KeyRound is the channel-administration view's. Two screens sharing a glyph
+        // is how a sidebar stops being scannable.
+        icon: KeySquare,
+        permission: 'sessions:provider:read',
+        element: lazyView(ProvidersView),
+      },
+      {
+        // The provider-profile plane's own door, gated on ITS read tier. The plane is
+        // also a tab inside `/agentops` and `/sessions`, but those routes require run:read
+        // or live:read, so a principal holding only sessions:profile:read could reach no
+        // screen for a permission the engine declares. Same view as the next entry, opened
+        // on the profiles tab; write/admin actions gate further inside (sessions:profile:
+        // write/admin). Two doors into one room — not a redirect, and the generic route
+        // guard keeps declaring exactly one permission per entry.
+        id: 'providerProfiles',
+        path: '/provider-profiles',
+        navigation: {
+          kind: 'feature',
+          areaId: 'ai',
+          sectionId: 'environments',
+        },
+        helpHref: '/reference/modules/ii-sessions',
+        hub: 'operate',
+        icon: IdCard,
+        permission: 'sessions:profile:read',
+        element: lazyView(ProviderAdminView, { entrance: 'profiles' as const }),
+      },
+      {
+        // The source-binding door, gated on the binding plane's OWN read tier, which is
+        // independent of the profile tiers. Opens on the tenant-wide bindings table; bind
+        // and revoke gate on sessions:profile-binding:write/admin inside, and binding also
+        // needs the deployment-wide source authority the engine decides on the roster read.
+        id: 'providerBindings',
+        path: '/provider-bindings',
+        navigation: {
+          kind: 'feature',
+          areaId: 'ai',
+          sectionId: 'environments',
+        },
+        helpHref: '/reference/modules/ii-sessions',
+        hub: 'operate',
+        icon: Link2,
+        permission: 'sessions:profile-binding:read',
+        element: lazyView(ProviderAdminView, { entrance: 'bindings' as const }),
+      },
+      {
+        // Agent-artifact supply chain. This is tenant-estate metadata and its
+        // own models.agent_aibom ledger, not the lineage of one owned model.
+        id: 'agentArtifacts',
+        path: '/agent-artifacts',
+        navigation: {
+          kind: 'feature',
+          areaId: 'data-context',
+          sectionId: 'artifacts',
+        },
+        helpHref: '/reference/modules/xxiii-model-operations',
+        hub: 'prove',
+        icon: PackageSearch,
+        permission: 'models:registry:read',
+        element: lazyView(AgentArtifactsView),
+      },
+      {
+        // Workspace templates catalog — reusable session configuration snapshots
+        // (hooks, settings, connectors, policies). Gated on the base template-read perm;
+        // create/edit/archive actions gate further inside the view.
+        id: 'workspace-templates',
+        path: '/workspace-templates',
+        navigation: {
+          kind: 'feature',
+          areaId: 'ai',
+          sectionId: 'environments',
+        },
+        helpHref: '/reference/modules/ii-sessions',
+        hub: 'operate',
+        icon: LayoutTemplate,
+        permission: 'sessions:template:read',
+        element: lazyView(TemplatesView),
+      },
+      {
+        // Eventing (webhook event subscriptions) — outbound webhooks, event log,
+        // delivery tracking, and dead-letter queue. Gated on the subscription-read perm;
+        // write actions gate further inside the view (eventing:subscription:write).
+        id: 'eventing',
+        path: '/eventing',
+        navigation: {
+          kind: 'feature',
+          areaId: 'automation',
+          sectionId: 'events',
+        },
+        helpHref: '/reference/modules/eventing',
+        hub: 'automate',
+        icon: Bell,
+        permission: 'eventing:subscription:read',
+        commandActions: [
+          {
+            id: 'createSubscription',
+            permission: 'eventing:subscription:write',
+          },
+        ],
+        element: lazyView(EventingView),
+      },
+      {
+        //Automations — the unified aggregator over schedules, event
+        // subscriptions and alert routes, plus the trigger catalog. Gated on the
+        // schedules read perm (the core rail); each panel inside degrades
+        // independently on a per-rail 403 (deny-closed, never a blank page).
+        id: 'automations',
+        path: '/automations',
+        navigation: {
+          kind: 'feature',
+          areaId: 'automation',
+          sectionId: 'workflows',
+        },
+        helpHref: '/reference/modules/iv-orchestration',
+        hub: 'automate',
+        icon: Zap,
+        permission: 'orchestration:schedule:read',
+        element: lazyView(AutomationsView),
+      },
+      {
+        //Inference proxy admin — config gates, egress DLP rules and device
+        // approvals. Gated on the proxy config-read perm; config writes need editor,
+        // DLP writes need admin, and every write requires an AAL3 step-up in the view.
+        id: 'inferenceProxy',
+        path: '/inference-proxy',
+        navigation: {
+          kind: 'feature',
+          areaId: 'security-identity',
+          sectionId: 'policy',
+        },
+        helpHref: '/reference/modules/inferenceproxy',
+        hub: 'govern',
+        icon: Waypoints,
+        permission: 'inferenceproxy:config:read',
+        element: lazyView(InferenceProxyView),
+      },
+      {
+        //Alerting — notify routes (event → destination) CRUD + live test, and the
+        // read-only delivery log. Gated on the route-read perm; create/edit need write,
+        // delete/test need admin (enforced server-side and mirrored inside the view).
+        id: 'alerting',
+        path: '/alerting',
+        navigation: {
+          kind: 'feature',
+          areaId: 'automation',
+          sectionId: 'events',
+        },
+        helpHref: '/reference/modules/xv-notify',
+        hub: 'automate',
+        icon: Siren,
+        permission: 'notify:route:read',
+        commandActions: [
+          { id: 'createRoute', permission: 'notify:route:write' },
+        ],
+        element: lazyView(AlertingView),
+      },
 
-  // Intelligence ()
-  {
-    id: 'models',
-    path: '/models',
-    navigation: { kind: 'feature', areaId: 'ai', sectionId: 'models' },
-    helpHref: '/reference/modules/x-models',
-    hub: 'connect',
-    icon: Cpu,
-    permission: 'models:catalog:read',
-    element: lazyView(ModelsView),
-  },
-  {
-    id: 'modelOps',
-    path: '/model-operations',
-    navigation: { kind: 'feature', areaId: 'ai', sectionId: 'models' },
-    helpHref: '/reference/modules/xxiii-model-operations',
-    hub: 'connect',
-    icon: BadgeCheck,
-    permission: 'models:registry:read',
-    element: lazyView(ModelOpsView),
-  },
-  {
-    id: 'finops',
-    path: '/finops',
-    navigation: {
-      kind: 'feature',
-      areaId: 'observation',
-      sectionId: 'cost-adoption',
-    },
-    helpHref: '/reference/modules/xi-finops',
-    hub: 'prove',
-    icon: Coins,
-    permission: 'finops:spend:read',
-    element: lazyView(FinOpsView),
-  },
-  {
-    id: 'adoption',
-    path: '/adoption',
-    navigation: {
-      kind: 'feature',
-      areaId: 'observation',
-      sectionId: 'cost-adoption',
-    },
-    helpHref: '/reference/modules/claudeadoption',
-    hub: 'prove',
-    icon: Gauge,
-    // Team/org adoption views are viewer-read; the per-developer drill-down is gated
-    // deny-closed inside the view (adoption:developer:read).
-    permission: 'adoption:metrics:read',
-    element: lazyView(AdoptionView),
-  },
-  {
-    id: 'evals',
-    path: '/evals',
-    navigation: {
-      kind: 'feature',
-      areaId: 'observation',
-      sectionId: 'evaluation-evidence',
-    },
-    helpHref: '/reference/modules/xii-evals',
-    hub: 'prove',
-    icon: ClipboardCheck,
-    permission: 'evals:run:read',
-    element: lazyView(EvalsView),
-  },
-  {
-    id: 'security',
-    path: '/security',
-    navigation: {
-      kind: 'feature',
-      areaId: 'security-identity',
-      sectionId: 'defense',
-    },
-    helpHref: '/reference/modules/ix-security',
-    hub: 'prove',
-    icon: ShieldAlert,
-    permission: 'security:finding:read',
-    element: lazyView(SecurityView),
-  },
-  {
-    id: 'recordings',
-    path: '/recordings',
-    navigation: {
-      kind: 'feature',
-      areaId: 'observation',
-      sectionId: 'audit-recordings',
-    },
-    savedViewsFeatureId: 'recordings',
-    helpHref: '/reference/modules/recording',
-    hub: 'prove',
-    icon: Disc3,
-    permission: 'recording:session:admin',
-    element: lazyView(RecordingsView),
-  },
-  {
-    // Session recording viewer — detail page reached by clicking a row in
-    // RecordingsView. Not a sidebar entry; navigation is deep-link only.
-    id: 'session-viewer',
-    path: '/session-viewer/$id',
-    navigation: {
-      kind: 'detail',
-      areaId: 'observation',
-      sectionId: 'audit-recordings',
-      parentViewId: 'recordings',
-    },
-    helpHref: '/reference/modules/recording',
-    hub: 'prove',
-    icon: Play,
-    permission: 'recording:session:admin',
-    element: lazyView(SessionViewerPage),
-    hideInNav: true,
-  },
-  {
-    id: 'compliance',
-    path: '/compliance',
-    navigation: {
-      kind: 'feature',
-      areaId: 'observation',
-      sectionId: 'evaluation-evidence',
-    },
-    helpHref: '/reference/modules/xiii-compliance',
-    hub: 'prove',
-    // Scale, not ScrollText: ScrollText is the Claude-policy icon —
-    // compliance is the scales of regulation, not a policy document.
-    icon: Scale,
-    permission: 'compliance:framework:read',
-    element: lazyView(ComplianceView),
-  },
-  {
-    //Posture export — one-click read-only export of the ground-truth posture
-    // (inventory, least-privilege drift, findings) for a control tower to ingest.
-    // Gated on the export read perm the backend enforces on /v1/m/posture/export.
-    id: 'postureExport',
-    path: '/posture-export',
-    navigation: {
-      kind: 'feature',
-      areaId: 'observation',
-      sectionId: 'evaluation-evidence',
-    },
-    savedViewsFeatureId: 'posture-export',
-    helpHref: '/reference/modules/posture-export',
-    hub: 'prove',
-    icon: Share2,
-    permission: 'posture:export:read',
-    element: lazyView(PostureExportView),
-  },
-  {
-    id: 'orchestration',
-    path: '/orchestration',
-    navigation: {
-      kind: 'feature',
-      areaId: 'automation',
-      sectionId: 'workflows',
-    },
-    helpHref: '/reference/modules/iv-orchestration',
-    hub: 'automate',
-    icon: Workflow,
-    permission: 'orchestration:graph:read',
-    commandActions: [
-      { id: 'createSchedule', permission: 'orchestration:schedule:write' },
-    ],
-    element: lazyView(OrchestrationView),
-  },
-  {
-    id: 'voice',
-    path: '/voice',
-    navigation: { kind: 'feature', areaId: 'ai', sectionId: 'execution' },
-    helpHref: '/reference/modules/xvi-voice',
-    hub: 'operate',
-    icon: AudioLines,
-    permission: 'voice:session:read',
-    element: lazyView(VoiceView),
-  },
-  {
-    id: 'sandbox',
-    path: '/sandbox',
-    navigation: { kind: 'feature', areaId: 'ai', sectionId: 'execution' },
-    helpHref: '/reference/modules/xvii-sandbox',
-    hub: 'operate',
-    icon: FlaskConical,
-    permission: 'sandbox:run:read',
-    element: lazyView(SandboxView),
-  },
-  {
-    id: 'redteam',
-    path: '/red-team',
-    navigation: {
-      kind: 'feature',
-      areaId: 'security-identity',
-      sectionId: 'defense',
-    },
-    helpHref: '/reference/modules/xviii-redteam',
-    hub: 'prove',
-    icon: Swords,
-    permission: 'redteam:target:read',
-    element: lazyView(RedTeamView),
-  },
+      // Intelligence ()
+      {
+        id: 'models',
+        path: '/models',
+        navigation: { kind: 'feature', areaId: 'ai', sectionId: 'models' },
+        helpHref: '/reference/modules/x-models',
+        hub: 'connect',
+        icon: Cpu,
+        permission: 'models:catalog:read',
+        element: lazyView(ModelsView),
+      },
+      {
+        id: 'modelOps',
+        path: '/model-operations',
+        navigation: { kind: 'feature', areaId: 'ai', sectionId: 'models' },
+        helpHref: '/reference/modules/xxiii-model-operations',
+        hub: 'connect',
+        icon: BadgeCheck,
+        permission: 'models:registry:read',
+        element: lazyView(ModelOpsView),
+      },
+      {
+        id: 'finops',
+        path: '/finops',
+        navigation: {
+          kind: 'feature',
+          areaId: 'observation',
+          sectionId: 'cost-adoption',
+        },
+        helpHref: '/reference/modules/xi-finops',
+        hub: 'prove',
+        icon: Coins,
+        permission: 'finops:spend:read',
+        element: lazyView(FinOpsView),
+      },
+      {
+        id: 'adoption',
+        path: '/adoption',
+        navigation: {
+          kind: 'feature',
+          areaId: 'observation',
+          sectionId: 'cost-adoption',
+        },
+        helpHref: '/reference/modules/claudeadoption',
+        hub: 'prove',
+        icon: Gauge,
+        // Team/org adoption views are viewer-read; the per-developer drill-down is gated
+        // deny-closed inside the view (adoption:developer:read).
+        permission: 'adoption:metrics:read',
+        element: lazyView(AdoptionView),
+      },
+      {
+        id: 'evals',
+        path: '/evals',
+        navigation: {
+          kind: 'feature',
+          areaId: 'observation',
+          sectionId: 'evaluation-evidence',
+        },
+        helpHref: '/reference/modules/xii-evals',
+        hub: 'prove',
+        icon: ClipboardCheck,
+        permission: 'evals:run:read',
+        element: lazyView(EvalsView),
+      },
+      {
+        id: 'security',
+        path: '/security',
+        navigation: {
+          kind: 'feature',
+          areaId: 'security-identity',
+          sectionId: 'defense',
+        },
+        helpHref: '/reference/modules/ix-security',
+        hub: 'prove',
+        icon: ShieldAlert,
+        permission: 'security:finding:read',
+        element: lazyView(SecurityView),
+      },
+      {
+        id: 'recordings',
+        path: '/recordings',
+        navigation: {
+          kind: 'feature',
+          areaId: 'observation',
+          sectionId: 'audit-recordings',
+        },
+        savedViewsFeatureId: 'recordings',
+        helpHref: '/reference/modules/recording',
+        hub: 'prove',
+        icon: Disc3,
+        permission: 'recording:session:admin',
+        element: lazyView(RecordingsView),
+      },
+      {
+        // Session recording viewer — detail page reached by clicking a row in
+        // RecordingsView. Not a sidebar entry; navigation is deep-link only.
+        id: 'session-viewer',
+        path: '/session-viewer/$id',
+        navigation: {
+          kind: 'detail',
+          areaId: 'observation',
+          sectionId: 'audit-recordings',
+          parentViewId: 'recordings',
+        },
+        helpHref: '/reference/modules/recording',
+        hub: 'prove',
+        icon: Play,
+        permission: 'recording:session:admin',
+        element: lazyView(SessionViewerPage),
+        hideInNav: true,
+      },
+      {
+        id: 'compliance',
+        path: '/compliance',
+        navigation: {
+          kind: 'feature',
+          areaId: 'observation',
+          sectionId: 'evaluation-evidence',
+        },
+        helpHref: '/reference/modules/xiii-compliance',
+        hub: 'prove',
+        // Scale, not ScrollText: ScrollText is the Claude-policy icon —
+        // compliance is the scales of regulation, not a policy document.
+        icon: Scale,
+        permission: 'compliance:framework:read',
+        element: lazyView(ComplianceView),
+      },
+      {
+        //Posture export — one-click read-only export of the ground-truth posture
+        // (inventory, least-privilege drift, findings) for a control tower to ingest.
+        // Gated on the export read perm the backend enforces on /v1/m/posture/export.
+        id: 'postureExport',
+        path: '/posture-export',
+        navigation: {
+          kind: 'feature',
+          areaId: 'observation',
+          sectionId: 'evaluation-evidence',
+        },
+        savedViewsFeatureId: 'posture-export',
+        helpHref: '/reference/modules/posture-export',
+        hub: 'prove',
+        icon: Share2,
+        permission: 'posture:export:read',
+        element: lazyView(PostureExportView),
+      },
+      {
+        id: 'orchestration',
+        path: '/orchestration',
+        navigation: {
+          kind: 'feature',
+          areaId: 'automation',
+          sectionId: 'workflows',
+        },
+        helpHref: '/reference/modules/iv-orchestration',
+        hub: 'automate',
+        icon: Workflow,
+        permission: 'orchestration:graph:read',
+        commandActions: [
+          { id: 'createSchedule', permission: 'orchestration:schedule:write' },
+        ],
+        element: lazyView(OrchestrationView),
+      },
+      {
+        id: 'voice',
+        path: '/voice',
+        navigation: { kind: 'feature', areaId: 'ai', sectionId: 'execution' },
+        helpHref: '/reference/modules/xvi-voice',
+        hub: 'operate',
+        icon: AudioLines,
+        permission: 'voice:session:read',
+        element: lazyView(VoiceView),
+      },
+      {
+        id: 'sandbox',
+        path: '/sandbox',
+        navigation: { kind: 'feature', areaId: 'ai', sectionId: 'execution' },
+        helpHref: '/reference/modules/xvii-sandbox',
+        hub: 'operate',
+        icon: FlaskConical,
+        permission: 'sandbox:run:read',
+        element: lazyView(SandboxView),
+      },
+      {
+        id: 'redteam',
+        path: '/red-team',
+        navigation: {
+          kind: 'feature',
+          areaId: 'security-identity',
+          sectionId: 'defense',
+        },
+        helpHref: '/reference/modules/xviii-redteam',
+        hub: 'prove',
+        icon: Swords,
+        permission: 'redteam:target:read',
+        element: lazyView(RedTeamView),
+      },
 
-  // Executive (). No dedicated backend permission: module XXI is a web-only
-  // rollup of the other modules' read APIs, so the route is open to any signed-in
-  // user and each KPI pillar is gated INSIDE the view by its source's read
-  // permission (a reader who can't see /finops never sees the cost KPI, and the
-  // exported PDF therefore can't leak it). docs/SECURITY-HARDENING.md.
-  {
-    id: 'dashboards',
-    path: '/dashboards',
-    navigation: {
-      kind: 'feature',
-      areaId: 'observation',
-      sectionId: 'operations',
-    },
-    helpHref: '/reference/modules/xxi-executive-dashboards',
-    hub: 'prove',
-    icon: BarChart3,
-    element: lazyView(ExecutiveView),
-  },
-  {
-    // Team cost attribution — team-level spend with sparklines and expandable
-    // project/model breakdown rows. Same permission gate as FinOps: the backend
-    // enforces finops:spend:read on the /analytics/team-summary endpoint.
-    id: 'team-costs',
-    path: '/team-costs',
-    navigation: {
-      kind: 'feature',
-      areaId: 'observation',
-      sectionId: 'cost-adoption',
-    },
-    savedViewsFeatureId: 'team-costs',
-    helpHref: '/reference/modules/xi-finops',
-    hub: 'prove',
-    icon: DollarSign,
-    permission: 'finops:spend:read',
-    element: lazyView(TeamCostsView),
-  },
-  {
-    //Reports — on-demand generation + download of the five built-in reports
-    // (compliance evidence, audit summary, FinOps, access review, executive), plus
-    // the scheduler surface when the enterprise build wires it. Gated on the
-    // reporting read perm the backend enforces on /v1/m/reporting/reports.
-    id: 'reporting',
-    path: '/reporting',
-    navigation: {
-      kind: 'feature',
-      areaId: 'observation',
-      sectionId: 'evaluation-evidence',
-    },
-    helpHref: '/reference/modules/reporting',
-    hub: 'prove',
-    icon: FileBarChart,
-    permission: 'reporting:report:read',
-    element: lazyView(ReportingView),
-  },
+      // Executive (). No dedicated backend permission: module XXI is a web-only
+      // rollup of the other modules' read APIs, so the route is open to any signed-in
+      // user and each KPI pillar is gated INSIDE the view by its source's read
+      // permission (a reader who can't see /finops never sees the cost KPI, and the
+      // exported PDF therefore can't leak it). docs/SECURITY-HARDENING.md.
+      {
+        id: 'dashboards',
+        path: '/dashboards',
+        navigation: {
+          kind: 'feature',
+          areaId: 'observation',
+          sectionId: 'operations',
+        },
+        helpHref: '/reference/modules/xxi-executive-dashboards',
+        hub: 'prove',
+        icon: BarChart3,
+        element: lazyView(ExecutiveView),
+      },
+      {
+        // Team cost attribution — team-level spend with sparklines and expandable
+        // project/model breakdown rows. Same permission gate as FinOps: the backend
+        // enforces finops:spend:read on the /analytics/team-summary endpoint.
+        id: 'team-costs',
+        path: '/team-costs',
+        navigation: {
+          kind: 'feature',
+          areaId: 'observation',
+          sectionId: 'cost-adoption',
+        },
+        savedViewsFeatureId: 'team-costs',
+        helpHref: '/reference/modules/xi-finops',
+        hub: 'prove',
+        icon: DollarSign,
+        permission: 'finops:spend:read',
+        element: lazyView(TeamCostsView),
+      },
+      {
+        //Reports — on-demand generation + download of the five built-in reports
+        // (compliance evidence, audit summary, FinOps, access review, executive), plus
+        // the scheduler surface when the enterprise build wires it. Gated on the
+        // reporting read perm the backend enforces on /v1/m/reporting/reports.
+        id: 'reporting',
+        path: '/reporting',
+        navigation: {
+          kind: 'feature',
+          areaId: 'observation',
+          sectionId: 'evaluation-evidence',
+        },
+        helpHref: '/reference/modules/reporting',
+        hub: 'prove',
+        icon: FileBarChart,
+        permission: 'reporting:report:read',
+        element: lazyView(ReportingView),
+      },
 
-  // System (). Cross-cutting admin dashboards over the Fase-F depth. Each route
-  // gates on its source module's existing read permission (the backend stays the
-  // source of truth); the views themselves are honest about what is live vs a
-  // declared-contract seam.
-  {
-    id: 'observability',
-    path: '/observability',
-    navigation: {
-      kind: 'feature',
-      areaId: 'observation',
-      sectionId: 'operations',
-    },
-    savedViewsFeatureId: 'observability',
-    helpHref: '/reference/modules/observability',
-    hub: 'operate',
-    icon: Radar,
-    permission: 'health:status:read',
-    element: lazyView(ObservabilityView),
-  },
-  {
-    id: 'platforms',
-    path: '/platforms',
-    navigation: {
-      kind: 'feature',
-      areaId: 'ai',
-      sectionId: 'provider-reference',
-    },
-    helpHref: '/reference/modules/x-models',
-    hub: 'connect',
-    icon: Layers,
-    permission: 'models:platforms:read',
-    element: lazyView(PlatformsView),
-  },
-  {
-    id: 'rateLimits',
-    path: '/rate-limits',
-    navigation: {
-      kind: 'feature',
-      areaId: 'ai',
-      sectionId: 'provider-reference',
-    },
-    helpHref: '/reference/modules/x-models',
-    hub: 'govern',
-    // Timer, not Gauge: Gauge belongs to Adoption; rate limits are about
-    // time windows, and every registered view must carry a unique glyph.
-    icon: Timer,
-    permission: 'models:ratelimits:read',
-    element: lazyView(RateLimitsView),
-  },
-  {
-    id: 'attestation',
-    path: '/attestation',
-    navigation: {
-      kind: 'feature',
-      areaId: 'observation',
-      sectionId: 'evaluation-evidence',
-    },
-    helpHref: '/how-to/verify-a-release',
-    hub: 'prove',
-    icon: PackageCheck,
-    permission: 'observability:attestation:read',
-    element: lazyView(AttestationView),
-  },
-  {
-    id: 'apiPlayground',
-    path: '/api-playground',
-    navigation: { kind: 'feature', areaId: 'system', sectionId: 'development' },
-    helpHref: '/reference/modules/xix-api-manage-as-code',
-    hub: 'connect',
-    icon: Code2,
-    permission: 'tenant:admin',
-    element: lazyView(ApiPlaygroundView),
-  },
+      // System (). Cross-cutting admin dashboards over the Fase-F depth. Each route
+      // gates on its source module's existing read permission (the backend stays the
+      // source of truth); the views themselves are honest about what is live vs a
+      // declared-contract seam.
+      {
+        id: 'observability',
+        path: '/observability',
+        navigation: {
+          kind: 'feature',
+          areaId: 'observation',
+          sectionId: 'operations',
+        },
+        savedViewsFeatureId: 'observability',
+        helpHref: '/reference/modules/observability',
+        hub: 'operate',
+        icon: Radar,
+        permission: 'health:status:read',
+        element: lazyView(ObservabilityView),
+      },
+      {
+        id: 'platforms',
+        path: '/platforms',
+        navigation: {
+          kind: 'feature',
+          areaId: 'ai',
+          sectionId: 'provider-reference',
+        },
+        helpHref: '/reference/modules/x-models',
+        hub: 'connect',
+        icon: Layers,
+        permission: 'models:platforms:read',
+        element: lazyView(PlatformsView),
+      },
+      {
+        id: 'rateLimits',
+        path: '/rate-limits',
+        navigation: {
+          kind: 'feature',
+          areaId: 'ai',
+          sectionId: 'provider-reference',
+        },
+        helpHref: '/reference/modules/x-models',
+        hub: 'govern',
+        // Timer, not Gauge: Gauge belongs to Adoption; rate limits are about
+        // time windows, and every registered view must carry a unique glyph.
+        icon: Timer,
+        permission: 'models:ratelimits:read',
+        element: lazyView(RateLimitsView),
+      },
+      {
+        id: 'attestation',
+        path: '/attestation',
+        navigation: {
+          kind: 'feature',
+          areaId: 'observation',
+          sectionId: 'evaluation-evidence',
+        },
+        helpHref: '/how-to/verify-a-release',
+        hub: 'prove',
+        icon: PackageCheck,
+        permission: 'observability:attestation:read',
+        element: lazyView(AttestationView),
+      },
+      {
+        id: 'apiPlayground',
+        path: '/api-playground',
+        navigation: {
+          kind: 'feature',
+          areaId: 'system',
+          sectionId: 'development',
+        },
+        helpHref: '/reference/modules/xix-api-manage-as-code',
+        hub: 'connect',
+        icon: Code2,
+        permission: 'tenant:admin',
+        element: lazyView(ApiPlaygroundView),
+      },
 
-  //Backup/Restore — DR management console: list, trigger, download,
-  // restore with dual-confirmation, scheduling. Superadmin-only.
-  {
-    id: 'backups',
-    path: '/backups',
-    navigation: { kind: 'feature', areaId: 'system', sectionId: 'maintenance' },
-    helpHref: '/how-to/backup-and-restore',
-    hub: 'operate',
-    icon: DatabaseBackup,
-    permission: 'system:admin',
-    element: lazyView(BackupsView),
-  },
-  //Log Viewer — real-time engine log stream (SSE), with level/module
-  // filters, search, pause/resume. Superadmin-only.
-  {
-    id: 'logs',
-    path: '/logs',
-    navigation: { kind: 'feature', areaId: 'system', sectionId: 'maintenance' },
-    helpHref: '/how-to/troubleshooting',
-    hub: 'operate',
-    // Logs, not ScrollText: ScrollText is the Claude-policy icon, and
-    // lucide ships a literal Logs glyph for a log stream.
-    icon: Logs,
-    permission: 'system:admin',
-    element: lazyView(LogsView),
-  },
-  // C07-02 Tenants — retirar y restaurar el servicio de un tenant.
-  //
-  // ⚠ NO va dentro de «Data residency» aunque ésa ya liste los mismos orgs: esa pantalla trata de
-  // DÓNDE viven los datos, y colgarle una acción de ciclo de vida sería una pantalla que miente
-  // sobre lo que es. Además el roster de residencia no muestra el `status`, así que hoy un
-  // operador no puede ver que un tenant está suspendido.
-  //
-  // ⚠ Y no es la superficie de C07-09: `/admin/tenants*` **no existe** (404 medido en motor vivo
-  // el 2026-08-18). Ésta se construye sobre `/v1/system/orgs*`, que sí existen; cuando aterrice
-  // aquella API, extenderá esta vista en vez de estrenar otra.
-  {
-    id: 'tenants',
-    path: '/tenants',
-    navigation: {
-      kind: 'feature',
-      areaId: 'system',
-      sectionId: 'administration',
-    },
-    helpHref: '/how-to/troubleshooting',
-    hub: 'operate',
-    icon: Building2,
-    permission: 'system:admin',
-    element: lazyView(TenantsView),
-  },
-  //Data residency — org region pin set/clear with two-step confirm +
-  // AAL3. Superadmin-only; the org roster + region PUT are authzSystem routes.
-  {
-    id: 'residency',
-    path: '/residency',
-    navigation: {
-      kind: 'feature',
-      areaId: 'security-identity',
-      sectionId: 'boundaries',
-    },
-    helpHref: '/reference/modules/xiii-compliance',
-    hub: 'govern',
-    icon: Globe,
-    permission: 'system:admin',
-    element: lazyView(ResidencyView),
-  },
-]
+      //Backup/Restore — DR management console: list, trigger, download,
+      // restore with dual-confirmation, scheduling. Superadmin-only.
+      {
+        id: 'backups',
+        path: '/backups',
+        navigation: {
+          kind: 'feature',
+          areaId: 'system',
+          sectionId: 'maintenance',
+        },
+        helpHref: '/how-to/backup-and-restore',
+        hub: 'operate',
+        icon: DatabaseBackup,
+        permission: 'system:admin',
+        element: lazyView(BackupsView),
+      },
+      //Log Viewer — real-time engine log stream (SSE), with level/module
+      // filters, search, pause/resume. Superadmin-only.
+      {
+        id: 'logs',
+        path: '/logs',
+        navigation: {
+          kind: 'feature',
+          areaId: 'system',
+          sectionId: 'maintenance',
+        },
+        helpHref: '/how-to/troubleshooting',
+        hub: 'operate',
+        // Logs, not ScrollText: ScrollText is the Claude-policy icon, and
+        // lucide ships a literal Logs glyph for a log stream.
+        icon: Logs,
+        permission: 'system:admin',
+        element: lazyView(LogsView),
+      },
+      // C07-02 Tenants — retirar y restaurar el servicio de un tenant.
+      //
+      // ⚠ NO va dentro de «Data residency» aunque ésa ya liste los mismos orgs: esa pantalla trata de
+      // DÓNDE viven los datos, y colgarle una acción de ciclo de vida sería una pantalla que miente
+      // sobre lo que es. Además el roster de residencia no muestra el `status`, así que hoy un
+      // operador no puede ver que un tenant está suspendido.
+      //
+      // ⚠ Y no es la superficie de C07-09: `/admin/tenants*` **no existe** (404 medido en motor vivo
+      // el 2026-08-18). Ésta se construye sobre `/v1/system/orgs*`, que sí existen; cuando aterrice
+      // aquella API, extenderá esta vista en vez de estrenar otra.
+      {
+        id: 'tenants',
+        path: '/tenants',
+        navigation: {
+          kind: 'feature',
+          areaId: 'system',
+          sectionId: 'administration',
+        },
+        helpHref: '/how-to/troubleshooting',
+        hub: 'operate',
+        icon: Building2,
+        permission: 'system:admin',
+        element: lazyView(TenantsView),
+      },
+      //Data residency — org region pin set/clear with two-step confirm +
+      // AAL3. Superadmin-only; the org roster + region PUT are authzSystem routes.
+      {
+        id: 'residency',
+        path: '/residency',
+        navigation: {
+          kind: 'feature',
+          areaId: 'security-identity',
+          sectionId: 'boundaries',
+        },
+        helpHref: '/reference/modules/xiii-compliance',
+        hub: 'govern',
+        icon: Globe,
+        permission: 'system:admin',
+        element: lazyView(ResidencyView),
+      },
+    ] satisfies FeatureView[]
+  ).map((view) => Object.freeze(view)),
+)
 
 /**
  * RETIRED PATHS THAT STILL RESOLVE. Empty on purpose: Re-hubbed all 51 views and

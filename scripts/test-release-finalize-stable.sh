@@ -308,6 +308,7 @@ cat >"$WORK/bin/gh" <<'GHEOF'
 route=""
 jqexpr=""
 method="GET"
+include_headers=0
 prev=""
 for a in "$@"; do
 	case "$prev" in
@@ -316,11 +317,13 @@ for a in "$@"; do
 	esac
 	case "$a" in
 	repos/*) route="$a" ;;
+	--include) include_headers=1 ;;
 	esac
 	prev="$a"
 done
 
 emit() { # emit <file>
+	if [ "$include_headers" -eq 1 ]; then printf 'HTTP/2.0 200 OK\r\n\r\n'; fi
 	if [ -n "$jqexpr" ]; then jq -c -r "$jqexpr" "$1"; else cat "$1"; fi
 }
 
@@ -351,6 +354,16 @@ case "$route" in
 	# fixture release is the single element, rebuilt on every call so the reconciliation
 	# rows see the PATCH that already happened.
 	[ "${GH_RELEASE_RC:-0}" -eq 0 ] || { echo "gh: HTTP 503 (stub)" >&2; exit "${GH_RELEASE_RC}"; }
+	reads="$(cat "${GH_STATE}/release-list-reads" 2>/dev/null || echo 0)"
+	reads=$((reads + 1))
+	printf '%s' "$reads" >"${GH_STATE}/release-list-reads"
+	if [ "$reads" -gt 1 ]; then
+		[ "${GH_ORIGIN_LIST_RC:-0}" -eq 0 ] || { echo "gh: HTTP 503 (stub)" >&2; exit "${GH_ORIGIN_LIST_RC}"; }
+		if [ -n "${GH_ORIGIN_LIST_FILE:-}" ]; then
+			emit "${GH_ORIGIN_LIST_FILE}"
+			exit 0
+		fi
+	fi
 	if [ -n "${GH_RELEASES_LIST_FILE:-}" ]; then
 		emit "${GH_RELEASES_LIST_FILE}"
 	else
@@ -372,7 +385,18 @@ case "$route" in
 	;;
 */releases/latest)
 	[ "${GH_LATEST_RC:-0}" -eq 0 ] || { echo "gh: HTTP 404 (stub)" >&2; exit "${GH_LATEST_RC}"; }
-	emit "${GH_STATE}/latest.json"
+	if [ "$(jq -r '.draft' "${GH_STATE}/release.json")" = "true" ]; then
+		if [ "${GH_ORIGIN_STATUS:-200}" != "200" ]; then
+			if [ "$include_headers" -eq 1 ]; then
+				printf 'HTTP/2.0 %s fixture error\r\n\r\n' "$GH_ORIGIN_STATUS"
+			fi
+			printf '{"message":"fixture error"}\n'
+			exit 1
+		fi
+		emit "${GH_STATE}/origin.json"
+	else
+		emit "${GH_STATE}/latest.json"
+	fi
 	;;
 */releases/assets/*)
 	id="${route##*/}"
@@ -735,13 +759,14 @@ build_release_state() { # build_release_state [sign-key-name] [manifest-version]
 		'{id:$id,tag_name:$tag,draft:true,prerelease:false,immutable:false,target_commitish:$tc}' \
 		>"$STATE/release.json"
 	jq -nc --argjson id "$RELEASE_ID" --arg tag "$TAG" '{id:$id,tag_name:$tag,draft:false}' >"$STATE/latest.json"
+	jq -nc '{id:42424241,tag_name:"v26.8.0",draft:false,prerelease:false}' >"$STATE/origin.json"
 	jq -nc --arg repo "$REPO" --argjson rid "$REPO_ID" --arg sha "$COMMIT" \
 		--argjson attempt "$RUN_ATTEMPT" --arg ev "$CTX_EVENT" \
 		'{repository:{full_name:$repo,id:$rid},path:".github/workflows/release.yml",
 		  event:$ev,head_sha:$sha,run_attempt:$attempt,status:"completed",conclusion:"success"}' \
 		>"$STATE/run.json"
 	: >"$STATE/patches"
-	rm -f "$STATE/asset-reads" "$STATE/assets-swapped.json"
+	rm -f "$STATE/asset-reads" "$STATE/assets-swapped.json" "$STATE/release-list-reads"
 	rebuild_assets_json
 	stage_attached_pair
 }
@@ -881,6 +906,90 @@ check "both the checksums and the manifest signature were re-verified" "two subj
 # EVERY asset was fetched by id, never by a mutable selector.
 ! command grep -q '^ARG latest$' "$WORK/gh.log.$n"
 check "no request selected a candidate by 'latest'" "immutable identity only" $?
+
+# An existing release with the same version must not be replaced by this draft.
+build_release_state || blind "fixture"
+jq --arg tag "$TAG" '.tag_name = $tag' "$STATE/origin.json" >"$STATE/origin.next" &&
+	mv "$STATE/origin.next" "$STATE/origin.json"
+run_finalizer
+[ "$rc" -eq 1 ] && [ "$(patch_count)" -eq 0 ] && says 'not a strict successor'
+check "an equal version cannot replace latest" "refused before publication" $?
+
+# Order is numeric by component, including components too large for machine integers.
+for _origin in v26.10.0 v27.0.0 v26.9.1 v26.9.9007199254740993; do
+	build_release_state || blind "fixture"
+	jq --arg tag "$_origin" '.tag_name = $tag' "$STATE/origin.json" >"$STATE/origin.next" &&
+		mv "$STATE/origin.next" "$STATE/origin.json"
+	run_finalizer
+	[ "$rc" -eq 1 ] && [ "$(patch_count)" -eq 0 ] && says 'not a strict successor'
+	check "latest $_origin prevents publishing an older candidate" "no pointer regression" $?
+done
+
+for _origin in v26.8.99 v26.8.9007199254740993 v25.99.99; do
+	build_release_state || blind "fixture"
+	jq --arg tag "$_origin" '.tag_name = $tag' "$STATE/origin.json" >"$STATE/origin.next" &&
+		mv "$STATE/origin.next" "$STATE/origin.json"
+	run_finalizer
+	[ "$rc" -eq 0 ] && [ "$(patch_count)" -eq 1 ] && says "latest $_origin precedes candidate"
+	check "a candidate newer than $_origin publishes" "numeric component order" $?
+done
+
+for _origin in v26.8 v26.08.0 v26.8.0-rc1 $'v26.8.0\n'; do
+	build_release_state || blind "fixture"
+	jq --arg tag "$_origin" '.tag_name = $tag' "$STATE/origin.json" >"$STATE/origin.next" &&
+		mv "$STATE/origin.next" "$STATE/origin.json"
+	run_finalizer
+	[ "$rc" -eq 2 ] && [ "$(patch_count)" -eq 0 ] && says 'usable version'
+	check "an unreadable latest tag is blind: $(printf '%q' "$_origin")" "never absence" $?
+done
+
+for _filter in 'del(.draft)' '.draft = "false"' '.prerelease = true' '.id = null'; do
+	build_release_state || blind "fixture"
+	jq "$_filter" "$STATE/origin.json" >"$STATE/origin.next" && mv "$STATE/origin.next" "$STATE/origin.json"
+	run_finalizer
+	[ "$rc" -eq 2 ] && [ "$(patch_count)" -eq 0 ] && says 'ordinary published release'
+	check "an incomplete latest object is blind: $_filter" "typed release state" $?
+done
+
+build_release_state || blind "fixture"
+printf '{' >"$STATE/origin.json"
+run_finalizer
+[ "$rc" -eq 2 ] && [ "$(patch_count)" -eq 0 ] && says 'usable version'
+check "malformed latest JSON is blind" "not a first publication" $?
+
+build_release_state || blind "fixture"
+run_finalizer GH_ORIGIN_STATUS=503
+[ "$rc" -eq 2 ] && [ "$(patch_count)" -eq 0 ] && says 'HTTP 503'
+check "an unreadable latest origin stops publication" "no PATCH" $?
+
+build_release_state || blind "fixture"
+run_finalizer GH_LATEST_RC=1
+[ "$rc" -eq 2 ] && [ "$(patch_count)" -eq 0 ] && says 'no HTTP status'
+check "stderr mentioning 404 does not prove first publication" "response status required" $?
+
+build_release_state || blind "fixture"
+run_finalizer GH_ORIGIN_STATUS=404
+[ "$rc" -eq 0 ] && [ "$(patch_count)" -eq 1 ] && says 'first stable publication'
+check "404 and an inventory containing only the draft permit the first publication" "positive case" $?
+
+build_release_state || blind "fixture"
+printf '[]\n[{"id":42424241,"tag_name":"v26.8.0","draft":false,"prerelease":false}]\n' >"$WORK/origin-pages.json"
+run_finalizer GH_ORIGIN_STATUS=404 GH_ORIGIN_LIST_FILE="$WORK/origin-pages.json"
+[ "$rc" -eq 2 ] && [ "$(patch_count)" -eq 0 ] && says 'ordinary published release exists'
+check "404 with a published release on page two is blind" "every page counts" $?
+
+for _pages in '' '{}' '[] invalid' '[{"draft":false}]'; do
+	build_release_state || blind "fixture"
+	printf '%s' "$_pages" >"$WORK/origin-pages.json"
+	run_finalizer GH_ORIGIN_STATUS=404 GH_ORIGIN_LIST_FILE="$WORK/origin-pages.json"
+	[ "$rc" -eq 2 ] && [ "$(patch_count)" -eq 0 ] && says 'inventory is incomplete or unreadable'
+	check "404 with an unreadable inventory is blind: $(printf '%q' "$_pages")" "empty bytes are not an empty array" $?
+done
+
+build_release_state || blind "fixture"
+run_finalizer GH_ORIGIN_STATUS=404 GH_ORIGIN_LIST_RC=1
+[ "$rc" -eq 2 ] && [ "$(patch_count)" -eq 0 ] && says 'could not establish'
+check "a failed first-publication list read stops publication" "no PATCH" $?
 
 # THE LIGHT FIXTURE CANNOT PASS ON ITS OWN, which is what makes it safe to use in sections D,
 # E and F. Everything else about this candidate is correct; only the shipped binary is a
@@ -1496,6 +1605,15 @@ command grep -qF -- "--source-uri github.com/${PREPROD_REPO}" "$WORK/slsa.log.$n
 check "and slsa-verifier is given the preprod source repository" "not a production literal" $?
 ! command grep -qF -- 'olivaresai/olivares' "$WORK/cosign.log.$n"
 check "and no call names the production repository" "profile negative control" $?
+for _policy in false legacy; do
+	build_release_state || blind "preprod fixture"
+	run_finalizer GITHUB_REPOSITORY="$PREPROD_REPO" OLIVARES_RELEASE_PROFILE=preprod \
+		OLIVARES_PREPROD_MAKE_LATEST="$_policy" GH_ORIGIN_STATUS=503 \
+		COSIGN_EXPECT_IDENTITY='^https://github\.com/acme/product-preprod/\.github/workflows/release\.yml@refs/tags/v26\.9\.0$'
+	[ "$rc" -eq 0 ] && [ "$(patch_count)" -eq 1 ] &&
+		! command grep -qF -- "repos/${PREPROD_REPO}/releases/latest" "$WORK/gh.log.$n"
+	check "preprod $_policy preserves its explicit pointer policy" "no latest read or successor claim" $?
+done
 REPO="$_saved_repo"
 
 # ============================================================================================
@@ -1805,6 +1923,18 @@ build_release_state || blind "fixture"
 run_finalizer
 [ "$rc" -ne 0 ] && [ "$(patch_count)" -eq 0 ]
 check "[mutant] reading the candidate by TAG cannot see the draft" "the list read is causal" $?
+
+# M6: with the successor guard removed, an equal-origin draft is published.
+restore_sut || blind "fixture"
+sed -i '/^# --- latest publication guard: begin/,/^# --- latest publication guard: end/d' "$SUT"
+! command grep -q '^# --- latest publication guard: begin' "$SUT"
+check "[mutant] the successor guard was removed" "mutant applied" $?
+build_release_state || blind "fixture"
+jq --arg tag "$TAG" '.tag_name = $tag' "$STATE/origin.json" >"$STATE/origin.next" &&
+	mv "$STATE/origin.next" "$STATE/origin.json"
+run_finalizer
+[ "$rc" -eq 0 ] && [ "$(patch_count)" -eq 1 ]
+check "[mutant] removing the successor guard publishes an equal version" "the refusal is causal" $?
 
 restore_sut
 build_release_state || blind "fixture"

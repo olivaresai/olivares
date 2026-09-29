@@ -44,18 +44,33 @@ export function XScroll({
   children,
   className,
   contentKey,
+  accessibleLabel,
 }: {
   children: ReactNode
   className?: string
   /** Anything whose change resizes the content — a row count, a tab id. */
   contentKey?: unknown
+  /** Name a static table's keyboard scroll region when its content overflows. */
+  accessibleLabel?: string
 }) {
   const ref = useRef<HTMLDivElement>(null)
   const edges = useScrollEdges(ref, [contentKey])
+  const keyboardScrollable = !!accessibleLabel && (edges.left || edges.right)
   return (
     <div className="relative">
       <ScrollEdgeHints edges={edges} />
-      <div ref={ref} className={cn('overflow-x-auto', className)}>
+      <div
+        ref={ref}
+        role={keyboardScrollable ? 'region' : undefined}
+        aria-label={keyboardScrollable ? accessibleLabel : undefined}
+        tabIndex={keyboardScrollable ? 0 : undefined}
+        className={cn(
+          'overflow-x-auto',
+          keyboardScrollable &&
+            'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus',
+          className,
+        )}
+      >
         {children}
       </div>
     </div>

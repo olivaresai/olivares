@@ -1,0 +1,24 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# Socket of the Appliance Console, the appliance's read-only status on port 9443.
+#
+# Packaged, not enabled: there is no [Install] section, so installing the package starts
+# nothing at boot. Started by hand, it listens on loopback only. Remote access needs a
+# selected management interface, verified TLS custody and a measured firewall
+# prerequisite, and is then a separate socket unit per management interface: its own
+# ListenStream= on that interface's address, BindToDevice= naming the interface, its own
+# IP allow list and Service=olivares-portal.service. It is never a drop-in on this unit:
+# BindToDevice= applies to every listener of a socket unit, so it would bind 127.0.0.1:9443
+# to the uplink too, and IPAddressAllow=localhost below would still drop remote peers. No
+# listener is ever a wildcard address. The console reads each socket's binding back and
+# refuses any non-loopback socket not bound to a selected interface.
+[Unit]
+Description=Appliance Console socket (loopback only)
+Documentation=https://github.com/olivaresai/olivares
+
+[Socket]
+ListenStream=127.0.0.1:9443
+# Beside the loopback address, the kernel drops traffic from any other peer.
+IPAddressDeny=any
+IPAddressAllow=localhost
