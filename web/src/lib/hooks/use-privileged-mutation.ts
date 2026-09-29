@@ -4,6 +4,7 @@
 import {
   useMutation,
   useQueryClient,
+  type MutationKey,
   type QueryKey,
   type MutateOptions,
   type UseMutateFunction,
@@ -82,6 +83,10 @@ export interface PrivilegedMutationOptions<TVars, TData> {
   stepUpEnrollment?: StepUpDemand['enrollment']
   /** Feature-owned errors only. Authorization and assurance cannot be suppressed. */
   onError?: (err: unknown, vars: TVars) => boolean
+  /** Names this action's mutations in TanStack's MutationCache, so their owner can find
+   *  and remove them later (for example, what a retired authority boundary left behind).
+   *  Without it the mutations carry no key, as before. */
+  mutationKey?: MutationKey
 }
 
 type ActionContext = { owner: StepUpOwner; resumed: boolean }
@@ -128,6 +133,7 @@ export function usePrivilegedMutation<TVars = void, TData = unknown>(
   const mutateRef = useRef<((execution: Execution<TVars>) => void) | null>(null)
   const mutation = useMutation<TData, unknown, Execution<TVars>, ActionContext>(
     {
+      mutationKey: opts.mutationKey,
       mutationFn: async ({ vars, attempt }) => {
         // TanStack may wait before onMutate and again before calling mutationFn.
         // This authority was captured before either queue, not reconstructed here.

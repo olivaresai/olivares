@@ -65,10 +65,10 @@ func TestSCIMProvisionJoinsTenant(t *testing.T) {
 	}
 	// Idempotent and write-free: a second provision of an account that is already a
 	// member returns the stored one as it stands, and does not duplicate it. The
-	// attributes below all differ from the ones the account was created with, so a
+	// directory attributes differ but the explicit external identity agrees, so a
 	// create that wrote the row it found would be caught here.
 	again, created2, err := a.SCIMProvisionUser(ctx, super, tenant, auth.SCIMUserInput{
-		UserName: "joiner@acme.com", ExternalID: "idp-rewritten", DisplayName: "Rewritten", Active: false,
+		UserName: "joiner@acme.com", ExternalID: "idp-9", DisplayName: "Rewritten", Active: false,
 	})
 	if err != nil || created2 {
 		t.Errorf("re-provision = (%v, created=%v), want (nil, false)", err, created2)

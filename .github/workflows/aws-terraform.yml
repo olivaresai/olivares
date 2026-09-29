@@ -177,6 +177,7 @@ jobs:
       # runner entre jobs y es escribible, que `/tmp` en estos runners no lo es.
       - name: Go caches and TMPDIR under RUNNER_TEMP (this runner may have no $HOME)
         run: |
+          : "${RUNNER_TEMP:?aws-terraform: RUNNER_TEMP must be set and non-empty}"
           mkdir -p "$RUNNER_TEMP/tmp"
           {
             echo "TMPDIR=$RUNNER_TEMP/tmp"
@@ -221,6 +222,7 @@ jobs:
         shell: bash
         run: |
           set -u
+          : "${RUNNER_TEMP:?aws-terraform: RUNNER_TEMP must be set and non-empty}"
           _d="$RUNNER_TEMP/go-liveness"
           if ! mkdir -p "$_d" 2>/dev/null || ! printf 'package main\nfunc main(){}\n' > "$_d/main.go" 2>/dev/null; then
             echo "aws-terraform: COULD NOT LOOK — no puedo preparar $_d (espacio, permisos o inodos)." >&2
@@ -253,6 +255,7 @@ jobs:
       - name: install OpenTofu (pinned)
         run: |
           set -euo pipefail
+          : "${RUNNER_TEMP:?aws-terraform: RUNNER_TEMP must be set and non-empty}"
           # ⛔ $RUNNER_TEMP Y NO /tmp: en este runner /tmp NO ES ESCRIBIBLE. Medido el
           # 2026-08-24 (job 97367227397): `curl: (23) Failure writing output to
           # destination`, y 0 verdes en 40 corridas. El 23 de curl es un fallo de
@@ -408,6 +411,7 @@ jobs:
       - name: install OpenTofu (pinned)
         run: |
           set -euo pipefail
+          : "${RUNNER_TEMP:?aws-terraform: RUNNER_TEMP must be set and non-empty}"
           # ⛔ $RUNNER_TEMP Y NO /tmp: en este runner /tmp NO ES ESCRIBIBLE. Medido el
           # 2026-08-24 (job 97367227397): `curl: (23) Failure writing output to
           # destination`, y 0 verdes en 40 corridas. El 23 de curl es un fallo de
@@ -456,6 +460,7 @@ jobs:
       - name: install the AWS CLI (pinned, no root)
         run: |
           set -euo pipefail
+          : "${RUNNER_TEMP:?aws-terraform: RUNNER_TEMP must be set and non-empty}"
           curl -fsSL -o "$RUNNER_TEMP/awscli.zip" \
             "https://awscli.amazonaws.com/awscli-exe-linux-x86_64-${AWSCLI_VERSION}.zip"
           echo "${AWSCLI_SHA256}  $RUNNER_TEMP/awscli.zip" | sha256sum -c -
@@ -753,6 +758,7 @@ jobs:
       - name: install OpenTofu (pinned)
         run: |
           set -euo pipefail
+          : "${RUNNER_TEMP:?aws-terraform: RUNNER_TEMP must be set and non-empty}"
           curl -fsSL -o "$RUNNER_TEMP/tofu.zip" \
             "https://github.com/opentofu/opentofu/releases/download/v${TOFU_VERSION}/tofu_${TOFU_VERSION}_linux_amd64.zip"
           echo "${TOFU_SHA256}  $RUNNER_TEMP/tofu.zip" | sha256sum -c -
@@ -763,6 +769,7 @@ jobs:
       - name: install the AWS CLI (pinned, no root)
         run: |
           set -euo pipefail
+          : "${RUNNER_TEMP:?aws-terraform: RUNNER_TEMP must be set and non-empty}"
           curl -fsSL -o "$RUNNER_TEMP/awscli.zip" \
             "https://awscli.amazonaws.com/awscli-exe-linux-x86_64-${AWSCLI_VERSION}.zip"
           echo "${AWSCLI_SHA256}  $RUNNER_TEMP/awscli.zip" | sha256sum -c -

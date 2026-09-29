@@ -353,6 +353,16 @@ func moduleResponses(r moduleRoute) map[string]any {
 	} else {
 		resp["200"] = oaJSONResp("OK")
 	}
+	if sessionsProviderAccountCreate(r) {
+		// 201, and the 200 is DELETED rather than left beside it. This route makes a
+		// directory on the node and a row that names it, and 201 is the only success
+		// it can answer with; publishing a 200 it never produces is the same defect
+		// the three run controls below were corrected for, one size smaller.
+		delete(resp, "200")
+		resp["201"] = oaJSONResp("the provider account, and the home the engine built for it")
+		resp["422"] = oaJSONResp("Invalid account name, retry key or execution environment")
+		resp["503"] = oaJSONResp("Account home service unavailable or outcome unresolved; retry the same idempotency key")
+	}
 	// ⛔ THE THREE RUN CONTROLS ARE PUBLISHED LAST, AND THEY OVERRIDE.
 	//
 	// The generic set above assumes every module operation succeeds with 200 and
@@ -581,6 +591,13 @@ func sessionsProtocolBindingReconcile(r moduleRoute) bool {
 func sessionsProtocolBindingRoute(r moduleRoute) bool {
 	return r.ns == "sessions" && (strings.HasPrefix(r.pattern, "/protocol-bindings") ||
 		strings.HasPrefix(r.pattern, "/protocol-binding-specs"))
+}
+
+// sessionsProviderAccountCreate is the one account route that CREATES: it builds
+// a home and registers the account that owns it. Its siblings name or read an
+// account that already exists and answer 200.
+func sessionsProviderAccountCreate(r moduleRoute) bool {
+	return r.ns == "sessions" && r.method == http.MethodPost && r.pattern == "/provider-accounts"
 }
 
 func sessionsProtocolBindingSpecMutation(r moduleRoute) bool {

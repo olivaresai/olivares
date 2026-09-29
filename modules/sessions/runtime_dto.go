@@ -20,13 +20,15 @@ import (
 // stored `running` shows as `idle` when activity is stale (a read-time
 // projection, never a stored flip-flop — mirrors the observe overlay's cc_state).
 type runDTO struct {
-	RunRef         string `json:"run_ref"`
-	Name           string `json:"name,omitempty"`
-	Transport      string `json:"transport"`
-	PermissionMode string `json:"permission_mode"`
-	Effort         string `json:"effort,omitempty"`
-	ModelRef       string `json:"model_ref,omitempty"`
-	WorkspaceRef   string `json:"workspace_ref,omitempty"`
+	// Completion belongs only to an originating in-process launch call.
+	Completion     RuntimeLaunchCompletion `json:"-"`
+	RunRef         string                  `json:"run_ref"`
+	Name           string                  `json:"name,omitempty"`
+	Transport      string                  `json:"transport"`
+	PermissionMode string                  `json:"permission_mode"`
+	Effort         string                  `json:"effort,omitempty"`
+	ModelRef       string                  `json:"model_ref,omitempty"`
+	WorkspaceRef   string                  `json:"workspace_ref,omitempty"`
 	// WorkspacePath is the HOST directory this session's child was started in: the
 	// registered workspace's canonical root, or the directory of its own this plane
 	// created under the data directory. It is shown by NAME because the walk of

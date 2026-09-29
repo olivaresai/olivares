@@ -5,6 +5,7 @@
 """Exercise the shared Task installer and its workflow callers without services."""
 
 from pathlib import Path
+from contextlib import redirect_stdout
 import hashlib
 import io
 import os
@@ -13,6 +14,7 @@ import sys
 import tarfile
 import tempfile
 import unittest
+from unittest.mock import patch
 
 try:
     import yaml
@@ -35,6 +37,8 @@ CALLERS = {
     "release-rehearsal.yml": ["goreleaser-rehearsal"],
     "release.yml": ["goreleaser"],
 }
+# The export deliberately omits these two workflows. All other callers ship.
+CURATED_HUB_CALLERS = {"export-check.yml", "release-rehearsal.yml"}
 
 
 class WorkflowInstallTest(unittest.TestCase):
@@ -43,7 +47,17 @@ class WorkflowInstallTest(unittest.TestCase):
         self.assertEqual(action["inputs"]["task_version"]["default"], VERSION)
         self.assertEqual(action["inputs"]["task_sha256"]["default"], ARCHIVE_SHA)
         for filename, jobs in CALLERS.items():
-            workflow = yaml.safe_load((ROOT / ".github/workflows" / filename).read_text())
+            path = ROOT / ".github/workflows" / filename
+            if filename in CURATED_HUB_CALLERS and not path.exists() and not path.is_symlink():
+                classification = subprocess.run(
+                    ["bash", str(ROOT / "scripts/hub-leg.sh"), "--classify", "--root", str(ROOT)],
+                    capture_output=True, text=True, check=True, timeout=5,
+                )
+                self.assertEqual(classification.stdout.strip(), "public",
+                                 f"Missing required workflow {filename}: {classification.stderr}")
+                print(f"NOT APPLICABLE: {filename} is curated out of the proven public export")
+                continue
+            workflow = yaml.safe_load(path.read_text())
             for job in jobs:
                 with self.subTest(workflow=filename, job=job):
                     steps = workflow["jobs"][job]["steps"]
@@ -68,6 +82,124 @@ class WorkflowInstallTest(unittest.TestCase):
                         if not line.lstrip().startswith("#")
                     )
                     self.assertNotIn("go install github.com/go-task/task/", commands, path.name)
+
+
+class WorkflowScopeTest(unittest.TestCase):
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory(prefix="task-workflow-scope-")
+        self.addCleanup(directory.cleanup)
+        self.root = Path(directory.name)
+        (self.root / "scripts").mkdir()
+        (self.root / "scripts/hub-leg.sh").write_bytes((ROOT / "scripts/hub-leg.sh").read_bytes())
+        action = self.root / ACTION / "action.yml"
+        action.parent.mkdir(parents=True)
+        action.write_bytes((ROOT / ACTION / "action.yml").read_bytes())
+        self.workflows = self.root / ".github/workflows"
+        self.workflows.mkdir()
+        # This fixture names the public obligations independently of CALLERS.
+        self.public = {
+            "commit-outcome-oracle.yml": ["generated"],
+            "compose-ready.yml": ["qualify-compose-ready"],
+            "drills-nightly.yml": ["drills"],
+            "mainline-ci.yml": ["sdk-tests"],
+            "pr-ci.yml": ["pr-lint", "pr-build", "pr-test-shard", "pr-web"],
+            "race-full.yml": ["race-workspace"],
+            "release.yml": ["goreleaser"],
+        }
+        self.curated = {
+            "export-check.yml": ["pattern-net-static", "acceptance-empirical"],
+            "release-rehearsal.yml": ["goreleaser-rehearsal"],
+        }
+        for filename, jobs in self.public.items():
+            self.workflow(filename, jobs)
+        self.marker = self.root / "PUBLIC-EXPORT.md"
+        self.marker.write_text(
+            "This repository is the public, curated export of the Olivares AI control plane.\n"
+        )
+
+    def workflow(self, filename, jobs):
+        body = {"jobs": {job: {"steps": [
+            {"uses": "actions/checkout@fixture"},
+            {"uses": ACTION, "with": {"task_version": VERSION, "task_sha256": ARCHIVE_SHA}},
+        ]} for job in jobs}}
+        path = self.workflows / filename
+        path.write_text(yaml.safe_dump(body))
+        return path
+
+    def inspect(self):
+        result = unittest.TestResult()
+        output = io.StringIO()
+        case = WorkflowInstallTest("test_remaining_callers_use_the_verified_release_after_checkout")
+        with patch.dict(globals(), {"ROOT": self.root}), redirect_stdout(output):
+            case.run(result)
+        return result, output.getvalue()
+
+    def test_public_omits_only_the_two_curated_workflows(self):
+        result, output = self.inspect()
+        self.assertTrue(result.wasSuccessful(), result.errors + result.failures)
+        for filename in self.curated:
+            self.assertIn("NOT APPLICABLE", output)
+            self.assertIn(filename, output)
+
+    def test_all_seven_public_workflows_remain_required(self):
+        for filename in self.public:
+            with self.subTest(workflow=filename):
+                path = self.workflows / filename
+                original = path.read_bytes()
+                path.unlink()
+                self.assertFalse(self.inspect()[0].wasSuccessful())
+                path.write_bytes(original)
+
+    def test_hub_cannot_hide_either_curated_workflow_behind_a_marker(self):
+        (self.root / "sessions").mkdir()
+        for filename, jobs in self.curated.items():
+            self.workflow(filename, jobs)
+        self.assertTrue(self.inspect()[0].wasSuccessful())
+        for filename in self.curated:
+            with self.subTest(workflow=filename):
+                path = self.workflows / filename
+                original = path.read_bytes()
+                path.unlink()
+                self.assertFalse(self.inspect()[0].wasSuccessful())
+                path.write_bytes(original)
+
+    def test_unknown_tree_cannot_omit_curated_workflows(self):
+        for marker in (None, "", "unverified export\n"):
+            with self.subTest(marker=marker):
+                if marker is None:
+                    self.marker.unlink()
+                else:
+                    self.marker.write_text(marker)
+                self.assertFalse(self.inspect()[0].wasSuccessful())
+
+    def test_broken_curated_workflow_link_is_not_an_omission(self):
+        for filename in self.curated:
+            with self.subTest(workflow=filename):
+                path = self.workflows / filename
+                path.symlink_to("missing-workflow")
+                self.assertFalse(self.inspect()[0].wasSuccessful())
+                path.unlink()
+
+    def test_present_curated_workflows_still_require_pins_order_and_strict_failure(self):
+        for filename, jobs in self.curated.items():
+            for mutation in ("pin", "order", "continue", "job", "go-install"):
+                with self.subTest(workflow=filename, mutation=mutation):
+                    path = self.workflow(filename, jobs)
+                    body = yaml.safe_load(path.read_text())
+                    steps = body["jobs"][jobs[0]]["steps"]
+                    if mutation == "pin":
+                        steps[1]["with"]["task_sha256"] = "0" * 64
+                    elif mutation == "order":
+                        steps.reverse()
+                    elif mutation == "continue":
+                        steps[1]["continue-on-error"] = True
+                    elif mutation == "job":
+                        del body["jobs"][jobs[0]]
+                    else:
+                        steps.append({"run": "go install github.com/go-task/task/v3/cmd/task@latest"})
+                    path.write_text(yaml.safe_dump(body))
+                    self.assertFalse(self.inspect()[0].wasSuccessful())
+                    path.unlink()
 
 
 class InstallerTest(unittest.TestCase):

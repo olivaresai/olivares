@@ -10,6 +10,7 @@ import { apiFetch, configureApiClient } from '@/lib/api/client'
 import { createQueryClient } from '@/lib/api/query'
 import { isolateCacheOnTenantChange } from '@/lib/api/tenant-cache-isolation'
 import { AuthProvider } from '@/lib/auth/context'
+import { AuthBoundaryCustody } from '@/features/agentops/auth-boundary'
 import { useSessionStore } from '@/stores/session'
 import { useTenantStore } from '@/stores/tenant'
 import { useWorkspaceStore } from '@/stores/workspace'
@@ -70,7 +71,9 @@ useTenantStore.subscribe((s) => {
  * as a side-effect import in main.tsx before this renders.
  *
  * StepUpHost sits INSIDE AuthProvider on purpose: the ceremony reads the session
- * assurance and re-reads whoami after the backend elevates it. */
+ * assurance and re-reads whoami after the backend elevates it. AuthBoundaryCustody sits
+ * there too: it needs the principal, and it must see every authority-boundary move of the
+ * page load, not only those made while a provider screen is open. */
 export function Providers({ children }: { children: ReactNode }) {
   const [queryClient] = useState(() => createQueryClient())
   // ⛔ LA CLAVE SE CALCULA AL PINTAR Y LA CABECERA SE LEE AL ENVIAR. Entre esos dos instantes cabe
@@ -81,6 +84,7 @@ export function Providers({ children }: { children: ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
+        <AuthBoundaryCustody />
         <TooltipProvider delayDuration={300}>
           {children}
           <Toaster />

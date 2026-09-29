@@ -186,10 +186,7 @@ export function SourceDiffView({
   return (
     <div className="flex h-full min-h-0 flex-col">
       <header className="flex flex-wrap items-end gap-3 border-b border-border p-4">
-        <PageHeader
-          title={t('nav:items.sourceDiff')}
-          className="w-full"
-        />
+        <PageHeader title={t('nav:items.sourceDiff')} className="w-full" />
         <div className="flex flex-col gap-1">
           <span className="text-sm text-muted-foreground">{t('host')}</span>
           <span className="font-mono text-sm">{query.host}</span>

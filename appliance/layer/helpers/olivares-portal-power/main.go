@@ -34,6 +34,7 @@ func main() {
 
 // execRun runs argv with no shell and an empty environment.
 func execRun(ctx context.Context, argv []string) error {
+	// #nosec G204 -- The sole caller is helper: it clones one of the two literal powerArgv vectors; no request value becomes an argument.
 	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
 	cmd.Env = []string{}
 	return cmd.Run()

@@ -11,7 +11,7 @@ from typing import TypedDict, cast
 from urllib.parse import quote
 
 API_VERSION = "v1"
-SPEC_HASH = "2793a247ca86bd6b9e4aa19953ab2947ffa491900c03ec1e6ba55c56232b4702"
+SPEC_HASH = "1004dfb0a826f2933f3ae5a92e87031207887699806019aa3638a8296b9daf1b"
 STABILITY_POLICY = "https://olivares.ai/docs"
 
 class _AuthCapabilityQuestionRequired(TypedDict):
@@ -5618,6 +5618,41 @@ class OperationsMixin:
         Stability: beta.
         """
         return self._do("POST", "/v1/m/sessions/protocol-bindings/{id}/reconcile", "/v1/m/sessions/protocol-bindings/" + quote(str(id), safe="") + "/reconcile", body=body, query=query, tenant=tenant)
+
+    def get_v1_m_sessions_provider_accounts(self, *, tenant=None, **query):
+        """GET /v1/m/sessions/provider-accounts — sessions module route (requires sessions:account:read)
+
+        Stability: beta.
+        """
+        return self._do("GET", "/v1/m/sessions/provider-accounts", "/v1/m/sessions/provider-accounts", query=query, tenant=tenant)
+
+    def post_v1_m_sessions_provider_accounts(self, body, *, tenant=None, **query):
+        """POST /v1/m/sessions/provider-accounts — sessions module route (requires sessions:account:write)
+
+        Stability: beta.
+        """
+        return self._do_json_required("POST", "/v1/m/sessions/provider-accounts", "/v1/m/sessions/provider-accounts", body=body, query=query, tenant=tenant)
+
+    def get_v1_m_sessions_provider_accounts_by_ref(self, ref, *, tenant=None, **query):
+        """GET /v1/m/sessions/provider-accounts/{ref} — sessions module route (requires sessions:account:read)
+
+        Stability: beta.
+        """
+        return self._do("GET", "/v1/m/sessions/provider-accounts/{ref}", "/v1/m/sessions/provider-accounts/" + quote(str(ref), safe=""), query=query, tenant=tenant)
+
+    def patch_v1_m_sessions_provider_accounts_by_ref(self, ref, body, *, tenant=None, **query):
+        """PATCH /v1/m/sessions/provider-accounts/{ref} — sessions module route (requires sessions:account:write)
+
+        Stability: beta.
+        """
+        return self._do_json_required("PATCH", "/v1/m/sessions/provider-accounts/{ref}", "/v1/m/sessions/provider-accounts/" + quote(str(ref), safe=""), body=body, query=query, tenant=tenant)
+
+    def post_v1_m_sessions_provider_accounts_by_ref_adopt(self, ref, body, *, tenant=None, **query):
+        """POST /v1/m/sessions/provider-accounts/{ref}/adopt — sessions module route (requires sessions:account:write)
+
+        Stability: beta.
+        """
+        return self._do_json_required("POST", "/v1/m/sessions/provider-accounts/{ref}/adopt", "/v1/m/sessions/provider-accounts/" + quote(str(ref), safe="") + "/adopt", body=body, query=query, tenant=tenant)
 
     def get_v1_m_sessions_provider_profiles(self, *, tenant=None, **query):
         """GET /v1/m/sessions/provider-profiles — Lists the tenant's provider profiles as references and labels, never paths.

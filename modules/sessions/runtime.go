@@ -1154,7 +1154,10 @@ func (m *Module) createRunInternal(
 		}
 		return runDTO{}, errors.Join(err, teardownErr)
 	}
-	return m.toRunDTO(m.settleDriverLaunch(wctx, lr, rec)), nil
+	completion := runtimeLaunchCompletion(tenant, runRef, runtimeCreds.launchID, rec)
+	dto := m.toRunDTO(m.settleDriverLaunch(wctx, lr, rec))
+	dto.Completion = completion
+	return dto, nil
 }
 
 // resumeRun relaunches a stopped session against its persisted claude_session_id.
@@ -1513,7 +1516,10 @@ func (m *Module) resumeRun(ctx context.Context, tenant model.TenantID, runRef, a
 		}
 		return runDTO{}, errors.Join(err, teardownErr)
 	}
-	return m.toRunDTO(m.settleDriverLaunch(wctx, lr, updated)), nil
+	completion := runtimeLaunchCompletion(tenant, runRef, launchID, updated)
+	dto := m.toRunDTO(m.settleDriverLaunch(wctx, lr, updated))
+	dto.Completion = completion
+	return dto, nil
 }
 
 // stopRun signals a graceful stop and waits for the bridge to finalize the row.

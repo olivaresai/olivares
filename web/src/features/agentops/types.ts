@@ -133,11 +133,18 @@ export interface RunDTO {
  * configured provider instance on ONE execution environment. Configuration and
  * storage identity — never an authenticated provider account. No path here: the
  * homes are on the admin-only configuration read. */
+export type ProviderAccentName = 'orange' | 'green' | 'amber' | 'red' | 'blue'
+export interface ProviderAccountMetadataPatch {
+  display_name?: string
+  accent?: ProviderAccentName | ''
+}
+
 export interface ProviderProfileDTO {
   profile_ref: string
   driver: string
   environment_ref: string
   display_name?: string
+  accent?: ProviderAccentName | (string & {})
   state: 'active' | 'disabled' | 'retired' | (string & {})
   /** Belongs to THIS node's execution environment; a foreign one is shown as such
    * and never launched here. */
@@ -237,6 +244,53 @@ export interface CreateBindingRequest {
   source_id: string
   source_revision: number
   profile_ref: string
+}
+
+/** One provider account (GET /provider-accounts, /provider-accounts/{ref}): a provider
+ * profile that has been NAMED. An unnamed profile is not an account and is never listed
+ * as one. The reference is the profile's own; there is no second id. No path travels
+ * here — `home_relative` is a location under the server's accounts root, and the console
+ * does not paint it — and no credential ever. */
+export interface ProviderAccountDTO {
+  account_ref: string
+  name: string
+  display_name?: string
+  accent?: ProviderAccentName | (string & {})
+  driver: string
+  environment_ref: string
+  state: 'active' | 'disabled' | 'retired' | (string & {})
+  /** `adopted`: the operator's existing home, left where it is. */
+  home_mode: 'adopted' | 'managed' | (string & {})
+  home_generation: number
+  home_relative: string
+  /** Always stated by the server, never inferred: an adopted home is `shared`. */
+  isolation_level: 'shared' | 'dedicated' | (string & {})
+  os_user?: string
+  release_ref?: string
+  pending_release?: string
+  auth_source: string
+  provider_record_ref?: string
+  /** Who the provider says is signed in, and where that came from. Source `none`
+   * means nothing asked the provider: the identity is empty, not guessed. */
+  identity: string
+  identity_source: 'none' | (string & {})
+  last_login_at?: string
+  created_at: string
+  updated_at: string
+}
+
+/** One stable creation request. Retries keep the same body and key. */
+export interface CreateAccountRequest {
+  driver: string
+  name?: string
+  idempotency_key: string
+}
+
+/** POST /provider-accounts/{profile_ref}/adopt body. An absent name asks the server to
+ * generate one; a present name is checked exactly as typed. The isolation level is not
+ * a field: an adopted home is shared by what it is. */
+export interface AdoptAccountRequest {
+  name?: string
 }
 
 /** One lifecycle-ledger event (GET /runs/{ref}/events), seq-ordered. The PayloadHash

@@ -149,7 +149,7 @@ jobs:
       - name: build docs-site AND run its full gate suite
         run: npm --prefix docs-site test
 
-      # Identical guard to docs-site-artifact.yml, and it belongs BEFORE the deploy rather than
+      # The same content guard protects the artifact and the deployment. It belongs before
       # after: a build that produced nothing must never be published over a working site. Deleting
       # a thousand pages is the one failure here that is not recoverable by re-running.
       - name: refuse to publish an empty or truncated build
@@ -187,15 +187,15 @@ jobs:
             echo "::error::That is a broken build with enough assets to look like a whole site."
             exit 1
           fi
-          # `_redirects` is the reason this workflow exists at all: it is committed and unserved.
-          # Astro copies public/ into dist/, so its absence here means the copy silently stopped.
-          if [ ! -f docs-site/dist/_redirects ]; then
-            echo "::error::docs-site/dist/_redirects is missing. It is committed at"
-            echo "::error::docs-site/public/_redirects and Astro copies public/ into dist/, so this"
-            echo "::error::build would publish the site WITHOUT the redirects it promises."
-            exit 1
-          fi
-          echo "docs-site/dist: ${n} files, _redirects present"
+          # Astro copies both serving policies from public/ without transformation.
+          for must in _headers _redirects; do
+            if [ ! -f "docs-site/dist/$must" ] || [ -L "docs-site/dist/$must" ] ||
+               ! cmp -s "docs-site/public/$must" "docs-site/dist/$must"; then
+              echo "::error::docs-site/dist/$must must be a regular copy of docs-site/public/$must."
+              exit 1
+            fi
+          done
+          echo "docs-site/dist: ${n} files, _headers and _redirects verified"
 
       # ⛔⛔ THE GUARD THAT USED TO BE HERE DID NOT WORK, AND IT RAN TWICE IN PRODUCTION.
       # It was `npm --prefix docs-site exec --no-install -- wrangler --version`, with a comment

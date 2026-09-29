@@ -204,6 +204,9 @@ func (s *Server) scimCreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	in := scim.DecodeUser(body)
+	// externalId is case-exact (RFC 7643 section 3). Create must preserve its
+	// bytes: trimming could turn a different identity into a match or absence.
+	in.ExternalID = body.ExternalID
 	if in.UserName == "" {
 		writeSCIMError(w, scim.NewError(http.StatusBadRequest, scim.TypeInvalidValue, "userName is required"))
 		return

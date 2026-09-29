@@ -203,9 +203,20 @@ grep -F 'test-package-publish-pacman: 18/18 cases green' "$pacman_log" >/dev/nul
 ok 'pacman family: render, unsigned and wrongly signed database refusals, digest, evidence and roots-last cases green'
 
 wrong_key_log="$scratch/wrong-key.log"
-bash "$root/scripts/test-package-repositories.sh" >"$wrong_key_log"
-grep -F 'mutant-wrong-signing-key' "$wrong_key_log" >/dev/null
-grep -F '4/4 mutants red with positive controls' "$wrong_key_log" >/dev/null
+if bash "$root/scripts/test-package-repositories.sh" >"$wrong_key_log" 2>&1; then
+	:
+else
+	rc=$?
+	printf 'test-package-publish: repository child failed (rc=%d)\n' "$rc" >&2
+	sed 's/^/  /' "$wrong_key_log" >&2
+	exit "$rc"
+fi
+if ! grep -Eq '^ok [0-9]+ - mutant-wrong-signing-key \(rc=1\)$' "$wrong_key_log" ||
+	! grep -Eq '^test-package-repositories: OK — [1-9][0-9]* checks; 9/9 mutants red with positive controls$' "$wrong_key_log"; then
+	printf '%s\n' 'test-package-publish: repository child result contract failed: expected wrong-key rc=1 and 9/9 mutants' >&2
+	sed 's/^/  /' "$wrong_key_log" >&2
+	exit 1
+fi
 ok 'real wrong-signing-key mutant remains red with its positive control'
 
 printf 'test-package-publish: OK — %d controls; staging-only, partial, pacman and wrong-key mutants are red\n' "$checks"

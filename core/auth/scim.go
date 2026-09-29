@@ -75,10 +75,12 @@ func SCIMUserNameKey(userName string) string { return normalizeEmail(userName) }
 // tenant. It returns the stored user and whether THIS call created it: the route
 // answers 201 with a Location for an account it made, and 200 for one it found.
 //
-// A create NEVER writes an account it did not create. An address already held by
-// a member of the bound tenant is idempotent — this connection owns that resource
-// already, so it comes back as it stands, and PUT/PATCH is how its attributes
-// move. An address held by an account that is NOT a member of the bound tenant is
+// A create never replaces an existing account's directory attributes. An address
+// already held by a member of the bound tenant is idempotent only if an explicitly
+// supplied externalId matches the stored one exactly. An omitted externalId
+// preserves the optional legacy path; create never adopts or clears that field.
+// The account comes back as it stands, and PUT/PATCH is how its attributes move.
+// An address held by an account that is NOT a member of the bound tenant is
 // ErrConflict (the handler maps it to SCIM 409 uniqueness): the address is taken,
 // and this connection has no authority over the account holding it.
 //
@@ -87,8 +89,9 @@ func SCIMUserNameKey(userName string) string { return normalizeEmail(userName) }
 // tell one tenant's connection which addresses exist in all the others, and would
 // let it write that account's directory attributes and its lifecycle status,
 // which is a disable in every tenant the account belongs to. Joining an existing
-// account to a tenant is a separate, explicit and audited operation; a create
-// never performs it.
+// account to a tenant requires consent. The existing exception is readmission by
+// the account's own custodian after retirement completes; it has the same
+// external identity check before the membership or retirement record can change.
 func (a *Authenticator) SCIMProvisionUser(ctx context.Context, actor Principal, tenant model.TenantID, in SCIMUserInput) (model.User, bool, error) {
 	if tenant.IsZero() || tenant.IsSystem() {
 		return model.User{}, false, ErrInvalidToken
@@ -119,6 +122,12 @@ func (a *Authenticator) SCIMProvisionUser(ctx context.Context, actor Principal, 
 			u, err := as.Users().Get(ctx, existing[0].ID)
 			if err != nil {
 				return err
+			}
+			// The locked account, not the email alone, must match an explicit
+			// directory identity. Check before custodian readmission can write.
+			// Use the same conflict as a foreign account without disclosing it.
+			if in.ExternalID != "" && in.ExternalID != u.ExternalID {
+				return store.ErrConflict
 			}
 			member, custodian, err := joinOrConsent(ctx, as, u, tenant)
 			switch {
