@@ -1812,17 +1812,25 @@ func (m *Module) sendTextInputLoaded(
 	runRef, text string,
 	rec model.Record,
 ) (bool, error) {
+	lr, err := m.textInputLive(tenant, runRef, rec)
+	if err != nil {
+		return false, err
+	}
+	return m.driverInput(ctx, lr, text)
+}
+
+func (m *Module) textInputLive(tenant model.TenantID, runRef string, rec model.Record) (*liveRun, error) {
 	if rec.String(colState) != stateRunning {
-		return false, conflictErr("session is not running (state=" + rec.String(colState) + ")")
+		return nil, conflictErr("session is not running (state=" + rec.String(colState) + ")")
 	}
 	lr, ok := m.rt.getLive(tenant, runRef)
 	if !ok {
-		return false, conflictErr("session is not live (state=" + rec.String(colState) + ")")
+		return nil, conflictErr("session is not live (state=" + rec.String(colState) + ")")
 	}
 	if lr.session == nil {
-		return false, badRequest("this session is not driven by a provider protocol driver: send line or message")
+		return nil, badRequest("this session is not driven by a provider protocol driver: send line or message")
 	}
-	return m.driverInput(ctx, lr, text)
+	return lr, nil
 }
 
 // cleanupRun releases a stopped session: it blocks resume (clears the Claude
@@ -1980,39 +1988,53 @@ func (m *Module) sendInput(ctx context.Context, tenant model.TenantID, runRef st
 //
 // The caller holds the per-run operation lock (both of them do).
 func (m *Module) sendInputLoaded(ctx context.Context, tenant model.TenantID, runRef string, line []byte, rec model.Record) (bool, error) {
+	lr, err := m.rawInputLive(tenant, runRef, line, rec)
+	if err != nil {
+		return false, err
+	}
+	// Existing callers still prove durable authority immediately before I/O.
+	if err := m.assertRunAuthority(ctx, lr); err != nil {
+		return false, err
+	}
+	return m.sendInputAdmitted(ctx, lr, line, lr.launchID, lr.claim.SID)
+}
+
+func (m *Module) rawInputLive(tenant model.TenantID, runRef string, line []byte, rec model.Record) (*liveRun, error) {
 	if Transport(rec.String(colTransport)) == TransportRemoteControl {
-		return false, conflictErr("remote-control sessions do not bridge input (I/O is relayed to Anthropic cloud)")
+		return nil, conflictErr("remote-control sessions do not bridge input (I/O is relayed to Anthropic cloud)")
 	}
 	if rec.String(colState) != stateRunning {
-		return false, conflictErr("session is not running (state=" + rec.String(colState) + ")")
+		return nil, conflictErr("session is not running (state=" + rec.String(colState) + ")")
 	}
 	// One POST = one NDJSON line. Reject embedded newlines so a single governed
 	// input action cannot smuggle MULTIPLE stream-json messages onto the child stdin
 	// (the {"message": …} path is already newline-free via json.Compact).
 	if bytes.IndexByte(line, '\n') >= 0 || bytes.IndexByte(line, '\r') >= 0 {
-		return false, badRequest("input must be a single line (no embedded newlines)")
+		return nil, badRequest("input must be a single line (no embedded newlines)")
 	}
 	lr, ok := m.rt.getLive(tenant, runRef)
 	if !ok {
-		return false, conflictErr("session is not live (state=" + rec.String(colState) + ")")
+		return nil, conflictErr("session is not live (state=" + rec.String(colState) + ")")
 	}
 	if lr.session != nil {
 		// ⛔ A DRIVER RUN NEVER TAKES A RAW LINE. The child is an owned JSON-RPC peer,
 		// so an arbitrary line on its stdin is not "input": it is the whole method
 		// surface, approvals included, handed to whoever can reach this route. A turn
 		// is expressed as text and encoded by the driver.
-		return false, badRequest("this session is driven by an owned provider protocol: send text, not a raw protocol line")
+		return nil, badRequest("this session is driven by an owned provider protocol: send text, not a raw protocol line")
 	}
-	// The same effect-boundary authority the text route now proves. Raw input and
-	// text input reach different children by different contracts, but they cross
-	// the same boundary and answer to the same holder.
-	if err := m.assertRunAuthority(ctx, lr); err != nil {
+	return lr, nil
+}
+
+// sendInputAdmitted is only the I/O half, after a known successful authority
+// transaction under the run lock. It neither authorizes nor opens a transaction.
+func (m *Module) sendInputAdmitted(ctx context.Context, lr *liveRun, line []byte, launch model.ID, sid string) (bool, error) {
+	if err := m.runtimeInputLiveCurrent(ctx, lr, launch, sid); err != nil {
 		return false, err
 	}
 	if err := lr.proc.Send(ctx, line); err != nil {
-		// Process has received the complete LaunchSpec and may echo either bearer
-		// in an error. Keep provider text out of logs and API errors.
-		m.warnf("session input rejected", "run_ref", runRef)
+		// The process may echo launch credentials; only fixed diagnostics escape.
+		m.warnf("session input rejected", "run_ref", lr.runRef)
 		return true, badRequest("input rejected (the session is not accepting input)")
 	}
 	return true, nil

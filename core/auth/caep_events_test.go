@@ -461,7 +461,7 @@ func TestCAEPDeviceStepUpDegradesOnlyTheSessionsScopedToTheTenant(t *testing.T) 
 			}); err != nil {
 				t.Fatal(err)
 			}
-			if s, ok := sessions[scoped]; !ok || s.AAL != 1 || s.AALExpiresAt != nil || s.Revoked {
+			if s, ok := sessions[scoped]; !ok || s.AAL != 1 || s.AALExpiresAt != nil || s.AALAuthenticatedAt != nil || s.Revoked {
 				t.Errorf("the session scoped to the tenant after its step-up event = %+v (found %t), want AAL1 with no step-up window, not revoked", s, ok)
 			}
 			if s, ok := sessions[foreign]; !ok || s.AAL != 3 || s.Revoked {
@@ -483,10 +483,11 @@ func mintScopedSession(t *testing.T, st store.Store, userID model.ID, tenant mod
 	var id model.ID
 	if err := st.AuthMutate(ctx, func(as store.AuthScope) error {
 		window := model.NewTimestamp(time.Now().Add(10 * time.Minute))
+		stamp := model.NewTimestamp(time.Now())
 		s, err := as.Sessions().Create(ctx, model.AuthSession{
 			UserID: userID, Selector: c.Selector, SecretHash: c.SecretHash,
 			ExpiresAt: model.NewTimestamp(time.Now().Add(time.Hour)),
-			AAL:       aal, AALExpiresAt: &window, TenantScope: tenant,
+			AAL:       aal, AALExpiresAt: &window, TenantScope: tenant, AALAuthenticatedAt: &stamp,
 		})
 		id = s.ID
 		return err

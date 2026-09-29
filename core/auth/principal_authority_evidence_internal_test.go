@@ -1178,8 +1178,9 @@ func deterministicPrincipalAuthoritySealFixture(t *testing.T) Principal {
 		directoryEpoch: store.AuthorizationFactRef{
 			Kind: model.DirectoryEpochKind, ID: model.ID(tenant), Version: 17,
 		},
-		observedAt: time.Date(2026, time.August, 16, 12, 34, 56, 123456789, time.UTC),
-		freshUntil: time.Date(2026, time.August, 16, 12, 51, 56, 123456789, time.UTC),
+		observedAt:      time.Date(2026, time.August, 16, 12, 34, 56, 123456789, time.UTC),
+		freshUntil:      time.Date(2026, time.August, 16, 12, 51, 56, 123456789, time.UTC),
+		authenticatedAt: time.Date(2026, time.August, 16, 12, 30, 0, 987654321, time.UTC),
 	}
 	seal, err := computePrincipalAuthoritySeal(principal)
 	if err != nil {
@@ -1191,7 +1192,7 @@ func deterministicPrincipalAuthoritySealFixture(t *testing.T) Principal {
 
 func TestPrincipalAuthoritySealGoldenCanonicalOrderAndValidShapeMutations(t *testing.T) {
 	baseline := deterministicPrincipalAuthoritySealFixture(t)
-	const wantGolden = "fb18dbd39d83089e8d934af6bdbddc81f909da56306476a2ce56b209c7afee16"
+	const wantGolden = "94918e60c2221fdb900c3ef372db0f573e3e6ac6ddda58a5e0264ebfbd34f254"
 	if got := hex.EncodeToString(baseline.evidence.seal[:]); got != wantGolden {
 		t.Fatalf("authority seal golden = %s, want %s", got, wantGolden)
 	}
@@ -1217,6 +1218,7 @@ func TestPrincipalAuthoritySealGoldenCanonicalOrderAndValidShapeMutations(t *tes
 	}{
 		{name: "user id", mutate: func(p *Principal) { p.UserID = otherUser; p.evidence.userAuthority.UserID = otherUser }},
 		{name: "User authority version", mutate: func(p *Principal) { p.evidence.userAuthority.Version++ }},
+		{name: "authentication instant", mutate: func(p *Principal) { p.evidence.authenticatedAt = p.evidence.authenticatedAt.Add(time.Nanosecond) }},
 		{name: "credential identity", mutate: func(p *Principal) {
 			p.CredID = otherCredential
 			p.credentialRef.credentialID = otherCredential
@@ -1281,7 +1283,7 @@ func TestPrincipalAuthoritySealCoversStandingValues(t *testing.T) {
 		t.Fatalf("compute the standing authority seal: %v", err)
 	}
 	standing.evidence.seal = seal
-	const wantGolden = "f54b6180ed9421b324d94570648c12b8699f38a30cb6dc3529cbd3bbe7f6e545"
+	const wantGolden = "c52fbe255552e7402f3bdf38ee563ba5388b7158dbcf33949e55d5928236508f"
 	if got := hex.EncodeToString(seal[:]); got != wantGolden {
 		t.Fatalf("standing authority seal golden = %s, want %s", got, wantGolden)
 	}
@@ -1318,7 +1320,7 @@ func TestPrincipalAuthoritySealProtocolInventoryAndSemanticCanonicalization(t *t
 	}
 	principalType := reflect.TypeOf(Principal{})
 	if principalType.NumField() != len(wantPrincipalFields) {
-		t.Fatalf("Principal field count = %d, want sealed v3 inventory %d; review and version the seal",
+		t.Fatalf("Principal field count = %d, want sealed v4 inventory %d; review and version the seal",
 			principalType.NumField(), len(wantPrincipalFields))
 	}
 	for i, want := range wantPrincipalFields {
@@ -1327,7 +1329,7 @@ func TestPrincipalAuthoritySealProtocolInventoryAndSemanticCanonicalization(t *t
 		}
 	}
 	wantEvidenceFields := []string{
-		"tenant", "ref", "directoryEpoch", "authorityMode", "userAuthority", "observedAt", "freshUntil", "seal",
+		"tenant", "ref", "directoryEpoch", "authorityMode", "userAuthority", "authenticatedAt", "observedAt", "freshUntil", "seal",
 	}
 	evidenceType := reflect.TypeOf(principalEvidenceProvenance{})
 	if evidenceType.NumField() != len(wantEvidenceFields) {
@@ -1344,6 +1346,7 @@ func TestPrincipalAuthoritySealProtocolInventoryAndSemanticCanonicalization(t *t
 	sameInstants := cloneEvidencePrincipal(baseline)
 	sameInstants.evidence.observedAt = baseline.evidence.observedAt.In(zone)
 	sameInstants.evidence.freshUntil = baseline.evidence.freshUntil.In(zone)
+	sameInstants.evidence.authenticatedAt = baseline.evidence.authenticatedAt.In(zone)
 	if !validPrincipalAuthoritySeal(sameInstants) {
 		t.Fatal("equivalent time instants in another location changed the seal")
 	}

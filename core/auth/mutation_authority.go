@@ -24,9 +24,10 @@ import (
 // ⛔ IT IS NOT A PERMIT, AND EVERY OMITTED METHOD IS THE REASON. There is no
 // exported constructor, no mutable field, no boolean, no witness accessor and no
 // codec: a value of this type can only come out of AuthorizeRouteMutation, and the
-// only question it answers is AuthorityFor — "what authority did that exact
+// authority question it answers is AuthorityFor — "what authority did that exact
 // decision rest on, and does it still hold at this instant for this exact
-// question?". A caller that could read a bool out of it would eventually read the
+// question?". MetadataFor projects only inert attribution after the same validation.
+// A caller that could read a bool out of it would eventually read the
 // bool and skip the barrier, which is the failure this shape exists to prevent.
 //
 // ⛔ HOLDING ONE IS NOT PERMISSION TO WRITE. The bundle it returns must be locked
@@ -203,6 +204,27 @@ func (a RouteMutationAuthorization) AuthorityFor(
 	return store.AuthoritySnapshotBundle{
 		Facts:           slices.Clone(a.witness.Decision.Facts),
 		UserAuthorities: a.capturedUserAuthorities(),
+	}, nil
+}
+
+// RouteMutationMetadata identifies the original validated decision for attribution.
+// Neither field grants permission, carries facts, nor replaces AuthorityFor and the
+// complete bundle barrier on the protected transaction. Copies are independent.
+type RouteMutationMetadata struct {
+	FreshUntil     time.Time
+	EvidenceDigest [sha256.Size]byte
+}
+
+// MetadataFor validates this exact question through AuthorityFor, then projects
+// the original witness's deadline and digest. It does not reevaluate authorization,
+// expose a witness, refresh evidence, or establish that a write may proceed.
+func (a RouteMutationAuthorization) MetadataFor(now time.Time, req Request) (RouteMutationMetadata, error) {
+	if _, err := a.AuthorityFor(now, req); err != nil {
+		return RouteMutationMetadata{}, err
+	}
+	return RouteMutationMetadata{
+		FreshUntil:     a.witness.Decision.FreshUntil,
+		EvidenceDigest: a.witness.EvidenceDigest,
 	}, nil
 }
 

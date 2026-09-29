@@ -465,20 +465,11 @@ type RouteActionAuthorizationPort interface {
 
 // AuthenticationFacts is the subset of authentication a handler may rely on.
 //
-// ⛔ AuthenticatedAt IS NOT HERE, AND ITS ABSENCE IS DELIBERATE RATHER THAN AN OVERSIGHT.
-// The architecture's §7.5 wants "the AAL3 ceremony happened less than five minutes ago",
-// and the engine cannot answer that today: model.AuthSession records AAL and AALExpiresAt
-// but not the instant of the ceremony, and §7.1 explicitly forbids reconstructing that
-// instant by subtracting the window — a legacy row would yield an invented time that
-// looks exactly like a measured one. Publishing a zero timestamp in a struct called
-// "AuthenticationFacts" is worse than omitting it: every caller that forgets to check for
-// zero reads it as "authenticated at the epoch", which is always older than five minutes
-// and denies, or, with the comparison written the other way, always passes.
-//
-// What the engine CAN establish is the effective AAL, which effectiveAAL already degrades
-// to AAL1 when the elevation window has closed, and that is what routes enforce. The
-// five-minute freshness lands when model.AuthSession gains a nullable AALAuthenticatedAt
-// that the elevation ceremony writes in the same mutation.
+// This scalar projection supplies effective AAL, not authentication freshness.
+// A consumer needing the actual ceremony instant must resolve the Principal,
+// obtain Principal.AuthenticationEvidence and validate its AuthorityFor accessor
+// against the same principal, tenant and database time. Copying a timestamp into
+// this struct would discard that credential and authority provenance.
 type AuthenticationFacts struct {
 	// Credential is the exact credential reference, absent for synthetic principals.
 	Credential auth.PrincipalRef

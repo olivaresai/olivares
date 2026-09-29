@@ -41,30 +41,39 @@ const StepUpTTL = 15 * time.Minute
 var ErrStepUpRequired = errors.New("auth: step-up required: this action requires a verified hardware authenticator (AAL3)")
 
 // effectiveAAL computes the assurance a session row carries RIGHT NOW. A legacy
-// row (zero AAL) and an elevated row whose freshness window has passed both read
-// as AAL1 — assurance is degraded, never inflated (fail-closed).
+// row (zero AAL), missing/invalid event, or elevated row at/past its deadline
+// reads as AAL1 — assurance is degraded, never inflated (fail-closed).
 func effectiveAAL(s model.AuthSession, now model.Timestamp) int {
-	aal := s.AAL
-	if aal <= AAL1 {
+	if s.AAL != AAL3 || s.AALAuthenticatedAt == nil ||
+		!validAuthenticationInstant(s.AALAuthenticatedAt.Time()) || s.AALAuthenticatedAt.Time().After(now.Time()) ||
+		s.AALExpiresAt == nil || !now.Before(*s.AALExpiresAt) {
 		return AAL1
 	}
-	if s.AALExpiresAt == nil || s.AALExpiresAt.Before(now) {
-		return AAL1
-	}
-	return aal
+	return AAL3
 }
 
 // ElevateSession raises the calling session's assurance to aal after the caller
 // VERIFIED a ceremony for method ("webauthn" or "piv"). It refuses non-session
 // principals and dead sessions, appends method to the session's AMR (once),
+// captures the event once at UTC microsecond precision before storage can wait,
 // stamps the step-up freshness window, and records the step-up on the ledger in
 // the same transaction. It never lowers an assurance and never touches the
 // session credential or grants.
 func (a *Authenticator) ElevateSession(ctx context.Context, actor Principal, method string, aal int) (model.AuthSession, error) {
-	if actor.Kind != KindUser || actor.CredID.IsZero() {
+	authenticatedAt := model.NewTimestamp(a.clock.Now().Time().UTC().Truncate(time.Microsecond))
+	return a.elevateSessionAt(ctx, actor, method, aal, authenticatedAt)
+}
+
+// elevateSessionAt retains the verified caller's event across persistence and
+// authority waits. It never replaces the ceremony with a later observation.
+func (a *Authenticator) elevateSessionAt(ctx context.Context, actor Principal, method string, aal int, authenticatedAt model.Timestamp) (model.AuthSession, error) {
+	if actor.Kind != KindUser || actor.CredID.IsZero() || actor.UserID.IsZero() {
 		return model.AuthSession{}, ErrUnauthenticated
 	}
-	now := a.clock.Now()
+	if aal != AAL3 || (method != "webauthn" && method != "piv") || !validAuthenticationInstant(authenticatedAt.Time()) {
+		return model.AuthSession{}, ErrStepUpRequired
+	}
+	exp := model.NewTimestamp(authenticatedAt.Time().Add(StepUpTTL))
 	var sess model.AuthSession
 	if err := a.st.AuthMutate(ctx, func(as store.AuthScope) error {
 		s, err := as.Sessions().Get(ctx, actor.CredID)
@@ -74,8 +83,13 @@ func (a *Authenticator) ElevateSession(ctx context.Context, actor Principal, met
 			}
 			return err
 		}
-		if s.Revoked || s.ExpiresAt.Before(now) {
+		now := a.clock.Now()
+		if s.UserID != actor.UserID || s.Revoked || s.DeletedAt != nil || !now.Before(s.ExpiresAt) {
 			return ErrUnauthenticated
+		}
+		if authenticatedAt.Time().After(now.Time()) || !now.Before(exp) ||
+			(s.AALAuthenticatedAt != nil && authenticatedAt.Before(*s.AALAuthenticatedAt)) {
+			return ErrStepUpRequired
 		}
 		if aal > s.AAL {
 			s.AAL = aal
@@ -83,8 +97,8 @@ func (a *Authenticator) ElevateSession(ctx context.Context, actor Principal, met
 		if !slices.Contains(s.AMR, method) {
 			s.AMR = append(s.AMR, method)
 		}
-		exp := model.NewTimestamp(now.Time().Add(StepUpTTL))
 		s.AALExpiresAt = &exp
+		s.AALAuthenticatedAt = &authenticatedAt
 		updated, err := as.Sessions().Update(ctx, s)
 		if err != nil {
 			return err

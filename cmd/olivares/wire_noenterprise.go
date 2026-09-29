@@ -122,10 +122,10 @@ func newSeatPolicy(_ licenseClaimsFunc, _ crlViewFunc) auth.SeatPolicy {
 
 // bindEnterpriseEntitlement is the open half of the grant-list seam. The
 // enterprise overlay implements the real binder (it publishes the list to
-// every add-on gate). The AGPL build has nothing to entitle, so this is a
-// no-op: the signature exists so boot.go can call it in both builds without
+// every add-on gate and retains the same holder for live license observations).
+// The AGPL build has nothing to entitle, so this is a no-op: the signature exists so boot.go can call it in both builds without
 // a build tag. It does not gate reads, export, or deny-closed evaluation.
-func bindEnterpriseEntitlement(_ licenseGrantsFunc) {}
+func bindEnterpriseEntitlement(_ licenseGrantsFunc, _ *licenseHolder) {}
 
 // newServerToolEgressGate returns NO server-tool egress gate in the default (AGPL)
 // build (P0 #1): the inline inference PEP keeps its observe-only behavior — req.Tools

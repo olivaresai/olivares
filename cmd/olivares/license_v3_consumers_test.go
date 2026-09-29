@@ -426,7 +426,7 @@ func TestBootWiresTheGrantListSeam(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(src), "bindEnterpriseEntitlement(licHolder.grants)") {
-		t.Fatal("boot.go does not bind licHolder.grants; addongate would see no EntitlementFunc")
+	if !strings.Contains(string(src), "bindEnterpriseEntitlement(licHolder.grants, licHolder)") {
+		t.Fatal("boot.go must bind licHolder.grants and that same live licHolder")
 	}
 }

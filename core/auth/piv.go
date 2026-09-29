@@ -244,6 +244,8 @@ func (a *Authenticator) ElevatePIVSession(ctx context.Context, actor Principal, 
 		a.auditStepUpFailure(ctx, actor, "piv", "ocsp_revoked")
 		return model.AuthSession{}, st, ErrPIVVerification
 	}
+	// Preserve the verified event before the user lookup or mutation can wait.
+	authenticatedAt := model.NewTimestamp(a.clock.Now().Time().UTC().Truncate(time.Microsecond))
 	var email string
 	if err := a.st.AuthView(ctx, func(as store.AuthScope) error {
 		u, err := as.Users().Get(ctx, actor.UserID)
@@ -262,7 +264,7 @@ func (a *Authenticator) ElevatePIVSession(ctx context.Context, actor Principal, 
 		a.auditStepUpFailure(ctx, actor, "piv", "subject_mismatch")
 		return model.AuthSession{}, st, ErrPIVVerification
 	}
-	sess, err := a.ElevateSession(ctx, actor, "piv", AAL3)
+	sess, err := a.elevateSessionAt(ctx, actor, "piv", AAL3, authenticatedAt)
 	if err != nil {
 		return model.AuthSession{}, st, err
 	}

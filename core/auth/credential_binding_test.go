@@ -343,6 +343,8 @@ func TestBindingRevisionLifecycle(t *testing.T) {
 		}
 		until := model.NewTimestamp(time.Now().Add(time.Minute))
 		row.AAL, row.AMR, row.AALExpiresAt = AAL3, []string{"pwd", "webauthn"}, &until
+		stamp := model.NewTimestamp(time.Now())
+		row.AALAuthenticatedAt = &stamp
 		_, err = as.Sessions().Update(f.ctx, row)
 		return err
 	}); err != nil {
@@ -373,6 +375,8 @@ func TestBindingRevisionLifecycle(t *testing.T) {
 	p5, _, _ := f.session(f.userA, func(row *model.AuthSession) {
 		until := model.NewTimestamp(time.Now().Add(1500 * time.Millisecond))
 		row.AAL, row.AMR, row.AALExpiresAt = AAL3, []string{"pwd", "webauthn"}, &until
+		stamp := model.NewTimestamp(time.Now())
+		row.AALAuthenticatedAt = &stamp
 	})
 	s5 := f.subject(model.NewID(), f.userA.ID)
 	b5 := f.mustBind(p5, s5)

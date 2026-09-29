@@ -720,6 +720,11 @@ func (m *Module) fireGuardianRule(ctx context.Context, tenant model.TenantID, ru
 	var emits []pendingGuardianEmit
 	err := m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
 		emits = emits[:0] // a conflict-retried closure must not double-collect
+		if action == gaActionStopAgent || action == gaActionStopEstate {
+			if err := lockKillSwitchTransaction(ctx, sc); err != nil {
+				return err
+			}
+		}
 		actRepo, err := sc.Ext(guardianActionKind)
 		if err != nil {
 			return err
@@ -1013,6 +1018,13 @@ func (m *Module) GuardianSweep(ctx context.Context, tenant model.TenantID) (Guar
 		var emits []pendingGuardianEmit
 		err := m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
 			emits = emits[:0]
+			// Discovery chooses lock order only. Bind it to the stored arm below.
+			arm := p.String(colGAAction)
+			if arm == gaActionStopAgent || arm == gaActionStopEstate {
+				if err := lockKillSwitchTransaction(ctx, sc); err != nil {
+					return err
+				}
+			}
 			actRepo, err := sc.Ext(guardianActionKind)
 			if err != nil {
 				return err
@@ -1020,6 +1032,9 @@ func (m *Module) GuardianSweep(ctx context.Context, tenant model.TenantID) (Guar
 			rec, err := actRepo.Get(ctx, actionID)
 			if err != nil {
 				return err
+			}
+			if rec.String(colGAAction) != arm {
+				return validationError("guardian action changed during lock selection")
 			}
 			if rec.String(colGAStatus) != gaStatusPending {
 				return nil // raced with another pass; converged

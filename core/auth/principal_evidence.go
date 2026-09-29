@@ -31,14 +31,15 @@ var ErrPrincipalEvidenceUnavailable = errors.New("auth: principal evidence unava
 // consume it, while product routes and readiness remain OFF until the later K3
 // composition cut.
 type principalEvidenceProvenance struct {
-	tenant         model.TenantID
-	ref            PrincipalRef
-	directoryEpoch store.AuthorizationFactRef
-	authorityMode  principalReadAuthorityMode
-	userAuthority  store.UserAuthorityFactRef
-	observedAt     time.Time
-	freshUntil     time.Time
-	seal           [sha256.Size]byte
+	tenant          model.TenantID
+	ref             PrincipalRef
+	directoryEpoch  store.AuthorizationFactRef
+	authorityMode   principalReadAuthorityMode
+	userAuthority   store.UserAuthorityFactRef
+	authenticatedAt time.Time
+	observedAt      time.Time
+	freshUntil      time.Time
+	seal            [sha256.Size]byte
 }
 
 type principalReadAuthorityMode byte
@@ -139,7 +140,7 @@ func (a *Authenticator) ResolvePrincipalScope(
 			return principalEvidenceUnavailable("context deadline is not after database time", nil)
 		}
 
-		principal, freshUntil, err := material.finalize(now, deadline)
+		principal, freshUntil, authenticatedAt, err := material.finalize(now, deadline)
 		if err != nil {
 			return err
 		}
@@ -149,13 +150,14 @@ func (a *Authenticator) ResolvePrincipalScope(
 		principal = principal.withCredentialRef(ref.version)
 		principal.credentialRef.binding = ref.binding
 		principal.evidence = principalEvidenceProvenance{
-			tenant:         tenant,
-			ref:            ref,
-			directoryEpoch: before,
-			authorityMode:  mode,
-			userAuthority:  userAuthority,
-			observedAt:     now.Time(),
-			freshUntil:     freshUntil,
+			tenant:          tenant,
+			ref:             ref,
+			directoryEpoch:  before,
+			authorityMode:   mode,
+			userAuthority:   userAuthority,
+			authenticatedAt: authenticatedAt,
+			observedAt:      now.Time(),
+			freshUntil:      freshUntil,
 		}
 		seal, err := computePrincipalAuthoritySeal(principal)
 		if err != nil {
@@ -196,31 +198,39 @@ type principalEvidenceMaterial struct {
 func (m principalEvidenceMaterial) finalize(
 	now model.Timestamp,
 	deadline time.Time,
-) (Principal, time.Time, error) {
+) (Principal, time.Time, time.Time, error) {
 	if m.credentialExpiry != nil {
 		// A credential is not evidence at its exact expiry boundary. This is
 		// intentionally stricter than historical hot-path token/session checks.
 		if m.credentialExpiry.IsZero() {
-			return Principal{}, time.Time{}, principalEvidenceUnavailable("credential expiry is malformed", nil)
+			return Principal{}, time.Time{}, time.Time{}, principalEvidenceUnavailable("credential expiry is malformed", nil)
 		}
 		if !now.Time().Before(m.credentialExpiry.Time()) {
-			return Principal{}, time.Time{}, ErrUnauthenticated
+			return Principal{}, time.Time{}, time.Time{}, ErrUnauthenticated
 		}
 		deadline = earlierDeadline(deadline, m.credentialExpiry.Time())
 	}
 	p := m.principal
+	var authenticatedAt time.Time
 	if m.session != nil {
 		aal, elevatedUntil, err := effectiveEvidenceAAL(*m.session, now)
 		if err != nil {
-			return Principal{}, time.Time{}, err
+			return Principal{}, time.Time{}, time.Time{}, err
 		}
 		p.AAL = aal
 		p.AMR = defensiveAMR(m.session.AMR)
+		authenticatedAt = m.session.CreatedAt.Time()
+		if aal == AAL3 {
+			authenticatedAt = m.session.AALAuthenticatedAt.Time()
+		}
+		if !validAuthenticationInstant(authenticatedAt) || afterTransactionClock(authenticatedAt, now) {
+			return Principal{}, time.Time{}, time.Time{}, principalEvidenceUnavailable("authentication instant is malformed", nil)
+		}
 		if !elevatedUntil.IsZero() {
 			deadline = earlierDeadline(deadline, elevatedUntil.Time())
 		}
 	}
-	return p, deadline.UTC(), nil
+	return p, deadline.UTC(), authenticatedAt.UTC(), nil
 }
 
 func resolveSessionEvidenceMaterial(
@@ -460,6 +470,18 @@ func validPrincipalDirectoryEpochFact(tenant model.TenantID, fact store.Authoriz
 	return !leased
 }
 
+// transactionClockPrecision is the coarsest precision a store's transaction
+// clock reports: SQLite's engine clock reads milliseconds (PostgreSQL reads
+// microseconds). An instant the application clock stamped inside the same
+// millisecond can read later than the truncated transaction time.
+const transactionClockPrecision = time.Millisecond
+
+// afterTransactionClock reports whether instant t lies after the transaction
+// time now, allowing for the transaction clock's precision.
+func afterTransactionClock(t time.Time, now model.Timestamp) bool {
+	return !t.Before(now.Time().Add(transactionClockPrecision))
+}
+
 func effectiveEvidenceAAL(session model.AuthSession, now model.Timestamp) (int, model.Timestamp, error) {
 	if !defensiveAMRValid(session.AMR) {
 		return 0, model.Timestamp{}, principalEvidenceUnavailable("session AMR is malformed", nil)
@@ -468,6 +490,12 @@ func effectiveEvidenceAAL(session model.AuthSession, now model.Timestamp) (int, 
 	case 0, AAL1:
 		return AAL1, model.Timestamp{}, nil
 	case AAL3:
+		if session.AALAuthenticatedAt == nil {
+			return AAL1, model.Timestamp{}, nil
+		}
+		if !validAuthenticationInstant(session.AALAuthenticatedAt.Time()) || afterTransactionClock(session.AALAuthenticatedAt.Time(), now) {
+			return 0, model.Timestamp{}, principalEvidenceUnavailable("elevated authentication instant is malformed", nil)
+		}
 		if session.AALExpiresAt == nil || !now.Time().Before(session.AALExpiresAt.Time()) {
 			return AAL1, model.Timestamp{}, nil
 		}

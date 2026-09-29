@@ -314,6 +314,7 @@ var authSessionDescriptor = model.EntityDescriptor{
 		// Nullable and appended last for the additive reconcile.
 		pdecl(field("tenant_scope", model.KindUUID, true),
 			model.None("the one tenant the session is confined to: core/model/auth.go:254")),
+		field("aal_authenticated_at", model.KindTimestamp, true),
 	},
 	Indexes: []model.IndexSpec{
 		{Name: "auth_sessions_selector_uniq", Columns: []string{"tenant_id", "selector"}, Unique: true},
@@ -331,7 +332,7 @@ var authSessionCodec = model.Codec[model.AuthSession]{
 			"user_id": s.UserID.String(), "selector": s.Selector, "secret_hash": encBytes(s.SecretHash),
 			"expires_at": encTS(s.ExpiresAt), "revoked": s.Revoked, "created_ip": s.CreatedIP,
 			"aal": encOptInt(int64(s.AAL)), "amr": amr, "aal_expires_at": encOptTS(s.AALExpiresAt),
-			"tenant_scope": encOptTenant(s.TenantScope),
+			"tenant_scope": encOptTenant(s.TenantScope), "aal_authenticated_at": encOptTS(s.AALAuthenticatedAt),
 		}, nil
 	},
 	Decode: func(b model.BaseFields, r model.Record) (model.AuthSession, error) {
@@ -347,10 +348,14 @@ var authSessionCodec = model.Codec[model.AuthSession]{
 		if err != nil {
 			return model.AuthSession{}, err
 		}
+		authenticatedAt, err := decOptTS(r, "aal_authenticated_at")
+		if err != nil {
+			return model.AuthSession{}, err
+		}
 		return model.AuthSession{BaseFields: b, UserID: decID(r, "user_id"), Selector: r.String("selector"),
 			SecretHash: r.Bytes("secret_hash"), ExpiresAt: exp, Revoked: r.Bool("revoked"),
 			CreatedIP: r.String("created_ip"), AAL: int(r.Int("aal")), AMR: amr, AALExpiresAt: aalExp,
-			TenantScope: decTenant(r, "tenant_scope")}, nil
+			TenantScope: decTenant(r, "tenant_scope"), AALAuthenticatedAt: authenticatedAt}, nil
 	},
 }
 

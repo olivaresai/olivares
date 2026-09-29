@@ -325,7 +325,8 @@ func authSessionRenewalOnly(old, next model.AuthSession) bool {
 		old.CreatedIP == next.CreatedIP &&
 		old.AAL == next.AAL &&
 		slices.Equal(old.AMR, next.AMR) &&
-		authorityOptionalTimestampEqual(old.AALExpiresAt, next.AALExpiresAt)
+		authorityOptionalTimestampEqual(old.AALExpiresAt, next.AALExpiresAt) &&
+		authorityOptionalTimestampEqual(old.AALAuthenticatedAt, next.AALAuthenticatedAt)
 }
 
 // authTokenRenewalOnly is intentionally positive and exhaustive: only expiry

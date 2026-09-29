@@ -43,13 +43,21 @@ if run; then bad "grants() dropped stayed CLEAN"
 else ok "mutant (drop grants) is killed"; fi
 
 stage
-sed -i 's/bindEnterpriseEntitlement(licHolder.grants)/bindEnterpriseEntitlement(nil)/' \
+sed -i 's/bindEnterpriseEntitlement(licHolder\.grants, licHolder)/bindEnterpriseEntitlement(nil, licHolder)/' \
   "$TMP/tree/cmd/olivares/boot.go"
 if run; then bad "boot unbound stayed CLEAN"
 else ok "mutant (boot does not bind grants) is killed"; fi
 
+for replacement in 'otherHolder.grants, licHolder' 'licHolder.grants, nil' 'licHolder.grants, otherHolder'; do
+  stage
+  sed -i "s/bindEnterpriseEntitlement(licHolder\\.grants, licHolder)/bindEnterpriseEntitlement($replacement)/" \
+    "$TMP/tree/cmd/olivares/boot.go"
+  if run; then bad "wrong grant/holder binding stayed CLEAN: $replacement"
+  else ok "mutant (wrong grant/holder binding) is killed: $replacement"; fi
+done
+
 stage
-sed -i 's/func bindEnterpriseEntitlement(_ licenseGrantsFunc) {}/func bindEnterpriseEntitlement(_ licenseGrantsFunc) { panic("gate") }/' \
+sed -i 's/func bindEnterpriseEntitlement(_ licenseGrantsFunc, _ \*licenseHolder) {}/func bindEnterpriseEntitlement(_ licenseGrantsFunc, _ *licenseHolder) { panic("gate") }/' \
   "$TMP/tree/cmd/olivares/wire_noenterprise.go"
 if run; then bad "AGPL binder that gates stayed CLEAN"
 else ok "mutant (AGPL no-op became a gate) is killed"; fi

@@ -138,3 +138,24 @@ func TestProductBootCallbackAppendOnlyCensus(t *testing.T) {
 		t.Logf("PRODUCT_CALLBACK_CENSUS_WRITTEN|path=%s", path)
 	}
 }
+
+// The generation is mutable metadata, registered by the same boot callback as
+// its stop producer. It must not change the append-only guard manifest.
+func TestProductBootKillSwitchGenerationCensus(t *testing.T) {
+	appendOnly, mutable := productBootCallbackCensus(t)
+	const table = "governance_killswitch_generation"
+	for _, name := range appendOnly {
+		if name == table {
+			t.Fatal("stop generation entered the append-only census")
+		}
+	}
+	count := 0
+	for _, name := range mutable {
+		if name == table {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Fatalf("boot registered %d mutable stop generation tables, want 1", count)
+	}
+}

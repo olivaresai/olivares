@@ -29,7 +29,8 @@ jobs:
   rpm-repository:
     if: github.repository == 'olivaresai/olivares' || vars.OLIVARES_RELEASE_PROFILE == 'preprod'
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # Step ceilings total 53 minutes (3 + 5 + 5 + 10 + 30); allow 7 for job overhead.
+    timeout-minutes: 60
     steps:
       - name: checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

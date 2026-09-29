@@ -405,13 +405,14 @@ func (o *supportBundleOptions) collectSecretInventory(cmd *cobra.Command, assemb
 		// render-exempt: rendered into a buffer that becomes a FILE inside the
 		// support tarball, not written to stdout.
 		tw := tabwriter.NewWriter(&b, 0, 2, 2, ' ', 0)
-		fmt.Fprintln(tw, "NAME\tHINT\tDESCRIPTION\tUPDATED")
+		// Portable diagnostics must not expose value-derived fingerprints.
+		fmt.Fprintln(tw, "NAME\tDESCRIPTION\tUPDATED")
 		for _, view := range views {
 			updated := ""
 			if !view.UpdatedAt.IsZero() {
 				updated = view.UpdatedAt.String()
 			}
-			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", view.Name, view.Hint, view.Description, updated)
+			fmt.Fprintf(tw, "%s\t%s\t%s\n", view.Name, view.Description, updated)
 		}
 		if err := tw.Flush(); err != nil {
 			return fmt.Errorf("collect secret inventory: %w", err)

@@ -451,6 +451,7 @@ func (a *Authenticator) FinishWebAuthnStepUp(ctx context.Context, actor Principa
 		a.auditStepUpFailure(ctx, actor, "webauthn", "verification")
 		return model.AuthSession{}, ErrWebAuthnVerification
 	}
+	authenticatedAt := model.NewTimestamp(a.clock.Now().Time().UTC().Truncate(time.Microsecond))
 	// Persist the post-assertion credential state FIRST (updated sign count,
 	// flags, clone warning) so a clone signal survives even when elevation is
 	// refused right after.
@@ -468,7 +469,7 @@ func (a *Authenticator) FinishWebAuthnStepUp(ctx context.Context, actor Principa
 		a.auditStepUpFailure(ctx, actor, "webauthn", "user_verification")
 		return model.AuthSession{}, ErrWebAuthnVerification
 	}
-	return a.ElevateSession(ctx, actor, "webauthn", AAL3)
+	return a.elevateSessionAt(ctx, actor, "webauthn", AAL3, authenticatedAt)
 }
 
 // persistWebAuthnCredential writes the library's post-assertion credential state

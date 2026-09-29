@@ -192,9 +192,9 @@ run_case() {
 	esac
 	if [ -n "${mutate}" ]; then
 		# A REAL defect in REAL public source: the binding the grants seam exists to require.
-		command sed -i 's/bindEnterpriseEntitlement(licHolder\.grants)/bindEnterpriseEntitlement(nil)/' \
+		command sed -i 's/bindEnterpriseEntitlement(licHolder\.grants, licHolder)/bindEnterpriseEntitlement(nil, licHolder)/' \
 			"${dir}/cmd/olivares/boot.go" || cannot "could not mutate boot.go in '${name}'"
-		command grep -q 'bindEnterpriseEntitlement(nil)' "${dir}/cmd/olivares/boot.go" \
+		command grep -q 'bindEnterpriseEntitlement(nil, licHolder)' "${dir}/cmd/olivares/boot.go" \
 			|| cannot "the mutation did not apply in '${name}'; the seam's source moved"
 	fi
 	LAST_DIR="${dir}"; LAST_RC=0

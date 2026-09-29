@@ -240,8 +240,8 @@ type AuthSession struct {
 	// vouch for), 3 = a phishing-resistant hardware ceremony (WebAuthn with user
 	// verification, or PIV/CAC) verified by this engine. 0 means a legacy row
 	// minted before the column existed and is read as 1 (fail-closed: the level
-	// is never inflated). An elevated level is only effective while AALExpiresAt
-	// is in the future.
+	// is never inflated). An elevated level requires a valid, nonfuture
+	// AALAuthenticatedAt witness and an AALExpiresAt strictly in the future.
 	AAL int
 	// AMR lists the authentication methods used on this session, in order
 	// ("pwd", "sso", "webauthn", "piv"). Product vocabulary shared with the
@@ -256,6 +256,10 @@ type AuthSession struct {
 	// account that tenant created) carries it and acts nowhere else; the zero value
 	// is account scope. A scoped session's token carries the prefix "olvt".
 	TenantScope TenantID
+	// AALAuthenticatedAt is the server-observed successful hardware ceremony,
+	// fixed once at UTC microsecond precision by the verified producer.
+	// Nil is a legacy or never-elevated session; expiry never reconstructs it.
+	AALAuthenticatedAt *Timestamp
 }
 
 // WebAuthnCredential is a registered FIDO2/WebAuthn authenticator for a user

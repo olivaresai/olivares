@@ -874,3 +874,48 @@ func assertProviderURL(t *testing.T, f *principalEvidenceFixture, id model.ID, w
 		t.Fatalf("read back the protected row: %v", err)
 	}
 }
+
+func TestRouteMutationMetadataRetainsValidatedDecisionWithoutReevaluation(t *testing.T) {
+	m := newMutationAuthorityFixture(t)
+	req := m.request()
+	a, err := m.az.AuthorizeRouteMutation(m.callerCtx(), req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	metadata, err := a.MetadataFor(m.now, req)
+	if err != nil || !metadata.FreshUntil.Equal(a.witness.Decision.FreshUntil) || metadata.EvidenceDigest != a.witness.EvidenceDigest {
+		t.Fatalf("metadata is not the original validated decision: %+v, %v", metadata, err)
+	}
+	original := metadata
+	metadata.FreshUntil = metadata.FreshUntil.Add(time.Hour)
+	metadata.EvidenceDigest[0] ^= 1
+	again, err := a.MetadataFor(m.now, req)
+	if err != nil || again != original {
+		t.Fatal("editing a metadata copy changed retained evidence")
+	}
+	if _, err := a.AuthorityFor(m.now, req); err != nil {
+		t.Fatal(err)
+	}
+	other := req
+	other.Resource.ID = model.NewID().String()
+	for _, tc := range []struct {
+		name string
+		a    RouteMutationAuthorization
+		now  time.Time
+		req  Request
+	}{
+		{"zero", RouteMutationAuthorization{}, m.now, req},
+		{"other question", a, m.now, other},
+		{"expired", a, original.FreshUntil, req},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := tc.a.MetadataFor(tc.now, tc.req)
+			if !errors.Is(err, ErrRouteUndecided) || got != (RouteMutationMetadata{}) {
+				t.Fatalf("invalid metadata projection: %+v, %v", got, err)
+			}
+		})
+	}
+	if m.scoped.typedCalls != 1 || m.scoped.legacyCalls != 0 {
+		t.Fatalf("metadata reevaluated authorization: %d typed, %d legacy", m.scoped.typedCalls, m.scoped.legacyCalls)
+	}
+}

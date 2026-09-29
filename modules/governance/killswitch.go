@@ -250,6 +250,10 @@ type ksEngageOutcome struct {
 // for the same key is returned as AlreadyActive (the guardian path treats that
 // as success; the operator handler maps it to a 409 naming the existing stop).
 func (m *Module) engageKillSwitchLocked(ctx context.Context, sc store.Scope, p ksEngageParams, now model.Timestamp) (ksEngageOutcome, error) {
+	generation, err := lockKillSwitchGeneration(ctx, sc)
+	if err != nil {
+		return ksEngageOutcome{}, err
+	}
 	repo, err := sc.Ext(killSwitchKind)
 	if err != nil {
 		return ksEngageOutcome{}, err
@@ -287,6 +291,10 @@ func (m *Module) engageKillSwitchLocked(ctx context.Context, sc store.Scope, p k
 		return ksEngageOutcome{}, err
 	} else if found {
 		return ksEngageOutcome{Record: existing, AlreadyActive: true}, nil
+	}
+
+	if err := advanceKillSwitchGeneration(ctx, sc, generation); err != nil {
+		return ksEngageOutcome{}, err
 	}
 
 	// Revoke the queued work: cancel every PENDING approval for an in-scope
@@ -662,6 +670,10 @@ func (m *Module) handleReenableKillSwitch(w http.ResponseWriter, r *http.Request
 		clientCID  string
 	)
 	err := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
+		generation, err := lockKillSwitchGeneration(r.Context(), sc)
+		if err != nil {
+			return err
+		}
 		repo, err := sc.Ext(killSwitchKind)
 		if err != nil {
 			return err
@@ -745,6 +757,9 @@ func (m *Module) handleReenableKillSwitch(w http.ResponseWriter, r *http.Request
 					clientErr = "a prior incident for this scope (" + prior.String(model.ColID) + ") has not been post-reviewed; review it before re-enabling again"
 					clientCode = http.StatusConflict
 					return nil
+				}
+				if err := advanceKillSwitchGeneration(r.Context(), sc, generation); err != nil {
+					return err
 				}
 				sealed, aerr := sc.Audit().Append(r.Context(), model.AuditDraft{
 					Actor: mc.Principal.Actor(), ActorKind: mc.Principal.ActorKind(),
@@ -877,6 +892,9 @@ func (m *Module) handleReviewKillSwitch(w http.ResponseWriter, r *http.Request, 
 		clientCode int
 	)
 	err := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
+		if err := lockKillSwitchTransaction(r.Context(), sc); err != nil {
+			return err
+		}
 		repo, err := sc.Ext(killSwitchKind)
 		if err != nil {
 			return err
@@ -971,28 +989,9 @@ func (m *Module) KillSwitchState(ctx context.Context, tenant model.TenantID) (St
 		return st, errNoData
 	}
 	err := m.data.View(ctx, tenant, func(sc store.Scope) error {
-		repo, err := sc.Ext(killSwitchKind)
-		if err != nil {
-			return err
-		}
-		recs, err := listAll(ctx, repo, eq(colKSStatus, ksStatusActive))
-		if err != nil {
-			return err
-		}
-		for _, rec := range recs {
-			id := model.ID(rec.String(model.ColID))
-			switch rec.String(colKSScopeKind) {
-			case ksScopeEstate:
-				st.EstateStopped, st.EstateStopID = true, id
-			case ksScopeAgent:
-				for _, ref := range []string{rec.String(colKSScopeRef), rec.String(colKSAgentID), rec.String(colKSAgentExternal)} {
-					if ref != "" {
-						st.AgentRefs[ref] = id
-					}
-				}
-			}
-		}
-		return nil
+		var err error
+		st, err = readKillSwitchState(ctx, sc)
+		return err
 	})
 	return st, err
 }
