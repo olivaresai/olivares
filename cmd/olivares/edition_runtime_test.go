@@ -230,10 +230,10 @@ func TestBootBindsEditionRuntimeCapabilities(t *testing.T) {
 		{"missing governance", "Governance: set.gov,", ""},
 		{"nil governance", "Governance: set.gov", "Governance: nil"},
 		{"wrong governance", "Governance: set.gov", "Governance: otherGov"},
-		{"missing secrets", "Secrets: secretResolver,", ""},
-		{"nil secrets", "Secrets: secretResolver", "Secrets: nil"},
-		{"wrong secrets", "Secrets: secretResolver", "Secrets: otherResolver"},
-		{"second resolver", "Secrets: secretResolver", "Secrets: newSecretResolver(secretStore, osGetenv, log)"},
+		{"missing secrets", "Governance: set.gov, Secrets: secretResolver,", "Governance: set.gov,"},
+		{"nil secrets", "Governance: set.gov, Secrets: secretResolver", "Governance: set.gov, Secrets: nil"},
+		{"wrong secrets", "Governance: set.gov, Secrets: secretResolver", "Governance: set.gov, Secrets: otherResolver"},
+		{"second resolver", "Governance: set.gov, Secrets: secretResolver", "Governance: set.gov, Secrets: newSecretResolver(secretStore, osGetenv, log)"},
 		{"missing binding", "editionBindModuleDependencies(", "unrelatedBinding("},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

@@ -28,7 +28,7 @@ func (c *ceremonyClock) Now() model.Timestamp { return model.NewTimestamp(c.now)
 
 // The scheduling/failure seam wraps a real transaction. It does not supply a
 // verified certificate, manufacture a row, or replace commit/rollback.
-type ceremonyStore struct {
+type ceremonySeamStore struct {
 	store.Store
 	before     func()
 	beforeRead func()
@@ -36,7 +36,7 @@ type ceremonyStore struct {
 	failUpdate bool
 }
 
-func (s *ceremonyStore) AuthMutate(ctx context.Context, fn func(store.AuthScope) error) error {
+func (s *ceremonySeamStore) AuthMutate(ctx context.Context, fn func(store.AuthScope) error) error {
 	if s.before != nil {
 		s.before()
 	}
@@ -48,7 +48,7 @@ func (s *ceremonyStore) AuthMutate(ctx context.Context, fn func(store.AuthScope)
 	})
 }
 
-func (s *ceremonyStore) AuthView(ctx context.Context, fn func(store.AuthScope) error) error {
+func (s *ceremonySeamStore) AuthView(ctx context.Context, fn func(store.AuthScope) error) error {
 	if s.beforeRead != nil {
 		s.beforeRead()
 	}
@@ -150,7 +150,7 @@ func ceremonyPersistence(t *testing.T, cfg store.Config) {
 	instant := f.session.CreatedAt.Time().Add(time.Minute).Truncate(time.Second).Add(123456789 * time.Nanosecond)
 	canonical := instant.UTC().Truncate(time.Microsecond)
 	clock := &ceremonyClock{now: instant}
-	wrapped := &ceremonyStore{Store: f.st, before: func() { clock.now = instant.Add(7 * time.Minute) }}
+	wrapped := &ceremonySeamStore{Store: f.st, before: func() { clock.now = instant.Add(7 * time.Minute) }}
 	a := NewAuthenticator(wrapped, clock)
 	p, err := a.Authenticate(f.ctx, f.sessRaw)
 	if err != nil {
@@ -219,7 +219,7 @@ func TestAuthenticationCeremonyRefusalAndAuditRollback(t *testing.T) {
 					s.AAL, s.AMR, s.AALAuthenticatedAt, s.AALExpiresAt = AAL3, []string{"piv"}, &oldStamp, &oldExpiry
 				})
 			}
-			wrapped := &ceremonyStore{Store: f.st,
+			wrapped := &ceremonySeamStore{Store: f.st,
 				failAudit:  test == "audit failure" || test == "existing witness audit failure",
 				failUpdate: test == "update failure"}
 			if test == "expired while waiting" {
