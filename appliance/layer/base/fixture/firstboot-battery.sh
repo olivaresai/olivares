@@ -458,6 +458,12 @@ capture() {
   mkdir -p "$dir"
   capture_network "$name" "$dir"
   docker exec "$name" cat /var/lib/olivares-appliance/state.json > "$dir/state.json" 2>/dev/null || echo '{}' > "$dir/state.json"
+  # The delivered setup token's SHAPE, mode and owner — never its bytes, which stay on the
+  # machine in the root-only file.
+  docker exec "$name" sh -c 'tok=/var/lib/olivares-appliance/setup-token; \
+    if [ -r "$tok" ]; then printf "shape "; head -c 4 "$tok"; printf "\n"; \
+      printf "mode %s owner %s\n" "$(stat -c %a "$tok")" "$(stat -c %U "$tok")"; \
+    else echo absent; fi' > "$dir/setup-token" 2>/dev/null || true
   docker exec "$name" journalctl --boot --no-pager > "$dir/journal.txt" 2>/dev/null || true
   docker exec "$name" cloud-init status --format json > "$dir/cloud-init.json" 2>/dev/null || true
   docker exec "$name" systemctl is-active olivares.service > "$dir/product.active" 2>/dev/null || true
@@ -570,7 +576,7 @@ job_graph() {
 
 journal_is_clean() {
   local scenario=$1 dir=$2
-  vacuous "journal_has_no_setup_token:$scenario" "the setup-token seam refuses, so the product never starts" \
+  vacuous "journal_has_no_setup_token:$scenario" "the product never starts in this fixture while a later seam refuses" \
     no_setup_token "$dir/journal.txt"
   control "journal_has_no_setup_token:$scenario" no_setup_token \
     "$(counterfeit_lines "$dir/journal.txt" '  Token:    olst_ABCDEFGHIJKLMNOPQRSTUVWXYZ234567')"
@@ -632,14 +638,25 @@ agreeing() {
   }
   imported fx-agreeing || { unable "agreeing: systemd did not import the system credential"; return; }
   delivered agreeing "$d"
-  check agreeing_carriers_stop_at_the_token_seam record_is "$d/state.json" refused prepare-setup-delivery
-  control agreeing_carriers_stop_at_the_token_seam record_is \
-    "$(counterfeit "$d/state.json" '.stage = "measure-readiness"')" refused prepare-setup-delivery
-  check stages_before_the_token_seam_completed_in_order completed_are "$d/state.json" \
-    prepare-identity verify-host-settings hand-over-host-settings generate-product-config initialize-storage
-  control stages_before_the_token_seam_completed_in_order completed_are \
+  # The setup-token seam now COMPLETES in the fixture too: the token is minted and delivered
+  # to its root-only file, and the stop this scenario pins moves one stage on, to the firewall
+  # this Debian container cannot load (no nftables kernel path inside it). The image legs
+  # (the NoCloud probe) measure the ready outcome on the real Fedora image.
+  check agreeing_carriers_stop_at_the_firewall record_is "$d/state.json" refused verify-firewall
+  control agreeing_carriers_stop_at_the_firewall record_is \
+    "$(counterfeit "$d/state.json" '.stage = "measure-readiness"')" refused verify-firewall
+  check stages_through_the_setup_delivery_completed_in_order completed_are "$d/state.json" \
+    prepare-identity verify-host-settings hand-over-host-settings generate-product-config initialize-storage \
+    prepare-setup-delivery
+  control stages_through_the_setup_delivery_completed_in_order completed_are \
     "$(counterfeit "$d/state.json" '.completed |= reverse')" \
-    prepare-identity verify-host-settings hand-over-host-settings generate-product-config initialize-storage
+    prepare-identity verify-host-settings hand-over-host-settings generate-product-config initialize-storage \
+    prepare-setup-delivery
+  # The delivery itself, on the machine: the owner's token shape in a root-only file.
+  check the_setup_token_was_delivered_here holds "$d/setup-token" "shape olst"
+  control the_setup_token_was_delivered_here holds "$(counterfeit_text 'shape nope')" "shape olst"
+  check the_delivered_token_is_root_only_here holds "$d/setup-token" "mode 600 owner root"
+  control the_delivered_token_is_root_only_here holds "$(counterfeit_text 'mode 644 owner root')" "mode 600 owner root"
   check product_generator_wrote_the_configuration holds "$d/olivares.env" "(profile: single-node-prod)"
   control product_generator_wrote_the_configuration holds "$here/../../../../packaging/olivares.env.example" "(profile: single-node-prod)"
   check public_url_declared_in_the_appliance_drop_in holds "$d/drop-in.conf" "Environment=OLIVARES_PUBLIC_URL=https://olivares.example.test"

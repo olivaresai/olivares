@@ -1,0 +1,28 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# The desktop edition's preset: the server profile's lines unchanged, plus the two units the
+# desktop profile exists to run. The enablement itself is made by the recipe's config.sh inside
+# the image root - the three links systemctl's enable and default-target operations would create
+# (gdm.service installs only an Alias, display-manager.service, which graphical.target wants;
+# sshd.service is wanted by multi-user.target); these lines are the declared record config.sh
+# checks, in the file that sorts before Fedora's own presets (systemd.preset(5)).
+#
+# One automatic update route (F5 r3 §3): the product timer drives the managed DNF5 route, so dnf5-automatic is
+# installed and stays disabled. dnf-automatic.timer is the same unit under its alias (dnf5-plugin-automatic 5.4.5.0-1).
+disable dnf5-automatic.timer
+disable dnf-automatic.timer
+disable dnf5-automatic.service
+# The module helpers' sockets, which the Appliance Console connects to for the services, storage and firewall reads.
+# The root helpers' sockets are packaged, not enabled.
+enable olivares-helper-units.socket
+enable olivares-helper-storage.socket
+enable olivares-helper-firewall.socket
+# The firewall owner's boot load, which loads the confirmed policy before the network, and its guard, which reverts
+# an unconfirmed change at its deadline.
+enable olivares-firewall.service
+enable olivares-firewall-guard.service
+# The desktop's display manager, which starts GNOME Shell on the graphical target config.sh
+# sets as the default, and the SSH server, whose stock configuration serves SFTP.
+enable gdm.service
+enable sshd.service

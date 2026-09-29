@@ -67,7 +67,10 @@ set -eu
 # '^https://github.com/olivaresai/olivares' also accepted `.../olivares-anything/...`
 # and any workflow file on any branch -- i.e. far more identities than the one that
 # actually signs a release.
-DEFAULT_CERT_IDENTITY='^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$'
+# `v?` — releases before the 2026-09-29 tag-name correction carry the v prefix (v26.9.0);
+# current release tags are bare CalVer (26.10.0). The default's claim is 'this repository's
+# release workflow on a release tag', both shapes of it; pin one release with --source-tag.
+DEFAULT_CERT_IDENTITY='^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+\.[0-9]+$'
 
 REPO="olivaresai/olivares"
 RAW="https://raw.githubusercontent.com/${REPO}/main"

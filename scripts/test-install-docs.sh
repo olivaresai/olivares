@@ -19,9 +19,11 @@ for tool in bash jq find cp sed grep; do command -v "$tool" >/dev/null 2>&1 || b
 # acusando al banco de lo que era una ruta caducada. Un hecho, una fuente.
 VERSION="$(awk '!/^[[:space:]]*(#|$)/ { print; exit }' "$ROOT/RELEASE-VERSION")" \
 	|| blind "no pude leer RELEASE-VERSION"
+# Ambas formas del canon son legibles aqui: las releases anteriores a 26.10 conservan la v
+# con la que se cortaron y desde 26.10 el canon es CalVer desnuda (la correccion de nombres).
 case "$VERSION" in
-v[0-9]*.[0-9]*.[0-9]*) ;;
-*) blind "RELEASE-VERSION no tiene un valor vYY.M.PATCH legible" ;;
+v[0-9]*.[0-9]*.[0-9]* | [0-9]*.[0-9]*.[0-9]*) ;;
+*) blind "RELEASE-VERSION no tiene un valor CalVer YY.M.PATCH legible" ;;
 esac
 WITNESS="docs/releases/$VERSION-install-surfaces.json"
 [ -r "$ROOT/$WITNESS" ] || blind "falta el testigo del canon: $WITNESS"

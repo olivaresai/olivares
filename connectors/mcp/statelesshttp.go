@@ -65,7 +65,7 @@ type statelessHTTPTransport struct {
 // as the 2025-11-25 transport).
 func newStatelessHTTPTransport(spec serverSpec) (*statelessHTTPTransport, error) {
 	t := &statelessHTTPTransport{
-		client:  &http.Client{},
+		client:  newStreamableClient(http.DefaultTransport),
 		url:     spec.URL,
 		headers: spec.Headers,
 	}
@@ -195,12 +195,12 @@ func (t *statelessHTTPTransport) listen(ctx context.Context, req rpcRequest, onE
 	}
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, t.url, bytes.NewReader(body))
 	if err != nil {
-		return err
+		return &streamableRequestError{op: "mcp: listen post", cause: err}
 	}
 	setRequestHeaders(httpReq, t.headers, bearer, routingHeaders(req.Method, body))
 	resp, err := t.client.Do(httpReq)
 	if err != nil {
-		return fmt.Errorf("mcp: listen post: %w", err)
+		return &streamableRequestError{op: "mcp: listen post", cause: err}
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
@@ -319,12 +319,12 @@ func (t *statelessHTTPTransport) Close() error { return nil }
 func (t *statelessHTTPTransport) post(ctx context.Context, body []byte, routing map[string]string) (*http.Response, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, t.url, bytes.NewReader(body))
 	if err != nil {
-		return nil, err
+		return nil, &streamableRequestError{op: "mcp: http post", cause: err}
 	}
 	setRequestHeaders(req, t.headers, t.bearer, routing)
 	resp, err := t.client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("mcp: http post: %w", err)
+		return nil, &streamableRequestError{op: "mcp: http post", cause: err}
 	}
 	return resp, nil
 }

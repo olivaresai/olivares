@@ -25,21 +25,21 @@ func TestResolveChannelReleaseAssets(t *testing.T) {
 			endpoint:    "https://github.com/olivaresai/olivares",
 			wantTag:     "",
 			wantMani:    "https://github.com/olivaresai/olivares/releases/latest/download/stable-manifest.json",
-			wantArtifac: "https://github.com/olivaresai/olivares/releases/download/v26.8.0/olivares_26.8.0_linux_amd64.tar.gz",
+			wantArtifac: "https://github.com/olivaresai/olivares/releases/download/26.8.0/olivares_26.8.0_linux_amd64.tar.gz",
 		},
 		{
 			name:        "a trailing slash changes nothing",
 			endpoint:    "https://github.com/olivaresai/olivares/",
 			wantTag:     "",
 			wantMani:    "https://github.com/olivaresai/olivares/releases/latest/download/stable-manifest.json",
-			wantArtifac: "https://github.com/olivaresai/olivares/releases/download/v26.8.0/olivares_26.8.0_linux_amd64.tar.gz",
+			wantArtifac: "https://github.com/olivaresai/olivares/releases/download/26.8.0/olivares_26.8.0_linux_amd64.tar.gz",
 		},
 		{
 			name:        "an explicit latest-download base",
 			endpoint:    "https://github.com/olivaresai/olivares/releases/latest/download",
 			wantTag:     "",
 			wantMani:    "https://github.com/olivaresai/olivares/releases/latest/download/stable-manifest.json",
-			wantArtifac: "https://github.com/olivaresai/olivares/releases/download/v26.8.0/olivares_26.8.0_linux_amd64.tar.gz",
+			wantArtifac: "https://github.com/olivaresai/olivares/releases/download/26.8.0/olivares_26.8.0_linux_amd64.tar.gz",
 		},
 		{
 			name:        "a release PAGE url pins that release",
@@ -60,14 +60,14 @@ func TestResolveChannelReleaseAssets(t *testing.T) {
 			endpoint:    "https://github.com/olivaresai/olivares/releases",
 			wantTag:     "",
 			wantMani:    "https://github.com/olivaresai/olivares/releases/latest/download/stable-manifest.json",
-			wantArtifac: "https://github.com/olivaresai/olivares/releases/download/v26.8.0/olivares_26.8.0_linux_amd64.tar.gz",
+			wantArtifac: "https://github.com/olivaresai/olivares/releases/download/26.8.0/olivares_26.8.0_linux_amd64.tar.gz",
 		},
 		{
 			name:        "a mirror serving the release shape from another host is accepted",
 			endpoint:    "https://mirror.example.test/olivaresai/olivares/releases/latest/download",
 			wantTag:     "",
 			wantMani:    "https://mirror.example.test/olivaresai/olivares/releases/latest/download/stable-manifest.json",
-			wantArtifac: "https://mirror.example.test/olivaresai/olivares/releases/download/v26.8.0/olivares_26.8.0_linux_amd64.tar.gz",
+			wantArtifac: "https://mirror.example.test/olivaresai/olivares/releases/download/26.8.0/olivares_26.8.0_linux_amd64.tar.gz",
 		},
 	}
 	for _, c := range cases {
@@ -337,8 +337,14 @@ func TestResolveChannelRefusals(t *testing.T) {
 		}
 	})
 
-	t.Run("a version with a v prefix is not doubled", func(t *testing.T) {
+	t.Run("a version with a stray v prefix resolves to the bare tag", func(t *testing.T) {
 		t.Parallel()
+		// Release tags are bare CalVer since the 2026-09-29 tag-name correction, so the
+		// derivation strips a stray v instead of adding one: a manifest that declares
+		// "v26.8.0" still addresses the release tagged 26.8.0. A 26.9.0-or-older binary
+		// ADDED the prefix here, which is exactly why its default-endpoint upgrade against
+		// a bare-tag release answers 404 and the documented step for those installs pins
+		// the release with /releases/tag/<tag>.
 		l, err := ResolveChannel("https://github.com/o/r", ChannelStable)
 		if err != nil {
 			t.Fatal(err)
@@ -347,7 +353,14 @@ func TestResolveChannelRefusals(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if want := "https://github.com/o/r/releases/download/v26.8.0/x.tar.gz"; got != want {
+		if want := "https://github.com/o/r/releases/download/26.8.0/x.tar.gz"; got != want {
+			t.Fatalf("ArtifactURL() = %q, want %q", got, want)
+		}
+		got, err = l.ArtifactURL("26.8.0", "x.tar.gz")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := "https://github.com/o/r/releases/download/26.8.0/x.tar.gz"; got != want {
 			t.Fatalf("ArtifactURL() = %q, want %q", got, want)
 		}
 	})

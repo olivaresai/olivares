@@ -1,5 +1,8 @@
 Olivares Server \n
-First boot: run `sudo appliance-firstboot status`. Once it reports ready, the console answers
-at https://\4:8443 and the one-time setup token is delivered as that status describes;
-it is never shown on this screen or written to the system journal.
-
+Finish first setup in a browser at https://\4:8443/setup (\4 is this machine's address).
+The one-time setup token is on this machine, readable by root:
+  sudo cat /var/lib/olivares-appliance/setup-token
+It is single-use and stops working once the first administrator exists. It is never shown on
+this screen and never written to the system journal. After setup completes the token is spent:
+remove the file with `sudo rm /var/lib/olivares-appliance/setup-token`.
+First boot state: run `sudo appliance-firstboot status`.

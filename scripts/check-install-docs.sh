@@ -43,9 +43,13 @@ done
 [ -r "$ROOT/RELEASE-VERSION" ] || blind "cannot read $ROOT/RELEASE-VERSION"
 
 version="$(awk '!/^[[:space:]]*(#|$)/ { print; exit }' "$ROOT/RELEASE-VERSION")"
+# Both canon forms are readable here: releases before 26.10 carry the v prefix they were cut
+# with, and from 26.10 on the canon is bare CalVer (the tag-name correction of 2026-09-29).
+# The canon's era rule is check-release-version's to enforce; this gate follows whichever
+# form it reads, so every binding below names the release exactly as the canon spells it.
 case "$version" in
-v[0-9]*.[0-9]*.[0-9]*) ;;
-*) blind "RELEASE-VERSION has no readable vYY.M.PATCH value" ;;
+v[0-9]*.[0-9]*.[0-9]* | [0-9]*.[0-9]*.[0-9]*) ;;
+*) blind "RELEASE-VERSION has no readable CalVer YY.M.PATCH value" ;;
 esac
 plain_version="${version#v}"
 
@@ -567,7 +571,9 @@ contains "$ROOT/CHANGELOG.md" '## [Unreleased]' "changelog"
 # without ever catching a plausible wrong date either.
 version_re="$(printf '%s' "$plain_version" | sed 's/[.]/[.]/g')"
 matches "$ROOT/CHANGELOG.md" "^## \\[${version_re}\\] - [0-9]{4}-[0-9]{2}-[0-9]{2}\$" "released changelog section"
-contains "$ROOT/SECURITY.md" "v${plain_version}" "supported release"
+# The supported row names the canon in ITS OWN form: v-prefixed before 26.10, bare from
+# 26.10 on — the row is a shipped surface, so the correction's spelling rule binds it too.
+contains "$ROOT/SECURITY.md" "$version" "supported release"
 
 unverified="$(jq -r '[.surfaces[] | select(.status == "publication-unverified") | .id] | join(", ")' "$STATE")" \
 	|| blind "jq failed while listing unverified surfaces in $STATE"

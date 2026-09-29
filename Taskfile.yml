@@ -255,13 +255,15 @@ tasks:
 
   appliance:build:
     desc: >-
-      One hosted server amd64 qualification transaction: qualify one builder, build, assemble
-      iso, qcow2 and ova together (FORMAT=all, the only value) and run all four guest cases and
-      NoCloud. A single-format export is not a supported or qualified target. Requires, on the
-      shipping BASE=fedora44, the signed rpm-md tree of the product and layer RPMs with its
-      delivery.json in PACKAGE_DIR (and QUALIFICATION_KEY when a throwaway key signed it; the
-      Debian base, BASE=debian13, reads the .debs in PACKAGE_DIR), an explicit
-      ACCELERATOR=kvm|tcg and a new EVIDENCE directory in the current Actions job. Not a push gate.
+      One hosted amd64 qualification transaction of one edition: qualify one builder, build,
+      assemble iso, qcow2 and ova together (FORMAT=all, the only value) and run all four guest
+      cases and NoCloud. A single-format export is not a supported or qualified target. EDITION
+      is server (the default) or desktop, the server profile plus GNOME on the fedora44 base
+      only. Requires, on the shipping BASE=fedora44, the signed rpm-md tree of the product and
+      layer RPMs with its delivery.json in PACKAGE_DIR (and QUALIFICATION_KEY when a throwaway
+      key signed it; the Debian base, BASE=debian13, reads the .debs in PACKAGE_DIR and builds
+      the server edition only), an explicit ACCELERATOR=kvm|tcg and a new EVIDENCE directory in
+      the current Actions job. Not a push gate.
     vars:
       EDITION: '{{.EDITION | default "server"}}'
       ARCH: '{{.ARCH | default "amd64"}}'
@@ -275,34 +277,41 @@ tasks:
       TARGET_DIR: '{{.TARGET_DIR | default "dist/appliance"}}'
     cmds:
       - |
-        if [ "{{.EDITION}}" != server ] || [ "{{.ARCH}}" != amd64 ] || [ "{{.FORMAT}}" != all ]; then
-          echo "appliance:build is one qualification transaction: EDITION=server ARCH=amd64 FORMAT=all" >&2
+        if { [ "{{.EDITION}}" != server ] && [ "{{.EDITION}}" != desktop ]; }            || [ "{{.ARCH}}" != amd64 ] || [ "{{.FORMAT}}" != all ]; then
+          echo "appliance:build is one qualification transaction: EDITION=server|desktop ARCH=amd64 FORMAT=all" >&2
           echo "(iso, qcow2 and ova together); {{.EDITION}} {{.ARCH}} FORMAT={{.FORMAT}} is not supported" >&2
           exit 2
         fi
       - >-
         python3 appliance/images/kiwi/attempt.py --evidence "{{.EVIDENCE}}"
         --accelerator "{{.ACCELERATOR}}" --firmware "{{.FIRMWARE}}"
-        --base "{{.BASE}}" --package-dir "{{.PACKAGE_DIR}}" --qualification-key "{{.QUALIFICATION_KEY}}"
-        --target-dir "{{.TARGET_DIR}}"
+        --base "{{.BASE}}" --edition "{{.EDITION}}" --package-dir "{{.PACKAGE_DIR}}"
+        --qualification-key "{{.QUALIFICATION_KEY}}" --target-dir "{{.TARGET_DIR}}"
 
   appliance:boot:
     desc: >-
-      Boot supplied artifacts through the guest battery and NoCloud with an explicit
-      ACCELERATOR=kvm|tcg. This standalone run does not admit or qualify a builder. Not a push gate.
+      Boot supplied artifacts of one edition through the guest battery and NoCloud with an
+      explicit ACCELERATOR=kvm|tcg. EDITION (server, the default, or desktop) selects which
+      edition's artifacts the batteries read. This standalone run does not admit or qualify a
+      builder. Not a push gate.
     vars:
       ARTIFACTS: '{{.ARTIFACTS | default "dist/appliance"}}'
       EVIDENCE: '{{.EVIDENCE | default "dist/appliance/evidence"}}'
       ACCELERATOR: '{{.ACCELERATOR | default ""}}'
+      EDITION: '{{.EDITION | default "server"}}'
     cmds:
       - |
         case "{{.ACCELERATOR}}" in
           kvm|tcg) ;;
           *) echo "appliance:boot needs ACCELERATOR=kvm or tcg, typed explicitly" >&2; exit 2 ;;
         esac
+        case "{{.EDITION}}" in
+          server|desktop) ;;
+          *) echo "appliance:boot needs EDITION=server or desktop" >&2; exit 2 ;;
+        esac
       - bash appliance/test/battery-selftest.sh "{{.EVIDENCE}}/selftest"
-      - APPLIANCE_BOOT_ACCEL="{{.ACCELERATOR}}" bash appliance/test/boot-battery.sh "{{.ARTIFACTS}}" "{{.EVIDENCE}}/boot"
-      - APPLIANCE_BOOT_ACCEL="{{.ACCELERATOR}}" bash appliance/test/nocloud-probe.sh "{{.ARTIFACTS}}" "{{.EVIDENCE}}/nocloud"
+      - APPLIANCE_BOOT_ACCEL="{{.ACCELERATOR}}" APPLIANCE_EDITION="{{.EDITION}}" bash appliance/test/boot-battery.sh "{{.ARTIFACTS}}" "{{.EVIDENCE}}/boot"
+      - APPLIANCE_BOOT_ACCEL="{{.ACCELERATOR}}" APPLIANCE_EDITION="{{.EDITION}}" bash appliance/test/nocloud-probe.sh "{{.ARTIFACTS}}" "{{.EVIDENCE}}/nocloud"
 
   build:commerce:
     desc: >-

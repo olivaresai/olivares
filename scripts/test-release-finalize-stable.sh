@@ -64,7 +64,7 @@ _olivares_git_env="${ROOT}/scripts/lib/git-env.sh"
 }
 unset _olivares_git_env
 
-TAG="v26.9.0"
+TAG="26.9.0"
 VERSION="26.9.0"
 REPO="olivaresai/olivares"
 REPO_ID="987654321"
@@ -895,7 +895,7 @@ check "the complete platform matrix was required" "not just the named artifacts"
 # verifying a download and would be wrong here. The finalizer's calls are the ones that carry
 # `--certificate-github-workflow-repository`, so the row is scoped to those and the battery
 # stops conflating two different callers' contracts.
-_tagpat="$(printf '@refs/tags/v26\\.9\\.0$')"
+_tagpat="$(printf '@refs/tags/26\\.9\\.0$')"
 _fincalls="$(command grep -F -- '--certificate-github-workflow-repository' "$WORK/cosign.log.$n" 2>/dev/null || true)"
 [ -n "$_fincalls" ] && printf '%s\n' "$_fincalls" | command grep -F -- "$_tagpat" >/dev/null
 check "the certificate identity pins THIS exact tag" "not any SemVer release" $?
@@ -915,8 +915,38 @@ run_finalizer
 [ "$rc" -eq 1 ] && [ "$(patch_count)" -eq 0 ] && says 'not a strict successor'
 check "an equal version cannot replace latest" "refused before publication" $?
 
+# --- the 2026-09-29 tag-name correction: the candidate grammar is BARE CalVer -------------
+# A v prefix is refused with its own message (the reflexive mistake is pasting the old
+# shape); two-part and three-digit-month shapes are refused by the grammar itself.
+_saved_tag="$TAG"
+TAG="v26.9.0"
+run_finalizer
+[ "$rc" -eq 1 ] && [ "$(patch_count)" -eq 0 ] && says 'carries a v prefix'
+check "a v-prefixed candidate tag is refused with the correction message" "bare only" $?
+TAG="26.9"
+run_finalizer
+[ "$rc" -eq 1 ] && [ "$(patch_count)" -eq 0 ] && says 'must be bare CalVer YY.M.PATCH'
+check "a two-part candidate tag is refused" "26.9" $?
+TAG="26.902.1"
+run_finalizer
+[ "$rc" -eq 1 ] && [ "$(patch_count)" -eq 0 ] && says 'must be bare CalVer YY.M.PATCH'
+check "a three-digit-month candidate tag is refused" "26.902.1" $?
+TAG="26.13.0"
+run_finalizer
+[ "$rc" -eq 1 ] && [ "$(patch_count)" -eq 0 ] && says 'must be bare CalVer YY.M.PATCH'
+check "a month-13 candidate tag is refused" "26.13.0" $?
+TAG="26.01.0"
+run_finalizer
+[ "$rc" -eq 1 ] && [ "$(patch_count)" -eq 0 ] && says 'must be bare CalVer YY.M.PATCH'
+check "a leading-zero-month candidate tag is refused" "26.01.0" $?
+TAG="26.10.01"
+run_finalizer
+[ "$rc" -eq 1 ] && [ "$(patch_count)" -eq 0 ] && says 'must be bare CalVer YY.M.PATCH'
+check "a leading-zero-patch candidate tag is refused" "26.10.01" $?
+TAG="$_saved_tag"
+
 # Order is numeric by component, including components too large for machine integers.
-for _origin in v26.10.0 v27.0.0 v26.9.1 v26.9.9007199254740993; do
+for _origin in 26.10.0 27.0.0 26.9.1 26.9.9007199254740993 v26.10.0 v27.0.0 v26.9.1 v26.9.9007199254740993; do
 	build_release_state || blind "fixture"
 	jq --arg tag "$_origin" '.tag_name = $tag' "$STATE/origin.json" >"$STATE/origin.next" &&
 		mv "$STATE/origin.next" "$STATE/origin.json"
@@ -925,7 +955,7 @@ for _origin in v26.10.0 v27.0.0 v26.9.1 v26.9.9007199254740993; do
 	check "latest $_origin prevents publishing an older candidate" "no pointer regression" $?
 done
 
-for _origin in v26.8.99 v26.8.9007199254740993 v25.99.99; do
+for _origin in 26.8.99 26.8.9007199254740993 25.99.99 v26.8.99 v26.8.9007199254740993 v25.99.99; do
 	build_release_state || blind "fixture"
 	jq --arg tag "$_origin" '.tag_name = $tag' "$STATE/origin.json" >"$STATE/origin.next" &&
 		mv "$STATE/origin.next" "$STATE/origin.json"
@@ -1560,7 +1590,7 @@ check "a relative OLIVARES_COSIGN_BIN refuses" "a name is not an authenticated b
 # that is not the expected one does not verify — so these rows measure the anchor rather than
 # an exit code.
 # ============================================================================================
-PROD_ID='^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v26\.9\.0$'
+PROD_ID='^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/26\.9\.0$'
 build_release_state || blind "fixture"
 run_finalizer COSIGN_EXPECT_IDENTITY="$PROD_ID"
 [ "$rc" -eq 0 ] && [ "$(patch_count)" -eq 1 ]
@@ -1578,7 +1608,7 @@ check "slsa-verifier receives the derived source repository and tag" "the same i
 # CROSS-TAG. A checksums.txt legitimately signed for another tag of this repository satisfies
 # the any-SemVer anchor and must not satisfy this publication.
 build_release_state || blind "fixture"
-run_finalizer COSIGN_EXPECT_IDENTITY='^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v26\.8\.0$'
+run_finalizer COSIGN_EXPECT_IDENTITY='^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/26\.8\.0$'
 [ "$rc" -ne 0 ] && [ "$(patch_count)" -eq 0 ]
 check "a cosign that accepts only ANOTHER tag refuses" "cross-tag negative control" $?
 
@@ -1598,7 +1628,7 @@ REPO="$PREPROD_REPO"
 build_release_state || blind "preprod fixture"
 run_finalizer GITHUB_REPOSITORY="$PREPROD_REPO" OLIVARES_RELEASE_PROFILE=preprod \
 	OLIVARES_PREPROD_MAKE_LATEST=false \
-	COSIGN_EXPECT_IDENTITY='^https://github\.com/acme/product-preprod/\.github/workflows/release\.yml@refs/tags/v26\.9\.0$'
+	COSIGN_EXPECT_IDENTITY='^https://github\.com/acme/product-preprod/\.github/workflows/release\.yml@refs/tags/26\.9\.0$'
 [ "$rc" -eq 0 ] && [ "$(patch_count)" -eq 1 ]
 check "the PREPROD profile completes under ITS OWN derived identity" "both supported profiles" $?
 command grep -qF -- "--source-uri github.com/${PREPROD_REPO}" "$WORK/slsa.log.$n"
@@ -1609,7 +1639,7 @@ for _policy in false legacy; do
 	build_release_state || blind "preprod fixture"
 	run_finalizer GITHUB_REPOSITORY="$PREPROD_REPO" OLIVARES_RELEASE_PROFILE=preprod \
 		OLIVARES_PREPROD_MAKE_LATEST="$_policy" GH_ORIGIN_STATUS=503 \
-		COSIGN_EXPECT_IDENTITY='^https://github\.com/acme/product-preprod/\.github/workflows/release\.yml@refs/tags/v26\.9\.0$'
+		COSIGN_EXPECT_IDENTITY='^https://github\.com/acme/product-preprod/\.github/workflows/release\.yml@refs/tags/26\.9\.0$'
 	[ "$rc" -eq 0 ] && [ "$(patch_count)" -eq 1 ] &&
 		! command grep -qF -- "repos/${PREPROD_REPO}/releases/latest" "$WORK/gh.log.$n"
 	check "preprod $_policy preserves its explicit pointer policy" "no latest read or successor claim" $?

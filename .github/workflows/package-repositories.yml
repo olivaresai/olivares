@@ -65,7 +65,12 @@ jobs:
             exit 2
           }
           release_repo=olivaresai/olivares
-          tag="v${RELEASE_VERSION}"
+          # BARE CalVer since the 2026-09-29 tag-name correction: the release tag IS the
+          # version, and the signing identity names that exact tag. v-prefixed releases
+          # (v26.8.0, v26.9.0) predate the correction and stay qualifiable by passing their
+          # tag verbatim once this dispatch grows a tag input; the default path serves the
+          # current grammar.
+          tag="${RELEASE_VERSION}"
           dist="${RUNNER_TEMP}/package-release"
           mkdir -p "$dist"
           meta="$(gh release view "$tag" --repo "$release_repo" --json publishedAt,tagName,url)"
@@ -77,7 +82,7 @@ jobs:
             --pattern "olivares_${RELEASE_VERSION}_linux_*.deb" \
             --pattern "olivares_${RELEASE_VERSION}_linux_*.rpm" \
             --pattern "olivares_${RELEASE_VERSION}_linux_*.apk"
-          identity="^https://github\\.com/olivaresai/olivares/\\.github/workflows/release\\.yml@refs/tags/v${RELEASE_VERSION}$"
+          identity="^https://github\\.com/olivaresai/olivares/\\.github/workflows/release\\.yml@refs/tags/${RELEASE_VERSION}$"
           bash scripts/cosign-verified.sh verify-blob \
             --certificate "$dist/checksums.txt.pem" \
             --signature "$dist/checksums.txt.sig" \

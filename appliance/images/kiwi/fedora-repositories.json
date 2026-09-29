@@ -8,14 +8,14 @@
       "repomd_sha256": "da3845427d188097f6fd71b417a039bdfb8efefc4f38ca44b5cbb94f95a18991",
       "repomd_bytes": 5966,
       "primary_sha256": "c48e47563bbf65b996c95caf4a608223f982c314cab637e6ab87dd1df67b9d26",
-      "recorded_at": "2026-09-27T13:43:10Z"
+      "recorded_at": "2026-09-29T14:52:29Z"
     },
     "fedora-44-updates": {
       "baseurl": "https://dl.fedoraproject.org/pub/fedora/linux/updates/44/Everything/x86_64/",
-      "repomd_sha256": "204b9f69d50089542161aaab293a8ddce072ea7130d1c0dbb76737d6c15ee7b8",
+      "repomd_sha256": "440731252c9b7fe8d43126edc5ded1ad5776ce295ec95d419a2eff2139f67cb3",
       "repomd_bytes": 7055,
-      "primary_sha256": "8b982f405946c38471baf73db8b098ad1961eadd9ca20c9e77813a66005ae1de",
-      "recorded_at": "2026-09-27T13:43:10Z"
+      "primary_sha256": "89be3578d53b9130ddff5628a0bcf4a7cbe9aec5e2db17d265327cdbe7cc3e1a",
+      "recorded_at": "2026-09-29T14:52:29Z"
     }
   },
   "key": {
@@ -31,14 +31,14 @@
       "repomd_sha256": "251ebbbd83c0c21f148905a4961f887fe2b1a6a53accbb256462a679f868f686",
       "repomd_bytes": 4978,
       "primary_sha256": "c2dcdc609d12c90294d8bbe3589901a14826c1f6f088c9f88853bc87a8883f9a",
-      "recorded_at": "2026-09-27T13:43:10Z"
+      "recorded_at": "2026-09-29T14:52:29Z"
     },
     "fedora-44-updates-source": {
       "baseurl": "https://dl.fedoraproject.org/pub/fedora/linux/updates/44/Everything/source/tree/",
-      "repomd_sha256": "8dfac2862ca5c7b69d579b4c04032a39024e4bbb641e2a11e01a60ca8571bc74",
+      "repomd_sha256": "03163975511cba142b4fcc7b035e78bc9113c0be218bf4c51df58e45fb041da0",
       "repomd_bytes": 6068,
-      "primary_sha256": "38e6264b0e0285065461f8b2ac4794ab8bcf29591aade699071d8729fa56362c",
-      "recorded_at": "2026-09-27T13:43:10Z"
+      "primary_sha256": "0a801b05a3cdfa490ea26d7eeae93e71c937a26927acb27d0586923dcb674e19",
+      "recorded_at": "2026-09-29T14:52:29Z"
     }
   }
 }

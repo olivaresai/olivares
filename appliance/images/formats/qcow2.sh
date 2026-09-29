@@ -9,7 +9,7 @@
 # take without converting anything. Compressed, because an appliance disk is mostly empty and
 # the ceiling is measured on the file that is published, not on the size it claims.
 #
-# usage: qcow2.sh [--target-dir DIR] [--output-dir DIR]
+# usage: qcow2.sh [--edition server|desktop] [--target-dir DIR] [--output-dir DIR]
 set -euo pipefail
 assembly=qcow2.sh
 here=$(cd "$(dirname "$0")" && pwd)
@@ -21,17 +21,20 @@ target_dir=${TARGET_DIR:-$repo/dist/appliance}
 output_dir=${OUTPUT_DIR:-$target_dir}
 while [ $# -gt 0 ]; do
   case $1 in
+    --edition) edition=${2:?}; shift 2 ;;
     --target-dir) target_dir=${2:?}; shift 2 ;;
     --output-dir) output_dir=${2:?}; shift 2 ;;
     *) unmeasurable "unknown option: $1" ;;
   esac
 done
 
+require_edition
+
 require_tool qemu-img sha256sum stat python3
 mkdir -p "$output_dir"
 
 disk=$(find_disk "$target_dir")
-name=$(formats_query qcow2 file)
+name=$(formats_query qcow2 file) || unmeasurable "formats.json declares no qcow2 for the ${edition:-server} edition"
 artifact="$output_dir/$name"
 
 qemu-img convert -p -f raw -O qcow2 -c -o compat=1.1 "$disk" "$artifact"

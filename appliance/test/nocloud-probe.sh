@@ -64,16 +64,19 @@ console_label=$(banner_label "$repo/appliance/layer/base/units/tty1-banner.txt")
   || unmeasurable "the layer's banner (appliance/layer/base/units/tty1-banner.txt) names no console label"
 readonly console_label
 
+# The artifact of one format for the edition being booted (APPLIANCE_EDITION, the server
+# edition when nothing named one); an edition the declaration does not carry refuses here.
 artifact_file() {
-  python3 - "$formats_json" "$1" <<'PY'
+  python3 - "$formats_json" "$1" "${APPLIANCE_EDITION:-server}" <<'PY'
 import json, sys
 body = "\n".join(l for l in open(sys.argv[1]).read().splitlines() if not l.strip().startswith("//"))
+edition = sys.argv[3]
 for artifact in json.loads(body)["artifacts"]:
-    if artifact["format"] == sys.argv[2]:
+    if artifact["format"] == sys.argv[2] and artifact.get("edition", "server") == edition:
         print(artifact["file"])
         break
 else:
-    raise SystemExit("formats.json declares no format " + sys.argv[2])
+    raise SystemExit("formats.json declares no format %s for the %s edition" % (sys.argv[2], edition))
 PY
 }
 
@@ -143,6 +146,10 @@ ExecStart=/bin/sh -c 'for i in $(seq 1 180); do \
     echo "<<<PROBE firstboot.enabled"; systemctl is-enabled olivares-appliance-firstboot.service 2>/dev/null || true; echo ">>>PROBE"; \
     echo "<<<PROBE cloud-init.json"; cloud-init status --format json 2>/dev/null || echo "{}"; echo ">>>PROBE"; \
     echo "<<<PROBE journal.txt"; journalctl --boot --no-pager 2>/dev/null || true; echo ">>>PROBE"; \
+    tok=/var/lib/olivares-appliance/setup-token; echo "<<<PROBE setup-token"; \
+    if [ -r "$tok" ]; then printf 'shape '; head -c 4 "$tok"; printf '\n'; \
+      printf 'mode %s owner %s\n' "$(stat -c %a "$tok")" "$(stat -c %U "$tok")"; \
+    else echo absent; fi; echo ">>>PROBE"; \
     echo "<<<PROBE end"; echo ">>>PROBE"; } > /dev/ttyS1; sync; systemctl poweroff --no-block'
 UNIT
 )
@@ -196,24 +203,31 @@ for name, body in re.findall(r"<<<PROBE (\S+)\n(.*?)>>>PROBE", text, re.S):
     with open(os.path.join(out, name), "w") as handle:
         handle.write(body)
 PY
-for file in state.json ready product.active journal.txt; do
+for file in state.json ready product.active journal.txt setup-token; do
   [ -s "$evidence/$file" ] || unmeasurable "the guest sent no $file"
 done
 
 # ---- the assertions, the delivered ones --------------------------------------------------------
-# The expected record of THIS head is a refusal at the setup-token seam: the appliance layer
-# refuses to start the product until a protected delivery for the setup token and a measured
-# host firewall exist, and neither seam is closed yet (A1, README). When A3 and A4 close them
-# the expected state here becomes ready, and this is the line that has to change with them.
-check unattended_first_boot_stops_at_the_token_seam record_is "$evidence/state.json" refused prepare-setup-delivery
-control unattended_first_boot_stops_at_the_token_seam record_is \
-  "$(counterfeit "$evidence/state.json" '.state = "ready"')" refused prepare-setup-delivery
+# The setup-token seam is closed: first boot mints the product's one-time token through its
+# owner and delivers it to a root-only file on the machine, so the record reaches ready and
+# the product starts. The delivery itself is asserted below on the file the guest sent: its
+# SHAPE (the owner's olst_ prefix, never the bytes), its mode and its owner.
+check unattended_first_boot_completes record_is "$evidence/state.json" ready ""
+control unattended_first_boot_completes record_is \
+  "$(counterfeit "$evidence/state.json" '.state = "refused"; .stage = "prepare-setup-delivery"')" ready ""
 
-check unattended_first_boot_completed_the_stages_before_it completed_are "$evidence/state.json" \
-  prepare-identity verify-host-settings generate-product-config initialize-storage
-control unattended_first_boot_completed_the_stages_before_it completed_are \
+check unattended_first_boot_completed_every_stage_in_order completed_are "$evidence/state.json" \
+  prepare-identity verify-host-settings hand-over-host-settings generate-product-config initialize-storage \
+  prepare-setup-delivery verify-firewall start-services measure-readiness
+control unattended_first_boot_completed_every_stage_in_order completed_are \
   "$(counterfeit "$evidence/state.json" '.completed |= reverse')" \
-  prepare-identity verify-host-settings generate-product-config initialize-storage
+  prepare-identity verify-host-settings hand-over-host-settings generate-product-config initialize-storage \
+  prepare-setup-delivery verify-firewall start-services measure-readiness
+
+check the_setup_token_was_delivered_on_the_machine holds "$evidence/setup-token" "shape olst"
+control the_setup_token_was_delivered_on_the_machine holds "$(counterfeit_text 'shape nope')" "shape olst"
+check the_delivered_token_is_root_only holds "$evidence/setup-token" "mode 600 owner root"
+control the_delivered_token_is_root_only holds "$(counterfeit_text 'mode 644 owner root')" "mode 600 owner root"
 
 check unattended_first_boot_verified_what_cloud_init_applied reason_quotes_none "$evidence/state.json" \
   "cloud-init did not" "hostname does not"
@@ -224,9 +238,8 @@ check unattended_first_boot_printed_no_setup_token no_setup_token "$evidence/jou
 control unattended_first_boot_printed_no_setup_token no_setup_token \
   "$(counterfeit_lines "$evidence/journal.txt" '  Token:    olst_ABCDEFGHIJKLMNOPQRSTUVWXYZ234567')"
 
-check unattended_first_boot_is_not_ready_without_a_measured_readiness is "$evidence/ready" absent
-control unattended_first_boot_is_not_ready_without_a_measured_readiness is \
-  "$(counterfeit_text present)" absent
+check readiness_was_measured_and_marked is "$evidence/ready" present
+control readiness_was_measured_and_marked is "$(counterfeit_text absent)" present
 
 check the_console_showed_the_label holds "$console" "$console_label"
 control the_console_showed_the_label holds "$(counterfeit_text 'login:')" "$console_label"

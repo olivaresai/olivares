@@ -22,11 +22,11 @@ const twoGiB = int64(2) << 30
 type formatsDeclaration struct {
 	Product              string `json:"product"`
 	Vendor               string `json:"vendor"`
-	Edition              string `json:"edition"`
 	Arch                 string `json:"arch"`
 	ReleaseAssetMaxBytes int64  `json:"release_asset_max_bytes"`
 	ReleaseAssetLimit    string `json:"release_asset_limit"`
 	Artifacts            []struct {
+		Edition      string `json:"edition"`
 		Format       string `json:"format"`
 		File         string `json:"file"`
 		Script       string `json:"script"`
@@ -61,34 +61,39 @@ func formatsPolicy(t *testing.T) formatsDeclaration {
 	return declaration
 }
 
-// TestFormats_DeclareIsoQcow2Ova — A2 delivers three formats and no more: the hybrid
-// installer ISO, the qcow2 disk and the OVA. Each has its assembly script, each writes its
-// manifest, and the Taskfile exposes them under one target.
+// TestFormats_DeclareIsoQcow2Ova — A2 delivers three formats and no more — the hybrid
+// installer ISO, the qcow2 disk and the OVA — to each declared edition: the server edition,
+// and the desktop edition the same recipe builds beside it. Each artifact has its assembly
+// script, each writes its manifest, and the Taskfile exposes them under one target.
 func TestFormats_DeclareIsoQcow2Ova(t *testing.T) {
 	declaration := formatsPolicy(t)
 
-	want := []string{"iso", "qcow2", "ova"}
-	got := make([]string, 0, len(declaration.Artifacts))
+	want := "iso qcow2 ova"
+	byEdition := map[string][]string{}
 	for _, artifact := range declaration.Artifacts {
-		got = append(got, artifact.Format)
-	}
-	if strings.Join(got, " ") != strings.Join(want, " ") {
-		t.Fatalf("the declared formats are %q, the recipe delivers %q", strings.Join(got, " "), strings.Join(want, " "))
-	}
-
-	for _, artifact := range declaration.Artifacts {
+		byEdition[artifact.Edition] = append(byEdition[artifact.Edition], artifact.Format)
 		if artifact.File == "" || artifact.Manifest != artifact.File+".manifest.json" {
-			t.Errorf("format %s does not name its artifact and the manifest beside it: %q %q", artifact.Format, artifact.File, artifact.Manifest)
+			t.Errorf("edition %s format %s does not name its artifact and the manifest beside it: %q %q",
+				artifact.Edition, artifact.Format, artifact.File, artifact.Manifest)
+		}
+		if !strings.Contains(artifact.File, "-"+artifact.Edition+"-") {
+			t.Errorf("edition %s's artifact %q does not name its edition", artifact.Edition, artifact.File)
 		}
 		script := filepath.Join(repoRoot, "appliance/images/formats", artifact.Script)
 		info, err := os.Stat(script)
 		if err != nil {
-			t.Errorf("format %s has no assembly script: %v", artifact.Format, err)
+			t.Errorf("edition %s format %s has no assembly script: %v", artifact.Edition, artifact.Format, err)
 			continue
 		}
 		if info.Mode().Perm()&0o111 == 0 {
-			t.Errorf("format %s cannot run its assembly script: mode %v", artifact.Format, info.Mode().Perm())
+			t.Errorf("edition %s format %s cannot run its assembly script: mode %v", artifact.Edition,
+				artifact.Format, info.Mode().Perm())
 		}
+	}
+	if len(byEdition) != 2 || strings.Join(byEdition["server"], " ") != want ||
+		strings.Join(byEdition["desktop"], " ") != want {
+		t.Fatalf("each declared edition (found %d) delivers exactly %q; the declaration holds %v",
+			len(byEdition), want, byEdition)
 	}
 
 	// The OVA is a vmdk inside an OVF envelope with its own manifest: the format the design

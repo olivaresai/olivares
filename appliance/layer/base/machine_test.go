@@ -249,14 +249,20 @@ func TestTokenDelivery_TheSeamRefusesByDefaultAndNeverWritesPlaintextToTheJourna
 	in := answersFixture(t, "olivares.example.test")
 	const plaintext = "olst_" + "FAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKE"
 	sink := filepath.Join(t.TempDir(), "setup-token")
+	realHost, _ := deliveryHost(t)
 	cases := []struct {
 		name  string
 		seam  Step
 		state State
 	}{
-		{"the default seam refuses", RefusingSetupDelivery{}, Refused},
+		// The real seam's own refusals (a token minted but never delivered, a missing
+		// product account) are pinned in setup_delivery_test.go; this row keeps the
+		// machine-level property they stand for — a setup-delivery refusal stops first
+		// boot before the product starts.
+		{"a seam that refuses", undeliveredDelivery{}, Refused},
 		{"an adapter error quoting the token", leakyDelivery{}, Refused},
 		{"a token delivered to its protected sink", sinkDelivery{path: sink, token: plaintext}, Ready},
+		{"the real seam over a prepared host", SetupTokenDelivery{Host: realHost}, Ready},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -288,6 +294,16 @@ func TestTokenDelivery_TheSeamRefusesByDefaultAndNeverWritesPlaintextToTheJourna
 		t.Fatalf("the sink is not a protected file: %v", err)
 	}
 }
+
+// undeliveredDelivery refuses the way the real seam does when the token exists but was
+// never delivered: a fixed reason an operator can act on.
+type undeliveredDelivery struct{}
+
+func (undeliveredDelivery) Apply(context.Context, Input) (Effect, error) {
+	return "", Refuse("the one-time setup token is not in its root-only file")
+}
+
+func (undeliveredDelivery) Verify(context.Context, Input, Effect) error { return nil }
 
 // leakyDelivery fails the way a careless adapter would: quoting the secret it handled.
 type leakyDelivery struct{}

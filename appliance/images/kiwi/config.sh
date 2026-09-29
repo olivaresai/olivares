@@ -21,11 +21,14 @@ test -f /.kconfig && . /.kconfig
 test -f /.profile && . /.profile
 
 # --- the base -------------------------------------------------------------------------------
-# One description, one profile per base (config.xml). KIWI names the profiles this build takes,
-# comma-separated, in kiwi_profiles (system/profile.py :359-363); a root of neither base stops here.
+# One description, one profile per base and edition (config.xml). KIWI names the profiles this
+# build takes, comma-separated, in kiwi_profiles (system/profile.py :359-363); a root of no
+# known profile stops here.
+edition=none
 case ",${kiwi_profiles:-}," in
-  *,fedora44-server-amd64,*) base=fedora44 ;;
-  *,debian13-server-amd64,*) base=debian13 ;;
+  *,fedora44-server-amd64,*) base=fedora44; edition=server ;;
+  *,fedora44-desktop-amd64,*) base=fedora44; edition=desktop ;;
+  *,debian13-server-amd64,*) base=debian13; edition=server ;;
   *) printf 'config.sh: no base profile in kiwi_profiles=%s\n' "${kiwi_profiles:-}" >&2; exit 1 ;;
 esac
 
@@ -213,6 +216,39 @@ if [ "$base" = fedora44 ]; then
     printf 'config.sh: /.autorelabel asks for a relabel on first boot, which runs with enforcement lowered\n' >&2
     exit 1
   fi
+fi
+
+# --- the desktop edition (Fedora) -------------------------------------------------------------
+# The desktop profile's own state, each check failing the build. The enablement is made HERE,
+# inside the image root, as the three links the service manager's own enable and default-target
+# operations would create - the recipe still runs no service-manager command: the graphical
+# target becomes the default, gdm becomes the display manager graphical.target wants (its unit
+# installs only the alias), and sshd, whose stock configuration serves SFTP, joins
+# multi-user.target.wants. The links are created at build time and not shipped in the overlay
+# because the public export copies the tree's files and an absolute link's target lives on the
+# installed system, not in the tree. What follows the creation is the fail-closed read-back:
+# each link must exist and point at its exact unit, so a root that lost an enablement - or a
+# config.sh that stopped making it - fails the build here. images.sh holds the units' presence
+# in the root, and the preset lines remain the declared record.
+if [ "$edition" = desktop ]; then
+  want_link() {  # LINK TARGET
+    link=$(readlink "$1" 2>/dev/null || true)
+    if [ "$link" != "$2" ]; then
+      printf 'config.sh: %s is not the symlink to %s the desktop edition enables\n' "$1" "$2" >&2
+      exit 1
+    fi
+  }
+  mkdir -p /etc/systemd/system/multi-user.target.wants
+  ln -sfn /usr/lib/systemd/system/graphical.target /etc/systemd/system/default.target
+  ln -sfn /usr/lib/systemd/system/gdm.service /etc/systemd/system/display-manager.service
+  ln -sfn /usr/lib/systemd/system/sshd.service /etc/systemd/system/multi-user.target.wants/sshd.service
+  want_link /etc/systemd/system/default.target /usr/lib/systemd/system/graphical.target
+  want_link /etc/systemd/system/display-manager.service /usr/lib/systemd/system/gdm.service
+  want_link /etc/systemd/system/multi-user.target.wants/sshd.service /usr/lib/systemd/system/sshd.service
+  grep -qx 'enable gdm.service' /etc/systemd/system-preset/10-olivares-appliance.preset || {
+    printf 'config.sh: the preset does not enable gdm.service\n' >&2; exit 1; }
+  grep -qx 'enable sshd.service' /etc/systemd/system-preset/10-olivares-appliance.preset || {
+    printf 'config.sh: the preset does not enable sshd.service\n' >&2; exit 1; }
 fi
 
 # --- the gate --------------------------------------------------------------------------------

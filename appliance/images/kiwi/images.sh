@@ -15,11 +15,24 @@ test -f /.kconfig && . /.kconfig
 test -f /.profile && . /.profile
 
 case ",${kiwi_profiles:-}," in
-  *,fedora44-server-amd64,*) base=fedora44 ;;
+  *,fedora44-server-amd64,*|*,fedora44-desktop-amd64,*) base=fedora44 ;;
   *,debian13-server-amd64,*) base=debian13 ;;
   *) printf 'images.sh: no base profile in kiwi_profiles=%s\n' "${kiwi_profiles:-}" >&2; exit 1 ;;
 esac
 [ "$base" = fedora44 ] || exit 0
+
+# The units the desktop overlay enables must be in the image, each check failing the build: gdm,
+# which the overlay's display-manager.service alias points at (config.sh checks the alias), and
+# sshd, which multi-user.target wants and whose stock configuration serves SFTP.
+case ",${kiwi_profiles:-}," in
+  *,fedora44-desktop-amd64,*)
+    for unit in gdm.service sshd.service; do
+      if [ ! -e "/usr/lib/systemd/system/$unit" ]; then
+        printf 'images.sh: %s, which the desktop overlay enables, is not in the image\n' "$unit" >&2
+        exit 1
+      fi
+    done ;;
+esac
 
 # The installed packages' paths the module labels (olivares, olivares-appliance-base), which must be there, and the
 # Appliance Console package's, which this image does not install: those are checked when present.

@@ -119,9 +119,15 @@ func (l ChannelLayout) SignatureURL() string { return l.ManifestURL() + ".sig" }
 //     the artifact read would move it, and the second read would serve a different
 //     release's asset. Deriving the tag from the manifest pins both to ONE release — the
 //     one whose signature the caller has already checked.
-//   - The `v` prefix is this repository's documented version-prefix contract, not a
-//     guess: "git/GitHub tag has `v`; GoReleaser filenames, manifest JSON and WS-COMMERCE
-//     ENTERPRISE_VERSION omit it" (docs/RELEASE-GO-LIVE-RUNBOOK.md).
+//   - The tag is the version, BARE: since the tag-name correction of 2026-09-29 the git
+//     and GitHub release tag is 26.10.0, the same string GoReleaser filenames, manifest
+//     JSON and the commercial ENTERPRISE_VERSION carry, so the derivation adds nothing
+//     and strips nothing beyond a defensive v a stray manifest might still declare.
+//     A 26.9.0-or-older binary DERIVED a `v` prefix here; against a bare-tag release its
+//     default-endpoint artifact URL answers 404, which is why the documented upgrade
+//     step for those installs names the release explicitly:
+//     `olivares upgrade --endpoint https://github.com/<owner>/<repo>/releases/tag/26.10.0`
+//     (a pinned endpoint carries the tag verbatim and needs no derivation at all).
 //
 // filename must be a bare leaf name. A signed manifest carries one, and refusing a
 // separator here names the reason instead of letting a percent-encoded slash come back as
@@ -143,13 +149,13 @@ func (l ChannelLayout) ArtifactURL(version, filename string) (string, error) {
 	if tag == "" {
 		// AN UNSTAMPED VERSION HAS NO TAG, and inventing one is worse than refusing. IsUnstamped
 		// is the repository's single answer to "does this string have a position in the
-		// ordering" — "" and "dev" do not — and without it `v` + "dev" would address a release
-		// called `vdev`, i.e. a confident URL for a release that cannot exist.
+		// ordering" — "" and "dev" do not — and without it a bare "dev" would address a release
+		// called `dev`, i.e. a confident URL for a release that cannot exist.
 		v := strings.TrimSpace(version)
 		if IsUnstamped(v) {
 			return "", fmt.Errorf("release: cannot locate %q: this endpoint is the latest release, and the manifest declares version %q, which has no position in the ordering to derive a tag from", filename, version)
 		}
-		tag = "v" + strings.TrimPrefix(v, "v")
+		tag = strings.TrimPrefix(v, "v")
 	}
 	return l.releasesRoot + "/download/" + url.PathEscape(tag) + "/" + url.PathEscape(name), nil
 }

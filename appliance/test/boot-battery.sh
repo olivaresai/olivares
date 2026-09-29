@@ -173,16 +173,19 @@ counterfeit_with() {
 }
 
 # ---- the fixture ---------------------------------------------------------------------------
+# The artifact of one format for the edition being booted (APPLIANCE_EDITION, the server
+# edition when nothing named one); an edition the declaration does not carry refuses here.
 artifact_file() {
-  python3 - "$formats_json" "$1" <<'PY'
+  python3 - "$formats_json" "$1" "${APPLIANCE_EDITION:-server}" <<'PY'
 import json, sys
 body = "\n".join(l for l in open(sys.argv[1]).read().splitlines() if not l.strip().startswith("//"))
+edition = sys.argv[3]
 for artifact in json.loads(body)["artifacts"]:
-    if artifact["format"] == sys.argv[2]:
+    if artifact["format"] == sys.argv[2] and artifact.get("edition", "server") == edition:
         print(artifact["file"])
         break
 else:
-    raise SystemExit("formats.json declares no format " + sys.argv[2])
+    raise SystemExit("formats.json declares no format %s for the %s edition" % (sys.argv[2], edition))
 PY
 }
 

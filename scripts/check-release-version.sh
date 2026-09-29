@@ -328,6 +328,9 @@ DERIVED_ALLOW = [
     # the canon exactly — the allowance is scoped to the TOKEN on the bound, as everywhere else.
     ("docs/RELEASE-VERIFICATION.md", "min-version",
      "the key ledger's first column is the first release a signing pair covers, a coverage FLOOR"),
+    ("packaging/nfpm/postinstall.sh", "contract-floor",
+     "first_contract_version names the first release whose prerm honors the upgrade contract: "
+     "the cut being prepared, which the canon cannot name ahead of its tag"),
 ]
 
 # ── ARM B: an artefact PIN, anywhere the export publishes ──────────────────────────────────
@@ -812,15 +815,25 @@ def judge_pins(canon, hits, curated=None, kept=None):
         # it. Judging it would force the fixture to lie about the case it tests.
         if go_test_fixture(path):
             continue
-        ver = re.search(r"v?(\d+\.\d+\.\d+(?:-fips|-stig)?)$", tok).group(1)
-        if ver.lstrip("v") in {f.lstrip("v") for f in allowed_at(canon, path)}:
+        if token_version(tok) in allowed_at(canon, path):
             continue
         if historical_allowed(canon, path, tok, dated, curated, kept):
             continue
         bad.append((path, i, tok))
     return bad
 
-CANON_SHAPE = re.compile(r"v(2[6-9]|[3-9][0-9])\.([1-9]|1[0-2])\.([0-9]+)")
+# THE TAG-NAME CORRECTION (2026-09-29): releases from 26.10 on are bare CalVer (26.10.0),
+# and every release before it keeps the v prefix it was cut with. The canon RECORD follows the
+# same rule — a v-prefixed 26.10.0 canon and a bare 26.9.0 canon are both refused — and the
+# SURFACES follow it too: under a bare canon only the bare form states the release, so a
+# surface writing v26.10.0 is a divergence the sweep reports instead of silently tolerating.
+CANON_SHAPE = re.compile(r"(v?)(2[6-9]|[3-9][0-9])\.([1-9]|1[0-2])\.([0-9]+)")
+BARE_CANON_FROM = (26, 10)  # the first release whose tag carries no v prefix
+
+
+def canon_parts(canon):
+    """-> (prefix, yy, mm, pp) of a decided canon. require_decided has already matched it."""
+    return CANON_SHAPE.fullmatch(str(canon)).groups()
 
 # Where a changelog stops stating the CURRENT release and starts being the RECORD of past
 # ones: the first section heading, `## [Unreleased]` or the first dated version heading.
@@ -885,6 +898,8 @@ ARTIFACT_ALLOW = [
      "the -fips/-stig tag rows the Docker Hub landing page documents"),
     ("operator/README.md", "min-version",
      "the /pod-readyz precondition is a compatibility FLOOR, not a shipped coordinate"),
+    ("packaging/nfpm/postinstall.sh", "contract-floor",
+     "first_contract_version: the first release whose prerm honors the upgrade contract"),
 ] + [(p, "min-version",
       "the role-label precondition is a compatibility FLOOR, not a shipped coordinate")
      for p in crd_types_files()]
@@ -901,6 +916,22 @@ ARTIFACT_ALLOW = [
 # the amnesty to `fixed` as well — a stale shipped version passing as a floor because a bound
 # happened to share its line. So the expression must sit IMMEDIATELY before the token.
 BOUND = re.compile(r"""(?:>=|≥|--min-version|introduced["']?\s*:)\s*["']?v?$""")
+
+
+# The package upgrade-contract coordinate: the ONE version a live script may name above the
+# canon, because it names the cut being prepared, not a claim about what ships today. The canon
+# cannot name it by its own rule (RELEASE-VERSION never names a cut ahead of its tag), and at
+# the cut it ships with the value IS the canon. The allowance binds the token to the exact
+# assignment the package logic reads — `first_contract_version='<v>~'`, the tilde sorting the
+# value before that release's own pre-releases — on the exact path the records name: any other
+# version in that file, or that assignment on any other file, is judged exactly as before.
+CONTRACT = re.compile(r"^first_contract_version=['\"]v?(\d+\.\d+\.\d+)~['\"]$")
+
+
+def contract_assignment(line, tok):
+    """-> True iff the line IS the upgrade-contract assignment and the token is its value."""
+    found = CONTRACT.match(line.strip())
+    return bool(found) and found.group(1) == tok.lstrip("v")
 
 
 def bounded(line, tok):
@@ -921,16 +952,19 @@ def _tuple(tok):
 
 def artifact_allowed(canon, path, tok, line):
     """-> (ok, why). The canon exactly, plus the two context-bound artifact kinds."""
-    base = canon.lstrip("v")
-    if tok.lstrip("v") == base:
+    _, yy, mm, pp = canon_parts(canon)
+    base = f"{yy}.{mm}.{pp}"
+    if token_version(tok) in allowed_at(canon, path):
         return True, "canon"
     kinds = {k for p, k, _ in ARTIFACT_ALLOW if path == p or path.endswith("/" + p)}
-    if "variants" in kinds and tok.lstrip("v") in {f"{base}-fips", f"{base}-stig"}:
+    if "variants" in kinds and token_version(tok) in {f"{base}-fips", f"{base}-stig"}:
         return True, "variants"
     # A floor is granted a NARROWER allowance (<= canon), and only on the line that
     # states the bound. Off that line the canon is required exactly.
     if "min-version" in kinds and bounded(line, tok) and _tuple(tok) <= _tuple(canon):
         return True, "min-version"
+    if "contract-floor" in kinds and contract_assignment(line, tok):
+        return True, "contract-floor"
     return False, "divergent"
 
 
@@ -964,30 +998,50 @@ def read_canon(text):
     if canon == "UNDECIDED":
         unverified("UNVERIFIED check-release-version: RELEASE-VERSION says UNDECIDED; there is no canon "
                    "to hold the release-bearing surfaces to, and nothing is certified without one.")
-    if not CANON_SHAPE.fullmatch(canon):
-        sys.exit(f"FAIL check-release-version: RELEASE-VERSION record {canon!r} is not vYY.M.PATCH (month 1-12)")
+    m = CANON_SHAPE.fullmatch(canon)
+    if not m:
+        sys.exit(f"FAIL check-release-version: RELEASE-VERSION record {canon!r} is not CalVer YY.M.PATCH (month 1-12)")
+    prefix, yy, mm, _pp = m.groups()
+    if (int(yy), int(mm)) >= BARE_CANON_FROM:
+        if prefix:
+            sys.exit(f"FAIL check-release-version: RELEASE-VERSION record {canon!r} carries a v prefix; "
+                     "releases from 26.10 on are bare CalVer (26.10.0, not v26.10.0)")
+    elif not prefix:
+        sys.exit(f"FAIL check-release-version: RELEASE-VERSION record {canon!r} lacks the v prefix; "
+                 "releases before 26.10 keep the shape they were cut with")
     return canon
 
 
 def require_decided(canon):
-    """Every judge's first line: a canon that is not vYY.M.PATCH is refused (exit 2), never
-    judged as 'no failures'. read_canon() already refuses it; this keeps a caller that skips the
-    schema from turning UNDECIDED back into a pass."""
+    """Every judge's first line: a canon that is not a decided CalVer record — v-prefixed
+    before 26.10, bare from 26.10 on — is refused (exit 2), never judged as 'no failures'.
+    read_canon() already refuses it; this keeps a caller that skips the schema from turning
+    UNDECIDED back into a pass."""
     if not CANON_SHAPE.fullmatch(str(canon)):
-        unverified(f"UNVERIFIED check-release-version: {canon!r} is not a decided canon (vYY.M.PATCH); "
-                   "no surface is judged against it.")
+        unverified(f"UNVERIFIED check-release-version: {canon!r} is not a decided canon "
+                   "(vYY.M.PATCH before 26.10, bare YY.M.PATCH from 26.10 on); no surface is judged against it.")
 
 def allowed_at(canon, path):
-    m = CANON_SHAPE.fullmatch(canon)
-    yy, mm, pp = m.groups()
+    prefix, yy, mm, pp = canon_parts(canon)
     base = f"{yy}.{mm}.{pp}"
-    allowed = {base, f"v{base}"}
+    # THE ERA RULE, on the surfaces too: under a bare canon (26.10 on) only the bare form
+    # states the release — v26.10.0 on a surface is a divergence, which is the row the
+    # battery pins. Under a v canon both spellings of ITS OWN version stay tolerated, which
+    # is the behavior every release before the correction was swept under.
+    allowed = {base} if (int(yy), int(mm)) >= BARE_CANON_FROM or not prefix else {base, f"v{base}"}
     for suffix, kind, _ in DERIVED_ALLOW:
         if not path.endswith(suffix):
             continue
         if kind == "variants":
             allowed |= {f"{base}-fips", f"{base}-stig"}
     return allowed
+
+
+def token_version(tok):
+    """-> the version form a token states at its end, its v-prefix KEPT: the exact spelling
+    the surface carries, compared against the exact forms allowed_at returns."""
+    m = re.search(r"(v?\d+\.\d+\.\d+(?:-fips|-stig)?)$", tok)
+    return m.group(1) if m else None
 
 def scan(files, rd):
     """-> [(path, line_no, token, line, dated)] for every product-version-shaped token.
@@ -1014,10 +1068,12 @@ def doc_allowed(canon, path, tok, line, dated, curated, kept=frozenset()):
     states the bound. Off such a line the canon is required exactly, so this is a
     narrower allowance granted by context — not the general line-skip the header refuses.
     """
-    if tok.lstrip("v") in {f.lstrip("v") for f in allowed_at(canon, path)}:
+    if token_version(tok) in allowed_at(canon, path):
         return True
     kinds = {k for p, k, _ in DERIVED_ALLOW if path == p or path.endswith("/" + p)}
     if "min-version" in kinds and bounded(line, tok) and _tuple(tok) <= _tuple(canon):
+        return True
+    if "contract-floor" in kinds and contract_assignment(line, tok):
         return True
     if historical_allowed(canon, path, tok, dated, curated, kept):
         return True
@@ -1191,6 +1247,10 @@ def selftest():
     canon_refuses("month-zero canon -> refuse", "v26.0.1\n")
     canon_refuses("prefixless canon -> refuse", "26.7.0\n")
     expect("well-formed canon -> accepted", read_canon("v26.7.0\n") == "v26.7.0")
+    # ── the tag-name correction: bare CalVer from 26.10 on, v-shaped history before it ──
+    expect("bare canon from 26.10 -> accepted", read_canon("26.10.0\n") == "26.10.0")
+    canon_refuses("v-prefixed canon from 26.10 -> refuse", "v26.10.0\n")
+    canon_refuses("bare canon before 26.10 -> refuse (history keeps its shape)", "26.9.0\n")
     # ── decided canon: divergence is red; derived forms only in their contexts ──
     tree = {"README.md": "ships with `v26.7.0` today", "CHANGELOG.md": "the first release is `v26.6.0`"}
     fails, _ = judge("v26.7.0", scan(tree, rd(tree)))
@@ -1200,6 +1260,19 @@ def selftest():
     fails, _ = judge("v26.7.0", scan(tree, rd(tree)))
     expect("fips INSIDE the upgrade doc -> green; the canon's next patch there -> red (no invented release)",
            fails == [("docs-site/src/content/docs/how-to/docker-deployment.md", 1, "26.7.1")])
+    # Under a BARE canon only the bare form states the release; the v-prefixed spelling of
+    # the same version is a divergence the sweep reports (the correction's surface rule).
+    tree = {"README.md": "run olivares 26.10.0 today"}
+    fails, _ = judge("26.10.0", scan(tree, rd(tree)))
+    expect("bare canon on a surface -> green", fails == [])
+    tree = {"README.md": "run olivares v26.10.0 today"}
+    fails, _ = judge("26.10.0", scan(tree, rd(tree)))
+    expect("v-prefixed 26.10.0 on a surface -> red under the bare canon",
+           fails == [("README.md", 1, "v26.10.0")])
+    tree = {"CHANGELOG.md": "## [26.10.0] - 2026-10-01\nships today\n\n## [v26.9.0] - 2026-09-17\nthe record of v26.9.0"}
+    fails, _ = judge("26.10.0", scan(tree, rd(tree)))
+    expect("v26.9.0 history under the bare canon -> green (the record keeps its shape)",
+           fails == [])
     tree = {"README.md": "the first release will be v26.7.1"}
     fails, _ = judge("v26.7.0", scan(tree, rd(tree)))
     expect("next-patch OUTSIDE its documented example -> red", fails == [("README.md", 1, "v26.7.1")])
@@ -1213,6 +1286,23 @@ def selftest():
            fails == [("b.md", 1, "v29.1.0")])
     tree = {"c.md": "release v0.1.0 pending"}
     expect("SemVer placeholder -> not product-shaped", scan(tree, rd(tree)) == [])
+    # The upgrade-contract coordinate: green on its one assignment, red everywhere else.
+    line = "first_contract_version='26.8.0~'"
+    tree = {"packaging/nfpm/postinstall.sh": line}
+    fails, _ = judge("v26.7.0", scan(tree, rd(tree)))
+    expect("upgrade-contract coordinate above the canon, on its assignment -> green", fails == [])
+    tree = {"packaging/nfpm/postinstall.sh": "echo see 26.8.0 today"}
+    fails, _ = judge("v26.7.0", scan(tree, rd(tree)))
+    expect("the same value outside the assignment on the same file -> red", fails == [("packaging/nfpm/postinstall.sh", 1, "26.8.0")])
+    tree = {"packaging/nfpm/postinstall.sh": "echo see 26.8.0 today\n" + line}
+    fails, _ = judge("v26.7.0", scan(tree, rd(tree)))
+    expect("a stray value on another line does not reach the assignment's allowance -> red there, green on it",
+           fails == [("packaging/nfpm/postinstall.sh", 1, "26.8.0")])
+    tree = {"packaging/nfpm/prerm.sh": line}
+    fails, _ = judge("v26.7.0", scan(tree, rd(tree)))
+    expect("the assignment on a file the records do not name -> red", fails == [("packaging/nfpm/prerm.sh", 1, "26.8.0")])
+    ok_artifact, why = artifact_allowed("v26.7.0", "packaging/nfpm/postinstall.sh", "26.8.0", line)
+    expect("the same coordinate as an artefact pin -> green for the same reason", (ok_artifact, why) == (True, "contract-floor"))
     tree = {"d.md": "requires Go 1.26.5 and chi v5.3.1"}
     expect("dependency versions -> not product-shaped", scan(tree, rd(tree)) == [])
     tree = {"e.md": "since 26.0.9 things"}

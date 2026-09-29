@@ -5,8 +5,9 @@
   The ONE image description of the Olivares AI appliance, read by KIWI NG. One description
   with profiles is the design's rule: an edition is a profile here, never a second file that
   drifts from this one. A2 delivers the server edition on amd64, based on Fedora 44 (the
-  shipping profile) and still buildable on Debian 13 (not shipping); the workstation edition
-  (A5) and arm64 (A6) are profiles added to this same document.
+  shipping profile) and still buildable on Debian 13 (not shipping); the desktop edition (A5)
+  is the fedora44-desktop-amd64 profile of this same document, the server profile plus GNOME;
+  arm64 (A6) is a profile added to this same document too.
 
   What this description does NOT do, on purpose:
     * it starts no service and creates no identity. The appliance layer is installed as a
@@ -33,8 +34,16 @@
 
          Fedora 44 is the shipping base (Root c1efc2ee, 2026-09-27): its conventional RPM/DNF
          package base, server/minimal, amd64. The Debian 13 profile stays, not shipping, while
-         its own tests stay valid for Debian; it is not a Fedora test. -->
+         its own tests stay valid for Debian; it is not a Fedora test.
+
+         The desktop edition is the server profile's packages plus the desktop section below:
+         GNOME Shell with GDM, Firefox, Ptyxis, Nautilus and Fedora's default font set, over the
+         same type, repositories, SELinux policy and product layer. config.sh sets the graphical
+         default target and enables gdm and sshd inside the image root, with the links systemctl
+         enable would create; the overlay carries no links, so a public export of the tree copies
+         plain files only. -->
     <profile name="fedora44-server-amd64" description="Server edition, amd64, based on Fedora 44 (server/minimal, RPM/DNF); the shipping profile" import="true"/>
+    <profile name="fedora44-desktop-amd64" description="Desktop edition, amd64, based on Fedora 44: the server profile plus GNOME (GNOME Shell with GDM on the graphical target, Firefox, Ptyxis, Nautilus)"/>
     <profile name="debian13-server-amd64" description="Server edition, amd64, based on Debian 13 (trixie); not shipping"/>
     <!-- The firmware flag of the recipe. Redistributable but not free firmware is what the
          official Debian installer has included since bookworm and it is what makes the image
@@ -113,7 +122,11 @@
     </type>
   </preferences>
 
-  <preferences profiles="fedora44-server-amd64" arch="x86_64">
+  <!-- The two Fedora 44 editions share this section: the desktop profile is the server profile's
+       type, layout, package manager and SELinux policy, so an edition remains a package set and
+       an overlay, never a second layout (KIWI applies a section when any of its listed profiles
+       is selected). -->
+  <preferences profiles="fedora44-server-amd64,fedora44-desktop-amd64" arch="x86_64">
     <version>1.0.0</version>
     <!-- KIWI 11.0.4 names its Fedora package managers dnf4 and dnf5 (kiwi.rnc :999); Fedora 44's is
          dnf5. KIWI hands dnf5 this release version (else it passes releasever 0), and with
@@ -201,13 +214,13 @@
        longer has the sha256 fedora-repositories.json pins, and adds the locked key as gpgkey. The
        build repositories do not become the image's update channel: which update authority the
        appliance runs, and from where, is the host slice's decision. -->
-  <repository type="rpm-md" alias="fedora-44-releases" profiles="fedora44-server-amd64"
+  <repository type="rpm-md" alias="fedora-44-releases" profiles="fedora44-server-amd64,fedora44-desktop-amd64"
               repository_gpgcheck="false" package_gpgcheck="true" customize="fedora-repo-pinned.sh">
     <source path="https://dl.fedoraproject.org/pub/fedora/linux/releases/44/Everything/x86_64/os/">
       <signing key="file:///etc/pki/rpm-gpg/RPM-GPG-KEY-fedora-44-primary"/>
     </source>
   </repository>
-  <repository type="rpm-md" alias="fedora-44-updates" profiles="fedora44-server-amd64"
+  <repository type="rpm-md" alias="fedora-44-updates" profiles="fedora44-server-amd64,fedora44-desktop-amd64"
               repository_gpgcheck="false" package_gpgcheck="true" customize="fedora-repo-pinned.sh">
     <source path="https://dl.fedoraproject.org/pub/fedora/linux/updates/44/Everything/x86_64/">
       <signing key="file:///etc/pki/rpm-gpg/RPM-GPG-KEY-fedora-44-primary"/>
@@ -221,7 +234,7 @@
        one before KIWI reads it (delivery_check.py), and stages the checked key beside the
        description. olivares-repo-pinned.sh, KIWI's customize script for the .repo file, checks the
        key's fingerprint against that pin again and names it as gpgkey. -->
-  <repository type="rpm-md" alias="olivares-appliance-rpms" profiles="fedora44-server-amd64"
+  <repository type="rpm-md" alias="olivares-appliance-rpms" profiles="fedora44-server-amd64,fedora44-desktop-amd64"
               repository_gpgcheck="true" package_gpgcheck="true" customize="olivares-repo-pinned.sh">
     <source path="dir:///packages">
       <signing key="file:///description/olivares-package-repository.asc"/>
@@ -233,7 +246,7 @@
        discards the secret key; the build log and the manifest record the key's fingerprint. So no
        repository of the recipe is ever read with a check off, and the product repository keeps
        exactly D's two packages. -->
-  <repository type="rpm-md" alias="olivares-appliance-build" profiles="fedora44-server-amd64"
+  <repository type="rpm-md" alias="olivares-appliance-build" profiles="fedora44-server-amd64,fedora44-desktop-amd64"
               repository_gpgcheck="true" package_gpgcheck="true" customize="olivares-repo-pinned.sh">
     <source path="dir:///build-packages">
       <signing key="file:///description/olivares-build-key.asc"/>
@@ -331,7 +344,7 @@
        builder (KIWI runs the builder's dnf5 with installroot), so the image carries no package tool
        of its own: which update authority the appliance runs is the host slice's decision, and
        nothing is installed for it until the host slice names it. -->
-  <packages type="bootstrap" profiles="fedora44-server-amd64">
+  <packages type="bootstrap" profiles="fedora44-server-amd64,fedora44-desktop-amd64">
     <package name="filesystem"/>
     <package name="fedora-release-server"/>
     <package name="fedora-gpg-keys"/>
@@ -341,7 +354,7 @@
 
   <!-- The Debian profile's packages mapped to Fedora 44 names (r12-fedora/PACKAGE-MAP.tsv gives the
        reason, NEVRA and sha256 of each). -->
-  <packages type="image" profiles="fedora44-server-amd64">
+  <packages type="image" profiles="fedora44-server-amd64,fedora44-desktop-amd64">
     <!-- the system: Fedora ships udev apart from systemd, and builds no systemd-timesyncd -->
     <package name="kernel"/>
     <package name="systemd"/>
@@ -410,6 +423,27 @@
     <package name="policycoreutils"/>
     <package name="policycoreutils-python-utils"/>
     <package name="olivares-selinux"/>
+  </packages>
+
+  <!-- The desktop edition's own packages, on top of the server set both profiles share above.
+       Every name resolves in the Fedora 44 releases tree (measured 2026-09-29 against the pinned
+       repomd, sha256 da384542: NEVRA and sha256 of each in the lane's measurement record), and
+       nothing here adds a repository. gdm hard-requires gnome-session, gnome-session-wayland-
+       session, gnome-shell and gnome-settings-daemon, so the session arrives with it; gnome-shell
+       is named beside it because the desktop is GNOME Shell, not only its greeter. No package of
+       the GNOME line requires a font package (measured over the whole primary), so Fedora's own
+       default font set is named; the locale stays the server profile's glibc-langpack-en. The
+       terminal is Ptyxis, Fedora 44's default GNOME terminal (gnome-console would name the same
+       tree). openssh-server, already in the shared set, ships sftp-server and its stock sshd_config
+       serves the sftp subsystem; the desktop overlay enables sshd and points default.target at
+       graphical.target, where gdm runs as display-manager.service. -->
+  <packages type="image" profiles="fedora44-desktop-amd64">
+    <package name="gdm"/>
+    <package name="gnome-shell"/>
+    <package name="firefox"/>
+    <package name="nautilus"/>
+    <package name="ptyxis"/>
+    <package name="default-fonts-core"/>
   </packages>
 
   <packages type="image" profiles="fedora44-firmware">

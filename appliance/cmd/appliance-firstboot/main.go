@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/olivaresai/olivares/appliance/answers"
@@ -103,7 +104,7 @@ func apply(stdout, stderr io.Writer) int {
 			HostHandoff:   base.HostSettingsHandoff{Host: host},
 			ProductConfig: base.ProductConfig{Host: host},
 			Storage:       base.Storage{Host: host},
-			SetupDelivery: base.RefusingSetupDelivery{},
+			SetupDelivery: base.SetupTokenDelivery{Host: host},
 			Firewall:      firewallstage.New(carriers.ExecRunner),
 			StartServices: base.ProductService{Host: host},
 			Readiness:     base.ProductReadiness{Host: host, Poll: 2 * time.Second},
@@ -144,6 +145,17 @@ func status(stdout, stderr io.Writer) int {
 		return 2
 	}
 	_, _ = fmt.Fprintf(stdout, "%s\n", out)
+	// The delivered setup token outlives setup: it is single-use, so once the first
+	// administrator exists the file is spent and grants nothing — but it stays on the
+	// machine until somebody removes it, and the operator reading this output is the one
+	// holding root. Name the file and its removal while it may still matter.
+	if rec.State == base.Ready {
+		if _, err := os.Stat(filepath.Join(base.StateDir, "setup-token")); err == nil {
+			_, _ = fmt.Fprintf(stdout, "The one-time setup token is at %s. Once setup is complete it is\n"+
+				"spent: remove it with `sudo rm %s`.\n",
+				filepath.Join(base.StateDir, "setup-token"), filepath.Join(base.StateDir, "setup-token"))
+		}
+	}
 	switch rec.State {
 	case base.Ready:
 		return 0

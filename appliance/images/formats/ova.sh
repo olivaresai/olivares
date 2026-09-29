@@ -18,7 +18,7 @@
 # manifest is the digest of what is inside it. Whether vSphere, VirtualBox and Proxmox import
 # it is the owner's laboratory row of the design (section 8, A2), stated and not run here.
 #
-# usage: ova.sh [--target-dir DIR] [--output-dir DIR]
+# usage: ova.sh [--edition server|desktop] [--target-dir DIR] [--output-dir DIR]
 set -euo pipefail
 assembly=ova.sh
 here=$(cd "$(dirname "$0")" && pwd)
@@ -34,18 +34,21 @@ memory_mib=${OVA_MEMORY_MIB:-4096}
 version=${VERSION-0.0.0-dev}
 while [ $# -gt 0 ]; do
   case $1 in
+    --edition) edition=${2:?}; shift 2 ;;
     --target-dir) target_dir=${2:?}; shift 2 ;;
     --output-dir) output_dir=${2:?}; shift 2 ;;
     *) unmeasurable "unknown option: $1" ;;
   esac
 done
+
+require_edition
 [[ "$version" =~ ^([0-9]+\.[0-9]+\.[0-9]+|0\.0\.0-dev)$ ]] || unmeasurable "VERSION is X.Y.Z or 0.0.0-dev, not '$version'"
 
 require_tool qemu-img tar sha256sum stat python3
 mkdir -p "$output_dir"
 
 disk=$(find_disk "$target_dir")
-name=$(formats_query ova file)
+name=$(formats_query ova file) || unmeasurable "formats.json declares no ova for the ${edition:-server} edition"
 artifact="$output_dir/$name"
 base=${name%.ova}
 work="$output_dir/.ova-$base"
