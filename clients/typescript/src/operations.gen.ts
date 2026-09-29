@@ -7163,6 +7163,51 @@ export class Client extends ClientCore {
   }
 
   /**
+   * GET /v1/m/sessions/provider-accounts — sessions module route (requires sessions:account:read)
+   *
+   * Stability: beta.
+   */
+  getV1MSessionsProviderAccounts(opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/m/sessions/provider-accounts", "/v1/m/sessions/provider-accounts", undefined, opts);
+  }
+
+  /**
+   * POST /v1/m/sessions/provider-accounts — sessions module route (requires sessions:account:write)
+   *
+   * Stability: beta.
+   */
+  postV1MSessionsProviderAccounts(body: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.doJsonRequired("POST", "/v1/m/sessions/provider-accounts", "/v1/m/sessions/provider-accounts", body, opts);
+  }
+
+  /**
+   * GET /v1/m/sessions/provider-accounts/{ref} — sessions module route (requires sessions:account:read)
+   *
+   * Stability: beta.
+   */
+  getV1MSessionsProviderAccountsByRef(ref: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/m/sessions/provider-accounts/{ref}", `/v1/m/sessions/provider-accounts/${encodeURIComponent(ref)}`, undefined, opts);
+  }
+
+  /**
+   * PATCH /v1/m/sessions/provider-accounts/{ref} — sessions module route (requires sessions:account:write)
+   *
+   * Stability: beta.
+   */
+  patchV1MSessionsProviderAccountsByRef(ref: string, body: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.doJsonRequired("PATCH", "/v1/m/sessions/provider-accounts/{ref}", `/v1/m/sessions/provider-accounts/${encodeURIComponent(ref)}`, body, opts);
+  }
+
+  /**
+   * POST /v1/m/sessions/provider-accounts/{ref}/adopt — sessions module route (requires sessions:account:write)
+   *
+   * Stability: beta.
+   */
+  postV1MSessionsProviderAccountsByRefAdopt(ref: string, body: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.doJsonRequired("POST", "/v1/m/sessions/provider-accounts/{ref}/adopt", `/v1/m/sessions/provider-accounts/${encodeURIComponent(ref)}/adopt`, body, opts);
+  }
+
+  /**
    * GET /v1/m/sessions/provider-profiles — Lists the tenant's provider profiles as references and labels, never paths.
    *
    * Stability: beta.

@@ -349,6 +349,7 @@ func TestCommunicationSchemaRegistersNamespaceOnce(t *testing.T) {
 			// copy of the shared validator whose two 256-character token bounds
 			// are within PostgreSQL's regular-expression repetition limit.
 			"0025_communication_token_bounds.sql",
+			"0026_provider_account_name_uniq.sql",
 		},
 		"sqlite": communicationSQLiteMigrationNames(),
 	}
@@ -493,6 +494,7 @@ func communicationSQLiteMigrationNames() []string {
 		// OT-V: the two halves of the accepted-state lease-effect rule.
 		"0096_work_handoff_vacant_transfer_ins.sql",
 		"0097_work_handoff_vacant_transfer_upd.sql",
+		"0098_provider_account_name_uniq.sql",
 	)
 }
 

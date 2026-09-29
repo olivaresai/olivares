@@ -48,6 +48,7 @@ const (
 	colPPConfigHome  = "config_home"
 	colPPUserHome    = "user_home"
 	colPPDisplayName = "display_name"
+	colPPAccent      = "accent"
 	colPPState       = "state"
 	colPPHomeSlot    = "home_slot"
 	colPPRetiredAt   = "retired_at"
@@ -136,6 +137,7 @@ type ProviderProfile struct {
 	ConfigHome     string
 	UserHome       string
 	DisplayName    string
+	Accent         string
 	State          string
 	// AuthSource is the authorized authentication source ("" = none authorized).
 	AuthSource string
@@ -219,6 +221,9 @@ type CreateProfileInput struct {
 // the expression/partial indexes the live plane needs are NOT expressible here and
 // live in the module's SQL migrations (schema.go, migrations/).
 func (m *Module) registerProviderProfileSchema(reg store.ExtensionRegistry) error {
+	if err := registerAccountHomeOperation(reg); err != nil {
+		return err
+	}
 	if err := reg.Register(model.EntityDescriptor{
 		Kind:  providerProfileKind,
 		Table: providerProfileTable,
@@ -229,6 +234,7 @@ func (m *Module) registerProviderProfileSchema(reg store.ExtensionRegistry) erro
 			{Name: colPPConfigHome, Kind: model.KindText, Principal: pdeclNoneHomePath},
 			{Name: colPPUserHome, Kind: model.KindText, Principal: pdeclNoneHomePath},
 			{Name: colPPDisplayName, Kind: model.KindText, Principal: model.None("an operator-chosen profile name, bounded and shown only: provider_profile.go:367, provider_profile.go:438")},
+			{Name: colPPAccent, Kind: model.KindText, Nullable: true, Principal: model.None("a closed display-only color enum; validated by normalizeAccountAccent and rendered by ProviderAccent, never used for identity or launch authority")},
 			{Name: colPPState, Kind: model.KindText, Indexed: true, Principal: model.None("a profile lifecycle state, a closed set: provider_profile.go:72-78, provider_profile.go:719")},
 			{Name: colPPHomeSlot, Kind: model.KindText, Principal: model.None("the uniqueness key of an active home built from environment, driver and config home, or a retired marker: provider_profile.go:381-385")},
 			{Name: colPPRetiredAt, Kind: model.KindTimestamp, Nullable: true},
@@ -247,6 +253,16 @@ func (m *Module) registerProviderProfileSchema(reg store.ExtensionRegistry) erro
 			// predates the columns therefore reads as undeclared, which is what it is.
 			{Name: colPPSessionTools, Kind: model.KindText, Nullable: true, Principal: pdeclProfileSessionTools},
 			{Name: colPPSessionPermissionMode, Kind: model.KindText, Nullable: true, Principal: pdeclNonePermissionMode},
+			// Account metadata does not enter ProviderHomeSnapshot. A NULL name keeps
+			// every existing row an unnamed profile; account identity reuses its ref.
+			{Name: colPPAccountName, Kind: model.KindText, Nullable: true, Principal: model.None("a provider account label, allocated or adopted without human identity resolution: provider_account.go:308, provider_account_home.go:177")},
+			{Name: colPPHomeMode, Kind: model.KindText, Nullable: true, Principal: model.None("managed or adopted home custody, shown by the account DTO: provider_account_api.go:116-125")},
+			{Name: colPPHomeGeneration, Kind: model.KindInt, Nullable: true},
+			{Name: colPPOwnerRef, Kind: model.KindText, Nullable: true, Principal: model.None("reserved absence; every nonempty value invalidates the retirement pass rather than implying an owner: provider_account_retirement.go:34-41")},
+			{Name: colPPReleaseRef, Kind: model.KindText, Nullable: true, Principal: model.None("an optional provider binary release reference, shown only: provider_account_api.go:116-125")},
+			{Name: colPPPendingRelease, Kind: model.KindText, Nullable: true, Principal: model.None("an optional pending provider binary release reference, shown only: provider_account_api.go:116-125")},
+			{Name: colPPIsolationLevel, Kind: model.KindText, Nullable: true, Principal: model.None("shared or dedicated process isolation label, not human authority: provider_account_api.go:116-125")},
+			{Name: colPPOSUser, Kind: model.KindText, Nullable: true, Principal: model.None("an optional operating-system service user label, never resolved to an Olivares principal: provider_account_api.go:116-125")},
 		},
 		Indexes: []model.IndexSpec{
 			{Name: "sessions_provider_profile_ref_uniq", Columns: []string{model.ColTenantID, colPPRef}, Unique: true},
@@ -436,6 +452,7 @@ func profileFromRecord(rec model.Record) ProviderProfile {
 		ConfigHome:            rec.String(colPPConfigHome),
 		UserHome:              rec.String(colPPUserHome),
 		DisplayName:           rec.String(colPPDisplayName),
+		Accent:                rec.String(colPPAccent),
 		State:                 rec.String(colPPState),
 		AuthSource:            rec.String(colPPAuthSource),
 		ProviderRecordRef:     rec.String(colPPProviderRecordRef),
@@ -547,8 +564,11 @@ func (m *Module) CreateProfile(ctx context.Context, tenant model.TenantID, in Cr
 	ref := newProfileRef()
 	var out ProviderProfile
 	err = m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
-		repo, err := sc.Ext(providerProfileKind)
+		repo, _, err := accountHomeAdmission(ctx, sc, tenant)
 		if err != nil {
+			return err
+		}
+		if err := m.rejectManagedRegistration(configHome, userHome); err != nil {
 			return err
 		}
 		if err := validateRecordBinding(ctx, sc, driver, recordRef); err != nil {
@@ -708,7 +728,7 @@ func (m *Module) PatchProfile(ctx context.Context, tenant model.TenantID, ref st
 	}
 	var out ProviderProfile
 	err := m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
-		repo, err := sc.Ext(providerProfileKind)
+		repo, _, err := accountHomeAdmission(ctx, sc, tenant)
 		if err != nil {
 			return err
 		}

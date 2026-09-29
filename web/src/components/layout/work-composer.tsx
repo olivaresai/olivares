@@ -42,6 +42,7 @@
 //    `launchFailureMessage`, the engine's own answer, not a sentence composed here. The
 //    dialog keeps the readiness PREFLIGHT and every other field, one click away: this
 //    is the fast path, not a replacement for it.
+import { ProviderAccent } from '@/features/agentops/provider-accent'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { IdCard, Layers, Plus, Send } from 'lucide-react'
@@ -672,7 +673,13 @@ export function WorkComposer({
         </SelectTrigger>
         <SelectContent>
           {profiles.map((p) => (
-            <SelectItem key={p.profile_ref} value={p.profile_ref}>
+            <SelectItem
+              key={p.profile_ref}
+              value={p.profile_ref}
+              aria-description={p.profile_ref}
+              title={p.profile_ref}
+            >
+              <ProviderAccent accent={p.accent} />
               {p.display_name || p.profile_ref}
             </SelectItem>
           ))}

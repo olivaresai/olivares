@@ -31,6 +31,7 @@ import {
   ClipboardList,
   Coins,
   Compass,
+  ContactRound,
   Container,
   Cpu,
   Database,
@@ -175,11 +176,9 @@ const SessionsWorkspaceView = lazy(() =>
     default: m.SessionsWorkspaceView,
   })),
 )
-// The provider-profile plane: its OWN room with two doors, same pattern as above.
-// `/provider-profiles` (sessions:profile:read) and `/provider-bindings`
-// (sessions:profile-binding:read) mount one view; the entrance names the tab that
-// opens first. They exist because the plane's read tiers are independent of runs
-// and live sessions, and a principal holding only one of them had no route.
+// Profiles, bindings and accounts share one view with independent read tiers.
+// Each route opens its own tab so an operator can reach the permissions they hold
+// without requiring access to runs, live sessions or another provider tab.
 const ProviderAdminView = lazy(() =>
   import('./agentops/provider-admin-view').then((m) => ({
     default: m.ProviderAdminView,
@@ -548,6 +547,7 @@ export const PRODUCT_NOUNS: readonly ProductNoun[] = [
       'providers',
       'providerProfiles',
       'providerBindings',
+      'providerAccounts',
       'voice',
       'recordings',
       'session-viewer',
@@ -1548,6 +1548,22 @@ export const FEATURE_VIEWS: readonly FeatureView[] = Object.freeze(
         icon: Link2,
         permission: 'sessions:profile-binding:read',
         element: lazyView(ProviderAdminView, { entrance: 'bindings' as const }),
+      },
+      {
+        // Account read opens this tab; creating or adopting an account still needs
+        // account write, and choosing from profiles needs profile read inside it.
+        id: 'providerAccounts',
+        path: '/provider-accounts',
+        navigation: {
+          kind: 'feature',
+          areaId: 'ai',
+          sectionId: 'environments',
+        },
+        helpHref: '/reference/modules/ii-sessions',
+        hub: 'operate',
+        icon: ContactRound,
+        permission: 'sessions:account:read',
+        element: lazyView(ProviderAdminView, { entrance: 'accounts' as const }),
       },
       {
         // Agent-artifact supply chain. This is tenant-estate metadata and its

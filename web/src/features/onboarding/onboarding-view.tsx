@@ -13,6 +13,7 @@
 // resumable because the source of truth is the backend, not local state. Nearly every
 // write needs an AAL3 step-up; the forms wrap the privileged action in RequireAssurance
 // and surface the engine's honest denial rather than fake a success.
+import { ProviderAccent } from '@/features/agentops/provider-accent'
 import './i18n'
 import { useState, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
@@ -1484,7 +1485,8 @@ function AgentStep({
             key={p.profile_ref}
             className="flex flex-wrap items-center gap-2 text-sm"
           >
-            <span className="font-medium text-foreground">
+            <span className="font-medium text-foreground" title={p.profile_ref}>
+              <ProviderAccent accent={p.accent} />
               {p.display_name || p.profile_ref}
             </span>
             <span className="text-xs text-muted-foreground">{p.driver}</span>

@@ -11,6 +11,7 @@ import (
 	"errors"
 	"io"
 	"os/exec"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -200,16 +201,29 @@ func newestWithin(entries []Entry, budget int) ([]Entry, bool) {
 	return entries[first:], first > 0
 }
 
-// ExecJournal is the helper's Runner: it runs argv, which must name JournalctlPath, with no
-// shell, an empty environment and a time bound, and reads at most limit bytes of its standard
-// output. Past the bound it stops the reader and returns what it read with ErrJournalLimit.
+// ExecJournal is the helper's Runner: it admits only the complete LogArgv form, with no
+// shell, an empty environment and a time bound, and reads at most limit bytes of standard
+// output. The caller checks host inventory. Past the bound it stops the reader and
+// returns what it read with ErrJournalLimit.
 func ExecJournal(ctx context.Context, argv []string, limit int64) ([]byte, error) {
-	if len(argv) == 0 || argv[0] != JournalctlPath {
+	argv = slices.Clone(argv)
+	if len(argv) != 5 || argv[0] != JournalctlPath || argv[2] != "--output=json" || argv[4] != "--no-pager" {
 		return nil, errors.New("not the journal reader's argument vector")
+	}
+	unit, unitOK := strings.CutPrefix(argv[1], "--unit=")
+	count, countOK := strings.CutPrefix(argv[3], "--lines=")
+	lines, err := strconv.Atoi(count)
+	if !unitOK || Check(OpLogs, unit) != nil || !countOK || err != nil ||
+		lines < 1 || lines > MaxLogLines || strconv.Itoa(lines) != count {
+		return nil, errors.New("not the journal reader's argument vector")
+	}
+	if limit < 1 || limit > MaxJournalBytes {
+		return nil, errors.New("the journal reader's byte limit is out of range")
 	}
 	ctx, cancel := context.WithTimeout(ctx, journalTimeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
+	// #nosec G204 -- The exact LogArgv form, unit name, line count and byte bound are validated above; the executable is fixed.
+	cmd := exec.CommandContext(ctx, JournalctlPath, argv[1:]...)
 	cmd.Env = []string{}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {

@@ -64,6 +64,7 @@
     "/permissions",
     "/platforms",
     "/posture-export",
+    "/provider-accounts",
     "/provider-bindings",
     "/provider-profiles",
     "/providers",

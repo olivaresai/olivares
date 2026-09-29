@@ -53,7 +53,7 @@ identity, Deployment, Observability & evidence, then System & settings.
 
 <!-- BEGIN GENERATED olivares-console-routes — regenerate with `bash scripts/check-guide-docs.sh --write`; do not edit by hand -->
 
-The console publishes **78 routes**. Every one of them is in the tables below, with the
+The console publishes **79 routes**. Every one of them is in the tables below, with the
 permission it requires and the reference page its in-product help link opens.
 
 ### Operate
@@ -72,6 +72,7 @@ permission it requires and the reference page its in-product help link opens.
 | Kill switch | `/killswitch` | Emergency stop, dual-control recovery and guardian containment | `governance:killswitch:read` | [how-to/cookbook/kill-switch-drill](/how-to/cookbook/kill-switch-drill/) |
 | Logs | `/logs` | The live engine log stream, with level and module filters, search and pause | `system:admin` | [how-to/troubleshooting](/how-to/troubleshooting/) |
 | Observability | `/observability` | Ingestion health by standard and trace drill-down | `health:status:read` | [reference/modules/observability](/reference/modules/observability/) |
+| Provider accounts | `/provider-accounts` | List named provider accounts and adopt an existing provider profile as an account | `sessions:account:read` | [reference/modules/ii-sessions](/reference/modules/ii-sessions/) |
 | Source bindings | `/provider-bindings` | Dedicate configured sources, at the revision this node applied, to provider profiles | `sessions:profile-binding:read` | [reference/modules/ii-sessions](/reference/modules/ii-sessions/) |
 | Provider profiles | `/provider-profiles` | Register and administer the provider homes sessions launch under, and read their configuration on demand | `sessions:profile:read` | [reference/modules/ii-sessions](/reference/modules/ii-sessions/) |
 | Providers | `/providers` | Register the API keys and endpoints sessions launch with; test, rotate and revoke them | `sessions:provider:read` | [how-to/add-a-provider](/how-to/add-a-provider/) |

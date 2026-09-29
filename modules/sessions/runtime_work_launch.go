@@ -48,6 +48,9 @@ type WorkLaunchSpec struct {
 // ManagedRunRef is the references-only result consumed by orchestration. It
 // deliberately exposes neither process handles nor launch credentials.
 type ManagedRunRef struct {
+	// Completion is present only on the originating successful launch, never
+	// reconstructed from a later row for a dispatch replay.
+	Completion     RuntimeLaunchCompletion
 	RunRef         string
 	SessionID      string
 	WorkItemID     model.ID
@@ -135,6 +138,7 @@ func (m *Module) LaunchForWork(
 	}
 	result.State = dto.State
 	result.Replayed = replayed
+	result.Completion = dto.Completion
 	return result, nil
 }
 

@@ -11,10 +11,12 @@ import (
 	"errors"
 	"io"
 	"os/exec"
+	"path/filepath"
+	"slices"
 )
 
 // The fixed argument vectors of nft: the ruleset travels on standard input, never as a path,
-// and the read-back lists the one table as JSON.
+// and the read-back lists the one table as JSON. The adapter refuses modified vectors.
 var (
 	LoadArgs = []string{"-f", "-"}
 	ListArgs = []string{"-j", "list", "table", "inet", "olivares"}
@@ -31,7 +33,8 @@ const (
 
 // NFT is the kernel as nft reaches it over netlink.
 type NFT struct {
-	// Program is nft's absolute path; nftProgram when empty.
+	// Program is nft's absolute path; nftProgram when empty. It is trusted caller
+	// configuration, never a helper request field.
 	Program string
 }
 
@@ -44,22 +47,34 @@ func (n NFT) program() string {
 
 // Load loads ruleset as one nft transaction.
 func (n NFT) Load(ctx context.Context, ruleset []byte) error {
-	_, err := runBounded(ctx, n.program(), LoadArgs, ruleset, maxLoadOutput)
+	args := slices.Clone(LoadArgs)
+	if !slices.Equal(args, []string{"-f", "-"}) {
+		return errors.New("not the nft load argument vector")
+	}
+	_, err := runBounded(ctx, n.program(), args, ruleset, maxLoadOutput)
 	return err
 }
 
 // Table lists the table inet olivares and reads it.
 func (n NFT) Table(ctx context.Context) (Table, error) {
-	out, err := runBounded(ctx, n.program(), ListArgs, nil, maxListing)
+	args := slices.Clone(ListArgs)
+	if !slices.Equal(args, []string{"-j", "list", "table", "inet", "olivares"}) {
+		return Table{}, errors.New("not the nft table argument vector")
+	}
+	out, err := runBounded(ctx, n.program(), args, nil, maxListing)
 	if err != nil {
 		return Table{}, err
 	}
 	return ParseTable(out)
 }
 
-// Exec runs a program by absolute path with fixed arguments, no shell and an empty environment,
-// and returns at most 256 KiB of its standard output. It is the owner's Runner.
+// Exec is the owner's Runner for the fixed sshd -T configuration probe, by absolute path,
+// with no shell and an empty environment. It returns at most 256 KiB of standard output.
 func Exec(ctx context.Context, name string, args ...string) ([]byte, error) {
+	args = slices.Clone(args)
+	if name != sshdProgram || !slices.Equal(args, []string{"-T"}) {
+		return nil, errors.New("not the SSH configuration probe's argument vector")
+	}
 	return runBounded(ctx, name, args, nil, 256*1024)
 }
 
@@ -67,6 +82,10 @@ func Exec(ctx context.Context, name string, args ...string) ([]byte, error) {
 // environment, discards its standard error and returns at most limit bytes of its standard
 // output: more is an error, and the program is killed.
 func runBounded(ctx context.Context, program string, args []string, stdin []byte, limit int) ([]byte, error) {
+	if !filepath.IsAbs(program) {
+		return nil, errors.New("the program must be configured by absolute path")
+	}
+	// #nosec G204 -- Callers validate fixed nft/sshd argv; the absolute program is trusted caller configuration, never helper input.
 	cmd := exec.CommandContext(ctx, program, args...)
 	cmd.Env = []string{}
 	if stdin != nil {
