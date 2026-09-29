@@ -120,8 +120,9 @@ func (s OSIdentity) observe(context.Context, Input) (Effect, error) {
 // CloudInitHost verifies what cloud-init, the single owner of host settings, applied after
 // its final stage ended. It never applies a host setting.
 type CloudInitHost struct {
-	Host    Host
-	Network NetworkReader
+	Host     Host
+	Network  NetworkReader
+	Networkd NetworkdReader
 }
 
 // Apply verifies the host settings and records what was verified.

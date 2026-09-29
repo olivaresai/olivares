@@ -411,3 +411,7 @@ FBOOT-85	allow	olivares_firstboot_t	system_dbusd_t	dbus	send_msg			Hello and the
 FBOOT-86	allow	system_dbusd_t	olivares_firstboot_t	dbus	send_msg			the bus driver's replies
 FBOOT-87	allow	olivares_firstboot_t	NetworkManager_t	dbus	send_msg			method calls to NetworkManager (networkmanager.te: NetworkManager_t owns org.freedesktop.NetworkManager)
 FBOOT-88	allow	NetworkManager_t	olivares_firstboot_t	dbus	send_msg			NetworkManager's replies
+FBOOT-89	allow	olivares_firstboot_t	init_t	dbus	send_msg			read-only systemd GetUnit, GetUnitFileState and unit properties through the existing unique bus owner
+FBOOT-90	allow	init_t	olivares_firstboot_t	dbus	send_msg			systemd replies to first boot's read-only unit observation
+FBOOT-91	allow	olivares_firstboot_t	systemd_networkd_unit_file_t	service	status			GetUnit checks status on networkd.service's file label (Fedora 44.10 systemd.fc:33); never start or enable
+FBOOT-92	allow	olivares_firstboot_t	systemd_unit_file_t	service	status			GetUnit checks status on networkd.socket's file label (Fedora 44.10 systemd.fc:30); never start or enable

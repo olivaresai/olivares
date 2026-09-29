@@ -98,6 +98,10 @@ REQUIRED = [
     (FIRSTBOOT, "olivares_cloud_owner_t", "file", "create rename write", "the host-owner drop-in"),
     ("cloud_init_t", "olivares_cloud_owner_t", "file", "read", "cloud-init reads the drop-in"),
     (FIRSTBOOT, "NetworkManager_t", "dbus", "send_msg", "first boot's read-only NetworkManager calls"),
+    (FIRSTBOOT, "init_t", "dbus", "send_msg", "read-only systemd observation"),
+    ("init_t", FIRSTBOOT, "dbus", "send_msg", "systemd observation replies"),
+    (FIRSTBOOT, "systemd_networkd_unit_file_t", "service", "status", "networkd service status"),
+    (FIRSTBOOT, "systemd_unit_file_t", "service", "status", "networkd socket status"),
     (FIRSTBOOT, "net_conf_t", "file", "read", "the second-owner scan"),
 ]
 TRANSITIONS = [(GUARD, "var_run_t", "dir", 'olivares_network_run_t "olivares-network"'),
@@ -131,6 +135,9 @@ def access_failures(rows):
     failures += [f"no type_transition {s} {t}:{c} {p}" for s, t, c, p in TRANSITIONS if (s, t, c, p) not in transitions]
     for r in allows:
         perms = set(r["perms"].split())
+        if (r["source"] == FIRSTBOOT and r["target"] in {"systemd_networkd_unit_file_t", "systemd_unit_file_t"}
+                and r["class"] == "service" and perms - {"status"}):
+            failures.append(f"{r['id']}: networkd observation grants more than status")
         listener = SOCKETS.get(r["target"]) if r["class"] == "sock_file" and "write" in perms else (
             r["target"] if r["class"] == "unix_stream_socket" and "connectto" in perms and r["target"] in ADMITTED else None)
         if listener and r["source"] not in ADMITTED[listener]:
@@ -176,13 +183,13 @@ def denied_failures(denied):
 
 
 def network_rows(rows):
-    """The network plane's rows: the three domains', and PORTAL-40..46, RCON-16..22 and FBOOT-74..88."""
+    """The network plane's rows: the three domains', and PORTAL-40..46, RCON-16..22 and FBOOT-74..92."""
     def number(rid):
         return int(rid.rsplit("-", 1)[1])
     return [r for r in rows if r["id"].startswith(("NGRD-", "NRST-", "NPRB-"))
             or (r["id"].startswith("PORTAL-") and 40 <= number(r["id"]) <= 46)
             or (r["id"].startswith("RCON-") and 16 <= number(r["id"]) <= 22)
-            or (r["id"].startswith("FBOOT-") and 74 <= number(r["id"]) <= 88)]
+            or (r["id"].startswith("FBOOT-") and 74 <= number(r["id"]) <= 92)]
 
 
 def repository():
@@ -214,6 +221,14 @@ class NetworkContexts(unittest.TestCase):
 class NetworkAccess(unittest.TestCase):
     def test_the_rows_hold_the_network_planes_accesses(self):
         self.assertEqual(access_failures(repository()[0]), [])
+
+    def test_networkd_observation_never_grants_unit_mutation(self):
+        for target in ("systemd_networkd_unit_file_t", "systemd_unit_file_t"):
+            for perm in ("start", "enable", "stop", "reload"):
+                rows = repository()[0]
+                row = {"id": "X-01", "kind": "allow", "source": FIRSTBOOT, "target": target,
+                       "class": "service", "perms": "status " + perm, "condition": "", "via": "", "rationale": "mutant"}
+                self.assertIn("X-01: networkd observation grants more than status", access_failures(rows + [row]))
 
     def test_a_generic_permission_on_the_guards_domain_fails(self):
         rows = repository()[0]

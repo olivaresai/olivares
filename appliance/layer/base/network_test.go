@@ -107,64 +107,55 @@ func TestFirstBoot_DnsPrecedenceIsComparedInOrder(t *testing.T) {
 }
 
 func TestFirstBoot_VendorNetworkFilesRequireAnInactiveDisabledOwner(t *testing.T) {
-	const dormant = "LoadState=loaded\nActiveState=inactive\nUnitFileState=disabled\n"
-	const absent = "LoadState=not-found\nActiveState=inactive\nUnitFileState=\n"
+	dormant := NetworkdUnit{LoadState: "loaded", ActiveState: "inactive", UnitFileState: "disabled"}
 	for _, tc := range []struct {
-		name, service, socket, refusal string
-		probeError                     bool
+		name    string
+		state   NetworkdState
+		err     error
+		refusal string
 	}{
-		{"disabled", dormant, dormant, "", false},
-		{"masked", strings.Replace(dormant, "disabled", "masked", 1), dormant, "", false},
-		{"absent socket", dormant, absent, "", false},
-		{"active service", strings.Replace(dormant, "inactive", "active", 1), dormant, "second_network_owner", false},
-		{"enabled service", strings.Replace(dormant, "disabled", "enabled", 1), dormant, "second_network_owner", false},
-		{"active socket", dormant, strings.Replace(dormant, "inactive", "active", 1), "second_network_owner", false},
-		{"enabled socket", dormant, strings.Replace(dormant, "disabled", "enabled-runtime", 1), "second_network_owner", false},
-		{"activating", strings.Replace(dormant, "inactive", "activating", 1), dormant, "second_network_owner", false},
-		{"unknown", strings.Replace(dormant, "disabled", "future-state", 1), dormant, "network_owner_unmeasured", false},
-		{"missing property", "LoadState=loaded\nActiveState=inactive\n", dormant, "network_owner_unmeasured", false},
-		{"duplicate property", dormant + "ActiveState=inactive\n", dormant, "network_owner_unmeasured", false},
-		{"bus error", dormant, dormant, "network_owner_unmeasured", true},
+		{"disabled", NetworkdState{Service: dormant, Socket: dormant}, nil, ""},
+		{"not loaded disabled", NetworkdState{Service: NetworkdUnit{NotLoaded: true, UnitFileState: "disabled"}, Socket: dormant}, nil, ""},
+		{"absent socket", NetworkdState{Service: dormant, Socket: NetworkdUnit{NotLoaded: true, FileAbsent: true}}, nil, ""},
+		{"unknown reader", NetworkdState{}, nil, "network_owner_unmeasured"},
+		{"bus error", NetworkdState{Service: dormant, Socket: dormant}, errors.New("bus unavailable"), "network_owner_unmeasured"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			s, in := networkHost(t)
 			place(t, s.Host.Root, "usr/lib/systemd/network/80-container-host0.network", "[Match]\nName=host0\n[Network]\nDHCP=yes\n")
-			var observed []string
-			s.Host.Run = func(_ context.Context, name string, args ...string) ([]byte, error) {
-				if name != "systemctl" || len(args) != 4 || args[0] != "show" || args[1] != "--all" || args[2] != "--property=LoadState,ActiveState,UnitFileState" {
-					t.Fatalf("unexpected observation: %s %v", name, args)
-				}
-				observed = append(observed, args[3])
-				if tc.probeError {
-					return []byte(tc.service), errors.New("bus unavailable")
-				}
-				switch args[3] {
-				case "systemd-networkd.service":
-					return []byte(tc.service), nil
-				case "systemd-networkd.socket":
-					return []byte(tc.socket), nil
-				default:
-					t.Fatalf("unexpected unit: %q", args[3])
-					return nil, errors.New("unexpected unit")
-				}
+			observed := 0
+			s.Networkd = func(context.Context) (NetworkdState, error) { observed++; return tc.state, tc.err }
+			s.Host.Run = func(context.Context, string, ...string) ([]byte, error) {
+				t.Fatal("observe must never execute a program")
+				return nil, errors.New("forbidden")
 			}
 			_, err := s.Apply(context.Background(), in)
-			if tc.refusal == "" {
-				if err != nil || !slices.Equal(observed, []string{"systemd-networkd.service", "systemd-networkd.socket"}) {
-					t.Fatalf("dormant vendor definitions: %v; observed %v", err, observed)
-				}
-			} else if err == nil || !strings.Contains(err.Error(), tc.refusal) {
-				t.Fatalf("want %s, got %v", tc.refusal, err)
+			if observed != 1 {
+				t.Fatalf("networkd reads=%d, want1", observed)
+			}
+			if tc.refusal == "" && err != nil || tc.refusal != "" && (err == nil || !strings.Contains(err.Error(), tc.refusal)) {
+				t.Fatalf("want %q, got %v", tc.refusal, err)
 			}
 		})
 	}
-	t.Run("missing runner", func(t *testing.T) {
-		s, in := networkHost(t)
-		place(t, s.Host.Root, "usr/lib/systemd/network/80-container.network", "[Match]\nName=host0\n")
-		if _, err := s.Apply(context.Background(), in); err == nil || !strings.Contains(err.Error(), "network_owner_unmeasured") {
-			t.Fatalf("unmeasured owner: %v", err)
-		}
-	})
+	for _, dir := range []string{"etc", "run"} {
+		t.Run(dir+" intent remains conflicting", func(t *testing.T) {
+			s, in := networkHost(t)
+			place(t, s.Host.Root, "usr/lib/systemd/network/80-container-host0.network", "[Match]\nName=host0\n")
+			place(t, s.Host.Root, dir+"/systemd/network/10-admin.network", "[Match]\nName=ens4\n[Network]\nDHCP=yes\n")
+			s.Networkd = func(context.Context) (NetworkdState, error) {
+				t.Fatal("local intent must refuse before vendor exemption")
+				return NetworkdState{}, nil
+			}
+			s.Host.Run = func(context.Context, string, ...string) ([]byte, error) {
+				t.Fatal("observe ran a program")
+				return nil, errors.New("forbidden")
+			}
+			if _, err := s.Apply(context.Background(), in); err == nil || !strings.Contains(err.Error(), "second_network_owner") {
+				t.Fatal(err)
+			}
+		})
+	}
 }
 
 func TestFirstBoot_DnsSearchIsReadInNetworkManagerOrder(t *testing.T) {

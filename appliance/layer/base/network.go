@@ -30,7 +30,7 @@ type NetworkProfile struct {
 type NetworkReader func(context.Context) ([]NetworkProfile, error)
 
 func (s CloudInitHost) verifyNetwork(ctx context.Context, in Input) error {
-	if err := secondNetworkOwner(ctx, s.Host); err != nil {
+	if err := secondNetworkOwner(ctx, s.Host, s.Networkd); err != nil {
 		return err
 	}
 	if in.Answers.Network.Mode == "static" {
@@ -137,7 +137,7 @@ func sameStrings(a, b []string) bool {
 	return slices.Equal(a, b)
 }
 
-func secondNetworkOwner(ctx context.Context, h Host) error {
+func secondNetworkOwner(ctx context.Context, h Host, networkd NetworkdReader) error {
 	vendorOwnerMeasured := false
 	patterns := []string{"/etc/network/interfaces", "/etc/network/interfaces.d/*", "/etc/sysconfig/network-scripts/ifcfg-*", "/etc/systemd/network/*.network", "/run/systemd/network/*.network", "/usr/lib/systemd/network/*.network", "/etc/netplan/*.yaml", "/etc/netplan/*.yml"}
 	for _, pattern := range patterns {
@@ -173,7 +173,7 @@ func secondNetworkOwner(ctx context.Context, h Host) error {
 				// configuration remains conflicting intent regardless of unit state.
 				if pattern == "/usr/lib/systemd/network/*.network" {
 					if !vendorOwnerMeasured {
-						if err := verifyDormantNetworkd(ctx, h); err != nil {
+						if err := verifyDormantNetworkd(ctx, networkd); err != nil {
 							return err
 						}
 						vendorOwnerMeasured = true
@@ -194,45 +194,47 @@ func secondNetworkOwner(ctx context.Context, h Host) error {
 	return nil
 }
 
-func verifyDormantNetworkd(ctx context.Context, h Host) error {
-	if h.Run == nil {
+func verifyDormantNetworkd(ctx context.Context, reader NetworkdReader) error {
+	if reader == nil {
+		reader = ReadNetworkd
+	}
+	state, err := reader(ctx)
+	if err != nil {
 		return Refuse("network_owner_unmeasured")
 	}
-	for _, unit := range []string{"systemd-networkd.service", "systemd-networkd.socket"} {
-		out, err := h.Run(ctx, "systemctl", "show", "--all", "--property=LoadState,ActiveState,UnitFileState", unit)
-		if err != nil || len(out) > 4096 {
-			return Refuse("network_owner_unmeasured")
-		}
-		properties := make(map[string]string, 3)
-		for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
-			key, value, ok := strings.Cut(line, "=")
-			if !ok || (key != "LoadState" && key != "ActiveState" && key != "UnitFileState") {
+	for _, unit := range []NetworkdUnit{state.Service, state.Socket} {
+		if unit.NotLoaded {
+			if unit.LoadState != "" || unit.ActiveState != "" || unit.Job != 0 {
 				return Refuse("network_owner_unmeasured")
 			}
-			if _, duplicate := properties[key]; duplicate {
+		} else {
+			switch unit.LoadState {
+			case "loaded", "masked", "not-found":
+			default:
 				return Refuse("network_owner_unmeasured")
 			}
-			properties[key] = value
+			if unit.Job != 0 {
+				return Refuse("second_network_owner")
+			}
+			switch unit.ActiveState {
+			case "active", "activating", "reloading", "deactivating":
+				return Refuse("second_network_owner")
+			case "inactive":
+			default:
+				return Refuse("network_owner_unmeasured")
+			}
 		}
-		if len(properties) != 3 {
-			return Refuse("network_owner_unmeasured")
-		}
-		load, active, enabled := properties["LoadState"], properties["ActiveState"], properties["UnitFileState"]
-		if active == "active" || active == "activating" || active == "reloading" || active == "deactivating" {
-			return Refuse("second_network_owner")
-		}
-		if active != "inactive" {
-			return Refuse("network_owner_unmeasured")
-		}
-		if load == "not-found" && enabled == "" {
+		if unit.FileAbsent {
+			if unit.UnitFileState != "" || !unit.NotLoaded && unit.LoadState != "not-found" {
+				return Refuse("network_owner_unmeasured")
+			}
 			continue
 		}
-		if load != "loaded" && load != "masked" {
+		if !unit.NotLoaded && (unit.LoadState == "not-found" || (unit.LoadState == "masked") != (unit.UnitFileState == "masked")) {
 			return Refuse("network_owner_unmeasured")
 		}
-		switch enabled {
+		switch unit.UnitFileState {
 		case "disabled", "masked":
-			continue
 		case "enabled", "enabled-runtime", "linked", "linked-runtime", "alias", "static", "indirect", "generated", "transient":
 			return Refuse("second_network_owner")
 		default:
