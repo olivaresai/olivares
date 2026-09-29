@@ -223,7 +223,7 @@ func (m principalEvidenceMaterial) finalize(
 		if aal == AAL3 {
 			authenticatedAt = m.session.AALAuthenticatedAt.Time()
 		}
-		if !validAuthenticationInstant(authenticatedAt) || authenticatedAt.After(now.Time()) {
+		if !validAuthenticationInstant(authenticatedAt) || afterTransactionClock(authenticatedAt, now) {
 			return Principal{}, time.Time{}, time.Time{}, principalEvidenceUnavailable("authentication instant is malformed", nil)
 		}
 		if !elevatedUntil.IsZero() {
@@ -470,6 +470,18 @@ func validPrincipalDirectoryEpochFact(tenant model.TenantID, fact store.Authoriz
 	return !leased
 }
 
+// transactionClockPrecision is the coarsest precision a store's transaction
+// clock reports: SQLite's engine clock reads milliseconds (PostgreSQL reads
+// microseconds). An instant the application clock stamped inside the same
+// millisecond can read later than the truncated transaction time.
+const transactionClockPrecision = time.Millisecond
+
+// afterTransactionClock reports whether instant t lies after the transaction
+// time now, allowing for the transaction clock's precision.
+func afterTransactionClock(t time.Time, now model.Timestamp) bool {
+	return !t.Before(now.Time().Add(transactionClockPrecision))
+}
+
 func effectiveEvidenceAAL(session model.AuthSession, now model.Timestamp) (int, model.Timestamp, error) {
 	if !defensiveAMRValid(session.AMR) {
 		return 0, model.Timestamp{}, principalEvidenceUnavailable("session AMR is malformed", nil)
@@ -481,7 +493,7 @@ func effectiveEvidenceAAL(session model.AuthSession, now model.Timestamp) (int, 
 		if session.AALAuthenticatedAt == nil {
 			return AAL1, model.Timestamp{}, nil
 		}
-		if !validAuthenticationInstant(session.AALAuthenticatedAt.Time()) || session.AALAuthenticatedAt.Time().After(now.Time()) {
+		if !validAuthenticationInstant(session.AALAuthenticatedAt.Time()) || afterTransactionClock(session.AALAuthenticatedAt.Time(), now) {
 			return 0, model.Timestamp{}, principalEvidenceUnavailable("elevated authentication instant is malformed", nil)
 		}
 		if session.AALExpiresAt == nil || !now.Time().Before(session.AALExpiresAt.Time()) {
