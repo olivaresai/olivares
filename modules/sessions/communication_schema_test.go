@@ -76,26 +76,19 @@ var protocolBindingDescriptorKinds = map[model.Kind]string{
 	protocolSubscriptionEventKind:  protocolSubscriptionEventTable,
 }
 
-// providerProfileDescriptorKinds is the B1 provider-instance manifest — profiles,
-// source→profile bindings, profile-scoped aliases and (v26.10) the provider RECORDS a
-// profile binds to — the sessions descriptors that are neither K1/K2 legacy, K3
-// communication nor K5 protocol. Like K5 they are created by their descriptor and
-// absent from the pre-K3 registration the upgrade tables reopen from; the
-// expression/partial indexes the first three need on the LIVE table are the module
-// migrations 0093–0095 (SQLite) and 0021–0023 (PostgreSQL).
-//
-// ⛔ v26.10 ADDED THE FOURTH, AND THIS MANIFEST IS WHY THAT IS A DECISION RATHER THAN A
-// SIDE EFFECT. A descriptor the module registers and nobody classifies fails
-// TestCommunicationSchemaInventoryIsExactlyTwenty by name — which is exactly what it
-// did when `sessions.provider_record` first landed. The record declares its two
-// unique indexes ON the descriptor (ref, and the active name slot), so unlike its
-// three neighbours it needs no SQL migration of its own; that difference is the
-// reason its row is here with a note instead of silently matching the pattern above.
+// providerProfileDescriptorKinds is the B1 provider-instance manifest: profiles,
+// source bindings, scoped aliases, provider records and the account-home journal.
+// These descriptors are absent from the K1/K2 legacy fixture and are separate
+// from the exact twenty K3 and six K5 descriptors. The first three use the LIVE
+// indexes from migrations 0093-0095 (SQLite)/0021-0023 (PostgreSQL); provider records
+// and account-home operations declare their unique indexes on their descriptors.
+// New kinds must be listed explicitly; an unknown kind still fails the inventory.
 var providerProfileDescriptorKinds = map[model.Kind]string{
-	providerProfileKind: providerProfileTable,
-	providerBindingKind: providerBindingTable,
-	providerAliasKind:   providerAliasTable,
-	providerRecordKind:  providerRecordTable,
+	providerProfileKind:      providerProfileTable,
+	providerBindingKind:      providerBindingTable,
+	providerAliasKind:        providerAliasTable,
+	providerRecordKind:       providerRecordTable,
+	accountHomeOperationKind: accountHomeOperationTable,
 }
 
 type communicationCapturedMigration struct {
@@ -217,6 +210,9 @@ func TestCommunicationSchemaInventoryIsExactlyTwenty(t *testing.T) {
 				if descriptor.Table != table {
 					t.Fatalf("B1 provider profile kind %s table = %q, want %q", descriptor.Kind, descriptor.Table, table)
 				}
+				if defects := descriptor.PrincipalDefects(); len(defects) != 0 {
+					t.Errorf("B1 provider kind %s has incomplete principal declarations: %v", descriptor.Kind, defects)
+				}
 				profileSeen[descriptor.Kind] = struct{}{}
 				continue
 			}
@@ -281,8 +277,8 @@ func TestCommunicationSchemaInventoryIsExactlyTwenty(t *testing.T) {
 		len(protocolSeen) != len(protocolBindingDescriptorKinds) ||
 		len(profileSeen) != len(providerProfileDescriptorKinds) ||
 		len(reg.descriptors) != len(communicationLegacyDescriptorKinds)+len(communicationSchemaEntities)+len(protocolBindingDescriptorKinds)+len(providerProfileDescriptorKinds) {
-		t.Fatalf("registered sessions descriptors = %d (%d legacy + %d K3 + %d K5 + %d B1), want exactly %d + 20 + 6 + 3",
-			len(reg.descriptors), len(legacySeen), len(got), len(protocolSeen), len(profileSeen), len(communicationLegacyDescriptorKinds))
+		t.Fatalf("registered sessions descriptors = %d (%d legacy + %d K3 + %d K5 + %d B1), want exactly %d + 20 + 6 + %d",
+			len(reg.descriptors), len(legacySeen), len(got), len(protocolSeen), len(profileSeen), len(communicationLegacyDescriptorKinds), len(providerProfileDescriptorKinds))
 	}
 
 	if got[handoffKind].Table != "sessions_work_handoff" {

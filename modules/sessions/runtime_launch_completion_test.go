@@ -60,8 +60,56 @@ func TestRuntimeCompletionRetainsOriginalAttemptAcrossResume(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(string(wire), "Completion") || strings.Contains(string(wire), resumed.RuntimeLaunchID.String()) {
+	if runtimeCompletionWireLeak(t, wire, resumed.RuntimeLaunchID) {
 		t.Fatal("in-process witness leaked into the run wire DTO")
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(wire, &fields); err != nil {
+		t.Fatal(err)
+	}
+	var workspacePath string
+	if err := json.Unmarshal(fields["workspace_path"], &workspacePath); err != nil {
+		t.Fatal(err)
+	}
+	if workspacePath != second.WorkspacePath || workspacePath == "" {
+		t.Fatal("completion serialization changed the public working-directory fact")
+	}
+}
+
+// The harness's temporary workspace includes this test's name (and therefore
+// "Completion"). That inert value is not the in-process field. Inspect field
+// names structurally while still rejecting the launch UUID anywhere on the wire.
+func runtimeCompletionWireLeak(t *testing.T, wire []byte, launch model.ID) bool {
+	t.Helper()
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(wire, &fields); err != nil {
+		t.Fatal(err)
+	}
+	for key := range fields {
+		if strings.EqualFold(key, "completion") {
+			return true
+		}
+	}
+	return strings.Contains(string(wire), launch.String())
+}
+
+func TestRuntimeCompletionWireOracleDistinguishesValuesFromFields(t *testing.T) {
+	launch := model.ID("0199abc0-0000-7000-8000-000000000001")
+	for _, tc := range []struct {
+		name string
+		wire string
+		leak bool
+	}{
+		{"public workspace value", `{"workspace_path":"/tmp/TestRuntimeCompletion/work"}`, false},
+		{"unexported witness body still exposed as a field", `{"Completion":{}}`, true},
+		{"lowercase witness field", `{"completion":{}}`, true},
+		{"launch UUID under another field", `{"unexpected":"` + launch.String() + `"}`, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := runtimeCompletionWireLeak(t, []byte(tc.wire), launch); got != tc.leak {
+				t.Fatalf("wire leak = %v, want %v", got, tc.leak)
+			}
+		})
 	}
 }
 

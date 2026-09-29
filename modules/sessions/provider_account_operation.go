@@ -33,15 +33,15 @@ const (
 
 func registerAccountHomeOperation(reg store.ExtensionRegistry) error {
 	fields := []model.FieldSpec{
-		{Name: colHOKey, Kind: model.KindText, Principal: model.None("a caller's bounded retry identity, matched only to the same operation: provider_account_home.go:89-134, provider_account_operation.go:73-89")},
-		{Name: colHOEnv, Kind: model.KindText, Principal: pdeclNoneEnvRef},
-		{Name: colHODriver, Kind: model.KindText, Principal: pdeclNoneDriverKey},
-		{Name: colHORequested, Kind: model.KindText, Principal: model.None("an optional account label compared only for retry intent: provider_account_home.go:81-87, provider_account_operation.go:84-89")},
-		{Name: colHOName, Kind: model.KindText, Principal: model.None("the allocated provider label, reserved to avoid a second allocation: provider_account_home.go:120-134, provider_account_operation.go:103-111")},
-		{Name: colHORef, Kind: model.KindText, Principal: pdeclNoneProfileRef},
-		{Name: colHORoot, Kind: model.KindText, Principal: model.None("the canonical filesystem root planned for this operation: provider_account_files.go:188")},
-		{Name: colHOToken, Kind: model.KindText, Principal: model.None("a newly minted filesystem custody nonce, never an authentication credential: provider_account_home.go:133, provider_account_files.go:188")},
-		{Name: colHOState, Kind: model.KindText, Principal: model.None("reserved or complete, validated by the retirement reader: provider_account_home.go:177-185, provider_account_retirement.go:65-97")},
+		{Name: colHOKey, Kind: model.KindText, Principal: model.None("a caller's bounded retry identity, matched only to the same operation: provider_account_operation.go:76, provider_account_retirement.go:75")},
+		{Name: colHOEnv, Kind: model.KindText, Principal: model.None("an execution-environment reference used to scope reservations and home custody: provider_account_operation.go:76, provider_account_operation.go:100, provider_account_files.go:196")},
+		{Name: colHODriver, Kind: model.KindText, Principal: model.None("a provider driver key compared only with the original retry intent: provider_account_operation.go:86, provider_account_retirement.go:74-75")},
+		{Name: colHORequested, Kind: model.KindText, Principal: model.None("an optional account label compared only for retry intent: provider_account_operation.go:86, provider_account_retirement.go:81-82")},
+		{Name: colHOName, Kind: model.KindText, Principal: model.None("the allocated provider label, reserved to avoid a second allocation: provider_account_operation.go:107, provider_account_home.go:177")},
+		{Name: colHORef, Kind: model.KindText, Principal: model.None("a provider profile reference used to recover registration and home custody, not a human identity: provider_account_home.go:164, provider_account_files.go:196")},
+		{Name: colHORoot, Kind: model.KindText, Principal: model.None("the canonical filesystem root planned for this operation: provider_account_files.go:190-191")},
+		{Name: colHOToken, Kind: model.KindText, Principal: model.None("a filesystem custody nonce read as a staging name and ownership marker, never an authentication credential: provider_account_files.go:201-205, provider_account_retirement.go:90")},
+		{Name: colHOState, Kind: model.KindText, Principal: model.None("reserved or complete, validated by the retirement reader: provider_account_home.go:163-173, provider_account_retirement.go:96-97")},
 	}
 	return reg.Register(model.EntityDescriptor{Kind: accountHomeOperationKind, Table: accountHomeOperationTable, Fields: fields, Indexes: []model.IndexSpec{
 		{Name: "home_operation_key", Columns: []string{model.ColTenantID, colHOEnv, colHOKey}, Unique: true},
