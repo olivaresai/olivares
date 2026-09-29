@@ -239,13 +239,14 @@ func (s *Server) addSupportSecretMetadata(ctx context.Context, assembler *suppor
 		raw.WriteString("no secrets stored\n")
 	} else {
 		tw := tabwriter.NewWriter(&raw, 0, 2, 2, ' ', 0)
-		_, _ = fmt.Fprintln(tw, "NAME\tHINT\tDESCRIPTION\tUPDATED")
+		// Portable diagnostics must not expose value-derived fingerprints.
+		_, _ = fmt.Fprintln(tw, "NAME\tDESCRIPTION\tUPDATED")
 		for _, view := range views {
 			updated := ""
 			if !view.UpdatedAt.IsZero() {
 				updated = view.UpdatedAt.String()
 			}
-			_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", view.Name, view.Hint, view.Description, updated)
+			_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\n", view.Name, view.Description, updated)
 		}
 		if err := tw.Flush(); err != nil {
 			return fmt.Errorf("support bundle: format secret metadata: %w", err)

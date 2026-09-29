@@ -58,7 +58,7 @@ func buildCoreMigrations(
 		if credentialBindingRelation(d.Kind) {
 			continue
 		}
-		d = beforeConsentCustody(d)
+		d = beforeConsentCustody(beforeAuthenticationFreshness(d))
 		entity = append(entity, dia.CreateTableStmts(d)...)
 	}
 	migrations := []migrate.Migration{
@@ -141,6 +141,7 @@ func buildCoreMigrationPlan(
 		coreLoginCapabilityMigration(dia, userAuthorityRoles...),
 		coreConsentCustodyMigration(),
 		coreCredentialBindingMigration(),
+		coreAuthenticationFreshnessMigration(),
 	)
 }
 

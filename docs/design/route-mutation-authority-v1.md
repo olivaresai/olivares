@@ -20,13 +20,21 @@ permission to write.
 
 There is no exported constructor, no mutable field, no `AllowWitness`, no `FactsFor`, no
 JSON codec and no boolean permit. A value can only come out of `AuthorizeRouteMutation`,
-and the only question it answers is `AuthorityFor`. The empty value always refuses.
+and its authority question is answered by `AuthorityFor`. `MetadataFor` is a limited
+exception for inert attribution metadata, validated through that same accessor; it does
+not expose the witness. The empty value always refuses.
 
 ## Interface
 
 ```go
 func (az *Authorizer) AuthorizeRouteMutation(ctx context.Context, req Request) (RouteMutationAuthorization, error)
 func (a RouteMutationAuthorization) AuthorityFor(now time.Time, req Request) (store.AuthoritySnapshotBundle, error)
+func (a RouteMutationAuthorization) MetadataFor(now time.Time, req Request) (RouteMutationMetadata, error)
+
+type RouteMutationMetadata struct {
+    FreshUntil time.Time
+    EvidenceDigest [32]byte
+}
 ```
 
 This type is separate from `RouteReadDecision` and is not implemented by calling
@@ -74,6 +82,12 @@ On success it returns the canonical witness facts plus the captured human User f
 no User fences for a token — in fresh slice storage. Every refusal is an empty bundle and
 `ErrRouteUndecided`; a partial bundle is never returned. It does not refresh a principal,
 query a database, advance an epoch, extend a lifetime or make an external call.
+
+`MetadataFor` calls `AuthorityFor` for the exact request and instant, propagates its
+refusal with zero metadata, and returns only the original validated witness deadline
+and digest. It performs no second authorization. Editing this value cannot alter the
+retained decision. These fields identify that decision for attribution; they expose no
+outcome, permission, facts or witness and never replace the complete bundle and barrier.
 
 A copied valid value is still evidence for the same question. MA1 does not claim single
 consumption; the durable managed-stop intent owns deduplication and dispatch ambiguity.

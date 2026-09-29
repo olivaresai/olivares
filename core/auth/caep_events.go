@@ -392,6 +392,7 @@ func degradeScopedSessions(ctx context.Context, as store.AuthScope, user model.I
 		}
 		s.AAL = 1
 		s.AALExpiresAt = nil
+		s.AALAuthenticatedAt = nil
 		if _, err := as.Sessions().Update(ctx, s); err != nil {
 			return err
 		}
@@ -437,6 +438,7 @@ func (a *Authenticator) DegradeSessionAssurance(ctx context.Context, actor Princ
 			}
 			s.AAL = 1
 			s.AALExpiresAt = nil
+			s.AALAuthenticatedAt = nil
 			if _, err := as.Sessions().Update(ctx, s); err != nil {
 				return err
 			}

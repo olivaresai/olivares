@@ -46,8 +46,12 @@ var ErrCoreSchemaVersionAhead = errors.New("sqlstore: the database records a cor
 //
 // It advances to v15 with durable credential bindings
 // (credentialbindingmigration.go), so a v14 binary refuses a store whose workflow
-// runs resolve them. The compiled plan is 1..11, 13, 14, 15.
-const coreSupportedMigrationVersion = coreCredentialBindingMigrationVersion
+// runs resolve them.
+// v17 adds the durable authentication witness. v16 is permanently unregistered:
+// introducing it after v17 would invalidate the ordered prefix of deployed histories.
+// E12 must use an ordinal greater than the greatest registered version when it lands.
+// The plan and preflight use registered versions, not every integer below this ceiling.
+const coreSupportedMigrationVersion = coreAuthenticationFreshnessMigrationVersion
 
 // ErrCoreSchemaVersionUnrecognized is returned before any boot DDL when the database
 // records a version at or below the supported ceiling that this binary's compiled plan
@@ -66,7 +70,7 @@ func compiledCoreMigrationVersions(dia dialect.Dialect) map[int64]struct{} {
 }
 
 // compiledCoreMigrationVersionOrder is the compiled plan's versions in ascending order
-// (1..11, 13, 14, 15). A legitimate tracked history is an ordered prefix of it.
+// (1..11, 13, 14, 15, 17). A legitimate tracked history is an ordered prefix of it.
 func compiledCoreMigrationVersionOrder(dia dialect.Dialect) []int64 {
 	set := compiledCoreMigrationVersions(dia)
 	out := make([]int64, 0, len(set))
@@ -82,7 +86,7 @@ func compiledCoreMigrationVersionOrder(dia dialect.Dialect) []int64 {
 // separate `olivares` module (through core/engine): derived from the same pure plan
 // constructor the preflight uses, building migration values and executing nothing, so it is
 // not a second registry (ROOT-CONSTRUCTION-R5-1 §2). The result is the plan, not an integer
-// range: v12 is reserved and unregistered.
+// range: v12 is reserved and v16 is permanently unregistered.
 func CompiledCoreMigrationVersions(engine store.Engine) ([]int, error) {
 	dia, ok := dialect.New(engine)
 	if !ok {

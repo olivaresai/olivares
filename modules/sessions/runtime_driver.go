@@ -1033,6 +1033,23 @@ func (m *Module) driverInput(ctx context.Context, lr *liveRun, text string) (boo
 	if err := m.assertRunAuthority(ctx, lr); err != nil {
 		return false, err
 	}
+	return m.driverInputAdmitted(ctx, lr, text, lr.launchID, lr.claim.SID)
+}
+
+// driverInputAdmitted is the I/O half after known authority commit under the run
+// lock. Existing callers enter through driverInput; checked delivery establishes
+// the same authority in its final transaction and must not open another one here.
+func (m *Module) driverInputAdmitted(ctx context.Context, lr *liveRun, text string, launch model.ID, sid string) (bool, error) {
+	if lr == nil || lr.session == nil {
+		return false, conflictErr("this session has no provider protocol driver")
+	}
+	if state := lr.session.AuthState(); state == AuthStateRequired {
+		return false, &runErr{http.StatusConflict, "the provider reports that this profile is not authenticated (auth_required); a turn cannot be started"}
+	}
+	// AuthState may wait on the driver's mutex. Check again after that wait.
+	if err := m.runtimeInputLiveCurrent(ctx, lr, launch, sid); err != nil {
+		return false, err
+	}
 	return lr.session.Input(ctx, text)
 }
 

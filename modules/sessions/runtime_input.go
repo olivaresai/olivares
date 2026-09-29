@@ -9,6 +9,9 @@ import (
 	"context"
 	"crypto/sha256"
 	"errors"
+	"maps"
+	"reflect"
+	"slices"
 	"strings"
 	"time"
 
@@ -166,9 +169,27 @@ func (m *Module) ValidateRuntimeInputTargetInScope(ctx context.Context, sc store
 	return err
 }
 
+// ValidateRuntimeInputModeInScope checks target custody and transport compatibility
+// before the caller records input. The caller must already hold its complete
+// directory/account authority barrier in this same mutation Scope. This method
+// neither authorizes the caller nor sends input; supported validation may touch
+// the Claim through the existing target guard. Success is not a transferable
+// permit: final delivery revalidates the target and mode under the run lock.
+// Text denotes an owned provider turn; Raw denotes a stream-json frame. This
+// method does not convert terminal input or validate payload contents.
+func (m *Module) ValidateRuntimeInputModeInScope(ctx context.Context, sc store.Scope, target RuntimeInputTarget, mode RuntimeInputMode) error {
+	switch mode {
+	case RuntimeInputText, RuntimeInputRaw:
+		_, err := m.runtimeInputTargetInScope(ctx, sc, target, mode)
+		return err
+	default:
+		return ErrRuntimeInputUnsupported
+	}
+}
+
 // An empty mode validates target custody only, as required by the exported
-// in-scope validator. Delivery supplies its validated mode so unsupported input
-// is rejected before either work authority or Claim can enter the write set.
+// target-only validator. Mode validation and delivery supply a closed mode so
+// unsupported input is rejected before work authority or Claim enters the write set.
 func (m *Module) runtimeInputTargetInScope(ctx context.Context, raw store.Scope, target RuntimeInputTarget, mode RuntimeInputMode) (model.Record, error) {
 	if err := validateRuntimeInputTarget(target); err != nil {
 		return nil, err
@@ -354,8 +375,13 @@ func (m *Module) DeliverRuntimeInput(ctx context.Context, request RuntimeInputRe
 	} else {
 		attempted, err = m.sendInputLoaded(ctx, request.Target.Tenant, request.Target.RunRef, request.Raw, rec)
 	}
+	return m.settleRuntimeInputResult(ctx, request, attempted, err)
+}
+
+// settleRuntimeInputResult records the observed transport outcome; it cannot send.
+func (m *Module) settleRuntimeInputResult(ctx context.Context, request RuntimeInputRequest, attempted bool, err error) (RuntimeInputResult, error) {
 	if !attempted {
-		return refused, ErrRuntimeInputRefused
+		return RuntimeInputResult{Outcome: RuntimeInputRefused}, ErrRuntimeInputRefused
 	}
 	if w := request.Target.Work; w != nil {
 		generation := runtimeWorkGeneration{itemID: w.WorkItemID, holderSID: w.HolderSID, fence: w.LeaseFence}
@@ -371,4 +397,265 @@ func (m *Module) DeliverRuntimeInput(ctx context.Context, request RuntimeInputRe
 		return RuntimeInputResult{Outcome: RuntimeInputUnknown, Attempted: attempted}, ErrRuntimeInputUnknown
 	}
 	return RuntimeInputResult{Outcome: RuntimeInputAccepted, Attempted: attempted}, nil
+}
+
+// RuntimeInputChecks restricts one otherwise-authorized delivery. Both methods
+// run in the port's final transaction, on the same Scope: BeforeTarget follows
+// the complete directory/account barrier; BeforeSend follows target/work/Claim.
+// Implementations must not open another transaction, retain the Scope, change
+// target authority or perform external I/O. Returning nil grants no authority.
+type RuntimeInputChecks interface {
+	BeforeTarget(context.Context, store.Scope) error
+	BeforeSend(context.Context, store.Scope) error
+}
+
+const maxCheckedRuntimeInputLease = 250 * time.Millisecond
+
+// DeliverRuntimeInputChecked composes restrictive checks with the last authority
+// transaction before delivery. The caller supplies the ORIGINAL request context,
+// whose finite deadline has at most 250ms remaining and is bounded by its original
+// request lease. This entry ceiling cannot establish when an external lease began.
+// No wait creates or extends a lease, and no callback receives a transport handle.
+//
+// The order is caller-owned exclusions, run lock, complete directory/account
+// barrier, BeforeTarget, target/work/Claim, BeforeSend, known commit, then I/O.
+// No database lock spans I/O. The existing Process contract must honor the same
+// deadline; an internal driver mutex may delay return without authorizing a late
+// write. This method is not a receiver-side instantaneous revocation protocol.
+func (m *Module) DeliverRuntimeInputChecked(ctx context.Context, request RuntimeInputRequest, checks RuntimeInputChecks) (RuntimeInputResult, error) {
+	refused := RuntimeInputResult{Outcome: RuntimeInputRefused}
+	if ctx == nil || m == nil || m.data == nil || m.rt == nil || nilRuntimeInputChecks(checks) {
+		return refused, ErrRuntimeInputAuthority
+	}
+	deadline, ok := ctx.Deadline()
+	if !ok || deadline.IsZero() || time.Until(deadline) > maxCheckedRuntimeInputLease {
+		return refused, ErrRuntimeInputAuthority
+	}
+	if err := runtimeInputDeadline(ctx, deadline); err != nil {
+		return refused, err
+	}
+	request.Raw = bytes.Clone(request.Raw)
+	if request.Target.Work != nil {
+		work := *request.Target.Work
+		request.Target.Work = &work
+	}
+	request.Authority.Entry.Principal.AMR = slices.Clone(request.Authority.Entry.Principal.AMR)
+	request.Authority.Entry.Resource.Extra = maps.Clone(request.Authority.Entry.Resource.Extra)
+	if err := validateRuntimeInputTarget(request.Target); err != nil {
+		return refused, err
+	}
+	switch request.Mode {
+	case RuntimeInputText:
+		if len(request.Raw) != 0 || strings.TrimSpace(request.Text) == "" || !boundedText(request.Text, 1, maxWorkTextInputBytes) {
+			return refused, ErrRuntimeInputRefused
+		}
+	case RuntimeInputRaw:
+		if request.Text != "" || len(request.Raw) == 0 || len(request.Raw) > maxWorkTextInputBytes || bytes.ContainsAny(request.Raw, "\r\n") {
+			return refused, ErrRuntimeInputRefused
+		}
+	default:
+		return RuntimeInputResult{Outcome: RuntimeInputUnsupported}, ErrRuntimeInputUnsupported
+	}
+	release, err := m.rt.lockRunContext(ctx, liveKey(request.Target.Tenant, request.Target.RunRef))
+	if err != nil {
+		return refused, err
+	}
+	defer release()
+	var rec model.Record
+	var admitted *liveRun
+	err = m.data.Mutate(ctx, request.Target.Tenant, func(sc store.Scope) error {
+		clock, ok := sc.(store.TransactionClock)
+		if !ok {
+			return ErrRuntimeInputAuthority
+		}
+		refresh := func() (store.AuthoritySnapshotBundle, error) {
+			if err := runtimeInputDeadline(ctx, deadline); err != nil {
+				return store.AuthoritySnapshotBundle{}, err
+			}
+			now, err := clock.TransactionNow(ctx)
+			if err != nil {
+				return store.AuthoritySnapshotBundle{}, err
+			}
+			return runtimeInputCompleteAuthority(now.Time(), deadline, request)
+		}
+		bundle, err := refresh()
+		if err != nil {
+			return err
+		}
+		// Final owner checks may read governed state whose writers advance this
+		// epoch without taking directory admission. Pin the actual fact along
+		// with every retained proof in the ONE surrounding authority barrier.
+		epochs, ok := sc.(store.AuthorizationEpochReader)
+		if !ok {
+			return ErrRuntimeInputAuthority
+		}
+		epoch, err := epochs.ReadAuthorizationEpoch(ctx)
+		if err != nil {
+			return err
+		}
+		if epoch.Kind != model.AuthorizationEpochKind || epoch.ID != model.ID(request.Target.Tenant) || epoch.Version < 1 {
+			return ErrRuntimeInputAuthority
+		}
+		bundle, err = auth.MergeAuthoritySnapshotBundles(bundle, store.AuthoritySnapshotBundle{Facts: []store.AuthorizationFactRef{epoch}})
+		if err != nil {
+			return err
+		}
+		barrier, ok := sc.(store.DirectoryAuthoritySnapshotLocker)
+		if !ok {
+			return ErrRuntimeInputAuthority
+		}
+		if err := barrier.LockDirectoryAuthoritySnapshot(ctx, bundle); err != nil {
+			return err
+		}
+		if _, err := refresh(); err != nil {
+			return err
+		}
+		if err := checks.BeforeTarget(ctx, sc); err != nil {
+			return ErrRuntimeInputRefused
+		}
+		if _, err := refresh(); err != nil {
+			return err
+		}
+		admitted, ok = m.rt.getLive(request.Target.Tenant, request.Target.RunRef)
+		if !ok {
+			return ErrRuntimeInputTarget
+		}
+		rec, err = m.runtimeInputTargetInScope(ctx, sc, request.Target, request.Mode)
+		if err != nil {
+			return err
+		}
+		if err := checks.BeforeSend(ctx, sc); err != nil {
+			return ErrRuntimeInputRefused
+		}
+		if _, err := refresh(); err != nil {
+			return err
+		}
+		// The Claim is already in this transaction's write set. CAS alone does
+		// not keep a short lease alive while BeforeSend waits: the original
+		// deadline must also fit the SAME Claim, never a newly acquired lease.
+		claim, found, err := findClaim(ctx, sc, admitted.claim.SID)
+		if err != nil {
+			return err
+		}
+		if !found {
+			return ErrRuntimeInputTarget
+		}
+		if err := assertFence(claimFenceState(claim), fenceToken{Holder: admitted.claim.Holder, Fence: admitted.claim.Fence}, deadline); err != nil {
+			return err
+		}
+		return m.runtimeInputLiveCurrent(ctx, admitted, request.Target.ExpectedLaunch, request.Target.ExpectedSID)
+	})
+	if err != nil {
+		if errors.Is(err, store.ErrCommitOutcomeUnknown) {
+			return RuntimeInputResult{Outcome: RuntimeInputUnknown}, errors.Join(ErrRuntimeInputUnknown, store.ErrCommitOutcomeUnknown)
+		}
+		if errors.Is(err, ErrRuntimeInputUnsupported) {
+			return RuntimeInputResult{Outcome: RuntimeInputUnsupported}, ErrRuntimeInputUnsupported
+		}
+		return refused, err
+	}
+	if err := runtimeInputDeadline(ctx, deadline); err != nil {
+		return refused, err
+	}
+	if _, err := runtimeInputCompleteAuthority(m.now(), deadline, request); err != nil {
+		return refused, err
+	}
+	if err := m.runtimeInputLiveCurrent(ctx, admitted, request.Target.ExpectedLaunch, request.Target.ExpectedSID); err != nil {
+		return refused, err
+	}
+	var live *liveRun
+	if request.Mode == RuntimeInputText {
+		live, err = m.textInputLive(request.Target.Tenant, request.Target.RunRef, rec)
+	} else {
+		live, err = m.rawInputLive(request.Target.Tenant, request.Target.RunRef, request.Raw, rec)
+	}
+	if err != nil || live != admitted {
+		return refused, ErrRuntimeInputTarget
+	}
+	var attempted bool
+	if request.Mode == RuntimeInputText {
+		attempted, err = m.driverInputAdmitted(ctx, live, request.Text, request.Target.ExpectedLaunch, request.Target.ExpectedSID)
+	} else {
+		attempted, err = m.sendInputAdmitted(ctx, live, request.Raw, request.Target.ExpectedLaunch, request.Target.ExpectedSID)
+	}
+	if attempted && err == nil {
+		err = runtimeInputDeadline(ctx, deadline)
+	}
+	return m.settleRuntimeInputResult(ctx, request, attempted, err)
+}
+
+func nilRuntimeInputChecks(checks RuntimeInputChecks) bool {
+	if checks == nil {
+		return true
+	}
+	value := reflect.ValueOf(checks)
+	switch value.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+		return value.IsNil()
+	default:
+		return false
+	}
+}
+
+func runtimeInputDeadline(ctx context.Context, deadline time.Time) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if !time.Now().Before(deadline) {
+		return context.DeadlineExceeded
+	}
+	return nil
+}
+
+// All evidence is retained original evidence. Merging neither refreshes it nor
+// substitutes a newer source. The original deadline must fit every proof/lease.
+func runtimeInputCompleteAuthority(now, deadline time.Time, request RuntimeInputRequest) (store.AuthoritySnapshotBundle, error) {
+	a := request.Authority
+	p := a.Entry.Principal
+	evidence, ok := p.AuthenticationEvidence()
+	if !ok {
+		return store.AuthoritySnapshotBundle{}, ErrRuntimeInputAuthority
+	}
+	authenticated, err := evidence.AuthorityFor(now, p, request.Target.Tenant)
+	if err != nil {
+		return store.AuthoritySnapshotBundle{}, err
+	}
+	authorized, err := a.AuthorityFor(now, request.Target)
+	if err != nil {
+		return store.AuthoritySnapshotBundle{}, err
+	}
+	entry, err := a.EntryAuthorization.MetadataFor(now, a.Entry)
+	if err != nil {
+		return store.AuthoritySnapshotBundle{}, err
+	}
+	run, err := a.RunAuthorization.MetadataFor(now, RuntimeInputRunQuestion(p, request.Target))
+	if err != nil {
+		return store.AuthoritySnapshotBundle{}, err
+	}
+	if deadline.After(evidence.FreshUntil) || deadline.After(entry.FreshUntil) || deadline.After(run.FreshUntil) {
+		return store.AuthoritySnapshotBundle{}, ErrRuntimeInputAuthority
+	}
+	if w := request.Target.Work; w != nil {
+		expiry, err := time.Parse(time.RFC3339Nano, w.LeaseExpiresAt)
+		if err != nil || deadline.After(expiry) {
+			return store.AuthoritySnapshotBundle{}, ErrRuntimeInputAuthority
+		}
+	}
+	return auth.MergeAuthoritySnapshotBundles(authenticated, authorized)
+}
+
+// runtimeInputLiveCurrent rechecks the original identity after waits. The run
+// operation lock is held by the caller; this is not a transferable authority.
+func (m *Module) runtimeInputLiveCurrent(ctx context.Context, live *liveRun, launch model.ID, sid string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if live == nil || live.launchID != launch || live.claim.SID != sid {
+		return ErrRuntimeInputTarget
+	}
+	current, ok := m.rt.getLive(live.tenant, live.runRef)
+	if !ok || current != live {
+		return ErrRuntimeInputTarget
+	}
+	return nil
 }

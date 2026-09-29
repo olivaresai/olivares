@@ -272,22 +272,18 @@ func TestNilAuthorizerDeniesRatherThanAllows(t *testing.T) {
 	}
 }
 
-// TestAuthenticationFactsOmitsAuthenticatedAt is a test about an ABSENCE, and it exists so
-// the absence stays deliberate.
-//
-// The architecture wants a five-minute freshness on the AAL3 ceremony. The engine cannot
-// answer it today and must not invent it: a zero timestamp in a struct called
-// "AuthenticationFacts" reads as "authenticated at the epoch" to every caller that forgets
-// the zero check, which either always denies or, with the comparison written the other
-// way, always passes. When model.AuthSession gains AALAuthenticatedAt, this test is the
-// one to change.
-func TestAuthenticationFactsOmitsAuthenticatedAt(t *testing.T) {
-	f := AuthenticationFactsOf(auth.Principal{AAL: auth.AAL3})
+// Scalar AAL facts cannot replace sealed authentication freshness.
+func TestAuthenticationFactsDoNotMintAuthenticationEvidence(t *testing.T) {
+	p := auth.Principal{AAL: auth.AAL3}
+	f := AuthenticationFactsOf(p)
 	if f.AAL != auth.AAL3 {
 		t.Errorf("AAL = %d, want %d", f.AAL, auth.AAL3)
 	}
 	if f.HasCredential {
 		t.Error("a synthetic principal reported an established credential reference")
+	}
+	if _, ok := p.AuthenticationEvidence(); ok {
+		t.Error("scalar assurance manufactured authentication evidence")
 	}
 }
 

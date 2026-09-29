@@ -18,6 +18,8 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -400,13 +402,18 @@ func TestSupportBundleSecretInventoryListsMetadataWithoutOpeningValue(t *testing
 		t.Fatal(err)
 	}
 	secretStore := auth.NewSecretStore(eng.store, supportInventoryTestSealer{})
-	_, err = secretStore.Put(context.Background(), mustTestOperator("support-test"), auth.GlobalSecretScope, "support/api-token", supportSeededSecret, "support test credential 4111111111111111")
+	view, err := secretStore.Put(context.Background(), mustTestOperator("support-test"), auth.GlobalSecretScope, "support/api-token", supportSeededSecret, "support test credential 4111111111111111")
 	if err != nil {
 		_ = eng.Close()
 		t.Fatal(err)
 	}
 	if err := eng.Close(); err != nil {
 		t.Fatal(err)
+	}
+	sum := sha256.Sum256([]byte(supportSeededSecret))
+	hint := hex.EncodeToString(sum[:])[:12]
+	if view.Hint != hint || view.UpdatedAt.IsZero() {
+		t.Fatalf("secret fixture lacks its computed fingerprint or update time: %+v", view)
 	}
 
 	outPath := filepath.Join(t.TempDir(), "inventory.tar.gz")
@@ -417,15 +424,25 @@ func TestSupportBundleSecretInventoryListsMetadataWithoutOpeningValue(t *testing
 	}
 	entries := readSupportTestBundle(t, outPath)
 	inventory := string(entries["secrets/inventory.txt"])
-	if !strings.Contains(inventory, "support/api-token") || !strings.Contains(inventory, "support test credential") {
-		t.Fatalf("inventory lacks non-secret metadata:\n%s", inventory)
+	lines := strings.Split(strings.TrimSpace(inventory), "\n")
+	if len(lines) != 2 {
+		t.Fatalf("secret inventory = %q, want header and one row", lines)
 	}
-	if strings.Contains(inventory, supportSeededSecret) {
-		t.Fatalf("inventory opened and leaked the stored value:\n%s", inventory)
+	columns := regexp.MustCompile(` {2,}`)
+	want := [][]string{
+		{"NAME", "DESCRIPTION", "UPDATED"},
+		{"support/api-token", "support test credential [redacted:credit-card]", view.UpdatedAt.String()},
+	}
+	for i, line := range lines {
+		if got := columns.Split(strings.TrimSpace(line), -1); !reflect.DeepEqual(got, want[i]) {
+			t.Errorf("inventory row %d = %q, want %q", i, got, want[i])
+		}
 	}
 	for name, contents := range entries {
-		if strings.Contains(string(contents), "4111111111111111") {
-			t.Fatalf("inventory credit card leaked in %s", name)
+		for _, forbidden := range []string{supportSeededSecret, hint, "4111111111111111"} {
+			if strings.Contains(string(contents), forbidden) {
+				t.Errorf("support bundle entry %s disclosed the synthetic value, fingerprint or credit card", name)
+			}
 		}
 	}
 	if !strings.Contains(inventory, "[redacted:credit-card]") {

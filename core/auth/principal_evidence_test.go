@@ -408,6 +408,10 @@ func newPrincipalEvidenceFixtureConfig(t *testing.T, cfg store.Config) *principa
 		t.Fatalf("seed authenticated credentials: %v", err)
 	}
 	f.sessRaw, f.tokRaw = sessionCred.Token, tokenCred.Token
+	// The observed database instant follows creation of the rows it attests.
+	// A pre-fixture instant would make CreatedAt a future authentication event.
+	f.now = time.Now().UTC()
+	f.hooks.now = model.NewTimestamp(f.now)
 	return f
 }
 
@@ -1620,6 +1624,8 @@ func TestResolvePrincipalScopeClipsContextCredentialAndElevatedAALWindows(t *tes
 		session.AAL = AAL3
 		session.AMR = []string{"pwd", "webauthn"}
 		session.AALExpiresAt = &elevatedUntil
+		stamp := model.NewTimestamp(f.now)
+		session.AALAuthenticatedAt = &stamp
 		updated, err := as.Sessions().Update(f.ctx, session)
 		f.session = updated
 		return err
@@ -1725,6 +1731,8 @@ func TestResolvePrincipalScopeDegradesExpiredElevatedAAL(t *testing.T) {
 				session.AAL = AAL3
 				session.AMR = []string{"pwd", "webauthn"}
 				session.AALExpiresAt = &expiredElevatedUntil
+				stamp := model.NewTimestamp(f.now.Add(-time.Minute))
+				session.AALAuthenticatedAt = &stamp
 				f.session, err = as.Sessions().Update(f.ctx, session)
 				return err
 			}); err != nil {

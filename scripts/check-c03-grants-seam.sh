@@ -25,9 +25,9 @@ WIRE=cmd/olivares/seatcapwire.go
 
 grep -Fq 'func (h *licenseHolder) grants() ([]license.Grant, bool)' "$HOLD" \
   || fail "licenseHolder lost grants()"
-grep -q 'bindEnterpriseEntitlement(licHolder.grants)' "$BOOT" \
-  || fail "boot.go does not bind licHolder.grants"
-grep -q 'func bindEnterpriseEntitlement(_ licenseGrantsFunc) {}' "$NOENT" \
+grep -Fq 'bindEnterpriseEntitlement(licHolder.grants, licHolder)' "$BOOT" \
+  || fail "boot.go does not bind licHolder.grants and the same live holder"
+grep -Fq 'func bindEnterpriseEntitlement(_ licenseGrantsFunc, _ *licenseHolder) {}' "$NOENT" \
   || fail "AGPL bindEnterpriseEntitlement is not a no-op"
 grep -q 'type licenseGrantsFunc' "$WIRE" \
   || fail "licenseGrantsFunc seam disappeared"

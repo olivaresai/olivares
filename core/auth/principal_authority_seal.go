@@ -18,14 +18,14 @@ import (
 )
 
 // principalAuthoritySealDomain is written verbatim as the first bytes of every
-// v3 preimage. The trailing NUL is part of the domain, not a separator supplied
-// by the encoder. v3 is v2 with the account's standing appended: its tenant
-// exclusions, the session's tenant scope and the retirement floors.
-const principalAuthoritySealDomain = "olivares.auth.principal-authority-seal.v3\x00"
+// v4 preimage. The trailing NUL is part of the domain, not a separator supplied
+// by the encoder. v4 appends the durable authentication instant to v3's account
+// standing, identity and complete authority provenance.
+const principalAuthoritySealDomain = "olivares.auth.principal-authority-seal.v4\x00"
 
 var errInvalidPrincipalAuthoritySeal = errors.New("auth: invalid principal authority seal input")
 
-// The v3 encoding has a fixed field order and a closed set of type tags. Every
+// The v4 encoding has a fixed field order and a closed set of type tags. Every
 // variable-width value carries an unsigned 64-bit big-endian byte length; every
 // collection carries an unsigned 64-bit big-endian element count. Integers are
 // fixed-width two's-complement big-endian values. Maps and authority sets are
@@ -78,7 +78,7 @@ func computePrincipalAuthoritySeal(p Principal) ([sha256.Size]byte, error) {
 	w.str(p.localSubject)
 	// A resolved principal must carry no local attribution. Encode the semantic
 	// zero explicitly so adding a local shape to a future protocol requires a
-	// new domain/version rather than silently changing v3.
+	// new domain/version rather than silently changing v4.
 	w.nilValue()
 	w.boolean(p.localSystem)
 	w.ref(p.credentialRef)
@@ -97,6 +97,7 @@ func computePrincipalAuthoritySeal(p Principal) ([sha256.Size]byte, error) {
 	w.tenantSet(p.excluded)
 	w.tenant(p.sessionScope)
 	w.floorMap(p.floors)
+	w.instant(p.evidence.authenticatedAt)
 	return w.sum(), nil
 }
 
@@ -112,7 +113,7 @@ func validPrincipalAuthoritySeal(p Principal) bool {
 // resolver can reconstruct: a human session, an ordinary bound token, a
 // canonical agent-OBO token, or one of the two server-authored runtime tokens.
 // Synthetic, ambiguous delegation/act-as, superadmin and local principals
-// cannot acquire a valid v3 seal.
+// cannot acquire a valid v4 seal.
 func validPrincipalAuthorityShape(p Principal) bool {
 	if p.localVia != "" || p.localSubject != "" || len(p.localMeta) != 0 || p.localSystem ||
 		p.Superadmin || !validPrincipalAuthorityProvenanceShape(p) || !validPrincipalReadAuthorityShape(p) ||
@@ -143,9 +144,10 @@ func validPrincipalReadAuthorityShape(p Principal) bool {
 	switch p.evidence.authorityMode {
 	case principalHumanAuthority:
 		return p.Kind == KindUser && validPrincipalEvidenceID(p.UserID) &&
-			p.evidence.userAuthority.UserID == p.UserID && p.evidence.userAuthority.Version > 0
+			p.evidence.userAuthority.UserID == p.UserID && p.evidence.userAuthority.Version > 0 &&
+			validAuthenticationInstant(p.evidence.authenticatedAt) && !p.evidence.authenticatedAt.After(p.evidence.observedAt)
 	case principalTokenDirectoryOnly:
-		return p.Kind == KindToken && p.evidence.userAuthority == (store.UserAuthorityFactRef{})
+		return p.Kind == KindToken && p.evidence.userAuthority == (store.UserAuthorityFactRef{}) && p.evidence.authenticatedAt.IsZero()
 	default:
 		return false
 	}

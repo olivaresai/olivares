@@ -1698,22 +1698,6 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	// scoped seam evaluates that policy once — grants and forbids together). A tenant with
 	// no authored grants makes the scoped engine abstain before any store read.
 	authz := auth.NewAuthorizer(set.gov.RequestEvaluator(), auth.WithScopedGrants(set.gov.ScopedGrants()))
-	// Live edition ports are bound only after the real Store, sessions data and
-	// request authorizer exist, before api.New installs any of their routes.
-	editionResources, err := editionBindModuleDependencies(ctx, editionConfigFrom(cfg), set.all,
-		EditionDependencies{
-			Store: st, Sessions: set.sessions,
-			Rows: api.NewReadRowAuthorizationPort(authz, authr), Mutations: authz,
-		}, log)
-	if err != nil {
-		_ = st.Close()
-		return nil, fmt.Errorf("bind edition module dependencies: %w", err)
-	}
-	defer func() {
-		if !bootOK {
-			closeEditionResources(editionResources, log)
-		}
-	}()
 	setupTok := secure.NewSetupToken(filepath.Join(cfg.DataDir, "setup.token"))
 
 	// late-bind the eventing platform's two seams. The SAME composed
@@ -1841,6 +1825,24 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	}
 	secretStore := auth.NewSecretStore(st, secretSealer)
 	secretResolver := newSecretResolver(secretStore, osGetenv, log)
+
+	// Live edition ports are bound only after the real Store, sessions data and
+	// request authorizer and secret resolver exist, before api.New mounts routes.
+	editionResources, err := editionBindModuleDependencies(ctx, editionConfigFrom(cfg), set.all,
+		EditionDependencies{
+			Store: st, Sessions: set.sessions,
+			Rows: api.NewReadRowAuthorizationPort(authz, authr), Mutations: authz,
+			Principals: authr, Governance: set.gov, Secrets: secretResolver,
+		}, log)
+	if err != nil {
+		_ = st.Close()
+		return nil, fmt.Errorf("bind edition module dependencies: %w", err)
+	}
+	defer func() {
+		if !bootOK {
+			closeEditionResources(editionResources, log)
+		}
+	}()
 
 	// the durable source roster (the store-backed successor to the file's
 	// `sources[]`) and the live reconciler that wires it into the running runtime
@@ -1970,9 +1972,10 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	// the enterprise overlay keeps its injection point and the console keeps its
 	// (usage-only) figure. Set once here, before the server is built — race-free.
 	authr.WithSeatPolicy(newSeatPolicy(licHolder.claims, crlViewFromDataDir(cfg.DataDir)))
-	// Grant list for the closed add-on gates. No-op in the AGPL build; the
-	// overlay binds it as the EntitlementFunc every Authorize consults.
-	bindEnterpriseEntitlement(licHolder.grants)
+	// Grant list and its live holder for the closed add-on gates. No-op in the
+	// AGPL build; the overlay owns any coherent license observation under the
+	// holder's existing lock, trust and source.
+	bindEnterpriseEntitlement(licHolder.grants, licHolder)
 
 	// Login enforcement: require-SSO + network/IP allow-list over the login
 	// surface. The default (AGPL) build wires nil (newLoginPolicy → no enforcement,

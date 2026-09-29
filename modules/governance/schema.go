@@ -58,12 +58,15 @@ const (
 	// guardian action trail (what a rule did or queued for approval). The stop row
 	// is the single source of truth every actuation gate consults (deny-closed);
 	// the ledger — anchored by engage_audit_seq — is its incident timeline.
-	killSwitchKind      model.Kind = "governance.killswitch"
-	killSwitchTable                = "governance_killswitch" // 21 chars
-	guardianRuleKind    model.Kind = "governance.guardian_rule"
-	guardianRuleTable              = "governance_guardian_rule" // 24 chars
-	guardianActionKind  model.Kind = "governance.guardian_action"
-	guardianActionTable            = "governance_guardian_action" // 26 chars
+	killSwitchKind            model.Kind = "governance.killswitch"
+	killSwitchTable                      = "governance_killswitch" // 21 chars
+	killSwitchGenerationKind  model.Kind = "governance.killswitch_generation"
+	killSwitchGenerationTable            = "governance_killswitch_generation"
+	colKSGeneration                      = "generation"
+	guardianRuleKind          model.Kind = "governance.guardian_rule"
+	guardianRuleTable                    = "governance_guardian_rule" // 24 chars
+	guardianActionKind        model.Kind = "governance.guardian_action"
+	guardianActionTable                  = "governance_guardian_action" // 26 chars
 	// the per-agent risk/autonomy profile — operator-declared and/or
 	// heuristic-suggested tier with the full governance lifecycle (classify →
 	// review → override). The effective tier is mirrored onto Agent.RiskTier
@@ -812,6 +815,20 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 			Name:    "governance_policy_observed_uniq",
 			Columns: []string{model.ColTenantID, colObsSurface, colObsScope},
 			Unique:  true,
+		}},
+	}); err != nil {
+		return err
+	}
+
+	// One durable generation domain per tenant. Transition writers serialize on
+	// the transaction barrier and update through the generic repository's CAS.
+	if err := reg.Register(model.EntityDescriptor{
+		Kind:   killSwitchGenerationKind,
+		Table:  killSwitchGenerationTable,
+		Fields: []model.FieldSpec{{Name: colKSGeneration, Kind: model.KindInt}},
+		Indexes: []model.IndexSpec{{
+			Name:    "governance_killswitch_generation_uniq",
+			Columns: []string{model.ColTenantID}, Unique: true,
 		}},
 	}); err != nil {
 		return err

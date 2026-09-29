@@ -438,7 +438,8 @@ jobs:
   pr-web:
     if: github.repository == 'olivaresai/olivares' || vars.OLIVARES_RELEASE_PROFILE == 'preprod'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # 30 + the two generated-reference gates below (their step ceilings, 15 + 10).
+    timeout-minutes: 55
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -478,3 +479,14 @@ jobs:
           if-no-files-found: error
       - name: the console checks, and the embedded bundle matches its sources
         run: task check:web web:check
+      # The generated CLI reference (seven locale pages) and the console/gRPC/upgrade guides are
+      # otherwise checked only after merge, in mainline-ci control-plane; public-generation writes
+      # them but is dispatched. Each gate runs its own red battery first, then the check.
+      - name: the generated CLI reference matches the olivares command tree
+        timeout-minutes: 15
+        run: |
+          TMPDIR="$PWD/.cli-ref-docs-tmp" bash scripts/check-cli-ref-docs.sh --self-test
+          TMPDIR="$PWD/.cli-ref-docs-tmp" bash scripts/check-cli-ref-docs.sh
+      - name: the console/gRPC references and the upgrade guide match the tree
+        timeout-minutes: 10
+        run: task lint:guide-docs

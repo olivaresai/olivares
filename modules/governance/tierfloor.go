@@ -99,6 +99,10 @@ func (m *Module) checkTierFloor(ctx context.Context, tenant model.TenantID, f sd
 			return nil // medium / low / unclassified: no built-in floor
 		}
 
+		if err := lockKillSwitchTransaction(ctx, sc); err != nil {
+			return err
+		}
+
 		// Record the signal durably (idempotent on the fingerprint) and count the
 		// distinct signals for THIS canonical agent inside the window.
 		count, cerr := m.recordAndCountTierFloorSignal(ctx, sc, canonicalAgentID, fingerprint, f, now)

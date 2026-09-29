@@ -8,7 +8,10 @@ import (
 	"context"
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/auth"
+	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/core/secret"
 	"github.com/olivaresai/olivares/core/store"
+	"github.com/olivaresai/olivares/modules/governance"
 	"github.com/olivaresai/olivares/modules/sessions"
 	"io"
 	"log/slog"
@@ -131,6 +134,20 @@ type EditionMutationAuthorizer interface {
 	AuthorizeRouteMutation(context.Context, auth.Request) (auth.RouteMutationAuthorization, error)
 }
 
+// EditionPrincipalResolver reconstructs current authority for the exact credential
+// and tenant through the engine authenticator. Consumers need a finite deadline;
+// a missing resolver or a failed reconstruction is unavailable evidence.
+type EditionPrincipalResolver interface {
+	ResolvePrincipalScope(context.Context, auth.PrincipalRef, model.TenantID) (auth.Principal, error)
+}
+
+// EditionGovernancePosture supplies live observations and an in-scope stop fence. Consumers
+// must refuse on an absent port or read error; neither means the estate is clear.
+type EditionGovernancePosture interface {
+	KillSwitchState(context.Context, model.TenantID) (governance.StopState, error)
+	LockKillSwitchState(context.Context, store.Scope) (governance.KillSwitchSnapshot, error)
+}
+
 // EditionDependencies contains existing engine capabilities, never a private engine
 // or a second configuration source. Boot binds these after store/auth composition.
 type EditionDependencies struct {
@@ -139,6 +156,12 @@ type EditionDependencies struct {
 	Rows     api.RowAuthorizationPort
 	// Mutations is required by mutation consumers; absence must refuse, never use Rows.
 	Mutations EditionMutationAuthorizer
+	// These are the live engine producers; nil does not supply a fallback.
+	Principals EditionPrincipalResolver
+	Governance EditionGovernancePosture
+	// Secrets is the same configured resolver boot gives to its other consumers.
+	// Absence is unavailable; callers must not construct a permissive replacement.
+	Secrets *secret.Resolver
 }
 
 func closeEditionResources(resources []io.Closer, log *slog.Logger) {

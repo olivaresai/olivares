@@ -150,6 +150,10 @@ const NO_VERB: ReadonlyArray<{ dir: string; why: string }> = [
     why: 'a detail screen: verify and summarise are secondary, and it has no list',
   },
   {
+    dir: 'features/source-diff',
+    why: 'a read-only comparison of existing revisions; ref controls change the query, not the source',
+  },
+  {
     dir: 'features/team-costs',
     why: 'a cost read; its controls are a saved view and an export',
   },
