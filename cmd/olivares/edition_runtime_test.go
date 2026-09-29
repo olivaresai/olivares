@@ -124,7 +124,8 @@ func TestEditionRuntimePortsReadLiveAuthority(t *testing.T) {
 		stop, err := repo.Create(ctx, model.Record{
 			"scope_kind": "estate", "status": "active", "reason": "edition port fixture",
 			"source": "operator", "engaged_by": "system", "engaged_aal": 1,
-			"engaged_at": model.NewTimestamp(time.Now()), "engage_audit_seq": 0,
+			// Stored as its string form, as the governance module writes it.
+			"engaged_at": model.NewTimestamp(time.Now()).String(), "engage_audit_seq": 0,
 			"revoked_approvals": 0, "reviewed": false,
 		})
 		stopID = model.ID(stop.String(model.ColID))

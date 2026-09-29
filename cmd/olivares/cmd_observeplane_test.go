@@ -1755,7 +1755,11 @@ func TestAnOverLargeResponseIsDetectedNotTruncated(t *testing.T) {
 		}
 	}))
 	t.Cleanup(srv.Close)
-	_, _, err := execRoot(t, observeArgs(srv.URL, "inventory", "entities", "ls")...)
+	// An explicit, generous deadline. The default request timeout also covers
+	// reading the body, and a slow runner can take longer than that to stream 33 MiB
+	// through httptest: the test then failed on the deadline instead of the bound.
+	// It measures the size bound, not the runner's throughput.
+	_, _, err := execRoot(t, observeArgs(srv.URL, "inventory", "entities", "ls", "--timeout", "2m")...)
 	if err == nil {
 		t.Fatal("an over-cap body must be reported, not silently truncated")
 	}
