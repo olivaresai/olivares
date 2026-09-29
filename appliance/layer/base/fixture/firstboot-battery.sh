@@ -636,10 +636,10 @@ agreeing() {
   control agreeing_carriers_stop_at_the_token_seam record_is \
     "$(counterfeit "$d/state.json" '.stage = "measure-readiness"')" refused prepare-setup-delivery
   check stages_before_the_token_seam_completed_in_order completed_are "$d/state.json" \
-    prepare-identity verify-host-settings generate-product-config initialize-storage
+    prepare-identity verify-host-settings hand-over-host-settings generate-product-config initialize-storage
   control stages_before_the_token_seam_completed_in_order completed_are \
     "$(counterfeit "$d/state.json" '.completed |= reverse')" \
-    prepare-identity verify-host-settings generate-product-config initialize-storage
+    prepare-identity verify-host-settings hand-over-host-settings generate-product-config initialize-storage
   check product_generator_wrote_the_configuration holds "$d/olivares.env" "(profile: single-node-prod)"
   control product_generator_wrote_the_configuration holds "$here/../../../../packaging/olivares.env.example" "(profile: single-node-prod)"
   check public_url_declared_in_the_appliance_drop_in holds "$d/drop-in.conf" "Environment=OLIVARES_PUBLIC_URL=https://olivares.example.test"

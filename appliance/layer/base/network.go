@@ -30,7 +30,7 @@ type NetworkProfile struct {
 type NetworkReader func(context.Context) ([]NetworkProfile, error)
 
 func (s CloudInitHost) verifyNetwork(ctx context.Context, in Input) error {
-	if err := secondNetworkOwner(s.Host); err != nil {
+	if err := secondNetworkOwner(ctx, s.Host); err != nil {
 		return err
 	}
 	if in.Answers.Network.Mode == "static" {
@@ -137,7 +137,8 @@ func sameStrings(a, b []string) bool {
 	return slices.Equal(a, b)
 }
 
-func secondNetworkOwner(h Host) error {
+func secondNetworkOwner(ctx context.Context, h Host) error {
+	vendorOwnerMeasured := false
 	patterns := []string{"/etc/network/interfaces", "/etc/network/interfaces.d/*", "/etc/sysconfig/network-scripts/ifcfg-*", "/etc/systemd/network/*.network", "/run/systemd/network/*.network", "/usr/lib/systemd/network/*.network", "/etc/netplan/*.yaml", "/etc/netplan/*.yml"}
 	for _, pattern := range patterns {
 		paths, err := filepath.Glob(h.path(pattern))
@@ -166,6 +167,19 @@ func secondNetworkOwner(h Host) error {
 					return Refuse("second_network_owner")
 				}
 			case strings.HasSuffix(pattern, ".network"):
+				// Distribution defaults alone do not own an interface. Exempt them
+				// only when neither networkd nor its activation socket can start
+				// from an enabled unit or is currently active. Local /etc and /run
+				// configuration remains conflicting intent regardless of unit state.
+				if pattern == "/usr/lib/systemd/network/*.network" {
+					if !vendorOwnerMeasured {
+						if err := verifyDormantNetworkd(ctx, h); err != nil {
+							return err
+						}
+						vendorOwnerMeasured = true
+					}
+					continue
+				}
 				// A file without an exact loopback-only match can configure non-loopback devices.
 				if !strings.Contains(content, "Name=lo\n") || strings.Contains(content, "Name=lo ") {
 					return Refuse("second_network_owner")
@@ -175,6 +189,54 @@ func secondNetworkOwner(h Host) error {
 					return Refuse("second_network_owner")
 				}
 			}
+		}
+	}
+	return nil
+}
+
+func verifyDormantNetworkd(ctx context.Context, h Host) error {
+	if h.Run == nil {
+		return Refuse("network_owner_unmeasured")
+	}
+	for _, unit := range []string{"systemd-networkd.service", "systemd-networkd.socket"} {
+		out, err := h.Run(ctx, "systemctl", "show", "--all", "--property=LoadState,ActiveState,UnitFileState", unit)
+		if err != nil || len(out) > 4096 {
+			return Refuse("network_owner_unmeasured")
+		}
+		properties := make(map[string]string, 3)
+		for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+			key, value, ok := strings.Cut(line, "=")
+			if !ok || (key != "LoadState" && key != "ActiveState" && key != "UnitFileState") {
+				return Refuse("network_owner_unmeasured")
+			}
+			if _, duplicate := properties[key]; duplicate {
+				return Refuse("network_owner_unmeasured")
+			}
+			properties[key] = value
+		}
+		if len(properties) != 3 {
+			return Refuse("network_owner_unmeasured")
+		}
+		load, active, enabled := properties["LoadState"], properties["ActiveState"], properties["UnitFileState"]
+		if active == "active" || active == "activating" || active == "reloading" || active == "deactivating" {
+			return Refuse("second_network_owner")
+		}
+		if active != "inactive" {
+			return Refuse("network_owner_unmeasured")
+		}
+		if load == "not-found" && enabled == "" {
+			continue
+		}
+		if load != "loaded" && load != "masked" {
+			return Refuse("network_owner_unmeasured")
+		}
+		switch enabled {
+		case "disabled", "masked":
+			continue
+		case "enabled", "enabled-runtime", "linked", "linked-runtime", "alias", "static", "indirect", "generated", "transient":
+			return Refuse("second_network_owner")
+		default:
+			return Refuse("network_owner_unmeasured")
 		}
 	}
 	return nil
