@@ -50,7 +50,9 @@ ProtectSystem=strict
 # needs one then records its refusal, where a missing required path would stop the unit before
 # first boot could record anything.
 # The verified handoff writes only its cloud-init ownership drop-in.
-ReadWritePaths=-/etc/olivares -/etc/systemd/system/olivares.service.d -/etc/olivares-portal -/etc/cloud/cloud.cfg.d
+# The product data directory is writable for one reason: prepare-setup-delivery mints the one-time
+# setup token there, before the product first starts, and gives it to the product service account.
+ReadWritePaths=-/etc/olivares -/etc/systemd/system/olivares.service.d -/etc/olivares-portal -/etc/cloud/cloud.cfg.d -/var/lib/olivares
 # ProtectHome: read-only, not true: verify-host-settings reads the authorized SSH keys in /home and /root.
 ProtectHome=read-only
 PrivateTmp=true
@@ -66,11 +68,16 @@ RestrictRealtime=true
 LockPersonality=true
 MemoryDenyWriteExecute=true
 SystemCallArchitectures=native
+# SystemCallFilter: the product's set plus @chown, so prepare-setup-delivery can give the minted
+# setup token to the product service account.
 SystemCallFilter=@system-service
 SystemCallFilter=~@privileged @resources
-# CapabilityBoundingSet: CAP_DAC_READ_SEARCH where the product keeps none: first boot runs as root and
-# reads other accounts' authorized keys and the product's 0750 data directory. Nothing else.
-CapabilityBoundingSet=CAP_DAC_READ_SEARCH
+SystemCallFilter=@chown
+# CapabilityBoundingSet: CAP_DAC_READ_SEARCH, CAP_DAC_OVERRIDE and CAP_CHOWN where the product keeps
+# none: first boot runs as root; it reads other accounts' authorized keys and the product's 0750 data
+# directory, writes the setup token into that directory and gives the token to the product service
+# account. Nothing else.
+CapabilityBoundingSet=CAP_DAC_READ_SEARCH CAP_DAC_OVERRIDE CAP_CHOWN
 AmbientCapabilities=
 # UMask: 0077, tighter than the product's 0027: first boot writes only root-private records.
 UMask=0077

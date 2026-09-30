@@ -11,4 +11,4 @@ L’espace de noms de l’API est `/v1/m/gitpublish`. Il expose les cibles, les 
 
 Un résultat distant incertain n’autorise pas une nouvelle tentative. Le module conserve séparément les demandes, les observations et les accusés de réception. Une opération distante déjà envoyée peut coïncider avec une révocation locale ultérieure.
 
-[Référence de l’API des modules](/fr/reference/api-beta/).
+[Référence de l’API des modules](/reference/api-beta/).

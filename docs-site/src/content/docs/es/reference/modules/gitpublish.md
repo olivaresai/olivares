@@ -11,4 +11,4 @@ El espacio de nombres de la API es `/v1/m/gitpublish`. Expone destinos, intencio
 
 Un resultado remoto incierto no autoriza un reintento. El módulo registra por separado las solicitudes, las observaciones y los acuses de recibo. Una operación remota ya enviada puede coincidir con una revocación local posterior.
 
-[Referencia de la API de módulos](/es/reference/api-beta/).
+[Referencia de la API de módulos](/reference/api-beta/).

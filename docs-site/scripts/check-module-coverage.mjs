@@ -40,6 +40,7 @@ const DIR_TO_SLUG = {
   'evals': 'xii-evals',
   'eventing': 'eventing', // external subscriptions over the bus — its own page (Platform & integrations)
   'finops': 'xi-finops',
+  'gitpublish': 'gitpublish', // governed Git publication — its own page (Management)
   'governance': 'vi-governance',
   'health': 'xxii-health',
   'inferenceproxy': 'inferenceproxy', // Inline inference PEP proxy — its own page (Claude & agent ecosystem)
