@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/olivaresai/olivares/appliance/answers/carriers"
+	"github.com/olivaresai/olivares/core/secure"
 )
 
 // Paths the Linux adapters read and write, relative to Host.Root.
@@ -39,6 +40,16 @@ const (
 	readinessURL   = "https://127.0.0.1:8443/readyz"
 	// machineIDKey keys the machine ID digest, as machine-id(5) asks of applications.
 	machineIDKey = "olivares-appliance-firstboot/machine-id"
+	// setupTokenDeliveryFile is the root-only file the one-time setup token is delivered in,
+	// under the unit's StateDirectory.
+	setupTokenDeliveryFile = "setup-token"
+	// setupDeliveryDomain domain-separates the setup-delivery digests. It is a constant in
+	// public source, so it is DOMAIN SEPARATION, not a keyed MAC: nobody pretends the
+	// effect is secret-independent, and it does not need to be — the record and the journal
+	// are public surfaces, and what must stay out of them is the delivered bytes, which a
+	// plain digest would not leak either; the separation keeps the effect's digests from
+	// colliding with any other sha256 of the same files.
+	setupDeliveryDomain = "olivares-appliance-firstboot/setup-delivery"
 )
 
 // cloud-init's own files, read where its status command reads them (cloud-init 26.1,
@@ -391,6 +402,120 @@ func (s Storage) observe(context.Context, Input) (Effect, error) {
 	return Effect(fmt.Sprintf("single-node-prod: %s owned by the service account (uid %s), mode %04o; "+
 		"the product's first start creates the store and readiness measures it",
 		ProductDataDir, uid, uint32(info.Mode().Perm()))), nil
+}
+
+// SetupTokenDelivery delivers the product's one-time setup token to the machine itself, so
+// an appliance administrator can finish setup at the console without a journal scrape.
+//
+// The token's owner is the product (core/secure): this seam MINTS through the owner before
+// the product's first start — which is the only moment the plaintext exists at all, because
+// the engine stores just a SHA-256 and never reprints — and hands it to the administrator
+// two ways, neither of which crosses the network or starts a service:
+//
+//   - /var/lib/olivares-appliance/setup-token, root-only (0600 in the unit's 0700 state
+//     directory): the plaintext, written once, at mint time;
+//   - the packaged console banner (units/tty1-banner.txt, /etc/issue.d), which names the
+//     setup address and where the token is. The banner is static and secret-free, so this
+//     seam writes no file under /etc.
+//
+// The engine accepts the token because it mints nothing when one already exists: its first
+// start sees the token file this stage created (owned by the product account, which is why
+// Apply chowns it — the engine's own mint would write as that account) and prints no
+// banner of its own. The delivered token is single-use and stops working once the first
+// administrator exists.
+type SetupTokenDelivery struct{ Host Host }
+
+// Apply mints the token if none exists and delivers it once. A run interrupted after the
+// mint and before the record was persisted mints nothing on the way back (the token exists),
+// and the delivery file it wrote is the one observed.
+func (s SetupTokenDelivery) Apply(ctx context.Context, in Input) (Effect, error) {
+	tokenPath := s.Host.path(filepath.Join(ProductDataDir, "setup.token"))
+	uid, gid, ok := s.Host.accountIDs(productAccount)
+	if !ok {
+		return "", Refuse("the product service account is missing")
+	}
+	plaintext, created, err := secure.NewSetupToken(tokenPath).Ensure()
+	if err != nil {
+		return "", Refuse("the product's setup-token owner could not mint the token")
+	}
+	// The owner's mint writes as first boot's user (root); the engine reads the file as the
+	// product account on every verification, so the ownership is what the engine's own mint
+	// would have produced.
+	if err := os.Chown(tokenPath, uid, gid); err != nil {
+		return "", Refuse("the setup token cannot be given to the product service account")
+	}
+	if created {
+		// THE ONE DELIVERY. The plaintext exists only here; every later reader gets the
+		// root-only file, never a reprint.
+		if err := writeAtomic(s.Host.path(StateDir), setupTokenDeliveryFile, []byte(plaintext+"\n"), 0o600); err != nil {
+			return "", Refuse("the setup token cannot be delivered to its root-only file in " + StateDir)
+		}
+	}
+	return s.observe(ctx, in)
+}
+
+// Verify refuses a delivery that changed after first boot recorded it.
+func (s SetupTokenDelivery) Verify(ctx context.Context, in Input, recorded Effect) error {
+	return verifyAgain(ctx, s.observe, in, recorded,
+		"the delivered setup token changed after first boot recorded it; "+
+			"remove "+filepath.Join(ProductDataDir, "setup.token")+" and run `appliance-firstboot apply` again: "+
+			"a fresh token is minted and delivered")
+}
+
+// observe records where the token was delivered and domain-separated digests of both
+// files. The plaintext never reaches the effect: the record and the journal are public
+// surfaces, which the machine battery pins.
+func (s SetupTokenDelivery) observe(context.Context, Input) (Effect, error) {
+	delivered, err := readDeliveredSetupToken(s.Host)
+	if err != nil {
+		return "", Refuse("the one-time setup token is not in its root-only file; it was minted before " +
+			"first boot could deliver it. Remove " + filepath.Join(ProductDataDir, "setup.token") +
+			" and run `appliance-firstboot apply` again to mint and deliver a fresh one")
+	}
+	record, err := os.ReadFile(s.Host.path(filepath.Join(ProductDataDir, "setup.token")))
+	if err != nil {
+		return "", Refuse("the product's setup-token record is missing; the token cannot be verified")
+	}
+	digest := sha256.New()
+	digest.Write([]byte(setupDeliveryDomain))
+	digest.Write(delivered)
+	deliveredSum := digest.Sum(nil)
+	digest.Reset()
+	digest.Write([]byte(setupDeliveryDomain))
+	digest.Write(record)
+	recordSum := digest.Sum(nil)
+	return Effect(fmt.Sprintf("setup token delivered to %s (root, 0600); finish setup at https://<this-machine>:8443/setup; delivery=%x token=%x",
+		filepath.Join(StateDir, setupTokenDeliveryFile), deliveredSum[:8], recordSum[:8])), nil
+}
+
+// readDeliveredSetupToken reads the delivered plaintext from the state directory.
+func readDeliveredSetupToken(h Host) ([]byte, error) {
+	return os.ReadFile(h.path(filepath.Join(StateDir, setupTokenDeliveryFile)))
+}
+
+// accountIDs resolves account's uid and gid from files alone, the same two sources
+// accountUID reads. A userdb record names no group, so its gid is the uid: the group of a
+// first-boot-created file matters only to the account itself.
+func (h Host) accountIDs(account string) (int, int, bool) {
+	uidText, ok := h.accountUID(account)
+	if !ok {
+		return 0, 0, false
+	}
+	uid, err := strconv.Atoi(uidText)
+	if err != nil {
+		return 0, 0, false
+	}
+	if records, err := os.ReadFile(h.path("/etc/passwd")); err == nil {
+		for _, line := range strings.Split(string(records), "\n") {
+			fields := strings.Split(line, ":")
+			if len(fields) > 3 && fields[0] == account {
+				if gid, err := strconv.Atoi(fields[3]); err == nil {
+					return uid, gid, true
+				}
+			}
+		}
+	}
+	return uid, uid, true
 }
 
 // accountUID resolves account's uid, in decimal, from files alone: the host's /etc/passwd

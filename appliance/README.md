@@ -328,13 +328,37 @@ cloud-init network configuration, such as a NoCloud seed's `network-config`.
 
 `appliance/images` is the recipe of an appliance image: ONE KIWI NG description with a
 profile per edition and architecture (`kiwi/config.xml`, profile `fedora44-server-amd64`,
-the shipping base, built from the signed product RPMs; `debian13-server-amd64` stays buildable
-with `--base debian13`), the assembly of the formats built from the disk it produces (`formats/`), and the
+the shipping base, built from the signed product RPMs, and profile `fedora44-desktop-amd64`,
+the server profile plus GNOME; `debian13-server-amd64` stays buildable with `--base debian13`),
+the assembly of the formats built from the disk it produces (`formats/`), and the
 tests that hold both to their shape. `appliance/test` is the boot side of the same recipe.
+
+### The two variants
+
+Both variants are the same recipe on the same base, differ only in their package set and
+overlay, and ship the same three formats (ISO installer, qcow2 disk, OVA). Each is built and
+booted by the same hosted job (`.github/workflows/appliance-image.yml`, job `image`), which
+takes an `edition` input.
+
+| Variant | What it is for | Minimum resources |
+| --- | --- | --- |
+| Server (`fedora44-server-amd64`, the default) | A machine room or cloud appliance administered over SSH and the console: the product, its first boot, Cockpit, no graphical desktop. | 2 vCPU, 2 GiB RAM, 12 GiB disk, a serial console or SSH reachability |
+| Desktop (`fedora44-desktop-amd64`) | The same appliance for a desk: GNOME Shell with GDM on the graphical target, Firefox to browse, Ptyxis as the terminal, Nautilus as the file browser, and SSH/SFTP enabled so files travel to it the usual way. | 2 vCPU, 4 GiB RAM, 12 GiB disk, a graphical console (keyboard and monitor or a SPICE/VNC window) |
+
+The desktop profile adds GNOME on top of the server profile's packages — nothing of the
+server's set or behavior changes — and the recipe's config.sh sets the machine's default
+target to `graphical.target` and enables `gdm` (as `display-manager.service`, the only way
+gdm's unit installs) and `sshd` inside the image root, with the links `systemctl enable`
+would create; the stock `sshd_config` already serves the SFTP subsystem. The desktop
+artifact sizes are predictions near the 2 GiB release-asset ceiling until the first hosted
+build weighs them; a heavier artifact is refused by the assembly, and shrinking the set or
+declaring the format split is the owner's decision then.
 
 ```sh
 # Hosted current job only, after staging the Community and layer packages:
 task appliance:build ACCELERATOR=kvm EVIDENCE="$RUNNER_TEMP/appliance-attempt" FORMAT=all
+# The desktop edition is the same transaction with EDITION named:
+task appliance:build ACCELERATOR=kvm EVIDENCE="$RUNNER_TEMP/appliance-attempt" EDITION=desktop FORMAT=all
 # Standalone guest observation over existing artifacts (no builder admission):
 task appliance:boot ACCELERATOR=kvm
 # TCG is an explicit choice and must match the prerequisite trial:

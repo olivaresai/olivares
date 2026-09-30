@@ -15,14 +15,16 @@
 # formats (appliance/images/formats) are assembled from what it leaves in the target
 # directory; this script formats nothing itself.
 #
-# usage: build.sh [--base fedora44|debian13] [--edition server] [--arch amd64] [--firmware nonfree|free]
+# usage: build.sh [--base fedora44|debian13] [--edition server|desktop] [--arch amd64] [--firmware nonfree|free]
 #                 --receipt FILE --attempt ID --image-id sha256:ID --accelerator kvm|tcg
 #                 [--package-dir DIR] [--qualification-key FINGERPRINT] [--target-dir DIR]
 #        build.sh --print-plan [any option above]
-#   --base fedora44, the default, is the shipping Fedora 44 profile on the Fedora builder
-#   (toolchain/fedora44); debian13 is the Debian 13 profile, not shipping, on the Debian builder
+#   --base fedora44, the default, is the shipping Fedora 44 base on the Fedora builder
+#   (toolchain/fedora44); debian13 is the Debian 13 base, not shipping, on the Debian builder
 #   with the product's .debs, which --deb-dir (the same option as --package-dir, for debian13 only)
 #   names.
+#   --edition server, the default, builds the fedora44-server-amd64 profile; desktop builds
+#   fedora44-desktop-amd64, the server profile plus GNOME, on the fedora44 base only.
 #   On Fedora, --package-dir is the signed rpm-md tree D's S3 delivers with its delivery.json and
 #   the package-repository key; delivery_check.py refuses it before KIWI unless its key is the
 #   release key pinned in package-repository-key.json, or the throwaway key --qualification-key
@@ -83,9 +85,12 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-# A2 delivers one edition on one architecture. The workstation edition is A5 and arm64 is A6;
-# both are profiles of the same description, and neither is claimed here.
-[ "$edition" = server ] || die "this recipe delivers the server edition only, not $edition"
+# One architecture; the desktop edition is a profile of the same description as the server's,
+# the server's packages plus GNOME, and arm64 (A6) stays unclaimed here.
+case $edition in
+  server|desktop) ;;
+  *) die "EDITION is server or desktop, not $edition" ;;
+esac
 [ "$arch" = amd64 ] || die "this recipe delivers amd64 only, not $arch"
 case $firmware in
   nonfree|free) ;;
@@ -97,13 +102,15 @@ esac
 # by name while its own tests hold.
 case $base in
   fedora44)
-    profiles=(fedora44-server-amd64); firmware_profile=fedora44-firmware; kind=rpm
+    overlay="fedora44-$edition-amd64"; firmware_profile=fedora44-firmware; kind=rpm
     toolchain="$repo/appliance/images/toolchain/fedora44" ;;
   debian13)
-    profiles=(debian13-server-amd64); firmware_profile=firmware-nonfree; kind=deb
+    [ "$edition" = server ] || die "the Debian 13 base builds the server edition only, not $edition"
+    overlay=debian13-server-amd64; firmware_profile=firmware-nonfree; kind=deb
     toolchain="$repo/appliance/images/toolchain" ;;
   *) die "BASE is fedora44 (shipping) or debian13, not $base" ;;
 esac
+profiles=("$overlay")
 lock="$toolchain/input-lock.json"
 # The release outputs are named from VERSION alone (olivares-appliance-VERSION-...): X.Y.Z for a release, 0.0.0-dev for
 # a qualification, and nothing else. It is never derived from git, a date or a file; a build that cannot name its
@@ -299,12 +306,13 @@ else
   cp -a "$package_dir/." "$packages/"
   mkdir "$build_packages" "$work/s3"
   cp "$package_dir/olivares-package-repository.asc" "$stage/"
-  # The profile overlay KIWI copies into the root before config.sh (system/setup.py import_overlay_files), with the
+  # The profile overlay KIWI copies into the root before config.sh (system/setup.py
+  # import_overlay_files: a directory named exactly like each selected profile), with the
   # checked key at the path the repository file names.
-  cp -a "$here/fedora44-server-amd64" "$stage/"
-  mkdir -p "$stage/fedora44-server-amd64/etc/pki/rpm-gpg"
+  cp -a "$here/$overlay" "$stage/"
+  mkdir -p "$stage/$overlay/etc/pki/rpm-gpg"
   cp "$package_dir/olivares-package-repository.asc" \
-    "$stage/fedora44-server-amd64/etc/pki/rpm-gpg/RPM-GPG-KEY-olivares-package-repository"
+    "$stage/$overlay/etc/pki/rpm-gpg/RPM-GPG-KEY-olivares-package-repository"
   printf '{"olivares-appliance-rpms": {"key": "olivares-package-repository.asc", "fingerprint": "%s"}}\n' \
     "$expected_key" > "$stage/olivares-repositories.json"
   cp "$here/olivares-repo-pinned.sh" "$here/delivery_check.py" "$stage/"
@@ -333,8 +341,8 @@ if [ "$kind" = rpm ]; then
   # config.sh erases the per-build key from the image's rpm keyring by this record, then removes the record.
   build_key=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["olivares-appliance-build"]["fingerprint"])' \
     "$stage/olivares-build-repository.json")
-  mkdir -p "$stage/fedora44-server-amd64/var/lib/olivares-appliance-build"
-  printf '%s\n' "$build_key" > "$stage/fedora44-server-amd64/var/lib/olivares-appliance-build/per-build-key.fingerprint"
+  mkdir -p "$stage/$overlay/var/lib/olivares-appliance-build"
+  printf '%s\n' "$build_key" > "$stage/$overlay/var/lib/olivares-appliance-build/per-build-key.fingerprint"
 fi
 # The local repositories' packages are named by digest here, after the stage step and before KIWI
 # reads any of them: on Debian the one KIWI trusts without a signature, on Fedora the two it reads

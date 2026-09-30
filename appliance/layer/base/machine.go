@@ -225,6 +225,7 @@ func (m *Machine) Run(ctx context.Context) (Record, error) {
 		if err != nil {
 			return m.finish(rec, StageValidate, Refuse("the product identities cannot be inspected"))
 		}
+		ids = withoutRecordedSetupToken(rec, ids)
 		if len(ids) > 0 {
 			return m.finish(rec, StageValidate, Refuse("product identities exist before first boot started the product ("+
 				strings.Join(ids, ", ")+"); an initialized installation is never treated as a template"))
@@ -377,6 +378,17 @@ func bindsAnswers(stage Stage) bool {
 
 // mayHaveStarted reports whether the product's start may have begun. It reads the durable
 // field Run sets with Applying@start-services, not the stage, which the next outcome overwrites.
+// withoutRecordedSetupToken drops the setup token from the identities a later run finds when this
+// record's prepare-setup-delivery minted it: first boot creates that one identity itself, before
+// the product starts, and the stage's Verify proves the file is the one it recorded. Every other
+// identity, and a setup token no recorded delivery accounts for, still refuses.
+func withoutRecordedSetupToken(rec Record, ids []string) []string {
+	if _, delivered := effectOf(rec, StageSetupDelivery); !delivered {
+		return ids
+	}
+	return slices.DeleteFunc(slices.Clone(ids), func(id string) bool { return id == setupTokenIdentity })
+}
+
 func mayHaveStarted(rec Record) bool {
 	_, started := effectOf(rec, StageStartServices)
 	return started || rec.ProductMayHaveStarted

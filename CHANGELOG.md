@@ -35,444 +35,189 @@ month, release-of-month).
 
 ## [Unreleased]
 
-Pending for **v26.10**, the next planned release. Nothing below is published until that release
-is, and the section is dated only then.
+Pending for 26.10. Nothing below is published until that release is.
 
-### Added
+### Install and upgrade
 
-- **A run can say what it was launched at, to a reader that holds no run.** A new read port,
-  beside the existing session-identity and run-launch readers, presents one run's provider
-  profile, the driver that profile names and the execution environment it was resolved
-  against — so a presentation consumer can name a launch target without receiving the
-  runtime that owns the run. It refuses exactly as its sibling does: absent,
-  foreign-workspace and lineage-unset runs are one answer, because telling them apart is an
-  existence probe, while a visible run whose row cannot establish that authority is reported
-  as unavailable rather than as absent. A run launched under no provider profile is
-  presented with those three fields empty rather than refused; the two provider home paths
-  and the authorized authentication source are not presented at all.
-- `OLIVARES_SESSIONS_AGENT_LINK_LISTEN` is a recognized configuration key: the listen address,
-  as `host:port`, of the agent link, the mutual-TLS endpoint an edition built on this tree
-  serves for its node agents. Empty, the default, means no listener. A startup that sets it no
-  longer logs it as ignored, and `olivares config validate` and `config effective --strict`
-  accept it. The Community build does not read it.
-- **Each provider driver now says which launch choices its tool actually receives.** The Claude
-  Code, Codex, Grok and OpenCode drivers declare whether a session launch hands the model, the
-  effort and the permission mode to the tool they start, and where the models offered for them
-  come from; the sessions module reads that declaration per driver. Claude Code receives all
-  three. Codex, Grok and OpenCode receive the model and the effort but not the permission mode,
-  which is Claude Code's own setting. The models of every driver can be discovered by testing
-  the provider credential a profile is bound to, and no driver lists models itself. A driver
-  that declares nothing reads as unknown rather than as a guess, and a conformance test holds
-  each declaration to what the launch actually sends. No launch changes, and no API or console
-  surface presents the declaration yet.
-### Changed
+- Release tags no longer start with `v`. Update any script or pin that expected the prefix:
+  pin tags in the form `26.10.<patch>`.
+- The engine now listens on every network interface by default: `--listen` defaults to
+  `:8443` and `--grpc-listen` to `:8444`. To keep it on the local host only, start it with
+  `--listen=127.0.0.1:8443 --grpc-listen=127.0.0.1:8444`; in Docker Compose set
+  `OLIVARES_BIND=127.0.0.1` in `.env`. The packaged systemd and OpenRC units listen on every
+  interface too; override with `OLIVARES_EXTRA_ARGS`. TLS, the one-time setup token and the
+  other start-up protections are unchanged.
+- Upgrade every replica at once: the database schema moves to version 14 and a binary from an
+  earlier release refuses to open an upgraded database. To go back, restore the earlier
+  database together with the earlier binary.
+- PostgreSQL connection strings are now read the way PostgreSQL itself reads them (the driver
+  is now pgx v5.11.0). Check every configured string before upgrading: in `postgres://` URLs,
+  percent-encode a space as `%20`, `=` as `%3D` and `@` as `%40`, and expect `+` to mean a
+  literal plus; in `host=... dbname=...` strings, write a literal backslash as `\\` and put
+  values with spaces in quotes (`application_name='my app'`). Strings that relied on the old
+  reading are refused with a parse error.
+- Packaged installations run the engine under a dedicated `olivares-svc` service account. The
+  installer validates the account's declaration and refuses to guess when an installation's
+  state does not say exactly one account.
+- `olivares first-boot` prints the address the console answers at and whether first setup is
+  still pending, with no credentials and no network. While no administrator exists,
+  `olivares first-boot --new-token` replaces the one-time setup token.
+- `olivares doctor` now judges the installation it finds: on a local installation the checks
+  that only apply to a service report `not_applicable`, and every remedy names something you
+  can do on that kind of installation.
+- New configuration keys: `OLIVARES_PDF_RENDER_TIMEOUT` (a duration; the default stays 30s and
+  invalid values are refused by name) and `OLIVARES_SESSIONS_AGENT_LINK_LISTEN` (accepted by
+  `config validate`; not used by this build).
+- The binary is built with Go 1.26.8.
 
-- **Built with Go 1.26.8.** The workspace toolchain, every module outside the workspace, the release
-  and hardened-image builders and the development container move from Go 1.26.6 to 1.26.8, the
-  latest 1.26 patch release. Go 1.26.7 fixes the net/http package; Go 1.26.8 fixes cgo, the
-  compiler, the runtime and the debug/elf and os packages. Every pin moves together, so the
-  toolchain check still finds one version everywhere.
-- **Content inspection now also receives decoded tool-use arguments, with separate bounded work.**
-  Request/response DLP receives every JSON-unescaped tool-use argument key and string and every
-  decoded URL/base64 variant, each with its original trust provenance and once per occurrence.
-  The pre-existing channels and decoding are preserved with their original limits, and the new
-  work never consumes them. The new work has its own limits per request or response, covering
-  the whole resent conversation: 32 MiB of decoded output, 64 MiB of parsed or decoded input,
-  262,144 JSON tokens, 65,536 added channels, and six encoding levels. When a limit is reached
-  the content is marked unscanned: the stock policy refuses the request or withholds the
-  buffered response; with an explicit unscanned-allow rule, or with the inspector alone, the
-  pre-existing decoding and channels still apply, but the remaining added decoding is not
-  inspected. Wire bytes are unchanged.
-- **A right-to-erasure receipt now states what its verification examined.** The residual scan
-  that runs after the erase pass and before the crypto-shred reports the method it used and
-  the targets it opened against the targets this request's data-class scope required; the
-  sealed receipt carries them as `residual_scan_depth`, `residual_scan_opened`,
-  `residual_scan_applicable` and `data_classes`, and `manifest_hash` commits to the labels
-  (manifest v2). When the scan opened nothing, or less than the scope required, the receipt
-  says so once in `verify_reason` on a matchable substring (`residual-scan-depth=unestablished`
-  / `residual-scan-coverage=partial`) and the erasure closes `completed_with_gaps` with
-  `verify_ok: false` — an erasure whose verification could not look where the request said to
-  look is not a verified erasure. Receipts sealed earlier keep empty fields and the manifest
-  hash they were sealed under; nothing recomputes a stored manifest. **Extension seam
-  (contract v3):** `CryptoShredProbes.ResidualScan` is now `ResidualScanReport` and returns a
-  `CryptoShredResidualScanReport` (see *Deprecated* below for the field that goes with it), and the
-  two markers above are RESERVED — a coordinator-supplied string carrying either, whether an
-  `Unverified` entry, a readiness warning or a policy label, is replaced on `verify_reason` by one
-  fixed sentence recording that a string was withheld, so a third party cannot state the scan's own
-  claims in the scan's own words. A coordinator built against the previous contract *and honoring
-  it* fails closed — a declared gap, or a refusal naming the seam. One that swallows a failed type
-  assertion and reports itself complete still seals a verified receipt, exactly as it did before
-  this change: what makes that verdict honest is the contract, and a seam cannot enforce it.
-- **Onboarding and granting no longer join an existing account.** Onboarding or granting a
-  membership to an address that already has an account, which is not a member of the tenant,
-  answers `202` with `{"status":"consent_required"}` and writes nothing; SCIM provisioning of
-  such an address answers a conflict, whoever asks. This release has no path for the holder
-  to consent: a person who already has an account joins a further organization only once a
-  later release ships that consent. `POST /v1/users` accepts `tenant`, `role` and
-  `workspace_id` to create an account with its first membership in one step, and
-  `olivares users create` gains `--member-of` and `--role`. An address in an email domain
-  another tenant's identity provider claims is refused.
-- **A tenant removes a member only from itself, and the account's retirement precedes any
-  re-admission.** A tenant's disable, deprovision, SCIM event or CAEP signal removes the
-  account's membership in that tenant, its group rows there and the tokens and sessions bound
-  to that tenant. It never changes the account's global status, its other memberships, its
-  account-wide sessions or its passkeys. The console's *Disable* is now *Remove from
-  organization*. The removed account's grants stop matching at once. What the tenant stored
-  that names it is then retired in the background, or listed by id for an administrator to
-  resolve; until the retirement completes the account cannot be admitted to the tenant again
-  (`409 retirement_pending`), and afterwards only the tenant that created the account
-  re-admits it directly. Removing a member that is already removed writes nothing.
-  Sessions of an account a tenant created are scoped to that tenant.
-- **Writes that name accounts take the deployment's directory admission, and are bounded.** A
-  write that stores a reference letting an account act in a tenant, or binding it to a duty
-  there, reads the standing of the accounts it names and takes the deployment's directory
-  admission in its transaction; while a named account is being removed from the tenant it
-  answers `409 subject_retirement_active`. One such write names at most 64 accounts, counted
-  once each after its ids, credential ids and email addresses resolve to accounts; above that
-  it answers `409 too_many_subjects`. A model-access forbid only restricts, so it is never
-  refused and the retirement keeps it.
-- **SCIM writes an account's attributes only when the tenant alone governs it.** An attribute
-  change of an account another tenant shares, whose holder took custody of it, or that the
-  deployment suspended answers `403` and writes nothing. `active=true` writes nothing, and
-  `active=false` removes the member from that tenant only; an attribute change is never read
-  as a removal.
-- **Stored kinds must be known.** A policy of a kind no module registered, and a policy
-  revision on a surface the revision store does not list, are refused. A stored policy,
-  revision or workflow step of an unknown kind, left by an earlier version or a restore, keeps
-  a retirement in its tenant blocked until the row is migrated or removed.
-- **Invitations need the deployment's mail destination and its declared console address.**
-  Invite mode mails the invitation to the invitee through the destination
-  `OLIVARES_INVITE_MAIL_DESTINATION` names in `OLIVARES_NOTIFY_CONFIG`, which the operator must
-  scope to no tenant (`"tenants": []`), with a link to the console address declared by
-  `--public-url` or `OLIVARES_PUBLIC_URL`. Without either it answers
-  `409 invite_delivery_unavailable` and writes nothing. A pending invitation can be resent
-  with a new secret.
-- **A tenant's erasure request keeps the account's global record.** It removes the account's
-  membership in that tenant and anonymizes no account, not even one the tenant created; the
-  receipt records that the global record waits for the deployment's erasure ceremony.
-- **Upgrade every replica together; a rollback reopens what this release closes.** The core
-  schema moves to version 14, and a binary of an earlier version refuses to open an upgraded
-  database. Rolling back therefore means an earlier binary on an earlier database, and that
-  binary again joins existing accounts and lets tenant actions write global status, as it did
-  before this release.
-- **PostgreSQL connection strings are read the way libpq reads them.** The PostgreSQL driver is
-  now pgx v5.11.0, and it reads both connection-string forms as libpq does. Check any configured
-  string that relies on the old reading:
-  - `postgres://` and `postgresql://` URIs decode only percent-encoded bytes. In a query value,
-    write a space as `%20` and an `=` as `%3D`; a `+` is a literal plus sign, not a space, and an
-    unencoded space or `=` inside a value is refused. `?options=-c+role=app` must be written
-    `?options=-c%20role%3Dapp`. A malformed percent-encoding such as `%zz`, and `%00`, are
-    refused. The user name and password end at the first `@` that comes before any `/`, so write
-    an `@` in either as `%40`. Write an `@` in a query value as `%40` as well: with no `/` before
-    it, as in `postgres://db?application_name=me@corp`, it ends a user name and the host becomes
-    `corp`. A repeated query parameter takes its last value; the previous driver took the first.
-  - Keyword/value strings (`host=… dbname=…`): a backslash escapes the character after it and
-    is dropped, so write a literal backslash as `\\`. `sslrootcert=C:\certs\ca.pem` now reads
-    `C:certsca.pem` and must be written `sslrootcert=C:\\certs\\ca.pem`. Whitespace inside a
-    keyword is refused: `application_name=my app host=db` was read as `application_name=my` plus
-    a parameter named `app host`, so `host=db` was lost, and it now fails to parse. Quote the
-    value instead: `application_name='my app' host=db`.
-  - The driver's v5.11.0 release notes list the remaining edge cases, among them multiple hosts,
-    IPv6 addresses without brackets, and empty host or port values.
+### Console
 
-  Olivares passes these configured connection strings to the driver as written: the
-  `--dsn`, `--owner-dsn`, `--admin-dsn` and `--superuser-dsn` values, the content of their
-  `file:` or `env:` references (a file loses only its final line ending), and the `dsn` of a
-  PostgreSQL content source, so each of them follows the rules above. `OLIVARES_VECTOR_DSN`, when
-  `OLIVARES_VECTOR_BACKEND` is `pgvector`, follows them too after surrounding whitespace is
-  trimmed. If the driver refuses it, Olivares logs a warning and keeps the in-process vector
-  index, so look for that warning after upgrading. A PostgreSQL content source configured with
-  separate host, port, database, user, password and SSL mode fields gets a keyword/value string
-  that Olivares escapes itself. Review those fields too: Olivares does not quote tabs, line breaks
-  or other whitespace besides a space, so such a value was already cut short and the new driver
-  may refuse the whole string. NUL bytes are refused. Comma-separated host or port fields follow
-  the driver's multiple-host and empty-value rules above.
+- The console is rebuilt around the work: one screen lists every session grouped by what it
+  needs (active, waiting for you, settled), a session opens into the story of its run with its
+  checks, last turns and touched resources, and a composer starts or continues a session from
+  there. Every session has a working link that survives a reload, the first screen after login
+  offers the next action you are allowed to take, and the interface is fully translated in
+  seven languages.
+- The dark theme is now the default. Light and system remain choices in the same toggle, and
+  the light theme keeps full parity.
+- Header controls wrap onto a second line instead of covering the screen's name, rows open
+  from the keyboard, tables give their columns room, the New session dialog scrolls its fields
+  instead of the page, and unnamed things get a readable fallback word in every language
+  instead of a raw identifier.
+- Command-line output goes through one renderer, so the same fact reads the same everywhere;
+  some command output that was formatted by hand in 26.9.0 may look different now, and the
+  plain text is the stable form.
 
-### Deprecated
+### Sessions and providers
 
-- **`CryptoShredResidualScan.ScanDepth` (extension seam, contract v3).** The field is still READ:
-  the adapter copies it off every wired verdict, which is what lets a coordinator built against the
-  previous contract still compile and still deserialize whole. What changed is that nothing CONSUMES
-  it and nothing publishes it — no receipt field, no summary line and no hash reflects a value set
-  there. Depth is stated once, by the pre-shred scan, in the receipt's `residual_scan_depth`. A
-  coordinator that still sets it is not contradicted; it is simply not repeated.
+- The first hour works from the command line: `olivares provider add | test | rotate | bind |
+  rm` registers a model provider and proves it before anything depends on it (a refused
+  credential is offered `rotate`, never `bind`), and `olivares agent profile update | rm`,
+  `olivares agent deploy` and `olivares agent tool install` take you from an empty
+  installation to a governed session.
+- The official Codex and Grok command-line clients install beside Claude Code with
+  `olivares agent tool install`. The Grok download is verified end to end; the Codex origin
+  cannot be verified automatically today, so the installer labels it unverified instead of
+  claiming a check it cannot make.
+- A session that names no workspace now starts in its own empty private directory, which is
+  removed when the session is released (files are kept if a workspace was registered under
+  it).
+- A session's usage and cost appear in the session record and, where a cost sink is wired, in
+  the spend ledger.
+- The product documents exactly which launch choices each tool receives (model, effort,
+  permission mode): Claude Code receives all three; Codex, Grok and OpenCode receive the model
+  and the effort. A run's provider profile, driver and execution environment can also be read
+  through a new read-only API without holding the run itself.
+- The model gateway has one written contract (one streaming call with tool use, usage
+  accounting and cancellation) with classified errors — rate limit, context length,
+  authentication, transient — and a conformance suite every driver must pass; the contract and
+  a driver-writing guide are in the reference documentation.
 
-### Removed
+### Identity
 
-- **An invitation response no longer carries the redemption token or its link.** Onboarding in
-  invite mode answers the invitation's `id`, `expires_at` and `delivery` state; `token` and
-  `accept_url` are gone, and the link reaches only the invitee's mailbox.
-- **A SCIM delete no longer disables an account.** Deleting a member removes it from the tenant;
-  an account left with no membership keeps its global status.
+- An organization can no longer join an existing account on its own: inviting or granting a
+  membership to an address that already has an account now asks for the holder's consent,
+  which this release does not provide a way to give (the answer is `consent_required`). To
+  give a new person everything in one step, create the account with its first membership:
+  `POST /v1/users` with `tenant`, `role` and `workspace_id`, or
+  `olivares users create --member-of ... --role ...`.
+- Removing a member removes them from that organization only: their account, its passkeys and
+  their memberships elsewhere are untouched, and the console action is now called *Remove from
+  organization*. Until the removal finishes in the background the account cannot be added back
+  (`409 retirement_pending`), and afterwards only the organization that created the account
+  adds it back directly.
+- Writes that store what an account may do read the account's standing first, refuse with
+  `409 subject_retirement_active` while a named account is being removed, and accept at most
+  64 accounts per write (`409 too_many_subjects` above that).
+- SCIM writes an account's attributes only when this organization alone governs it;
+  `active=false` removes the member from this organization, and deleting a member no longer
+  disables the account behind it.
+- Invite mode needs a mail destination (`OLIVARES_INVITE_MAIL_DESTINATION` in
+  `OLIVARES_NOTIFY_CONFIG`) and a declared console address (`--public-url` or
+  `OLIVARES_PUBLIC_URL`); without both, sending an invitation answers
+  `409 invite_delivery_unavailable`. A pending invitation can be resent with a new secret.
+- An erasure request from one organization removes that membership and leaves the account's
+  global record to the deployment's own erasure process; the receipt says so.
+- An invitation response no longer contains the redemption token or its link: the link reaches
+  only the invitee's mailbox.
 
-### Fixed
+### Governance and audit
 
-- Reporting now passes its tenant-scoped data handle to external data consumers, restoring
-  late-bound enterprise report sources while preserving existing providers.
+- `olivares policy replay` answers what a policy decided on a past date, from the recorded
+  evidence rather than today's policy, so an allow can be explained after a revoke. The same
+  reconstruction is available over the API and in the console.
+- Content inspection also scans decoded tool-use arguments (every unescaped key and string,
+  including URL and base64 variants) within fixed limits per request; when a limit is reached
+  the content is marked unscanned and the stock policy refuses it. An explicit
+  unscanned-allow rule keeps traffic flowing on the inspection that did complete.
+- A right-to-erasure receipt now states what its verification examined (`residual_scan_depth`,
+  `residual_scan_opened`, `residual_scan_applicable`, `data_classes`), and an erasure whose
+  scan could not look where the request said to look closes as `completed_with_gaps` with
+  `verify_ok: false` instead of counting as verified. Extension authors: the residual-scan
+  seam returns a report type now, and two marker strings are reserved on `verify_reason`.
+- Stored things must be of a known kind: a policy, revision or workflow step of a kind no
+  module registers is refused, and such a row left by an earlier version or a restore blocks
+  that organization's retirement until the row is migrated or removed.
+
+### Connectors and MCP
+
+- The MCP client no longer follows a redirect from a Streamable HTTP server: a 301/302/303/307/
+  308 with a `Location` fails the request instead of sending anything to the redirected
+  address. Configure each server with its final endpoint URL.
+- A request that cannot be sent now reports a fixed reason (`connection refused`, `invalid
+  endpoint URL`) instead of echoing the URL.
+
+### Appliance
+
+- The Fedora 44 appliance ships in two editions built from one recipe: the server edition
+  without a desktop, and a desktop edition with GNOME (GNOME Shell with GDM on the graphical
+  target, Firefox, the Ptyxis terminal, the Nautilus file browser, and SSH with SFTP enabled).
+  Both come as an installer ISO, a qcow2 disk and an OVA, both keep SELinux enforcing, and the
+  desktop edition needs a graphical console and at least 2 vCPU with 4 GiB of memory.
+- Release images are built from a published release's own bytes and checked against its signed
+  checksums before they are published. Files up to 2 GiB are attached to the release itself;
+  larger files are published at a versioned location with an index, and every earlier version
+  stays available.
+- Each image ships with its checksums, its SBOM and a source bundle, all signed.
 
 ### Security
 
-- **An organization can no longer join an existing account without its holder's consent, act on
-  an account beyond its own membership, or keep authority for a member it removed.** The
-  behavior that changes for operators, integrations and administrators is listed under
-  *Changed* and *Removed*.
-- Federated sign-in through a tenant's identity provider is bound to that tenant. It
-  returns a session only for a member of the tenant whose address lies in an email domain
-  that provider claims, and it provisions a new account only in such a domain, with a
-  viewer membership in that tenant alone. Wherever a tenant's identity provider can be
-  selected at sign-in, activating one now requires at least one claimed email domain.
-  After the upgrade, a tenant's identity provider that is already active with no claimed
-  email domain signs nobody in until an administrator claims a domain for it; each refused
-  sign-in is recorded as a blocked login. The deployment-wide identity provider, and so
-  every single-tenant deployment, is unchanged.
+- An organization can no longer join an existing account without its holder's consent, act on
+  an account beyond its own membership, or keep authority over a member it removed; the exact
+  new behavior is under *Identity*.
+- Sign-in through an organization's identity provider now works only for members of that
+  organization whose address lies in an email domain the provider claims, and a provider can
+  be activated only with at least one claimed domain. After upgrading, an active provider with
+  no claimed domain signs nobody in until an administrator claims one; the deployment-wide
+  provider is unchanged.
+- Accepting an invitation now passes the same network and password policy as the login form;
+  before, an address the policy refuses at the login form could enter through an invitation
+  link.
+- A hook request's agent is the one its credential proves; a request header never selects the
+  policy. A hook that logs in with a user session is refused in an organization that has
+  agent-scoped hook policy.
+- Dependency advisories with a fixed release were applied: the Backstage connector pins
+  `adm-zip` 0.6.1 ([GHSA-7q85-xj36-vmfc](https://github.com/advisories/GHSA-7q85-xj36-vmfc))
+  and `colord` 2.9.4 ([GHSA-2wm5-q62r-hmrv](https://github.com/advisories/GHSA-2wm5-q62r-hmrv)).
+  Neither package is part of the engine binary.
 
+### Fixed
 
-### Also pending for v26.10
-
-Prepared for a September candidate cut that was never tagged or published; these entries are
-pending for v26.10 together with the ones above.
-
-#### Added
-
-- **A console built around the work.** The session is the unit of work: one screen lists
-  every agent session on the plane in a keyboard-navigable rail grouped by what each session
-  needs (active, waiting for you, settled), opens one into the narrative of the run with its
-  checks, last turns and touched resources inline, keeps its scope and identifiers beside it,
-  and carries a composer that launches or continues a governed session. A session is
-  addressable: a link opens it cold, survives a reload and follows Back and Forward, and the
-  authority checks still decide. Names come from one ladder (run name, summary, goal, action,
-  "Untitled session"); a raw reference is never painted as a name and stays reachable in the
-  identifiers block. Overview, agents, provider profiles and audit follow the same frame —
-  title, description and actions on one line in one shared page header, tables that fill
-  their region including at zero rows, every truncated sentence carrying its full text — and
-  the chrome shrinks to a 48 px header and one 36 px title line. The first screen after login
-  offers the next action to a principal authorized to take it, and every empty state says
-  what the surface will show, in seven languages. States are told in words as well as colour,
-  the work rail declares itself busy while its first read is in flight, headings never skip a
-  level on the session screens, and a burst of work-stream events costs two list reads
-  instead of one per event. Measured against the embedded console of the built binary in both
-  themes at 1440, 1180 and 390 px; one known limit is unchanged: the audit screen's name is
-  cut at 1180 px by its own block of controls. The documentation's console captures are
-  retaken from this console.
-
-- **An auditor can ask what a policy decided on a past date.** `olivares policy replay`
-  answers from the evidence ledger — the recorded policy version and the inputs that decision
-  consumed — and never from the policy that is active today, so Monday's allow can be
-  replayed after Tuesday's revoke. The same reconstruction is available over the API and from
-  the console's governance client. The how-to says what a reconstruction proves and what it
-  cannot prove.
-
-- **The first hour, from the command line.** `olivares provider add | test | rotate | bind | rm`
-  registers a model-provider credential and proves it before anything depends on it: a test
-  carries its outcome in the exit code, and the screen that follows names the command that
-  fixes what it just reported — a refused credential is offered `rotate`, never `bind`.
-  `olivares agent profile update | rm` and two declared policy fields (the tools a profile may
-  use and its permission mode, deny-closed when undeclared), `olivares agent deploy`, and
-  `olivares agent tool install` with download progress complete the path from an empty
-  installation to a governed session. The console gains a providers screen, and the guided
-  first hour is documented in seven languages. A session's usage and cost are folded into
-  the session record and, where a cost sink is wired, into the spend ledger.
-
-- `OLIVARES_PDF_RENDER_TIMEOUT` declares the time budget of a PDF render as a duration. The
-  default stays 30 s; a value that is not a positive duration is refused by name before a
-  render starts.
-
-- **The official Codex and Grok command-line clients install beside Claude Code.**
-  `olivares agent tool install` and the `codex` / `grok` command families install, verify and
-  record each client from its origin with the same receipt model. The Grok origin is verified
-  end to end (download, checksum, launch, version). The Codex origin answers 403 to an
-  unauthenticated verification, so the installer labels that origin **unverified** in the
-  receipt and in the documentation instead of claiming a check it cannot make.
-
-- **One declared contract for launching an official client in a governed session.** The
-  arguments each client needs are built from a single table, the transport each form requires
-  (pipes or a terminal) is declared beside it, and the engine asks that declaration which
-  runner to wire: a client that refuses a terminal on its standard input is launched on
-  pipes. Launch, attach, input, answer by name, reconnect, stop and resume are exercised
-  against the three real clients without a model turn.
-
-- **A written contract for the model gateway.** One `CreateMessage` call with streaming, tool
-  use, usage accounting and cancellation, and a conformance suite that every driver must pass
-  over each driver, protocol and transport the product ships. Drivers report their
-  capabilities through the contract, and errors carry the provider's classification (rate
-  limit, context length, authentication, transient) so retry and budget decisions do not
-  parse messages. The contract and a guide to writing a driver are in the reference
-  documentation.
-
-- `olivares first-boot` answers "what now?" without a shell. It reads the installation's
-  data directory and prints the address or addresses the console answers at, plus whether
-  first setup is still pending — no credential and no network, so it works against the
-  distroless container whose startup banner has scrolled away
-  (`docker compose -f deploy/compose/docker-compose.yml exec olivares olivares first-boot`)
-  and against a packaged install (`olivares first-boot --data-dir /var/lib/olivares`). It
-  never prints the one-time setup token, which is shown once at mint time; while no
-  administrator exists, `--new-token` mints a replacement and prints it once, and the
-  previous token stops working. The command sits with `quickstart` under *Setup &
-  Configuration* in `olivares --help`.
-
-#### Changed
-
-- **One renderer for the terminal.** Panels, tables, refusals and next steps of the CLI now
-  go through one plain-first, width-aware renderer: the first-hour commands, the governance
-  family and a number of other families. The same fact reads the same across them, and output
-  that was formatted by hand in 26.9.0 may have changed shape; the plain form is the
-  contract, and color only adds to it. Some families are not on the renderer yet and keep
-  their 26.9.0 tables and panels, among them `compliance`, `notify`, `health`, `identity`,
-  `observability` and `adoption`.
-
-- **A session that names no workspace gets a directory of its own.** It starts in an empty,
-  private directory (mode 0700) created for that run and recorded on the run, instead of the
-  engine's own tree; it is refused only when no such directory can be derived. Releasing the
-  session removes that directory — unless a workspace has been registered at or under it
-  since, in which case the files are kept. This sets where a session starts and what it finds
-  there; it is not confinement, which remains the isolation posture and the profile's tools.
-
-- **`olivares doctor` judges the installation that exists.** It classifies the install shape
-  and reports it (`install_shape` in `-o json`, `service` or `local`): on a `local`
-  installation — `quickstart` or `serve` over a data directory — the checks that only a
-  service installation can pass report `not_applicable` instead of failing, and each remedy
-  names something that applies to that installation; a service installation is held to every
-  check it was held to before. A build stamped with its own source commit is recognized as a
-  source build; a release, an unknown label or a mismatched hash is still held to the release
-  anchors.
-
-- **Dark is the console's default theme.** An operator who has not chosen a theme now gets
-  the dark one instead of the operating system's setting. Light and system remain explicit
-  choices in the same toggle, and the light theme keeps full parity.
-
-- **The console is a server: `serve` and `quickstart` bind every interface by default.**
-  `--listen` now defaults to `:8443` and `--grpc-listen` to `:8444` — `0.0.0.0` and, where
-  the kernel has IPv6, `::` — where 26.9.0 defaulted to `127.0.0.1:8443` and
-  `127.0.0.1:8444`. A default install therefore answers off-host as soon as it starts; to
-  keep the engine on the host, pass `--listen=127.0.0.1:8443 --grpc-listen=127.0.0.1:8444`.
-  What guards the exposed port is unchanged: TLS on by default, no default credentials, the
-  one-time setup token gating the first administrator, a plaintext `--insecure` listener
-  refused off-host, and `--seed-demo` refusing a non-loopback bind. The first-boot banner
-  lists every address the bind answers at. The Compose stack is named `olivares` — project,
-  service and container — so the documented next step,
-  `docker compose -f deploy/compose/docker-compose.yml exec olivares olivares first-boot`,
-  is typed as-is; it publishes on `${OLIVARES_BIND:-0.0.0.0}`, and `OLIVARES_BIND=127.0.0.1`
-  in `.env` restricts it to the host. The packaged systemd and OpenRC units bind every
-  interface too, with `OLIVARES_EXTRA_ARGS` in the environment file to override. The install
-  guide, the README family, the deployment guides and the configuration and CLI references
-  describe the new defaults.
-
-- The release workflow completes its second phase and publishes one draft per tag. The
-  step that asserts the reviewed `slsa-verifier` makes the installed binary readable before
-  it takes its digest, and digests it by absolute path only; the guard that binds the
-  second phase to the first admits the `$HOME/.cosign` location the cosign installer uses;
-  the workflow-only evidence step quotes its file list, filters the changed paths with git
-  itself and treats a non-numeric run count as a refusal; the evidence fetch no longer
-  shallows the checkout, so the release build records the previous tag instead of an empty
-  one; the finalizer reads its candidate from the release list and retries a dropped asset;
-  and the first phase reuses an existing draft for the tag instead of creating a second
-  one. The assertions, the digests they compare and the published artifacts are the same.
-
-- The installer matrix installs the current release from end to end on Debian, Ubuntu,
-  Fedora, openSUSE Leap, Alpine and macOS. Each leg installs with `install.sh`, installs
-  the user-mode service at the one route the service adapter accepts (the launchd
-  configuration and data routes on macOS), starts the engine from the binary that adapter
-  installed and reads `olivares doctor`. The legs use the isolated cosign the workflow
-  supplies and hash with `sha256sum` or `shasum`; the container images carry `python3` for
-  the doctor step; a failing leg prints the captured installer and engine logs before it
-  cleans up; and the scratch is emptied from inside the container, so a cleanup can never
-  decide the verdict.
-
-- The published tree describes the product only. Prose in scripts, workflows, tests and
-  records was rewritten to name what the code does; ten scripts that served no shipped
-  target and one staging note were removed; and a gate refuses prose that describes
-  anything else.
-
-- The pull-request checks bring their own PostgreSQL services and run the functional suite
-  as declared shards, each with the time it measures on the hosted runner; the estate-shape
-  self-test answers *not applicable* where the tree carries no `design/` instead of red.
-
-#### Fixed
-
-- Accepting an invitation now passes the same login policy as every other way of obtaining a
-  session. The invited user's first session is minted through the single door that applies the
-  network policy of the login attempt and the password policy, inside the transaction that
-  activates the invitation; before, acceptance issued a session without consulting either, so
-  an address the policy refuses at the login form could enter through an invitation link.
-
-- A hook request's agent is the one its credential proves; a header never selects a policy.
-  Agent-scoped policy follows the proven agent; a request whose credential proves no agent is
-  treated as unbindable wherever an agent-scoped policy could apply, with or without the
-  header, and a declared agent can only add a denial. A hook that authenticates with a login
-  session is therefore refused, deny-closed, in a tenant that has an agent-scoped hook
-  firewall policy; without such a policy its verdicts are unchanged.
-
-- The engine writes one log format. Started without `--quiet` it used the language's default
-  handler, and with `--quiet` a structured text handler, so the shape of every line depended
-  on a flag; every start now writes logfmt lines with the timestamp in UTC. The same change
-  makes `OLIVARES_LOG_LEVEL` govern what the engine emits, as its reference says; before, it
-  governed only the in-memory capture, so a deployment that sets it will see its log volume
-  follow the level after upgrading.
-
-- `--help` no longer shows a value placeholder that a flag does not accept. A quoted command
-  name inside a usage string was rendered as the flag's argument: 17 flags were affected, four
-  of them booleans shown as if they took a value. The CLI reference is regenerated in all
-  seven languages.
-
-- The installer (`scripts/install.sh`, served at `https://olivares.ai/olivares/install.sh`)
-  and the HTTPS bootstrap no longer stop with `cosign is required` on a host without
-  cosign: they fetch cosign v2.6.4 into their temporary directory, accept it only if its
-  SHA-256 equals the digest pinned in the script (the per-platform rows
-  `scripts/assert-cosign-binary.sh` approves), say so in the printed plan, verify the
-  release with it and remove it afterwards. `--install-cosign` keeps the verified copy
-  next to `olivares`; `OLIVARES_COSIGN=/path/to/cosign` uses your own. A temporary
-  directory mounted `noexec` falls back to `$XDG_CACHE_HOME`/`~/.cache`. Reported
-  against v26.8 and again against v26.9 (`curl -fsSL https://olivares.ai/olivares/install.sh | sh`).
-
+- The installer and the HTTPS bootstrap no longer stop with `cosign is required` on a host
+  without cosign: they fetch cosign v2.6.4, accept it only when its SHA-256 matches the digest
+  pinned in the script, verify the release and clean up afterwards. `--install-cosign` keeps
+  the verified copy; `OLIVARES_COSIGN=/path/to/cosign` uses your own.
 - The service installer no longer refuses to replace an existing service file on a host
-  without `cmp`. The idempotency check uses `cmp` when it is present and SHA-256
-  (`sha256sum` or `shasum`) otherwise, and it names the missing tools when neither
-  exists. On a minimal image the missing tool read as "refusing to replace existing
-  service file" on the second `--start` invocation.
-
-- The controls of a screen header wrap onto a second line when they do not fit on one, and the
-  title row that carries them grows to hold that second line instead of keeping a fixed height.
-
-- The controls of a header give way before the screen's name: the block that holds the title no
-  longer clips it, and the name keeps its whole text while the controls shrink around it.
-
-- A run, a health subject and a reliability timeline take their name from the same ladder as the
-  rest of the console — the name someone typed, then the session's own line, and only then a
-  fallback word — so a reference is no longer painted as the name of a thing that has none, and
-  stays beside the name instead.
-
-- The fallback words for an untitled session and an unnamed subject read in all seven languages.
-
-- Escape closes the composer's Advanced panel and returns focus to the summary that opens it; with
-  a picker open inside the panel, Escape closes the picker and leaves the panel open.
-
-- The composer's scope line names an environment that is not this node with the word the provider
-  profiles table uses, instead of its raw reference, which stays on the tooltip.
-
-- A provider-profile row opens from a real button on its name, so Tab reaches the name and Enter
-  opens the row.
-
-- The sessions table gives the session, state and last-seen columns a width of their own on a
-  desktop-width screen, and its last column gives way at its end with its full text on the tooltip.
-
-- The New session dialog bounds its own height to the viewport and makes its field region the one
-  part of it that scrolls; what that produces on a screen is measured separately.
-
-- The empty Deployment screen says what it lists — deployment definitions, desired state recorded
-  there, not a launched session — and offers the way to the sessions screen beside its own Declare
-  verb.
-
-- The Spanish console and documentation describe evidence as making alteration detectable rather
-  than claiming tamper-proof storage, and state a routine's cadence as a minimum interval rather
-  than an ambiguous label.
-
-#### Security
-
-- The Backstage connector resolves `adm-zip` 0.6.1
-  ([GHSA-7q85-xj36-vmfc](https://github.com/advisories/GHSA-7q85-xj36-vmfc): uncontrolled
-  memory allocation from the declared uncompressed size, high). `adm-zip` is a transitive
-  dependency of the connector's three workspaces; an override pins `^0.6.1` and the three
-  lockfiles move that package alone. The engine binary does not contain it.
+  without `cmp`; it falls back to SHA-256 and names the missing tools when neither works.
+- The engine writes one log format in every mode (logfmt, UTC timestamps), and
+  `OLIVARES_LOG_LEVEL` now governs what the engine emits — a deployment that sets it will see
+  its log volume follow the level.
+- `--help` no longer shows a value placeholder for a flag that takes none (17 flags were
+  affected; the CLI reference is regenerated in all seven languages).
+- Reporting passes its organization-scoped data handle to external report sources again,
+  restoring late-bound report data.
+- The Spanish console and documentation describe evidence and routine schedules accurately
+  (making alteration detectable; a minimum interval).
 
 ## [26.9.0] - 2026-09-16
 

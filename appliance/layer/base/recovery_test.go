@@ -116,7 +116,9 @@ func TestStageMachine_AMissingCarrierKeepsTheRecordedStageAndReason(t *testing.T
 	in := answersFixture(t, "olivares.example.test")
 	dir, h := t.TempDir(), newFakeHost()
 	seams := h.seams()
-	seams.SetupDelivery = RefusingSetupDelivery{}
+	// The recorded-refusal subject needs a seam that refuses; the real seam's own refusal
+	// modes are pinned in setup_delivery_test.go.
+	seams.SetupDelivery = undeliveredDelivery{}
 	refused, err := newMachine(dir, h, &in, seams).Run(context.Background())
 	if err != nil || refused.State != Refused || refused.Stage != StageSetupDelivery {
 		t.Fatalf("first run: %+v %v", refused, err)

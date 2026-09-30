@@ -1,8 +1,10 @@
 # SPDX-FileCopyrightText: 2026 Olivares.AI
 # SPDX-License-Identifier: AGPL-3.0-only
 #
-# appliance-image — the hosted fixture of the appliance image recipe: it builds the server
-# edition for amd64 on its shipping base, Fedora 44, and then boots what it built.
+# appliance-image — the hosted fixture of the appliance image recipe: it builds one edition
+# for amd64 on its shipping base, Fedora 44 — the server edition by default, or the desktop
+# edition, the server profile plus GNOME, when dispatched with edition=desktop — and then
+# boots what it built.
 #
 # The product and layer are RPMs, signed with their repodata through D's S3 scripts
 # (scripts/rpm-payload-sign.py, scripts/render-rpm-repodata.py; S3 is composed before this
@@ -25,6 +27,11 @@ on:
         type: choice
         options: [nonfree, free]
         default: nonfree
+      edition:
+        description: Which edition's profile the job builds — the qualification fixture boots it, and the publish path builds, signs and publishes it
+        type: choice
+        options: [server, desktop]
+        default: server
       accelerator:
         # Required and without a default, as the Taskfile and attempt.py require it: a choice
         # list would preselect one. attempt.py refuses anything but kvm or tcg before any work.
@@ -35,6 +42,23 @@ on:
         description: Version stamped on the development packages and the OVF envelope
         type: string
         default: 0.0.0-dev
+      publish:
+        description: >-
+          Publish path: build the RELEASE image of the selected edition from the published
+          release's own signed rpm, sign the outputs, and attach them to the published release
+          (files over 2 GiB go to the R2 image route). Runs after the stable ceremony published
+          the release; each edition is one dispatch, and every file the edition's run adds
+          carries the edition's name so two editions never collide on one release.
+        type: boolean
+        default: false
+      release_tag:
+        description: The published release's bare CalVer tag (YY.M.PATCH, e.g. 26.10.0)
+        type: string
+        default: ''
+      release_commit:
+        description: Full 40-hex commit the tag points at (the release's own recorded commit)
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -52,6 +76,9 @@ env:
 
 jobs:
   image:
+    # The QUALIFICATION fixture, unchanged. The publish path is the release-image job below;
+    # the two never run in the same dispatch.
+    if: inputs.publish != true
     # Hosted on purpose: build.sh runs the builder as a PRIVILEGED container with the host's
     # /dev shared, which must never run on a runner that shares a host with other builds, so
     # this job stays on a disposable GitHub-hosted VM and no step reads a secret.
@@ -130,12 +157,13 @@ jobs:
           FIRMWARE: ${{ inputs.firmware }}
           ACCELERATOR: ${{ inputs.accelerator }}
           VERSION: ${{ inputs.version }}
+          EDITION: ${{ inputs.edition }}
         run: |
           set -euo pipefail
           /usr/bin/python3 appliance/images/kiwi/attempt.py \
             --evidence "$RUNNER_TEMP/appliance-image-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" \
             --accelerator "$ACCELERATOR" --firmware "$FIRMWARE" \
-            --base fedora44 --package-dir "$GITHUB_WORKSPACE/dist/rpm" \
+            --base fedora44 --edition "$EDITION" --package-dir "$GITHUB_WORKSPACE/dist/rpm" \
             --qualification-key "$QUALIFICATION_KEY" --target-dir "$GITHUB_WORKSPACE/dist/appliance"
       - name: always retire the builder owned by this job
         if: always()
@@ -158,9 +186,14 @@ jobs:
           set -euo pipefail
           total=0
           present=0
+          # The files formats.json declares, both editions: one run builds one edition's three,
+          # and the budget counts what exists.
           for file in dist/appliance/olivares-appliance-server-amd64.iso \
                       dist/appliance/olivares-appliance-server-amd64.qcow2 \
-                      dist/appliance/olivares-appliance-server-amd64.ova; do
+                      dist/appliance/olivares-appliance-server-amd64.ova \
+                      dist/appliance/olivares-appliance-desktop-amd64.iso \
+                      dist/appliance/olivares-appliance-desktop-amd64.qcow2 \
+                      dist/appliance/olivares-appliance-desktop-amd64.ova; do
             if [ -f "$file" ]; then
               present=$((present + 1))
               total=$((total + $(stat -c %s "$file")))
@@ -170,10 +203,11 @@ jobs:
           if [ "$present" -gt 0 ] && [ "$total" -le "$BUDGET_BYTES" ]; then
             upload=true
           fi
-          echo "image artifacts: $present of 3, $total bytes, budget $BUDGET_BYTES bytes, upload $upload"
+          echo "image artifacts: $present of 6, $total bytes, budget $BUDGET_BYTES bytes, upload $upload"
           echo "upload=$upload" >> "$GITHUB_OUTPUT"
-      # The three files formats.json declares, by name: KIWI's installer medium stays in the same
-      # directory beside the declared ISO, and a pattern would keep it as a fourth file.
+      # The six files formats.json declares for the two editions, by name: one run built three of
+      # them. KIWI's installer medium stays in the same directory beside the declared ISO, and a
+      # pattern would keep it as a seventh file.
       - name: retain image artifacts without publishing
         if: always() && steps.image-budget.outputs.upload == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -183,6 +217,9 @@ jobs:
             dist/appliance/olivares-appliance-server-amd64.iso
             dist/appliance/olivares-appliance-server-amd64.qcow2
             dist/appliance/olivares-appliance-server-amd64.ova
+            dist/appliance/olivares-appliance-desktop-amd64.iso
+            dist/appliance/olivares-appliance-desktop-amd64.qcow2
+            dist/appliance/olivares-appliance-desktop-amd64.ova
           retention-days: 7
           if-no-files-found: warn
           compression-level: 0
@@ -209,3 +246,302 @@ jobs:
             dist/appliance/*.json
           retention-days: 7
           if-no-files-found: warn
+
+  # --- The PUBLICATION route ---------------------------------------------------------------
+  # Two jobs, because one could not: the hosted job ceiling is 360 minutes and the attempt
+  # step alone is declared at 290 (its inner ceilings sum to 346 with the fixture's own
+  # packaging). The build job adds release verification and the signed delivery to the same
+  # budget, so the signing, uploading and public-delivery postconditions move to a second job
+  # that consumes the build's artifact. The producer signs; the publisher re-verifies against
+  # its own derived identity before anything becomes public — the same doctrine the stable
+  # ceremony uses across its two phases.
+  release-image:
+    if: inputs.publish == true
+    runs-on: ubuntu-latest
+    # Under the hosted 360-minute cap with the attempt step at its fixture ceiling: the
+    # step ceilings sum to 350 (10+5+2+10+3+20+290+5+5), and the artifact upload that hands
+    # the set to the publishing job runs inside the remaining job ceiling, uncapped apart
+    # from it. Anything that does not fit moves to the publishing job, never out of the run.
+    timeout-minutes: 358
+    # build.sh refuses a RELEASE delivery unless the package-repository key pinned in
+    # appliance/images/kiwi/package-repository-key.json signed it, so the protected
+    # environment's secrets are needed AT BUILD TIME. The environment is the one the package
+    # publication already reviews (required reviewer, main-only): one approval guards every
+    # route that writes public bytes with these secrets.
+    environment: packages-publish
+    permissions:
+      contents: read
+      id-token: write # keyless cosign over the SHA256SUMS this job writes
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ inputs.release_tag }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.work
+          cache: true
+          cache-dependency-path: go.work.sum
+      - name: install the host tools before any release work
+        timeout-minutes: 10
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends qemu-system-x86 qemu-utils ovmf xorriso jq python3-yaml \
+            rpm createrepo-c gnupg openssl
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        timeout-minutes: 5
+        with:
+          cosign-release: 'v2.6.4'
+      - name: assert the installed cosign binary before any release authentication
+        timeout-minutes: 2
+        run: bash scripts/assert-cosign-binary.sh --isolate
+      # EVERYTHING THE DISPATCH CLAIMS IS CHECKED AGAINST THE RELEASE'S OWN SIGNED EVIDENCE
+      # before the signing secrets are materialized: the tag grammar, the commit binding, the
+      # published (non-draft) state, the checksums signature under the release workflow's
+      # identity, and the product rpm's digest in that signed table. Only then does the job
+      # touch the protected environment's key.
+      - name: verify the published release and bind this checkout to it
+        id: release
+        timeout-minutes: 10
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          RELEASE_COMMIT: ${{ inputs.release_commit }}
+        run: |
+          set -euo pipefail
+          if [[ "$RELEASE_TAG" =~ ^v[0-9] ]]; then
+            echo "::error::release_tag '$RELEASE_TAG' carries a v prefix. Release tags are bare CalVer (YY.M.PATCH) since the 2026-09-29 tag-name correction." >&2
+            exit 2
+          fi
+          [[ "$RELEASE_TAG" =~ ^[0-9]{2}\.[0-9]{1,2}\.[0-9]+$ ]] || { echo "::error::release_tag must be bare CalVer YY.M.PATCH" >&2; exit 2; }
+          [[ "$RELEASE_COMMIT" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::release_commit must be a full 40-hex OID" >&2; exit 2; }
+          tag_oid="$(git rev-parse --verify "refs/tags/${RELEASE_TAG}^{commit}")"
+          head_oid="$(git rev-parse --verify "HEAD^{commit}")"
+          [ "$tag_oid" = "$RELEASE_COMMIT" ] && [ "$head_oid" = "$RELEASE_COMMIT" ] || {
+            echo "::error::the tag resolves to $tag_oid and the checkout is $head_oid; the dispatch named $RELEASE_COMMIT" >&2
+            exit 2; }
+          version="${RELEASE_TAG}"
+          state="$(gh release view "$RELEASE_TAG" --json isDraft,tagName)"
+          [ "$(jq -r '.tagName' <<<"$state")" = "$RELEASE_TAG" ] || { echo "::error::the release found reports another tag" >&2; exit 2; }
+          [ "$(jq -r '.isDraft' <<<"$state")" = "false" ] || {
+            echo "::error::the release $RELEASE_TAG is still a DRAFT. The stable ceremony's finalizer refuses assets it did not admit, so this route attaches only to a published release; run phase 2 first." >&2
+            exit 2; }
+          rel="${RUNNER_TEMP}/release-evidence"
+          mkdir -m 0700 "$rel"
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --dir "$rel" \
+            --pattern checksums.txt --pattern checksums.txt.sig --pattern checksums.txt.pem --pattern release-commit.txt
+          repo_rx="$(printf '%s' "$GITHUB_REPOSITORY" | sed 's/[.[\*^$()+?{}|]/\\&/g')"
+          tag_rx="$(printf '%s' "$RELEASE_TAG" | sed 's/[.[\*^$()+?{}|]/\\&/g')"
+          bash scripts/cosign-verified.sh verify-blob \
+            --certificate "$rel/checksums.txt.pem" --signature "$rel/checksums.txt.sig" \
+            --certificate-identity-regexp "^https://github\.com/${repo_rx}/\.github/workflows/release\.yml@refs/tags/${tag_rx}\$" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            --certificate-github-workflow-repository "$GITHUB_REPOSITORY" \
+            "$rel/checksums.txt"
+          ev_sum="$(sha256sum "$rel/release-commit.txt" | cut -d' ' -f1)"
+          grep -qxF "${ev_sum}  release-commit.txt" "$rel/checksums.txt" || { echo "::error::release-commit.txt is not in the signed checksums" >&2; exit 2; }
+          IFS= read -r recorded <"$rel/release-commit.txt"
+          [ "$recorded" = "$RELEASE_COMMIT" ] || { echo "::error::the release recorded commit $recorded, the dispatch named $RELEASE_COMMIT" >&2; exit 2; }
+          product="olivares_${version}_linux_amd64.rpm"
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --dir "$rel" --pattern "$product"
+          want="$(awk -v f="$product" '$2 == f {print $1}' "$rel/checksums.txt")"
+          [[ "$want" =~ ^[0-9a-f]{64}$ ]] || { echo "::error::the signed checksums do not name $product" >&2; exit 2; }
+          got="$(sha256sum "$rel/$product" | cut -d' ' -f1)"
+          [ "$got" = "$want" ] || { echo "::error::$product is $got, the signed checksums say $want" >&2; exit 2; }
+          printf 'version=%s\nproduct_rpm=%s\nexpected_sha256=%s\n' "$version" "$rel/$product" "$want" >>"$GITHUB_OUTPUT"
+          echo "release $RELEASE_TAG verified: published, signed, and its $product matches the signed checksums"
+      - name: materialize the repository signing key against tracked anchors
+        id: key
+        timeout-minutes: 3
+        env:
+          SIGNING_BUNDLE: ${{ secrets.OLIVARES_REPO_SIGNING_KEY }}
+          SIGNING_PASSPHRASE: ${{ secrets.OLIVARES_REPO_SIGNING_PASSPHRASE }}
+          TMPDIR: ${{ runner.temp }}
+        run: |
+          set -euo pipefail
+          umask 077
+          [[ -n "$SIGNING_BUNDLE" && -n "$SIGNING_PASSPHRASE" ]] || {
+            echo '::error::repository signing custody is incomplete' >&2
+            exit 2
+          }
+          printf '%s' "$SIGNING_BUNDLE" >"${RUNNER_TEMP}/repository-key.b64"
+          printf '%s' "$SIGNING_PASSPHRASE" >"${RUNNER_TEMP}/repository-key.passphrase"
+          bash scripts/materialize-package-repository-key.sh \
+            --bundle-base64-file "${RUNNER_TEMP}/repository-key.b64" \
+            --passphrase-file "${RUNNER_TEMP}/repository-key.passphrase" \
+            --descriptor "$GITHUB_WORKSPACE/packaging/repositories/production-key-descriptor.json" \
+            --out "${RUNNER_TEMP}/repository-key" --github-output "$GITHUB_OUTPUT"
+      - name: assemble the signed release delivery from the release's own rpm
+        id: delivery
+        timeout-minutes: 20
+        env:
+          TMPDIR: ${{ runner.temp }}
+        run: |
+          set -euo pipefail
+          bash scripts/appliance-release-delivery.sh \
+            --version "${{ steps.release.outputs.version }}" \
+            --release-rpm "${{ steps.release.outputs.product_rpm }}" \
+            --expected-sha256 "${{ steps.release.outputs.expected_sha256 }}" \
+            --key-dir "${{ steps.key.outputs.key_dir }}" \
+            --out "${RUNNER_TEMP}/release-delivery"
+          printf 'package_dir=%s\n' "${RUNNER_TEMP}/release-delivery/packages" >>"$GITHUB_OUTPUT"
+      - name: qualify, admit, build and boot the release image of the requested edition
+        timeout-minutes: 290
+        env:
+          FIRMWARE: ${{ inputs.firmware }}
+          ACCELERATOR: ${{ inputs.accelerator }}
+          EDITION: ${{ inputs.edition }}
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          set -euo pipefail
+          # No --qualification-key: the delivery carries the PINNED release key, so the
+          # build's manifest records this as a release. Every boot assertion still runs.
+          /usr/bin/python3 appliance/images/kiwi/attempt.py \
+            --evidence "$RUNNER_TEMP/appliance-release-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" \
+            --accelerator "$ACCELERATOR" --firmware "$FIRMWARE" \
+            --base fedora44 --edition "$EDITION" --package-dir "${{ steps.delivery.outputs.package_dir }}" \
+            --target-dir "$GITHUB_WORKSPACE/dist/appliance"
+      - name: always retire the builder owned by this job
+        if: always()
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          /usr/bin/python3 appliance/images/kiwi/attempt.py \
+            --evidence "$RUNNER_TEMP/appliance-release-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" --release-only
+      # The PUBLIC SET IS DERIVED, not listed: formats.json declares every edition's files,
+      # and this run publishes the selected edition's three formats and their manifests. The
+      # release outputs the build writes beside the images (SPDX SBOM, source bundle and its
+      # descriptor) are named from VERSION alone and are therefore EDITION-BLIND — two
+      # editions publishing to one release would collide on them, so the publication names
+      # carry the edition. The signed table is edition-named for the same reason.
+      # Attempt-internal evidence stays in the evidence artifact, not in the publication.
+      - name: sign the public files with the release signing path
+        timeout-minutes: 5
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+          EDITION: ${{ inputs.edition }}
+        run: |
+          set -euo pipefail
+          v="$VERSION" e="$EDITION"
+          pub=dist/appliance
+          mapfile -t declared < <(python3 - "$e" <<'PYDECL'
+          import json, re, sys
+          edition = sys.argv[1]
+          text = open("appliance/images/formats/formats.json").read()
+          declared = json.loads("\n".join(re.sub(r"^//.*$", "", line) for line in text.splitlines()))
+          names = []
+          for artifact in declared["artifacts"]:
+              if artifact["edition"] == edition:
+                  names += [artifact["file"], artifact["manifest"]]
+          if len(names) == 0:
+              sys.exit("formats.json declares no artifacts for edition %s" % edition)
+          print("\n".join(names))
+          PYDECL
+          )
+          files=()
+          for name in "${declared[@]}"; do
+            [ -s "$pub/$name" ] || { echo "::error::the build left no $name" >&2; exit 2; }
+            files+=("$name")
+          done
+          for blind in "olivares-appliance-${v}-x86_64.spdx.json:olivares-appliance-${e}-${v}-x86_64.spdx.json" \
+                      "olivares-appliance-${v}-source.tar.zst:olivares-appliance-${e}-${v}-source.tar.zst" \
+                      "source-bundle.json:olivares-appliance-${e}-${v}-source-bundle.json"; do
+            from="${blind%%:*}" to="${blind##*:}"
+            [ -s "$pub/$from" ] || { echo "::error::the build left no $from" >&2; exit 2; }
+            mv "$pub/$from" "$pub/$to"
+            files+=("$to")
+          done
+          sums="SHA256SUMS-${e}"
+          ( cd "$pub" && sha256sum "${files[@]}" >"$sums" )
+          bash scripts/cosign-verified.sh sign-blob --yes \
+            --output-signature "$pub/$sums.sig" --output-certificate "$pub/$sums.pem" \
+            "$pub/$sums"
+          {
+            printf '{"schema":"olivares.ai/appliance-publication/v1","version":"%s","edition":"%s","commit":"%s","run_id":"%s","run_attempt":"%s"}\n' \
+              "$v" "$e" "$GITHUB_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"
+          } >"$pub/appliance-publication.json"
+      - name: retain the publication set for the publishing job
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: appliance-release-publication-${{ github.run_id }}-${{ github.run_attempt }}
+          path: dist/appliance/
+          retention-days: 7
+          if-no-files-found: warn
+          compression-level: 0
+      - name: retain qualification, release and guest evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: appliance-release-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/appliance-release-${{ github.run_id }}-${{ github.run_attempt }}/**/*.json
+            ${{ runner.temp }}/appliance-release-${{ github.run_id }}-${{ github.run_attempt }}/**/*.jsonl
+            ${{ runner.temp }}/appliance-release-${{ github.run_id }}-${{ github.run_attempt }}/**/*.log
+            ${{ runner.temp }}/appliance-release-${{ github.run_id }}-${{ github.run_attempt }}/**/*.txt
+            ${{ runner.temp }}/appliance-release-${{ github.run_id }}-${{ github.run_attempt }}/**/SHA256SUMS
+            ${{ runner.temp }}/appliance-release-${{ github.run_id }}-${{ github.run_attempt }}/**/seconds
+            ${{ runner.temp }}/appliance-release-${{ github.run_id }}-${{ github.run_attempt }}/**/qemu.cmd
+            ${{ runner.temp }}/appliance-release-${{ github.run_id }}-${{ github.run_attempt }}/**/qemu.stderr
+            ${{ runner.temp }}/appliance-release-${{ github.run_id }}-${{ github.run_attempt }}/**/ready
+            ${{ runner.temp }}/appliance-release-${{ github.run_id }}-${{ github.run_attempt }}/**/product.active
+          retention-days: 7
+          if-no-files-found: warn
+      - name: erase decrypted signing material
+        if: ${{ always() }}
+        timeout-minutes: 2
+        run: |
+          set -euo pipefail
+          for target in \
+            "${RUNNER_TEMP}/repository-key.b64" \
+            "${RUNNER_TEMP}/repository-key.passphrase" \
+            "${RUNNER_TEMP}/repository-key/openpgp-secret.asc" \
+            "${RUNNER_TEMP}/repository-key/apk-private.pem" \
+            "${RUNNER_TEMP}/repository-key/passphrase"; do
+            if [[ -f "$target" ]]; then shred -u -- "$target"; fi
+          done
+
+  publish-image:
+    if: inputs.publish == true
+    needs: [release-image]
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    environment: packages-publish
+    permissions:
+      contents: write # attach the publication set to the published release
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+      OLIVARES_APPLIANCE_ORIGIN: https://appliance.olivares.ai
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ inputs.release_tag }}
+          persist-credentials: false
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        timeout-minutes: 5
+        with:
+          cosign-release: 'v2.6.4'
+      - name: assert the installed cosign binary before verifying the handoff
+        timeout-minutes: 2
+        run: bash scripts/assert-cosign-binary.sh --isolate
+      - name: fetch the publication set the build signed
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: appliance-release-publication-${{ github.run_id }}-${{ github.run_attempt }}
+          path: publication
+      - name: publish the verified set, GitHub first and R2 for what a release asset may not carry
+        timeout-minutes: 100
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: 8763fa9c803b42fb43ffe6e5ad64815e
+          OLIVARES_APPLIANCE_PUBLISH_APPROVED: '1'
+        run: |
+          set -euo pipefail
+          bash scripts/publish-appliance-release.sh \
+            --version "${{ inputs.release_tag }}" --sums "SHA256SUMS-${{ inputs.edition }}" \
+            --dir "$GITHUB_WORKSPACE/publication"

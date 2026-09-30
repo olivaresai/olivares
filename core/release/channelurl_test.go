@@ -337,18 +337,35 @@ func TestResolveChannelRefusals(t *testing.T) {
 		}
 	})
 
-	t.Run("a version with a v prefix is not doubled", func(t *testing.T) {
+	t.Run("the derived tag follows the release era, whatever prefix the version carries", func(t *testing.T) {
 		t.Parallel()
+		// Releases from 26.10 on are tagged with the bare version; every earlier release was
+		// cut and published as v<version>. The era decides the prefix, never the manifest's
+		// spelling. A 26.9.0-or-older binary ADDED the prefix for every version, which is
+		// why its default-endpoint upgrade against a bare-tag release answers 404 and the
+		// documented step for those installs pins the release with /releases/tag/<tag>.
 		l, err := ResolveChannel("https://github.com/o/r", ChannelStable)
 		if err != nil {
 			t.Fatal(err)
 		}
-		got, err := l.ArtifactURL("v26.8.0", "x.tar.gz")
-		if err != nil {
-			t.Fatal(err)
-		}
-		if want := "https://github.com/o/r/releases/download/v26.8.0/x.tar.gz"; got != want {
-			t.Fatalf("ArtifactURL() = %q, want %q", got, want)
+		for version, tag := range map[string]string{
+			"26.8.0":       "v26.8.0",
+			"v26.8.0":      "v26.8.0",
+			"26.9.0":       "v26.9.0",
+			"25.12.3":      "v25.12.3",
+			"26.10.0":      "26.10.0",
+			"v26.10.0":     "26.10.0",
+			"26.10.0-rc.1": "26.10.0-rc.1",
+			"26.11.2":      "26.11.2",
+			"27.1.0":       "27.1.0",
+		} {
+			got, err := l.ArtifactURL(version, "x.tar.gz")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if want := "https://github.com/o/r/releases/download/" + tag + "/x.tar.gz"; got != want {
+				t.Fatalf("ArtifactURL(%q) = %q, want %q", version, got, want)
+			}
 		}
 	})
 }

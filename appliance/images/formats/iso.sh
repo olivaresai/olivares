@@ -20,7 +20,7 @@
 # shown by booting it with Secure Boot on, which the boot battery does
 # (appliance/test/boot-battery.sh, case uefi-secureboot).
 #
-# usage: iso.sh [--target-dir DIR] [--output-dir DIR]
+# usage: iso.sh [--edition server|desktop] [--target-dir DIR] [--output-dir DIR]
 set -euo pipefail
 assembly=iso.sh
 here=$(cd "$(dirname "$0")" && pwd)
@@ -32,17 +32,20 @@ target_dir=${TARGET_DIR:-$repo/dist/appliance}
 output_dir=${OUTPUT_DIR:-$target_dir}
 while [ $# -gt 0 ]; do
   case $1 in
+    --edition) edition=${2:?}; shift 2 ;;
     --target-dir) target_dir=${2:?}; shift 2 ;;
     --output-dir) output_dir=${2:?}; shift 2 ;;
     *) unmeasurable "unknown option: $1" ;;
   esac
 done
 
+require_edition
+
 require_tool xorriso sha256sum stat python3
 mkdir -p "$output_dir"
 
 medium=$(find_install_iso "$target_dir")
-name=$(formats_query iso file)
+name=$(formats_query iso file) || unmeasurable "formats.json declares no iso for the ${edition:-server} edition"
 artifact="$output_dir/$name"
 
 # The two El Torito boot images of a hybrid medium: one the legacy BIOS loads, one the EFI

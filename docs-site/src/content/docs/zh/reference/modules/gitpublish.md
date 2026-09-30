@@ -11,4 +11,4 @@ API 命名空间为 `/v1/m/gitpublish`，提供发布目标、推送、合并请
 
 远端结果不确定时，不允许直接重试。模块分别记录请求、观察结果和确认信息。已经发出的远端操作可能与后续本地撤权发生竞争。
 
-[模块 API 参考](/zh/reference/api-beta/).
+[模块 API 参考](/reference/api-beta/).

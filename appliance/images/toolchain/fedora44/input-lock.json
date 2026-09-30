@@ -31,32 +31,32 @@
       "fedora-44-releases": {
         "baseurl": "https://dl.fedoraproject.org/pub/fedora/linux/releases/44/Everything/x86_64/os/",
         "primary_sha256": "c48e47563bbf65b996c95caf4a608223f982c314cab637e6ab87dd1df67b9d26",
-        "recorded_at": "2026-09-27T13:43:10Z",
+        "recorded_at": "2026-09-29T14:52:29Z",
         "repomd_bytes": 5966,
         "repomd_sha256": "da3845427d188097f6fd71b417a039bdfb8efefc4f38ca44b5cbb94f95a18991"
       },
       "fedora-44-updates": {
         "baseurl": "https://dl.fedoraproject.org/pub/fedora/linux/updates/44/Everything/x86_64/",
-        "primary_sha256": "8b982f405946c38471baf73db8b098ad1961eadd9ca20c9e77813a66005ae1de",
-        "recorded_at": "2026-09-27T13:43:10Z",
+        "primary_sha256": "89be3578d53b9130ddff5628a0bcf4a7cbe9aec5e2db17d265327cdbe7cc3e1a",
+        "recorded_at": "2026-09-29T14:52:29Z",
         "repomd_bytes": 7055,
-        "repomd_sha256": "204b9f69d50089542161aaab293a8ddce072ea7130d1c0dbb76737d6c15ee7b8"
+        "repomd_sha256": "440731252c9b7fe8d43126edc5ded1ad5776ce295ec95d419a2eff2139f67cb3"
       }
     },
     "source_repositories": {
       "fedora-44-releases-source": {
         "baseurl": "https://dl.fedoraproject.org/pub/fedora/linux/releases/44/Everything/source/tree/",
         "primary_sha256": "c2dcdc609d12c90294d8bbe3589901a14826c1f6f088c9f88853bc87a8883f9a",
-        "recorded_at": "2026-09-27T13:43:10Z",
+        "recorded_at": "2026-09-29T14:52:29Z",
         "repomd_bytes": 4978,
         "repomd_sha256": "251ebbbd83c0c21f148905a4961f887fe2b1a6a53accbb256462a679f868f686"
       },
       "fedora-44-updates-source": {
         "baseurl": "https://dl.fedoraproject.org/pub/fedora/linux/updates/44/Everything/source/tree/",
-        "primary_sha256": "38e6264b0e0285065461f8b2ac4794ab8bcf29591aade699071d8729fa56362c",
-        "recorded_at": "2026-09-27T13:43:10Z",
+        "primary_sha256": "0a801b05a3cdfa490ea26d7eeae93e71c937a26927acb27d0586923dcb674e19",
+        "recorded_at": "2026-09-29T14:52:29Z",
         "repomd_bytes": 6068,
-        "repomd_sha256": "8dfac2862ca5c7b69d579b4c04032a39024e4bbb641e2a11e01a60ca8571bc74"
+        "repomd_sha256": "03163975511cba142b4fcc7b035e78bc9113c0be218bf4c51df58e45fb041da0"
       }
     },
     "system_packages": {
@@ -215,21 +215,21 @@
       "dnf5": {
         "arch": "x86_64",
         "epoch": "0",
-        "href": "Packages/d/dnf5-5.4.5.0-1.fc44.x86_64.rpm",
-        "koji_signed": "https://kojipkgs.fedoraproject.org/packages/dnf5/5.4.5.0/1.fc44/data/signed/6d9f90a6/x86_64/dnf5-5.4.5.0-1.fc44.x86_64.rpm",
-        "nevra": "dnf5-5.4.5.0-1.fc44.x86_64",
+        "href": "Packages/d/dnf5-5.4.6.0-1.fc44.x86_64.rpm",
+        "koji_signed": "https://kojipkgs.fedoraproject.org/packages/dnf5/5.4.6.0/1.fc44/data/signed/6d9f90a6/x86_64/dnf5-5.4.6.0-1.fc44.x86_64.rpm",
+        "nevra": "dnf5-5.4.6.0-1.fc44.x86_64",
         "release": "1.fc44",
         "repo": "fedora-44-updates",
-        "sha256": "d6e4e4b5e6d82d8bd87018c63f287170418ae01a2b44c3dfc8cb01f6c56d53ae",
-        "sourcerpm": "dnf5-5.4.5.0-1.fc44.src.rpm",
+        "sha256": "fb9ac72e1073e13a21687fdbced25bbcee242e2b18090e4c91829dcdd17f4b4c",
+        "sourcerpm": "dnf5-5.4.6.0-1.fc44.src.rpm",
         "srpm": {
-          "href": "Packages/d/dnf5-5.4.5.0-1.fc44.src.rpm",
-          "koji_signed": "https://kojipkgs.fedoraproject.org/packages/dnf5/5.4.5.0/1.fc44/data/signed/6d9f90a6/src/dnf5-5.4.5.0-1.fc44.src.rpm",
-          "nevra": "dnf5-5.4.5.0-1.fc44.src",
+          "href": "Packages/d/dnf5-5.4.6.0-1.fc44.src.rpm",
+          "koji_signed": "https://kojipkgs.fedoraproject.org/packages/dnf5/5.4.6.0/1.fc44/data/signed/6d9f90a6/src/dnf5-5.4.6.0-1.fc44.src.rpm",
+          "nevra": "dnf5-5.4.6.0-1.fc44.src",
           "repo": "fedora-44-updates-source",
-          "sha256": "ceb92d71827f92705bed81b102495d6f44f64542781fdec2fcdb6182a968b355"
+          "sha256": "301012bd90579374addf79210f94447e5f614562331e614269e1c1afb3a41369"
         },
-        "version": "5.4.5.0"
+        "version": "5.4.6.0"
       },
       "dosfstools": {
         "arch": "x86_64",
@@ -1243,6 +1243,25 @@
       },
       "version": "37"
     },
+    "default-fonts-core": {
+      "arch": "noarch",
+      "epoch": "0",
+      "href": "Packages/d/default-fonts-core-4.3-1.fc44.noarch.rpm",
+      "koji_signed": "https://kojipkgs.fedoraproject.org/packages/langpacks/4.3/1.fc44/data/signed/6d9f90a6/noarch/default-fonts-core-4.3-1.fc44.noarch.rpm",
+      "nevra": "default-fonts-core-4.3-1.fc44.noarch",
+      "release": "1.fc44",
+      "repo": "fedora-44-releases",
+      "sha256": "3774cc68b95e7a14ec85067ac3eb12ca387600535b6bb7f75e454ec96b35af25",
+      "sourcerpm": "langpacks-4.3-1.fc44.src.rpm",
+      "srpm": {
+        "href": "Packages/l/langpacks-4.3-1.fc44.src.rpm",
+        "koji_signed": "https://kojipkgs.fedoraproject.org/packages/langpacks/4.3/1.fc44/data/signed/6d9f90a6/src/langpacks-4.3-1.fc44.src.rpm",
+        "nevra": "langpacks-4.3-1.fc44.src",
+        "repo": "fedora-44-releases-source",
+        "sha256": "1cbf9b2b199f8d10a83208409e4b2e7bbcecf5244584843f221a00b0be6ad827"
+      },
+      "version": "4.3"
+    },
     "dialog": {
       "arch": "x86_64",
       "epoch": "0",
@@ -1265,40 +1284,40 @@
     "dnf5": {
       "arch": "x86_64",
       "epoch": "0",
-      "href": "Packages/d/dnf5-5.4.5.0-1.fc44.x86_64.rpm",
-      "koji_signed": "https://kojipkgs.fedoraproject.org/packages/dnf5/5.4.5.0/1.fc44/data/signed/6d9f90a6/x86_64/dnf5-5.4.5.0-1.fc44.x86_64.rpm",
-      "nevra": "dnf5-5.4.5.0-1.fc44.x86_64",
+      "href": "Packages/d/dnf5-5.4.6.0-1.fc44.x86_64.rpm",
+      "koji_signed": "https://kojipkgs.fedoraproject.org/packages/dnf5/5.4.6.0/1.fc44/data/signed/6d9f90a6/x86_64/dnf5-5.4.6.0-1.fc44.x86_64.rpm",
+      "nevra": "dnf5-5.4.6.0-1.fc44.x86_64",
       "release": "1.fc44",
       "repo": "fedora-44-updates",
-      "sha256": "d6e4e4b5e6d82d8bd87018c63f287170418ae01a2b44c3dfc8cb01f6c56d53ae",
-      "sourcerpm": "dnf5-5.4.5.0-1.fc44.src.rpm",
+      "sha256": "fb9ac72e1073e13a21687fdbced25bbcee242e2b18090e4c91829dcdd17f4b4c",
+      "sourcerpm": "dnf5-5.4.6.0-1.fc44.src.rpm",
       "srpm": {
-        "href": "Packages/d/dnf5-5.4.5.0-1.fc44.src.rpm",
-        "koji_signed": "https://kojipkgs.fedoraproject.org/packages/dnf5/5.4.5.0/1.fc44/data/signed/6d9f90a6/src/dnf5-5.4.5.0-1.fc44.src.rpm",
-        "nevra": "dnf5-5.4.5.0-1.fc44.src",
+        "href": "Packages/d/dnf5-5.4.6.0-1.fc44.src.rpm",
+        "koji_signed": "https://kojipkgs.fedoraproject.org/packages/dnf5/5.4.6.0/1.fc44/data/signed/6d9f90a6/src/dnf5-5.4.6.0-1.fc44.src.rpm",
+        "nevra": "dnf5-5.4.6.0-1.fc44.src",
         "repo": "fedora-44-updates-source",
-        "sha256": "ceb92d71827f92705bed81b102495d6f44f64542781fdec2fcdb6182a968b355"
+        "sha256": "301012bd90579374addf79210f94447e5f614562331e614269e1c1afb3a41369"
       },
-      "version": "5.4.5.0"
+      "version": "5.4.6.0"
     },
     "dnf5-plugin-automatic": {
       "arch": "x86_64",
       "epoch": "0",
-      "href": "Packages/d/dnf5-plugin-automatic-5.4.5.0-1.fc44.x86_64.rpm",
-      "koji_signed": "https://kojipkgs.fedoraproject.org/packages/dnf5/5.4.5.0/1.fc44/data/signed/6d9f90a6/x86_64/dnf5-plugin-automatic-5.4.5.0-1.fc44.x86_64.rpm",
-      "nevra": "dnf5-plugin-automatic-5.4.5.0-1.fc44.x86_64",
+      "href": "Packages/d/dnf5-plugin-automatic-5.4.6.0-1.fc44.x86_64.rpm",
+      "koji_signed": "https://kojipkgs.fedoraproject.org/packages/dnf5/5.4.6.0/1.fc44/data/signed/6d9f90a6/x86_64/dnf5-plugin-automatic-5.4.6.0-1.fc44.x86_64.rpm",
+      "nevra": "dnf5-plugin-automatic-5.4.6.0-1.fc44.x86_64",
       "release": "1.fc44",
       "repo": "fedora-44-updates",
-      "sha256": "493059a12ddb0e8edc7ea16422785c97a47060e5a36718440008a63fcca33ef8",
-      "sourcerpm": "dnf5-5.4.5.0-1.fc44.src.rpm",
+      "sha256": "cddefed5256e780e1bf058e5ff6372b7b49a61be83d992f8cf20f31ea210942d",
+      "sourcerpm": "dnf5-5.4.6.0-1.fc44.src.rpm",
       "srpm": {
-        "href": "Packages/d/dnf5-5.4.5.0-1.fc44.src.rpm",
-        "koji_signed": "https://kojipkgs.fedoraproject.org/packages/dnf5/5.4.5.0/1.fc44/data/signed/6d9f90a6/src/dnf5-5.4.5.0-1.fc44.src.rpm",
-        "nevra": "dnf5-5.4.5.0-1.fc44.src",
+        "href": "Packages/d/dnf5-5.4.6.0-1.fc44.src.rpm",
+        "koji_signed": "https://kojipkgs.fedoraproject.org/packages/dnf5/5.4.6.0/1.fc44/data/signed/6d9f90a6/src/dnf5-5.4.6.0-1.fc44.src.rpm",
+        "nevra": "dnf5-5.4.6.0-1.fc44.src",
         "repo": "fedora-44-updates-source",
-        "sha256": "ceb92d71827f92705bed81b102495d6f44f64542781fdec2fcdb6182a968b355"
+        "sha256": "301012bd90579374addf79210f94447e5f614562331e614269e1c1afb3a41369"
       },
-      "version": "5.4.5.0"
+      "version": "5.4.6.0"
     },
     "dosfstools": {
       "arch": "x86_64",
@@ -1471,6 +1490,25 @@
       },
       "version": "3.18"
     },
+    "firefox": {
+      "arch": "x86_64",
+      "epoch": "0",
+      "href": "Packages/f/firefox-156.0.1-1.fc44.x86_64.rpm",
+      "koji_signed": "https://kojipkgs.fedoraproject.org/packages/firefox/156.0.1/1.fc44/data/signed/6d9f90a6/x86_64/firefox-156.0.1-1.fc44.x86_64.rpm",
+      "nevra": "firefox-156.0.1-1.fc44.x86_64",
+      "release": "1.fc44",
+      "repo": "fedora-44-updates",
+      "sha256": "1b21a1f144b4b29379e4f147fb0715767d9be21e47eaec4dd8725a9597b68d11",
+      "sourcerpm": "firefox-156.0.1-1.fc44.src.rpm",
+      "srpm": {
+        "href": "Packages/f/firefox-156.0.1-1.fc44.src.rpm",
+        "koji_signed": "https://kojipkgs.fedoraproject.org/packages/firefox/156.0.1/1.fc44/data/signed/6d9f90a6/src/firefox-156.0.1-1.fc44.src.rpm",
+        "nevra": "firefox-156.0.1-1.fc44.src",
+        "repo": "fedora-44-updates-source",
+        "sha256": "c36fba8fa03e6b54d158fead223827f4f13ff09e7f20b3c487bdfc4fffdbe9de"
+      },
+      "version": "156.0.1"
+    },
     "gdisk": {
       "arch": "x86_64",
       "epoch": "0",
@@ -1490,6 +1528,25 @@
       },
       "version": "1.0.10"
     },
+    "gdm": {
+      "arch": "x86_64",
+      "epoch": "1",
+      "href": "Packages/g/gdm-50.3-1.fc44.x86_64.rpm",
+      "koji_signed": "https://kojipkgs.fedoraproject.org/packages/gdm/50.3/1.fc44/data/signed/6d9f90a6/x86_64/gdm-50.3-1.fc44.x86_64.rpm",
+      "nevra": "gdm-1:50.3-1.fc44.x86_64",
+      "release": "1.fc44",
+      "repo": "fedora-44-updates",
+      "sha256": "58c09c2b25f8ac8e4e652f030a2221cc1b706dadcbb9709e1c10ce497afb4c6d",
+      "sourcerpm": "gdm-50.3-1.fc44.src.rpm",
+      "srpm": {
+        "href": "Packages/g/gdm-50.3-1.fc44.src.rpm",
+        "koji_signed": "https://kojipkgs.fedoraproject.org/packages/gdm/50.3/1.fc44/data/signed/6d9f90a6/src/gdm-50.3-1.fc44.src.rpm",
+        "nevra": "gdm-1:50.3-1.fc44.src",
+        "repo": "fedora-44-updates-source",
+        "sha256": "5dac7b7cd45bdb8cbba6cb910038c5cc1c74a11f8e9de1c5a7e4848670dc29a3"
+      },
+      "version": "50.3"
+    },
     "glibc-langpack-en": {
       "arch": "x86_64",
       "epoch": "0",
@@ -1508,6 +1565,25 @@
         "sha256": "55c78a36a549ba287000cfb29cfe8e637757c943937dce3ed62a9cf4cd45abd0"
       },
       "version": "2.43"
+    },
+    "gnome-shell": {
+      "arch": "x86_64",
+      "epoch": "0",
+      "href": "Packages/g/gnome-shell-50.5-1.fc44.x86_64.rpm",
+      "koji_signed": "https://kojipkgs.fedoraproject.org/packages/gnome-shell/50.5/1.fc44/data/signed/6d9f90a6/x86_64/gnome-shell-50.5-1.fc44.x86_64.rpm",
+      "nevra": "gnome-shell-50.5-1.fc44.x86_64",
+      "release": "1.fc44",
+      "repo": "fedora-44-updates",
+      "sha256": "44a63ad44b9529f7d6d34a372a6e62f6eb66d9dd4b37f219b1e5a8d214efb2c3",
+      "sourcerpm": "gnome-shell-50.5-1.fc44.src.rpm",
+      "srpm": {
+        "href": "Packages/g/gnome-shell-50.5-1.fc44.src.rpm",
+        "koji_signed": "https://kojipkgs.fedoraproject.org/packages/gnome-shell/50.5/1.fc44/data/signed/6d9f90a6/src/gnome-shell-50.5-1.fc44.src.rpm",
+        "nevra": "gnome-shell-50.5-1.fc44.src",
+        "repo": "fedora-44-updates-source",
+        "sha256": "a93d3ae1fcc43f1b4e729d97d821e22bac213984126ff160d942ee7318bc8b1d"
+      },
+      "version": "50.5"
     },
     "grub2-common": {
       "arch": "noarch",
@@ -1721,21 +1797,21 @@
     "libdnf5-plugin-actions": {
       "arch": "x86_64",
       "epoch": "0",
-      "href": "Packages/l/libdnf5-plugin-actions-5.4.5.0-1.fc44.x86_64.rpm",
-      "koji_signed": "https://kojipkgs.fedoraproject.org/packages/dnf5/5.4.5.0/1.fc44/data/signed/6d9f90a6/x86_64/libdnf5-plugin-actions-5.4.5.0-1.fc44.x86_64.rpm",
-      "nevra": "libdnf5-plugin-actions-5.4.5.0-1.fc44.x86_64",
+      "href": "Packages/l/libdnf5-plugin-actions-5.4.6.0-1.fc44.x86_64.rpm",
+      "koji_signed": "https://kojipkgs.fedoraproject.org/packages/dnf5/5.4.6.0/1.fc44/data/signed/6d9f90a6/x86_64/libdnf5-plugin-actions-5.4.6.0-1.fc44.x86_64.rpm",
+      "nevra": "libdnf5-plugin-actions-5.4.6.0-1.fc44.x86_64",
       "release": "1.fc44",
       "repo": "fedora-44-updates",
-      "sha256": "098087ecd3b1afce68fd0ab66624ec779a0ee670160ab718275f9576d76c42af",
-      "sourcerpm": "dnf5-5.4.5.0-1.fc44.src.rpm",
+      "sha256": "581c43f6a6c79c558e3517511509130cf4de3f3767ea734e25746c72ce3aa5ce",
+      "sourcerpm": "dnf5-5.4.6.0-1.fc44.src.rpm",
       "srpm": {
-        "href": "Packages/d/dnf5-5.4.5.0-1.fc44.src.rpm",
-        "koji_signed": "https://kojipkgs.fedoraproject.org/packages/dnf5/5.4.5.0/1.fc44/data/signed/6d9f90a6/src/dnf5-5.4.5.0-1.fc44.src.rpm",
-        "nevra": "dnf5-5.4.5.0-1.fc44.src",
+        "href": "Packages/d/dnf5-5.4.6.0-1.fc44.src.rpm",
+        "koji_signed": "https://kojipkgs.fedoraproject.org/packages/dnf5/5.4.6.0/1.fc44/data/signed/6d9f90a6/src/dnf5-5.4.6.0-1.fc44.src.rpm",
+        "nevra": "dnf5-5.4.6.0-1.fc44.src",
         "repo": "fedora-44-updates-source",
-        "sha256": "ceb92d71827f92705bed81b102495d6f44f64542781fdec2fcdb6182a968b355"
+        "sha256": "301012bd90579374addf79210f94447e5f614562331e614269e1c1afb3a41369"
       },
-      "version": "5.4.5.0"
+      "version": "5.4.6.0"
     },
     "linux-firmware": {
       "arch": "noarch",
@@ -1774,6 +1850,25 @@
         "sha256": "9f6c2a6d3926ba12b1d405bddb3e3a28e39295f7d749e07427c4f995e04117df"
       },
       "version": "0.7.2"
+    },
+    "nautilus": {
+      "arch": "x86_64",
+      "epoch": "0",
+      "href": "Packages/n/nautilus-50.3-1.fc44.x86_64.rpm",
+      "koji_signed": "https://kojipkgs.fedoraproject.org/packages/nautilus/50.3/1.fc44/data/signed/6d9f90a6/x86_64/nautilus-50.3-1.fc44.x86_64.rpm",
+      "nevra": "nautilus-50.3-1.fc44.x86_64",
+      "release": "1.fc44",
+      "repo": "fedora-44-updates",
+      "sha256": "e786d5e35d4de3689848a2dc075085477f66de8e7e7e26929143f6bfe2e8180a",
+      "sourcerpm": "nautilus-50.3-1.fc44.src.rpm",
+      "srpm": {
+        "href": "Packages/n/nautilus-50.3-1.fc44.src.rpm",
+        "koji_signed": "https://kojipkgs.fedoraproject.org/packages/nautilus/50.3/1.fc44/data/signed/6d9f90a6/src/nautilus-50.3-1.fc44.src.rpm",
+        "nevra": "nautilus-50.3-1.fc44.src",
+        "repo": "fedora-44-updates-source",
+        "sha256": "0eb3b8b306d0044b3147ad33e562ef1c77fe768a5f8fb13915b03acc278e618f"
+      },
+      "version": "50.3"
     },
     "nftables": {
       "arch": "x86_64",
@@ -1869,6 +1964,25 @@
         "sha256": "136387dc8da317c0eb7ee1c546fd6c8d6e6941aed089d1e302ad916a9de5837d"
       },
       "version": "3.11"
+    },
+    "ptyxis": {
+      "arch": "x86_64",
+      "epoch": "0",
+      "href": "Packages/p/ptyxis-50.1-2.fc44.x86_64.rpm",
+      "koji_signed": "https://kojipkgs.fedoraproject.org/packages/ptyxis/50.1/2.fc44/data/signed/6d9f90a6/x86_64/ptyxis-50.1-2.fc44.x86_64.rpm",
+      "nevra": "ptyxis-50.1-2.fc44.x86_64",
+      "release": "2.fc44",
+      "repo": "fedora-44-updates",
+      "sha256": "b72e338c4676dd5546004035f0e17161e26e68417521a6da031295e94bd3c6c8",
+      "sourcerpm": "ptyxis-50.1-2.fc44.src.rpm",
+      "srpm": {
+        "href": "Packages/p/ptyxis-50.1-2.fc44.src.rpm",
+        "koji_signed": "https://kojipkgs.fedoraproject.org/packages/ptyxis/50.1/2.fc44/data/signed/6d9f90a6/src/ptyxis-50.1-2.fc44.src.rpm",
+        "nevra": "ptyxis-50.1-2.fc44.src",
+        "repo": "fedora-44-updates-source",
+        "sha256": "21e04ef1b19f63307672b1b489ef58771ba766a62fdfc7b62bbf741abaf9f349"
+      },
+      "version": "50.1"
     },
     "rpm": {
       "arch": "x86_64",
@@ -2054,7 +2168,7 @@
     "required_qmp_status": "prelaunch"
   },
   "purpose": "The exact build toolchain the Fedora 44 appliance server image recipe runs, and the prerequisite it proves on a disposable hosted runner before a recipe attempt. This lock builds no image and boots no guest.",
-  "recorded_at": "2026-09-27T13:43:10Z",
+  "recorded_at": "2026-09-29T14:52:29Z",
   "resolution": {
     "qualification": "Source metadata closure only; the hosted builder build, ABI, CLI and required data files must pass before eligibility.",
     "rejected_route": "Fedora 44's python3-kiwi is 11.0.2, not the locked 11.0.4; it is never installed.",

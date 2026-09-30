@@ -11,4 +11,4 @@ Der API-Namensraum ist `/v1/m/gitpublish`. Er umfasst Ziele, Push-, Pull-Request
 
 Ein ungewisses entferntes Ergebnis erlaubt keinen erneuten Versuch. Anfragen, Beobachtungen und Bestätigungen werden getrennt erfasst. Eine bereits gesendete entfernte Operation kann mit einem späteren lokalen Widerruf zusammentreffen.
 
-[Modul-API-Referenz](/de/reference/api-beta/).
+[Modul-API-Referenz](/reference/api-beta/).

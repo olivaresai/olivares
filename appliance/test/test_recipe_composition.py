@@ -707,16 +707,35 @@ class RecipeComposition(unittest.TestCase):
                 self.assertEqual(result.returncode, 2)
                 self.assertIn('unknown accelerator', result.stdout)
 
-    def test_workflow_uses_one_job_and_always_release(self):
+    def test_every_workflow_job_owns_one_builder_and_always_releases(self):
         import yaml
+        # The qualification fixture is ONE job with one builder; the publication route adds
+        # two dispatch-gated jobs (build, then publish) that never run beside it. The
+        # invariant each of them must keep is the one this test has always asserted: exactly
+        # one attempt owner, and exactly one always-release retirement of it.
         workflow = yaml.safe_load((ROOT/'.github/workflows/appliance-image.yml').read_text())
-        self.assertEqual(list(workflow['jobs']), ['image'])
-        steps = workflow['jobs']['image']['steps']
-        owners = [s for s in steps if 'kiwi/attempt.py' in s.get('run','') and '--release-only' not in s['run']]
-        self.assertEqual(len(owners), 1)
-        releases = [s for s in steps if '--release-only' in s.get('run','')]
-        self.assertEqual(len(releases), 1)
-        self.assertEqual(releases[0]['if'], 'always()')
+        self.assertEqual(list(workflow['jobs']), ['image', 'release-image', 'publish-image'])
+        self.assertEqual(workflow['jobs']['image'].get('if'), "inputs.publish != true")
+        for name, job in workflow['jobs'].items():
+            steps = job.get('steps', [])
+            owners = [s for s in steps if 'kiwi/attempt.py' in s.get('run','') and '--release-only' not in s['run']]
+            releases = [s for s in steps if '--release-only' in s.get('run','')]
+            # A job either owns no builder at all (the publisher) or exactly one, retired by
+            # exactly one always() step.
+            self.assertLessEqual(len(owners), 1, name)
+            self.assertEqual(len(releases), len(owners), name)
+            if releases:
+                self.assertEqual(releases[0]['if'], 'always()', name)
+
+    def test_the_job_takes_an_edition_input_and_hands_it_to_the_attempt(self):
+        job = workflow()["jobs"]["image"]
+        spec = workflow()[True]["workflow_dispatch"]["inputs"]["edition"]
+        self.assertEqual((spec["type"], spec["options"], spec.get("default")), ("choice", ["server", "desktop"],
+                                                                                "server"))
+        attempt = next(s for s in job["steps"] if "kiwi/attempt.py" in s.get("run", "")
+                       and "--release-only" not in s["run"])
+        self.assertIn("'EDITION': '${{ inputs.edition }}'", str(attempt.get("env", {})))
+        self.assertIn('--edition "$EDITION"', attempt["run"])
 
     def test_job_ceiling_sits_above_its_step_ceilings_within_the_hosted_limit(self):
         job = workflow()["jobs"]["image"]
@@ -1108,6 +1127,16 @@ class FedoraBuild(unittest.TestCase):
         self.assertEqual(self.plan("--qualification-key", "not-a-fingerprint").returncode, 2)
         free = self.plan("--firmware", "free")
         self.assertIn("profiles:      fedora44-server-amd64\n", free.stdout)
+
+    def test_the_desktop_edition_plans_the_desktop_profile_and_only_on_fedora(self):
+        result = self.plan("--edition", "desktop")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("edition:       desktop\n", result.stdout)
+        self.assertIn("profiles:      fedora44-desktop-amd64 fedora44-firmware\n", result.stdout)
+        free = self.plan("--edition", "desktop", "--firmware", "free")
+        self.assertIn("profiles:      fedora44-desktop-amd64\n", free.stdout)
+        self.assertEqual(self.plan("--edition", "workstation").returncode, 2)
+        self.assertEqual(self.plan("--edition", "desktop", "--base", "debian13").returncode, 2)
 
     def test_the_debian_profile_is_still_built_by_name(self):
         result = self.plan("--base", "debian13")
@@ -1878,6 +1907,43 @@ class FedoraCallers(unittest.TestCase):
                           build[build.index("--qualification-key") + 1]), ("fedora44", str(packages), self.QUALIFICATION))
         self.assertNotIn("--deb-dir", build)
 
+    def test_attempt_carries_the_desktop_edition_to_build_formats_and_guests(self):
+        packages = self.work / "delivery"
+        module = load_attempt("recipe_attempt_desktop")
+        calls = []
+
+        def preflight(directory, argv):
+            Path(directory).mkdir(parents=True)
+            (Path(directory) / "receipt.json").write_text(json.dumps(receipt()))
+            calls.append(("preflight", argv))
+            return 0
+
+        def run(argv, log, timeout):
+            calls.append(("run", argv))
+            return 0
+        with patch.dict(os.environ, ENV), patch.object(module, "execute_preflight", preflight), \
+                patch.object(module, "run_command", run), patch.object(module, "cleanup_containers", lambda *a: True):
+            code = module.execute(self.work / "evidence-desktop", "tcg", packages, self.work / "target",
+                                  "nonfree", edition="desktop")
+        self.assertEqual(code, 0, calls)
+        build = next(argv for kind, argv in calls if kind == "run"
+                     and any(str(x).endswith("/kiwi/build.sh") for x in argv))
+        self.assertEqual(build[build.index("--edition") + 1], "desktop")
+        assemblies = [argv for kind, argv in calls if kind == "run"
+                      and any(str(x).endswith("/formats/assemble.sh") for x in argv)]
+        self.assertEqual(len(assemblies), 3)
+        for argv in assemblies:
+            self.assertEqual(argv[argv.index("--edition") + 1], "desktop")
+        guests = [argv for kind, argv in calls if kind == "run"
+                  and any(str(x).endswith(("/boot-battery.sh", "/nocloud-probe.sh")) for x in argv)]
+        self.assertEqual(len(guests), 2)
+        for argv in guests:
+            self.assertIn("APPLIANCE_EDITION=desktop", argv)
+        self.assertEqual(module.execute(self.work / "evidence-desktop-2", "tcg", packages, self.work / "target",
+                                        "nonfree", edition="workstation"), 2)
+        self.assertEqual(module.execute(self.work / "evidence-desktop-3", "tcg", packages, self.work / "target",
+                                        "nonfree", base="debian13", edition="desktop"), 2)
+
     def test_attempt_keeps_the_debian_builder_for_the_debian_base(self):
         debs = self.work / "debs"
         preflight, build, release = self.attempt_calls("debian13", debs)
@@ -2120,9 +2186,10 @@ class FedoraRelock(unittest.TestCase):
         dnf5 = lock["image_packages"]["dnf5"]
         self.assertEqual(dnf5["sha256"], self.lock["image_packages"]["dnf5"]["sha256"])
         # The retained source of each locked RPM: Koji's copy signed with the Fedora 44 key, byte-equal to the tree's
-        # (measured for dnf5-5.4.5.0-1.fc44 at 11:51:08Z, r12b-fedora/sources/GETS.tsv).
-        self.assertEqual(dnf5["koji_signed"], "https://kojipkgs.fedoraproject.org/packages/dnf5/5.4.5.0/1.fc44/data/signed/"
-                                              "6d9f90a6/x86_64/dnf5-5.4.5.0-1.fc44.x86_64.rpm")
+        # (measured for dnf5-5.4.5.0-1.fc44 at 11:51:08Z, r12b-fedora/sources/GETS.tsv; the relock of 2026-09-29 pins
+        # dnf5-5.4.6.0-1.fc44, whose downloaded bytes match its pinned sha256).
+        self.assertEqual(dnf5["koji_signed"], "https://kojipkgs.fedoraproject.org/packages/dnf5/5.4.6.0/1.fc44/data/signed/"
+                                              "6d9f90a6/x86_64/dnf5-5.4.6.0-1.fc44.x86_64.rpm")
         bootstrap = (out / "bootstrap.sh").read_text()
         self.assertIn("printf '%%s  %%s\\n' '%s' input-lock.json" % hashlib.sha256(text.encode()).hexdigest(), bootstrap)
         repositories = json.loads((out / "fedora-repositories.json").read_text())
@@ -3186,7 +3253,22 @@ class SshHostKeys(unittest.TestCase):
 
 
 FEDORA = "fedora44-server-amd64"
+DESKTOP = "fedora44-desktop-amd64"
 DEBIAN = "debian13-server-amd64"
+# The desktop edition's packages, every name measured in the Fedora 44 trees (the relock of
+# 2026-09-29 pins each in the toolchain lock, with its tree and source RPM). gdm requires
+# gnome-session, gnome-session-wayland-session, gnome-shell and gnome-settings-daemon, so the
+# session arrives with it; no package of the GNOME line requires a font package (measured over
+# the whole pinned releases primary), so Fedora's own default font set is named. The locale is
+# the server profile's glibc-langpack-en, already in the shared set.
+DESKTOP_PACKAGES = {
+    "gdm": "the display manager; brings gnome-session and gnome-settings-daemon with it",
+    "gnome-shell": "GNOME Shell, the desktop",
+    "firefox": "the browser",
+    "nautilus": "the file browser",
+    "ptyxis": "the terminal, Fedora 44's default GNOME terminal (gnome-console is the other option)",
+    "default-fonts-core": "Fedora's default font set: no GNOME package requires a font package",
+}
 # The product's boot and storage layout (platform report §3; the Debian type since F10a a5f0a04c): an expandable oem
 # disk, UEFI with Secure Boot and the legacy BIOS path on the same disk, a btrfs root in the subvolume @ with the two data
 # volumes beside it, a separate 1024 MB ext4 /boot, the hybrid installer medium and the serial console. A base change
@@ -3233,7 +3315,7 @@ class FedoraProfile(unittest.TestCase):
 
     def test_the_fedora_profile_installs_with_dnf5_for_release_44(self):
         # KIWI 11.0.4 accepts apk, apt, zypper, dnf4, dnf5, microdnf and pacman (kiwi.rnc :999); Fedora 44's package
-        # manager is dnf5 5.4.5.0 (updates primary). Without <release-version> KIWI passes --releasever=0 to dnf5
+        # manager is dnf5 5.4.6.0 (updates primary, relocked 2026-09-29). Without <release-version> KIWI passes --releasever=0 to dnf5
         # (package_manager/base.py :48).
         preferences = profile_preferences(description_root(), FEDORA)
         self.assertEqual([p.get("arch") for p in preferences], ["x86_64"])
@@ -3262,13 +3344,14 @@ class FedoraProfile(unittest.TestCase):
                 self.assertNotIn(mark, value.lower())
 
 
-# Fedora 44 as read on 2026-09-27 (r12-fedora/sources/GETS.tsv): the repomd.xml of the Everything x86_64 releases and
-# updates trees, and the Fedora 44 primary key, whose fingerprint fedoraproject.org/security lists and whose file
-# fedora-gpg-keys-44-2 (updates primary) ships byte-equal to src.fedoraproject.org's copy.
+# Fedora 44 as read on 2026-09-27 (r12-fedora/sources/GETS.tsv) and relocked on 2026-09-29 (the updates tree moved; the
+# relock's --fetch read both trees again and the pins below are what it measured): the repomd.xml of the Everything x86_64
+# releases and updates trees, and the Fedora 44 primary key, whose fingerprint fedoraproject.org/security lists and whose
+# file fedora-gpg-keys-44-2 (updates primary) ships byte-equal to src.fedoraproject.org's copy.
 FEDORA_RELEASES = "https://dl.fedoraproject.org/pub/fedora/linux/releases/44/Everything/x86_64/os/"
 FEDORA_UPDATES = "https://dl.fedoraproject.org/pub/fedora/linux/updates/44/Everything/x86_64/"
 FEDORA_REPOMD = {"fedora-44-releases": "da3845427d188097f6fd71b417a039bdfb8efefc4f38ca44b5cbb94f95a18991",
-                 "fedora-44-updates": "204b9f69d50089542161aaab293a8ddce072ea7130d1c0dbb76737d6c15ee7b8"}
+                 "fedora-44-updates": "440731252c9b7fe8d43126edc5ded1ad5776ce295ec95d419a2eff2139f67cb3"}
 FEDORA_KEY = "/etc/pki/rpm-gpg/RPM-GPG-KEY-fedora-44-primary"
 FEDORA_KEY_SHA256 = "93642aec521a1e5e96dd715f7ae0ec0850ebc9de09a94ce03cae5263f26cc18a"
 FEDORA_KEY_FINGERPRINT = "36F612DCF27F7D1A48A835E4DBFCF71C6D9F90A6"
@@ -3319,11 +3402,188 @@ class FedoraRepositories(unittest.TestCase):
         self.assertEqual((pins["key"]["path"], pins["key"]["sha256"], pins["key"]["fingerprint"]),
                          (FEDORA_KEY, FEDORA_KEY_SHA256, FEDORA_KEY_FINGERPRINT))
         for alias, pin in pins["repositories"].items():
-            self.assertRegex(pin["recorded_at"], r"^2026-09-27T\d\d:\d\d:\d\dZ$", alias)
+            self.assertRegex(pin["recorded_at"], r"^2026-09-29T\d\d:\d\d:\d\dZ$",
+                             alias + ": the relock of 2026-09-29 read both trees again")
 
     def test_build_stages_the_pin_check_beside_the_description(self):
         self.assertIn('cp "$here/fedora-repo-pinned.sh" "$here/fedora-repositories.json" "$stage/"',
                       (KIWI / "build.sh").read_text())
+
+
+class DesktopProfile(unittest.TestCase):
+    """The desktop edition is a profile of the ONE description (A5): the server profile's type,
+    layout, package manager, repositories and SELinux policy, the server package set plus GNOME,
+    and its own overlay. The server profile's set and behavior are unchanged by it."""
+
+    def test_the_desktop_profile_is_declared_and_not_the_default(self):
+        profiles = {p.get("name"): p.get("import") for p in description_root().iter("profile")}
+        self.assertIn(DESKTOP, profiles)
+        self.assertIsNone(profiles[DESKTOP])
+        self.assertEqual([name for name, imported in profiles.items() if imported == "true"], [FEDORA],
+                         "the server profile stays the one a build takes when none is named")
+
+    def test_the_desktop_profile_keeps_the_type_layout_and_repositories(self):
+        image = description_root()
+        desktop = profile_type(image, DESKTOP)
+        self.assertEqual({k: desktop.get(k) for k in PRODUCT_LAYOUT}, PRODUCT_LAYOUT)
+        self.assertEqual(desktop.get("selinux_policy"), "targeted")
+        self.assertEqual([(s.get("unit"), s.text) for s in desktop.iter("size")], [("G", "12")])
+        self.assertEqual({e.tag: e.text for c in desktop.iter("oemconfig") for e in c}, PRODUCT_OEMCONFIG)
+        self.assertEqual([v.get("name") for v in desktop.iter("volume")], PRODUCT_VOLUMES)
+        preferences = profile_preferences(image, DESKTOP)
+        self.assertEqual([p.get("arch") for p in preferences], ["x86_64"])
+        self.assertEqual([e.text for p in preferences for e in p.iter("packagemanager")], ["dnf5"])
+        self.assertEqual([e.text for p in preferences for e in p.iter("release-version")], ["44"])
+        self.assertEqual([e.text for p in preferences for e in p.iter("rpm-check-signatures")], ["true"])
+        # The same repositories as the server profile reads, attribute for attribute.
+        def repositories(profile):
+            return {r.get("alias"): {"type": r.get("type"), "repository_gpgcheck": r.get("repository_gpgcheck"),
+                                     "package_gpgcheck": r.get("package_gpgcheck"), "customize": r.get("customize"),
+                                     "imageinclude": r.get("imageinclude"),
+                                     "sources": [s.get("path") for s in r.iter("source")],
+                                     "keys": [k.get("key") for k in r.iter("signing")]}
+                    for r in description_root().iter("repository") if in_profile(r, profile)}
+        self.assertEqual(repositories(DESKTOP), repositories(FEDORA))
+
+    def test_the_server_package_set_is_unchanged_and_the_desktop_adds_its_own(self):
+        image = description_root()
+        server = profile_packages(image, "image", FEDORA)
+        desktop = profile_packages(image, "image", DESKTOP)
+        self.assertEqual(len(desktop), len(set(desktop)), "a package is named twice")
+        self.assertEqual(set(desktop) - set(server), set(DESKTOP_PACKAGES))
+        self.assertEqual(set(server) - set(desktop), set(), "the desktop profile removes nothing of the server's")
+        self.assertEqual(set(profile_packages(image, "bootstrap", DESKTOP)),
+                         set(profile_packages(image, "bootstrap", FEDORA)))
+        self.assertEqual((set(desktop) | set(profile_packages(image, "bootstrap", DESKTOP))) & NOT_ON_FEDORA, set())
+
+    def test_the_desktop_packages_are_pinned_in_the_lock(self):
+        # The relock of 2026-09-29 added each desktop name to image_packages, with its NEVRA,
+        # sha256, tree and source RPM; the shape test of the toolchain holds the common rule.
+        lock = json.loads(FEDORA_LOCK.read_text())
+        for name in DESKTOP_PACKAGES:
+            with self.subTest(name=name):
+                self.assertIn(name, lock["image_packages"])
+                self.assertRegex(lock["image_packages"][name]["nevra"], r"\.(x86_64|noarch)$")
+                self.assertRegex(lock["image_packages"][name]["sha256"], r"^[0-9a-f]{64}$")
+                self.assertRegex(lock["image_packages"][name]["srpm"]["nevra"], r"\.src$")
+
+    def test_the_readme_documents_both_variants(self):
+        readme = (ROOT / "appliance/README.md").read_text()
+        self.assertIn("`fedora44-server-amd64`", readme)
+        self.assertIn("`fedora44-desktop-amd64`", readme)
+        for what in ("| Server (", "| Desktop (", "Ptyxis", "Nautilus", "SFTP"):
+            with self.subTest(what=what):
+                self.assertIn(what, readme)
+
+
+class DesktopEnablement(unittest.TestCase):
+    """The desktop overlay: the server overlay's files plus the preset lines that declare the
+    enablements the desktop exists for. The enablement itself is made by config.sh inside the
+    image root - the graphical default target, gdm as the display manager, sshd for SSH/SFTP,
+    each the link systemctl enable or set-default would create - because the overlay ships no
+    symlinks (an absolute link's target lives on the installed system, and the public export
+    copies the tree's files). config.sh reads its own links back, exactly, and images.sh holds
+    the units' presence; every check fails the build."""
+
+    PRESET = "etc/systemd/system-preset/10-olivares-appliance.preset"
+    LINKS = (("etc/systemd/system/default.target", "/usr/lib/systemd/system/graphical.target"),
+             ("etc/systemd/system/display-manager.service", "/usr/lib/systemd/system/gdm.service"),
+             ("etc/systemd/system/multi-user.target.wants/sshd.service", "/usr/lib/systemd/system/sshd.service"))
+
+    def preset_lines(self, profile):
+        return [l.strip() for l in (KIWI / profile / self.PRESET).read_text().splitlines()
+                if l.strip() and not l.startswith("#")]
+
+    def test_the_shared_files_are_the_server_overlays_bytes(self):
+        for rel in ("etc/yum.repos.d/olivares.repo", "etc/dnf/libdnf5.conf.d/20-olivares-appliance.conf"):
+            with self.subTest(rel=rel):
+                self.assertEqual((KIWI / DESKTOP / rel).read_bytes(), (KIWI / FEDORA / rel).read_bytes())
+
+    def test_the_preset_is_the_servers_plus_the_two_enables(self):
+        server = self.preset_lines(FEDORA)
+        desktop = self.preset_lines(DESKTOP)
+        self.assertEqual(desktop[:len(server)], server)
+        self.assertEqual(desktop[len(server):], ["enable gdm.service", "enable sshd.service"])
+
+    def test_no_profile_ships_a_symlink_anywhere_under_appliance(self):
+        # The export copies files; a link's absolute target lives on the installed machine, not
+        # in the tree, so the recipe creates every enablement link inside the image root.
+        for path in ROOT.joinpath("appliance").rglob("*"):
+            self.assertFalse(path.is_symlink(), str(path))
+
+    def test_config_sh_makes_the_enablement_links_and_points_them_exactly(self):
+        root = self.root()
+        result = run_config_sh(root, [DESKTOP], programs=["setfiles"])
+        self.assertEqual(result.returncode, 0, result.stderr[-2000:])
+        for rel, target in self.LINKS:
+            with self.subTest(rel=rel):
+                link = root / rel
+                self.assertTrue(link.is_symlink(), rel)
+                self.assertEqual(os.readlink(link), target)
+
+    def root(self):
+        root = Path(tempfile.mkdtemp(prefix="a2-desktop-", dir=os.environ.get("TMPDIR")))
+        contexts = root / "etc/selinux/targeted/contexts/files/file_contexts"
+        contexts.parent.mkdir(parents=True)
+        contexts.write_text("/.* system_u:object_r:default_t:s0\n")
+        return root
+
+    def rerun(self, root, profiles):
+        """A second config.sh run on a root whose first run consumed the per-build key record:
+        the record is what build.sh stages, so it is staged again before the run."""
+        (root / BUILD_KEY_RECORD).parent.mkdir(parents=True, exist_ok=True)
+        (root / BUILD_KEY_RECORD).write_text(PER_BUILD_FINGERPRINT + "\n")
+        return run_config_sh(root, profiles, programs=["setfiles"])
+
+    def test_config_sh_fails_when_it_no_longer_makes_an_enablement(self):
+        # The fail-closed control of the new shape: config.sh both makes the links and reads
+        # them back, so the mutant that matters is a config.sh that stopped making one - the
+        # read-back must fail the build, not ship a desktop without its enablements.
+        script = (KIWI / "config.sh").read_text()
+        for rel, target in self.LINKS:
+            with self.subTest(rel=rel):
+                line = "ln -sfn %s %s" % (target, "/" + rel)
+                assert line in script, line
+                with tempfile.TemporaryDirectory(prefix="a2-desktop-mutant-", dir=os.environ.get("TMPDIR")) as temp:
+                    shutil.copytree(KIWI, Path(temp) / "kiwi", dirs_exist_ok=True, symlinks=True)
+                    mutant = Path(temp) / "kiwi" / "config.sh"
+                    mutant.write_text(script.replace(line, ":"))
+                    root = self.root()
+                    result = run_config_sh(root, [DESKTOP], programs=["setfiles"], script=mutant)
+                    self.assertNotEqual(result.returncode, 0, rel)
+                    self.assertIn(rel, result.stderr)
+
+    def test_config_sh_fails_a_preset_that_does_not_declare_the_units(self):
+        for unit in ("gdm.service", "sshd.service"):
+            with self.subTest(unit=unit):
+                root = self.root()
+                self.assertEqual(run_config_sh(root, [DESKTOP], programs=["setfiles"]).returncode, 0)
+                preset = root / self.PRESET
+                preset.write_text("".join(line + "\n" for line in preset.read_text().splitlines()
+                                          if line != "enable " + unit))
+                result = self.rerun(root, [DESKTOP])
+                self.assertNotEqual(result.returncode, 0, unit)
+                self.assertIn(unit, result.stderr)
+
+    def test_images_sh_requires_the_enabled_units_in_the_image(self):
+        def labeled_root(units):
+            root = self.root()
+            for path in LABELED_PATHS[:2] + tuple("/usr/lib/systemd/system/" + u for u in units):
+                (root / path.lstrip("/")).parent.mkdir(parents=True, exist_ok=True)
+                (root / path.lstrip("/")).write_text("")
+            for path in LABELED_PATHS[2:]:
+                (root / path.lstrip("/")).mkdir(parents=True)
+            return root
+        for units, expected in ((("gdm.service", "sshd.service"), 0), (("sshd.service",), 1), ((), 1)):
+            with self.subTest(units=units):
+                result = run_images_sh(labeled_root(units), [DESKTOP])
+                self.assertEqual(result.returncode, expected,
+                                 result.stderr[-1000:] if expected else result.stderr[-2000:])
+                if expected:
+                    self.assertIn("desktop overlay enables", result.stderr)
+        # The server profile's image carries no such requirement.
+        result = run_images_sh(labeled_root(()), [FEDORA])
+        self.assertEqual(result.returncode, 0, result.stderr[-2000:])
 
 
 # The image packages of the Debian profile mapped to Fedora 44 (each Fedora name resolves in the pinned releases or updates
@@ -3496,7 +3756,7 @@ def port_listing(records):
 
 
 def run_config_sh(root, profiles, programs=(), keyring=None, erase=True, record=PER_BUILD_FINGERPRINT,
-                  modules=POLICY_MODULES, ports=PORT_RECORDS):
+                  modules=POLICY_MODULES, ports=PORT_RECORDS, script=None):
     """config.sh as KIWI runs it (system/setup.py call_config_script: bash in the image root after the packages), here on
     ROOT: its absolute /etc, /var, /.kconfig and /.profile paths are moved below ROOT, the layer's template gate is
     stubbed (it is the layer's, tested there), and PROGRAMS are the only extra commands on PATH, each exiting 0. On
@@ -3513,10 +3773,11 @@ def run_config_sh(root, profiles, programs=(), keyring=None, erase=True, record=
             if record is not None:
                 (root / BUILD_KEY_RECORD).parent.mkdir(parents=True, exist_ok=True)
                 (root / BUILD_KEY_RECORD).write_text(record + "\n")
-            if profile == FEDORA and not (root / "etc/yum.repos.d/fedora.repo").exists():
+            if profile in (FEDORA, DESKTOP) and not (root / "etc/yum.repos.d/fedora.repo").exists():
                 fedora_repo_files(root)
             (root / ".overlay-imported").write_text(profile)
-    text = (KIWI / "config.sh").read_text().replace("/usr/bin/appliance-firstboot check-template /", "true")
+    text = (script if script is not None else KIWI / "config.sh").read_text() \
+        .replace("/usr/bin/appliance-firstboot check-template /", "true")
     # A path after "//" is inside a URL (file:///etc/...), text config.sh compares, not a file of the root.
     text = re.sub(r"(?<![\w./])/(etc|var|\.kconfig|\.profile|\.autorelabel)(?=[/\s'\"]|$)",
                   lambda m: str(root) + m.group(0), text)
@@ -4012,7 +4273,7 @@ class FedoraToolchain(unittest.TestCase):
     def test_every_fedora_profile_package_is_locked(self):
         image = description_root()
         named = set()
-        for profile in (FEDORA, "fedora44-firmware"):
+        for profile in (FEDORA, DESKTOP, "fedora44-firmware"):
             named |= set(profile_packages(image, "bootstrap", profile)) | set(profile_packages(image, "image", profile))
         self.assertEqual(named - LOCAL_RPMS - set(self.lock()["image_packages"]), set())
 
@@ -4042,9 +4303,9 @@ class FedoraToolchain(unittest.TestCase):
 
 
 # The actions plugin's own version, measured at the dnf5 source of the locked version: libdnf5-plugins/actions/actions.cpp
-# :54 `PLUGIN_VERSION{1, 4, 1}` at tag 5.4.5.0 (GET 2026-09-27T11:17:59Z, r12b-fedora/sources). A locked dnf5 version
-# without a measured row fails the check below.
-ACTIONS_PLUGIN_VERSION = {"5.4.5.0": (1, 4, 1)}
+# :54 `PLUGIN_VERSION{1, 4, 1}` at tag 5.4.5.0 (GET 2026-09-27T11:17:59Z, r12b-fedora/sources) and the same line at tag
+# 5.4.6.0 (GET 2026-09-29, this lane's relock). A locked dnf5 version without a measured row fails the check below.
+ACTIONS_PLUGIN_VERSION = {"5.4.5.0": (1, 4, 1), "5.4.6.0": (1, 4, 1)}
 # F5 r3 :62: the minimum plugin version for each feature the bridge uses, from libdnf5_plugins/actions.8 at tag 5.4.5.0
 # (GET 11:17:58Z): mode=json 1.2.0 (:89), raise_error 1.4.0 (:99-103), the JSON stop operation 1.4.0 (:235),
 # goal_resolved 1.3.0 (:61); pre_transaction and post_transaction (:62-63) carry no version note, the plugin's first.
@@ -4134,7 +4395,8 @@ class FedoraUpdateInterface(unittest.TestCase):
         # A4: retained points boot their own store objects, so the only live kernels they reference are the current entry's
         # (DESIGN-A4-r1c :117-118) and, until the next witness, next_pair's (DESIGN-A4-r1h §3.1.4): two. A transaction that
         # installs a new kernel adds one: 3. dnf5.conf(5) at 5.4.5.0: minimum 2, default 3; /etc/dnf/dnf.conf loads last and
-        # libdnf5 5.4.5.0-1's own dnf.conf sets no installonly_limit (sha256 bb898f90, r12b-fedora/sources/rpm-reads).
+        # libdnf5 5.4.5.0-1's own dnf.conf sets no installonly_limit (sha256 bb898f90, r12b-fedora/sources/rpm-reads); the
+        # locked 5.4.6.0-1 ships no /etc/dnf/dnf.conf at all (read from the pinned RPM, 2026-09-29).
         conf = (FEDORA_OVERLAY / "etc/dnf/libdnf5.conf.d/20-olivares-appliance.conf").read_text().splitlines()
         self.assertEqual([l for l in conf if l and not l.startswith("#")], ["[main]", "installonly_limit=3"])
         with tempfile.TemporaryDirectory(prefix="a2-installonly-") as temp:
@@ -4263,8 +4525,10 @@ class VisibleName(unittest.TestCase):
         formats = json.loads("\n".join(line for line in text.splitlines() if not line.lstrip().startswith("//")))
         self.assertEqual(formats["product"], "Olivares Server")
         self.assertEqual(sorted(a["file"] for a in formats["artifacts"]),
-                         ["olivares-appliance-server-amd64.iso", "olivares-appliance-server-amd64.ova",
-                          "olivares-appliance-server-amd64.qcow2"])
+                         ["olivares-appliance-desktop-amd64.iso", "olivares-appliance-desktop-amd64.ova",
+                          "olivares-appliance-desktop-amd64.qcow2", "olivares-appliance-server-amd64.iso",
+                          "olivares-appliance-server-amd64.ova", "olivares-appliance-server-amd64.qcow2"])
+        self.assertEqual(sorted({a["edition"] for a in formats["artifacts"]}), ["desktop", "server"])
         envelope = (ROOT / "appliance/images/formats/ova/envelope-template.xml").read_text()
         self.assertIn("<Product>@PRODUCT@</Product>", envelope, "the OVA shows the formats' product text")
 
@@ -4395,12 +4659,12 @@ class InstallerMedium(unittest.TestCase):
             (self.iso_root / name).write_bytes(content)
         self.efi_image(efi_files)
 
-    def assemble(self, image=None, path=None):
+    def assemble(self, image=None, path=None, *extra):
         if image is not None:
             (self.iso_root / "boot/x86_64/loader/initrd").write_bytes(image)
         env = dict(os.environ, PATH=str(self.bin) + os.pathsep + (path or os.environ["PATH"]))
         return subprocess.run(["bash", str(ROOT / "appliance/images/formats/iso.sh"), "--target-dir", str(self.target),
-                               "--output-dir", str(self.work / "out")], env=env, capture_output=True, text=True,
+                               "--output-dir", str(self.work / "out"), *extra], env=env, capture_output=True, text=True,
                               timeout=30)
 
     def reader(self, image, *args, path=None):
@@ -4415,6 +4679,23 @@ class InstallerMedium(unittest.TestCase):
         self.assertIn("installer initrd carries kiwi-dump kiwi-dump-reboot", result.stdout)
         self.assertTrue((self.work / "out/olivares-appliance-server-amd64.iso").is_file())
         self.assertFalse(any(p.name.startswith(".install-initrd") for p in (self.work / "out").iterdir()))
+
+    def test_the_assembly_names_the_editions_own_artifact_and_refuses_an_undeclared_edition(self):
+        for edition, name in (("desktop", "olivares-appliance-desktop-amd64.iso"),
+                              ("server", "olivares-appliance-server-amd64.iso")):
+            with self.subTest(edition=edition):
+                shutil.rmtree(self.work / "out", ignore_errors=True)
+                result = self.assemble(initrd(self.MODULES), None, "--edition", edition)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertTrue((self.work / "out" / name).is_file())
+                manifest = json.loads((self.work / "out" / (name + ".manifest.json")).read_text())
+                self.assertEqual(manifest["edition"], edition)
+                self.assertEqual(manifest["file"], name)
+        shutil.rmtree(self.work / "out", ignore_errors=True)
+        result = self.assemble(initrd(self.MODULES), None, "--edition", "workstation")
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertIn("workstation edition", result.stderr)
+        self.assertEqual(list((self.work / "out").glob("olivares-appliance-*")), [])
 
     def test_a_medium_without_the_install_modules_is_refused(self):
         for missing in ("kiwi-dump", "kiwi-dump-reboot"):
@@ -4679,6 +4960,22 @@ class BootBattery(unittest.TestCase):
         result = subprocess.run(["bash", str(script or ROOT / "appliance/test/boot-battery.sh"), str(self.artifacts),
                                  str(evidence), *cases], env=env, capture_output=True, text=True, timeout=deadline * 4 + 60)
         return result, evidence
+
+    def test_the_preflight_reads_the_named_editions_artifacts(self):
+        desktop_only = self.work / "artifacts-desktop"
+        desktop_only.mkdir()
+        for artifact in (self.artifacts / name for name in ("olivares-appliance-desktop-amd64.qcow2",
+                                                            "olivares-appliance-desktop-amd64.iso")):
+            shutil.copy(artifact, desktop_only / artifact.name)
+        battery = ["bash", str(ROOT / "appliance/test/boot-battery.sh"), "--check-preflight", str(desktop_only)]
+        env = dict(os.environ, APPLIANCE_BOOT_ACCEL="tcg", APPLIANCE_QEMU=str(self.bin / "qemu"),
+                   APPLIANCE_QEMU_IMG=str(self.bin / "qemu-img"), APPLIANCE_OVMF_DIR=str(self.ovmf))
+        wrong = subprocess.run(battery, env=env, capture_output=True, text=True, timeout=30)
+        self.assertEqual(wrong.returncode, 2, "the server edition's artifacts are not there")
+        self.assertIn("olivares-appliance-server-amd64.qcow2", wrong.stdout + wrong.stderr)
+        right = subprocess.run(battery, env=dict(env, APPLIANCE_EDITION="desktop"), capture_output=True,
+                               text=True, timeout=30)
+        self.assertEqual(right.returncode, 0, right.stdout + right.stderr)
 
     def test_a_boot_case_waits_for_the_console_label_it_asserts(self):
         # Hosted run 36259628735: the bios guest reached multi-user in 74 s and was stopped there, while first boot was
@@ -5264,6 +5561,24 @@ class OwnerInterface(unittest.TestCase):
         result = subprocess.run(["bash", str(KIWI / "build.sh"), "--help"], capture_output=True, text=True, timeout=10)
         self.assertEqual(result.returncode, 0)
         self.assertEqual(result.stdout.splitlines(), header)
+
+    def test_the_taskfile_takes_the_desktop_edition_and_the_declaration_lists_both(self):
+        import yaml
+        task = yaml.safe_load((ROOT / "Taskfile.yml").read_text())["tasks"]["appliance:build"]
+        guard = task["cmds"][0]
+        for values, expected in ({"EDITION": "desktop", "FORMAT": "all"}, 0), ({"EDITION": "workstation"}, 2):
+            with self.subTest(**values):
+                variables = {"EDITION": "server", "ARCH": "amd64", "FORMAT": "all", **values}
+                script = re.sub(r"\{\{\.(\w+)\}\}", lambda m: variables.get(m.group(1), ""), guard)
+                result = subprocess.run(["bash", "-c", script], capture_output=True, text=True, timeout=10)
+                self.assertEqual(result.returncode, expected, result.stderr)
+        boot = yaml.safe_load((ROOT / "Taskfile.yml").read_text())["tasks"]["appliance:boot"]
+        self.assertIn('APPLIANCE_EDITION="{{.EDITION}}"', boot["cmds"][-1])
+        self.assertEqual(boot["vars"]["EDITION"], '{{.EDITION | default "server"}}')
+        listed = subprocess.run(["bash", str(ROOT / "appliance/images/formats/assemble.sh"), "--list"],
+                                capture_output=True, text=True, timeout=10)
+        self.assertEqual(listed.stdout.split(), ["server", "iso", "server", "qcow2", "server", "ova",
+                                                 "desktop", "iso", "desktop", "qcow2", "desktop", "ova"])
 
     def test_print_plan_is_a_pure_offline_plan(self):
         environment = {k: v for k, v in os.environ.items() if k != "WORK_DIR"}

@@ -249,14 +249,20 @@ func TestTokenDelivery_TheSeamRefusesByDefaultAndNeverWritesPlaintextToTheJourna
 	in := answersFixture(t, "olivares.example.test")
 	const plaintext = "olst_" + "FAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKE"
 	sink := filepath.Join(t.TempDir(), "setup-token")
+	realHost, _ := deliveryHost(t)
 	cases := []struct {
 		name  string
 		seam  Step
 		state State
 	}{
-		{"the default seam refuses", RefusingSetupDelivery{}, Refused},
+		// The real seam's own refusals (a token minted but never delivered, a missing
+		// product account) are pinned in setup_delivery_test.go; this row keeps the
+		// machine-level property they stand for — a setup-delivery refusal stops first
+		// boot before the product starts.
+		{"a seam that refuses", undeliveredDelivery{}, Refused},
 		{"an adapter error quoting the token", leakyDelivery{}, Refused},
 		{"a token delivered to its protected sink", sinkDelivery{path: sink, token: plaintext}, Ready},
+		{"the real seam over a prepared host", SetupTokenDelivery{Host: realHost}, Ready},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -289,6 +295,16 @@ func TestTokenDelivery_TheSeamRefusesByDefaultAndNeverWritesPlaintextToTheJourna
 	}
 }
 
+// undeliveredDelivery refuses the way the real seam does when the token exists but was
+// never delivered: a fixed reason an operator can act on.
+type undeliveredDelivery struct{}
+
+func (undeliveredDelivery) Apply(context.Context, Input) (Effect, error) {
+	return "", Refuse("the one-time setup token is not in its root-only file")
+}
+
+func (undeliveredDelivery) Verify(context.Context, Input, Effect) error { return nil }
+
 // leakyDelivery fails the way a careless adapter would: quoting the secret it handled.
 type leakyDelivery struct{}
 
@@ -310,3 +326,55 @@ func (s sinkDelivery) Apply(context.Context, Input) (Effect, error) {
 }
 
 func (s sinkDelivery) Verify(context.Context, Input, Effect) error { return nil }
+
+// firewallRefusal stands in for a host whose firewall cannot load, the stop the container
+// fixtures measure after the setup delivery.
+type firewallRefusal struct{ host *fakeHost }
+
+func (f firewallRefusal) Apply(context.Context, Input) (Effect, error) {
+	f.host.applies[StageFirewall]++
+	return "", Refuse("the firewall cannot load here")
+}
+
+func (f firewallRefusal) Verify(context.Context, Input, Effect) error { return nil }
+
+func TestStageMachine_ItsOwnSetupTokenIsNotAPreviousInstallation(t *testing.T) {
+	in := answersFixture(t, "olivares.example.test")
+	for _, tc := range []struct {
+		name      string
+		delivered bool
+		found     []string
+		refuse    bool
+		named     string
+	}{
+		{"the token its recorded delivery minted", true, []string{"setup.token"}, false, ""},
+		{"a token no recorded delivery accounts for", false, []string{"setup.token"}, true, "(setup.token)"},
+		{"another identity beside its own token", true, []string{"olivares.db", "setup.token"}, true, "(olivares.db)"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir, h := t.TempDir(), newFakeHost()
+			seams := h.seams()
+			seams.Firewall = firewallRefusal{h}
+			if !tc.delivered {
+				seams.SetupDelivery = firewallRefusal{h}
+			}
+			first := newMachine(dir, h, &in, seams)
+			if rec, _ := first.Run(context.Background()); rec.State != Refused {
+				t.Fatalf("first run: %+v", rec)
+			}
+			again := newMachine(dir, h, &in, seams)
+			again.Identities = func() ([]string, error) { return tc.found, nil }
+			rec, _ := again.Run(context.Background())
+			atValidate := rec.State == Refused && rec.Stage == StageValidate
+			if atValidate != tc.refuse {
+				t.Fatalf("second run with %v: %+v, want a validate refusal %v", tc.found, rec, tc.refuse)
+			}
+			if tc.refuse && !strings.Contains(rec.Reason, tc.named) {
+				t.Fatalf("the refusal must name exactly the unaccounted identities %s: %q", tc.named, rec.Reason)
+			}
+			if !tc.refuse && (rec.Stage != StageFirewall || h.verifies[StageSetupDelivery] == 0) {
+				t.Fatalf("the run must verify the recorded delivery and stop where the host stops: %+v", rec)
+			}
+		})
+	}
+}

@@ -5,7 +5,7 @@
 # refuses before any network effect.
 set -euo pipefail
 cd /toolchain
-printf '%s  %s\n' 'a374d48707b18af5018dc5be9829d881a60b7279b726679dd733c726c3adaed7' input-lock.json | sha256sum -c -
+printf '%s  %s\n' '0d2271eaa152b80d862a7299299f5de274b737a89f4c8ed56cc0711910918cb3' input-lock.json | sha256sum -c -
 # HTTPS does not grant trust: every package is checked against the Fedora 44 key, whose file the base image's
 # fedora-gpg-keys installed and whose sha256 is checked first. Fedora does not sign repomd.xml, so dnf5 caches the
 # metadata of the two pinned trees, their repomd.xml sha256 is checked in the cache, and only then does dnf5 install,
@@ -35,7 +35,7 @@ while read -r repo pinned; do
   printf '%s  %s\n' "$pinned" "${cached[0]}" | sha256sum -c -
 done <<'PINS'
 fedora-44-releases da3845427d188097f6fd71b417a039bdfb8efefc4f38ca44b5cbb94f95a18991
-fedora-44-updates 204b9f69d50089542161aaab293a8ddce072ea7130d1c0dbb76737d6c15ee7b8
+fedora-44-updates 440731252c9b7fe8d43126edc5ded1ad5776ce295ec95d419a2eff2139f67cb3
 PINS
 dnf5 -y -C install --setopt=install_weak_deps=False \
     bash-5.3.9-3.fc44.x86_64 \
@@ -46,7 +46,7 @@ dnf5 -y -C install --setopt=install_weak_deps=False \
     createrepo_c-1.2.1-5.fc44.x86_64 \
     cryptsetup-2.8.8-1.fc44.x86_64 \
     curl-8.18.0-10.fc44.x86_64 \
-    dnf5-5.4.5.0-1.fc44.x86_64 \
+    dnf5-5.4.6.0-1.fc44.x86_64 \
     dosfstools-4.2-18.fc44.x86_64 \
     e2fsprogs-1.47.3-4.fc44.x86_64 \
     erofs-utils-1.9.4-1.fc44.x86_64 \

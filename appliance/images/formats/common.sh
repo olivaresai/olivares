@@ -23,23 +23,40 @@ require_tool() {
   done
 }
 
-# formats_query FORMAT KEY — one field of the declaration. The document carries // comment
-# lines, which the recipe's shape gate strips the same way.
-formats_query() {
-  python3 - "$formats_json" "$1" "$2" <<'PY'
+# require_edition — the declaration must carry the edition being assembled ($edition, the
+# server edition when none was named); an edition it does not carry refuses before any effect.
+require_edition() {
+  python3 - "$formats_json" "${edition:-server}" <<'REQ' \
+    || unmeasurable "formats.json declares no artifacts for the ${edition:-server} edition"
 import json, sys
-path, fmt, key = sys.argv[1], sys.argv[2], sys.argv[3]
+body = "\n".join(l for l in open(sys.argv[1]).read().splitlines() if not l.strip().startswith("//"))
+edition = sys.argv[2]
+if not any(artifact.get("edition", "server") == edition for artifact in json.loads(body)["artifacts"]):
+    raise SystemExit(1)
+REQ
+}
+
+# formats_query FORMAT KEY — one field of the declaration, of the edition the assembly is
+# working on ($edition, the server edition when nothing named one). The document carries //
+# comment lines, which the recipe's shape gate strips the same way.
+formats_query() {
+  python3 - "$formats_json" "$1" "$2" "${edition:-server}" <<'PY'
+import json, sys
+path, fmt, key, edition = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
 body = "\n".join(l for l in open(path).read().splitlines() if not l.strip().startswith("//"))
 document = json.loads(body)
+if fmt == "" and key == "edition":
+    print(edition)
+    raise SystemExit
 if fmt == "":
     print(document[key])
 else:
     for artifact in document["artifacts"]:
-        if artifact["format"] == fmt:
+        if artifact["format"] == fmt and artifact.get("edition", "server") == edition:
             print(artifact[key])
             break
     else:
-        raise SystemExit("formats.json declares no format " + fmt)
+        raise SystemExit("formats.json declares no format %s for the %s edition" % (fmt, edition))
 PY
 }
 

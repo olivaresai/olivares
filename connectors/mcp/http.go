@@ -55,7 +55,7 @@ type httpTransport struct {
 // 401 can be answered with an audience-bound token rather than only detected.
 func newHTTPTransport(spec serverSpec) (*httpTransport, error) {
 	t := &httpTransport{
-		client:  &http.Client{},
+		client:  newStreamableClient(http.DefaultTransport),
 		url:     spec.URL,
 		headers: spec.Headers,
 	}
@@ -208,7 +208,7 @@ func (t *httpTransport) Close() error { return nil }
 func (t *httpTransport) post(ctx context.Context, body []byte) (*http.Response, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, t.url, bytes.NewReader(body))
 	if err != nil {
-		return nil, err
+		return nil, &streamableRequestError{op: "mcp: http post", cause: err}
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json, text/event-stream")
@@ -227,7 +227,7 @@ func (t *httpTransport) post(ctx context.Context, body []byte) (*http.Response, 
 	}
 	resp, err := t.client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("mcp: http post: %w", err)
+		return nil, &streamableRequestError{op: "mcp: http post", cause: err}
 	}
 	return resp, nil
 }

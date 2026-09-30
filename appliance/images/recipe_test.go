@@ -24,11 +24,13 @@ import (
 const repoRoot = "../.."
 
 // The guest profiles are fixed here; the reviewed toolchain locks own the builder versions. Fedora 44
-// is the shipping base (Root c1efc2ee); the Debian 13 profile stays, not shipping, with its own checks.
+// is the shipping base (Root c1efc2ee), in two editions: the server profile, and the desktop profile,
+// the server's packages plus GNOME. The Debian 13 profile stays, not shipping, with its own checks.
 const (
-	debianSuite   = "trixie"
-	serverProfile = "fedora44-server-amd64"
-	debianProfile = "debian13-server-amd64"
+	debianSuite    = "trixie"
+	serverProfile  = "fedora44-server-amd64"
+	desktopProfile = "fedora44-desktop-amd64"
+	debianProfile  = "debian13-server-amd64"
 )
 
 // kiwiImage is the subset of KIWI NG's schema this gate reads. Attribute and element names
@@ -276,12 +278,19 @@ func TestRecipe_ServerProfileInstallsTheLayerAndFirstBoot(t *testing.T) {
 	profiles := map[string][]string{
 		serverProfile: {"olivares", "olivares-appliance-base", "cloud-init", "openssh-server", "kernel", "systemd",
 			"shim-x64", "grub2-efi-x64", "grub2-pc", "btrfs-progs", "dracut", "selinux-policy-targeted"},
+		desktopProfile: {"olivares", "olivares-appliance-base", "cloud-init", "openssh-server", "kernel", "systemd",
+			"shim-x64", "grub2-efi-x64", "grub2-pc", "btrfs-progs", "dracut", "selinux-policy-targeted",
+			// The desktop edition's own packages, every name from the Fedora 44 trees: GNOME with
+			// gdm as the display manager, Firefox, Ptyxis as the terminal, Nautilus as the file
+			// browser, and Fedora's default font set (no GNOME package requires a font package).
+			"gdm", "gnome-shell", "firefox", "nautilus", "ptyxis", "default-fonts-core"},
 		debianProfile: {"olivares", "olivares-appliance-base", "cloud-init", "openssh-server", "linux-image-amd64",
 			"systemd-sysv", "shim-signed", "grub-efi-amd64-signed", "grub-pc-bin", "btrfs-progs", "dracut"},
 	}
 	firmware := map[string][]string{
-		serverProfile: {"linux-firmware"},
-		debianProfile: {"firmware-linux-nonfree", "firmware-misc-nonfree"},
+		serverProfile:  {"linux-firmware"},
+		desktopProfile: {"linux-firmware"},
+		debianProfile:  {"firmware-linux-nonfree", "firmware-misc-nonfree"},
 	}
 	for name, required := range profiles {
 		found := false
@@ -309,38 +318,44 @@ func TestRecipe_ServerProfileInstallsTheLayerAndFirstBoot(t *testing.T) {
 		}
 	}
 
-	prefs := 0
-	for _, pref := range image.Preferences {
-		if !inProfile(pref.Profiles, serverProfile) {
-			continue
+	// Both Fedora 44 editions share the type and preferences: the desktop profile is the
+	// server profile plus packages, never a second layout.
+	for _, profile := range []string{serverProfile, desktopProfile} {
+		prefs := 0
+		for _, pref := range image.Preferences {
+			if !inProfile(pref.Profiles, profile) {
+				continue
+			}
+			if pref.Arch != "x86_64" {
+				t.Errorf("the preferences of %s are not amd64 (x86_64): %q", profile, pref.Arch)
+			}
+			if pref.PackageManager != "dnf5" {
+				t.Errorf("the %s profile does not install with dnf5: %q", profile, pref.PackageManager)
+			}
+			for _, typ := range pref.Type {
+				prefs++
+				if typ.Image != "oem" {
+					t.Errorf("%s: the image type is %q, not the expandable disk the formats are assembled from",
+						profile, typ.Image)
+				}
+				if typ.Firmware != "uefi" {
+					t.Errorf("%s: the firmware is %q; uefi is the EFI layout with Secure Boot", profile, typ.Firmware)
+				}
+				if typ.EfiCSM == "false" {
+					t.Errorf("%s: eficsm is off, so the same disk cannot boot under legacy BIOS", profile)
+				}
+				if typ.InstallISO != "true" {
+					t.Errorf("%s: the type does not produce the installer ISO", profile)
+				}
+				if !strings.Contains(typ.KernelCmdline, "console=ttyS0") {
+					t.Errorf("%s: the kernel command line does not put a console on the serial port, where the boot battery reads the label: %q",
+						profile, typ.KernelCmdline)
+				}
+			}
 		}
-		if pref.Arch != "x86_64" {
-			t.Errorf("the preferences of %s are not amd64 (x86_64): %q", serverProfile, pref.Arch)
+		if prefs != 1 {
+			t.Errorf("the %s profile declares %d image types, it must declare exactly one", profile, prefs)
 		}
-		if pref.PackageManager != "dnf5" {
-			t.Errorf("the %s profile does not install with dnf5: %q", serverProfile, pref.PackageManager)
-		}
-		for _, typ := range pref.Type {
-			prefs++
-			if typ.Image != "oem" {
-				t.Errorf("the image type is %q, not the expandable disk the formats are assembled from", typ.Image)
-			}
-			if typ.Firmware != "uefi" {
-				t.Errorf("the firmware is %q; uefi is the EFI layout with Secure Boot", typ.Firmware)
-			}
-			if typ.EfiCSM == "false" {
-				t.Error("eficsm is off, so the same disk cannot boot under legacy BIOS")
-			}
-			if typ.InstallISO != "true" {
-				t.Error("the type does not produce the installer ISO")
-			}
-			if !strings.Contains(typ.KernelCmdline, "console=ttyS0") {
-				t.Errorf("the kernel command line does not put a console on the serial port, where the boot battery reads the label: %q", typ.KernelCmdline)
-			}
-		}
-	}
-	if prefs != 1 {
-		t.Errorf("the %s profile declares %d image types, it must declare exactly one", serverProfile, prefs)
 	}
 
 	// The image is built without ever starting the product or first boot, and without any of

@@ -38,6 +38,11 @@ const (
 	DropinName = "agentops.conf"
 	// RuntimeEnvName is the AgentOps runtime env file beside the service config.
 	RuntimeEnvName = "agentops.env"
+
+	// RoleAccountDropin records the image service-account override. Its path is
+	// fixed in /etc even when the base unit is packaged under /usr/lib.
+	RoleAccountDropin = "account-dropin"
+	AccountDropinPath = "/etc/systemd/system/olivares.service.d/05-olivares-service-account.conf"
 )
 
 // File is one installed path. Managed means Olivares, rather than a package
@@ -110,7 +115,7 @@ func (m *Manifest) ExecutedProgram() string {
 	return ""
 }
 
-// DropinPath is the only drop-in path a systemd manifest may record.
+// DropinPath is the only AgentOps drop-in path a systemd manifest may record.
 func DropinPath(unit string) string {
 	return unit + ".d/" + DropinName
 }
@@ -229,7 +234,7 @@ func Validate(m *Manifest, home string) error {
 		return fmt.Errorf("unexpected manifest path %q (want %q)", m.ManifestPath, wantManifest)
 	}
 	seen := map[string]bool{}
-	var binaries, configs, units, wrappers, dropins, runtimeEnvs []string
+	var binaries, configs, units, wrappers, dropins, runtimeEnvs, accountDropins []string
 	for _, f := range m.Files {
 		if seen[f.Path] {
 			return fmt.Errorf("duplicate install path %q", f.Path)
@@ -244,7 +249,7 @@ func Validate(m *Manifest, home string) error {
 			if m.Init != "launchd" || f.Path != filepath.Join(m.DataDir, "launchd-run.sh") {
 				return fmt.Errorf("unexpected launchd wrapper path %q", f.Path)
 			}
-		case RoleDropin:
+		case RoleDropin, RoleAccountDropin:
 			// Checked against the one recorded unit after the loop.
 		case RoleRuntimeEnv:
 			if f.Path != RuntimeEnvPath(m.Config) {
@@ -272,6 +277,8 @@ func Validate(m *Manifest, home string) error {
 			dropins = append(dropins, f.Path)
 		case RoleRuntimeEnv:
 			runtimeEnvs = append(runtimeEnvs, f.Path)
+		case RoleAccountDropin:
+			accountDropins = append(accountDropins, f.Path)
 		}
 	}
 	if len(binaries) != 1 || len(configs) != 1 || len(units) != 1 || configs[0] != m.Config {
@@ -298,10 +305,21 @@ func Validate(m *Manifest, home string) error {
 	if err := validateTuple(m, units[0], home); err != nil {
 		return err
 	}
+	imageAccount := m.Mode == "system" && m.Account.User == "olivares-svc"
+	if imageAccount {
+		if m.Init != "systemd" || m.Custom() || m.DataDir != "/var/lib/olivares" ||
+			len(accountDropins) != 1 || accountDropins[0] != AccountDropinPath {
+			return fmt.Errorf("image service account requires the default systemd tuple and one canonical account drop-in")
+		}
+	} else if len(accountDropins) != 0 {
+		return fmt.Errorf("account drop-in requires the image service account")
+	}
 	if m.Mode == "system" {
 		wantUser, wantGroup := "olivares", "olivares"
 		if m.Init == "launchd" {
 			wantUser, wantGroup = "_olivares", "staff"
+		} else if imageAccount {
+			wantUser, wantGroup = "olivares-svc", "olivares-svc"
 		}
 		if m.Account.User != wantUser || m.Account.Group != wantGroup {
 			return fmt.Errorf("unexpected system service account %q:%q (want %s:%s)", m.Account.User, m.Account.Group, wantUser, wantGroup)

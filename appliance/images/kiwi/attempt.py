@@ -426,13 +426,17 @@ def release(evidence):
     return 0 if outcome["state"] == "released" else 1
 
 
-def execute(evidence, accelerator, packages, target, firmware, base="fedora44", qualification_key=None):
+def execute(evidence, accelerator, packages, target, firmware, base="fedora44", edition="server",
+            qualification_key=None):
     """One attempt on BASE's builder. PACKAGES is the product repository D's S3 delivers (Fedora) or the directory of
     the product's .debs (Debian); QUALIFICATION_KEY names a throwaway package-repository key, so the build is not a
     release: its OpenPGP fingerprint, or the armored key file qualification-delivery.sh writes, whose fingerprint the
     build is given."""
     evidence = Path(evidence).resolve()
     if accelerator not in ("kvm", "tcg") or firmware not in ("free", "nonfree") or base not in LOCKS:
+        return 2
+    # The desktop edition is the Fedora 44 server profile plus GNOME; no other base builds it.
+    if edition not in ("server", "desktop") or (edition == "desktop" and base != "fedora44"):
         return 2
     # The build names its outputs from VERSION alone: X.Y.Z for a release, 0.0.0-dev (also when unset) for a
     # qualification. Anything else stops here, before the preflight builds its container.
@@ -466,15 +470,17 @@ def execute(evidence, accelerator, packages, target, firmware, base="fedora44", 
             attempt = bound_attempt(receipt)
             image = image_id(receipt["observations"]["container_toolchain"]["image_id"])
             common = ["env", "PYTHONDONTWRITEBYTECODE=1", "APPLIANCE_BOOT_ACCEL=" + accelerator,
-                      "VERSION=" + version]
+                      "APPLIANCE_EDITION=" + edition, "VERSION=" + version]
             phases = [("build", 5400, common + ["WORK_DIR=" + str(evidence / "recipe-work"),
                 "bash", str(ROOT / "appliance/images/kiwi/build.sh"), "--receipt", str(preflight / "receipt.json"),
                 "--attempt", attempt, "--image-id", image, "--accelerator", accelerator, "--base", base,
+                "--edition", edition,
                 "--deb-dir" if base == "debian13" else "--package-dir", str(Path(packages).resolve()),
                 "--target-dir", str(Path(target).resolve()), "--firmware", firmware]
                 + (["--qualification-key", qualification_key] if qualification_key else []))]
             phases += [("format-" + fmt, 600, common + ["bash", str(ROOT / "appliance/images/formats/assemble.sh"),
-                "--format", fmt, "--target-dir", str(Path(target).resolve()), "--output-dir", str(Path(target).resolve())])
+                "--format", fmt, "--edition", edition, "--target-dir", str(Path(target).resolve()),
+                "--output-dir", str(Path(target).resolve())])
                 for fmt in ("iso", "qcow2", "ova")]
             phases += [("boot", 5700, common + ["bash", str(ROOT / "appliance/test/boot-battery.sh"),
                 str(Path(target).resolve()), str(evidence / "boot"), "bios", "uefi", "uefi-secureboot", "iso-install"]),
@@ -520,6 +526,7 @@ def main():
     parser.add_argument("--evidence", required=True)
     parser.add_argument("--accelerator", choices=("kvm", "tcg"))
     parser.add_argument("--base", choices=sorted(LOCKS), default="fedora44")
+    parser.add_argument("--edition", choices=("server", "desktop"), default="server")
     parser.add_argument("--package-dir", default=None)
     parser.add_argument("--deb-dir", default=None)
     parser.add_argument("--qualification-key", default="")
@@ -541,9 +548,11 @@ def main():
         parser.error("--accelerator is required")
     if args.deb_dir is not None and args.base != "debian13":
         parser.error("--deb-dir names .debs, for --base debian13 only; the Fedora base reads --package-dir")
+    if args.edition == "desktop" and args.base != "fedora44":
+        parser.error("--edition desktop is built on the fedora44 base only")
     packages = args.package_dir or args.deb_dir or ("dist" if args.base == "debian13" else "dist/rpm")
     return execute(evidence, args.accelerator, packages, args.target_dir, args.firmware, base=args.base,
-                   qualification_key=args.qualification_key or None)
+                   edition=args.edition, qualification_key=args.qualification_key or None)
 
 
 if __name__ == "__main__":

@@ -249,14 +249,38 @@ func TestUnits_CarryTheProductHardeningByLastValueOrStateWhy(t *testing.T) {
 		}
 		// Every path may be missing: the stage that needs one then records its refusal, where a
 		// missing required path would stop the unit before first boot could record anything.
-		want := "-/etc/olivares -/etc/systemd/system/olivares.service.d -/etc/olivares-portal -/etc/cloud/cloud.cfg.d"
+		want := "-/etc/olivares -/etc/systemd/system/olivares.service.d -/etc/olivares-portal -/etc/cloud/cloud.cfg.d " +
+			"-/var/lib/olivares"
 		if got, _ := unit.last("ReadWritePaths"); got != want {
-			t.Fatalf("%s: ReadWritePaths=%q: the product configuration, its drop-in directory and the Appliance "+
-				"Console's selection directory, each prefixed '-'", path, got)
+			t.Fatalf("%s: ReadWritePaths=%q: the product configuration, its drop-in directory, the Appliance "+
+				"Console's selection directory, the cloud-init drop-in directory and the product data directory "+
+				"(the setup token), each prefixed '-'", path, got)
 		}
 		// apply's context (appliance-firstboot's applyTimeout, 10 minutes) ends before systemd's.
 		if got, _ := unit.last("TimeoutStartSec"); got != "15min" {
 			t.Fatalf("%s: TimeoutStartSec=%q, not longer than the 10-minute apply context", path, got)
+		}
+	}
+}
+
+// TestUnits_LetFirstBootGiveTheSetupTokenToTheProduct pins what prepare-setup-delivery needs from
+// the sandbox: it writes into the product's 0750 data directory as root (CAP_DAC_OVERRIDE) and gives
+// the token to the product service account (CAP_CHOWN and the @chown calls the deny list removes).
+// Without them the stage refuses on every real boot while the fake-host tests stay green.
+func TestUnits_LetFirstBootGiveTheSetupTokenToTheProduct(t *testing.T) {
+	for _, path := range []string{firstBootUnitPath, readinessUnitPath} {
+		unit, _ := readUnit(t, path)
+		caps, _ := unit.last("CapabilityBoundingSet")
+		for _, want := range []string{"CAP_DAC_OVERRIDE", "CAP_CHOWN"} {
+			if !slices.Contains(strings.Fields(caps), want) {
+				t.Fatalf("%s: CapabilityBoundingSet=%q lacks %s", path, caps, want)
+			}
+		}
+		filters := unit["SystemCallFilter"]
+		deny := slices.IndexFunc(filters, func(v string) bool { return strings.HasPrefix(v, "~") })
+		allow := slices.Index(filters, "@chown")
+		if deny < 0 || allow < deny {
+			t.Fatalf("%s: SystemCallFilter %q does not allow @chown after the deny list", path, filters)
 		}
 	}
 }

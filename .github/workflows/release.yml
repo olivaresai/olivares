@@ -33,7 +33,16 @@ name: release
 
 on:
   push:
-    tags: ["v*"]
+    # BARE CalVer is the release tag shape (2026-09-29 correction: 26.10.0, not v26.10.0).
+    # `2*` and `3*` admit it by its two-digit year (20-39) without a bracket class, which the
+    # workflow minute census cannot parse, and without matching the chart-v*/terraform-provider-v*
+    # tags; scripts/release-preflight.sh enforces the exact grammar
+    # ^[0-9]{2}\.([1-9]|1[0-2])\.(0|[1-9][0-9]*)$ and refuses everything else RED. `v*` is
+    # KEPT ON PURPOSE: the internal rehearsal tags (v0.0.0-rehearsal.N) still trigger through
+    # it, and a habitual v-prefixed release tag fails loudly in the preflight instead of
+    # silently not running at all — a tag that does not trigger anything is the one failure
+    # nobody notices until a customer asks where the release is.
+    tags: ["v*", "2*", "3*"]
   # Phase 2: after the tag run has attached stable-manifest.json to the DRAFT, this
   # dispatch completes the stable ceremony — it SIGNS the manifest, freshly VERIFIES the
   # complete remote candidate, and then PUBLISHES it.
@@ -69,7 +78,7 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: "PUBLISH this draft release tag (vMAJOR.MINOR.PATCH). Approving the protected environment makes it public."
+        description: "PUBLISH this draft release tag (YY.M.PATCH, bare CalVer — no v prefix). Approving the protected environment makes it public."
         required: true
         type: string
       release_commit:
@@ -1464,6 +1473,7 @@ jobs:
           # Validated §C.4 outputs, never raw contexts (P1-02).
           DIGEST: ${{ needs.goreleaser.outputs.digest }}
           OCI_IMAGE_REPO: ${{ needs.preflight.outputs.oci_image_repo }}
+          RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
           RELEASE_VERSION: ${{ needs.preflight.outputs.release_version }}
           # Same anchored-identity contract (and the same repo-var validation) as the
           # OTA job's checksum verification — see that step for the full rationale.
@@ -1501,7 +1511,18 @@ jobs:
           # una VARIABLE DE REPOSITORIO, mutable por cualquier admin sin revision. Un valor puesto
           # en el `env:` de este paso vive en el fichero versionado y pasa por PR, que es
           # exactamente el nivel de revision que se pedia.
-          CERT_IDENTITY_REGEXP="${CERT_IDENTITY_REGEXP:-^https://github\.com/${repo_rx}/\.github/workflows/release\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+\$}"
+          #
+          # ⛔ THE ANCHOR NAMES THIS EXACT TAG, not any CalVer tag. Until this revision the
+          # pattern ended in `refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$`: the correct identity for
+          # "a release of ours" and the wrong one for "the release whose latest* aliases we
+          # are about to write" — an image legitimately signed for ANOTHER tag of this
+          # repository satisfied it completely. The tag (bare CalVer since the 2026-09-29
+          # tag-name correction) is escaped first: it carries dots, and an unescaped dot
+          # matches any character exactly where the anchor must be strict (same class as
+          # `aws-images.yml:315`).
+          # shellcheck disable=SC2016 # The sed pattern needs literal regex metacharacters.
+          tag_rx="$(printf '%s' "${RELEASE_TAG}" | sed 's/[.[\*^$()+?{}|]/\\&/g')"
+          CERT_IDENTITY_REGEXP="${CERT_IDENTITY_REGEXP:-^https://github\.com/${repo_rx}/\.github/workflows/release\.yml@refs/tags/${tag_rx}\$}"
           case "${CERT_IDENTITY_REGEXP}" in
             '^'*'$') ;;
             *) echo "ERROR: OLIVARES_CERT_IDENTITY must be fully anchored (^…\$); got '${CERT_IDENTITY_REGEXP}'" >&2; exit 1;;
@@ -2433,7 +2454,14 @@ jobs:
           # Same tag grammar the §C.4 preflight pins for production (the old check
           # accepted any v* string). Prereleases are deliberately outside the contract —
           # see the policy note at PROD_TAG_RE in scripts/release-preflight.sh.
-          [[ "${RELEASE_TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "ERROR: release_tag must be vMAJOR.MINOR.PATCH" >&2; exit 1; }
+          # BARE CalVer since the 2026-09-29 correction. A v-prefixed input gets its own
+          # message because the reflexive mistake is to paste the old shape, and "wrong
+          # shape" alone sends the operator to the grammar instead of to the prefix.
+          if [[ "${RELEASE_TAG}" =~ ^v[0-9] ]]; then
+            echo "ERROR: release_tag '${RELEASE_TAG}' carries a v prefix. Release tags are bare CalVer (YY.M.PATCH, e.g. 26.10.0) since the 2026-09-29 tag-name correction." >&2
+            exit 1
+          fi
+          [[ "${RELEASE_TAG}" =~ ^[0-9]{2}\.([1-9]|1[0-2])\.(0|[1-9][0-9]*)$ ]] || { echo "ERROR: release_tag must be bare CalVer YY.M.PATCH with a real month 1-12 and no leading zeroes (e.g. 26.10.0), got '${RELEASE_TAG}'" >&2; exit 1; }
           version="${RELEASE_TAG#v}"
           mkdir -p ota-dist
           # ALL platform archives, not just linux/amd64: the cross-check below binds

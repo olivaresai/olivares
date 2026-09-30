@@ -323,9 +323,18 @@ fi
 
 # THE SAME STRICT GRAMMAR THE §C.4 PREFLIGHT PINS. Prereleases are outside this contract by
 # policy (scripts/release-preflight.sh PROD_TAG_RE), so an accepted tag here is exactly the
-# shape the whole stable chain is written for.
-[[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] ||
-	refuse "release_tag must be vMAJOR.MINOR.PATCH, got '${RELEASE_TAG}'"
+# shape the whole stable chain is written for. BARE CalVer since the 2026-09-29 tag-name
+# correction: a v prefix gets its own refusal because the reflexive mistake is pasting the
+# old shape, and a generic grammar error would send the operator counting digits instead of
+# deleting one letter.
+case "$RELEASE_TAG" in
+v[0-9]*)
+	refuse "release_tag '${RELEASE_TAG}' carries a v prefix" \
+		"Release tags are bare CalVer (YY.M.PATCH, e.g. 26.10.0) since the 2026-09-29 tag-name correction."
+	;;
+esac
+[[ "$RELEASE_TAG" =~ ^[0-9]{2}\.([1-9]|1[0-2])\.(0|[1-9][0-9]*)$ ]] ||
+	refuse "release_tag must be bare CalVer YY.M.PATCH (e.g. 26.10.0), got '${RELEASE_TAG}'"
 [[ "$RELEASE_COMMIT" =~ ^[0-9a-f]{40}$ ]] ||
 	refuse "release_commit must be a full lowercase 40-hex OID"
 VERSION="${RELEASE_TAG#v}"
@@ -1354,10 +1363,15 @@ if [ "$MAKE_LATEST" = "true" ]; then
 	latest_status="${BASH_REMATCH[1]}"
 	if [ "$latest_rc" -eq 0 ] && [ "$latest_status" = "200" ]; then
 		sed '1,/^[[:space:]]*$/d' "$WORK/latest-before.http" >"$WORK/latest-before.json"
+		# THE ORIGIN MAY STILL CARRY THE v PREFIX. Releases before the 2026-09-29 tag-name
+		# correction were tagged v26.9.0, and `latest` points at whatever was published last,
+		# not at today's grammar; the candidate above is already bare-only. Reading the origin
+		# with `v?` is history, not a widening of what this ceremony will publish, and
+		# ltrimstr("v") below orders both shapes on the same numbers.
 		"$JQ_BIN" -s -e 'length == 1 and (.[0] |
 			type == "object" and .draft == false and .prerelease == false and
 			(.id | type == "number" and . > 0 and . == floor) and
-			(.tag_name | type == "string" and test("\\Av(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\z")))' \
+			(.tag_name | type == "string" and test("\\Av?(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\z")))' \
 			"$WORK/latest-before.json" >/dev/null 2>&1 ||
 			blind "latest does not identify an ordinary published release with a usable version"
 		latest_tag="$("$JQ_BIN" -r '.tag_name' "$WORK/latest-before.json")"
